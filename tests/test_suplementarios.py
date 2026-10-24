@@ -10,11 +10,13 @@ import unittest
 from fractions import Fraction
 from pathlib import Path
 
-from helpers import M, S, declared, last_diag, records, session
+from helpers import M, S, declared, last_diag, records, scenario, session
 
 from grafcet.canonical import CanonicalError, canonical_text, strict_loads
 from grafcet.declaration import coverage_declaration
 from grafcet.diagnostics import DiagnosticError
+from grafcet.engine import Session
+from grafcet.profile import normalize_options
 from grafcet.ids import document_filename, document_id_fits
 from grafcet.persistence import add_document, new_project
 from grafcet.values import TypeSpec, check_fits, format_value, parse_value
@@ -170,6 +172,72 @@ class BloqueosU(unittest.TestCase):
         for m in cases:
             s = session(m.compile(), init={"p": True} if m.doc["variables"][0]["name"] == "p" else None, start=False)
             self.assertTrue(any(d.question == "U-09" for d in s.start()), m.doc["variables"])
+
+
+class LecturasSeleccionables(unittest.TestCase):
+    """P-IMP-15: lectura de U-03 elegible por el usuario; por defecto, detener."""
+
+    def _u03(self, reading=None, reinicio=False, budget=10_000):
+        m = M().var("p").var("reinicio").step("A", True).step("B").step("C")
+        m.trans("t", ["A"], ["B"], "rise(p)").trans("u", ["B"], ["C"], "rise(p)").trans("v", ["C"], ["A"], "reinicio")
+        cm = m.compile()
+        s = Session(cm, scenario(cm, {"reinicio": reinicio}, [(1 * S, 0, {"p": True})]), budget=budget,
+                    options=None if reading is None else {"U-03": reading})
+        self.assertEqual(s.start(), [])
+        s.run()
+        return s
+
+    def test_SOPT03a_por_defecto_se_detiene(self):
+        """REQ-EVT-03, REQ-SEM-09, REQ-NOR-02: sin elección explícita, U-03 sigue deteniendo."""
+        s = self._u03()
+        self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-03"))
+        self.assertEqual(s.trace.header["semanticProfile"]["options"], {"U-03": "detener"})
+
+    def test_SOPT03b_lectura_situacion_anterior(self):
+        """REQ-EVT-03, REQ-SEM-09, REQ-SIM-05: el evento solo franquea lo validado antes de él → B, con hipótesis en la traza."""
+        s = self._u03("situacion-anterior")
+        self.assertEqual((s.status, s.z.situation), ("finalizada", {"B"}))
+        hyp = records(s, "estable")[-1]["hypotheses"]
+        self.assertEqual(hyp, [{"question": "U-03", "reading": "situacion-anterior", "transition": "u",
+                                "evolutionIndex": 2, "receptivity": False}])
+        self.assertEqual(s.trace.header["semanticProfile"]["options"], {"U-03": "situacion-anterior"})
+        self.assertEqual(self._u03("situacion-anterior", reinicio=True).z.situation, {"B"})
+
+    def test_SOPT03c_lectura_recorrido(self):
+        """REQ-EVT-03, REQ-SEM-07, REQ-SEM-09: el evento sigue disponible en el recorrido → C; con reinicio, ciclo sin fin."""
+        s = self._u03("recorrido")
+        self.assertEqual(s.z.situation, {"C"})
+        self.assertEqual([e["cleared"] for e in records(s, "evolucion")], [["t"], ["u"]])
+        # Con reinicio=1 el recorrido vuelve a A y el mismo flanco vuelve a franquear t: A→B→C→A→… en el mismo
+        # instante. Es consecuencia de esta lectura; el motor lo corta con D-LIM-EVOL y no publica estado estable.
+        r = self._u03("recorrido", reinicio=True, budget=30)
+        self.assertEqual((r.status, last_diag(r).code), ("pausada-recorrido", "D-LIM-EVOL"))
+        self.assertEqual([e["cleared"] for e in records(r, "evolucion")][:6], [["t"], ["u"], ["v"], ["t"], ["u"], ["v"]])
+        self.assertEqual(records(r, "estable"), [])
+
+    def test_SOPT03d_instantanea_exige_la_misma_lectura(self):
+        """REQ-SIM-04, REQ-DAT-04: no se mezclan instantáneas de lecturas distintas."""
+        s = self._u03("situacion-anterior")
+        snap = s.snapshot("con-hipotesis")
+        with self.assertRaises(DiagnosticError) as ctx:
+            Session.restore(s.cm, s.scenario, snap)
+        self.assertEqual(ctx.exception.diagnostics[0].code, "D-INSTANTANEA-INCOMPATIBLE")
+        r = Session.restore(s.cm, s.scenario, snap, options={"U-03": "situacion-anterior"})
+        self.assertEqual(r.z.situation, {"B"})
+
+    def test_SOPT03e_limites_de_la_opcion(self):
+        """REQ-MOD-04, REQ-EVT-03: valores no admitidos se rechazan; la repetición de fuentes sigue en U-07."""
+        with self.assertRaises(ValueError):
+            normalize_options({"U-03": "lo-que-diga-el-plc"})
+        with self.assertRaises(ValueError):
+            normalize_options({"U-05": "recorrido"})
+        m = M().var("p").step("X", True).step("A").step("B")
+        m.trans("t", [], ["A"], "rise(p)").trans("u", [], ["B"], "rise(p)")
+        cm = m.compile()
+        s = Session(cm, scenario(cm, None, [(1 * S, 0, {"p": True})]), options={"U-03": "recorrido"})
+        s.start()
+        s.run()
+        self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-07"))
 
 
 class ReglasP(unittest.TestCase):

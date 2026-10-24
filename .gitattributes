@@ -1,3 +1,5 @@
 # Finales de línea LF en todos los sistemas: las representaciones canónicas, las trazas y
 # los digests no deben depender de la plataforma de checkout (REQ-PLT-01, REQ-DAT-05).
 * text=auto eol=lf
+# Los lanzadores de Windows necesitan CRLF
+*.bat text eol=crlf

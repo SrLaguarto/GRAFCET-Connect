@@ -1,9 +1,9 @@
 {
- "date": "2026-10-24T21:39:10+02:00",
+ "date": "2026-10-24T22:35:12+02:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 118,
+ "total": 123,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -160,6 +160,59 @@
     "REQ-PLT-02"
    ],
    "summary": "REQ-DAT-01, REQ-PLT-02: hallazgo H-12."
+  },
+  {
+   "test": "test_suplementarios.LecturasSeleccionables.test_SOPT03a_por_defecto_se_detiene",
+   "case": "S-OPT03a",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03",
+    "REQ-NOR-02",
+    "REQ-SEM-09"
+   ],
+   "summary": "REQ-EVT-03, REQ-SEM-09, REQ-NOR-02: sin elección explícita, U-03 sigue deteniendo."
+  },
+  {
+   "test": "test_suplementarios.LecturasSeleccionables.test_SOPT03b_lectura_situacion_anterior",
+   "case": "S-OPT03b",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03",
+    "REQ-SEM-09",
+    "REQ-SIM-05"
+   ],
+   "summary": "REQ-EVT-03, REQ-SEM-09, REQ-SIM-05: el evento solo franquea lo validado antes de él → B, con hipótesis en la traza."
+  },
+  {
+   "test": "test_suplementarios.LecturasSeleccionables.test_SOPT03c_lectura_recorrido",
+   "case": "S-OPT03c",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03",
+    "REQ-SEM-07",
+    "REQ-SEM-09"
+   ],
+   "summary": "REQ-EVT-03, REQ-SEM-07, REQ-SEM-09: el evento sigue disponible en el recorrido → C; con reinicio, ciclo sin fin."
+  },
+  {
+   "test": "test_suplementarios.LecturasSeleccionables.test_SOPT03d_instantanea_exige_la_misma_lectura",
+   "case": "S-OPT03d",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-04",
+    "REQ-SIM-04"
+   ],
+   "summary": "REQ-SIM-04, REQ-DAT-04: no se mezclan instantáneas de lecturas distintas."
+  },
+  {
+   "test": "test_suplementarios.LecturasSeleccionables.test_SOPT03e_limites_de_la_opcion",
+   "case": "S-OPT03e",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03",
+    "REQ-MOD-04"
+   ],
+   "summary": "REQ-MOD-04, REQ-EVT-03: valores no admitidos se rechazan; la repetición de fuentes sigue en U-07."
   },
   {
    "test": "test_suplementarios.ReglasP.test_SCAN_formato_canonico",

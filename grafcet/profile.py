@@ -47,6 +47,7 @@ FINDINGS = {
     "H-09": "Base temporal con salida y reentrada virtual o base compuesta",
     "H-10": "Lectura de salidas continuas en expresiones",
     "H-18": "Momento de aplicación del forzado en el recorrido (ampliación de U-08)",
+    "H-23": "La lectura «recorrido» de U-03, aplicada literalmente, produce ciclos transitorios sin fin",
 }
 
 
@@ -112,6 +113,36 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
        "P: no implementada en esta iteración", "REQ-SIM-02"),
     _c("instantanea.recorrido","Instantánea exacta en mitad de un recorrido", "no-soportada", "P: D-INSTANTANEA-FASE", "REQ-SIM-04"),
 ]}
+
+
+# Lecturas seleccionables de cuestiones abiertas (P-IMP-15). Por defecto se detiene, porque el documento 12
+# prohíbe cerrar una U con un valor por defecto de implementación. Elegir otra lectura es una hipótesis
+# explícita del usuario: queda en el perfil efectivo de la traza y las instantáneas, y nunca es conformidad.
+SEMANTIC_OPTIONS: dict[str, dict[str, Any]] = {
+    "U-03": {
+        "default": "detener",
+        "scope": "receptividades de transición con eventos de entrada en evoluciones posteriores del contexto",
+        "values": {
+            "detener": "Detener con D-SEM-PENDIENTE: la cuestión sigue abierta",
+            "situacion-anterior": "El evento solo franquea transiciones validadas en la situación anterior al evento",
+            "recorrido": "El evento sigue disponible durante todo el recorrido transitorio que provoca",
+        },
+    },
+}
+
+
+def normalize_options(options: dict[str, str] | None) -> dict[str, str]:
+    out = {q: spec["default"] for q, spec in SEMANTIC_OPTIONS.items()}
+    for q, value in (options or {}).items():
+        if q not in SEMANTIC_OPTIONS or value not in SEMANTIC_OPTIONS[q]["values"]:
+            raise ValueError(f"lectura no admitida: {q}={value!r}")
+        out[q] = value
+    return out
+
+
+def profile_ref(options: dict[str, str]) -> dict[str, Any]:
+    """Perfil efectivo de una ejecución: identidad del perfil más las lecturas elegidas."""
+    return {"id": PROFILE_ID, "version": PROFILE_VERSION, "options": dict(sorted(options.items()))}
 
 
 def sem_pending(question: str, message: str, element: str | None = None, **evidence: Any) -> Diagnostic:

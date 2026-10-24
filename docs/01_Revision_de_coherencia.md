@@ -47,6 +47,12 @@ Tipos: **T** = tensión entre oráculos o documentos, **H** = hueco de especific
 | H-21 | H | 05, 09 | La acción limitada (05, tabla de formas temporales) no tiene campo en el diccionario Action de 09 | Acción continua limitada a 2 s (T-12c) | P-IMP-14: campo opcional `limitUs` | RP |
 | H-22 | T | 09, 11 (T-22b, T-18c) | T-22b espera D-REF, D-ID o D-FORMATO para un «propietario contradictorio», mientras que T-18c y T-19c usan D-PROPIETARIO | — | Lectura L-08: las referencias redundantes que no coinciden dan D-FORMATO («se rechaza el documento», 09) y D-PROPIETARIO queda para la propiedad múltiple. Ambos oráculos se cumplen sin alterarlos | RP |
 
+### Hallazgos posteriores, al probar el banco
+
+| ID | Tipo | Documentos | Descripción | Caso discriminante | Tratamiento | Resp. |
+|---|---|---|---|---|---|---|
+| H-23 | N | 12 (U-03) | La alternativa «disponibilidad en ciertas evoluciones virtuales» no dice cuáles. Si se lee como «el evento sigue disponible en todo el recorrido», un modelo con retorno entra en un ciclo transitorio sin fin dentro del mismo instante | A→B/rise(p), B→C/rise(p), C→A/reinicio, con reinicio=1 y una subida de p: A→B→C→A→B… sin estabilizar | Lectura «recorrido» implementada literalmente (P-IMP-15): el motor lo detiene con D-LIM-EVOL y no publica estado estable (prueba S-OPT03c). El cierre de U-03 debe precisar qué evoluciones virtuales pueden usar el evento | RN |
+
 ## 3. Observaciones menores (sin efecto en la implementación)
 
 - Las tablas de requisitos no tienen columnas homogéneas. Por ejemplo, 07 no tiene columna de clase: la prioridad se declara en el texto. El extractor automático lo tiene en cuenta.

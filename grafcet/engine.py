@@ -25,7 +25,7 @@ from typing import Any, Generator, Iterable
 from . import expressions as ex
 from .diagnostics import Diagnostic, DiagnosticError
 from .model import Action, CompiledModel, TemporalSpec
-from .profile import PROFILE_ID, PROFILE_VERSION, blocked, sem_pending
+from .profile import blocked, normalize_options, profile_ref
 from .scenario import Batch, Scenario
 from .timeutil import MAX_US
 from .trace import Trace
@@ -175,6 +175,7 @@ class Blocked(Exception):
 class Control:
     budget: int = DEFAULT_BUDGET
     abort: bool = False
+    options: dict[str, str] = field(default_factory=normalize_options)  # lecturas elegidas (P-IMP-15)
 
 
 @dataclass
@@ -277,6 +278,7 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
         deact_ctx: set[str] = set()
         act_ctx: set[str] = set()
         done_event_actions: list[Action] = []
+        hypotheses: list[dict[str, Any]] = []  # decisiones tomadas bajo una lectura elegida (P-IMP-15)
         k = 0
         while True:
             k += 1
@@ -298,12 +300,19 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                                           f"mismo contexto: {sorted(e.support.vars & set(written))}", t.id))
                 val = bool(ex.evaluate(e.node, env))
                 if k >= 2 and any(n.key in present for n in e.support.events):
-                    if val != bool(ex.evaluate(e.node, env0)):
+                    without_event = bool(ex.evaluate(e.node, env0))
+                    if val != without_event:
                         if not t.pre:
                             raise Blocked(blocked("transiciones.fuente-repeticion", "transición fuente: ¿se repite el "
                                                   "mismo evento en evoluciones posteriores del contexto?", t.id))
-                        raise Blocked(blocked("eventos.recorrido", "transición que sigue validada o se valida durante el "
-                                              "recorrido causado por el propio evento", t.id))
+                        reading = ctl.options["U-03"]
+                        if reading == "detener":
+                            raise Blocked(blocked("eventos.recorrido", "transición que sigue validada o se valida durante "
+                                                  "el recorrido causado por el propio evento", t.id))
+                        if reading == "situacion-anterior":
+                            val = without_event
+                        hypotheses.append({"question": "U-03", "reading": reading, "transition": t.id,
+                                           "evolutionIndex": k, "receptivity": val})
                 info[t.id] = val
                 if val:
                     fire.append(t.id)
@@ -396,10 +405,13 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
         if stim.kind == "lote":
             w.next_batch += 1
         virtual = sorted((act_ctx | deact_ctx | prior_s) - w.situation - prior_s) if (act_ctx or deact_ctx) else []
-        records.append({"kind": "estable", "timeUs": str(w.time), "situation": sorted(w.situation),
-                        "virtualSteps": virtual,
-                        "outputs": {k: v for k, v in sorted(w.outputs.items())},
-                        "values": {k: _fmt(cm, k, v) for k, v in sorted(w.values.items()) if v != z.values.get(k)}})
+        closing = {"kind": "estable", "timeUs": str(w.time), "situation": sorted(w.situation),
+                   "virtualSteps": virtual,
+                   "outputs": {k: v for k, v in sorted(w.outputs.items())},
+                   "values": {k: _fmt(cm, k, v) for k, v in sorted(w.values.items()) if v != z.values.get(k)}}
+        if hypotheses:
+            closing["hypotheses"] = hypotheses
+        records.append(closing)
         return Outcome("estable", w, records)
     except Blocked as b:
         records.append({"kind": "fallo", "timeUs": str(w.time), "diagnostics": [b.diag.to_dict()],
@@ -412,8 +424,9 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
         return Outcome("fallo", None, records, dg)
 
 
-def run_full(cm: CompiledModel, z: State, stim: Stimulus, budget: int = DEFAULT_BUDGET) -> Outcome:
-    gen = run_context(cm, z, stim, Control(budget, abort=True))
+def run_full(cm: CompiledModel, z: State, stim: Stimulus, budget: int = DEFAULT_BUDGET,
+             options: dict[str, str] | None = None) -> Outcome:
+    gen = run_context(cm, z, stim, Control(budget, abort=True, options=normalize_options(options)))
     try:
         while True:
             next(gen)
@@ -421,18 +434,19 @@ def run_full(cm: CompiledModel, z: State, stim: Stimulus, budget: int = DEFAULT_
         return stop.value
 
 
-def check_simultaneous_expiries(cm: CompiledModel, z: State, stim: Stimulus, budget: int) -> Diagnostic | None:
+def check_simultaneous_expiries(cm: CompiledModel, z: State, stim: Stimulus, budget: int,
+                                options: dict[str, str] | None = None) -> Diagnostic | None:
     """Varios vencimientos en el mismo instante: se aceptan solo si el resultado no depende del orden (U-06)."""
     keys = stim.expiring
     if len(keys) < 2:
         return None
     if len(keys) > 4:
         return blocked("temporal.coincidencias", f"{len(keys)} vencimientos simultáneos: demasiados para comparar órdenes")
-    ref = run_full(cm, z, stim, budget)
+    ref = run_full(cm, z, stim, budget, options)
     for perm in itertools.permutations(keys):
         cur: State | None = z
         for key in perm:
-            out = run_full(cm, cur, Stimulus("vencimiento", stim.time, None, (key,)), budget)
+            out = run_full(cm, cur, Stimulus("vencimiento", stim.time, None, (key,)), budget, options)
             if out.status != "estable":
                 cur = None
                 break
@@ -521,12 +535,14 @@ SESSION_STATES = {"preparada", "ejecutando", "pausada-estable", "pausada-recorri
 
 class Session:
     def __init__(self, cm: CompiledModel, scenario: Scenario, budget: int = DEFAULT_BUDGET,
-                 run_id: str = "run-1", batches: list[Batch] | None = None, parent: str | None = None) -> None:
+                 run_id: str = "run-1", batches: list[Batch] | None = None, parent: str | None = None,
+                 options: dict[str, str] | None = None) -> None:
         self.cm, self.scenario, self.run_id = cm, scenario, run_id
-        self.ctl = Control(budget)
+        self.options = normalize_options(options)
+        self.ctl = Control(budget, options=self.options)
         self.batches = list(batches if batches is not None else scenario.batches)
         self.trace = Trace({"runId": run_id, "modelRevision": cm.revision, "scenario": scenario.id,
-                            "semanticProfile": {"id": PROFILE_ID, "version": PROFILE_VERSION}, "timeUnit": "us",
+                            "semanticProfile": profile_ref(self.options), "timeUnit": "us",
                             "limits": {"evolutionBudget": budget}, "parentRun": parent})
         self.status = "preparada"
         self.z: State | None = None
@@ -620,7 +636,7 @@ class Session:
             self._fail(nxt)
             return False
         if nxt.kind == "vencimiento":
-            dg = check_simultaneous_expiries(self.cm, self.z, nxt, self.ctl.budget)
+            dg = check_simultaneous_expiries(self.cm, self.z, nxt, self.ctl.budget, self.options)
             if dg is not None:
                 self._fail(dg)
                 return False
@@ -763,7 +779,7 @@ class Session:
         if var.role == "input" or vid in self.cm.continuous_by_target:
             raise DiagnosticError(Diagnostic("D-ESCRITURA-ROL", "solo se intervienen memorias internas/memorizadas", element=vid))
         branch = Session(self.cm, self.scenario, self.ctl.budget, f"{self.run_id}.b{len(self.trace.records)}",
-                         self.pending(), parent=f"{self.run_id}@{len(self.trace.records)}")
+                         self.pending(), parent=f"{self.run_id}@{len(self.trace.records)}", options=self.options)
         z = self.z.copy()
         before = z.values[vid]
         z.values[vid] = check_fits(var.type, value)
@@ -815,19 +831,22 @@ class Session:
             raise DiagnosticError(Diagnostic("D-INSTANTANEA-FASE", f"no se exporta un estado en fase «{self.status}»: "
                                              "el perfil no admite instantáneas exactas dentro de un recorrido"))
         body = {"family": "snapshot", "formatVersion": "0.1", "id": snapshot_id, "modelRevision": self.cm.revision,
-                "semanticProfile": {"id": PROFILE_ID, "version": PROFILE_VERSION}, "scenarioId": self.scenario.id,
+                "semanticProfile": profile_ref(self.options), "scenarioId": self.scenario.id,
                 "runId": self.run_id, "state": self.z.to_dict(self.cm, self.pending())}
         body["integrity"] = {"projection": "file", "digest": digest(body)}
         self._log("instantanea", timeUs=str(self.z.time), snapshot=body["state"], snapshotId=snapshot_id)
         return body
 
     @classmethod
-    def restore(cls, cm: CompiledModel, scenario: Scenario, snap: dict[str, Any], run_id: str = "run-r") -> "Session":
+    def restore(cls, cm: CompiledModel, scenario: Scenario, snap: dict[str, Any], run_id: str = "run-r",
+                options: dict[str, str] | None = None) -> "Session":
+        """Restaura solo con el mismo perfil efectivo, incluidas las lecturas elegidas (P-IMP-15)."""
         from .canonical import digest
         prof = snap.get("semanticProfile", {})
+        options = normalize_options(options)
         if (snap.get("family") != "snapshot" or snap.get("modelRevision") != cm.revision
-                or prof != {"id": PROFILE_ID, "version": PROFILE_VERSION} or snap.get("scenarioId") != scenario.id):
-            raise DiagnosticError(Diagnostic("D-INSTANTANEA-INCOMPATIBLE", "revisión, perfil o escenario distintos; "
+                or prof != profile_ref(options) or snap.get("scenarioId") != scenario.id):
+            raise DiagnosticError(Diagnostic("D-INSTANTANEA-INCOMPATIBLE", "revisión, perfil (o lecturas elegidas) o escenario distintos; "
                                              "no se modifica ninguna sesión",
                                              evidence={"revision": str(snap.get("modelRevision")), "perfil": str(prof)}))
         body = {k: v for k, v in snap.items() if k != "integrity"}
@@ -836,7 +855,7 @@ class Session:
         z, pending = state_from_dict(cm, snap["state"])
         z.origin = "restaurado"
         z.next_batch = 0  # los lotes pendientes viajan completos en la instantánea
-        session = cls(cm, scenario, run_id=run_id, batches=pending, parent=snap.get("runId"))
+        session = cls(cm, scenario, run_id=run_id, batches=pending, parent=snap.get("runId"), options=options)
         session.z = z
         session._log("inicio", timeUs=str(z.time), origin="restaurado", situation=sorted(z.situation),
                      outputs=dict(sorted(z.outputs.items())), fromSnapshot=snap["id"])
@@ -845,6 +864,6 @@ class Session:
 
     def restart(self, run_id: str) -> "Session":
         """Nueva ejecución con el escenario inicial; la traza anterior se conserva en esta sesión."""
-        s = Session(self.cm, self.scenario, self.ctl.budget, run_id, parent=self.run_id)
+        s = Session(self.cm, self.scenario, self.ctl.budget, run_id, parent=self.run_id, options=self.options)
         s.start()
         return s

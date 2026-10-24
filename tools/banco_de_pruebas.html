@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banco GRAFCET</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--text:#1d2330;--muted:#6b7385;--line:#d6dae3;--accent:#1f6feb;--accent-soft:#dbe8ff;
+--ok:#1a7f37;--warn:#9a6700;--err:#c62828;--err-soft:#fdecea;--virt:#8250df;--glow:#f0883e}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--panel:#171b23;--text:#e4e7ee;--muted:#9099ab;--line:#2c3340;
+--accent:#5b9dff;--accent-soft:#1c2d4d;--ok:#3fb950;--warn:#d29922;--err:#ff6b6b;--err-soft:#3a1d1d;--virt:#b392f0;--glow:#f0883e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+header h1{font-size:16px;margin:0}header .note{color:var(--muted);font-size:12px}
+select,button{font:inherit;color:inherit}select{padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+button{padding:6px 11px;border:1px solid var(--line);border-radius:6px;background:var(--panel);cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent)}button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr);gap:14px;padding:14px 16px;max-width:1300px;margin:0 auto}
+@media (max-width:860px){main{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.card h2{font-size:13px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.help{margin:0 0 10px;color:var(--muted)}
+.status{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.badge{border-radius:999px;padding:2px 10px;font-size:12px;border:1px solid var(--line)}
+.badge.estable{color:var(--ok);border-color:var(--ok)}.badge.recorrido{color:var(--virt);border-color:var(--virt)}
+.badge.error{color:var(--err);border-color:var(--err)}
+.clock{font-variant-numeric:tabular-nums;font-size:22px;font-weight:600}
+svg{width:100%;height:auto;max-height:72vh;display:block}
+.step rect{fill:var(--panel);stroke:var(--text);stroke-width:1.4}.step text{fill:var(--text);font-size:14px;font-weight:600}
+.step.active rect.outer{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2.6}
+.step.virtual rect.outer{stroke:var(--virt);stroke-dasharray:5 4;stroke-width:2.2}
+.token{fill:var(--accent)}.vtag{fill:var(--virt);font-size:10px}
+.act rect{fill:var(--panel);stroke:var(--muted)}.act text{fill:var(--text);font-size:11px}.act.on rect{stroke:var(--ok);stroke-width:2}
+.link{stroke:var(--muted);stroke-width:1.4;fill:none}.dbl{stroke:var(--text);stroke-width:1.2}
+.tr line.bar{stroke:var(--muted);stroke-width:4}.tr.validated line.bar{stroke:var(--text)}
+.tr.fireable line.bar{stroke:var(--accent)}.tr.cleared line.bar{stroke:var(--glow);stroke-width:6}
+.step.stale rect.outer{fill:var(--panel);stroke:var(--muted);stroke-dasharray:2 3;stroke-width:2}.stag{fill:var(--muted);font-size:10px}
+.step.cand rect.outer{stroke:var(--glow);stroke-dasharray:6 4;stroke-width:2.4}.ctag{fill:var(--glow);font-size:10px}
+.tr.question line.bar{stroke:var(--err);stroke-width:6}
+.tr text{font-size:12px;fill:var(--muted)}.tr text.cond{fill:var(--text);font-family:ui-monospace,Consolas,monospace}
+.arrow{fill:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.inputs button{min-width:92px;text-align:left}.inputs button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent)}
+.inputs b{font-family:ui-monospace,Consolas,monospace}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:500}.mono{font-family:ui-monospace,Consolas,monospace}
+.on{color:var(--ok);font-weight:600}.off{color:var(--muted)}
+.diag{border:1px solid var(--err);background:var(--err-soft);border-radius:8px;padding:10px 12px;margin-bottom:12px}
+.diag b{color:var(--err)}.diag p{margin:4px 0}
+ol.trace{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto;font-size:12.5px}
+ol.trace li{padding:4px 2px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:62px 1fr;gap:6px}
+ol.trace .t{color:var(--muted);font-variant-numeric:tabular-nums}ol.trace .fallo{color:var(--err)}
+ol.trace .evolucion{color:var(--accent)}ol.trace .contexto{color:var(--muted)}
+label.chk{display:flex;gap:6px;align-items:center}
+.legend{font-size:12px;color:var(--muted);margin-top:6px}
+.toast{color:var(--err);font-size:12px;min-height:16px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Banco de pruebas GRAFCET</h1>
+  <label for="ej">Ejemplo</label><select id="ej"></select>
+  <button id="reset">Reiniciar</button>
+  <span class="note">Núcleo con perfil provisional · <strong>no es la interfaz del producto ni declara conformidad</strong></span>
+</header>
+<main>
+  <section>
+    <div class="card">
+      <div class="status" aria-live="polite"><span id="badge" class="badge"></span><span id="title"></span></div>
+      <p class="help" id="help"></p>
+      <svg id="diagram" role="img" aria-labelledby="title"></svg>
+      <p class="legend">Etapa activa: fondo azul y marca ●. Etapa virtual (recorrido sin duración): borde morado discontinuo.
+        Transición: gris = no validada, negro = validada, azul = franqueable, naranja = recién franqueada.
+        Tras un bloqueo: gris punteado = último estado estable conservado (no es el resultado); naranja discontinuo =
+        alcanzada antes del punto en cuestión, sin confirmar; barra roja = transición en cuestión.</p>
+    </div>
+    <div class="card"><h2>Traza</h2><ol class="trace" id="trace"></ol></div>
+  </section>
+  <section>
+    <div id="diag" aria-live="assertive"></div>
+    <div class="card">
+      <h2>Entradas</h2>
+      <div class="row inputs" id="inputs"></div>
+      <div class="toast" id="toast" role="status"></div>
+      <label class="chk"><input type="checkbox" id="paso"> Paso a paso (detener tras cada evolución)</label>
+      <div class="row" style="margin-top:8px">
+        <button id="evo" disabled>Siguiente evolución</button><button id="fin" disabled>Completar recorrido</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Tiempo lógico</h2>
+      <div class="row"><span class="clock" id="clock">0 s</span><span class="help" id="next" style="margin:0"></span></div>
+      <div class="row" style="margin-top:8px">
+        <button data-us="100000">+0,1 s</button><button data-us="500000">+0,5 s</button>
+        <button data-us="1000000">+1 s</button><button data-us="3000000">+3 s</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="rt" aria-pressed="false">▶ Tiempo real</button>
+        <span class="help" style="margin:0">El tiempo lógico avanza al ritmo del reloj (extensión E del documento 08); los vencimientos siguen siendo exactos al µs.</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Opciones de interpretación</h2>
+      <label for="u03">Evento usado en su propio recorrido (U-03)</label>
+      <select id="u03" style="display:block;width:100%;margin-top:4px"></select>
+      <p class="help" id="u03note" style="margin:6px 0 0"></p>
+    </div>
+    <div class="card"><h2>Salidas y variables</h2><table id="vars"></table></div>
+    <div class="card" id="tempcard"><h2>Condiciones temporales</h2><table id="temp"></table></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const SX = 100; // margen izquierdo del dibujo
+const H = 22;   // semilado de la etapa: las etapas son cuadradas
+let M = null, S = null, busy = false, rtTimer = null;
+const RT_TICK_MS = 200;
+const STATUS = {"pausada-estable":["estable","estable"],"pausada-recorrido":["en recorrido (situación virtual)","recorrido"],
+  "error":["detenido por diagnóstico","error"],"finalizada":["finalizada","estable"],"preparada":["preparada",""],"ejecutando":["ejecutando",""]};
+
+async function call(op, body={}) {
+  busy = true;
+  try {
+    const r = await fetch("/api/" + op, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    const j = await r.json();
+    $("toast").textContent = j.error ? "No disponible: " + j.error : "";
+    M = j.model; S = j.state; render();
+  } finally { busy = false; }
+}
+function setRealTime(on) {
+  clearInterval(rtTimer); rtTimer = null;
+  if (on) rtTimer = setInterval(() => {
+    if (!busy && S.status === "pausada-estable") call("avanzar", {us: RT_TICK_MS * 1000});
+  }, RT_TICK_MS);
+  $("rt").setAttribute("aria-pressed", String(on));
+  $("rt").textContent = on ? "❚❚ Pausar tiempo real" : "▶ Tiempo real";
+}
+async function load() {
+  const j = await (await fetch("/api/estado")).json();
+  $("ej").innerHTML = j.examples.map(e => `<option value="${e.key}">${e.title}</option>`).join("");
+  M = j.model; S = j.state; $("ej").value = M.key; render();
+}
+function el(tag, attrs={}, parent) { const e = document.createElementNS(NS, tag);
+  for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; }
+function txt(parent, x, y, s, attrs={}) { const t = el("text", {x, y, ...attrs}, parent); t.textContent = s; return t; }
+
+function drawDiagram() {
+  const svg = $("diagram"); svg.innerHTML = "";
+  const pos = {}; M.steps.forEach(s => pos[s.id] = {x:s.x+SX, y:s.y});
+  const maxY = Math.max(...M.steps.map(s=>s.y), ...M.transitions.map(t=>t.y)) + 50;
+  const minX = Math.min(...M.steps.map(s=>s.x)) + SX;
+  svg.setAttribute("viewBox", `0 0 640 ${maxY}`);
+  const situation = new Set(S.situation || []), virtual = new Set(S.virtual || []);
+  const cleared = new Set(S.lastCleared || []);
+  const blk = S.blocked, reached = new Set(blk ? blk.reached : []);
+  const links = el("g", {}, svg), bars = el("g", {}, svg), steps = el("g", {}, svg);
+  M.transitions.forEach(t => {
+    const tx = t.x + SX, ty = t.y, ob = (S.transitions||{})[t.id] || {};
+    const pre = t.pre.map(p => pos[p]), post = t.post.map(p => pos[p]);
+    if (pre.length > 1) {
+      const xs = pre.map(p=>p.x), yy = ty - 12;
+      el("line", {x1:Math.min(...xs)-6, x2:Math.max(...xs)+6, y1:yy, y2:yy, class:"dbl"}, links);
+      el("line", {x1:Math.min(...xs)-6, x2:Math.max(...xs)+6, y1:yy-4, y2:yy-4, class:"dbl"}, links);
+      pre.forEach(p => el("path", {d:`M${p.x},${p.y+H} V${yy-4}`, class:"link"}, links));
+      el("path", {d:`M${tx},${yy} V${ty}`, class:"link"}, links);
+    } else pre.forEach(p => el("path", {d:`M${p.x},${p.y+H} V${(p.y+H+ty)/2} H${tx} V${ty}`, class:"link"}, links));
+    const down = post.filter(p => p.y > ty), up = post.filter(p => p.y <= ty);
+    if (down.length > 1) {
+      const xs = down.map(p=>p.x), yy = ty + 12;
+      el("path", {d:`M${tx},${ty} V${yy}`, class:"link"}, links);
+      el("line", {x1:Math.min(...xs)-6, x2:Math.max(...xs)+6, y1:yy, y2:yy, class:"dbl"}, links);
+      el("line", {x1:Math.min(...xs)-6, x2:Math.max(...xs)+6, y1:yy+4, y2:yy+4, class:"dbl"}, links);
+      down.forEach(p => el("path", {d:`M${p.x},${yy+4} V${p.y-H}`, class:"link"}, links));
+    } else down.forEach(p => el("path", {d:`M${tx},${ty} V${(ty+p.y-H)/2} H${p.x} V${p.y-H}`, class:"link"}, links));
+    up.forEach(p => {
+      const lx = minX - 80, top = p.y - H - 16;
+      el("path", {d:`M${tx},${ty} V${ty+16} H${lx} V${top} H${p.x} V${p.y-H}`, class:"link"}, links);
+      const my = (ty + 16 + top) / 2;
+      el("path", {d:`M${lx-5},${my+6} L${lx},${my-4} L${lx+5},${my+6} Z`, class:"arrow"}, links);
+    });
+    const cls = ["tr", ob.validated?"validated":"", ob.fireable?"fireable":"", cleared.has(t.id)?"cleared":"",
+                 blk && blk.element === t.id ? "question" : ""].join(" ");
+    const g = el("g", {class:cls}, bars);
+    el("title", {}, g).textContent = `${t.id}: validada ${ob.validated?"sí":"no"}, receptividad ${ob.receptivity?"verdadera":"falsa"}`;
+    el("line", {x1:tx-28, x2:tx+28, y1:ty, y2:ty, class:"bar"}, g);
+    txt(g, tx-36, ty+4, t.id, {"text-anchor":"end"});
+    txt(g, tx+36, ty+4, t.cond, {class:"cond"});
+  });
+  M.steps.forEach(s => {
+    const p = pos[s.id], stale = !!blk && situation.has(s.id), act = !blk && situation.has(s.id);
+    const cand = !!blk && reached.has(s.id) && !stale, vir = virtual.has(s.id) && !act;
+    const g = el("g", {class:`step ${act?"active":""} ${vir?"virtual":""} ${stale?"stale":""} ${cand?"cand":""}`}, steps);
+    el("title", {}, g).textContent = `Etapa ${s.id}${s.initial?" (inicial)":""}: ` + (stale ? "último estado estable conservado" :
+      cand ? "alcanzada antes del punto en cuestión, sin confirmar" : act ? "activa" : vir ? "virtual" : "inactiva");
+    el("rect", {x:p.x-H, y:p.y-H, width:2*H, height:2*H, class:"outer"}, g);
+    if (s.initial) el("rect", {x:p.x-H+4, y:p.y-H+4, width:2*H-8, height:2*H-8, fill:"none"}, g);
+    txt(g, p.x, p.y+2, s.id, {"text-anchor":"middle"});
+    if (act) el("circle", {cx:p.x, cy:p.y+12, r:4, class:"token"}, g);
+    if (vir) txt(g, p.x, p.y+H+13, "virtual", {"text-anchor":"middle", class:"vtag"});
+    if (stale) txt(g, p.x, p.y+H+13, "último estable", {"text-anchor":"middle", class:"stag"});
+    if (cand) txt(g, p.x, p.y+H+13, "alcanzada, sin confirmar", {"text-anchor":"middle", class:"ctag"});
+    s.actions.forEach((a, i) => {
+      const w = Math.max(70, a.length * 6.6 + 14), left = s.x < 220, ax = left ? p.x - H - 12 - w : p.x + H + 12;
+      const target = a.split(/[: ]/)[0], on = S.outputs && S.outputs[target] && S.outputs[target].value;
+      const ga = el("g", {class:`act ${on?"on":""}`}, g);
+      el("line", {x1: left ? p.x-H : p.x+H, x2: left ? ax+w : ax, y1:p.y + i*24 - (s.actions.length-1)*12, y2:p.y + i*24 - (s.actions.length-1)*12, class:"link"}, ga);
+      el("rect", {x:ax, y:p.y-10 + i*24 - (s.actions.length-1)*12, width:w, height:20, rx:2}, ga);
+      txt(ga, ax+7, p.y+4 + i*24 - (s.actions.length-1)*12, a);
+    });
+  });
+  const b = svg.getBBox();
+  svg.setAttribute("viewBox", `${b.x-14} ${b.y-14} ${b.width+28} ${b.height+28}`);
+}
+
+function render() {
+  const [label, cls] = STATUS[S.status] || [S.status, ""];
+  $("badge").textContent = label; $("badge").className = "badge " + cls;
+  $("title").textContent = M.title; $("help").textContent = M.help;
+  const stable = S.status === "pausada-estable", inRec = S.status === "pausada-recorrido";
+  $("diag").innerHTML = (S.diagnostics || []).filter(d => S.status === "error" || inRec).slice(-1).map(d => `
+    <div class="diag"><p><b>${d.code}${d.question ? " · " + d.question : ""}</b></p><p>${d.message}</p>
+    <p><em>${d.correction}</em></p>
+    ${S.blocked ? `<p>Recorrido determinado hasta S = {${S.blocked.reached.join(", ")}}${S.blocked.element ?
+      `; en cuestión: <b>${S.blocked.element}</b>` : ""}. Lo que pase después depende de la cuestión abierta, así que el
+      lote se rechaza entero.</p>` : ""}
+    <p>${S.status === "error" ? `El motor no aproxima: conserva el último estado estable${S.blocked ?
+      ` {${S.blocked.lastStable.join(", ")}}, que <b>no</b> es el resultado del lote` : ""}. Pulse «Reiniciar» para seguir.` :
+      "Contexto pendiente: puede completarse o ampliarse el presupuesto."}</p></div>`).join("");
+  if (S.status === "error" && rtTimer) setRealTime(false);
+  const spec = S.optionSpecs["U-03"], cur = S.options["U-03"];
+  $("u03").innerHTML = Object.entries(spec.values).map(([k, v]) =>
+    `<option value="${k}" ${k === cur ? "selected" : ""}>${k === spec.default ? "Por defecto · " : "Hipótesis · "}${v}</option>`).join("");
+  $("u03note").innerHTML = cur === spec.default
+    ? "La cuestión sigue abierta: el motor se detiene y no elige."
+    : "<b>Hipótesis activa.</b> Se registra en la traza y en las instantáneas; no cierra U-03 ni implica conformidad. Cambiarla reinicia la ejecución.";
+  if (S.time === undefined) { $("diagram").innerHTML = ""; return; }
+  drawDiagram();
+  $("inputs").innerHTML = M.inputs.map(v => {
+    const on = S.values[v] === true;
+    return `<button data-var="${v}" aria-pressed="${on}" aria-label="Entrada ${v}, valor ${on ? 1 : 0}" ${stable ? "" : "disabled"}><b>${v}</b> = ${on ? "1" : "0"}</button>`;
+  }).join("");
+  document.querySelectorAll("#inputs button").forEach(b => b.onclick = () => call("entrada", {var:b.dataset.var, paso:$("paso").checked}));
+  $("evo").disabled = !inRec; $("fin").disabled = !inRec;
+  document.querySelectorAll("[data-us]").forEach(b => b.disabled = !stable);
+  $("clock").textContent = "τ = " + S.time;
+  $("next").textContent = S.nextEvent ? `próximo vencimiento: ${S.nextEvent}` : "";
+  const outs = Object.entries(S.outputs || {}).map(([k, o]) =>
+    `<tr><td class="mono">${k}</td><td>salida continua</td><td class="${o.value?"on":"off"}">${o.value?"ON":"OFF"}</td><td class="mono">${o.contributors.join(", ")}</td></tr>`);
+  const internals = Object.entries(S.values).filter(([k]) => !M.inputs.includes(k) && !(k in (S.outputs||{}))).map(([k, v]) =>
+    `<tr><td class="mono">${k}</td><td>memorizada</td><td class="mono">${v}</td><td></td></tr>`);
+  $("vars").innerHTML = (outs.length || internals.length) ? `<tr><th>Variable</th><th>Modo</th><th>Valor</th><th>Contribuyen</th></tr>` + outs.join("") + internals.join("") : "<tr><td class='off'>Sin salidas ni variables internas</td></tr>";
+  const temp = Object.entries(S.temporal || {});
+  $("tempcard").hidden = !temp.length;
+  $("temp").innerHTML = `<tr><th>Condición</th><th>Fase</th><th>Valor</th><th>Vence</th></tr>` + temp.map(([k, t]) =>
+    `<tr><td class="mono">${t.label}</td><td>${t.phase}</td><td class="${t.effectiveValue?"on":"off"}">${t.effectiveValue?"verdadera":"falsa"}</td><td>${t.deadlineS || "—"}</td></tr>`).join("");
+  $("trace").innerHTML = (S.trace || []).map(r => `<li><span class="t">${r.time}</span><span class="${r.kind}">${r.text}</span></li>`).join("");
+  $("trace").scrollTop = $("trace").scrollHeight;
+}
+$("ej").onchange = () => call("cargar", {ejemplo:$("ej").value});
+$("reset").onclick = () => call("reiniciar");
+$("evo").onclick = () => call("evolucion");
+$("fin").onclick = () => call("estabilizar");
+$("rt").onclick = () => setRealTime(!rtTimer);
+$("u03").onchange = () => call("opciones", {options: {"U-03": $("u03").value}});
+document.querySelectorAll("[data-us]").forEach(b => b.onclick = () => call("avanzar", {us:Number(b.dataset.us)}));
+load();
+</script>
+</body>
+</html>

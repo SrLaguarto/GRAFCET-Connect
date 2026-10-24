@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from .profile import APP_VERSION, CAPABILITIES, FINDINGS, FORMAT_VERSION, NORMATIVE_BASE, PROFILE_ID, \
-    PROFILE_VERSION, U_REGISTRY
+    PROFILE_VERSION, SEMANTIC_OPTIONS, U_REGISTRY
 
 CRITICAL_U = {"U-01", "U-03", "U-04", "U-05", "U-06", "U-07", "U-08", "U-09", "U-12"}
 
@@ -27,6 +27,8 @@ def coverage_declaration() -> dict[str, Any]:
         "capabilities": [{"id": c.id, "status": c.status, "reason": c.reason, "requirements": list(c.requirements),
                           "description": c.description} for c in caps],
         "excludedMatters": [{"capability": c.id, "question": c.reason} for c in excluded],
+        "selectableReadings": {q: {"default": v["default"], "scope": v["scope"], "values": v["values"]}
+                               for q, v in SEMANTIC_OPTIONS.items()},
         "openQuestions": U_REGISTRY,
         "findings": FINDINGS,
     }
@@ -49,5 +51,11 @@ def render_markdown(decl: dict[str, Any]) -> str:
                      f"{', '.join(c['requirements'])} |")
     lines += ["", "## Materias excluidas por cuestiones críticas abiertas (REQ-NOR-02)", ""]
     lines += [f"- `{x['capability']}`: {x['question']}" for x in decl["excludedMatters"]]
+    lines += ["", "## Lecturas seleccionables como hipótesis (P-IMP-15)", "",
+              "Elegir una lectura distinta de la predeterminada no cierra la cuestión ni amplía la cobertura: la "
+              "ejecución queda marcada con esa hipótesis en su perfil efectivo y en su traza.", ""]
+    for q, spec in decl["selectableReadings"].items():
+        lines.append(f"- **{q}** ({spec['scope']}); por defecto `{spec['default']}`:")
+        lines += [f"  - `{k}`: {v}" for k, v in spec["values"].items()]
     lines.append("")
     return "\n".join(lines)

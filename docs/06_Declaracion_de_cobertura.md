@@ -84,3 +84,12 @@ Base normativa declarada: IEC 60848 edición 3.0 (2013-02-27), adopción UNE-EN 
 - `transiciones.fuente-nivel`: U-07
 - `transiciones.fuente-repeticion`: U-07 (con U-03)
 - `transiciones.sin-lados`: U-07
+
+## Lecturas seleccionables como hipótesis (P-IMP-15)
+
+Elegir una lectura distinta de la predeterminada no cierra la cuestión ni amplía la cobertura: la ejecución queda marcada con esa hipótesis en su perfil efectivo y en su traza.
+
+- **U-03** (receptividades de transición con eventos de entrada en evoluciones posteriores del contexto); por defecto `detener`:
+  - `detener`: Detener con D-SEM-PENDIENTE: la cuestión sigue abierta
+  - `situacion-anterior`: El evento solo franquea transiciones validadas en la situación anterior al evento
+  - `recorrido`: El evento sigue disponible durante todo el recorrido transitorio que provoca
