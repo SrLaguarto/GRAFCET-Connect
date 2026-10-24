@@ -32,6 +32,9 @@ from grafcet.profile import SEMANTIC_OPTIONS, normalize_options  # noqa: E402
 from grafcet.timeutil import format_duration  # noqa: E402
 
 PAGE = Path(__file__).with_name("banco_de_pruebas.html")
+# La página se lee una vez al arrancar: así un servidor en marcha sirve siempre la página de su misma
+# versión. Si se releyera en cada petición, un servidor antiguo entregaría la página nueva con datos antiguos.
+PAGE_BYTES = PAGE.read_bytes()
 
 
 def ej_temporizada() -> tuple[M, dict]:
@@ -242,7 +245,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         if self.path in ("/", "/index.html"):
-            self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+            self._send(200, PAGE_BYTES, "text/html; charset=utf-8")
         elif self.path == "/api/estado":
             with BANCO.lock:
                 self._json({"model": BANCO.model, "state": BANCO.state(),

@@ -216,6 +216,28 @@ function drawDiagram() {
 }
 
 function render() {
+  // Un fallo al dibujar nunca debe dejar la página en blanco sin explicación.
+  try { renderAll(); }
+  catch (e) {
+    console.error(e);
+    $("toast").textContent = "Error al dibujar el banco (" + e.message + "). Si lo abrió con el lanzador, cierre su " +
+      "ventana negra y vuelva a abrirlo; si persiste, avise con este mensaje.";
+  }
+}
+
+function renderOptions() {
+  const card = $("u03").closest(".card");
+  const spec = S.optionSpecs && S.optionSpecs["U-03"], cur = S.options && S.options["U-03"];
+  card.hidden = !spec;
+  if (!spec) return;
+  $("u03").innerHTML = Object.entries(spec.values).map(([k, v]) =>
+    `<option value="${k}" ${k === cur ? "selected" : ""}>${k === spec.default ? "Por defecto · " : "Hipótesis · "}${v}</option>`).join("");
+  $("u03note").innerHTML = cur === spec.default
+    ? "La cuestión sigue abierta: el motor se detiene y no elige."
+    : "<b>Hipótesis activa.</b> Se registra en la traza y en las instantáneas; no cierra U-03 ni implica conformidad. Cambiarla reinicia la ejecución.";
+}
+
+function renderAll() {
   const [label, cls] = STATUS[S.status] || [S.status, ""];
   $("badge").textContent = label; $("badge").className = "badge " + cls;
   $("title").textContent = M.title; $("help").textContent = M.help;
@@ -230,14 +252,9 @@ function render() {
       ` {${S.blocked.lastStable.join(", ")}}, que <b>no</b> es el resultado del lote` : ""}. Pulse «Reiniciar» para seguir.` :
       "Contexto pendiente: puede completarse o ampliarse el presupuesto."}</p></div>`).join("");
   if (S.status === "error" && rtTimer) setRealTime(false);
-  const spec = S.optionSpecs["U-03"], cur = S.options["U-03"];
-  $("u03").innerHTML = Object.entries(spec.values).map(([k, v]) =>
-    `<option value="${k}" ${k === cur ? "selected" : ""}>${k === spec.default ? "Por defecto · " : "Hipótesis · "}${v}</option>`).join("");
-  $("u03note").innerHTML = cur === spec.default
-    ? "La cuestión sigue abierta: el motor se detiene y no elige."
-    : "<b>Hipótesis activa.</b> Se registra en la traza y en las instantáneas; no cierra U-03 ni implica conformidad. Cambiarla reinicia la ejecución.";
-  if (S.time === undefined) { $("diagram").innerHTML = ""; return; }
-  drawDiagram();
+  if (S.time === undefined) { $("diagram").innerHTML = ""; renderOptions(); return; }
+  drawDiagram();  // primero el diagrama: lo secundario no puede impedir que se vea
+  renderOptions();
   $("inputs").innerHTML = M.inputs.map(v => {
     const on = S.values[v] === true;
     return `<button data-var="${v}" aria-pressed="${on}" aria-label="Entrada ${v}, valor ${on ? 1 : 0}" ${stable ? "" : "disabled"}><b>${v}</b> = ${on ? "1" : "0"}</button>`;
