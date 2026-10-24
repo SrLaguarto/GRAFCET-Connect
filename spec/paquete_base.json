@@ -1,0 +1,17 @@
+{
+ "version": "0.1",
+ "sha256": {
+  "01_Alcance_y_objetivos.md": "8e6ac3453625fdd3038b79eb66a814ba5b24be21f0c51e98920ba4f942471d09",
+  "02_Fuentes_normativas_y_clean_room.md": "7f244a47633df1ee4f188f10ea6dcfef99d908112d2983d6ee612915aafdc535",
+  "03_Modelo_conceptual_y_notacion.md": "71eaf6eeb321e3c21356577b5b691392a6ea9e550b696e19f3dc048165b779dc",
+  "04_Semantica_de_evolucion.md": "31044abfd634919c7a404853edc8ba59d2d9b7d4f65450e27a62211a74d66d53",
+  "05_Receptividades_eventos_tiempo_y_acciones.md": "f76845d8a2f3f038c93ef0b893adc8b74552b52c3e9d5e18f570a5a544deac3c",
+  "06_Estructuracion_y_jerarquias.md": "30083d332968986b4e384a69b4d9e1c1289fef542294cb71ed0886722aa2a788",
+  "07_Requisitos_del_editor.md": "17c31cc1a1bbd603602bac3db75bd8c54eb30a76104b4a725211453571ca60c4",
+  "08_Simulador_trazas_y_diagnostico.md": "9e20fbff13685979d240b76790647f54b7796280983694f8b861a5eb1d18c345",
+  "09_Datos_y_contratos.md": "01c18ca01b83f25ef9c951dbc0253548bd1511c9d382b6e91b87f298925ef063",
+  "10_Arquitectura_conceptual_y_multiplataforma.md": "ff050f4abab5f0c722b11ed2bcb8696ac5fc9e4e9b201adb078e7226329c31fb",
+  "11_Trazabilidad_y_plan_de_pruebas.md": "89c92c692d71280162bf015ceaed75ef78472c537dd8d99a3b7768b159a384a8",
+  "12_Decisiones_pendientes_y_traspaso.md": "fbf03540e458f2cf7d6798cee4e3a760f1a7f3b999d85756d7fca5bd25db1239"
+ }
+}

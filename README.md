@@ -1,0 +1,74 @@
+# Núcleo GRAFCET — implementación parcial del paquete 0.1
+
+Implementación de la **segunda IA** a partir de los doce documentos de `../Definición del proyecto/`, que no se modifican. Cubre los requisitos que no dependen de las cuestiones U pendientes. Lo que sí depende de una U no se aproxima: se detiene con un diagnóstico que nombra la cuestión.
+
+> **No se declara conformidad** con IEC 60848:2013 ni con UNE-EN 60848:2022. Las capacidades I son provisionales (U-01); las que dependen de una U abierta están bloqueadas. Ver `docs/06_Declaracion_de_cobertura.md`.
+
+## Uso
+
+Requiere Python ≥ 3.12, sin dependencias externas.
+
+```bash
+python tools/comprobar_paquete.py
+```
+
+```bash
+python tools/ejecutar_pruebas.py
+```
+
+```bash
+python tools/generar_trazabilidad.py
+```
+
+```bash
+python tools/medir_presupuestos.py
+```
+
+El primer comando comprueba la parte automatizable de R-02: el paquete sigue siendo exactamente doce Markdown con las huellas registradas. El segundo ejecuta la batería y deja la evidencia en `docs/resultados_pruebas.json`. El tercero regenera la matriz y los documentos 02, 05 y 06. El cuarto hace una medición indicativa que no es aceptación (U-10).
+
+## Documentos
+
+| Documento | Contenido |
+|---|---|
+| [docs/01_Revision_de_coherencia.md](docs/01_Revision_de_coherencia.md) | Revisión del paquete: hallazgos H-01…H-22 con caso discriminante y tratamiento |
+| [docs/02_Alcance_implementable.md](docs/02_Alcance_implementable.md) | Clasificación de los 82 requisitos frente a las U; propuesta para cerrar U-12 (generado) |
+| [docs/03_Decision_tecnologica.md](docs/03_Decision_tecnologica.md) | Tecnología propuesta y su justificación |
+| [docs/04_Decisiones_de_implementacion.md](docs/04_Decisiones_de_implementacion.md) | Decisiones P-IMP pendientes de aceptación y lecturas del paquete |
+| [docs/05_Trazabilidad.md](docs/05_Trazabilidad.md) | Matriz requisito ↔ módulo ↔ caso ↔ resultado (generado) |
+| [docs/06_Declaracion_de_cobertura.md](docs/06_Declaracion_de_cobertura.md) | Capacidades y su estado; materias excluidas (generado) |
+| [docs/07_Medicion_indicativa.md](docs/07_Medicion_indicativa.md) | Medición de presupuestos en este equipo (no ratificada) |
+
+## Estructura
+
+| Módulo | Responsabilidad (documento 10) | Requisitos principales |
+|---|---|---|
+| `grafcet/model.py` | Modelo y validación | MOD-01..07, ACT-04, JER-03, DAT-01, DAT-08 |
+| `grafcet/expressions.py`, `values.py`, `timeutil.py` | Expresiones, tipos y tiempo exactos | EXP-01/02, TMP-01 |
+| `grafcet/engine.py` | Interpretación, escenarios y reloj, sesión | SEM-*, EVT-01, TMP-02, ACT-01..03, SIM-* |
+| `grafcet/profile.py`, `declaration.py` | Perfil, capacidades y bloqueos U | NOR-01/02, ALC-03 |
+| `grafcet/scenario.py` | Lotes, entradas iniciales, parada | EVT-02, SIM-02 |
+| `grafcet/trace.py` | Traza, cierre, digest | SIM-05, DAT-08 |
+| `grafcet/persistence.py`, `canonical.py`, `ids.py` | Persistencia abierta, canónica y atómica | DAT-01..07, ROB-02, EDT-10, PLT-02 |
+| `grafcet/editor.py` | Operaciones de edición sin interfaz | EDT-01..07, 09, 14; MOD-03, MOD-06 |
+| `spec/clasificacion.py` | Clasificación de requisitos y tratamiento de casos | U-12 (propuesta) |
+| `tests/` | Casos T-01…T-26 del documento 11 y suplementarios S-xx | — |
+
+## Convención de commits
+
+Cada commit traza requisito, cambio y prueba:
+
+- Título: qué cambia, en una línea.
+- Cuerpo: requisitos afectados (`REQ-…`), casos (`T-…`, `S-…`) y cuestiones o hallazgos (`U-…`, `H-…`, `P-IMP-…`) que motivan o limitan el cambio.
+- Antes de confirmar, ejecutar `tools/ejecutar_pruebas.py` y `tools/generar_trazabilidad.py`, e incluir `docs/resultados_pruebas.json` y los documentos regenerados en el mismo commit, de modo que cada commit lleve su propia evidencia.
+- Un cambio de oráculo nunca va en el mismo commit que el código que lo satisface. Debe aprobarlo antes el revisor correspondiente (documento 12).
+
+## Procedencia (REQ-CR-02, REQ-CR-03, REQ-CR-04)
+
+Este trabajo se ha hecho solo con los doce documentos del paquete. No se han consultado la norma, el PDF local, las imágenes, otros productos, sus repositorios ni sus capturas. No se ha accedido a la red. Ningún oráculo procede de otro producto: las pruebas implementan los oráculos del documento 11 y, como variantes declaradas, los casos suplementarios S-xx. No se ha detectado contaminación. Como advierte el documento 02, no se afirma un aislamiento absoluto respecto al entrenamiento del modelo.
+
+## Lo que falta
+
+- Ejecución jerárquica (forzado, macroetapas, encapsulación): está modelada y validada, pero no se ejecuta (hallazgo H-18; U-08).
+- Interfaz gráfica (Qt 6/PySide6 propuesta), exportación SVG/PDF y accesibilidad: requieren instalar la dependencia y ratificar U-10.
+- Empaquetado, matriz de sistemas y medición en el equipo de referencia (U-10).
+- Ratificación del formato 0.1 (U-11) y cierre de las U normativas, que permitiría desbloquear capacidades.

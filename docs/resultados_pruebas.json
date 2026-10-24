@@ -1,0 +1,894 @@
+{
+ "date": "2026-10-24T21:39:10+02:00",
+ "python": "3.12.10",
+ "platform": "Windows-11-10.0.26200-SP0",
+ "machine": "AMD64",
+ "total": 118,
+ "failures": 0,
+ "errors": 0,
+ "results": [
+  {
+   "test": "test_suplementarios.BloqueosU.test_SU03_accion_por_evento_en_etapa_que_sale",
+   "case": "S-U03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-02",
+    "REQ-EVT-03"
+   ],
+   "summary": "REQ-EVT-03, REQ-ACT-02: acción sobre evento y etapa desactivada por ese evento (U-03/U-05)."
+  },
+  {
+   "test": "test_suplementarios.BloqueosU.test_SU03_flanco_sobre_variable_interna",
+   "case": "S-U03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03"
+   ],
+   "summary": "REQ-EVT-03: eventos internos estáticamente bloqueados (U-03)."
+  },
+  {
+   "test": "test_suplementarios.BloqueosU.test_SU05_receptividad_lee_valor_asignado",
+   "case": "S-U05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-05",
+    "REQ-SEM-09"
+   ],
+   "summary": "REQ-ACT-05, REQ-SEM-09: asignación n:=1 seguida de receptividad n=1 en etapa virtual (U-05)."
+  },
+  {
+   "test": "test_suplementarios.BloqueosU.test_SU06_delay_cero",
+   "case": "S-U06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-TMP-03"
+   ],
+   "summary": "REQ-TMP-03: delay con d1=0 bloqueado (U-06)."
+  },
+  {
+   "test": "test_suplementarios.BloqueosU.test_SU06_lote_y_vencimiento_coincidentes",
+   "case": "S-U06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-TMP-03"
+   ],
+   "summary": "REQ-TMP-03: coincidencia de lote y vencimiento en el mismo τ (H-17, U-06)."
+  },
+  {
+   "test": "test_suplementarios.BloqueosU.test_SU06_vencimientos_que_dependen_del_orden",
+   "case": "S-U06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SEM-08",
+    "REQ-TMP-03"
+   ],
+   "summary": "REQ-TMP-03, REQ-SEM-08: vencimientos simultáneos con efecto mutuo (U-06)."
+  },
+  {
+   "test": "test_suplementarios.BloqueosU.test_SU07_fuente_de_nivel_y_transicion_sin_lados",
+   "case": "S-U07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-04"
+   ],
+   "summary": "REQ-MOD-04: U-07 en validación; el borrador se conserva."
+  },
+  {
+   "test": "test_suplementarios.BloqueosU.test_SU09_inicio_inestable_acciones_iniciales_y_temporal_verdadero",
+   "case": "S-U09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-02",
+    "REQ-SEM-01",
+    "REQ-TMP-02"
+   ],
+   "summary": "REQ-SEM-01, REQ-ACT-02, REQ-TMP-02: bloqueos de inicialización (U-09)."
+  },
+  {
+   "test": "test_suplementarios.Hallazgos.test_S08a_limite_de_evolucion_recuperable",
+   "case": "S-08a",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01",
+    "REQ-SEM-07",
+    "REQ-SIM-08"
+   ],
+   "summary": "REQ-SEM-07, REQ-ROB-01, REQ-SIM-08: variante de T-08a disparada por un lote (H-03)."
+  },
+  {
+   "test": "test_suplementarios.Hallazgos.test_S12a_retardo_tras_activacion_no_inicial",
+   "case": "S-12a",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-TMP-02"
+   ],
+   "summary": "REQ-TMP-02: variante de T-12a independiente de H-02 (activación por transición a 1 s)."
+  },
+  {
+   "test": "test_suplementarios.Hallazgos.test_SH05_activar_etapa_ya_activa_bloqueo_U04",
+   "case": "S-H05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03",
+    "REQ-SEM-05"
+   ],
+   "summary": "REQ-SEM-05, REQ-EVT-03: hallazgo H-05 (activación de etapa ya activa fuera de D)."
+  },
+  {
+   "test": "test_suplementarios.Hallazgos.test_SH07_memoria_inicial_no_nula_bloqueo_U09",
+   "case": "S-H07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-02",
+    "REQ-SEM-01"
+   ],
+   "summary": "REQ-ACT-02, REQ-SEM-01: hallazgo H-07."
+  },
+  {
+   "test": "test_suplementarios.Hallazgos.test_SH08_actividad_de_parcial_con_hijos",
+   "case": "S-H08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-01"
+   ],
+   "summary": "REQ-JER-01: hallazgo H-08."
+  },
+  {
+   "test": "test_suplementarios.Hallazgos.test_SH09_reentrada_virtual_con_dependencia_temporal",
+   "case": "S-H09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-TMP-02"
+   ],
+   "summary": "REQ-TMP-02: hallazgo H-09."
+  },
+  {
+   "test": "test_suplementarios.Hallazgos.test_SH10_leer_salida_continua",
+   "case": "S-H10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01"
+   ],
+   "summary": "REQ-ACT-01: hallazgo H-10."
+  },
+  {
+   "test": "test_suplementarios.Hallazgos.test_SH12_id_de_documento_y_nombre_de_fichero",
+   "case": "S-H12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-01",
+    "REQ-PLT-02"
+   ],
+   "summary": "REQ-DAT-01, REQ-PLT-02: hallazgo H-12."
+  },
+  {
+   "test": "test_suplementarios.ReglasP.test_SCAN_formato_canonico",
+   "case": "S-CAN",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-05",
+    "REQ-DAT-06"
+   ],
+   "summary": "REQ-DAT-05, REQ-DAT-06: reglas de representación canónica y lectura estricta (09)."
+  },
+  {
+   "test": "test_suplementarios.ReglasP.test_SDECL_declaracion_sin_conformidad",
+   "case": "S-DECL",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ALC-03",
+    "REQ-NOR-01",
+    "REQ-NOR-02"
+   ],
+   "summary": "REQ-NOR-01, REQ-NOR-02, REQ-ALC-03: la declaración excluye U críticas y no afirma conformidad."
+  },
+  {
+   "test": "test_suplementarios.ReglasP.test_SDEC_decimales_y_enteros_exactos",
+   "case": "S-DEC",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EXP-01",
+    "REQ-TMP-01"
+   ],
+   "summary": "REQ-EXP-01, REQ-TMP-01: sin redondeo silencioso ni desbordamiento."
+  },
+  {
+   "test": "test_suplementarios.ReglasP.test_SEXP_comparacion_encadenada_y_tipos",
+   "case": "S-EXP",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EXP-01"
+   ],
+   "summary": "REQ-EXP-01: comparaciones encadenadas rechazadas; sin conversión booleano↔número."
+  },
+  {
+   "test": "test_suplementarios.ReglasP.test_SPKG_paquete_de_transferencia_intacto",
+   "case": "S-PKG",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ALC-02",
+    "REQ-CR-02"
+   ],
+   "summary": "REQ-ALC-02, REQ-CR-02: parte automatizable de R-02 (doce Markdown, huellas de la versión implementada)."
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T01a_situacion_inicial_explicita",
+   "case": "T-01a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T01b_orden_de_archivo_irrelevante",
+   "case": "T-01b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T01c_restaurar_conserva_memoria_reiniciar_la_pone_a_cero",
+   "case": "T-01c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T01d_sin_iniciales_bloqueo_U07",
+   "case": "T-01d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T02a_receptividad_sin_validacion",
+   "case": "T-02a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T02b_validacion_sin_receptividad",
+   "case": "T-02b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T02c_franqueamiento_inmediato",
+   "case": "T-02c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T03a_divergencia_en_y_activa_el_conjunto",
+   "case": "T-03a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T03b_sincronizacion_desactiva_conjuntamente",
+   "case": "T-03b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T03c_transicion_sumidero",
+   "case": "T-03c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T03d_rama_no_recorrida_no_contribuye",
+   "case": "T-03d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T04a_transiciones_independientes_simultaneas",
+   "case": "T-04a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T04b_sin_exclusion_automatica",
+   "case": "T-04b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T04c_presentacion_orden_y_parciales_no_cambian_observables",
+   "case": "T-04c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T05a_permanencia_activa",
+   "case": "T-05a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T05b_efectos_de_permanencia_bloqueo_U04",
+   "case": "T-05b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T06a_sincronizacion_incompleta",
+   "case": "T-06a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T06b_recorrido_hasta_sincronizar",
+   "case": "T-06b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T06c_paralelismo_y_sincronizacion",
+   "case": "T-06c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T07a_etapa_virtual_sin_pulso",
+   "case": "T-07a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T07b_memorizada_al_activar_etapa_virtual",
+   "case": "T-07b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T07c_memorizada_al_desactivar_etapa_virtual",
+   "case": "T-07c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T08a_inicio_inestable_bloqueado_por_U09",
+   "case": "T-08a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Hallazgo H-03: el modelo de T-08a es inestable al iniciar (U-09). La parte P se prueba en S-08a."
+  },
+  {
+   "test": "test_t01_t08_evolucion.Evolucion.test_T08b_espera_estable_no_es_divergencia",
+   "case": "T-08b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T14a_disyuncion_de_contribuciones",
+   "case": "T-14a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T14b_continua_sin_memoria",
+   "case": "T-14b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T14c_condicion_continua_con_evento",
+   "case": "T-14c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T15a_memorizada_conserva_valor",
+   "case": "T-15a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T15b_accion_por_evento_cuenta_eventos_reales",
+   "case": "T-15b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T15c_lecturas_cruzadas_bloqueo_U05",
+   "case": "T-15c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T16a_conflicto_de_escritura",
+   "case": "T-16a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T16b_escrituras_iguales",
+   "case": "T-16b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T16c_modos_mezclados",
+   "case": "T-16c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T16d_dos_incrementos_bloqueo_U05",
+   "case": "T-16d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T10a_sin_flanco_al_arrancar",
+   "case": "T-10a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T10b_lote_simultaneo_frente_a_lotes_ordenados",
+   "case": "T-10b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T10c_flanco_no_se_retiene",
+   "case": "T-10c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T10d_alcance_causal_del_evento_bloqueo_U03",
+   "case": "T-10d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T10e_fuentes_por_evento_primera_evolucion_y_repeticion_U07",
+   "case": "T-10e",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T11a_permanencia_y_franqueamiento_separados_bloqueo_U04",
+   "case": "T-11a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T11b_evento_de_franqueamiento_bloqueo_U03",
+   "case": "T-11b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Expresiones.test_T09a_precedencia",
+   "case": "T-09a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Expresiones.test_T09b_unidades_y_tipos",
+   "case": "T-09b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Expresiones.test_T09c_texto_pendiente_y_divergencia_se_guardan",
+   "case": "T-09c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Expresiones.test_T09d_observar_no_modifica_estado",
+   "case": "T-09d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T12a_retardo_exacto_sin_cuantizacion",
+   "case": "T-12a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T12b_pulso_breve_no_activa",
+   "case": "T-12b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T12c_accion_limitada",
+   "case": "T-12c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T12d_tiempo_exacto_rechazos",
+   "case": "T-12d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T12e_retardo_de_conexion_y_desconexion",
+   "case": "T-12e",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T12f_reentrada_inicia_intervalo_nuevo",
+   "case": "T-12f",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T13a_lote_con_dos_escrituras",
+   "case": "T-13a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T13b_caida_exacta_en_el_vencimiento_bloqueo",
+   "case": "T-13b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T13c_rebote_durante_desconexion_bloqueo_U06",
+   "case": "T-13c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T13d_vencimientos_simultaneos_misma_frontera",
+   "case": "T-13d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T17a_forzado_no_ejecutable_en_esta_iteracion",
+   "case": "T-17a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T17b_forzado_actual_no_ejecutable",
+   "case": "T-17b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T17c_conflicto_posible_de_forzado",
+   "case": "T-17c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T17d_ciclo_de_forzado",
+   "case": "T-17d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18a_macroetapa_no_ejecutable_en_esta_iteracion",
+   "case": "T-18a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18b_recorrido_de_expansion_no_ejecutable",
+   "case": "T-18b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18c_propiedad_unica_y_recursion",
+   "case": "T-18c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18d_rama_residual_bloqueada",
+   "case": "T-18d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18e_reentrada_de_macroetapa_no_ejecutable",
+   "case": "T-18e",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T19a_encapsulacion_no_ejecutable_en_esta_iteracion",
+   "case": "T-19a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T19b_encapsulacion_anidada_no_ejecutable",
+   "case": "T-19b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T19c_propietario_unico_y_coherencia_inicial",
+   "case": "T-19c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20a_coincidencia_jerarquica_bloqueada",
+   "case": "T-20a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20b_particion_sin_orden_y_actividad_derivada",
+   "case": "T-20b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20c_forzado_contra_recinto_bloqueado",
+   "case": "T-20c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Datos.test_T22a_ida_y_vuelta_conserva_significado_notas_y_vista",
+   "case": "T-22a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Datos.test_T22b_referencia_rota_propietario_contradictorio_clave_duplicada",
+   "case": "T-22b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Datos.test_T22c_versiones_y_desconocidos",
+   "case": "T-22c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Datos.test_T22d_guardado_interrumpido",
+   "case": "T-22d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Datos.test_T22d_recuperacion_separada",
+   "case": "T-22d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Datos.test_T22e_migracion_y_ejes_de_version",
+   "case": "T-22e",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Editor_.test_T21a_crear_guardar_reabrir_duplicar",
+   "case": "T-21a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Editor_.test_T21b_diagnosticos_separados_borrador_guardable",
+   "case": "T-21b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Editor_.test_T21c_cruzar_mover_alinear_no_conecta",
+   "case": "T-21c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Editor_.test_T21d_renombrar_conserva_ids_y_traza",
+   "case": "T-21d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Editor_.test_T21e_copiar_pegar_con_referencia_externa",
+   "case": "T-21e",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Editor_.test_T21f_borrar_encapsulante_y_deshacer_atomico",
+   "case": "T-21f",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Plataforma.test_T24a_trazas_canonicas_deterministas",
+   "case": "T-24a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Parcial: solo Windows en esta iteración; los digests se comparan en otros sistemas (U-10)."
+  },
+  {
+   "test": "test_t21_t26_producto.Plataforma.test_T24b_configuracion_regional",
+   "case": "T-24b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Plataforma.test_T24c_rutas_unicode_e_ids_que_difieren_en_mayusculas",
+   "case": "T-24c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Plataforma.test_T24d_sin_conexion",
+   "case": "T-24d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Robustez.test_T25a_limites",
+   "case": "T-25a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Robustez.test_T25b_script_operador_desconocido_y_ruta_externa",
+   "case": "T-25b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Robustez.test_T25c_profundidad_y_documento_corrupto",
+   "case": "T-25c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Simulacion.test_T22f_restaurar_exige_compatibilidad_exacta",
+   "case": "T-22f",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Simulacion.test_T22g_traza_truncada_o_alterada",
+   "case": "T-22g",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Simulacion.test_T23a_pausa_antes_del_conjunto",
+   "case": "T-23a",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Simulacion.test_T23b_continuo_microavances_y_puntos_de_parada",
+   "case": "T-23b",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Simulacion.test_T23c_instantanea_continuar_y_restaurar",
+   "case": "T-23c",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Simulacion.test_T23d_edicion_durante_ejecucion_crea_revision",
+   "case": "T-23d",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Simulacion.test_T23e_intervencion_de_depuracion",
+   "case": "T-23e",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_t21_t26_producto.Simulacion.test_T23f_instantanea_dentro_de_un_recorrido",
+   "case": "T-23f",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  }
+ ]
+}

@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+.recuperacion/
+*.new
+commit.json.tmp
+.claude/
