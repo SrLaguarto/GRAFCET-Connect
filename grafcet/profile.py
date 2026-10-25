@@ -28,11 +28,11 @@ U_REGISTRY = {
     "U-02": "Terminología y referencias locales dudosas",
     "U-03": "Alcance causal de eventos",
     "U-04": "Permanencia activa y eventos internos",
-    "U-05": "Lecturas y escrituras en un contexto causal",
+    "U-05": "Lecturas y escrituras en un contexto causal (cerrada por el responsable, hoja 08 2.1–2.5; contraste U-01)",
     "U-06": "Fronteras temporales y rebotes",
     "U-07": "Construcciones fuente, vacías y persistentes",
     "U-08": "Interacciones jerárquicas",
-    "U-09": "Inicialización semántica",
+    "U-09": "Inicialización semántica (cerrada por el responsable, hoja 08 1.1–1.5, salvo arranque vacío U-07 y expansiones U-08; contraste U-01)",
     "U-10": "Sistemas soportados y rendimiento",
     "U-11": "Ratificación de formato e intercambio",
     "U-12": "Aceptación del paquete y cobertura final",
@@ -40,9 +40,9 @@ U_REGISTRY = {
 
 # Cuestiones nuevas devueltas por la implementación (docs/01_Revision_de_coherencia.md)
 FINDINGS = {
-    "H-02": "Duración de etapa inicial frente a U-09",
+    "H-02": "Duración de etapa inicial desde τ=0 (confirmada por el responsable, hoja 08 1.4)",
     "H-05": "Activación de etapa ya activa no incluida en D (ampliación de U-04)",
-    "H-07": "Valor inicial distinto de cero en variable memorizada (U-09)",
+    "H-07": "Valor inicial distinto de cero: no se admite; se usa una acción al activar (hoja 08 1.5)",
     "H-08": "Actividad de parcial con parciales anidados",
     "H-09": "Base temporal compuesta (la salida y reentrada en el mismo instante quedó decidida en P-IMP-18)",
     "H-10": "Lectura de salidas continuas en expresiones",
@@ -69,10 +69,14 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
        "provisional", "I (U-01)", "REQ-SEM-02", "REQ-SEM-03", "REQ-SEM-04"),
     _c("situacion.inicial.explicita", "Situación inicial = etapas marcadas iniciales", "provisional", "I (U-01)", "REQ-SEM-01"),
     _c("situacion.inicial.vacia", "Arranque sin etapas iniciales", "no-soportada", "U-07", "REQ-SEM-01", "REQ-MOD-04"),
-    _c("inicio.inestable", "Transición franqueable en la situación inicial", "no-soportada", "U-09", "REQ-SEM-01"),
-    _c("inicio.acciones-activacion", "Acciones memorizadas al activar etapas iniciales", "no-soportada", "U-09", "REQ-ACT-02"),
-    _c("inicio.memoria-no-nula", "Variable memorizada con valor inicial distinto de cero", "no-soportada", "U-09 (H-07)", "REQ-ACT-02"),
-    _c("inicio.temporal-entrada-verdadera", "Condición temporal sobre entrada verdadera al iniciar", "no-soportada", "U-09", "REQ-TMP-02"),
+    _c("inicio.inestable", "Transición franqueable en la situación inicial: evoluciona en τ=0", "provisional",
+       "decisión del responsable, hoja 08 1.2 A", "REQ-SEM-01"),
+    _c("inicio.acciones-activacion", "Acciones al activar de las etapas iniciales: se ejecutan al arrancar",
+       "provisional", "decisión del responsable, hoja 08 1.1 A", "REQ-ACT-02"),
+    _c("inicio.memoria-no-nula", "Variable memorizada con valor inicial distinto de cero (no compila)",
+       "no-soportada", "decisión del responsable, hoja 08 1.5 A: se usa una acción al activar", "REQ-ACT-02"),
+    _c("inicio.temporal-entrada-verdadera", "Condición temporal sobre entrada verdadera al iniciar: cuenta desde τ=0",
+       "provisional", "decisión del responsable, hoja 08 1.3 A", "REQ-TMP-02"),
     _c("permanencia.actividad", "Etapa activada y desactivada a la vez permanece activa", "provisional", "I (U-01)", "REQ-SEM-05"),
     _c("permanencia.efectos", "Acciones, eventos y tiempo de una etapa en permanencia activa o reactivada", "no-soportada", "U-04 (H-05)", "REQ-SEM-05", "REQ-EVT-03"),
     _c("transitorios", "Situaciones virtuales sin pulsos continuos; memorizadas conservadas", "provisional", "I (U-01)", "REQ-SEM-06"),
@@ -91,7 +95,7 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
     _c("temporal.delay-cero", "delay con d1=0", "no-soportada", "U-06", "REQ-TMP-03"),
     _c("temporal.coincidencias", "Vencimiento coincidente con lote, caída en el vencimiento, rebote", "no-soportada", "U-06", "REQ-TMP-03"),
     _c("temporal.vencimientos-simultaneos", "Varios vencimientos en el mismo instante (independientes del orden)", "provisional", "I (U-01)", "REQ-TMP-02"),
-    _c("temporal.duracion-etapa-inicial", "La duración de una etapa inicial cuenta desde τ=0 (oráculos T-12a/T-12c)", "provisional", "I; tensión H-02", "REQ-TMP-02"),
+    _c("temporal.duracion-etapa-inicial", "La duración de una etapa inicial cuenta desde τ=0 (oráculos T-12a/T-12c)", "provisional", "I; decisión del responsable, hoja 08 1.4 A", "REQ-TMP-02"),
     _c("temporal.reentrada-virtual", "Salida y reentrada en el mismo instante: la duración de la etapa no se interrumpe",
        "provisional", "decisión del responsable de producto, 25-10-2026 (P-IMP-18; cierra H-09)", "REQ-TMP-02"),
     _c("temporal.base-compuesta", "Base temporal distinta de entradas o active(etapa)", "no-soportada", "H-09", "REQ-TMP-02"),
@@ -100,9 +104,11 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
     _c("acciones.limitadas", "Acción continua limitada [t0, t0+d)", "provisional", "I (U-01)", "REQ-TMP-02"),
     _c("acciones.memorizadas", "Acciones memorizadas al activar, desactivar o por evento", "provisional", "I (U-01)", "REQ-ACT-02"),
     _c("acciones.activacion-condicionada", "Acción al activar/desactivar con condición adicional", "no-soportada",
-       "no implementada; lectura en contexto U-05", "REQ-ACT-02"),
-    _c("acciones.conflicto","Conflicto de escritura detenido con evidencia", "provisional", "P", "REQ-ACT-03"),
-    _c("acciones.lecturas-contexto", "Lecturas de valores asignados en el mismo contexto causal", "no-soportada", "U-05", "REQ-ACT-05"),
+       "no implementada en esta iteración", "REQ-ACT-02"),
+    _c("acciones.conflicto", "Conflicto de escritura y dependencia cruzada: no compila si es seguro; si no, se detiene",
+       "provisional", "P-IMP-16; decisión del responsable, hoja 08 2.1 C y 2.2 B", "REQ-ACT-03"),
+    _c("acciones.lecturas-contexto", "Lo asignado en un instante se ve en ese mismo instante; vale la última asignación",
+       "provisional", "decisión del responsable, hoja 08 2.3 A y 2.4 A", "REQ-ACT-05"),
     _c("acciones.salidas-continuas-leidas", "Leer salidas continuas en expresiones", "no-soportada", "H-10", "REQ-ACT-01"),
     _c("parciales.actividad", "activePartial sobre parcial sin hijos", "provisional", "I (U-01)", "REQ-JER-01"),
     _c("parciales.anidados", "activePartial sobre parcial con parciales hijos", "no-soportada", "H-08", "REQ-JER-01"),
@@ -116,19 +122,76 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
 ]}
 
 
-# Lecturas seleccionables de cuestiones abiertas (P-IMP-15). Por defecto se detiene, porque el documento 12
-# prohíbe cerrar una U con un valor por defecto de implementación. Elegir otra lectura es una hipótesis
-# explícita del usuario: queda en el perfil efectivo de la traza y las instantáneas, y nunca es conformidad.
+# Lecturas seleccionables de las cuestiones de la hoja 08 (P-IMP-15 y P-IMP-21). Cada alternativa está
+# implementada para poder compararla en el comparador de decisiones. Los valores por defecto son: lo que ya
+# decidió el responsable (bloques 1 y 2) y, para lo abierto, «detener», porque el documento 12 prohíbe cerrar
+# una U con un valor por defecto de implementación. Elegir otra lectura es una hipótesis explícita: queda en
+# el perfil efectivo de la traza y de las instantáneas, y nunca es conformidad.
+_STOP = "Detener: la cuestión sigue abierta"
+
+
+def _opt(default: str, scope: str, values: dict[str, str]) -> dict[str, Any]:
+    return {"default": default, "scope": scope, "values": values}
+
+
 SEMANTIC_OPTIONS: dict[str, dict[str, Any]] = {
-    "U-03": {
-        "default": "detener",
-        "scope": "receptividades de transición con eventos de entrada en evoluciones posteriores del contexto",
-        "values": {
-            "detener": "Detener con D-SEM-PENDIENTE: la cuestión sigue abierta",
-            "situacion-anterior": "El evento solo franquea transiciones validadas en la situación anterior al evento",
-            "recorrido": "El evento sigue disponible durante todo el recorrido transitorio que provoca",
-        },
-    },
+    "U-03": _opt("detener", "U-03: receptividades con eventos de entrada en evoluciones posteriores del instante", {
+        "detener": "Detener con D-SEM-PENDIENTE: la cuestión sigue abierta",
+        "situacion-anterior": "El evento solo franquea transiciones validadas en la situación anterior al evento",
+        "recorrido": "El evento sigue disponible durante todo el recorrido transitorio que provoca"}),
+    "1.1": _opt("A", "U-09: acciones «al activar» de las etapas iniciales", {
+        "A": "Se ejecutan al arrancar", "B": "No se ejecutan: la situación inicial no es una activación"}),
+    "1.2": _opt("A", "U-09: situación inicial inestable", {
+        "A": "Evoluciona en τ=0", "B": "Espera al primer cambio de entradas", "C": "No compila"}),
+    "1.3": _opt("A", "U-09: temporizador sobre una entrada ya verdadera al arrancar", {
+        "A": "Cuenta desde τ=0", "B": "Espera una subida real de la entrada"}),
+    "1.5": _opt("A", "U-09: variable memorizada con valor inicial distinto de 0", {
+        "A": "No compila (se usa una acción al activar)", "B": "Empieza con el valor declarado"}),
+    "2.1": _opt("C", "U-05: varias asignaciones simultáneas a la misma variable", {
+        "A": "Todas leen el valor anterior; si coinciden, una sola escritura",
+        "B": "Se acumulan, una detrás de otra (orden de identificador)", "C": "Conflicto"}),
+    "2.2": _opt("B", "U-05: dependencia cruzada entre asignaciones simultáneas", {
+        "A": "Todas leen el estado anterior (intercambio)", "B": "Error: no compila o se detiene"}),
+    "2.3": _opt("A", "U-05: receptividad que lee un valor asignado en el mismo instante", {
+        "A": "Ve el valor nuevo", "B": "Ve el valor de antes del instante"}),
+    "2.4": _opt("A", "U-05: asignaciones distintas sucesivas en el mismo instante", {
+        "A": "Vale la última", "B": "Conflicto"}),
+    "2.5": _opt("A", "U-05: salida continua que lee una memoria cambiada en el instante", {
+        "A": "Usa el valor final del instante", "B": "Usa el valor de antes del instante"}),
+    "3.1": _opt("detener", "U-04: acciones al activar/desactivar de una etapa en permanencia activa", {
+        "detener": _STOP, "A": "No se ejecuta ninguna", "B": "Se ejecutan las dos"}),
+    "3.2": _opt("detener", "U-04: temporizador de una etapa en permanencia activa o reactivada", {
+        "detener": _STOP, "A": "Sigue contando", "B": "Vuelve a empezar"}),
+    "3.3": _opt("detener", "U-04 (H-05): acciones al activar una etapa que ya estaba activa", {
+        "detener": _STOP, "A": "No se ejecutan", "B": "Se ejecutan"}),
+    "4.1": _opt("detener", "U-06: la base de un retardo cambia exactamente en su vencimiento", {
+        "detener": _STOP, "A": "Primero vence el retardo", "B": "Primero cambia la entrada (cancela)"}),
+    "4.2": _opt("detener", "U-06: rebote durante el retardo de desconexión", {
+        "detener": _STOP, "A": "La condición sigue verdadera sin interrupción",
+        "B": "Se mantiene el plazo; después vuelve a contar el retardo de conexión"}),
+    "4.3": _opt("detener", "U-06: lote y vencimiento independientes en el mismo instante", {
+        "detener": _STOP, "A": "Juntos en un solo instante", "B": "Primero el vencimiento", "C": "Primero el lote",
+        "D": "Solo se detiene si el resultado depende del orden"}),
+    "4.4": _opt("detener", "U-06: retardo cero", {
+        "detener": _STOP, "A": "0s/p equivale a p", "B": "No compila"}),
+    "5.2": _opt("detener", "U-03: acción por evento en una etapa que se desactiva con ese mismo evento", {
+        "detener": _STOP, "A": "Se ejecuta", "B": "No se ejecuta"}),
+    "5.3": _opt("detener", "U-03: acción por evento en una etapa que se activa con ese mismo evento", {
+        "detener": _STOP, "A": "No se ejecuta", "B": "Se ejecuta"}),
+    "6.1": _opt("detener", "U-07: grafcet sin etapas iniciales", {
+        "detener": _STOP, "A": "No compila", "B": "Arranca sin etapas activas"}),
+    "6.2": _opt("detener", "U-07: transición fuente con receptividad de nivel", {
+        "detener": _STOP, "A": "No compila",
+        "B": "Imposición continua: mientras sea verdadera, mantiene activas sus etapas siguientes"}),
+    "6.3": _opt("detener", "U-07: transición fuente con flanco en evoluciones posteriores del instante", {
+        "detener": _STOP, "A": "Franquea una sola vez por flanco"}),
+    "6.4": _opt("detener", "U-07: transición sin etapas antes ni después", {
+        "detener": _STOP, "A": "No compila", "B": "Se permite y no tiene efecto"}),
+    "8.1": _opt("detener", "H-08: actividad de un parcial con parciales hijos", {
+        "detener": _STOP, "A": "Cuenta también las etapas de los hijos", "B": "Solo las etapas propias"}),
+    "8.2": _opt("detener", "H-10: leer una salida continua en una expresión", {
+        "detener": _STOP, "A": "Prohibido: no compila", "B": "Valor de la situación estable anterior",
+        "C": "Valor según la situación inestable del momento"}),
 }
 
 

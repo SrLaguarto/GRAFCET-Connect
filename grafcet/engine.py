@@ -24,7 +24,7 @@ from typing import Any, Generator, Iterable
 
 from . import expressions as ex
 from .diagnostics import Diagnostic, DiagnosticError
-from .model import Action, CompiledModel, TemporalSpec
+from .model import Action, CompiledModel, TemporalSpec, constant_value
 from .profile import blocked, normalize_options, profile_ref
 from .scenario import Batch, Scenario
 from .timeutil import MAX_US
@@ -122,17 +122,43 @@ def state_from_dict(cm: CompiledModel, d: dict[str, Any]) -> tuple[State, list[B
 # --- Entornos de evaluación ----------------------------------------------------------
 
 class _Env:
-    def __init__(self, cm: CompiledModel, w: State, events: dict[str, bool] | None) -> None:
+    """Entorno de evaluación. `options` aplica las lecturas 8.1 y 8.2; `before`/`written` dan, para las variables
+    asignadas en el instante, el valor de antes del instante (lecturas 2.3 B y 2.5 B)."""
+
+    def __init__(self, cm: CompiledModel, w: State, events: dict[str, bool] | None,
+                 options: dict[str, str] | None = None, before: dict[str, Value] | None = None,
+                 written: Any = None) -> None:
         self.cm, self.w, self.events = cm, w, events or {}
+        self.options = options or normalize_options(None)
+        self.before, self.written = before, written
+        self._computing: set[str] = set()
 
     def var(self, vid: str) -> Value:
+        if vid in self.cm.continuous_by_target:  # solo admitido con la lectura 8.2 B o C
+            if self.options["8.2"] == "C" and vid not in self._computing:
+                self._computing.add(vid)
+                try:
+                    return any(a.step in self.w.situation and bool(ex.evaluate(self.cm.exprs[a.cond].node, self))
+                               for a in self.cm.continuous_by_target[vid])
+                finally:
+                    self._computing.discard(vid)
+            return self.w.outputs.get(vid, False)
+        if self.before is not None and self.written is not None and vid in self.written:
+            return self.before[vid]
         return self.w.values[vid]
 
     def active(self, sid: str) -> bool:
         return sid in self.w.situation
 
     def active_partial(self, pid: str) -> bool:
-        return bool(self.cm.partials[pid]["steps"] & self.w.situation)
+        steps = set(self.cm.partials[pid]["steps"])
+        if self.options["8.1"] == "A":  # 8.1 A: también las etapas de los parciales hijos
+            pending = list(self.cm.partials[pid]["children"])
+            while pending:
+                child = pending.pop()
+                steps |= self.cm.partials[child]["steps"]
+                pending.extend(self.cm.partials[child]["children"])
+        return bool(steps & self.w.situation)
 
     def active_macro(self, mid: str) -> bool:
         raise DiagnosticError(blocked("jerarquia.macroetapas", "activeMacro no ejecutable"))
@@ -149,7 +175,8 @@ class _Env:
 
 class _InputEnv(_Env):
     def __init__(self, cm: CompiledModel, values: dict[str, Value]) -> None:
-        self.cm, self.values = cm, values
+        super().__init__(cm, State(frozenset(), {}, {}, {}, {}, {}, 0, 0, 0), None)
+        self.values = values
 
     def var(self, vid: str) -> Value:
         return self.values[vid]
@@ -159,7 +186,7 @@ class _InputEnv(_Env):
 
 @dataclass
 class Stimulus:
-    kind: str  # lote | vencimiento
+    kind: str  # inicio | lote | vencimiento (un lote puede llevar vencimientos simultáneos: lectura 4.3 A)
     time: int
     batch: Batch | None = None
     expiring: tuple[str, ...] = ()
@@ -175,7 +202,7 @@ class Blocked(Exception):
 class Control:
     budget: int = DEFAULT_BUDGET
     abort: bool = False
-    options: dict[str, str] = field(default_factory=normalize_options)  # lecturas elegidas (P-IMP-15)
+    options: dict[str, str] = field(default_factory=normalize_options)  # lecturas elegidas (P-IMP-15, P-IMP-21)
 
 
 @dataclass
@@ -186,16 +213,28 @@ class Outcome:
     diagnostic: Diagnostic | None = None
 
 
-def _base_change(st: TState, spec: TemporalSpec, new: bool, now: int, element: str) -> None:
+def _start_on(st: TState, spec: TemporalSpec, now: int) -> None:
+    if spec.d1 == 0:  # lectura 4.4 A: el retardo cero equivale a la condición
+        st.phase, st.start, st.deadline = "on", now, None
+    else:
+        st.phase, st.start = "on_pending", now
+        st.deadline = now + spec.d1 if now + spec.d1 <= MAX_US else None
+
+
+def _base_change(st: TState, spec: TemporalSpec, new: bool, now: int, element: str, rebound: str = "detener") -> None:
     if new == st.base:
         return
     st.base = new
     if new:
         if st.phase == "off_pending":
-            raise Blocked(blocked("temporal.coincidencias", "rebote: la base vuelve a ser verdadera durante el retardo de "
-                                  "desconexión (cancelar o mantener)", element))
-        st.phase, st.start = "on_pending", now
-        st.deadline = now + spec.d1 if now + spec.d1 <= MAX_US else None
+            if rebound == "detener":
+                raise Blocked(blocked("temporal.coincidencias", "rebote: la base vuelve a ser verdadera durante el "
+                                      "retardo de desconexión (cancelar o mantener)", element))
+            if rebound == "A":  # 4.2 A: sigue verdadera sin interrupción
+                st.phase, st.deadline = "on", None
+            return  # 4.2 B: se mantiene el plazo; al vencer, vuelve a contar el retardo de conexión
+        if st.phase == "inactive":
+            _start_on(st, spec, now)
     elif st.phase == "on_pending":
         st.phase, st.start, st.deadline = "inactive", None, None
     elif st.phase == "on":
@@ -206,17 +245,21 @@ def _base_change(st: TState, spec: TemporalSpec, new: bool, now: int, element: s
             st.deadline = now + spec.d2 if now + spec.d2 <= MAX_US else None
 
 
-def _expire(st: TState, now: int) -> None:
+def _expire(st: TState, now: int, spec: TemporalSpec | None = None) -> None:
     if st.deadline == now:
         if st.phase == "on_pending":
             st.phase, st.deadline = "on", None
         elif st.phase == "off_pending":
             st.phase, st.start, st.deadline = "inactive", None, None
+            if st.base and spec is not None:  # 4.2 B: la base volvió durante la desconexión
+                _start_on(st, spec, now)
 
 
-def compute_outputs(cm: CompiledModel, w: State) -> None:
-    """Salida continua = disyunción de contribuciones de la situación efectiva (REQ-ACT-01)."""
-    env = _Env(cm, w, None)
+def compute_outputs(cm: CompiledModel, w: State, options: dict[str, str] | None = None,
+                    before: dict[str, Value] | None = None, written: Any = None) -> None:
+    """Salida continua = disyunción de contribuciones de la situación efectiva (REQ-ACT-01). Con la lectura
+    2.5 B, las memorias asignadas en el instante se leen con su valor de antes del instante."""
+    env = _Env(cm, w, None, options, before, written)
     for target, acts in sorted(cm.continuous_by_target.items()):
         contrib = []
         for a in acts:
@@ -234,10 +277,21 @@ def _fmt(cm: CompiledModel, vid: str, val: Value) -> Any:
     return format_value(cm.variables[vid].type, val)
 
 
+def _restart_duration(cm: CompiledModel, w: State, sid: str) -> None:
+    """Lectura 3.2 B: la duración de la etapa vuelve a empezar."""
+    w.since[sid] = w.time
+    for key, spec in cm.temporals.items():
+        if spec.base_kind == "active" and spec.base_step == sid:
+            st = TState(base=True)
+            _start_on(st, spec, w.time)
+            w.temporal[key] = st
+
+
 def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                 ) -> Generator[tuple[str, Any], None, Outcome]:
     """Procesa un estímulo hasta su cierre causal. Produce ("propuesta", E), ("aplicada", registro) y
     ("limite", k); devuelve el resultado. El estado z no se modifica: se trabaja sobre una copia."""
+    o = ctl.options
     w = z.copy()
     w.time = stim.time
     records: list[dict[str, Any]] = []
@@ -247,7 +301,9 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
     try:
         # 1. Aplicar el estímulo
         changed: dict[str, Any] = {}
-        if stim.kind == "lote":
+        if stim.kind == "inicio":
+            pass  # situación inicial ya fijada; no se inventan flancos de entrada al leer valores iniciales
+        elif stim.kind == "lote":
             assert stim.batch is not None
             before = dict(w.values)
             for vid, val in stim.batch.changes:
@@ -262,25 +318,92 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
             for key, spec in sorted(cm.temporals.items()):
                 if spec.base_kind == "inputs":
                     _base_change(w.temporal[key], spec, bool(ex.evaluate(spec.base, _InputEnv(cm, w.values))),
-                                 w.time, spec.expr)
-        else:
-            for key in stim.expiring:
-                if key in w.temporal:
-                    _expire(w.temporal[key], w.time)
-        records.append({"kind": "contexto", "timeUs": str(w.time), "stimulus": stim.kind,
-                        "batch": stim.batch.id if stim.batch else None,
-                        "batchOrdinal": stim.batch.ordinal if stim.batch else None,
-                        "origin": stim.batch.origin if stim.batch else "vencimiento",
-                        "inputChanges": changed, "expiring": sorted(stim.expiring),
-                        "events": sorted(k for k, v in events.items() if v)})
+                                 w.time, spec.expr, o["4.2"])
+        for key in stim.expiring:  # vencimientos (también los que van junto a un lote: lectura 4.3 A)
+            if key in w.temporal:
+                _expire(w.temporal[key], w.time, cm.temporals[key])
+        if stim.kind != "inicio":
+            records.append({"kind": "contexto", "timeUs": str(w.time), "stimulus": stim.kind,
+                            "batch": stim.batch.id if stim.batch else None,
+                            "batchOrdinal": stim.batch.ordinal if stim.batch else None,
+                            "origin": stim.batch.origin if stim.batch else "vencimiento",
+                            "inputChanges": changed, "expiring": sorted(stim.expiring),
+                            "events": sorted(k for k, v in events.items() if v)})
         present = {k for k, v in events.items() if v}
         written: dict[str, tuple[Value, list[str]]] = {}
         deact_ctx: set[str] = set()
-        act_ctx: set[str] = set()
+        act_ctx: set[str] = set(prior_s) if stim.kind == "inicio" else set()
+        hypotheses: list[dict[str, Any]] = []  # decisiones tomadas bajo una lectura elegida
+
+        def apply(proposals: list[Action], env: _Env) -> list[dict[str, Any]]:
+            """Asignaciones memorizadas de una evolución (REQ-ACT-02, REQ-ACT-03; lecturas 2.1, 2.2 y 2.4).
+            Se evalúan todas con los valores anteriores a esta evolución y después se escriben."""
+            by_target: dict[str, list[Action]] = {}
+            for a in sorted(proposals, key=lambda a: a.id):
+                by_target.setdefault(a.target, []).append(a)
+            if o["2.2"] == "B":  # dependencia cruzada entre asignaciones simultáneas
+                for a in proposals:
+                    cross = cm.exprs[a.value].support.vars & {b.target for b in proposals if b.target != a.target}
+                    if cross:
+                        raise DiagnosticError(Diagnostic(
+                            "D-DEPENDENCIA-CRUZADA", f"{a.id} lee {sorted(cross)}, que otra acción escribe en la misma "
+                            "evolución", element=a.id, evidence={"contexto": str(w.time)}))
+            results: dict[str, Value] = {}
+            for target, acts in by_target.items():
+                values = [ex.evaluate(cm.exprs[a.value].node, env) for a in acts]
+                if len(acts) > 1:
+                    consts = {constant_value(cm.exprs[a.value]) for a in acts}
+                    same_constant = None not in consts and len(consts) == 1
+                    if o["2.1"] == "B" and not same_constant:  # se acumulan, una detrás de otra
+                        saved, cur = w.values[target], w.values[target]
+                        try:
+                            for a in acts:
+                                w.values[target] = cur
+                                cur = ex.evaluate(cm.exprs[a.value].node, env)
+                        finally:
+                            w.values[target] = saved
+                        values = [cur]
+                    elif not same_constant and (o["2.1"] == "C" or len(set(values)) > 1):
+                        raise DiagnosticError(Diagnostic(
+                            "D-ESCRITURA-CONFLICTO", f"varias asignaciones simultáneas sobre {target}", element=target,
+                            evidence={"propuestas": "; ".join(f"{a.id}={_fmt(cm, target, v)}" for a, v in zip(acts, values)),
+                                      "contexto": str(w.time)}))
+                var = cm.variables[target]
+                val = check_fits(var.type, values[-1])
+                if not in_domain(var.type, var.domain, val):
+                    raise DiagnosticError(Diagnostic("D-NUM", f"{target} fuera de dominio", element=acts[0].id,
+                                                     evidence={"valor": str(val)}))
+                results[target] = val
+            out = []
+            for target, val in sorted(results.items()):
+                authors = [a.id for a in by_target[target]]
+                entry = {"target": target, "value": _fmt(cm, target, val), "authors": authors}
+                if target in written and written[target][0] != val:
+                    if o["2.4"] == "B":
+                        raise DiagnosticError(Diagnostic(
+                            "D-ESCRITURA-CONFLICTO", f"asignaciones sucesivas distintas sobre {target} en el mismo instante",
+                            element=target, evidence={"propuestas": f"{_fmt(cm, target, written[target][0])} y "
+                                                                    f"{_fmt(cm, target, val)}", "contexto": str(w.time)}))
+                    entry["previous"] = _fmt(cm, target, written[target][0])  # 2.4 A: vale la última del recorrido
+                written[target] = (val, written.get(target, (val, []))[1] + authors)
+                w.values[target] = val
+                out.append(entry)
+            return out
+
+        if stim.kind == "inicio" and o["1.1"] == "A":
+            # 1.1 A: las acciones «al activar» de las etapas iniciales se ejecutan al arrancar (evolución 0)
+            initial_actions = [a for sid in sorted(prior_s) for a in cm.stored_by_step.get((sid, "activation"), [])]
+            if initial_actions:
+                assignments = apply(initial_actions, _Env(cm, w, None, o))
+                rec0 = {"kind": "evolucion", "timeUs": str(w.time), "evolutionIndex": 0, "validated": [], "receptivity": {},
+                        "cleared": [], "deactivated": [], "activated": sorted(prior_s), "permanent": [],
+                        "situation": sorted(w.situation), "assignments": assignments}
+                records.append(rec0)
+                yield ("aplicada", rec0)
         done_event_actions: list[Action] = []
-        hypotheses: list[dict[str, Any]] = []  # decisiones tomadas bajo una lectura elegida (P-IMP-15)
         # Duración de cada etapa antes de su primera salida en este contexto (P-IMP-18)
         before_exit: dict[str, tuple[int | None, dict[str, TState]]] = {}
+        old = z.values if o["2.3"] == "B" else None  # 2.3 B: las receptividades ven el valor de antes del instante
         k = 0
         while True:
             k += 1
@@ -288,36 +411,44 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                 yield ("limite", (k - 1, list(records)))
                 if ctl.abort:
                     return Outcome("fallo", None, records, Diagnostic("D-LIM-EVOL", "contexto abandonado tras el límite"))
+            if stim.kind == "inicio" and o["1.2"] == "B":
+                break  # 1.2 B: la situación inicial espera al primer cambio de entradas
             s = w.situation
-            env = _Env(cm, w, events)
-            env0 = _Env(cm, w, None)
+            env = _Env(cm, w, events, o)
+            renv = _Env(cm, w, events, o, old, written)
+            renv0 = _Env(cm, w, None, o, old, written)
             fire: list[str] = []
             info: dict[str, Any] = {}
             for t in sorted(cm.transitions.values(), key=lambda t: t.id):
-                if not t.pre <= s:
+                if not t.pre <= s or (not t.pre and not t.post):  # 6.4 B: sin etapas, sin efecto
                     continue
                 e = cm.exprs[t.cond]
-                if e.support.vars & set(written):
-                    raise Blocked(blocked("acciones.lecturas-contexto", "una receptividad lee un valor asignado en el "
-                                          f"mismo contexto: {sorted(e.support.vars & set(written))}", t.id))
-                val = bool(ex.evaluate(e.node, env))
+                val = bool(ex.evaluate(e.node, renv))  # 2.3 A: ve los valores asignados antes en el mismo instante
                 if k >= 2 and any(n.key in present for n in e.support.events):
-                    without_event = bool(ex.evaluate(e.node, env0))
+                    without_event = bool(ex.evaluate(e.node, renv0))
                     if val != without_event:
                         if not t.pre:
-                            raise Blocked(blocked("transiciones.fuente-repeticion", "transición fuente: ¿se repite el "
-                                                  "mismo evento en evoluciones posteriores del contexto?", t.id))
-                        reading = ctl.options["U-03"]
-                        if reading == "detener":
-                            raise Blocked(blocked("eventos.recorrido", "transición que sigue validada o se valida durante "
-                                                  "el recorrido causado por el propio evento", t.id))
-                        if reading == "situacion-anterior":
-                            val = without_event
-                        hypotheses.append({"question": "U-03", "reading": reading, "transition": t.id,
-                                           "evolutionIndex": k, "receptivity": val})
+                            if o["6.3"] == "detener":
+                                raise Blocked(blocked("transiciones.fuente-repeticion", "transición fuente: ¿se repite "
+                                                      "el mismo evento en evoluciones posteriores del contexto?", t.id))
+                            val = without_event  # 6.3 A: una sola vez por flanco
+                        else:
+                            reading = o["U-03"]
+                            if reading == "detener":
+                                raise Blocked(blocked("eventos.recorrido", "transición que sigue validada o se valida "
+                                                      "durante el recorrido causado por el propio evento", t.id))
+                            if reading == "situacion-anterior":
+                                val = without_event
+                            hypotheses.append({"question": "U-03", "reading": reading, "transition": t.id,
+                                               "evolutionIndex": k, "receptivity": val})
                 info[t.id] = val
+                if val and not t.pre and t.post <= s and not e.support.events:
+                    continue  # 6.2 B: la imposición continua no cambia nada si sus etapas ya están activas
                 if val:
                     fire.append(t.id)
+            if stim.kind == "inicio" and o["1.2"] == "C" and fire:
+                raise DiagnosticError(Diagnostic("D-FORMATO", f"situación inicial inestable ({', '.join(fire)} "
+                                                 "franqueables al arrancar): no se admite (lectura 1.2 C)"))
             proposals: list[Action] = []
             if k == 1:
                 for a in cm.event_actions:
@@ -334,56 +465,51 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
             new_s = (s - d_set) | a_set
             activated, deactivated = a_set - s, d_set - a_set
             permanent, reactivated = d_set & a_set, (a_set & s) - d_set
-            for sid in sorted(permanent | reactivated):
-                if cm.step_dependents.get(sid):
-                    why = "permanencia activa (activada y desactivada a la vez)" if sid in permanent \
-                        else "activación de una etapa ya activa no incluida en D (H-05)"
-                    raise Blocked(blocked("permanencia.efectos", f"{why} con {sorted(cm.step_dependents[sid])}", sid))
+            restart: list[str] = []
+            for sid in sorted(permanent | reactivated):  # U-04 (lecturas 3.1, 3.2, 3.3)
+                acts_on = cm.stored_by_step.get((sid, "activation"), [])
+                acts_off = cm.stored_by_step.get((sid, "deactivation"), [])
+                timed = [x for x in cm.step_dependents.get(sid, ()) if x.startswith(("condición temporal", "acción limitada"))]
+                if sid in permanent:
+                    if (acts_on or acts_off) and o["3.1"] == "detener":
+                        raise Blocked(blocked("permanencia.efectos", "permanencia activa (activada y desactivada a la "
+                                              f"vez) con acciones {sorted(a.id for a in acts_on + acts_off)}", sid))
+                    if o["3.1"] == "B":
+                        proposals.extend(acts_on + acts_off)
+                elif acts_on:
+                    if o["3.3"] == "detener":
+                        raise Blocked(blocked("permanencia.efectos", "activación de una etapa ya activa no incluida en D "
+                                              f"(H-05) con acciones {sorted(a.id for a in acts_on)}", sid))
+                    if o["3.3"] == "B":
+                        proposals.extend(acts_on)
+                if timed:
+                    if o["3.2"] == "detener":
+                        raise Blocked(blocked("permanencia.efectos", f"permanencia o reactivación con {timed}", sid))
+                    if o["3.2"] == "B":
+                        restart.append(sid)
             # Salida y reentrada en el mismo instante: el recorrido no ocupa tiempo, así que la duración de la etapa no
             # se interrumpe (decisión del responsable de producto que cierra H-09, P-IMP-18)
             reentered = activated & deact_ctx
-            for a in done_event_actions:
+            for a in list(done_event_actions):  # U-03: acción por evento en etapa que sale con ese evento (5.2)
                 if a.step in deactivated:
-                    raise Blocked(blocked("eventos.recorrido", f"acción por evento {a.id} en etapa desactivada por el mismo "
-                                          "contexto (U-03/U-05)", a.step))
-            for a in cm.event_actions:
+                    if o["5.2"] == "detener":
+                        raise Blocked(blocked("eventos.recorrido", f"acción por evento {a.id} en etapa desactivada por el "
+                                              "mismo contexto (U-03/U-05)", a.step))
+                    if o["5.2"] == "B" and k == 1 and a in proposals:
+                        proposals.remove(a)
+                    done_event_actions.remove(a)
+            for a in cm.event_actions:  # U-03: acción por evento en etapa que entra con ese evento (5.3)
                 if a.step in activated and any(n.key in present for n in cm.exprs[a.trigger_expr].support.events):
-                    raise Blocked(blocked("eventos.recorrido", f"acción por evento {a.id} en etapa activada durante el "
-                                          "recorrido de ese evento", a.step))
+                    if o["5.3"] == "detener":
+                        raise Blocked(blocked("eventos.recorrido", f"acción por evento {a.id} en etapa activada durante "
+                                              "el recorrido de ese evento", a.step))
+                    if o["5.3"] == "B" and bool(ex.evaluate(cm.exprs[a.trigger_expr].node, env)):
+                        proposals.append(a)
             for sid in sorted(activated):
                 proposals.extend(cm.stored_by_step.get((sid, "activation"), []))
             for sid in sorted(deactivated):
                 proposals.extend(cm.stored_by_step.get((sid, "deactivation"), []))
-            # Asignaciones memorizadas (REQ-ACT-02, REQ-ACT-03; U-05)
-            values: dict[str, list[tuple[Value, str]]] = {}
-            for a in proposals:
-                reads = cm.exprs[a.value].support.vars
-                others = {b.target for b in proposals if b is not a}
-                if reads & (set(written) | others):
-                    raise Blocked(blocked("acciones.lecturas-contexto", f"la acción {a.id} lee "
-                                          f"{sorted(reads & (set(written) | others))}, asignado en el mismo contexto", a.id))
-                var = cm.variables[a.target]
-                val = check_fits(var.type, ex.evaluate(cm.exprs[a.value].node, env))
-                if not in_domain(var.type, var.domain, val):
-                    raise DiagnosticError(Diagnostic("D-NUM", f"{a.target} fuera de dominio", element=a.id,
-                                                     evidence={"valor": str(val)}))
-                values.setdefault(a.target, []).append((val, a.id))
-            assignments = []
-            for target, props in sorted(values.items()):
-                distinct = {p[0] for p in props}
-                if len(distinct) > 1:
-                    raise DiagnosticError(Diagnostic(
-                        "D-ESCRITURA-CONFLICTO", f"valores contradictorios para {target} en la misma evolución",
-                        element=target, evidence={"propuestas": "; ".join(f"{a}={_fmt(cm, target, v)}" for v, a in props),
-                                                  "contexto": str(w.time)}))
-                val = props[0][0]
-                if target in written and written[target][0] != val:
-                    raise Blocked(blocked("acciones.lecturas-contexto", f"asignaciones sucesivas distintas sobre {target} "
-                                          "en el mismo contexto (no se aplica «última escritura gana»)", target))
-                authors = sorted(a for _, a in props)
-                written[target] = (val, written.get(target, (val, []))[1] + authors)
-                w.values[target] = val
-                assignments.append({"target": target, "value": _fmt(cm, target, val), "authors": authors})
+            assignments = apply(proposals, env)
             w.situation = new_s
             for sid in sorted(deactivated):
                 if sid not in before_exit:
@@ -395,13 +521,15 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                 w.since.pop(sid, None)
             for key, spec in sorted(cm.temporals.items()):
                 if spec.base_kind == "active" and spec.base_step in (activated | deactivated) - reentered:
-                    _base_change(w.temporal[key], spec, spec.base_step in new_s, w.time, spec.base_step)
+                    _base_change(w.temporal[key], spec, spec.base_step in new_s, w.time, spec.base_step, o["4.2"])
             for sid in sorted(reentered):
                 since, states = before_exit[sid]
                 if since is not None:
                     w.since[sid] = since
                 for key, st in states.items():
                     w.temporal[key] = replace(st)
+            for sid in restart:
+                _restart_duration(cm, w, sid)
             deact_ctx |= deactivated
             act_ctx |= activated
             rec = {"kind": "evolucion", "timeUs": str(w.time), "evolutionIndex": k,
@@ -410,14 +538,18 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                    "situation": sorted(new_s), "assignments": assignments}
             if reentered:
                 rec["durationKept"] = sorted(reentered)
+            if restart:
+                rec["durationRestarted"] = sorted(restart)
             records.append(rec)
             yield ("aplicada", rec)
-        compute_outputs(cm, w)
+        compute_outputs(cm, w, o, z.values if o["2.5"] == "B" else None, written)
         w.contexts += 1
         w.phase = "estable"
         if stim.kind == "lote":
             w.next_batch += 1
-        virtual = sorted((act_ctx | deact_ctx | prior_s) - w.situation - prior_s) if (act_ctx or deact_ctx) else []
+        # Etapas inestables: activas solo durante el recorrido (al arrancar, también las iniciales que se abandonan)
+        prior_for_virtual = frozenset() if stim.kind == "inicio" else prior_s
+        virtual = sorted((act_ctx | deact_ctx) - w.situation - prior_for_virtual) if (act_ctx or deact_ctx) else []
         closing = {"kind": "estable", "timeUs": str(w.time), "situation": sorted(w.situation),
                    "virtualSteps": virtual,
                    "outputs": {k: v for k, v in sorted(w.outputs.items())},
@@ -472,13 +604,23 @@ def check_simultaneous_expiries(cm: CompiledModel, z: State, stim: Stimulus, bud
 
 # --- Inicialización ------------------------------------------------------------------
 
-def initial_state(cm: CompiledModel, scenario: Scenario) -> tuple[State | None, list[Diagnostic]]:
-    """Inicialización normativa provisional: situación inicial explícita (REQ-SEM-01) y
-    bloqueo de los casos abiertos en U-07/U-09."""
-    diags: list[Diagnostic] = []
+def initial_state(cm: CompiledModel, scenario: Scenario, options: dict[str, str] | None = None
+                  ) -> tuple[State | None, list[Diagnostic]]:
+    """Situación inicial elegida (REQ-SEM-01), antes de su cierre causal en τ=0.
+
+    Respuestas de la hoja 08 (U-09): las memorizadas empiezan en 0 (1.5); las condiciones temporales que ya son
+    verdaderas al arrancar, sobre la actividad de una etapa inicial (1.4) o sobre entradas (1.3), cuentan desde
+    τ=0. Las acciones «al activar» de las etapas iniciales (1.1) y las transiciones ya franqueables (1.2) se
+    resuelven en el contexto de inicio (run_context con estímulo «inicio»). El arranque vacío sigue abierto (U-07)
+    salvo que se elija una lectura de 6.1; 1.3 B y 1.5 B son alternativas para el comparador (P-IMP-21).
+    """
+    o = normalize_options(options)
     s0 = cm.initial_situation()
     if not s0:
-        diags.append(blocked("situacion.inicial.vacia", "no hay etapas iniciales; no se inventa ninguna"))
+        if o["6.1"] == "detener":
+            return None, [blocked("situacion.inicial.vacia", "no hay etapas iniciales; no se inventa ninguna")]
+        if o["6.1"] == "A":
+            return None, [Diagnostic("D-FORMATO", "grafcet sin etapas iniciales: no se admite (lectura 6.1 A)")]
     values: dict[str, Value] = {}
     for v in cm.variables.values():
         if v.id in cm.continuous_by_target:
@@ -487,32 +629,21 @@ def initial_state(cm: CompiledModel, scenario: Scenario) -> tuple[State | None, 
             if v.id in scenario.initial:
                 values[v.id] = scenario.initial[v.id]
         else:
-            if v.initial != zero(v.type):
-                diags.append(blocked("inicio.memoria-no-nula", f"valor inicial declarado {v.initial!r}; el inicio "
-                                     "normativo provisional es falso/cero (H-07)", v.id))
-            values[v.id] = zero(v.type)
-    for sid in sorted(s0):
-        for a in cm.stored_by_step.get((sid, "activation"), []):
-            diags.append(blocked("inicio.acciones-activacion", f"acción al activar la etapa inicial {sid}", a.id))
+            values[v.id] = v.initial if o["1.5"] == "B" else zero(v.type)
     w = State(s0, values, {}, {}, {}, {sid: 0 for sid in s0}, 0, 0, 0)
     for key, spec in sorted(cm.temporals.items()):
-        st = TState()
         if spec.base_kind == "active":
-            if spec.base_step in s0:  # capacidad temporal.duracion-etapa-inicial (H-02)
-                st = TState("on_pending", True, 0, spec.d1)
-        elif bool(ex.evaluate(spec.base, _InputEnv(cm, values))):
-            diags.append(blocked("inicio.temporal-entrada-verdadera", "condición temporal sobre una entrada verdadera "
-                                 "al iniciar", spec.expr))
+            true_at_start = spec.base_step in s0
+        else:
+            true_at_start = bool(ex.evaluate(spec.base, _InputEnv(cm, values)))
+            if true_at_start and o["1.3"] == "B":  # 1.3 B: hace falta una subida real de la entrada
+                w.temporal[key] = TState(base=True)
+                continue
+        st = TState()
+        if true_at_start:
+            st.base = True
+            _start_on(st, spec, 0)
         w.temporal[key] = st
-    if diags:
-        return None, diags
-    env = _Env(cm, w, None)
-    for t in sorted(cm.transitions.values(), key=lambda t: t.id):
-        if t.pre <= s0 and bool(ex.evaluate(cm.exprs[t.cond].node, env)):
-            diags.append(blocked("inicio.inestable", "transición franqueable en la situación inicial", t.id))
-    if diags:
-        return None, diags
-    compute_outputs(cm, w)
     return w, []
 
 
@@ -581,13 +712,23 @@ class Session:
     def start(self) -> list[Diagnostic]:
         if self.status != "preparada":
             raise RuntimeError("la sesión ya se inició")
-        z, diags = initial_state(self.cm, self.scenario)
+        z, diags = initial_state(self.cm, self.scenario, self.options)
         if z is None:
             self.status, self.diagnostics = "error", diags
             self._log("fallo", timeUs="0", diagnostics=[d.to_dict() for d in diags])
             return diags
-        self._begin(z, "inicio")
-        return []
+        # Cierre causal de la situación inicial en τ=0: acciones al activar y recorrido inicial (hoja 08, 1.1 y 1.2)
+        self.z = z
+        self._log("inicio", timeUs="0", origin=z.origin, mode="inicio", situation=sorted(z.situation))
+        self._stim = Stimulus("inicio", 0)
+        self._gen = run_context(self.cm, z, self._stim, self.ctl)
+        self._work, self._flushed = None, 0
+        self.status = "ejecutando"
+        self._pump()
+        if self.status == "pausada-estable":
+            self._snapshot_record()
+            return []
+        return self.diagnostics[-1:]
 
     def start_declared(self, z: State) -> None:
         self._begin(z, "inicio-declarado")
@@ -624,11 +765,55 @@ class Session:
         if nb is not None and nd == nb.time:
             if horizon is not None and nd > horizon:
                 return None
-            return blocked("temporal.coincidencias", f"lote {nb.id} y vencimientos {sorted(deadlines[nd])} en el mismo "
-                           f"instante {nd} µs: no se fija orden de cola")
+            return self._coincidence(nb, nd, tuple(sorted(deadlines[nd])))
         if nb is not None:
             return None if horizon is not None and nb.time > horizon else Stimulus("lote", nb.time, nb)
         return None
+
+    def _coincidence(self, nb: Batch, t: int, keys: tuple[str, ...]) -> Stimulus | Diagnostic:
+        """Lote y vencimientos en el mismo instante (U-06). Si el lote cambia la base de un retardo que vence en
+        ese instante decide la lectura 4.1; si no, la 4.3. «Detener» sigue siendo el valor por defecto (H-17)."""
+        o, z = self.options, self.z
+        after = dict(z.values)
+        after.update(dict(nb.changes))
+        touched = [k for k in keys if k in z.temporal and self.cm.temporals[k].base_kind == "inputs"
+                   and bool(ex.evaluate(self.cm.temporals[k].base, _InputEnv(self.cm, after))) != z.temporal[k].base]
+        expiry, batch = Stimulus("vencimiento", t, None, keys), Stimulus("lote", t, nb)
+        if touched:
+            if o["4.1"] == "detener":
+                return blocked("temporal.coincidencias", f"el lote {nb.id} cambia la base de {touched} justo cuando "
+                               f"vence ({t} µs): no se fija qué va primero")
+            return expiry if o["4.1"] == "A" else batch
+        if o["4.3"] == "detener":
+            return blocked("temporal.coincidencias", f"lote {nb.id} y vencimientos {list(keys)} en el mismo "
+                           f"instante {t} µs: no se fija orden de cola")
+        together = Stimulus("lote", t, nb, keys)
+        if o["4.3"] == "A":
+            return together
+        if o["4.3"] == "B":
+            return expiry
+        if o["4.3"] == "C":
+            return batch
+        # 4.3 D: se comparan los tres órdenes y solo se detiene si el resultado depende del orden
+        results = [self._chain(together), self._chain(expiry, batch), self._chain(batch, expiry)]
+        if all(r is not None for r in results) and all(r.equivalent(results[0]) for r in results[1:]):
+            return together
+        return blocked("temporal.coincidencias", f"lote {nb.id} y vencimientos {list(keys)} en {t} µs: el resultado "
+                       "depende del orden (lectura 4.3 D)")
+
+    def _chain(self, *stims: Stimulus) -> State | None:
+        z: State | None = self.z
+        for st in stims:
+            if st.kind == "vencimiento":
+                st = Stimulus("vencimiento", st.time, None, tuple(k for k in st.expiring
+                                                                  if k not in z.temporal or z.temporal[k].deadline == st.time))
+                if not st.expiring:
+                    continue
+            out = run_full(self.cm, z, st, self.ctl.budget, self.options)
+            if out.status != "estable":
+                return None
+            z = out.state
+        return z
 
     # -- controles
     def _open(self) -> bool:
@@ -798,7 +983,7 @@ class Session:
         z.values[vid] = check_fits(var.type, value)
         z.origin = "intervenido"
         z.next_batch = 0
-        compute_outputs(self.cm, z)
+        compute_outputs(self.cm, z, self.options)
         branch.z = z
         branch._log("intervencion", timeUs=str(z.time), target=vid, before=_fmt(self.cm, vid, before),
                     after=_fmt(self.cm, vid, z.values[vid]), reason=reason, author=author)
@@ -818,7 +1003,7 @@ class Session:
     # -- observación pura (REQ-SIM-03, REQ-SIM-06)
     def observe(self) -> dict[str, Any]:
         z = self.z
-        env = _Env(self.cm, z, None)
+        env = _Env(self.cm, z, None, self.options)
         trans = {}
         for t in sorted(self.cm.transitions.values(), key=lambda t: t.id):
             validated = t.pre <= z.situation

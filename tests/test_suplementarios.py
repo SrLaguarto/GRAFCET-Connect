@@ -37,7 +37,7 @@ class Hallazgos(unittest.TestCase):
         self.assertEqual(s.status, "pausada-recorrido")
         self.assertEqual(last_diag(s).code, "D-LIM-EVOL")
         self.assertEqual(len(records(s, "evolucion")), 20, "últimos registros completos")
-        self.assertEqual(records(s, "estable")[-1]["timeUs"] if records(s, "estable") else None, None,
+        self.assertEqual([r for r in records(s, "estable") if r["timeUs"] == str(S)], [],
                          "no se publica falsa estabilidad")
         self.assertEqual(s.z.time, 0, "el último estado estable no avanza")
         self.assertEqual(records(s, "limite")[-1]["timeUs"], str(1 * S), "τ del contexto sin avanzar")
@@ -65,12 +65,14 @@ class Hallazgos(unittest.TestCase):
         self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-04"))
         self.assertEqual(s.z.values["n"], 0)
 
-    def test_SH07_memoria_inicial_no_nula_bloqueo_U09(self):
-        """REQ-ACT-02, REQ-SEM-01: hallazgo H-07."""
-        cm = M().var("n", "internal", "int", init="5").step("A", True).compile()
-        s = session(cm, start=False)
-        diags = s.start()
-        self.assertEqual({(d.code, d.question) for d in diags}, {("D-SEM-PENDIENTE", "U-09")})
+    def test_SH07_memoria_inicial_no_nula_no_compila(self):
+        """REQ-ACT-02, REQ-SEM-01: hoja 08, 1.5 A (cierra H-07); otro valor inicial se pone al activar la etapa inicial."""
+        res = M().var("n", "internal", "int", init="5").step("A", True).validate()
+        d = next(x for x in res.diagnostics if x.element == "n")
+        self.assertEqual((d.code, d.field), ("D-FORMATO", "initialValue"))
+        self.assertFalse(res.can_simulate)
+        m = M().var("n", "internal", "int").step("A", True).stored("A", "n", "activation", "5")
+        self.assertEqual(session(m.compile()).z.values["n"], 5, "n := 5 al activar la etapa inicial")
 
     def test_SH08_actividad_de_parcial_con_hijos(self):
         """REQ-JER-01: hallazgo H-08."""
@@ -144,13 +146,25 @@ class BloqueosU(unittest.TestCase):
         self.assertEqual((s.z.situation, s.z.values["n"]), ({"A"}, 0))
 
     def test_SU05_receptividad_lee_valor_asignado(self):
-        """REQ-ACT-05, REQ-SEM-09: asignación n:=1 seguida de receptividad n=1 en etapa virtual (U-05)."""
+        """REQ-ACT-05, REQ-SEM-09: hoja 08, 2.3 A; la receptividad ve el valor recién asignado y sigue en el mismo instante."""
         m = M().var("p").var("n", "internal", "int").step("A", True).step("B").step("C")
         m.trans("t", ["A"], ["B"], "p").trans("u", ["B"], ["C"], "n = 1").stored("B", "n", "activation", "1")
         s = session(m.compile(), batches=[(1 * S, 0, {"p": True})])
         s.run()
-        self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-05"))
-        self.assertEqual(s.z.situation, {"A"})
+        self.assertEqual((s.z.situation, s.z.values["n"]), ({"C"}, 1))
+        self.assertEqual([e["cleared"] for e in records(s, "evolucion")], [["t"], ["u"]])
+        self.assertEqual(records(s, "estable")[-1]["virtualSteps"], ["B"], "B es inestable, pero su acción se ejecutó")
+
+    def test_SU05b_asignaciones_sucesivas_vale_la_ultima(self):
+        """REQ-ACT-05, REQ-ACT-02: hoja 08, 2.4 A; dos asignaciones distintas sucesivas en un instante, vale la última."""
+        m = M().var("p").var("z", "internal", "int").step("A", True).step("B").step("C")
+        m.trans("t", ["A"], ["B"], "p").trans("u", ["B"], ["C"], "true")
+        m.stored("B", "z", "activation", "1").stored("C", "z", "activation", "2")
+        s = session(m.compile(), batches=[(1 * S, 0, {"p": True})])
+        s.run()
+        self.assertEqual(s.z.values["z"], 2)
+        last = records(s, "evolucion")[-1]["assignments"][0]
+        self.assertEqual((last["value"], last["previous"]), ("2", "1"))
 
     def test_SU06_lote_y_vencimiento_coincidentes(self):
         """REQ-TMP-03: coincidencia de lote y vencimiento en el mismo τ (H-17, U-06)."""
@@ -183,14 +197,32 @@ class BloqueosU(unittest.TestCase):
         self.assertIsNotNone(res.model)
         self.assertFalse(res.can_simulate)
 
-    def test_SU09_inicio_inestable_acciones_iniciales_y_temporal_verdadero(self):
-        """REQ-SEM-01, REQ-ACT-02, REQ-TMP-02: bloqueos de inicialización (U-09)."""
-        cases = [M().var("p").step("A", True).step("B").trans("t", ["A"], ["B"], "p"),
-                 M().var("z", "internal").step("A", True).stored("A", "z", "activation", "true"),
-                 M().var("p").var("y", "output").step("A", True).cont("A", "y", "delay(1 s, p, 0 s)")]
-        for m in cases:
-            s = session(m.compile(), init={"p": True} if m.doc["variables"][0]["name"] == "p" else None, start=False)
-            self.assertTrue(any(d.question == "U-09" for d in s.start()), m.doc["variables"])
+    def test_SU09_inicializacion_decidida(self):
+        """REQ-SEM-01, REQ-ACT-02, REQ-TMP-02: hoja 08, 1.1 A, 1.2 A y 1.3 A (U-09 cerrada por el responsable)."""
+        # 1.2 A: situación inicial inestable → evoluciona en τ=0; A queda inestable
+        m = M().var("p").var("y", "output").step("A", True).step("B").trans("t", ["A"], ["B"], "p").cont("A", "y")
+        s = session(m.compile(), init={"p": True})
+        self.assertEqual((s.z.situation, s.z.time, s.z.outputs["y"]), ({"B"}, 0, False))
+        self.assertEqual(records(s, "estable")[-1]["virtualSteps"], ["A"])
+        # 1.1 A: acción al activar una etapa inicial, ejecutada al arrancar (evolución 0)
+        m = M().var("z", "internal").step("A", True).stored("A", "z", "activation", "true")
+        s = session(m.compile())
+        self.assertTrue(s.z.values["z"])
+        self.assertEqual(records(s, "evolucion")[0]["evolutionIndex"], 0)
+        # 1.1 A + 1.2 A: la receptividad inicial ve el valor asignado al arrancar (2.3 A)
+        m = M().var("n", "internal", "int").step("A", True).step("B").stored("A", "n", "activation", "1")
+        m.trans("t", ["A"], ["B"], "n = 1")
+        self.assertEqual(session(m.compile()).z.situation, {"B"})
+        # 1.3 A: temporizador sobre una entrada ya verdadera al arrancar cuenta desde τ=0
+        m = M().var("p").var("y", "output").step("A", True).cont("A", "y", "delay(1 s, p, 0 s)")
+        s = session(m.compile(), init={"p": True})
+        s.advance_to(999_999)
+        self.assertFalse(s.z.outputs["y"])
+        s.advance_to(1 * S)
+        self.assertTrue(s.z.outputs["y"])
+        # Sin flancos inventados: una entrada que vale 1 al arrancar no produce ↑p (doc. 05)
+        m = M().var("p").step("A", True).step("B").trans("t", ["A"], ["B"], "rise(p)")
+        self.assertEqual(session(m.compile(), init={"p": True}).z.situation, {"A"})
 
 
 class LecturasSeleccionables(unittest.TestCase):
@@ -210,7 +242,7 @@ class LecturasSeleccionables(unittest.TestCase):
         """REQ-EVT-03, REQ-SEM-09, REQ-NOR-02: sin elección explícita, U-03 sigue deteniendo."""
         s = self._u03()
         self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-03"))
-        self.assertEqual(s.trace.header["semanticProfile"]["options"], {"U-03": "detener"})
+        self.assertEqual(s.trace.header["semanticProfile"]["options"]["U-03"], "detener")
 
     def test_SOPT03b_lectura_situacion_anterior(self):
         """REQ-EVT-03, REQ-SEM-09, REQ-SIM-05: el evento solo franquea lo validado antes de él → B, con hipótesis en la traza."""
@@ -219,7 +251,7 @@ class LecturasSeleccionables(unittest.TestCase):
         hyp = records(s, "estable")[-1]["hypotheses"]
         self.assertEqual(hyp, [{"question": "U-03", "reading": "situacion-anterior", "transition": "u",
                                 "evolutionIndex": 2, "receptivity": False}])
-        self.assertEqual(s.trace.header["semanticProfile"]["options"], {"U-03": "situacion-anterior"})
+        self.assertEqual(s.trace.header["semanticProfile"]["options"]["U-03"], "situacion-anterior")
         self.assertEqual(self._u03("situacion-anterior", reinicio=True).z.situation, {"B"})
 
     def test_SOPT03c_lectura_recorrido(self):
@@ -232,7 +264,7 @@ class LecturasSeleccionables(unittest.TestCase):
         r = self._u03("recorrido", reinicio=True, budget=30)
         self.assertEqual((r.status, last_diag(r).code), ("pausada-recorrido", "D-LIM-EVOL"))
         self.assertEqual([e["cleared"] for e in records(r, "evolucion")][:6], [["t"], ["u"], ["v"], ["t"], ["u"], ["v"]])
-        self.assertEqual(records(r, "estable"), [])
+        self.assertEqual([x for x in records(r, "estable") if x["timeUs"] == str(S)], [], "sin estabilidad publicada")
 
     def test_SOPT03d_instantanea_exige_la_misma_lectura(self):
         """REQ-SIM-04, REQ-DAT-04: no se mezclan instantáneas de lecturas distintas."""
@@ -279,24 +311,29 @@ class ConflictosAlCompilar(unittest.TestCase):
         m4.stored("B", "z", "activation", "1").stored("B", "z", "activation", "-1")
         m5 = base().trans("t", ["A"], ["B"], "p")
         m5.stored("A", "z", "event", "1", event="rise(p)").stored("A", "z", "event", "2", event="rise(p)")
-        for i, mm in enumerate((m, m2, m3, m4, m5), 1):
+        m6 = base().trans("t", ["A"], ["B", "C"], "p")  # hoja 08, 2.1 C: dos incrementos simultáneos
+        m6.stored("B", "z", "activation", "z + 1").stored("C", "z", "activation", "z + 1")
+        for i, mm in enumerate((m, m2, m3, m4, m5, m6), 1):
             diags, res = self._codes(mm)
             self.assertEqual(len(diags), 1, f"caso {i}: {[str(d) for d in res.diagnostics]}")
             self.assertEqual(diags[0].severity, "error")
             self.assertFalse(res.can_simulate, f"caso {i} no debe compilar")
+        m7 = M().var("p").var("x", "internal", "int").var("y", "internal", "int").step("A", True).step("B")
+        m7.trans("t", ["A"], ["B"], "p").stored("B", "x", "activation", "y").stored("B", "y", "activation", "x")
+        res = m7.validate()  # hoja 08, 2.2 B: dependencia cruzada
+        self.assertIn("D-DEPENDENCIA-CRUZADA", {d.code for d in res.diagnostics})
+        self.assertFalse(res.can_simulate)
 
     def test_SESC02_no_son_conflictos_seguros(self):
-        """REQ-ACT-03, REQ-ACT-05: valores iguales, etapas en secuencia y valores no constantes (U-05) no impiden compilar."""
+        """REQ-ACT-03, REQ-ACT-05: la misma constante, etapas en secuencia y eventos distintos no impiden compilar."""
         base = lambda: M().var("p").var("q").var("z", "internal", "int").step("A", True).step("B").step("C")
         iguales = base().trans("t", ["A"], ["B", "C"], "p")
         iguales.stored("B", "z", "activation", "2").stored("C", "z", "activation", "2")
         secuencia = base().trans("t", ["A"], ["B"], "p").trans("u", ["B"], ["C"], "q")
         secuencia.stored("B", "z", "activation", "1").stored("C", "z", "activation", "2")
-        no_constante = base().trans("t", ["A"], ["B", "C"], "p")
-        no_constante.stored("B", "z", "activation", "z + 1").stored("C", "z", "activation", "z + 1")
         eventos_distintos = base().trans("t", ["A"], ["B"], "p")
         eventos_distintos.stored("A", "z", "event", "1", event="rise(p)").stored("A", "z", "event", "2", event="rise(q)")
-        for mm in (iguales, secuencia, no_constante, eventos_distintos):
+        for mm in (iguales, secuencia, eventos_distintos):
             diags, res = self._codes(mm)
             self.assertEqual(diags, [])
             self.assertTrue(res.can_simulate, [str(d) for d in res.diagnostics])
@@ -350,8 +387,13 @@ class ReglasP(unittest.TestCase):
         self.assertFalse([c for c in decl["capabilities"] if c["status"] == "aprobada"])
         self.assertTrue(all(c["status"] in ("provisional", "no-soportada") for c in decl["capabilities"]))
         excluded = {x["capability"] for x in decl["excludedMatters"]}
-        self.assertTrue({"eventos.recorrido", "permanencia.efectos", "acciones.lecturas-contexto",
-                         "temporal.coincidencias", "situacion.inicial.vacia", "inicio.inestable"} <= excluded)
+        self.assertTrue({"eventos.recorrido", "permanencia.efectos", "temporal.coincidencias",
+                         "situacion.inicial.vacia"} <= excluded, "cuestiones aún abiertas")
+        caps = {c["id"]: c for c in decl["capabilities"]}
+        for cid in ("inicio.inestable", "acciones.lecturas-contexto"):  # cerradas por el responsable (hoja 08)
+            self.assertNotIn(cid, excluded)
+            self.assertEqual(caps[cid]["status"], "provisional", "decidida, pero sin contraste normativo (U-01)")
+            self.assertIn("hoja 08", caps[cid]["reason"])
         self.assertEqual(decl["normativeBase"]["edition"], "3.0")
 
     def test_SPKG_paquete_de_transferencia_intacto(self):

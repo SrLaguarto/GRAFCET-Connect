@@ -2,9 +2,9 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-25T09:37:50+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 126 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-25T14:38:49+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 132 pruebas ejecutadas, 0 fallos, 0 errores.
 
-Leyenda: ✔ pasa · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
+Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
 ## Resumen
 
@@ -13,7 +13,8 @@ Leyenda: ✔ pasa · ⛔ bloqueo por U verificado (el oráculo semántico sigue 
 | Implementado (P), verificable ya (`IMPL-P`) | 41 |
 | Implementado como provisional (I; U-01) (`IMPL-I`) | 11 |
 | Parcial (`PARCIAL`) | 11 |
-| Bloqueado por U (bloqueo implementado) (`BLOQ-U`) | 5 |
+| Implementado según decisión del responsable (U cerrada; contraste U-01 pendiente) (`IMPL-DEC`) | 1 |
+| Bloqueado por U (bloqueo implementado) (`BLOQ-U`) | 4 |
 | Pendiente de iteración (estructura hecha) (`PEND-ITER`) | 3 |
 | Pendiente de interfaz (`PEND-UI`) | 5 |
 | Pendiente de plataforma (U-10) (`PEND-PLT`) | 1 |
@@ -21,13 +22,14 @@ Leyenda: ✔ pasa · ⛔ bloqueo por U verificado (el oráculo semántico sigue 
 
 | Estado de los 102 casos del documento 11 | Nº |
 |---|---|
-| BLOQUEO VERIFICADO | 13 |
+| BLOQUEO VERIFICADO | 10 |
 | NO EJECUTADO | 6 |
 | NO IMPLEMENTADO | 7 |
-| PARCIAL | 8 |
-| PASA | 68 |
+| PARCIAL | 7 |
+| PASA | 70 |
+| PASA SEGÚN DECISIÓN | 2 |
 
-Pruebas suplementarias S-xx: 26 casos, 29 pruebas, 29 pasan.
+Pruebas suplementarias S-xx: 32 casos, 35 pruebas, 35 pasan.
 
 ## Requisitos
 
@@ -37,7 +39,7 @@ Pruebas suplementarias S-xx: 26 casos, 29 pruebas, 29 pasan.
 | REQ-ALC-02 | P/crítica | 01 | DOC | tools/comprobar_paquete.py | R-02 (documental), S-PKG ✔ | Parte automatizable de R-02: el paquete conserva exactamente los doce Markdown con sus huellas |
 | REQ-ALC-03 | P/alta | 01 | IMPL-P | profile, declaration | R-01 (documental), S-DECL ✔ | Cada capacidad marcada provisional / no soportada con su motivo |
 | REQ-NOR-01 | P/crítica | 01 | IMPL-P | profile, persistence, declaration | T-22e ✔, S-DECL ✔ | Base normativa declarada en el manifiesto; ejes de versión separados; no se sustituye silenciosamente |
-| REQ-NOR-02 | P/crítica | 01 | IMPL-P | declaration | R-01 (documental), S-OPT03a ✔, S-DECL ✔ | La declaración excluye toda materia con U crítica y nunca afirma conformidad; R-01 sigue siendo documental |
+| REQ-NOR-02 | P/crítica | 01 | IMPL-P | declaration | R-01 (documental), S-CMP01 ✔, S-CMP04 ✔, S-CMP05 ✔, S-OPT03a ✔, S-DECL ✔ | La declaración excluye toda materia con U crítica y nunca afirma conformidad; R-01 sigue siendo documental |
 | REQ-CR-01 | P/crítica | 02 | DOC | tools/paquete.py | R-01 (documental) | Las fuentes y localizadores se conservan en el paquete; la matriz enlaza cada requisito con su documento |
 | REQ-CR-02 | P/crítica | 02 | DOC | — | R-02 (documental), S-PKG ✔ | Esta implementación se ha hecho solo con el paquete; ver declaración de procedencia en README |
 | REQ-CR-03 | P/crítica | 02 | DOC | — | R-02 (documental) | No se ha detectado contaminación; procedimiento descrito en README |
@@ -49,28 +51,28 @@ Pruebas suplementarias S-xx: 26 casos, 29 pruebas, 29 pasan.
 | REQ-MOD-05 | P/alta | 03 | IMPL-P | model, expressions, editor | T-09c ✔ | Texto libre conservado como descriptivo; D-EXP-PENDIENTE localizado |
 | REQ-MOD-06 | P/crítica | 03 | IMPL-P | model, editor, engine | T-04c ✔, T-21d ✔ | Renombrar, mover u ordenar no cambia observables ni revisión semántica (H-13) |
 | REQ-MOD-07 | I/alta | 03 | IMPL-I | model | T-18c ✔, T-19c ✔ | Propiedad única de expansiones y recintos; recursión rechazada (solo estructura) |
-| REQ-SEM-01 | I/crítica | 04 | PARCIAL | engine | T-01a ✔, T-01b ✔, T-01c ◐, T-01d ⛔, S-U09 ✔, S-H07 ✔ | Situación inicial explícita sin jerarquía: I. Inicio inestable, acciones iniciales, memoria no nula y temporal verdadero: U-09. Inicio vacío: U-07 |
+| REQ-SEM-01 | I/crítica | 04 | PARCIAL | engine | T-01a ✔, T-01b ✔, T-01c ✔, T-01d ⛔, S-CMP02 ✔, S-U09 ✔, S-H07 ✔ | Situación inicial explícita y su cierre causal en τ=0: acciones al activar las iniciales, evolución inicial y temporizadores desde τ=0 (hoja 08, 1.1–1.4, P-IMP-19). Abiertos: inicio vacío (U-07) e iniciales dentro de jerarquías (U-08) |
 | REQ-SEM-02 | I/crítica | 04 | IMPL-I | engine | T-02c ✔, T-02a ✔, T-02b ✔, T-06a ✔, T-06b ✔ | Validación y receptividad; imposición jerárquica pendiente de iteración |
 | REQ-SEM-03 | I/crítica | 04 | IMPL-I | engine | T-03a ✔, T-03b ✔, T-03c ✔, T-03d ✔, T-06c ✔ | Cambio conjunto de precedentes y siguientes |
 | REQ-SEM-04 | I/crítica | 04 | IMPL-I | engine | T-04a ✔, T-04b ✔, T-04c ✔, T-06a ✔, T-06b ✔, T-13d ✔ | Conjunto simultáneo completo; sin prioridad por orden |
 | REQ-SEM-05 | I/crítica | 04 | PARCIAL | engine | T-05a ✔, T-05b ⛔, S-H05 ✔ | Actividad I; efectos (acciones, eventos, tiempo) bloqueados por U-04 (y H-05) |
 | REQ-SEM-06 | I/crítica | 04 | IMPL-I | engine | T-07a ✔, T-07b ✔, T-07c ✔, S-H09 ✔ | Etapas virtuales sin pulso continuo; memorizadas conservadas; eventos en el recorrido: U-03 |
-| REQ-SEM-07 | P/crítica | 04 | IMPL-P | engine | T-08a ⛔, T-08b ✔, S-08a ✔, S-H09b ✔, S-OPT03c ✔ | D-LIM-EVOL recuperable, τ sin avanzar, sin falsa estabilidad (S-08a; T-08a bloqueado por U-09, H-03) |
+| REQ-SEM-07 | P/crítica | 04 | IMPL-P | engine | T-08a ✔, T-08b ✔, S-08a ✔, S-H09b ✔, S-OPT03c ✔ | D-LIM-EVOL recuperable, τ sin avanzar, sin falsa estabilidad (T-08a con su oráculo original desde la respuesta 1.2 A; S-08a) |
 | REQ-SEM-08 | P/crítica | 04 | IMPL-P | engine, trace | T-04c ✔, T-23b ✔, T-24a ◐, S-U06 ✔ | Mismos observables con independencia de recorrido, geometría y control; entre sistemas: U-10 |
-| REQ-SEM-09 | U/crítica | 04 | BLOQ-U | engine | T-10d ⛔, T-11b ⛔, T-15c ⛔, S-U05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔ | U-03..U-05: detención con D-SEM-PENDIENTE; si todas las lecturas coinciden, se acepta. U-03 admite además lecturas elegidas como hipótesis registrada (P-IMP-15) |
+| REQ-SEM-09 | U/crítica | 04 | BLOQ-U | engine | T-10d ⛔, T-11b ⛔, T-15c ◆, S-CMP01 ✔, S-CMP02 ✔, S-CMP03 ✔, S-CMP05 ✔, S-U05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔ | U-05 cerrada por el responsable (P-IMP-20); U-03 seleccionable como hipótesis (P-IMP-15); las alternativas de U-04, U-06 y U-07 se prueban en el comparador (P-IMP-21), pero por defecto siguen deteniéndose. Si todas las lecturas coinciden, se acepta |
 | REQ-ACT-01 | I/crítica | 05 | IMPL-I | engine | T-14a ✔, T-14b ✔, T-14c ✔, T-07a ✔, T-12c ✔, S-H10 ✔ | Disyunción sobre situación efectiva; lectura de salidas continuas no soportada (H-10) |
-| REQ-ACT-02 | I/crítica | 05 | IMPL-I | engine | T-15a ✔, T-15b ✔, T-01c ◐, T-07b ✔, T-07c ✔, T-18e ∅, S-U03 ✔, S-U09 ✔, S-H07 ✔ | Memorizadas por activación, desactivación y evento, también virtuales |
+| REQ-ACT-02 | I/crítica | 05 | IMPL-I | engine | T-15a ✔, T-15b ✔, T-01c ✔, T-07b ✔, T-07c ✔, T-18e ∅, S-CMP02 ✔, S-U03 ✔, S-U05b ✔, S-U09 ✔, S-H07 ✔ | Memorizadas por activación, desactivación y evento, también virtuales |
 | REQ-ACT-03 | P/crítica | 05 | IMPL-P | model, engine | T-16a ✔, T-16b ✔, S-ESC01 ✔, S-ESC02 ✔ | D-ESCRITURA-CONFLICTO con autores y valores, sin prioridad oculta; un conflicto seguro impide compilar (P-IMP-16) y el resto se detiene en ejecución |
 | REQ-ACT-04 | I/crítica | 05 | IMPL-I | model | T-16c ✔ | D-MODO-SALIDA en validación |
-| REQ-ACT-05 | U/crítica | 05 | BLOQ-U | engine | T-15c ⛔, T-16d ⛔, S-U05 ✔, S-ESC02 ✔ | U-05: lecturas cruzadas, incrementos simultáneos y lecturas tras asignación bloqueadas |
+| REQ-ACT-05 | U/crítica | 05 | IMPL-DEC | engine, model | T-15c ◆, T-16d ◆, S-U05 ✔, S-U05b ✔, S-ESC02 ✔ | Hoja 08, 2.1 C, 2.2 B, 2.3 A, 2.4 A y 2.5 A (P-IMP-20): conflicto si dos escriben a la vez, dependencia cruzada no compila, lo asignado se ve en el mismo instante y vale la última asignación |
 | REQ-EVT-01 | I/crítica | 05 | IMPL-I | engine | T-10a ✔, T-10b ✔, T-10c ✔, T-10e ◐ | Flancos sobre entradas en la 1.ª evolución; sin retención ni consumo exclusivo |
 | REQ-EVT-02 | P/crítica | 05 | IMPL-P | scenario | T-10b ✔, T-13a ✔ | Lotes simultáneos frente a lotes ordenados; D-LOTE |
-| REQ-EVT-03 | U/crítica | 05 | BLOQ-U | model, engine | T-10d ⛔, T-11a ⛔, T-11b ⛔, T-05b ⛔, S-U03 ✔, S-H05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔, S-OPT03e ✔ | U-03/U-04: eventos internos, de franqueamiento y en recorrido bloqueados por defecto; lectura de U-03 seleccionable como hipótesis (P-IMP-15, H-23) |
+| REQ-EVT-03 | U/crítica | 05 | BLOQ-U | model, engine | T-10d ⛔, T-11a ⛔, T-11b ⛔, T-05b ⛔, S-CMP02 ✔, S-U03 ✔, S-H05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔, S-OPT03e ✔ | U-03/U-04: eventos internos, de franqueamiento y en recorrido bloqueados por defecto; lectura de U-03 seleccionable como hipótesis (P-IMP-15, H-23) |
 | REQ-EXP-01 | P/alta | 05 | IMPL-P | expressions, values | T-09a ✔, T-09b ✔, T-09c ✔, S-DEC ✔, S-EXP ✔ | Tipos exactos, unidades, precedencia; sintaxis de literales P-IMP-06 |
 | REQ-EXP-02 | P/crítica | 05 | IMPL-P | expressions, engine | T-09d ✔ | Evaluación pura |
 | REQ-TMP-01 | P/crítica | 05 | IMPL-P | timeutil, values | T-12d ✔, T-24b ✔, S-DEC ✔ | µs exactos, rango 0..2^63-1, sin redondeo |
 | REQ-TMP-02 | I/crítica | 05 | IMPL-I | engine, model | T-12a ✔, T-12b ✔, T-12c ✔, T-12e ✔, T-12f ✔, T-13d ✔, S-U09 ✔, S-12a ✔, S-H09 ✔, S-H09b ✔ | delay ordinario, limitadas, retardadas; duración de etapa inicial según T-12a/T-12c (H-02); salida y reentrada en el mismo instante sin interrumpir la duración (P-IMP-18); bases compuestas no soportadas (H-09) |
-| REQ-TMP-03 | U/crítica | 05 | BLOQ-U | engine | T-13b ⛔, T-13c ⛔, T-20a ⛔, S-U06 ✔ | U-06: coincidencias lote/vencimiento, caída en vencimiento, rebote, d1=0, órdenes dependientes |
+| REQ-TMP-03 | U/crítica | 05 | BLOQ-U | engine | T-13b ⛔, T-13c ⛔, T-20a ⛔, S-CMP02 ✔, S-U06 ✔ | U-06: coincidencias lote/vencimiento, caída en vencimiento, rebote, d1=0, órdenes dependientes |
 | REQ-JER-01 | I/crítica | 06 | PARCIAL | engine, model | T-04c ✔, T-20b ✔, S-H08 ✔ | Partición sin orden y XG de parciales sin hijos; anidados: H-08 |
 | REQ-JER-02 | I/crítica | 06 | PEND-ITER | model | T-17a ∅, T-17b ∅ | Cuatro formas de forzado editables y validadas; ejecución pendiente (H-18, U-08) |
 | REQ-JER-03 | P/crítica | 06 | PARCIAL | model | T-17c ◐, T-17d ✔ | Ciclos D-JERARQUIA-CICLO; conflicto posible estático; detección dinámica pendiente de ejecución |
@@ -99,9 +101,9 @@ Pruebas suplementarias S-xx: 26 casos, 29 pruebas, 29 pasan.
 | REQ-SIM-05 | P/crítica | 08 | IMPL-P | trace | T-04a ✔, T-22g ✔, S-OPT03b ✔ | Traza con conjuntos E, causas, cierre y digest |
 | REQ-SIM-06 | P/crítica | 08 | IMPL-P | engine | T-09d ✔, T-23b ✔ | Observar y pausar no modifican comportamiento |
 | REQ-SIM-07 | P/crítica | 08 | IMPL-P | engine | T-23e ✔ | Intervención E en pausa estable, rama auditable |
-| REQ-SIM-08 | P/alta | 08 | IMPL-P | diagnostics, engine | T-08a ⛔, T-08b ✔, T-16a ✔, S-08a ✔ | Evidencia y corrección recomendada en cada diagnóstico |
+| REQ-SIM-08 | P/alta | 08 | IMPL-P | diagnostics, engine | T-08a ✔, T-08b ✔, T-16a ✔, S-08a ✔ | Evidencia y corrección recomendada en cada diagnóstico |
 | REQ-DAT-01 | P/crítica | 09 | IMPL-P | model, persistence, ids | T-22b ✔, T-21e ✔, S-H12 ✔ | Identidades, referencias y propiedad; nombres hexadecimales (H-12) |
-| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
+| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-CMP04 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
 | REQ-DAT-03 | P/crítica | 09 | IMPL-P | persistence | T-22c ✔, T-22e ✔ | Versión mayor/menor, desconocidos y migración con copia e informe |
 | REQ-DAT-04 | P/crítica | 09 | IMPL-P | engine | T-22f ✔, T-23c ✔, T-23f ✔, S-OPT03d ✔ | Instantánea íntegra y compatibilidad exacta; campos U no aplicables declarados |
 | REQ-DAT-05 | P/crítica | 09 | IMPL-P | canonical, timeutil | T-24a ◐, T-24b ✔, S-CAN ✔ | Representación canónica y SHA-256 independientes de región |
@@ -113,7 +115,7 @@ Pruebas suplementarias S-xx: 26 casos, 29 pruebas, 29 pasan.
 | REQ-PLT-02 | P/alta | 10 | PARCIAL | timeutil, persistence | T-24b ✔, T-24c ◐, S-H12 ✔ | Región, Unicode, rutas y mayúsculas verificados en Windows; otros sistemas U-10 |
 | REQ-PLT-03 | P/alta | 10 | PARCIAL | todo el núcleo | T-24d ◐, T-24e — | Sin conexión verificado; instalación y actualización pendientes de empaquetado |
 | REQ-PLT-04 | P/alta | 10 | PARCIAL | model, persistence, tools/medir_presupuestos.py | T-25a ◐, T-25d — | Límites aplicados; medición indicativa, no ratificada (U-10) |
-| REQ-ROB-01 | P/crítica | 10 | IMPL-P | model, engine, persistence | T-08a ⛔, T-08b ✔, T-25a ◐, S-08a ✔ | Límites de datos y de evolución diagnosticados sin alterar significado |
+| REQ-ROB-01 | P/crítica | 10 | IMPL-P | model, engine, persistence | T-08a ✔, T-08b ✔, T-25a ◐, S-08a ✔ | Límites de datos y de evolución diagnosticados sin alterar significado |
 | REQ-ROB-02 | P/crítica | 10 | IMPL-P | persistence, canonical | T-22d ✔, T-25b ✔, T-25c ✔ | Archivos fallidos preservan la última revisión válida y no ejecutan cargas |
 
 ## Casos del documento 11
@@ -122,7 +124,7 @@ Pruebas suplementarias S-xx: 26 casos, 29 pruebas, 29 pasan.
 |---|---|---|---|---|---|
 | T-01a | REQ-SEM-01 | I | PASA (oráculo I) | `test_T01a_situacion_inicial_explicita` |  |
 | T-01b | REQ-SEM-01 | I | PASA (oráculo I) | `test_T01b_orden_de_archivo_irrelevante` |  |
-| T-01c | REQ-SEM-01, REQ-ACT-02 | P/I parcial | PARCIAL | `test_T01c_restaurar_conserva_memoria_reiniciar_la_pone_a_cero` | restaurar/reiniciar verificados; activaciones iniciales U-09 |
+| T-01c | REQ-SEM-01, REQ-ACT-02 | P/I parcial | PASA (oráculo P/I parcial) | `test_T01c_restaurar_conserva_memoria_reiniciar_la_pone_a_cero` | restaurar y reiniciar; las acciones al activar las iniciales ya se ejecutan (1.1 A) |
 | T-01d | REQ-SEM-01, REQ-MOD-04 | B | BLOQUEO VERIFICADO | `test_T01d_sin_iniciales_bloqueo_U07` | U-07 |
 | T-02a | REQ-SEM-02 | I | PASA (oráculo I) | `test_T02a_receptividad_sin_validacion` |  |
 | T-02b | REQ-SEM-02 | I | PASA (oráculo I) | `test_T02b_validacion_sin_receptividad` |  |
@@ -142,7 +144,7 @@ Pruebas suplementarias S-xx: 26 casos, 29 pruebas, 29 pasan.
 | T-07a | REQ-SEM-06, REQ-ACT-01 | I | PASA (oráculo I) | `test_T07a_etapa_virtual_sin_pulso` |  |
 | T-07b | REQ-SEM-06, REQ-ACT-02 | I | PASA (oráculo I) | `test_T07b_memorizada_al_activar_etapa_virtual` |  |
 | T-07c | REQ-SEM-06, REQ-ACT-02 | I | PASA (oráculo I) | `test_T07c_memorizada_al_desactivar_etapa_virtual` |  |
-| T-08a | REQ-SEM-07, REQ-ROB-01 | P | BLOQUEO VERIFICADO | `test_T08a_inicio_inestable_bloqueado_por_U09` | el modelo es inestable al iniciar: U-09 (H-03); la parte P está en S-08a |
+| T-08a | REQ-SEM-07, REQ-ROB-01 | P | PASA (oráculo P) | `test_T08a_ciclo_instantaneo_al_arrancar` | oráculo original ejecutable desde la respuesta 1.2 A de la hoja 08 (cierra H-03) |
 | T-08b | REQ-SEM-07 | P | PASA (oráculo P) | `test_T08b_espera_estable_no_es_divergencia` |  |
 | T-09a | REQ-EXP-01 | P | PASA (oráculo P) | `test_T09a_precedencia` |  |
 | T-09b | REQ-EXP-01, REQ-EDT-07 | P | PASA (oráculo P) | `test_T09b_unidades_y_tipos` |  |
@@ -170,11 +172,11 @@ Pruebas suplementarias S-xx: 26 casos, 29 pruebas, 29 pasan.
 | T-14c | REQ-ACT-01 | I | PASA (oráculo I) | `test_T14c_condicion_continua_con_evento` | segunda parte = T-07a |
 | T-15a | REQ-ACT-02 | I | PASA (oráculo I) | `test_T15a_memorizada_conserva_valor` |  |
 | T-15b | REQ-ACT-02 | I | PASA (oráculo I) | `test_T15b_accion_por_evento_cuenta_eventos_reales` |  |
-| T-15c | REQ-ACT-05, REQ-SEM-09 | B | BLOQUEO VERIFICADO | `test_T15c_lecturas_cruzadas_bloqueo_U05` | U-05 |
+| T-15c | REQ-ACT-05, REQ-SEM-09 | B | PASA SEGÚN DECISIÓN (en el documento 11: B, depende de U) | `test_T15c_lecturas_cruzadas_dependencia_cruzada` | decisión 2.2 B de la hoja 08: dependencia cruzada, no compila; en ejecución se detiene. El error no está entre las lecturas (5,2), (5,5) y (2,2) que lista el caso |
 | T-16a | REQ-ACT-03 | P | PASA (oráculo P) | `test_T16a_conflicto_de_escritura` |  |
 | T-16b | REQ-ACT-03 | I | PASA (oráculo I) | `test_T16b_escrituras_iguales` |  |
 | T-16c | REQ-ACT-04 | I | PASA (oráculo I) | `test_T16c_modos_mezclados` |  |
-| T-16d | REQ-ACT-05 | B | BLOQUEO VERIFICADO | `test_T16d_dos_incrementos_bloqueo_U05` | U-05 |
+| T-16d | REQ-ACT-05 | B | PASA SEGÚN DECISIÓN (en el documento 11: B, depende de U) | `test_T16d_dos_incrementos_conflicto` | decisión 2.1 C de la hoja 08: de las alternativas del caso (n=1, n=2 o conflicto), conflicto |
 | T-17a | REQ-JER-02 | I | NO IMPLEMENTADO (bloqueo verificado) | `test_T17a_forzado_no_ejecutable_en_esta_iteracion` | ejecución de forzado no implementada (H-18) |
 | T-17b | REQ-JER-02 | I/B parcial | NO IMPLEMENTADO (bloqueo verificado) | `test_T17b_forzado_actual_no_ejecutable` | ejecución de forzado no implementada; efectos U-08 |
 | T-17c | REQ-JER-03 | P | PARCIAL | `test_T17c_conflicto_posible_de_forzado` | conflicto posible detectado estáticamente; detección dinámica pendiente |
@@ -232,13 +234,18 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-08a | REQ-ROB-01, REQ-SEM-07, REQ-SIM-08 | pasa | `test_S08a_limite_de_evolucion_recuperable` | variante de T-08a disparada por un lote (H-03). |
 | S-12a | REQ-TMP-02 | pasa | `test_S12a_retardo_tras_activacion_no_inicial` | variante de T-12a independiente de H-02 (activación por transición a 1 s). |
 | S-CAN | REQ-DAT-05, REQ-DAT-06 | pasa | `test_SCAN_formato_canonico` | reglas de representación canónica y lectura estricta (09). |
+| S-CMP01 | REQ-NOR-02, REQ-SEM-09 | pasa | `test_SCMP01_catalogo_coherente` | cada lectura del comparador existe en el perfil, tiene su texto y se comprueba. |
+| S-CMP02 | REQ-ACT-02, REQ-EVT-03, REQ-SEM-01, REQ-SEM-09, REQ-TMP-03 | pasa | `test_SCMP02_cada_lectura_hace_lo_que_anuncia` | cada alternativa evoluciona como dice su panel. |
+| S-CMP03 | REQ-SEM-09 | pasa | `test_SCMP03_las_lecturas_se_distinguen` | en cada ejemplo, las lecturas no acaban todas igual (si no, el ejemplo no sirve para elegir). |
+| S-CMP04 | REQ-DAT-02, REQ-NOR-02 | pasa | `test_SCMP04_registro_de_decisiones` | la respuesta se guarda con su origen; los bloques 1 y 2 vienen de la hoja 08. |
+| S-CMP05 | REQ-NOR-02, REQ-SEM-09 | pasa | `test_SCMP05_lecturas_por_defecto_son_las_respuestas_de_la_hoja` | las respuestas de los bloques 1 y 2 son las lecturas por defecto; lo abierto se detiene. |
 | S-DEC | REQ-EXP-01, REQ-TMP-01 | pasa | `test_SDEC_decimales_y_enteros_exactos` | sin redondeo silencioso ni desbordamiento. |
 | S-DECL | REQ-ALC-03, REQ-NOR-01, REQ-NOR-02 | pasa | `test_SDECL_declaracion_sin_conformidad` | la declaración excluye U críticas y no afirma conformidad. |
 | S-ESC01 | REQ-ACT-03, REQ-EDT-09 | pasa | `test_SESC01_conflictos_seguros_no_compilan` | activación/activación, desactivación/desactivación, activación/desactivación y misma etapa. |
-| S-ESC02 | REQ-ACT-03, REQ-ACT-05 | pasa | `test_SESC02_no_son_conflictos_seguros` | valores iguales, etapas en secuencia y valores no constantes (U-05) no impiden compilar. |
+| S-ESC02 | REQ-ACT-03, REQ-ACT-05 | pasa | `test_SESC02_no_son_conflictos_seguros` | la misma constante, etapas en secuencia y eventos distintos no impiden compilar. |
 | S-EXP | REQ-EXP-01 | pasa | `test_SEXP_comparacion_encadenada_y_tipos` | comparaciones encadenadas rechazadas; sin conversión booleano↔número. |
 | S-H05 | REQ-EVT-03, REQ-SEM-05 | pasa | `test_SH05_activar_etapa_ya_activa_bloqueo_U04` | hallazgo H-05 (activación de etapa ya activa fuera de D). |
-| S-H07 | REQ-ACT-02, REQ-SEM-01 | pasa | `test_SH07_memoria_inicial_no_nula_bloqueo_U09` | hallazgo H-07. |
+| S-H07 | REQ-ACT-02, REQ-SEM-01 | pasa | `test_SH07_memoria_inicial_no_nula_no_compila` | hoja 08, 1.5 A (cierra H-07); otro valor inicial se pone al activar la etapa inicial. |
 | S-H08 | REQ-JER-01 | pasa | `test_SH08_actividad_de_parcial_con_hijos` | hallazgo H-08. |
 | S-H09 | REQ-SEM-06, REQ-TMP-02 | pasa | `test_SH09_reentrada_en_el_mismo_instante_conserva_la_duracion` | P-IMP-18 (cierra H-09); la salida y reentrada sin tiempo no reinicia el retardo. |
 | S-H09b | REQ-SEM-07, REQ-TMP-02 | pasa | `test_SH09b_etapa_que_sale_por_su_temporizador_y_reentra_no_se_estabiliza` | consecuencia de P-IMP-18; ciclo instantáneo sin fin, cortado con D-LIM-EVOL (doc. 04). |
@@ -252,12 +259,13 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-PKG | REQ-ALC-02, REQ-CR-02 | pasa | `test_SPKG_paquete_de_transferencia_intacto` | parte automatizable de R-02 (doce Markdown, huellas de la versión implementada). |
 | S-U03 | REQ-ACT-02, REQ-EVT-03 | pasa | `test_SU03_accion_por_evento_en_etapa_que_sale` | acción sobre evento y etapa desactivada por ese evento (U-03/U-05). |
 | S-U03 | REQ-EVT-03 | pasa | `test_SU03_flanco_sobre_variable_interna` | eventos internos estáticamente bloqueados (U-03). |
-| S-U05 | REQ-ACT-05, REQ-SEM-09 | pasa | `test_SU05_receptividad_lee_valor_asignado` | asignación n:=1 seguida de receptividad n=1 en etapa virtual (U-05). |
+| S-U05 | REQ-ACT-05, REQ-SEM-09 | pasa | `test_SU05_receptividad_lee_valor_asignado` | hoja 08, 2.3 A; la receptividad ve el valor recién asignado y sigue en el mismo instante. |
+| S-U05b | REQ-ACT-02, REQ-ACT-05 | pasa | `test_SU05b_asignaciones_sucesivas_vale_la_ultima` | hoja 08, 2.4 A; dos asignaciones distintas sucesivas en un instante, vale la última. |
 | S-U06 | REQ-TMP-03 | pasa | `test_SU06_delay_cero` | delay con d1=0 bloqueado (U-06). |
 | S-U06 | REQ-TMP-03 | pasa | `test_SU06_lote_y_vencimiento_coincidentes` | coincidencia de lote y vencimiento en el mismo τ (H-17, U-06). |
 | S-U06 | REQ-SEM-08, REQ-TMP-03 | pasa | `test_SU06_vencimientos_que_dependen_del_orden` | vencimientos simultáneos con efecto mutuo (U-06). |
 | S-U07 | REQ-MOD-04 | pasa | `test_SU07_fuente_de_nivel_y_transicion_sin_lados` | U-07 en validación; el borrador se conserva. |
-| S-U09 | REQ-ACT-02, REQ-SEM-01, REQ-TMP-02 | pasa | `test_SU09_inicio_inestable_acciones_iniciales_y_temporal_verdadero` | bloqueos de inicialización (U-09). |
+| S-U09 | REQ-ACT-02, REQ-SEM-01, REQ-TMP-02 | pasa | `test_SU09_inicializacion_decidida` | hoja 08, 1.1 A, 1.2 A y 1.3 A (U-09 cerrada por el responsable). |
 
 ## Revisión bidireccional del paquete
 

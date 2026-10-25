@@ -45,6 +45,7 @@ CATALOGO: dict[str, tuple[str, str, str]] = {
     "D-JERARQUIA-INICIAL": ("error", "P-IMP-01", "Hacer coherentes las etapas iniciales con sus encapsulantes"),
     "D-ENTRADA-SIN-VALOR": ("error", "P-IMP-01", "Declarar el valor inicial de la entrada en el escenario"),
     "D-CAPACIDAD-NO-SOPORTADA": ("bloqueo", "P-IMP-01", "Capacidad no disponible en este perfil; ver hallazgo citado"),
+    "D-DEPENDENCIA-CRUZADA": ("error", "hoja 08, 2.2", "Separar las asignaciones en evoluciones distintas o usar una variable auxiliar"),
 }
 
 GRAVEDADES_QUE_IMPIDEN_INICIO = {"error", "bloqueo"}

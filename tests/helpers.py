@@ -104,11 +104,11 @@ class M:
         self._attach(step, a)
         return self
 
-    def validate(self) -> ValidationResult:
-        return validate_model(self.doc)
+    def validate(self, options: dict[str, str] | None = None) -> ValidationResult:
+        return validate_model(self.doc, options)
 
-    def compile(self) -> CompiledModel:
-        res = self.validate()
+    def compile(self, options: dict[str, str] | None = None) -> CompiledModel:
+        res = self.validate(options)
         blocking = [d for d in res.diagnostics if d.blocks_start]
         assert res.model is not None and not blocking, f"modelo no ejecutable: {[str(d) for d in res.diagnostics]}"
         return res.model

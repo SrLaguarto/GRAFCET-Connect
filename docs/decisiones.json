@@ -1,0 +1,86 @@
+{
+  "formato": "decisiones-0.1",
+  "nota": "Respuestas del responsable a las cuestiones abiertas. Una respuesta no es conformidad ni cita una cláusula: el contraste normativo sigue pendiente (U-01). Cada una se implementa después como lectura por defecto, con su prueba y su referencia (P-IMP-21).",
+  "decisiones": {
+    "1.1": {
+      "eleccion": "A",
+      "texto": "Sí: arrancar cuenta como activar E0",
+      "pregunta": "Acción «al activar» en una etapa inicial",
+      "origen": "hoja 08",
+      "fecha": "2026-10-25",
+      "comentario": ""
+    },
+    "1.2": {
+      "eleccion": "A",
+      "texto": "Evoluciona en ese mismo instante",
+      "pregunta": "Situación inicial inestable",
+      "origen": "hoja 08",
+      "fecha": "2026-10-25",
+      "comentario": ""
+    },
+    "1.3": {
+      "eleccion": "A",
+      "texto": "A los 3 s: cuenta desde el arranque",
+      "pregunta": "Temporizador sobre una entrada ya verdadera al arrancar",
+      "origen": "hoja 08",
+      "fecha": "2026-10-25",
+      "comentario": ""
+    },
+    "1.4": {
+      "eleccion": "A",
+      "texto": "Sí, como está ahora",
+      "pregunta": "Duración de una etapa inicial",
+      "origen": "hoja 08",
+      "fecha": "2026-10-25",
+      "comentario": ""
+    },
+    "1.5": {
+      "eleccion": "A",
+      "texto": "No: siempre empieza en 0 (no compila)",
+      "pregunta": "Variable memorizada con valor inicial distinto de cero",
+      "origen": "hoja 08",
+      "fecha": "2026-10-25",
+      "comentario": "Las memorizadas empiezan en 0; otro valor inicial se pone con una acción «al activar» en la etapa inicial (n := 5 en E0), que se ejecuta al arrancar por la respuesta 1.1."
+    },
+    "2.1": {
+      "eleccion": "C",
+      "texto": "Conflicto: no compila",
+      "pregunta": "Dos incrementos simultáneos",
+      "origen": "hoja 08",
+      "fecha": "2026-10-25",
+      "comentario": "Dar conflicto si las dos se activan a la vez."
+    },
+    "2.2": {
+      "eleccion": "B",
+      "texto": "Error: dependencia cruzada, no compila",
+      "pregunta": "Intercambio de valores",
+      "origen": "hoja 08",
+      "fecha": "2026-10-25",
+      "comentario": ""
+    },
+    "2.3": {
+      "eleccion": "A",
+      "texto": "Sí: ve n = 1 (B queda inestable)",
+      "pregunta": "Receptividad que lee un valor recién asignado",
+      "origen": "hoja 08",
+      "fecha": "2026-10-25",
+      "comentario": "Realmente no es virtual, ya que cambia un valor: en la norma es una «etapa inestable»."
+    },
+    "2.4": {
+      "eleccion": "A",
+      "texto": "2: vale la última del recorrido",
+      "pregunta": "Dos asignaciones distintas sucesivas en el mismo instante",
+      "origen": "hoja 08",
+      "fecha": "2026-10-25",
+      "comentario": ""
+    },
+    "2.5": {
+      "eleccion": "A",
+      "texto": "Sí: usa el valor final del instante",
+      "pregunta": "Salida continua que lee una memoria cambiada en el instante",
+      "origen": "hoja 08",
+      "fecha": "2026-10-25",
+      "comentario": ""
+    }
+  }
+}

@@ -1,12 +1,64 @@
 {
- "date": "2026-10-25T09:37:50+01:00",
+ "date": "2026-10-25T14:38:49+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 126,
+ "total": 132,
  "failures": 0,
  "errors": 0,
  "results": [
+  {
+   "test": "test_comparador.Comparador.test_SCMP01_catalogo_coherente",
+   "case": "S-CMP01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-NOR-02",
+    "REQ-SEM-09"
+   ],
+   "summary": "REQ-NOR-02, REQ-SEM-09: cada lectura del comparador existe en el perfil, tiene su texto y se comprueba."
+  },
+  {
+   "test": "test_comparador.Comparador.test_SCMP02_cada_lectura_hace_lo_que_anuncia",
+   "case": "S-CMP02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-02",
+    "REQ-EVT-03",
+    "REQ-SEM-01",
+    "REQ-SEM-09",
+    "REQ-TMP-03"
+   ],
+   "summary": "REQ-SEM-09, REQ-SEM-01, REQ-ACT-02, REQ-TMP-03, REQ-EVT-03: cada alternativa evoluciona como dice su panel."
+  },
+  {
+   "test": "test_comparador.Comparador.test_SCMP03_las_lecturas_se_distinguen",
+   "case": "S-CMP03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SEM-09"
+   ],
+   "summary": "REQ-SEM-09: en cada ejemplo, las lecturas no acaban todas igual (si no, el ejemplo no sirve para elegir)."
+  },
+  {
+   "test": "test_comparador.Comparador.test_SCMP04_registro_de_decisiones",
+   "case": "S-CMP04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-NOR-02"
+   ],
+   "summary": "REQ-NOR-02, REQ-DAT-02: la respuesta se guarda con su origen; los bloques 1 y 2 vienen de la hoja 08."
+  },
+  {
+   "test": "test_comparador.Comparador.test_SCMP05_lecturas_por_defecto_son_las_respuestas_de_la_hoja",
+   "case": "S-CMP05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-NOR-02",
+    "REQ-SEM-09"
+   ],
+   "summary": "REQ-SEM-09, REQ-NOR-02: las respuestas de los bloques 1 y 2 son las lecturas por defecto; lo abierto se detiene."
+  },
   {
    "test": "test_suplementarios.BloqueosU.test_SU03_accion_por_evento_en_etapa_que_sale",
    "case": "S-U03",
@@ -34,7 +86,17 @@
     "REQ-ACT-05",
     "REQ-SEM-09"
    ],
-   "summary": "REQ-ACT-05, REQ-SEM-09: asignación n:=1 seguida de receptividad n=1 en etapa virtual (U-05)."
+   "summary": "REQ-ACT-05, REQ-SEM-09: hoja 08, 2.3 A; la receptividad ve el valor recién asignado y sigue en el mismo instante."
+  },
+  {
+   "test": "test_suplementarios.BloqueosU.test_SU05b_asignaciones_sucesivas_vale_la_ultima",
+   "case": "S-U05b",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-02",
+    "REQ-ACT-05"
+   ],
+   "summary": "REQ-ACT-05, REQ-ACT-02: hoja 08, 2.4 A; dos asignaciones distintas sucesivas en un instante, vale la última."
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU06_delay_cero",
@@ -74,7 +136,7 @@
    "summary": "REQ-MOD-04: U-07 en validación; el borrador se conserva."
   },
   {
-   "test": "test_suplementarios.BloqueosU.test_SU09_inicio_inestable_acciones_iniciales_y_temporal_verdadero",
+   "test": "test_suplementarios.BloqueosU.test_SU09_inicializacion_decidida",
    "case": "S-U09",
    "outcome": "pasa",
    "requirements": [
@@ -82,7 +144,7 @@
     "REQ-SEM-01",
     "REQ-TMP-02"
    ],
-   "summary": "REQ-SEM-01, REQ-ACT-02, REQ-TMP-02: bloqueos de inicialización (U-09)."
+   "summary": "REQ-SEM-01, REQ-ACT-02, REQ-TMP-02: hoja 08, 1.1 A, 1.2 A y 1.3 A (U-09 cerrada por el responsable)."
   },
   {
    "test": "test_suplementarios.ConflictosAlCompilar.test_SESC01_conflictos_seguros_no_compilan",
@@ -102,7 +164,7 @@
     "REQ-ACT-03",
     "REQ-ACT-05"
    ],
-   "summary": "REQ-ACT-03, REQ-ACT-05: valores iguales, etapas en secuencia y valores no constantes (U-05) no impiden compilar."
+   "summary": "REQ-ACT-03, REQ-ACT-05: la misma constante, etapas en secuencia y eventos distintos no impiden compilar."
   },
   {
    "test": "test_suplementarios.Hallazgos.test_S08a_limite_de_evolucion_recuperable",
@@ -135,14 +197,14 @@
    "summary": "REQ-SEM-05, REQ-EVT-03: hallazgo H-05 (activación de etapa ya activa fuera de D)."
   },
   {
-   "test": "test_suplementarios.Hallazgos.test_SH07_memoria_inicial_no_nula_bloqueo_U09",
+   "test": "test_suplementarios.Hallazgos.test_SH07_memoria_inicial_no_nula_no_compila",
    "case": "S-H07",
    "outcome": "pasa",
    "requirements": [
     "REQ-ACT-02",
     "REQ-SEM-01"
    ],
-   "summary": "REQ-ACT-02, REQ-SEM-01: hallazgo H-07."
+   "summary": "REQ-ACT-02, REQ-SEM-01: hoja 08, 1.5 A (cierra H-07); otro valor inicial se pone al activar la etapa inicial."
   },
   {
    "test": "test_suplementarios.Hallazgos.test_SH08_actividad_de_parcial_con_hijos",
@@ -450,11 +512,11 @@
    "summary": ""
   },
   {
-   "test": "test_t01_t08_evolucion.Evolucion.test_T08a_inicio_inestable_bloqueado_por_U09",
+   "test": "test_t01_t08_evolucion.Evolucion.test_T08a_ciclo_instantaneo_al_arrancar",
    "case": "T-08a",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "Hallazgo H-03: el modelo de T-08a es inestable al iniciar (U-09). La parte P se prueba en S-08a."
+   "summary": "Oráculo original de T-08a, ejecutable desde la respuesta 1.2 A de la hoja 08 (cierra H-03)."
   },
   {
    "test": "test_t01_t08_evolucion.Evolucion.test_T08b_espera_estable_no_es_divergencia",
@@ -499,11 +561,11 @@
    "summary": ""
   },
   {
-   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T15c_lecturas_cruzadas_bloqueo_U05",
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T15c_lecturas_cruzadas_dependencia_cruzada",
    "case": "T-15c",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Hoja 08, 2.2 B: x := y con y := x simultáneas es una dependencia cruzada; no compila."
   },
   {
    "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T16a_conflicto_de_escritura",
@@ -527,11 +589,11 @@
    "summary": ""
   },
   {
-   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T16d_dos_incrementos_bloqueo_U05",
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Acciones.test_T16d_dos_incrementos_conflicto",
    "case": "T-16d",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Hoja 08, 2.1 C: de las alternativas de T-16d (n=1, n=2 o conflicto), el responsable elige conflicto."
   },
   {
    "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T10a_sin_flanco_al_arrancar",

@@ -18,7 +18,8 @@ U-12 corresponde al responsable del proyecto: esta lista es una **propuesta** de
 | Implementado (P), verificable ya | 41 | REQ-ACT-03, REQ-ALC-03, REQ-ARQ-01, REQ-DAT-01, REQ-DAT-02, REQ-DAT-03, REQ-DAT-04, REQ-DAT-05, REQ-DAT-06, REQ-DAT-07, REQ-DAT-08, REQ-EDT-02, REQ-EDT-04, REQ-EDT-05, REQ-EDT-06, REQ-EDT-07, REQ-EDT-09, REQ-EDT-10, REQ-EDT-14, REQ-EVT-02, REQ-EXP-01, REQ-EXP-02, REQ-MOD-01, REQ-MOD-03, REQ-MOD-05, REQ-MOD-06, REQ-NOR-01, REQ-NOR-02, REQ-ROB-01, REQ-ROB-02, REQ-SEM-07, REQ-SEM-08, REQ-SIM-01, REQ-SIM-02, REQ-SIM-03, REQ-SIM-04, REQ-SIM-05, REQ-SIM-06, REQ-SIM-07, REQ-SIM-08, REQ-TMP-01 |
 | Implementado como provisional (I; U-01) | 11 | REQ-ACT-01, REQ-ACT-02, REQ-ACT-04, REQ-EVT-01, REQ-MOD-02, REQ-MOD-07, REQ-SEM-02, REQ-SEM-03, REQ-SEM-04, REQ-SEM-06, REQ-TMP-02 |
 | Parcial | 11 | REQ-ALC-01, REQ-EDT-01, REQ-EDT-03, REQ-JER-01, REQ-JER-03, REQ-MOD-04, REQ-PLT-02, REQ-PLT-03, REQ-PLT-04, REQ-SEM-01, REQ-SEM-05 |
-| Bloqueado por U (bloqueo implementado) | 5 | REQ-ACT-05, REQ-EVT-03, REQ-JER-06, REQ-SEM-09, REQ-TMP-03 |
+| Implementado según decisión del responsable (U cerrada; contraste U-01 pendiente) | 1 | REQ-ACT-05 |
+| Bloqueado por U (bloqueo implementado) | 4 | REQ-EVT-03, REQ-JER-06, REQ-SEM-09, REQ-TMP-03 |
 | Pendiente de iteración (estructura hecha) | 3 | REQ-JER-02, REQ-JER-04, REQ-JER-05 |
 | Pendiente de interfaz | 5 | REQ-EDT-08, REQ-EDT-11, REQ-EDT-12, REQ-EDT-13, REQ-JER-07 |
 | Pendiente de plataforma (U-10) | 1 | REQ-PLT-01 |

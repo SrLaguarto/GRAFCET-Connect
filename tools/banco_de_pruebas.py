@@ -13,16 +13,21 @@ activación o desactivación, o banderita de evento. Las proporciones se tomaron
 inspección visual de las imágenes de la norma aportadas por el usuario; no se copia
 ningún activo.
 
-Uso:  python tools/banco_de_pruebas.py [--port 8765] [--abrir]
-      o doble clic en «Probar banco de pruebas.bat»
+El comparador de decisiones (/comparar, P-IMP-21) ejecuta el ejemplo de cada cuestión abierta una vez
+por lectura, lado a lado, y guarda la elección del responsable en docs/decisiones.json.
+
+Uso:  python tools/banco_de_pruebas.py [--port 8765] [--abrir] [--comparar]
+      o doble clic en «Probar banco de pruebas.bat» o «Comparar decisiones.bat»
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
 import webbrowser
+from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
@@ -30,6 +35,7 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from helpers import M, scenario  # noqa: E402  (constructor de modelos con el formato del documento 09)
 
@@ -38,10 +44,19 @@ from grafcet.engine import Session  # noqa: E402
 from grafcet.profile import SEMANTIC_OPTIONS, normalize_options  # noqa: E402
 from grafcet.timeutil import format_duration  # noqa: E402
 
-PAGE = Path(__file__).with_name("banco_de_pruebas.html")
-# La página se lee una vez al arrancar: así un servidor en marcha sirve siempre la página de su misma
-# versión. Si se releyera en cada petición, un servidor antiguo entregaría la página nueva con datos antiguos.
-PAGE_BYTES = PAGE.read_bytes()
+from decisiones import CATALOGO, POR_ID, RESPUESTAS_HOJA_08  # noqa: E402
+
+HERE = Path(__file__).resolve().parent
+DECISIONES = ROOT / "docs" / "decisiones.json"
+COMPARADOR_PRESUPUESTO = 1_000  # evoluciones por contexto en cada panel del comparador
+# Las páginas se leen una vez al arrancar: así un servidor en marcha sirve siempre las páginas de su misma
+# versión. Si se releyeran en cada petición, un servidor antiguo entregaría páginas nuevas con datos antiguos.
+STATIC = {path: ((HERE / name).read_bytes(), ctype) for path, name, ctype in (
+    ("/", "banco_de_pruebas.html", "text/html; charset=utf-8"),
+    ("/index.html", "banco_de_pruebas.html", "text/html; charset=utf-8"),
+    ("/comparar", "comparador.html", "text/html; charset=utf-8"),
+    ("/dibujo.js", "dibujo.js", "text/javascript; charset=utf-8"),
+    ("/dibujo.css", "dibujo.css", "text/css; charset=utf-8"))}
 
 
 def ej_temporizada() -> tuple[M, dict]:
@@ -51,6 +66,14 @@ def ej_temporizada() -> tuple[M, dict]:
     m.trans("t3", ["E2"], ["E0"], "fin")
     m.cont("E1", "motor").cont("E2", "luz").stored("E2", "ciclos", "activation", "ciclos + 1")
     return m, {"E0": (220, 60), "t1": (220, 140), "E1": (220, 220), "t2": (220, 300), "E2": (220, 380), "t3": (220, 460)}
+
+
+def ej_arranque() -> tuple[M, dict]:
+    m = M().var("parar").var("motor", "output").var("n", "internal", "int")
+    m.step("E0", True).step("E1").step("E2")
+    m.stored("E0", "n", "activation", "5").cont("E1", "motor")
+    m.trans("t1", ["E0"], ["E1"], "n = 5").trans("t2", ["E1"], ["E2"], "parar")
+    return m, {"E0": (220, 60), "t1": (220, 140), "E1": (220, 220), "t2": (220, 300), "E2": (220, 380)}
 
 
 def ej_paralelo() -> tuple[M, dict]:
@@ -93,12 +116,13 @@ def ej_conflicto_ejecucion() -> tuple[M, dict]:
 
 EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
     "temporizada": ("Secuencia con temporización", "Pulse «marcha»: E1 activa el motor; a los 3 s pasa a E2 (luz, "
-                    "ciclos+1). «fin» vuelve a E0. Pruebe a soltar «marcha» y poner «fin»=1 antes de los 3 s: E2 se "
-                    "recorre virtualmente (sin luz, pero ciclos+1 se conserva). Con «marcha»=1 y «fin»=1, E1 sale y vuelve "
-                    "a entrar en el mismo instante sin interrumpir su duración (P-IMP-18): el temporizador sigue vencido "
-                    "y el ciclo volvería a empezar. En la segunda vuelta ciclos+1 sumaría otra vez en el mismo instante, "
-                    "que es la cuestión abierta U-05, y el motor se detiene ahí; sin esa acción se cortaría con D-LIM-EVOL.",
-                    ej_temporizada),
+                    "ciclos+1). «fin» vuelve a E0. Pruebe a soltar «marcha» y poner «fin»=1 antes de los 3 s: E2 es "
+                    "una etapa inestable (sin luz, pero ciclos+1 se ejecuta). Con «marcha»=1 y «fin»=1, E1 sale y vuelve "
+                    "a entrar en el mismo instante sin interrumpir su duración (P-IMP-18): el temporizador sigue vencido, "
+                    "el ciclo se repite sin fin en tiempo cero y el motor lo corta con D-LIM-EVOL.", ej_temporizada),
+    "arranque": ("Arranque con acción inicial", "Al arrancar se ejecuta n := 5 en la etapa inicial E0 (hoja 08, "
+                 "1.1) y t1 ve ese valor en el mismo instante (2.3), así que el grafcet evoluciona en τ = 0 (1.2): "
+                 "E0 queda inestable y se arranca en E1 con el motor en marcha.", ej_arranque),
     "paralelo": ("Paralelismo y sincronización", "p divide en dos ramas; q y r avanzan cada una; s solo franquea t4 "
                  "cuando D y E están activas a la vez.", ej_paralelo),
     "contador": ("Contador por eventos", "Cada subida de «pulso» suma 1 a n (acción por evento). Pulsar sin soltar no "
@@ -190,6 +214,8 @@ def describe(r: dict[str, Any], texts: dict[str, str]) -> dict[str, str] | None:
         return {"kind": k, "time": when, "text": f"{src}: {what}{ev}"}
     if k == "evolucion":
         asg = "; ".join(f"{a['target']}:={a['value']}" for a in r["assignments"])
+        if r["evolutionIndex"] == 0:
+            return {"kind": k, "time": when, "text": f"Arranque: acciones al activar las etapas iniciales · {asg}"}
         perm = f" · permanece {', '.join(r['permanent'])}" if r["permanent"] else ""
         perm += f" · {', '.join(r['durationKept'])} reentra sin interrumpir su duración" if r.get("durationKept") else ""
         return {"kind": k, "time": when, "text": f"Evolución {r['evolutionIndex']}: franquea {{{', '.join(r['cleared'])}}}"
@@ -197,7 +223,7 @@ def describe(r: dict[str, Any], texts: dict[str, str]) -> dict[str, str] | None:
     if k == "estable":
         if "reason" in r:
             return None
-        virt = f" · virtuales: {', '.join(r['virtualSteps'])}" if r.get("virtualSteps") else ""
+        virt = f" · inestables: {', '.join(r['virtualSteps'])}" if r.get("virtualSteps") else ""
         hyp = "".join(f" · hipótesis {h['question']} ({h['reading']}) aplicada a {h['transition']}"
                       for h in r.get("hypotheses", []))
         return {"kind": k, "time": when, "text": f"Estable · S = {{{', '.join(r['situation'])}}}{virt}{hyp}"}
@@ -208,23 +234,21 @@ def describe(r: dict[str, Any], texts: dict[str, str]) -> dict[str, str] | None:
     return None
 
 
-class Banco:
-    def __init__(self) -> None:
-        self.lock = threading.Lock()
-        self.options = normalize_options(None)  # por defecto, U-03 detiene (P-IMP-15)
-        self.load("temporizada")
+class Vista:
+    """Un modelo con su sesión bajo unas lecturas dadas: lo que la página dibuja en un panel."""
 
-    def load(self, key: str) -> None:
-        title, help_text, build = EJEMPLOS[key]
+    def __init__(self, key: str, title: str, help_text: str, build: Callable[[], tuple[M, dict]],
+                 options: dict[str, str], init: dict[str, Any] | None = None,
+                 batches: list[tuple[int, int, dict[str, Any]]] = (), budget: int = 10_000) -> None:
         m, layout = build()
-        self.key = key
-        res = m.validate()
+        self.key, self.options = key, options
+        res = m.validate(options)
         self.compile_diags = [d for d in res.diagnostics if d.blocks_start]
         self.s: Session | None = None
         self.start_diags: list = []
         if res.can_simulate:
             cm = res.model
-            self.s = Session(cm, scenario(cm, max_contexts=1_000_000), options=self.options)
+            self.s = Session(cm, scenario(cm, init, batches, max_contexts=1_000_000), budget=budget, options=options)
             self.start_diags = self.s.start()
         exprs = {e["id"]: e for e in m.doc["expressions"]}
         self.texts = {eid: e["text"] for eid, e in exprs.items()}
@@ -251,6 +275,7 @@ class Banco:
         self.model = {
             "key": key, "title": title, "help": help_text, "compilable": res.can_simulate,
             "steps": [{"id": s["id"], "initial": s["initial"], "x": layout[s["id"]][0], "y": layout[s["id"]][1],
+                       "partial": None if s["partialRef"] == "g" else s["partialRef"],
                        "actions": acts.get(s["id"], [])} for s in m.doc["steps"]],
             "transitions": [{"id": t["id"], "pre": t["preRefs"], "post": t["postRefs"],
                              "cond": disp(t["conditionRef"], top=True),
@@ -260,9 +285,7 @@ class Banco:
 
     def state(self) -> dict[str, Any]:
         s = self.s
-        out: dict[str, Any] = {"options": self.options,
-                               "optionSpecs": {q: {"default": v["default"], "values": v["values"]}
-                                               for q, v in SEMANTIC_OPTIONS.items()}}
+        out: dict[str, Any] = {}
         if s is None:  # no compila: se dibuja la estructura y se listan los errores
             out.update({"status": "no-compilable", "diagnostics": [d.to_dict() for d in self.compile_diags],
                         "time": "—", "situation": [], "transitions": {}, "outputs": {}, "values": {}, "temporal": {},
@@ -274,9 +297,11 @@ class Banco:
         obs = s.observe()
         evo = [r for r in s.trace.records if r["kind"] == "evolucion"]
         closed = next((r["kind"] for r in reversed(s.trace.records) if r["kind"] in ("estable", "fallo", "limite")), None)
+        last_stable = next((r for r in reversed(s.trace.records) if r["kind"] == "estable" and "reason" not in r), None)
         out.update({
             "time": t_s(obs["timeUs"]), "timeUs": obs["timeUs"], "situation": obs["situation"],
             "virtual": obs.get("recorrido", {}).get("virtualSituation"),
+            "unstable": last_stable.get("virtualSteps", []) if last_stable and closed == "estable" else [],
             "transitions": obs["transitions"], "outputs": obs["outputs"],
             "values": {k: v for k, v in obs["values"].items()},
             "temporal": {k: {**v, "label": self.texts.get(k.split(".")[0], k),
@@ -307,6 +332,46 @@ class Banco:
         nxt = self.s.next_stimulus()
         return t_s(nxt.time) if hasattr(nxt, "time") and nxt.kind == "vencimiento" else None
 
+    def act(self, op: str, body: dict[str, Any]) -> None:
+        if self.s is None:
+            raise RuntimeError("el programa no puede compilarse; corrija los errores indicados")
+        if op == "entrada":
+            var = body["var"]
+            self.s.manual_input({var: not self.s.z.values[var]})
+            self.s.step_evolution() if body.get("paso") else self.s.step_external()
+        elif op == "fijar":  # guion del comparador: fija entradas y procesa todo lo que ocurre en ese instante
+            changes = {k: v for k, v in body["cambios"].items() if self.s.z.values.get(k) != v}
+            if changes:
+                self.s.manual_input(changes)
+            self.s.advance_to(self.s.z.time)
+        elif op == "avanzar":
+            self.s.advance_to(self.s.z.time + int(body["us"]))
+        elif op == "hasta":
+            self.s.advance_to(max(int(body["us"]), self.s.z.time))
+        elif op == "evolucion":
+            self.s.step_evolution()
+        elif op == "estabilizar":
+            self.s.run_to_stable()
+        else:
+            raise ValueError(f"operación desconocida: {op}")
+
+
+class Banco:
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.options = normalize_options(None)  # por defecto: decisiones del responsable y, lo abierto, detener
+        self.load("temporizada")
+
+    def load(self, key: str) -> None:
+        title, help_text, build = EJEMPLOS[key]
+        self.key = key
+        self.v = Vista(key, title, help_text, build, self.options)
+        self.model = self.v.model
+
+    def state(self) -> dict[str, Any]:
+        return {**self.v.state(), "options": self.options,
+                "optionSpecs": {q: {"default": v["default"], "values": v["values"]} for q, v in SEMANTIC_OPTIONS.items()}}
+
     def act(self, op: str, body: dict[str, Any]) -> dict[str, Any]:
         if op == "cargar":
             self.load(body.get("ejemplo", self.key))
@@ -315,24 +380,146 @@ class Banco:
         elif op == "opciones":
             self.options = normalize_options(body.get("options"))  # cambia el perfil efectivo: ejecución nueva
             self.load(self.key)
-        elif self.s is None:
-            raise RuntimeError("el programa no puede compilarse; corrija los errores indicados")
-        elif op == "entrada":
-            var = body["var"]
-            self.s.manual_input({var: not self.s.z.values[var]})
-            self.s.step_evolution() if body.get("paso") else self.s.step_external()
-        elif op == "avanzar":
-            self.s.advance_to(self.s.z.time + int(body["us"]))
-        elif op == "evolucion":
-            self.s.step_evolution()
-        elif op == "estabilizar":
-            self.s.run_to_stable()
         else:
-            raise ValueError(f"operación desconocida: {op}")
+            self.v.act(op, body)
         return {"model": self.model, "state": self.state()}
 
 
+class Comparador:
+    """Comparador de decisiones (P-IMP-21): el mismo ejemplo, una vez por lectura, con el mismo guion.
+
+    La elección se guarda en docs/decisiones.json; no cambia el motor. Cada respuesta se incorpora después
+    como lectura por defecto, con su prueba y su referencia, igual que las de los bloques 1 y 2."""
+
+    def __init__(self, path: Path = DECISIONES) -> None:
+        self.path = path
+        self.load(CATALOGO[0].id)
+
+    # -- respuestas guardadas
+    def answers(self) -> dict[str, Any]:
+        try:
+            return json.loads(self.path.read_text(encoding="utf-8"))["decisiones"]
+        except FileNotFoundError:
+            return {}
+
+    def choose(self, did: str, value: str, comment: str = "") -> None:
+        d = POR_ID[did]
+        texts = dict(d.choices)
+        if value != "abierta" and value not in texts:
+            raise ValueError(f"opción desconocida para {did}: {value}")
+        try:
+            doc = json.loads(self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            doc = nuevo_registro()
+        doc["decisiones"][did] = {"eleccion": value, "texto": texts.get(value, "Dejar abierta"),
+                                  "pregunta": d.title, "origen": "comparador", "fecha": date.today().isoformat(),
+                                  "comentario": comment.strip()}
+        doc["decisiones"] = dict(sorted(doc["decisiones"].items(), key=lambda kv: [int(x) for x in kv[0].split(".")]))
+        guardar_registro(self.path, doc)
+
+    # -- ejemplo en curso
+    def load(self, did: str) -> None:
+        d = POR_ID[did]
+        self.d, self.k = d, 0
+        self.panels: list[tuple[str, Vista | None, str | None]] = []
+        if not d.simulable:
+            return
+        for value, _ in d.choices:
+            opts = normalize_options({**d.base, d.option: value})
+            self.panels.append((value, Vista(d.id, d.title, d.example, d.build, opts, d.init, d.batches,
+                                             budget=COMPARADOR_PRESUPUESTO), None))
+
+    def step(self) -> None:
+        if self.k >= len(self.d.script):
+            raise RuntimeError("el guion del ejemplo ya terminó; pulse «Repetir» para empezar de nuevo")
+        st = self.d.script[self.k]
+        self._each(st["op"], st)
+        self.k += 1
+
+    def _each(self, op: str, body: dict[str, Any]) -> None:
+        panels = []
+        for value, v, _ in self.panels:
+            note = None
+            if v.s is None:
+                note = "no compila: no se ejecuta"
+            elif v.s.status != "pausada-estable":
+                note = "detenido: el paso no se aplica"
+            else:
+                try:
+                    v.act(op, body)
+                except (DiagnosticError, RuntimeError, ValueError, KeyError) as exc:
+                    note = str(exc)
+            panels.append((value, v, note))
+        self.panels = panels
+
+    def free(self, op: str, body: dict[str, Any]) -> None:
+        """Entrada o avance libre, igual en todos los paneles (fuera del guion)."""
+        if op == "entrada":
+            for _, v, _ in self.panels:
+                if v.s is not None and v.s.status == "pausada-estable":
+                    v.act("fijar", {"cambios": {body["var"]: not v.s.z.values[body["var"]]}})
+            self.panels = [(value, v, None) for value, v, _ in self.panels]
+        elif op == "avanzar":
+            self._each("avanzar", body)
+        else:
+            raise ValueError(f"operación desconocida: {op}")
+
+    def view(self) -> dict[str, Any]:
+        d = self.d
+        answers = self.answers()
+        texts = dict(d.choices)
+        return {
+            "catalog": [{"id": x.id, "block": x.block, "title": x.title, "simulable": x.simulable,
+                         "answer": answers.get(x.id, {}).get("eleccion")} for x in CATALOGO],
+            "decision": {"id": d.id, "block": d.block, "title": d.title, "question": d.question, "example": d.example,
+                         "note": d.note, "simulable": d.simulable, "choices": [{"value": v, "text": t} for v, t in d.choices],
+                         "base": [{"question": q, "value": v, "text": SEMANTIC_OPTIONS[q]["values"][v]} for q, v in d.base.items()],
+                         "answer": answers.get(d.id)},
+            "script": [{"text": x["texto"], "done": i < self.k} for i, x in enumerate(d.script)],
+            "stepIndex": self.k,
+            "panels": [{"value": value, "text": texts[value], "expect": d.expect.get(value, ""), "note": note,
+                        "model": v.model, "state": v.state()} for value, v, note in self.panels],
+            "file": str(self.path.relative_to(ROOT) if self.path.is_relative_to(ROOT) else self.path).replace("\\", "/"),
+        }
+
+    def act(self, op: str, body: dict[str, Any]) -> dict[str, Any]:
+        if op == "cargar":
+            self.load(body["id"])
+        elif op == "repetir":
+            self.load(self.d.id)
+        elif op == "paso":
+            self.step()
+        elif op in ("entrada", "avanzar"):
+            self.free(op, body)
+        elif op == "elegir":
+            self.choose(body["id"], body["value"], body.get("comentario", ""))
+        else:
+            raise ValueError(f"operación desconocida: {op}")
+        return self.view()
+
+
+def nuevo_registro() -> dict[str, Any]:
+    """Registro de respuestas precargado con las de la hoja 08 (bloques 1 y 2)."""
+    decisiones = {}
+    for did, (value, comment) in RESPUESTAS_HOJA_08.items():
+        d = POR_ID[did]
+        decisiones[did] = {"eleccion": value, "texto": dict(d.choices)[value], "pregunta": d.title,
+                           "origen": "hoja 08", "fecha": "2026-10-25", "comentario": comment}
+    return {"formato": "decisiones-0.1",
+            "nota": "Respuestas del responsable a las cuestiones abiertas. Una respuesta no es conformidad ni cita una "
+                    "cláusula: el contraste normativo sigue pendiente (U-01). Cada una se implementa después como "
+                    "lectura por defecto, con su prueba y su referencia (P-IMP-21).",
+            "decisiones": decisiones}
+
+
+def guardar_registro(path: Path, doc: dict[str, Any]) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    os.replace(tmp, path)
+
+
 BANCO: Banco | None = None
+COMPARADOR: Comparador | None = None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -348,12 +535,16 @@ class Handler(BaseHTTPRequestHandler):
         self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path in ("/", "/index.html"):
-            self._send(200, PAGE_BYTES, "text/html; charset=utf-8")
+        if self.path in STATIC:
+            body, ctype = STATIC[self.path]
+            self._send(200, body, ctype)
         elif self.path == "/api/estado":
             with BANCO.lock:
                 self._json({"model": BANCO.model, "state": BANCO.state(),
                             "examples": [{"key": k, "title": v[0]} for k, v in EJEMPLOS.items()]})
+        elif self.path == "/api/cmp/estado":
+            with BANCO.lock:
+                self._json(COMPARADOR.view())
         else:
             self._send(404, b"no encontrado", "text/plain; charset=utf-8")
 
@@ -364,6 +555,12 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(length) or b"{}")
         with BANCO.lock:
+            if self.path.startswith("/api/cmp/"):
+                try:
+                    self._json(COMPARADOR.act(self.path[9:], body))
+                except (DiagnosticError, RuntimeError, ValueError, KeyError) as exc:
+                    self._json({"error": str(exc), **COMPARADOR.view()}, 400)
+                return
             try:
                 self._json(BANCO.act(self.path[5:], body))
             except (DiagnosticError, RuntimeError, ValueError, KeyError) as exc:
@@ -374,14 +571,18 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    global BANCO
+    global BANCO, COMPARADOR
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--abrir", action="store_true", help="abrir el navegador cuando el servidor esté listo")
+    ap.add_argument("--comparar", action="store_true", help="abrir directamente el comparador de decisiones")
     args = ap.parse_args()
     BANCO = Banco()
+    if not DECISIONES.exists():
+        guardar_registro(DECISIONES, nuevo_registro())
+    COMPARADOR = Comparador()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    url = f"http://127.0.0.1:{args.port}"
+    url = f"http://127.0.0.1:{args.port}" + ("/comparar" if args.comparar else "")
     print(f"Banco de pruebas en {url}  (cierre esta ventana o pulse Ctrl+C para detenerlo)", flush=True)
     if args.abrir:
         webbrowser.open(url)

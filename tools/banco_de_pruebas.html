@@ -4,59 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Banco GRAFCET</title>
+<link rel="stylesheet" href="/dibujo.css">
 <style>
-:root{--bg:#f6f7f9;--panel:#fff;--text:#1d2330;--muted:#6b7385;--line:#d6dae3;--accent:#1f6feb;--accent-soft:#dbe8ff;
---ok:#1a7f37;--warn:#9a6700;--err:#c62828;--err-soft:#fdecea;--virt:#8250df;--glow:#e36209}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--panel:#171b23;--text:#e4e7ee;--muted:#9099ab;--line:#2c3340;
---accent:#5b9dff;--accent-soft:#1c2d4d;--ok:#3fb950;--warn:#d29922;--err:#ff6b6b;--err-soft:#3a1d1d;--virt:#b392f0;--glow:#f0883e}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
-header h1{font-size:16px;margin:0}header .note{color:var(--muted);font-size:12px}
-select,button{font:inherit;color:inherit}select{padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
-button{padding:6px 11px;border:1px solid var(--line);border-radius:6px;background:var(--panel);cursor:pointer}
-button:hover:not(:disabled){border-color:var(--accent)}button:disabled{opacity:.45;cursor:not-allowed}
-button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr);gap:14px;padding:14px 16px;max-width:1300px;margin:0 auto}
 @media (max-width:860px){main{grid-template-columns:1fr}}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
-.card h2{font-size:13px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
-.help{margin:0 0 10px;color:var(--muted)}
-.status{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
-.badge{border-radius:999px;padding:2px 10px;font-size:12px;border:1px solid var(--line)}
-.badge.estable{color:var(--ok);border-color:var(--ok)}.badge.recorrido{color:var(--virt);border-color:var(--virt)}
-.badge.error{color:var(--err);border-color:var(--err)}
 .clock{font-variant-numeric:tabular-nums;font-size:22px;font-weight:600}
-svg{width:100%;height:auto;max-height:72vh;display:block;font-family:Arial,"Helvetica Neue",Helvetica,sans-serif}
-/* Notación gráfica según las imágenes de la norma: trazos finos y negros, etapa cuadrada, transición corta */
-.link{stroke:var(--text);stroke-width:1.6;fill:none}.dbl{stroke:var(--text);stroke-width:1.6}.arrow{fill:var(--text)}
-.step rect{fill:var(--panel);stroke:var(--text);stroke-width:1.6}.step text{fill:var(--text);font-size:16px}
-.step.active rect.outer{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2.4}
-.step.virtual rect.outer{stroke:var(--virt);stroke-dasharray:5 4;stroke-width:2}
-.step.stale rect.outer{stroke:var(--muted);stroke-dasharray:2 3;stroke-width:2}
-.step.cand rect.outer{stroke:var(--glow);stroke-dasharray:6 4;stroke-width:2.2}
-.token{fill:var(--text)}.step.active .token{fill:var(--accent)}
-.tag{font-size:10px}.vtag{fill:var(--virt)}.stag{fill:var(--muted)}.ctag{fill:var(--glow)}
-.tr .bar{stroke:var(--muted);stroke-width:2.4}.tr.validated .bar{stroke:var(--text)}.tr.fireable .bar{stroke:var(--accent)}
-.tr.cleared .bar{stroke:var(--glow);stroke-width:3}.tr.question .bar{stroke:var(--err);stroke-width:3}
-.tdes{fill:var(--muted);font-size:13px}.tcond{fill:var(--text);font-size:14px}
-.act rect{fill:var(--panel);stroke:var(--text);stroke-width:1.6}.act.on rect{stroke:var(--ok);stroke-width:2.6}
-.atext{fill:var(--text);font-size:15px}.acond{fill:var(--text);font-size:13px}
-.amark{stroke:var(--text);stroke-width:1.6}.ahead{fill:var(--text)}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+svg.grafcet{max-height:72vh}
 .inputs button{min-width:92px;text-align:left}.inputs button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent)}
 .inputs b{font-family:ui-monospace,Consolas,monospace}
-table{width:100%;border-collapse:collapse;font-size:13px}td,th{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}
-th{color:var(--muted);font-weight:500}.mono{font-family:ui-monospace,Consolas,monospace}
-.on{color:var(--ok);font-weight:600}.off{color:var(--muted)}
-.diag{border:1px solid var(--err);background:var(--err-soft);border-radius:8px;padding:10px 12px;margin-bottom:12px}
-.diag b{color:var(--err)}.diag p{margin:4px 0}.diag ul{margin:4px 0;padding-left:18px}
 ol.trace{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto;font-size:12.5px}
 ol.trace li{padding:4px 2px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:62px 1fr;gap:6px}
 ol.trace .t{color:var(--muted);font-variant-numeric:tabular-nums}ol.trace .fallo{color:var(--err)}
 ol.trace .evolucion{color:var(--accent)}ol.trace .contexto{color:var(--muted)}
 label.chk{display:flex;gap:6px;align-items:center}
 .legend{font-size:12px;color:var(--muted);margin-top:6px}
-.toast{color:var(--err);font-size:12px;min-height:16px}
 </style>
 </head>
 <body>
@@ -64,6 +25,7 @@ label.chk{display:flex;gap:6px;align-items:center}
   <h1>Banco de pruebas GRAFCET</h1>
   <label for="ej">Ejemplo</label><select id="ej"></select>
   <button id="reset">Reiniciar</button>
+  <a href="/comparar">Comparar decisiones →</a>
   <span class="note">Núcleo con perfil provisional · <strong>no es la interfaz del producto ni declara conformidad</strong></span>
 </header>
 <main>
@@ -71,8 +33,8 @@ label.chk{display:flex;gap:6px;align-items:center}
     <div class="card">
       <div class="status" aria-live="polite"><span id="badge" class="badge"></span><span id="title"></span></div>
       <p class="help" id="help"></p>
-      <svg id="diagram" role="img" aria-labelledby="title"></svg>
-      <p class="legend">Etapa activa: marca ● y fondo azul. Etapa virtual (recorrido sin duración): borde morado discontinuo.
+      <svg id="diagram" class="grafcet" role="img" aria-labelledby="title"></svg>
+      <p class="legend">Etapa activa: marca ● y fondo azul. Etapa inestable (activa durante un tiempo nulo: sus acciones memorizadas se ejecutan, las continuas no producen salida): borde morado discontinuo; «fue inestable» marca las del último instante.
         Transición: gris = no validada, negra = validada, azul = franqueable, naranja = recién franqueada.
         Tras un bloqueo: gris punteado = último estado estable conservado (no es el resultado); naranja discontinuo =
         alcanzada antes del punto en cuestión, sin confirmar; trazo rojo = transición en cuestión.
@@ -113,18 +75,12 @@ label.chk{display:flex;gap:6px;align-items:center}
     <div class="card" id="tempcard"><h2>Condiciones temporales</h2><table id="temp"></table></div>
   </section>
 </main>
+<script src="/dibujo.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-const NS = "http://www.w3.org/2000/svg";
-// Proporciones tomadas de las imágenes de la norma (unidad: lado de la etapa = 2·H)
-const SX = 100;       // margen izquierdo del dibujo
-const H = 22;         // semilado de la etapa cuadrada
-const TB = 14;        // semilongitud del trazo de transición (≈0,65 del lado)
-const ACT_LINK = 26;  // enlace etapa–acción (≈0,6 del lado)
-const ACT_MIN = 80;   // anchura mínima de una acción
 let M = null, S = null, busy = false, rtTimer = null;
 const RT_TICK_MS = 200;
-const STATUS = {"pausada-estable":["estable","estable"],"pausada-recorrido":["en recorrido (situación virtual)","recorrido"],
+const STATUS = {"pausada-estable":["estable","estable"],"pausada-recorrido":["en recorrido (situación inestable)","recorrido"],
   "error":["detenido por diagnóstico","error"],"no-compilable":["no compilable","error"],"finalizada":["finalizada","estable"],
   "preparada":["preparada",""],"ejecutando":["ejecutando",""]};
 
@@ -150,111 +106,6 @@ async function load() {
   $("ej").innerHTML = j.examples.map(e => `<option value="${e.key}">${e.title}</option>`).join("");
   M = j.model; S = j.state; $("ej").value = M.key; render();
 }
-function el(tag, attrs={}, parent) { const e = document.createElementNS(NS, tag);
-  for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; }
-function txt(parent, x, y, s, attrs={}) { const t = el("text", {x, y, ...attrs}, parent); t.textContent = s; return t; }
-// Texto con segmentos {t, o: sobrerrayado (negación), s: subíndice}
-function segText(parent, x, y, segs, cls, anchor="start") {
-  const t = el("text", {x, y, class: cls, "text-anchor": anchor}, parent);
-  (segs || []).forEach(s => {
-    const sp = el("tspan", {}, t); sp.textContent = s.t;
-    if (s.o) sp.setAttribute("text-decoration", "overline");
-    if (s.s) { sp.setAttribute("baseline-shift", "sub"); sp.setAttribute("font-size", "75%"); }
-  });
-  return t;
-}
-
-function drawDiagram() {
-  const svg = $("diagram"); svg.innerHTML = "";
-  svg.setAttribute("viewBox", "0 0 640 600");
-  const pos = {}; M.steps.forEach(s => pos[s.id] = {x:s.x+SX, y:s.y});
-  const minX = Math.min(...M.steps.map(s=>s.x)) + SX;
-  const situation = new Set(S.situation || []), virtual = new Set(S.virtual || []);
-  const cleared = new Set(S.lastCleared || []);
-  const blk = S.blocked, reached = new Set(blk ? blk.reached : []);
-  const links = el("g", {}, svg), bars = el("g", {}, svg), steps = el("g", {}, svg);
-  M.transitions.forEach(t => {
-    const tx = t.x + SX, ty = t.y, ob = (S.transitions||{})[t.id] || {};
-    const pre = t.pre.map(p => pos[p]), post = t.post.map(p => pos[p]);
-    if (pre.length > 1) {   // sincronización: doble trazo sobre la transición
-      const xs = pre.map(p=>p.x), yy = ty - 14;
-      el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:yy, y2:yy, class:"dbl"}, links);
-      el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:yy-4, y2:yy-4, class:"dbl"}, links);
-      pre.forEach(p => el("path", {d:`M${p.x},${p.y+H} V${yy-4}`, class:"link"}, links));
-      el("path", {d:`M${tx},${yy} V${ty}`, class:"link"}, links);
-    } else pre.forEach(p => el("path", {d:`M${p.x},${p.y+H} V${(p.y+H+ty)/2} H${tx} V${ty}`, class:"link"}, links));
-    const down = post.filter(p => p.y > ty), up = post.filter(p => p.y <= ty);
-    if (down.length > 1) {  // divergencia simultánea: doble trazo bajo la transición
-      const xs = down.map(p=>p.x), yy = ty + 14;
-      el("path", {d:`M${tx},${ty} V${yy}`, class:"link"}, links);
-      el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:yy, y2:yy, class:"dbl"}, links);
-      el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:yy+4, y2:yy+4, class:"dbl"}, links);
-      down.forEach(p => el("path", {d:`M${p.x},${yy+4} V${p.y-H}`, class:"link"}, links));
-    } else down.forEach(p => el("path", {d:`M${tx},${ty} V${(ty+p.y-H)/2} H${p.x} V${p.y-H}`, class:"link"}, links));
-    up.forEach(p => {       // enlace ascendente con flecha
-      const lx = minX - 70, top = p.y - H - 16;
-      el("path", {d:`M${tx},${ty} V${ty+14} H${lx} V${top} H${p.x} V${p.y-H}`, class:"link"}, links);
-      const my = (ty + 14 + top) / 2;
-      el("path", {d:`M${lx-5},${my+6} L${lx},${my-4} L${lx+5},${my+6} Z`, class:"arrow"}, links);
-    });
-    const cls = ["tr", ob.validated?"validated":"", ob.fireable?"fireable":"", cleared.has(t.id)?"cleared":"",
-                 blk && blk.element === t.id ? "question" : ""].join(" ");
-    const g = el("g", {class:cls}, bars);
-    el("title", {}, g).textContent = `Transición ${t.id}: validada ${ob.validated?"sí":"no"}, receptividad ${ob.receptivity?"verdadera":"falsa"}`;
-    el("line", {x1:tx-TB, x2:tx+TB, y1:ty, y2:ty, class:"bar"}, g);
-    txt(g, tx-TB-6, ty+5, `(${t.id})`, {"text-anchor":"end", class:"tdes"});
-    segText(g, tx+TB+8, ty+5, t.cond, "tcond");
-  });
-  M.steps.forEach(s => {
-    const p = pos[s.id], stale = !!blk && situation.has(s.id), act = !blk && situation.has(s.id);
-    const cand = !!blk && reached.has(s.id) && !stale, vir = virtual.has(s.id) && !act;
-    const g = el("g", {class:`step ${act?"active":""} ${vir?"virtual":""} ${stale?"stale":""} ${cand?"cand":""}`}, steps);
-    el("title", {}, g).textContent = `Etapa ${s.id}${s.initial?" (inicial)":""}: ` + (stale ? "último estado estable conservado" :
-      cand ? "alcanzada antes del punto en cuestión, sin confirmar" : act ? "activa" : vir ? "virtual" : "inactiva");
-    el("rect", {x:p.x-H, y:p.y-H, width:2*H, height:2*H, class:"outer"}, g);
-    if (s.initial) el("rect", {x:p.x-H+4, y:p.y-H+4, width:2*H-8, height:2*H-8, fill:"none"}, g);
-    txt(g, p.x, p.y+3, s.id, {"text-anchor":"middle"});
-    if (act) el("circle", {cx:p.x, cy:p.y+12, r:3.5, class:"token"}, g);
-    if (vir) txt(g, p.x, p.y+H+13, "virtual", {"text-anchor":"middle", class:"tag vtag"});
-    if (stale) txt(g, p.x, p.y+H+13, "último estable", {"text-anchor":"middle", class:"tag stag"});
-    if (cand) txt(g, p.x, p.y+H+13, "alcanzada, sin confirmar", {"text-anchor":"middle", class:"tag ctag"});
-    drawActions(g, p, s.actions);
-  });
-  const b = svg.getBBox();
-  svg.setAttribute("viewBox", `${b.x-14} ${b.y-14} ${b.width+28} ${b.height+28}`);
-}
-
-// Acciones a la derecha de la etapa, del alto de la etapa y contiguas (representación (2) de la norma)
-function drawActions(g, p, actions) {
-  if (!actions.length) return;
-  let ax = p.x + H + ACT_LINK;
-  el("line", {x1:p.x+H, x2:ax, y1:p.y, y2:p.y, class:"link"}, g);
-  actions.forEach(a => {
-    const on = a.kind === "continuous" && S.outputs && S.outputs[a.target] && S.outputs[a.target].value;
-    const ga = el("g", {class:`act ${on?"on":""}`}, g);
-    const rect = el("rect", {x:ax, y:p.y-H, height:2*H, width:ACT_MIN}, ga);
-    const label = segText(ga, ax + 12, p.y + 5, a.text, "atext");
-    const w = Math.max(ACT_MIN, label.getComputedTextLength() + 24);
-    rect.setAttribute("width", w);
-    const mx = ax + 12, top = p.y - H, bottom = p.y + H;
-    if (a.kind === "continuous" && a.cond) {             // acción condicionada: trazo y condición
-      el("line", {x1:mx, x2:mx, y1:top, y2:top-14, class:"amark"}, ga);
-      segText(ga, mx+5, top-4, a.cond, "acond");
-    } else if (a.trigger === "activation") {            // memorizada al activar: flecha hacia arriba
-      el("line", {x1:mx, x2:mx, y1:top, y2:top-11, class:"amark"}, ga);
-      el("path", {d:`M${mx-5},${top-10} L${mx},${top-19} L${mx+5},${top-10} Z`, class:"ahead"}, ga);
-    } else if (a.trigger === "deactivation") {          // memorizada al desactivar: flecha hacia abajo
-      el("line", {x1:mx, x2:mx, y1:bottom, y2:bottom+11, class:"amark"}, ga);
-      el("path", {d:`M${mx-5},${bottom+10} L${mx},${bottom+19} L${mx+5},${bottom+10} Z`, class:"ahead"}, ga);
-    } else if (a.trigger === "event") {                 // memorizada por evento: banderita y evento
-      el("line", {x1:mx, x2:mx, y1:top, y2:top-20, class:"amark"}, ga);
-      el("path", {d:`M${mx},${top-20} L${mx-9},${top-15} L${mx},${top-10} Z`, class:"ahead"}, ga);
-      segText(ga, mx+5, top-11, a.event, "acond");
-    }
-    ax += w;
-  });
-}
-
 function render() {
   // Un fallo al dibujar nunca debe dejar la página en blanco sin explicación.
   try { renderAll(); }
@@ -303,7 +154,7 @@ function renderAll() {
   renderDiag(stable, inRec);
   if (rtTimer && !stable) setRealTime(false);
   if (S.time === undefined) { $("diagram").innerHTML = ""; renderOptions(); return; }
-  drawDiagram();  // primero el diagrama: lo secundario no puede impedir que se vea
+  drawDiagram($("diagram"), M, S);  // primero el diagrama: lo secundario no puede impedir que se vea
   renderOptions();
   $("inputs").innerHTML = M.inputs.map(v => {
     const on = S.values[v] === true;

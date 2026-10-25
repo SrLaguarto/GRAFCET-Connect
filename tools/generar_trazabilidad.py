@@ -33,6 +33,7 @@ def case_status(cid: str, case: dict, results: list[dict]) -> tuple[str, str]:
     if any(r["outcome"] != "pasa" for r in mine):
         return "FALLA", ", ".join(r["test"] for r in mine if r["outcome"] != "pasa")
     label = {"oraculo": f"PASA (oráculo {case['estado']})", "bloqueo-U": "BLOQUEO VERIFICADO",
+             "decision": f"PASA SEGÚN DECISIÓN (en el documento 11: {case['estado']}, depende de U)",
              "parcial": "PARCIAL", "no-impl-bloqueo": "NO IMPLEMENTADO (bloqueo verificado)"}[kind]
     return label, note
 
@@ -65,7 +66,7 @@ def main() -> int:
         for q in r["requirements"]:
             if q in linked and r["case"] not in linked[q]:
                 linked[q].append(r["case"])
-    short = {"PASA": "✔", "BLOQUEO VERIFICADO": "⛔", "PARCIAL": "◐", "NO IMPLEMENTADO (bloqueo verificado)": "∅",
+    short = {"PASA": "✔", "PASA SEGÚN DECISIÓN": "◆", "BLOQUEO VERIFICADO": "⛔", "PARCIAL": "◐", "NO IMPLEMENTADO (bloqueo verificado)": "∅",
              "NO EJECUTADO": "—", "FALLA": "✘", "SIN PRUEBA": "?"}
 
     def mark(cid: str) -> str:
@@ -85,7 +86,9 @@ def main() -> int:
     # --- 05 Trazabilidad
     L = ["# 05. Trazabilidad requisito ↔ implementación ↔ prueba", "",
          "Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.", "", head, "",
-         "Leyenda: ✔ pasa · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · "
+         "Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del "
+         "documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo "
+         "semántico sigue abierto) · ◐ parcial · "
          "∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · "
          "✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**", "",
          "## Resumen", "", "| Categoría del requisito | Nº |", "|---|---|"]

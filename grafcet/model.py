@@ -14,7 +14,7 @@ from . import expressions as ex
 from .canonical import digest
 from .diagnostics import Diagnostic, DiagnosticError, has_blocking
 from .ids import label_key, valid_id, valid_label
-from .profile import blocked, unsupported
+from .profile import blocked, normalize_options, unsupported
 from .timeutil import parse_time_field
 from .values import TypeSpec, Value, in_domain, parse_type, parse_value, zero
 
@@ -280,7 +280,10 @@ def _cycle(graph: dict[str, set[str]]) -> list[str] | None:
     return None
 
 
-def validate_model(doc: dict[str, Any]) -> ValidationResult:
+def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -> ValidationResult:
+    """Valida el documento con las lecturas elegidas (P-IMP-21): una alternativa puede hacer que un caso no
+    compile, se permita o siga detenido."""
+    opt = normalize_options(options)
     v = _V(doc)
     if not v.fields("model", doc, "modelo"):
         return ValidationResult(v.d, None, v.caps)
@@ -522,10 +525,16 @@ def validate_model(doc: dict[str, Any]) -> ValidationResult:
                 ok = False
         cond = use_expr(t["conditionRef"], tid, "receptivity")
         if not pre and not post:
-            v.d.append(blocked("transiciones.sin-lados", "transición sin precedentes ni siguientes (se conserva como borrador)", tid))
+            if opt["6.4"] == "detener":
+                v.d.append(blocked("transiciones.sin-lados", "transición sin precedentes ni siguientes (se conserva como borrador)", tid))
+            elif opt["6.4"] == "A":
+                v.add("D-FORMATO", "transición sin etapas antes ni después: no se admite (opción 6.4 A)", tid)
         elif not pre:
             if cond is not None and not ex.is_event_positive(raw_exprs[t["conditionRef"]]["meaning"]):
-                v.d.append(blocked("transiciones.fuente-nivel", "transición fuente con receptividad de nivel", tid))
+                if opt["6.2"] == "detener":
+                    v.d.append(blocked("transiciones.fuente-nivel", "transición fuente con receptividad de nivel", tid))
+                elif opt["6.2"] == "A":
+                    v.add("D-FORMATO", "transición fuente con receptividad de nivel: no se admite (opción 6.2 A)", tid)
             v.caps.add("transiciones.fuente-evento")
         if not post:
             v.caps.add("transiciones.sumidero")
@@ -599,7 +608,15 @@ def validate_model(doc: dict[str, Any]) -> ValidationResult:
         if len(modes) > 1:
             v.add("D-MODO-SALIDA", f"{vid} recibe acciones continuas y memorizadas", vid)
     continuous_targets = {vid for vid, m in modes_by_target.items() if "continuous" in m}
-    _certain_write_conflicts(v, actions, transitions, exprs, executable)
+    _certain_write_conflicts(v, actions, transitions, exprs, executable, opt)
+    if opt["6.1"] == "A" and raw_steps and not any(s.get("initial") is True for s in raw_steps.values()):
+        v.add("D-FORMATO", "grafcet sin etapas iniciales: no se admite (lectura 6.1 A)")
+    # Respuesta 1.5 A de la hoja 08: las variables memorizadas empiezan en 0; otro valor inicial se pone con
+    # una acción «al activar» en una etapa inicial, que se ejecuta al arrancar (respuesta 1.1 A)
+    for var in sorted(variables.values(), key=lambda x: x.id):
+        if opt["1.5"] == "A" and var.role != "input" and var.id not in continuous_targets and var.initial != zero(var.type):
+            v.add("D-FORMATO", f"{var.id} declara valor inicial {var.initial!r}, pero las variables memorizadas empiezan "
+                  "en 0; para otro valor use una acción «al activar» en una etapa inicial", var.id, "initialValue")
 
     # Soportes: eventos, tiempo, lecturas no admitidas (U-03, U-06, H-08, H-09, H-10)
     temporals: dict[str, TemporalSpec] = {}
@@ -608,15 +625,19 @@ def validate_model(doc: dict[str, Any]) -> ValidationResult:
         user = uses[eid][0]
         sup = e.support
         if sup.vars & continuous_targets:
-            v.d.append(unsupported("acciones.salidas-continuas-leidas",
-                                   f"lectura de salida continua {sorted(sup.vars & continuous_targets)}", user))
+            if opt["8.2"] == "detener":
+                v.d.append(unsupported("acciones.salidas-continuas-leidas",
+                                       f"lectura de salida continua {sorted(sup.vars & continuous_targets)}", user))
+            elif opt["8.2"] == "A":
+                v.add("D-FORMATO", f"lectura de salida continua {sorted(sup.vars & continuous_targets)}: no se admite "
+                      "(opción 8.2 A)", user)
         if sup.elapsed:
             v.d.append(blocked("temporal.elapsed", "elapsed() no ejecutable en este perfil", user))
         if sup.macros:
             v.d.append(unsupported("jerarquia.macroetapas", "activeMacro() requiere ejecución jerárquica", user))
         for pid in sup.partials:
             v.caps.add("parciales.actividad")
-            if children.get(pid):
+            if children.get(pid) and opt["8.1"] == "detener":
                 v.d.append(unsupported("parciales.anidados", f"activePartial({pid}) con parciales hijos", user))
         for evn in sup.events:
             v.caps.add("eventos.entradas")
@@ -628,8 +649,11 @@ def validate_model(doc: dict[str, Any]) -> ValidationResult:
             d1, base, d2 = tn.kids
             if d1.op != "lit" or d2.op != "lit":
                 continue
-            if d1.value == 0:
-                v.d.append(blocked("temporal.delay-cero", "delay con retardo de conexión nulo", user))
+            if d1.value == 0 and opt["4.4"] != "A":
+                if opt["4.4"] == "detener":
+                    v.d.append(blocked("temporal.delay-cero", "delay con retardo de conexión nulo", user))
+                else:
+                    v.add("D-FORMATO", "retardo cero: no se admite (opción 4.4 B)", user)
                 continue
             bs = ex.support(base)
             if base.op == "active":
@@ -688,7 +712,8 @@ def validate_model(doc: dict[str, Any]) -> ValidationResult:
     return ValidationResult(v.d, cm, v.caps)
 
 
-def _constant(e: Expr) -> Value | None:
+def constant_value(e: Expr) -> Value | None:
+    """Valor de una expresión literal (o literal negado); None si no es constante."""
     n = e.node
     if n.op == "lit":
         return n.value
@@ -698,17 +723,15 @@ def _constant(e: Expr) -> Value | None:
 
 
 def _certain_write_conflicts(v: _V, actions: dict[str, Action], transitions: dict[str, Transition],
-                             exprs: dict[str, Expr], executable: dict[str, dict[str, Any]]) -> None:
-    """Conflictos de escritura seguros (decisión del responsable de producto, P-IMP-16).
+                             exprs: dict[str, Expr], executable: dict[str, dict[str, Any]], opt: dict[str, str]) -> None:
+    """Conflictos seguros entre acciones memorizadas que se ejecutan necesariamente en la misma evolución.
 
-    Dos acciones memorizadas con valores CONSTANTES distintos sobre el mismo objetivo que se ejecutan
-    necesariamente en la misma evolución impiden compilar. No se juzga aquí si dos expresiones no
-    constantes coinciden: eso se decide al ejecutar (D-ESCRITURA-CONFLICTO) o queda en U-05.
+    - Mismo objetivo: es conflicto salvo que ambas escriban la misma constante (P-IMP-16; respuesta 2.1 C de la
+      hoja 08, que incluye dos `n := n + 1` simultáneos).
+    - Una lee lo que la otra escribe: dependencia cruzada (respuesta 2.2 B).
+    Ambos casos impiden compilar. Los que dependen del escenario se detectan al ejecutar.
     """
-    stored = [a for a in actions.values() if a.mode == "stored" and _constant(exprs[a.value]) is not None]
-    by_target: dict[str, list[Action]] = {}
-    for a in stored:
-        by_target.setdefault(a.target, []).append(a)
+    stored = sorted((a for a in actions.values() if a.mode == "stored"), key=lambda a: a.id)
 
     def together(a: Action, b: Action) -> str | None:
         if a.trigger == b.trigger and a.step == b.step:
@@ -727,17 +750,33 @@ def _certain_write_conflicts(v: _V, actions: dict[str, Action], transitions: dic
                 return f"el franqueamiento de {t.id}"
         return None
 
-    for target, acts in sorted(by_target.items()):
-        acts.sort(key=lambda a: a.id)
-        for i, a in enumerate(acts):
-            for b in acts[i + 1:]:
-                va, vb = _constant(exprs[a.value]), _constant(exprs[b.value])
-                why = together(a, b) if va != vb else None
-                if why:
+    def text(a: Action) -> str:
+        return executable[a.value]["text"]
+
+    for i, a in enumerate(stored):
+        for b in stored[i + 1:]:
+            why = together(a, b)
+            if not why:
+                continue
+            if a.target == b.target:
+                ca, cb = constant_value(exprs[a.value]), constant_value(exprs[b.value])
+                if ca is not None and ca == cb:
+                    continue  # la misma constante: un único resultado (T-16b)
+                if opt["2.1"] == "B" or (opt["2.1"] == "A" and (ca is None or cb is None)):
+                    continue  # 2.1 B se acumulan; 2.1 A con valores no constantes se decide al ejecutar
+                v.d.append(Diagnostic(
+                    "D-ESCRITURA-CONFLICTO", f"conflicto de escritura seguro sobre {a.target}: {a.id} y {b.id} escriben a "
+                    f"la vez en {why}; el programa no puede compilarse", element=a.target, severity="error",
+                    evidence={"autores": f"{a.id}, {b.id}", "valores": f"{text(a)}, {text(b)}", "causa": why}))
+                continue
+            for x, y in ((a, b), (b, a)) if opt["2.2"] == "B" else ():
+                if y.target in exprs[x.value].support.vars:
                     v.d.append(Diagnostic(
-                        "D-ESCRITURA-CONFLICTO", f"conflicto de escritura seguro sobre {target}: {a.id} y {b.id} "
-                        f"escriben valores distintos en {why}; el programa no puede compilarse", element=target,
-                        severity="error", evidence={"autores": f"{a.id}, {b.id}", "valores": f"{va}, {vb}", "causa": why}))
+                        "D-DEPENDENCIA-CRUZADA", f"{x.id} lee {y.target}, que {y.id} escribe a la vez en {why}; "
+                        "el programa no puede compilarse", element=x.id, severity="error",
+                        evidence={"lee": f"{x.id} ({x.target} := {text(x)})", "escribe": f"{y.id} ({y.target} := {text(y)})",
+                                  "causa": why}))
+                    break
 
 
 def _validate_hierarchy(v: _V, partials: dict[str, Any], steps: dict[str, Any], forces: list[dict[str, Any]],

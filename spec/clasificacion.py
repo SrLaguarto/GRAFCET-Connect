@@ -6,6 +6,8 @@ Categorías:
             implementado, pero U-01 impide promoverlo a N o declararlo conforme.
   PARCIAL   Parte implementada y verificada; el resto depende de U, de la interfaz o de
             una iteración posterior (se indica).
+  IMPL-DEC  Requisito U cuya cuestión cerró el responsable (hoja 08): implementado según su decisión;
+            sigue siendo provisional hasta el contraste normativo (U-01).
   BLOQ-U    Requisito U: solo se implementa el bloqueo diagnosticado (D-SEM-PENDIENTE).
   PEND-ITER Implementable como I/P, pendiente de la siguiente iteración (estructura hecha).
   PEND-UI   Requiere la interfaz gráfica (no iniciada).
@@ -17,6 +19,7 @@ CATEGORIAS = {
     "IMPL-P": "Implementado (P), verificable ya",
     "IMPL-I": "Implementado como provisional (I; U-01)",
     "PARCIAL": "Parcial",
+    "IMPL-DEC": "Implementado según decisión del responsable (U cerrada; contraste U-01 pendiente)",
     "BLOQ-U": "Bloqueado por U (bloqueo implementado)",
     "PEND-ITER": "Pendiente de iteración (estructura hecha)",
     "PEND-UI": "Pendiente de interfaz",
@@ -42,15 +45,15 @@ REQ = {
     "REQ-MOD-05": ("IMPL-P", "model, expressions, editor", "Texto libre conservado como descriptivo; D-EXP-PENDIENTE localizado"),
     "REQ-MOD-06": ("IMPL-P", "model, editor, engine", "Renombrar, mover u ordenar no cambia observables ni revisión semántica (H-13)"),
     "REQ-MOD-07": ("IMPL-I", "model", "Propiedad única de expansiones y recintos; recursión rechazada (solo estructura)"),
-    "REQ-SEM-01": ("PARCIAL", "engine", "Situación inicial explícita sin jerarquía: I. Inicio inestable, acciones iniciales, memoria no nula y temporal verdadero: U-09. Inicio vacío: U-07"),
+    "REQ-SEM-01": ("PARCIAL", "engine", "Situación inicial explícita y su cierre causal en τ=0: acciones al activar las iniciales, evolución inicial y temporizadores desde τ=0 (hoja 08, 1.1–1.4, P-IMP-19). Abiertos: inicio vacío (U-07) e iniciales dentro de jerarquías (U-08)"),
     "REQ-SEM-02": ("IMPL-I", "engine", "Validación y receptividad; imposición jerárquica pendiente de iteración"),
     "REQ-SEM-03": ("IMPL-I", "engine", "Cambio conjunto de precedentes y siguientes"),
     "REQ-SEM-04": ("IMPL-I", "engine", "Conjunto simultáneo completo; sin prioridad por orden"),
     "REQ-SEM-05": ("PARCIAL", "engine", "Actividad I; efectos (acciones, eventos, tiempo) bloqueados por U-04 (y H-05)"),
     "REQ-SEM-06": ("IMPL-I", "engine", "Etapas virtuales sin pulso continuo; memorizadas conservadas; eventos en el recorrido: U-03"),
-    "REQ-SEM-07": ("IMPL-P", "engine", "D-LIM-EVOL recuperable, τ sin avanzar, sin falsa estabilidad (S-08a; T-08a bloqueado por U-09, H-03)"),
+    "REQ-SEM-07": ("IMPL-P", "engine", "D-LIM-EVOL recuperable, τ sin avanzar, sin falsa estabilidad (T-08a con su oráculo original desde la respuesta 1.2 A; S-08a)"),
     "REQ-SEM-08": ("IMPL-P", "engine, trace", "Mismos observables con independencia de recorrido, geometría y control; entre sistemas: U-10"),
-    "REQ-SEM-09": ("BLOQ-U", "engine", "U-03..U-05: detención con D-SEM-PENDIENTE; si todas las lecturas coinciden, se acepta. U-03 admite además lecturas elegidas como hipótesis registrada (P-IMP-15)"),
+    "REQ-SEM-09": ("BLOQ-U", "engine", "U-05 cerrada por el responsable (P-IMP-20); U-03 seleccionable como hipótesis (P-IMP-15); las alternativas de U-04, U-06 y U-07 se prueban en el comparador (P-IMP-21), pero por defecto siguen deteniéndose. Si todas las lecturas coinciden, se acepta"),
     "REQ-EXP-01": ("IMPL-P", "expressions, values", "Tipos exactos, unidades, precedencia; sintaxis de literales P-IMP-06"),
     "REQ-EXP-02": ("IMPL-P", "expressions, engine", "Evaluación pura"),
     "REQ-EVT-01": ("IMPL-I", "engine", "Flancos sobre entradas en la 1.ª evolución; sin retención ni consumo exclusivo"),
@@ -63,7 +66,7 @@ REQ = {
     "REQ-ACT-02": ("IMPL-I", "engine", "Memorizadas por activación, desactivación y evento, también virtuales"),
     "REQ-ACT-03": ("IMPL-P", "model, engine", "D-ESCRITURA-CONFLICTO con autores y valores, sin prioridad oculta; un conflicto seguro impide compilar (P-IMP-16) y el resto se detiene en ejecución"),
     "REQ-ACT-04": ("IMPL-I", "model", "D-MODO-SALIDA en validación"),
-    "REQ-ACT-05": ("BLOQ-U", "engine", "U-05: lecturas cruzadas, incrementos simultáneos y lecturas tras asignación bloqueadas"),
+    "REQ-ACT-05": ("IMPL-DEC", "engine, model", "Hoja 08, 2.1 C, 2.2 B, 2.3 A, 2.4 A y 2.5 A (P-IMP-20): conflicto si dos escriben a la vez, dependencia cruzada no compila, lo asignado se ve en el mismo instante y vale la última asignación"),
     "REQ-JER-01": ("PARCIAL", "engine, model", "Partición sin orden y XG de parciales sin hijos; anidados: H-08"),
     "REQ-JER-02": ("PEND-ITER", "model", "Cuatro formas de forzado editables y validadas; ejecución pendiente (H-18, U-08)"),
     "REQ-JER-03": ("PARCIAL", "model", "Ciclos D-JERARQUIA-CICLO; conflicto posible estático; detección dinámica pendiente de ejecución"),
@@ -113,13 +116,15 @@ REQ = {
 # Casos con tratamiento distinto de «se ejecuta su oráculo». (tipo, explicación)
 #   bloqueo-U        el caso es B o lo toca una U: se verifica la detención con la U correcta
 #   parcial          se ejecuta la parte determinada; el resto queda bloqueado o pendiente
+#   decision         caso U del documento 11 (oráculo B) cuya cuestión cerró el responsable en la hoja 08: la
+#                    prueba comprueba la alternativa elegida, no un oráculo del paquete
 #   no-impl-bloqueo  capacidad no implementada en esta iteración: se verifica que no se ejecuta
 #   no-ejecutado     no hay prueba en esta iteración (interfaz, plataforma, medición)
 CASOS = {
-    "T-01c": ("parcial", "restaurar/reiniciar verificados; activaciones iniciales U-09"),
+    "T-01c": ("oraculo", "restaurar y reiniciar; las acciones al activar las iniciales ya se ejecutan (1.1 A)"),
     "T-01d": ("bloqueo-U", "U-07"),
     "T-05b": ("bloqueo-U", "U-04"),
-    "T-08a": ("bloqueo-U", "el modelo es inestable al iniciar: U-09 (H-03); la parte P está en S-08a"),
+    "T-08a": ("oraculo", "oráculo original ejecutable desde la respuesta 1.2 A de la hoja 08 (cierra H-03)"),
     "T-10d": ("bloqueo-U", "U-03"),
     "T-10e": ("parcial", "primera evolución E={t,u} verificada; repetición U-07"),
     "T-11a": ("bloqueo-U", "U-04"),
@@ -129,8 +134,9 @@ CASOS = {
     "T-13b": ("bloqueo-U", "U-06; con p verdadera desde el inicio, U-09"),
     "T-13c": ("bloqueo-U", "U-06"),
     "T-14c": ("oraculo", "segunda parte = T-07a"),
-    "T-15c": ("bloqueo-U", "U-05"),
-    "T-16d": ("bloqueo-U", "U-05"),
+    "T-15c": ("decision", "decisión 2.2 B de la hoja 08: dependencia cruzada, no compila; en ejecución se detiene. "
+              "El error no está entre las lecturas (5,2), (5,5) y (2,2) que lista el caso"),
+    "T-16d": ("decision", "decisión 2.1 C de la hoja 08: de las alternativas del caso (n=1, n=2 o conflicto), conflicto"),
     "T-17a": ("no-impl-bloqueo", "ejecución de forzado no implementada (H-18)"),
     "T-17b": ("no-impl-bloqueo", "ejecución de forzado no implementada; efectos U-08"),
     "T-17c": ("parcial", "conflicto posible detectado estáticamente; detección dinámica pendiente"),

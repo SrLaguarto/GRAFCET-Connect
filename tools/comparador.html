@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparador de decisiones</title>
+<link rel="stylesheet" href="/dibujo.css">
+<style>
+main{padding:14px 16px;max-width:1500px;margin:0 auto}
+.top{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr);gap:12px}
+@media (max-width:860px){.top{grid-template-columns:1fr}}
+.q h3{margin:0 0 6px;font-size:18px}.q .block{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.q .question{font-size:15px;margin:6px 0 8px}
+.saved{border-radius:8px;padding:8px 10px;background:var(--ok-soft);border:1px solid var(--ok);margin-top:8px}
+.saved.open{background:var(--bg);border-color:var(--line)}
+.base{font-size:12.5px;color:var(--warn);margin:6px 0 0}
+ol.script{margin:0 0 10px;padding-left:22px}ol.script li{padding:2px 0}
+ol.script li.done{color:var(--muted)}ol.script li.done::marker{content:"✓  "}
+ol.script li.next{font-weight:600}
+.free{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.free summary{cursor:pointer;color:var(--muted);font-size:13px}
+.free .row{margin-top:8px}.free button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent)}
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:12px}
+.panel{display:flex;flex-direction:column}
+.panel.chosen{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
+.panel h3{margin:0;font-size:15px}.panel .ltext{margin:2px 0 6px}
+.expect{font-size:13px;background:var(--bg);border-radius:6px;padding:6px 8px;margin-bottom:8px}
+.expect b{color:var(--muted);font-weight:500}
+.panel svg.grafcet{max-height:52vh;margin:4px 0}
+.panel .note{font-size:12px;color:var(--warn);margin:4px 0}
+.panel .diag{margin:6px 0;padding:8px 10px;font-size:13px}
+.panel .pick{margin-top:auto;padding-top:8px}
+.panel .pick button{width:100%;font-weight:600}
+.panel.chosen .pick button{background:var(--ok-soft);border-color:var(--ok)}
+.clock{font-variant-numeric:tabular-nums;font-weight:600}
+.choices{display:grid;gap:8px;margin-top:8px}.choices button{text-align:left}
+.choices button.chosen{background:var(--ok-soft);border-color:var(--ok)}
+.decide{margin-top:12px}
+.decide textarea{width:100%;min-height:54px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.legend{font-size:12px;color:var(--muted);margin:10px 0 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Comparador de decisiones</h1>
+  <label for="dec">Cuestión</label><select id="dec"></select>
+  <button id="prev" aria-label="Cuestión anterior">←</button><button id="nextq" aria-label="Cuestión siguiente">→</button>
+  <a href="/">← Banco de pruebas</a>
+  <span class="note">Cada panel ejecuta el mismo ejemplo con una lectura distinta · <strong>elegir una no declara conformidad</strong></span>
+</header>
+<main>
+  <div class="top">
+    <div class="card q" id="qcard" aria-live="polite"></div>
+    <div class="card" id="scard">
+      <h2>Guion del ejemplo</h2>
+      <ol class="script" id="script"></ol>
+      <div class="row"><button id="paso">Siguiente paso ▶</button><button id="repetir">Repetir desde el principio</button></div>
+      <div class="toast" id="toast" role="status"></div>
+      <details class="free"><summary>Probar por libre (igual en todos los paneles)</summary>
+        <div class="row" id="freeinputs"></div>
+        <div class="row"><button data-us="500000">+0,5 s</button><button data-us="1000000">+1 s</button><button data-us="3000000">+3 s</button></div>
+      </details>
+    </div>
+  </div>
+  <div class="panels" id="panels"></div>
+  <div class="card decide" id="decide"></div>
+  <p class="legend">Etapa activa: ● y fondo azul. Borde morado discontinuo: etapa inestable (activa un tiempo nulo; sus
+    acciones memorizadas se ejecutan y las continuas no producen salida). Transición naranja: recién franqueada; roja:
+    la que está en cuestión. Acción con borde verde: salida continua encendida.</p>
+</main>
+<script src="/dibujo.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let V = null;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const STATUS = {"pausada-estable":["estable","estable"],"pausada-recorrido":["recorrido sin terminar","recorrido"],
+  "error":["detenido","error"],"no-compilable":["no compila","error"],"finalizada":["estable","estable"]};
+
+async function call(op, body={}) {
+  const r = await fetch("/api/cmp/" + op, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const j = await r.json();
+  V = j; render(); $("toast").textContent = j.error ? j.error : "";
+}
+async function load() { V = await (await fetch("/api/cmp/estado")).json(); render(); }
+
+function renderSelect() {
+  const groups = {};
+  V.catalog.forEach(c => (groups[c.block] = groups[c.block] || []).push(c));
+  $("dec").innerHTML = Object.entries(groups).map(([b, cs]) => `<optgroup label="${esc(b)}">` + cs.map(c =>
+    `<option value="${c.id}">${c.answer ? (c.answer === "abierta" ? "○" : "✓") : "·"} ${c.id} ${esc(c.title)}${c.simulable ? "" : " (sin simulación)"}</option>`).join("") +
+    "</optgroup>").join("");
+  $("dec").value = V.decision.id;
+  const i = V.catalog.findIndex(c => c.id === V.decision.id);
+  $("prev").disabled = i <= 0; $("nextq").disabled = i >= V.catalog.length - 1;
+}
+
+function answerText(a) {
+  if (!a) return `<div class="saved open">Sin responder todavía.</div>`;
+  const what = a.eleccion === "abierta" ? "Dejar abierta" : `${esc(a.eleccion)} · ${esc(a.texto)}`;
+  return `<div class="saved ${a.eleccion === "abierta" ? "open" : ""}">Respuesta guardada: <b>${what}</b>
+    <span class="help">(${a.origen === "hoja 08" ? "hoja 08" : "comparador"}, ${esc(a.fecha)})</span>
+    ${a.comentario ? `<br><em>${esc(a.comentario)}</em>` : ""}</div>`;
+}
+
+function renderQuestion() {
+  const d = V.decision;
+  $("qcard").innerHTML = `<div class="block">${esc(d.block)}</div><h3>${d.id} · ${esc(d.title)}</h3>
+    <p class="question">${esc(d.question)}</p>
+    ${d.example ? `<p class="help">${esc(d.example)}</p>` : ""}
+    ${d.note ? `<p class="help"><em>${esc(d.note)}</em></p>` : ""}
+    ${d.base.map(b => `<p class="base">Este ejemplo usa además la lectura ${b.question} ${b.value} («${esc(b.text)}»), que es otra cuestión.</p>`).join("")}
+    ${answerText(d.answer)}`;
+  $("scard").hidden = !d.simulable;
+  const k = V.stepIndex;
+  $("script").innerHTML = `<li class="${k === 0 ? "" : "done"}">Arranque</li>` + V.script.map((s, i) =>
+    `<li class="${s.done ? "done" : i === k ? "next" : ""}">${esc(s.text)}</li>`).join("");
+  $("paso").disabled = k >= V.script.length;
+  $("paso").textContent = k >= V.script.length ? "Guion terminado" : `Siguiente paso ▶ (${k + 1} de ${V.script.length})`;
+}
+
+function panelHtml(p, chosen) {
+  const S = p.state, [label, cls] = STATUS[S.status] || [S.status, ""];
+  const diags = S.status === "no-compilable" || S.status === "error" || S.status === "pausada-recorrido"
+    ? (S.diagnostics || []).slice(-1).map(d => `<div class="diag"><b>${esc(d.code)}${d.question ? " · " + esc(d.question) : ""}</b>
+        <p>${esc(d.message)}</p></div>`).join("") : "";
+  const outs = Object.entries(S.outputs || {}).map(([k, o]) => `<tr><td class="mono">${esc(k)}</td><td class="${o.value?"on":"off"}">${o.value?"ON":"OFF"}</td></tr>`);
+  const vals = Object.entries(S.values || {}).filter(([k]) => !p.model.inputs.includes(k) && !(k in (S.outputs||{})))
+    .map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td class="mono">${esc(v)}</td></tr>`);
+  const ins = p.model.inputs.map(k => `${esc(k)} = ${S.values && S.values[k] === true ? 1 : 0}`).join(" · ");
+  return `<div class="card panel ${chosen ? "chosen" : ""}">
+    <h3>Lectura ${esc(p.value)}</h3><p class="ltext">${esc(p.text)}</p>
+    <div class="expect"><b>Qué debe pasar:</b> ${esc(p.expect)}</div>
+    <div class="status"><span class="badge ${cls}">${esc(label)}</span>
+      <span class="clock">${S.time !== undefined ? "τ = " + esc(S.time) : ""}</span>
+      <span class="help" style="margin:0">S = {${(S.situation || []).join(", ")}}</span></div>
+    ${diags}
+    <svg class="grafcet" role="img" aria-label="Grafcet con la lectura ${esc(p.value)}"></svg>
+    ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
+    <table>${outs.join("")}${vals.join("")}${ins ? `<tr><td colspan="2" class="help">Entradas: ${ins}</td></tr>` : ""}</table>
+    <div class="pick"><button data-pick="${esc(p.value)}">${chosen ? "✓ Elegida" : "Esta es la buena"}</button></div>
+  </div>`;
+}
+
+function renderPanels() {
+  const d = V.decision, cur = d.answer && d.answer.eleccion;
+  $("panels").innerHTML = V.panels.map(p => panelHtml(p, p.value === cur)).join("");
+  document.querySelectorAll("#panels .panel").forEach((card, i) => {
+    try {
+      const svg = card.querySelector("svg");
+      drawDiagram(svg, V.panels[i].model, V.panels[i].state);
+      svg.style.maxWidth = Math.round(svg.viewBox.baseVal.width * 1.25) + "px";  // sin ampliar de más un ejemplo pequeño
+    }
+    catch (e) { console.error(e); card.querySelector("svg").outerHTML = `<p class="toast">No se pudo dibujar: ${esc(e.message)}</p>`; }
+  });
+  const first = V.panels.find(p => p.state.values) || V.panels[0];
+  $("freeinputs").innerHTML = first ? first.model.inputs.map(v => {
+    const on = first.state.values && first.state.values[v] === true;
+    return `<button data-var="${v}" aria-pressed="${on}">${v} = ${on ? 1 : 0}</button>`; }).join("") : "";
+  document.querySelectorAll("#freeinputs button").forEach(b => b.onclick = () => call("entrada", {var: b.dataset.var}));
+}
+
+function renderDecide() {
+  const d = V.decision, cur = d.answer && d.answer.eleccion;
+  const choices = d.simulable ? "" : `<div class="choices">${d.choices.map(c =>
+    `<button data-pick="${esc(c.value)}" class="${c.value === cur ? "chosen" : ""}">${c.value === cur ? "✓ " : ""}<b>${esc(c.value)}.</b> ${esc(c.text)}</button>`).join("")}</div>`;
+  $("decide").innerHTML = `<h2>Decidir</h2>
+    ${d.simulable ? `<p class="help" style="margin:0 0 8px">Elija con el botón «Esta es la buena» del panel que se comporta como debe, o deje la cuestión abierta.</p>` : ""}
+    ${choices}
+    <label for="coment" class="help" style="display:block;margin:10px 0 4px">Comentario (opcional; se guarda con la respuesta)</label>
+    <textarea id="coment">${esc(d.answer && d.answer.comentario)}</textarea>
+    <div class="row" style="margin-top:8px"><button data-pick="abierta" class="${cur === "abierta" ? "chosen" : ""}">Dejar abierta (el programa sigue deteniéndose)</button>
+    <span class="help" style="margin:0">Se guarda en <span class="mono">${esc(V.file)}</span>. Después la implemento como lectura por defecto, con su prueba.</span></div>`;
+}
+
+function render() {
+  try {
+    renderSelect(); renderQuestion(); renderPanels(); renderDecide();
+    document.querySelectorAll("[data-pick]").forEach(b => b.onclick = () =>
+      call("elegir", {id: V.decision.id, value: b.dataset.pick, comentario: ($("coment") || {}).value || ""}));
+  } catch (e) { console.error(e); $("toast").textContent = "Error al dibujar el comparador (" + e.message + ")."; }
+}
+function go(delta) { const i = V.catalog.findIndex(c => c.id === V.decision.id); call("cargar", {id: V.catalog[i + delta].id}); }
+$("dec").onchange = () => call("cargar", {id: $("dec").value});
+$("prev").onclick = () => go(-1); $("nextq").onclick = () => go(1);
+$("paso").onclick = () => call("paso");
+$("repetir").onclick = () => call("repetir");
+document.querySelectorAll("[data-us]").forEach(b => b.onclick = () => call("avanzar", {us: Number(b.dataset.us)}));
+load();
+</script>
+</body>
+</html>

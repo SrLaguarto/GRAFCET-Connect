@@ -231,13 +231,17 @@ class Evolucion(unittest.TestCase):
         s.run()
         self.assertTrue(s.z.values["z"])
 
-    def test_T08a_inicio_inestable_bloqueado_por_U09(self):
-        """Hallazgo H-03: el modelo de T-08a es inestable al iniciar (U-09). La parte P se prueba en S-08a."""
+    def test_T08a_ciclo_instantaneo_al_arrancar(self):
+        """Oráculo original de T-08a, ejecutable desde la respuesta 1.2 A de la hoja 08 (cierra H-03)."""
         cm = M().step("A", True).step("B").trans("t", ["A"], ["B"], "true").trans("u", ["B"], ["A"], "true").compile()
         s = session(cm, budget=20, start=False)
         diags = s.start()
-        self.assertTrue(any(d.code == "D-SEM-PENDIENTE" and d.question == "U-09" for d in diags))
-        self.assertIsNone(s.z)
+        self.assertEqual([d.code for d in diags], ["D-LIM-EVOL"])
+        self.assertEqual(s.status, "pausada-recorrido")
+        self.assertEqual(s.z.time, 0, "τ = 0")
+        self.assertEqual(records(s, "estable"), [], "no hay resultado estable")
+        self.assertEqual(len(records(s, "evolucion")), 20, "evidencia del recorrido")
+        self.assertEqual(len(records(s, "limite")), 1, "evidencia del límite")
 
     def test_T08b_espera_estable_no_es_divergencia(self):
         cm = M().var("p").step("A", True).step("B").trans("t", ["A"], ["B"], "p").compile()

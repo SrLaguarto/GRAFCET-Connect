@@ -221,8 +221,10 @@ class Tiempo(unittest.TestCase):
     def test_T13b_caida_exacta_en_el_vencimiento_bloqueo(self):
         m = M().var("p").step("A", True).step("B").trans("t", ["A"], ["B"], "delay(2 s, p, 0 s)")
         cm = m.compile()
-        s = session(cm, init={"p": True}, start=False)
-        self.assertEqual({d.question for d in s.start()}, {"U-09"}, "p verdadera desde el inicio: U-09")
+        # p verdadera desde el arranque: cuenta desde τ=0 (hoja 08, 1.3 A) y cae justo en el vencimiento
+        s = session(cm, init={"p": True}, batches=[(2 * S, 0, {"p": False})])
+        s.run()
+        self.assertEqual((last_diag(s).code, last_diag(s).question), ("D-SEM-PENDIENTE", "U-06"))
         s = session(cm, batches=[(0, 0, {"p": True}), (2 * S, 0, {"p": False})])
         s.run()
         self.assertEqual((last_diag(s).code, last_diag(s).question), ("D-SEM-PENDIENTE", "U-06"))
@@ -291,12 +293,20 @@ class Acciones(unittest.TestCase):
             got.append(s.z.values["n"])
         self.assertEqual(got, [1, 1, 2])
 
-    def test_T15c_lecturas_cruzadas_bloqueo_U05(self):
-        m = M().var("p").var("x", "internal", "int").var("yv", "internal", "int").step("A").step("B")
+    def test_T15c_lecturas_cruzadas_dependencia_cruzada(self):
+        """Hoja 08, 2.2 B: x := y con y := x simultáneas es una dependencia cruzada; no compila."""
+        m = M().var("p").var("x", "internal", "int").var("yv", "internal", "int").step("A", True).step("B")
         m.trans("t", ["A"], ["B"], "p").stored("B", "x", "activation", "yv").stored("B", "yv", "activation", "x")
-        s = declared(m.compile(), ["A"], values={"x": 2, "yv": 5}, batches=[(1 * S, 0, {"p": True})])
+        res = m.validate()
+        self.assertIn("D-DEPENDENCIA-CRUZADA", {d.code for d in res.diagnostics})
+        self.assertFalse(res.can_simulate)
+        # Si solo se sabe al ejecutar (ramas independientes con la misma entrada), se detiene sin elegir valores
+        m2 = M().var("p").var("x", "internal", "int").var("yv", "internal", "int").step("A").step("B").step("C").step("D")
+        m2.trans("t", ["A"], ["B"], "p").trans("u", ["C"], ["D"], "p")
+        m2.stored("B", "x", "activation", "yv").stored("D", "yv", "activation", "x")
+        s = declared(m2.compile(), ["A", "C"], values={"x": 2, "yv": 5}, batches=[(1 * S, 0, {"p": True})])
         s.run()
-        self.assertEqual((last_diag(s).code, last_diag(s).question), ("D-SEM-PENDIENTE", "U-05"))
+        self.assertEqual(last_diag(s).code, "D-DEPENDENCIA-CRUZADA")
         self.assertEqual((s.z.values["x"], s.z.values["yv"]), (2, 5))
 
     def _two_writers(self, v1, v2, expr=False):
@@ -337,10 +347,15 @@ class Acciones(unittest.TestCase):
         m = M().var("y", "output").step("A", True).step("B").cont("A", "y").stored("B", "y", "activation", "true")
         self.assertIn("D-MODO-SALIDA", codes(m.validate()))
 
-    def test_T16d_dos_incrementos_bloqueo_U05(self):
-        s = self._two_writers("z + 1", "z + 1")
-        self.assertEqual((last_diag(s).code, last_diag(s).question), ("D-SEM-PENDIENTE", "U-05"))
-        self.assertEqual(s.z.values["z"], 0)
+    def test_T16d_dos_incrementos_conflicto(self):
+        """Hoja 08, 2.1 C: de las alternativas de T-16d (n=1, n=2 o conflicto), el responsable elige conflicto."""
+        m = M().var("p").var("z", "internal", "int").step("A", True).step("B").step("C")
+        m.trans("t", ["A"], ["B", "C"], "p")
+        m.stored("B", "z", "activation", "z + 1", aid="aB").stored("C", "z", "activation", "z + 1", aid="aC")
+        res = m.validate()
+        d = next(x for x in res.diagnostics if x.code == "D-ESCRITURA-CONFLICTO")
+        self.assertEqual(d.evidence["autores"], "aB, aC")
+        self.assertFalse(res.can_simulate, "no se resuelve con el orden de archivo: no compila")
 
 
 if __name__ == "__main__":
