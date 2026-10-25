@@ -599,6 +599,7 @@ def validate_model(doc: dict[str, Any]) -> ValidationResult:
         if len(modes) > 1:
             v.add("D-MODO-SALIDA", f"{vid} recibe acciones continuas y memorizadas", vid)
     continuous_targets = {vid for vid, m in modes_by_target.items() if "continuous" in m}
+    _certain_write_conflicts(v, actions, transitions, exprs, executable)
 
     # Soportes: eventos, tiempo, lecturas no admitidas (U-03, U-06, H-08, H-09, H-10)
     temporals: dict[str, TemporalSpec] = {}
@@ -685,6 +686,58 @@ def validate_model(doc: dict[str, Any]) -> ValidationResult:
             lst.sort(key=lambda a: a.id)
     cm.event_actions.sort(key=lambda a: a.id)
     return ValidationResult(v.d, cm, v.caps)
+
+
+def _constant(e: Expr) -> Value | None:
+    n = e.node
+    if n.op == "lit":
+        return n.value
+    if n.op == "neg" and n.kids[0].op == "lit":
+        return -n.kids[0].value
+    return None
+
+
+def _certain_write_conflicts(v: _V, actions: dict[str, Action], transitions: dict[str, Transition],
+                             exprs: dict[str, Expr], executable: dict[str, dict[str, Any]]) -> None:
+    """Conflictos de escritura seguros (decisión del responsable de producto, P-IMP-16).
+
+    Dos acciones memorizadas con valores CONSTANTES distintos sobre el mismo objetivo que se ejecutan
+    necesariamente en la misma evolución impiden compilar. No se juzga aquí si dos expresiones no
+    constantes coinciden: eso se decide al ejecutar (D-ESCRITURA-CONFLICTO) o queda en U-05.
+    """
+    stored = [a for a in actions.values() if a.mode == "stored" and _constant(exprs[a.value]) is not None]
+    by_target: dict[str, list[Action]] = {}
+    for a in stored:
+        by_target.setdefault(a.target, []).append(a)
+
+    def together(a: Action, b: Action) -> str | None:
+        if a.trigger == b.trigger and a.step == b.step:
+            if a.trigger != "event":
+                return f"la misma {'activación' if a.trigger == 'activation' else 'desactivación'} de {a.step}"
+            if executable[a.trigger_expr]["meaning"] == executable[b.trigger_expr]["meaning"]:
+                return f"el mismo evento en {a.step}"
+            return None
+        if "event" in (a.trigger, b.trigger):
+            return None
+        for t in sorted(transitions.values(), key=lambda t: t.id):
+            activated, deactivated = t.post - t.pre, t.pre - t.post
+            sa = activated if a.trigger == "activation" else deactivated
+            sb = activated if b.trigger == "activation" else deactivated
+            if a.step in sa and b.step in sb:
+                return f"el franqueamiento de {t.id}"
+        return None
+
+    for target, acts in sorted(by_target.items()):
+        acts.sort(key=lambda a: a.id)
+        for i, a in enumerate(acts):
+            for b in acts[i + 1:]:
+                va, vb = _constant(exprs[a.value]), _constant(exprs[b.value])
+                why = together(a, b) if va != vb else None
+                if why:
+                    v.d.append(Diagnostic(
+                        "D-ESCRITURA-CONFLICTO", f"conflicto de escritura seguro sobre {target}: {a.id} y {b.id} "
+                        f"escriben valores distintos en {why}; el programa no puede compilarse", element=target,
+                        severity="error", evidence={"autores": f"{a.id}, {b.id}", "valores": f"{va}, {vb}", "causa": why}))
 
 
 def _validate_hierarchy(v: _V, partials: dict[str, Any], steps: dict[str, Any], forces: list[dict[str, Any]],

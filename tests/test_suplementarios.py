@@ -240,6 +240,49 @@ class LecturasSeleccionables(unittest.TestCase):
         self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-07"))
 
 
+class ConflictosAlCompilar(unittest.TestCase):
+    """P-IMP-16 (decisión del responsable de producto): un conflicto de escritura seguro impide compilar."""
+
+    def _codes(self, m):
+        res = m.validate()
+        return [d for d in res.diagnostics if d.code == "D-ESCRITURA-CONFLICTO"], res
+
+    def test_SESC01_conflictos_seguros_no_compilan(self):
+        """REQ-ACT-03, REQ-EDT-09: activación/activación, desactivación/desactivación, activación/desactivación y misma etapa."""
+        base = lambda: M().var("p").var("z", "internal", "int").step("A", True).step("B").step("C")
+        m = base().trans("t", ["A"], ["B", "C"], "p")
+        m.stored("B", "z", "activation", "1").stored("C", "z", "activation", "2")
+        m2 = base().trans("t", ["A", "B"], ["C"], "p")
+        m2.stored("A", "z", "deactivation", "1").stored("B", "z", "deactivation", "2")
+        m3 = base().trans("t", ["A"], ["B"], "p")
+        m3.stored("A", "z", "deactivation", "1").stored("B", "z", "activation", "2")
+        m4 = base().trans("t", ["A"], ["B"], "p")
+        m4.stored("B", "z", "activation", "1").stored("B", "z", "activation", "-1")
+        m5 = base().trans("t", ["A"], ["B"], "p")
+        m5.stored("A", "z", "event", "1", event="rise(p)").stored("A", "z", "event", "2", event="rise(p)")
+        for i, mm in enumerate((m, m2, m3, m4, m5), 1):
+            diags, res = self._codes(mm)
+            self.assertEqual(len(diags), 1, f"caso {i}: {[str(d) for d in res.diagnostics]}")
+            self.assertEqual(diags[0].severity, "error")
+            self.assertFalse(res.can_simulate, f"caso {i} no debe compilar")
+
+    def test_SESC02_no_son_conflictos_seguros(self):
+        """REQ-ACT-03, REQ-ACT-05: valores iguales, etapas en secuencia y valores no constantes (U-05) no impiden compilar."""
+        base = lambda: M().var("p").var("q").var("z", "internal", "int").step("A", True).step("B").step("C")
+        iguales = base().trans("t", ["A"], ["B", "C"], "p")
+        iguales.stored("B", "z", "activation", "2").stored("C", "z", "activation", "2")
+        secuencia = base().trans("t", ["A"], ["B"], "p").trans("u", ["B"], ["C"], "q")
+        secuencia.stored("B", "z", "activation", "1").stored("C", "z", "activation", "2")
+        no_constante = base().trans("t", ["A"], ["B", "C"], "p")
+        no_constante.stored("B", "z", "activation", "z + 1").stored("C", "z", "activation", "z + 1")
+        eventos_distintos = base().trans("t", ["A"], ["B"], "p")
+        eventos_distintos.stored("A", "z", "event", "1", event="rise(p)").stored("A", "z", "event", "2", event="rise(q)")
+        for mm in (iguales, secuencia, no_constante, eventos_distintos):
+            diags, res = self._codes(mm)
+            self.assertEqual(diags, [])
+            self.assertTrue(res.can_simulate, [str(d) for d in res.diagnostics])
+
+
 class ReglasP(unittest.TestCase):
     def test_SCAN_formato_canonico(self):
         """REQ-DAT-05, REQ-DAT-06: reglas de representación canónica y lectura estricta (09)."""

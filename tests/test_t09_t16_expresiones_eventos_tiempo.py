@@ -308,11 +308,24 @@ class Acciones(unittest.TestCase):
         return s
 
     def test_T16a_conflicto_de_escritura(self):
-        s = self._two_writers("1", "2")
+        # Caso del oráculo: B y C se activan por la misma transición → conflicto seguro, no compila (P-IMP-16)
+        m = M().var("p").var("z", "internal", "int").step("A", True).step("B").step("C")
+        m.trans("t", ["A"], ["B", "C"], "p")
+        m.stored("B", "z", "activation", "1", aid="aB").stored("C", "z", "activation", "2", aid="aC")
+        res = m.validate()
+        d = next(x for x in res.diagnostics if x.code == "D-ESCRITURA-CONFLICTO")
+        self.assertEqual((d.evidence["autores"], d.evidence["valores"]), ("aB, aC", "1, 2"))
+        self.assertFalse(res.can_simulate, "el programa no puede compilarse; ningún valor final arbitrario")
+        # Conflicto que solo se conoce al ejecutar: dos ramas independientes con la misma entrada
+        m2 = M().var("p").var("z", "internal", "int").step("A", True).step("B").step("C", True).step("D")
+        m2.trans("t", ["A"], ["B"], "p").trans("u", ["C"], ["D"], "p")
+        m2.stored("B", "z", "activation", "1", aid="aB").stored("D", "z", "activation", "2", aid="aD")
+        s = session(m2.compile(), batches=[(1 * S, 0, {"p": True})])
+        s.run()
         d = last_diag(s)
         self.assertEqual(d.code, "D-ESCRITURA-CONFLICTO")
         self.assertIn("aB=1", d.evidence["propuestas"])
-        self.assertIn("aC=2", d.evidence["propuestas"])
+        self.assertIn("aD=2", d.evidence["propuestas"])
         self.assertEqual(s.z.values["z"], 0, "ningún valor final arbitrario")
 
     def test_T16b_escrituras_iguales(self):

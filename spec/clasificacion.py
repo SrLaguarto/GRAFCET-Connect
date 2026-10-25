@@ -61,7 +61,7 @@ REQ = {
     "REQ-TMP-03": ("BLOQ-U", "engine", "U-06: coincidencias lote/vencimiento, caída en vencimiento, rebote, d1=0, órdenes dependientes"),
     "REQ-ACT-01": ("IMPL-I", "engine", "Disyunción sobre situación efectiva; lectura de salidas continuas no soportada (H-10)"),
     "REQ-ACT-02": ("IMPL-I", "engine", "Memorizadas por activación, desactivación y evento, también virtuales"),
-    "REQ-ACT-03": ("IMPL-P", "engine", "D-ESCRITURA-CONFLICTO con autores y valores; sin prioridad oculta"),
+    "REQ-ACT-03": ("IMPL-P", "model, engine", "D-ESCRITURA-CONFLICTO con autores y valores, sin prioridad oculta; un conflicto seguro impide compilar (P-IMP-16) y el resto se detiene en ejecución"),
     "REQ-ACT-04": ("IMPL-I", "model", "D-MODO-SALIDA en validación"),
     "REQ-ACT-05": ("BLOQ-U", "engine", "U-05: lecturas cruzadas, incrementos simultáneos y lecturas tras asignación bloqueadas"),
     "REQ-JER-01": ("PARCIAL", "engine, model", "Partición sin orden y XG de parciales sin hijos; anidados: H-08"),

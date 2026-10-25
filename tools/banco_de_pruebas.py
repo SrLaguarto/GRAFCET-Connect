@@ -2,9 +2,16 @@
 
 Sirve en http://127.0.0.1:8765 una página que dibuja un ejemplo y deja cambiar
 entradas, avanzar el tiempo lógico y avanzar evolución a evolución. Toda la semántica
-la decide grafcet/engine.py, perfil provisional: no hay aproximaciones en la página y
-los bloqueos por cuestiones U se muestran tal cual. Solo biblioteca estándar, sin red
-externa (escucha únicamente en 127.0.0.1).
+la decide grafcet/engine.py, con el perfil provisional: la página no hace aproximaciones
+y los bloqueos por cuestiones U se muestran tal cual. Solo usa la biblioteca estándar y
+no sale a la red (escucha únicamente en 127.0.0.1).
+
+El dibujo sigue la notación gráfica de la norma (tablas 1–7): etapa cuadrada, transición
+como trazo corto con designación entre paréntesis, receptividad con ↑ ↓ · + y
+sobrerrayado, y acciones del alto de la etapa con trazo de condición, flecha de
+activación o desactivación, o banderita de evento. Las proporciones se tomaron por
+inspección visual de las imágenes de la norma aportadas por el usuario; no se copia
+ningún activo.
 
 Uso:  python tools/banco_de_pruebas.py [--port 8765] [--abrir]
       o doble clic en «Probar banco de pruebas.bat»
@@ -43,7 +50,7 @@ def ej_temporizada() -> tuple[M, dict]:
     m.trans("t1", ["E0"], ["E1"], "marcha").trans("t2", ["E1"], ["E2"], "delay(3 s, active(E1), 0 s)")
     m.trans("t3", ["E2"], ["E0"], "fin")
     m.cont("E1", "motor").cont("E2", "luz").stored("E2", "ciclos", "activation", "ciclos + 1")
-    return m, {"E0": (220, 60), "t1": (220, 130), "E1": (220, 200), "t2": (220, 270), "E2": (220, 340), "t3": (220, 410)}
+    return m, {"E0": (220, 60), "t1": (220, 140), "E1": (220, 220), "t2": (220, 300), "E2": (220, 380), "t3": (220, 460)}
 
 
 def ej_paralelo() -> tuple[M, dict]:
@@ -52,29 +59,36 @@ def ej_paralelo() -> tuple[M, dict]:
         m.step(sid, sid == "A")
     m.trans("t1", ["A"], ["B", "C"], "p").trans("t2", ["B"], ["D"], "q").trans("t3", ["C"], ["E"], "r")
     m.trans("t4", ["D", "E"], ["F"], "s").trans("t5", ["F"], ["A"], "NOT s")
-    return m, {"A": (220, 50), "t1": (220, 110), "B": (130, 180), "C": (310, 180), "t2": (130, 245), "t3": (310, 245),
-               "D": (130, 310), "E": (310, 310), "t4": (220, 380), "F": (220, 450), "t5": (220, 515)}
+    return m, {"A": (220, 50), "t1": (220, 115), "B": (150, 190), "C": (290, 190), "t2": (150, 260), "t3": (290, 260),
+               "D": (150, 330), "E": (290, 330), "t4": (220, 405), "F": (220, 480), "t5": (220, 545)}
 
 
 def ej_contador() -> tuple[M, dict]:
     m = M().var("pulso").var("borrar").var("alarma", "output").var("n", "internal", "int")
     m.step("A", True).step("B")
-    m.stored("A", "n", "event", "n + 1", event="rise(pulso)").cont("A", "alarma", "n >= 3")
+    m.cont("A", "alarma", "n >= 3").stored("A", "n", "event", "n + 1", event="rise(pulso)")
     m.trans("t1", ["A"], ["B"], "borrar").trans("t2", ["B"], ["A"], "NOT borrar").stored("B", "n", "activation", "0")
-    return m, {"A": (220, 60), "t1": (220, 140), "B": (220, 220), "t2": (220, 300)}
+    return m, {"A": (220, 70), "t1": (220, 150), "B": (220, 230), "t2": (220, 310)}
 
 
 def ej_bloqueo_u03() -> tuple[M, dict]:
     m = M().var("p").var("reinicio").step("A", True).step("B").step("C")
     m.trans("t", ["A"], ["B"], "rise(p)").trans("u", ["B"], ["C"], "rise(p)").trans("v", ["C"], ["A"], "reinicio")
-    return m, {"A": (220, 60), "t": (220, 130), "B": (220, 200), "u": (220, 270), "C": (220, 340), "v": (220, 410)}
+    return m, {"A": (220, 60), "t": (220, 140), "B": (220, 220), "u": (220, 300), "C": (220, 380), "v": (220, 460)}
 
 
 def ej_conflicto() -> tuple[M, dict]:
     m = M().var("p").var("z", "internal", "int").step("A", True).step("B").step("C")
     m.trans("t", ["A"], ["B", "C"], "p")
     m.stored("B", "z", "activation", "1", aid="aB").stored("C", "z", "activation", "2", aid="aC")
-    return m, {"A": (220, 60), "t": (220, 130), "B": (130, 210), "C": (310, 210)}
+    return m, {"A": (220, 60), "t": (220, 130), "B": (150, 215), "C": (330, 215)}
+
+
+def ej_conflicto_ejecucion() -> tuple[M, dict]:
+    m = M().var("p").var("z", "internal", "int").step("A", True).step("B").step("C", True).step("D")
+    m.trans("t", ["A"], ["B"], "p").trans("u", ["C"], ["D"], "p")
+    m.stored("B", "z", "activation", "1", aid="aB").stored("D", "z", "activation", "2", aid="aD")
+    return m, {"A": (150, 60), "t": (150, 140), "B": (150, 220), "C": (330, 60), "u": (330, 140), "D": (330, 220)}
 
 
 EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
@@ -86,12 +100,74 @@ EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
                  "cuando D y E están activas a la vez.", ej_paralelo),
     "contador": ("Contador por eventos", "Cada subida de «pulso» suma 1 a n (acción por evento). Pulsar sin soltar no "
                  "cuenta dos veces. Con n ≥ 3 se enciende «alarma». «borrar» pone n a 0.", ej_contador),
-    "bloqueo-u03": ("Bloqueo por U-03", "Dos transiciones seguidas con rise(p). ¿Una subida de p deja la situación "
+    "bloqueo-u03": ("Bloqueo por U-03", "Dos transiciones seguidas con ↑p. ¿Una subida de p deja la situación "
                     "en B o en C? Es la cuestión abierta U-03. Por defecto el motor se detiene y no elige; en «Opciones de "
                     "interpretación» puede probar cada lectura como hipótesis (también con «reinicio»=1).", ej_bloqueo_u03),
-    "conflicto": ("Conflicto de escritura", "p activa B y C a la vez; B escribe z:=1 y C z:=2. El motor no elige: "
-                  "D-ESCRITURA-CONFLICTO con ambos autores.", ej_conflicto),
+    "conflicto": ("Conflicto de escritura al compilar", "t activa B y C en la misma evolución; B escribe z:=1 y C z:=2. "
+                  "Es un conflicto seguro: el programa no puede compilarse.", ej_conflicto),
+    "conflicto-ejecucion": ("Conflicto de escritura en ejecución", "t y u son independientes, pero ambas dependen de p: "
+                            "al subir p se activan B y D a la vez y escriben valores distintos en z. Solo se sabe al "
+                            "ejecutar: D-ESCRITURA-CONFLICTO, sin elegir valor.", ej_conflicto_ejecucion),
 }
+
+# --- Notación de la norma para mostrar expresiones -------------------------------------
+# Segmento: {"t": texto, "o": sobrerrayado, "s": subíndice}
+
+_CMP = {"eq": "=", "ne": "≠", "lt": "<", "le": "≤", "gt": ">", "ge": "≥"}
+_ARITH = {"add": " + ", "sub": " − ", "mul": "·", "div": "/"}
+_PREC = {"or": 1, "and": 2, **{c: 4 for c in _CMP}, "add": 5, "sub": 5, "mul": 6, "div": 6}
+
+
+def _seg(t: str, **f: bool) -> dict[str, Any]:
+    return {"t": t, **{k: True for k, v in f.items() if v}}
+
+
+def _paren(segs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [_seg("(")] + segs + [_seg(")")]
+
+
+def _dur(us: int) -> str:
+    return format_duration(us, "s", "es-ES").replace(" ", "")
+
+
+def norm(m: dict[str, Any], top: bool = True) -> list[dict[str, Any]]:
+    op = m["operator"]
+    if op == "lit":
+        lit = m["literal"]
+        if lit["type"] == "bool":
+            return [_seg("= 1" if top and lit["value"] else ("1" if lit["value"] else "0"))]
+        if lit["type"] == "duration":
+            return [_seg(_dur(int(lit["value"])))]
+        return [_seg(lit["value"].replace(".", ","))]
+    if op == "ref":
+        return [_seg(m["reference"])]
+    if op in ("active", "activePartial", "activeMacro"):
+        return [_seg("X"), _seg(m["reference"], s=True)]
+    if op in ("rise", "fall"):
+        inner = m["operands"][0]
+        body = norm(inner, False)
+        if inner["operator"] not in ("ref", "active", "lit"):
+            body = _paren(body)
+        return [_seg("↑" if op == "rise" else "↓")] + body
+    if op == "not":
+        return [dict(s, o=True) for s in norm(m["operands"][0], False)]
+    if op == "delay":
+        d1, base, d2 = m["operands"]
+        out = norm(d1, False) + [_seg("/")] + norm(base, False)
+        if int(d2["literal"]["value"]):
+            out += [_seg("/")] + norm(d2, False)
+        return out
+    if op == "neg":
+        return [_seg("−")] + norm(m["operands"][0], False)
+    a, b = m["operands"]
+
+    def side(x: dict[str, Any]) -> list[dict[str, Any]]:
+        segs = norm(x, False)
+        return _paren(segs) if _PREC.get(x["operator"], 9) < _PREC[op] else segs
+    if op in _CMP:
+        return [_seg("[")] + side(a) + [_seg(f" {_CMP[op]} ")] + side(b) + [_seg("]")]
+    sym = {"and": "·", "or": " + ", **_ARITH}[op]
+    return side(a) + [_seg(sym)] + side(b)
 
 
 def t_s(us: str | int) -> str:
@@ -137,35 +213,58 @@ class Banco:
     def load(self, key: str) -> None:
         title, help_text, build = EJEMPLOS[key]
         m, layout = build()
-        cm = m.compile()
-        self.key, self.cm = key, cm
-        self.s = Session(cm, scenario(cm, max_contexts=1_000_000), options=self.options)
-        self.start_diags = self.s.start()
-        texts = {e["id"]: e["text"] for e in m.doc["expressions"]}
-        self.texts = texts
-        acts = {}
+        self.key = key
+        res = m.validate()
+        self.compile_diags = [d for d in res.diagnostics if d.blocks_start]
+        self.s: Session | None = None
+        self.start_diags: list = []
+        if res.can_simulate:
+            cm = res.model
+            self.s = Session(cm, scenario(cm, max_contexts=1_000_000), options=self.options)
+            self.start_diags = self.s.start()
+        exprs = {e["id"]: e for e in m.doc["expressions"]}
+        self.texts = {eid: e["text"] for eid, e in exprs.items()}
+
+        def disp(eid: str | None, top: bool = False) -> list[dict[str, Any]] | None:
+            if eid is None:
+                return None
+            e = exprs[eid]
+            return norm(e["meaning"], top) if e["mode"] == "executable" else [_seg(e["text"])]
+        acts: dict[str, list[dict[str, Any]]] = {}
         for a in m.doc["actions"]:
             if a["mode"] == "continuous":
-                acts.setdefault(a["stepRef"], []).append(f"{a['targetRef']}" + (
-                    "" if texts[a["conditionRef"]] == "true" else f" si {texts[a['conditionRef']]}"))
+                cond = exprs[a["conditionRef"]]
+                plain = cond["mode"] == "executable" and cond["meaning"] == {"operator": "lit", "literal": {"type": "bool", "value": True}}
+                acts.setdefault(a["stepRef"], []).append({"kind": "continuous", "target": a["targetRef"],
+                                                          "text": [_seg(a["targetRef"])],
+                                                          "cond": None if plain else disp(a["conditionRef"])})
             else:
-                trig = {"activation": "al activar", "deactivation": "al desactivar"}.get(
-                    a["trigger"]["kind"], f"en {texts.get(a['trigger'].get('expressionRef'), 'evento')}")
-                acts.setdefault(a["stepRef"], []).append(f"{a['targetRef']}:={texts[a['valueRef']]} ({trig})")
+                trig = a["trigger"]
+                acts.setdefault(a["stepRef"], []).append({
+                    "kind": "stored", "target": a["targetRef"], "trigger": trig["kind"],
+                    "text": [_seg(f"{a['targetRef']} := ")] + disp(a["valueRef"]),
+                    "event": disp(trig.get("expressionRef"))})
         self.model = {
-            "key": key, "title": title, "help": help_text,
+            "key": key, "title": title, "help": help_text, "compilable": res.can_simulate,
             "steps": [{"id": s["id"], "initial": s["initial"], "x": layout[s["id"]][0], "y": layout[s["id"]][1],
                        "actions": acts.get(s["id"], [])} for s in m.doc["steps"]],
-            "transitions": [{"id": t["id"], "pre": t["preRefs"], "post": t["postRefs"], "cond": texts[t["conditionRef"]],
+            "transitions": [{"id": t["id"], "pre": t["preRefs"], "post": t["postRefs"],
+                             "cond": disp(t["conditionRef"], top=True),
                              "x": layout[t["id"]][0], "y": layout[t["id"]][1]} for t in m.doc["transitions"]],
-            "inputs": sorted(cm.inputs),
+            "inputs": sorted(v["id"] for v in m.doc["variables"] if v["role"] == "input"),
         }
 
     def state(self) -> dict[str, Any]:
         s = self.s
-        out: dict[str, Any] = {"status": s.status, "diagnostics": [d.to_dict() for d in (self.start_diags or s.diagnostics)[-2:]],
-                               "options": self.options,
-                               "optionSpecs": {q: {"default": v["default"], "values": v["values"]} for q, v in SEMANTIC_OPTIONS.items()}}
+        out: dict[str, Any] = {"options": self.options,
+                               "optionSpecs": {q: {"default": v["default"], "values": v["values"]}
+                                               for q, v in SEMANTIC_OPTIONS.items()}}
+        if s is None:  # no compila: se dibuja la estructura y se listan los errores
+            out.update({"status": "no-compilable", "diagnostics": [d.to_dict() for d in self.compile_diags],
+                        "time": "—", "situation": [], "transitions": {}, "outputs": {}, "values": {}, "temporal": {},
+                        "lastCleared": [], "trace": [], "nextEvent": None, "blocked": None})
+            return out
+        out.update({"status": s.status, "diagnostics": [d.to_dict() for d in (self.start_diags or s.diagnostics)[-2:]]})
         if s.z is None:
             return out
         obs = s.observe()
@@ -205,7 +304,6 @@ class Banco:
         return t_s(nxt.time) if hasattr(nxt, "time") and nxt.kind == "vencimiento" else None
 
     def act(self, op: str, body: dict[str, Any]) -> dict[str, Any]:
-        s = self.s
         if op == "cargar":
             self.load(body.get("ejemplo", self.key))
         elif op == "reiniciar":
@@ -213,16 +311,18 @@ class Banco:
         elif op == "opciones":
             self.options = normalize_options(body.get("options"))  # cambia el perfil efectivo: ejecución nueva
             self.load(self.key)
+        elif self.s is None:
+            raise RuntimeError("el programa no puede compilarse; corrija los errores indicados")
         elif op == "entrada":
             var = body["var"]
-            s.manual_input({var: not s.z.values[var]})
-            s.step_evolution() if body.get("paso") else s.step_external()
+            self.s.manual_input({var: not self.s.z.values[var]})
+            self.s.step_evolution() if body.get("paso") else self.s.step_external()
         elif op == "avanzar":
-            s.advance_to(s.z.time + int(body["us"]))
+            self.s.advance_to(self.s.z.time + int(body["us"]))
         elif op == "evolucion":
-            s.step_evolution()
+            self.s.step_evolution()
         elif op == "estabilizar":
-            s.run_to_stable()
+            self.s.run_to_stable()
         else:
             raise ValueError(f"operación desconocida: {op}")
         return {"model": self.model, "state": self.state()}

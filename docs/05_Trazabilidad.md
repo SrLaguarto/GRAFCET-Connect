@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-24T22:39:48+02:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 123 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-25T08:52:50+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 125 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -27,7 +27,7 @@ Leyenda: ✔ pasa · ⛔ bloqueo por U verificado (el oráculo semántico sigue 
 | PARCIAL | 8 |
 | PASA | 68 |
 
-Pruebas suplementarias S-xx: 23 casos, 26 pruebas, 26 pasan.
+Pruebas suplementarias S-xx: 25 casos, 28 pruebas, 28 pasan.
 
 ## Requisitos
 
@@ -60,9 +60,9 @@ Pruebas suplementarias S-xx: 23 casos, 26 pruebas, 26 pasan.
 | REQ-SEM-09 | U/crítica | 04 | BLOQ-U | engine | T-10d ⛔, T-11b ⛔, T-15c ⛔, S-U05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔ | U-03..U-05: detención con D-SEM-PENDIENTE; si todas las lecturas coinciden, se acepta. U-03 admite además lecturas elegidas como hipótesis registrada (P-IMP-15) |
 | REQ-ACT-01 | I/crítica | 05 | IMPL-I | engine | T-14a ✔, T-14b ✔, T-14c ✔, T-07a ✔, T-12c ✔, S-H10 ✔ | Disyunción sobre situación efectiva; lectura de salidas continuas no soportada (H-10) |
 | REQ-ACT-02 | I/crítica | 05 | IMPL-I | engine | T-15a ✔, T-15b ✔, T-01c ◐, T-07b ✔, T-07c ✔, T-18e ∅, S-U03 ✔, S-U09 ✔, S-H07 ✔ | Memorizadas por activación, desactivación y evento, también virtuales |
-| REQ-ACT-03 | P/crítica | 05 | IMPL-P | engine | T-16a ✔, T-16b ✔ | D-ESCRITURA-CONFLICTO con autores y valores; sin prioridad oculta |
+| REQ-ACT-03 | P/crítica | 05 | IMPL-P | model, engine | T-16a ✔, T-16b ✔, S-ESC01 ✔, S-ESC02 ✔ | D-ESCRITURA-CONFLICTO con autores y valores, sin prioridad oculta; un conflicto seguro impide compilar (P-IMP-16) y el resto se detiene en ejecución |
 | REQ-ACT-04 | I/crítica | 05 | IMPL-I | model | T-16c ✔ | D-MODO-SALIDA en validación |
-| REQ-ACT-05 | U/crítica | 05 | BLOQ-U | engine | T-15c ⛔, T-16d ⛔, S-U05 ✔ | U-05: lecturas cruzadas, incrementos simultáneos y lecturas tras asignación bloqueadas |
+| REQ-ACT-05 | U/crítica | 05 | BLOQ-U | engine | T-15c ⛔, T-16d ⛔, S-U05 ✔, S-ESC02 ✔ | U-05: lecturas cruzadas, incrementos simultáneos y lecturas tras asignación bloqueadas |
 | REQ-EVT-01 | I/crítica | 05 | IMPL-I | engine | T-10a ✔, T-10b ✔, T-10c ✔, T-10e ◐ | Flancos sobre entradas en la 1.ª evolución; sin retención ni consumo exclusivo |
 | REQ-EVT-02 | P/crítica | 05 | IMPL-P | scenario | T-10b ✔, T-13a ✔ | Lotes simultáneos frente a lotes ordenados; D-LOTE |
 | REQ-EVT-03 | U/crítica | 05 | BLOQ-U | model, engine | T-10d ⛔, T-11a ⛔, T-11b ⛔, T-05b ⛔, S-U03 ✔, S-H05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔, S-OPT03e ✔ | U-03/U-04: eventos internos, de franqueamiento y en recorrido bloqueados por defecto; lectura de U-03 seleccionable como hipótesis (P-IMP-15, H-23) |
@@ -86,7 +86,7 @@ Pruebas suplementarias S-xx: 23 casos, 26 pruebas, 26 pasan.
 | REQ-EDT-06 | P/crítica | 07 | IMPL-P | editor | T-21d ✔ | Renombrar sin cambiar ID, usos actualizados, colisión diagnosticada, búsqueda con ruta |
 | REQ-EDT-07 | P/alta | 07 | IMPL-P | editor | T-09b ✔, T-21d ✔ | Diccionario de variables y usos afectados por un cambio |
 | REQ-EDT-08 | P/alta | 07 | PEND-UI | — | T-21g — | Navegación jerárquica |
-| REQ-EDT-09 | P/alta | 07 | IMPL-P | diagnostics | T-21b ✔, T-09c ✔ | Código, gravedad, elemento, evidencia y corrección; foco en interfaz pendiente |
+| REQ-EDT-09 | P/alta | 07 | IMPL-P | diagnostics | T-21b ✔, T-09c ✔, S-ESC01 ✔ | Código, gravedad, elemento, evidencia y corrección; foco en interfaz pendiente |
 | REQ-EDT-10 | P/crítica | 07 | IMPL-P | persistence | T-22d ✔ | Recuperación separada cada 30 s si hay cambios, sin sobrescritura |
 | REQ-EDT-11 | P/alta | 07 | PEND-UI | — | T-21h — | Exportación SVG/PDF no implementada en esta iteración |
 | REQ-EDT-12 | P/alta | 07 | PEND-UI | — | T-21g —, T-25a ◐ | Diagramas extensos: vista general, zoom y filtros |
@@ -234,6 +234,8 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-CAN | REQ-DAT-05, REQ-DAT-06 | pasa | `test_SCAN_formato_canonico` | reglas de representación canónica y lectura estricta (09). |
 | S-DEC | REQ-EXP-01, REQ-TMP-01 | pasa | `test_SDEC_decimales_y_enteros_exactos` | sin redondeo silencioso ni desbordamiento. |
 | S-DECL | REQ-ALC-03, REQ-NOR-01, REQ-NOR-02 | pasa | `test_SDECL_declaracion_sin_conformidad` | la declaración excluye U críticas y no afirma conformidad. |
+| S-ESC01 | REQ-ACT-03, REQ-EDT-09 | pasa | `test_SESC01_conflictos_seguros_no_compilan` | activación/activación, desactivación/desactivación, activación/desactivación y misma etapa. |
+| S-ESC02 | REQ-ACT-03, REQ-ACT-05 | pasa | `test_SESC02_no_son_conflictos_seguros` | valores iguales, etapas en secuencia y valores no constantes (U-05) no impiden compilar. |
 | S-EXP | REQ-EXP-01 | pasa | `test_SEXP_comparacion_encadenada_y_tipos` | comparaciones encadenadas rechazadas; sin conversión booleano↔número. |
 | S-H05 | REQ-EVT-03, REQ-SEM-05 | pasa | `test_SH05_activar_etapa_ya_activa_bloqueo_U04` | hallazgo H-05 (activación de etapa ya activa fuera de D). |
 | S-H07 | REQ-ACT-02, REQ-SEM-01 | pasa | `test_SH07_memoria_inicial_no_nula_bloqueo_U09` | hallazgo H-07. |

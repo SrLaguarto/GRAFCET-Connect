@@ -1,9 +1,9 @@
 {
- "date": "2026-10-24T22:39:48+02:00",
+ "date": "2026-10-25T08:52:50+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 123,
+ "total": 125,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -83,6 +83,26 @@
     "REQ-TMP-02"
    ],
    "summary": "REQ-SEM-01, REQ-ACT-02, REQ-TMP-02: bloqueos de inicialización (U-09)."
+  },
+  {
+   "test": "test_suplementarios.ConflictosAlCompilar.test_SESC01_conflictos_seguros_no_compilan",
+   "case": "S-ESC01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-03",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-ACT-03, REQ-EDT-09: activación/activación, desactivación/desactivación, activación/desactivación y misma etapa."
+  },
+  {
+   "test": "test_suplementarios.ConflictosAlCompilar.test_SESC02_no_son_conflictos_seguros",
+   "case": "S-ESC02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-03",
+    "REQ-ACT-05"
+   ],
+   "summary": "REQ-ACT-03, REQ-ACT-05: valores iguales, etapas en secuencia y valores no constantes (U-05) no impiden compilar."
   },
   {
    "test": "test_suplementarios.Hallazgos.test_S08a_limite_de_evolucion_recuperable",
