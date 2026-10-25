@@ -80,16 +80,35 @@ class Hallazgos(unittest.TestCase):
         self.assertIn("D-CAPACIDAD-NO-SOPORTADA", {d.code for d in res.diagnostics})
         self.assertFalse(res.can_simulate)
 
-    def test_SH09_reentrada_virtual_con_dependencia_temporal(self):
-        """REQ-TMP-02: hallazgo H-09."""
-        m = M().var("p").var("y", "output").step("A", True).step("B").step("X", True)
-        m.trans("t", ["A"], ["B"], "p").trans("u", ["B"], ["A"], "true").cont("A", "y", "delay(3 s, active(A), 0 s)")
-        s = session(m.compile(), batches=[(2 * S, 0, {"p": True})])
-        s.run()
-        self.assertEqual(last_diag(s).code, "D-CAPACIDAD-NO-SOPORTADA")
-        self.assertIn("H-09", last_diag(s).question)
+    def test_SH09_reentrada_en_el_mismo_instante_conserva_la_duracion(self):
+        """REQ-TMP-02, REQ-SEM-06: P-IMP-18 (cierra H-09); la salida y reentrada sin tiempo no reinicia el retardo."""
+        m = M().var("q").var("y", "output").step("A", True).step("B")
+        m.trans("t", ["A"], ["B"], "rise(q)").trans("u", ["B"], ["A"], "true").cont("A", "y", "delay(5 s, active(A), 0 s)")
+        cm = m.compile()
+        s = Session(cm, scenario(cm, None, [(2 * S, 0, {"q": True})]), options={"U-03": "situacion-anterior"})
+        s.start()
+        s.step_external()
+        self.assertEqual(s.z.situation, {"A"})
+        self.assertEqual(records(s, "evolucion")[1]["durationKept"], ["A"])
+        self.assertEqual(records(s, "estable")[-1]["virtualSteps"], ["B"])
+        s.advance_to(4_999_999)
+        self.assertFalse(s.z.outputs["y"], "sigue contando desde 0, no desde 2 s")
+        s.advance_to(5 * S)
+        self.assertTrue(s.z.outputs["y"], "vence a 5 s: la duración no se interrumpió")
         m2 = M().var("p").var("y", "output").step("A", True).cont("A", "y", "delay(1 s, active(A) AND p, 0 s)")
-        self.assertIn("D-CAPACIDAD-NO-SOPORTADA", {d.code for d in m2.validate().diagnostics})
+        self.assertIn("D-CAPACIDAD-NO-SOPORTADA", {d.code for d in m2.validate().diagnostics}, "base compuesta: H-09 sigue")
+
+    def test_SH09b_etapa_que_sale_por_su_temporizador_y_reentra_no_se_estabiliza(self):
+        """REQ-SEM-07, REQ-TMP-02: consecuencia de P-IMP-18; ciclo instantáneo sin fin, cortado con D-LIM-EVOL (doc. 04)."""
+        m = M().var("marcha").var("fin").step("E0", True).step("E1").step("E2")
+        m.trans("t1", ["E0"], ["E1"], "marcha").trans("t2", ["E1"], ["E2"], "delay(3 s, active(E1), 0 s)")
+        m.trans("t3", ["E2"], ["E0"], "fin")
+        cm = m.compile()
+        s = Session(cm, scenario(cm, None, [(0, 0, {"marcha": True}), (1, 0, {"fin": True})]), budget=30)
+        s.start()
+        s.run()
+        self.assertEqual((s.status, last_diag(s).code), ("pausada-recorrido", "D-LIM-EVOL"))
+        self.assertEqual([e["cleared"] for e in records(s, "evolucion")][1:7], [["t2"], ["t3"], ["t1"], ["t2"], ["t3"], ["t1"]])
 
     def test_SH10_leer_salida_continua(self):
         """REQ-ACT-01: hallazgo H-10."""

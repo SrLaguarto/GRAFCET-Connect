@@ -94,8 +94,11 @@ def ej_conflicto_ejecucion() -> tuple[M, dict]:
 EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
     "temporizada": ("Secuencia con temporización", "Pulse «marcha»: E1 activa el motor; a los 3 s pasa a E2 (luz, "
                     "ciclos+1). «fin» vuelve a E0. Pruebe a soltar «marcha» y poner «fin»=1 antes de los 3 s: E2 se "
-                    "recorre virtualmente (sin luz, pero ciclos+1 se conserva). Si deja «marcha»=1, el recorrido volvería "
-                    "a entrar en E1 en el mismo instante: es el hallazgo H-09 y el motor se detiene.", ej_temporizada),
+                    "recorre virtualmente (sin luz, pero ciclos+1 se conserva). Con «marcha»=1 y «fin»=1, E1 sale y vuelve "
+                    "a entrar en el mismo instante sin interrumpir su duración (P-IMP-18): el temporizador sigue vencido "
+                    "y el ciclo volvería a empezar. En la segunda vuelta ciclos+1 sumaría otra vez en el mismo instante, "
+                    "que es la cuestión abierta U-05, y el motor se detiene ahí; sin esa acción se cortaría con D-LIM-EVOL.",
+                    ej_temporizada),
     "paralelo": ("Paralelismo y sincronización", "p divide en dos ramas; q y r avanzan cada una; s solo franquea t4 "
                  "cuando D y E están activas a la vez.", ej_paralelo),
     "contador": ("Contador por eventos", "Cada subida de «pulso» suma 1 a n (acción por evento). Pulsar sin soltar no "
@@ -188,6 +191,7 @@ def describe(r: dict[str, Any], texts: dict[str, str]) -> dict[str, str] | None:
     if k == "evolucion":
         asg = "; ".join(f"{a['target']}:={a['value']}" for a in r["assignments"])
         perm = f" · permanece {', '.join(r['permanent'])}" if r["permanent"] else ""
+        perm += f" · {', '.join(r['durationKept'])} reentra sin interrumpir su duración" if r.get("durationKept") else ""
         return {"kind": k, "time": when, "text": f"Evolución {r['evolutionIndex']}: franquea {{{', '.join(r['cleared'])}}}"
                 f" → S = {{{', '.join(r['situation'])}}}{perm}" + (f" · {asg}" if asg else "")}
     if k == "estable":

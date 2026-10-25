@@ -52,7 +52,7 @@ Base normativa declarada: IEC 60848 edición 3.0 (2013-02-27), adopción UNE-EN 
 | `temporal.delay-cero` — delay con d1=0 | pendiente / bloqueada | U-06 | REQ-TMP-03 |
 | `temporal.duracion-etapa-inicial` — La duración de una etapa inicial cuenta desde τ=0 (oráculos T-12a/T-12c) | provisional (especificada, sin contraste normativo) | I; tensión H-02 | REQ-TMP-02 |
 | `temporal.elapsed` — Duración elapsed(etapa) ejecutable | pendiente / bloqueada | U-06 (valor inactivo); no implementada | REQ-TMP-02 |
-| `temporal.reentrada-virtual` — Salida y reentrada virtual de etapa con dependencias temporales | pendiente / bloqueada | H-09 | REQ-TMP-02 |
+| `temporal.reentrada-virtual` — Salida y reentrada en el mismo instante: la duración de la etapa no se interrumpe | provisional (especificada, sin contraste normativo) | decisión del responsable de producto, 25-10-2026 (P-IMP-18; cierra H-09) | REQ-TMP-02 |
 | `temporal.vencimientos-simultaneos` — Varios vencimientos en el mismo instante (independientes del orden) | provisional (especificada, sin contraste normativo) | I (U-01) | REQ-TMP-02 |
 | `transiciones.fuente-evento` — Transición fuente con receptividad de evento (primera evolución) | provisional (especificada, sin contraste normativo) | I (U-01); repetición U-07 | REQ-MOD-04 |
 | `transiciones.fuente-nivel` — Transición fuente con receptividad de nivel | pendiente / bloqueada | U-07 | REQ-MOD-04 |

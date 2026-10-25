@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-25T08:52:50+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 125 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-25T09:37:50+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 126 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -27,7 +27,7 @@ Leyenda: ✔ pasa · ⛔ bloqueo por U verificado (el oráculo semántico sigue 
 | PARCIAL | 8 |
 | PASA | 68 |
 
-Pruebas suplementarias S-xx: 25 casos, 28 pruebas, 28 pasan.
+Pruebas suplementarias S-xx: 26 casos, 29 pruebas, 29 pasan.
 
 ## Requisitos
 
@@ -54,8 +54,8 @@ Pruebas suplementarias S-xx: 25 casos, 28 pruebas, 28 pasan.
 | REQ-SEM-03 | I/crítica | 04 | IMPL-I | engine | T-03a ✔, T-03b ✔, T-03c ✔, T-03d ✔, T-06c ✔ | Cambio conjunto de precedentes y siguientes |
 | REQ-SEM-04 | I/crítica | 04 | IMPL-I | engine | T-04a ✔, T-04b ✔, T-04c ✔, T-06a ✔, T-06b ✔, T-13d ✔ | Conjunto simultáneo completo; sin prioridad por orden |
 | REQ-SEM-05 | I/crítica | 04 | PARCIAL | engine | T-05a ✔, T-05b ⛔, S-H05 ✔ | Actividad I; efectos (acciones, eventos, tiempo) bloqueados por U-04 (y H-05) |
-| REQ-SEM-06 | I/crítica | 04 | IMPL-I | engine | T-07a ✔, T-07b ✔, T-07c ✔ | Etapas virtuales sin pulso continuo; memorizadas conservadas; eventos en el recorrido: U-03 |
-| REQ-SEM-07 | P/crítica | 04 | IMPL-P | engine | T-08a ⛔, T-08b ✔, S-08a ✔, S-OPT03c ✔ | D-LIM-EVOL recuperable, τ sin avanzar, sin falsa estabilidad (S-08a; T-08a bloqueado por U-09, H-03) |
+| REQ-SEM-06 | I/crítica | 04 | IMPL-I | engine | T-07a ✔, T-07b ✔, T-07c ✔, S-H09 ✔ | Etapas virtuales sin pulso continuo; memorizadas conservadas; eventos en el recorrido: U-03 |
+| REQ-SEM-07 | P/crítica | 04 | IMPL-P | engine | T-08a ⛔, T-08b ✔, S-08a ✔, S-H09b ✔, S-OPT03c ✔ | D-LIM-EVOL recuperable, τ sin avanzar, sin falsa estabilidad (S-08a; T-08a bloqueado por U-09, H-03) |
 | REQ-SEM-08 | P/crítica | 04 | IMPL-P | engine, trace | T-04c ✔, T-23b ✔, T-24a ◐, S-U06 ✔ | Mismos observables con independencia de recorrido, geometría y control; entre sistemas: U-10 |
 | REQ-SEM-09 | U/crítica | 04 | BLOQ-U | engine | T-10d ⛔, T-11b ⛔, T-15c ⛔, S-U05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔ | U-03..U-05: detención con D-SEM-PENDIENTE; si todas las lecturas coinciden, se acepta. U-03 admite además lecturas elegidas como hipótesis registrada (P-IMP-15) |
 | REQ-ACT-01 | I/crítica | 05 | IMPL-I | engine | T-14a ✔, T-14b ✔, T-14c ✔, T-07a ✔, T-12c ✔, S-H10 ✔ | Disyunción sobre situación efectiva; lectura de salidas continuas no soportada (H-10) |
@@ -69,7 +69,7 @@ Pruebas suplementarias S-xx: 25 casos, 28 pruebas, 28 pasan.
 | REQ-EXP-01 | P/alta | 05 | IMPL-P | expressions, values | T-09a ✔, T-09b ✔, T-09c ✔, S-DEC ✔, S-EXP ✔ | Tipos exactos, unidades, precedencia; sintaxis de literales P-IMP-06 |
 | REQ-EXP-02 | P/crítica | 05 | IMPL-P | expressions, engine | T-09d ✔ | Evaluación pura |
 | REQ-TMP-01 | P/crítica | 05 | IMPL-P | timeutil, values | T-12d ✔, T-24b ✔, S-DEC ✔ | µs exactos, rango 0..2^63-1, sin redondeo |
-| REQ-TMP-02 | I/crítica | 05 | IMPL-I | engine, model | T-12a ✔, T-12b ✔, T-12c ✔, T-12e ✔, T-12f ✔, T-13d ✔, S-U09 ✔, S-12a ✔, S-H09 ✔ | delay ordinario, limitadas, retardadas; duración de etapa inicial según T-12a/T-12c (H-02); bases compuestas no soportadas (H-09) |
+| REQ-TMP-02 | I/crítica | 05 | IMPL-I | engine, model | T-12a ✔, T-12b ✔, T-12c ✔, T-12e ✔, T-12f ✔, T-13d ✔, S-U09 ✔, S-12a ✔, S-H09 ✔, S-H09b ✔ | delay ordinario, limitadas, retardadas; duración de etapa inicial según T-12a/T-12c (H-02); salida y reentrada en el mismo instante sin interrumpir la duración (P-IMP-18); bases compuestas no soportadas (H-09) |
 | REQ-TMP-03 | U/crítica | 05 | BLOQ-U | engine | T-13b ⛔, T-13c ⛔, T-20a ⛔, S-U06 ✔ | U-06: coincidencias lote/vencimiento, caída en vencimiento, rebote, d1=0, órdenes dependientes |
 | REQ-JER-01 | I/crítica | 06 | PARCIAL | engine, model | T-04c ✔, T-20b ✔, S-H08 ✔ | Partición sin orden y XG de parciales sin hijos; anidados: H-08 |
 | REQ-JER-02 | I/crítica | 06 | PEND-ITER | model | T-17a ∅, T-17b ∅ | Cuatro formas de forzado editables y validadas; ejecución pendiente (H-18, U-08) |
@@ -240,7 +240,8 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-H05 | REQ-EVT-03, REQ-SEM-05 | pasa | `test_SH05_activar_etapa_ya_activa_bloqueo_U04` | hallazgo H-05 (activación de etapa ya activa fuera de D). |
 | S-H07 | REQ-ACT-02, REQ-SEM-01 | pasa | `test_SH07_memoria_inicial_no_nula_bloqueo_U09` | hallazgo H-07. |
 | S-H08 | REQ-JER-01 | pasa | `test_SH08_actividad_de_parcial_con_hijos` | hallazgo H-08. |
-| S-H09 | REQ-TMP-02 | pasa | `test_SH09_reentrada_virtual_con_dependencia_temporal` | hallazgo H-09. |
+| S-H09 | REQ-SEM-06, REQ-TMP-02 | pasa | `test_SH09_reentrada_en_el_mismo_instante_conserva_la_duracion` | P-IMP-18 (cierra H-09); la salida y reentrada sin tiempo no reinicia el retardo. |
+| S-H09b | REQ-SEM-07, REQ-TMP-02 | pasa | `test_SH09b_etapa_que_sale_por_su_temporizador_y_reentra_no_se_estabiliza` | consecuencia de P-IMP-18; ciclo instantáneo sin fin, cortado con D-LIM-EVOL (doc. 04). |
 | S-H10 | REQ-ACT-01 | pasa | `test_SH10_leer_salida_continua` | hallazgo H-10. |
 | S-H12 | REQ-DAT-01, REQ-PLT-02 | pasa | `test_SH12_id_de_documento_y_nombre_de_fichero` | hallazgo H-12. |
 | S-OPT03a | REQ-EVT-03, REQ-NOR-02, REQ-SEM-09 | pasa | `test_SOPT03a_por_defecto_se_detiene` | sin elección explícita, U-03 sigue deteniendo. |

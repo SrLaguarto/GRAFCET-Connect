@@ -279,6 +279,8 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
         act_ctx: set[str] = set()
         done_event_actions: list[Action] = []
         hypotheses: list[dict[str, Any]] = []  # decisiones tomadas bajo una lectura elegida (P-IMP-15)
+        # Duración de cada etapa antes de su primera salida en este contexto (P-IMP-18)
+        before_exit: dict[str, tuple[int | None, dict[str, TState]]] = {}
         k = 0
         while True:
             k += 1
@@ -337,10 +339,9 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                     why = "permanencia activa (activada y desactivada a la vez)" if sid in permanent \
                         else "activación de una etapa ya activa no incluida en D (H-05)"
                     raise Blocked(blocked("permanencia.efectos", f"{why} con {sorted(cm.step_dependents[sid])}", sid))
-            for sid in sorted(activated & deact_ctx):
-                deps = [x for x in cm.step_dependents.get(sid, ()) if x.startswith(("condición temporal", "acción limitada"))]
-                if deps:
-                    raise Blocked(blocked("temporal.reentrada-virtual", f"salida y reentrada en el mismo contexto con {deps}", sid))
+            # Salida y reentrada en el mismo instante: el recorrido no ocupa tiempo, así que la duración de la etapa no
+            # se interrumpe (decisión del responsable de producto que cierra H-09, P-IMP-18)
+            reentered = activated & deact_ctx
             for a in done_event_actions:
                 if a.step in deactivated:
                     raise Blocked(blocked("eventos.recorrido", f"acción por evento {a.id} en etapa desactivada por el mismo "
@@ -384,19 +385,31 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                 w.values[target] = val
                 assignments.append({"target": target, "value": _fmt(cm, target, val), "authors": authors})
             w.situation = new_s
+            for sid in sorted(deactivated):
+                if sid not in before_exit:
+                    before_exit[sid] = (w.since.get(sid), {key: replace(w.temporal[key]) for key, spec in cm.temporals.items()
+                                                           if spec.base_kind == "active" and spec.base_step == sid})
             for sid in activated:
                 w.since[sid] = w.time
             for sid in deactivated:
                 w.since.pop(sid, None)
             for key, spec in sorted(cm.temporals.items()):
-                if spec.base_kind == "active" and spec.base_step in (activated | deactivated):
+                if spec.base_kind == "active" and spec.base_step in (activated | deactivated) - reentered:
                     _base_change(w.temporal[key], spec, spec.base_step in new_s, w.time, spec.base_step)
+            for sid in sorted(reentered):
+                since, states = before_exit[sid]
+                if since is not None:
+                    w.since[sid] = since
+                for key, st in states.items():
+                    w.temporal[key] = replace(st)
             deact_ctx |= deactivated
             act_ctx |= activated
             rec = {"kind": "evolucion", "timeUs": str(w.time), "evolutionIndex": k,
                    "validated": sorted(info), "receptivity": dict(sorted(info.items())), "cleared": sorted(fire),
                    "deactivated": sorted(deactivated), "activated": sorted(activated), "permanent": sorted(permanent),
                    "situation": sorted(new_s), "assignments": assignments}
+            if reentered:
+                rec["durationKept"] = sorted(reentered)
             records.append(rec)
             yield ("aplicada", rec)
         compute_outputs(cm, w)

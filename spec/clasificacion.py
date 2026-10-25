@@ -57,7 +57,7 @@ REQ = {
     "REQ-EVT-02": ("IMPL-P", "scenario", "Lotes simultáneos frente a lotes ordenados; D-LOTE"),
     "REQ-EVT-03": ("BLOQ-U", "model, engine", "U-03/U-04: eventos internos, de franqueamiento y en recorrido bloqueados por defecto; lectura de U-03 seleccionable como hipótesis (P-IMP-15, H-23)"),
     "REQ-TMP-01": ("IMPL-P", "timeutil, values", "µs exactos, rango 0..2^63-1, sin redondeo"),
-    "REQ-TMP-02": ("IMPL-I", "engine, model", "delay ordinario, limitadas, retardadas; duración de etapa inicial según T-12a/T-12c (H-02); bases compuestas no soportadas (H-09)"),
+    "REQ-TMP-02": ("IMPL-I", "engine, model", "delay ordinario, limitadas, retardadas; duración de etapa inicial según T-12a/T-12c (H-02); salida y reentrada en el mismo instante sin interrumpir la duración (P-IMP-18); bases compuestas no soportadas (H-09)"),
     "REQ-TMP-03": ("BLOQ-U", "engine", "U-06: coincidencias lote/vencimiento, caída en vencimiento, rebote, d1=0, órdenes dependientes"),
     "REQ-ACT-01": ("IMPL-I", "engine", "Disyunción sobre situación efectiva; lectura de salidas continuas no soportada (H-10)"),
     "REQ-ACT-02": ("IMPL-I", "engine", "Memorizadas por activación, desactivación y evento, también virtuales"),

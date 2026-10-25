@@ -1,9 +1,9 @@
 {
- "date": "2026-10-25T08:52:50+01:00",
+ "date": "2026-10-25T09:37:50+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 125,
+ "total": 126,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -154,13 +154,24 @@
    "summary": "REQ-JER-01: hallazgo H-08."
   },
   {
-   "test": "test_suplementarios.Hallazgos.test_SH09_reentrada_virtual_con_dependencia_temporal",
+   "test": "test_suplementarios.Hallazgos.test_SH09_reentrada_en_el_mismo_instante_conserva_la_duracion",
    "case": "S-H09",
    "outcome": "pasa",
    "requirements": [
+    "REQ-SEM-06",
     "REQ-TMP-02"
    ],
-   "summary": "REQ-TMP-02: hallazgo H-09."
+   "summary": "REQ-TMP-02, REQ-SEM-06: P-IMP-18 (cierra H-09); la salida y reentrada sin tiempo no reinicia el retardo."
+  },
+  {
+   "test": "test_suplementarios.Hallazgos.test_SH09b_etapa_que_sale_por_su_temporizador_y_reentra_no_se_estabiliza",
+   "case": "S-H09b",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SEM-07",
+    "REQ-TMP-02"
+   ],
+   "summary": "REQ-SEM-07, REQ-TMP-02: consecuencia de P-IMP-18; ciclo instantáneo sin fin, cortado con D-LIM-EVOL (doc. 04)."
   },
   {
    "test": "test_suplementarios.Hallazgos.test_SH10_leer_salida_continua",
