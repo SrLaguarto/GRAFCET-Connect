@@ -27,6 +27,14 @@ function segText(parent, x, y, segs, cls, anchor="start") {
   return t;
 }
 
+// Estado de los temporizadores de una expresión: «1,2 s / 3 s» mientras cuenta y «3 s ✓» al vencer (Vista.state().temporal)
+function timerText(parent, x, y, ref, S) {
+  Object.values(S.temporal || {}).filter(t => t.expr === ref && t.shown).forEach(t => {
+    const e = txt(parent, x, y, t.shown, {class: `timer ${t.estado === "contando" ? "run" : "done"}`});
+    x += e.getComputedTextLength() + 8;
+  });
+}
+
 // M: modelo de la vista (etapas, macroetapas, transiciones, acciones, parciales); S: estado observado del motor
 function drawDiagram(svg, M, S) {
   svg.innerHTML = "";
@@ -79,7 +87,8 @@ function drawDiagram(svg, M, S) {
       (ob.forced ? "; su parcial está forzado y no evoluciona" : "");
     el("line", {x1:tx-TB, x2:tx+TB, y1:ty, y2:ty, class:"bar"}, g);
     txt(g, tx-TB-6, ty+5, `(${t.id})`, {"text-anchor":"end", class:"tdes"});
-    segText(g, tx+TB+8, ty+5, t.cond, "tcond");
+    const tc = segText(g, tx+TB+8, ty+5, t.cond, "tcond");
+    timerText(g, tx+TB+8 + tc.getComputedTextLength() + (t.cond ? 10 : 0), ty+5, t.conditionRef, S);
   });
   M.steps.forEach(s => {
     const p = pos[s.id], stale = !!blk && situation.has(s.id), act = !blk && situation.has(s.id);
@@ -182,7 +191,8 @@ function drawActions(g, p, actions, S) {
     const mx = ax + 12, top = p.y - H, bottom = p.y + H;
     if (a.kind === "continuous" && a.cond) {             // acción condicionada: trazo y condición
       el("line", {x1:mx, x2:mx, y1:top, y2:top-14, class:"amark"}, ga);
-      segText(ga, mx+5, top-4, a.cond, "acond");
+      const ac = segText(ga, mx+5, top-4, a.cond, "acond");
+      timerText(ga, mx+5 + ac.getComputedTextLength() + 8, top-4, a.condRef, S);
     } else if (a.trigger === "activation") {            // memorizada al activar: flecha hacia arriba
       el("line", {x1:mx, x2:mx, y1:top, y2:top-11, class:"amark"}, ga);
       el("path", {d:`M${mx-5},${top-10} L${mx},${top-19} L${mx+5},${top-10} Z`, class:"ahead"}, ga);
@@ -192,7 +202,8 @@ function drawActions(g, p, actions, S) {
     } else if (a.trigger === "event") {                 // memorizada por evento: banderita y evento
       el("line", {x1:mx, x2:mx, y1:top, y2:top-20, class:"amark"}, ga);
       el("path", {d:`M${mx},${top-20} L${mx-9},${top-15} L${mx},${top-10} Z`, class:"ahead"}, ga);
-      segText(ga, mx+5, top-11, a.event, "acond");
+      const ev = segText(ga, mx+5, top-11, a.event, "acond");
+      timerText(ga, mx+5 + ev.getComputedTextLength() + 8, top-11, a.condRef, S);
     }
     ax += w;
   });

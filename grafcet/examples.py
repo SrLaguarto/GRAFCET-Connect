@@ -130,9 +130,9 @@ EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
     "contador": ("Contador por eventos", "Cada subida de «pulso» suma 1 a n (acción por evento). Pulsar sin soltar no "
                  "cuenta dos veces. Con n ≥ 3 se enciende «alarma». «borrar» pone n a 0.", ej_contador),
     "bloqueo-u03": ("Flanco en el recorrido (U-03)", "Dos transiciones seguidas con ↑p. Con la lectura por defecto, "
-                    "«situación anterior» (comparador, 5.1), una subida de p solo franquea t y se queda en B. En «Opciones "
-                    "de interpretación» puede probar «recorrido» (llega a C; con «reinicio»=1 gira sin fin) o «detener» "
-                    "(no elige).", ej_bloqueo_u03),
+                    "«situación anterior» (comparador, 5.1), una subida de p solo franquea t y se queda en B. En las "
+                    "lecturas de interpretación (Ajustes en el simulador; Opciones en el banco) puede probar «recorrido» "
+                    "(llega a C; con «reinicio»=1 gira sin fin).", ej_bloqueo_u03),
     "contador-inestable": ("Contador con etapa inestable", "Ejemplo del responsable. I00 lleva a 1. Cada bajada de I02 "
                            "pasa por 2, que suma 1 a CT al activarse y, mientras CT < 3, vuelve a 1 en el mismo instante: 2 "
                            "queda inestable (no enciende sus salidas), pero la suma se hace. A la tercera bajada, CT = 3 y se "

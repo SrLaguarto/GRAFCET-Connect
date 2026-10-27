@@ -96,6 +96,12 @@ def t_s(us: str | int) -> str:
     return format_duration(int(us), "s", "es-ES")
 
 
+def t_trunc(us: str | int) -> str:
+    """Tiempo para mostrar: truncado a la baja a 2 decimales (el valor exacto no cambia, solo cómo se escribe)."""
+    us = int(us)
+    return t_s(us - us % 10_000)
+
+
 def describe(r: dict[str, Any], texts: dict[str, str]) -> dict[str, str] | None:
     k = r["kind"]
     when = t_s(r.get("timeUs", 0))
@@ -162,6 +168,7 @@ class Vista:
         layout = {**auto_layout(doc), **(layout or {})}
         exprs = {e["id"]: e for e in doc["expressions"]}
         self.texts = {eid: e["text"] for eid, e in exprs.items()}
+        self.where = {t["conditionRef"]: f"transición {t.get('label', t['id'])}" for t in doc["transitions"]}
 
         def disp(eid: str | None, top: bool = False) -> list[dict[str, Any]] | None:
             if eid is None:
@@ -175,13 +182,17 @@ class Vista:
                 plain = cond["mode"] == "executable" and cond["meaning"] == {"operator": "lit", "literal": {"type": "bool", "value": True}}
                 acts.setdefault(a["stepRef"], []).append({"kind": "continuous", "target": a["targetRef"],
                                                           "text": [_seg(a["targetRef"])],
-                                                          "cond": None if plain else disp(a["conditionRef"])})
+                                                          "cond": None if plain else disp(a["conditionRef"]),
+                                                          "condRef": a["conditionRef"]})
+                self.where.setdefault(a["conditionRef"], f"acción {a['targetRef']} ({a['stepRef']})")
             else:
                 trig = a["trigger"]
                 acts.setdefault(a["stepRef"], []).append({
                     "kind": "stored", "target": a["targetRef"], "trigger": trig["kind"],
                     "text": [_seg(f"{a['targetRef']} := ")] + disp(a["valueRef"]),
-                    "event": disp(trig.get("expressionRef"))})
+                    "event": disp(trig.get("expressionRef")), "condRef": trig.get("expressionRef")})
+                if trig.get("expressionRef"):
+                    self.where.setdefault(trig["expressionRef"], f"evento de {a['targetRef']} ({a['stepRef']})")
         # Jerarquía, con la notación de las figuras de la norma (tablas 8–11; imágenes P40-02, P42-02..05,
         # P43-01, P43-02, P44-01, P45-01, P47-01..03): orden de forzado «G12{8,9,11}» en rectángulo doble, «*» de
         # enlace de activación, recinto con su encapsulante y su nombre, expansión unida a su macroetapa
@@ -210,6 +221,7 @@ class Vista:
                          for p in doc["partials"] if p["id"] != "g" and p["stepRefs"]],
             "transitions": [{"id": t["id"], "label": t.get("label", t["id"]), "pre": t["preRefs"], "post": t["postRefs"],
                              "partial": t["partialRef"], "cond": disp(t["conditionRef"], top=True),
+                             "conditionRef": t["conditionRef"],
                              "x": layout[t["id"]][0], "y": layout[t["id"]][1]} for t in doc["transitions"]],
             "inputs": sorted(v["id"] for v in doc["variables"] if v["role"] == "input"),
             "numericInputs": {v["id"]: v["type"]["kind"] for v in doc["variables"]
@@ -238,12 +250,10 @@ class Vista:
             "unstable": last_stable.get("virtualSteps", []) if last_stable and closed == "estable" else [],
             "transitions": obs["transitions"], "outputs": obs["outputs"],
             "values": {k: v for k, v in obs["values"].items()},
-            "temporal": {k: {**v, "label": self.texts.get(k.split(".")[0], k),
-                             "deadlineS": None if v["deadline"] == "inactive" else t_s(v["deadline"])}
-                         for k, v in obs["temporal"].items()},
+            "temporal": {k: self._temporizador(k, v, obs["timeUs"]) for k, v in obs["temporal"].items()},
             "lastCleared": evo[-1]["cleared"] if evo and closed == "estable" else [],  # un contexto fallido no franquea
             "trace": [x for x in (describe(r, self.texts) for r in s.trace.records[-60:]) if x],
-            "nextEvent": self._next(),
+            "nextEvent": self._next(), "nextEventUs": self._next_us(),
             "blocked": self._blocked(closed),
         })
         return out
@@ -260,11 +270,37 @@ class Vista:
         return {"reached": rec["situationCandidate"], "proposed": rec.get("proposedSet", []),
                 "element": d.get("element"), "question": d.get("question"), "lastStable": sorted(self.s.z.situation)}
 
-    def _next(self) -> str | None:
+    def _temporizador(self, key: str, v: dict[str, Any], now: int) -> dict[str, Any]:
+        """Un retardo t1/condición/t2 como temporizador: dónde está, en qué estado, cuánto lleva y su preset (el de
+        conexión mientras cuenta o ya venció; el de desconexión mientras se mantiene tras desaparecer la base)."""
+        spec = self.s.cm.temporals[key]
+        expr = key.split(".")[0]
+        phase = v["phase"]
+        off = phase == "off_pending"
+        preset = spec.d2 if off else spec.d1
+        counting = phase in ("on_pending", "off_pending")
+        done = phase == "on"
+        lleva = int(now) - int(v["intervalStart"]) if counting else (spec.d1 if done else None)
+        estado = "contando" if counting else "vencido" if done else "parado"
+        shown = ""
+        if counting:
+            shown = f"{t_trunc(lleva)} / {t_s(preset)}"
+        elif done and spec.d1:
+            shown = f"{t_s(spec.d1)} ✓"
+        return {**v, "label": self.texts.get(expr, key), "expr": expr, "where": self.where.get(expr, expr),
+                "deadlineS": None if v["deadline"] == "inactive" else t_s(v["deadline"]),
+                "estado": estado, "lleva": "—" if lleva is None else t_trunc(lleva), "preset": t_s(preset),
+                "shown": shown, "off": off}
+
+    def _next_us(self) -> int | None:
         if self.s.status != "pausada-estable":
             return None
         nxt = self.s.next_stimulus()
-        return t_s(nxt.time) if hasattr(nxt, "time") and nxt.kind == "vencimiento" else None
+        return int(nxt.time) if hasattr(nxt, "time") and nxt.kind == "vencimiento" else None
+
+    def _next(self) -> str | None:
+        us = self._next_us()
+        return None if us is None else t_s(us)
 
     def act(self, op: str, body: dict[str, Any]) -> None:
         if self.s is None:

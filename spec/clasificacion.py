@@ -53,7 +53,7 @@ REQ = {
     "REQ-SEM-06": ("IMPL-I", "engine", "Etapas inestables sin pulso continuo; memorizadas conservadas; eventos en el recorrido según la lectura 5.1 (P-IMP-22)"),
     "REQ-SEM-07": ("IMPL-P", "engine", "D-LIM-EVOL recuperable, τ sin avanzar, sin falsa estabilidad (T-08a con su oráculo original desde la respuesta 1.2 A; S-08a)"),
     "REQ-SEM-08": ("IMPL-P", "engine, trace", "Mismos observables con independencia de recorrido, geometría y control; entre sistemas: U-10"),
-    "REQ-SEM-09": ("IMPL-DEC", "engine", "U-05 (P-IMP-20) y U-03, U-04, U-06, U-07 (comparador, 27-10-2026, P-IMP-22) cerradas por el responsable; cada lectura sigue siendo seleccionable, «detener» incluida (P-IMP-15, P-IMP-21). Siguen deteniéndose los eventos internos y de franqueamiento (U-03), 0s/p/d2 y los vencimientos que dependen del orden (U-06)"),
+    "REQ-SEM-09": ("IMPL-DEC", "engine", "U-05 (P-IMP-20) y U-03, U-04, U-06, U-07 (comparador, 27-10-2026, P-IMP-22) cerradas por el responsable; cada lectura sigue siendo seleccionable, «detener» incluida en el banco (P-IMP-15, P-IMP-21; el simulador de escritorio no la ofrece, P-IMP-30). Siguen deteniéndose los eventos internos y de franqueamiento (U-03), 0s/p/d2 y los vencimientos que dependen del orden (U-06)"),
     "REQ-EXP-01": ("IMPL-P", "expressions, values", "Tipos exactos, unidades, precedencia; sintaxis de literales P-IMP-06"),
     "REQ-EXP-02": ("IMPL-P", "expressions, engine", "Evaluación pura"),
     "REQ-EVT-01": ("IMPL-I", "engine", "Flancos sobre entradas en la 1.ª evolución; sin retención ni consumo exclusivo"),

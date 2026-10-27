@@ -8,11 +8,16 @@ Qué hace
 - Simula los ejemplos (menú Ejemplos) y los modelos guardados (Archivo > Abrir modelo): un proyecto (su
   manifest.json) o un documento de modelo (model-….json).
 - Dibuja el grafcet con la notación de la norma y muestra la evolución: etapas activas e inestables,
-  transiciones validadas y franqueables, acciones, salidas, variables, condiciones temporales y traza.
-- Entradas con un clic (las numéricas se escriben), tiempo lógico en pasos o al ritmo del reloj, y evolución a
-  evolución con «Paso a paso».
-- Lecturas de interpretación: por defecto, las decididas por el responsable; lo que sigue abierto se detiene
-  con su cuestión U en vez de aproximarse.
+  transiciones validadas y franqueables, acciones, salidas, variables, temporizadores y traza.
+- Entradas con un clic (las numéricas se escriben). El tiempo corre en tiempo real desde que se carga el
+  modelo, como un autómata: cada retardo es un temporizador que se ve contar («1,2 s / 3 s») junto a su
+  receptividad. Barra de herramientas: Ejecutar/Pausa, Paso y Reiniciar. «Simulación > Avanzar el tiempo…» es
+  una herramienta de depuración.
+- Evolución a evolución con «Paso a paso» (en Entradas) y «Paso».
+- Ajustes > Lecturas de interpretación: por defecto, las decididas por el responsable; lo que sigue abierto se
+  detiene con su cuestión U en vez de aproximarse. Si se elige otra, la barra de estado lo avisa.
+- Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J).
+- Zoom del dibujo: «−», «+», «Ajustar», rueda del ratón, Ctrl+= y Ctrl+−; el zoom elegido se mantiene.
 - Archivo > Guardar como proyecto: guarda el modelo en curso con su dibujo, para abrirlo después.
 
 Qué no es

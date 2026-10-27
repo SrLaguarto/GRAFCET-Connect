@@ -17,9 +17,10 @@ from __future__ import annotations
 import html
 from typing import Any
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetricsF, QImage, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QGraphicsScene, QGraphicsTextItem, QGraphicsView
+from PySide6.QtWidgets import (QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QHBoxLayout, QLabel,
+                               QToolButton, QWidget)
 
 SX = 100       # margen izquierdo del dibujo
 H = 22         # semilado de la etapa cuadrada (unidad: lado = 2·H)
@@ -124,6 +125,23 @@ class _Pintor:
         return [{"t": t}]
 
 
+def _temporizadores(S: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Temporizadores con algo que mostrar (contando o vencidos), por expresión que los contiene."""
+    out: dict[str, list[dict[str, Any]]] = {}
+    for t in (S.get("temporal") or {}).values():
+        if t.get("shown"):
+            out.setdefault(t["expr"], []).append(t)
+    return out
+
+
+def _estado_temporal(pt: _Pintor, x: float, y: float, ref: str | None, tmp: dict[str, list[dict[str, Any]]],
+                     z: float, tip: str | None = None) -> None:
+    """Estado de los temporizadores de una receptividad o condición: «1,2 s / 3 s» mientras cuenta y «3 s ✓» al vencer."""
+    for t in tmp.get(ref or "", []):
+        x += pt.text(x, y, pt.seg(t["shown"]), 12, "accent" if t["estado"] == "contando" else "ok", z, tip=tip,
+                     bold=True) + 8
+
+
 def _parcial(pid: str | None) -> str:
     """Parcial de un elemento; "" para el grafcet raíz (las etapas lo indican con None y las transiciones con "g")."""
     return "" if pid in (None, "g") else pid
@@ -150,6 +168,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
     blk = S.get("blocked")
     reached = set(blk["reached"]) if blk else set()
     _marcos(pt, M, pos)
+    tmp = _temporizadores(S)
     link = pt.pen("text")
     for t in M["transitions"]:
         tx, ty = t["x"] + SX, t["y"]
@@ -202,7 +221,8 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
                + ("; su parcial está forzado y no evoluciona" if ob.get("forced") else ""))
         pt.line(tx - TB, ty, tx + TB, ty, pt.pen(color, width), Z_BAR, tip)
         pt.text(tx - TB - 6, ty + 5, pt.seg(f"({t.get('label', t['id'])})"), 13, "muted", Z_BAR, "end", tip)
-        pt.text(tx + TB + 8, ty + 5, t.get("cond"), 14, "text", Z_BAR, tip=tip)
+        w = pt.text(tx + TB + 8, ty + 5, t.get("cond"), 14, "text", Z_BAR, tip=tip)
+        _estado_temporal(pt, tx + TB + 8 + w + (10 if w else 0), ty + 5, t.get("conditionRef"), tmp, Z_BAR, tip)
     for s in M["steps"]:
         x, y = pos[s["id"]]
         sid = s["id"]
@@ -246,7 +266,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
                                    (stale, "último estable", "muted"), (cand, "alcanzada, sin confirmar", "glow")):
             if flag:
                 pt.text(x, y + H + 13, pt.seg(label), 10, color, Z_STEP, "middle", tip)
-        _acciones(pt, x, y, s["actions"], S)
+        _acciones(pt, x, y, s["actions"], S, tmp)
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
         x, y = pos[m["id"]]
         act = bool((S.get("macros") or {}).get(m["id"]))
@@ -309,7 +329,8 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]])
             pt.text(b["x1"] - 30, b["y1"] + 5, pt.seg(p["label"]), 14, "text", Z_FRAME, "end", halo=True)
 
 
-def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S: dict[str, Any]) -> None:
+def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S: dict[str, Any],
+              tmp: dict[str, list[dict[str, Any]]]) -> None:
     """Acciones a la derecha de la etapa, del alto de la etapa y contiguas (representación (2) de la norma)."""
     if not actions:
         return
@@ -331,7 +352,8 @@ def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S:
         mark = pt.pen("text")
         if a["kind"] == "continuous" and a.get("cond"):  # acción condicionada: trazo y condición
             pt.line(mx, top, mx, top - 14, mark, Z_STEP)
-            pt.text(mx + 5, top - 4, a["cond"], 13, "text", Z_STEP)
+            w = pt.text(mx + 5, top - 4, a["cond"], 13, "text", Z_STEP)
+            _estado_temporal(pt, mx + 5 + w + 8, top - 4, a.get("condRef"), tmp, Z_STEP)
         elif a.get("trigger") == "activation":  # memorizada al activar: flecha hacia arriba
             pt.line(mx, top, mx, top - 11, mark, Z_STEP)
             pt.poly([(mx - 5, top - 10), (mx, top - 19), (mx + 5, top - 10)], None, Z_STEP, fill="text")
@@ -341,12 +363,21 @@ def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S:
         elif a.get("trigger") == "event":  # memorizada por evento: banderita y evento
             pt.line(mx, top, mx, top - 20, mark, Z_STEP)
             pt.poly([(mx, top - 20), (mx - 9, top - 15), (mx, top - 10)], None, Z_STEP, fill="text")
-            pt.text(mx + 5, top - 11, a.get("event"), 13, "text", Z_STEP)
+            w = pt.text(mx + 5, top - 11, a.get("event"), 13, "text", Z_STEP)
+            _estado_temporal(pt, mx + 5 + w + 8, top - 11, a.get("condRef"), tmp, Z_STEP)
         ax += w
 
 
+ZOOM_MIN, ZOOM_MAX, ZOOM_PASO = 0.1, 8.0, 1.15
+ESTILO_FLECHA = ("QToolButton { background: rgba(255,255,255,215); border: 1px solid #c3c9d6; border-radius: 4px; "
+                 "color: #1d2330; font-size: 13px } QToolButton:hover { background: #dbe8ff }")
+
+
 class VistaDiagrama(QGraphicsView):
-    """Vista del dibujo: se ajusta a la ventana; Ctrl + rueda acerca o aleja y el doble clic vuelve a ajustar."""
+    """Vista del dibujo. Se ajusta a la ventana hasta que se hace zoom; desde entonces el zoom se mantiene al
+    refrescar y solo «Ajustar» (o el doble clic) vuelve a encajar el dibujo. La rueda acerca o aleja."""
+
+    zoomCambiado = Signal(float)
 
     def __init__(self) -> None:
         super().__init__()
@@ -355,12 +386,73 @@ class VistaDiagrama(QGraphicsView):
         self.setBackgroundBrush(QColor(COL["panel"]))
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self._manual = False
+        self._bordes: list[tuple[QWidget, str]] = []
+        self._barra_zoom()
+
+    def _barra_zoom(self) -> None:
+        """Controles del zoom sobre el dibujo, arriba a la derecha: «−», porcentaje, «+» y «Ajustar»."""
+        self.barra = QFrame(self)
+        self.barra.setStyleSheet("QFrame { background: rgba(255,255,255,215); border: 1px solid #c3c9d6; "
+                                 "border-radius: 4px } QToolButton { border: none; padding: 2px 7px; font-size: 14px } "
+                                 "QToolButton:hover { background: #dbe8ff } QLabel { border: none; min-width: 42px }")
+        lay = QHBoxLayout(self.barra)
+        lay.setContentsMargins(3, 2, 3, 2)
+        lay.setSpacing(0)
+        self.b_menos = QToolButton()
+        self.b_menos.setText("−")
+        self.b_menos.setToolTip("Alejar (Ctrl+−)")
+        self.b_menos.clicked.connect(self.alejar)
+        self.l_zoom = QLabel("100 %")
+        self.l_zoom.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.b_mas = QToolButton()
+        self.b_mas.setText("+")
+        self.b_mas.setToolTip("Acercar (Ctrl+=)")
+        self.b_mas.clicked.connect(self.acercar)
+        self.b_ajustar = QToolButton()
+        self.b_ajustar.setText("Ajustar")
+        self.b_ajustar.setToolTip("Encajar el dibujo en la ventana (Ctrl+0 o doble clic)")
+        self.b_ajustar.clicked.connect(self.ajustar)
+        for w in (self.b_menos, self.l_zoom, self.b_mas, self.b_ajustar):
+            lay.addWidget(w)
+        self.barra.adjustSize()
+
+    def borde(self, boton: QToolButton, lugar: str) -> None:
+        """Flecha pegada a un borde del dibujo («derecha» o «abajo»): pliega el panel que hay al otro lado."""
+        boton.setParent(self)
+        boton.setStyleSheet(ESTILO_FLECHA)
+        boton.setFixedSize(*((18, 54) if lugar == "derecha" else (54, 18)))
+        boton.show()
+        self._bordes.append((boton, lugar))
+        self._colocar()
+
+    def _colocar(self) -> None:
+        w, h = self.width(), self.height()
+        sb = self.verticalScrollBar().width() if self.verticalScrollBar().isVisible() else 0
+        sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
+        self.barra.move(w - self.barra.width() - sb - 8, 8)
+        for b, lugar in self._bordes:
+            if lugar == "derecha":
+                b.move(w - b.width() - sb, (h - b.height()) // 2)
+            else:
+                b.move((w - b.width()) // 2, h - b.height() - sh)
+            b.raise_()
+        self.barra.raise_()
+
+    def escala(self) -> float:
+        return self.transform().m11()
+
+    def _notificar(self) -> None:
+        self.l_zoom.setText(f"{round(self.escala() * 100)} %")
+        self.zoomCambiado.emit(self.escala())
 
     def mostrar(self, M: dict[str, Any], S: dict[str, Any]) -> None:
+        centro = self.mapToScene(self.viewport().rect().center())  # al refrescar, la vista no se desplaza ni se reescala
         dibujar(self.scene(), M, S)
         self.scene().setSceneRect(self.scene().itemsBoundingRect().adjusted(-14, -14, 14, 14))
         if not self._manual:
             self.ajustar()
+        else:
+            self.centerOn(centro)
 
     def ajustar(self) -> None:
         self._manual = False
@@ -370,19 +462,35 @@ class VistaDiagrama(QGraphicsView):
         self.resetTransform()
         k = min(self.viewport().width() / r.width(), self.viewport().height() / r.height(), 1.6)
         self.scale(k, k)
+        self._notificar()
+
+    def zoom(self, factor: float) -> None:
+        """Zoom manual: queda fijo hasta «Ajustar» o doble clic."""
+        k = min(max(self.escala() * factor, ZOOM_MIN), ZOOM_MAX) / self.escala()
+        self._manual = True
+        self.scale(k, k)
+        self._notificar()
+
+    def acercar(self) -> None:
+        self.zoom(ZOOM_PASO)
+
+    def alejar(self) -> None:
+        self.zoom(1 / ZOOM_PASO)
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802
         super().resizeEvent(event)
         if not self._manual:
             self.ajustar()
+        self._colocar()
 
     def wheelEvent(self, event: Any) -> None:  # noqa: N802
-        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            self._manual = True
-            k = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
-            self.scale(k, k)
-        else:
-            super().wheelEvent(event)
+        """La rueda (con o sin Ctrl) acerca o aleja alrededor del puntero; el dibujo se mueve arrastrándolo."""
+        if not event.angleDelta().y():
+            return
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.zoom(ZOOM_PASO if event.angleDelta().y() > 0 else 1 / ZOOM_PASO)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        event.accept()
 
     def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802
         self.ajustar()

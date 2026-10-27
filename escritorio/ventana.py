@@ -1,10 +1,10 @@
-"""Ventana del simulador GRAFCET de escritorio (P-IMP-29): primera versión portable para Windows.
+"""Ventana del simulador GRAFCET de escritorio (P-IMP-29, P-IMP-30): primera versión portable para Windows.
 
 Simula un ejemplo o un modelo guardado (proyecto o documento de modelo, documento 09) con el dibujo de la
-norma. Entradas, tiempo lógico (pasos fijos o al ritmo del reloj), evolución a evolución, traza, salidas,
-variables, condiciones temporales y lecturas de interpretación. Toda la semántica la decide grafcet/engine.py
-con el perfil provisional: la ventana no aproxima nada y los bloqueos por cuestiones U se muestran tal cual.
-No es el editor ni declara conformidad con IEC 60848 / UNE-EN 60848.
+norma. Entradas, tiempo real (como un autómata: los retardos son temporizadores que cuentan solos), evolución a
+evolución, traza, salidas, variables, temporizadores y, en «Ajustes», las lecturas de interpretación. Toda la
+semántica la decide grafcet/engine.py con el perfil provisional: la ventana no aproxima nada y los bloqueos por
+cuestiones U se muestran tal cual. No es el editor ni declara conformidad con IEC 60848 / UNE-EN 60848.
 """
 from __future__ import annotations
 
@@ -13,23 +13,26 @@ import re
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QElapsedTimer, Qt, QTimer
+from PySide6.QtCore import QElapsedTimer, QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
-                               QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
-                               QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QScrollArea, QSplitter,
-                               QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
+                               QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
+                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QScrollArea,
+                               QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolBar, QToolButton,
+                               QVBoxLayout, QWidget)
 
 from grafcet.diagnostics import DiagnosticError
 from grafcet.examples import EJEMPLOS
 from grafcet.persistence import add_document, new_project, open_model, save_project
 from grafcet.profile import APP_VERSION, SEMANTIC_OPTIONS, normalize_options
-from grafcet.view import Vista, auto_layout, layout_from_presentation, presentation_for
+from grafcet.timeutil import parse_duration
+from grafcet.view import Vista, auto_layout, layout_from_presentation, presentation_for, t_trunc
 
 from .diagrama import COL, VistaDiagrama
 
 TITULO = "Simulador GRAFCET"
-TICK_MS = 200  # tiempo real: cada cuánto se avanza el tiempo lógico
+TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
+AVISO = "Núcleo con perfil provisional · no declara conformidad con IEC 60848 / UNE-EN 60848"
 ESTADOS = {"pausada-estable": ("estable", "ok"), "pausada-recorrido": ("en recorrido (situación inestable)", "virt"),
            "error": ("detenido por diagnóstico", "err"), "no-compilable": ("no compilable", "err"),
            "finalizada": ("finalizada", "ok"), "preparada": ("preparada", "muted"), "ejecutando": ("ejecutando", "muted")}
@@ -46,11 +49,13 @@ LEYENDA = (
     "unida a su expansión (de E a S) por trazos discontinuos; encapsulante = esquinas cortadas; recinto = marco con "
     "la encapsulante arriba y su nombre abajo; * = enlace de activación; G{…} en rectángulo doble = orden de forzado "
     "(morada si está vigente; {*} situación actual, {INIT} inicial, { } vacía); marco redondeado = parcial.<br>"
-    "Pase el ratón por una etapa o transición para ver su estado. Ctrl + rueda acerca o aleja; doble clic ajusta.")
+    "<br><b>Temporizadores</b>: junto a la receptividad o la acción con retardo, «1,2 s / 3 s» mientras cuenta (lo "
+    "que lleva / su preset) y «3 s ✓» cuando ha vencido.<br>"
+    "Pase el ratón por una etapa o transición para ver su estado. La rueda acerca o aleja; doble clic ajusta.")
 
 
 def _q_key(q: str) -> list[Any]:
-    return [int(x) if x.isdigit() else x for x in re.split(r"[.-]", q)]
+    return [(0, int(x), "") if x.isdigit() else (1, 0, x) for x in re.split(r"[.-]", q)]  # números antes que letras
 
 
 class Lecturas(QDialog):
@@ -61,22 +66,30 @@ class Lecturas(QDialog):
         self.setWindowTitle("Lecturas de interpretación")
         self.resize(760, 560)
         lay = QVBoxLayout(self)
-        note = QLabel("Cada cuestión tiene la lectura decidida por el responsable (o «detener» si sigue abierta). Elegir "
-                      "otra no implica conformidad; se registra en la traza y cambiarla reinicia la simulación.")
+        note = QLabel("Cada cuestión tiene la lectura decidida por el responsable. Elegir otra no implica conformidad; "
+                      "se avisa en la barra de estado, se registra en la traza y cambiarla reinicia la simulación.")
         note.setWordWrap(True)
         lay.addWidget(note)
         form_host = QWidget()
         form = QFormLayout(form_host)
         self.combos: dict[str, QComboBox] = {}
+        self.fijas: dict[str, str] = {}  # cuestiones sin decidir: no se eligen, el motor se detiene con su diagnóstico
         for q in sorted(SEMANTIC_OPTIONS, key=_q_key):
             spec = SEMANTIC_OPTIONS[q]
-            cb = QComboBox()
-            for value, text in spec["values"].items():
-                cb.addItem(("Por defecto · " if value == spec["default"] else "") + text, value)
-            cb.setCurrentIndex(max(0, cb.findData(options.get(q, spec["default"]))))
-            cb.setToolTip(spec["scope"])
             label = QLabel(f"<b>{html.escape(q)}</b> · {html.escape(spec['scope'])}")
             label.setWordWrap(True)
+            if spec["default"] == "detener":
+                fija = QLabel("Sin decidir: se detiene")
+                fija.setStyleSheet(f"color: {COL['muted']}")
+                form.addRow(label, fija)
+                self.fijas[q] = "detener"
+                continue
+            cb = QComboBox()
+            for value, text in spec["values"].items():
+                if value != "detener":  # «detener» es lo que hace el motor con lo abierto: no se ofrece como lectura
+                    cb.addItem(("Por defecto · " if value == spec["default"] else "") + text, value)
+            cb.setCurrentIndex(max(0, cb.findData(options.get(q, spec["default"]))))
+            cb.setToolTip(spec["scope"])
             form.addRow(label, cb)
             self.combos[q] = cb
         scroll = QScrollArea()
@@ -96,14 +109,16 @@ class Lecturas(QDialog):
             cb.setCurrentIndex(cb.findData(SEMANTIC_OPTIONS[q]["default"]))
 
     def options(self) -> dict[str, str]:
-        return {q: cb.currentData() for q, cb in self.combos.items()}
+        return {**self.fijas, **{q: cb.currentData() for q, cb in self.combos.items()}}
 
 
 class Ventana(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, ajustes: QSettings | None = None) -> None:
         super().__init__()
         self.setWindowTitle(TITULO)
         self.resize(1360, 860)
+        # Preferencias de la interfaz (paneles plegados) en un .ini del usuario, sin tocar el registro
+        self.ajustes = ajustes or QSettings(QSettings.Format.IniFormat, QSettings.Scope.UserScope, "GRAFCET", "Simulador")
         self.options = normalize_options(None)  # por defecto: decisiones del responsable y, lo abierto, detener
         self.fuente: dict[str, Any] = {}
         self.v: Vista | None = None
@@ -116,9 +131,19 @@ class Ventana(QMainWindow):
         self.reloj = QElapsedTimer()
         self._menus()
         self._interfaz()
+        self._barra_herramientas()
+        self._paneles()
         self.cargar_ejemplo(next(iter(EJEMPLOS)))
 
     # -- construcción ---------------------------------------------------------------------------
+    def _accion(self, texto: str, slot: Any, atajo: str | list[str] | None = None, marcable: bool = False) -> QAction:
+        a = QAction(texto, self)
+        a.setCheckable(marcable)
+        if atajo:
+            a.setShortcuts([QKeySequence(x) for x in ([atajo] if isinstance(atajo, str) else atajo)])
+        (a.toggled if marcable else a.triggered).connect(slot)
+        return a
+
     def _menus(self) -> None:
         bar = self.menuBar()
         archivo = bar.addMenu("&Archivo")
@@ -138,9 +163,31 @@ class Ventana(QMainWindow):
             act.triggered.connect(lambda _=False, k=key: self.cargar_ejemplo(k))
             self.grupo.addAction(act)
             self.acciones_ej[key] = act
+        # Acciones de la simulación: también van en la barra de herramientas
+        self.a_ejecutar = self._accion("▶ Ejecutar", self._ejecutar, "F5", marcable=True)
+        self.a_ejecutar.setToolTip("Ejecutar / pausar el tiempo real (F5)")
+        self.a_paso = self._accion("Paso", self.paso_evolucion, "F10")
+        self.a_paso.setToolTip("Una evolución; con la situación estable, hasta el próximo vencimiento (F10)")
+        self.a_completar = self._accion("Completar recorrido", lambda: self._act("estabilizar"), "F11")
+        self.a_completar.setToolTip("Terminar las evoluciones pendientes hasta la situación estable (F11)")
+        self.a_reiniciar = self._accion("Reiniciar", self.reiniciar, "Ctrl+R")
+        self.a_reiniciar.setToolTip("Reiniciar la simulación (Ctrl+R)")
+        ver = bar.addMenu("&Ver")
+        self.a_derecho = self._accion("Panel &derecho", lambda on: self._mostrar_panel("derecho", on), "Ctrl+B", True)
+        self.a_inferior = self._accion("Panel &inferior", lambda on: self._mostrar_panel("inferior", on), "Ctrl+J", True)
+        ver.addAction(self.a_derecho)
+        ver.addAction(self.a_inferior)
+        ver.addSeparator()
+        ver.addAction(self._accion("&Acercar", lambda: self.diagrama.acercar(), ["Ctrl+=", "Ctrl++"]))
+        ver.addAction(self._accion("A&lejar", lambda: self.diagrama.alejar(), "Ctrl+-"))
+        ver.addAction(self._accion("A&justar el dibujo", lambda: self.diagrama.ajustar(), "Ctrl+0"))
         sim = bar.addMenu("&Simulación")
-        sim.addAction("&Reiniciar", self.reiniciar).setShortcut(QKeySequence("Ctrl+R"))
-        sim.addAction("&Lecturas de interpretación…", self.lecturas)
+        for a in (self.a_ejecutar, self.a_paso, self.a_completar, self.a_reiniciar):
+            sim.addAction(a)
+        sim.addSeparator()
+        sim.addAction("&Avanzar el tiempo…", self.avanzar_tiempo).setToolTip("Herramienta de depuración")
+        m_ajustes = bar.addMenu("A&justes")
+        m_ajustes.addAction("&Lecturas de interpretación…", self.lecturas)
         ayuda = bar.addMenu("A&yuda")
         ayuda.addAction("&Leyenda del dibujo", lambda: self.pestanas.setCurrentIndex(1))
         ayuda.addAction("&Acerca de", self.acerca)
@@ -202,81 +249,77 @@ class Ventana(QMainWindow):
         lay.addWidget(self.aviso)
         self.paso = QCheckBox("Paso a paso (detener tras cada evolución)")
         lay.addWidget(self.paso)
-        fila = QHBoxLayout()
-        self.b_evo = QPushButton("Siguiente evolución")
-        self.b_evo.clicked.connect(lambda: self._act("evolucion"))
-        self.b_fin = QPushButton("Completar recorrido")
-        self.b_fin.clicked.connect(lambda: self._act("estabilizar"))
-        fila.addWidget(self.b_evo)
-        fila.addWidget(self.b_fin)
-        fila.addStretch(1)
-        lay.addLayout(fila)
-
-        _, lay = self._caja("Tiempo lógico")
-        fila = QHBoxLayout()
-        self.l_reloj = QLabel()
-        self.l_reloj.setStyleSheet("font-size: 20px; font-weight: 600")
-        self.l_prox = QLabel()
-        self.l_prox.setWordWrap(True)
-        self.l_prox.setStyleSheet(f"color: {COL['muted']}")
-        fila.addWidget(self.l_reloj)
-        fila.addWidget(self.l_prox, 1)
-        lay.addLayout(fila)
-        fila = QHBoxLayout()
-        self.b_tiempo = []
-        for texto, us in (("+0,1 s", 100_000), ("+0,5 s", 500_000), ("+1 s", 1_000_000), ("+3 s", 3_000_000)):
-            b = QPushButton(texto)
-            b.clicked.connect(lambda _=False, us=us: self._act("avanzar", us=us))
-            fila.addWidget(b)
-            self.b_tiempo.append(b)
-        lay.addLayout(fila)
-        self.b_rt = QPushButton("▶ Tiempo real")
-        self.b_rt.setCheckable(True)
-        self.b_rt.toggled.connect(self._tiempo_real)
-        nota = QLabel("El tiempo lógico avanza al ritmo del reloj (extensión E del documento 08); los vencimientos "
-                      "siguen siendo exactos al µs.")
-        nota.setWordWrap(True)
-        nota.setStyleSheet(f"color: {COL['muted']}")
-        lay.addWidget(self.b_rt)
-        lay.addWidget(nota)
-
-        _, lay = self._caja("Lecturas de interpretación")
-        lay.addWidget(QLabel("Flancos seguidos: de uno en uno o por ciclo (U-03)"))
-        self.u03 = QComboBox()
-        self.u03.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-        self.u03.setMinimumContentsLength(24)  # el texto largo se ve en la lista desplegada y en la ayuda emergente
-        spec = SEMANTIC_OPTIONS["U-03"]
-        for value, text in spec["values"].items():
-            self.u03.addItem(("Por defecto · " if value == spec["default"] else "Alternativa · ") + text, value)
-        self.u03.activated.connect(lambda _: self._opciones({**self.options, "U-03": self.u03.currentData()}))
-        lay.addWidget(self.u03)
-        self.l_lect = QLabel()
-        self.l_lect.setWordWrap(True)
-        lay.addWidget(self.l_lect)
-        b = QPushButton("Todas las lecturas…")
-        b.clicked.connect(self.lecturas)
-        lay.addWidget(b)
 
         _, lay = self._caja("Salidas y variables")
         self.t_vars = self._tabla(["Variable", "Modo", "Valor", "Contribuyen"])
         lay.addWidget(self.t_vars)
-        self.c_temp, lay = self._caja("Condiciones temporales")
-        self.t_temp = self._tabla(["Condición", "Fase", "Valor", "Vence"])
+        self.c_temp, lay = self._caja("Temporizadores")
+        self.t_temp = self._tabla(["Dónde", "Estado", "Lleva", "Preset"])
         lay.addWidget(self.t_temp)
         self.lado.addStretch(1)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(der)
-        scroll.setMinimumWidth(400)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        split = QSplitter(Qt.Orientation.Horizontal)
-        split.addWidget(izq)
-        split.addWidget(scroll)
-        split.setSizes([880, 460])
-        self.setCentralWidget(split)
-        self.statusBar().showMessage("Núcleo con perfil provisional · no declara conformidad con IEC 60848 / "
-                                     "UNE-EN 60848")
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setWidget(der)
+        self.scroll.setMinimumWidth(400)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.vsplit = vsplit
+        self.split = QSplitter(Qt.Orientation.Horizontal)
+        self.split.addWidget(izq)
+        self.split.addWidget(self.scroll)
+        self.split.setSizes([880, 460])
+        self.setCentralWidget(self.split)
+        # Barra de estado: aviso de conformidad, lecturas distintas de las decididas, instante lógico
+        sb = self.statusBar()
+        self.l_aviso = QLabel(AVISO)
+        self.l_lect = QLabel()
+        self.l_lect.setStyleSheet(f"color: {COL['err']}")
+        self.l_reloj = QLabel()
+        self.l_reloj.setStyleSheet("font-weight: 600")
+        sb.addWidget(self.l_aviso, 1)
+        sb.addPermanentWidget(self.l_lect)
+        sb.addPermanentWidget(self.l_reloj)
+
+    def _barra_herramientas(self) -> None:
+        tb = QToolBar("Simulación")
+        tb.setMovable(False)
+        tb.setObjectName("barra-simulacion")
+        for a in (self.a_ejecutar, self.a_paso, self.a_completar):
+            tb.addAction(a)
+        tb.addSeparator()
+        tb.addAction(self.a_reiniciar)
+        self.addToolBar(tb)
+
+    def _paneles(self) -> None:
+        """Flechas en el borde del dibujo para plegar del todo el panel derecho y el inferior, y el estado guardado."""
+        self.flechas = {}
+        for nombre, lugar in (("derecho", "derecha"), ("inferior", "abajo")):
+            b = QToolButton()
+            b.clicked.connect(lambda _=False, n=nombre: self._mostrar_panel(n, self._panel(n).isHidden()))
+            self.diagrama.borde(b, lugar)
+            self.flechas[nombre] = b
+        for nombre, accion in (("derecho", self.a_derecho), ("inferior", self.a_inferior)):
+            visible = self.ajustes.value(f"paneles/{nombre}", True, type=bool)
+            accion.blockSignals(True)
+            accion.setChecked(visible)
+            accion.blockSignals(False)
+            self._mostrar_panel(nombre, visible, guardar=False)
+
+    def _panel(self, nombre: str) -> QWidget:
+        return self.scroll if nombre == "derecho" else self.pestanas
+
+    def _mostrar_panel(self, nombre: str, visible: bool, guardar: bool = True) -> None:
+        self._panel(nombre).setVisible(visible)
+        accion = self.a_derecho if nombre == "derecho" else self.a_inferior
+        if accion.isChecked() != visible:
+            accion.blockSignals(True)
+            accion.setChecked(visible)
+            accion.blockSignals(False)
+        # La flecha apunta hacia donde se pliega el panel y, plegado, hacia donde se despliega
+        self.flechas[nombre].setText(("▸" if visible else "◂") if nombre == "derecho" else ("▾" if visible else "▴"))
+        self.flechas[nombre].setToolTip(f"{'Plegar' if visible else 'Desplegar'} el panel {nombre}")
+        if guardar:
+            self.ajustes.setValue(f"paneles/{nombre}", visible)
 
     @staticmethod
     def _tabla(cols: list[str]) -> QTableWidget:
@@ -327,7 +370,7 @@ class Ventana(QMainWindow):
             self.abrir_ruta(Path(ruta))
 
     def _cargar(self) -> None:
-        self.b_rt.setChecked(False)  # ejecución nueva: el tiempo real se vuelve a pedir
+        self.a_ejecutar.setChecked(False)  # ejecución nueva; si se puede, el tiempo real arranca al final
         f = self.fuente
         try:
             if f["tipo"] == "ejemplo":
@@ -342,9 +385,43 @@ class Ventana(QMainWindow):
         self.diagrama.ajustar()
         self._entradas()
         self.refrescar()
+        # Como un autómata: el tiempo corre desde que se carga (si el modelo compila y la situación es estable)
+        self.a_ejecutar.setChecked(self.v.s is not None and self.v.s.status == "pausada-estable")
 
     def reiniciar(self) -> None:
         self._cargar()
+
+    def paso_evolucion(self) -> None:
+        """Paso: una evolución del recorrido pendiente; con la situación estable, hasta el próximo vencimiento."""
+        if self.v is None or self.v.s is None:
+            return
+        st = self.v.s.status
+        if st == "pausada-recorrido":
+            self._act("evolucion")
+        elif st == "pausada-estable":
+            sig = self.v.state().get("nextEventUs")
+            if sig is None:
+                self.aviso.setText("No hay ningún vencimiento pendiente: la situación solo cambia con las entradas.")
+            else:
+                self._act("hasta", us=sig)
+
+    def avanzar_tiempo(self) -> None:
+        """Depuración: avanza el tiempo lógico una duración dada (por ejemplo «0,5», «2 s» o «350 ms»)."""
+        if self.v is None or self.v.s is None or self.v.s.status != "pausada-estable":
+            QMessageBox.information(self, TITULO, "El tiempo solo puede avanzarse con la situación estable.")
+            return
+        texto, ok = QInputDialog.getText(self, "Avanzar el tiempo", "Duración (segundos, o con unidad: «350 ms»):",
+                                         text="1 s")
+        if not ok:
+            return
+        raw = texto.strip().replace(",", ".")
+        try:
+            us = parse_duration(raw if re.search(r"[a-zµ]", raw) else f"{raw} s")
+        except DiagnosticError as exc:
+            QMessageBox.warning(self, TITULO, f"No es una duración válida: {exc}")
+            return
+        self.a_ejecutar.setChecked(False)  # el tiempo avanzado a mano no se mezcla con el del reloj
+        self._act("avanzar", us=us)
 
     # -- acciones de simulación -------------------------------------------------------------------
     def _act(self, op: str, **body: Any) -> None:
@@ -401,11 +478,11 @@ class Ventana(QMainWindow):
 
     def lecturas(self) -> None:
         d = Lecturas(self, self.options)
-        if d.exec() == QDialog.DialogCode.Accepted:
+        if d.exec() == QDialog.DialogCode.Accepted and d.options() != self.options:
             self._opciones(d.options())
 
-    def _tiempo_real(self, on: bool) -> None:
-        self.b_rt.setText("❚❚ Pausar tiempo real" if on else "▶ Tiempo real")
+    def _ejecutar(self, on: bool) -> None:
+        self.a_ejecutar.setText("‖ Pausa" if on else "▶ Ejecutar")
         if on:
             self.reloj.start()
             self.rt.start()
@@ -415,7 +492,7 @@ class Ventana(QMainWindow):
     def _tick(self) -> None:
         us = self.reloj.restart() * 1000
         if self.v is None or self.v.s is None or self.v.s.status != "pausada-estable":
-            self.b_rt.setChecked(False)
+            self.a_ejecutar.setChecked(False)
             return
         self._act("avanzar", us=us)
 
@@ -444,15 +521,13 @@ class Ventana(QMainWindow):
             b.setText(f"{var} = {1 if on else 0}")
             b.setStyleSheet(f"background: {COL['accent_soft']}; border: 1px solid {COL['accent']}; color: #1d2330; "
                             "padding: 5px 10px" if on else "padding: 5px 10px")
-        self.b_evo.setEnabled(rec)
-        self.b_fin.setEnabled(rec)
-        for b in self.b_tiempo:
-            b.setEnabled(stable)
-        self.b_rt.setEnabled(stable or self.b_rt.isChecked())
-        if self.b_rt.isChecked() and not stable:
-            self.b_rt.setChecked(False)
-        self.l_reloj.setText(f"τ = {S.get('time', '—')}")
-        self.l_prox.setText(f"próximo vencimiento: {S['nextEvent']}" if S.get("nextEvent") else "")
+        self.a_completar.setEnabled(rec)
+        self.a_paso.setEnabled(rec or (stable and S.get("nextEventUs") is not None))
+        self.a_ejecutar.setEnabled(stable or self.a_ejecutar.isChecked())
+        if self.a_ejecutar.isChecked() and not stable:
+            self.a_ejecutar.setChecked(False)  # error o recorrido pendiente: el tiempo real se pausa solo
+        self.l_reloj.setText(f"τ = {t_trunc(S['timeUs']) if 'timeUs' in S else '—'}"
+                             + (f" · próximo vencimiento: {S['nextEvent']}" if S.get("nextEvent") else ""))
         self._lecturas()
         self._variables(M, S)
         self._traza(S)
@@ -487,17 +562,12 @@ class Ventana(QMainWindow):
         self.diag.show()
 
     def _lecturas(self) -> None:
-        self.u03.setCurrentIndex(self.u03.findData(self.options["U-03"]))
-        self.u03.setToolTip(self.u03.currentText())
+        """Aviso discreto, en la barra de estado, cuando alguna lectura difiere de la decidida por el responsable."""
         changed = [q for q, v in self.options.items() if q in SEMANTIC_OPTIONS and v != SEMANTIC_OPTIONS[q]["default"]]
-        if changed:
-            self.l_lect.setText(f"<b>Lecturas distintas de las decididas</b>: {', '.join(sorted(changed, key=_q_key))}. "
-                                "Se registran en la traza; no implican conformidad.")
-            self.l_lect.setStyleSheet(f"color: {COL['err']}")
-        else:
-            self.l_lect.setText("Lecturas decididas por el responsable. No implican conformidad: el contraste normativo "
-                                "sigue pendiente (U-01).")
-            self.l_lect.setStyleSheet(f"color: {COL['muted']}")
+        self.l_lect.setText(f"Lecturas distintas de las decididas: {', '.join(sorted(changed, key=_q_key))} · "
+                            if changed else "")
+        self.l_lect.setToolTip("Se registran en la traza y no implican conformidad (Ajustes > Lecturas de interpretación)"
+                               if changed else "")
 
     def _variables(self, M: dict[str, Any], S: dict[str, Any]) -> None:
         outs = S.get("outputs") or {}
@@ -508,17 +578,17 @@ class Ventana(QMainWindow):
         self._filas(self.t_vars, rows)
         temp = S.get("temporal") or {}
         self.c_temp.setVisible(bool(temp))
-        self._filas(self.t_temp, [(t["label"], t["phase"], "verdadera" if t["effectiveValue"] else "falsa",
-                                   t["deadlineS"] or "—", "ok" if t["effectiveValue"] else "muted")
-                                  for t in temp.values()])
+        self._filas(self.t_temp, [(t["where"], t["estado"], t["lleva"], t["preset"],
+                                   "accent" if t["estado"] == "contando" else "ok" if t["estado"] == "vencido" else "muted")
+                                  for t in temp.values()], 1)
 
     @staticmethod
-    def _filas(t: QTableWidget, rows: list[tuple[str, ...]]) -> None:
+    def _filas(t: QTableWidget, rows: list[tuple[str, ...]], col_color: int = 2) -> None:
         t.setRowCount(len(rows))
         for i, (*cells, color) in enumerate(rows):
             for j, c in enumerate(cells):
                 item = QTableWidgetItem(c)
-                if j == 2:
+                if j == col_color:
                     item.setForeground(QColor(COL[color]))
                 t.setItem(i, j, item)
 

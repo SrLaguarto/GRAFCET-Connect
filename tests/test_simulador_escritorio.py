@@ -1,7 +1,7 @@
 """Simulador de escritorio (P-IMP-29): abrir y guardar modelos, colocación automática, entradas numéricas y la
 ventana Qt sin pantalla.
 
-Las pruebas del núcleo (S-APP01..04) no necesitan Qt. Las de la ventana (S-APP05..07) se omiten si PySide6 no
+Las pruebas del núcleo (S-APP01..04) no necesitan Qt. Las de la ventana (S-APP05..13) se omiten si PySide6 no
 está instalado; usan la plataforma «offscreen» de Qt, sin abrir ventanas. Ninguna es oráculo del documento 11:
 comprueban que el simulador muestra lo que decide el motor, sin cambiar la semántica.
 """
@@ -134,8 +134,16 @@ class Ventana(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+        from PySide6.QtCore import QSettings
         from escritorio.ventana import Ventana as V
-        cls.w = V()
+        cls.tmp = tempfile.TemporaryDirectory()  # las preferencias de las pruebas no tocan las del usuario
+        cls.w = V(QSettings(str(Path(cls.tmp.name) / "ajustes.ini"), QSettings.Format.IniFormat))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.w.a_ejecutar.setChecked(False)
+        cls.w.ajustes.sync()
+        cls.tmp.cleanup()
 
     def test_SAPP05_ejemplos_en_la_ventana(self):
         """REQ-SIM-03: cada ejemplo se carga y se dibuja; un clic en una entrada hace evolucionar el grafcet como en el banco."""
@@ -176,11 +184,164 @@ class Ventana(unittest.TestCase):
         self.w.cargar_ejemplo("bloqueo-u03")
         self.w._opciones({**self.w.options, "U-03": "recorrido"})
         self.assertEqual(self.w.v.options["U-03"], "recorrido")
-        self.assertIn("distintas de las decididas", self.w.l_lect.text())
+        self.assertIn("distintas de las decididas: U-03", self.w.l_lect.text(), "el aviso va en la barra de estado")
         self.w.botones["p"].click()
         self.assertEqual(self.w.v.state()["situation"], ["C"], "con «recorrido» la subida llega a C")
         self.w._opciones(normalize_options(None))
-        self.assertIn("decididas por el responsable", self.w.l_lect.text())
+        self.assertEqual(self.w.l_lect.text(), "", "con las lecturas decididas no hay aviso")
+
+    def test_SAPP08_ajustes_y_lecturas(self):
+        """REQ-SEM-09: «Ajustes» (entre Simulación y Ayuda) tiene las lecturas; el diálogo no ofrece «detener» y el
+        panel derecho ya no las lleva."""
+        from PySide6.QtWidgets import QComboBox, QGroupBox
+        from escritorio.ventana import Lecturas
+        titulos = [a.text().replace("&", "") for a in self.w.menuBar().actions()]
+        self.assertEqual(titulos[titulos.index("Simulación") + 1:], ["Ajustes", "Ayuda"])
+        d = Lecturas(self.w, self.w.options)
+        self.assertGreater(len(d.combos), 10)
+        for q, cb in d.combos.items():
+            self.assertNotIn("detener", [cb.itemData(i) for i in range(cb.count())], q)
+        self.assertEqual(d.options(), self.w.options, "sin tocar nada, las lecturas no cambian")
+        self.assertFalse(hasattr(self.w, "u03"))
+        self.assertNotIn("Lecturas de interpretación", [g.title() for g in self.w.scroll.findChildren(QGroupBox)])
+        self.assertEqual(self.w.scroll.findChildren(QComboBox), [], "el panel derecho no tiene combos de lecturas")
+
+    def test_SAPP09_tiempo_real_pausa_y_paso(self):
+        """REQ-SIM-03: al cargar, el tiempo real está activo; pausa, paso y reinicio funcionan."""
+        self.w.cargar_ejemplo("temporizada")
+        self.assertTrue(self.w.a_ejecutar.isChecked() and self.w.rt.isActive(), "corre desde que se carga")
+        self.assertFalse(hasattr(self.w, "b_tiempo"), "ya no hay botones de tiempo lógico")
+        self.w.a_ejecutar.setChecked(False)
+        self.assertFalse(self.w.rt.isActive())
+        self.assertFalse(self.w.a_paso.isEnabled(), "estable y sin vencimientos: Paso no tiene nada que hacer")
+        self.w.botones["marcha"].click()
+        self.assertEqual(self.w.v.state()["situation"], ["E1"])
+        self.assertEqual(self.w.v.state()["nextEvent"], "3 s")
+        self.assertTrue(self.w.a_paso.isEnabled())
+        self.w.paso_evolucion()  # hasta el vencimiento exacto de 3 s
+        self.assertEqual((self.w.v.state()["time"], self.w.v.state()["situation"]), ("3 s", ["E2"]))
+        self.assertIn("τ = 3 s", self.w.l_reloj.text())
+        self.w.reiniciar()
+        self.assertEqual(self.w.v.state()["situation"], ["E0"])
+        self.assertTrue(self.w.a_ejecutar.isChecked(), "tras reiniciar vuelve a correr")
+        self.w.cargar_ejemplo("conflicto")  # el motor no arranca: no hay tiempo real
+        self.assertFalse(self.w.a_ejecutar.isChecked())
+
+    def test_SAPP10_temporizador_en_dibujo_y_tabla(self):
+        """REQ-SIM-03: «temporizada», con E1 activa y 1 s transcurrido, muestra «1 s / 3 s» junto a la receptividad y en
+        la tabla de temporizadores; al vencer, «3 s ✓»."""
+        self.w.cargar_ejemplo("temporizada")
+        self.w.a_ejecutar.setChecked(False)
+        self.assertFalse(self.w.c_temp.isHidden())
+        self.assertEqual(self.w.t_temp.rowCount(), 1)
+        self.assertEqual(self.w.t_temp.item(0, 1).text(), "parado")
+        self.w.botones["marcha"].click()
+        self.w._act("avanzar", us=1_000_000)
+
+        def textos():
+            return [it.toPlainText() for it in self.w.diagrama.scene().items() if hasattr(it, "toPlainText")]
+        self.assertIn("1 s / 3 s", textos())
+        fila = [self.w.t_temp.item(0, j).text() for j in range(4)]
+        self.assertEqual(fila, ["transición t2", "contando", "1 s", "3 s"])
+        self.w._act("avanzar", us=2_000_000)  # vence y t2 franquea: E2, y el temporizador vuelve a parado
+        self.assertEqual(self.w.v.state()["situation"], ["E2"])
+        self.assertNotIn("1 s / 3 s", textos())
+        self.assertEqual(self.w.t_temp.item(0, 1).text(), "parado")
+        # Un retardo en la condición de una acción: «2 s ✓» al vencer, junto a la condición de la acción
+        from PySide6.QtWidgets import QGraphicsScene
+        from escritorio.diagrama import dibujar
+        m = M().var("p").var("y", "output").step("A", True).step("B")
+        m.trans("t", ["A"], ["B"], "p").cont("B", "y", "delay(2 s, p, 0 s)")
+        v = Vista("m", "", "", lambda: (m, None), normalize_options(None))
+        run(v, ("fijar", {"cambios": {"p": True}}), ("avanzar", {"us": 1_500_000}))
+        sc = QGraphicsScene()
+        dibujar(sc, v.model, v.state())
+        self.assertIn("1,5 s / 2 s", [it.toPlainText() for it in sc.items() if hasattr(it, "toPlainText")])
+        self.assertEqual([t["estado"] for t in v.state()["temporal"].values()], ["contando"])
+        run(v, ("avanzar", {"us": 500_000}))
+        dibujar(sc, v.model, v.state())
+        self.assertIn("2 s ✓", [it.toPlainText() for it in sc.items() if hasattr(it, "toPlainText")])
+        self.assertEqual(([t["estado"] for t in v.state()["temporal"].values()], v.state()["outputs"]["y"]["value"]),
+                         (["vencido"], True))
+
+    def test_SAPP11_paneles_plegables(self):
+        """REQ-SIM-03: el panel derecho y el inferior se pliegan del todo con su flecha y desde «Ver»; el estado se guarda."""
+        from PySide6.QtCore import QSettings
+        from escritorio.ventana import Ventana as V
+        w = self.w
+        self.assertFalse(w.scroll.isHidden() or w.pestanas.isHidden())
+        w.flechas["derecho"].click()
+        self.assertTrue(w.scroll.isHidden() and not w.a_derecho.isChecked())
+        self.assertEqual(w.flechas["derecho"].text(), "◂")
+        w.flechas["inferior"].click()
+        self.assertTrue(w.pestanas.isHidden() and not w.a_inferior.isChecked())
+        self.assertEqual(w.flechas["inferior"].text(), "▴")
+        self.assertFalse(w.ajustes.value("paneles/derecho", True, type=bool))
+        w.a_derecho.setChecked(True)  # desde el menú Ver
+        w.a_inferior.setChecked(True)
+        self.assertFalse(w.scroll.isHidden() or w.pestanas.isHidden())
+        self.assertTrue(w.ajustes.value("paneles/inferior", False, type=bool))
+        self.assertEqual(w.flechas["derecho"].text(), "▸")
+        w.a_derecho.setChecked(False)  # un arranque posterior lo recuerda
+        w.ajustes.sync()
+        otra = V(QSettings(w.ajustes.fileName(), QSettings.Format.IniFormat))
+        try:
+            self.assertTrue(otra.scroll.isHidden() and not otra.a_derecho.isChecked())
+        finally:
+            otra.a_ejecutar.setChecked(False)
+            otra.deleteLater()
+            w.a_derecho.setChecked(True)
+
+    def test_SAPP12_zoom_se_conserva(self):
+        """REQ-SIM-03: «+», «−» y la rueda con Ctrl cambian el zoom; un refresco lo conserva; «Ajustar» vuelve a encajar."""
+        w, d = self.w, self.w.diagrama
+        w.cargar_ejemplo("contador-flanco")
+        w.a_ejecutar.setChecked(False)
+        d.ajustar()
+        base = d.escala()
+        d.b_mas.click()
+        d.b_mas.click()
+        k = d.escala()
+        self.assertGreater(k, base * 1.3)
+        self.assertEqual(d.l_zoom.text(), f"{round(k * 100)} %")
+        w.botones["I00"].click()  # refresca el dibujo
+        w.refrescar()
+        self.assertAlmostEqual(d.escala(), k, places=6, msg="el zoom elegido se mantiene al refrescar")
+        d.b_menos.click()
+        self.assertLess(d.escala(), k)
+        d.b_ajustar.click()
+        self.assertAlmostEqual(d.escala(), base, places=6)
+        # La rueda del ratón, con o sin Ctrl, acerca y aleja
+        from PySide6.QtCore import QPoint, QPointF, Qt
+        from PySide6.QtGui import QWheelEvent
+        for mod in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ControlModifier):
+            antes = d.escala()
+            for delta, sentido in ((120, 1), (-120, -1)):
+                ev = QWheelEvent(QPointF(100, 100), d.mapToGlobal(QPointF(100, 100)), QPoint(0, 0), QPoint(0, delta),
+                                 Qt.MouseButton.NoButton, mod, Qt.ScrollPhase.NoScrollPhase, False)
+                k = d.escala()
+                self.app.sendEvent(d.viewport(), ev)
+                self.assertEqual(d.escala() > k, sentido > 0, f"rueda {delta} con {mod}")
+            self.assertAlmostEqual(d.escala(), antes, places=6)
+        d.ajustar()
+
+    def test_SAPP13_tiempos_truncados_a_dos_decimales(self):
+        """REQ-SIM-03: lo que lleva un temporizador y τ se muestran truncados a la baja a 2 decimales; el preset, tal cual."""
+        w = self.w
+        w.cargar_ejemplo("temporizada")
+        w.a_ejecutar.setChecked(False)
+        w.botones["marcha"].click()
+        w._act("avanzar", us=1_239_999)
+        self.assertEqual(w.v.state()["time"], "1,239999 s", "el estado exacto no se toca")
+        self.assertEqual(w.t_temp.item(0, 2).text(), "1,23 s")
+        self.assertEqual(w.l_reloj.text().split(" · ")[0], "τ = 1,23 s")
+        w._act("avanzar", us=1)
+        self.assertEqual((w.t_temp.item(0, 2).text(), w.l_reloj.text().split(" · ")[0]), ("1,24 s", "τ = 1,24 s"))
+        self.assertEqual(w.t_temp.item(0, 3).text(), "3 s")
+        self.assertEqual(w.a_ejecutar.text(), "▶ Ejecutar")
+        w.a_ejecutar.setChecked(True)
+        self.assertEqual(w.a_ejecutar.text(), "‖ Pausa")
+        w.a_ejecutar.setChecked(False)
 
 
 if __name__ == "__main__":

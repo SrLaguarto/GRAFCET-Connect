@@ -29,10 +29,11 @@ El primer comando comprueba la parte automatizable de R-02: el paquete sigue sie
 ### Simulador de escritorio (P-IMP-29)
 
 Primera versión para Windows: simula los ejemplos y los modelos guardados con el dibujo de la norma. Tiene entradas
-con un clic, tiempo lógico en pasos o al ritmo del reloj, evolución a evolución, traza, salidas, variables,
-condiciones temporales y todas las lecturas de interpretación. «Abrir modelo» admite un proyecto (su
-`manifest.json`) o un documento de modelo; «Guardar como proyecto» guarda el modelo en curso con su dibujo. No es el
-editor.
+con un clic, tiempo real desde que se carga (como un autómata; los retardos se ven como temporizadores que cuentan:
+«1,2 s / 3 s»), pausa y paso, evolución a evolución, traza, salidas, variables y todas las lecturas de interpretación
+(menú «Ajustes»). Los paneles derecho e inferior se pliegan, y el dibujo admite zoom (P-IMP-30). «Abrir modelo» admite
+un proyecto (su `manifest.json`) o un documento de modelo; «Guardar como proyecto» guarda el modelo en curso con su
+dibujo. No es el editor.
 
 - Desde el código: doble clic en «Abrir simulador.bat», o `python escritorio/simulador.py [modelo]`.
 - Versión portable: «Construir ejecutable.bat» (o `python tools/construir_ejecutable.py`) deja el programa en
