@@ -44,7 +44,7 @@ from grafcet.engine import Session  # noqa: E402
 from grafcet.profile import SEMANTIC_OPTIONS, normalize_options  # noqa: E402
 from grafcet.timeutil import format_duration  # noqa: E402
 
-from decisiones import CATALOGO, POR_ID, RESPUESTAS_HOJA_08  # noqa: E402
+from decisiones import CATALOGO, POR_ID, RESPUESTAS_HOJA_08, RESPUESTAS_INCORPORADAS  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 DECISIONES = ROOT / "docs" / "decisiones.json"
@@ -127,9 +127,10 @@ EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
                  "cuando D y E están activas a la vez.", ej_paralelo),
     "contador": ("Contador por eventos", "Cada subida de «pulso» suma 1 a n (acción por evento). Pulsar sin soltar no "
                  "cuenta dos veces. Con n ≥ 3 se enciende «alarma». «borrar» pone n a 0.", ej_contador),
-    "bloqueo-u03": ("Bloqueo por U-03", "Dos transiciones seguidas con ↑p. ¿Una subida de p deja la situación "
-                    "en B o en C? Es la cuestión abierta U-03. Por defecto el motor se detiene y no elige; en «Opciones de "
-                    "interpretación» puede probar cada lectura como hipótesis (también con «reinicio»=1).", ej_bloqueo_u03),
+    "bloqueo-u03": ("Flanco en el recorrido (U-03)", "Dos transiciones seguidas con ↑p. Con la lectura por defecto, "
+                    "«situación anterior» (comparador, 5.1), una subida de p solo franquea t y se queda en B. En «Opciones "
+                    "de interpretación» puede probar «recorrido» (llega a C; con «reinicio»=1 gira sin fin) o «detener» "
+                    "(no elige).", ej_bloqueo_u03),
     "conflicto": ("Conflicto de escritura al compilar", "t activa B y C en la misma evolución; B escribe z:=1 y C z:=2. "
                   "Es un conflicto seguro: el programa no puede compilarse.", ej_conflicto),
     "conflicto-ejecucion": ("Conflicto de escritura en ejecución", "t y u son independientes, pero ambas dependen de p: "
@@ -417,6 +418,19 @@ class Comparador:
         doc["decisiones"] = dict(sorted(doc["decisiones"].items(), key=lambda kv: [int(x) for x in kv[0].split(".")]))
         guardar_registro(self.path, doc)
 
+    def comment(self, did: str, comment: str) -> None:
+        """Guarda solo el comentario; si aún no hay elección, la entrada queda sin elegir (eleccion = None)."""
+        d = POR_ID[did]
+        try:
+            doc = json.loads(self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            doc = nuevo_registro()
+        entry = doc["decisiones"].setdefault(did, {"eleccion": None, "texto": "Sin elegir", "pregunta": d.title,
+                                                   "origen": "comparador", "fecha": date.today().isoformat()})
+        entry["comentario"] = comment.strip()
+        doc["decisiones"] = dict(sorted(doc["decisiones"].items(), key=lambda kv: [int(x) for x in kv[0].split(".")]))
+        guardar_registro(self.path, doc)
+
     # -- ejemplo en curso
     def load(self, did: str) -> None:
         d = POR_ID[did]
@@ -471,6 +485,7 @@ class Comparador:
         return {
             "catalog": [{"id": x.id, "block": x.block, "title": x.title, "simulable": x.simulable,
                          "answer": answers.get(x.id, {}).get("eleccion")} for x in CATALOGO],
+            "applied": RESPUESTAS_INCORPORADAS.get(d.id),
             "decision": {"id": d.id, "block": d.block, "title": d.title, "question": d.question, "example": d.example,
                          "note": d.note, "simulable": d.simulable, "choices": [{"value": v, "text": t} for v, t in d.choices],
                          "base": [{"question": q, "value": v, "text": SEMANTIC_OPTIONS[q]["values"][v]} for q, v in d.base.items()],
@@ -493,6 +508,9 @@ class Comparador:
             self.free(op, body)
         elif op == "elegir":
             self.choose(body["id"], body["value"], body.get("comentario", ""))
+        elif op == "comentar":
+            self.comment(body["id"], body.get("comentario", ""))
+            return {"ok": True}
         else:
             raise ValueError(f"operación desconocida: {op}")
         return self.view()

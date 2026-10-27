@@ -26,11 +26,14 @@ NORMATIVE_BASE = {
 U_REGISTRY = {
     "U-01": "Integridad, edición y correcciones de la fuente normativa",
     "U-02": "Terminología y referencias locales dudosas",
-    "U-03": "Alcance causal de eventos",
-    "U-04": "Permanencia activa y eventos internos",
+    "U-03": "Alcance causal de eventos (lectura por defecto «situación anterior» y acciones por evento decididas por el "
+            "responsable, comparador 5.1–5.3; eventos internos y de franqueamiento siguen abiertos; contraste U-01)",
+    "U-04": "Permanencia activa y eventos internos (permanencia decidida por el responsable, comparador 3.1–3.4; "
+            "contraste U-01)",
     "U-05": "Lecturas y escrituras en un contexto causal (cerrada por el responsable, hoja 08 2.1–2.5; contraste U-01)",
-    "U-06": "Fronteras temporales y rebotes",
-    "U-07": "Construcciones fuente, vacías y persistentes",
+    "U-06": "Fronteras temporales y rebotes (cerrada por el responsable, comparador 4.1–4.5, salvo 0s/p/d2 con d2 > 0; "
+            "contraste U-01)",
+    "U-07": "Construcciones fuente, vacías y persistentes (cerrada por el responsable, comparador 6.1–6.4; contraste U-01)",
     "U-08": "Interacciones jerárquicas",
     "U-09": "Inicialización semántica (cerrada por el responsable, hoja 08 1.1–1.5, salvo arranque vacío U-07 y expansiones U-08; contraste U-01)",
     "U-10": "Sistemas soportados y rendimiento",
@@ -41,7 +44,7 @@ U_REGISTRY = {
 # Cuestiones nuevas devueltas por la implementación (docs/01_Revision_de_coherencia.md)
 FINDINGS = {
     "H-02": "Duración de etapa inicial desde τ=0 (confirmada por el responsable, hoja 08 1.4)",
-    "H-05": "Activación de etapa ya activa no incluida en D (ampliación de U-04)",
+    "H-05": "Activación de etapa ya activa no incluida en D: no ejecuta sus acciones (comparador 3.3 A)",
     "H-07": "Valor inicial distinto de cero: no se admite; se usa una acción al activar (hoja 08 1.5)",
     "H-08": "Actividad de parcial con parciales anidados",
     "H-09": "Base temporal compuesta (la salida y reentrada en el mismo instante quedó decidida en P-IMP-18)",
@@ -68,7 +71,8 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
     _c("evolucion.ordinaria", "Validación, receptividad, cambio conjunto, simultaneidad y relación S'=(S\\D)∪A",
        "provisional", "I (U-01)", "REQ-SEM-02", "REQ-SEM-03", "REQ-SEM-04"),
     _c("situacion.inicial.explicita", "Situación inicial = etapas marcadas iniciales", "provisional", "I (U-01)", "REQ-SEM-01"),
-    _c("situacion.inicial.vacia", "Arranque sin etapas iniciales", "no-soportada", "U-07", "REQ-SEM-01", "REQ-MOD-04"),
+    _c("situacion.inicial.vacia", "Arranque sin etapas iniciales (no compila)", "no-soportada", "decisión del responsable, comparador 27-10-2026, 6.1 A",
+       "REQ-SEM-01", "REQ-MOD-04"),
     _c("inicio.inestable", "Transición franqueable en la situación inicial: evoluciona en τ=0", "provisional",
        "decisión del responsable, hoja 08 1.2 A", "REQ-SEM-01"),
     _c("inicio.acciones-activacion", "Acciones al activar de las etapas iniciales: se ejecutan al arrancar",
@@ -78,28 +82,37 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
     _c("inicio.temporal-entrada-verdadera", "Condición temporal sobre entrada verdadera al iniciar: cuenta desde τ=0",
        "provisional", "decisión del responsable, hoja 08 1.3 A", "REQ-TMP-02"),
     _c("permanencia.actividad", "Etapa activada y desactivada a la vez permanece activa", "provisional", "I (U-01)", "REQ-SEM-05"),
-    _c("permanencia.efectos", "Acciones, eventos y tiempo de una etapa en permanencia activa o reactivada", "no-soportada", "U-04 (H-05)", "REQ-SEM-05", "REQ-EVT-03"),
+    _c("permanencia.efectos", "Etapa en permanencia activa o reactivada: no ejecuta acciones al activar ni al desactivar "
+       "y su duración sigue", "provisional", "decisión del responsable, comparador 27-10-2026, 3.1 A, 3.2 A y 3.3 A (cierra H-05)", "REQ-SEM-05", "REQ-EVT-03"),
     _c("transitorios", "Situaciones virtuales sin pulsos continuos; memorizadas conservadas", "provisional", "I (U-01)", "REQ-SEM-06"),
     _c("transiciones.sumidero", "Transición sin siguientes", "provisional", "I (U-01)", "REQ-MOD-04"),
-    _c("transiciones.fuente-evento", "Transición fuente con receptividad de evento (primera evolución)", "provisional", "I (U-01); repetición U-07", "REQ-MOD-04"),
-    _c("transiciones.fuente-nivel", "Transición fuente con receptividad de nivel", "no-soportada", "U-07", "REQ-MOD-04"),
-    _c("transiciones.fuente-repeticion", "Transición fuente por evento en evoluciones posteriores del mismo contexto",
-       "no-soportada", "U-07 (con U-03)", "REQ-MOD-04", "REQ-EVT-03"),
-    _c("transiciones.sin-lados","Transición sin precedentes ni siguientes", "no-soportada", "U-07", "REQ-MOD-04"),
+    _c("transiciones.fuente-evento", "Transición fuente con receptividad de evento (primera evolución)", "provisional", "I (U-01)", "REQ-MOD-04"),
+    _c("transiciones.fuente-nivel", "Transición fuente con receptividad de nivel (no compila)", "no-soportada", "decisión del responsable, comparador 27-10-2026, 6.2 A",
+       "REQ-MOD-04"),
+    _c("transiciones.fuente-repeticion", "Transición fuente por evento: franquea una sola vez por flanco",
+       "provisional", "decisión del responsable, comparador 27-10-2026, 6.3 A", "REQ-MOD-04", "REQ-EVT-03"),
+    _c("transiciones.sin-lados", "Transición sin precedentes ni siguientes (no compila)", "no-soportada", "decisión del responsable, comparador 27-10-2026, 6.4 A",
+       "REQ-MOD-04"),
     _c("eventos.entradas", "Flancos sobre proposiciones de entradas en la primera evolución del contexto", "provisional", "I (U-01)", "REQ-EVT-01"),
-    _c("eventos.recorrido", "Uso de un evento por transiciones validadas durante su propio recorrido", "no-soportada", "U-03", "REQ-EVT-03", "REQ-SEM-09"),
+    _c("eventos.recorrido", "Un evento solo franquea las transiciones validadas antes de él; una acción por evento solo "
+       "se ejecuta si su etapa estaba activa antes y no sale con él", "provisional",
+       "decisión del responsable, comparador 27-10-2026, 5.1 «situación anterior» (seleccionable, P-IMP-15), 5.2 B y 5.3 A", "REQ-EVT-03", "REQ-SEM-09"),
     _c("eventos.internos", "Flancos sobre actividad, variables internas o condiciones temporales", "no-soportada", "U-03", "REQ-EVT-03"),
     _c("eventos.franqueamiento", "Eventos de franqueamiento como disparadores", "no-soportada", "U-03", "REQ-EVT-03"),
     _c("lotes", "Lotes simultáneos y lotes ordenados con igual tiempo", "provisional", "P", "REQ-EVT-02"),
     _c("temporal.delay", "delay(d1,p,d2) ordinario con d1>0", "provisional", "I (U-01)", "REQ-TMP-02"),
-    _c("temporal.delay-cero", "delay con d1=0", "no-soportada", "U-06", "REQ-TMP-03"),
-    _c("temporal.coincidencias", "Vencimiento coincidente con lote, caída en el vencimiento, rebote", "no-soportada", "U-06", "REQ-TMP-03"),
+    _c("temporal.delay-cero", "delay con d1=0: 0s/p no compila; 0s/p/d2 con d2 > 0 sigue sin soporte", "no-soportada",
+       "decisión del responsable, comparador 27-10-2026, 4.4 B; el caso con desconexión no se preguntó (U-06)", "REQ-TMP-03"),
+    _c("temporal.coincidencias", "Lote y vencimiento en el mismo instante: primero el vencimiento si el lote cambia su base, "
+       "si no juntos; un rebote durante la desconexión la mantiene verdadera", "provisional",
+       "decisión del responsable, comparador 27-10-2026, 4.1 A, 4.2 A y 4.3 A (cierra H-17)", "REQ-TMP-03"),
     _c("temporal.vencimientos-simultaneos", "Varios vencimientos en el mismo instante (independientes del orden)", "provisional", "I (U-01)", "REQ-TMP-02"),
     _c("temporal.duracion-etapa-inicial", "La duración de una etapa inicial cuenta desde τ=0 (oráculos T-12a/T-12c)", "provisional", "I; decisión del responsable, hoja 08 1.4 A", "REQ-TMP-02"),
     _c("temporal.reentrada-virtual", "Salida y reentrada en el mismo instante: la duración de la etapa no se interrumpe",
        "provisional", "decisión del responsable de producto, 25-10-2026 (P-IMP-18; cierra H-09)", "REQ-TMP-02"),
     _c("temporal.base-compuesta", "Base temporal distinta de entradas o active(etapa)", "no-soportada", "H-09", "REQ-TMP-02"),
-    _c("temporal.elapsed", "Duración elapsed(etapa) ejecutable", "no-soportada", "U-06 (valor inactivo); no implementada", "REQ-TMP-02"),
+    _c("temporal.elapsed", "Duración elapsed(etapa) ejecutable", "no-soportada",
+       "no implementada en esta iteración; el valor con la etapa inactiva ya está decidido: 0 (decisión del responsable, comparador 27-10-2026, 4.5 A)", "REQ-TMP-02"),
     _c("acciones.continuas", "Disyunción de contribuciones continuas sobre situación efectiva", "provisional", "I (U-01)", "REQ-ACT-01"),
     _c("acciones.limitadas", "Acción continua limitada [t0, t0+d)", "provisional", "I (U-01)", "REQ-TMP-02"),
     _c("acciones.memorizadas", "Acciones memorizadas al activar, desactivar o por evento", "provisional", "I (U-01)", "REQ-ACT-02"),
@@ -115,7 +128,9 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
     _c("jerarquia.estructura", "Edición, persistencia y validación de forzados, macroetapas y recintos", "provisional", "I/P", "REQ-MOD-07", "REQ-JER-03"),
     _c("jerarquia.forzado", "Ejecución de órdenes de forzado", "no-soportada", "no implementada en esta iteración; U-08 (H-18)", "REQ-JER-02"),
     _c("jerarquia.macroetapas", "Ejecución de macroetapas", "no-soportada", "no implementada en esta iteración; U-08", "REQ-JER-04"),
-    _c("jerarquia.encapsulacion", "Ejecución de encapsulación", "no-soportada", "no implementada en esta iteración; U-08", "REQ-JER-05"),
+    _c("jerarquia.encapsulacion", "Ejecución de encapsulación", "no-soportada",
+       "no implementada en esta iteración; U-08. Decidido: en permanencia activa de la encapsulante, su contenido se "
+       "mantiene (decisión del responsable, comparador 27-10-2026, 3.4 A)", "REQ-JER-05"),
     _c("escenario.predicado-parada", "Condición de parada por predicado observador", "no-soportada",
        "P: no implementada en esta iteración", "REQ-SIM-02"),
     _c("instantanea.recorrido","Instantánea exacta en mitad de un recorrido", "no-soportada", "P: D-INSTANTANEA-FASE", "REQ-SIM-04"),
@@ -123,10 +138,11 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
 
 
 # Lecturas seleccionables de las cuestiones de la hoja 08 (P-IMP-15 y P-IMP-21). Cada alternativa está
-# implementada para poder compararla en el comparador de decisiones. Los valores por defecto son: lo que ya
-# decidió el responsable (bloques 1 y 2) y, para lo abierto, «detener», porque el documento 12 prohíbe cerrar
-# una U con un valor por defecto de implementación. Elegir otra lectura es una hipótesis explícita: queda en
-# el perfil efectivo de la traza y de las instantáneas, y nunca es conformidad.
+# implementada para poder compararla en el comparador de decisiones. Los valores por defecto son lo que decidió
+# el responsable (hoja 08, bloques 1 y 2, P-IMP-19 y P-IMP-20; comparador, P-IMP-22) y, para lo abierto
+# (8.1, 8.2), «detener», porque el documento 12 prohíbe cerrar una U con un valor por defecto de
+# implementación. Elegir otra lectura es una hipótesis explícita: queda en el perfil efectivo de la traza y de
+# las instantáneas, y nunca es conformidad.
 _STOP = "Detener: la cuestión sigue abierta"
 
 
@@ -135,10 +151,12 @@ def _opt(default: str, scope: str, values: dict[str, str]) -> dict[str, Any]:
 
 
 SEMANTIC_OPTIONS: dict[str, dict[str, Any]] = {
-    "U-03": _opt("detener", "U-03: receptividades con eventos de entrada en evoluciones posteriores del instante", {
-        "detener": "Detener con D-SEM-PENDIENTE: la cuestión sigue abierta",
-        "situacion-anterior": "El evento solo franquea transiciones validadas en la situación anterior al evento",
-        "recorrido": "El evento sigue disponible durante todo el recorrido transitorio que provoca"}),
+    "U-03": _opt("situacion-anterior", "U-03: receptividades con eventos de entrada en evoluciones posteriores del instante", {
+        "detener": "Detener con D-SEM-PENDIENTE: no se elige",
+        "situacion-anterior": "De uno en uno («situación anterior»): el flanco solo franquea las transiciones validadas "
+                              "antes de él",
+        "recorrido": "Por ciclo («recorrido»): el flanco vale en todo el recorrido del instante y puede atravesar "
+                     "varias etapas inestables seguidas"}),
     "1.1": _opt("A", "U-09: acciones «al activar» de las etapas iniciales", {
         "A": "Se ejecutan al arrancar", "B": "No se ejecutan: la situación inicial no es una activación"}),
     "1.2": _opt("A", "U-09: situación inicial inestable", {
@@ -158,34 +176,34 @@ SEMANTIC_OPTIONS: dict[str, dict[str, Any]] = {
         "A": "Vale la última", "B": "Conflicto"}),
     "2.5": _opt("A", "U-05: salida continua que lee una memoria cambiada en el instante", {
         "A": "Usa el valor final del instante", "B": "Usa el valor de antes del instante"}),
-    "3.1": _opt("detener", "U-04: acciones al activar/desactivar de una etapa en permanencia activa", {
+    "3.1": _opt("A", "U-04: acciones al activar/desactivar de una etapa en permanencia activa", {
         "detener": _STOP, "A": "No se ejecuta ninguna", "B": "Se ejecutan las dos"}),
-    "3.2": _opt("detener", "U-04: temporizador de una etapa en permanencia activa o reactivada", {
+    "3.2": _opt("A", "U-04: temporizador de una etapa en permanencia activa o reactivada", {
         "detener": _STOP, "A": "Sigue contando", "B": "Vuelve a empezar"}),
-    "3.3": _opt("detener", "U-04 (H-05): acciones al activar una etapa que ya estaba activa", {
+    "3.3": _opt("A", "U-04 (H-05): acciones al activar una etapa que ya estaba activa", {
         "detener": _STOP, "A": "No se ejecutan", "B": "Se ejecutan"}),
-    "4.1": _opt("detener", "U-06: la base de un retardo cambia exactamente en su vencimiento", {
+    "4.1": _opt("A", "U-06: la base de un retardo cambia exactamente en su vencimiento", {
         "detener": _STOP, "A": "Primero vence el retardo", "B": "Primero cambia la entrada (cancela)"}),
-    "4.2": _opt("detener", "U-06: rebote durante el retardo de desconexión", {
+    "4.2": _opt("A", "U-06: rebote durante el retardo de desconexión", {
         "detener": _STOP, "A": "La condición sigue verdadera sin interrupción",
         "B": "Se mantiene el plazo; después vuelve a contar el retardo de conexión"}),
-    "4.3": _opt("detener", "U-06: lote y vencimiento independientes en el mismo instante", {
+    "4.3": _opt("A", "U-06: lote y vencimiento independientes en el mismo instante", {
         "detener": _STOP, "A": "Juntos en un solo instante", "B": "Primero el vencimiento", "C": "Primero el lote",
         "D": "Solo se detiene si el resultado depende del orden"}),
-    "4.4": _opt("detener", "U-06: retardo cero", {
+    "4.4": _opt("B", "U-06: retardo cero", {
         "detener": _STOP, "A": "0s/p equivale a p", "B": "No compila"}),
-    "5.2": _opt("detener", "U-03: acción por evento en una etapa que se desactiva con ese mismo evento", {
+    "5.2": _opt("B", "U-03: acción por evento en una etapa que se desactiva con ese mismo evento", {
         "detener": _STOP, "A": "Se ejecuta", "B": "No se ejecuta"}),
-    "5.3": _opt("detener", "U-03: acción por evento en una etapa que se activa con ese mismo evento", {
+    "5.3": _opt("A", "U-03: acción por evento en una etapa que se activa con ese mismo evento", {
         "detener": _STOP, "A": "No se ejecuta", "B": "Se ejecuta"}),
-    "6.1": _opt("detener", "U-07: grafcet sin etapas iniciales", {
+    "6.1": _opt("A", "U-07: grafcet sin etapas iniciales", {
         "detener": _STOP, "A": "No compila", "B": "Arranca sin etapas activas"}),
-    "6.2": _opt("detener", "U-07: transición fuente con receptividad de nivel", {
+    "6.2": _opt("A", "U-07: transición fuente con receptividad de nivel", {
         "detener": _STOP, "A": "No compila",
         "B": "Imposición continua: mientras sea verdadera, mantiene activas sus etapas siguientes"}),
-    "6.3": _opt("detener", "U-07: transición fuente con flanco en evoluciones posteriores del instante", {
+    "6.3": _opt("A", "U-07: transición fuente con flanco en evoluciones posteriores del instante", {
         "detener": _STOP, "A": "Franquea una sola vez por flanco"}),
-    "6.4": _opt("detener", "U-07: transición sin etapas antes ni después", {
+    "6.4": _opt("A", "U-07: transición sin etapas antes ni después", {
         "detener": _STOP, "A": "No compila", "B": "Se permite y no tiene efecto"}),
     "8.1": _opt("detener", "H-08: actividad de un parcial con parciales hijos", {
         "detener": _STOP, "A": "Cuenta también las etapas de los hijos", "B": "Solo las etapas propias"}),
@@ -221,11 +239,22 @@ def unsupported(capability: str, message: str, element: str | None = None) -> Di
                       question=cap.reason, evidence={"capacidad": capability})
 
 
+# Cuestión de origen de las capacidades que el responsable ya decidió. Si se elige la lectura «detener», el
+# caso vuelve a tratarse como abierto y se diagnostica con su U, no con la decisión.
+CAP_QUESTION = {
+    "situacion.inicial.vacia": "U-07", "transiciones.fuente-nivel": "U-07", "transiciones.fuente-repeticion": "U-07",
+    "transiciones.sin-lados": "U-07", "permanencia.efectos": "U-04", "eventos.recorrido": "U-03",
+    "temporal.delay-cero": "U-06", "temporal.coincidencias": "U-06",
+}
+
+
 def blocked(capability: str, message: str, element: str | None = None) -> Diagnostic:
     """Diagnóstico de capacidad bloqueada: D-SEM-PENDIENTE si la motiva una U, D-CAPACIDAD-NO-SOPORTADA si no."""
     cap = CAPABILITIES[capability]
     if cap.reason.startswith("U-"):
         return sem_pending(cap.reason.split(" ")[0], f"{message} [{capability}]", element, capacidad=capability)
+    if capability in CAP_QUESTION:
+        return sem_pending(CAP_QUESTION[capability], f"{message} [{capability}]", element, capacidad=capability)
     return unsupported(capability, message, element)
 
 

@@ -95,10 +95,17 @@ function renderSelect() {
 }
 
 function answerText(a) {
-  if (!a) return `<div class="saved open">Sin responder todavía.</div>`;
+  const d = V.decision, applied = V.applied;
+  const state = !a ? "" : a.eleccion === applied
+    ? (d.simulable ? "Ya es la lectura por defecto del programa." : "Registrada; se aplicará cuando esta parte se ejecute.")
+    : a.eleccion === "abierta" ? (applied ? `Ojo: el programa aplica hoy la ${esc(applied)}.` : "El programa sigue deteniéndose.")
+    : "Pendiente de incorporar al programa.";
+  if (!a || !a.eleccion) return `<div class="saved open">Sin responder todavía.${a && a.comentario ?
+    `<br><em>${esc(a.comentario)}</em>` : ""}</div>`;
   const what = a.eleccion === "abierta" ? "Dejar abierta" : `${esc(a.eleccion)} · ${esc(a.texto)}`;
   return `<div class="saved ${a.eleccion === "abierta" ? "open" : ""}">Respuesta guardada: <b>${what}</b>
     <span class="help">(${a.origen === "hoja 08" ? "hoja 08" : "comparador"}, ${esc(a.fecha)})</span>
+    <br><span class="help">${state}</span>
     ${a.comentario ? `<br><em>${esc(a.comentario)}</em>` : ""}</div>`;
 }
 
@@ -166,21 +173,34 @@ function renderDecide() {
   $("decide").innerHTML = `<h2>Decidir</h2>
     ${d.simulable ? `<p class="help" style="margin:0 0 8px">Elija con el botón «Esta es la buena» del panel que se comporta como debe, o deje la cuestión abierta.</p>` : ""}
     ${choices}
-    <label for="coment" class="help" style="display:block;margin:10px 0 4px">Comentario (opcional; se guarda con la respuesta)</label>
+    <label for="coment" class="help" style="display:block;margin:10px 0 4px">Comentario (opcional; se guarda solo
+      mientras escribe, haya elegido o no) <span id="comstate" class="help" role="status"></span></label>
     <textarea id="coment">${esc(d.answer && d.answer.comentario)}</textarea>
     <div class="row" style="margin-top:8px"><button data-pick="abierta" class="${cur === "abierta" ? "chosen" : ""}">Dejar abierta (el programa sigue deteniéndose)</button>
     <span class="help" style="margin:0">Se guarda en <span class="mono">${esc(V.file)}</span>. Después la implemento como lectura por defecto, con su prueba.</span></div>`;
 }
 
+let comTimer = null;
+async function saveComment() {
+  clearTimeout(comTimer); comTimer = null;
+  const box = $("coment"); if (!box) return;
+  const r = await fetch("/api/cmp/comentar", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({id: V.decision.id, comentario: box.value})});
+  $("comstate").textContent = r.ok ? "· guardado" : "· no se pudo guardar";
+}
 function render() {
   try {
     renderSelect(); renderQuestion(); renderPanels(); renderDecide();
+    $("coment").oninput = () => { $("comstate").textContent = "· sin guardar"; clearTimeout(comTimer);
+      comTimer = setTimeout(saveComment, 700); };
+    $("coment").onblur = () => { if (comTimer) saveComment(); };
     document.querySelectorAll("[data-pick]").forEach(b => b.onclick = () =>
       call("elegir", {id: V.decision.id, value: b.dataset.pick, comentario: ($("coment") || {}).value || ""}));
   } catch (e) { console.error(e); $("toast").textContent = "Error al dibujar el comparador (" + e.message + ")."; }
 }
-function go(delta) { const i = V.catalog.findIndex(c => c.id === V.decision.id); call("cargar", {id: V.catalog[i + delta].id}); }
-$("dec").onchange = () => call("cargar", {id: $("dec").value});
+async function flush() { if (comTimer) await saveComment(); }  // nunca se pierde un comentario al cambiar de cuestión
+async function go(delta) { await flush(); const i = V.catalog.findIndex(c => c.id === V.decision.id); call("cargar", {id: V.catalog[i + delta].id}); }
+$("dec").onchange = async () => { await flush(); call("cargar", {id: $("dec").value}); };
 $("prev").onclick = () => go(-1); $("nextq").onclick = () => go(1);
 $("paso").onclick = () => call("paso");
 $("repetir").onclick = () => call("repetir");

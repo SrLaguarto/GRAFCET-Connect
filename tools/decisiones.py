@@ -446,8 +446,8 @@ CATALOGO: list[Decision] = [
     Decision(
         "5.1", "5. Flancos durante el recorrido (U-03)", "Lectura por defecto de U-03",
         "Dos transiciones seguidas con ↑p. Una subida de p, ¿deja la situación en B o en C?",
-        [("detener", "Por defecto «detener»"), ("situacion-anterior", "Por defecto «situación anterior»"),
-         ("recorrido", "Por defecto «recorrido»")],
+        [("detener", "Por defecto «detener»"), ("situacion-anterior", "Por defecto «de uno en uno» (situación anterior)"),
+         ("recorrido", "Por defecto «por ciclo» (recorrido)")],
         "U-03", "Es el ejemplo «Bloqueo por U-03» del banco. Recuerde H-23: con «recorrido», un modelo con retorno "
         "puede girar sin fin.", m51, script=[fijar("p sube", p=True)],
         expect={"detener": "Se detiene con D-SEM-PENDIENTE (U-03) y no elige.",
@@ -473,9 +473,8 @@ CATALOGO: list[Decision] = [
         "6.1", "6. Fuentes y arranque vacío (U-07)", "Grafcet sin etapas iniciales",
         "Ninguna etapa es inicial. ¿Qué pasa al arrancar?",
         [("A", "Error: no compila"), ("B", "Arranca sin etapas activas (solo lo activan transiciones fuente)")],
-        "6.1", "t0 es una transición fuente con ↑q. Para que el ejemplo avance se usa la lectura A de 6.3 "
-        "(franquea una vez por flanco), que es otra cuestión. La opción C de la hoja (arrancar con advertencia) "
-        "se comporta como B.", m61, base={"6.3": "A"},
+        "6.1", "t0 es una transición fuente con ↑q, que franquea una vez por flanco (respuesta 6.3 A). La opción C "
+        "de la hoja (arrancar con advertencia) se comporta como B.", m61,
         script=[fijar("q sube: la fuente activa A", q=True), fijar("p sube: A → B", p=True)],
         expect={"A": "No compila: D-FORMATO.", "B": "Arranca sin etapas activas; ↑q activa A y p lleva a B."},
         checks={"A": {0: {"code": "D-FORMATO"}},
@@ -496,7 +495,7 @@ CATALOGO: list[Decision] = [
     Decision(
         "6.3", "6. Fuentes y arranque vacío (U-07)", "Transición fuente con flanco",
         "t0 no tiene etapa anterior y su receptividad es ↑p. ¿Cuántas veces franquea?",
-        [("detener", "Hoy: se detiene si en el mismo instante seguiría validada"),
+        [("detener", "Detener si en el mismo instante seguiría validada"),
          ("A", "Franquea exactamente una vez por cada subida de p")],
         "6.3", "t1 es siempre verdadera, así que A es inestable y t0 sigue validada en la evolución siguiente.", m63,
         script=[fijar("p sube", p=True)],
@@ -565,7 +564,8 @@ CATALOGO: list[Decision] = [
 
 POR_ID: dict[str, Decision] = {d.id: d for d in CATALOGO}
 
-# Respuestas ya dadas en la hoja 08 (bloques 1 y 2), con las que se precarga docs/decisiones.json
+# Respuestas ya dadas en la hoja 08 (bloques 1 y 2), con las que se precarga docs/decisiones.json; son lecturas
+# por defecto desde P-IMP-19 y P-IMP-20
 RESPUESTAS_HOJA_08: dict[str, tuple[str, str]] = {
     "1.1": ("A", ""), "1.2": ("A", ""), "1.3": ("A", ""), "1.4": ("A", ""),
     "1.5": ("A", "Las memorizadas empiezan en 0; otro valor inicial se pone con una acción «al activar» en la "
@@ -574,3 +574,13 @@ RESPUESTAS_HOJA_08: dict[str, tuple[str, str]] = {
     "2.3": ("A", "Realmente no es virtual, ya que cambia un valor: en la norma es una «etapa inestable»."),
     "2.4": ("A", ""), "2.5": ("A", ""),
 }
+
+# Respuestas dadas en el comparador el 27-10-2026 e incorporadas en P-IMP-22. 3.4 y 4.5 quedan registradas: se
+# aplicarán cuando se ejecuten la encapsulación y elapsed. 7.1-7.7 siguen abiertas; 8.1 y 8.2 no se respondieron.
+RESPUESTAS_COMPARADOR: dict[str, str] = {
+    "3.1": "A", "3.2": "A", "3.3": "A", "3.4": "A", "4.1": "A", "4.2": "A", "4.3": "A", "4.4": "B", "4.5": "A",
+    "5.1": "situacion-anterior", "5.2": "B", "5.3": "A", "6.1": "A", "6.2": "A", "6.3": "A", "6.4": "A",
+}
+
+# Lo que el programa aplica hoy: el comparador muestra si la respuesta guardada ya está incorporada
+RESPUESTAS_INCORPORADAS: dict[str, str] = {**{k: v for k, (v, _) in RESPUESTAS_HOJA_08.items()}, **RESPUESTAS_COMPARADOR}

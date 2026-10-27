@@ -67,7 +67,7 @@ label.chk{display:flex;gap:6px;align-items:center}
     </div>
     <div class="card">
       <h2>Opciones de interpretación</h2>
-      <label for="u03">Evento usado en su propio recorrido (U-03)</label>
+      <label for="u03">Flancos seguidos: de uno en uno o por ciclo (U-03)</label>
       <select id="u03" style="display:block;width:100%;margin-top:4px"></select>
       <p class="help" id="u03note" style="margin:6px 0 0"></p>
     </div>
@@ -122,10 +122,10 @@ function renderOptions() {
   card.hidden = !spec;
   if (!spec) return;
   $("u03").innerHTML = Object.entries(spec.values).map(([k, v]) =>
-    `<option value="${k}" ${k === cur ? "selected" : ""}>${k === spec.default ? "Por defecto · " : "Hipótesis · "}${v}</option>`).join("");
+    `<option value="${k}" ${k === cur ? "selected" : ""}>${k === spec.default ? "Por defecto · " : "Alternativa · "}${v}</option>`).join("");
   $("u03note").innerHTML = cur === spec.default
-    ? "La cuestión sigue abierta: el motor se detiene y no elige."
-    : "<b>Hipótesis activa.</b> Se registra en la traza y en las instantáneas; no cierra U-03 ni implica conformidad. Cambiarla reinicia la ejecución.";
+    ? "Lectura decidida por el responsable (comparador, 5.1). No implica conformidad: el contraste normativo sigue pendiente (U-01)."
+    : "<b>Lectura distinta de la decidida.</b> Se registra en la traza y en las instantáneas; no implica conformidad. Cambiarla reinicia la ejecución.";
 }
 
 function renderDiag(stable, inRec) {

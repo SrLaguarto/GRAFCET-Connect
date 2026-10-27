@@ -650,10 +650,10 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
             if d1.op != "lit" or d2.op != "lit":
                 continue
             if d1.value == 0 and opt["4.4"] != "A":
-                if opt["4.4"] == "detener":
+                if opt["4.4"] == "B" and d2.value == 0:
+                    v.add("D-FORMATO", "retardo cero: 0s/p no se admite; use p (lectura 4.4 B)", user)
+                else:  # la respuesta 4.4 B no cubre 0s/p/d2 con desconexión: sigue abierta
                     v.d.append(blocked("temporal.delay-cero", "delay con retardo de conexión nulo", user))
-                else:
-                    v.add("D-FORMATO", "retardo cero: no se admite (opción 4.4 B)", user)
                 continue
             bs = ex.support(base)
             if base.op == "active":

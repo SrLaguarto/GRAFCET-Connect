@@ -39,18 +39,22 @@ class Evolucion(unittest.TestCase):
         self.assertNotEqual(n2.trace.header["runId"], s.trace.header["runId"])
         self.assertTrue(records(s, "evolucion"), "la traza anterior se conserva")
 
-    def test_T01d_sin_iniciales_bloqueo_U07(self):
+    def test_T01d_sin_iniciales_no_compila(self):
+        """Comparador, 6.1 A: un grafcet sin etapas iniciales no compila. Con «detener» sigue siendo U-07."""
         for m in (M().step("A").step("B").var("p").trans("t", ["A"], ["B"], "p"),
                   M().step("A").var("p").trans("f", [], ["A"], "rise(p)")):
-            cm = m.compile()
-            s = session(cm, start=False)
+            res = m.validate()
+            self.assertEqual([d.code for d in res.diagnostics if d.blocks_start], ["D-FORMATO"])
+            self.assertFalse(res.can_simulate)
+            cm = m.compile({"6.1": "detener"})
+            s = session(cm, start=False, options={"6.1": "detener"})
             diags = s.start()
             self.assertEqual(s.status, "error")
             self.assertIsNone(s.z, "no se inventa una etapa inicial")
             self.assertTrue(any(d.code == "D-SEM-PENDIENTE" and d.question == "U-07" for d in diags))
 
     def test_T02a_receptividad_sin_validacion(self):
-        cm = M().var("p").step("A").step("B").trans("t", ["A"], ["B"], "p").compile()
+        cm = M().var("p").step("A", True).step("B").trans("t", ["A"], ["B"], "p").compile()  # 6.1 A: sin etapa inicial no compila; el estado declarado manda
         s = declared(cm, [], batches=[(1 * S, 0, {"p": True})])
         s.run()
         self.assertEqual(s.z.situation, frozenset())
@@ -163,11 +167,19 @@ class Evolucion(unittest.TestCase):
         self.assertEqual(first["situation"], ["B", "C"])
         # El «cierre posterior» se evalúa aparte (oráculo de T-05a); se registra como observación.
 
-    def test_T05b_efectos_de_permanencia_bloqueo_U04(self):
-        m = M().var("p").var("n", "internal", "int").var("mm", "internal", "int").step("A").step("B").step("C")
+    def test_T05b_efectos_de_permanencia_decididos(self):
+        """Comparador, 3.1 A: en la permanencia, B no ejecuta sus acciones al activar ni al desactivar. Como p sigue a
+        1, u vuelve a franquear en la evolución siguiente y B sale de verdad (mm := 1). Con «detener», U-04."""
+        m = M().var("p").var("n", "internal", "int").var("mm", "internal", "int").step("A", True).step("B").step("C")
         m.trans("t", ["A"], ["B"], "p").trans("u", ["B"], ["C"], "p")
         m.stored("B", "n", "activation", "n + 1").stored("B", "mm", "deactivation", "mm + 1")
         s = declared(m.compile(), ["A", "B"], batches=[(1 * S, 0, {"p": True})])
+        s.run()
+        evo = records(s, "evolucion")
+        self.assertEqual((evo[0]["cleared"], evo[0]["permanent"], evo[0]["assignments"]), (["t", "u"], ["B"], []))
+        self.assertEqual((evo[1]["cleared"], evo[1]["deactivated"]), (["u"], ["B"]))
+        self.assertEqual((s.z.situation, s.z.values["n"], s.z.values["mm"]), ({"C"}, 0, 1))
+        s = declared(m.compile(), ["A", "B"], batches=[(1 * S, 0, {"p": True})], options={"3.1": "detener"})
         s.run()
         d = last_diag(s)
         self.assertEqual((d.code, d.question, d.element), ("D-SEM-PENDIENTE", "U-04", "B"))

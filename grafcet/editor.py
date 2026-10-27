@@ -18,7 +18,7 @@ from .diagnostics import Diagnostic, DiagnosticError
 from .ids import IdGenerator, label_key, valid_label
 from .model import ValidationResult, compute_revision, validate_model
 from .profile import FORMAT_VERSION
-from .values import TypeSpec, format_value, parse_type, zero
+from .values import TypeSpec, format_value, parse_type, parse_value, zero
 
 
 def new_model_document(model_id: str) -> dict[str, Any]:
@@ -34,6 +34,15 @@ def new_presentation(model_id: str) -> dict[str, Any]:
 
 def _coord(v: Any) -> str:
     return format_value(TypeSpec("decimal", 3), Fraction(str(v)))
+
+
+def _check_initial(role: str, t: Any, init: Any) -> None:
+    """Hoja 08, 1.5 A y su comentario: fuera del grafcet no se declara ningún valor inicial. Las variables que no
+    son entradas empiezan en 0; otro valor se pone con una acción «al activar» en la etapa inicial."""
+    if role != "input" and parse_value(t, init) != zero(t):
+        raise DiagnosticError(Diagnostic(
+            "D-FORMATO", "las variables que no son entradas empiezan en 0: el valor inicial se pone con una acción "
+            "«al activar» en la etapa inicial (hoja 08, 1.5)", field="initialValue"))
 
 
 @dataclass
@@ -218,6 +227,7 @@ class Editor:
                 raise DiagnosticError(Diagnostic("D-NOMBRE-COLISION", f"variable «{name}» ya existe en el ámbito"))
             t = parse_type(type_)
             init = initial if initial is not None else format_value(t, zero(t))
+            _check_initial(role, t, init)
             vid = self.ids.new("v")
             m["variables"].append({"id": vid, "name": name, "scopeRef": sc, "role": role, "type": type_, "unit": unit,
                                    "domain": domain or {}, "initialValue": init})
@@ -373,6 +383,10 @@ class Editor:
                 if k not in ("role", "type", "unit", "domain", "initialValue"):
                     raise DiagnosticError(Diagnostic("D-FORMATO", f"campo no editable: {k}"))
                 var[k] = val
+            t = parse_type(var["type"])
+            if var["role"] != "input" and "initialValue" not in changes:
+                var["initialValue"] = format_value(t, zero(t))  # al dejar de ser entrada, empieza en 0
+            _check_initial(var["role"], t, var["initialValue"])
         self._txn("cambiar variable", fn)
         return impact
 

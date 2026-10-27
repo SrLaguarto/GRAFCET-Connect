@@ -15,9 +15,10 @@ from helpers import M, S, declared, last_diag, records, scenario, session
 from grafcet.canonical import CanonicalError, canonical_text, strict_loads
 from grafcet.declaration import coverage_declaration
 from grafcet.diagnostics import DiagnosticError
+from grafcet.editor import Editor, new_model_document
 from grafcet.engine import Session
 from grafcet.profile import normalize_options
-from grafcet.ids import document_filename, document_id_fits
+from grafcet.ids import IdGenerator, document_filename, document_id_fits
 from grafcet.persistence import add_document, new_project
 from grafcet.values import TypeSpec, check_fits, format_value, parse_value
 
@@ -56,11 +57,14 @@ class Hallazgos(unittest.TestCase):
         s.advance_to(3 * S)
         self.assertEqual(s.z.situation, {"B"})
 
-    def test_SH05_activar_etapa_ya_activa_bloqueo_U04(self):
-        """REQ-SEM-05, REQ-EVT-03: hallazgo H-05 (activación de etapa ya activa fuera de D)."""
-        m = M().var("p").var("n", "internal", "int").step("A").step("B")
+    def test_SH05_activar_etapa_ya_activa_no_ejecuta_sus_acciones(self):
+        """REQ-SEM-05, REQ-EVT-03: hallazgo H-05, cerrado por el comparador (3.3 A). Con «detener», U-04."""
+        m = M().var("p").var("n", "internal", "int").step("A", True).step("B")
         m.trans("t", ["A"], ["B"], "p").stored("B", "n", "activation", "n + 1")
         s = declared(m.compile(), ["A", "B"], batches=[(1 * S, 0, {"p": True})])
+        s.run()
+        self.assertEqual((s.z.situation, s.z.values["n"]), ({"B"}, 0))
+        s = declared(m.compile(), ["A", "B"], batches=[(1 * S, 0, {"p": True})], options={"3.3": "detener"})
         s.run()
         self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-04"))
         self.assertEqual(s.z.values["n"], 0)
@@ -73,6 +77,16 @@ class Hallazgos(unittest.TestCase):
         self.assertFalse(res.can_simulate)
         m = M().var("n", "internal", "int").step("A", True).stored("A", "n", "activation", "5")
         self.assertEqual(session(m.compile()).z.values["n"], 5, "n := 5 al activar la etapa inicial")
+        # Comentario del responsable a 1.5: en la aplicación no se declara un valor inicial fuera del grafcet
+        ed = Editor(new_model_document("m"), ids=IdGenerator("x"))
+        with self.assertRaises(DiagnosticError) as ctx:
+            ed.add_variable("n", "internal", {"kind": "int"}, initial="5")
+        self.assertEqual((ctx.exception.diagnostics[0].code, ctx.exception.diagnostics[0].field), ("D-FORMATO", "initialValue"))
+        v = ed.add_variable("e", "input", {"kind": "bool"}, initial=True)  # las entradas las da el escenario
+        ed.change_variable(v, role="internal")
+        self.assertIs(next(x for x in ed.model["variables"] if x["id"] == v)["initialValue"], False, "deja de ser entrada: 0")
+        with self.assertRaises(DiagnosticError):
+            ed.change_variable(v, initialValue=True)
 
     def test_SH08_actividad_de_parcial_con_hijos(self):
         """REQ-JER-01: hallazgo H-08."""
@@ -137,10 +151,13 @@ class BloqueosU(unittest.TestCase):
         self.assertTrue(any(d.question == "U-03" for d in m2.validate().diagnostics))
 
     def test_SU03_accion_por_evento_en_etapa_que_sale(self):
-        """REQ-EVT-03, REQ-ACT-02: acción sobre evento y etapa desactivada por ese evento (U-03/U-05)."""
+        """REQ-EVT-03, REQ-ACT-02: acción por evento en una etapa que sale con ese evento: no se ejecuta (comparador, 5.2 B)."""
         m = M().var("p").var("n", "internal", "int").step("A", True).step("B")
         m.trans("t", ["A"], ["B"], "rise(p)").stored("A", "n", "event", "n + 1", event="rise(p)")
         s = session(m.compile(), batches=[(1 * S, 0, {"p": True})])
+        s.run()
+        self.assertEqual((s.z.situation, s.z.values["n"]), ({"B"}, 0))
+        s = session(m.compile(), batches=[(1 * S, 0, {"p": True})], options={"5.2": "detener"})
         s.run()
         self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-03"))
         self.assertEqual((s.z.situation, s.z.values["n"]), ({"A"}, 0))
@@ -167,16 +184,24 @@ class BloqueosU(unittest.TestCase):
         self.assertEqual((last["value"], last["previous"]), ("2", "1"))
 
     def test_SU06_lote_y_vencimiento_coincidentes(self):
-        """REQ-TMP-03: coincidencia de lote y vencimiento en el mismo τ (H-17, U-06)."""
+        """REQ-TMP-03: lote y vencimiento independientes en el mismo τ se procesan juntos (comparador 4.3 A; cierra H-17)."""
         m = M().var("q").var("y", "output").step("A", True).cont("A", "y", "delay(2 s, active(A), 0 s)")
         s = session(m.compile(), batches=[(2 * S, 0, {"q": True})])
+        s.run()
+        ctx = [r for r in records(s, "contexto") if r["timeUs"] == str(2 * S)]
+        self.assertEqual([(r["stimulus"], r["batch"], r["expiring"]) for r in ctx], [("lote", "b0", ["e1"])], "un solo contexto")
+        self.assertTrue(s.z.outputs["y"])
+        s = session(m.compile(), batches=[(2 * S, 0, {"q": True})], options={"4.3": "detener"})
         s.run()
         self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-06"))
         self.assertFalse(s.z.outputs["y"])
 
     def test_SU06_delay_cero(self):
-        """REQ-TMP-03: delay con d1=0 bloqueado (U-06)."""
+        """REQ-TMP-03: 0s/p no compila (comparador, 4.4 B); 0s/p/2s no se preguntó y sigue en U-06."""
         m = M().var("p").step("A", True).step("B").trans("t", ["A"], ["B"], "delay(0 s, p, 0 s)")
+        self.assertEqual([d.code for d in m.validate().diagnostics if d.blocks_start], ["D-FORMATO"])
+        self.assertTrue(any(d.question == "U-06" for d in m.validate({"4.4": "detener"}).diagnostics))
+        m = M().var("p").step("A", True).step("B").trans("t", ["A"], ["B"], "delay(0 s, p, 2 s)")
         self.assertTrue(any(d.question == "U-06" for d in m.validate().diagnostics))
 
     def test_SU06_vencimientos_que_dependen_del_orden(self):
@@ -190,9 +215,12 @@ class BloqueosU(unittest.TestCase):
         self.assertEqual(s.z.situation, {"A", "C"})
 
     def test_SU07_fuente_de_nivel_y_transicion_sin_lados(self):
-        """REQ-MOD-04: U-07 en validación; el borrador se conserva."""
+        """REQ-MOD-04: fuente de nivel y transición sin lados no compilan (comparador 6.2 A y 6.4 A); con «detener», U-07."""
         m = M().var("p").step("A", True).trans("f", [], ["A"], "p").trans("n", [], [], "p")
         res = m.validate()
+        self.assertEqual([(d.code, d.element) for d in res.diagnostics], [("D-FORMATO", "f"), ("D-FORMATO", "n")])
+        self.assertFalse(res.can_simulate)
+        res = m.validate({"6.2": "detener", "6.4": "detener"})
         self.assertEqual(sum(1 for d in res.diagnostics if d.question == "U-07"), 2)
         self.assertIsNotNone(res.model)
         self.assertFalse(res.can_simulate)
@@ -238,9 +266,12 @@ class LecturasSeleccionables(unittest.TestCase):
         s.run()
         return s
 
-    def test_SOPT03a_por_defecto_se_detiene(self):
-        """REQ-EVT-03, REQ-SEM-09, REQ-NOR-02: sin elección explícita, U-03 sigue deteniendo."""
+    def test_SOPT03a_por_defecto_situacion_anterior(self):
+        """REQ-EVT-03, REQ-SEM-09, REQ-NOR-02: por defecto, la respuesta 5.1 («situación anterior»); «detener» sigue disponible."""
         s = self._u03()
+        self.assertEqual((s.status, s.z.situation), ("finalizada", {"B"}))
+        self.assertEqual(s.trace.header["semanticProfile"]["options"]["U-03"], "situacion-anterior")
+        s = self._u03("detener")
         self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-03"))
         self.assertEqual(s.trace.header["semanticProfile"]["options"]["U-03"], "detener")
 
@@ -268,16 +299,16 @@ class LecturasSeleccionables(unittest.TestCase):
 
     def test_SOPT03d_instantanea_exige_la_misma_lectura(self):
         """REQ-SIM-04, REQ-DAT-04: no se mezclan instantáneas de lecturas distintas."""
-        s = self._u03("situacion-anterior")
+        s = self._u03("recorrido")
         snap = s.snapshot("con-hipotesis")
         with self.assertRaises(DiagnosticError) as ctx:
             Session.restore(s.cm, s.scenario, snap)
         self.assertEqual(ctx.exception.diagnostics[0].code, "D-INSTANTANEA-INCOMPATIBLE")
-        r = Session.restore(s.cm, s.scenario, snap, options={"U-03": "situacion-anterior"})
-        self.assertEqual(r.z.situation, {"B"})
+        r = Session.restore(s.cm, s.scenario, snap, options={"U-03": "recorrido"})
+        self.assertEqual(r.z.situation, {"C"})
 
     def test_SOPT03e_limites_de_la_opcion(self):
-        """REQ-MOD-04, REQ-EVT-03: valores no admitidos se rechazan; la repetición de fuentes sigue en U-07."""
+        """REQ-MOD-04, REQ-EVT-03: valores no admitidos se rechazan; la repetición de fuentes la decide 6.3, no U-03."""
         with self.assertRaises(ValueError):
             normalize_options({"U-03": "lo-que-diga-el-plc"})
         with self.assertRaises(ValueError):
@@ -286,6 +317,10 @@ class LecturasSeleccionables(unittest.TestCase):
         m.trans("t", [], ["A"], "rise(p)").trans("u", [], ["B"], "rise(p)")
         cm = m.compile()
         s = Session(cm, scenario(cm, None, [(1 * S, 0, {"p": True})]), options={"U-03": "recorrido"})
+        s.start()
+        s.run()
+        self.assertEqual(s.z.situation, {"X", "A", "B"}, "6.3 A: una vez por flanco, también con «recorrido»")
+        s = Session(cm, scenario(cm, None, [(1 * S, 0, {"p": True})]), options={"U-03": "recorrido", "6.3": "detener"})
         s.start()
         s.run()
         self.assertEqual(q(s), ("D-SEM-PENDIENTE", "U-07"))
@@ -365,7 +400,7 @@ class ReglasP(unittest.TestCase):
             check_fits(TypeSpec("decimal", 0), Fraction(10**18))
         with self.assertRaises(DiagnosticError):
             check_fits(TypeSpec("int"), 2**63)
-        m = M().var("p").var("n", "internal", "int").step("A").step("B")
+        m = M().var("p").var("n", "internal", "int").step("A", True).step("B")  # 6.1 A: sin etapa inicial no compila; el estado declarado manda
         m.trans("t", ["A"], ["B"], "p").stored("B", "n", "activation", "n * 2")
         s = declared(m.compile(), ["A"], values={"n": 2**62}, batches=[(1 * S, 0, {"p": True})])
         s.run()
@@ -387,13 +422,16 @@ class ReglasP(unittest.TestCase):
         self.assertFalse([c for c in decl["capabilities"] if c["status"] == "aprobada"])
         self.assertTrue(all(c["status"] in ("provisional", "no-soportada") for c in decl["capabilities"]))
         excluded = {x["capability"] for x in decl["excludedMatters"]}
-        self.assertTrue({"eventos.recorrido", "permanencia.efectos", "temporal.coincidencias",
-                         "situacion.inicial.vacia"} <= excluded, "cuestiones aún abiertas")
+        self.assertTrue({"eventos.internos", "eventos.franqueamiento", "temporal.delay-cero", "jerarquia.forzado"}
+                        <= excluded, "cuestiones aún abiertas")
         caps = {c["id"]: c for c in decl["capabilities"]}
-        for cid in ("inicio.inestable", "acciones.lecturas-contexto"):  # cerradas por el responsable (hoja 08)
+        decided = {"inicio.inestable": "hoja 08", "acciones.lecturas-contexto": "hoja 08", "eventos.recorrido": "comparador",
+                   "permanencia.efectos": "comparador", "temporal.coincidencias": "comparador",
+                   "transiciones.fuente-repeticion": "comparador"}
+        for cid, where in decided.items():  # cerradas por el responsable
             self.assertNotIn(cid, excluded)
             self.assertEqual(caps[cid]["status"], "provisional", "decidida, pero sin contraste normativo (U-01)")
-            self.assertIn("hoja 08", caps[cid]["reason"])
+            self.assertIn(where, caps[cid]["reason"])
         self.assertEqual(decl["normativeBase"]["edition"], "3.0")
 
     def test_SPKG_paquete_de_transferencia_intacto(self):

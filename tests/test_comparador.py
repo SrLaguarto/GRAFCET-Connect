@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import banco_de_pruebas as banco  # noqa: E402
-from decisiones import CATALOGO, POR_ID, RESPUESTAS_HOJA_08  # noqa: E402
+from decisiones import CATALOGO, POR_ID, RESPUESTAS_HOJA_08, RESPUESTAS_INCORPORADAS  # noqa: E402
 
 from grafcet.profile import SEMANTIC_OPTIONS  # noqa: E402
 
@@ -111,17 +111,30 @@ class Comparador(unittest.TestCase):
         self.assertEqual(list(doc["decisiones"]), sorted(doc["decisiones"], key=lambda x: [int(n) for n in x.split(".")]))
         with self.assertRaises(ValueError):
             self.cmp.choose("3.1", "Z")
+        # El comentario se guarda solo, sin elegir; elegir después lo conserva
+        self.assertEqual(self.cmp.act("comentar", {"id": "7.2", "comentario": "  quiero verlo antes  "}), {"ok": True})
+        doc = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual((doc["decisiones"]["7.2"]["eleccion"], doc["decisiones"]["7.2"]["comentario"]),
+                         (None, "quiero verlo antes"))
+        self.cmp.act("comentar", {"id": "3.1", "comentario": "ampliado"})
+        doc = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual((doc["decisiones"]["3.1"]["eleccion"], doc["decisiones"]["3.1"]["comentario"]), ("A", "ampliado"))
         self.assertEqual(self.cmp.view()["decision"]["id"], "1.1", "elegir no cambia la cuestión en pantalla")
 
-    def test_SCMP05_lecturas_por_defecto_son_las_respuestas_de_la_hoja(self):
-        """REQ-SEM-09, REQ-NOR-02: las respuestas de los bloques 1 y 2 son las lecturas por defecto; lo abierto se detiene."""
-        for did, (value, _) in RESPUESTAS_HOJA_08.items():
+    def test_SCMP05_lecturas_por_defecto_son_las_respuestas_incorporadas(self):
+        """REQ-SEM-09, REQ-NOR-02: las respuestas incorporadas (hoja 08 y comparador) son las lecturas por defecto; lo abierto se detiene."""
+        for did, value in RESPUESTAS_INCORPORADAS.items():
             d = POR_ID[did]
+            self.assertIn(value, dict(d.choices), did)
             if d.option is not None:
                 self.assertEqual(SEMANTIC_OPTIONS[d.option]["default"], value, did)
-        for d in CATALOGO:
-            if d.option is not None and d.id not in RESPUESTAS_HOJA_08:
-                self.assertEqual(SEMANTIC_OPTIONS[d.option]["default"], "detener", d.id)
+        still_open = {d.id for d in CATALOGO} - set(RESPUESTAS_INCORPORADAS)
+        self.assertEqual(still_open, {"7.1", "7.2", "7.3", "7.4", "7.5", "7.6", "7.7", "8.1", "8.2"})
+        for did in still_open:
+            if POR_ID[did].option is not None:
+                self.assertEqual(SEMANTIC_OPTIONS[POR_ID[did].option]["default"], "detener", did)
+        self.cmp.load("4.4")
+        self.assertEqual(self.cmp.view()["applied"], "B", "el comparador muestra lo que el programa aplica")
 
 
 if __name__ == "__main__":

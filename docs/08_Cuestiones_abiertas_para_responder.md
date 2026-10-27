@@ -87,7 +87,7 @@ Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 25-1
 **Hoy:** el programa no arranca. El resumen local (§4.8.3) dice que las memorizadas empiezan en falso/0.
 **Ejemplo:** la variable interna n se declara con valor inicial 5.
 **Pregunta:** ¿se admite?
-- [X] **A.** No: siempre empieza en 0. Declarar otro valor es un error de compilación.
+- [X] **A.** No: siempre empieza en 0. Declarar otro valor es un error de compilación. Comentario del responsable (27-10-2026): en la aplicación no se podrá declarar un valor fuera del grafcet; debe ponerse con una acción (n := 5).
 - [ ] **B.** Sí: empieza con el valor declarado.
 - [ ] **C.** Solo como «intervención de depuración» marcada, no en una ejecución normal.
 - [ ] **Dejar abierta**
@@ -167,41 +167,41 @@ Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 25-1
 **Hoy:** se detiene (D-SEM-PENDIENTE U-04).
 **Ejemplo:** A y B activas; t: A → B y u: B → C, ambas con p, franquean a la vez. B tiene `n := n + 1 (al activar)` y `m := m + 1 (al desactivar)`. B sigue activa.
 **Pregunta:**
-- [ ] **A.** No se ejecuta ninguna: B no ha cambiado de estado.
+- [X] **A.** No se ejecuta ninguna: B no ha cambiado de estado.
 - [ ] **B.** Se ejecutan las dos: B «sale y entra» a efectos de acciones.
 - [ ] **Dejar abierta**
 - [ ] **Otra:**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 3.2 · Temporizador de una etapa en permanencia activa
 **Hoy:** se detiene.
 **Ejemplo:** el mismo caso, con `5s/XB` contando desde hace 2 s.
 **Pregunta:**
-- [ ] **A.** Sigue contando: vence 3 s después. Es coherente con tu decisión P-IMP-18.
+- [X] **A.** Sigue contando: vence 3 s después. Es coherente con tu decisión P-IMP-18.
 - [ ] **B.** Vuelve a empezar: vence 5 s después.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 3.3 · Activar una etapa que ya estaba activa (H-05)
 **Hoy:** se detiene.
 **Ejemplo:** A y B activas; t: A → B franquea (B no es precedente de t). B tiene `n := n + 1 (al activar)`.
 **Pregunta:**
-- [ ] **A.** No se ejecuta: B ya estaba activa.
+- [X] **A.** No se ejecuta: B ya estaba activa.
 - [ ] **B.** Se ejecuta: hay una activación de B.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 3.4 · Etapa encapsulante en permanencia activa
 **Hoy:** la encapsulación aún no se ejecuta.
 **Pregunta:** si la encapsulante H se activa y se desactiva a la vez, ¿su contenido…
-- [ ] **A.** …se mantiene como estaba?
+- [X] **A.** …se mantiene como estaba?
 - [ ] **B.** …se reinicia con sus etapas de activación?
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ---
 
@@ -212,50 +212,50 @@ Cláusula / página / ¿normativo o nota?:
 ### 4.1 · La entrada cae exactamente al vencer el retardo
 **Hoy:** se detiene.
 **Ejemplo:** t: A → B con `2s/p`. p sube a 0 s y baja exactamente a 2 s.
-- [ ] **A.** Franquea: el vencimiento llega antes que la caída.
+- [X] **A.** Franquea: el vencimiento llega antes que la caída.
 - [ ] **B.** No franquea: la caída cancela el retardo.
 - [ ] **Dejar abierta**
 - [ ] **Otra:**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 4.2 · Rebote durante el retardo de desconexión
 **Hoy:** se detiene.
 **Ejemplo:** `1s/p/2s`. p sube a 0 s (la condición pasa a verdadera a 1 s), baja a 3 s (seguiría verdadera hasta 5 s) y vuelve a subir a 4 s.
-- [ ] **A.** La condición sigue verdadera sin interrupción: la nueva subida anula la desconexión pendiente.
+- [X] **A.** La condición sigue verdadera sin interrupción: la nueva subida anula la desconexión pendiente.
 - [ ] **B.** Se mantiene el plazo de 5 s; luego hace falta 1 s de p para volver a ser verdadera.
 - [ ] **Dejar abierta**
 - [ ] **Otra:**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 4.3 · Cambio de entrada y vencimiento en el mismo instante, sin relación entre ellos
 **Hoy:** se detiene siempre (H-17).
 **Ejemplo:** un temporizador de una rama vence a 2 s y, también a 2 s, cambia una entrada que solo usa otra rama.
-- [ ] **A.** Se procesan juntos, como un solo instante.
+- [X] **A.** Se procesan juntos, como un solo instante.
 - [ ] **B.** Primero el vencimiento y luego la entrada.
 - [ ] **C.** Primero la entrada y luego el vencimiento.
 - [ ] **D.** Solo se detiene si los resultados de A, B y C difieren.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 4.4 · Retardo cero
 **Hoy:** `0s/p` no compila.
 - [ ] **A.** `0s/p` equivale a `p`.
-- [ ] **B.** Se prohíbe: no compila.
+- [X] **B.** Se prohíbe: no compila.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 4.5 · Duración T de una etapa inactiva
 **Hoy:** `elapsed(etapa)` no se puede ejecutar.
-- [ ] **A.** Vale 0.
+- [X] **A.** Vale 0.
 - [ ] **B.** No tiene valor: leerla con la etapa inactiva es un error.
 - [ ] **C.** Conserva la última duración.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ---
 
@@ -266,28 +266,28 @@ Cláusula / página / ¿normativo o nota?:
 ### 5.1 · Lectura por defecto en el programa final
 **Hoy:** se puede elegir (P-IMP-15) y por defecto se detiene. Recuerda el hallazgo H-23: con «recorrido», un modelo con retorno puede girar sin fin.
 - [ ] **A.** Por defecto «detener».
-- [ ] **B.** Por defecto «situación anterior»: el flanco solo vale para las transiciones validadas antes de él.
+- [X] **B.** Por defecto «situación anterior»: el flanco solo vale para las transiciones validadas antes de él.
 - [ ] **C.** Por defecto «recorrido».
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 5.2 · Acción por evento en una etapa que se desactiva con ese mismo evento
 **Hoy:** se detiene.
 **Ejemplo:** A tiene `H := 0 por ↑a`, y t: A → B con `↑a`.
 - [ ] **A.** Se ejecuta: A estaba activa cuando ocurrió el evento.
-- [ ] **B.** No se ejecuta.
+- [X] **B.** No se ejecuta.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 5.3 · Acción por evento en una etapa que se activa con ese mismo evento
 **Hoy:** se detiene.
 **Ejemplo:** B tiene `H := 0 por ↑a`, y t: A → B con `↑a`.
-- [ ] **A.** No se ejecuta: B no estaba activa al ocurrir el evento.
+- [X] **A.** No se ejecuta: B no estaba activa al ocurrir el evento.
 - [ ] **B.** Se ejecuta.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ---
 
@@ -297,39 +297,40 @@ Cláusula / página / ¿normativo o nota?:
 
 ### 6.1 · Grafcet sin etapas iniciales
 **Hoy:** no arranca.
-- [ ] **A.** Error: no compila.
+- [X] **A.** Error: no compila.
 - [ ] **B.** Arranca sin etapas activas (solo se activará mediante transiciones fuente).
 - [ ] **C.** Arranca con una advertencia.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 6.2 · Transición fuente con receptividad de nivel
 **Hoy:** no compila.
 **Ejemplo:** una transición sin etapa anterior y con receptividad `p`, que lleva a A.
-- [ ] **A.** No se permite: no compila.
+- [X] **A.** No se permite: no compila.
 - [ ] **B.** Mientras p = 1, A se mantiene activa (imposición continua).
 - [ ] **Dejar abierta**
 - [ ] **Otra:**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 6.3 · Transición fuente con flanco
+**Comentario del responsable:** si no se admitieran transiciones fuente, no se ejecutaría y daría error; como se admiten, una vez por flanco, en la línea de las anteriores («situación anterior»).
 **Hoy:** franquea una vez con el evento, pero se detiene si en el mismo instante seguiría validada.
 **Ejemplo:** una transición sin etapa anterior con `↑p`, que lleva a A.
-- [ ] **A.** Franquea exactamente una vez por cada subida de p.
+- [X] **A.** Franquea exactamente una vez por cada subida de p.
 - [ ] **Dejar abierta**
 - [ ] **Otra:**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 6.4 · Transición sin etapas antes ni después
 **Hoy:** se guarda como borrador, pero no compila.
-- [ ] **A.** No se permite.
+- [X] **A.** No se permite.
 - [ ] **B.** Se permite, sin efecto.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ---
 

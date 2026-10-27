@@ -105,28 +105,45 @@ class Eventos(unittest.TestCase):
         self.assertEqual([e["cleared"] for e in records(s, "evolucion")], [["u"]])
         self.assertEqual(s.z.situation, {"A"})
 
-    def test_T10d_alcance_causal_del_evento_bloqueo_U03(self):
+    def test_T10d_alcance_causal_del_evento_situacion_anterior(self):
+        """Comparador, 5.1: lectura por defecto «situación anterior»; el flanco solo franquea t, validada antes de él.
+        Con «detener», U-03 y no se elige alternativa."""
         m = M().var("p").step("A", True).step("B").step("C")
         m.trans("t", ["A"], ["B"], "rise(p)").trans("u", ["B"], ["C"], "rise(p)")
         s = session(m.compile(), batches=[(1 * S, 0, {"p": True})])
+        s.run()
+        self.assertEqual(s.z.situation, {"B"})
+        self.assertEqual(records(s, "estable")[-1]["hypotheses"][0]["reading"], "situacion-anterior")
+        s = session(m.compile(), batches=[(1 * S, 0, {"p": True})], options={"U-03": "detener"})
         s.run()
         d = last_diag(s)
         self.assertEqual((d.code, d.question), ("D-SEM-PENDIENTE", "U-03"))
         self.assertEqual(s.z.situation, {"A"}, "ni B ni C: no se elige alternativa")
 
-    def test_T10e_fuentes_por_evento_primera_evolucion_y_repeticion_U07(self):
+    def test_T10e_fuentes_por_evento_una_vez_por_flanco(self):
+        """Comparador, 6.3 A: cada fuente por evento franquea una sola vez por flanco. Con «detener», U-07."""
         m = M().var("p").step("X", True).step("A").step("B")
         m.trans("t", [], ["A"], "rise(p)").trans("u", [], ["B"], "rise(p)")
         s = session(m.compile(), batches=[(1 * S, 0, {"p": True})])
         s.run()
+        self.assertEqual([e["cleared"] for e in records(s, "evolucion")], [["t", "u"]], "ambas, con el mismo evento, una vez")
+        self.assertEqual(s.z.situation, {"X", "A", "B"})
+        s = session(m.compile(), batches=[(1 * S, 0, {"p": True})], options={"6.3": "detener"})
+        s.run()
         self.assertEqual(records(s, "evolucion")[0]["cleared"], ["t", "u"], "ambas reciben el mismo evento")
-        self.assertEqual(last_diag(s).question, "U-07", "la repetición en el contexto queda pendiente")
+        self.assertEqual(last_diag(s).question, "U-07", "con «detener», la repetición queda pendiente")
 
-    def test_T11a_permanencia_y_franqueamiento_separados_bloqueo_U04(self):
-        m = M().var("p").var("n", "internal", "int").var("mm", "internal", "int").step("A").step("B").step("C")
+    def test_T11a_permanencia_y_franqueamiento_separados(self):
+        """E contiene t y u en la primera evolución; la permanencia de B no ejecuta acciones (comparador, 3.1 A).
+        Con «detener», U-04."""
+        m = M().var("p").var("n", "internal", "int").var("mm", "internal", "int").step("A", True).step("B").step("C")
         m.trans("t", ["A"], ["B"], "p").trans("u", ["B"], ["C"], "p")
         m.stored("B", "n", "activation", "n + 1").stored("B", "mm", "deactivation", "mm + 1")
         s = declared(m.compile(), ["A", "B"], batches=[(1 * S, 0, {"p": True})])
+        s.run()
+        first = records(s, "evolucion")[0]
+        self.assertEqual((first["cleared"], first["permanent"], first["assignments"]), (["t", "u"], ["B"], []))
+        s = declared(m.compile(), ["A", "B"], batches=[(1 * S, 0, {"p": True})], options={"3.1": "detener"})
         s.run()
         fallo = records(s, "fallo")[-1]
         self.assertEqual(fallo["proposedSet"], ["t", "u"], "E contiene t y u en la primera evolución")
@@ -218,21 +235,32 @@ class Tiempo(unittest.TestCase):
         sc, diags = load_scenario(ok, cm)
         self.assertEqual([(b.time, b.ordinal) for b in sc.batches], [(S, 0), (S, 1)])
 
-    def test_T13b_caida_exacta_en_el_vencimiento_bloqueo(self):
+    def test_T13b_caida_exacta_en_el_vencimiento_franquea(self):
+        """Comparador, 4.1 A: el vencimiento va antes que la caída, así que franquea. Con «detener», U-06."""
         m = M().var("p").step("A", True).step("B").trans("t", ["A"], ["B"], "delay(2 s, p, 0 s)")
         cm = m.compile()
         # p verdadera desde el arranque: cuenta desde τ=0 (hoja 08, 1.3 A) y cae justo en el vencimiento
-        s = session(cm, init={"p": True}, batches=[(2 * S, 0, {"p": False})])
-        s.run()
-        self.assertEqual((last_diag(s).code, last_diag(s).question), ("D-SEM-PENDIENTE", "U-06"))
-        s = session(cm, batches=[(0, 0, {"p": True}), (2 * S, 0, {"p": False})])
+        for s in (session(cm, init={"p": True}, batches=[(2 * S, 0, {"p": False})]),
+                  session(cm, batches=[(0, 0, {"p": True}), (2 * S, 0, {"p": False})])):
+            s.run()
+            self.assertEqual((s.status, s.z.situation), ("finalizada", {"B"}))
+            at2 = [r["stimulus"] for r in records(s, "contexto") if r["timeUs"] == str(2 * S)]
+            self.assertEqual(at2, ["vencimiento", "lote"], "primero el vencimiento, después la caída")
+        s = session(cm, batches=[(0, 0, {"p": True}), (2 * S, 0, {"p": False})], options={"4.1": "detener"})
         s.run()
         self.assertEqual((last_diag(s).code, last_diag(s).question), ("D-SEM-PENDIENTE", "U-06"))
         self.assertEqual(s.z.situation, {"A"})
 
-    def test_T13c_rebote_durante_desconexion_bloqueo_U06(self):
+    def test_T13c_rebote_durante_desconexion_sigue_verdadera(self):
+        """Comparador, 4.2 A: la nueva subida anula la desconexión pendiente; y no se apaga. Con «detener», U-06."""
         cm = M().var("p").var("y", "output").step("A", True).cont("A", "y", "delay(1 s, p, 2 s)").compile()
-        s = session(cm, batches=[(0, 0, {"p": True}), (3 * S, 0, {"p": False}), (4 * S, 0, {"p": True})])
+        batches = [(0, 0, {"p": True}), (3 * S, 0, {"p": False}), (4 * S, 0, {"p": True})]
+        s = session(cm, batches=batches)
+        for t in (S, 3 * S, 4 * S, 5 * S, 6 * S):
+            s.advance_to(t)
+            self.assertTrue(s.z.outputs["y"], f"y a {t} µs")
+        self.assertEqual((s.status, s.diagnostics), ("pausada-estable", []))
+        s = session(cm, batches=batches, options={"4.2": "detener"})
         s.run()
         self.assertEqual((last_diag(s).code, last_diag(s).question), ("D-SEM-PENDIENTE", "U-06"))
         self.assertEqual(s.z.time, 3 * S, "se conserva el último estado estable")
@@ -301,7 +329,7 @@ class Acciones(unittest.TestCase):
         self.assertIn("D-DEPENDENCIA-CRUZADA", {d.code for d in res.diagnostics})
         self.assertFalse(res.can_simulate)
         # Si solo se sabe al ejecutar (ramas independientes con la misma entrada), se detiene sin elegir valores
-        m2 = M().var("p").var("x", "internal", "int").var("yv", "internal", "int").step("A").step("B").step("C").step("D")
+        m2 = M().var("p").var("x", "internal", "int").var("yv", "internal", "int").step("A", True).step("B").step("C").step("D")
         m2.trans("t", ["A"], ["B"], "p").trans("u", ["C"], ["D"], "p")
         m2.stored("B", "x", "activation", "yv").stored("D", "yv", "activation", "x")
         s = declared(m2.compile(), ["A", "C"], values={"x": 2, "yv": 5}, batches=[(1 * S, 0, {"p": True})])

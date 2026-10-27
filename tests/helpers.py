@@ -135,8 +135,8 @@ def scenario(cm: CompiledModel, init: dict[str, Any] | None = None, batches: lis
 
 
 def session(cm: CompiledModel, init: dict[str, Any] | None = None, batches: list[tuple[int, int, dict[str, Any]]] = (),
-            budget: int = 10_000, start: bool = True, **kw: Any) -> Session:
-    s = Session(cm, scenario(cm, init, batches, **kw), budget=budget)
+            budget: int = 10_000, start: bool = True, options: dict[str, str] | None = None, **kw: Any) -> Session:
+    s = Session(cm, scenario(cm, init, batches, **kw), budget=budget, options=options)
     if start:
         diags = s.start()
         assert not diags, [str(d) for d in diags]
@@ -144,9 +144,12 @@ def session(cm: CompiledModel, init: dict[str, Any] | None = None, batches: list
 
 
 def declared(cm: CompiledModel, situation: list[str], batches: list[tuple[int, int, dict[str, Any]]] = (),
-             values: dict[str, Any] | None = None, budget: int = 10_000, **kw: Any) -> Session:
-    """Sesión desde un estado previo declarado de prueba (no inicialización normativa)."""
-    s = Session(cm, scenario(cm, None, batches, **kw), budget=budget)
+             values: dict[str, Any] | None = None, budget: int = 10_000, options: dict[str, str] | None = None,
+             **kw: Any) -> Session:
+    """Sesión desde un estado previo declarado de prueba (no inicialización normativa). Desde la respuesta 6.1 A
+    un modelo sin etapas iniciales no compila, así que los modelos de estas pruebas marcan una como inicial: la
+    marca no influye, porque el estado declarado sustituye a la inicialización."""
+    s = Session(cm, scenario(cm, None, batches, **kw), budget=budget, options=options)
     s.start_declared(declared_state(cm, situation, values))
     return s
 

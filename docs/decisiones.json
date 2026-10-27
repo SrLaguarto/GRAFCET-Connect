@@ -6,8 +6,8 @@
       "eleccion": "A",
       "texto": "Sí: arrancar cuenta como activar E0",
       "pregunta": "Acción «al activar» en una etapa inicial",
-      "origen": "hoja 08",
-      "fecha": "2026-10-25",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
       "comentario": ""
     },
     "1.2": {
@@ -38,9 +38,9 @@
       "eleccion": "A",
       "texto": "No: siempre empieza en 0 (no compila)",
       "pregunta": "Variable memorizada con valor inicial distinto de cero",
-      "origen": "hoja 08",
-      "fecha": "2026-10-25",
-      "comentario": "Las memorizadas empiezan en 0; otro valor inicial se pone con una acción «al activar» en la etapa inicial (n := 5 en E0), que se ejecuta al arrancar por la respuesta 1.1."
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": "Las memorizadas empiezan en 0; otro valor inicial se pone con una acción «al activar» en la etapa inicial (n := 5 en E0), que se ejecuta al arrancar por la respuesta 1.1.\nPero esto no tiene sentido, en la app no va a poder declararse valor fuera de GRAFCET, por lo que debe declararse obligatoriamente en una acción (n:=5) o de lo contrario no puede pasar."
     },
     "2.1": {
       "eleccion": "C",
@@ -80,6 +80,134 @@
       "pregunta": "Salida continua que lee una memoria cambiada en el instante",
       "origen": "hoja 08",
       "fecha": "2026-10-25",
+      "comentario": ""
+    },
+    "3.1": {
+      "eleccion": "A",
+      "texto": "No se ejecuta ninguna: B no cambia de estado",
+      "pregunta": "Acciones de una etapa en permanencia activa",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "3.2": {
+      "eleccion": "A",
+      "texto": "Sigue contando: vence 3 s después (coherente con P-IMP-18)",
+      "pregunta": "Temporizador de una etapa en permanencia activa",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "3.3": {
+      "eleccion": "A",
+      "texto": "No: B ya estaba activa",
+      "pregunta": "Activar una etapa que ya estaba activa (H-05)",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "3.4": {
+      "eleccion": "A",
+      "texto": "…se mantiene como estaba",
+      "pregunta": "Etapa encapsulante en permanencia activa",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "4.1": {
+      "eleccion": "A",
+      "texto": "Franquea: el vencimiento llega antes que la caída",
+      "pregunta": "La entrada cae exactamente al vencer el retardo",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "4.2": {
+      "eleccion": "A",
+      "texto": "Sigue verdadera sin interrupción",
+      "pregunta": "Rebote durante el retardo de desconexión",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "4.3": {
+      "eleccion": "A",
+      "texto": "Juntos, como un solo instante",
+      "pregunta": "Cambio de entrada y vencimiento en el mismo instante",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "4.4": {
+      "eleccion": "B",
+      "texto": "Se prohíbe: no compila",
+      "pregunta": "Retardo cero",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "4.5": {
+      "eleccion": "A",
+      "texto": "Vale 0",
+      "pregunta": "Duración T de una etapa inactiva",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "5.1": {
+      "eleccion": "situacion-anterior",
+      "texto": "Por defecto «situación anterior»",
+      "pregunta": "Lectura por defecto de U-03",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": "El programa debe permitir elegir si los flancos se evalúan de uno en uno o por ciclo (afecta a etapas inestables con varios flancos seguidos). (Dicho en el chat el 27-10-2026; el comentario escrito en el comparador se perdió por un fallo de guardado, ya corregido.)"
+    },
+    "5.2": {
+      "eleccion": "B",
+      "texto": "No",
+      "pregunta": "Acción por evento en una etapa que se desactiva con ese evento",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": "Esta es buena,"
+    },
+    "5.3": {
+      "eleccion": "A",
+      "texto": "No: B no estaba activa al ocurrir el evento",
+      "pregunta": "Acción por evento en una etapa que se activa con ese evento",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "6.1": {
+      "eleccion": "A",
+      "texto": "Error: no compila",
+      "pregunta": "Grafcet sin etapas iniciales",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "6.2": {
+      "eleccion": "A",
+      "texto": "No se permite: no compila",
+      "pregunta": "Transición fuente con receptividad de nivel",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "6.3": {
+      "eleccion": "A",
+      "texto": "Franquea exactamente una vez por cada subida de p",
+      "pregunta": "Transición fuente con flanco",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": "Si no se acmiten trasniciones fuente, no se ejecuta y da error, si se admiten, la B (en la linea d elas anteriores)\nPor mi parte, que por defecto las transiciones fuente no estén permitidas; pero si la norma dice que sí, se dejan. (Dicho en el chat el 27-10-2026; el comentario escrito en el comparador se perdió por un fallo de guardado, ya corregido.)"
+    },
+    "6.4": {
+      "eleccion": "A",
+      "texto": "No se permite",
+      "pregunta": "Transición sin etapas antes ni después",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
       "comentario": ""
     }
   }

@@ -1,5 +1,5 @@
 {
- "date": "2026-10-25T14:38:49+01:00",
+ "date": "2026-10-27T10:19:55+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
@@ -50,14 +50,14 @@
    "summary": "REQ-NOR-02, REQ-DAT-02: la respuesta se guarda con su origen; los bloques 1 y 2 vienen de la hoja 08."
   },
   {
-   "test": "test_comparador.Comparador.test_SCMP05_lecturas_por_defecto_son_las_respuestas_de_la_hoja",
+   "test": "test_comparador.Comparador.test_SCMP05_lecturas_por_defecto_son_las_respuestas_incorporadas",
    "case": "S-CMP05",
    "outcome": "pasa",
    "requirements": [
     "REQ-NOR-02",
     "REQ-SEM-09"
    ],
-   "summary": "REQ-SEM-09, REQ-NOR-02: las respuestas de los bloques 1 y 2 son las lecturas por defecto; lo abierto se detiene."
+   "summary": "REQ-SEM-09, REQ-NOR-02: las respuestas incorporadas (hoja 08 y comparador) son las lecturas por defecto; lo abierto se detiene."
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU03_accion_por_evento_en_etapa_que_sale",
@@ -67,7 +67,7 @@
     "REQ-ACT-02",
     "REQ-EVT-03"
    ],
-   "summary": "REQ-EVT-03, REQ-ACT-02: acción sobre evento y etapa desactivada por ese evento (U-03/U-05)."
+   "summary": "REQ-EVT-03, REQ-ACT-02: acción por evento en una etapa que sale con ese evento: no se ejecuta (comparador, 5.2 B)."
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU03_flanco_sobre_variable_interna",
@@ -105,7 +105,7 @@
    "requirements": [
     "REQ-TMP-03"
    ],
-   "summary": "REQ-TMP-03: delay con d1=0 bloqueado (U-06)."
+   "summary": "REQ-TMP-03: 0s/p no compila (comparador, 4.4 B); 0s/p/2s no se preguntó y sigue en U-06."
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU06_lote_y_vencimiento_coincidentes",
@@ -114,7 +114,7 @@
    "requirements": [
     "REQ-TMP-03"
    ],
-   "summary": "REQ-TMP-03: coincidencia de lote y vencimiento en el mismo τ (H-17, U-06)."
+   "summary": "REQ-TMP-03: lote y vencimiento independientes en el mismo τ se procesan juntos (comparador 4.3 A; cierra H-17)."
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU06_vencimientos_que_dependen_del_orden",
@@ -133,7 +133,7 @@
    "requirements": [
     "REQ-MOD-04"
    ],
-   "summary": "REQ-MOD-04: U-07 en validación; el borrador se conserva."
+   "summary": "REQ-MOD-04: fuente de nivel y transición sin lados no compilan (comparador 6.2 A y 6.4 A); con «detener», U-07."
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU09_inicializacion_decidida",
@@ -187,14 +187,14 @@
    "summary": "REQ-TMP-02: variante de T-12a independiente de H-02 (activación por transición a 1 s)."
   },
   {
-   "test": "test_suplementarios.Hallazgos.test_SH05_activar_etapa_ya_activa_bloqueo_U04",
+   "test": "test_suplementarios.Hallazgos.test_SH05_activar_etapa_ya_activa_no_ejecuta_sus_acciones",
    "case": "S-H05",
    "outcome": "pasa",
    "requirements": [
     "REQ-EVT-03",
     "REQ-SEM-05"
    ],
-   "summary": "REQ-SEM-05, REQ-EVT-03: hallazgo H-05 (activación de etapa ya activa fuera de D)."
+   "summary": "REQ-SEM-05, REQ-EVT-03: hallazgo H-05, cerrado por el comparador (3.3 A). Con «detener», U-04."
   },
   {
    "test": "test_suplementarios.Hallazgos.test_SH07_memoria_inicial_no_nula_no_compila",
@@ -255,7 +255,7 @@
    "summary": "REQ-DAT-01, REQ-PLT-02: hallazgo H-12."
   },
   {
-   "test": "test_suplementarios.LecturasSeleccionables.test_SOPT03a_por_defecto_se_detiene",
+   "test": "test_suplementarios.LecturasSeleccionables.test_SOPT03a_por_defecto_situacion_anterior",
    "case": "S-OPT03a",
    "outcome": "pasa",
    "requirements": [
@@ -263,7 +263,7 @@
     "REQ-NOR-02",
     "REQ-SEM-09"
    ],
-   "summary": "REQ-EVT-03, REQ-SEM-09, REQ-NOR-02: sin elección explícita, U-03 sigue deteniendo."
+   "summary": "REQ-EVT-03, REQ-SEM-09, REQ-NOR-02: por defecto, la respuesta 5.1 («situación anterior»); «detener» sigue disponible."
   },
   {
    "test": "test_suplementarios.LecturasSeleccionables.test_SOPT03b_lectura_situacion_anterior",
@@ -305,7 +305,7 @@
     "REQ-EVT-03",
     "REQ-MOD-04"
    ],
-   "summary": "REQ-MOD-04, REQ-EVT-03: valores no admitidos se rechazan; la repetición de fuentes sigue en U-07."
+   "summary": "REQ-MOD-04, REQ-EVT-03: valores no admitidos se rechazan; la repetición de fuentes la decide 6.3, no U-03."
   },
   {
    "test": "test_suplementarios.ReglasP.test_SCAN_formato_canonico",
@@ -379,11 +379,11 @@
    "summary": ""
   },
   {
-   "test": "test_t01_t08_evolucion.Evolucion.test_T01d_sin_iniciales_bloqueo_U07",
+   "test": "test_t01_t08_evolucion.Evolucion.test_T01d_sin_iniciales_no_compila",
    "case": "T-01d",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Comparador, 6.1 A: un grafcet sin etapas iniciales no compila. Con «detener» sigue siendo U-07."
   },
   {
    "test": "test_t01_t08_evolucion.Evolucion.test_T02a_receptividad_sin_validacion",
@@ -463,11 +463,11 @@
    "summary": ""
   },
   {
-   "test": "test_t01_t08_evolucion.Evolucion.test_T05b_efectos_de_permanencia_bloqueo_U04",
+   "test": "test_t01_t08_evolucion.Evolucion.test_T05b_efectos_de_permanencia_decididos",
    "case": "T-05b",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Comparador, 3.1 A: en la permanencia, B no ejecuta sus acciones al activar ni al desactivar. Como p sigue a"
   },
   {
    "test": "test_t01_t08_evolucion.Evolucion.test_T06a_sincronizacion_incompleta",
@@ -617,25 +617,25 @@
    "summary": ""
   },
   {
-   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T10d_alcance_causal_del_evento_bloqueo_U03",
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T10d_alcance_causal_del_evento_situacion_anterior",
    "case": "T-10d",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Comparador, 5.1: lectura por defecto «situación anterior»; el flanco solo franquea t, validada antes de él."
   },
   {
-   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T10e_fuentes_por_evento_primera_evolucion_y_repeticion_U07",
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T10e_fuentes_por_evento_una_vez_por_flanco",
    "case": "T-10e",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Comparador, 6.3 A: cada fuente por evento franquea una sola vez por flanco. Con «detener», U-07."
   },
   {
-   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T11a_permanencia_y_franqueamiento_separados_bloqueo_U04",
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T11a_permanencia_y_franqueamiento_separados",
    "case": "T-11a",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "E contiene t y u en la primera evolución; la permanencia de B no ejecuta acciones (comparador, 3.1 A)."
   },
   {
    "test": "test_t09_t16_expresiones_eventos_tiempo.Eventos.test_T11b_evento_de_franqueamiento_bloqueo_U03",
@@ -722,18 +722,18 @@
    "summary": ""
   },
   {
-   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T13b_caida_exacta_en_el_vencimiento_bloqueo",
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T13b_caida_exacta_en_el_vencimiento_franquea",
    "case": "T-13b",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Comparador, 4.1 A: el vencimiento va antes que la caída, así que franquea. Con «detener», U-06."
   },
   {
-   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T13c_rebote_durante_desconexion_bloqueo_U06",
+   "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T13c_rebote_durante_desconexion_sigue_verdadera",
    "case": "T-13c",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Comparador, 4.2 A: la nueva subida anula la desconexión pendiente; y no se apaga. Con «detener», U-06."
   },
   {
    "test": "test_t09_t16_expresiones_eventos_tiempo.Tiempo.test_T13d_vencimientos_simultaneos_misma_frontera",

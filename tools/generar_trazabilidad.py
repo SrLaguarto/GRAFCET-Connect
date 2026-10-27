@@ -140,6 +140,9 @@ def main() -> int:
          "- **Depende de U**: solo se implementa la detención diagnosticada. La implementación nunca elige una "
          "alternativa; si todas las lecturas posibles dan el mismo observable, el resultado no depende de la U y se "
          "acepta.",
+         "- **Decidido por el responsable**: la U la cerró el responsable de producto (hoja 08 o comparador). Se "
+         "implementa su respuesta como lectura por defecto, provisional hasta el contraste normativo (U-01); "
+         "«detener» sigue siendo seleccionable.",
          "- **Pendiente**: implementable, pero fuera de esta iteración (interfaz, plataforma, ejecución jerárquica).",
          "", "## Recuento", "", "| Categoría | Nº | Requisitos |", "|---|---|---|"]
     for k in CATEGORIAS:
@@ -150,7 +153,8 @@ def main() -> int:
           "2. Formato 0.1 implementado como provisional hasta que se ratifique U-11.",
           "3. La duración de una etapa inicial cuenta desde τ=0 según T-12a/T-12c (tensión H-02). Si el revisor "
           "normativo extiende U-09 a este caso, la capacidad `temporal.duracion-etapa-inicial` pasa a no soportada.",
-          "4. La coincidencia de lote y vencimiento se bloquea siempre (H-17). Es un sobrebloqueo consciente.",
+          "4. La coincidencia de lote y vencimiento sigue la respuesta del responsable (comparador 4.1 A y 4.3 A, "
+          "P-IMP-22; cierra H-17). Los vencimientos simultáneos que dependen del orden siguen bloqueados (U-06).",
           "5. La ejecución jerárquica (forzado, macroetapas, encapsulación) es la siguiente iteración. Su estructura ya "
           "se edita, guarda y valida (discriminante de U-12).",
           "", "Responsables según el paquete: decisiones P → responsable de producto; I/U → revisor normativo; "
