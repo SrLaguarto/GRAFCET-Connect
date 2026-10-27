@@ -55,6 +55,7 @@ python tools/banco_de_pruebas.py --abrir --comparar
 | `grafcet/model.py` | Modelo y validación | MOD-01..07, ACT-04, JER-03, DAT-01, DAT-08 |
 | `grafcet/expressions.py`, `values.py`, `timeutil.py` | Expresiones, tipos y tiempo exactos | EXP-01/02, TMP-01 |
 | `grafcet/engine.py` | Interpretación, escenarios y reloj, sesión | SEM-*, EVT-01, TMP-02, ACT-01..03, SIM-* |
+| `grafcet/hierarchy.py` | Macroetapas, encapsulación y forzado | JER-02..06 |
 | `grafcet/profile.py`, `declaration.py` | Perfil, capacidades y bloqueos U | NOR-01/02, ALC-03 |
 | `grafcet/scenario.py` | Lotes, entradas iniciales, parada | EVT-02, SIM-02 |
 | `grafcet/trace.py` | Traza, cierre, digest | SIM-05, DAT-08 |
@@ -79,7 +80,7 @@ El núcleo se ha hecho solo con los doce documentos del paquete. El 25-10-2026, 
 
 ## Lo que falta
 
-- Ejecución jerárquica (forzado, macroetapas, encapsulación): está modelada y validada, pero no se ejecuta (hallazgo H-18; U-08). Las cuestiones 7.1–7.7 siguen abiertas; 3.4 ya está decidida para cuando se ejecute.
+- Jerarquías: forzado, macroetapas y encapsulación se ejecutan (P-IMP-23); las interacciones de U-08 (cuestiones 7.2–7.8) siguen abiertas y se detienen hasta que se respondan en el comparador.
 - `elapsed(etapa)` en expresiones: no se ejecuta todavía (su valor con la etapa inactiva ya está decidido, 4.5 A).
 - Sin responder: 8.1 (H-08), 8.2 (H-10) y `0s/p/d2` con d2 > 0; siguen deteniéndose.
 - Interfaz gráfica (Qt 6/PySide6 propuesta), exportación SVG/PDF y accesibilidad: requieren instalar la dependencia y ratificar U-10.

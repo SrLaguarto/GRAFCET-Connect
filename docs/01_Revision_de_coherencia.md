@@ -52,6 +52,7 @@ Tipos: **T** = tensión entre oráculos o documentos, **H** = hueco de especific
 | ID | Tipo | Documentos | Descripción | Caso discriminante | Tratamiento | Resp. |
 |---|---|---|---|---|---|---|
 | H-23 | N | 12 (U-03) | La alternativa «disponibilidad en ciertas evoluciones virtuales» no dice cuáles. Si se lee como «el evento sigue disponible en todo el recorrido», un modelo con retorno entra en un ciclo transitorio sin fin dentro del mismo instante | A→B/rise(p), B→C/rise(p), C→A/reinicio, con reinicio=1 y una subida de p: A→B→C→A→B… sin estabilizar | Lectura «recorrido» implementada literalmente (P-IMP-15): el motor lo detiene con D-LIM-EVOL y no publica estado estable (prueba S-OPT03c). El cierre de U-03 debe precisar qué evoluciones virtuales pueden usar el evento. El responsable eligió «situación anterior» como lectura por defecto (comparador, 27-10-2026, 5.1; P-IMP-22), que no produce este ciclo; «recorrido» sigue seleccionable | RN |
+| H-24 | N | 06, 12 (U-08) | El documento 06 no dice si las etapas que activa o desactiva un forzado ejecutan sus acciones al activar o desactivar; «no equivale a escribir X(s) desde el depurador» no lo resuelve | H fuerza G = {B}; B con n := 1 al activar; ¿n = 1? | Se detiene con D-SEM-PENDIENTE (U-08) si alguna de esas etapas tiene acciones; cuestión 7.8 en el comparador (P-IMP-23) | RN |
 
 ## 3. Observaciones menores (sin efecto en la implementación)
 

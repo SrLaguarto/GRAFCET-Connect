@@ -155,8 +155,8 @@ def main() -> int:
           "normativo extiende U-09 a este caso, la capacidad `temporal.duracion-etapa-inicial` pasa a no soportada.",
           "4. La coincidencia de lote y vencimiento sigue la respuesta del responsable (comparador 4.1 A y 4.3 A, "
           "P-IMP-22; cierra H-17). Los vencimientos simultáneos que dependen del orden siguen bloqueados (U-06).",
-          "5. La ejecución jerárquica (forzado, macroetapas, encapsulación) es la siguiente iteración. Su estructura ya "
-          "se edita, guarda y valida (discriminante de U-12).",
+          "5. La ejecución jerárquica (forzado, macroetapas, encapsulación) sigue el documento 06 (P-IMP-23). Sus "
+          "interacciones abiertas (U-08, cuestiones 7.2–7.8) se detienen por defecto.",
           "", "Responsables según el paquete: decisiones P → responsable de producto; I/U → revisor normativo; "
           "evidencia → segunda IA y revisor de pruebas.", ""]
     (DOCS / "02_Alcance_implementable.md").write_text("\n".join(A) + "\n", encoding="utf-8", newline="\n")

@@ -35,10 +35,18 @@ Base normativa declarada: IEC 60848 edición 3.0 (2013-02-27), adopción UNE-EN 
 | `inicio.memoria-no-nula` — Variable memorizada con valor inicial distinto de cero (no compila) | pendiente / bloqueada | decisión del responsable, hoja 08 1.5 A: se usa una acción al activar | REQ-ACT-02 |
 | `inicio.temporal-entrada-verdadera` — Condición temporal sobre entrada verdadera al iniciar: cuenta desde τ=0 | provisional (especificada, sin contraste normativo) | decisión del responsable, hoja 08 1.3 A | REQ-TMP-02 |
 | `instantanea.recorrido` — Instantánea exacta en mitad de un recorrido | pendiente / bloqueada | P: D-INSTANTANEA-FASE | REQ-SIM-04 |
-| `jerarquia.encapsulacion` — Ejecución de encapsulación | pendiente / bloqueada | no implementada en esta iteración; U-08. Decidido: en permanencia activa de la encapsulante, su contenido se mantiene (decisión del responsable, comparador 27-10-2026, 3.4 A) | REQ-JER-05 |
+| `jerarquia.encapsulacion` — Encapsulación: al entrar, etapas con enlace de activación (al arrancar, las iniciales); al salir, se desactiva todo el contenido | provisional (especificada, sin contraste normativo) | I (U-01), documento 06 y LOC §7.4; P-IMP-23 | REQ-JER-05 |
+| `jerarquia.encapsulacion-coincidencia` — Transición interior que franquea cuando se desactiva su encapsulante | pendiente / bloqueada | U-08 (7.6) | REQ-JER-06 |
+| `jerarquia.encapsulacion-permanencia` — Encapsulante en permanencia activa: su contenido se mantiene | provisional (especificada, sin contraste normativo) | decisión del responsable, comparador 27-10-2026, 3.4 A | REQ-JER-05, REQ-SEM-05 |
 | `jerarquia.estructura` — Edición, persistencia y validación de forzados, macroetapas y recintos | provisional (especificada, sin contraste normativo) | I/P | REQ-MOD-07, REQ-JER-03 |
-| `jerarquia.forzado` — Ejecución de órdenes de forzado | pendiente / bloqueada | no implementada en esta iteración; U-08 (H-18) | REQ-JER-02 |
-| `jerarquia.macroetapas` — Ejecución de macroetapas | pendiente / bloqueada | no implementada en esta iteración; U-08 | REQ-JER-04 |
+| `jerarquia.forzado` — Forzado: explícito, actual, vacío e inicial; el destino no evoluciona mientras está vigente | provisional (especificada, sin contraste normativo) | I (U-01), documento 06 y LOC tabla 9; P-IMP-23 | REQ-JER-02, REQ-JER-03 |
+| `jerarquia.forzado-acciones` — Acciones al activar o desactivar etapas cambiadas por un forzado | pendiente / bloqueada | U-08 (7.8, H-24) | REQ-JER-06, REQ-ACT-02 |
+| `jerarquia.forzado-momento` — Orden que entra en vigor en la evolución en que su destino franquea | pendiente / bloqueada | U-08 (7.2, H-18) | REQ-JER-06 |
+| `jerarquia.forzado-recinto` — Forzado de un recinto contra el invariante de su encapsulante | pendiente / bloqueada | U-08 (7.4) | REQ-JER-06 |
+| `jerarquia.forzado-tiempo` — Temporizadores de un parcial forzado | pendiente / bloqueada | U-08 (7.3) | REQ-JER-06 |
+| `jerarquia.macro-inicial` — Etapas iniciales dentro de una expansión | pendiente / bloqueada | U-08 (7.7) | REQ-JER-04 |
+| `jerarquia.macro-ramas` — Salida de una macroetapa con otras ramas de la expansión activas | pendiente / bloqueada | U-08 (7.5) | REQ-JER-06 |
+| `jerarquia.macroetapas` — Macroetapas: llegar activa la entrada; salir exige la salida; XM por la expansión | provisional (especificada, sin contraste normativo) | I (U-01), documento 06 y LOC tabla 11; P-IMP-23 | REQ-JER-04 |
 | `lotes` — Lotes simultáneos y lotes ordenados con igual tiempo | provisional (especificada, sin contraste normativo) | P | REQ-EVT-02 |
 | `parciales.actividad` — activePartial sobre parcial sin hijos | provisional (especificada, sin contraste normativo) | I (U-01) | REQ-JER-01 |
 | `parciales.anidados` — activePartial sobre parcial con parciales hijos | pendiente / bloqueada | H-08 | REQ-JER-01 |
@@ -65,9 +73,13 @@ Base normativa declarada: IEC 60848 edición 3.0 (2013-02-27), adopción UNE-EN 
 
 - `eventos.franqueamiento`: U-03
 - `eventos.internos`: U-03
-- `jerarquia.encapsulacion`: no implementada en esta iteración; U-08. Decidido: en permanencia activa de la encapsulante, su contenido se mantiene (decisión del responsable, comparador 27-10-2026, 3.4 A)
-- `jerarquia.forzado`: no implementada en esta iteración; U-08 (H-18)
-- `jerarquia.macroetapas`: no implementada en esta iteración; U-08
+- `jerarquia.encapsulacion-coincidencia`: U-08 (7.6)
+- `jerarquia.forzado-acciones`: U-08 (7.8, H-24)
+- `jerarquia.forzado-momento`: U-08 (7.2, H-18)
+- `jerarquia.forzado-recinto`: U-08 (7.4)
+- `jerarquia.forzado-tiempo`: U-08 (7.3)
+- `jerarquia.macro-inicial`: U-08 (7.7)
+- `jerarquia.macro-ramas`: U-08 (7.5)
 - `temporal.delay-cero`: decisión del responsable, comparador 27-10-2026, 4.4 B; el caso con desconexión no se preguntó (U-06)
 
 ## Lecturas seleccionables como hipótesis (P-IMP-15)
@@ -160,6 +172,40 @@ Elegir una lectura distinta de la predeterminada no cierra la cuestión ni ampl�
   - `detener`: Detener: la cuestión sigue abierta
   - `A`: No compila
   - `B`: Se permite y no tiene efecto
+- **3.4** (U-04/U-08: encapsulante activada y desactivada a la vez); por defecto `A`:
+  - `detener`: Detener: la cuestión sigue abierta
+  - `A`: Su contenido se mantiene
+  - `B`: Su contenido se reinicia con las etapas de activación
+- **7.2** (U-08 (H-18): orden que entra en vigor cuando su destino podría evolucionar); por defecto `detener`:
+  - `detener`: Detener: la cuestión sigue abierta
+  - `A`: El forzado se aplica en esa misma evolución y gana
+  - `B`: El destino evoluciona y el forzado se aplica en la evolución siguiente
+- **7.3** (U-08: temporizadores de un parcial forzado); por defecto `detener`:
+  - `detener`: Detener: la cuestión sigue abierta
+  - `A`: Siguen contando
+  - `B`: Se congelan mientras dura el forzado
+- **7.4** (U-08: forzar un recinto cuya encapsulante está inactiva); por defecto `detener`:
+  - `detener`: Detener: la cuestión sigue abierta
+  - `A`: Error de diseño: se detiene con error
+  - `B`: Se fuerza igualmente
+  - `C`: El forzado se ignora mientras la encapsulante esté inactiva
+- **7.5** (U-08: salir de una macroetapa con ramas internas aún activas); por defecto `detener`:
+  - `detener`: Detener: la cuestión sigue abierta
+  - `A`: Se desactivan todas las etapas de la expansión
+  - `B`: Las ramas siguen activas
+  - `C`: Error de diseño: se detiene con error
+- **7.6** (U-08: desactivar la encapsulante cuando franquea algo en su interior); por defecto `detener`:
+  - `detener`: Detener: la cuestión sigue abierta
+  - `A`: Gana la desactivación: lo interior no tiene efecto
+  - `B`: Primero actúa lo interior y después se desactiva
+- **7.7** (U-08: etapas iniciales dentro de una expansión); por defecto `detener`:
+  - `detener`: Detener: la cuestión sigue abierta
+  - `A`: Se permiten: están activas al arrancar
+  - `B`: No se permiten: no compila
+- **7.8** (U-08 (H-24): acciones de etapas activadas o desactivadas por un forzado); por defecto `detener`:
+  - `detener`: Detener: la cuestión sigue abierta
+  - `A`: Se ejecutan
+  - `B`: No se ejecutan
 - **8.1** (H-08: actividad de un parcial con parciales hijos); por defecto `detener`:
   - `detener`: Detener: la cuestión sigue abierta
   - `A`: Cuenta también las etapas de los hijos

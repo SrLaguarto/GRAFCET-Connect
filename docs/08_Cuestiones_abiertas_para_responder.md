@@ -338,6 +338,8 @@ Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-1
 
 **Dónde mirar:** §7.2 a §7.5 y tablas 8 a 11 (PDF 40–48).
 
+> Desde P-IMP-23 las jerarquías se ejecutan y cada cuestión de este bloque tiene su ejemplo en el comparador.
+
 ### 7.1 · Quién fuerza a quién (U-02)
 La frase del §7.3 sobre el sentido jerárquico parece invertir sujeto y objeto.
 - [ ] **A.** La etapa de un parcial **superior** fuerza a un parcial **inferior**.
@@ -380,6 +382,14 @@ Cláusula / página / ¿normativo o nota?:
 ### 7.6 · Desactivar la encapsulante en el mismo instante en que vence un temporizador interno
 - [ ] **A.** Gana la desactivación: el temporizador interno no tiene efecto.
 - [ ] **B.** Primero actúa el temporizador interno y luego se desactiva.
+- [ ] **Dejar abierta**
+
+Cláusula / página / ¿normativo o nota?:
+
+### 7.8 · Acciones de las etapas que cambia un forzado (H-24, nueva)
+**Ejemplo:** H fuerza G = {B}; B tiene `n := 1 (al activar)`.
+- [ ] **A.** Se ejecutan: es una activación.
+- [ ] **B.** No se ejecutan: el forzado impone la situación sin acciones.
 - [ ] **Dejar abierta**
 
 Cláusula / página / ¿normativo o nota?:

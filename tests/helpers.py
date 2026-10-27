@@ -104,6 +104,26 @@ class M:
         self._attach(step, a)
         return self
 
+    def macro(self, mid: str, expansion: str, entry: str, exit_: str, partial: str = "g") -> "M":
+        """Macroetapa con su expansión (documento 09, hierarchy.macros y hierarchy.expansions)."""
+        h = self.doc["hierarchy"]
+        h["macros"].append({"id": mid, "label": mid, "partialRef": partial, "expansionRef": f"x{mid}"})
+        h["expansions"].append({"id": f"x{mid}", "ownerMacroRef": mid, "partialRef": expansion, "entryRef": entry,
+                                "exitRef": exit_})
+        return self
+
+    def enclosure(self, owner: str, partial: str, activation: list[str]) -> "M":
+        self.doc["hierarchy"]["enclosures"].append({"id": f"enc{partial}", "ownerStepRef": owner, "partialRef": partial,
+                                                    "activationRefs": list(activation)})
+        return self
+
+    def force(self, fid: str, source: str, target: str, kind: str, steps: list[str] | None = None) -> "M":
+        f = {"id": fid, "sourceStepRef": source, "targetPartialRef": target, "targetKind": kind}
+        if steps is not None:
+            f["targetSteps"] = list(steps)
+        self.doc["forces"].append(f)
+        return self
+
     def validate(self, options: dict[str, str] | None = None) -> ValidationResult:
         return validate_model(self.doc, options)
 

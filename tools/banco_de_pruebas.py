@@ -114,6 +114,36 @@ def ej_conflicto_ejecucion() -> tuple[M, dict]:
     return m, {"A": (150, 60), "t": (150, 140), "B": (150, 220), "C": (330, 60), "u": (330, 140), "D": (330, 220)}
 
 
+def ej_macroetapa() -> tuple[M, dict]:
+    m = M().partial("X").var("p").var("q").var("r").var("s").var("motor", "output")
+    m.step("A", True).step("B").step("E1", kind="entry", partial="X").step("K", partial="X").step("S1", kind="exit", partial="X")
+    m.trans("tq", ["E1"], ["K"], "q", partial="X").trans("tr", ["K"], ["S1"], "r", partial="X").cont("K", "motor")
+    m.macro("M", "X", "E1", "S1").trans("tp", ["A"], ["M"], "p").trans("ts", ["M"], ["B"], "s").trans("tb", ["B"], ["A"], "NOT s")
+    return m, {"A": (160, 60), "tp": (160, 140), "M": (160, 220), "ts": (160, 300), "B": (160, 380), "tb": (160, 450),
+               "E1": (430, 100), "tq": (430, 180), "K": (430, 260), "tr": (430, 340), "S1": (430, 420)}
+
+
+def ej_encapsulacion() -> tuple[M, dict]:
+    m = M().partial("R").var("p").var("q").var("r").var("luz", "output")
+    m.step("H", True, kind="enclosing").step("Z")
+    m.step("I", True, partial="R").step("J", partial="R").step("K", partial="R")
+    m.trans("t", ["H"], ["Z"], "p").trans("u", ["Z"], ["H"], "q")
+    m.trans("v", ["I"], ["J"], "r", partial="R").trans("w", ["K"], ["J"], "r", partial="R").cont("J", "luz")
+    m.enclosure("H", "R", ["K"])
+    return m, {"H": (160, 60), "t": (160, 140), "Z": (160, 220), "u": (160, 290),
+               "I": (430, 70), "v": (430, 150), "J": (430, 230), "K": (580, 70), "w": (580, 150)}
+
+
+def ej_forzado() -> tuple[M, dict]:
+    m = M().partial("G").var("f").var("a").var("b").var("c")
+    m.step("H2", True).step("H").step("A", True, partial="G").step("B", partial="G").step("C", partial="G")
+    m.trans("t1", ["H2"], ["H"], "f").trans("t2", ["H"], ["H2"], "NOT f")
+    m.trans("ta", ["A"], ["B"], "a", partial="G").trans("tb", ["B"], ["C"], "b", partial="G").trans("tc", ["C"], ["A"], "c", partial="G")
+    m.force("F", "H", "G", "explicit", ["B"])
+    return m, {"H2": (160, 60), "t1": (160, 140), "H": (160, 220), "t2": (160, 290),
+               "A": (480, 60), "ta": (480, 140), "B": (480, 220), "tb": (480, 300), "C": (480, 380), "tc": (480, 450)}
+
+
 EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
     "temporizada": ("Secuencia con temporización", "Pulse «marcha»: E1 activa el motor; a los 3 s pasa a E2 (luz, "
                     "ciclos+1). «fin» vuelve a E0. Pruebe a soltar «marcha» y poner «fin»=1 antes de los 3 s: E2 es "
@@ -131,6 +161,14 @@ EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
                     "«situación anterior» (comparador, 5.1), una subida de p solo franquea t y se queda en B. En «Opciones "
                     "de interpretación» puede probar «recorrido» (llega a C; con «reinicio»=1 gira sin fin) o «detener» "
                     "(no elige).", ej_bloqueo_u03),
+    "macroetapa": ("Macroetapa (jerarquía)", "p lleva a la macroetapa M: se activa su entrada E1. q y r recorren la "
+                   "expansión. Aunque s valga 1, solo se sale de M cuando su salida S1 está activa; la macroetapa cuenta como "
+                   "activa mientras haya alguna etapa de su expansión activa.", ej_macroetapa),
+    "encapsulacion": ("Encapsulación (jerarquía)", "Al arrancar, H e I (iniciales). p: sale de H y su recinto R se vacía. "
+                      "q: vuelve a H y se activa K, la etapa marcada con *, no I ni la última situación. r mueve el contenido a "
+                      "J y enciende la luz.", ej_encapsulacion),
+    "forzado": ("Forzado (jerarquía)", "f activa H y la orden F/G:{B} lleva el parcial G a {B}. Mientras H está activa, G no "
+                "evoluciona aunque pulse a, b o c. Al quitar f se retira la orden y G sigue desde B.", ej_forzado),
     "conflicto": ("Conflicto de escritura al compilar", "t activa B y C en la misma evolución; B escribe z:=1 y C z:=2. "
                   "Es un conflicto seguro: el programa no puede compilarse.", ej_conflicto),
     "conflicto-ejecucion": ("Conflicto de escritura en ejecución", "t y u son independientes, pero ambas dependen de p: "
@@ -273,12 +311,28 @@ class Vista:
                     "kind": "stored", "target": a["targetRef"], "trigger": trig["kind"],
                     "text": [_seg(f"{a['targetRef']} := ")] + disp(a["valueRef"]),
                     "event": disp(trig.get("expressionRef"))})
+        # Jerarquía (documento 03): forzado en rectángulo doble, marca de activación y marco de cada parcial
+        hier = m.doc["hierarchy"]
+        marked = {sid for e in hier["enclosures"] for sid in e["activationRefs"]}
+        labels = {p["id"]: p["label"] for p in m.doc["partials"]}
+        roles = {x["partialRef"]: f"expansión de {x['ownerMacroRef']}" for x in hier["expansions"]}
+        roles.update({e["partialRef"]: f"recinto de {e['ownerStepRef']}" for e in hier["enclosures"]})
+        for f in m.doc["forces"]:
+            sit = {"explicit": "{" + ", ".join(f.get("targetSteps", [])) + "}", "current": "{*}", "empty": "{ }",
+                   "initial": "{INIT}"}[f["targetKind"]]
+            acts.setdefault(f["sourceStepRef"], []).append({"kind": "force", "id": f["id"], "target": f["targetPartialRef"],
+                                                           "text": [_seg(f"F/{labels[f['targetPartialRef']]}:{sit}")]})
         self.model = {
             "key": key, "title": title, "help": help_text, "compilable": res.can_simulate,
             "steps": [{"id": s["id"], "initial": s["initial"], "x": layout[s["id"]][0], "y": layout[s["id"]][1],
-                       "partial": None if s["partialRef"] == "g" else s["partialRef"],
-                       "actions": acts.get(s["id"], [])} for s in m.doc["steps"]],
-            "transitions": [{"id": t["id"], "pre": t["preRefs"], "post": t["postRefs"],
+                       "partial": None if s["partialRef"] == "g" else s["partialRef"], "kind": s["kind"],
+                       "activation": s["id"] in marked, "actions": acts.get(s["id"], [])} for s in m.doc["steps"]],
+            "macros": [{"id": x["id"], "x": layout[x["id"]][0], "y": layout[x["id"]][1],
+                        "expansion": next(e["partialRef"] for e in hier["expansions"] if e["id"] == x["expansionRef"])}
+                       for x in hier["macros"]],
+            "partials": [{"id": p["id"], "label": p["label"], "role": roles.get(p["id"], "parcial")}
+                         for p in m.doc["partials"] if p["id"] != "g" and p["stepRefs"]],
+            "transitions": [{"id": t["id"], "pre": t["preRefs"], "post": t["postRefs"], "partial": t["partialRef"],
                              "cond": disp(t["conditionRef"], top=True),
                              "x": layout[t["id"]][0], "y": layout[t["id"]][1]} for t in m.doc["transitions"]],
             "inputs": sorted(v["id"] for v in m.doc["variables"] if v["role"] == "input"),
@@ -301,6 +355,7 @@ class Vista:
         last_stable = next((r for r in reversed(s.trace.records) if r["kind"] == "estable" and "reason" not in r), None)
         out.update({
             "time": t_s(obs["timeUs"]), "timeUs": obs["timeUs"], "situation": obs["situation"],
+            "macros": obs.get("macros", {}), "forces": obs.get("forces", []),
             "virtual": obs.get("recorrido", {}).get("virtualSituation"),
             "unstable": last_stable.get("virtualSteps", []) if last_stable and closed == "estable" else [],
             "transitions": obs["transitions"], "outputs": obs["outputs"],

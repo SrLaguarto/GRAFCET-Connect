@@ -23,6 +23,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Generator, Iterable
 
 from . import expressions as ex
+from . import hierarchy
 from .diagnostics import Diagnostic, DiagnosticError
 from .model import Action, CompiledModel, TemporalSpec, constant_value
 from .profile import blocked, normalize_options, profile_ref
@@ -67,16 +68,19 @@ class State:
     contexts: int
     phase: str = "estable"
     origin: str = "normativa"
+    forces: dict[str, frozenset[str]] = field(default_factory=dict)  # órdenes de forzado vigentes → situación impuesta
+    frozen: dict[str, int] = field(default_factory=dict)  # parcial forzado congelado (7.3 B) → desde cuándo
 
     def copy(self) -> "State":
         return replace(self, values=dict(self.values), outputs=dict(self.outputs),
                        contributors={k: list(v) for k, v in self.contributors.items()},
-                       temporal={k: replace(v) for k, v in self.temporal.items()}, since=dict(self.since))
+                       temporal={k: replace(v) for k, v in self.temporal.items()}, since=dict(self.since),
+                       forces=dict(self.forces), frozen=dict(self.frozen))
 
     def equivalent(self, other: "State") -> bool:
         return (self.situation == other.situation and self.values == other.values and self.outputs == other.outputs
                 and {k: v.to_dict() for k, v in self.temporal.items()} == {k: v.to_dict() for k, v in other.temporal.items()}
-                and self.since == other.since)
+                and self.since == other.since and self.forces == other.forces and self.frozen == other.frozen)
 
     def to_dict(self, cm: CompiledModel, pending: list[Batch]) -> dict[str, Any]:
         """Z completo (documento 09, State). Campos no aplicables se declaran explícitamente."""
@@ -88,8 +92,10 @@ class State:
             "eventHistory": {"basis": "estable", "pendingEvents": []},
             "temporalStates": {k: v.to_dict() for k, v in sorted(self.temporal.items())},
             "stepActivationTimes": {k: str(v) for k, v in sorted(self.since.items())},
-            "hierarchyState": {"status": "no-aplicable", "reason": "jerarquía no ejecutable en este perfil"},
-            "activeForces": [],
+            "hierarchyState": ({"status": "ejecutable", "frozenPartials": {k: str(v) for k, v in sorted(self.frozen.items())}}
+                               if cm.hier.active else {"status": "no-aplicable", "reason": "el modelo no tiene jerarquía"}),
+            "activeForces": [{"order": f.id, "source": f.source, "target": f.target, "steps": sorted(self.forces[f.id])}
+                             for f in cm.hier.forces if f.id in self.forces],
             "logicalTimeUs": str(self.time),
             "pendingBatches": [b.to_dict(cm) for b in pending],
             "nextBatchIndex": self.next_batch,
@@ -116,6 +122,8 @@ def state_from_dict(cm: CompiledModel, d: dict[str, Any]) -> tuple[State, list[B
                {k: list(v["contributors"]) for k, v in d["outputs"].items()},
                temporal, {k: int(v) for k, v in d["stepActivationTimes"].items()}, int(d["logicalTimeUs"]),
                d["nextBatchIndex"], d["completedContexts"], d["phase"], d["origin"])
+    st.forces = {f["order"]: frozenset(f["steps"]) for f in d.get("activeForces", [])}
+    st.frozen = {k: int(v) for k, v in (d.get("hierarchyState") or {}).get("frozenPartials", {}).items()}
     return st, pending
 
 
@@ -161,7 +169,7 @@ class _Env:
         return bool(steps & self.w.situation)
 
     def active_macro(self, mid: str) -> bool:
-        raise DiagnosticError(blocked("jerarquia.macroetapas", "activeMacro no ejecutable"))
+        return bool(self.cm.hier.macro_steps[mid] & self.w.situation)  # XM: alguna etapa de la expansión
 
     def elapsed(self, sid: str) -> int:
         raise DiagnosticError(blocked("temporal.elapsed", "elapsed no ejecutable"))
@@ -265,7 +273,8 @@ def compute_outputs(cm: CompiledModel, w: State, options: dict[str, str] | None 
         for a in acts:
             if a.step not in w.situation:
                 continue
-            if a.limit_us is not None and not (w.time - w.since[a.step] < a.limit_us):
+            now = w.frozen.get(cm.steps[a.step].partial, w.time)  # 7.3 B: el tiempo no corre en un parcial congelado
+            if a.limit_us is not None and not (now - w.since[a.step] < a.limit_us):
                 continue
             if ex.evaluate(cm.exprs[a.cond].node, env):
                 contrib.append(a.id)
@@ -404,6 +413,24 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
         # Duración de cada etapa antes de su primera salida en este contexto (P-IMP-18)
         before_exit: dict[str, tuple[int | None, dict[str, TState]]] = {}
         old = z.values if o["2.3"] == "B" else None  # 2.3 B: las receptividades ven el valor de antes del instante
+        hier = cm.hier
+        hier_events: list[dict[str, Any]] = []
+
+        def unfreeze(g: str) -> None:
+            """Fin de un forzado con congelación (7.3 B): lo que no corrió mientras duró se desplaza."""
+            t0 = w.frozen.pop(g, None)
+            if t0 is None:
+                return
+            steps = hier.partial_steps.get(g, frozenset())
+            for sid in steps & w.situation:
+                w.since[sid] += w.time - max(t0, w.since[sid])
+            for key, spec in cm.temporals.items():
+                st = w.temporal[key]
+                if spec.base_kind == "active" and spec.base_step in steps and st.start is not None:
+                    shift = w.time - max(t0, st.start)
+                    st.start += shift
+                    if st.deadline is not None:
+                        st.deadline = st.deadline + shift if st.deadline + shift <= MAX_US else None
         k = 0
         while True:
             k += 1
@@ -414,6 +441,10 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
             if stim.kind == "inicio" and o["1.2"] == "B":
                 break  # 1.2 B: la situación inicial espera al primer cambio de entradas
             s = w.situation
+            hstep = hierarchy.Step()
+            if hier.active:  # órdenes cuyo origen está activo al empezar la evolución (arranque, o lectura 7.2 B)
+                hierarchy.register(hier, w.forces, s, cm, w.time, w.frozen, o, hstep)
+                hier_events.extend(hstep.events)
             env = _Env(cm, w, events, o)
             renv = _Env(cm, w, events, o, old, written)
             renv0 = _Env(cm, w, None, o, old, written)
@@ -446,6 +477,8 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                     continue  # 6.2 B: la imposición continua no cambia nada si sus etapas ya están activas
                 if val:
                     fire.append(t.id)
+            if hier.active:
+                fire = hierarchy.prune_fire(hier, cm, s, fire, w.forces, o)
             if stim.kind == "inicio" and o["1.2"] == "C" and fire:
                 raise DiagnosticError(Diagnostic("D-FORMATO", f"situación inicial inestable ({', '.join(fire)} "
                                                  "franqueables al arrancar): no se admite (lectura 1.2 C)"))
@@ -456,15 +489,31 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                         if a.step in prior_s:
                             proposals.append(a)
                             done_event_actions.append(a)
-            if not fire and not proposals:
+            if not fire and not proposals and not (hier.active and hierarchy.forcing_change(hier, s, w.forces, o)):
                 break
             yield ("propuesta", (k, fire))
             ts = [cm.transitions[t] for t in fire]
             d_set = frozenset().union(*(t.pre for t in ts)) if ts else frozenset()
             a_set = frozenset().union(*(t.post for t in ts)) if ts else frozenset()
             new_s = (s - d_set) | a_set
-            activated, deactivated = a_set - s, d_set - a_set
-            permanent, reactivated = d_set & a_set, (a_set & s) - d_set
+            quiet: frozenset[str] = frozenset()  # etapas cambiadas por un forzado cuyas acciones no se ejecutan (7.8 B)
+            if hier.active:  # cierre jerárquico: salida de macroetapa, encapsulación y forzado
+                new_s, hstep = hierarchy.close(hier, cm, s, fire, d_set, a_set, new_s, w.forces, w.frozen, w.time, o,
+                                               unfreeze)
+                hier_events.extend(hstep.events)
+                changed = hstep.forced_on | hstep.forced_off
+                acted = sorted({sid for sid in hstep.forced_on if cm.stored_by_step.get((sid, "activation"))}
+                               | {sid for sid in hstep.forced_off if cm.stored_by_step.get((sid, "deactivation"))})
+                if acted and o["7.8"] == "detener":
+                    raise Blocked(blocked("jerarquia.forzado-acciones", f"el forzado cambia la actividad de {acted}, que "
+                                          "tienen acciones al activar o desactivar (7.8, H-24)", acted[0]))
+                if o["7.8"] == "B":
+                    quiet = frozenset(changed)
+            activated, deactivated = new_s - s, s - new_s
+            permanent, reactivated = (d_set & a_set) & new_s, ((a_set & s) - d_set) & new_s
+            # Activadas por un franqueamiento y retiradas por la jerarquía en la misma evolución (7.5 A, 7.6 B): actúan
+            # y después se desactivan, como una etapa inestable
+            transient = (a_set - s) - new_s
             restart: list[str] = []
             for sid in sorted(permanent | reactivated):  # U-04 (lecturas 3.1, 3.2, 3.3)
                 acts_on = cm.stored_by_step.get((sid, "activation"), [])
@@ -505,9 +554,9 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                                               "el recorrido de ese evento", a.step))
                     if o["5.3"] == "B" and bool(ex.evaluate(cm.exprs[a.trigger_expr].node, env)):
                         proposals.append(a)
-            for sid in sorted(activated):
+            for sid in sorted((activated | transient) - quiet):
                 proposals.extend(cm.stored_by_step.get((sid, "activation"), []))
-            for sid in sorted(deactivated):
+            for sid in sorted((deactivated | transient) - quiet):
                 proposals.extend(cm.stored_by_step.get((sid, "deactivation"), []))
             assignments = apply(proposals, env)
             w.situation = new_s
@@ -530,8 +579,8 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                     w.temporal[key] = replace(st)
             for sid in restart:
                 _restart_duration(cm, w, sid)
-            deact_ctx |= deactivated
-            act_ctx |= activated
+            deact_ctx |= deactivated | transient
+            act_ctx |= activated | transient
             rec = {"kind": "evolucion", "timeUs": str(w.time), "evolutionIndex": k,
                    "validated": sorted(info), "receptivity": dict(sorted(info.items())), "cleared": sorted(fire),
                    "deactivated": sorted(deactivated), "activated": sorted(activated), "permanent": sorted(permanent),
@@ -540,6 +589,10 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                 rec["durationKept"] = sorted(reentered)
             if restart:
                 rec["durationRestarted"] = sorted(restart)
+            if transient:
+                rec["transient"] = sorted(transient)
+            if hier_events:
+                rec["hierarchy"], hier_events = hier_events, []
             records.append(rec)
             yield ("aplicada", rec)
         compute_outputs(cm, w, o, z.values if o["2.5"] == "B" else None, written)
@@ -556,9 +609,11 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                    "values": {k: _fmt(cm, k, v) for k, v in sorted(w.values.items()) if v != z.values.get(k)}}
         if hypotheses:
             closing["hypotheses"] = hypotheses
+        if hier_events:  # órdenes que entraron en vigor sin cambiar nada
+            closing["hierarchy"] = hier_events
         records.append(closing)
         return Outcome("estable", w, records)
-    except Blocked as b:
+    except (Blocked, hierarchy.HierarchyBlocked) as b:
         records.append({"kind": "fallo", "timeUs": str(w.time), "diagnostics": [b.diag.to_dict()],
                         "proposedSet": sorted(fire), "situationCandidate": sorted(w.situation)})
         return Outcome("fallo", None, records, b.diag)
@@ -745,7 +800,7 @@ class Session:
         ends: dict[int, list[str]] = {}
         for acts in self.cm.continuous_by_target.values():
             for a in acts:
-                if a.limit_us is not None and a.step in self.z.situation:
+                if a.limit_us is not None and a.step in self.z.situation and self.cm.steps[a.step].partial not in self.z.frozen:
                     end = self.z.since[a.step] + a.limit_us
                     if end > self.z.time and end <= MAX_US:
                         ends.setdefault(end, []).append(f"limit:{a.id}")
@@ -755,6 +810,9 @@ class Session:
         z = self.z
         deadlines: dict[int, list[str]] = self._limited_ends()
         for key, st in z.temporal.items():
+            spec = self.cm.temporals[key]
+            if spec.base_kind == "active" and self.cm.steps[spec.base_step].partial in z.frozen:
+                continue  # 7.3 B: congelado mientras dura el forzado
             if st.deadline is not None:
                 deadlines.setdefault(st.deadline, []).append(key)
         nd = min(deadlines) if deadlines else None
@@ -1004,12 +1062,15 @@ class Session:
     def observe(self) -> dict[str, Any]:
         z = self.z
         env = _Env(self.cm, z, None, self.options)
+        forced = {f.target for f in self.cm.hier.forces if f.id in z.forces}
         trans = {}
         for t in sorted(self.cm.transitions.values(), key=lambda t: t.id):
             validated = t.pre <= z.situation
             rec = bool(ex.evaluate(self.cm.exprs[t.cond].node, env))
             trans[t.id] = {"preActivity": {p: p in z.situation for p in sorted(t.pre)}, "validated": validated,
-                           "receptivity": rec, "fireable": validated and rec}
+                           "receptivity": rec, "fireable": validated and rec and t.partial not in forced}
+            if t.partial in forced:
+                trans[t.id]["forced"] = True  # su parcial está forzado: no evoluciona (documento 06)
         obs = {"status": self.status, "timeUs": str(z.time), "situation": sorted(z.situation),
                "steps": {s.id: {"active": s.id in z.situation, "initial": s.initial, "partial": s.partial}
                          for s in sorted(self.cm.steps.values(), key=lambda s: s.id)},
@@ -1018,6 +1079,11 @@ class Session:
                            for k, v in sorted(z.outputs.items())},
                "values": {k: _fmt(self.cm, k, v) for k, v in sorted(z.values.items())},
                "temporal": {k: v.to_dict() for k, v in sorted(z.temporal.items())}}
+        if self.cm.hier.active:
+            obs["forces"] = [{"order": f.id, "source": f.source, "target": f.target, "kind": f.kind,
+                              "steps": sorted(z.forces[f.id])} for f in self.cm.hier.forces if f.id in z.forces]
+            obs["macros"] = {m: bool(st & z.situation) for m, st in sorted(self.cm.hier.macro_steps.items())}
+            obs["frozen"] = sorted(z.frozen)
         if self.status == "pausada-recorrido" and self._work and "last" in self._work:
             obs["recorrido"] = {"virtualSituation": self._work["last"]["situation"], "note": "situación virtual, no efectiva"}
         return obs

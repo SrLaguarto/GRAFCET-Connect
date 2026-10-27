@@ -1,6 +1,8 @@
-// Dibujo de un grafcet con la notación gráfica de la norma (tablas 1–7). Lo usan el banco de pruebas y el
+// Dibujo de un grafcet con la notación gráfica de la norma (tablas 1–11). Lo usan el banco de pruebas y el
 // comparador de decisiones. Las proporciones se tomaron por inspección visual de las imágenes de la norma
-// aportadas por el usuario; no se copia ningún activo.
+// aportadas por el usuario; los símbolos jerárquicos siguen la descripción del documento 03 (forzado en
+// rectángulo doble, macroetapa con divisiones horizontales, encapsulante con marcas internas y marca de
+// activación). La geometría exacta de esas marcas está pendiente de contraste (U-01). No se copia ningún activo.
 const NS = "http://www.w3.org/2000/svg";
 // Unidad: lado de la etapa = 2·H
 const SX = 100;       // margen izquierdo del dibujo
@@ -8,6 +10,7 @@ const H = 22;         // semilado de la etapa cuadrada
 const TB = 14;        // semilongitud del trazo de transición (≈0,65 del lado)
 const ACT_LINK = 26;  // enlace etapa–acción (≈0,6 del lado)
 const ACT_MIN = 80;   // anchura mínima de una acción
+const MARK = 7;       // marcas internas de la encapsulante y divisiones de la macroetapa
 
 function el(tag, attrs={}, parent) { const e = document.createElementNS(NS, tag);
   for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; }
@@ -23,17 +26,21 @@ function segText(parent, x, y, segs, cls, anchor="start") {
   return t;
 }
 
-// M: modelo de la vista (etapas, transiciones, acciones); S: estado observado del motor
+// M: modelo de la vista (etapas, macroetapas, transiciones, acciones, parciales); S: estado observado del motor
 function drawDiagram(svg, M, S) {
   svg.innerHTML = "";
   svg.setAttribute("viewBox", "0 0 640 600");
-  const pos = {}; M.steps.forEach(s => pos[s.id] = {x:s.x+SX, y:s.y});
-  const minX = Math.min(...M.steps.map(s=>s.x)) + SX;
+  const pos = {};
+  M.steps.forEach(s => pos[s.id] = {x:s.x+SX, y:s.y});
+  (M.macros || []).forEach(m => pos[m.id] = {x:m.x+SX, y:m.y});
+  const nodes = Object.values(pos);
+  const minX = Math.min(...nodes.map(p=>p.x));
   const situation = new Set(S.situation || []), virtual = new Set(S.virtual || []);
   const unstable = new Set(S.unstable || []);
   const cleared = new Set(S.lastCleared || []);
   const blk = S.blocked, reached = new Set(blk ? blk.reached : []);
-  const links = el("g", {}, svg), bars = el("g", {}, svg), steps = el("g", {}, svg);
+  const frames = el("g", {}, svg), links = el("g", {}, svg), bars = el("g", {}, svg), steps = el("g", {}, svg);
+  drawFrames(frames, M, pos);
   M.transitions.forEach(t => {
     const tx = t.x + SX, ty = t.y, ob = (S.transitions||{})[t.id] || {};
     const pre = t.pre.map(p => pos[p]), post = t.post.map(p => pos[p]);
@@ -53,7 +60,7 @@ function drawDiagram(svg, M, S) {
       down.forEach(p => el("path", {d:`M${p.x},${yy+4} V${p.y-H}`, class:"link"}, links));
     } else down.forEach(p => el("path", {d:`M${tx},${ty} V${(ty+p.y-H)/2} H${p.x} V${p.y-H}`, class:"link"}, links));
     up.forEach(p => {       // enlace ascendente con flecha
-      const lx = minX - 70, top = p.y - H - 16;
+      const lx = Math.min(minX, tx) - 70, top = p.y - H - 16;
       el("path", {d:`M${tx},${ty} V${ty+14} H${lx} V${top} H${p.x} V${p.y-H}`, class:"link"}, links);
       const my = (ty + 14 + top) / 2;
       el("path", {d:`M${lx-5},${my+6} L${lx},${my-4} L${lx+5},${my+6} Z`, class:"arrow"}, links);
@@ -63,7 +70,8 @@ function drawDiagram(svg, M, S) {
     const cls = ["tr", ob.validated?"validated":"", ob.fireable?"fireable":"", cleared.has(t.id)?"cleared":"",
                  blk && blk.element === t.id ? "question" : ""].join(" ");
     const g = el("g", {class:cls}, bars);
-    el("title", {}, g).textContent = `Transición ${t.id}: validada ${ob.validated?"sí":"no"}, receptividad ${ob.receptivity?"verdadera":"falsa"}`;
+    el("title", {}, g).textContent = `Transición ${t.id}: validada ${ob.validated?"sí":"no"}, receptividad ${ob.receptivity?"verdadera":"falsa"}` +
+      (ob.forced ? "; su parcial está forzado y no evoluciona" : "");
     el("line", {x1:tx-TB, x2:tx+TB, y1:ty, y2:ty, class:"bar"}, g);
     txt(g, tx-TB-6, ty+5, `(${t.id})`, {"text-anchor":"end", class:"tdes"});
     segText(g, tx+TB+8, ty+5, t.cond, "tcond");
@@ -73,13 +81,23 @@ function drawDiagram(svg, M, S) {
     const cand = !!blk && reached.has(s.id) && !stale, vir = virtual.has(s.id) && !act;
     const uns = !vir && !act && !stale && !cand && unstable.has(s.id);
     const g = el("g", {class:`step ${act?"active":""} ${vir||uns?"virtual":""} ${stale?"stale":""} ${cand?"cand":""}`}, steps);
-    el("title", {}, g).textContent = `Etapa ${s.id}${s.initial?" (inicial)":""}${s.partial?` · parcial ${s.partial}`:""}: ` +
+    const kind = {enclosing:" (encapsulante)", entry:" (entrada de la expansión)", exit:" (salida de la expansión)"}[s.kind] || "";
+    el("title", {}, g).textContent = `Etapa ${s.id}${s.initial?" (inicial)":""}${kind}${s.partial?` · parcial ${s.partial}`:""}` +
+      `${s.activation?" · enlace de activación":""}: ` +
       (stale ? "último estado estable conservado" : cand ? "alcanzada antes del punto en cuestión, sin confirmar" :
        act ? "activa" : vir ? "inestable (en recorrido)" : uns ? "fue inestable en el último instante" : "inactiva");
     el("rect", {x:p.x-H, y:p.y-H, width:2*H, height:2*H, class:"outer"}, g);
     if (s.initial) el("rect", {x:p.x-H+4, y:p.y-H+4, width:2*H-8, height:2*H-8, fill:"none"}, g);
+    if (s.kind === "enclosing") {  // marcas internas de encapsulación en las cuatro esquinas
+      const o = s.initial ? 7 : 3;
+      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([dx,dy]) => {
+        const cx = p.x + dx*(H-o), cy = p.y + dy*(H-o);
+        el("path", {d:`M${cx},${cy - dy*MARK} V${cy} H${cx - dx*MARK}`, class:"hmark"}, g);
+      });
+    }
     txt(g, p.x, p.y+3, s.id, {"text-anchor":"middle"});
-    if (s.partial) txt(g, p.x-H, p.y-H-5, s.partial, {class:"tag ptag"});
+    if (s.kind === "entry" || s.kind === "exit") txt(g, p.x+H+4, p.y-H+8, s.kind === "entry" ? "entrada" : "salida", {class:"tag ptag"});
+    if (s.activation) txt(g, p.x-H-5, p.y+5, "*", {"text-anchor":"end", class:"amark-act"});
     if (act) el("circle", {cx:p.x, cy:p.y+12, r:3.5, class:"token"}, g);
     if (vir) txt(g, p.x, p.y+H+13, "inestable", {"text-anchor":"middle", class:"tag vtag"});
     if (uns) txt(g, p.x, p.y+H+13, "fue inestable", {"text-anchor":"middle", class:"tag vtag"});
@@ -87,8 +105,30 @@ function drawDiagram(svg, M, S) {
     if (cand) txt(g, p.x, p.y+H+13, "alcanzada, sin confirmar", {"text-anchor":"middle", class:"tag ctag"});
     drawActions(g, p, s.actions, S);
   });
+  (M.macros || []).forEach(m => {  // macroetapa: divisiones horizontales superior e inferior
+    const p = pos[m.id], act = !!(S.macros || {})[m.id];
+    const g = el("g", {class:`step macro ${act?"active":""}`}, steps);
+    el("title", {}, g).textContent = `Macroetapa ${m.id} (expansión ${m.expansion}): ${act ? "activa (alguna etapa de su expansión)" : "inactiva"}`;
+    el("rect", {x:p.x-H, y:p.y-H, width:2*H, height:2*H, class:"outer"}, g);
+    el("line", {x1:p.x-H, x2:p.x+H, y1:p.y-H+MARK, y2:p.y-H+MARK, class:"hmark"}, g);
+    el("line", {x1:p.x-H, x2:p.x+H, y1:p.y+H-MARK, y2:p.y+H-MARK, class:"hmark"}, g);
+    txt(g, p.x, p.y+5, m.id, {"text-anchor":"middle"});
+  });
   const b = svg.getBBox();
   svg.setAttribute("viewBox", `${b.x-14} ${b.y-14} ${b.width+28} ${b.height+28}`);
+}
+
+// Marco discontinuo de cada parcial (presentación P): expansión de una macroetapa, recinto o parcial
+function drawFrames(g, M, pos) {
+  (M.partials || []).forEach(pt => {
+    const pts = M.steps.filter(s => s.partial === pt.id).map(s => pos[s.id])
+      .concat(M.transitions.filter(t => t.partial === pt.id).map(t => ({x: t.x + SX, y: t.y, tr: true})));
+    if (!pts.length) return;
+    const x0 = Math.min(...pts.map(p => p.x)) - H - 26, x1 = Math.max(...pts.map(p => p.x)) + H + 70;
+    const y0 = Math.min(...pts.map(p => p.y)) - H - 34, y1 = Math.max(...pts.map(p => p.y)) + H + 14;
+    el("rect", {x:x0, y:y0, width:x1-x0, height:y1-y0, rx:6, class:"frame"}, g);
+    txt(g, x0 + 6, y0 + 13, `${pt.label} · ${pt.role}`, {class:"framelabel"});
+  });
 }
 
 // Acciones a la derecha de la etapa, del alto de la etapa y contiguas (representación (2) de la norma)
@@ -97,12 +137,15 @@ function drawActions(g, p, actions, S) {
   let ax = p.x + H + ACT_LINK;
   el("line", {x1:p.x+H, x2:ax, y1:p.y, y2:p.y, class:"link"}, g);
   actions.forEach(a => {
-    const on = a.kind === "continuous" && S.outputs && S.outputs[a.target] && S.outputs[a.target].value;
-    const ga = el("g", {class:`act ${on?"on":""}`}, g);
+    const on = a.kind === "continuous" ? !!(S.outputs && S.outputs[a.target] && S.outputs[a.target].value)
+      : a.kind === "force" ? (S.forces || []).some(f => f.order === a.id) : false;
+    const ga = el("g", {class:`act ${on?"on":""} ${a.kind === "force" ? "force" : ""}`}, g);
     const rect = el("rect", {x:ax, y:p.y-H, height:2*H, width:ACT_MIN}, ga);
+    const inner = a.kind === "force" ? el("rect", {x:ax+3, y:p.y-H+3, height:2*H-6, width:ACT_MIN-6, class:"inner"}, ga) : null;
     const label = segText(ga, ax + 12, p.y + 5, a.text, "atext");
     const w = Math.max(ACT_MIN, label.getComputedTextLength() + 24);
     rect.setAttribute("width", w);
+    if (inner) inner.setAttribute("width", w - 6);  // forzado: rectángulo doble
     const mx = ax + 12, top = p.y - H, bottom = p.y + H;
     if (a.kind === "continuous" && a.cond) {             // acción condicionada: trazo y condición
       el("line", {x1:mx, x2:mx, y1:top, y2:top-14, class:"amark"}, ga);

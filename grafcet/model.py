@@ -14,6 +14,7 @@ from . import expressions as ex
 from .canonical import digest
 from .diagnostics import Diagnostic, DiagnosticError, has_blocking
 from .ids import label_key, valid_id, valid_label
+from . import hierarchy
 from .profile import blocked, normalize_options, unsupported
 from .timeutil import parse_time_field
 from .values import TypeSpec, Value, in_domain, parse_type, parse_value, zero
@@ -124,6 +125,7 @@ class CompiledModel:
     event_actions: list[Action] = field(default_factory=list)
     temporals: dict[str, TemporalSpec] = field(default_factory=dict)
     step_dependents: dict[str, set[str]] = field(default_factory=dict)
+    hier: hierarchy.HierarchyInfo = field(default_factory=hierarchy.HierarchyInfo)
 
     def initial_situation(self) -> frozenset[str]:
         return frozenset(s.id for s in self.steps.values() if s.initial)
@@ -339,6 +341,11 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
     enclosures = [x for x in hier["enclosures"] if v.fields("enclosure", x, "recinto") and v.register(x["id"], "recinto")]
     drafts = [x for x in doc.get("draftLinks", []) if v.fields("draftLink", x, "enlace borrador") and v.register(x["id"], "enlace")]
     macro_ids = {m["id"] for m in macros}
+    # Relación expandida de las macroetapas (documento 06): entrada y salida de cada una
+    exp_raw = {x["id"]: x for x in expansions}
+    macro_map = {m["id"]: {"entry": exp_raw[m["expansionRef"]]["entryRef"], "exit": exp_raw[m["expansionRef"]]["exitRef"]}
+                 for m in macros if m["expansionRef"] in exp_raw}
+    macro_exits: dict[str, list[str]] = {}
 
     # Parciales: propiedad única y acíclica (REQ-MOD-01, REQ-JER-01)
     owner_graph: dict[str, set[str]] = {}
@@ -539,7 +546,10 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
         if not post:
             v.caps.add("transiciones.sumidero")
         if ok:
-            transitions[tid] = Transition(tid, t["partialRef"], frozenset(pre), frozenset(post), t["conditionRef"])
+            pre_x, post_x, exits = hierarchy.expand_refs(pre, post, macro_map)
+            transitions[tid] = Transition(tid, t["partialRef"], frozenset(pre_x), frozenset(post_x), t["conditionRef"])
+            if exits:
+                macro_exits[tid] = exits
 
     # Acciones (REQ-ACT-01..04)
     actions: dict[str, Action] = {}
@@ -634,7 +644,7 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
         if sup.elapsed:
             v.d.append(blocked("temporal.elapsed", "elapsed() no ejecutable en este perfil", user))
         if sup.macros:
-            v.d.append(unsupported("jerarquia.macroetapas", "activeMacro() requiere ejecución jerárquica", user))
+            v.caps.add("jerarquia.macroetapas")
         for pid in sup.partials:
             v.caps.add("parciales.actividad")
             if children.get(pid) and opt["8.1"] == "detener":
@@ -671,14 +681,21 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
               "etapa/transición; no ejecutable", dl["id"])
 
     has_h = bool(forces or macros or expansions or enclosures)
-    if forces:
-        v.d.append(unsupported("jerarquia.forzado", "órdenes de forzado presentes"))
-    if macros or expansions:
-        v.d.append(unsupported("jerarquia.macroetapas", "macroetapas presentes"))
-    if enclosures:
-        v.d.append(unsupported("jerarquia.encapsulacion", "recintos de encapsulación presentes"))
+    for cap, present in (("jerarquia.forzado", forces), ("jerarquia.macroetapas", macros or expansions),
+                         ("jerarquia.encapsulacion", enclosures)):
+        if present:
+            v.caps.add(cap)
     if has_h:
         v.caps.add("jerarquia.estructura")
+    # Etapas iniciales dentro de una expansión (cuestión 7.7, U-08)
+    for x in expansions:
+        inner = sorted(sid for sid, s in raw_steps.items() if s["partialRef"] == x["partialRef"] and s["initial"] is True)
+        if inner and opt["7.7"] == "detener":
+            v.d.append(blocked("jerarquia.macro-inicial", f"etapas iniciales {inner} dentro de la expansión {x['id']} "
+                               "(7.7)", x["id"]))
+        elif inner and opt["7.7"] == "B":
+            v.add("D-FORMATO", f"etapas iniciales {inner} dentro de la expansión {x['id']}: no se admiten "
+                  "(lectura 7.7 B)", x["id"])
     v.d.extend(ctx.diags)
 
     structural = {"D-FORMATO", "D-ID", "D-REF", "D-PROPIETARIO", "D-JERARQUIA-CICLO", "D-LIM-DATOS"}
@@ -702,6 +719,12 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
         if a.limit_us is not None:
             cm.step_dependents.setdefault(a.step, set()).add(f"acción limitada {a.id}")
     cm.temporals = temporals
+    if has_h:
+        partial_steps = {pid: frozenset(sid for sid, s in raw_steps.items() if s["partialRef"] == pid) for pid in partials}
+        cm.hier = hierarchy.build(partial_steps, {pid: frozenset(x for x in st if raw_steps[x]["initial"] is True)
+                                                  for pid, st in partial_steps.items()},
+                                  macros, expansions, enclosures, forces, {sid: s["kind"] for sid, s in raw_steps.items()})
+        cm.hier.exits = {tid: [cm.hier.macros[mid] for mid in mids] for tid, mids in macro_exits.items()}
     for ts in temporals.values():
         if ts.base_kind == "active":
             cm.step_dependents.setdefault(ts.base_step, set()).add(f"condición temporal {ts.key}")

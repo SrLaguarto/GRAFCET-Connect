@@ -25,6 +25,8 @@ CATALOGO: dict[str, tuple[str, str, str]] = {
     "D-ESCRITURA-CONFLICTO": ("error", "08", "Modificar condiciones o diseño para evitar valores contradictorios"),
     "D-MODO-SALIDA": ("error", "08", "Separar las determinaciones continua y memorizada"),
     "D-FORZADO-CONFLICTO": ("bloqueo", "08", "Resolver el conflicto jerárquico entre órdenes"),
+    "D-FORZADO-RECINTO": ("error", "hoja 08, 7.4", "No forzar un recinto mientras su encapsulante está inactiva"),
+    "D-JERARQUIA-RAMA": ("error", "hoja 08, 7.5", "Sincronizar las ramas de la expansión antes de su etapa de salida"),
     "D-JERARQUIA-CICLO": ("bloqueo", "08", "Eliminar el ciclo de la relación jerárquica"),
     "D-LIM-EVOL": ("pausa", "08", "Inspeccionar el ciclo o ampliar el presupuesto explícitamente"),
     "D-TRAZA-LIM": ("pausa", "08", "Exportar la traza o ampliar el límite"),

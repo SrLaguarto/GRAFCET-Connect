@@ -259,6 +259,73 @@ def m82() -> tuple[M, Layout]:
     return g, _cadena("A", "t1", "B", "t2", "C")
 
 
+# --- 3.4 y 7. Jerarquías (U-04, U-08) -------------------------------------------------
+
+def m34() -> tuple[M, Layout]:
+    g = M().partial("R").var("p").var("q")
+    g.step("A", True).step("H", True, kind="enclosing").step("C")
+    g.step("I", True, partial="R").step("J", partial="R").step("K", partial="R")
+    g.trans("t", ["A"], ["H"], "p").trans("u", ["H"], ["C"], "p AND active(A)").trans("v", ["I"], ["J"], "q", partial="R")
+    g.enclosure("H", "R", ["K"])
+    return g, {**_cadena("A", "t", "H", "u", "C"), "I": (420, 140), "v": (420, 220), "J": (420, 300), "K": (540, 140)}
+
+
+def m72() -> tuple[M, Layout]:
+    g = M().partial("G").var("p").var("n", "internal", "int")
+    g.step("Z", True).step("H").step("A", True, partial="G").step("B", partial="G").step("C", partial="G")
+    g.trans("t", ["Z"], ["H"], "p").trans("u", ["A"], ["B"], "p", partial="G").stored("B", "n", "activation", "1")
+    g.force("F", "H", "G", "explicit", ["C"])
+    return g, {**_cadena("Z", "t", "H"), "A": (430, 60), "u": (430, 140), "B": (430, 220), "C": (560, 60)}
+
+
+def m73() -> tuple[M, Layout]:
+    g = M().partial("G").var("p").var("q").var("luz", "output")
+    g.step("Z", True).step("H").step("A", True, partial="G").step("B", partial="G")
+    g.trans("t", ["Z"], ["H"], "p").trans("v", ["H"], ["Z"], "q")
+    g.trans("w", ["A"], ["B"], "delay(3 s, active(A), 0 s)", partial="G").cont("B", "luz")
+    g.force("F", "H", "G", "current")
+    return g, {"Z": (160, 60), "t": (160, 140), "H": (160, 220), "v": (160, 290),
+               "A": (440, 60), "w": (440, 140), "B": (440, 220)}
+
+
+def m74() -> tuple[M, Layout]:
+    g = M().partial("R").var("p")
+    g.step("P0", True).step("H", kind="enclosing").step("F0", True).step("I", partial="R").step("J", partial="R")
+    g.trans("t", ["P0"], ["H"], "p").enclosure("H", "R", ["I"]).force("F", "F0", "R", "explicit", ["J"])
+    return g, {**_cadena("P0", "t", "H"), "F0": (160, 340), "I": (420, 140), "J": (420, 230)}
+
+
+def m75() -> tuple[M, Layout]:
+    g = M().partial("X").var("p").var("q").var("s").step("A", True).step("B")
+    g.step("E", kind="entry", partial="X").step("K", partial="X").step("Sx", kind="exit", partial="X")
+    g.trans("tq", ["E"], ["K", "Sx"], "q", partial="X")
+    g.macro("M", "X", "E", "Sx").trans("tp", ["A"], ["M"], "p").trans("ts", ["M"], ["B"], "s")
+    return g, {**_cadena("A", "tp", "M", "ts", "B"), "E": (430, 100), "tq": (430, 180), "K": (370, 260), "Sx": (500, 260)}
+
+
+def m76() -> tuple[M, Layout]:
+    g = M().partial("R").var("p").var("n", "internal", "int")
+    g.step("H", True, kind="enclosing").step("Z").step("A", True, partial="R").step("B", partial="R")
+    g.trans("ti", ["A"], ["B"], "delay(2 s, active(A), 0 s)", partial="R").trans("to", ["H"], ["Z"], "p")
+    g.stored("B", "n", "activation", "1").enclosure("H", "R", ["A"])
+    return g, {**_cadena("H", "to", "Z"), "A": (430, 60), "ti": (430, 140), "B": (430, 220)}
+
+
+def m77() -> tuple[M, Layout]:
+    g = M().partial("X").var("p").var("q").step("A", True).step("B")
+    g.step("E", kind="entry", partial="X").step("K", True, partial="X").step("Sx", kind="exit", partial="X")
+    g.trans("te", ["E"], ["Sx"], "q", partial="X")
+    g.macro("M", "X", "E", "Sx").trans("tp", ["A"], ["M"], "p").trans("ts", ["M"], ["B"], "q")
+    return g, {**_cadena("A", "tp", "M", "ts", "B"), "E": (430, 100), "te": (430, 180), "Sx": (430, 260), "K": (560, 100)}
+
+
+def m78() -> tuple[M, Layout]:
+    g = M().partial("G").var("p").var("n", "internal", "int")
+    g.step("Z", True).step("H").step("A", True, partial="G").step("B", partial="G")
+    g.trans("t", ["Z"], ["H"], "p").stored("B", "n", "activation", "1").force("F", "H", "G", "explicit", ["B"])
+    return g, {**_cadena("Z", "t", "H"), "A": (430, 60), "B": (430, 180)}
+
+
 ARRANQUE = "Arranque"
 
 CATALOGO: list[Decision] = [
@@ -394,7 +461,12 @@ CATALOGO: list[Decision] = [
         "3.4", "3. Activada y desactivada a la vez (U-04)", "Etapa encapsulante en permanencia activa",
         "Si la encapsulante H se activa y se desactiva a la vez, ¿su contenido…",
         [("A", "…se mantiene como estaba"), ("B", "…se reinicia con sus etapas de activación")],
-        note="La encapsulación aún no se ejecuta: no hay simulación. Se puede responder igualmente."),
+        "3.4", "A y H son iniciales; H encapsula el recinto R (I inicial; K con enlace de activación *). u lleva p·X_A para "
+        "que solo franquee junto con t.", m34,
+        script=[fijar("q sube: dentro de R, I → J", q=True), fijar("p sube: t y u franquean a la vez; H sigue activa", p=True)],
+        expect={"A": "H no cambia de estado: R sigue en J.", "B": "R vuelve a empezar desde K, la etapa marcada con *."},
+        checks={"A": {1: {"situation": ["A", "H", "J"]}, 2: {"situation": ["C", "H", "J"]}},
+                "B": {2: {"situation": ["C", "H", "K"]}}}),
     Decision(
         "4.1", "4. Fronteras de tiempo (U-06)", "La entrada cae exactamente al vencer el retardo",
         "t tiene 2s/p. p sube a 0 s y baja exactamente a 2 s. ¿Franquea?",
@@ -512,33 +584,78 @@ CATALOGO: list[Decision] = [
     Decision("7.1", "7. Jerarquías (U-08, U-02)", "Quién fuerza a quién (U-02)",
              "La frase del §7.3 sobre el sentido jerárquico parece invertir sujeto y objeto.",
              [("A", "La etapa de un parcial superior fuerza a un parcial inferior"), ("B", "Es al revés")],
-             note="Las jerarquías aún no se ejecutan: no hay simulación."),
-    Decision("7.2", "7. Jerarquías (U-08, U-02)", "Cuándo se aplica el forzado (H-18)",
-             "La etapa F (que fuerza G = {B}) se activa en una evolución en la que G también podría evolucionar.",
-             [("A", "El forzado se aplica en esa misma evolución y gana"), ("B", "G evoluciona y el forzado se aplica en la siguiente")],
-             note="Las jerarquías aún no se ejecutan: no hay simulación."),
-    Decision("7.3", "7. Jerarquías (U-08, U-02)", "Temporizadores de un parcial forzado",
-             "¿Qué pasa con los temporizadores de un parcial mientras está forzado?",
-             [("A", "Siguen contando"), ("B", "Se congelan mientras dura el forzado")],
-             note="Las jerarquías aún no se ejecutan: no hay simulación."),
-    Decision("7.4", "7. Jerarquías (U-08, U-02)", "Forzar un recinto cuya encapsulante está inactiva",
-             "¿Qué pasa si se fuerza un recinto cuya encapsulante está inactiva?",
-             [("A", "Error de diseño: no compila"), ("B", "Se fuerza igualmente"),
-              ("C", "El forzado se ignora mientras la encapsulante esté inactiva")],
-             note="Las jerarquías aún no se ejecutan: no hay simulación."),
-    Decision("7.5", "7. Jerarquías (U-08, U-02)", "Salir de una macroetapa con ramas internas aún activas",
-             "¿Qué pasa con las ramas internas al salir de la macroetapa?",
-             [("A", "Se desactivan todas las etapas de la expansión"), ("B", "Las ramas siguen activas"),
-              ("C", "Error de diseño")],
-             note="Las jerarquías aún no se ejecutan: no hay simulación."),
-    Decision("7.6", "7. Jerarquías (U-08, U-02)", "Desactivar la encapsulante cuando vence un temporizador interno",
-             "La encapsulante se desactiva en el mismo instante en que vence un temporizador interno.",
-             [("A", "Gana la desactivación"), ("B", "Primero actúa el temporizador interno")],
-             note="Las jerarquías aún no se ejecutan: no hay simulación."),
-    Decision("7.7", "7. Jerarquías (U-08, U-02)", "Etapas iniciales dentro de la expansión de una macroetapa",
-             "¿Se admiten etapas iniciales dentro de una expansión?",
-             [("A", "Sí: están activas al arrancar"), ("B", "No")],
-             note="Las jerarquías aún no se ejecutan: no hay simulación."),
+             note="El documento 06 lo fija como interpretación I: una orden de una etapa de un parcial superior impone "
+                  "una situación a un parcial inferior (A). Es lo que ejecuta el programa; la duda U-02 es sobre la redacción "
+                  "del §7.3. Se puede responder igualmente."),
+    Decision(
+        "7.2", "7. Jerarquías (U-08, U-02)", "Cuándo se aplica el forzado (H-18)",
+        "La orden F (de H, que fuerza G = {C}) entra en vigor en una evolución en la que G también evoluciona. ¿Qué pasa?",
+        [("A", "El forzado se aplica en esa misma evolución y gana"), ("B", "G evoluciona y el forzado se aplica en la siguiente")],
+        "7.2", "p activa H (t) y, a la vez, haría avanzar G de A a B (u). B pone n := 1 al activarse.", m72,
+        script=[fijar("p sube: t activa H, que fuerza G = {C}, y u querría llevar G de A a B", p=True)],
+        expect={"A": "El forzado gana: G pasa directamente a {C}; B nunca se activa y n = 0.",
+                "B": "G avanza a B (n := 1) y, en la evolución siguiente, el forzado lo lleva a {C}: B queda inestable."},
+        checks={"A": {1: {"situation": ["C", "H"], "values": {"n": "0"}}},
+                "B": {1: {"situation": ["C", "H"], "values": {"n": "1"}}}}),
+    Decision(
+        "7.3", "7. Jerarquías (U-08, U-02)", "Temporizadores de un parcial forzado",
+        "Mientras G está forzado, ¿qué pasa con sus temporizadores (3s/X_A)?",
+        [("A", "Siguen contando"), ("B", "Se congelan mientras dura el forzado")],
+        "7.3", "A está activa desde τ = 0. A 1 s, H fuerza G en su situación actual ({A}); a 5 s se retira el forzado.", m73,
+        batches=[(S, 0, {"p": True}), (5 * S, 0, {"p": False, "q": True})],
+        script=[hasta("τ = 1 s: p activa H, que fuerza G = {A}", S), hasta("τ = 5 s: q retira el forzado", 5 * S),
+                hasta("τ = 7 s", 7 * S)],
+        expect={"A": "El tiempo de A siguió corriendo: al retirarse el forzado (5 s), A → B en el acto.",
+                "B": "A solo llevaba 1 s cuando empezó el forzado: tras retirarlo le faltan 2 s y pasa a B a los 7 s."},
+        checks={"A": {2: {"situation": ["B", "Z"]}}, "B": {2: {"situation": ["A", "Z"]}, 3: {"situation": ["B", "Z"]}}}),
+    Decision(
+        "7.4", "7. Jerarquías (U-08, U-02)", "Forzar un recinto cuya encapsulante está inactiva",
+        "F0 fuerza el recinto R = {J}, pero su encapsulante H no está activa al arrancar. ¿Qué pasa?",
+        [("A", "Error de diseño: se detiene con error"), ("B", "Se fuerza igualmente"),
+         ("C", "El forzado se ignora mientras la encapsulante esté inactiva")],
+        "7.4", "F0 es inicial y su orden F/R:{J} está vigente desde el arranque. p activa H.", m74,
+        script=[fijar("p sube: se activa H", p=True)],
+        expect={"A": "Se detiene con D-FORZADO-RECINTO.",
+                "B": "J está activa desde el arranque, aunque H no lo esté (se rompe la regla del recinto).",
+                "C": "Al arrancar R está vacío; cuando H se activa, el forzado lo lleva a {J}."},
+        checks={"A": {0: {"code": "D-FORZADO-RECINTO"}}, "B": {0: {"situation": ["F0", "J", "P0"]}, 1: {"situation": ["F0", "H", "J"]}},
+                "C": {0: {"situation": ["F0", "P0"]}, 1: {"situation": ["F0", "H", "J"]}}}),
+    Decision(
+        "7.5", "7. Jerarquías (U-08, U-02)", "Salir de una macroetapa con ramas internas aún activas",
+        "La expansión de M tiene dos ramas (K y la salida Sx). Cuando se sale de M por Sx, ¿qué pasa con K?",
+        [("A", "Se desactivan todas las etapas de la expansión"), ("B", "Las ramas siguen activas"),
+         ("C", "Error de diseño: se detiene con error")],
+        "7.5", "Es el caso T-18d del documento 11. s permite salir de M en cuanto Sx está activa.", m75,
+        script=[fijar("p sube: se entra en M (E)", p=True), fijar("q sube: E → K y Sx", q=True),
+                fijar("s sube: se sale de M por Sx", s=True)],
+        expect={"A": "Se pasa a B y K se desactiva.", "B": "Se pasa a B y K sigue activa dentro de la expansión.",
+                "C": "Se detiene con D-JERARQUIA-RAMA."},
+        checks={"A": {3: {"situation": ["B"]}}, "B": {3: {"situation": ["B", "K"]}}, "C": {3: {"code": "D-JERARQUIA-RAMA"}}}),
+    Decision(
+        "7.6", "7. Jerarquías (U-08, U-02)", "Desactivar la encapsulante cuando vence un temporizador interno",
+        "A 2 s vence 2s/X_A dentro del recinto de H y, en el mismo instante, p desactiva H. ¿Qué pasa?",
+        [("A", "Gana la desactivación: el temporizador interno no tiene efecto"),
+         ("B", "Primero actúa el temporizador interno y luego se desactiva")],
+        "7.6", "Es el caso T-20a del documento 11. B pone n := 1 al activarse.", m76,
+        batches=[(2 * S, 0, {"p": True})], script=[hasta("τ = 2 s: vence 2s/X_A y p desactiva H a la vez", 2 * S)],
+        expect={"A": "Se pasa a Z; B nunca se activa (n = 0).", "B": "B se activa (n := 1) y queda inestable; se pasa a Z."},
+        checks={"A": {1: {"situation": ["Z"], "values": {"n": "0"}}}, "B": {1: {"situation": ["Z"], "values": {"n": "1"}}}}),
+    Decision(
+        "7.7", "7. Jerarquías (U-08, U-02)", "Etapas iniciales dentro de la expansión de una macroetapa",
+        "K es inicial y está dentro de la expansión de M. ¿Se admite?",
+        [("A", "Se permiten: están activas al arrancar"), ("B", "No se permiten: no compila")],
+        "7.7", "Con K activa, M cuenta como activa aunque no se haya entrado por E.", m77,
+        script=[fijar("p sube: se entra en M por E", p=True)],
+        expect={"A": "Al arrancar, A y K están activas (M cuenta como activa).", "B": "No compila: D-FORMATO."},
+        checks={"A": {0: {"situation": ["A", "K"]}, 1: {"situation": ["E", "K"]}}, "B": {0: {"code": "D-FORMATO"}}}),
+    Decision(
+        "7.8", "7. Jerarquías (U-08, U-02)", "Acciones de las etapas que cambia un forzado (H-24)",
+        "El forzado activa B, que tiene n := 1 al activarse. ¿Se ejecuta esa acción?",
+        [("A", "Sí: es una activación"), ("B", "No: el forzado impone la situación sin acciones")],
+        "7.8", "Duda nueva al implementar (H-24): la hoja 08 no la recogía. p activa H, que fuerza G = {B}.", m78,
+        script=[fijar("p sube: H fuerza G = {B}", p=True)],
+        expect={"A": "B se activa por el forzado y n = 1.", "B": "B se activa por el forzado y n sigue en 0."},
+        checks={"A": {1: {"situation": ["B", "H"], "values": {"n": "1"}}}, "B": {1: {"situation": ["B", "H"], "values": {"n": "0"}}}}),
     Decision(
         "8.1", "8. Otras dudas (H-08, H-10)", "Actividad de un parcial con parciales hijos (H-08)",
         "t tiene activePartial(G1). G1 contiene X (inactiva) y tiene un parcial hijo G2 con Y (inicial). ¿G1 está activo?",

@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-27T10:19:55+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 132 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-27T10:30:09+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 132 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -10,12 +10,12 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 
 | Categoría del requisito | Nº |
 |---|---|
-| Implementado (P), verificable ya (`IMPL-P`) | 41 |
-| Implementado como provisional (I; U-01) (`IMPL-I`) | 11 |
-| Parcial (`PARCIAL`) | 11 |
+| Implementado (P), verificable ya (`IMPL-P`) | 42 |
+| Implementado como provisional (I; U-01) (`IMPL-I`) | 14 |
+| Parcial (`PARCIAL`) | 10 |
 | Implementado según decisión del responsable (U cerrada; contraste U-01 pendiente) (`IMPL-DEC`) | 4 |
 | Bloqueado por U (bloqueo implementado) (`BLOQ-U`) | 1 |
-| Pendiente de iteración (estructura hecha) (`PEND-ITER`) | 3 |
+| Pendiente de iteración (estructura hecha) (`PEND-ITER`) | 0 |
 | Pendiente de interfaz (`PEND-UI`) | 5 |
 | Pendiente de plataforma (U-10) (`PEND-PLT`) | 1 |
 | Revisión documental (`DOC`) | 5 |
@@ -24,9 +24,8 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 |---|---|
 | BLOQUEO VERIFICADO | 4 |
 | NO EJECUTADO | 6 |
-| NO IMPLEMENTADO | 7 |
-| PARCIAL | 6 |
-| PASA | 70 |
+| PARCIAL | 7 |
+| PASA | 76 |
 | PASA SEGÚN DECISIÓN | 9 |
 
 Pruebas suplementarias S-xx: 32 casos, 35 pruebas, 35 pasan.
@@ -50,7 +49,7 @@ Pruebas suplementarias S-xx: 32 casos, 35 pruebas, 35 pasan.
 | REQ-MOD-04 | I/alta | 03 | IMPL-DEC | model, engine | T-03c ✔, T-10e ◆, T-01d ◆, S-U07 ✔, S-OPT03e ✔ | Sumideros I. U-07 cerrada por el responsable (comparador, 27-10-2026, P-IMP-22): fuente por evento una vez por flanco (6.3 A); sin etapas iniciales, fuente de nivel y transición sin lados no compilan (6.1 A, 6.2 A, 6.4 A) |
 | REQ-MOD-05 | P/alta | 03 | IMPL-P | model, expressions, editor | T-09c ✔ | Texto libre conservado como descriptivo; D-EXP-PENDIENTE localizado |
 | REQ-MOD-06 | P/crítica | 03 | IMPL-P | model, editor, engine | T-04c ✔, T-21d ✔ | Renombrar, mover u ordenar no cambia observables ni revisión semántica (H-13) |
-| REQ-MOD-07 | I/alta | 03 | IMPL-I | model | T-18c ✔, T-19c ✔ | Propiedad única de expansiones y recintos; recursión rechazada (solo estructura) |
+| REQ-MOD-07 | I/alta | 03 | IMPL-I | model, hierarchy | T-18c ✔, T-19c ✔ | Propiedad única de expansiones y recintos; recursión rechazada; la estructura se ejecuta (P-IMP-23) |
 | REQ-SEM-01 | I/crítica | 04 | PARCIAL | engine | T-01a ✔, T-01b ✔, T-01c ✔, T-01d ◆, S-CMP02 ✔, S-U09 ✔, S-H07 ✔ | Situación inicial explícita y su cierre causal en τ=0: acciones al activar las iniciales, evolución inicial y temporizadores desde τ=0 (hoja 08, 1.1–1.4, P-IMP-19). Inicio vacío: no compila (6.1 A, P-IMP-22). Abierto: iniciales dentro de jerarquías (U-08) |
 | REQ-SEM-02 | I/crítica | 04 | IMPL-I | engine | T-02c ✔, T-02a ✔, T-02b ✔, T-06a ✔, T-06b ✔ | Validación y receptividad; imposición jerárquica pendiente de iteración |
 | REQ-SEM-03 | I/crítica | 04 | IMPL-I | engine | T-03a ✔, T-03b ✔, T-03c ✔, T-03d ✔, T-06c ✔ | Cambio conjunto de precedentes y siguientes |
@@ -61,7 +60,7 @@ Pruebas suplementarias S-xx: 32 casos, 35 pruebas, 35 pasan.
 | REQ-SEM-08 | P/crítica | 04 | IMPL-P | engine, trace | T-04c ✔, T-23b ✔, T-24a ◐, S-U06 ✔ | Mismos observables con independencia de recorrido, geometría y control; entre sistemas: U-10 |
 | REQ-SEM-09 | U/crítica | 04 | IMPL-DEC | engine | T-10d ◆, T-11b ⛔, T-15c ◆, S-CMP01 ✔, S-CMP02 ✔, S-CMP03 ✔, S-CMP05 ✔, S-U05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔ | U-05 (P-IMP-20) y U-03, U-04, U-06, U-07 (comparador, 27-10-2026, P-IMP-22) cerradas por el responsable; cada lectura sigue siendo seleccionable, «detener» incluida (P-IMP-15, P-IMP-21). Siguen deteniéndose los eventos internos y de franqueamiento (U-03), 0s/p/d2 y los vencimientos que dependen del orden (U-06) |
 | REQ-ACT-01 | I/crítica | 05 | IMPL-I | engine | T-14a ✔, T-14b ✔, T-14c ✔, T-07a ✔, T-12c ✔, S-H10 ✔ | Disyunción sobre situación efectiva; lectura de salidas continuas no soportada (H-10) |
-| REQ-ACT-02 | I/crítica | 05 | IMPL-I | engine | T-15a ✔, T-15b ✔, T-01c ✔, T-07b ✔, T-07c ✔, T-18e ∅, S-CMP02 ✔, S-U03 ✔, S-U05b ✔, S-U09 ✔, S-H07 ✔ | Memorizadas por activación, desactivación y evento, también virtuales |
+| REQ-ACT-02 | I/crítica | 05 | IMPL-I | engine | T-15a ✔, T-15b ✔, T-01c ✔, T-07b ✔, T-07c ✔, T-18e ◐, S-CMP02 ✔, S-U03 ✔, S-U05b ✔, S-U09 ✔, S-H07 ✔ | Memorizadas por activación, desactivación y evento, también virtuales |
 | REQ-ACT-03 | P/crítica | 05 | IMPL-P | model, engine | T-16a ✔, T-16b ✔, S-ESC01 ✔, S-ESC02 ✔ | D-ESCRITURA-CONFLICTO con autores y valores, sin prioridad oculta; un conflicto seguro impide compilar (P-IMP-16) y el resto se detiene en ejecución |
 | REQ-ACT-04 | I/crítica | 05 | IMPL-I | model | T-16c ✔ | D-MODO-SALIDA en validación |
 | REQ-ACT-05 | U/crítica | 05 | IMPL-DEC | engine, model | T-15c ◆, T-16d ◆, S-U05 ✔, S-U05b ✔, S-ESC02 ✔ | Hoja 08, 2.1 C, 2.2 B, 2.3 A, 2.4 A y 2.5 A (P-IMP-20): conflicto si dos escriben a la vez, dependencia cruzada no compila, lo asignado se ve en el mismo instante y vale la última asignación |
@@ -74,11 +73,11 @@ Pruebas suplementarias S-xx: 32 casos, 35 pruebas, 35 pasan.
 | REQ-TMP-02 | I/crítica | 05 | IMPL-I | engine, model | T-12a ✔, T-12b ✔, T-12c ✔, T-12e ✔, T-12f ✔, T-13d ✔, S-U09 ✔, S-12a ✔, S-H09 ✔, S-H09b ✔ | delay ordinario, limitadas, retardadas; duración de etapa inicial según T-12a/T-12c (H-02); salida y reentrada en el mismo instante sin interrumpir la duración (P-IMP-18); bases compuestas no soportadas (H-09) |
 | REQ-TMP-03 | U/crítica | 05 | PARCIAL | engine, model | T-13b ◆, T-13c ◆, T-20a ⛔, S-CMP02 ✔, S-U06 ✔ | Decidido (comparador, 27-10-2026, P-IMP-22): caída en el vencimiento → primero el vencimiento (4.1 A); rebote → sigue verdadera (4.2 A); lote y vencimiento independientes → juntos (4.3 A; cierra H-17); 0s/p no compila (4.4 B). Siguen en U-06: 0s/p/d2 y vencimientos simultáneos que dependen del orden |
 | REQ-JER-01 | I/crítica | 06 | PARCIAL | engine, model | T-04c ✔, T-20b ✔, S-H08 ✔ | Partición sin orden y XG de parciales sin hijos; anidados: H-08 |
-| REQ-JER-02 | I/crítica | 06 | PEND-ITER | model | T-17a ∅, T-17b ∅ | Cuatro formas de forzado editables y validadas; ejecución pendiente (H-18, U-08) |
-| REQ-JER-03 | P/crítica | 06 | PARCIAL | model | T-17c ◐, T-17d ✔ | Ciclos D-JERARQUIA-CICLO; conflicto posible estático; detección dinámica pendiente de ejecución |
-| REQ-JER-04 | I/crítica | 06 | PEND-ITER | model | T-18a ∅, T-18b ∅, T-18c ✔, T-18e ∅ | Estructura de macro/expansión validada; ejecución pendiente |
-| REQ-JER-05 | I/crítica | 06 | PEND-ITER | model | T-19a ∅, T-19b ∅, T-19c ✔ | Estructura de recintos y coherencia inicial validadas; ejecución pendiente. Ya decidido para cuando se ejecute: en permanencia activa de la encapsulante, su contenido se mantiene (comparador, 27-10-2026, 3.4 A) |
-| REQ-JER-06 | U/crítica | 06 | BLOQ-U | model | T-18d ⛔, T-20a ⛔, T-20c ⛔ | U-08: no ejecutable (y ejecución jerárquica aún no implementada) |
+| REQ-JER-02 | I/crítica | 06 | IMPL-I | hierarchy, engine | T-17a ✔, T-17b ◐ | Forzado explícito, actual (captura), vacío e inicial; el destino no evoluciona mientras está vigente; la retirada libera desde la situación resultante (documento 06, P-IMP-23). Momento, temporizadores, recintos y acciones: U-08 (7.2–7.4, 7.8) |
+| REQ-JER-03 | P/crítica | 06 | IMPL-P | model, hierarchy | T-17c ✔, T-17d ✔ | Ciclos D-JERARQUIA-CICLO; conflicto posible avisado al validar y detenido al ejecutar (D-FORZADO-CONFLICTO) sin prioridad por ID |
+| REQ-JER-04 | I/crítica | 06 | IMPL-I | model, hierarchy, engine | T-18a ✔, T-18b ✔, T-18c ✔, T-18e ◐ | Relación expandida: llegar activa la entrada, salir exige la salida; XM por la expansión; reentrada sin borrar memorias (P-IMP-23). Ramas residuales e iniciales en la expansión: U-08 (7.5, 7.7) |
+| REQ-JER-05 | I/crítica | 06 | IMPL-I | model, hierarchy | T-19a ✔, T-19b ✔, T-19c ✔ | Al arrancar, iniciales; al reentrar, enlaces de activación; al salir, se desactivan todos los descendientes (P-IMP-23). Encapsulante en permanencia: el contenido se mantiene (comparador, 3.4 A) |
+| REQ-JER-06 | U/crítica | 06 | BLOQ-U | hierarchy | T-18d ⛔, T-20a ⛔, T-20c ⛔ | U-08: cada interacción abierta (7.2–7.8) se detiene con D-SEM-PENDIENTE; sus lecturas se prueban en el comparador |
 | REQ-JER-07 | P/alta | 06 | PEND-UI | — | T-21g —, T-24a ◐ | Plegado y navegación pertenecen a la vista |
 | REQ-EDT-01 | P/alta | 07 | PARCIAL | editor, persistence | T-21a ◐ | Crear, abrir, guardar y duplicar sin interfaz; diálogo de cierre con cambios pendiente de interfaz |
 | REQ-EDT-02 | P/alta | 07 | IMPL-P | editor | T-21b ✔, T-21c ✔ | Insertar, conectar, editar; borrador inválido guardable |
@@ -177,21 +176,21 @@ Pruebas suplementarias S-xx: 32 casos, 35 pruebas, 35 pasan.
 | T-16b | REQ-ACT-03 | I | PASA (oráculo I) | `test_T16b_escrituras_iguales` |  |
 | T-16c | REQ-ACT-04 | I | PASA (oráculo I) | `test_T16c_modos_mezclados` |  |
 | T-16d | REQ-ACT-05 | B | PASA SEGÚN DECISIÓN (en el documento 11: B, depende de U) | `test_T16d_dos_incrementos_conflicto` | decisión 2.1 C de la hoja 08: de las alternativas del caso (n=1, n=2 o conflicto), conflicto |
-| T-17a | REQ-JER-02 | I | NO IMPLEMENTADO (bloqueo verificado) | `test_T17a_forzado_no_ejecutable_en_esta_iteracion` | ejecución de forzado no implementada (H-18) |
-| T-17b | REQ-JER-02 | I/B parcial | NO IMPLEMENTADO (bloqueo verificado) | `test_T17b_forzado_actual_no_ejecutable` | ejecución de forzado no implementada; efectos U-08 |
-| T-17c | REQ-JER-03 | P | PARCIAL | `test_T17c_conflicto_posible_de_forzado` | conflicto posible detectado estáticamente; detección dinámica pendiente |
+| T-17a | REQ-JER-02 | I | PASA (oráculo I) | `test_T17a_forzado_explicito_vacio_e_inicial` | forzado explícito, vacío e inicial (P-IMP-23) |
+| T-17b | REQ-JER-02 | I/B parcial | PARCIAL | `test_T17b_forzado_actual_captura_y_retirada` | captura, mantenimiento y retirada verificados (I); efectos coincidentes U-08 (7.2, 7.8) |
+| T-17c | REQ-JER-03 | P | PASA (oráculo P) | `test_T17c_conflicto_de_forzado` | conflicto avisado al validar y detenido al ejecutar, sin prioridad |
 | T-17d | REQ-JER-03 | P | PASA (oráculo P) | `test_T17d_ciclo_de_forzado` |  |
-| T-18a | REQ-JER-04 | I | NO IMPLEMENTADO (bloqueo verificado) | `test_T18a_macroetapa_no_ejecutable_en_esta_iteracion` | ejecución de macroetapas no implementada |
-| T-18b | REQ-JER-04 | I | NO IMPLEMENTADO (bloqueo verificado) | `test_T18b_recorrido_de_expansion_no_ejecutable` | ejecución de macroetapas no implementada |
+| T-18a | REQ-JER-04 | I | PASA (oráculo I) | `test_T18a_macroetapa_entrada_y_salida` | entrada, salida y XM (P-IMP-23) |
+| T-18b | REQ-JER-04 | I | PASA (oráculo I) | `test_T18b_recorrido_de_expansion_y_reentrada` | recorrido virtual de la expansión y reentrada (P-IMP-23) |
 | T-18c | REQ-JER-04, REQ-MOD-07 | P/I | PASA (oráculo P/I) | `test_T18c_propiedad_unica_y_recursion` | estructura: propiedad, anidamiento y recursión |
-| T-18d | REQ-JER-06 | B | BLOQUEO VERIFICADO | `test_T18d_rama_residual_bloqueada` | U-08 (y ejecución no implementada) |
-| T-18e | REQ-JER-04, REQ-ACT-02 | I/B parcial | NO IMPLEMENTADO (bloqueo verificado) | `test_T18e_reentrada_de_macroetapa_no_ejecutable` | ejecución de macroetapas no implementada; U-08 |
-| T-19a | REQ-JER-05 | I | NO IMPLEMENTADO (bloqueo verificado) | `test_T19a_encapsulacion_no_ejecutable_en_esta_iteracion` | ejecución de encapsulación no implementada |
-| T-19b | REQ-JER-05 | I | NO IMPLEMENTADO (bloqueo verificado) | `test_T19b_encapsulacion_anidada_no_ejecutable` | ejecución de encapsulación no implementada |
+| T-18d | REQ-JER-06 | B | BLOQUEO VERIFICADO | `test_T18d_rama_residual_U08` | U-08 (7.5): se detiene; las lecturas A, B y C se comprueban como referencia |
+| T-18e | REQ-JER-04, REQ-ACT-02 | I/B parcial | PARCIAL | `test_T18e_reentrada_de_macroetapa_y_memoria` | parte I verificada: E en cada llegada, n=1 y n=2 sin reinicio de memoria (P-IMP-23); el caso pide confirmar U-08 antes de cerrar |
+| T-19a | REQ-JER-05 | I | PASA (oráculo I) | `test_T19a_inicio_salida_y_reentrada_por_enlace_de_activacion` | inicio por iniciales, salida y reentrada por enlace de activación (P-IMP-23) |
+| T-19b | REQ-JER-05 | I | PASA (oráculo I) | `test_T19b_encapsulacion_anidada` | activación anidada y desactivación de descendientes (P-IMP-23) |
 | T-19c | REQ-JER-05, REQ-MOD-07 | I/P | PASA (oráculo I/P) | `test_T19c_propietario_unico_y_coherencia_inicial` |  |
-| T-20a | REQ-JER-06, REQ-TMP-03 | B | BLOQUEO VERIFICADO | `test_T20a_coincidencia_jerarquica_bloqueada` | U-06/U-08 (y ejecución no implementada) |
+| T-20a | REQ-JER-06, REQ-TMP-03 | B | BLOQUEO VERIFICADO | `test_T20a_desactivacion_y_vencimiento_interior_U08` | U-08 (7.6): se detiene; las lecturas A y B se comprueban como referencia |
 | T-20b | REQ-JER-01 | I/P | PASA (oráculo I/P) | `test_T20b_particion_sin_orden_y_actividad_derivada` |  |
-| T-20c | REQ-JER-06 | B | BLOQUEO VERIFICADO | `test_T20c_forzado_contra_recinto_bloqueado` | U-08 (y ejecución no implementada) |
+| T-20c | REQ-JER-06 | B | BLOQUEO VERIFICADO | `test_T20c_forzado_contra_recinto_U08` | U-08 (7.4) y vaciar un recinto activo (no preguntado): se detienen |
 | T-21a | REQ-ALC-01, REQ-EDT-01 | P | PARCIAL | `test_T21a_crear_guardar_reabrir_duplicar` | sin interfaz: el diálogo de cierre con cambios queda pendiente |
 | T-21b | REQ-MOD-01, REQ-MOD-02, REQ-EDT-02, REQ-EDT-09 | P/I | PASA (oráculo P/I) | `test_T21b_diagnosticos_separados_borrador_guardable` |  |
 | T-21c | REQ-MOD-03, REQ-EDT-02, REQ-EDT-03 | P | PASA (oráculo P) | `test_T21c_cruzar_mover_alinear_no_conecta` |  |

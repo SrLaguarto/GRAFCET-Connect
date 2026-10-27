@@ -1,5 +1,5 @@
 {
- "date": "2026-10-27T10:19:55+01:00",
+ "date": "2026-10-27T10:30:09+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
@@ -743,25 +743,25 @@
    "summary": ""
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T17a_forzado_no_ejecutable_en_esta_iteracion",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T17a_forzado_explicito_vacio_e_inicial",
    "case": "T-17a",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "G mantiene {B} y t no franquea mientras H está activa; vacío deja G sin etapas; inicial, sus iniciales."
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T17b_forzado_actual_no_ejecutable",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T17b_forzado_actual_captura_y_retirada",
    "case": "T-17b",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "La orden «actual» mantiene la captura {A,B}; al retirarse, G evoluciona desde ahí."
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T17c_conflicto_posible_de_forzado",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T17c_conflicto_de_forzado",
    "case": "T-17c",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Dos órdenes vigentes con igual destino y objetivo distinto: D-FORZADO-CONFLICTO, sin prioridad."
   },
   {
    "test": "test_t17_t20_jerarquias.Jerarquias.test_T17d_ciclo_de_forzado",
@@ -771,18 +771,18 @@
    "summary": ""
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18a_macroetapa_no_ejecutable_en_esta_iteracion",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18a_macroetapa_entrada_y_salida",
    "case": "T-18a",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "p activa E; q activa K sin salida externa (XM no sustituye a S); r activa S y habilita la salida a B."
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18b_recorrido_de_expansion_no_ejecutable",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18b_recorrido_de_expansion_y_reentrada",
    "case": "T-18b",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Expansión E→S/1: recorrido virtual hasta B; un nuevo ciclo vuelve a activar E."
   },
   {
    "test": "test_t17_t20_jerarquias.Jerarquias.test_T18c_propiedad_unica_y_recursion",
@@ -792,32 +792,32 @@
    "summary": ""
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18d_rama_residual_bloqueada",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18d_rama_residual_U08",
    "case": "T-18d",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "S habilita la salida con K aún activa: U-08 (7.5), no se borra K por analogía con una llamada."
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18e_reentrada_de_macroetapa_no_ejecutable",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18e_reentrada_de_macroetapa_y_memoria",
    "case": "T-18e",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "E se activa en ambas llegadas: n=1 tras la primera y n=2 tras la segunda; la memoria no se reinicia."
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T19a_encapsulacion_no_ejecutable_en_esta_iteracion",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T19a_inicio_salida_y_reentrada_por_enlace_de_activacion",
    "case": "T-19a",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Inicio {H,I}; la salida de H vacía R; la reentrada activa K, no I ni la última situación."
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T19b_encapsulacion_anidada_no_ejecutable",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T19b_encapsulacion_anidada",
    "case": "T-19b",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Entrar en H activa K y L (sus recintos) y N (recinto de K); salir de H desactiva todos los descendientes."
   },
   {
    "test": "test_t17_t20_jerarquias.Jerarquias.test_T19c_propietario_unico_y_coherencia_inicial",
@@ -827,11 +827,11 @@
    "summary": ""
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20a_coincidencia_jerarquica_bloqueada",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20a_desactivacion_y_vencimiento_interior_U08",
    "case": "T-20a",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "H se desactiva a 2 s cuando vence 2s/X_A en su interior: U-08 (7.6); se registran las alternativas."
   },
   {
    "test": "test_t17_t20_jerarquias.Jerarquias.test_T20b_particion_sin_orden_y_actividad_derivada",
@@ -841,11 +841,11 @@
    "summary": ""
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20c_forzado_contra_recinto_bloqueado",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20c_forzado_contra_recinto_U08",
    "case": "T-20c",
    "outcome": "pasa",
    "requirements": [],
-   "summary": ""
+   "summary": "Forzar el recinto de una encapsulante inactiva, o vaciarlo con ella activa: U-08 (7.4), sin resultado silencioso."
   },
   {
    "test": "test_t21_t26_producto.Datos.test_T22a_ida_y_vuelta_conserva_significado_notas_y_vista",
