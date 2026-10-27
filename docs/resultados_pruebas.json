@@ -1,9 +1,9 @@
 {
- "date": "2026-10-27T17:54:16+01:00",
+ "date": "2026-10-27T18:06:05+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 147,
+ "total": 150,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -117,6 +117,25 @@
    "summary": "REQ-SIM-02: una entrada numérica escrita a mano admite coma decimal y respeta tipo, escala y rango."
   },
   {
+   "test": "test_simulador_escritorio.Nucleo.test_SAPP14_nombres_en_vez_de_id",
+   "case": "S-APP14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-07, REQ-SIM-03: un modelo hecho con el editor (ID internos) se dibuja y se traza con los nombres:"
+  },
+  {
+   "test": "test_simulador_escritorio.Nucleo.test_SAPP15_ejemplos_no_cambian",
+   "case": "S-APP15",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: en los ejemplos el ID es el nombre: mostrar nombres no cambia nada del dibujo ni de la traza."
+  },
+  {
    "test": "test_simulador_escritorio.Ventana.test_SAPP05_ejemplos_en_la_ventana",
    "case": "S-APP05",
    "outcome": "pasa",
@@ -195,6 +214,16 @@
     "REQ-SIM-03"
    ],
    "summary": "REQ-SIM-03: lo que lleva un temporizador y τ se muestran truncados a la baja a 2 decimales; el preset, tal cual."
+  },
+  {
+   "test": "test_simulador_escritorio.Ventana.test_SAPP16_ventana_con_nombres",
+   "case": "S-APP16",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-07, REQ-SIM-03: un modelo del editor, guardado y abierto en la ventana, muestra nombres en el dibujo,"
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU03_accion_por_evento_en_etapa_que_sale",

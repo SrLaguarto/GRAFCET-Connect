@@ -14,6 +14,7 @@ Para un modelo abierto sin presentación, o con elementos sin posición, `auto_l
 """
 from __future__ import annotations
 
+import re
 from collections import deque
 from fractions import Fraction
 from typing import Any, Callable
@@ -50,7 +51,48 @@ def _dur(us: int) -> str:
     return format_duration(us, "s", "es-ES").replace(" ", "")
 
 
-def norm(m: dict[str, Any], top: bool = True) -> list[dict[str, Any]]:
+_INTERNO = re.compile(r"[a-z]-[0-9a-f]{32}")  # el ID que crea grafcet.ids.IdGenerator: no es para mostrar
+
+
+def display_names(doc: dict[str, Any]) -> dict[str, str]:
+    """Nombre visible de cada elemento: variable → name, etapa → label, parcial y macroetapa → label, transición →
+    label si lo tiene o, si no, t1, t2… cuando su ID es interno. Un nombre repetido en otro parcial lleva el del parcial delante, como en el texto de las
+    expresiones (grafcet/editor.py). El dibujo y las tablas nunca muestran los ID internos que crea el editor."""
+    plabel = {p["id"]: p["label"] for p in doc["partials"]}
+    out: dict[str, str] = {}
+    for coll, key, scope in (("variables", "name", "scopeRef"), ("steps", "label", "partialRef")):
+        for x in doc[coll]:
+            same = [o for o in doc[coll] if o[key] == x[key]]
+            out[x["id"]] = x[key] if len(same) == 1 else f"{plabel.get(x[scope], x[scope])}.{x[key]}"
+    out.update({p["id"]: p["label"] for p in doc["partials"]})
+    out.update({x["id"]: x.get("label", x["id"]) for x in doc["hierarchy"]["macros"]})
+    taken = {t["label"] for t in doc["transitions"] if t.get("label")}
+    for n, t in enumerate(doc["transitions"], 1):  # sin etiqueta, una transición del editor se numera: t1, t2…
+        name = t.get("label")
+        if not name and _INTERNO.fullmatch(t["id"]):
+            k = n
+            while f"t{k}" in taken:
+                k += 1
+            name = f"t{k}"
+            taken.add(name)
+        out[t["id"]] = name or t["id"]
+    for a in doc["actions"]:  # una acción del editor se nombra por su etapa (columna «Contribuyen»)
+        if _INTERNO.fullmatch(a["id"]) and a["stepRef"] in out:
+            out[a["id"]] = out[a["stepRef"]]
+    return out
+
+
+def substitute(text: str, names: dict[str, str]) -> str:
+    """Sustituye en un texto (mensajes del motor) los ID internos por sus nombres visibles."""
+    pairs = {i: n for i, n in names.items() if i != n}
+    if not pairs:
+        return text
+    rx = re.compile(r"(?<!\w)(" + "|".join(re.escape(i) for i in sorted(pairs, key=len, reverse=True)) + r")(?!\w)")
+    return rx.sub(lambda mo: pairs[mo.group(1)], text)
+
+
+def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    names = names or {}
     op = m["operator"]
     if op == "lit":
         lit = m["literal"]
@@ -60,31 +102,31 @@ def norm(m: dict[str, Any], top: bool = True) -> list[dict[str, Any]]:
             return [_seg(_dur(int(lit["value"])))]
         return [_seg(lit["value"].replace(".", ","))]
     if op == "ref":
-        return [_seg(m["reference"])]
+        return [_seg(names.get(m["reference"], m["reference"]))]
     if op in ("active", "activePartial", "activeMacro"):
-        return [_seg("X"), _seg(m["reference"], s=True)]
+        return [_seg("X"), _seg(names.get(m["reference"], m["reference"]), s=True)]
     if op in ("rise", "fall"):
         inner = m["operands"][0]
-        body = norm(inner, False)
+        body = norm(inner, False, names)
         if inner["operator"] not in ("ref", "active", "lit"):
             body = _paren(body)
         return [_seg("↑" if op == "rise" else "↓")] + body
     if op == "not":
-        return [dict(s, o=True) for s in norm(m["operands"][0], False)]
+        return [dict(s, o=True) for s in norm(m["operands"][0], False, names)]
     if op == "delay":  # t1/condición/t2 de la norma; un tiempo de 0 s no se escribe (respuesta 4.4 revisada)
         d1, base, d2 = m["operands"]
-        out = norm(base, False)
+        out = norm(base, False, names)
         if int(d1["literal"]["value"]):
-            out = norm(d1, False) + [_seg("/")] + out
+            out = norm(d1, False, names) + [_seg("/")] + out
         if int(d2["literal"]["value"]):
-            out += [_seg("/")] + norm(d2, False)
+            out += [_seg("/")] + norm(d2, False, names)
         return out
     if op == "neg":
-        return [_seg("−")] + norm(m["operands"][0], False)
+        return [_seg("−")] + norm(m["operands"][0], False, names)
     a, b = m["operands"]
 
     def side(x: dict[str, Any]) -> list[dict[str, Any]]:
-        segs = norm(x, False)
+        segs = norm(x, False, names)
         return _paren(segs) if _PREC.get(x["operator"], 9) < _PREC[op] else segs
     if op in _CMP:
         return [_seg("[")] + side(a) + [_seg(f" {_CMP[op]} ")] + side(b) + [_seg("]")]
@@ -102,36 +144,40 @@ def t_trunc(us: str | int) -> str:
     return t_s(us - us % 10_000)
 
 
-def describe(r: dict[str, Any], texts: dict[str, str]) -> dict[str, str] | None:
+def describe(r: dict[str, Any], texts: dict[str, str], names: dict[str, str] | None = None) -> dict[str, str] | None:
+    names = names or {}
+
+    def lst(ids: list[str]) -> str:
+        return ", ".join(names.get(i, i) for i in ids)
     k = r["kind"]
     when = t_s(r.get("timeUs", 0))
     if k == "inicio":
-        return {"kind": k, "time": when, "text": f"Inicio · S = {{{', '.join(r['situation'])}}}"}
+        return {"kind": k, "time": when, "text": f"Inicio · S = {{{lst(r['situation'])}}}"}
     if k == "contexto":
-        what = ", ".join(f"{v}={str(x).lower()}" for v, x in r["inputChanges"].items()) or "sin cambio de entradas"
+        what = ", ".join(f"{names.get(v, v)}={str(x).lower()}" for v, x in r["inputChanges"].items()) or "sin cambio de entradas"
         src = "vencimiento temporal" if r["stimulus"] == "vencimiento" else f"lote {r['origin']}"
         names = sorted({texts.get(e.split(".")[0], e) for e in r["events"]})
         ev = f" · eventos: {', '.join(names)}" if names else ""
         return {"kind": k, "time": when, "text": f"{src}: {what}{ev}"}
     if k == "evolucion":
-        asg = "; ".join(f"{a['target']}:={a['value']}" for a in r["assignments"])
+        asg = "; ".join(f"{names.get(a['target'], a['target'])}:={a['value']}" for a in r["assignments"])
         if r["evolutionIndex"] == 0:
             return {"kind": k, "time": when, "text": f"Arranque: acciones al activar las etapas iniciales · {asg}"}
-        perm = f" · permanece {', '.join(r['permanent'])}" if r["permanent"] else ""
-        perm += f" · {', '.join(r['durationKept'])} reentra sin interrumpir su duración" if r.get("durationKept") else ""
-        return {"kind": k, "time": when, "text": f"Evolución {r['evolutionIndex']}: franquea {{{', '.join(r['cleared'])}}}"
-                f" → S = {{{', '.join(r['situation'])}}}{perm}" + (f" · {asg}" if asg else "")}
+        perm = f" · permanece {lst(r['permanent'])}" if r["permanent"] else ""
+        perm += f" · {lst(r['durationKept'])} reentra sin interrumpir su duración" if r.get("durationKept") else ""
+        return {"kind": k, "time": when, "text": f"Evolución {r['evolutionIndex']}: franquea {{{lst(r['cleared'])}}}"
+                f" → S = {{{lst(r['situation'])}}}{perm}" + (f" · {asg}" if asg else "")}
     if k == "estable":
         if "reason" in r:
             return None
-        virt = f" · inestables: {', '.join(r['virtualSteps'])}" if r.get("virtualSteps") else ""
-        hyp = "".join(f" · hipótesis {h['question']} ({h['reading']}) aplicada a {h['transition']}"
+        virt = f" · inestables: {lst(r['virtualSteps'])}" if r.get("virtualSteps") else ""
+        hyp = "".join(f" · hipótesis {h['question']} ({h['reading']}) aplicada a {names.get(h['transition'], h['transition'])}"
                       for h in r.get("hypotheses", []))
-        return {"kind": k, "time": when, "text": f"Estable · S = {{{', '.join(r['situation'])}}}{virt}{hyp}"}
+        return {"kind": k, "time": when, "text": f"Estable · S = {{{lst(r['situation'])}}}{virt}{hyp}"}
     if k in ("fallo", "limite"):
         d = r["diagnostics"][0]
         q = f" ({d['question']})" if d.get("question") else ""
-        return {"kind": "fallo", "time": when, "text": f"{d['code']}{q}: {d['message']}"}
+        return {"kind": "fallo", "time": when, "text": f"{d['code']}{q}: {substitute(d['message'], names)}"}
     return None
 
 
@@ -144,6 +190,12 @@ class Vista:
         m, layout = build()
         doc = m.doc if isinstance(m, M) else m
         self.key, self.options, self.doc = key, options, doc
+        self.texts: dict[str, str] = {}
+        self.where: dict[str, str] = {}
+        try:
+            self.names = display_names(doc)
+        except (KeyError, TypeError, AttributeError):
+            self.names = {}  # documento dañado: se muestran los ID tal cual
         res = validate_model(doc, options)
         self.compile_diags = [d for d in res.diagnostics if d.blocks_start]
         self.s: Session | None = None
@@ -160,7 +212,7 @@ class Vista:
         except (KeyError, TypeError, ValueError, AttributeError, IndexError):
             # Documento demasiado dañado para dibujarlo: no se dibuja nada y se listan los errores
             self.texts = {}
-            self.model = {"key": key, "title": title, "help": help_text, "compilable": False, "steps": [],
+            self.model = {"key": key, "names": self.names, "title": title, "help": help_text, "compilable": False, "steps": [],
                           "macros": [], "partials": [], "transitions": [], "inputs": [], "numericInputs": {}}
 
     def _structure(self, key: str, title: str, help_text: str, doc: dict[str, Any], compilable: bool,
@@ -168,31 +220,34 @@ class Vista:
         layout = {**auto_layout(doc), **(layout or {})}
         exprs = {e["id"]: e for e in doc["expressions"]}
         self.texts = {eid: e["text"] for eid, e in exprs.items()}
-        self.where = {t["conditionRef"]: f"transición {t.get('label', t['id'])}" for t in doc["transitions"]}
+        names = self.names
+        self.where = {t["conditionRef"]: f"transición {names[t['id']]}" for t in doc["transitions"]}
 
         def disp(eid: str | None, top: bool = False) -> list[dict[str, Any]] | None:
             if eid is None:
                 return None
             e = exprs[eid]
-            return norm(e["meaning"], top) if e["mode"] == "executable" else [_seg(e["text"])]
+            return norm(e["meaning"], top, names) if e["mode"] == "executable" else [_seg(e["text"])]
         acts: dict[str, list[dict[str, Any]]] = {}
         for a in doc["actions"]:
             if a["mode"] == "continuous":
                 cond = exprs[a["conditionRef"]]
                 plain = cond["mode"] == "executable" and cond["meaning"] == {"operator": "lit", "literal": {"type": "bool", "value": True}}
                 acts.setdefault(a["stepRef"], []).append({"kind": "continuous", "target": a["targetRef"],
-                                                          "text": [_seg(a["targetRef"])],
+                                                          "text": [_seg(names.get(a["targetRef"], a["targetRef"]))],
                                                           "cond": None if plain else disp(a["conditionRef"]),
                                                           "condRef": a["conditionRef"]})
-                self.where.setdefault(a["conditionRef"], f"acción {a['targetRef']} ({a['stepRef']})")
+                self.where.setdefault(a["conditionRef"], f"acción {names.get(a['targetRef'], a['targetRef'])} "
+                                                         f"({names.get(a['stepRef'], a['stepRef'])})")
             else:
                 trig = a["trigger"]
                 acts.setdefault(a["stepRef"], []).append({
                     "kind": "stored", "target": a["targetRef"], "trigger": trig["kind"],
-                    "text": [_seg(f"{a['targetRef']} := ")] + disp(a["valueRef"]),
+                    "text": [_seg(f"{names.get(a['targetRef'], a['targetRef'])} := ")] + disp(a["valueRef"]),
                     "event": disp(trig.get("expressionRef")), "condRef": trig.get("expressionRef")})
                 if trig.get("expressionRef"):
-                    self.where.setdefault(trig["expressionRef"], f"evento de {a['targetRef']} ({a['stepRef']})")
+                    self.where.setdefault(trig["expressionRef"], f"evento de {names.get(a['targetRef'], a['targetRef'])} "
+                                                                 f"({names.get(a['stepRef'], a['stepRef'])})")
         # Jerarquía, con la notación de las figuras de la norma (tablas 8–11; imágenes P40-02, P42-02..05,
         # P43-01, P43-02, P44-01, P45-01, P47-01..03): orden de forzado «G12{8,9,11}» en rectángulo doble, «*» de
         # enlace de activación, recinto con su encapsulante y su nombre, expansión unida a su macroetapa
@@ -203,12 +258,12 @@ class Vista:
                                             for x in hier["expansions"]}
         kinds.update({e["partialRef"]: {"kind": "enclosure", "ownerStep": e["ownerStepRef"]} for e in hier["enclosures"]})
         for f in doc["forces"]:
-            sit = {"explicit": "{" + ",".join(f.get("targetSteps", [])) + "}", "current": "{*}", "empty": "{ }",
+            sit = {"explicit": "{" + ",".join(names.get(i, i) for i in f.get("targetSteps", [])) + "}", "current": "{*}", "empty": "{ }",
                    "initial": "{INIT}"}[f["targetKind"]]
             acts.setdefault(f["sourceStepRef"], []).append({"kind": "force", "id": f["id"], "target": f["targetPartialRef"],
                                                            "text": [_seg(f"{labels[f['targetPartialRef']]}{sit}")]})
         return {
-            "key": key, "title": title, "help": help_text, "compilable": compilable,
+            "key": key, "title": title, "help": help_text, "compilable": compilable, "names": names,
             "steps": [{"id": s["id"], "label": s["label"], "initial": s["initial"],
                        "x": layout[s["id"]][0], "y": layout[s["id"]][1],
                        "partial": None if s["partialRef"] == "g" else s["partialRef"], "kind": s["kind"],
@@ -219,11 +274,11 @@ class Vista:
             "partials": [{"id": p["id"], "label": p["label"], "owner": p.get("ownerRef"),
                           **kinds.get(p["id"], {"kind": "partial"})}
                          for p in doc["partials"] if p["id"] != "g" and p["stepRefs"]],
-            "transitions": [{"id": t["id"], "label": t.get("label", t["id"]), "pre": t["preRefs"], "post": t["postRefs"],
+            "transitions": [{"id": t["id"], "label": names[t["id"]], "pre": t["preRefs"], "post": t["postRefs"],
                              "partial": t["partialRef"], "cond": disp(t["conditionRef"], top=True),
                              "conditionRef": t["conditionRef"],
                              "x": layout[t["id"]][0], "y": layout[t["id"]][1]} for t in doc["transitions"]],
-            "inputs": sorted(v["id"] for v in doc["variables"] if v["role"] == "input"),
+            "inputs": sorted((v["id"] for v in doc["variables"] if v["role"] == "input"), key=lambda i: (names[i], i)),
             "numericInputs": {v["id"]: v["type"]["kind"] for v in doc["variables"]
                               if v["role"] == "input" and v["type"]["kind"] != "bool"},
         }
@@ -232,11 +287,11 @@ class Vista:
         s = self.s
         out: dict[str, Any] = {}
         if s is None:  # no compila: se dibuja la estructura y se listan los errores
-            out.update({"status": "no-compilable", "diagnostics": [d.to_dict() for d in self.compile_diags],
+            out.update({"status": "no-compilable", "diagnostics": [self._diag(d) for d in self.compile_diags],
                         "time": "—", "situation": [], "transitions": {}, "outputs": {}, "values": {}, "temporal": {},
                         "lastCleared": [], "trace": [], "nextEvent": None, "blocked": None})
             return out
-        out.update({"status": s.status, "diagnostics": [d.to_dict() for d in (self.start_diags or s.diagnostics)[-2:]]})
+        out.update({"status": s.status, "diagnostics": [self._diag(d) for d in (self.start_diags or s.diagnostics)[-2:]]})
         if s.z is None:
             return out
         obs = s.observe()
@@ -252,11 +307,16 @@ class Vista:
             "values": {k: v for k, v in obs["values"].items()},
             "temporal": {k: self._temporizador(k, v, obs["timeUs"]) for k, v in obs["temporal"].items()},
             "lastCleared": evo[-1]["cleared"] if evo and closed == "estable" else [],  # un contexto fallido no franquea
-            "trace": [x for x in (describe(r, self.texts) for r in s.trace.records[-60:]) if x],
+            "trace": [x for x in (describe(r, self.texts, self.names) for r in s.trace.records[-60:]) if x],
             "nextEvent": self._next(), "nextEventUs": self._next_us(),
             "blocked": self._blocked(closed),
         })
         return out
+
+    def _diag(self, d: Any) -> dict[str, Any]:
+        """Diagnóstico para mostrar: el elemento sigue siendo su ID (el dibujo lo busca), el texto usa nombres."""
+        x = d.to_dict()
+        return {**x, **{k: substitute(x[k], self.names) for k in ("message", "correction") if isinstance(x.get(k), str)}}
 
     def _blocked(self, closed: str | None) -> dict[str, Any] | None:
         """Contexto rechazado: hasta dónde el recorrido está determinado y qué elemento queda en cuestión

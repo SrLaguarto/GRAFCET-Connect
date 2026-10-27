@@ -151,6 +151,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
     """M: estructura de la vista (Vista.model); S: estado observado (Vista.state())."""
     scene.clear()
     pt = _Pintor(scene)
+    nombre = M.get("names", {}).get  # los ID internos nunca se muestran: etapas, parciales y macroetapas, por su nombre
     pos = {s["id"]: (s["x"] + SX, s["y"]) for s in M["steps"]}
     pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
     if not pos and not M["transitions"]:
@@ -216,7 +217,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
             color, width = "glow", 3
         if blk and blk.get("element") == t["id"]:
             color, width = "err", 3
-        tip = (f"Transición {t['id']}: validada {'sí' if ob.get('validated') else 'no'}, receptividad "
+        tip = (f"Transición {t.get('label', t['id'])}: validada {'sí' if ob.get('validated') else 'no'}, receptividad "
                f"{'verdadera' if ob.get('receptivity') else 'falsa'}"
                + ("; su parcial está forzado y no evoluciona" if ob.get("forced") else ""))
         pt.line(tx - TB, ty, tx + TB, ty, pt.pen(color, width), Z_BAR, tip)
@@ -232,7 +233,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
         uns = not vir and not act and not stale and not cand and sid in unstable
         kind = {"enclosing": " (encapsulante)", "entry": " (entrada de la expansión)",
                 "exit": " (salida de la expansión)"}.get(s["kind"], "")
-        partial = f" · parcial {s['partial']}" if s.get("partial") else ""
+        partial = f" · parcial {nombre(s['partial'], s['partial'])}" if s.get("partial") else ""
         tip = (f"Etapa {s.get('label', sid)}{' (inicial)' if s['initial'] else ''}{kind}{partial}"
                f"{' · enlace de activación' if s.get('activation') else ''}: "
                + ("último estado estable conservado" if stale else "alcanzada antes del punto en cuestión, sin confirmar"
@@ -270,13 +271,13 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
         x, y = pos[m["id"]]
         act = bool((S.get("macros") or {}).get(m["id"]))
-        tip = (f"Macroetapa {m['id']} (expansión {m['expansion']}): "
+        tip = (f"Macroetapa {nombre(m['id'], m['id'])} (expansión {nombre(m['expansion'], m['expansion'])}): "
                + ("activa (alguna etapa de su expansión)" if act else "inactiva"))
         pt.rect(x - H, y - H, 2 * H, 2 * H, pt.pen("accent", 2.4) if act else pt.pen("text"), Z_STEP,
                 "accent_soft" if act else "panel", tip)
         pt.line(x - H, y - H + MARK, x + H, y - H + MARK, pt.pen("text"), Z_STEP + 0.01, tip)
         pt.line(x - H, y + H - MARK, x + H, y + H - MARK, pt.pen("text"), Z_STEP + 0.01, tip)
-        pt.text(x, y + 5, pt.seg(m["id"]), 16, "text", Z_STEP, "middle", tip)
+        pt.text(x, y + 5, pt.seg(nombre(m["id"], m["id"])), 16, "text", Z_STEP, "middle", tip)
 
 
 def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]]) -> None:
@@ -322,7 +323,8 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]])
             continue
         if p["kind"] == "enclosure":
             pt.rect(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"], pt.pen("text"), Z_FRAME)
-            pt.text((b["x0"] + b["x1"]) / 2, b["y0"] + 5, pt.seg(p["ownerStep"]), 14, "text", Z_FRAME, "middle", halo=True)
+            pt.text((b["x0"] + b["x1"]) / 2, b["y0"] + 5, pt.seg(M.get("names", {}).get(p["ownerStep"], p["ownerStep"])), 14, "text", Z_FRAME,
+                    "middle", halo=True)
             pt.text(b["x0"] + 30, b["y1"] + 5, pt.seg(p["label"]), 14, "text", Z_FRAME, halo=True)
         else:
             pt.rect(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"], pt.pen("muted", 1.2), Z_FRAME, radius=16)

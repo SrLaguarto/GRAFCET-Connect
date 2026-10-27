@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-27T17:54:16+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 147 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-27T18:06:05+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 150 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 47 casos, 50 pruebas, 50 pasan.
+Pruebas suplementarias S-xx: 50 casos, 53 pruebas, 53 pasan.
 
 ## Requisitos
 
@@ -85,7 +85,7 @@ Pruebas suplementarias S-xx: 47 casos, 50 pruebas, 50 pasan.
 | REQ-EDT-04 | P/crítica | 07 | IMPL-P | editor | T-21e ✔ | Copiar/pegar con IDs nuevos y decisión explícita de referencias externas |
 | REQ-EDT-05 | P/crítica | 07 | IMPL-P | editor | T-21f ✔ | Transacciones atómicas; fallo fuera del historial; rehacer descartado |
 | REQ-EDT-06 | P/crítica | 07 | IMPL-P | editor | T-21d ✔ | Renombrar sin cambiar ID, usos actualizados, colisión diagnosticada, búsqueda con ruta |
-| REQ-EDT-07 | P/alta | 07 | IMPL-P | editor | T-09b ✔, T-21d ✔ | Diccionario de variables y usos afectados por un cambio |
+| REQ-EDT-07 | P/alta | 07 | IMPL-P | editor | T-09b ✔, T-21d ✔, S-APP14 ✔, S-APP16 ✔ | Diccionario de variables y usos afectados por un cambio |
 | REQ-EDT-08 | P/alta | 07 | PEND-UI | — | T-21g — | Navegación jerárquica |
 | REQ-EDT-09 | P/alta | 07 | IMPL-P | diagnostics | T-21b ✔, T-09c ✔, S-ESC01 ✔ | Código, gravedad, elemento, evidencia y corrección; foco en interfaz pendiente |
 | REQ-EDT-10 | P/crítica | 07 | IMPL-P | persistence | T-22d ✔ | Recuperación separada cada 30 s si hay cambios, sin sobrescritura |
@@ -95,7 +95,7 @@ Pruebas suplementarias S-xx: 47 casos, 50 pruebas, 50 pasan.
 | REQ-EDT-14 | P/crítica | 07 | IMPL-P | editor, engine | T-23d ✔ | Edición semántica = revisión nueva; la ejecución conserva la suya |
 | REQ-SIM-01 | P/crítica | 08 | IMPL-P | engine | T-23a ✔, T-23b ✔ | Estados de sesión, pausas en frontera completa, microavance, puntos antes/después |
 | REQ-SIM-02 | P/crítica | 08 | IMPL-P | scenario, engine | T-10b ✔, T-23c ✔, S-APP04 ✔ | Escenarios y entradas manuales registradas con origen y ordinal |
-| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-APP05 ✔, S-APP09 ✔, S-APP10 ✔, S-APP11 ✔, S-APP12 ✔, S-APP13 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
+| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-APP14 ✔, S-APP15 ✔, S-APP05 ✔, S-APP09 ✔, S-APP10 ✔, S-APP11 ✔, S-APP12 ✔, S-APP13 ✔, S-APP16 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
 | REQ-SIM-04 | P/crítica | 08 | IMPL-P | engine | T-23c ✔, T-22f ✔, T-23f ✔, S-OPT03d ✔ | Instantánea con Z completo y compatibilidad exacta; dentro de recorrido D-INSTANTANEA-FASE |
 | REQ-SIM-05 | P/crítica | 08 | IMPL-P | trace | T-04a ✔, T-22g ✔, S-OPT03b ✔ | Traza con conjuntos E, causas, cierre y digest |
 | REQ-SIM-06 | P/crítica | 08 | IMPL-P | engine | T-09d ✔, T-23b ✔ | Observar y pausar no modifican comportamiento |
@@ -245,6 +245,9 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-APP11 | REQ-SIM-03 | pasa | `test_SAPP11_paneles_plegables` | el panel derecho y el inferior se pliegan del todo con su flecha y desde «Ver»; el estado se guarda. |
 | S-APP12 | REQ-SIM-03 | pasa | `test_SAPP12_zoom_se_conserva` | «+», «−» y la rueda con Ctrl cambian el zoom; un refresco lo conserva; «Ajustar» vuelve a encajar. |
 | S-APP13 | REQ-SIM-03 | pasa | `test_SAPP13_tiempos_truncados_a_dos_decimales` | lo que lleva un temporizador y τ se muestran truncados a la baja a 2 decimales; el preset, tal cual. |
+| S-APP14 | REQ-EDT-07, REQ-SIM-03 | pasa | `test_SAPP14_nombres_en_vez_de_id` | un modelo hecho con el editor (ID internos) se dibuja y se traza con los nombres: |
+| S-APP15 | REQ-SIM-03 | pasa | `test_SAPP15_ejemplos_no_cambian` | en los ejemplos el ID es el nombre: mostrar nombres no cambia nada del dibujo ni de la traza. |
+| S-APP16 | REQ-EDT-07, REQ-SIM-03 | pasa | `test_SAPP16_ventana_con_nombres` | un modelo del editor, guardado y abierto en la ventana, muestra nombres en el dibujo, |
 | S-CAN | REQ-DAT-05, REQ-DAT-06 | pasa | `test_SCAN_formato_canonico` | reglas de representación canónica y lectura estricta (09). |
 | S-CMP01 | REQ-NOR-02, REQ-SEM-09 | pasa | `test_SCMP01_catalogo_coherente` | cada lectura del comparador existe en el perfil, tiene su texto y se comprueba. |
 | S-CMP02 | REQ-ACT-02, REQ-EVT-03, REQ-SEM-01, REQ-SEM-09, REQ-TMP-03 | pasa | `test_SCMP02_cada_lectura_hace_lo_que_anuncia` | cada alternativa evoluciona como dice su panel. |

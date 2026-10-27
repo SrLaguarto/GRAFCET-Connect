@@ -27,6 +27,9 @@ function segText(parent, x, y, segs, cls, anchor="start") {
   return t;
 }
 
+// Nombre visible de una variable, etapa, parcial, macroetapa o transición: los ID internos del editor no se muestran
+function nameOf(M, id) { return ((M && M.names) || {})[id] ?? id; }
+
 // Estado de los temporizadores de una expresión: «1,2 s / 3 s» mientras cuenta y «3 s ✓» al vencer (Vista.state().temporal)
 function timerText(parent, x, y, ref, S) {
   Object.values(S.temporal || {}).filter(t => t.expr === ref && t.shown).forEach(t => {
@@ -83,10 +86,10 @@ function drawDiagram(svg, M, S) {
     const cls = ["tr", ob.validated?"validated":"", ob.fireable?"fireable":"", cleared.has(t.id)?"cleared":"",
                  blk && blk.element === t.id ? "question" : ""].join(" ");
     const g = el("g", {class:cls}, bars);
-    el("title", {}, g).textContent = `Transición ${t.id}: validada ${ob.validated?"sí":"no"}, receptividad ${ob.receptivity?"verdadera":"falsa"}` +
+    el("title", {}, g).textContent = `Transición ${t.label}: validada ${ob.validated?"sí":"no"}, receptividad ${ob.receptivity?"verdadera":"falsa"}` +
       (ob.forced ? "; su parcial está forzado y no evoluciona" : "");
     el("line", {x1:tx-TB, x2:tx+TB, y1:ty, y2:ty, class:"bar"}, g);
-    txt(g, tx-TB-6, ty+5, `(${t.id})`, {"text-anchor":"end", class:"tdes"});
+    txt(g, tx-TB-6, ty+5, `(${t.label})`, {"text-anchor":"end", class:"tdes"});
     const tc = segText(g, tx+TB+8, ty+5, t.cond, "tcond");
     timerText(g, tx+TB+8 + tc.getComputedTextLength() + (t.cond ? 10 : 0), ty+5, t.conditionRef, S);
   });
@@ -96,7 +99,7 @@ function drawDiagram(svg, M, S) {
     const uns = !vir && !act && !stale && !cand && unstable.has(s.id);
     const g = el("g", {class:`step ${act?"active":""} ${vir||uns?"virtual":""} ${stale?"stale":""} ${cand?"cand":""}`}, steps);
     const kind = {enclosing:" (encapsulante)", entry:" (entrada de la expansión)", exit:" (salida de la expansión)"}[s.kind] || "";
-    el("title", {}, g).textContent = `Etapa ${s.id}${s.initial?" (inicial)":""}${kind}${s.partial?` · parcial ${s.partial}`:""}` +
+    el("title", {}, g).textContent = `Etapa ${s.label}${s.initial?" (inicial)":""}${kind}${s.partial?` · parcial ${nameOf(M, s.partial)}`:""}` +
       `${s.activation?" · enlace de activación":""}: ` +
       (stale ? "último estado estable conservado" : cand ? "alcanzada antes del punto en cuestión, sin confirmar" :
        act ? "activa" : vir ? "inestable (en recorrido)" : uns ? "fue inestable en el último instante" : "inactiva");
@@ -108,7 +111,7 @@ function drawDiagram(svg, M, S) {
       el("path", {d:`M${x0+c},${y0} L${x0},${y0+c} M${x1-c},${y0} L${x1},${y0+c} M${x0},${y1-c} L${x0+c},${y1} M${x1},${y1-c} L${x1-c},${y1}`,
                   class:"hmark"}, g);
     }
-    txt(g, p.x, p.y+3, s.id, {"text-anchor":"middle"});
+    txt(g, p.x, p.y+3, s.label, {"text-anchor":"middle"});
     if (s.activation) txt(g, p.x-H-5, p.y+5, "*", {"text-anchor":"end", class:"amark-act"});
     if (act) el("circle", {cx:p.x, cy:p.y+12, r:3.5, class:"token"}, g);
     if (vir) txt(g, p.x, p.y+H+13, "inestable", {"text-anchor":"middle", class:"tag vtag"});
@@ -120,11 +123,11 @@ function drawDiagram(svg, M, S) {
   (M.macros || []).forEach(m => {  // macroetapa: divisiones horizontales superior e inferior
     const p = pos[m.id], act = !!(S.macros || {})[m.id];
     const g = el("g", {class:`step macro ${act?"active":""}`}, steps);
-    el("title", {}, g).textContent = `Macroetapa ${m.id} (expansión ${m.expansion}): ${act ? "activa (alguna etapa de su expansión)" : "inactiva"}`;
+    el("title", {}, g).textContent = `Macroetapa ${nameOf(M, m.id)} (expansión ${nameOf(M, m.expansion)}): ${act ? "activa (alguna etapa de su expansión)" : "inactiva"}`;
     el("rect", {x:p.x-H, y:p.y-H, width:2*H, height:2*H, class:"outer"}, g);
     el("line", {x1:p.x-H, x2:p.x+H, y1:p.y-H+MARK, y2:p.y-H+MARK, class:"hmark"}, g);
     el("line", {x1:p.x-H, x2:p.x+H, y1:p.y+H-MARK, y2:p.y+H-MARK, class:"hmark"}, g);
-    txt(g, p.x, p.y+5, m.id, {"text-anchor":"middle"});
+    txt(g, p.x, p.y+5, nameOf(M, m.id), {"text-anchor":"middle"});
   });
   const b = svg.getBBox();
   svg.setAttribute("viewBox", `${b.x-14} ${b.y-14} ${b.width+28} ${b.height+28}`);
@@ -164,7 +167,7 @@ function drawFrames(g, M, pos) {
     if (!b) return;
     if (pt.kind === "enclosure") {
       el("rect", {x:b.x0, y:b.y0, width:b.x1-b.x0, height:b.y1-b.y0, class:"frame enclosure"}, g);
-      txt(g, (b.x0 + b.x1) / 2, b.y0 + 5, pt.ownerStep, {"text-anchor":"middle", class:"framelabel"});
+      txt(g, (b.x0 + b.x1) / 2, b.y0 + 5, nameOf(M, pt.ownerStep), {"text-anchor":"middle", class:"framelabel"});
       txt(g, b.x0 + 30, b.y1 + 5, pt.label, {class:"framelabel"});
     } else {
       el("rect", {x:b.x0, y:b.y0, width:b.x1-b.x0, height:b.y1-b.y0, rx:16, class:"frame"}, g);

@@ -446,7 +446,7 @@ class Ventana(QMainWindow):
             if var in numeric:
                 if col:
                     fila, col = fila + 1, 0
-                self.rejilla.addWidget(QLabel(f"<b>{html.escape(var)}</b> ="), fila, 0)
+                self.rejilla.addWidget(QLabel(f"<b>{html.escape(self.nombre(var))}</b> ="), fila, 0)
                 campo = QLineEdit()
                 campo.setPlaceholderText("valor" + (" entero" if numeric[var] == "int" else ""))
                 campo.returnPressed.connect(lambda v=var: self._valor(v))
@@ -468,6 +468,10 @@ class Ventana(QMainWindow):
                 fila, col = fila + 1, 0
         if not self.v.model["inputs"]:
             self.rejilla.addWidget(QLabel("Sin entradas"), 0, 0)
+
+    def nombre(self, ident: str) -> str:
+        """Nombre visible de una variable, etapa, parcial o transición (los ID internos no se muestran)."""
+        return self.v.model.get("names", {}).get(ident, ident) if self.v else ident
 
     def _valor(self, var: str) -> None:
         self._act("valor", var=var, texto=self.campos[var].text(), paso=self.paso.isChecked())
@@ -518,7 +522,7 @@ class Ventana(QMainWindow):
                 continue
             on = values.get(var) is True
             b.setChecked(on)
-            b.setText(f"{var} = {1 if on else 0}")
+            b.setText(f"{self.nombre(var)} = {1 if on else 0}")
             b.setStyleSheet(f"background: {COL['accent_soft']}; border: 1px solid {COL['accent']}; color: #1d2330; "
                             "padding: 5px 10px" if on else "padding: 5px 10px")
         self.a_completar.setEnabled(rec)
@@ -549,12 +553,12 @@ class Ventana(QMainWindow):
         text = (f"<b>{e(d['code'])}{' · ' + e(d['question']) if d.get('question') else ''}</b><p>{e(d['message'])}</p>"
                 f"<p><i>{e(d.get('correction', ''))}</i></p>")
         if blk:
-            text += (f"<p>Recorrido determinado hasta S = {{{e(', '.join(blk['reached']))}}}"
-                     + (f"; en cuestión: <b>{e(blk['element'])}</b>" if blk.get("element") else "")
+            text += (f"<p>Recorrido determinado hasta S = {{{e(', '.join(self.nombre(i) for i in blk['reached']))}}}"
+                     + (f"; en cuestión: <b>{e(self.nombre(blk['element']))}</b>" if blk.get("element") else "")
                      + ". Lo que pase después depende de la cuestión abierta, así que el lote se rechaza entero.</p>")
         if S["status"] == "error":
             text += ("<p>El motor no aproxima: conserva el último estado estable"
-                     + (f" {{{e(', '.join(blk['lastStable']))}}}, que <b>no</b> es el resultado del lote" if blk else "")
+                     + (f" {{{e(', '.join(self.nombre(i) for i in blk['lastStable']))}}}, que <b>no</b> es el resultado del lote" if blk else "")
                      + ". Pulse «Reiniciar» (Ctrl+R) para seguir.</p>")
         else:
             text += "<p>Contexto pendiente: puede completarse evolución a evolución.</p>"
@@ -571,9 +575,9 @@ class Ventana(QMainWindow):
 
     def _variables(self, M: dict[str, Any], S: dict[str, Any]) -> None:
         outs = S.get("outputs") or {}
-        rows = [(k, "salida continua", "ON" if o["value"] else "OFF", ", ".join(o["contributors"]),
+        rows = [(self.nombre(k), "salida continua", "ON" if o["value"] else "OFF", ", ".join(self.nombre(c) for c in o["contributors"]),
                  "ok" if o["value"] else "muted") for k, o in outs.items()]
-        rows += [(k, "memorizada", str(v), "", "text") for k, v in (S.get("values") or {}).items()
+        rows += [(self.nombre(k), "memorizada", str(v), "", "text") for k, v in (S.get("values") or {}).items()
                  if k not in M["inputs"] and k not in outs]
         self._filas(self.t_vars, rows)
         temp = S.get("temporal") or {}

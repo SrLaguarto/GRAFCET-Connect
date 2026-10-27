@@ -1,7 +1,7 @@
 """Simulador de escritorio (P-IMP-29): abrir y guardar modelos, colocación automática, entradas numéricas y la
 ventana Qt sin pantalla.
 
-Las pruebas del núcleo (S-APP01..04) no necesitan Qt. Las de la ventana (S-APP05..13) se omiten si PySide6 no
+Las pruebas del núcleo (S-APP01..04) no necesitan Qt. Las de la ventana (S-APP05..16) se omiten si PySide6 no
 está instalado; usan la plataforma «offscreen» de Qt, sin abrir ventanas. Ninguna es oráculo del documento 11:
 comprueban que el simulador muestra lo que decide el motor, sin cambiar la semántica.
 """
@@ -19,6 +19,7 @@ from helpers import M, S  # noqa: E402
 
 from grafcet.canonical import canonical_bytes  # noqa: E402
 from grafcet.diagnostics import DiagnosticError  # noqa: E402
+from grafcet.editor import Editor, new_model_document  # noqa: E402
 from grafcet.examples import EJEMPLOS  # noqa: E402
 from grafcet.persistence import add_document, new_project, open_model, save_project  # noqa: E402
 from grafcet.profile import normalize_options  # noqa: E402
@@ -127,6 +128,56 @@ class Nucleo(unittest.TestCase):
         self.assertEqual(st["situation"], ["A"])
         st = run(v, ("avanzar", {"us": S}), ("valor", {"var": "n", "texto": "3"}))
         self.assertEqual((st["situation"], st["outputs"]["y"]["value"]), (["B"], True))
+
+    def test_SAPP14_nombres_en_vez_de_id(self):
+        """REQ-EDT-07, REQ-SIM-03: un modelo hecho con el editor (ID internos) se dibuja y se traza con los nombres:
+        «X E1», «marcha», «motor», «S = {E1}»; los ID solo se usan como claves."""
+        m, e0, e1, marcha, motor = modelo_del_editor()
+        v = Vista("ed", "Editor", "", lambda: (m, None), normalize_options(None))
+        M = v.model
+        nombres = {x["id"]: x["label"] for x in M["steps"]}
+        self.assertEqual(sorted(nombres.values()), ["E0", "E1"])
+        self.assertEqual(M["names"][marcha], "marcha")
+        self.assertEqual(M["names"][motor], "motor")
+        self.assertEqual(M["inputs"], [marcha])
+        self.assertEqual(sorted(t["label"] for t in M["transitions"]), ["t1", "t2"], "sin etiqueta, t1, t2… y no el ID")
+        con = {t["label"]: t["cond"] for t in M["transitions"]}
+        self.assertEqual(sorted(con.values(), key=lambda c: c[0]["t"]),
+                         [[{"t": "2s"}, {"t": "/"}, {"t": "X"}, {"t": "E1", "s": True}], [{"t": "marcha"}]])
+        acc = next(a for s in M["steps"] for a in s["actions"])
+        self.assertEqual((acc["text"], acc["target"]), ([{"t": "motor"}], motor), "se muestra el nombre, la clave es el ID")
+        st = run(v, ("entrada", {"var": marcha}), ("avanzar", {"us": 500_000}))
+        self.assertEqual(st["situation"], [e1])
+        textos = [r["text"] for r in st["trace"]]
+        self.assertTrue(any("S = {E1}" in t for t in textos), textos)
+        self.assertTrue(any("marcha=true" in t for t in textos), textos)
+        self.assertFalse(any(i in t for t in textos for i in (e0, e1, marcha)), "la traza no muestra ID internos")
+        self.assertEqual(st["temporal"][next(iter(st["temporal"]))]["where"], "transición t2")
+        self.assertEqual(M["names"][st["outputs"][motor]["contributors"][0]], "E1", "la columna «Contribuyen» dice la etapa")
+        # Los mensajes del motor también se escriben con nombres
+        from grafcet.view import substitute
+        self.assertEqual(substitute(f"la etapa {e1} y {marcha}", M["names"]), "la etapa E1 y marcha")
+
+    def test_SAPP15_ejemplos_no_cambian(self):
+        """REQ-SIM-03: en los ejemplos el ID es el nombre: mostrar nombres no cambia nada del dibujo ni de la traza."""
+        for key, (title, help_text, build) in EJEMPLOS.items():
+            v = Vista(key, title, help_text, build, normalize_options(None))
+            for i, n in v.model["names"].items():
+                self.assertEqual(i, n, f"{key}: {i}")
+
+
+def modelo_del_editor():
+    """Un grafcet hecho con el editor: sus ID son internos (s-…, v-…, t-…), sus nombres, los que se ven."""
+    ed = Editor(new_model_document("m"))
+    g = ed.add_partial("G")
+    marcha = ed.add_variable("marcha", "input", {"kind": "bool"})
+    motor = ed.add_variable("motor", "output", {"kind": "bool"})
+    e0 = ed.add_step(g, "E0", True, at=(100, 60))
+    e1 = ed.add_step(g, "E1", at=(100, 220))
+    ed.add_transition(g, "marcha", [e0], [e1], at=(100, 140))
+    ed.add_transition(g, "delay(2 s, active(E1), 0 s)", [e1], [e0], at=(100, 300))
+    ed.add_continuous_action(e1, motor)
+    return ed.model, e0, e1, marcha, motor
 
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
@@ -324,6 +375,32 @@ class Ventana(unittest.TestCase):
                 self.assertEqual(d.escala() > k, sentido > 0, f"rueda {delta} con {mod}")
             self.assertAlmostEqual(d.escala(), antes, places=6)
         d.ajustar()
+
+    def test_SAPP16_ventana_con_nombres(self):
+        """REQ-EDT-07, REQ-SIM-03: un modelo del editor, guardado y abierto en la ventana, muestra nombres en el dibujo,
+        las entradas, las tablas y la traza."""
+        m, e0, e1, marcha, motor = modelo_del_editor()
+        with tempfile.TemporaryDirectory() as tmp:
+            project = new_project("p-editor", "Editor")
+            add_document(project, m)
+            add_document(project, presentation_for(m, {e0: (100, 60), e1: (100, 220)}))
+            save_project(Path(tmp) / "p", project)
+            self.assertTrue(self.w.abrir_ruta(Path(tmp) / "p"))
+        w = self.w
+        w.a_ejecutar.setChecked(False)
+        self.assertEqual(list(w.botones), [marcha])
+        self.assertEqual(w.botones[marcha].text(), "marcha = 0")
+        w.botones[marcha].click()
+        self.assertEqual(w.botones[marcha].text(), "marcha = 1")
+        filas = [[w.t_vars.item(i, j).text() for j in range(2)] for i in range(w.t_vars.rowCount())]
+        self.assertEqual(filas, [["motor", "salida continua"]])
+        self.assertEqual(w.t_temp.item(0, 0).text(), "transición t2")
+        self.assertEqual(w.t_vars.item(0, 3).text(), "E1")
+        textos = [it.toPlainText() for it in w.diagrama.scene().items() if hasattr(it, "toPlainText")]
+        for esperado in ("E0", "E1", "motor", "marcha"):
+            self.assertIn(esperado, textos)
+        self.assertFalse(any(t.startswith(("s-", "v-", "g-")) for t in textos), textos)
+        self.assertTrue(any("S = {E1}" in w.traza.item(i).text() for i in range(w.traza.count())))
 
     def test_SAPP13_tiempos_truncados_a_dos_decimales(self):
         """REQ-SIM-03: lo que lleva un temporizador y τ se muestran truncados a la baja a 2 decimales; el preset, tal cual."""

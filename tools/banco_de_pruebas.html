@@ -162,7 +162,7 @@ function renderAll() {
   renderOptions();
   $("inputs").innerHTML = M.inputs.map(v => {
     const on = S.values[v] === true;
-    return `<button data-var="${v}" aria-pressed="${on}" aria-label="Entrada ${v}, valor ${on ? 1 : 0}" ${stable ? "" : "disabled"}><b>${v}</b> = ${on ? "1" : "0"}</button>`;
+    return `<button data-var="${v}" aria-pressed="${on}" aria-label="Entrada ${nameOf(M, v)}, valor ${on ? 1 : 0}" ${stable ? "" : "disabled"}><b>${nameOf(M, v)}</b> = ${on ? "1" : "0"}</button>`;
   }).join("");
   document.querySelectorAll("#inputs button").forEach(b => b.onclick = () => call("entrada", {var:b.dataset.var, paso:$("paso").checked}));
   $("evo").disabled = !inRec; $("fin").disabled = !inRec;
@@ -171,9 +171,9 @@ function renderAll() {
   $("clock").textContent = "τ = " + S.time;
   $("next").textContent = S.nextEvent ? `próximo vencimiento: ${S.nextEvent}` : "";
   const outs = Object.entries(S.outputs || {}).map(([k, o]) =>
-    `<tr><td class="mono">${k}</td><td>salida continua</td><td class="${o.value?"on":"off"}">${o.value?"ON":"OFF"}</td><td class="mono">${o.contributors.join(", ")}</td></tr>`);
+    `<tr><td class="mono">${nameOf(M, k)}</td><td>salida continua</td><td class="${o.value?"on":"off"}">${o.value?"ON":"OFF"}</td><td class="mono">${o.contributors.map(c => nameOf(M, c)).join(", ")}</td></tr>`);
   const internals = Object.entries(S.values).filter(([k]) => !M.inputs.includes(k) && !(k in (S.outputs||{}))).map(([k, v]) =>
-    `<tr><td class="mono">${k}</td><td>memorizada</td><td class="mono">${v}</td><td></td></tr>`);
+    `<tr><td class="mono">${nameOf(M, k)}</td><td>memorizada</td><td class="mono">${v}</td><td></td></tr>`);
   $("vars").innerHTML = (outs.length || internals.length) ? `<tr><th>Variable</th><th>Modo</th><th>Valor</th><th>Contribuyen</th></tr>` + outs.join("") + internals.join("") : "<tr><td class='off'>Sin salidas ni variables internas</td></tr>";
   const temp = Object.entries(S.temporal || {});
   $("tempcard").hidden = !temp.length;

@@ -133,10 +133,10 @@ function panelHtml(p, chosen) {
   const diags = S.status === "no-compilable" || S.status === "error" || S.status === "pausada-recorrido"
     ? (S.diagnostics || []).slice(-1).map(d => `<div class="diag"><b>${esc(d.code)}${d.question ? " · " + esc(d.question) : ""}</b>
         <p>${esc(d.message)}</p></div>`).join("") : "";
-  const outs = Object.entries(S.outputs || {}).map(([k, o]) => `<tr><td class="mono">${esc(k)}</td><td class="${o.value?"on":"off"}">${o.value?"ON":"OFF"}</td></tr>`);
+  const outs = Object.entries(S.outputs || {}).map(([k, o]) => `<tr><td class="mono">${esc(nameOf(p.model, k))}</td><td class="${o.value?"on":"off"}">${o.value?"ON":"OFF"}</td></tr>`);
   const vals = Object.entries(S.values || {}).filter(([k]) => !p.model.inputs.includes(k) && !(k in (S.outputs||{})))
-    .map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td class="mono">${esc(v)}</td></tr>`);
-  const ins = p.model.inputs.map(k => `${esc(k)} = ${S.values && S.values[k] === true ? 1 : 0}`).join(" · ");
+    .map(([k, v]) => `<tr><td class="mono">${esc(nameOf(p.model, k))}</td><td class="mono">${esc(v)}</td></tr>`);
+  const ins = p.model.inputs.map(k => `${esc(nameOf(p.model, k))} = ${S.values && S.values[k] === true ? 1 : 0}`).join(" · ");
   return `<div class="card panel ${chosen ? "chosen" : ""}">
     <h3>Lectura ${esc(p.value)}</h3><p class="ltext">${esc(p.text)}</p>
     <div class="expect"><b>Qué debe pasar:</b> ${esc(p.expect)}</div>
@@ -165,7 +165,7 @@ function renderPanels() {
   const first = V.panels.find(p => p.state.values) || V.panels[0];
   $("freeinputs").innerHTML = first ? first.model.inputs.map(v => {
     const on = first.state.values && first.state.values[v] === true;
-    return `<button data-var="${v}" aria-pressed="${on}">${v} = ${on ? 1 : 0}</button>`; }).join("") : "";
+    return `<button data-var="${v}" aria-pressed="${on}">${esc(nameOf(first.model, v))} = ${on ? 1 : 0}</button>`; }).join("") : "";
   document.querySelectorAll("#freeinputs button").forEach(b => b.onclick = () => call("entrada", {var: b.dataset.var}));
 }
 
