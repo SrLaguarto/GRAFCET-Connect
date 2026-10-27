@@ -157,14 +157,18 @@ class Jerarquias(unittest.TestCase):
         self.assertIsNotNone(nested.model, "identidad conservada en anidamiento")
         self.assertIn("D-JERARQUIA-CICLO", codes(macro_model(recursive=True).validate()))
 
-    def test_T18d_rama_residual_U08(self):
-        """S habilita la salida con K aún activa: U-08 (7.5), no se borra K por analogía con una llamada."""
+    def test_T18d_rama_residual(self):
+        """S habilita la salida con K aún activa: 7.5 A, se desactivan todas las etapas de la expansión. Con «detener»,
+        U-08; las lecturas B y C se comprueban como referencia."""
         m = M().partial("X").var("p").var("q").var("s").step("A", True).step("B")
         m.step("E", kind="entry", partial="X").step("K", partial="X").step("Sx", kind="exit", partial="X")
         m.trans("tq", ["E"], ["K", "Sx"], "q", partial="X")
         add_macro(m).trans("tp", ["A"], ["M"], "p").trans("ts", ["M"], ["B"], "s")
         batches = [(S, 0, {"p": True}), (2 * S, 0, {"q": True}), (3 * S, 0, {"s": True})]
         s = session(m.compile(), batches=batches)
+        s.run()
+        self.assertEqual((s.status, s.z.situation), ("finalizada", {"B"}))
+        s = session(m.compile(), batches=batches, options={"7.5": "detener"})
         s.run()
         self.assertEqual((last_diag(s).code, last_diag(s).question), ("D-SEM-PENDIENTE", "U-08"))
         self.assertEqual(s.z.situation, {"K", "Sx"}, "se conserva el último estado estable")
@@ -264,12 +268,14 @@ class Jerarquias(unittest.TestCase):
         self.assertEqual(r1, r2)
         self.assertEqual(r1, (True, ["t", "u"], {"D", "X"}, False))
 
-    def test_T20c_forzado_contra_recinto_U08(self):
-        """Forzar el recinto de una encapsulante inactiva, o vaciarlo con ella activa: U-08 (7.4), sin resultado silencioso."""
+    def test_T20c_forzado_contra_recinto(self):
+        """Forzar el recinto de una encapsulante inactiva: 7.4 C, se ignora mientras siga inactiva (con «detener», U-08).
+        Vaciarlo con ella activa no se preguntó: U-08, sin resultado silencioso."""
         m = enclosure_model(owner_initial=False, inner_initial=False)
         m.step("F0", True)
         with_force(m, "F", "F0", "R", "explicit", ["J"])
-        s = session(m.compile(), start=False)
+        self.assertEqual(session(m.compile()).z.situation, {"F0"}, "R sigue vacío: no se activa nada dentro de H inactiva")
+        s = session(m.compile(), start=False, options={"7.4": "detener"})
         d = s.start()[0]
         self.assertEqual((d.code, d.question), ("D-SEM-PENDIENTE", "U-08"))
         outcome = {}

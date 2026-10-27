@@ -125,6 +125,15 @@ def ej_contador_inestable() -> tuple[M, dict]:
                "t3": (160, 500), "t4": (320, 500)}
 
 
+def ej_contador_flanco() -> tuple[M, dict]:
+    """Segundo ejemplo aportado por el responsable el 27-10-2026: CT cuenta cada subida de I02 mientras 1 está activa."""
+    m = M().var("I00").var("I01").var("I02").var("Q00", "output").var("Q01", "output").var("CT", "internal", "int")
+    m.step("0", True).step("1")
+    m.trans("t1", ["0"], ["1"], "I00").trans("t2", ["1"], ["0"], "I01")
+    m.stored("1", "CT", "event", "CT + 1", event="rise(I02)").cont("1", "Q00").cont("1", "Q01")
+    return m, {"0": (160, 60), "t1": (160, 140), "1": (160, 230), "t2": (160, 320)}
+
+
 def ej_macroetapa() -> tuple[M, dict]:
     m = M().partial("X").var("p").var("q").var("r").var("s").var("motor", "output")
     m.step("A", True).step("B").step("E1", kind="entry", partial="X").step("K", partial="X").step("S1", kind="exit", partial="X")
@@ -177,6 +186,10 @@ EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
                            "queda inestable (no enciende sus salidas), pero la suma se hace. A la tercera bajada, CT = 3 y se "
                            "vuelve a 0. Con los flancos «por ciclo» en vez de «de uno en uno», una sola bajada de I02 daría la "
                            "vuelta tres veces en el mismo instante.", ej_contador_inestable),
+    "contador-flanco": ("Contador por flanco en una etapa", "Ejemplo del responsable. I00 lleva a 1 e I01 vuelve a 0. "
+                        "Mientras 1 está activa, cada subida de I02 suma 1 a CT (acción por evento ↑I02); mantener I02 "
+                        "pulsada no vuelve a contar, y en 0 no cuenta. Si I02 sube en el mismo instante en que se sale de 1, "
+                        "no cuenta (respuesta 5.2 B).", ej_contador_flanco),
     "macroetapa": ("Macroetapa (jerarquía)", "p lleva a la macroetapa M: se activa su etapa de entrada E1. q y r recorren la "
                    "expansión. Aunque s valga 1, solo se sale de M cuando su salida S1 está activa; la macroetapa cuenta como "
                    "activa mientras haya alguna etapa de su expansión activa.", ej_macroetapa),

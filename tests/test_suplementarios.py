@@ -127,9 +127,22 @@ class Hallazgos(unittest.TestCase):
         self.assertEqual([e["cleared"] for e in records(s, "evolucion")][1:7], [["t2"], ["t3"], ["t1"], ["t2"], ["t3"], ["t1"]])
 
     def test_SH10_leer_salida_continua(self):
-        """REQ-ACT-01: hallazgo H-10."""
-        m = M().var("y", "output").step("A", True).step("B").cont("A", "y").trans("t", ["A"], ["B"], "y")
-        self.assertIn("D-CAPACIDAD-NO-SOPORTADA", {d.code for d in m.validate().diagnostics})
+        """REQ-ACT-01: hallazgo H-10, cerrado por el comparador (8.2 C): se lee según la situación del momento, también la inestable."""
+        m = M().var("p").var("y", "output").var("luz", "output").step("A", True).step("B").step("C")
+        m.trans("t1", ["A"], ["B"], "p").cont("B", "y").trans("t2", ["B"], ["C"], "y").cont("C", "luz")
+        s = session(m.compile(), batches=[(S, 0, {"p": True})])
+        s.run()
+        self.assertEqual((s.z.situation, s.z.outputs["y"], s.z.outputs["luz"]), ({"C"}, False, True))
+        self.assertEqual(records(s, "estable")[-1]["virtualSteps"], ["B"], "B es inestable: y no llega a salir")
+        self.assertIn("D-CAPACIDAD-NO-SOPORTADA", {d.code for d in m.validate({"8.2": "detener"}).diagnostics})
+        # Con acción limitada, la lectura respeta el límite
+        m = M().var("p").var("y", "output").step("A", True).step("B").step("C")
+        m.cont("A", "y", limit_us=2 * S).trans("t", ["A"], ["B"], "NOT y").trans("u", ["B"], ["C"], "p")
+        s = session(m.compile(), batches=[(5 * S, 0, {"p": True})])
+        s.advance_to(S)
+        self.assertEqual(s.z.situation, {"A"})
+        s.advance_to(3 * S)
+        self.assertEqual(s.z.situation, {"B"}, "a los 2 s y deja de valer y NOT y franquea")
 
     def test_SH12_id_de_documento_y_nombre_de_fichero(self):
         """REQ-DAT-01, REQ-PLT-02: hallazgo H-12."""
@@ -422,10 +435,12 @@ class ReglasP(unittest.TestCase):
         self.assertFalse([c for c in decl["capabilities"] if c["status"] == "aprobada"])
         self.assertTrue(all(c["status"] in ("provisional", "no-soportada") for c in decl["capabilities"]))
         excluded = {x["capability"] for x in decl["excludedMatters"]}
-        self.assertTrue({"eventos.internos", "eventos.franqueamiento", "temporal.delay-cero", "jerarquia.forzado-tiempo",
-                         "jerarquia.macro-ramas", "jerarquia.forzado-acciones"} <= excluded, "cuestiones aún abiertas")
-        for cid in ("jerarquia.forzado-momento", "jerarquia.encapsulacion-coincidencia", "jerarquia.macro-inicial"):
-            self.assertNotIn(cid, excluded, "decididas por el responsable (P-IMP-24, P-IMP-25)")
+        self.assertTrue({"eventos.internos", "eventos.franqueamiento", "temporal.delay-cero"} <= excluded,
+                        "cuestiones aún abiertas")
+        for cid in ("jerarquia.forzado-momento", "jerarquia.encapsulacion-coincidencia", "jerarquia.macro-inicial",
+                    "jerarquia.forzado-tiempo", "jerarquia.forzado-recinto", "jerarquia.forzado-acciones",
+                    "jerarquia.macro-ramas"):
+            self.assertNotIn(cid, excluded, "decididas por el responsable (P-IMP-24 a P-IMP-26)")
         for cid in ("jerarquia.forzado", "jerarquia.macroetapas", "jerarquia.encapsulacion"):  # documento 06, I (P-IMP-23)
             self.assertNotIn(cid, excluded)
         caps = {c["id"]: c for c in decl["capabilities"]}

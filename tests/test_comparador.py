@@ -129,7 +129,7 @@ class Comparador(unittest.TestCase):
             if d.option is not None:
                 self.assertEqual(SEMANTIC_OPTIONS[d.option]["default"], value, did)
         still_open = {d.id for d in CATALOGO} - set(RESPUESTAS_INCORPORADAS)
-        self.assertEqual(still_open, {"7.1", "7.3", "7.4", "7.5", "7.8", "8.1", "8.2"})
+        self.assertEqual(still_open, {"8.1"})
         for did in still_open:
             if POR_ID[did].option is not None:
                 self.assertEqual(SEMANTIC_OPTIONS[POR_ID[did].option]["default"], "detener", did)
@@ -157,6 +157,21 @@ class EjemploDelResponsable(unittest.TestCase):
         self.assertEqual(self._run(), [(["1"], 1, ["2"]), (["1"], 2, ["2"]), (["0"], 3, ["2"])])
         # Con flancos «por ciclo», una sola bajada de I02 da la vuelta hasta que CT = 3 en el mismo instante
         self.assertEqual(self._run({"U-03": "recorrido"})[0], (["0"], 3, ["2"]), "1 ya estaba activa antes: no es inestable")
+
+
+    def test_SEJ02_contador_por_flanco_en_una_etapa(self):
+        """REQ-EVT-01, REQ-ACT-02, REQ-EVT-03: ejemplo del responsable; una cuenta por cada subida de I02 con 1 activa, ninguna en 0."""
+        from helpers import S, session
+        _, _, build = banco.EJEMPLOS["contador-flanco"]
+        m, _ = build()
+        plan = [({"I00": True}, ["1"], 0), ({"I02": True}, ["1"], 1), ({"I00": False}, ["1"], 1), ({"I02": False}, ["1"], 1),
+                ({"I02": True}, ["1"], 2), ({"I02": False}, ["1"], 2), ({"I02": True}, ["1"], 3), ({"I01": True}, ["0"], 3),
+                ({"I02": False}, ["0"], 3), ({"I02": True}, ["0"], 3), ({"I01": False, "I00": True}, ["1"], 3),
+                ({"I02": False, "I00": False}, ["1"], 3), ({"I02": True, "I01": True}, ["0"], 3)]
+        s = session(m.compile(), batches=[((i + 1) * S, 0, ch) for i, (ch, _, _) in enumerate(plan)])
+        for i, (ch, situation, ct) in enumerate(plan):
+            s.advance_to((i + 1) * S)
+            self.assertEqual((sorted(s.z.situation), s.z.values["CT"]), (situation, ct), f"paso {i + 1}: {ch}")
 
 
 if __name__ == "__main__":

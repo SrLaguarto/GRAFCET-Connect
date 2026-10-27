@@ -80,9 +80,9 @@ El núcleo se ha hecho solo con los doce documentos del paquete. El 25-10-2026, 
 
 ## Lo que falta
 
-- Jerarquías: forzado, macroetapas y encapsulación se ejecutan (P-IMP-23); las interacciones de U-08 (cuestiones 7.2–7.8) siguen abiertas y se detienen hasta que se respondan en el comparador.
+- Jerarquías: forzado, macroetapas y encapsulación se ejecutan (P-IMP-23) y sus interacciones están decididas (P-IMP-24 a P-IMP-26), salvo vaciar por forzado un recinto con su encapsulante activa, que se detiene.
 - `elapsed(etapa)` en expresiones: no se ejecuta todavía (su valor con la etapa inactiva ya está decidido, 4.5 A).
-- Sin responder: 8.1 (H-08), 8.2 (H-10) y `0s/p/d2` con d2 > 0; siguen deteniéndose.
+- Sin responder: 8.1 (H-08) y `0s/p/d2` con d2 > 0; siguen deteniéndose.
 - Interfaz gráfica (Qt 6/PySide6 propuesta), exportación SVG/PDF y accesibilidad: requieren instalar la dependencia y ratificar U-10.
 - Empaquetado, matriz de sistemas y medición en el equipo de referencia (U-10).
 - Ratificación del formato 0.1 (U-11) y cierre de las U normativas, que permitiría desbloquear capacidades.

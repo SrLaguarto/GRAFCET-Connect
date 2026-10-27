@@ -146,7 +146,11 @@ class _Env:
             if self.options["8.2"] == "C" and vid not in self._computing:
                 self._computing.add(vid)
                 try:
-                    return any(a.step in self.w.situation and bool(ex.evaluate(self.cm.exprs[a.cond].node, self))
+                    now = self.w.time
+                    return any(a.step in self.w.situation
+                               and (a.limit_us is None or self.w.frozen.get(self.cm.steps[a.step].partial, now)
+                                    - self.w.since.get(a.step, now) < a.limit_us)
+                               and bool(ex.evaluate(self.cm.exprs[a.cond].node, self))
                                for a in self.cm.continuous_by_target[vid])
                 finally:
                     self._computing.discard(vid)

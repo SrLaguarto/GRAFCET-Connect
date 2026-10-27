@@ -1,9 +1,9 @@
 {
- "date": "2026-10-27T11:13:09+01:00",
+ "date": "2026-10-27T11:24:46+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 133,
+ "total": 134,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -69,6 +69,17 @@
     "REQ-SEM-06"
    ],
    "summary": "REQ-SEM-06, REQ-ACT-05, REQ-EVT-03: ejemplo del responsable; la etapa inestable 2 suma en CT y vuelve a 1 mientras CT < 3."
+  },
+  {
+   "test": "test_comparador.EjemploDelResponsable.test_SEJ02_contador_por_flanco_en_una_etapa",
+   "case": "S-EJ02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-02",
+    "REQ-EVT-01",
+    "REQ-EVT-03"
+   ],
+   "summary": "REQ-EVT-01, REQ-ACT-02, REQ-EVT-03: ejemplo del responsable; una cuenta por cada subida de I02 con 1 activa, ninguna en 0."
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU03_accion_por_evento_en_etapa_que_sale",
@@ -253,7 +264,7 @@
    "requirements": [
     "REQ-ACT-01"
    ],
-   "summary": "REQ-ACT-01: hallazgo H-10."
+   "summary": "REQ-ACT-01: hallazgo H-10, cerrado por el comparador (8.2 C): se lee según la situación del momento, también la inestable."
   },
   {
    "test": "test_suplementarios.Hallazgos.test_SH12_id_de_documento_y_nombre_de_fichero",
@@ -803,11 +814,11 @@
    "summary": ""
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18d_rama_residual_U08",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T18d_rama_residual",
    "case": "T-18d",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "S habilita la salida con K aún activa: U-08 (7.5), no se borra K por analogía con una llamada."
+   "summary": "S habilita la salida con K aún activa: 7.5 A, se desactivan todas las etapas de la expansión. Con «detener»,"
   },
   {
    "test": "test_t17_t20_jerarquias.Jerarquias.test_T18e_reentrada_de_macroetapa_y_memoria",
@@ -852,11 +863,11 @@
    "summary": ""
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20c_forzado_contra_recinto_U08",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20c_forzado_contra_recinto",
    "case": "T-20c",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "Forzar el recinto de una encapsulante inactiva, o vaciarlo con ella activa: U-08 (7.4), sin resultado silencioso."
+   "summary": "Forzar el recinto de una encapsulante inactiva: 7.4 C, se ignora mientras siga inactiva (con «detener», U-08)."
   },
   {
    "test": "test_t21_t26_producto.Datos.test_T22a_ida_y_vuelta_conserva_significado_notas_y_vista",

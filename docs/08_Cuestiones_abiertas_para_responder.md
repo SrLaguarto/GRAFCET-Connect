@@ -342,11 +342,11 @@ Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-1
 
 ### 7.1 · Quién fuerza a quién (U-02)
 La frase del §7.3 sobre el sentido jerárquico parece invertir sujeto y objeto.
-- [ ] **A.** La etapa de un parcial **superior** fuerza a un parcial **inferior**.
+- [X] **A.** La etapa de un parcial **superior** fuerza a un parcial **inferior**.
 - [ ] **B.** Es al revés.
 - [ ] **Dejar abierta**
 
-Cláusula / página:
+Cláusula / página: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 7.2 · Cuándo se aplica el forzado (H-18)
 **Ejemplo:** la etapa F (que fuerza G = {B}) se activa en una evolución en la que G también podría evolucionar.
@@ -357,27 +357,27 @@ Cláusula / página:
 Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el chat (sin cláusula citada; contraste normativo pendiente, U-01). Comentario: «hagamos lo mismo, me da igual cuál, elegimos que se procesen juntos».
 
 ### 7.3 · Temporizadores de un parcial forzado
-- [ ] **A.** Siguen contando.
+- [X] **A.** Siguen contando.
 - [ ] **B.** Se congelan mientras dura el forzado.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 7.4 · Forzar un recinto cuya encapsulante está inactiva
 - [ ] **A.** Error de diseño: no compila.
 - [ ] **B.** Se fuerza igualmente.
-- [ ] **C.** El forzado se ignora mientras la encapsulante esté inactiva.
+- [X] **C.** El forzado se ignora mientras la encapsulante esté inactiva.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 7.5 · Salir de una macroetapa con ramas internas aún activas
-- [ ] **A.** Al salir se desactivan todas las etapas de la expansión.
+- [X] **A.** Al salir se desactivan todas las etapas de la expansión.
 - [ ] **B.** Las ramas siguen activas.
 - [ ] **C.** Error de diseño.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 7.6 · Desactivar la encapsulante en el mismo instante en que vence un temporizador interno
 - [ ] **A.** Gana la desactivación: el temporizador interno no tiene efecto.
@@ -388,11 +388,11 @@ Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-1
 
 ### 7.8 · Acciones de las etapas que cambia un forzado (H-24, nueva)
 **Ejemplo:** H fuerza G = {B}; B tiene `n := 1 (al activar)`.
-- [ ] **A.** Se ejecutan: es una activación.
+- [X] **A.** Se ejecutan: es una activación.
 - [ ] **B.** No se ejecutan: el forzado impone la situación sin acciones.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ### 7.7 · Etapas iniciales dentro de la expansión de una macroetapa
 - [X] **A.** Se permiten: están activas al arrancar.
@@ -414,8 +414,10 @@ Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-1
 **Ejemplo:** B tiene `y` continua; la transición B → C tiene `y`; B es virtual.
 - [ ] **A.** Se prohíbe leer salidas continuas en receptividades.
 - [ ] **B.** Se lee el valor de la situación anterior.
-- [ ] **C.** Se lee el valor según la situación virtual.
+- [X] **C.** Se lee el valor según la situación virtual.
 - [ ] **Dejar abierta**
+
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
 ---
 

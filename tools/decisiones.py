@@ -702,6 +702,8 @@ RESPUESTAS_HOJA_08: dict[str, tuple[str, str]] = {
 RESPUESTAS_COMPARADOR: dict[str, str] = {
     "3.1": "A", "3.2": "A", "3.3": "A", "3.4": "A", "4.1": "A", "4.2": "A", "4.3": "A", "4.4": "B", "4.5": "A",
     "5.1": "situacion-anterior", "5.2": "B", "5.3": "A", "6.1": "A", "6.2": "A", "6.3": "A", "6.4": "A",
+    # Segunda tanda, incorporada en P-IMP-26: 7.1 queda registrada (el programa ya hace A, documento 06)
+    "7.1": "A", "7.3": "A", "7.4": "C", "7.5": "A", "7.8": "A", "8.2": "C",
 }
 
 # Respuestas dadas en el chat el 27-10-2026 e incorporadas en P-IMP-24 (7.7) y P-IMP-25 (7.2 y 7.6)

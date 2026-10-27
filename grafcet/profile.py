@@ -34,8 +34,8 @@ U_REGISTRY = {
     "U-06": "Fronteras temporales y rebotes (cerrada por el responsable, comparador 4.1–4.5, salvo 0s/p/d2 con d2 > 0; "
             "contraste U-01)",
     "U-07": "Construcciones fuente, vacías y persistentes (cerrada por el responsable, comparador 6.1–6.4; contraste U-01)",
-    "U-08": "Interacciones jerárquicas (abiertas 7.3–7.5 y 7.8; 7.2, 7.6 y 7.7 decididas por el responsable; la "
-            "ejecución básica sigue el documento 06, P-IMP-23)",
+    "U-08": "Interacciones jerárquicas (cerrada por el responsable, 7.1–7.8, salvo vaciar por forzado un recinto con su "
+            "encapsulante activa; la ejecución básica sigue el documento 06, P-IMP-23; contraste U-01)",
     "U-09": "Inicialización semántica (cerrada por el responsable, hoja 08 1.1–1.5, salvo arranque vacío U-07 y expansiones U-08; contraste U-01)",
     "U-10": "Sistemas soportados y rendimiento",
     "U-11": "Ratificación de formato e intercambio",
@@ -49,10 +49,10 @@ FINDINGS = {
     "H-07": "Valor inicial distinto de cero: no se admite; se usa una acción al activar (hoja 08 1.5)",
     "H-08": "Actividad de parcial con parciales anidados",
     "H-09": "Base temporal compuesta (la salida y reentrada en el mismo instante quedó decidida en P-IMP-18)",
-    "H-10": "Lectura de salidas continuas en expresiones",
+    "H-10": "Lectura de salidas continuas en expresiones: según la situación del momento (8.2 C)",
     "H-18": "Momento de aplicación del forzado: el destino evoluciona y el forzado se aplica después (7.2 B)",
     "H-23": "La lectura «recorrido» de U-03, aplicada literalmente, produce ciclos transitorios sin fin",
-    "H-24": "Acciones al activar o desactivar de las etapas que cambia un forzado (ampliación de U-08)",
+    "H-24": "Acciones al activar o desactivar de las etapas que cambia un forzado: se ejecutan (7.8 A)",
 }
 
 
@@ -124,7 +124,8 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
        "provisional", "P-IMP-16; decisión del responsable, hoja 08 2.1 C y 2.2 B", "REQ-ACT-03"),
     _c("acciones.lecturas-contexto", "Lo asignado en un instante se ve en ese mismo instante; vale la última asignación",
        "provisional", "decisión del responsable, hoja 08 2.3 A y 2.4 A", "REQ-ACT-05"),
-    _c("acciones.salidas-continuas-leidas", "Leer salidas continuas en expresiones", "no-soportada", "H-10", "REQ-ACT-01"),
+    _c("acciones.salidas-continuas-leidas", "Leer salidas continuas en expresiones: valor según la situación del momento, "
+       "también la inestable", "provisional", "decisión del responsable, comparador 27-10-2026, 8.2 C (cierra H-10)", "REQ-ACT-01"),
     _c("parciales.actividad", "activePartial sobre parcial sin hijos", "provisional", "I (U-01)", "REQ-JER-01"),
     _c("parciales.anidados", "activePartial sobre parcial con parciales hijos", "no-soportada", "H-08", "REQ-JER-01"),
     _c("jerarquia.estructura", "Edición, persistencia y validación de forzados, macroetapas y recintos", "provisional", "I/P", "REQ-MOD-07", "REQ-JER-03"),
@@ -135,13 +136,15 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
     _c("jerarquia.forzado-momento", "Orden que entra en vigor cuando su destino franquea: el destino evoluciona y el "
        "forzado se aplica en la evolución siguiente", "provisional", "decisión del responsable, chat 27-10-2026, 7.2 B (coherente con 4.3 A y 7.6 B; cierra H-18)",
        "REQ-JER-06"),
-    _c("jerarquia.forzado-tiempo", "Temporizadores de un parcial forzado", "no-soportada", "U-08 (7.3)", "REQ-JER-06"),
-    _c("jerarquia.forzado-recinto", "Forzado de un recinto contra el invariante de su encapsulante", "no-soportada",
-       "U-08 (7.4)", "REQ-JER-06"),
-    _c("jerarquia.forzado-acciones", "Acciones al activar o desactivar etapas cambiadas por un forzado", "no-soportada",
-       "U-08 (7.8, H-24)", "REQ-JER-06", "REQ-ACT-02"),
-    _c("jerarquia.macro-ramas", "Salida de una macroetapa con otras ramas de la expansión activas", "no-soportada",
-       "U-08 (7.5)", "REQ-JER-06"),
+    _c("jerarquia.forzado-tiempo", "Temporizadores de un parcial forzado: siguen contando", "provisional", "decisión del responsable, comparador 27-10-2026, 7.3 A",
+       "REQ-JER-06"),
+    _c("jerarquia.forzado-recinto", "Forzar un recinto con la encapsulante inactiva: el forzado se ignora mientras siga "
+       "inactiva. Vaciar por forzado un recinto con la encapsulante activa no se preguntó y se detiene (U-08)", "provisional",
+       "decisión del responsable, comparador 27-10-2026, 7.4 C", "REQ-JER-06"),
+    _c("jerarquia.forzado-acciones", "Acciones al activar o desactivar de las etapas que cambia un forzado: se ejecutan",
+       "provisional", "decisión del responsable, comparador 27-10-2026, 7.8 A (cierra H-24)", "REQ-JER-06", "REQ-ACT-02"),
+    _c("jerarquia.macro-ramas", "Salir de una macroetapa con otras ramas activas: se desactivan todas las etapas de la "
+       "expansión", "provisional", "decisión del responsable, comparador 27-10-2026, 7.5 A", "REQ-JER-06"),
     _c("jerarquia.macro-inicial", "Etapas iniciales dentro de una expansión: se admiten y están activas al arrancar",
        "provisional", "decisión del responsable, chat 27-10-2026, 7.7 A", "REQ-JER-04"),
     _c("jerarquia.encapsulacion-coincidencia", "Transición interior que franquea cuando se desactiva su encapsulante: "
@@ -230,12 +233,12 @@ SEMANTIC_OPTIONS: dict[str, dict[str, Any]] = {
     "7.2": _opt("B", "U-08 (H-18): orden que entra en vigor cuando su destino podría evolucionar", {
         "detener": _STOP, "A": "El forzado se aplica en esa misma evolución y gana",
         "B": "El destino evoluciona y el forzado se aplica en la evolución siguiente"}),
-    "7.3": _opt("detener", "U-08: temporizadores de un parcial forzado", {
+    "7.3": _opt("A", "U-08: temporizadores de un parcial forzado", {
         "detener": _STOP, "A": "Siguen contando", "B": "Se congelan mientras dura el forzado"}),
-    "7.4": _opt("detener", "U-08: forzar un recinto cuya encapsulante está inactiva", {
+    "7.4": _opt("C", "U-08: forzar un recinto cuya encapsulante está inactiva", {
         "detener": _STOP, "A": "Error de diseño: se detiene con error", "B": "Se fuerza igualmente",
         "C": "El forzado se ignora mientras la encapsulante esté inactiva"}),
-    "7.5": _opt("detener", "U-08: salir de una macroetapa con ramas internas aún activas", {
+    "7.5": _opt("A", "U-08: salir de una macroetapa con ramas internas aún activas", {
         "detener": _STOP, "A": "Se desactivan todas las etapas de la expansión", "B": "Las ramas siguen activas",
         "C": "Error de diseño: se detiene con error"}),
     "7.6": _opt("B", "U-08: desactivar la encapsulante cuando franquea algo en su interior", {
@@ -243,11 +246,11 @@ SEMANTIC_OPTIONS: dict[str, dict[str, Any]] = {
         "B": "Primero actúa lo interior y después se desactiva"}),
     "7.7": _opt("A", "U-08: etapas iniciales dentro de una expansión", {
         "detener": _STOP, "A": "Se permiten: están activas al arrancar", "B": "No se permiten: no compila"}),
-    "7.8": _opt("detener", "U-08 (H-24): acciones de etapas activadas o desactivadas por un forzado", {
+    "7.8": _opt("A", "U-08 (H-24): acciones de etapas activadas o desactivadas por un forzado", {
         "detener": _STOP, "A": "Se ejecutan", "B": "No se ejecutan"}),
     "8.1": _opt("detener", "H-08: actividad de un parcial con parciales hijos", {
         "detener": _STOP, "A": "Cuenta también las etapas de los hijos", "B": "Solo las etapas propias"}),
-    "8.2": _opt("detener", "H-10: leer una salida continua en una expresión", {
+    "8.2": _opt("C", "H-10: leer una salida continua en una expresión", {
         "detener": _STOP, "A": "Prohibido: no compila", "B": "Valor de la situación estable anterior",
         "C": "Valor según la situación inestable del momento"}),
 }
@@ -286,6 +289,8 @@ CAP_QUESTION = {
     "transiciones.sin-lados": "U-07", "permanencia.efectos": "U-04", "eventos.recorrido": "U-03",
     "temporal.delay-cero": "U-06", "temporal.coincidencias": "U-06", "jerarquia.encapsulacion-permanencia": "U-04",
     "jerarquia.macro-inicial": "U-08", "jerarquia.forzado-momento": "U-08", "jerarquia.encapsulacion-coincidencia": "U-08",
+    "jerarquia.forzado-tiempo": "U-08", "jerarquia.forzado-recinto": "U-08", "jerarquia.forzado-acciones": "U-08",
+    "jerarquia.macro-ramas": "U-08",
 }
 
 
