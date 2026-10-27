@@ -88,13 +88,22 @@ class Hallazgos(unittest.TestCase):
         with self.assertRaises(DiagnosticError):
             ed.change_variable(v, initialValue=True)
 
-    def test_SH08_actividad_de_parcial_con_hijos(self):
-        """REQ-JER-01: hallazgo H-08."""
+    def test_SH08_parcial_dentro_de_otro(self):
+        """REQ-JER-01, REQ-MOD-07: hallazgo H-08, cerrado por el responsable (8.1 C): sin encapsulante no compila; como recinto, sí."""
         m = M().partial("G2", owner="g").var("y", "output").step("A", True).step("B", partial="G2")
         m.cont("A", "y", "activePartial(g)")
         res = m.validate()
-        self.assertIn("D-CAPACIDAD-NO-SOPORTADA", {d.code for d in res.diagnostics})
+        d = next(x for x in res.diagnostics if x.element == "G2")
+        self.assertEqual((d.code, d.field), ("D-FORMATO", "ownerRef"))
         self.assertFalse(res.can_simulate)
+        self.assertIn("D-CAPACIDAD-NO-SOPORTADA", {x.code for x in m.validate({"8.1": "detener"}).diagnostics})
+        # G2 como recinto de H, que está en g: se admite; con G2 activo, H está activa y g también (A y B coinciden)
+        m = M().partial("G2", owner="g").var("y", "output").step("H", True, kind="enclosing").step("B", True, partial="G2")
+        m.cont("H", "y", "activePartial(g)").enclosure("H", "G2", ["B"])
+        s = session(m.compile())
+        self.assertEqual((s.z.situation, s.z.outputs["y"]), ({"H", "B"}, True))
+        for reading in ("A", "B"):
+            self.assertTrue(session(m.compile({"8.1": reading}), options={"8.1": reading}).z.outputs["y"], reading)
 
     def test_SH09_reentrada_en_el_mismo_instante_conserva_la_duracion(self):
         """REQ-TMP-02, REQ-SEM-06: P-IMP-18 (cierra H-09); la salida y reentrada sin tiempo no reinicia el retardo."""

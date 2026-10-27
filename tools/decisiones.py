@@ -659,16 +659,18 @@ CATALOGO: list[Decision] = [
         expect={"A": "B se activa por el forzado y n = 1.", "B": "B se activa por el forzado y n sigue en 0."},
         checks={"A": {1: {"situation": ["B", "H"], "values": {"n": "1"}}}, "B": {1: {"situation": ["B", "H"], "values": {"n": "0"}}}}),
     Decision(
-        "8.1", "8. Otras dudas (H-08, H-10)", "Actividad de un parcial con parciales hijos (H-08)",
-        "En la norma, los parciales (G1, G2…) son trozos del grafcet puestos uno al lado del otro. El formato de archivo "
-        "permite además meter un parcial dentro de otro: aquí G2 está dentro de G1. G1 tiene su etapa X, inactiva; G2 tiene "
-        "Y, activa. La transición t tiene X_G1 («G1 está activo»). ¿Cuenta G1 como activo?",
-        [("A", "Sí: lo que está dentro de G1 también cuenta"), ("B", "No: solo cuentan las etapas propias de G1")],
-        "8.1", "Solo importa si un modelo mete un parcial dentro de otro y usa X_G de ese parcial en una condición. Si no se "
-        "va a usar, puede quedarse abierta.", m81,
+        "8.1", "8. Otras dudas (H-08, H-10)", "Parcial dentro de otro sin encapsulante (H-08)",
+        "En la norma, los parciales (G1, G2…) van uno al lado del otro; uno solo está «dentro» de otro como recinto de una "
+        "encapsulante (y entonces G2 activo implica la encapsulante activa, así que G1 también lo está). El formato de "
+        "archivo permite además meter G2 dentro de G1 sin encapsulante. G1 tiene su etapa X, inactiva; G2 tiene Y, activa; "
+        "t tiene X_G1. ¿Qué se hace?",
+        [("A", "Se admite: lo que está dentro de G1 también cuenta"), ("B", "Se admite: solo cuentan las etapas propias de G1"),
+         ("C", "No se admite sin encapsulante: no compila")],
+        "8.1", "El responsable señaló que un parcial dentro de otro necesita encapsulante; con ella, A y B dan lo mismo.", m81,
         expect={"A": "G1 cuenta como activo por Y (que está dentro): t franquea al arrancar y se pasa a E1.",
-                "B": "La única etapa propia de G1 es X, inactiva: G1 no cuenta como activo y se queda en E0."},
-        checks={"A": {0: {"situation": ["E1", "Y"]}}, "B": {0: {"situation": ["E0", "Y"]}}}),
+                "B": "La única etapa propia de G1 es X, inactiva: G1 no cuenta como activo y se queda en E0.",
+                "C": "No compila: D-FORMATO (G2 está dentro de G1 sin encapsulante)."},
+        checks={"A": {0: {"situation": ["E1", "Y"]}}, "B": {0: {"situation": ["E0", "Y"]}}, "C": {0: {"code": "D-FORMATO"}}}),
     Decision(
         "8.2", "8. Otras dudas (H-08, H-10)", "Receptividad que lee una salida continua (H-10)",
         "B tiene la salida continua y; t2: B → C tiene y. ¿Qué valor de y ve t2 durante el recorrido?",
@@ -698,7 +700,7 @@ RESPUESTAS_HOJA_08: dict[str, tuple[str, str]] = {
 }
 
 # Respuestas dadas en el comparador el 27-10-2026 e incorporadas en P-IMP-22. 3.4 y 4.5 quedan registradas: se
-# aplicarán cuando se ejecuten la encapsulación y elapsed. 7.1-7.7 siguen abiertas; 8.1 y 8.2 no se respondieron.
+# aplicarán cuando se ejecuten la encapsulación y elapsed (la encapsulación se ejecuta desde P-IMP-23).
 RESPUESTAS_COMPARADOR: dict[str, str] = {
     "3.1": "A", "3.2": "A", "3.3": "A", "3.4": "A", "4.1": "A", "4.2": "A", "4.3": "A", "4.4": "B", "4.5": "A",
     "5.1": "situacion-anterior", "5.2": "B", "5.3": "A", "6.1": "A", "6.2": "A", "6.3": "A", "6.4": "A",
@@ -706,8 +708,8 @@ RESPUESTAS_COMPARADOR: dict[str, str] = {
     "7.1": "A", "7.3": "A", "7.4": "C", "7.5": "A", "7.8": "A", "8.2": "C",
 }
 
-# Respuestas dadas en el chat el 27-10-2026 e incorporadas en P-IMP-24 (7.7) y P-IMP-25 (7.2 y 7.6)
-RESPUESTAS_CHAT: dict[str, str] = {"7.7": "A", "7.2": "B", "7.6": "B"}
+# Respuestas dadas en el chat el 27-10-2026 e incorporadas en P-IMP-24 (7.7), P-IMP-25 (7.2 y 7.6) y P-IMP-27 (8.1)
+RESPUESTAS_CHAT: dict[str, str] = {"7.7": "A", "7.2": "B", "7.6": "B", "8.1": "C"}
 
 # Lo que el programa aplica hoy: el comparador muestra si la respuesta guardada ya está incorporada
 RESPUESTAS_INCORPORADAS: dict[str, str] = {**{k: v for k, (v, _) in RESPUESTAS_HOJA_08.items()}, **RESPUESTAS_COMPARADOR,

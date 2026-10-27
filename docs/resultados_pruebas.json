@@ -1,5 +1,5 @@
 {
- "date": "2026-10-27T11:24:46+01:00",
+ "date": "2026-10-27T11:33:24+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
@@ -229,13 +229,14 @@
    "summary": "REQ-ACT-02, REQ-SEM-01: hoja 08, 1.5 A (cierra H-07); otro valor inicial se pone al activar la etapa inicial."
   },
   {
-   "test": "test_suplementarios.Hallazgos.test_SH08_actividad_de_parcial_con_hijos",
+   "test": "test_suplementarios.Hallazgos.test_SH08_parcial_dentro_de_otro",
    "case": "S-H08",
    "outcome": "pasa",
    "requirements": [
-    "REQ-JER-01"
+    "REQ-JER-01",
+    "REQ-MOD-07"
    ],
-   "summary": "REQ-JER-01: hallazgo H-08."
+   "summary": "REQ-JER-01, REQ-MOD-07: hallazgo H-08, cerrado por el responsable (8.1 C): sin encapsulante no compila; como recinto, sí."
   },
   {
    "test": "test_suplementarios.Hallazgos.test_SH09_reentrada_en_el_mismo_instante_conserva_la_duracion",

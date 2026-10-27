@@ -49,7 +49,7 @@ Base normativa declarada: IEC 60848 edición 3.0 (2013-02-27), adopción UNE-EN 
 | `jerarquia.macroetapas` — Macroetapas: llegar activa la entrada; salir exige la salida; XM por la expansión | provisional (especificada, sin contraste normativo) | I (U-01), documento 06 y LOC tabla 11; P-IMP-23 | REQ-JER-04 |
 | `lotes` — Lotes simultáneos y lotes ordenados con igual tiempo | provisional (especificada, sin contraste normativo) | P | REQ-EVT-02 |
 | `parciales.actividad` — activePartial sobre parcial sin hijos | provisional (especificada, sin contraste normativo) | I (U-01) | REQ-JER-01 |
-| `parciales.anidados` — activePartial sobre parcial con parciales hijos | pendiente / bloqueada | H-08 | REQ-JER-01 |
+| `parciales.anidados` — Parcial dentro de otro: solo como recinto de una encapsulante o expansión de una macroetapa del parcial dueño; sin encapsulante no compila | provisional (especificada, sin contraste normativo) | decisión del responsable, chat 27-10-2026, 8.1 C (cierra H-08) | REQ-JER-01, REQ-MOD-07 |
 | `permanencia.actividad` — Etapa activada y desactivada a la vez permanece activa | provisional (especificada, sin contraste normativo) | I (U-01) | REQ-SEM-05 |
 | `permanencia.efectos` — Etapa en permanencia activa o reactivada: no ejecuta acciones al activar ni al desactivar y su duración sigue | provisional (especificada, sin contraste normativo) | decisión del responsable, comparador 27-10-2026, 3.1 A, 3.2 A y 3.3 A (cierra H-05) | REQ-SEM-05, REQ-EVT-03 |
 | `situacion.inicial.explicita` — Situación inicial = etapas marcadas iniciales | provisional (especificada, sin contraste normativo) | I (U-01) | REQ-SEM-01 |
@@ -199,10 +199,11 @@ Elegir una lectura distinta de la predeterminada no cierra la cuestión ni ampl�
   - `detener`: Detener: la cuestión sigue abierta
   - `A`: Se ejecutan
   - `B`: No se ejecutan
-- **8.1** (H-08: actividad de un parcial con parciales hijos); por defecto `detener`:
+- **8.1** (H-08: parcial dentro de otro (ownerRef del documento 09)); por defecto `C`:
   - `detener`: Detener: la cuestión sigue abierta
   - `A`: Cuenta también las etapas de los hijos
   - `B`: Solo las etapas propias
+  - `C`: Sin encapsulante no se admite: no compila
 - **8.2** (H-10: leer una salida continua en una expresión); por defecto `C`:
   - `detener`: Detener: la cuestión sigue abierta
   - `A`: Prohibido: no compila

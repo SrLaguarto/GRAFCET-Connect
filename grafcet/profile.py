@@ -47,7 +47,7 @@ FINDINGS = {
     "H-02": "Duración de etapa inicial desde τ=0 (confirmada por el responsable, hoja 08 1.4)",
     "H-05": "Activación de etapa ya activa no incluida en D: no ejecuta sus acciones (comparador 3.3 A)",
     "H-07": "Valor inicial distinto de cero: no se admite; se usa una acción al activar (hoja 08 1.5)",
-    "H-08": "Actividad de parcial con parciales anidados",
+    "H-08": "Parcial dentro de otro sin encapsulante: no se admite (8.1 C)",
     "H-09": "Base temporal compuesta (la salida y reentrada en el mismo instante quedó decidida en P-IMP-18)",
     "H-10": "Lectura de salidas continuas en expresiones: según la situación del momento (8.2 C)",
     "H-18": "Momento de aplicación del forzado: el destino evoluciona y el forzado se aplica después (7.2 B)",
@@ -127,7 +127,8 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
     _c("acciones.salidas-continuas-leidas", "Leer salidas continuas en expresiones: valor según la situación del momento, "
        "también la inestable", "provisional", "decisión del responsable, comparador 27-10-2026, 8.2 C (cierra H-10)", "REQ-ACT-01"),
     _c("parciales.actividad", "activePartial sobre parcial sin hijos", "provisional", "I (U-01)", "REQ-JER-01"),
-    _c("parciales.anidados", "activePartial sobre parcial con parciales hijos", "no-soportada", "H-08", "REQ-JER-01"),
+    _c("parciales.anidados", "Parcial dentro de otro: solo como recinto de una encapsulante o expansión de una macroetapa "
+       "del parcial dueño; sin encapsulante no compila", "provisional", "decisión del responsable, chat 27-10-2026, 8.1 C (cierra H-08)", "REQ-JER-01", "REQ-MOD-07"),
     _c("jerarquia.estructura", "Edición, persistencia y validación de forzados, macroetapas y recintos", "provisional", "I/P", "REQ-MOD-07", "REQ-JER-03"),
     _c("jerarquia.forzado", "Forzado: explícito, actual, vacío e inicial; el destino no evoluciona mientras está vigente",
        "provisional", "I (U-01), documento 06 y LOC tabla 9; P-IMP-23", "REQ-JER-02", "REQ-JER-03"),
@@ -162,8 +163,8 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
 
 # Lecturas seleccionables de las cuestiones de la hoja 08 (P-IMP-15 y P-IMP-21). Cada alternativa está
 # implementada para poder compararla en el comparador de decisiones. Los valores por defecto son lo que decidió
-# el responsable (hoja 08, bloques 1 y 2, P-IMP-19 y P-IMP-20; comparador, P-IMP-22) y, para lo abierto
-# (8.1, 8.2), «detener», porque el documento 12 prohíbe cerrar una U con un valor por defecto de
+# el responsable (hoja 08, bloques 1 y 2, P-IMP-19 y P-IMP-20; comparador y chat, P-IMP-22 a P-IMP-27) y, para
+# lo que siguiera abierto, «detener», porque el documento 12 prohíbe cerrar una U con un valor por defecto de
 # implementación. Elegir otra lectura es una hipótesis explícita: queda en el perfil efectivo de la traza y de
 # las instantáneas, y nunca es conformidad.
 _STOP = "Detener: la cuestión sigue abierta"
@@ -248,8 +249,9 @@ SEMANTIC_OPTIONS: dict[str, dict[str, Any]] = {
         "detener": _STOP, "A": "Se permiten: están activas al arrancar", "B": "No se permiten: no compila"}),
     "7.8": _opt("A", "U-08 (H-24): acciones de etapas activadas o desactivadas por un forzado", {
         "detener": _STOP, "A": "Se ejecutan", "B": "No se ejecutan"}),
-    "8.1": _opt("detener", "H-08: actividad de un parcial con parciales hijos", {
-        "detener": _STOP, "A": "Cuenta también las etapas de los hijos", "B": "Solo las etapas propias"}),
+    "8.1": _opt("C", "H-08: parcial dentro de otro (ownerRef del documento 09)", {
+        "detener": _STOP, "A": "Cuenta también las etapas de los hijos", "B": "Solo las etapas propias",
+        "C": "Sin encapsulante no se admite: no compila"}),
     "8.2": _opt("C", "H-10: leer una salida continua en una expresión", {
         "detener": _STOP, "A": "Prohibido: no compila", "B": "Valor de la situación estable anterior",
         "C": "Valor según la situación inestable del momento"}),

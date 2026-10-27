@@ -676,6 +676,16 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
 
     # Jerarquía: estructura, propiedad única, ciclos, coherencia inicial (REQ-MOD-07, REQ-JER-03)
     _validate_hierarchy(v, partials, raw_steps, forces, macros, expansions, enclosures)
+    # Parcial dentro de otro (respuesta 8.1 C del responsable): en GRAFCET solo existe como recinto de una
+    # encapsulante o como expansión de una macroetapa del parcial dueño; sin eso, no se admite
+    if opt["8.1"] == "C":
+        backed = {e["partialRef"]: raw_steps.get(e["ownerStepRef"], {}).get("partialRef") for e in enclosures}
+        backed.update({x["partialRef"]: next((m["partialRef"] for m in macros if m["id"] == x["ownerMacroRef"]), None)
+                       for x in expansions})
+        for pid, p in sorted(partials.items()):
+            if p.get("ownerRef") in partials and backed.get(pid) != p["ownerRef"]:
+                v.add("D-FORMATO", f"el parcial {pid} está dentro de {p['ownerRef']} sin encapsulante: no se admite; "
+                      "use una etapa encapsulante (respuesta 8.1 C)", pid, "ownerRef")
     for dl in drafts:
         v.add("D-ALTERNANCIA", f"enlace de borrador {dl['fromRef']}→{dl['toRef']} viola la alternancia "
               "etapa/transición; no ejecutable", dl["id"])

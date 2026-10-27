@@ -408,7 +408,10 @@ Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-1
 ### 8.1 · Actividad de un parcial con parciales hijos (H-08)
 - [ ] **A.** Cuenta también las etapas de los parciales hijos.
 - [ ] **B.** Solo las etapas propias.
+- [X] **C.** No se admite un parcial dentro de otro sin encapsulante: no compila (opción añadida a raíz de la observación del responsable).
 - [ ] **Dejar abierta**
+
+Respondida por el responsable el 27-10-2026 en el chat (sin cláusula citada; contraste normativo pendiente, U-01). Comentario: «G2 no puede estar activo si G1 no lo está; los grafcets parciales necesitan encapsulante y ahí no las hay».
 
 ### 8.2 · Receptividad que lee una salida continua durante un recorrido (H-10)
 **Ejemplo:** B tiene `y` continua; la transición B → C tiene `y`; B es virtual.

@@ -67,7 +67,7 @@ REQ = {
     "REQ-ACT-03": ("IMPL-P", "model, engine", "D-ESCRITURA-CONFLICTO con autores y valores, sin prioridad oculta; un conflicto seguro impide compilar (P-IMP-16) y el resto se detiene en ejecución"),
     "REQ-ACT-04": ("IMPL-I", "model", "D-MODO-SALIDA en validación"),
     "REQ-ACT-05": ("IMPL-DEC", "engine, model", "Hoja 08, 2.1 C, 2.2 B, 2.3 A, 2.4 A y 2.5 A (P-IMP-20): conflicto si dos escriben a la vez, dependencia cruzada no compila, lo asignado se ve en el mismo instante y vale la última asignación"),
-    "REQ-JER-01": ("PARCIAL", "engine, model", "Partición sin orden y XG de parciales sin hijos; anidados: H-08"),
+    "REQ-JER-01": ("IMPL-I", "engine, model", "Partición sin orden y XG derivada de sus etapas. Un parcial dentro de otro solo como recinto o expansión; sin encapsulante no compila (chat 27-10-2026, 8.1 C; cierra H-08)"),
     "REQ-JER-02": ("IMPL-I", "hierarchy, engine", "Forzado explícito, actual (captura), vacío e inicial; el destino no evoluciona mientras está vigente; la retirada libera desde la situación resultante (documento 06, P-IMP-23). Momento, temporizadores, recintos y acciones: U-08 (7.2–7.4, 7.8)"),
     "REQ-JER-03": ("IMPL-P", "model, hierarchy", "Ciclos D-JERARQUIA-CICLO; conflicto posible avisado al validar y detenido al ejecutar (D-FORZADO-CONFLICTO) sin prioridad por ID"),
     "REQ-JER-04": ("IMPL-I", "model, hierarchy, engine", "Relación expandida: llegar activa la entrada, salir exige la salida; XM por la expansión; reentrada sin borrar memorias (P-IMP-23). Ramas residuales: U-08 (7.5). Iniciales en la expansión: se admiten (7.7 A, P-IMP-24)"),

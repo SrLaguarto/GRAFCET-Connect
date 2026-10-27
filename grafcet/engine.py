@@ -164,7 +164,7 @@ class _Env:
 
     def active_partial(self, pid: str) -> bool:
         steps = set(self.cm.partials[pid]["steps"])
-        if self.options["8.1"] == "A":  # 8.1 A: también las etapas de los parciales hijos
+        if self.options["8.1"] in ("A", "C"):  # 8.1 A, y en C los hijos admitidos (recinto o expansión) cuentan
             pending = list(self.cm.partials[pid]["children"])
             while pending:
                 child = pending.pop()

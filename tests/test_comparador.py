@@ -129,7 +129,7 @@ class Comparador(unittest.TestCase):
             if d.option is not None:
                 self.assertEqual(SEMANTIC_OPTIONS[d.option]["default"], value, did)
         still_open = {d.id for d in CATALOGO} - set(RESPUESTAS_INCORPORADAS)
-        self.assertEqual(still_open, {"8.1"})
+        self.assertEqual(still_open, set(), "todas las cuestiones del comparador están respondidas")
         for did in still_open:
             if POR_ID[did].option is not None:
                 self.assertEqual(SEMANTIC_OPTIONS[POR_ID[did].option]["default"], "detener", did)
