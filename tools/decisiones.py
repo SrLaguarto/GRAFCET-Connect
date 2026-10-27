@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from helpers import M, S  # constructor de modelos con el formato del documento 09
+from grafcet.builder import M, S  # constructor de modelos con el formato del documento 09
 
 Layout = dict[str, tuple[int, int]]
 

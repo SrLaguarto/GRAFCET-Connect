@@ -4,3 +4,5 @@ __pycache__/
 *.new
 commit.json.tmp
 .claude/
+build/
+dist/

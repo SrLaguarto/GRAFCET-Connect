@@ -36,6 +36,10 @@ function drawDiagram(svg, M, S) {
   (M.macros || []).forEach(m => pos[m.id] = {x:m.x+SX, y:m.y});
   const nodes = Object.values(pos);
   const minX = Math.min(...nodes.map(p=>p.x));
+  // Enlace ascendente: por la izquierda del parcial de la transición, no de todo el dibujo
+  const part = p => (p === "g" || p == null) ? "" : p, leftOf = {};
+  M.steps.forEach(s => { const k = part(s.partial); leftOf[k] = Math.min(leftOf[k] ?? Infinity, pos[s.id].x); });
+  (M.macros || []).forEach(m => { leftOf[""] = Math.min(leftOf[""] ?? Infinity, pos[m.id].x); });
   const situation = new Set(S.situation || []), virtual = new Set(S.virtual || []);
   const unstable = new Set(S.unstable || []);
   const cleared = new Set(S.lastCleared || []);
@@ -61,7 +65,7 @@ function drawDiagram(svg, M, S) {
       down.forEach(p => el("path", {d:`M${p.x},${yy+4} V${p.y-H}`, class:"link"}, links));
     } else down.forEach(p => el("path", {d:`M${tx},${ty} V${(ty+p.y-H)/2} H${p.x} V${p.y-H}`, class:"link"}, links));
     up.forEach(p => {       // enlace ascendente con flecha
-      const lx = Math.min(minX, tx) - 70, top = p.y - H - 16;
+      const lx = Math.min(leftOf[part(t.partial)] ?? minX, tx) - 70, top = p.y - H - 16;
       el("path", {d:`M${tx},${ty} V${ty+14} H${lx} V${top} H${p.x} V${p.y-H}`, class:"link"}, links);
       const my = (ty + 14 + top) / 2;
       el("path", {d:`M${lx-5},${my+6} L${lx},${my-4} L${lx+5},${my+6} Z`, class:"arrow"}, links);

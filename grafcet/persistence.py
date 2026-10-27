@@ -270,6 +270,54 @@ def open_project(root: Path, fs: FileSystem | None = None) -> Project:
     return project
 
 
+@dataclass
+class OpenedModel:
+    doc: dict[str, Any]
+    presentations: list[dict[str, Any]]  # las que dibujan este modelo (modelId)
+    title: str
+    diagnostics: list[Diagnostic] = field(default_factory=list)
+    executable: bool = True
+
+
+def open_model(path: Path, fs: FileSystem | None = None) -> OpenedModel:
+    """Abre un modelo para simularlo (P-IMP-29): la carpeta de un proyecto o su manifest.json (primer modelo del
+    proyecto, con sus presentaciones) o un documento de modelo suelto (con las presentaciones de su misma
+    carpeta). Aplica las mismas reglas de versión, integridad, límites y campos desconocidos que open_project."""
+    fs = fs or FileSystem()
+    path = Path(path)
+    if path.is_dir() or path.name == MANIFEST:
+        root = path if path.is_dir() else path.parent
+        project = open_project(root, fs)
+        models = project.models()
+        if not models:
+            raise DiagnosticError(Diagnostic("D-REF", "el proyecto no contiene ningún modelo"))
+        doc = models[0]
+        pres = [d for d in (project.documents[r["path"]] for r in project.manifest["presentationRefs"])
+                if d.get("modelId") == doc["id"]]
+        return OpenedModel(doc, pres, project.manifest.get("title") or doc["id"], project.diagnostics,
+                           project.executable)
+    loaded = parse_document(fs.read(path))
+    if loaded.doc is None:
+        raise DiagnosticError(*loaded.diagnostics)
+    if loaded.doc["family"] == "project":
+        return open_model(path.parent, fs)
+    if loaded.doc["family"] != "model":
+        raise DiagnosticError(Diagnostic("D-FORMATO", f"se esperaba un modelo o un proyecto, no un documento "
+                                         f"«{loaded.doc['family']}»", element=loaded.doc["id"]))
+    doc, diags, executable = loaded.doc, list(loaded.diagnostics), loaded.executable
+    unknown = unknown_fields(doc)
+    if unknown:
+        diags.append(Diagnostic("D-FORMATO", f"campos semánticos desconocidos {unknown}: no ejecutable", element=doc["id"],
+                                severity="bloqueo"))
+        executable = False
+    pres = []
+    for f in sorted(path.parent.glob("presentation-*.json")):
+        p = parse_document(fs.read(f), "presentation")
+        if p.doc is not None and p.doc.get("modelId") == doc["id"]:
+            pres.append(p.doc)
+    return OpenedModel(doc, pres, path.stem, diags, executable)
+
+
 def _element_ids(doc: dict[str, Any]) -> list[str]:
     out = [doc["id"]]
     if doc["family"] == "model":

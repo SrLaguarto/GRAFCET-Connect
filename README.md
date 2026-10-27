@@ -6,7 +6,7 @@ Implementación de la **segunda IA** a partir de los doce documentos de `../Defi
 
 ## Uso
 
-Requiere Python ≥ 3.12, sin dependencias externas.
+El núcleo requiere Python ≥ 3.12, sin dependencias externas. Solo el simulador de escritorio usa PySide6-Essentials (Qt 6, LGPL v3), y construir su `.exe` usa pyinstaller.
 
 ```bash
 python tools/comprobar_paquete.py
@@ -25,6 +25,19 @@ python tools/medir_presupuestos.py
 ```
 
 El primer comando comprueba la parte automatizable de R-02: el paquete sigue siendo exactamente doce Markdown con las huellas registradas. El segundo ejecuta la batería y deja la evidencia en `docs/resultados_pruebas.json`. El tercero regenera la matriz y los documentos 02, 05 y 06. El cuarto hace una medición indicativa que no es aceptación (U-10).
+
+### Simulador de escritorio (P-IMP-29)
+
+Primera versión para Windows: simula los ejemplos y los modelos guardados con el dibujo de la norma. Tiene entradas
+con un clic, tiempo lógico en pasos o al ritmo del reloj, evolución a evolución, traza, salidas, variables,
+condiciones temporales y todas las lecturas de interpretación. «Abrir modelo» admite un proyecto (su
+`manifest.json`) o un documento de modelo; «Guardar como proyecto» guarda el modelo en curso con su dibujo. No es el
+editor.
+
+- Desde el código: doble clic en «Abrir simulador.bat», o `python escritorio/simulador.py [modelo]`.
+- Versión portable: «Construir ejecutable.bat» (o `python tools/construir_ejecutable.py`) deja el programa en
+  `dist/GRAFCET/`. Esa carpeta entera es el programa: se copia donde se quiera y se abre `GRAFCET.exe`, sin instalar
+  Python. `dist/` y `build/` no se versionan.
 
 ### Banco de pruebas y comparador de decisiones
 
@@ -61,6 +74,8 @@ python tools/banco_de_pruebas.py --abrir --comparar
 | `grafcet/trace.py` | Traza, cierre, digest | SIM-05, DAT-08 |
 | `grafcet/persistence.py`, `canonical.py`, `ids.py` | Persistencia abierta, canónica y atómica | DAT-01..07, ROB-02, EDT-10, PLT-02 |
 | `grafcet/editor.py` | Operaciones de edición sin interfaz | EDT-01..07, 09, 14; MOD-03, MOD-06 |
+| `grafcet/builder.py`, `examples.py`, `view.py` | Constructor de modelos, ejemplos y vista común del banco, el comparador y el simulador (P-IMP-29) | SIM-02, SIM-03, DAT-02 |
+| `escritorio/` | Simulador de escritorio con Qt (PySide6) y su dibujo; `tools/construir_ejecutable.py` hace el `.exe` portable | EDT-01, SIM-03, PLT-03 |
 | `spec/clasificacion.py` | Clasificación de requisitos y tratamiento de casos | U-12 (propuesta) |
 | `tools/banco_de_pruebas.py`, `comparador.html`, `decisiones.py`, `dibujo.js` | Banco de pruebas y comparador de decisiones (no es la interfaz del producto) | SEM-09, NOR-02 |
 | `tests/` | Casos T-01…T-26 del documento 11 y suplementarios S-xx | — |
@@ -83,6 +98,6 @@ El núcleo se ha hecho solo con los doce documentos del paquete. El 25-10-2026, 
 - Jerarquías: forzado, macroetapas y encapsulación se ejecutan (P-IMP-23) y sus interacciones están decididas (P-IMP-24 a P-IMP-26), salvo vaciar por forzado un recinto con su encapsulante activa, que se detiene.
 - `elapsed(etapa)` en expresiones: no se ejecuta todavía (su valor con la etapa inactiva ya está decidido, 4.5 A).
 - Siguen deteniéndose, sin preguntar todavía: eventos internos y de franqueamiento (U-03, caso T-11b), vencimientos simultáneos que dependen del orden (U-06) y vaciar por forzado un recinto con su encapsulante activa (U-08). Las cuestiones del comparador están todas respondidas.
-- Interfaz gráfica (Qt 6/PySide6 propuesta), exportación SVG/PDF y accesibilidad: requieren instalar la dependencia y ratificar U-10.
-- Empaquetado, matriz de sistemas y medición en el equipo de referencia (U-10).
+- Editor gráfico, navegación jerárquica, exportación SVG/PDF y accesibilidad. El simulador de escritorio (P-IMP-29) ya simula, abre y guarda modelos, pero todavía no los edita.
+- Instalador y actualización, matriz de sistemas y medición en el equipo de referencia (U-10). Por ahora solo hay una versión portable para Windows, sin instalador.
 - Ratificación del formato 0.1 (U-11) y cierre de las U normativas, que permitiría desbloquear capacidades.

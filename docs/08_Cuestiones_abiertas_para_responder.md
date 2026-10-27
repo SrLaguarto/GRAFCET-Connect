@@ -464,8 +464,10 @@ El detalle está en `docs/04_Decisiones_de_implementacion.md`. Las P-IMP-15 a 18
 | P-IMP-14 | Campo `limitUs` para las acciones limitadas | [ ] | |
 
 ### 9.5 · Programa de escritorio
-- [ ] **A.** Permiso para instalar PySide6 y PyInstaller desde PyPI y empezar el programa con su `.exe` portable.
+- [X] **A.** Permiso para instalar PySide6 y PyInstaller desde PyPI y empezar el programa con su `.exe` portable.
 - [ ] **B.** Todavía no.
+
+Respondida en el chat el 27-10-2026: «Sí: instala PySide6-Essentials y pyinstaller desde PyPI con pip y empieza el primer ejecutable portable para Windows (simulador con dibujo, ejemplos y abrir modelos)». Aplicada en P-IMP-29.
 
 ---
 

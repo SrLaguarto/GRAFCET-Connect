@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-27T11:40:16+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 134 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-27T12:32:04+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 141 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 34 casos, 37 pruebas, 37 pasan.
+Pruebas suplementarias S-xx: 41 casos, 44 pruebas, 44 pasan.
 
 ## Requisitos
 
@@ -79,9 +79,9 @@ Pruebas suplementarias S-xx: 34 casos, 37 pruebas, 37 pasan.
 | REQ-JER-05 | I/crítica | 06 | IMPL-I | model, hierarchy | T-19a ✔, T-19b ✔, T-19c ✔ | Al arrancar, iniciales; al reentrar, enlaces de activación; al salir, se desactivan todos los descendientes (P-IMP-23). Encapsulante en permanencia: el contenido se mantiene (comparador, 3.4 A) |
 | REQ-JER-06 | U/crítica | 06 | IMPL-DEC | hierarchy | T-18d ◆, T-20a ◆, T-20c ◆ | Cerradas por el responsable: 7.2 B, 7.3 A, 7.4 C, 7.5 A, 7.6 B, 7.7 A y 7.8 A (P-IMP-24 a P-IMP-26). Vaciar por forzado un recinto con su encapsulante activa no se preguntó y se detiene (U-08) |
 | REQ-JER-07 | P/alta | 06 | PEND-UI | — | T-21g —, T-24a ◐ | Plegado y navegación pertenecen a la vista |
-| REQ-EDT-01 | P/alta | 07 | PARCIAL | editor, persistence | T-21a ◐ | Crear, abrir, guardar y duplicar sin interfaz; diálogo de cierre con cambios pendiente de interfaz |
+| REQ-EDT-01 | P/alta | 07 | PARCIAL | editor, persistence | T-21a ◐, S-APP06 ✔ | Crear, abrir, guardar y duplicar sin interfaz; el simulador de escritorio abre proyectos y modelos y guarda como proyecto (P-IMP-29); diálogo de cierre con cambios pendiente del editor |
 | REQ-EDT-02 | P/alta | 07 | IMPL-P | editor | T-21b ✔, T-21c ✔ | Insertar, conectar, editar; borrador inválido guardable |
-| REQ-EDT-03 | P/alta | 07 | PARCIAL | editor | T-04c ✔, T-21c ✔ | Mover, alinear, distribuir y deshacer; zoom y desplazamiento pendientes de interfaz |
+| REQ-EDT-03 | P/alta | 07 | PARCIAL | editor | T-04c ✔, T-21c ✔ | Mover, alinear, distribuir y deshacer; zoom y desplazamiento en la vista del simulador (P-IMP-29), pendientes en el editor |
 | REQ-EDT-04 | P/crítica | 07 | IMPL-P | editor | T-21e ✔ | Copiar/pegar con IDs nuevos y decisión explícita de referencias externas |
 | REQ-EDT-05 | P/crítica | 07 | IMPL-P | editor | T-21f ✔ | Transacciones atómicas; fallo fuera del historial; rehacer descartado |
 | REQ-EDT-06 | P/crítica | 07 | IMPL-P | editor | T-21d ✔ | Renombrar sin cambiar ID, usos actualizados, colisión diagnosticada, búsqueda con ruta |
@@ -89,21 +89,21 @@ Pruebas suplementarias S-xx: 34 casos, 37 pruebas, 37 pasan.
 | REQ-EDT-08 | P/alta | 07 | PEND-UI | — | T-21g — | Navegación jerárquica |
 | REQ-EDT-09 | P/alta | 07 | IMPL-P | diagnostics | T-21b ✔, T-09c ✔, S-ESC01 ✔ | Código, gravedad, elemento, evidencia y corrección; foco en interfaz pendiente |
 | REQ-EDT-10 | P/crítica | 07 | IMPL-P | persistence | T-22d ✔ | Recuperación separada cada 30 s si hay cambios, sin sobrescritura |
-| REQ-EDT-11 | P/alta | 07 | PEND-UI | — | T-21h — | Exportación SVG/PDF no implementada en esta iteración |
+| REQ-EDT-11 | P/alta | 07 | PEND-UI | — | T-21h — | Exportación SVG/PDF no implementada en esta iteración (el simulador guarda el dibujo como PNG) |
 | REQ-EDT-12 | P/alta | 07 | PEND-UI | — | T-21g —, T-25a ◐ | Diagramas extensos: vista general, zoom y filtros |
 | REQ-EDT-13 | P/alta | 07 | PEND-UI | — | T-26a —, T-26b — | Teclado y accesibilidad |
 | REQ-EDT-14 | P/crítica | 07 | IMPL-P | editor, engine | T-23d ✔ | Edición semántica = revisión nueva; la ejecución conserva la suya |
 | REQ-SIM-01 | P/crítica | 08 | IMPL-P | engine | T-23a ✔, T-23b ✔ | Estados de sesión, pausas en frontera completa, microavance, puntos antes/después |
-| REQ-SIM-02 | P/crítica | 08 | IMPL-P | scenario, engine | T-10b ✔, T-23c ✔ | Escenarios y entradas manuales registradas con origen y ordinal |
-| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔ | Observación de actividad, validación, receptividad y franqueamiento |
+| REQ-SIM-02 | P/crítica | 08 | IMPL-P | scenario, engine | T-10b ✔, T-23c ✔, S-APP04 ✔ | Escenarios y entradas manuales registradas con origen y ordinal |
+| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-APP05 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
 | REQ-SIM-04 | P/crítica | 08 | IMPL-P | engine | T-23c ✔, T-22f ✔, T-23f ✔, S-OPT03d ✔ | Instantánea con Z completo y compatibilidad exacta; dentro de recorrido D-INSTANTANEA-FASE |
 | REQ-SIM-05 | P/crítica | 08 | IMPL-P | trace | T-04a ✔, T-22g ✔, S-OPT03b ✔ | Traza con conjuntos E, causas, cierre y digest |
 | REQ-SIM-06 | P/crítica | 08 | IMPL-P | engine | T-09d ✔, T-23b ✔ | Observar y pausar no modifican comportamiento |
 | REQ-SIM-07 | P/crítica | 08 | IMPL-P | engine | T-23e ✔ | Intervención E en pausa estable, rama auditable |
 | REQ-SIM-08 | P/alta | 08 | IMPL-P | diagnostics, engine | T-08a ✔, T-08b ✔, T-16a ✔, S-08a ✔ | Evidencia y corrección recomendada en cada diagnóstico |
 | REQ-DAT-01 | P/crítica | 09 | IMPL-P | model, persistence, ids | T-22b ✔, T-21e ✔, S-H12 ✔ | Identidades, referencias y propiedad; nombres hexadecimales (H-12) |
-| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-CMP04 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
-| REQ-DAT-03 | P/crítica | 09 | IMPL-P | persistence | T-22c ✔, T-22e ✔ | Versión mayor/menor, desconocidos y migración con copia e informe |
+| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-CMP04 ✔, S-APP01 ✔, S-APP06 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
+| REQ-DAT-03 | P/crítica | 09 | IMPL-P | persistence | T-22c ✔, T-22e ✔, S-APP02 ✔ | Versión mayor/menor, desconocidos y migración con copia e informe |
 | REQ-DAT-04 | P/crítica | 09 | IMPL-P | engine | T-22f ✔, T-23c ✔, T-23f ✔, S-OPT03d ✔ | Instantánea íntegra y compatibilidad exacta; campos U no aplicables declarados |
 | REQ-DAT-05 | P/crítica | 09 | IMPL-P | canonical, timeutil | T-24a ◐, T-24b ✔, S-CAN ✔ | Representación canónica y SHA-256 independientes de región |
 | REQ-DAT-06 | P/crítica | 09 | IMPL-P | canonical, persistence, expressions | T-25b ✔, T-25c ✔, S-CAN ✔ | Sin código ejecutable, sin rutas fuera de raíz, límites previos |
@@ -112,10 +112,10 @@ Pruebas suplementarias S-xx: 34 casos, 37 pruebas, 37 pasan.
 | REQ-ARQ-01 | P/crítica | 10 | IMPL-P | todo el núcleo | T-23b ✔, T-24a ◐ | Todo el contrato se verifica sin interfaz (esta batería) |
 | REQ-PLT-01 | P/crítica | 10 | PEND-PLT | trace | T-24a ◐ | Trazas canónicas deterministas en Windows; comparación en macOS/Linux pendiente (U-10) |
 | REQ-PLT-02 | P/alta | 10 | PARCIAL | timeutil, persistence | T-24b ✔, T-24c ◐, S-H12 ✔ | Región, Unicode, rutas y mayúsculas verificados en Windows; otros sistemas U-10 |
-| REQ-PLT-03 | P/alta | 10 | PARCIAL | todo el núcleo | T-24d ◐, T-24e — | Sin conexión verificado; instalación y actualización pendientes de empaquetado |
+| REQ-PLT-03 | P/alta | 10 | PARCIAL | todo el núcleo | T-24d ◐, T-24e — | Sin conexión verificado; versión portable para Windows sin instalador (P-IMP-29); instalación y actualización pendientes (U-10) |
 | REQ-PLT-04 | P/alta | 10 | PARCIAL | model, persistence, tools/medir_presupuestos.py | T-25a ◐, T-25d — | Límites aplicados; medición indicativa, no ratificada (U-10) |
 | REQ-ROB-01 | P/crítica | 10 | IMPL-P | model, engine, persistence | T-08a ✔, T-08b ✔, T-25a ◐, S-08a ✔ | Límites de datos y de evolución diagnosticados sin alterar significado |
-| REQ-ROB-02 | P/crítica | 10 | IMPL-P | persistence, canonical | T-22d ✔, T-25b ✔, T-25c ✔ | Archivos fallidos preservan la última revisión válida y no ejecutan cargas |
+| REQ-ROB-02 | P/crítica | 10 | IMPL-P | persistence, canonical | T-22d ✔, T-25b ✔, T-25c ✔, S-APP02 ✔ | Archivos fallidos preservan la última revisión válida y no ejecutan cargas |
 
 ## Casos del documento 11
 
@@ -232,6 +232,13 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 |---|---|---|---|---|
 | S-08a | REQ-ROB-01, REQ-SEM-07, REQ-SIM-08 | pasa | `test_S08a_limite_de_evolucion_recuperable` | variante de T-08a disparada por un lote (H-03). |
 | S-12a | REQ-TMP-02 | pasa | `test_S12a_retardo_tras_activacion_no_inicial` | variante de T-12a independiente de H-02 (activación por transición a 1 s). |
+| S-APP01 | REQ-DAT-02 | pasa | `test_SAPP01_abrir_lo_guardado` | un ejemplo guardado como proyecto se abre igual (modelo y posiciones) y simula |
+| S-APP02 | REQ-DAT-03, REQ-ROB-02 | pasa | `test_SAPP02_abrir_rechaza_lo_que_no_es_modelo` | un documento de otra familia no se abre; uno con campos semánticos desconocidos |
+| S-APP03 |  | pasa | `test_SAPP03_colocacion_automatica` | cada etapa, macroetapa y transición tiene posición, dos etapas no |
+| S-APP04 | REQ-SIM-02 | pasa | `test_SAPP04_entradas_numericas` | una entrada numérica escrita a mano admite coma decimal y respeta tipo, escala y rango. |
+| S-APP05 | REQ-SIM-03 | pasa | `test_SAPP05_ejemplos_en_la_ventana` | cada ejemplo se carga y se dibuja; un clic en una entrada hace evolucionar el grafcet como en el banco. |
+| S-APP06 | REQ-DAT-02, REQ-EDT-01 | pasa | `test_SAPP06_guardar_y_abrir_en_la_ventana` | «Guardar como proyecto» y «Abrir modelo» conservan el modelo y su dibujo. |
+| S-APP07 |  | pasa | `test_SAPP07_lecturas_reinician` | Cambiar una lectura reinicia la simulación y se señala como distinta de la decidida. |
 | S-CAN | REQ-DAT-05, REQ-DAT-06 | pasa | `test_SCAN_formato_canonico` | reglas de representación canónica y lectura estricta (09). |
 | S-CMP01 | REQ-NOR-02, REQ-SEM-09 | pasa | `test_SCMP01_catalogo_coherente` | cada lectura del comparador existe en el perfil, tiene su texto y se comprueba. |
 | S-CMP02 | REQ-ACT-02, REQ-EVT-03, REQ-SEM-01, REQ-SEM-09, REQ-TMP-03 | pasa | `test_SCMP02_cada_lectura_hace_lo_que_anuncia` | cada alternativa evoluciona como dice su panel. |

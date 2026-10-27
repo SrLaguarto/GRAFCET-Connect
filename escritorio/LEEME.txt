@@ -1,0 +1,24 @@
+Simulador GRAFCET (versión portable, primera versión)
+====================================================
+
+Abrir: doble clic en GRAFCET.exe. No necesita instalación ni conexión a la red. La carpeta entera es el
+programa: puede copiarse a otro sitio o a un USB, pero GRAFCET.exe no funciona separado de ella.
+
+Qué hace
+- Simula los ejemplos (menú Ejemplos) y los modelos guardados (Archivo > Abrir modelo): un proyecto (su
+  manifest.json) o un documento de modelo (model-….json).
+- Dibuja el grafcet con la notación de la norma y muestra la evolución: etapas activas e inestables,
+  transiciones validadas y franqueables, acciones, salidas, variables, condiciones temporales y traza.
+- Entradas con un clic (las numéricas se escriben), tiempo lógico en pasos o al ritmo del reloj, y evolución a
+  evolución con «Paso a paso».
+- Lecturas de interpretación: por defecto, las decididas por el responsable; lo que sigue abierto se detiene
+  con su cuestión U en vez de aproximarse.
+- Archivo > Guardar como proyecto: guarda el modelo en curso con su dibujo, para abrirlo después.
+
+Qué no es
+- No es el editor: los modelos aún no se dibujan ni se modifican aquí.
+- Usa un perfil provisional y NO declara conformidad con IEC 60848 / UNE-EN 60848.
+
+Licencias
+- Interfaz con Qt for Python (PySide6), bajo LGPL v3. Las bibliotecas de Qt están como ficheros separados en
+  la carpeta _internal y pueden sustituirse por otras versiones compatibles.

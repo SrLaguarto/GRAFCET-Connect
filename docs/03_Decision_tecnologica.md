@@ -8,8 +8,8 @@ Estado: **propuesta de la segunda IA**. Pendiente de aceptación por el responsa
 |---|---|---|
 | Núcleo: modelo, validación, expresiones, motor, trazas, persistencia, operaciones de edición | **Python ≥ 3.12, solo biblioteca estándar** (sin dependencias de terceros) | Implementado (`grafcet/`) |
 | Pruebas y trazabilidad | `unittest` de la biblioteca estándar y scripts propios en `tools/` | Implementado |
-| Interfaz de escritorio (editor gráfico, accesibilidad, exportación PDF) | **Qt 6 mediante PySide6 (LGPL, enlace dinámico)** | No iniciado: requiere instalar la dependencia y ratificar U-10 |
-| Distribución | Paquete instalable por plataforma (p. ej., PyInstaller o Briefcase) sin servidor | No iniciado: depende de U-10 |
+| Interfaz de escritorio (editor gráfico, accesibilidad, exportación PDF) | **Qt 6 mediante PySide6 (LGPL, enlace dinámico)** | Iniciada (P-IMP-29): simulador de escritorio en `escritorio/`, con PySide6-Essentials 6.12.0, instalado con permiso del responsable (hoja 08, 9.5 A). El editor gráfico, la accesibilidad y la exportación SVG/PDF siguen pendientes |
+| Distribución | Paquete instalable por plataforma (p. ej., PyInstaller o Briefcase) sin servidor | Primera versión portable para Windows con PyInstaller 6.22.3 en modo carpeta (`dist/GRAFCET/GRAFCET.exe`), sin instalador. Matriz de sistemas, instalación y actualización: U-10 |
 
 Arquitectura de **puertos y adaptadores**. El núcleo no importa nada de la interfaz ni del sistema operativo; el acceso a ficheros pasa por un único adaptador. Así se cumple REQ-ARQ-01: todo el contrato semántico se verifica sin interfaz, y la interfaz futura usará los mismos contratos y perfiles.
 
