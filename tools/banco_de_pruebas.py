@@ -114,6 +114,17 @@ def ej_conflicto_ejecucion() -> tuple[M, dict]:
     return m, {"A": (150, 60), "t": (150, 140), "B": (150, 220), "C": (330, 60), "u": (330, 140), "D": (330, 220)}
 
 
+def ej_contador_inestable() -> tuple[M, dict]:
+    """Ejemplo aportado por el responsable el 27-10-2026: la etapa 2 suma aunque sea inestable."""
+    m = M().var("I00").var("I02").var("Q00", "output").var("Q01", "output").var("CT", "internal", "int")
+    m.step("0", True).step("1").step("2")
+    m.trans("t1", ["0"], ["1"], "I00").trans("t2", ["1"], ["2"], "fall(I02)")
+    m.trans("t3", ["2"], ["0"], "CT >= 3").trans("t4", ["2"], ["1"], "CT < 3")
+    m.cont("1", "Q00").cont("1", "Q01").stored("2", "CT", "activation", "CT + 1").cont("2", "Q00").cont("2", "Q01")
+    return m, {"0": (160, 60), "t1": (160, 140), "1": (160, 230), "t2": (160, 320), "2": (160, 410),
+               "t3": (160, 500), "t4": (320, 500)}
+
+
 def ej_macroetapa() -> tuple[M, dict]:
     m = M().partial("X").var("p").var("q").var("r").var("s").var("motor", "output")
     m.step("A", True).step("B").step("E1", kind="entry", partial="X").step("K", partial="X").step("S1", kind="exit", partial="X")
@@ -161,13 +172,18 @@ EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
                     "«situación anterior» (comparador, 5.1), una subida de p solo franquea t y se queda en B. En «Opciones "
                     "de interpretación» puede probar «recorrido» (llega a C; con «reinicio»=1 gira sin fin) o «detener» "
                     "(no elige).", ej_bloqueo_u03),
-    "macroetapa": ("Macroetapa (jerarquía)", "p lleva a la macroetapa M: se activa su entrada E1. q y r recorren la "
+    "contador-inestable": ("Contador con etapa inestable", "Ejemplo del responsable. I00 lleva a 1. Cada bajada de I02 "
+                           "pasa por 2, que suma 1 a CT al activarse y, mientras CT < 3, vuelve a 1 en el mismo instante: 2 "
+                           "queda inestable (no enciende sus salidas), pero la suma se hace. A la tercera bajada, CT = 3 y se "
+                           "vuelve a 0. Con los flancos «por ciclo» en vez de «de uno en uno», una sola bajada de I02 daría la "
+                           "vuelta tres veces en el mismo instante.", ej_contador_inestable),
+    "macroetapa": ("Macroetapa (jerarquía)", "p lleva a la macroetapa M: se activa su etapa de entrada E1. q y r recorren la "
                    "expansión. Aunque s valga 1, solo se sale de M cuando su salida S1 está activa; la macroetapa cuenta como "
                    "activa mientras haya alguna etapa de su expansión activa.", ej_macroetapa),
     "encapsulacion": ("Encapsulación (jerarquía)", "Al arrancar, H e I (iniciales). p: sale de H y su recinto R se vacía. "
                       "q: vuelve a H y se activa K, la etapa marcada con *, no I ni la última situación. r mueve el contenido a "
                       "J y enciende la luz.", ej_encapsulacion),
-    "forzado": ("Forzado (jerarquía)", "f activa H y la orden F/G:{B} lleva el parcial G a {B}. Mientras H está activa, G no "
+    "forzado": ("Forzado (jerarquía)", "f activa H y la orden G{B} lleva el parcial G a {B}. Mientras H está activa, G no "
                 "evoluciona aunque pulse a, b o c. Al quitar f se retira la orden y G sigue desde B.", ej_forzado),
     "conflicto": ("Conflicto de escritura al compilar", "t activa B y C en la misma evolución; B escribe z:=1 y C z:=2. "
                   "Es un conflicto seguro: el programa no puede compilarse.", ej_conflicto),
@@ -311,26 +327,30 @@ class Vista:
                     "kind": "stored", "target": a["targetRef"], "trigger": trig["kind"],
                     "text": [_seg(f"{a['targetRef']} := ")] + disp(a["valueRef"]),
                     "event": disp(trig.get("expressionRef"))})
-        # Jerarquía (documento 03): forzado en rectángulo doble, marca de activación y marco de cada parcial
+        # Jerarquía, con la notación de las figuras de la norma (tablas 8–11; imágenes P40-02, P42-02..05,
+        # P43-01, P43-02, P44-01, P45-01, P47-01..03): orden de forzado «G12{8,9,11}» en rectángulo doble, «*» de
+        # enlace de activación, recinto con su encapsulante y su nombre, expansión unida a su macroetapa
         hier = m.doc["hierarchy"]
         marked = {sid for e in hier["enclosures"] for sid in e["activationRefs"]}
         labels = {p["id"]: p["label"] for p in m.doc["partials"]}
-        roles = {x["partialRef"]: f"expansión de {x['ownerMacroRef']}" for x in hier["expansions"]}
-        roles.update({e["partialRef"]: f"recinto de {e['ownerStepRef']}" for e in hier["enclosures"]})
+        kinds: dict[str, dict[str, Any]] = {x["partialRef"]: {"kind": "expansion", "macro": x["ownerMacroRef"]}
+                                            for x in hier["expansions"]}
+        kinds.update({e["partialRef"]: {"kind": "enclosure", "ownerStep": e["ownerStepRef"]} for e in hier["enclosures"]})
         for f in m.doc["forces"]:
-            sit = {"explicit": "{" + ", ".join(f.get("targetSteps", [])) + "}", "current": "{*}", "empty": "{ }",
+            sit = {"explicit": "{" + ",".join(f.get("targetSteps", [])) + "}", "current": "{*}", "empty": "{ }",
                    "initial": "{INIT}"}[f["targetKind"]]
             acts.setdefault(f["sourceStepRef"], []).append({"kind": "force", "id": f["id"], "target": f["targetPartialRef"],
-                                                           "text": [_seg(f"F/{labels[f['targetPartialRef']]}:{sit}")]})
+                                                           "text": [_seg(f"{labels[f['targetPartialRef']]}{sit}")]})
         self.model = {
             "key": key, "title": title, "help": help_text, "compilable": res.can_simulate,
             "steps": [{"id": s["id"], "initial": s["initial"], "x": layout[s["id"]][0], "y": layout[s["id"]][1],
                        "partial": None if s["partialRef"] == "g" else s["partialRef"], "kind": s["kind"],
                        "activation": s["id"] in marked, "actions": acts.get(s["id"], [])} for s in m.doc["steps"]],
-            "macros": [{"id": x["id"], "x": layout[x["id"]][0], "y": layout[x["id"]][1],
-                        "expansion": next(e["partialRef"] for e in hier["expansions"] if e["id"] == x["expansionRef"])}
-                       for x in hier["macros"]],
-            "partials": [{"id": p["id"], "label": p["label"], "role": roles.get(p["id"], "parcial")}
+            "macros": [{"id": x["id"], "x": layout[x["id"]][0], "y": layout[x["id"]][1], "expansion": e["partialRef"],
+                        "entry": e["entryRef"], "exit": e["exitRef"]}
+                       for x in hier["macros"] for e in hier["expansions"] if e["id"] == x["expansionRef"]],
+            "partials": [{"id": p["id"], "label": p["label"], "owner": p.get("ownerRef"),
+                          **kinds.get(p["id"], {"kind": "partial"})}
                          for p in m.doc["partials"] if p["id"] != "g" and p["stepRefs"]],
             "transitions": [{"id": t["id"], "pre": t["preRefs"], "post": t["postRefs"], "partial": t["partialRef"],
                              "cond": disp(t["conditionRef"], top=True),

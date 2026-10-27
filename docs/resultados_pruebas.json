@@ -1,9 +1,9 @@
 {
- "date": "2026-10-27T10:30:09+01:00",
+ "date": "2026-10-27T11:13:09+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 132,
+ "total": 133,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -58,6 +58,17 @@
     "REQ-SEM-09"
    ],
    "summary": "REQ-SEM-09, REQ-NOR-02: las respuestas incorporadas (hoja 08 y comparador) son las lecturas por defecto; lo abierto se detiene."
+  },
+  {
+   "test": "test_comparador.EjemploDelResponsable.test_SEJ01_contador_en_etapa_inestable",
+   "case": "S-EJ01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-05",
+    "REQ-EVT-03",
+    "REQ-SEM-06"
+   ],
+   "summary": "REQ-SEM-06, REQ-ACT-05, REQ-EVT-03: ejemplo del responsable; la etapa inestable 2 suma en CT y vuelve a 1 mientras CT < 3."
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU03_accion_por_evento_en_etapa_que_sale",
@@ -827,11 +838,11 @@
    "summary": ""
   },
   {
-   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20a_desactivacion_y_vencimiento_interior_U08",
+   "test": "test_t17_t20_jerarquias.Jerarquias.test_T20a_desactivacion_y_vencimiento_interior",
    "case": "T-20a",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "H se desactiva a 2 s cuando vence 2s/X_A en su interior: U-08 (7.6); se registran las alternativas."
+   "summary": "H se desactiva a 2 s cuando vence 2s/X_A en su interior: 7.6 B, primero actúa lo interior (n := 1) y después se"
   },
   {
    "test": "test_t17_t20_jerarquias.Jerarquias.test_T20b_particion_sin_orden_y_actividad_derivada",

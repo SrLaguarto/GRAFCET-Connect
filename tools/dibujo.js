@@ -1,8 +1,9 @@
 // Dibujo de un grafcet con la notación gráfica de la norma (tablas 1–11). Lo usan el banco de pruebas y el
-// comparador de decisiones. Las proporciones se tomaron por inspección visual de las imágenes de la norma
-// aportadas por el usuario; los símbolos jerárquicos siguen la descripción del documento 03 (forzado en
-// rectángulo doble, macroetapa con divisiones horizontales, encapsulante con marcas internas y marca de
-// activación). La geometría exacta de esas marcas está pendiente de contraste (U-01). No se copia ningún activo.
+// comparador de decisiones. Las proporciones y convenciones se tomaron por inspección visual de las imágenes de la
+// norma aportadas por el usuario (fuente IMG del documento 02), también las jerárquicas: forzado «G{…}» en
+// rectángulo doble, macroetapa con divisiones horizontales, encapsulante con las esquinas cortadas, «*» de enlace
+// de activación, recinto y parciales enmarcados y expansión unida a su macroetapa. No se copia ningún activo; el
+// contraste con una copia íntegra sigue pendiente (U-01).
 const NS = "http://www.w3.org/2000/svg";
 // Unidad: lado de la etapa = 2·H
 const SX = 100;       // margen izquierdo del dibujo
@@ -88,15 +89,13 @@ function drawDiagram(svg, M, S) {
        act ? "activa" : vir ? "inestable (en recorrido)" : uns ? "fue inestable en el último instante" : "inactiva");
     el("rect", {x:p.x-H, y:p.y-H, width:2*H, height:2*H, class:"outer"}, g);
     if (s.initial) el("rect", {x:p.x-H+4, y:p.y-H+4, width:2*H-8, height:2*H-8, fill:"none"}, g);
-    if (s.kind === "enclosing") {  // marcas internas de encapsulación en las cuatro esquinas
-      const o = s.initial ? 7 : 3;
-      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([dx,dy]) => {
-        const cx = p.x + dx*(H-o), cy = p.y + dy*(H-o);
-        el("path", {d:`M${cx},${cy - dy*MARK} V${cy} H${cx - dx*MARK}`, class:"hmark"}, g);
-      });
+    if (s.kind === "enclosing") {  // encapsulante (P43-01, P44-01): esquinas cortadas en diagonal; si es inicial, las del cuadrado interior
+      const h = s.initial ? H - 4 : H, c = Math.round(0.22 * 2 * h);
+      const x0 = p.x - h, x1 = p.x + h, y0 = p.y - h, y1 = p.y + h;
+      el("path", {d:`M${x0+c},${y0} L${x0},${y0+c} M${x1-c},${y0} L${x1},${y0+c} M${x0},${y1-c} L${x0+c},${y1} M${x1},${y1-c} L${x1-c},${y1}`,
+                  class:"hmark"}, g);
     }
     txt(g, p.x, p.y+3, s.id, {"text-anchor":"middle"});
-    if (s.kind === "entry" || s.kind === "exit") txt(g, p.x+H+4, p.y-H+8, s.kind === "entry" ? "entrada" : "salida", {class:"tag ptag"});
     if (s.activation) txt(g, p.x-H-5, p.y+5, "*", {"text-anchor":"end", class:"amark-act"});
     if (act) el("circle", {cx:p.x, cy:p.y+12, r:3.5, class:"token"}, g);
     if (vir) txt(g, p.x, p.y+H+13, "inestable", {"text-anchor":"middle", class:"tag vtag"});
@@ -118,16 +117,46 @@ function drawDiagram(svg, M, S) {
   svg.setAttribute("viewBox", `${b.x-14} ${b.y-14} ${b.width+28} ${b.height+28}`);
 }
 
-// Marco discontinuo de cada parcial (presentación P): expansión de una macroetapa, recinto o parcial
+// Parciales según las figuras de la norma:
+// - recinto (P43-02): marco de trazo continuo; arriba, la etapa encapsulante; abajo, el nombre del parcial;
+// - parcial (P40-02): marco redondeado con su nombre abajo; un parcial hijo se dibuja dentro de su padre;
+// - expansión de macroetapa (P47-03): sin marco; trazos discontinuos de la macroetapa a su entrada y a su salida.
 function drawFrames(g, M, pos) {
-  (M.partials || []).forEach(pt => {
-    const pts = M.steps.filter(s => s.partial === pt.id).map(s => pos[s.id])
-      .concat(M.transitions.filter(t => t.partial === pt.id).map(t => ({x: t.x + SX, y: t.y, tr: true})));
-    if (!pts.length) return;
-    const x0 = Math.min(...pts.map(p => p.x)) - H - 26, x1 = Math.max(...pts.map(p => p.x)) + H + 70;
-    const y0 = Math.min(...pts.map(p => p.y)) - H - 34, y1 = Math.max(...pts.map(p => p.y)) + H + 14;
-    el("rect", {x:x0, y:y0, width:x1-x0, height:y1-y0, rx:6, class:"frame"}, g);
-    txt(g, x0 + 6, y0 + 13, `${pt.label} · ${pt.role}`, {class:"framelabel"});
+  const parts = M.partials || [];
+  const box = {};
+  const own = pid => M.steps.filter(s => s.partial === pid).map(s => pos[s.id])
+    .concat(M.transitions.filter(t => t.partial === pid).map(t => ({x: t.x + SX, y: t.y})));
+  function frame(pid) {
+    if (box[pid] !== undefined) return box[pid];
+    const pts = own(pid);
+    let b = pts.length ? {x0: Math.min(...pts.map(p => p.x)) - H - 26, x1: Math.max(...pts.map(p => p.x)) + H + 70,
+                          y0: Math.min(...pts.map(p => p.y)) - H - 22, y1: Math.max(...pts.map(p => p.y)) + H + 22} : null;
+    parts.filter(c => c.owner === pid && c.kind === "partial").forEach(c => {
+      const cb = frame(c.id);
+      if (!cb) return;
+      const e = {x0: cb.x0 - 12, x1: cb.x1 + 12, y0: cb.y0 - 12, y1: cb.y1 + 16};
+      b = b ? {x0: Math.min(b.x0, e.x0), x1: Math.max(b.x1, e.x1), y0: Math.min(b.y0, e.y0), y1: Math.max(b.y1, e.y1)} : e;
+    });
+    return (box[pid] = b);
+  }
+  parts.forEach(pt => {
+    if (pt.kind === "expansion") {
+      const m = (M.macros || []).find(x => x.id === pt.macro);
+      if (!m || !pos[m.entry] || !pos[m.exit]) return;
+      const mp = pos[m.id], ep = pos[m.entry], sp = pos[m.exit];
+      el("path", {d:`M${mp.x+H},${mp.y-H} L${ep.x-H},${ep.y-H} M${mp.x+H},${mp.y+H} L${sp.x-H},${sp.y+H}`, class:"expline"}, g);
+      return;
+    }
+    const b = frame(pt.id);
+    if (!b) return;
+    if (pt.kind === "enclosure") {
+      el("rect", {x:b.x0, y:b.y0, width:b.x1-b.x0, height:b.y1-b.y0, class:"frame enclosure"}, g);
+      txt(g, (b.x0 + b.x1) / 2, b.y0 + 5, pt.ownerStep, {"text-anchor":"middle", class:"framelabel"});
+      txt(g, b.x0 + 30, b.y1 + 5, pt.label, {class:"framelabel"});
+    } else {
+      el("rect", {x:b.x0, y:b.y0, width:b.x1-b.x0, height:b.y1-b.y0, rx:16, class:"frame"}, g);
+      txt(g, b.x1 - 30, b.y1 + 5, pt.label, {"text-anchor":"end", class:"framelabel"});
+    }
   });
 }
 

@@ -67,8 +67,9 @@ ol.script li.next{font-weight:600}
   <p class="legend">Etapa activa: ● y fondo azul. Borde morado discontinuo: etapa inestable (activa un tiempo nulo; sus
     acciones memorizadas se ejecutan y las continuas no producen salida). Transición naranja: recién franqueada; roja:
     la que está en cuestión. Acción con borde verde: salida continua encendida. Jerarquía: macroetapa con divisiones
-    horizontales; encapsulante con marcas en las esquinas; * = enlace de activación; F/G:{…} en rectángulo doble = orden de
-    forzado (morada si está vigente); marco discontinuo = parcial, expansión o recinto.</p>
+    horizontales unida a su expansión por trazos discontinuos; encapsulante con las esquinas cortadas; recinto = marco con
+    su encapsulante arriba; * = enlace de activación; G{…} en rectángulo doble = orden de forzado (morada si está
+    vigente); marco redondeado = parcial.</p>
 </main>
 <script src="/dibujo.js"></script>
 <script>
@@ -106,7 +107,7 @@ function answerText(a) {
     `<br><em>${esc(a.comentario)}</em>` : ""}</div>`;
   const what = a.eleccion === "abierta" ? "Dejar abierta" : `${esc(a.eleccion)} · ${esc(a.texto)}`;
   return `<div class="saved ${a.eleccion === "abierta" ? "open" : ""}">Respuesta guardada: <b>${what}</b>
-    <span class="help">(${a.origen === "hoja 08" ? "hoja 08" : "comparador"}, ${esc(a.fecha)})</span>
+    <span class="help">(${esc(a.origen)}, ${esc(a.fecha)})</span>
     <br><span class="help">${state}</span>
     ${a.comentario ? `<br><em>${esc(a.comentario)}</em>` : ""}</div>`;
 }

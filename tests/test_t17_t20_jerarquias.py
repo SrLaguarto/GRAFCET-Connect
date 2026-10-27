@@ -224,13 +224,18 @@ class Jerarquias(unittest.TestCase):
         self.assertFalse(h["initial"], "no se completa el padre sin aviso")
         self.assertIn("D-JERARQUIA-INICIAL", codes(enclosure_model(owner_initial=True, inner_initial=False).validate()))
 
-    def test_T20a_desactivacion_y_vencimiento_interior_U08(self):
-        """H se desactiva a 2 s cuando vence 2s/X_A en su interior: U-08 (7.6); se registran las alternativas."""
+    def test_T20a_desactivacion_y_vencimiento_interior(self):
+        """H se desactiva a 2 s cuando vence 2s/X_A en su interior: 7.6 B, primero actúa lo interior (n := 1) y después se
+        desactiva. Con «detener», U-08; la lectura A se comprueba como referencia."""
         m = M().partial("R").var("p").var("n", "internal", "int").step("H", True, kind="enclosing").step("Z")
         m.step("A", True, partial="R").step("B", partial="R").stored("B", "n", "activation", "1")
         m.trans("ti", ["A"], ["B"], "delay(2 s, active(A), 0 s)", partial="R").trans("to", ["H"], ["Z"], "p")
         add_enclosure(m, "encR", "H", "R", ["A"])
         s = session(m.compile(), batches=[(2 * S, 0, {"p": True})])
+        s.run()
+        self.assertEqual((s.z.situation, s.z.values["n"]), ({"Z"}, 1))
+        self.assertEqual(records(s, "estable")[-1]["virtualSteps"], ["B"], "B actúa y queda inestable")
+        s = session(m.compile(), batches=[(2 * S, 0, {"p": True})], options={"7.6": "detener"})
         s.run()
         self.assertEqual((last_diag(s).code, last_diag(s).question), ("D-SEM-PENDIENTE", "U-08"))
         self.assertEqual(s.z.situation, {"H", "A"})

@@ -209,6 +209,78 @@
       "origen": "comparador",
       "fecha": "2026-10-27",
       "comentario": ""
+    },
+    "7.1": {
+      "eleccion": "A",
+      "texto": "La etapa de un parcial superior fuerza a un parcial inferior",
+      "pregunta": "Quién fuerza a quién (U-02)",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "7.2": {
+      "eleccion": "B",
+      "texto": "G evoluciona y el forzado se aplica en la siguiente",
+      "pregunta": "Cuándo se aplica el forzado (H-18)",
+      "origen": "chat",
+      "fecha": "2026-10-27",
+      "comentario": "(Dicho en el chat el 27-10-2026: «en la 7.2 hagamos lo mismo, me da igual cuál, elegimos que se procesen juntos». Se interpreta como la lectura en la que ocurren los dos efectos, igual que en 4.1 A, 4.3 A y 7.6 B.)"
+    },
+    "7.3": {
+      "eleccion": "A",
+      "texto": "Siguen contando",
+      "pregunta": "Temporizadores de un parcial forzado",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "7.4": {
+      "eleccion": "C",
+      "texto": "El forzado se ignora mientras la encapsulante esté inactiva",
+      "pregunta": "Forzar un recinto cuya encapsulante está inactiva",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "7.5": {
+      "eleccion": "A",
+      "texto": "Se desactivan todas las etapas de la expansión",
+      "pregunta": "Salir de una macroetapa con ramas internas aún activas",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "7.6": {
+      "eleccion": "B",
+      "texto": "Primero actúa el temporizador interno y luego se desactiva",
+      "pregunta": "Desactivar la encapsulante cuando vence un temporizador interno",
+      "origen": "chat",
+      "fecha": "2026-10-27",
+      "comentario": "Coherente con 4.1 A (el vencimiento va antes que la caída) y 4.3 A (se procesan juntos y ocurren los dos efectos). (Dicho en el chat el 27-10-2026: «en la 7.2 hagamos lo mismo, me da igual cuál, elegimos que se procesen juntos». Se interpreta como la lectura en la que ocurren los dos efectos, igual que en 4.1 A, 4.3 A y 7.6 B.)"
+    },
+    "7.7": {
+      "eleccion": "A",
+      "texto": "Se permiten: están activas al arrancar",
+      "pregunta": "Etapas iniciales dentro de la expansión de una macroetapa",
+      "origen": "chat",
+      "fecha": "2026-10-27",
+      "comentario": "En una expansión de macro no hay lugar para recuadro ni para una etapa fuera de la rama (no es una encapsulante); ese ejemplo no lo contesto. Respecto a poner una etapa inicial en una macro, debería poderse aunque no tenga sentido. (Dicho en el chat; el ejemplo del comparador se ha rehecho.)"
+    },
+    "7.8": {
+      "eleccion": "A",
+      "texto": "Sí: es una activación",
+      "pregunta": "Acciones de las etapas que cambia un forzado (H-24)",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
+    },
+    "8.2": {
+      "eleccion": "C",
+      "texto": "El valor según la situación inestable del momento",
+      "pregunta": "Receptividad que lee una salida continua (H-10)",
+      "origen": "comparador",
+      "fecha": "2026-10-27",
+      "comentario": ""
     }
   }
 }

@@ -34,7 +34,8 @@ U_REGISTRY = {
     "U-06": "Fronteras temporales y rebotes (cerrada por el responsable, comparador 4.1–4.5, salvo 0s/p/d2 con d2 > 0; "
             "contraste U-01)",
     "U-07": "Construcciones fuente, vacías y persistentes (cerrada por el responsable, comparador 6.1–6.4; contraste U-01)",
-    "U-08": "Interacciones jerárquicas (abiertas 7.2–7.8; la ejecución básica sigue el documento 06, P-IMP-23)",
+    "U-08": "Interacciones jerárquicas (abiertas 7.3–7.5 y 7.8; 7.2, 7.6 y 7.7 decididas por el responsable; la "
+            "ejecución básica sigue el documento 06, P-IMP-23)",
     "U-09": "Inicialización semántica (cerrada por el responsable, hoja 08 1.1–1.5, salvo arranque vacío U-07 y expansiones U-08; contraste U-01)",
     "U-10": "Sistemas soportados y rendimiento",
     "U-11": "Ratificación de formato e intercambio",
@@ -49,7 +50,7 @@ FINDINGS = {
     "H-08": "Actividad de parcial con parciales anidados",
     "H-09": "Base temporal compuesta (la salida y reentrada en el mismo instante quedó decidida en P-IMP-18)",
     "H-10": "Lectura de salidas continuas en expresiones",
-    "H-18": "Momento de aplicación del forzado en el recorrido (ampliación de U-08)",
+    "H-18": "Momento de aplicación del forzado: el destino evoluciona y el forzado se aplica después (7.2 B)",
     "H-23": "La lectura «recorrido» de U-03, aplicada literalmente, produce ciclos transitorios sin fin",
     "H-24": "Acciones al activar o desactivar de las etapas que cambia un forzado (ampliación de U-08)",
 }
@@ -131,8 +132,9 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
        "provisional", "I (U-01), documento 06 y LOC tabla 9; P-IMP-23", "REQ-JER-02", "REQ-JER-03"),
     _c("jerarquia.macroetapas", "Macroetapas: llegar activa la entrada; salir exige la salida; XM por la expansión",
        "provisional", "I (U-01), documento 06 y LOC tabla 11; P-IMP-23", "REQ-JER-04"),
-    _c("jerarquia.forzado-momento", "Orden que entra en vigor en la evolución en que su destino franquea", "no-soportada",
-       "U-08 (7.2, H-18)", "REQ-JER-06"),
+    _c("jerarquia.forzado-momento", "Orden que entra en vigor cuando su destino franquea: el destino evoluciona y el "
+       "forzado se aplica en la evolución siguiente", "provisional", "decisión del responsable, chat 27-10-2026, 7.2 B (coherente con 4.3 A y 7.6 B; cierra H-18)",
+       "REQ-JER-06"),
     _c("jerarquia.forzado-tiempo", "Temporizadores de un parcial forzado", "no-soportada", "U-08 (7.3)", "REQ-JER-06"),
     _c("jerarquia.forzado-recinto", "Forzado de un recinto contra el invariante de su encapsulante", "no-soportada",
        "U-08 (7.4)", "REQ-JER-06"),
@@ -140,9 +142,10 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
        "U-08 (7.8, H-24)", "REQ-JER-06", "REQ-ACT-02"),
     _c("jerarquia.macro-ramas", "Salida de una macroetapa con otras ramas de la expansión activas", "no-soportada",
        "U-08 (7.5)", "REQ-JER-06"),
-    _c("jerarquia.macro-inicial", "Etapas iniciales dentro de una expansión", "no-soportada", "U-08 (7.7)", "REQ-JER-04"),
-    _c("jerarquia.encapsulacion-coincidencia", "Transición interior que franquea cuando se desactiva su encapsulante",
-       "no-soportada", "U-08 (7.6)", "REQ-JER-06"),
+    _c("jerarquia.macro-inicial", "Etapas iniciales dentro de una expansión: se admiten y están activas al arrancar",
+       "provisional", "decisión del responsable, chat 27-10-2026, 7.7 A", "REQ-JER-04"),
+    _c("jerarquia.encapsulacion-coincidencia", "Transición interior que franquea cuando se desactiva su encapsulante: "
+       "primero actúa y después se desactiva", "provisional", "decisión del responsable, chat 27-10-2026, 7.6 B (coherente con 4.1 A y 4.3 A)", "REQ-JER-06"),
     _c("jerarquia.encapsulacion", "Encapsulación: al entrar, etapas con enlace de activación (al arrancar, las "
        "iniciales); al salir, se desactiva todo el contenido", "provisional",
        "I (U-01), documento 06 y LOC §7.4; P-IMP-23", "REQ-JER-05"),
@@ -224,7 +227,7 @@ SEMANTIC_OPTIONS: dict[str, dict[str, Any]] = {
         "detener": _STOP, "A": "No compila", "B": "Se permite y no tiene efecto"}),
     "3.4": _opt("A", "U-04/U-08: encapsulante activada y desactivada a la vez", {
         "detener": _STOP, "A": "Su contenido se mantiene", "B": "Su contenido se reinicia con las etapas de activación"}),
-    "7.2": _opt("detener", "U-08 (H-18): orden que entra en vigor cuando su destino podría evolucionar", {
+    "7.2": _opt("B", "U-08 (H-18): orden que entra en vigor cuando su destino podría evolucionar", {
         "detener": _STOP, "A": "El forzado se aplica en esa misma evolución y gana",
         "B": "El destino evoluciona y el forzado se aplica en la evolución siguiente"}),
     "7.3": _opt("detener", "U-08: temporizadores de un parcial forzado", {
@@ -235,10 +238,10 @@ SEMANTIC_OPTIONS: dict[str, dict[str, Any]] = {
     "7.5": _opt("detener", "U-08: salir de una macroetapa con ramas internas aún activas", {
         "detener": _STOP, "A": "Se desactivan todas las etapas de la expansión", "B": "Las ramas siguen activas",
         "C": "Error de diseño: se detiene con error"}),
-    "7.6": _opt("detener", "U-08: desactivar la encapsulante cuando franquea algo en su interior", {
+    "7.6": _opt("B", "U-08: desactivar la encapsulante cuando franquea algo en su interior", {
         "detener": _STOP, "A": "Gana la desactivación: lo interior no tiene efecto",
         "B": "Primero actúa lo interior y después se desactiva"}),
-    "7.7": _opt("detener", "U-08: etapas iniciales dentro de una expansión", {
+    "7.7": _opt("A", "U-08: etapas iniciales dentro de una expansión", {
         "detener": _STOP, "A": "Se permiten: están activas al arrancar", "B": "No se permiten: no compila"}),
     "7.8": _opt("detener", "U-08 (H-24): acciones de etapas activadas o desactivadas por un forzado", {
         "detener": _STOP, "A": "Se ejecutan", "B": "No se ejecutan"}),
@@ -282,6 +285,7 @@ CAP_QUESTION = {
     "situacion.inicial.vacia": "U-07", "transiciones.fuente-nivel": "U-07", "transiciones.fuente-repeticion": "U-07",
     "transiciones.sin-lados": "U-07", "permanencia.efectos": "U-04", "eventos.recorrido": "U-03",
     "temporal.delay-cero": "U-06", "temporal.coincidencias": "U-06", "jerarquia.encapsulacion-permanencia": "U-04",
+    "jerarquia.macro-inicial": "U-08", "jerarquia.forzado-momento": "U-08", "jerarquia.encapsulacion-coincidencia": "U-08",
 }
 
 

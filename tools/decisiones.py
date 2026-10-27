@@ -297,10 +297,10 @@ def m74() -> tuple[M, Layout]:
 
 def m75() -> tuple[M, Layout]:
     g = M().partial("X").var("p").var("q").var("s").step("A", True).step("B")
-    g.step("E", kind="entry", partial="X").step("K", partial="X").step("Sx", kind="exit", partial="X")
-    g.trans("tq", ["E"], ["K", "Sx"], "q", partial="X")
-    g.macro("M", "X", "E", "Sx").trans("tp", ["A"], ["M"], "p").trans("ts", ["M"], ["B"], "s")
-    return g, {**_cadena("A", "tp", "M", "ts", "B"), "E": (430, 100), "tq": (430, 180), "K": (370, 260), "Sx": (500, 260)}
+    g.step("E1", kind="entry", partial="X").step("K", partial="X").step("S1", kind="exit", partial="X")
+    g.trans("tq", ["E1"], ["K", "S1"], "q", partial="X")
+    g.macro("M", "X", "E1", "S1").trans("tp", ["A"], ["M"], "p").trans("ts", ["M"], ["B"], "s")
+    return g, {**_cadena("A", "tp", "M", "ts", "B"), "E1": (430, 100), "tq": (430, 180), "K": (370, 280), "S1": (500, 280)}
 
 
 def m76() -> tuple[M, Layout]:
@@ -312,11 +312,11 @@ def m76() -> tuple[M, Layout]:
 
 
 def m77() -> tuple[M, Layout]:
-    g = M().partial("X").var("p").var("q").step("A", True).step("B")
-    g.step("E", kind="entry", partial="X").step("K", True, partial="X").step("Sx", kind="exit", partial="X")
-    g.trans("te", ["E"], ["Sx"], "q", partial="X")
-    g.macro("M", "X", "E", "Sx").trans("tp", ["A"], ["M"], "p").trans("ts", ["M"], ["B"], "q")
-    return g, {**_cadena("A", "tp", "M", "ts", "B"), "E": (430, 100), "te": (430, 180), "Sx": (430, 260), "K": (560, 100)}
+    g = M().partial("X").var("p").var("q").var("r").step("A", True).step("B")
+    g.step("E1", kind="entry", partial="X").step("K", True, partial="X").step("S1", kind="exit", partial="X")
+    g.trans("tq", ["E1"], ["K"], "q", partial="X").trans("tr", ["K"], ["S1"], "r", partial="X")
+    g.macro("M", "X", "E1", "S1").trans("tp", ["A"], ["M"], "p").trans("ts", ["M"], ["B"], "true")
+    return g, {**_cadena("A", "tp", "M", "ts", "B"), **_cadena("E1", "tq", "K", "tr", "S1", x=430, y0=60)}
 
 
 def m78() -> tuple[M, Layout]:
@@ -622,12 +622,12 @@ CATALOGO: list[Decision] = [
                 "C": {0: {"situation": ["F0", "P0"]}, 1: {"situation": ["F0", "H", "J"]}}}),
     Decision(
         "7.5", "7. Jerarquías (U-08, U-02)", "Salir de una macroetapa con ramas internas aún activas",
-        "La expansión de M tiene dos ramas (K y la salida Sx). Cuando se sale de M por Sx, ¿qué pasa con K?",
+        "La expansión de M tiene dos ramas (K y la salida S1). Cuando se sale de M por S1, ¿qué pasa con K?",
         [("A", "Se desactivan todas las etapas de la expansión"), ("B", "Las ramas siguen activas"),
          ("C", "Error de diseño: se detiene con error")],
         "7.5", "Es el caso T-18d del documento 11. s permite salir de M en cuanto Sx está activa.", m75,
-        script=[fijar("p sube: se entra en M (E)", p=True), fijar("q sube: E → K y Sx", q=True),
-                fijar("s sube: se sale de M por Sx", s=True)],
+        script=[fijar("p sube: se entra en M (E1)", p=True), fijar("q sube: E1 → K y S1", q=True),
+                fijar("s sube: se sale de M por S1", s=True)],
         expect={"A": "Se pasa a B y K se desactiva.", "B": "Se pasa a B y K sigue activa dentro de la expansión.",
                 "C": "Se detiene con D-JERARQUIA-RAMA."},
         checks={"A": {3: {"situation": ["B"]}}, "B": {3: {"situation": ["B", "K"]}}, "C": {3: {"code": "D-JERARQUIA-RAMA"}}}),
@@ -642,12 +642,14 @@ CATALOGO: list[Decision] = [
         checks={"A": {1: {"situation": ["Z"], "values": {"n": "0"}}}, "B": {1: {"situation": ["Z"], "values": {"n": "1"}}}}),
     Decision(
         "7.7", "7. Jerarquías (U-08, U-02)", "Etapas iniciales dentro de la expansión de una macroetapa",
-        "K es inicial y está dentro de la expansión de M. ¿Se admite?",
+        "K, dentro de la rama de la expansión de M (E1 → K → S1), está marcada como inicial. ¿Se admite?",
         [("A", "Se permiten: están activas al arrancar"), ("B", "No se permiten: no compila")],
-        "7.7", "Con K activa, M cuenta como activa aunque no se haya entrado por E.", m77,
-        script=[fijar("p sube: se entra en M por E", p=True)],
-        expect={"A": "Al arrancar, A y K están activas (M cuenta como activa).", "B": "No compila: D-FORMATO."},
-        checks={"A": {0: {"situation": ["A", "K"]}, 1: {"situation": ["E", "K"]}}, "B": {0: {"code": "D-FORMATO"}}}),
+        "7.7", "Con K activa al arrancar, M cuenta como activa aunque no se haya entrado por E1. Al subir r, K → S1 y, "
+        "como ts es siempre verdadera, se sale de M.", m77,
+        script=[fijar("r sube: K → S1 y se sale de M", r=True)],
+        expect={"A": "Al arrancar, A y K están activas (M cuenta como activa); con r se sale de M a B, mientras A sigue activa.",
+                "B": "No compila: D-FORMATO."},
+        checks={"A": {0: {"situation": ["A", "K"]}, 1: {"situation": ["A", "B"]}}, "B": {0: {"code": "D-FORMATO"}}}),
     Decision(
         "7.8", "7. Jerarquías (U-08, U-02)", "Acciones de las etapas que cambia un forzado (H-24)",
         "El forzado activa B, que tiene n := 1 al activarse. ¿Se ejecuta esa acción?",
@@ -658,11 +660,14 @@ CATALOGO: list[Decision] = [
         checks={"A": {1: {"situation": ["B", "H"], "values": {"n": "1"}}}, "B": {1: {"situation": ["B", "H"], "values": {"n": "0"}}}}),
     Decision(
         "8.1", "8. Otras dudas (H-08, H-10)", "Actividad de un parcial con parciales hijos (H-08)",
-        "t tiene activePartial(G1). G1 contiene X (inactiva) y tiene un parcial hijo G2 con Y (inicial). ¿G1 está activo?",
-        [("A", "Cuenta también las etapas de los parciales hijos"), ("B", "Solo las etapas propias")],
-        "8.1", "X está en el parcial G1; Y en G2, hijo de G1. E0 y E1 están en el parcial principal.", m81,
-        expect={"A": "G1 cuenta como activo por Y: t franquea en τ = 0 y se arranca en E1.",
-                "B": "G1 no tiene etapas propias activas: se queda en E0."},
+        "En la norma, los parciales (G1, G2…) son trozos del grafcet puestos uno al lado del otro. El formato de archivo "
+        "permite además meter un parcial dentro de otro: aquí G2 está dentro de G1. G1 tiene su etapa X, inactiva; G2 tiene "
+        "Y, activa. La transición t tiene X_G1 («G1 está activo»). ¿Cuenta G1 como activo?",
+        [("A", "Sí: lo que está dentro de G1 también cuenta"), ("B", "No: solo cuentan las etapas propias de G1")],
+        "8.1", "Solo importa si un modelo mete un parcial dentro de otro y usa X_G de ese parcial en una condición. Si no se "
+        "va a usar, puede quedarse abierta.", m81,
+        expect={"A": "G1 cuenta como activo por Y (que está dentro): t franquea al arrancar y se pasa a E1.",
+                "B": "La única etapa propia de G1 es X, inactiva: G1 no cuenta como activo y se queda en E0."},
         checks={"A": {0: {"situation": ["E1", "Y"]}}, "B": {0: {"situation": ["E0", "Y"]}}}),
     Decision(
         "8.2", "8. Otras dudas (H-08, H-10)", "Receptividad que lee una salida continua (H-10)",
@@ -699,5 +704,9 @@ RESPUESTAS_COMPARADOR: dict[str, str] = {
     "5.1": "situacion-anterior", "5.2": "B", "5.3": "A", "6.1": "A", "6.2": "A", "6.3": "A", "6.4": "A",
 }
 
+# Respuestas dadas en el chat el 27-10-2026 e incorporadas en P-IMP-24 (7.7) y P-IMP-25 (7.2 y 7.6)
+RESPUESTAS_CHAT: dict[str, str] = {"7.7": "A", "7.2": "B", "7.6": "B"}
+
 # Lo que el programa aplica hoy: el comparador muestra si la respuesta guardada ya está incorporada
-RESPUESTAS_INCORPORADAS: dict[str, str] = {**{k: v for k, (v, _) in RESPUESTAS_HOJA_08.items()}, **RESPUESTAS_COMPARADOR}
+RESPUESTAS_INCORPORADAS: dict[str, str] = {**{k: v for k, (v, _) in RESPUESTAS_HOJA_08.items()}, **RESPUESTAS_COMPARADOR,
+                                           **RESPUESTAS_CHAT}

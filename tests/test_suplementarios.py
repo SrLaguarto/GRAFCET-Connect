@@ -422,8 +422,10 @@ class ReglasP(unittest.TestCase):
         self.assertFalse([c for c in decl["capabilities"] if c["status"] == "aprobada"])
         self.assertTrue(all(c["status"] in ("provisional", "no-soportada") for c in decl["capabilities"]))
         excluded = {x["capability"] for x in decl["excludedMatters"]}
-        self.assertTrue({"eventos.internos", "eventos.franqueamiento", "temporal.delay-cero", "jerarquia.forzado-momento",
-                         "jerarquia.macro-ramas", "jerarquia.encapsulacion-coincidencia"} <= excluded, "cuestiones aún abiertas")
+        self.assertTrue({"eventos.internos", "eventos.franqueamiento", "temporal.delay-cero", "jerarquia.forzado-tiempo",
+                         "jerarquia.macro-ramas", "jerarquia.forzado-acciones"} <= excluded, "cuestiones aún abiertas")
+        for cid in ("jerarquia.forzado-momento", "jerarquia.encapsulacion-coincidencia", "jerarquia.macro-inicial"):
+            self.assertNotIn(cid, excluded, "decididas por el responsable (P-IMP-24, P-IMP-25)")
         for cid in ("jerarquia.forzado", "jerarquia.macroetapas", "jerarquia.encapsulacion"):  # documento 06, I (P-IMP-23)
             self.assertNotIn(cid, excluded)
         caps = {c["id"]: c for c in decl["capabilities"]}

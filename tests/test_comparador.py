@@ -129,12 +129,34 @@ class Comparador(unittest.TestCase):
             if d.option is not None:
                 self.assertEqual(SEMANTIC_OPTIONS[d.option]["default"], value, did)
         still_open = {d.id for d in CATALOGO} - set(RESPUESTAS_INCORPORADAS)
-        self.assertEqual(still_open, {"7.1", "7.2", "7.3", "7.4", "7.5", "7.6", "7.7", "7.8", "8.1", "8.2"})
+        self.assertEqual(still_open, {"7.1", "7.3", "7.4", "7.5", "7.8", "8.1", "8.2"})
         for did in still_open:
             if POR_ID[did].option is not None:
                 self.assertEqual(SEMANTIC_OPTIONS[POR_ID[did].option]["default"], "detener", did)
         self.cmp.load("4.4")
         self.assertEqual(self.cmp.view()["applied"], "B", "el comparador muestra lo que el programa aplica")
+
+
+class EjemploDelResponsable(unittest.TestCase):
+    def _run(self, options=None):
+        from helpers import S, records, session
+        _, _, build = banco.EJEMPLOS["contador-inestable"]
+        m, _ = build()
+        batches = [(S, 0, {"I00": True}), (2 * S, 0, {"I00": False})]
+        for i in range(3):
+            batches += [((3 + 2 * i) * S, 0, {"I02": True}), ((4 + 2 * i) * S, 0, {"I02": False})]
+        s = session(m.compile(), batches=batches, options=options)
+        out = []
+        for t in (4, 6, 8):
+            s.advance_to(t * S)
+            out.append((sorted(s.z.situation), s.z.values["CT"], records(s, "estable")[-1].get("virtualSteps")))
+        return out
+
+    def test_SEJ01_contador_en_etapa_inestable(self):
+        """REQ-SEM-06, REQ-ACT-05, REQ-EVT-03: ejemplo del responsable; la etapa inestable 2 suma en CT y vuelve a 1 mientras CT < 3."""
+        self.assertEqual(self._run(), [(["1"], 1, ["2"]), (["1"], 2, ["2"]), (["0"], 3, ["2"])])
+        # Con flancos «por ciclo», una sola bajada de I02 da la vuelta hasta que CT = 3 en el mismo instante
+        self.assertEqual(self._run({"U-03": "recorrido"})[0], (["0"], 3, ["2"]), "1 ya estaba activa antes: no es inestable")
 
 
 if __name__ == "__main__":

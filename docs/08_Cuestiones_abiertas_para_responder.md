@@ -351,10 +351,10 @@ Cláusula / página:
 ### 7.2 · Cuándo se aplica el forzado (H-18)
 **Ejemplo:** la etapa F (que fuerza G = {B}) se activa en una evolución en la que G también podría evolucionar.
 - [ ] **A.** El forzado se aplica en esa misma evolución y gana a la evolución normal de G.
-- [ ] **B.** G evoluciona normalmente en esa evolución y el forzado se aplica en la siguiente.
+- [X] **B.** G evoluciona normalmente en esa evolución y el forzado se aplica en la siguiente.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el chat (sin cláusula citada; contraste normativo pendiente, U-01). Comentario: «hagamos lo mismo, me da igual cuál, elegimos que se procesen juntos».
 
 ### 7.3 · Temporizadores de un parcial forzado
 - [ ] **A.** Siguen contando.
@@ -381,10 +381,10 @@ Cláusula / página / ¿normativo o nota?:
 
 ### 7.6 · Desactivar la encapsulante en el mismo instante en que vence un temporizador interno
 - [ ] **A.** Gana la desactivación: el temporizador interno no tiene efecto.
-- [ ] **B.** Primero actúa el temporizador interno y luego se desactiva.
+- [X] **B.** Primero actúa el temporizador interno y luego se desactiva.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el chat (sin cláusula citada; contraste normativo pendiente, U-01). Coherente con 4.1 A y 4.3 A.
 
 ### 7.8 · Acciones de las etapas que cambia un forzado (H-24, nueva)
 **Ejemplo:** H fuerza G = {B}; B tiene `n := 1 (al activar)`.
@@ -395,11 +395,11 @@ Cláusula / página / ¿normativo o nota?:
 Cláusula / página / ¿normativo o nota?:
 
 ### 7.7 · Etapas iniciales dentro de la expansión de una macroetapa
-- [ ] **A.** Se permiten: están activas al arrancar.
+- [X] **A.** Se permiten: están activas al arrancar.
 - [ ] **B.** No se permiten.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?:
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el chat (sin cláusula citada; contraste normativo pendiente, U-01). Comentario: en una expansión no hay lugar para recuadro ni para una etapa fuera de la rama; una etapa inicial dentro de una macro debería poderse aunque no tenga sentido.
 
 ---
 
