@@ -6,6 +6,7 @@ decimales, declaración, paquete). La primera línea de cada docstring enumera l
 requisitos que cubre; la herramienta de trazabilidad la lee.
 """
 import json
+import sys
 import unittest
 from fractions import Fraction
 from pathlib import Path
@@ -23,6 +24,7 @@ from grafcet.persistence import add_document, new_project
 from grafcet.values import TypeSpec, check_fits, format_value, parse_value
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
 
 
 def q(s):
@@ -219,12 +221,24 @@ class BloqueosU(unittest.TestCase):
         self.assertFalse(s.z.outputs["y"])
 
     def test_SU06_delay_cero(self):
-        """REQ-TMP-03: 0s/p no compila (comparador, 4.4 B); 0s/p/2s no se preguntó y sigue en U-06."""
+        """REQ-TMP-03: los tiempos de 0 s se quitan (chat, 4.4 revisada): 0s/p es p y 0s/p/2s es p/2s, retardo a la desconexión puro."""
         m = M().var("p").step("A", True).step("B").trans("t", ["A"], ["B"], "delay(0 s, p, 0 s)")
-        self.assertEqual([d.code for d in m.validate().diagnostics if d.blocks_start], ["D-FORMATO"])
+        s = session(m.compile(), batches=[(S, 0, {"p": True})])
+        s.run()
+        self.assertEqual((s.z.situation, s.z.time), ({"B"}, S), "0s/p franquea en el mismo instante que p")
+        self.assertEqual([d.code for d in m.validate({"4.4": "B"}).diagnostics if d.blocks_start], ["D-FORMATO"])
         self.assertTrue(any(d.question == "U-06" for d in m.validate({"4.4": "detener"}).diagnostics))
-        m = M().var("p").step("A", True).step("B").trans("t", ["A"], ["B"], "delay(0 s, p, 2 s)")
-        self.assertTrue(any(d.question == "U-06" for d in m.validate().diagnostics))
+        m = M().var("p").var("y", "output").step("A", True).cont("A", "y", "delay(0 s, p, 2 s)")
+        s = session(m.compile(), batches=[(S, 0, {"p": True}), (2 * S, 0, {"p": False})])
+        for t, y in ((S, True), (2 * S, True), (3 * S, True), (4 * S, False)):
+            s.advance_to(t)
+            self.assertEqual(s.z.outputs["y"], y, f"y a {t} µs")
+        self.assertTrue(any(d.question == "U-06" for d in m.validate({"4.4": "B"}).diagnostics), "B solo trataba 0s/p")
+        # Presentación con la notación de la norma, sin el 0 s
+        import banco_de_pruebas as banco
+        texto = lambda e: "".join(x["t"] for x in banco.norm(e["meaning"]))
+        exprs = {e["text"]: e for e in m.doc["expressions"]}
+        self.assertEqual(texto(exprs["delay(0 s, p, 2 s)"]), "p/2s")
 
     def test_SU06_vencimientos_que_dependen_del_orden(self):
         """REQ-TMP-03, REQ-SEM-08: vencimientos simultáneos con efecto mutuo (U-06)."""
@@ -444,8 +458,8 @@ class ReglasP(unittest.TestCase):
         self.assertFalse([c for c in decl["capabilities"] if c["status"] == "aprobada"])
         self.assertTrue(all(c["status"] in ("provisional", "no-soportada") for c in decl["capabilities"]))
         excluded = {x["capability"] for x in decl["excludedMatters"]}
-        self.assertTrue({"eventos.internos", "eventos.franqueamiento", "temporal.delay-cero"} <= excluded,
-                        "cuestiones aún abiertas")
+        self.assertTrue({"eventos.internos", "eventos.franqueamiento"} <= excluded, "cuestiones aún abiertas")
+        self.assertNotIn("temporal.delay-cero", excluded, "decidida por el responsable (P-IMP-28)")
         for cid in ("jerarquia.forzado-momento", "jerarquia.encapsulacion-coincidencia", "jerarquia.macro-inicial",
                     "jerarquia.forzado-tiempo", "jerarquia.forzado-recinto", "jerarquia.forzado-acciones",
                     "jerarquia.macro-ramas"):

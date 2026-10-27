@@ -659,6 +659,7 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
             d1, base, d2 = tn.kids
             if d1.op != "lit" or d2.op != "lit":
                 continue
+            # 4.4 A (revisada por el responsable): un tiempo de 0 s se quita; 0s/p se ejecuta como p y 0s/p/7s como p/7s
             if d1.value == 0 and opt["4.4"] != "A":
                 if opt["4.4"] == "B" and d2.value == 0:
                     v.add("D-FORMATO", "retardo cero: 0s/p no se admite; use p (lectura 4.4 B)", user)

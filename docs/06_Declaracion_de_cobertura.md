@@ -57,7 +57,7 @@ Base normativa declarada: IEC 60848 edición 3.0 (2013-02-27), adopción UNE-EN 
 | `temporal.base-compuesta` — Base temporal distinta de entradas o active(etapa) | pendiente / bloqueada | H-09 | REQ-TMP-02 |
 | `temporal.coincidencias` — Lote y vencimiento en el mismo instante: primero el vencimiento si el lote cambia su base, si no juntos; un rebote durante la desconexión la mantiene verdadera | provisional (especificada, sin contraste normativo) | decisión del responsable, comparador 27-10-2026, 4.1 A, 4.2 A y 4.3 A (cierra H-17) | REQ-TMP-03 |
 | `temporal.delay` — delay(d1,p,d2) ordinario con d1>0 | provisional (especificada, sin contraste normativo) | I (U-01) | REQ-TMP-02 |
-| `temporal.delay-cero` — delay con d1=0: 0s/p no compila; 0s/p/d2 con d2 > 0 sigue sin soporte | pendiente / bloqueada | decisión del responsable, comparador 27-10-2026, 4.4 B; el caso con desconexión no se preguntó (U-06) | REQ-TMP-03 |
+| `temporal.delay-cero` — Tiempos de 0 s en un retardo: se quitan al compilar (0s/p es p; 0s/p/7s es p/7s; 8s/p/0s es 8s/p) | provisional (especificada, sin contraste normativo) | decisión del responsable, chat 27-10-2026, 4.4 revisada (A) | REQ-TMP-03 |
 | `temporal.duracion-etapa-inicial` — La duración de una etapa inicial cuenta desde τ=0 (oráculos T-12a/T-12c) | provisional (especificada, sin contraste normativo) | I; decisión del responsable, hoja 08 1.4 A | REQ-TMP-02 |
 | `temporal.elapsed` — Duración elapsed(etapa) ejecutable | pendiente / bloqueada | no implementada en esta iteración; el valor con la etapa inactiva ya está decidido: 0 (decisión del responsable, comparador 27-10-2026, 4.5 A) | REQ-TMP-02 |
 | `temporal.reentrada-virtual` — Salida y reentrada en el mismo instante: la duración de la etapa no se interrumpe | provisional (especificada, sin contraste normativo) | decisión del responsable de producto, 25-10-2026 (P-IMP-18; cierra H-09) | REQ-TMP-02 |
@@ -73,7 +73,6 @@ Base normativa declarada: IEC 60848 edición 3.0 (2013-02-27), adopción UNE-EN 
 
 - `eventos.franqueamiento`: U-03
 - `eventos.internos`: U-03
-- `temporal.delay-cero`: decisión del responsable, comparador 27-10-2026, 4.4 B; el caso con desconexión no se preguntó (U-06)
 
 ## Lecturas seleccionables como hipótesis (P-IMP-15)
 
@@ -138,10 +137,10 @@ Elegir una lectura distinta de la predeterminada no cierra la cuestión ni ampl�
   - `B`: Primero el vencimiento
   - `C`: Primero el lote
   - `D`: Solo se detiene si el resultado depende del orden
-- **4.4** (U-06: retardo cero); por defecto `B`:
+- **4.4** (U-06: retardo cero); por defecto `A`:
   - `detener`: Detener: la cuestión sigue abierta
-  - `A`: 0s/p equivale a p
-  - `B`: No compila
+  - `A`: El 0 s se quita: 0s/p es p y 0s/p/7s es p/7s
+  - `B`: 0s/p no compila
 - **5.2** (U-03: acción por evento en una etapa que se desactiva con ese mismo evento); por defecto `B`:
   - `detener`: Detener: la cuestión sigue abierta
   - `A`: Se ejecuta

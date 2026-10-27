@@ -246,9 +246,11 @@ def norm(m: dict[str, Any], top: bool = True) -> list[dict[str, Any]]:
         return [_seg("↑" if op == "rise" else "↓")] + body
     if op == "not":
         return [dict(s, o=True) for s in norm(m["operands"][0], False)]
-    if op == "delay":
+    if op == "delay":  # t1/condición/t2 de la norma; un tiempo de 0 s no se escribe (respuesta 4.4 revisada)
         d1, base, d2 = m["operands"]
-        out = norm(d1, False) + [_seg("/")] + norm(base, False)
+        out = norm(base, False)
+        if int(d1["literal"]["value"]):
+            out = norm(d1, False) + [_seg("/")] + out
         if int(d2["literal"]["value"]):
             out += [_seg("/")] + norm(d2, False)
         return out

@@ -139,12 +139,12 @@
       "comentario": ""
     },
     "4.4": {
-      "eleccion": "B",
-      "texto": "Se prohíbe: no compila",
+      "eleccion": "A",
+      "texto": "El 0 s se quita: 0s/p es p (y 0s/p/7s es p/7s)",
       "pregunta": "Retardo cero",
-      "origen": "comparador",
+      "origen": "chat",
       "fecha": "2026-10-27",
-      "comentario": ""
+      "comentario": "Revisa la respuesta B del comparador: «No admitimos tiempos 0s, así mejoramos claridad. Si se pone 0s lo quitamos directamente: 0s/p/7s al compilar lo convertimos en p/7s, o 8s/p/0s pasa a 8s/p». (Respuesta anterior: B, comparador.)"
     },
     "4.5": {
       "eleccion": "A",

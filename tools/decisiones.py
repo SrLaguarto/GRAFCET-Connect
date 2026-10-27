@@ -506,8 +506,8 @@ CATALOGO: list[Decision] = [
                 "D": {1: {"code": "D-SEM-PENDIENTE"}}}),
     Decision(
         "4.4", "4. Fronteras de tiempo (U-06)", "Retardo cero",
-        "¿Qué significa 0s/p?", [("A", "Equivale a p"), ("B", "Se prohíbe: no compila")],
-        "4.4", "t tiene 0s/p.", m44, script=[fijar("p sube", p=True)],
+        "¿Qué significa 0s/p?", [("A", "El 0 s se quita: 0s/p es p (y 0s/p/7s es p/7s)"), ("B", "Se prohíbe: no compila")],
+        "4.4", "t tiene 0s/p; el dibujo ya lo muestra sin el 0 s.", m44, script=[fijar("p sube", p=True)],
         expect={"A": "Al subir p se pasa a B en ese mismo instante.", "B": "No compila: D-FORMATO."},
         checks={"A": {1: {"situation": ["B"]}}, "B": {0: {"code": "D-FORMATO"}}}),
     Decision(
@@ -702,14 +702,15 @@ RESPUESTAS_HOJA_08: dict[str, tuple[str, str]] = {
 # Respuestas dadas en el comparador el 27-10-2026 e incorporadas en P-IMP-22. 3.4 y 4.5 quedan registradas: se
 # aplicarán cuando se ejecuten la encapsulación y elapsed (la encapsulación se ejecuta desde P-IMP-23).
 RESPUESTAS_COMPARADOR: dict[str, str] = {
-    "3.1": "A", "3.2": "A", "3.3": "A", "3.4": "A", "4.1": "A", "4.2": "A", "4.3": "A", "4.4": "B", "4.5": "A",
+    "3.1": "A", "3.2": "A", "3.3": "A", "3.4": "A", "4.1": "A", "4.2": "A", "4.3": "A", "4.5": "A",
     "5.1": "situacion-anterior", "5.2": "B", "5.3": "A", "6.1": "A", "6.2": "A", "6.3": "A", "6.4": "A",
     # Segunda tanda, incorporada en P-IMP-26: 7.1 queda registrada (el programa ya hace A, documento 06)
     "7.1": "A", "7.3": "A", "7.4": "C", "7.5": "A", "7.8": "A", "8.2": "C",
 }
 
-# Respuestas dadas en el chat el 27-10-2026 e incorporadas en P-IMP-24 (7.7), P-IMP-25 (7.2 y 7.6) y P-IMP-27 (8.1)
-RESPUESTAS_CHAT: dict[str, str] = {"7.7": "A", "7.2": "B", "7.6": "B", "8.1": "C"}
+# Respuestas dadas en el chat el 27-10-2026 e incorporadas en P-IMP-24 (7.7), P-IMP-25 (7.2 y 7.6), P-IMP-27 (8.1) y
+# P-IMP-28 (4.4 revisada: la respuesta B del comparador pasa a A, «si se pone 0 s lo quitamos»)
+RESPUESTAS_CHAT: dict[str, str] = {"7.7": "A", "7.2": "B", "7.6": "B", "8.1": "C", "4.4": "A"}
 
 # Lo que el programa aplica hoy: el comparador muestra si la respuesta guardada ya está incorporada
 RESPUESTAS_INCORPORADAS: dict[str, str] = {**{k: v for k, (v, _) in RESPUESTAS_HOJA_08.items()}, **RESPUESTAS_COMPARADOR,

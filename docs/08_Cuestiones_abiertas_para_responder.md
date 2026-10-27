@@ -242,11 +242,11 @@ Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-1
 
 ### 4.4 · Retardo cero
 **Hoy:** `0s/p` no compila.
-- [ ] **A.** `0s/p` equivale a `p`.
-- [X] **B.** Se prohíbe: no compila.
+- [X] **A.** `0s/p` equivale a `p`.
+- [ ] **B.** Se prohíbe: no compila.
 - [ ] **Dejar abierta**
 
-Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
+Cláusula / página / ¿normativo o nota?: Respondida en el comparador (B) y revisada por el responsable el 27-10-2026 en el chat (sin cláusula citada; contraste normativo pendiente, U-01). Comentario: «No admitimos tiempos 0s; si se pone 0s lo quitamos directamente: 0s/p/7s pasa a p/7s y 8s/p/0s a 8s/p».
 
 ### 4.5 · Duración T de una etapa inactiva
 **Hoy:** `elapsed(etapa)` no se puede ejecutar.

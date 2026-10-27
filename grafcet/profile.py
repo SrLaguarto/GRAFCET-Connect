@@ -103,8 +103,8 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
     _c("eventos.franqueamiento", "Eventos de franqueamiento como disparadores", "no-soportada", "U-03", "REQ-EVT-03"),
     _c("lotes", "Lotes simultáneos y lotes ordenados con igual tiempo", "provisional", "P", "REQ-EVT-02"),
     _c("temporal.delay", "delay(d1,p,d2) ordinario con d1>0", "provisional", "I (U-01)", "REQ-TMP-02"),
-    _c("temporal.delay-cero", "delay con d1=0: 0s/p no compila; 0s/p/d2 con d2 > 0 sigue sin soporte", "no-soportada",
-       "decisión del responsable, comparador 27-10-2026, 4.4 B; el caso con desconexión no se preguntó (U-06)", "REQ-TMP-03"),
+    _c("temporal.delay-cero", "Tiempos de 0 s en un retardo: se quitan al compilar (0s/p es p; 0s/p/7s es p/7s; 8s/p/0s es "
+       "8s/p)", "provisional", "decisión del responsable, chat 27-10-2026, 4.4 revisada (A)", "REQ-TMP-03"),
     _c("temporal.coincidencias", "Lote y vencimiento en el mismo instante: primero el vencimiento si el lote cambia su base, "
        "si no juntos; un rebote durante la desconexión la mantiene verdadera", "provisional",
        "decisión del responsable, comparador 27-10-2026, 4.1 A, 4.2 A y 4.3 A (cierra H-17)", "REQ-TMP-03"),
@@ -214,8 +214,8 @@ SEMANTIC_OPTIONS: dict[str, dict[str, Any]] = {
     "4.3": _opt("A", "U-06: lote y vencimiento independientes en el mismo instante", {
         "detener": _STOP, "A": "Juntos en un solo instante", "B": "Primero el vencimiento", "C": "Primero el lote",
         "D": "Solo se detiene si el resultado depende del orden"}),
-    "4.4": _opt("B", "U-06: retardo cero", {
-        "detener": _STOP, "A": "0s/p equivale a p", "B": "No compila"}),
+    "4.4": _opt("A", "U-06: retardo cero", {
+        "detener": _STOP, "A": "El 0 s se quita: 0s/p es p y 0s/p/7s es p/7s", "B": "0s/p no compila"}),
     "5.2": _opt("B", "U-03: acción por evento en una etapa que se desactiva con ese mismo evento", {
         "detener": _STOP, "A": "Se ejecuta", "B": "No se ejecuta"}),
     "5.3": _opt("A", "U-03: acción por evento en una etapa que se activa con ese mismo evento", {

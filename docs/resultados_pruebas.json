@@ -1,5 +1,5 @@
 {
- "date": "2026-10-27T11:33:24+01:00",
+ "date": "2026-10-27T11:40:16+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
@@ -127,7 +127,7 @@
    "requirements": [
     "REQ-TMP-03"
    ],
-   "summary": "REQ-TMP-03: 0s/p no compila (comparador, 4.4 B); 0s/p/2s no se preguntó y sigue en U-06."
+   "summary": "REQ-TMP-03: los tiempos de 0 s se quitan (chat, 4.4 revisada): 0s/p es p y 0s/p/2s es p/2s, retardo a la desconexión puro."
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU06_lote_y_vencimiento_coincidentes",

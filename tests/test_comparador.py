@@ -134,7 +134,7 @@ class Comparador(unittest.TestCase):
             if POR_ID[did].option is not None:
                 self.assertEqual(SEMANTIC_OPTIONS[POR_ID[did].option]["default"], "detener", did)
         self.cmp.load("4.4")
-        self.assertEqual(self.cmp.view()["applied"], "B", "el comparador muestra lo que el programa aplica")
+        self.assertEqual(self.cmp.view()["applied"], "A", "el comparador muestra lo que el programa aplica")
 
 
 class EjemploDelResponsable(unittest.TestCase):
