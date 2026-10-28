@@ -1,599 +1,1036 @@
 """Programador por bloques de receptividades y condiciones (P-IMP-38).
 
-La expresión se ve como una fila de bloques: cada variable o etapa es un bloque de su color (entradas, salidas,
-internas, etapas X, comparaciones, temporizadores), la negación es una barra encima del bloque o del grupo, los
-flancos van delante (↑ ↓), · es Y y + es O, y los paréntesis cambian de color con el nivel. Los bloques se sacan de
-los cajones (Entradas, Salidas, Internas, Etapas, Constantes) y se modifican con los botones o con el teclado.
+La expresión se arma con bloques de colores que se arrastran desde una paleta (Entradas, Salidas, Memorias, Etapas,
+Operadores, Comparaciones, Tiempo) y encajan unos dentro de otros. Las condiciones son bloques hexagonales: una
+variable booleana o una etapa (con un desplegable para elegir cuál), «y» y «o» con dos huecos, «no» y los flancos ↑ ↓
+que envuelven a otro bloque, las constantes 1 y 0, «temporizar» (t1 y t2 como en la norma: 3s/X1, X1/2s) y la
+comparación de una variable numérica con un valor.
 
-Los bloques solo escriben el texto en la notación del usuario (↑a, X1, 3s/X1), que es lo que se guarda y lo que el
-núcleo analiza como siempre (grafcet/notation.py y grafcet/expressions.py no cambian): una expresión se trocea en
-bloques y los bloques se vuelven a juntar en el mismo texto.
+Los bloques solo escriben el texto en la notación del usuario (↑a, X1, 3s/X1, NOT, AND, OR, 1/0), que es lo que se
+guarda y lo que el núcleo analiza como siempre (grafcet/notation.py y grafcet/expressions.py no cambian). La primera
+parte de este fichero es el modelo, sin dibujo: un árbol de nodos (diccionarios) que se convierte de texto y a texto, y
+las operaciones de soltar, envolver, sustituir y quitar. La segunda, el dibujo y la interacción en Qt.
 """
 from __future__ import annotations
 
+import copy
+import json
 import re
+from collections import Counter
 from typing import Any, Callable
 
-from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLayout,
-                               QLineEdit, QMenu, QSizePolicy, QToolButton, QVBoxLayout, QWidget, QWidgetItem)
+from PySide6.QtCore import QMimeData, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import (QColor, QCursor, QDrag, QFont, QFontMetricsF, QKeySequence, QPainter, QPen, QPixmap,
+                           QPolygonF, QShortcut)
+from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLayout, QLineEdit, QMenu, QPushButton, QSizePolicy, QToolButton,
+                               QVBoxLayout, QWidget, QWidgetItem)
 
-from grafcet.notation import normalizar_espacios
+from grafcet.expressions import CMP, FUNCS_EXPR, FUNCS_REF, KEYWORDS, ParseError, parse, render
+from grafcet.notation import a_nucleo, a_usuario, normalizar_espacios, x_etapa
 
-# Colores de los bloques (relleno, borde y texto) por categoría, y de los paréntesis por nivel
-COLORES = {"entrada": ("#dbeafe", "#1d4ed8"), "salida": ("#dcfce7", "#15803d"), "interna": ("#fef3c7", "#b45309"),
-           "etapa": ("#ede9fe", "#6d28d9"), "comparacion": ("#ffedd5", "#c2410c"), "tiempo": ("#ccfbf1", "#0f766e"),
-           "constante": ("#f1f5f9", "#475569"), "otro": ("#fee2e2", "#b91c1c")}
-CATEGORIAS = {"entrada": "entrada", "salida": "salida", "interna": "variable interna", "etapa": "etapa activa (X)",
-              "comparacion": "comparación", "tiempo": "temporización", "constante": "constante",
-              "otro": "nombre que no existe"}
-PARENTESIS = ["#2563eb", "#d97706", "#16a34a", "#c026d3", "#dc2626", "#0891b2"]
-_DUR = r"\d+(?:[.,]\d+)?\s*(?:us|µs|μs|ms|s)\b"
-_TIEMPO = re.compile(rf"(?:^|/)\s*{_DUR}\s*/|/\s*{_DUR}\s*$")
-_SIMPLE = re.compile(r"[^\W\d]\w*(?:\.\w+)?")
-_CMP = re.compile(r"^(.+?)\s*(>=|<=|!=|=|<|>)\s*(.+)$")
-
-
-# -- bloques sin interfaz ---------------------------------------------------------------------------
-def categoria(texto: str, roles: dict[str, str], etapas: set[str]) -> str:
-    """De qué es un bloque: entrada, salida o interna (por el papel de la variable), etapa (X1), comparación,
-    temporización, constante, u «otro» si el nombre no existe."""
-    if _TIEMPO.search(texto):
-        return "tiempo"
-    if re.search(r"[<>=≠≤≥]", texto):
-        return "comparacion"
-    if texto in ("1", "0", "true", "false"):
-        return "constante"
-    if texto in etapas or texto.startswith("active("):
-        return "etapa"
-    return {"input": "entrada", "output": "salida", "internal": "interna"}.get(roles.get(texto, ""), "otro")
+# -- modelo: el árbol de bloques --------------------------------------------------------------------------
+# Un nodo es un diccionario con su clase en "k"; un hueco es None:
+#   var(n, papel)  etapa(n)  const(v)  y(a, b)  o(a, b)  no(a)  sube(a)  baja(a)  temp(t1, t2, a)
+#   cmp(n, op, v)  texto(s)  (lo que no se representa con bloques: aritmética, nombres que no existen)
+HIJOS = {"y": ("a", "b"), "o": ("a", "b"), "no": ("a",), "sube": ("a",), "baja": ("a",), "temp": ("a",)}
+ENVUELVEN = frozenset(HIJOS)  # soltados sobre un hueco ocupado, el bloque que había entra en su primer hueco
+HUECO = "__hueco__"  # nombre reservado con que se lee un «?» (hueco) del texto
+OPERADORES_CMP = ("=", "!=", "<", "<=", ">", ">=")
+OP_VISIBLE = {"=": "=", "!=": "≠", "<": "<", "<=": "≤", ">": ">", ">=": "≥"}
+PAPEL = {"entrada": "input", "salida": "output", "interna": "internal"}  # categoría de la paleta -> papel
+_SIMPLE = re.compile(r"[^\W\d]\w*(?:\.[^\W\d]\w*)*")
+_RESERVADAS = KEYWORDS | set(FUNCS_REF) | set(FUNCS_EXPR) | {"delay"}
+_DURACION = re.compile(r"(\d+(?:[.,]\d+)?)\s*(us|µs|μs|ms|s)")
+_TOP_PREC = {"or": 1, "and": 2, "not": 3, **{c: 4 for c in CMP.values()}}
 
 
-def trocear(texto: str, clase: Callable[[str], str] = lambda t: "otro") -> list[dict[str, Any]]:
-    """Texto en la notación del usuario -> bloques: operandos (con su negación y su flanco), Y/O y paréntesis (un
-    paréntesis que abre lleva la negación y el flanco de su grupo)."""
-    t, out, i, neg, flanco = normalizar_espacios(texto), [], 0, False, ""
-    while i < len(t):
-        c = t[i]
-        m = re.compile(r"(AND|OR)\b").match(t, i)
-        if c == " ":
-            i += 1
-        elif m:
-            out.append({"k": "op", "t": m.group(1)})
-            i = m.end()
-        elif re.compile(r"NOT\b").match(t, i):
-            neg, i = not neg, i + 3
-        elif c in "↑↓":
-            flanco, i = c, i + 1
-        elif c == "(":
-            out.append({"k": "(", "neg": neg, "flanco": flanco})
-            neg, flanco, i = False, "", i + 1
-        elif c == ")":
-            out.append({"k": ")"})
-            i += 1
-        else:  # un operando: hasta el AND, el OR o el paréntesis que cierra de su mismo nivel
-            j, nivel = i, 0
-            while j < len(t):
-                if t[j] == "(":
-                    nivel += 1
-                elif t[j] == ")":
-                    if nivel == 0:
-                        break
-                    nivel -= 1
-                elif nivel == 0 and re.compile(r" (AND|OR)\b").match(t, j):
-                    break
-                j += 1
-            cuerpo = t[i:j].strip()
-            if neg and _TIEMPO.search(cuerpo) and not re.match(_DUR, cuerpo):
-                cuerpo, neg = "NOT " + cuerpo, False  # «NOT marcha/2s» es el retardo de NOT marcha: va dentro
-            out.append({"k": "atomo", "t": cuerpo, "cat": clase(cuerpo), "neg": neg, "flanco": flanco})
-            neg, flanco, i = False, "", j
+def nuevo(k: str, **campos: Any) -> dict[str, Any]:
+    """Un bloque nuevo de la clase `k`, con sus huecos vacíos."""
+    base: dict[str, Any] = {
+        "var": {"n": None, "papel": "input"}, "etapa": {"n": None}, "const": {"v": 1}, "y": {"a": None, "b": None},
+        "o": {"a": None, "b": None}, "no": {"a": None}, "sube": {"a": None}, "baja": {"a": None},
+        "temp": {"t1": "3s", "t2": "", "a": None}, "cmp": {"n": None, "op": "=", "v": "0"}, "texto": {"s": ""}}[k]
+    return {"k": k, **copy.deepcopy(base), **campos}
+
+
+def var(nombre: str | None, papel: str = "input") -> dict[str, Any]:
+    return nuevo("var", n=nombre, papel=papel)
+
+
+def hijos(n: dict[str, Any] | None) -> tuple[str, ...]:
+    return HIJOS.get(n["k"], ()) if n else ()
+
+
+def obtener(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> dict[str, Any] | None:
+    """El nodo (o el hueco) que hay en `ruta`, una tupla de claves de hijo ("a", "b") desde la raíz."""
+    n = raiz
+    for c in ruta:
+        if n is None or c not in hijos(n):
+            raise KeyError(ruta)
+        n = n[c]
+    return n
+
+
+def con_nodo(raiz: dict[str, Any] | None, ruta: tuple[str, ...], nodo: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Copia del árbol con `nodo` en `ruta` (la raíz, si la ruta es vacía)."""
+    nodo = copy.deepcopy(nodo)
+    if not ruta:
+        return nodo
+    r = copy.deepcopy(raiz)
+    obtener(r, ruta[:-1])[ruta[-1]] = nodo
+    return r
+
+
+def primer_hueco(n: dict[str, Any] | None, ruta: tuple[str, ...] = ()) -> tuple[str, ...] | None:
+    """Ruta del primer hueco vacío del nodo, en orden (primero «a», luego «b», y dentro de cada uno, sus huecos)."""
+    for c in hijos(n):
+        if n[c] is None:
+            return ruta + (c,)
+        h = primer_hueco(n[c], ruta + (c,))
+        if h is not None:
+            return h
+    return None
+
+
+def soltar(raiz: dict[str, Any] | None, ruta: tuple[str, ...], nodo: dict[str, Any]) -> dict[str, Any] | None:
+    """Suelta un bloque en un hueco o sobre un bloque. Un hueco vacío lo recibe. Sobre uno ocupado: si el bloque
+    envuelve (no, ↑, ↓, temporizar, y, o) y tiene un hueco, el bloque que había entra en su primer hueco; si no, lo
+    sustituye."""
+    actual = obtener(raiz, ruta)
+    nodo = copy.deepcopy(nodo)
+    if actual is not None and nodo["k"] in ENVUELVEN:
+        h = primer_hueco(nodo)
+        if h is not None:
+            nodo = con_nodo(nodo, h, actual)
+    return con_nodo(raiz, ruta, nodo)
+
+
+def quitar(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> dict[str, Any] | None:
+    """Quita el bloque (con lo que lleva dentro) y deja su hueco: los demás huecos no cambian de sitio."""
+    return con_nodo(raiz, ruta, None)
+
+
+def mover(raiz: dict[str, Any] | None, origen: tuple[str, ...], destino: tuple[str, ...]) -> dict[str, Any] | None:
+    """Lleva el bloque de `origen` a `destino`. Soltarlo sobre sí mismo o sobre algo suyo no cambia nada."""
+    if destino[:len(origen)] == origen:
+        return raiz
+    return soltar(quitar(raiz, origen), destino, obtener(raiz, origen))
+
+
+def con_texto(n: dict[str, Any] | None) -> bool:
+    """Si el árbol tiene algún bloque de texto (para releerlo cuando cambian las variables)."""
+    return n is not None and (n["k"] == "texto" or any(con_texto(n[c]) for c in hijos(n)))
+
+
+def normalizar_duracion(texto: str) -> str | None:
+    """«3 s» -> «3s»; vacío o 0 -> «» (sin retardo); lo que no es una duración, None."""
+    t = texto.strip()
+    if t in ("", "0"):
+        return ""
+    m = _DURACION.fullmatch(t)
+    if not m:
+        return None
+    return "" if float(m.group(1).replace(",", ".")) == 0 else re.sub(r"\s+", "", t)
+
+
+def _citar(nombre: str) -> str:
+    return nombre if _SIMPLE.fullmatch(nombre) and nombre not in _RESERVADAS else f"`{nombre}`"
+
+
+# -- texto -> árbol ----------------------------------------------------------------------------------------
+def _etiquetas(etapas: list[str]) -> list[str]:
+    """Etiquetas de etapa con que `a_nucleo` resuelve las X…: «X1» -> «1»; si hay dos («E1» y «1»), las dos."""
+    out: list[str] = []
+    for x, c in Counter(etapas).items():
+        m = re.fullmatch(r"X(\w+)", x)
+        if m:
+            out += [f"E{m.group(1)}", m.group(1)] if c > 1 else [m.group(1)]
     return out
 
 
-def juntar(bloques: list[dict[str, Any]]) -> str:
-    """Bloques -> texto en la notación del usuario, con los espacios normalizados."""
-    partes = []
-    for b in bloques:
-        if b["k"] == "op":
-            partes.append(b["t"])
-        elif b["k"] == ")":
-            partes.append(")")
-        elif b["k"] == "(":
-            partes.append(("NOT " if b["neg"] else "") + b["flanco"] + "(")
+def _dur_usuario(us: int) -> str:
+    """Microsegundos -> «3s» (entero en s), «500ms» (entero en ms) o «1500us»."""
+    return f"{us // 1_000_000}s" if us % 1_000_000 == 0 else f"{us // 1000}ms" if us % 1000 == 0 else f"{us}us"
+
+
+def _crudo_de(m: dict[str, Any]) -> str:
+    """El significado como texto del usuario; las duraciones (que `render` da en µs) como las escribe quien dibuja."""
+    t = re.sub(r"`[^`]*`|(?<![\w.])(\d+) us\b", lambda mo: mo.group(0) if mo.group(1) is None
+               else _dur_usuario(int(mo.group(1))), render(m, lambda r: r))
+    return a_usuario(t).replace(HUECO, "?")
+
+
+def _duracion(m: dict[str, Any]) -> str | None:
+    """Duración literal (en µs) -> «3s», «500ms», «1500us»; la de 0, vacía; lo que no es una duración, None."""
+    lit = m.get("literal") if m["operator"] == "lit" else None
+    if not lit or lit["type"] != "duration":
+        return None
+    us = int(lit["value"])
+    return "" if us == 0 else _dur_usuario(us)
+
+
+def _desde_significado(m: dict[str, Any], variables: dict[str, tuple[str, str]], etapas: list[str]) -> dict[str, Any] | None:
+    op = m["operator"]
+    hijo = lambda o: _desde_significado(o, variables, etapas)  # noqa: E731
+    texto = lambda: nuevo("texto", s=_crudo_de(m))  # noqa: E731
+    if op == "lit":
+        lit = m["literal"]
+        return nuevo("const", v=1 if lit["value"] else 0) if lit["type"] == "bool" else texto()
+    if op == "ref":
+        nombre = m["reference"]
+        if nombre == HUECO:
+            return None
+        if nombre in variables and variables[nombre][1] == "bool":
+            return var(nombre, variables[nombre][0])
+        return texto()
+    if op == "active":
+        x = x_etapa(m["reference"])
+        if x not in etapas or (etapas.count(x) > 1 and x == "X" + m["reference"]):
+            return texto()  # no existe, o es «active(`1`)» con una etapa E1 que también se escribiría X1
+        return nuevo("etapa", n=x)
+    if op in ("and", "or"):
+        a, b = m["operands"]
+        return nuevo("y" if op == "and" else "o", a=hijo(a), b=hijo(b))
+    if op in ("not", "rise", "fall"):
+        return nuevo({"not": "no", "rise": "sube", "fall": "baja"}[op], a=hijo(m["operands"][0]))
+    if op == "delay":
+        t1, a, t2 = m["operands"]
+        d1, d2 = _duracion(t1), _duracion(t2)
+        return texto() if d1 is None or d2 is None else nuevo("temp", t1=d1, t2=d2, a=hijo(a))
+    if op in CMP.values():
+        izq, der = m["operands"]
+        nombre = izq["reference"] if izq["operator"] == "ref" else None
+        if nombre == HUECO or (nombre in variables and variables[nombre][1] != "bool"):
+            return nuevo("cmp", n=None if nombre == HUECO else nombre,
+                         op={v: k for k, v in CMP.items()}[op],
+                         v=("true" if der["literal"]["value"] else "false") if der["operator"] == "lit"
+                         and der["literal"]["type"] == "bool" else _crudo_de(der))
+    return texto()
+
+
+def texto_a_arbol(texto: str, variables: dict[str, tuple[str, str]], etapas: list[str]) -> dict[str, Any] | None:
+    """Texto en la notación del usuario -> árbol de bloques (vacío: sin raíz). Un «?» es un hueco. Si no se puede
+    analizar, lanza ValueError con el motivo, breve."""
+    t = texto.strip()
+    if not t:
+        return None
+    t = re.sub(r"`[^`]*`|\?", lambda m: HUECO if m.group(0) == "?" else m.group(0), t)
+    try:
+        nucleo = a_nucleo(t, _etiquetas(etapas), variables.keys(), True)
+        significado = parse(nucleo, lambda clase, nombre: nombre)
+        return _desde_significado(significado, variables, etapas)
+    except ParseError as e:
+        raise ValueError(re.sub(r"\s*\(posición \d+\)$", "", str(e)).replace(HUECO, "?")) from e
+    except Exception as e:  # noqa: BLE001 - un texto a medias no debe romper la interfaz
+        raise ValueError(str(e).replace(HUECO, "?")) from e
+
+
+# -- árbol -> texto ----------------------------------------------------------------------------------------
+_PREC_TEXTO: dict[str, int] = {}
+
+
+def _prec_texto(s: str) -> int:
+    """Precedencia (OR 1, AND 2, NOT 3, comparación 4, el resto 9) del texto crudo de un bloque de texto."""
+    if s not in _PREC_TEXTO:
+        try:
+            top = parse(a_nucleo(re.sub(r"`[^`]*`|\?", lambda m: HUECO if m.group(0) == "?" else m.group(0), s)),
+                        lambda clase, nombre: nombre)["operator"]
+            _PREC_TEXTO[s] = _TOP_PREC.get(top, 9)
+        except Exception:  # noqa: BLE001
+            _PREC_TEXTO[s] = 0
+    return _PREC_TEXTO[s]
+
+
+def _efectivo(n: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Un «temporizar» sin retardos no cambia el texto: se escribe lo que lleva dentro."""
+    while n is not None and n["k"] == "temp" and not (n["t1"] or n["t2"]):
+        n = n["a"]
+    return n
+
+
+def _prec(n: dict[str, Any] | None) -> int:
+    n = _efectivo(n)
+    if n is None:
+        return 9
+    return {"y": 2, "o": 1, "no": 3, "cmp": 4}.get(n["k"]) or (_prec_texto(n["s"]) if n["k"] == "texto" else 9)
+
+
+def _atomo(n: dict[str, Any] | None) -> bool:
+    """Un nombre o una etapa: lo que puede ir tras ↑, ↓ o la barra de un retardo sin paréntesis."""
+    n = _efectivo(n)
+    return n is None or n["k"] in ("etapa", "const") or (n["k"] == "var" and (n["n"] is None or _citar(n["n"]) == n["n"])) \
+        or (n["k"] == "texto" and bool(_SIMPLE.fullmatch(n["s"])) and n["s"] not in _RESERVADAS)
+
+
+def _t(n: dict[str, Any] | None, req: int = 0) -> str:
+    """Texto del nodo; entre paréntesis si su precedencia es menor que la que exige el sitio donde va."""
+    n = _efectivo(n)
+    s = _crudo(n)
+    return f"({s})" if _prec(n) < req else s
+
+
+def _crudo(n: dict[str, Any] | None) -> str:
+    if n is None:
+        return "?"
+    k = n["k"]
+    if k == "var":
+        return _citar(n["n"]) if n["n"] else "?"
+    if k == "etapa":
+        return n["n"] or "?"
+    if k == "const":
+        return str(n["v"])
+    if k == "y":
+        return f"{_t(n['a'], 2)} AND {_t(n['b'], 3)}"
+    if k == "o":
+        return f"{_t(n['a'], 1)} OR {_t(n['b'], 2)}"
+    if k == "no":
+        a = _efectivo(n["a"])
+        return f"NOT ({_t(a)})" if a is not None and a["k"] == "temp" else f"NOT {_t(a, 3)}"
+    if k in ("sube", "baja"):
+        a = _efectivo(n["a"])
+        s = _t(a, 9) if a is None or a["k"] in ("sube", "baja") or _atomo(a) else f"({_t(a)})"
+        return ("↑" if k == "sube" else "↓") + s
+    if k == "temp":
+        a = _efectivo(n["a"])
+        if _atomo(a) or (a is not None and a["k"] in ("no", "sube", "baja") and _atomo(a["a"])):
+            base = _t(a, 0)
         else:
-            cuerpo = b["t"]
-            if (b["neg"] or b["flanco"]) and not _SIMPLE.fullmatch(cuerpo):
-                cuerpo = f"({cuerpo})"
-            partes.append(("NOT " if b["neg"] else "") + b["flanco"] + cuerpo)
-    return normalizar_espacios(" ".join(partes))
+            base = f"({_t(a)})"
+        return "/".join(([n["t1"]] if n["t1"] else []) + [base] + ([n["t2"]] if n["t2"] else []))
+    if k == "cmp":
+        return f"{_citar(n['n']) if n['n'] else '?'} {n['op']} {n['v'].strip() or '0'}"
+    return n["s"].strip() or "?"
 
 
-def _abre(b: dict[str, Any] | None) -> bool:
-    return b is not None and b["k"] in ("atomo", "(")
+def arbol_a_texto(n: dict[str, Any] | None) -> str:
+    """Árbol -> texto en la notación del usuario, con paréntesis solo donde la precedencia lo exige (OR < AND < NOT <
+    comparación) y en el operando derecho de igual precedencia; los huecos, como «?»."""
+    return "" if n is None else _t(n)
 
 
-def _cierra(b: dict[str, Any] | None) -> bool:
-    return b is not None and b["k"] in ("atomo", ")")
+# -- dibujo ------------------------------------------------------------------------------------------------
+COLORES = {"entrada": "#2F6FDE", "salida": "#2E9E57", "interna": "#E07B1A", "etapa": "#7C4DDB",
+           "operador": "#D6559B", "comparacion": "#159AAE", "tiempo": "#B07A12", "texto": "#6B7280", "error": "#C0392B"}
+CATEGORIAS = (("entrada", "Entradas"), ("salida", "Salidas"), ("interna", "Memorias"), ("etapa", "Etapas (X)"),
+              ("operador", "Operadores"), ("comparacion", "Comparaciones"), ("tiempo", "Tiempo"))
+_PAPEL_CAT = {"input": "entrada", "output": "salida", "internal": "interna"}
+PADX, PADX_PILA, PADV, GAP, FILA = 10, 7, 3, 4, 3  # relleno lateral y vertical de un bloque, hueco entre piezas y entre filas
+ALTO = 20  # alto de las piezas (desplegables, campos)
+HUECO_W, HUECO_H = 34, 22
+SANGRIA = {"no": 8, "sube": 8, "baja": 8, "temp": 8}  # el hijo de un bloque que envuelve, algo hundido
+PUNTA = 8  # cuánto entra la punta de un hexágono
+MARGEN = 6
+MIME = "application/x-grafcet-bloque"
+_ARRASTRE = {"resuelto": False}  # el arrastre en curso (solo hay uno): si algún programador lo recibió
 
 
-class Expresion:
-    """Los bloques de una expresión, con el punto de inserción (cursor, entre bloques) y la selección [a, b)."""
+class _Pieza:
+    """Una pieza ya medida de un bloque: texto, desplegable o campo."""
+    __slots__ = ("tipo", "clave", "texto", "vacio", "w", "h")
 
-    def __init__(self, bloques: list[dict[str, Any]] | None = None) -> None:
-        self.b: list[dict[str, Any]] = bloques or []
-        self.cursor = len(self.b)
-        self.sel: tuple[int, int] | None = None
+    def __init__(self, tipo: str, clave: str, texto: str, vacio: bool, w: float, h: float) -> None:
+        self.tipo, self.clave, self.texto, self.vacio, self.w, self.h = tipo, clave, texto, vacio, w, h
 
-    def texto(self) -> str:
-        return juntar(self.b)
 
-    def pareja(self, i: int) -> int:
-        """El paréntesis que hace pareja con el de la posición i (o i, si no tiene)."""
-        paso = 1 if self.b[i]["k"] == "(" else -1
-        nivel, j = 0, i
-        while 0 <= j < len(self.b):
-            nivel += {"(": 1, ")": -1}.get(self.b[j]["k"], 0) * paso
-            if nivel == 0:
-                return j
-            j += paso
-        return i
+class _Caja:
+    """Un bloque (o un hueco) ya medido, con sus piezas y cajas hijas colocadas dentro: (x, y, pieza o caja)."""
 
-    def niveles(self) -> list[int]:
-        """Nivel de anidamiento de cada bloque (los paréntesis, el de su pareja)."""
-        out, n = [], 0
-        for b in self.b:
-            if b["k"] == ")":
-                n -= 1
-            out.append(n)
-            if b["k"] == "(":
-                n += 1
-        return out
+    def __init__(self, nodo: dict[str, Any] | None, ruta: tuple, w: float, h: float, cat: str = "") -> None:
+        self.nodo, self.ruta, self.w, self.h, self.cat = nodo, ruta, w, h, cat
+        self.items: list[tuple[float, float, Any]] = []
 
-    def _objetivo(self) -> tuple[int, int] | None:
-        if self.sel:
-            return self.sel
-        return (self.cursor - 1, self.cursor) if self.cursor > 0 else None
 
-    def _equilibrado(self, a: int, b: int) -> bool:
-        n = 0
-        for x in self.b[a:b]:
-            n += {"(": 1, ")": -1}.get(x["k"], 0)
-            if n < 0:
-                return False
-        return n == 0
+class Motor:
+    """Mide y dibuja bloques. Un bloque se dibuja en línea si cabe; si no, «y»/«o» apilan primer operando, rótulo y
+    segundo operando, y los que envuelven ponen su hijo debajo, con sangría. `fuente()` da las variables
+    {nombre: (papel, tipo)} y las etapas (en notación X) del modelo."""
 
-    def insertar(self, nuevos: list[dict[str, Any]]) -> None:
-        """Inserta en el cursor (tras la selección, si la hay). Entre dos operandos pone · (Y); un · o + junto a otro lo
-        sustituye."""
-        pos = self.sel[1] if self.sel else self.cursor
-        antes, despues = (self.b[pos - 1] if pos > 0 else None), (self.b[pos] if pos < len(self.b) else None)
-        nuevos = [dict(x) for x in nuevos]
-        if len(nuevos) == 1 and nuevos[0]["k"] == "op":
-            if antes is not None and antes["k"] == "op":
-                antes["t"] = nuevos[0]["t"]
-            elif despues is not None and despues["k"] == "op":
-                despues["t"] = nuevos[0]["t"]
-            elif _cierra(antes):
-                self.b.insert(pos, nuevos[0])
-                pos += 1
-            self.cursor, self.sel = pos, None
+    def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]]) -> None:
+        self.fuente = fuente
+        self.vars: dict[str, tuple[str, str]] = {}
+        self.etapas: list[str] = []
+        self.f = QFont()
+        self.f.setPixelSize(12)
+        self.fb = QFont(self.f)
+        self.fb.setBold(True)
+        self.m, self.mb = QFontMetricsF(self.f), QFontMetricsF(self.fb)
+        self.nat: dict[tuple, float] = {}
+
+    def reiniciar(self) -> None:
+        self.vars, self.etapas = self.fuente()
+        self.nat = {}
+
+    # -- qué lleva cada bloque
+    @staticmethod
+    def elementos(n: dict[str, Any]) -> list[tuple]:
+        k = n["k"]
+        if k in ("var", "etapa"):
+            return [("drop", "n", n["n"] or "elegir")]
+        if k == "const":
+            return [("txt", "", str(n["v"]))]
+        if k in ("y", "o"):
+            return [("hijo", "a"), ("txt", "", "y" if k == "y" else "o"), ("hijo", "b")]
+        if k == "no":
+            return [("txt", "", "no"), ("hijo", "a")]
+        if k in ("sube", "baja"):
+            return [("txt", "", "flanco ↑" if k == "sube" else "flanco ↓"), ("hijo", "a")]
+        if k == "temp":
+            return [("txt", "", "temporizar"), ("campo", "t1", n["t1"], "t1"), ("txt", "", "/"), ("hijo", "a"),
+                    ("txt", "", "/"), ("campo", "t2", n["t2"], "t2")]
+        if k == "cmp":
+            return [("drop", "n", n["n"] or "elegir"), ("drop", "op", OP_VISIBLE[n["op"]]),
+                    ("campo", "v", n["v"], "valor")]
+        return [("campo", "s", n["s"], "texto")]
+
+    def categoria(self, n: dict[str, Any]) -> str:
+        k = n["k"]
+        if k == "var":
+            v = self.vars.get(n["n"]) if n["n"] else None
+            if n["n"] and v is None:
+                return "error"
+            return _PAPEL_CAT.get(v[0] if v else n.get("papel"), "texto")
+        if k == "etapa":
+            return "etapa" if n["n"] is None or n["n"] in self.etapas else "error"
+        if k == "cmp":
+            return "error" if n["n"] and n["n"] not in self.vars else "comparacion"
+        if k == "temp":
+            return "tiempo"
+        if k == "texto":
+            return "error" if _SIMPLE.fullmatch(n["s"]) else "texto"
+        return "operador"
+
+    # -- medidas
+    def pieza(self, e: tuple, maxw: float = 100000) -> _Pieza:
+        tipo = e[0]
+        if tipo == "txt":
+            return _Pieza("txt", "", e[2], False, self.mb.horizontalAdvance(e[2]), 16)
+        texto = e[2] or (e[3] if tipo == "campo" else "")
+        vacio = tipo == "campo" and not e[2]
+        extra = 22 if tipo == "drop" else 12
+        vis = self.m.elidedText(texto, Qt.TextElideMode.ElideRight, max(maxw - extra, 20))
+        return _Pieza(tipo, e[1], vis, vacio, max(30 if tipo == "campo" else 0, self.m.horizontalAdvance(vis) + extra), ALTO)
+
+    def natural(self, n: dict[str, Any] | None, ruta: tuple) -> float:
+        if n is None:
+            return HUECO_W
+        if ruta not in self.nat:
+            ws = [self.natural(n[e[1]], ruta + (e[1],)) if e[0] == "hijo" else self.pieza(e).w
+                  for e in self.elementos(n)]
+            self.nat[ruta] = 2 * PADX + sum(ws) + GAP * (len(ws) - 1)
+        return self.nat[ruta]
+
+    def caja(self, n: dict[str, Any] | None, ruta: tuple, ancho: float) -> _Caja:
+        if n is None:
+            return _Caja(None, ruta, HUECO_W, HUECO_H)
+        elems = self.elementos(n)
+        c = _Caja(n, ruta, 0, 0, self.categoria(n))
+        if self.natural(n, ruta) <= ancho:  # todo en una fila
+            x, partes = PADX, []
+            for e in elems:
+                p = self.caja(n[e[1]], ruta + (e[1],), self.natural(n[e[1]], ruta + (e[1],))) if e[0] == "hijo" \
+                    else self.pieza(e)
+                partes.append((x, p))
+                x += p.w + GAP
+            c.h = max(p.h for _, p in partes) + 2 * PADV
+            c.w = x - GAP + PADX
+            c.items = [(x, (c.h - p.h) / 2, p) for x, p in partes]
+            return c
+        px = PADX_PILA  # apilado, menos relleno: así caben más niveles en poco ancho
+        interior = max(ancho - 2 * px, 40)
+        sangria = SANGRIA.get(n["k"], 0)
+        y, derecha, grupo = float(PADV), 0.0, []
+
+        def vaciar() -> None:
+            nonlocal y, derecha
+            lineas: list[list[_Pieza]] = [[]]
+            x = 0.0
+            for p in grupo:
+                if lineas[-1] and x + p.w > interior:
+                    lineas.append([])
+                    x = 0.0
+                lineas[-1].append(p)
+                x += p.w + GAP
+            for linea in lineas:
+                if not linea:
+                    continue
+                h, x = max(p.h for p in linea), float(px)
+                for p in linea:
+                    c.items.append((x, y + (h - p.h) / 2, p))
+                    x += p.w + GAP
+                derecha = max(derecha, x - GAP)
+                y += h + FILA
+            grupo.clear()
+        for e in elems:
+            if e[0] == "hijo":
+                vaciar()
+                h = self.caja(n[e[1]], ruta + (e[1],), interior - sangria)
+                c.items.append((px + sangria, y, h))
+                derecha = max(derecha, px + sangria + h.w)
+                y += h.h + FILA
+            else:
+                grupo.append(self.pieza(e, interior))
+        vaciar()
+        c.h, c.w = y - FILA + PADV, derecha + px
+        return c
+
+    # -- registro de lo que hay en cada sitio (para el ratón)
+    def registrar(self, c: _Caja, ox: float, oy: float, bloques: list, piezas: list) -> None:
+        bloques.append((QRectF(ox, oy, c.w, c.h), c.ruta, c.nodo))
+        for x, y, it in c.items:
+            if isinstance(it, _Caja):
+                self.registrar(it, ox + x, oy + y, bloques, piezas)
+            elif it.tipo != "txt":
+                piezas.append((QRectF(ox + x, oy + y, it.w, it.h), it.tipo, c.ruta, it.clave))
+
+    # -- dibujo
+    @staticmethod
+    def hexagono(r: QRectF) -> QPolygonF:
+        d, cy = min(PUNTA, r.height() / 2), r.center().y()
+        return QPolygonF([QPointF(r.left(), cy), QPointF(r.left() + d, r.top()), QPointF(r.right() - d, r.top()),
+                          QPointF(r.right(), cy), QPointF(r.right() - d, r.bottom()), QPointF(r.left() + d, r.bottom())])
+
+    def pintar(self, p: QPainter, c: _Caja, ox: float, oy: float, padre: QColor | None = None,
+               objetivo: tuple | None = None) -> None:
+        r = QRectF(ox, oy, c.w, c.h)
+        if c.nodo is None:  # un hueco: hexágono hundido y punteado
+            fondo = QColor(padre).darker(165) if padre else QColor("#EEF0F4")
+            borde = QColor(padre).lighter(185) if padre else QColor("#9AA3B5")
+            p.setPen(QPen(borde, 1.2, Qt.PenStyle.DashLine))
+            p.setBrush(fondo)
+            p.drawPolygon(self.hexagono(r.adjusted(0.5, 0.5, -0.5, -0.5)))
+        else:
+            color = QColor(COLORES[c.cat])
+            p.setPen(QPen(color.darker(145), 1.2))
+            p.setBrush(color)
+            p.drawPolygon(self.hexagono(r.adjusted(0.5, 0.5, -0.5, -0.5)))
+            for x, y, it in c.items:
+                if isinstance(it, _Caja):
+                    self.pintar(p, it, ox + x, oy + y, color, objetivo)
+                else:
+                    self._pintar_pieza(p, it, QRectF(ox + x, oy + y, it.w, it.h))
+        if objetivo is not None and c.ruta == objetivo:  # el sitio donde caería lo que se arrastra
+            p.setPen(QPen(QColor("#FFD43B"), 2.6))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPolygon(self.hexagono(r.adjusted(-0.5, -0.5, 0.5, 0.5)))
+
+    def _pintar_pieza(self, p: QPainter, it: _Pieza, r: QRectF) -> None:
+        if it.tipo == "txt":
+            p.setFont(self.fb)
+            p.setPen(QColor("#FFFFFF"))
+            p.drawText(r, Qt.AlignmentFlag.AlignCenter, it.texto)
             return
-        if _abre(nuevos[0]) and _cierra(antes):
-            nuevos.insert(0, {"k": "op", "t": "AND"})
-        if _cierra(nuevos[-1]) and _abre(despues):
-            nuevos.append({"k": "op", "t": "AND"})
-        self.b[pos:pos] = nuevos
-        self.cursor, self.sel = pos + len(nuevos), None
+        p.setPen(QPen(QColor(0, 0, 0, 70), 1))
+        p.setBrush(QColor("#FFFFFF"))
+        p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 5, 5)
+        p.setFont(self.f)
+        if it.tipo == "drop":
+            p.setPen(QColor("#1F2937"))
+            p.drawText(QRectF(r.left() + 6, r.top(), r.width() - 18, r.height()),
+                       Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, it.texto)
+            p.setPen(QColor("#6B7280"))
+            p.drawText(QRectF(r.right() - 16, r.top(), 12, r.height()), Qt.AlignmentFlag.AlignCenter, "▾")
+        else:
+            p.setPen(QColor("#9CA3AF" if it.vacio else "#1F2937"))
+            p.drawText(r.adjusted(5, 0, -5, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, it.texto)
 
-    def reemplazar(self, nuevos: list[dict[str, Any]]) -> None:
-        """Sustituye la selección (o el bloque antes del cursor) por otros bloques."""
-        obj = self._objetivo()
-        if obj and self._equilibrado(*obj):
-            del self.b[obj[0]:obj[1]]
-            self.cursor, self.sel = obj[0], None
-        self.insertar(nuevos)
-
-    def quitar(self) -> None:
-        """Quita la selección o el bloque antes del cursor; un paréntesis se lleva su pareja."""
-        obj = self._objetivo()
-        if obj is None:
-            return
-        a, b = obj
-        fuera = set(range(a, b))
-        for i in range(a, b):
-            if self.b[i]["k"] in ("(", ")"):
-                fuera.add(self.pareja(i))
-        self.b = [x for i, x in enumerate(self.b) if i not in fuera]
-        self.cursor, self.sel = a - len([i for i in fuera if i < a]), None
-        self.limpiar()
-
-    def limpiar(self) -> None:
-        """Sin · ni + sueltos (al principio, al final, junto a un paréntesis o dos seguidos) ni paréntesis vacíos."""
-        cambiado = True
-        while cambiado:
-            cambiado = False
-            for i, x in enumerate(self.b):
-                antes = self.b[i - 1] if i > 0 else None
-                despues = self.b[i + 1] if i + 1 < len(self.b) else None
-                if (x["k"] == "op" and (antes is None or despues is None or antes["k"] in ("(", "op")
-                                        or despues["k"] == ")")) or \
-                        (x["k"] == "(" and despues is not None and despues["k"] == ")"):
-                    n = 2 if x["k"] == "(" else 1
-                    del self.b[i:i + n]
-                    if self.cursor > i:
-                        self.cursor = max(i, self.cursor - n)
-                    cambiado = True
-                    break
-                if _cierra(x) and _abre(despues):  # dos operandos seguidos: entre ellos, Y
-                    self.b.insert(i + 1, {"k": "op", "t": "AND"})
-                    if self.cursor > i:
-                        self.cursor += 1
-                    cambiado = True
-                    break
-        self.cursor = min(self.cursor, len(self.b))
-
-    def envolver(self, neg: bool = False, flanco: str = "") -> bool:
-        """Entre paréntesis la selección (o el bloque antes del cursor); sin nada, un par vacío con el cursor dentro."""
-        obj = self._objetivo()
-        if obj is None:
-            self.insertar([{"k": "(", "neg": neg, "flanco": flanco}])
-            self.b.insert(self.cursor, {"k": ")"})
-            return True
-        a, b = obj
-        if not self._equilibrado(a, b) or all(x["k"] == "op" for x in self.b[a:b]):
-            return False
-        self.b.insert(b, {"k": ")"})
-        self.b.insert(a, {"k": "(", "neg": neg, "flanco": flanco})
-        self.cursor, self.sel = b + 2, (a, b + 2)
-        return True
-
-    def _modificar(self, campo: str, valor: Any) -> bool:
-        """NOT o flanco sobre la selección: un operando o un grupo lo llevan; varios bloques, entre paréntesis."""
-        obj = self._objetivo()
-        if obj is None:
-            return False
-        a, b = obj
-        if all(x["k"] == "op" for x in self.b[a:b]):
-            return False
-        if b - a == 1 and self.b[a]["k"] == ")":
-            a = self.pareja(a)
-            b = a + 1
-        if b - a == 1 and self.b[a]["k"] in ("atomo", "("):
-            x = self.b[a]
-            x[campo] = (not x[campo]) if campo == "neg" else ("" if x[campo] == valor else valor)
-            return True
-        if self.b[a]["k"] == "(" and self.pareja(a) == b - 1:
-            x = self.b[a]
-            x[campo] = (not x[campo]) if campo == "neg" else ("" if x[campo] == valor else valor)
-            return True
-        return self.envolver(**{campo: True if campo == "neg" else valor})
-
-    def negar(self) -> bool:
-        return self._modificar("neg", True)
-
-    def flanco(self, f: str) -> bool:
-        return self._modificar("flanco", f)
-
-    def alternar(self, i: int) -> None:
-        """Un · pasa a + y al revés."""
-        if self.b[i]["k"] == "op":
-            self.b[i]["t"] = "OR" if self.b[i]["t"] == "AND" else "AND"
+    def pixmap(self, n: dict[str, Any], ancho: float = 240, dpr: float = 1.0) -> QPixmap:
+        """El bloque tal como se ve, para llevarlo pegado al puntero al arrastrarlo."""
+        self.reiniciar()
+        c = self.caja(n, ("arrastre",), ancho)
+        pm = QPixmap(round((c.w + 4) * dpr), round((c.h + 4) * dpr))
+        pm.setDevicePixelRatio(dpr)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setOpacity(0.9)
+        self.pintar(p, c, 2, 2)
+        p.end()
+        return pm
 
 
-# -- dibujo e interacción -------------------------------------------------------------------------
-_ALTO, _SEP, _BARRA = 26, 4, 4  # alto de un bloque, separación y altura de cada barra de negación
+class _Editor(QLineEdit):
+    """El campo de texto que se abre sobre una pieza editable: Intro o salir lo aplica, Esc lo descarta."""
+    cancelado = Signal()
+
+    def keyPressEvent(self, event: Any) -> None:  # noqa: N802
+        if event.key() == Qt.Key.Key_Escape:
+            self.cancelado.emit()
+        else:
+            super().keyPressEvent(event)
 
 
-class LienzoBloques(QWidget):
-    """Los bloques dibujados en filas que se parten al ancho disponible. Clic: selecciona un bloque (Mayús: amplía);
-    en un · o + lo cambia; en un hueco, pone ahí el cursor. Teclado: ← →, Supr y Retroceso; doble clic en una
-    comparación o temporización la edita."""
+class _Superficie(QWidget):
+    """Un lienzo con bloques: los dibuja al ancho disponible (crece en alto, sin barras), abre el desplegable o el
+    campo de la pieza donde se hace clic y arrastra el bloque de donde se pulsa."""
+    avisa = Signal(str)
+    mueve = False  # arrastrar un bloque lo saca de aquí (el área); en la paleta, lo copia
 
-    cambiado = Signal()
-    editar = Signal(int)
-
-    def __init__(self) -> None:
+    def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "") -> None:
         super().__init__()
-        self.e = Expresion()
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.motor = Motor(fuente)
+        self.grupo = grupo
+        self._raices: list[dict[str, Any] | None] = []
+        self._cajas: list[tuple[_Caja, float, float]] = []
+        self._bloques: list[tuple[QRectF, tuple, Any]] = []
+        self._piezas: list[tuple[QRectF, str, tuple, str]] = []
+        self._alto, self._necesario, self._ancho = 40, 0.0, -1
+        self._objetivo: tuple | None = None
+        self._pulsado: tuple[QPointF, Any] | None = None
+        self._editor: _Editor | None = None
         self.setMinimumWidth(80)
-        self.font_ = QFont()
-        self.font_.setPixelSize(13)
-        self._cajas: list[QRectF] = []
-        self._huecos: list[tuple[float, float, float]] = []  # x, y de arriba y alto del hueco antes de cada bloque
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
 
-    # -- geometría
-    def _etiqueta(self, b: dict[str, Any]) -> str:
-        if b["k"] == "op":
-            return "·" if b["t"] == "AND" else "+"
-        if b["k"] == "(":
-            return b["flanco"] + "("
-        if b["k"] == ")":
-            return ")"
-        t = b["t"].replace(">=", "≥").replace("<=", "≤").replace("!=", "≠")
-        return b["flanco"] + t
+    # -- disposición
+    def _maqueta(self, ancho: float) -> tuple[list[tuple[_Caja, float, float]], float]:
+        raise NotImplementedError
 
-    def _alturas(self) -> list[int]:
-        """Cuántas barras de negación hay encima de cada bloque (la de un grupo, por encima de las de dentro)."""
-        alto = [0] * len(self.e.b)
-        for i, b in enumerate(self.e.b):
-            if b["k"] == "atomo" and b["neg"]:
-                alto[i] = 1
-        for i in range(len(self.e.b) - 1, -1, -1):  # grupos de dentro afuera
-            b = self.e.b[i]
-            if b["k"] == "(" and b["neg"]:
-                j = self.e.pareja(i)
-                h = 1 + max(alto[i + 1:j] or [0])
-                for k in range(i, j + 1):
-                    alto[k] = max(alto[k], h)
-        return alto
+    def _calcular(self, ancho: int) -> None:
+        if ancho == self._ancho:
+            return
+        self.motor.reiniciar()
+        self._cajas, self._alto = self._maqueta(max(ancho, 60))
+        self._bloques, self._piezas = [], []
+        for c, x, y in self._cajas:
+            self.motor.registrar(c, x, y, self._bloques, self._piezas)
+        self._necesario = max([x + c.w for c, x, y in self._cajas] or [0]) + MARGEN
+        self._ancho = ancho
 
-    def _maqueta(self, ancho: float) -> tuple[list[QRectF], list[tuple[float, float, float]], float]:
-        fm = QFontMetricsF(self.font_)
-        margen = _BARRA * (max(self._alturas() or [0]) + 1)
-        x, y, cajas, huecos = 4.0, 4.0 + margen, [], []
-        for b in self.e.b:
-            w = fm.horizontalAdvance(self._etiqueta(b)) + (18 if b["k"] == "atomo" else 10)
-            if b["k"] == "op":
-                w = 22
-            if x + w > ancho - 4 and x > 4:
-                x, y = 4.0, y + _ALTO + _SEP + margen
-            huecos.append((x - _SEP / 2, y, _ALTO))
-            cajas.append(QRectF(x, y, w, _ALTO))
-            x += w + _SEP
-        huecos.append((x - _SEP / 2, y, _ALTO))
-        return cajas, huecos, y + _ALTO + 4
+    def invalidar(self) -> None:
+        self._ancho = -1
+        self.setMinimumHeight(self.heightForWidth(max(self.width(), 80)))
+        self.updateGeometry()
+        self.update()
+
+    def ancho_necesario(self, ancho: int) -> float:
+        """Hasta dónde llegan los bloques a ese ancho (si pasa de él, se saldrían del lienzo)."""
+        self._calcular(ancho)
+        return self._necesario
 
     def hasHeightForWidth(self) -> bool:  # noqa: N802
         return True
 
     def heightForWidth(self, w: int) -> int:  # noqa: N802
-        return max(44, int(self._maqueta(w)[2]))
+        self._calcular(w)
+        return int(self._alto)
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(240, self.heightForWidth(max(self.width(), 240)))
+        return QSize(240, self.heightForWidth(240))  # fijo: un ancho que dependiera del actual no dejaría estrechar
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        return QSize(80, 44)
+        return QSize(80, 40)
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802
         super().resizeEvent(event)
         self.setMinimumHeight(self.heightForWidth(self.width()))
 
-    def actualizar(self) -> None:
-        self.setMinimumHeight(self.heightForWidth(max(self.width(), 80)))
-        self.updateGeometry()
-        self.update()
+    # -- cambios (los de las raíces se anotan en `_fijar`)
+    def _fijar(self, i: int, nueva: dict[str, Any] | None) -> None:
+        self._raices[i] = nueva
+        self.invalidar()
+
+    def _validar(self, i: int, nueva: dict[str, Any] | None) -> str:
+        return ""
+
+    def _partir(self, ruta: tuple) -> tuple[int, tuple]:
+        return ruta[0], tuple(ruta[1:])
+
+    def opciones_desplegable(self, n: dict[str, Any], clave: str) -> list[tuple[str, str]]:
+        """Las opciones de un desplegable: variables del papel (booleanas), etapas, variables numéricas u operadores."""
+        self.motor.reiniciar()
+        v, k = self.motor.vars, n["k"]
+        if k == "etapa":
+            return [(x, x) for x in dict.fromkeys(self.motor.etapas)]
+        if clave == "op":
+            return [(OP_VISIBLE[o], o) for o in OPERADORES_CMP]
+        if k == "cmp":
+            return [(nom, nom) for nom, (_, t) in v.items() if t != "bool"]
+        papel = (v[n["n"]][0] if n["n"] in v else None) or n.get("papel")
+        return [(nom, nom) for nom, (r, t) in v.items() if r == papel and t == "bool"]
+
+    def elegir(self, ruta: tuple, clave: str, valor: str) -> None:
+        """Elige en el desplegable de un bloque (la variable, la etapa o el operador de una comparación)."""
+        i, r = self._partir(ruta)
+        nueva = copy.deepcopy(self._raices[i])
+        n = obtener(nueva, r)
+        n[clave] = valor
+        if n["k"] == "var" and valor in self.motor.vars:
+            n["papel"] = self.motor.vars[valor][0]
+        self._fijar(i, nueva)
+
+    @staticmethod
+    def _no_numerico(texto: str) -> bool:
+        """Si el valor escrito es, en el nivel superior, un operador lógico o una comparación (no un operando numérico)."""
+        try:
+            top = parse(a_nucleo(re.sub(r"`[^`]*`|\?", lambda m: HUECO if m.group(0) == "?" else m.group(0), texto),
+                                 booleana=False), lambda clase, nombre: nombre)["operator"]
+        except Exception:  # noqa: BLE001 - lo que no se analiza lo rechaza _validar con su motivo
+            return False
+        return top in ("and", "or", "not", *CMP.values())
+
+    def editar_campo(self, ruta: tuple, clave: str, texto: str) -> bool:
+        """Escribe en el campo de un bloque (t1 y t2 de «temporizar», el valor de una comparación, un texto). Un
+        retardo que no es una duración, o un valor que no se puede analizar, se rechaza y se avisa."""
+        i, r = self._partir(ruta)
+        nueva = copy.deepcopy(self._raices[i])
+        n = obtener(nueva, r)
+        if n["k"] == "temp":
+            d = normalizar_duracion(texto)
+            if d is None:
+                self.avisa.emit("Retardo no válido: escriba «3s», «500ms» o déjelo vacío.")
+                return False
+            n[clave] = d
+        elif n["k"] == "cmp" and clave == "v" and self._no_numerico(texto):
+            self.avisa.emit("No válido: el valor de una comparación es un número, un nombre o una operación aritmética.")
+            return False
+        else:
+            n[clave] = texto.strip() or ("0" if n["k"] == "cmp" else "")
+        motivo = self._validar(i, nueva)
+        if motivo:
+            self.avisa.emit(motivo)
+            return False
+        self._fijar(i, nueva)
+        return True
 
     # -- dibujo
+    def _fondo(self, p: QPainter) -> None:
+        p.fillRect(self.rect(), QColor("#FFFFFF"))
+        p.setPen(QPen(QColor("#C3C9D6"), 1))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
+
+    def paintEvent(self, event: Any) -> None:  # noqa: N802
+        self._calcular(self.width())
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self._fondo(p)
+        for c, x, y in self._cajas:
+            self.motor.pintar(p, c, x, y, None, self._objetivo)
+        self._extra(p)
+        p.end()
+
+    def _extra(self, p: QPainter) -> None:
+        pass
+
+    # -- ratón
+    def _bloque_en(self, pos: QPointF) -> tuple | None:
+        """El bloque más interior bajo el puntero (no un hueco): su ruta completa."""
+        self._calcular(self.width())
+        dentro = [(r.width() * r.height(), ruta) for r, ruta, n in self._bloques if n is not None and r.contains(pos)]
+        return min(dentro)[1] if dentro else None
+
+    def ruta_en(self, pos: QPointF) -> tuple | None:
+        """El sitio (hueco o bloque) más interior bajo el puntero: donde caería un bloque soltado ahí."""
+        self._calcular(self.width())
+        dentro = [(r.width() * r.height(), ruta) for r, ruta, n in self._bloques if r.contains(pos)]
+        return min(dentro)[1] if dentro else None
+
+    def _pieza_en(self, pos: QPointF) -> tuple | None:
+        self._calcular(self.width())
+        return next(((r, t, ruta, clave) for r, t, ruta, clave in self._piezas if r.contains(pos)), None)
+
+    def mousePressEvent(self, event: Any) -> None:  # noqa: N802
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        self._cerrar_editor(True)
+        pos = event.position()
+        pieza = self._pieza_en(pos)
+        self._pulsado = (pos, pieza or self._bloque_en(pos), pieza is not None)
+
+    def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802
+        if self._pulsado is None or not event.buttons() & Qt.MouseButton.LeftButton:
+            return
+        pos, que, es_pieza = self._pulsado
+        if (event.position() - pos).manhattanLength() < 6 or que is None:
+            return
+        ruta = que[2] if es_pieza else que
+        self._pulsado = None
+        self._arrastrar(tuple(ruta))
+
+    def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802
+        if self._pulsado is None:
+            return
+        _, que, es_pieza = self._pulsado
+        self._pulsado = None
+        if es_pieza:
+            r, tipo, ruta, clave = que
+            if tipo == "drop":
+                self._menu(ruta, clave, r)
+            else:
+                self._abrir_editor(r, ruta, clave)
+
+    def _menu(self, ruta: tuple, clave: str, r: QRectF) -> None:
+        i, rr = self._partir(ruta)
+        n = obtener(self._raices[i], rr)
+        menu = QMenu(self)
+        ops = self.opciones_desplegable(n, clave)
+        for texto, valor in ops:
+            menu.addAction(texto, lambda v=valor: self.elegir(ruta, clave, v))
+        if not ops:
+            menu.addAction("(no hay ninguna: créela en el panel Variables)").setEnabled(False)
+        menu.exec(self.mapToGlobal(r.bottomLeft().toPoint()))
+
+    def _abrir_editor(self, r: QRectF, ruta: tuple, clave: str) -> None:
+        i, rr = self._partir(ruta)
+        ed = _Editor(self)
+        ed.setText(obtener(self._raices[i], rr)[clave])
+        ed.setProperty("destino", (ruta, clave))
+        ed.setGeometry(QRect(int(r.left()), int(r.top()) - 1, int(max(r.width(), 70)), int(r.height()) + 2))
+        ed.editingFinished.connect(lambda: self._cerrar_editor(True))
+        ed.cancelado.connect(lambda: self._cerrar_editor(False))
+        self._editor = ed
+        ed.show()
+        ed.setFocus()
+        ed.selectAll()
+
+    def _cerrar_editor(self, aplicar: bool) -> None:
+        ed, self._editor = self._editor, None
+        if ed is None:
+            return
+        ruta, clave = ed.property("destino")
+        texto = ed.text()
+        ed.hide()
+        ed.deleteLater()
+        if aplicar:
+            self.editar_campo(tuple(ruta), clave, texto)
+
+    # -- arrastrar
+    def _arrastrar(self, ruta: tuple) -> None:
+        i, r = self._partir(ruta)
+        nodo = obtener(self._raices[i], r)
+        mime = QMimeData()
+        mime.setData(MIME, json.dumps({"nodo": nodo, "grupo": self.grupo,
+                                       "origen": list(r) if self.mueve else None}).encode())
+        drag = QDrag(self)
+        drag.setMimeData(mime)
+        drag.setPixmap(self.motor.pixmap(nodo, 240, self.devicePixelRatioF()))
+        drag.setHotSpot(QPoint(12, 12))
+        _ARRASTRE["resuelto"] = False
+        drag.exec(Qt.DropAction.MoveAction | Qt.DropAction.CopyAction, Qt.DropAction.CopyAction)
+        if self.mueve and not _ARRASTRE["resuelto"] and not self.rect().contains(self.mapFromGlobal(QCursor.pos())):
+            self.quitar(tuple(r))  # soltado fuera del área: se quita
+        self._pulsado = None
+        self.invalidar()
+
+    def quitar(self, ruta: tuple) -> None:
+        pass
+
+
+class PaletaBloques(_Superficie):
+    """Los bloques de una categoría, uno tras otro (pasan de línea). Sus desplegables y campos se pueden cambiar antes de
+    arrastrar el bloque."""
+
+    def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "") -> None:
+        super().__init__(fuente, grupo)
+        self.clave = "entrada"
+        self.cargar("entrada")
+
+    def _maqueta(self, ancho: float) -> tuple[list[tuple[_Caja, float, float]], float]:
+        x, y, lh, out = float(MARGEN), float(MARGEN), 0.0, []
+        for i, n in enumerate(self._raices):
+            c = self.motor.caja(n, (i,), min(self.motor.natural(n, (i,)), ancho - 2 * MARGEN))
+            if x > MARGEN and x + c.w > ancho - MARGEN:
+                x, y, lh = float(MARGEN), y + lh + GAP * 2, 0.0
+            out.append((c, x, y))
+            x += c.w + GAP * 2
+            lh = max(lh, c.h)
+        return out, y + lh + MARGEN
+
+    def cargar(self, clave: str) -> None:
+        """Pone los bloques de la categoría con las variables y etapas del modelo; conserva lo elegido en un
+        desplegable si sigue existiendo."""
+        self.clave = clave
+        self.motor.reiniciar()
+        v, etapas = self.motor.vars, list(dict.fromkeys(self.motor.etapas))
+        previo = {n["k"]: n for n in self._raices if n is not None} if getattr(self, "_clave_previa", None) == clave else {}
+        self._clave_previa = clave
+        if clave in PAPEL:
+            validas = [nom for nom, (r, t) in v.items() if r == PAPEL[clave] and t == "bool"]
+            elegido = previo.get("var", {}).get("n")
+            nodos = [var(elegido if elegido in validas else (validas[0] if validas else None), PAPEL[clave])]
+        elif clave == "etapa":
+            elegido = previo.get("etapa", {}).get("n")
+            nodos = [nuevo("etapa", n=elegido if elegido in etapas else (etapas[0] if etapas else None))]
+        elif clave == "operador":
+            nodos = [nuevo("y"), nuevo("o"), nuevo("no"), nuevo("sube"), nuevo("baja"), nuevo("const", v=1),
+                     nuevo("const", v=0)]
+        elif clave == "comparacion":
+            numericas = [nom for nom, (_, t) in v.items() if t != "bool"]
+            c = previo.get("cmp") or nuevo("cmp")
+            nodos = [{**c, "n": c["n"] if c["n"] in numericas else (numericas[0] if numericas else None)}]
+        else:
+            nodos = [previo.get("temp") and {**previo["temp"], "a": None} or nuevo("temp")]
+        self._raices = nodos
+        self.invalidar()
+
+    def bloques(self) -> list[dict[str, Any]]:
+        return copy.deepcopy([n for n in self._raices if n is not None])
+
+
+class AreaBloques(_Superficie):
+    """El área de trabajo: el árbol de bloques, con un hueco como raíz si está vacía. Recibe los bloques que se sueltan
+    (de la paleta o de ella misma) y los arrastres de una pieza a otra. `modificado` se emite en cada cambio hecho
+    con el ratón o con las operaciones de abajo; `poner_arbol` no lo emite."""
+    modificado = Signal()
+    mueve = True
+
+    def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "") -> None:
+        super().__init__(fuente, grupo)
+        self._raices = [None]
+        self.previo: dict[str, Any] | None = None
+        self.setAcceptDrops(True)
+
+    @property
+    def arbol(self) -> dict[str, Any] | None:
+        return self._raices[0]
+
+    def poner_arbol(self, arbol: dict[str, Any] | None) -> None:
+        self._raices = [copy.deepcopy(arbol)]
+        self.invalidar()
+
+    def texto(self) -> str:
+        return arbol_a_texto(self.arbol)
+
+    def _maqueta(self, ancho: float) -> tuple[list[tuple[_Caja, float, float]], float]:
+        if self.arbol is None:
+            c = _Caja(None, (0,), min(max(HUECO_W, self.motor.m.horizontalAdvance("arrastre aquí un bloque") + 30),
+                                      ancho - 2 * MARGEN), 28)
+        else:
+            c = self.motor.caja(self.arbol, (0,), ancho - 2 * MARGEN)
+        return [(c, float(MARGEN), float(MARGEN))], c.h + 2 * MARGEN
+
+    def _fijar(self, i: int, nueva: dict[str, Any] | None) -> None:
+        self.previo = self._raices[i]
+        super()._fijar(i, nueva)
+        self.modificado.emit()
+
+    def _validar(self, i: int, nueva: dict[str, Any] | None) -> str:
+        """Un valor escrito a mano debe poder leerse otra vez como bloques."""
+        try:
+            texto_a_arbol(arbol_a_texto(nueva), *self._datos())
+        except ValueError as e:
+            return f"No válido: {e}"
+        return ""
+
+    def _datos(self) -> tuple[dict[str, tuple[str, str]], list[str]]:
+        return self.motor.fuente()
+
+    # -- operaciones (lo que hacen el ratón y las pruebas)
+    def soltar(self, ruta: tuple | None, nodo: dict[str, Any], origen: tuple | None = None) -> bool:
+        """Suelta `nodo` en la `ruta` (hueco o bloque; sin ruta, el área vacía) y devuelve si cambió algo. Con
+        `origen`, el bloque ya estaba en el árbol y se mueve (se quita de allí). En el área vacía solo sirve si no hay
+        raíz: pasa a serlo."""
+        if ruta is None:
+            if self.arbol is not None:
+                return False
+            ruta = ()
+        ruta = tuple(ruta)
+        try:
+            nueva = mover(self.arbol, tuple(origen), ruta) if origen is not None else soltar(self.arbol, ruta, nodo)
+        except KeyError:
+            return False
+        if nueva == self.arbol:
+            return False
+        self._fijar(0, nueva)
+        return True
+
+    def quitar(self, ruta: tuple) -> None:
+        ruta = tuple(ruta)
+        if ruta and ruta[0] == 0:
+            ruta = ruta[1:]  # las rutas de la superficie llevan el índice de la raíz; las del modelo, no
+        if obtener(self.arbol, ruta) is not None:
+            self._fijar(0, quitar(self.arbol, ruta))
+
+    def _partir(self, ruta: tuple) -> tuple[int, tuple]:
+        return (0, tuple(ruta)) if not ruta or ruta[0] != 0 else (0, tuple(ruta[1:]))
+
+    # -- arrastres que llegan
+    def _datos_mime(self, mime: QMimeData) -> dict[str, Any] | None:
+        return json.loads(bytes(mime.data(MIME)).decode()) if mime.hasFormat(MIME) else None
+
+    def dragEnterEvent(self, event: Any) -> None:  # noqa: N802
+        if event.mimeData().hasFormat(MIME):
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event: Any) -> None:  # noqa: N802
+        d = self._datos_mime(event.mimeData())
+        if d is None:
+            return
+        self._objetivo = self.ruta_en(event.position())
+        self.update()
+        event.setDropAction(Qt.DropAction.MoveAction if d.get("origen") is not None and d["grupo"] == self.grupo
+                            else Qt.DropAction.CopyAction)
+        event.accept()
+
+    def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802
+        self._objetivo = None
+        self.update()
+
+    def dropEvent(self, event: Any) -> None:  # noqa: N802
+        d = self._datos_mime(event.mimeData())
+        self._objetivo = None
+        if d is None:
+            return
+        ruta = self.ruta_en(event.position())
+        origen = tuple(d["origen"]) if d.get("origen") is not None and d["grupo"] == self.grupo else None
+        _ARRASTRE["resuelto"] = True
+        event.setDropAction(Qt.DropAction.MoveAction if origen is not None else Qt.DropAction.CopyAction)
+        event.accept()
+        self.soltar(None if ruta is None else tuple(ruta[1:]), d["nodo"], origen)
+        self.update()
+
+    def _extra(self, p: QPainter) -> None:
+        if self.arbol is None:
+            c, x, y = self._cajas[0]
+            p.setFont(self.motor.f)
+            p.setPen(QColor("#6B7385"))
+            p.drawText(QRectF(x, y, c.w, c.h), Qt.AlignmentFlag.AlignCenter, "arrastre aquí un bloque")
+
+
+class Papelera(QWidget):
+    """Papelera visible: soltar aquí un bloque del área lo quita."""
+
+    def __init__(self, al_soltar: Callable[[dict[str, Any]], None]) -> None:
+        super().__init__()
+        self.al_soltar, self._encima = al_soltar, False
+        self.setAcceptDrops(True)
+        self.setFixedSize(34, 30)
+        self.setToolTip("Papelera: suelte aquí un bloque para quitarlo")
+
     def paintEvent(self, event: Any) -> None:  # noqa: N802
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.fillRect(self.rect(), QColor("#ffffff"))
-        p.setPen(QPen(QColor("#c3c9d6"), 1))
+        color = QColor("#C0392B" if self._encima else "#6B7385")
+        p.setPen(QPen(color, 1.6))
+        p.setBrush(QColor("#FDECEA") if self._encima else Qt.BrushStyle.NoBrush)
         p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
-        cajas, huecos, _ = self._maqueta(self.width())
-        self._cajas, self._huecos = cajas, huecos
-        p.setFont(self.font_)
-        if not self.e.b:
-            p.setPen(QColor("#6b7385"))
-            p.drawText(QRectF(self.rect()).adjusted(8, 0, -8, 0), Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap,
-                       "Vacía: saque bloques de los cajones (Entradas, Etapas…)")
-        niveles, alturas = self.e.niveles(), self._alturas()
-        sel = range(*self.e.sel) if self.e.sel else range(0)
-        for i, (b, r) in enumerate(zip(self.e.b, cajas)):
-            if b["k"] == "atomo":
-                fondo, borde = COLORES.get(b["cat"], COLORES["otro"])
-                p.setPen(QPen(QColor(borde), 2.4 if i in sel else 1.2))
-                p.setBrush(QColor(fondo))
-                p.drawRoundedRect(r, 6, 6)
-                p.setPen(QColor(borde).darker(130))
-                self._texto_atomo(p, b, r)
-            elif b["k"] == "op":
-                p.setPen(QPen(QColor("#1f6feb" if i in sel else "#9aa3b5"), 1.6 if i in sel else 1))
-                p.setBrush(QColor("#f6f7fb"))
-                p.drawEllipse(r.center(), 10, 10)
-                f = QFont(self.font_)
-                f.setBold(True)
-                f.setPixelSize(16)
-                p.setFont(f)
-                p.setPen(QColor("#1d2330"))
-                p.drawText(r, Qt.AlignmentFlag.AlignCenter, self._etiqueta(b))
-                p.setFont(self.font_)
-            else:
-                color = QColor(PARENTESIS[niveles[i] % len(PARENTESIS)])
-                if i in sel:
-                    p.setPen(QPen(QColor("#1f6feb"), 1.4))
-                    p.setBrush(Qt.BrushStyle.NoBrush)
-                    p.drawRoundedRect(r, 4, 4)
-                f = QFont(self.font_)
-                f.setBold(True)
-                f.setPixelSize(19)
-                p.setFont(f)
-                p.setPen(color)
-                p.drawText(r, Qt.AlignmentFlag.AlignCenter, self._etiqueta(b))
-                p.setFont(self.font_)
-        # Barras de negación: encima del bloque, o encima de todo el grupo (fila a fila), por niveles
-        p.setPen(QPen(QColor("#1d2330"), 2))
-        for i, b in enumerate(self.e.b):
-            if b["k"] == "atomo" and b["neg"]:
-                r = cajas[i]
-                y = r.top() - 3
-                p.drawLine(QPointF(r.left() + 3, y), QPointF(r.right() - 3, y))
-            elif b["k"] == "(" and b["neg"]:
-                j = self.e.pareja(i)
-                y_off = 3 + _BARRA * (alturas[i] - 1)
-                tramo = [cajas[i]]
-                for k in range(i + 1, j + 1):
-                    if cajas[k].top() != tramo[-1].top():
-                        self._barra(p, tramo, y_off)
-                        tramo = []
-                    tramo.append(cajas[k])
-                self._barra(p, tramo, y_off)
-        if self.hasFocus() and not self.e.sel:  # el cursor, entre bloques
-            x, y, h = huecos[min(self.e.cursor, len(huecos) - 1)]
-            p.setPen(QPen(QColor("#1f6feb"), 2))
-            p.drawLine(QPointF(x, y + 2), QPointF(x, y + h - 2))
+        cx = self.width() / 2
+        p.drawLine(QPointF(cx - 7, 9), QPointF(cx + 7, 9))
+        p.drawLine(QPointF(cx - 2, 6), QPointF(cx + 2, 6))
+        p.drawPolyline(QPolygonF([QPointF(cx - 6, 9), QPointF(cx - 5, 24), QPointF(cx + 5, 24), QPointF(cx + 6, 9)]))
+        p.drawLine(QPointF(cx - 2, 12), QPointF(cx - 2, 21))
+        p.drawLine(QPointF(cx + 2, 12), QPointF(cx + 2, 21))
         p.end()
 
-    @staticmethod
-    def _barra(p: QPainter, tramo: list[QRectF], y_off: float) -> None:
-        if tramo:
-            y = tramo[0].top() - y_off
-            p.drawLine(QPointF(tramo[0].left() + 2, y), QPointF(tramo[-1].right() - 2, y))
+    def dragEnterEvent(self, event: Any) -> None:  # noqa: N802
+        if event.mimeData().hasFormat(MIME):
+            self._encima = True
+            self.update()
+            event.acceptProposedAction()
 
-    def _texto_atomo(self, p: QPainter, b: dict[str, Any], r: QRectF) -> None:
-        """El texto del bloque; una etapa X1 lleva el número en subíndice, como en la norma."""
-        m = re.fullmatch(r"X(\w+)", b["t"]) if b["cat"] == "etapa" else None
-        if not m:
-            p.drawText(r, Qt.AlignmentFlag.AlignCenter, self._etiqueta(b))
-            return
-        fm = QFontMetricsF(self.font_)
-        pequeña = QFont(self.font_)
-        pequeña.setPixelSize(10)
-        fs = QFontMetricsF(pequeña)
-        cabeza = b["flanco"] + "X"
-        w = fm.horizontalAdvance(cabeza) + fs.horizontalAdvance(m.group(1))
-        x = r.center().x() - w / 2
-        base = r.center().y() + fm.ascent() / 2 - 1
-        p.drawText(QPointF(x, base), cabeza)
-        p.setFont(pequeña)
-        p.drawText(QPointF(x + fm.horizontalAdvance(cabeza), base + 3), m.group(1))
-        p.setFont(self.font_)
-
-    # -- ratón y teclado
-    def _bloque_en(self, pos: QPointF) -> int | None:
-        return next((i for i, r in enumerate(self._cajas) if r.adjusted(-1, -2, 1, 2).contains(pos)), None)
-
-    def mousePressEvent(self, event: Any) -> None:  # noqa: N802
-        self.setFocus()
-        self._maqueta_si_falta()
-        pos = event.position()
-        i = self._bloque_en(pos)
-        if i is None:
-            fila = [(abs(x - pos.x()), k) for k, (x, y, h) in enumerate(self._huecos) if y - 6 <= pos.y() <= y + h + 6]
-            self.e.cursor = min(fila)[1] if fila else len(self.e.b)
-            self.e.sel = None
-        elif self.e.b[i]["k"] == "op" and not event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
-            self.e.alternar(i)
-            self.e.sel, self.e.cursor = None, i + 1
-            self.cambiado.emit()
-        elif event.modifiers() & Qt.KeyboardModifier.ShiftModifier and self.e.sel:
-            a, b = self.e.sel
-            self.e.sel = (min(a, i), max(b, i + 1))
-            self.e.cursor = self.e.sel[1]
-        else:
-            self.e.sel, self.e.cursor = (i, i + 1), i + 1
+    def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802
+        self._encima = False
         self.update()
 
-    def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802
-        i = self._bloque_en(event.position())
-        if i is not None and self.e.b[i]["k"] == "atomo":
-            self.editar.emit(i)
-
-    def _maqueta_si_falta(self) -> None:
-        if len(self._cajas) != len(self.e.b):
-            self._cajas, self._huecos, _ = self._maqueta(self.width())
-
-    def keyPressEvent(self, event: Any) -> None:  # noqa: N802
-        k = event.key()
-        if k in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
-            if k == Qt.Key.Key_Delete and not self.e.sel and self.e.cursor < len(self.e.b):
-                self.e.sel = (self.e.cursor, self.e.cursor + 1)
-            self.e.quitar()
-            self.cambiado.emit()
-        elif k == Qt.Key.Key_Left:
-            self.e.cursor, self.e.sel = max(0, (self.e.sel[0] if self.e.sel else self.e.cursor) - (0 if self.e.sel else 1)), None
-        elif k == Qt.Key.Key_Right:
-            self.e.cursor, self.e.sel = min(len(self.e.b), (self.e.sel[1] if self.e.sel else self.e.cursor + 1)), None
-        elif k in (Qt.Key.Key_Home, Qt.Key.Key_End):
-            self.e.cursor, self.e.sel = (0 if k == Qt.Key.Key_Home else len(self.e.b)), None
-        else:
-            super().keyPressEvent(event)
-            return
-        self.actualizar()
+    def dropEvent(self, event: Any) -> None:  # noqa: N802
+        self._encima = False
+        self.update()
+        _ARRASTRE["resuelto"] = True
+        event.setDropAction(Qt.DropAction.MoveAction)
+        event.accept()
+        self.al_soltar(json.loads(bytes(event.mimeData().data(MIME)).decode()))
 
 
-# -- diálogos de comparación y temporización (también los usa el panel de propiedades) ----------------------
-class _Dialogo(QDialog):
-    def __init__(self, parent: QWidget | None, titulo: str) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(titulo)
-        self.form = QFormLayout(self)
-
-    def cerrar(self) -> None:
-        b = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        b.accepted.connect(self.accept)
-        b.rejected.connect(self.reject)
-        self.form.addRow(b)
-
-
-def pedir_comparacion(parent: QWidget | None, numericas: list[str], previo: str = "") -> str | None:
-    """Variable numérica, comparación y valor: «CT >= 3». Con `previo`, se edita esa comparación."""
-    d = _Dialogo(parent, "Comparar")
-    var = QComboBox()  # solo variables numéricas (enteros, analógicas, decimales)
-    var.setEditable(True)
-    var.addItems(numericas)
-    op = QComboBox()
-    for texto, sim in (("=", "="), ("≠", "!="), ("<", "<"), ("≤", "<="), (">", ">"), ("≥", ">=")):
-        op.addItem(texto, sim)
-    valor = QLineEdit("0")
-    m = _CMP.match(previo)
-    if m:
-        var.setCurrentText(m.group(1).strip())
-        op.setCurrentIndex(max(0, op.findData(m.group(2))))
-        valor.setText(m.group(3).strip())
-    elif previo:
-        var.setCurrentText(previo)
-    d.form.addRow("Variable", var)
-    d.form.addRow("Comparación", op)
-    d.form.addRow("Valor", valor)
-    d.cerrar()
-    if d.exec() == QDialog.DialogCode.Accepted and var.currentText().strip():
-        return f"{var.currentText().strip()} {op.currentData()} {valor.text().strip() or '0'}"
-    return None
-
-
-def pedir_temporizacion(parent: QWidget | None, condiciones: list[str], previo: str = "") -> str | None:
-    """t1/condición/t2 como en la norma («3s/X1», «X1/2s», «3s/NOT marcha/2s»); los tiempos de 0 s no se escriben."""
-    d = _Dialogo(parent, "Temporizar")
-    t1, cond, t2 = QLineEdit("3 s"), QComboBox(), QLineEdit("0 s")
-    cond.setEditable(True)  # etapas (X), entradas y salidas del grafcet; también se puede escribir
-    cond.addItems(condiciones)
-    negar = QCheckBox("Negar la condición (NOT)")
-    partes = [x.strip() for x in previo.split("/")] if _TIEMPO.search(previo) else []
-    if partes:
-        if re.fullmatch(_DUR, partes[0]):
-            t1.setText(partes.pop(0))
-        else:
-            t1.setText("0 s")
-        if partes and len(partes) > 1 and re.fullmatch(_DUR, partes[-1]):
-            t2.setText(partes.pop())
-        base = "/".join(partes)
-        if base.startswith("NOT "):
-            negar.setChecked(True)
-            base = base[4:]
-        cond.setCurrentText(base)
-    elif previo:
-        cond.setCurrentText(previo)
-    d.form.addRow("Retardo a la conexión (t1)", t1)
-    d.form.addRow("Condición", cond)
-    d.form.addRow("", negar)
-    d.form.addRow("Retardo a la desconexión (t2)", t2)
-    d.cerrar()
-    if d.exec() != QDialog.DialogCode.Accepted or not cond.currentText().strip():
-        return None
-    c = cond.currentText().strip()
-    c = f"NOT {c}" if negar.isChecked() and not c.startswith("NOT ") else c
-    cero = lambda x: x in ("", "0", "0 s", "0s")
-    return "/".join(([] if cero(t1.text().strip()) else [re.sub(r"\s+", "", t1.text().strip())]) + [c]
-                    + ([] if cero(t2.text().strip()) else [re.sub(r"\s+", "", t2.text().strip())]))
-
-
-# -- el programador: cajones, botones y lienzo -------------------------------------------------------
+# -- el programador: paleta, área, papelera ------------------------------------------------------------------
 class FlowLayout(QLayout):
     """Los controles uno tras otro, y a la línea siguiente cuando no caben: el panel se puede estrechar."""
 
@@ -657,167 +1094,219 @@ class FlowLayout(QLayout):
 
 
 class Programador(QWidget):
-    """Cajones con lo que se puede usar (entradas, salidas, internas, etapas, constantes), botones para combinar
-    (· Y, + O, NOT, ↑, ↓, paréntesis, quitar, comparar, temporizar) y el lienzo con los bloques. `fuente()` devuelve
-    las variables {nombre: (papel, tipo)} y las etapas (en notación X) del modelo en curso."""
+    """Programador por bloques: categorías con su color, los bloques de la categoría elegida (que se arrastran), el
+    área de trabajo, la papelera y el aviso. `fuente()` devuelve las variables {nombre: (papel, tipo)} y las etapas
+    (en notación X) del modelo en curso. `cambiado(texto)` se emite en cada cambio hecho con bloques (no al llamar a
+    `poner`). Con `historial`, Ctrl+Z y Ctrl+Mayús+Z deshacen y rehacen los cambios de bloques; sin él, el
+    deshacer lo pone quien lo usa (`al_deshacer`, `al_rehacer`). «⤢ Ampliar» abre el mismo programador en una
+    ventana más grande, sincronizada con éste."""
 
     cambiado = Signal(str)
 
-    def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]]) -> None:
+    def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], historial: bool = False,
+                 ampliable: bool = True, grupo: str | None = None) -> None:
         super().__init__()
-        self.fuente = fuente
+        self.fuente, self.historial = fuente, historial
+        self.grupo = grupo or f"programador-{id(self)}"
+        self.al_deshacer: Callable[[], Any] | None = None
+        self.al_rehacer: Callable[[], Any] | None = None
+        self._pila: list[Any] = []
+        self._rehecho: list[Any] = []
+        self._espejo: Programador | None = None
+        self._ventana: QWidget | None = None
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
-        cajones = QWidget()
-        fc = FlowLayout(cajones)
-        self.cajones: dict[str, QToolButton] = {}
-        for clave, titulo in (("entrada", "Entradas"), ("salida", "Salidas"), ("interna", "Internas"),
-                              ("etapa", "Etapas X"), ("constante", "Constantes")):
+        fila = QWidget()
+        fl = FlowLayout(fila)
+        self.categorias: dict[str, QToolButton] = {}
+        for clave, titulo in CATEGORIAS:
             b = QToolButton()
-            b.setText(f"{titulo} ▾")
-            b.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-            fondo, borde = COLORES[clave]
-            b.setStyleSheet(f"QToolButton {{ background: {fondo}; border: 1px solid {borde}; border-radius: 5px; "
-                            f"padding: 2px 6px; color: {borde} }} QToolButton::menu-indicator {{ image: none }}")
-            menu = QMenu(b)
-            menu.aboutToShow.connect(lambda c=clave, m=menu: self._llenar(c, m))
-            b.setMenu(menu)
-            fc.addWidget(b)
-            self.cajones[clave] = b
-        lay.addWidget(cajones)
-        botones = QWidget()
-        fb = FlowLayout(botones)
-        self.botones: dict[str, QToolButton] = {}
-        for clave, texto, tip, accion in (
-                ("y", "· Y", "Y (AND) entre lo anterior y lo siguiente; sobre un · o + lo cambia", lambda: self._op("AND")),
-                ("o", "+ O", "O (OR)", lambda: self._op("OR")),
-                ("not", "NOT", "Negación: barra encima del bloque o del grupo seleccionado (otra vez: la quita)",
-                 lambda: self._hacer(self.lienzo.e.negar)),
-                ("sube", "↑", "Flanco ascendente del bloque o del grupo seleccionado", lambda: self._hacer(lambda: self.lienzo.e.flanco("↑"))),
-                ("baja", "↓", "Flanco descendente", lambda: self._hacer(lambda: self.lienzo.e.flanco("↓"))),
-                ("par", "( )", "Paréntesis alrededor de lo seleccionado (Mayús+clic para seleccionar varios bloques)",
-                 lambda: self._hacer(self.lienzo.e.envolver)),
-                ("quitar", "⌫", "Quitar el bloque seleccionado (o el de antes del cursor); un paréntesis, con su pareja",
-                 lambda: self._hacer(self.lienzo.e.quitar)),
-                ("comparar", "Comparar…", "Una variable numérica comparada con un valor: [CT ≥ 3]", self._comparar),
-                ("temporizar", "Temporizar…", "Retardo como en la norma: 3s/X1, X1/2s", self._temporizar)):
-            b = QToolButton()
-            b.setText(texto)
-            b.setToolTip(tip)
-            b.clicked.connect(accion)
-            fb.addWidget(b)
-            self.botones[clave] = b
-        lay.addWidget(botones)
-        self.lienzo = LienzoBloques()
-        self.lienzo.cambiado.connect(self._emitir)
-        self.lienzo.editar.connect(self._editar)
-        lay.addWidget(self.lienzo)
+            b.setCheckable(True)
+            b.setAutoExclusive(True)
+            b.setFixedSize(24, 24)
+            b.setToolTip(titulo)
+            b.setStyleSheet(f"QToolButton {{ background: {COLORES[clave]}; border: 2px solid white; border-radius: 12px; }}"
+                            f"QToolButton:checked {{ border: 2px solid #1F2937; }}"
+                            f"QToolButton:hover {{ border: 2px solid #9CA3AF; }}")
+            b.clicked.connect(lambda _=False, c=clave: self.elegir_categoria(c))
+            fl.addWidget(b)
+            self.categorias[clave] = b
+        self.ampliar = QPushButton("⤢ Ampliar")
+        self.ampliar.setToolTip("Abrir el programador en una ventana más grande (sigue sincronizado con éste)")
+        self.ampliar.clicked.connect(self.ampliar_ventana)
+        self.ampliar.setVisible(ampliable)
+        fl.addWidget(self.ampliar)
+        lay.addWidget(fila)
+        self.titulo = QLabel()
+        self.titulo.setStyleSheet("font-weight: 600")
+        lay.addWidget(self.titulo)
+        self.paleta = PaletaBloques(fuente, self.grupo)
+        lay.addWidget(self.paleta)
+        self.lienzo = AreaBloques(fuente, self.grupo)
+        self.lienzo.modificado.connect(self._tras_cambio)
+        self.lienzo.avisa.connect(self._avisar)
+        lay.addWidget(self.lienzo, 1)  # el área es la que crece
+        pie = QHBoxLayout()
+        pie.setContentsMargins(0, 0, 0, 0)
+        self.aviso = QLabel()
+        self.aviso.setWordWrap(True)
+        self.aviso.setStyleSheet("color: #B45309")
+        self.aviso.setVisible(False)
+        self.aviso.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)  # no impone su ancho
+        pie.addWidget(self.aviso, 1)
+        self.papelera = Papelera(self._a_la_papelera)
+        pie.addWidget(self.papelera)
+        lay.addLayout(pie)
+        if historial:
+            for atajo, f in (("Ctrl+Z", self.deshacer), ("Ctrl+Shift+Z", self.rehacer), ("Ctrl+Y", self.rehacer)):
+                s = QShortcut(QKeySequence(atajo), self)
+                s.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+                s.activated.connect(f)
+        self.elegir_categoria("entrada")
 
-    # -- datos del modelo
-    def _clase(self) -> Callable[[str], str]:
-        variables, etapas = self.fuente()
-        roles = {n: r for n, (r, _) in variables.items()}
-        return lambda t: categoria(t, roles, set(etapas))
+    # -- paleta
+    def elegir_categoria(self, clave: str) -> None:
+        self.categorias[clave].setChecked(True)
+        self.titulo.setText(dict(CATEGORIAS)[clave])
+        self.paleta.cargar(clave)
 
     def opciones(self, cajon: str) -> list[tuple[str, str]]:
-        """(texto del menú, lo que se inserta) de un cajón. Las variables numéricas abren «Comparar…»."""
+        """(texto, valor) de lo que ofrece un desplegable de la paleta: variables booleanas de un papel, o etapas."""
         variables, etapas = self.fuente()
         if cajon == "etapa":
-            return [(x, x) for x in etapas]
-        if cajon == "constante":
-            return [("1 (siempre verdadera)", "1"), ("0 (siempre falsa)", "0")]
-        papel = {"entrada": "input", "salida": "output", "interna": "internal"}[cajon]
-        return [(n if t == "bool" else f"{n}  [comparar…]", n) for n, (r, t) in variables.items() if r == papel]
+            return [(x, x) for x in dict.fromkeys(etapas)]
+        return [(n, n) for n, (r, t) in variables.items() if r == PAPEL[cajon] and t == "bool"]
 
-    def _llenar(self, cajon: str, menu: QMenu) -> None:
-        menu.clear()
-        ops = self.opciones(cajon)
-        if not ops:
-            a = menu.addAction("(no hay ninguna: créela en el panel Variables)")
-            a.setEnabled(False)
-        for texto, valor in ops:
-            menu.addAction(texto, lambda v=valor, c=cajon: self.poner_bloque(v, c))
+    def showEvent(self, event: Any) -> None:  # noqa: N802
+        super().showEvent(event)
+        self.paleta.cargar(self.paleta.clave)
 
-    # -- acciones
-    def poner(self, texto: str) -> None:
-        """Muestra un texto (el guardado, o lo escrito a mano); si es el mismo que ya hay, no toca cursor ni selección."""
-        if normalizar_espacios(texto) == self.lienzo.e.texto():
-            clase = self._clase()  # el mismo texto, pero una variable pudo crearse o cambiar de papel: su color
-            for b in self.lienzo.e.b:
-                if b["k"] == "atomo":
-                    b["cat"] = clase(b["t"])
-            self.lienzo.update()
-            return
-        self.lienzo.e = Expresion(trocear(texto, self._clase()))
-        self.lienzo.actualizar()
-
+    # -- texto <-> bloques
     def texto(self) -> str:
-        return self.lienzo.e.texto()
+        return self.lienzo.texto()
 
-    def poner_bloque(self, valor: str, cajon: str | None = None) -> None:
-        """Inserta un operando en el cursor; una variable numérica pasa antes por «Comparar…»."""
-        variables, _ = self.fuente()
-        if cajon in ("entrada", "salida", "interna") and variables.get(valor, ("", "bool"))[1] != "bool":
-            valor = pedir_comparacion(self, self._numericas(), valor)
-            if not valor:
-                return
-        self.lienzo.e.insertar([{"k": "atomo", "t": valor, "cat": self._clase()(valor), "neg": False, "flanco": ""}])
-        self._emitir()
-
-    def _op(self, op: str) -> None:
-        e = self.lienzo.e
-        if e.sel and e.sel[1] - e.sel[0] == 1 and e.b[e.sel[0]]["k"] == "op":
-            e.b[e.sel[0]]["t"] = op
-        else:
-            e.insertar([{"k": "op", "t": op}])
-        self._emitir()
-
-    def _hacer(self, f: Callable[[], Any]) -> None:
-        f()
-        self._emitir()
-
-    def _numericas(self) -> list[str]:
-        return [n for n, (_, t) in self.fuente()[0].items() if t != "bool"]
-
-    def _condiciones(self) -> list[str]:
+    def poner(self, texto: str) -> None:
+        """Muestra un texto (el guardado, o lo escrito a mano) como bloques, sin emitir `cambiado`. Si no se puede
+        analizar, los bloques no cambian y se avisa. Si es el mismo que ya hay, no toca el árbol (salvo para releer los
+        bloques de texto: una variable pudo crearse)."""
         variables, etapas = self.fuente()
-        return list(etapas) + [n for n, (r, t) in variables.items() if r in ("input", "output") and t == "bool"]
-
-    def _seleccion(self) -> str:
-        e = self.lienzo.e
-        return juntar(e.b[e.sel[0]:e.sel[1]]) if e.sel else ""
-
-    def _comparar(self) -> None:
-        texto = pedir_comparacion(self, self._numericas(), self._seleccion() if _CMP.match(self._seleccion()) else "")
-        if texto:
-            self._colocar(texto, sustituir=bool(_CMP.match(self._seleccion())))
-
-    def _temporizar(self) -> None:
-        """Con un bloque o grupo seleccionado, lo temporiza (X1 pasa a 3s/X1)."""
-        sel = self._seleccion()
-        texto = pedir_temporizacion(self, self._condiciones(), sel)
-        if texto:
-            self._colocar(texto, sustituir=bool(sel))
-
-    def _editar(self, i: int) -> None:
-        b = self.lienzo.e.b[i]
-        self.lienzo.e.sel = (i, i + 1)
-        if b["cat"] == "comparacion":
-            texto = pedir_comparacion(self, self._numericas(), b["t"])
-        elif b["cat"] == "tiempo":
-            texto = pedir_temporizacion(self, self._condiciones(), b["t"])
-        else:
+        self.paleta.cargar(self.paleta.clave)
+        try:
+            if normalizar_espacios(texto) == self.texto():
+                nuevo_ = self.lienzo.arbol
+                if con_texto(nuevo_):
+                    releido = texto_a_arbol(texto, variables, etapas)
+                    if arbol_a_texto(releido) == self.texto():
+                        nuevo_ = releido
+            else:
+                nuevo_ = texto_a_arbol(texto, variables, etapas)
+                self._pila.clear()
+                self._rehecho.clear()
+        except ValueError as e:
+            self._avisar(f"No se puede pasar a bloques: {e}")
             return
-        if texto:
-            b["t"] = texto
-            self._emitir()
+        self._avisar("")
+        self._fijar_arbol(nuevo_)
 
-    def _colocar(self, texto: str, sustituir: bool) -> None:
-        nuevo = [{"k": "atomo", "t": texto, "cat": self._clase()(texto), "neg": False, "flanco": ""}]
-        (self.lienzo.e.reemplazar if sustituir else self.lienzo.e.insertar)(nuevo)
-        self._emitir()
+    def _fijar_arbol(self, arbol: dict[str, Any] | None) -> None:
+        self.lienzo.poner_arbol(arbol)
+        if self._espejo is not None:
+            self._espejo._recibir(arbol, self.aviso.text())
 
-    def _emitir(self) -> None:
-        self.lienzo.actualizar()
-        self.cambiado.emit(self.lienzo.e.texto())
+    def _recibir(self, arbol: dict[str, Any] | None, aviso: str) -> None:
+        self.lienzo.poner_arbol(arbol)
+        self._poner_aviso(aviso)
+
+    def _avisar(self, texto: str) -> None:
+        self._poner_aviso(texto)
+        if self._espejo is not None:
+            self._espejo._poner_aviso(texto)
+
+    def _poner_aviso(self, texto: str) -> None:
+        self.aviso.setText(texto)
+        self.aviso.setVisible(bool(texto))
+
+    def _tras_cambio(self) -> None:
+        if self.historial:
+            self._pila.append(self.lienzo.previo)
+            self._rehecho.clear()
+        self._avisar("")
+        if self._espejo is not None:
+            self._espejo._recibir(self.lienzo.arbol, "")
+        self.cambiado.emit(self.texto())
+
+    def colocar(self, nodo: dict[str, Any]) -> bool:
+        """Pone un bloque en el primer hueco del árbol (o como raíz, si está vacío). Devuelve si había sitio."""
+        arbol = self.lienzo.arbol
+        ruta = () if arbol is None else primer_hueco(arbol)
+        return ruta is not None and self.lienzo.soltar(ruta, nodo)
+
+    # -- deshacer
+    def deshacer(self) -> None:
+        """Con historial local, el último cambio de bloques; si no, lo que haya puesto `al_deshacer`."""
+        if not self.historial:
+            if self.al_deshacer:
+                self.al_deshacer()
+            return
+        if self._pila:
+            self._rehecho.append(self.lienzo.arbol)
+            self._restaurar(self._pila.pop())
+
+    def rehacer(self) -> None:
+        if not self.historial:
+            if self.al_rehacer:
+                self.al_rehacer()
+            return
+        if self._rehecho:
+            self._pila.append(self.lienzo.arbol)
+            self._restaurar(self._rehecho.pop())
+
+    def _restaurar(self, arbol: dict[str, Any] | None) -> None:
+        self._fijar_arbol(arbol)
+        self.cambiado.emit(self.texto())
+
+    def _a_la_papelera(self, datos: dict[str, Any]) -> None:
+        if datos.get("origen") is not None and datos.get("grupo") == self.grupo:
+            self.lienzo.quitar(tuple(datos["origen"]))
+
+    # -- ventana ampliada
+    def ampliar_ventana(self) -> QWidget:
+        """Abre (o trae al frente) el programador en una ventana propia, no modal y sincronizada con éste."""
+        if self._ventana is not None:
+            self._ventana.show()
+            self._ventana.raise_()
+            self._ventana.activateWindow()
+            return self._ventana
+        v = QWidget(self.window(), Qt.WindowType.Window)
+        v.setWindowTitle("Programador de bloques")
+        v.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        v.resize(820, 560)
+        lay = QVBoxLayout(v)
+        grande = Programador(self.fuente, ampliable=False, grupo=self.grupo)
+        grande.lienzo.modificado.connect(lambda: self._cambio_en_ventana(grande))  # se aplica igual que uno del panel
+        grande.al_deshacer, grande.al_rehacer = self.deshacer, self.rehacer
+        lay.addWidget(grande)
+        for atajo, f in (("Ctrl+Z", self.deshacer), ("Ctrl+Shift+Z", self.rehacer), ("Ctrl+Y", self.rehacer)):
+            QShortcut(QKeySequence(atajo), v).activated.connect(f)
+        grande.lienzo.poner_arbol(self.lienzo.arbol)
+        grande._poner_aviso(self.aviso.text())
+        grande.elegir_categoria(self.paleta.clave)
+        self._espejo, grande._espejo = grande, self
+        v.programador = grande  # type: ignore[attr-defined]
+        v.destroyed.connect(self._cerrada)
+        self._ventana = v
+        v.show()
+        return v
+
+    def _cambio_en_ventana(self, grande: Programador) -> None:
+        """Un cambio hecho en la ventana ampliada (su árbol ya llegó aquí): historial, aviso y `cambiado`, como si se
+        hubiera hecho en este programador."""
+        if self.historial:
+            self._pila.append(grande.lienzo.previo)
+            self._rehecho.clear()
+        self._avisar("")
+        self.cambiado.emit(self.texto())
+
+    def _cerrada(self, *_: Any) -> None:
+        self._ventana, self._espejo = None, None

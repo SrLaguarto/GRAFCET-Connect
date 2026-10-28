@@ -1,9 +1,9 @@
 {
- "date": "2026-10-28T13:12:40+00:00",
+ "date": "2026-10-28T14:31:17+00:00",
  "python": "3.13.17",
  "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
  "machine": "x86_64",
- "total": 194,
+ "total": 208,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -80,6 +80,61 @@
     "REQ-EVT-03"
    ],
    "summary": "REQ-EVT-01, REQ-ACT-02, REQ-EVT-03: ejemplo del responsable; una cuenta por cada subida de I02 con 1 activa, ninguna en 0."
+  },
+  {
+   "test": "test_editor_escritorio.Bloques.test_SEDI42_ida_y_vuelta_texto_arbol_texto",
+   "case": "S-EDI42",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el texto se vuelve árbol de bloques y el árbol vuelve al mismo texto, con paréntesis solo donde la"
+  },
+  {
+   "test": "test_editor_escritorio.Bloques.test_SEDI50_soltar_envolver_sustituir_y_quitar",
+   "case": "S-EDI50",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un bloque suelto en un hueco lo encaja; uno que envuelve sobre un hueco ocupado deja el bloque que"
+  },
+  {
+   "test": "test_editor_escritorio.Bloques.test_SEDI51_desplegables_y_campos",
+   "case": "S-EDI51",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el desplegable de una variable ofrece las booleanas de su papel, el de una etapa todas las etapas y"
+  },
+  {
+   "test": "test_editor_escritorio.Bloques.test_SEDI54_paleta_por_categorias",
+   "case": "S-EDI54",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-07: la paleta tiene siete categorías con su color; las memorias son las variables de papel"
+  },
+  {
+   "test": "test_editor_escritorio.Bloques.test_SEDI56_cabe_a_200_px_y_crece_en_alto",
+   "case": "S-EDI56",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el programador cabe a 200 px sin barra horizontal; el área crece en alto al estrecharse y los"
+  },
+  {
+   "test": "test_editor_escritorio.Bloques.test_SEDI57_raton_clic_en_piezas_y_arrastres_recibidos",
+   "case": "S-EDI57",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un clic en un desplegable abre su menú y en un campo, su editor (Intro aplica, Esc descarta);"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI03_crear_enlazar_y_simular",
@@ -430,16 +485,7 @@
     "REQ-EDT-02",
     "REQ-TMP-01"
    ],
-   "summary": "REQ-EDT-02, REQ-TMP-01: con la etapa X1 en bloques y «Temporizar…», la receptividad es 3s/X1, se guarda como"
-  },
-  {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI42_programador_por_bloques",
-   "case": "S-EDI42",
-   "outcome": "pasa",
-   "requirements": [
-    "REQ-EDT-02"
-   ],
-   "summary": "REQ-EDT-02: los bloques trocean y vuelven a juntar el mismo texto; entre dos operandos ponen ·; NOT y los"
+   "summary": "REQ-EDT-02, REQ-TMP-01: con la etapa X1 en bloques y el bloque «temporizar» encima, la receptividad es 3s/X1,"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI43_panel_de_variables",
@@ -462,6 +508,62 @@
    "summary": "REQ-ACT-01, REQ-EDT-02: botón derecho en una etapa: «Añadir acción…»; la acción se dibuja a su derecha; un"
   },
   {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI48_dialogo_de_acciones_vista_previa_y_avisos",
+   "case": "S-EDI48",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: el diálogo de acciones muestra la condición y el evento en la notación de la norma;"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI49_memorias_en_la_interfaz",
+   "case": "S-EDI49",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: las variables internas se llaman «memorias» en la interfaz; el papel guardado sigue siendo"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI52_texto_y_bloques_sincronizados",
+   "case": "S-EDI52",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: lo escrito en el campo de texto aparece en bloques; un texto que no se puede analizar no cambia los"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI53_deshacer_cambios_de_bloques",
+   "case": "S-EDI53",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: en el panel de la transición cada cambio de bloques es una operación del editor y se deshace con su"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI55_ventana_ampliada_sincronizada",
+   "case": "S-EDI55",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: «⤢ Ampliar» abre el programador en una ventana propia, no modal, con el mismo texto; los cambios de"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI58_receptividad_1_y_accion_entera",
+   "case": "S-EDI58",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: una receptividad «1» se guarda como true y se valida sin D-TIPO; el valor de una acción"
+  },
+  {
    "test": "test_editor_escritorio.Notacion.test_SEDI16_notacion_del_usuario",
    "case": "S-EDI16",
    "outcome": "pasa",
@@ -479,6 +581,34 @@
     "REQ-EDT-07"
    ],
    "summary": "REQ-EDT-07, REQ-ACT-01: una acción se cambia de arriba abajo conservando su ID y su lugar, se ordena y se quita"
+  },
+  {
+   "test": "test_editor_escritorio.Notacion.test_SEDI45_constantes_1_y_0",
+   "case": "S-EDI45",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: en la notación del usuario se ve 1 y 0 y se guarda true y false, solo como operando booleano"
+  },
+  {
+   "test": "test_editor_escritorio.Notacion.test_SEDI46_retardo_con_parentesis_anidados",
+   "case": "S-EDI46",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-TMP-01"
+   ],
+   "summary": "REQ-EDT-02, REQ-TMP-01: la condición de un retardo puede llevar paréntesis anidados (3s/(a AND (b OR c)),"
+  },
+  {
+   "test": "test_editor_escritorio.Notacion.test_SEDI47_aviso_de_x1_ambiguo",
+   "case": "S-EDI47",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: si existen la etapa E1 y la etapa 1, X1 se sigue resolviendo a E1, pero se señala que podría ser"
   },
   {
    "test": "test_editor_escritorio.Nucleo.test_SEDI01_parcial_raiz_etiquetas_y_agrupar",

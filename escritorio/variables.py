@@ -1,6 +1,6 @@
 """Panel «Variables» del editor: el diccionario del grafcet (REQ-EDT-07, paso 4, P-IMP-38).
 
-Una fila por variable: nombre, papel (entrada, salida, interna), tipo (booleana, entera, decimal con su escala,
+Una fila por variable: nombre, papel (entrada, salida, memoria), tipo (booleana, entera, decimal con su escala,
 duración), valor inicial (solo las entradas: las demás empiezan en 0, hoja 08, 1.5), unidad y cuántos usos tiene.
 Todo cambio pasa por Edicion (rename, change_variable, add_variable, delete_variable del núcleo) y se deshace con
 Ctrl+Z; si no se puede, el motivo sale debajo y la tabla vuelve a lo que hay.
@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeade
 
 from .diagrama import COL
 
-PAPELES = (("input", "Entrada"), ("output", "Salida"), ("internal", "Interna"))
+PAPELES = (("input", "Entrada"), ("output", "Salida"), ("internal", "Memoria"))
 TIPOS = (({"kind": "bool"}, "Booleana"), ({"kind": "int"}, "Entera"), ({"kind": "decimal", "scale": 1}, "Decimal ,0"),
          ({"kind": "decimal", "scale": 2}, "Decimal ,00"), ({"kind": "decimal", "scale": 3}, "Decimal ,000"),
          ({"kind": "duration"}, "Duración"))
@@ -89,7 +89,7 @@ class PanelVariables(QWidget):
                 if not editable:
                     it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
                     if c == 3:
-                        it.setToolTip("Las salidas e internas empiezan en 0; otro valor, con una acción «al activar» en la etapa inicial")
+                        it.setToolTip("Las salidas y memorias empiezan en 0; otro valor, con una acción «al activar» en la etapa inicial")
                 self.tabla.setItem(r, c, it)
             papel = QComboBox()
             for clave, texto in PAPELES:

@@ -111,7 +111,7 @@ El núcleo se ha hecho solo con los doce documentos del paquete. El 25-10-2026, 
 - Jerarquías: forzado, macroetapas y encapsulación se ejecutan (P-IMP-23) y sus interacciones están decididas (P-IMP-24 a P-IMP-26), salvo vaciar por forzado un recinto con su encapsulante activa, que se detiene.
 - `elapsed(etapa)` en expresiones: no se ejecuta todavía (su valor con la etapa inactiva ya está decidido, 4.5 A).
 - Siguen deteniéndose, sin preguntar todavía: eventos internos y de franqueamiento (U-03, caso T-11b), vencimientos simultáneos que dependen del orden (U-06) y vaciar por forzado un recinto con su encapsulante activa (U-08). Las cuestiones del comparador están todas respondidas.
-- Editor gráfico, navegación jerárquica, exportación SVG/PDF y accesibilidad. El simulador de escritorio (P-IMP-29, P-IMP-32) ya crea, edita, guarda y simula un grafcet secuencial; ya tiene panel de variables, acciones en las etapas y un programador por bloques para receptividades y condiciones (paso 4, P-IMP-38); faltan comodidades del editor de ramas (paso 5) y jerarquías (paso 6); las selecciones, saltos y repeticiones ya se construyen con el ratón (P-IMP-33).
+- Editor gráfico, navegación jerárquica, exportación SVG/PDF y accesibilidad. El simulador de escritorio (P-IMP-29, P-IMP-32) ya crea, edita, guarda y simula un grafcet secuencial; ya tiene panel de variables (con memorias), acciones en las etapas y un programador por bloques para receptividades y condiciones (paso 4, P-IMP-38, rehecho en P-IMP-39); faltan comodidades del editor de ramas (paso 5) y jerarquías (paso 6); las selecciones, saltos y repeticiones ya se construyen con el ratón (P-IMP-33).
 - Instalador y actualización, matriz de sistemas y medición en el equipo de referencia (U-10). Por ahora solo hay una versión portable para Windows, sin instalador.
 - Ratificación del formato 0.1 (U-11) y cierre de las U normativas, que permitiría desbloquear capacidades.
 
@@ -131,12 +131,26 @@ Un enlace siempre sale de una etapa y llega a ella con un tramo vertical (16), y
 
 Los elementos de la paleta se arrastran con su figura, al zoom del dibujo. El panel izquierdo (paleta y propiedades) se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L), como los otros.
 
-## Variables, acciones y programador por bloques (paso 4, P-IMP-38)
+## Variables, acciones y programador por bloques (paso 4, P-IMP-38; rehecho en P-IMP-39)
 
 En modo Editar:
 
 - **Etapas nuevas** con solo el número: 0, 1, 2… En las receptividades, `X1` es la etapa 1.
-- **Variables** (lado derecho): nombre, papel (entrada, salida, interna), tipo (booleana, entera, decimal, duración), valor inicial (solo las entradas; las demás empiezan en 0), unidad y cuántos usos tiene. Cambiar el nombre actualiza las receptividades y acciones que la usan; una variable usada no se puede quitar.
-- **Acciones:** botón derecho en una etapa, «Añadir acción…», o el botón «Añadir…» de su panel. Tipos: continua (con condición opcional), memorizada al activar, al desactivar o por evento (por ejemplo `CT := CT + 1` con `↑I02`). Si la variable no existe, el diálogo la crea. Un clic en la caja de una acción la señala; doble clic la edita; el botón derecho la mueve o la quita.
-- **Programador por bloques** (receptividades y condiciones): los cajones Entradas, Salidas, Internas, Etapas X y Constantes ofrecen lo que existe; cada variable o etapa es un bloque de color. Entre dos bloques se pone · (Y) solo; un clic en · lo cambia a + (O). Con un bloque elegido (Mayús+clic para varios): NOT pone la barra encima (sobre varios, los agrupa), ↑ y ↓ ponen el flanco delante, ( ) los agrupa y ⌫ los quita. Los paréntesis cambian de color con el nivel. «Comparar…» hace `[CT ≥ 3]` y «Temporizar…» convierte el bloque elegido en `3s/X1`. El texto sigue debajo: se puede escribir y se vuelve a ver en bloques.
-- El panel izquierdo se puede estrechar: los rótulos pasan encima de los campos y los botones a la línea siguiente.
+- **Variables** (lado derecho): nombre, papel (entrada, salida o memoria), tipo (booleana, entera, decimal, duración), valor inicial (solo las entradas; las demás empiezan en 0), unidad y cuántos usos tiene. Las variables internas se llaman **memorias** en la interfaz; el archivo las sigue guardando con el papel `internal`. Cambiar el nombre actualiza las receptividades y acciones que la usan; una variable usada no se puede quitar.
+- **Acciones:** botón derecho en una etapa, «Añadir acción…», o el botón «Añadir…» de su panel. Tipos: continua (con condición opcional), memorizada al activar, al desactivar o por evento (por ejemplo `CT := CT + 1` con `↑I02`). Si la variable no existe, el diálogo la crea (salida o memoria, booleana o entera). El diálogo muestra en «En la norma» cómo quedarán la condición o el evento antes de aceptar. Si la variable no vale para esa acción (una entrada como destino, o una variable no booleana en una acción continua), avisa; si se acepta otra vez, se guarda como borrador y la validación lo señala. Un clic en la caja de una acción la señala; doble clic la edita; el botón derecho la mueve o la quita.
+- **Programador por bloques** (receptividades y condiciones), al estilo de Scratch:
+  - La paleta tiene siete categorías, cada una con un círculo de su color; debajo, sus bloques: Entradas, Salidas, Memorias, Etapas X, Operadores, Comparaciones y Tiempo.
+  - Las condiciones son bloques hexagonales: una variable booleana o una etapa, con un desplegable ▾ para elegir cuál.
+  - «y» y «o» tienen dos huecos y se pueden anidar.
+  - «no», «flanco de subida ↑» y «flanco de bajada ↓» envuelven a otro bloque.
+  - «temporizar» envuelve a otro bloque y tiene dos tiempos, t1 y t2, como en la norma (`3s/X1`, `X1/2s`).
+  - Comparación: [variable ▾][= ≠ < ≤ > ≥ ▾][valor], por ejemplo `CT ≥ 3`. Constantes 1 y 0.
+  - Arrastrar un bloque a un hueco lo encaja. Soltar un bloque que envuelve (no, ↑, ↓ o temporizar) sobre otro lo envuelve. Arrastrarlo fuera o a la papelera lo quita y queda su hueco.
+  - Un hueco sin llenar se muestra como «?»: la receptividad queda pendiente, con el texto con «?», y no se puede ejecutar.
+  - El texto de debajo está sincronizado en los dos sentidos. Lo que se escribe pasa a bloques; si no se puede, se avisa y los bloques no cambian.
+  - Ctrl+Z deshace cada cambio de bloques. En el diálogo de acciones, Ctrl+Z deshace lo del propio diálogo.
+  - «⤢ Ampliar» abre el programador en una ventana más grande, sincronizada con el del panel.
+- **Constantes:** 1 y 0 se escriben y se ven así. Cuando son una condición completa se guardan como `true` y `false`; en `CT = 1` o `n := 1` siguen siendo números.
+- **X1 ambiguo:** si `X1` puede ser la etapa E1 o la etapa 1, se usa E1 y el programa avisa. Para la etapa 1 se escribe ``active(`1`)``.
+- **Retardos** con paréntesis anidados, como `3s/(a AND (b OR c))`, ya se entienden.
+- El panel izquierdo se puede estrechar: los rótulos pasan encima de los campos y los botones a la línea siguiente. Si el programador no cabe, se apila en vertical.

@@ -23,8 +23,8 @@ Qué hace
   izquierda (iconos que se arrastran al dibujo; sin herramienta, el ratón selecciona, mueve y enlaza),
   puntos de unión arriba y abajo
   (al acercar el puntero se marcan y de ellos sale el enlace), panel de propiedades del elemento seleccionado
-  (etiqueta, tipo de etapa, receptividad con botones para flancos, negación, y, o, variables, etapas,
-  comparaciones y temporizadores; se escribe ↑a, ↓a y X1, y las variables que no existen salen en naranja), mover con rejilla, borrar,
+  (etiqueta, tipo de etapa, receptividad con el programador por bloques (ver abajo) o escrita a mano (↑a, ↓a, X1, 3s/X1…); las variables
+  que no existen salen en naranja), mover con rejilla, borrar,
   deshacer y rehacer (Ctrl+Z, Ctrl+Y), «Añadir debajo» (Ctrl+Intro) y panel de diagnósticos.
   Los enlaces se seleccionan con un clic (se pueden invertir o quitar); el sentido sale del trazo (de abajo
   arriba lleva flecha). La simultaneidad (doble trazo) es una barra de la paleta que se suelta en el dibujo, se
@@ -47,7 +47,7 @@ Selección, salto y repetición (corrección del paso 3, P-IMP-33)
 El menú Ejemplos incluye «Selección de secuencia», «Salto de etapas» y «Repetición de secuencia» para probar cada caso por separado. El retorno se actualiza al mover los elementos; se guarda la topología y la posición, no una flecha decorativa independiente.
 
 Qué no es
-- Todavía no edita variables ni acciones con un panel propio, ni jerarquías; selección, salto y repetición sí se editan.
+- Todavía no edita jerarquías; variables, acciones, receptividades, selección, salto y repetición sí se editan.
 - Usa un perfil provisional y NO declara conformidad con IEC 60848 / UNE-EN 60848.
 
 Licencias
@@ -70,12 +70,32 @@ Un enlace siempre sale de una etapa y llega a ella con un tramo vertical (16), y
 
 Los elementos de la paleta se arrastran con su figura, al zoom del dibujo. El panel izquierdo (paleta y propiedades) se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L), como los otros.
 
-Variables, acciones y programador por bloques (paso 4, P-IMP-38)
+Variables, acciones y programador por bloques (paso 4, P-IMP-38; rehecho en P-IMP-39)
 
 En modo Editar:
 
 - Etapas nuevas con solo el número: 0, 1, 2… En las receptividades, X1 es la etapa 1.
-- Variables (lado derecho): nombre, papel (entrada, salida, interna), tipo (booleana, entera, decimal, duración), valor inicial (solo las entradas; las demás empiezan en 0), unidad y cuántos usos tiene. Cambiar el nombre actualiza las receptividades y acciones que la usan; una variable usada no se puede quitar.
-- Acciones: botón derecho en una etapa, «Añadir acción…», o el botón «Añadir…» de su panel. Tipos: continua (con condición opcional), memorizada al activar, al desactivar o por evento (por ejemplo CT := CT + 1 con ↑I02). Si la variable no existe, el diálogo la crea. Un clic en la caja de una acción la señala; doble clic la edita; el botón derecho la mueve o la quita.
-- Programador por bloques (receptividades y condiciones): los cajones Entradas, Salidas, Internas, Etapas X y Constantes ofrecen lo que existe; cada variable o etapa es un bloque de color. Entre dos bloques se pone · (Y) solo; un clic en · lo cambia a + (O). Con un bloque elegido (Mayús+clic para varios): NOT pone la barra encima (sobre varios, los agrupa), ↑ y ↓ ponen el flanco delante, ( ) los agrupa y ⌫ los quita. Los paréntesis cambian de color con el nivel. «Comparar…» hace [CT ≥ 3] y «Temporizar…» convierte el bloque elegido en 3s/X1. El texto sigue debajo: se puede escribir y se vuelve a ver en bloques.
-- El panel izquierdo se puede estrechar: los rótulos pasan encima de los campos y los botones a la línea siguiente.
+- Variables (lado derecho): nombre, papel (entrada, salida o memoria), tipo (booleana, entera, decimal, duración), valor inicial (solo las entradas; las demás empiezan en 0), unidad y cuántos usos tiene. Las variables internas se llaman memorias en la pantalla; el archivo las guarda igual que antes. Cambiar el nombre actualiza las receptividades y acciones que la usan; una variable usada no se puede quitar.
+- Acciones: botón derecho en una etapa, «Añadir acción…», o el botón «Añadir…» de su panel. Tipos: continua (con condición opcional), memorizada al activar, al desactivar o por evento (por ejemplo CT := CT + 1 con ↑I02). Si la variable no existe, el diálogo la crea (salida o memoria, booleana o entera). El diálogo muestra en «En la norma» cómo quedarán la condición o el evento antes de aceptar. Si la variable no vale para esa acción (una entrada como destino, o una variable que no es booleana en una acción continua), avisa; si se acepta otra vez, se guarda como borrador y la validación lo señala. Un clic en la caja de una acción la señala; doble clic la edita; el botón derecho la mueve o la quita.
+- Programador por bloques (receptividades y condiciones), al estilo de Scratch:
+  · La paleta tiene siete categorías, cada una con un círculo de su color; debajo, sus bloques: Entradas,
+    Salidas, Memorias, Etapas X, Operadores, Comparaciones y Tiempo.
+  · Las condiciones son bloques hexagonales: una variable booleana o una etapa, con un desplegable ▾ para elegir
+    cuál.
+  · «y» y «o» tienen dos huecos y se pueden anidar.
+  · «no», «flanco de subida ↑» y «flanco de bajada ↓» envuelven a otro bloque.
+  · «temporizar» envuelve a otro bloque y tiene dos tiempos, t1 y t2, como en la norma (3s/X1, X1/2s).
+  · Comparación: [variable ▾][= ≠ < ≤ > ≥ ▾][valor], por ejemplo CT ≥ 3. Constantes 1 y 0.
+  · Arrastrar un bloque a un hueco lo encaja. Soltar un bloque que envuelve (no, ↑, ↓ o temporizar) sobre otro
+    lo envuelve. Arrastrarlo fuera o a la papelera lo quita y queda su hueco.
+  · Un hueco sin llenar se muestra como «?»: la receptividad queda pendiente y no se puede ejecutar.
+  · El texto de debajo está sincronizado en los dos sentidos. Lo que se escribe pasa a bloques; si no se puede,
+    se avisa y los bloques no cambian.
+  · Ctrl+Z deshace cada cambio de bloques. En el diálogo de acciones, Ctrl+Z deshace lo del propio diálogo.
+  · «⤢ Ampliar» abre el programador en una ventana más grande, sincronizada con el del panel.
+- Constantes: 1 y 0 se escriben y se ven así. Cuando son una condición completa se guardan como true y false; en
+  CT = 1 o n := 1 siguen siendo números.
+- X1 ambiguo: si X1 puede ser la etapa E1 o la etapa 1, se usa E1 y el programa avisa. Para la etapa 1 se escribe
+  active(`1`).
+- Retardos con paréntesis anidados, como 3s/(a AND (b OR c)), ya se entienden.
+- El panel izquierdo se puede estrechar: los rótulos pasan encima de los campos y los botones a la línea siguiente. Si el programador no cabe, se apila en vertical.

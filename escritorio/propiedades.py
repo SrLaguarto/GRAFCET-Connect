@@ -264,6 +264,8 @@ class PanelPropiedades(QWidget):
         f.addRow(QLabel("Receptividad (bloques)"))
         self.prog = Programador(lambda: self.e.fuente_bloques() if self.e is not None else ({}, []))
         self.prog.cambiado.connect(self._desde_bloques)
+        self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()  # Ctrl+Z en la ventana ampliada
+        self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()
         f.addRow(self.prog)
         self.t_texto = QLineEdit()
         self.t_texto.setPlaceholderText("o escríbala: ↑a AND NOT b, X1, 3s/X1…")
@@ -456,8 +458,9 @@ class PanelPropiedades(QWidget):
         else:
             d = e.comprobar(tid, texto)
             if d is None:
-                self.msg.setText("Receptividad correcta.")
-                self.msg.setStyleSheet(f"color: {COL['ok']}")
+                aviso = e.aviso_ambiguas(texto)
+                self.msg.setText("Receptividad correcta." + (f" {aviso}" if aviso else ""))
+                self.msg.setStyleSheet(f"color: {NARANJA if aviso else COL['ok']}")
                 self.t_dibujo.setText(_html(norm(e.significado(tid, texto), True, e.nombres)))
             else:
                 self.msg.setText(f"Error de sintaxis: {d.message}. {d.correction}")

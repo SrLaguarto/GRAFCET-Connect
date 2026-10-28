@@ -16,12 +16,12 @@ from typing import Any, Callable
 from PySide6.QtCore import QObject, QPointF, Signal
 
 from grafcet.diagnostics import DiagnosticError
-from grafcet.notation import a_nucleo, a_usuario, x_etapa
+from grafcet.notation import a_nucleo, a_usuario, etapas_ambiguas, x_etapa
 from grafcet.editor import Editor, new_grafcet_document
 from grafcet.persistence import Project, add_document, new_project, save_project
 from grafcet.profile import normalize_options
 from grafcet.routing import project_on_link
-from grafcet.view import Vista, display_names, layout_from_presentation, presentation_for, substitute
+from grafcet.view import Vista, display_names, norm, layout_from_presentation, presentation_for, substitute
 
 from .diagrama import REJILLA, SX, ancla_en, anclas, barra, elemento_en, enlaces, posiciones
 
@@ -528,7 +528,7 @@ class Edicion(QObject):
         nombre = var["name"] if var else a["targetRef"]
         if a["mode"] == "continuous":
             cond = self._texto(a["conditionRef"])
-            return {"tipo": "continua", "variable": nombre, "condicion": "" if cond == "true" else cond}
+            return {"tipo": "continua", "variable": nombre, "condicion": "" if cond in ("1", "true") else cond}
         trig = a["trigger"]
         valor = self._texto(a["valueRef"])
         if var and var["type"]["kind"] == "bool":
@@ -589,7 +589,8 @@ class Edicion(QObject):
                     self.ed.add_continuous_action(sid, vid, cond)
                 return
             valor = d["valor"].strip()
-            valor = self._n({"1": "true", "0": "false"}.get(valor, valor) if booleana else valor)
+            # el valor de una booleana es true o false; el de una entera (n := 1) sigue siendo un número
+            valor = self._n({"1": "true", "0": "false"}.get(valor, valor) if booleana else valor, booleana)
             trig = {"activacion": "activation", "desactivacion": "deactivation", "evento": "event"}[d["tipo"]]
             evento = self._n(d["evento"]) if trig == "event" else None
             if aid:
@@ -856,10 +857,32 @@ class Edicion(QObject):
         """El mismo texto en la notación del usuario: ↑a, ↓a, X1."""
         return a_usuario(self.texto_condicion(tid))
 
-    def _n(self, texto: str) -> str:
-        """Del texto escrito por el usuario (↑a, X1, espacios sueltos) al del núcleo, con los espacios normalizados."""
+    def _n(self, texto: str, booleana: bool = True) -> str:
+        """Del texto escrito por el usuario (↑a, X1, 1/0, espacios sueltos) al del núcleo, con los espacios normalizados.
+        `booleana=False` para un valor numérico (`n := 1`): el 1 y el 0 no pasan a true y false."""
         m = self.ed.model
-        return a_nucleo(texto, (s["label"] for s in m["steps"]), (v["name"] for v in m["variables"]))
+        return a_nucleo(texto, (s["label"] for s in m["steps"]), (v["name"] for v in m["variables"]), booleana)
+
+    def ambiguas(self, *textos: str) -> list[str]:
+        """Los `X…` de los textos que pueden ser dos etapas (E1 y 1 a la vez)."""
+        m = self.ed.model
+        etapas, variables = [s["label"] for s in m["steps"]], [v["name"] for v in m["variables"]]
+        return list(dict.fromkeys(x for t in textos for x in etapas_ambiguas(t, etapas, variables)))
+
+    def aviso_ambiguas(self, *textos: str) -> str:
+        """Aviso para el panel o el diálogo si algún `X…` puede ser dos etapas; vacío si no."""
+        return " ".join(f"{x} puede ser la etapa E{x[1:]} o la etapa {x[1:]}: se usa E{x[1:]}; para la otra escriba "
+                        f"active(`{x[1:]}`)." for x in self.ambiguas(*textos))
+
+    def vista_norma(self, texto: str) -> list[dict[str, Any]] | None:
+        """Segmentos de la notación de la norma de una condición o evento que se interpreta (vacío o con error: None)."""
+        if not texto.strip():
+            return None
+        try:
+            meaning, diag = self.ed._make_expr(self.ed.model, self._n(texto), None)
+        except Exception:  # un texto a medias no debe romper el diálogo
+            return None
+        return None if diag is not None else norm(meaning["meaning"], True, self.nombres)
 
     # -- guardar -----------------------------------------------------------------------------------
     def proyecto(self) -> Project:
