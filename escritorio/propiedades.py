@@ -350,8 +350,13 @@ class PanelPropiedades(QWidget):
         self.s_tipo.addItem("Normal", False)
         self.s_tipo.addItem("Inicial", True)
         self.s_tipo.activated.connect(lambda _: self.e.tipo_etapa(self.ident, self.s_tipo.currentData()))
+        self.s_comentario = QLineEdit()
+        self.s_comentario.setPlaceholderText("sin comentario")
+        self.s_comentario.setToolTip("Comentario de la etapa: se dibuja entre comillas a su derecha (no entra en la simulación)")
+        self.s_comentario.editingFinished.connect(lambda: self._comentar(self.s_comentario))
         f.addRow("Etiqueta", self.s_etiqueta)
         f.addRow("Tipo", self.s_tipo)
+        f.addRow("Comentario", self.s_comentario)
         f.addRow(QLabel("Acciones"))
         self.s_acciones = QListWidget()
         self.s_acciones.setWordWrap(True)
@@ -403,8 +408,14 @@ class PanelPropiedades(QWidget):
         self.t_mostrar = QCheckBox("Mostrar etiqueta")
         self.t_mostrar.setToolTip("Dibujar la etiqueta (t1) junto a la transición")
         self.t_mostrar.clicked.connect(lambda on: self.e.mostrar_etiqueta(self.ident, on))
+        self.t_comentario = QLineEdit()
+        self.t_comentario.setPlaceholderText("sin comentario")
+        self.t_comentario.setToolTip("Comentario de la transición: se dibuja entre comillas a la derecha de su receptividad "
+                                     "(no entra en la simulación)")
+        self.t_comentario.editingFinished.connect(lambda: self._comentar(self.t_comentario))
         f.addRow("Etiqueta", self.t_etiqueta)
         f.addRow(self.t_mostrar)
+        f.addRow("Comentario", self.t_comentario)
         self.t_abajo = QPushButton("Bloques abajo ▾")
         self.t_abajo.setToolTip("Desplegar el panel inferior en la pestaña Bloques: ahí está toda la receptividad "
                                 "(bloques, texto de la fórmula y su dibujo)")
@@ -493,7 +504,7 @@ class PanelPropiedades(QWidget):
                             if e is not None else "Propiedades")
         self.pila.setCurrentIndex({None: 0, "etapa": 1, "transicion": 2, "enlace": 3, "barra": 4}[kind])
         self.l_vacio.setText("Enlace de la etapa con sus acciones: Supr (o botón derecho, «Eliminar el enlace») las separa de la "
-                             "etapa; quedan sueltas, juntas, donde estaban."
+                             "etapa; quedan sueltas e independientes, cada una donde estaba."
                              if len(sel) == 1 and sel[0].startswith("enlaceacc:") else self.TEXTO_VACIO)
         acc = e.accion_programable() if e is not None else None
         self._objetivo = (("transicion", vivo) if kind == "transicion" else ("accion", *acc) if acc else None)
@@ -518,6 +529,7 @@ class PanelPropiedades(QWidget):
         if kind == "etapa":
             s = next(s for s in e.M["steps"] if s["id"] == vivo)
             self._poner(self.s_etiqueta, s["label"])
+            self._poner(self.s_comentario, e.comentario(vivo))
             self.s_tipo.setCurrentIndex(1 if s["initial"] else 0)
             self.actualizar_boton()
             self._llenando = True
@@ -536,6 +548,7 @@ class PanelPropiedades(QWidget):
         elif kind == "transicion":
             t = next(t for t in e.M["transitions"] if t["id"] == vivo)
             self._poner(self.t_etiqueta, t["label"])
+            self._poner(self.t_comentario, e.comentario(vivo))
             self.t_mostrar.setChecked(t.get("showLabel", True))
         elif kind == "barra":
             b = next(b for b in e.M["bars"] if b["id"] == vivo)
@@ -583,6 +596,12 @@ class PanelPropiedades(QWidget):
             self._insertar(prefijo + (sel if re.fullmatch(r"[\w.]+", sel) else f"({sel})"))
         else:
             self._insertar(prefijo)
+
+    def _comentar(self, campo: QLineEdit) -> None:
+        """El comentario de la etapa o transición mostrada: una operación de deshacer al confirmar."""
+        if self.ident is None or self.e is None or self.e.sel != [self.ident] or self.ident not in self.e.nombres:
+            return  # (el editingFinished puede llegar tarde: el elemento ya no es el mostrado, o ya no existe)
+        self.e.poner_comentario(self.ident, campo.text())
 
     def _renombrar(self, campo: QLineEdit) -> None:
         if self.ident is None or self.e.sel != [self.ident] or self.ident not in self.e.nombres \

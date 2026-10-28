@@ -31,6 +31,24 @@ function segText(parent, x, y, segs, cls, anchor="start") {
 }
 
 // Nombre visible de una variable, etapa, parcial, macroetapa o transición: los ID internos del editor no se muestran
+// Comentario de una etapa o transición: entre comillas tipográficas, en cursiva y discreto, a la derecha de x, centrado
+// en yc y ajustado a líneas de como mucho ANCHO_COMENTARIO (igual que escritorio/diagrama.py)
+const ANCHO_COMENTARIO = 190;
+function comentario(g, x, yc, texto) {
+  const t = el("text", {x, y: yc, class: "comentario"}, g);
+  const palabras = `\u201c${texto}\u201d`.split(/\s+/), lineas = [];
+  let linea = "";
+  palabras.forEach(pal => {
+    const prueba = linea ? linea + " " + pal : pal;
+    t.textContent = prueba;
+    if (linea && t.getComputedTextLength() > ANCHO_COMENTARIO) { lineas.push(linea); linea = pal; } else linea = prueba;
+  });
+  lineas.push(linea);
+  t.textContent = "";
+  const alto = 14, y0 = yc - (lineas.length - 1) * alto / 2 + 4;
+  lineas.forEach((l, i) => { const ts = el("tspan", {x, y: y0 + i * alto}, t); ts.textContent = l; });
+}
+
 function nameOf(M, id) { return ((M && M.names) || {})[id] ?? id; }
 
 // Estado de los temporizadores de una expresión: «1,2 s / 3 s» mientras cuenta y «3 s ✓» al vencer (Vista.state().temporal)
@@ -78,6 +96,11 @@ function drawDiagram(svg, M, S) {
     if (t.showLabel !== false) txt(g, tx-TB-6, ty+5, `(${t.label})`, {"text-anchor":"end", class:"tdes"});
     const tc = segText(g, tx+TB+8, ty+5, t.cond, "tcond");
     timerText(g, tx+TB+8 + tc.getComputedTextLength() + (t.cond ? 10 : 0), ty+5, t.conditionRef, S);
+    if (t.comment) {
+      const prev = g.querySelectorAll(".timer, .tmr");
+      const fin = Math.max(tx+TB+8 + tc.getComputedTextLength() + (t.cond ? 14 : 0), ...[...prev].map(n => n.getBBox().x + n.getBBox().width + 8));
+      comentario(g, fin, ty, t.comment);
+    }
   });
   // Exactamente los mismos recorridos que Qt y la detección del ratón.
   (M.links || []).forEach(e => {
@@ -113,7 +136,8 @@ function drawDiagram(svg, M, S) {
     if (uns) txt(g, p.x, p.y+H+13, "fue inestable", {"text-anchor":"middle", class:"tag vtag"});
     if (stale) txt(g, p.x, p.y+H+13, "último estable", {"text-anchor":"middle", class:"tag stag"});
     if (cand) txt(g, p.x, p.y+H+13, "alcanzada, sin confirmar", {"text-anchor":"middle", class:"tag ctag"});
-    drawActions(g, p, s.actions, S, s.actionLayout);
+    const xr = drawActions(g, p, s.actions, S, s.actionLayout);
+    if (s.comment) comentario(g, (xr ?? p.x + H) + 10, p.y, s.comment);  // a la derecha de la etapa o de su última acción
   });
   (M.macros || []).forEach(m => {  // macroetapa: divisiones horizontales superior e inferior
     const p = pos[m.id], act = !!(S.macros || {})[m.id];
@@ -232,7 +256,7 @@ function drawActions(g, p, actions, S, layout = "fila") {
     const cajas = actions.map((a, i) => drawAction(g, ax, ys[i], a, S));
     const ancho = Math.max(...cajas.map(c => c.w));
     cajas.forEach(c => c.ajustar(ancho));
-    return;
+    return ax + ancho;
   }
   if (layout === "fila-separada") {
     const entradas = [];
@@ -245,7 +269,8 @@ function drawActions(g, p, actions, S, layout = "fila") {
       linea(`M${bx},${p.y} V${yb} H${entradas[entradas.length-1]}`);
       entradas.forEach(ex => linea(`M${ex},${yb} V${p.y} H${ex+14}`));
     }
-    return;
+    return ax;
   }
   actions.forEach(a => { ax += drawAction(g, ax, p.y, a, S).w; });
+  return ax;
 }

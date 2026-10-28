@@ -6,7 +6,7 @@ editan aquí; los usos de la variable no se listan, solo impiden quitarla (con s
 (rename, change_variable, add_variable, delete_variable del núcleo) y se deshace con Ctrl+Z; si no se puede, el motivo
 sale debajo, la fila parpadea en naranja y la tabla vuelve a lo que hay.
 
-«Nueva variable» añade una fila **sin nombre**, solo de la interfaz: una variable no puede estar en el modelo sin
+«Nueva E», «Nueva S» y «Nueva M» (entrada, salida, memoria) añaden una fila **sin nombre**, solo de la interfaz: una variable no puede estar en el modelo sin
 nombre. Al escribir un nombre válido se crea en el modelo (una operación de deshacer); si no es válido o está repetido,
 se rechaza y la fila sigue en blanco. Con filas sin nombre, la ventana no deja simular ni guardar.
 """
@@ -16,9 +16,10 @@ from typing import Any
 
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView, QLabel, QPushButton,
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHeaderView, QLabel, QPushButton,
                                QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
+from .bloques import FlowLayout
 from .diagrama import COL
 from .edicion import Parpadeo
 
@@ -126,22 +127,25 @@ class PanelVariables(QWidget):
         self.tabla.setMinimumHeight(90)
         self.tabla.itemChanged.connect(self._editado)
         lay.addWidget(self.tabla, 1)
-        fila = QHBoxLayout()
-        self.b_nueva = QPushButton("Nueva variable")
-        self.b_nueva.setFont(self.fuente)
-        self.b_nueva.clicked.connect(self.nueva)
+        cont = QWidget()
+        fila = FlowLayout(cont, 3)  # en una fila si caben; si no, en dos
+        fm = QFontMetrics(self.fuente)
+        self.b_nuevas: dict[str, QPushButton] = {}
+        for papel, texto, tip in (("input", "Nueva E", "Nueva entrada"), ("output", "Nueva S", "Nueva salida"),
+                                  ("internal", "Nueva M", "Nueva memoria")):
+            b = QPushButton(texto)
+            b.setToolTip(tip)
+            b.clicked.connect(lambda _=False, p=papel: self.nueva(p))
+            self.b_nuevas[papel] = b
         self.b_quitar = QPushButton("Quitar")
-        self.b_quitar.setFont(self.fuente)
         self.b_quitar.setToolTip("Solo si no se usa en ninguna receptividad ni acción")
         self.b_quitar.clicked.connect(self.quitar)
-        fm = QFontMetrics(self.fuente)
-        for b in (self.b_nueva, self.b_quitar):  # botones a lo que mide su texto (el mínimo del estilo es de 75)
+        for b in (*self.b_nuevas.values(), self.b_quitar):  # botones a lo que mide su texto (el mínimo del estilo es de 75)
+            b.setFont(self.fuente)
             b.setMinimumWidth(fm.horizontalAdvance(b.text()) + 16)
-        fila.setSpacing(3)
-        fila.addWidget(self.b_nueva)
-        fila.addWidget(self.b_quitar)
-        fila.addStretch(1)
-        lay.addLayout(fila)
+            b.setFixedSize(b.minimumWidth(), b.sizeHint().height())
+            fila.addWidget(b)
+        lay.addWidget(cont)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
@@ -309,11 +313,11 @@ class PanelVariables(QWidget):
             self.tabla.editItem(self.tabla.item(r, 0))
 
     # -- botones y comprobaciones ----------------------------------------------------------------------
-    def nueva(self) -> None:
-        """Una fila sin nombre (entrada booleana), con el cursor en el nombre; la variable no existe en el modelo hasta
+    def nueva(self, papel: str = "input") -> None:
+        """Una fila sin nombre (booleana, con el papel dado: entrada por omisión), con el cursor en el nombre; la variable no existe en el modelo hasta
         que se escribe un nombre válido."""
         self._n += 1
-        f = {"id": None, "papel": "input", "tipo": {"kind": "bool"}, "n": self._n}
+        f = {"id": None, "papel": papel, "tipo": {"kind": "bool"}, "n": self._n}
         self._pend.append(f)
         self.msg.setText("")
         self.msg.setStyleSheet("")

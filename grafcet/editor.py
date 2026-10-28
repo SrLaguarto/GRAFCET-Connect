@@ -717,6 +717,28 @@ class Editor:
                 lay["labelVisible"] = False
         self._txn("mostrar la etiqueta" if visible else "ocultar la etiqueta", fn, view_only=True)
 
+    # Comentarios de etapas y transiciones (presentación, `presentation.notes` con `kind: "comment"`): texto asociado
+    # por ID que nunca es fuente de significado (documento 03, tabla 7 [30]; documento 09). No cambia la revisión.
+    def comments(self) -> dict[str, str]:
+        """{ID de etapa o transición: comentario}."""
+        notas = self.presentation.get("notes", [])
+        return {n["elementRef"]: n["text"] for n in notas if isinstance(n, dict) and n.get("kind") == "comment"
+                and isinstance(n.get("elementRef"), str) and isinstance(n.get("text"), str) and n["text"]}
+
+    def set_comment(self, ident: str, text: str) -> None:
+        """Pone (o, con texto vacío, quita) el comentario de una etapa o transición. Solo presentación."""
+        if not any(x["id"] == ident for x in self.model["steps"] + self.model["transitions"]):
+            raise DiagnosticError(Diagnostic("D-REF", f"solo las etapas y las transiciones llevan comentario: {ident}", element=ident))
+        text = text.strip()
+
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            notas = [n for n in p.get("notes", []) if not (isinstance(n, dict) and n.get("kind") == "comment"
+                                                           and n.get("elementRef") == ident)]
+            if text:
+                notas.append({"id": self.ids.new("nota"), "elementRef": ident, "text": text, "kind": "comment"})
+            p["notes"] = notas
+        self._txn("comentario", fn, view_only=True)
+
     def align(self, ids: list[str], axis: str = "x") -> None:
         def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
             lays = [l for l in p["elementLayouts"] if l["elementRef"] in ids]
@@ -851,6 +873,8 @@ class Editor:
                 used |= {a.get("conditionRef"), a.get("valueRef"), (a.get("trigger") or {}).get("expressionRef")}
             m["expressions"] = [e for e in m["expressions"] if e["id"] in used]
             p["elementLayouts"] = [l for l in p["elementLayouts"] if l["elementRef"] not in doomed]
+            if "notes" in p:  # el comentario se va con su elemento
+                p["notes"] = [n for n in p["notes"] if not (isinstance(n, dict) and n.get("elementRef") in doomed)]
             for b in p.get("barras", []):
                 b["arriba"] = [x for x in b["arriba"] if x not in doomed]
                 b["abajo"] = [x for x in b["abajo"] if x not in doomed]

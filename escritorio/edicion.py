@@ -208,7 +208,8 @@ class Edicion(QObject):
         ed = self.ed
         self.vista = Vista(ed.model["id"], self.titulo, "", lambda: (ed.model, self.layout()), self.opciones,
                            hidden=ed.hidden_labels(), bars=self._barras(), link_styles=self.estilos_enlaces(),
-                           draft_actions=self._borradores(), action_layouts=ed.action_layouts())
+                           draft_actions=self._borradores(), action_layouts=ed.action_layouts(),
+                           comments=ed.comments())
         self.M = self.vista.model
         self.nombres = self.M.get("names", {})
         vivos = set(posiciones(self.M)) | {d["id"] for d in self.M.get("drafts", [])} | {e["id"] for e in enlaces(self.M)} | {b["id"] for b in self.M.get("bars", [])}
@@ -1071,33 +1072,28 @@ class Edicion(QObject):
 
     # -- el enlace de una etapa con sus acciones
     def _separar_todas(self, sid: str) -> list[str]:
-        """Las acciones de la etapa dejan de estar unidas a ella: quedan sueltas, juntas (un grupo, con la colocación de la
-        etapa), donde estaban. Una acción del modelo pasa a ser un borrador con todos sus datos. Devuelve sus ID nuevos."""
+        """Las acciones de la etapa dejan de estar unidas a ella: quedan sueltas e independientes (sin grupo), cada una
+        donde estaba y sin solaparse. Una acción del modelo pasa a ser un borrador con todos sus datos. Devuelve sus ID
+        nuevos."""
         cajas = [c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["etapa"] == sid]
         if not cajas:
             return []
-        x0, y0, _, _ = cajas[0]["rect"]
-        at = (round(x0 - SX), round(y0 + H))
         orden = [c["id"] for c in cajas]
-        gid = self.ed.ids.new("grupo") if len(orden) > 1 else None
+        sitio = {c["id"]: (round(c["rect"][0] - SX), round(c["rect"][1] + H)) for c in cajas}
         nuevos: dict[str, str] = {}
-        for n, aid in enumerate(orden):
+        for aid in orden:
             if not self._es_borrador(aid):
                 datos = self.datos_accion(aid)
-                nuevos[aid] = self.ed.add_draft_action(at, {
+                nuevos[aid] = self.ed.add_draft_action(sitio[aid], {
                     "tipo": datos["tipo"], "variable": self.ed.get(aid)["targetRef"],
-                    **{k: datos[k] for k in ("condicion", "valor", "evento", "limite") if datos.get(k)},
-                    **({"grupo": gid, "orden": n} if gid else {})})
-        cambios = {aid: {"etapa": None, "x": at[0], "y": at[1], **({"grupo": gid, "orden": n} if gid else {})}
-                   for n, aid in enumerate(orden) if self._es_borrador(aid)}
+                    **{k: datos[k] for k in ("condicion", "valor", "evento", "limite") if datos.get(k)}})
+        cambios = {aid: {"etapa": None, "grupo": None, "orden": None, "x": sitio[aid][0], "y": sitio[aid][1]}
+                   for aid in orden if self._es_borrador(aid)}
         if cambios:
             self.ed.update_draft_actions(cambios)
         modelo = [aid for aid in orden if aid in nuevos]
         if modelo:
             self.ed.delete(modelo)
-        colocacion = self.colocacion(sid)
-        if gid and colocacion != "fila":
-            self.ed.set_action_layout(gid, colocacion)
         return [nuevos.get(aid, aid) for aid in orden]
 
     def eliminar_enlace_acciones(self, sid: str) -> None:
@@ -1319,7 +1315,7 @@ class Edicion(QObject):
         return None
 
     def poner_accion(self, sid: str | None, d: dict[str, str], aid: str | None = None,
-                     crear: tuple[str, str] | None = None) -> str | None:
+                     crear: tuple[str, Any] | None = None) -> str | None:
         """Añade (o, con `aid`, cambia) una acción de la etapa con los datos de `datos_accion`. Si la variable no existe
         y se da `crear` (papel, tipo), se declara antes. Con el `aid` de un borrador, lo guarda (aunque le falten datos).
         Una condicionada o por evento sin su condición o su evento (se programan en la pestaña Bloques) queda como
@@ -1343,7 +1339,7 @@ class Edicion(QObject):
         sin_texto = bool({"condición", "evento"} & set(self.faltan({**d, "variable": nombre})))
 
         def hacer() -> None:
-            vid = var["id"] if var else self.ed.add_variable(nombre, crear[0], {"kind": crear[1]})
+            vid = var["id"] if var else self.ed.add_variable(nombre, crear[0], (crear[1] if isinstance(crear[1], dict) else {"kind": crear[1]}))
             if sin_texto:  # falta programar la condición o el evento: borrador unido a la etapa, al final de la fila
                 if aid:
                     self.ed.delete([aid])
@@ -1381,7 +1377,7 @@ class Edicion(QObject):
                 **{k: (normalizar_duracion(d[k]) if k == "limite" else d.get(k, "").strip()) if relevantes[k] else ""
                    for k in relevantes}}
 
-    def _poner_borrador(self, did: str, d: dict[str, str], crear: tuple[str, str] | None) -> str | None:
+    def _poner_borrador(self, did: str, d: dict[str, str], crear: tuple[str, Any] | None) -> str | None:
         """Guarda los datos de un borrador (le pueden faltar); si está unido a una etapa y queda completo, pasa a ser una
         acción del modelo en la misma operación."""
         nombre = d.get("variable", "").strip()
@@ -1395,7 +1391,7 @@ class Edicion(QObject):
             return motivo
 
         def hacer() -> None:
-            vid = (var["id"] if var else self.ed.add_variable(nombre, crear[0], {"kind": crear[1]})) if nombre else None
+            vid = (var["id"] if var else self.ed.add_variable(nombre, crear[0], (crear[1] if isinstance(crear[1], dict) else {"kind": crear[1]}))) if nombre else None
             self.ed.update_draft_action(did, **self._campos_borrador(d, vid))
             self._completar(did)
         motivo = self._atomico("acción", hacer)
@@ -1755,6 +1751,8 @@ class Edicion(QObject):
             plan = self.ed.plan_delete(resto)
             if (set(plan["elements"]) > set(resto) or plan["affectedTransitions"]) and not self.confirmar_borrado(plan):
                 return False
+        # los borradores unidos a una etapa que se borra se van con ella
+        sueltas += [b["id"] for b in self.ed.draft_actions() if b.get("etapa") in resto and b["id"] not in sueltas]
         separadas: list[str] = []
         with self.ed.group("borrar"):
             for u in enlaces_acc:
@@ -1784,6 +1782,17 @@ class Edicion(QObject):
             return "; ".join(f"{d.message}. {d.correction}" for d in exc.diagnostics)
         self.cambia()
         return None
+
+    def comentario(self, ident: str) -> str:
+        """El comentario de una etapa o transición (vacío si no tiene)."""
+        return self.ed.comments().get(ident, "")
+
+    def poner_comentario(self, ident: str, texto: str) -> None:
+        """Pone el comentario de una etapa o transición (vacío lo quita): una operación de vista, que se deshace."""
+        if texto.strip() == self.comentario(ident) or ident not in self.nombres:
+            return
+        self.ed.set_comment(ident, texto)
+        self.cambia()
 
     def tipo_etapa(self, sid: str, inicial: bool) -> None:
         self.ed.set_initial(sid, inicial)

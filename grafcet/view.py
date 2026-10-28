@@ -192,8 +192,12 @@ class Vista:
                  hidden: frozenset[str] | set[str] = frozenset(), bars: list[dict[str, Any]] | None = None,
                  presentation: dict[str, Any] | None = None, link_styles: dict[str, Any] | None = None,
                  draft_actions: list[dict[str, Any]] | None = None,
-                 action_layouts: dict[str, str] | None = None) -> None:
+                 action_layouts: dict[str, str] | None = None, comments: dict[str, str] | None = None) -> None:
         m, layout = build()
+        # comentarios de etapas y transiciones (presentación: nunca entran en el significado ni en la simulación)
+        self.comments = {n["elementRef"]: n["text"] for n in (presentation or {}).get("notes", [])
+                         if isinstance(n, dict) and n.get("kind") == "comment" and isinstance(n.get("text"), str)
+                         and n["text"] and isinstance(n.get("elementRef"), str)} if comments is None else dict(comments)
         self.draft_actions = draft_actions or []  # acciones sueltas o sin completar, ya con su texto (editor; no se simulan)
         self.hidden = set(hidden)  # transiciones cuya etiqueta no se dibuja (presentación)
         self.bars = bars or []     # barras de simultaneidad y de alternativa (presentación)
@@ -309,7 +313,8 @@ class Vista:
                        "x": layout[s["id"]][0], "y": layout[s["id"]][1],
                        "partial": None if s["partialRef"] == "g" else s["partialRef"], "kind": s["kind"],
                        "activation": s["id"] in marked, "actions": acts.get(s["id"], []),
-                       "actionLayout": self.action_layouts.get(s["id"], "fila")} for s in doc["steps"]],
+                       "actionLayout": self.action_layouts.get(s["id"], "fila"),
+                       **({"comment": self.comments[s["id"]]} if s["id"] in self.comments else {})} for s in doc["steps"]],
             "macros": [{"id": x["id"], "x": layout[x["id"]][0], "y": layout[x["id"]][1], "expansion": e["partialRef"],
                         "entry": e["entryRef"], "exit": e["exitRef"]}
                        for x in hier["macros"] for e in hier["expansions"] if e["id"] == x["expansionRef"]],
@@ -324,7 +329,9 @@ class Vista:
                              "pre": t["preRefs"], "post": t["postRefs"],
                              "partial": t["partialRef"], "cond": disp(t["conditionRef"], top=True),
                              "conditionRef": t["conditionRef"],
-                             "x": layout[t["id"]][0], "y": layout[t["id"]][1]} for t in doc["transitions"]],
+                             "x": layout[t["id"]][0], "y": layout[t["id"]][1],
+                             **({"comment": self.comments[t["id"]]} if t["id"] in self.comments else {})}
+                            for t in doc["transitions"]],
             "drafts": [{"id": d["id"], "from": d["fromRef"], "to": d["toRef"]} for d in doc.get("draftLinks", [])],
             "inputs": sorted((v["id"] for v in doc["variables"] if v["role"] == "input"), key=lambda i: (names[i], i)),
             "numericInputs": {v["id"]: v["type"]["kind"] for v in doc["variables"]

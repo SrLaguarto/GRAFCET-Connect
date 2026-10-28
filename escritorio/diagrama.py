@@ -40,6 +40,7 @@ COL = {"panel": "#ffffff", "text": "#1d2330", "muted": "#6b7385", "accent": "#1f
        "ok": "#1a7f37", "err": "#c62828", "virt": "#8250df", "glow": "#e36209"}
 FONT = "Arial"
 Z_FRAME, Z_LINK, Z_BAR, Z_STEP = 0, 1, 2, 3
+ANCHO_COMENTARIO = 190  # ancho máximo de un comentario antes de pasar a otra línea
 
 
 def _html(segs: list[dict[str, Any]] | None) -> str:
@@ -144,6 +145,24 @@ class _Pintor:
     def seg(self, t: str) -> list[dict[str, Any]]:
         return [{"t": t}]
 
+    def comentario(self, x: float, yc: float, texto: str, z: float, ancho: float = ANCHO_COMENTARIO) -> None:
+        """Comentario de una etapa o transición: el texto entre comillas tipográficas, en cursiva y discreto, a la derecha
+        de `x`, centrado en vertical en `yc` y ajustado a varias líneas si pasa de `ancho`."""
+        font = QFont(FONT)
+        font.setPixelSize(12)
+        font.setItalic(True)
+        item = QGraphicsTextItem()
+        item.document().setDocumentMargin(0)
+        item.setFont(font)
+        item.setDefaultTextColor(QColor(COL["muted"]))
+        item.setPlainText(f"“{texto}”")
+        item.setTextWidth(ancho)
+        w = item.document().idealWidth()
+        item.setTextWidth(min(ancho, w + 2))  # sin hueco a la derecha si cabe en menos
+        item.setPos(x, yc - item.boundingRect().height() / 2)
+        self.sc.addItem(item)
+        self._put(item, z + 0.02, None)
+
 
 def _temporizadores(S: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     """Temporizadores con algo que mostrar (contando o vencidos), por expresión que los contiene."""
@@ -160,6 +179,11 @@ def _estado_temporal(pt: _Pintor, x: float, y: float, ref: str | None, tmp: dict
     for t in tmp.get(ref or "", []):
         x += pt.text(x, y, pt.seg(t["shown"]), 12, "accent" if t["estado"] == "contando" else "ok", z, tip=tip,
                      bold=True) + 8
+
+
+def _ancho_estado(tmp: dict[str, list[dict[str, Any]]], ref: str | None) -> float:
+    """Lo que ocupa a la derecha el estado de los temporizadores de una receptividad (para no pisarlo)."""
+    return sum(_Pintor.ancho([{"t": t["shown"]}], 12, True) + 8 for t in tmp.get(ref or "", []))
 
 
 REJILLA = 20   # paso de la rejilla del editor (coordenadas del modelo)
@@ -389,7 +413,10 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         if t.get("showLabel", True):
             pt.text(tx - TB - 6, ty + 5, pt.seg(f"({t.get('label', t['id'])})"), 13, "muted", Z_BAR, "end", tip)
         w = pt.text(tx + TB + 8, ty + 5, t.get("cond"), 14, "text", Z_BAR, tip=tip)
-        _estado_temporal(pt, tx + TB + 8 + w + (10 if w else 0), ty + 5, t.get("conditionRef"), tmp, Z_BAR, tip)
+        fin = tx + TB + 8 + w
+        _estado_temporal(pt, fin + (10 if w else 0), ty + 5, t.get("conditionRef"), tmp, Z_BAR, tip)
+        if t.get("comment"):  # a la derecha de la receptividad (o de la transición, si no tiene)
+            pt.comentario(fin + (14 if w else 0) + _ancho_estado(tmp, t.get("conditionRef")), ty, t["comment"], Z_BAR)
     for b in M.get("bars", []):  # barras de simultaneidad (doble trazo) y de alternativa (trazo simple), con sus conectores
         bx, by, w, h = barra(b)
         tipo = "Simultaneidad" if b["kind"] == "Y" else "Alternativa"
@@ -446,6 +473,9 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         unidas = [d for d in M.get("draftActions", []) if d.get("etapa") == s["id"]]  # sin completar, al final de la fila
         _acciones(pt, x, y, s["actions"] + unidas, S, tmp, cajas, s["id"], marcadas, s.get("actionLayout", "fila"),
                   uniones=uniones, resaltar=f"enlaceacc:{s['id']}" in (sel or ()))
+        if s.get("comment"):  # a la derecha de la etapa, o de su última acción si las tiene
+            cajas_ = _geometria_acciones(x, y, s["actions"] + unidas, s.get("actionLayout", "fila"))[0]
+            pt.comentario(max([ax + w for _, ax, _, w in cajas_] + [x + H]) + 10, y, s["comment"], Z_STEP)
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
         x, y = pos[m["id"]]
         act = bool((S.get("macros") or {}).get(m["id"]))

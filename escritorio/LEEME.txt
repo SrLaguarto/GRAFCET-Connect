@@ -23,7 +23,7 @@ Qué hace
   izquierda (iconos que se arrastran al dibujo; sin herramienta, el ratón selecciona, mueve y enlaza),
   puntos de unión arriba y abajo
   (al acercar el puntero se marcan y de ellos sale el enlace), panel de propiedades del elemento seleccionado
-  (etiqueta, tipo de etapa, receptividad con el programador por bloques (ver abajo) o escrita a mano (↑a, ↓a, X1, 3s/X1…); las variables
+  (etiqueta, tipo de etapa, comentario, receptividad con el programador por bloques (ver abajo) o escrita a mano (↑a, ↓a, X1, 3s/X1…); las variables
   que no existen salen en naranja), mover con rejilla, borrar,
   deshacer y rehacer (Ctrl+Z, Ctrl+Y), «Añadir debajo» (Ctrl+Intro) y panel de diagnósticos.
   Los enlaces se seleccionan con un clic (se pueden invertir o quitar); el sentido sale del trazo (de abajo
@@ -74,14 +74,16 @@ en una ficha solo muestra su ayuda. No hay modo de colocación ni atajos Alt par
 (paleta y propiedades) se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L), como los
 otros.
 
-Variables, acciones y programador por bloques (paso 4, P-IMP-38; rehecho en P-IMP-39, P-IMP-40, P-IMP-41 y P-IMP-43)
+Variables, acciones y programador por bloques (paso 4, P-IMP-38; rehecho en P-IMP-39, P-IMP-40, P-IMP-41, P-IMP-43 y P-IMP-44)
 
 En modo Editar:
 
 - Etapas nuevas con solo el número: 0, 1, 2… En las receptividades, X1 es la etapa 1.
 - Variables (lado derecho, al editar): tres columnas, Nombre, Papel y Tipo. El papel es entrada, salida o memoria; el tipo, booleana, entera o decimal con 2 decimales. Papel y Tipo se ven como texto y, al pulsar la celda, aparece su lista desplegable. Las variables internas se llaman memorias en la pantalla; el archivo las guarda igual que antes. El valor inicial y la unidad que tuviera un fichero se conservan aunque la tabla no los muestre; las variables nuevas no los tienen. Los usos no se listan, pero una variable usada no se puede quitar, y el mensaje lo dice. Cambiar el nombre actualiza las receptividades y acciones que la usan. Un fichero antiguo con un decimal de 1 o 3 decimales, o de tipo duración, muestra su tipo («Decimal (3)», «Duración») y sigue funcionando; si se cambia su tipo, solo se elige entre los tres que se ofrecen. Al crear, renombrar, quitar o cambiar el papel o el tipo de una variable, la
   paleta de bloques y los desplegables se actualizan en el acto.
-- Nueva variable: añade una fila sin nombre, con el cursor en él; no propone ninguno. Una variable no puede estar en el modelo sin nombre: la fila es solo de la interfaz hasta que se escribe un nombre válido, que la crea (una operación de deshacer). Un nombre no válido o repetido se rechaza con su mensaje y la fila sigue en blanco. Con una fila sin nombre no se simula ni se guarda («Guardar» o «Guardar como»): el aviso dice «Hay una variable sin nombre: escríbale un nombre o quítela» y la fila parpadea.
+- Nueva E, Nueva S, Nueva M (encima de la tabla): añaden una fila sin nombre de entrada, salida o memoria, de tipo
+  booleana (se cambia en su celda), con el cursor en el nombre; no propone ninguno. «Quitar» quita la variable elegida,
+  si no se usa. Una variable no puede estar en el modelo sin nombre: la fila es solo de la interfaz hasta que se escribe un nombre válido, que la crea (una operación de deshacer). Un nombre no válido o repetido se rechaza con su mensaje y la fila sigue en blanco. Con una fila sin nombre no se simula ni se guarda («Guardar» o «Guardar como»): el aviso dice «Hay una variable sin nombre: escríbale un nombre o quítela» y la fila parpadea.
 - Errores en naranja: el elemento con un error parpadea en naranja (unas tres veces en 1,5 s) y se centra en la vista si está fuera: una etapa, transición, barra, enlace, acción (del modelo o borrador) o fila de variable. Parpadea al rechazar una operación del editor que se refiere a un elemento; al pulsar «Simular» con errores de validación (cada elemento con error); al hacer clic en una línea de Diagnósticos, y al pulsar el aviso de un borrador de acción. Diagnósticos resume en una línea: «No se puede simular: N errores» o «El grafcet se puede simular».
 - Acciones: se crean de tres maneras. Arrastrando una ficha de la carpeta «Acciones» al dibujo: Continua,
   Condicionada, Al activar (memorizada, flecha ↑), Al desactivar (memorizada, flecha ↓) o Por evento (banderita); cada
@@ -90,11 +92,32 @@ En modo Editar:
   «Añadir…» de su panel. Una ficha soltada crea una acción suelta sin variable: no abre ningún diálogo, aparece con
   «?» (y una acción soltada sin tocar nada es una continua). Tipos: continua; condicionada (continua con una condición,
   el trazo encima de la caja); memorizada al activar, al desactivar o por evento (por ejemplo CT := CT + 1 con ↑I02).
-  Si la variable no existe, el diálogo la crea (salida o memoria, booleana o entera). Si la variable no vale para esa
-  acción (una entrada como destino, o una variable no booleana en una acción continua), avisa; si se acepta otra vez,
+  Si la variable no vale para esa acción (una entrada como destino, o una variable no booleana en una acción continua),
+  avisa; si se acepta otra vez,
   se guarda como borrador y la validación lo señala. Un clic en la caja de una acción la señala; doble clic la edita
-  («Editar…»), donde se eligen variable, valor y límite de tiempo. La condición y el evento no están en ese diálogo:
-  se programan en la pestaña «Bloques» (ver abajo).
+  («Editar…»), donde se eligen variable, valor y límite de tiempo. La condición y el evento se ven en ese diálogo y se
+  programan con bloques (ver abajo).
+  · Diálogo «Editar…» (doble clic en la acción, o «Editar…»). Arriba hay una frase que dice qué hace la acción, por
+    ejemplo «Al activarse la etapa 2: CT := CT + 1.» o «Mientras la etapa 1 esté activa (y se cumpla la condición),
+    Q00 vale 1.». Después:
+    - Variable: se elige en una lista, nunca se ofrecen entradas. Una continua ofrece las salidas y memorias booleanas.
+      Una memorizada (al activar, al desactivar o por evento) ofrece salidas y memorias de cualquier tipo, primero las
+      salidas y luego las memorias, cada una con su tipo. La última opción, «Nueva variable…», pide nombre (con las
+      reglas de nombres), papel (salida o memoria) y tipo, y la crea al aceptar, en la misma operación de deshacer que
+      la acción.
+    - Valor (solo en memorizadas). Se arma con bloques, como en la pestaña Bloques, pero más corto:
+      · Si la variable es booleana, elija la ficha «1» o la «0» (valor := 1 o valor := 0). También puede pulsar la
+        plantilla «:= 1» o «:= 0».
+      · Si es numérica, el valor se arma con un número (por ejemplo 5), con una variable numérica, o con una operación
+        «+», «−», «×» o «÷» entre dos huecos. Las operaciones se pueden anidar: CT * 2 - 1 es una resta cuyo primer
+        operando es «CT × 2» y el segundo es 1. Las plantillas «+1» y «−1» ponen CT + 1 y CT - 1 con la variable
+        elegida; «:= 0» pone 0.
+      · Debajo se ve el texto del valor, de solo lectura. «Escribir a mano» lo deja editar; lo escrito pasa a bloques.
+      · Un valor que el programa no entiende no se acepta, y el diálogo dice por qué.
+    - Condición o evento: no se escriben en este diálogo. Aquí se ven en una línea: «Condición: …» (con el dibujo de la
+      norma), «Evento: ↑I02», o «Condición: siempre (continua)» en una continua. Si no hay ninguna todavía, la línea
+      dice «sin programar» y la acción queda como borrador. «Programar con bloques abajo» cierra el diálogo, aplica lo
+      demás y abre la pestaña «Bloques» con esa condición o ese evento.
   · Unir a una etapa: el punto de unión de la derecha de la etapa (en el centro de su lado derecho, visible al pasar el
     puntero) se arrastra hasta una acción suelta; o se arrastra desde el punto de unión de la izquierda de la acción
     hasta la etapa, a cualquier parte de ella o a ese punto. La acción pasa a ser de esa etapa, al final de sus
@@ -105,9 +128,10 @@ En modo Editar:
     mueve junto y se une a una etapa de una vez. Respeta la colocación de la etapa: en fila separada o en columna,
     «pegar» la pone en el siguiente lugar del grupo.
   · Enlace de la etapa: el trazo horizontal que une la etapa con sus acciones se selecciona con un clic. Supr, o botón
-    derecho > «Eliminar el enlace», separa todas las acciones de la etapa: quedan sueltas, juntas, donde estaban.
+    derecho > «Eliminar el enlace», separa todas las acciones de la etapa: cada una queda suelta e independiente, donde estaba, sin agrupar.
     «Separar de la etapa» separa solo la acción elegida, y «Separar del grupo», en un grupo suelto, la saca del grupo.
     «Quitar» borra la acción.
+  · Borrar una etapa: borra también sus acciones y los borradores unidos a ella. Ctrl+Z lo restaura todo.
   · Tipo por botón derecho: en una acción, suelta o unida, «Tipo de acción» es un submenú con los cinco tipos, con sus
     mismos dibujos y nombres, y marca el actual. Después van «Editar…», «Separar de la etapa» (si está unida) o «Separar
     del grupo» (si es de un grupo suelto), «Colocación de las acciones» (en un grupo suelto), «Mover a la izquierda» o
@@ -156,7 +180,9 @@ En modo Editar:
   · Las condiciones son bloques hexagonales: una variable booleana o una etapa, con un desplegable ▾ para elegir
     cuál.
   · «y» y «o» tienen dos huecos y se pueden anidar. El «+» al final añade otro hueco (soltar un bloque sobre el «+» lo
-    mete en un hueco nuevo); el «×» de un hueco vacío lo quita, sin bajar de dos. En el texto, n operandos se escriben
+    mete en un hueco nuevo); ya no hay «×» en cada hueco. Un hueco sobra cuando se saca un bloque de un «y» o un «o» de más de dos huecos: su hueco
+  desaparece. Un hueco vacío sobrante se quita con botón derecho → «Quitar hueco», o seleccionándolo y pulsando Supr.
+  Nunca bajan de dos. En el texto, n operandos se escriben
     a AND b AND c AND d o a OR b OR c OR d, y los paréntesis salen solo donde la precedencia los exige.
   · «no», «flanco de subida ↑» y «flanco de bajada ↓» envuelven a otro bloque.
   · «temporizar» envuelve a otro bloque y tiene dos tiempos, t1 y t2, como en la norma (3s/X1, X1/2s).
@@ -183,4 +209,20 @@ En modo Editar:
 - X1 ambiguo: si X1 puede ser la etapa E1 o la etapa 1, se usa E1 y el programa avisa. Para la etapa 1 se escribe
   active(`1`).
 - Retardos con paréntesis anidados, como 3s/(a AND (b OR c)), ya se entienden.
-- Anchos de los paneles laterales: el izquierdo (Elementos y propiedades) tiene como mínimo el ancho que piden sus dos columnas de fichas (Etapa y Transición; Simultaneidad y Acción) y se puede ensanchar un 15 %. El derecho (Variables y Diagnósticos) tiene el mismo margen y, al editar, empieza con el mismo ancho. Así nada se corta con una etapa, transición, enlace o barra seleccionados ni con la tabla de variables. Al simular, el derecho vuelve a su ancho de siempre. Ambos paneles se pliegan como antes. En el panel de propiedades, los rótulos pasan encima de los campos y los botones a la línea siguiente. Si el programador no cabe, se apila en vertical.
+- Anchos de los paneles laterales: al editar, el izquierdo (Elementos y propiedades) y el derecho (Variables y Diagnósticos) tienen un ancho único y fijo, de 212 px o más si su contenido lo necesita: no hay divisor que los mueva ni se estiran. Ambos se pliegan y se despliegan del todo, como antes. Al simular, el derecho conserva su ancho de siempre. En el panel de propiedades, los rótulos pasan encima de los campos y los botones a la línea siguiente. Si el programador no cabe, se apila en vertical.
+
+
+Comentarios de etapas y transiciones (P-IMP-44)
+
+En modo Editar, el panel de propiedades de una etapa y el de una transición tienen el campo «Comentario», de una línea.
+Vacío significa sin comentario. Cada cambio se deshace con Ctrl+Z.
+- Se dibuja entre comillas tipográficas, en cursiva y gris: el de una transición, a la derecha de su receptividad (o de
+  su etiqueta, si no tiene receptividad); el de una etapa, a la derecha de la etapa, o de su última acción si la tiene.
+  Si es largo, se ajusta en varias líneas, con un ancho máximo de 190 px.
+- No entra en la simulación, ni en la receptividad, ni en los diagnósticos. Se ve también en modo Simular, y
+  tools/dibujo.js lo dibuja igual.
+- Se guarda en presentation.notes, con kind: "comment". Borrar el elemento borra su comentario, y Ctrl+Z lo devuelve.
+- Las acciones no llevan comentario.
+- Limitaciones: un comentario largo con elementos muy juntos puede pisar a un vecino (no se mueve nada solo); si el
+  texto ya lleva comillas, salen dobles. Copiar y pegar elementos aún no existe. Más adelante se añadirá un elemento de
+  texto de comentario que se pueda arrastrar.

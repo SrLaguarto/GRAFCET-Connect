@@ -38,8 +38,8 @@ from .propiedades import PanelPropiedades, Paleta, PaletaAcciones
 from .variables import PanelVariables
 
 TITULO = "Simulador GRAFCET"
+ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
-MARGEN_LATERAL = 1.15  # los paneles laterales de edición se ensanchan hasta un 15 % más que su ancho mínimo
 AYUDA_EDICION = {
     "seleccionar": "Clic selecciona un elemento y muestra sus opciones a la izquierda; arrastrarlo lo mueve (a la "
                    "rejilla); de un punto de unión (arriba o abajo de una etapa o transición, a la derecha de una etapa) "
@@ -407,13 +407,13 @@ class Ventana(QMainWindow):
         self.dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.dock.setWidget(izq_edit)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock)
-        # Anchos de los paneles laterales al editar: del que piden las dos columnas de la paleta a un 15 % más, los dos
-        # iguales (el dock y el panel derecho)
-        self.ancho_lateral = (self.dock.minimumSizeHint().width(),
-                              round(self.dock.minimumSizeHint().width() * MARGEN_LATERAL))
-        self.dock.setMinimumWidth(self.ancho_lateral[0])
-        self.dock.setMaximumWidth(self.ancho_lateral[1])
-        self.resizeDocks([self.dock], [sum(self.ancho_lateral) // 2], Qt.Orientation.Horizontal)
+        # Ancho de los paneles laterales al editar: único y fijo (lo que piden las dos columnas de la paleta y, como mínimo,
+        # lo que hace falta para que la tabla de variables deje ver los nombres), el mismo en el dock y en el panel derecho;
+        # no se pueden estirar, solo plegar
+        self.ancho_lateral = max(self.dock.minimumSizeHint().width(), ANCHO_LATERAL)
+        self.dock.setMinimumWidth(self.ancho_lateral)
+        self.dock.setMaximumWidth(self.ancho_lateral)
+        self.resizeDocks([self.dock], [self.ancho_lateral], Qt.Orientation.Horizontal)
         self.dock.hide()
         # Barra de estado: aviso de conformidad, lecturas distintas de las decididas, instante lógico
         sb = self.statusBar()
@@ -691,17 +691,17 @@ class Ventana(QMainWindow):
             self.diagrama.ajustar()
 
     def _anchos_laterales(self) -> None:
-        """Al editar, el panel derecho tiene el mismo margen de ancho que el izquierdo (del que piden las dos columnas de
-        la paleta a un 15 % más) y empieza con el mismo ancho (el punto medio); al simular, el de siempre."""
+        """Al editar, el panel derecho mide lo mismo que el izquierdo, fijo y sin divisor que lo mueva; al simular, el de
+        siempre (se puede estirar)."""
         editar = self.modo == "editar" and self.edicion is not None
-        minimo, maximo = self.ancho_lateral
-        self.derecho.setMinimumWidth(minimo if editar else 300)
-        self.derecho.setMaximumWidth(maximo if editar else 16777215)
-        inicial = (minimo + maximo) // 2
+        ancho = self.ancho_lateral
+        self.derecho.setMinimumWidth(ancho if editar else 300)
+        self.derecho.setMaximumWidth(ancho if editar else 16777215)
+        self.split.handle(1).setEnabled(not editar)
         total = max(self.split.width(), 1000)
-        self.split.setSizes([total - inicial, inicial] if editar else [880, 460])
+        self.split.setSizes([total - ancho, ancho] if editar else [880, 460])
         if editar:
-            self.resizeDocks([self.dock], [inicial], Qt.Orientation.Horizontal)
+            self.resizeDocks([self.dock], [ancho], Qt.Orientation.Horizontal)
 
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
@@ -808,8 +808,10 @@ class Ventana(QMainWindow):
 
     def editar_accion(self, sid: str | None, aid: str | None = None) -> None:
         """Añadir (sin `aid`) o cambiar una acción (de la etapa, suelta o unida sin completar): diálogo con el
-        programador por bloques."""
-        DialogoAccion(self, self.edicion, sid, aid).exec()
+        programador de valor; «Programar con bloques abajo» abre la pestaña Bloques con su condición o evento."""
+        d = DialogoAccion(self, self.edicion, sid, aid)
+        d.al_programar = self._abrir_bloques
+        d.exec()
 
     def editar_etiqueta(self, ident: str) -> None:
         """Doble clic en una etapa: lleva el cursor a su etiqueta, en el panel de propiedades."""
