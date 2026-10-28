@@ -116,15 +116,17 @@ El núcleo se ha hecho solo con los doce documentos del paquete. El 25-10-2026, 
 - Ratificación del formato 0.1 (U-11) y cierre de las U normativas, que permitiría desbloquear capacidades.
 
 
-## Ajustar flechas y realimentaciones (P-IMP-35, P-IMP-36)
+## Ajustar flechas y realimentaciones (P-IMP-35 a P-IMP-37)
 
 En modo Editar:
 
-1. Arrastre una flecha directamente para desplazarla por su enlace, incluidos los tramos horizontales.
-2. Con la flecha seleccionada, use «Mostrar flecha» para ocultarla o recuperarla. «Dar la vuelta a la flecha» invierte el enlace: la etapa pasa de anterior a siguiente de la transición o al revés, así que cambia el GRAFCET y la simulación. La flecha siempre indica el sentido real. Si el enlace tiene flecha de recorrido y de unión, el selector permite ajustar cada una.
-3. Seleccione el enlace de realimentación. Aparecen cuadrados: arrastre el del tramo vertical para llevar el retorno a izquierda o derecha; los de los tramos horizontales cambian sus alturas. El recorrido no tiene botón de restaurar: se recoloca a mano.
+1. Por defecto solo lleva flecha un enlace que sube, y una por lazo, en el enlace más largo. Un enlace que baja no lleva flecha.
+2. Arrastre una flecha directamente para desplazarla por su enlace, incluidos los tramos horizontales. Con el enlace seleccionado, «Mostrar flecha» la oculta o la muestra (también la de un enlace corto de un lazo, o la de unión donde llegan dos ramas). La flecha siempre sigue el sentido del enlace; para invertir un enlace, quítelo y vuelva a enlazar.
+3. Seleccione el enlace de realimentación. Aparecen cuadrados: arrastre el del tramo vertical para llevar el retorno a izquierda o derecha; los de los tramos horizontales cambian sus alturas. El recorrido se recoloca a mano.
 4. «Restablecer flecha automática» devuelve la flecha a su sitio.
 
 Cada arrastre se deshace con Ctrl+Z y se rehace con Ctrl+Y. Los extremos del enlace siguen a las etapas/transiciones; los tramos fijados a mano conservan sus coordenadas. Todo se guarda con el proyecto y se mantiene al simular.
 
-Tramos rectos (P-IMP-36): un enlace siempre sale de una etapa y llega a ella con un tramo vertical (16), y a cada lado de una transición con otro algo mayor (24), aunque los elementos estén casi a la misma altura: si no cabe, el enlace baja, cruza, sube con flecha y entra por arriba. Una transición se agarra por su trazo para moverla; la rama solo sale de los puntos de unión, al final de sus tramos rectos.
+Un enlace siempre sale de una etapa y llega a ella con un tramo vertical (16), y a cada lado de una transición con otro algo mayor (24); si no caben, se acortan, y solo si los elementos están casi a la misma altura el enlace da un rodeo y sube con flecha. Una transición se agarra por su trazo para moverla; la rama solo sale de los puntos de unión, al final de sus tramos rectos. Al mover una etapa o una transición cerca de la vertical de un elemento enlazado (dos pasos de rejilla), se alinea con él y el enlace queda recto.
+
+Los elementos de la paleta se arrastran con su figura, al zoom del dibujo. El panel izquierdo (paleta y propiedades) se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L), como los otros.

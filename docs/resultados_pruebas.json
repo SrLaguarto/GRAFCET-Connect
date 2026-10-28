@@ -1,9 +1,9 @@
 {
- "date": "2026-10-28T12:04:16+00:00",
+ "date": "2026-10-28T12:45:43+00:00",
  "python": "3.13.17",
  "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
  "machine": "x86_64",
- "total": 185,
+ "total": 188,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -216,14 +216,13 @@
    "summary": "REQ-MOD-03, REQ-EDT-02: la simultaneidad es una barra de doble trazo que se arrastra desde la paleta, se"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI18_enlaces_seleccionables_flecha_e_invertir",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI18_enlaces_seleccionables_flecha_y_quitar",
    "case": "S-EDI18",
    "outcome": "pasa",
    "requirements": [
-    "REQ-EDT-02",
-    "REQ-MOD-03"
+    "REQ-EDT-02"
    ],
-   "summary": "REQ-MOD-03, REQ-EDT-02: un enlace se selecciona con un clic en su trazo; «Invertir direccion» cambia su sentido y,"
+   "summary": "REQ-EDT-02: un enlace se selecciona con un clic en su trazo; si va de abajo arriba se dibuja con flecha; se"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI19_alternativas_con_el_raton",
@@ -327,7 +326,7 @@
     "REQ-EDT-02",
     "REQ-EDT-03"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-03: mover y ocultar la flecha son presentación; un arrastre, un deshacer. Darle la vuelta"
+   "summary": "REQ-EDT-02, REQ-EDT-03: mover y ocultar la flecha son presentación; un arrastre, un deshacer. La flecha sigue"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI30_recolocar_retorno_y_mover_etapa",
@@ -346,7 +345,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: la flecha de unión también se mueve y se oculta; se orienta con el tramo horizontal."
+   "summary": "REQ-EDT-02: la flecha de unión no sale por defecto (el enlace baja); se muestra, se mueve y se oculta; la"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI32_dibujo_manual_persistencia_y_simulacion",
@@ -359,14 +358,13 @@
    "summary": "REQ-EDT-01, REQ-SIM-03: los ajustes sobreviven a guardar, abrir, simular y guardar otra copia."
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI33_dar_la_vuelta_a_la_flecha_invierte_el_enlace",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI33_una_flecha_por_lazo_y_ninguna_al_bajar",
    "case": "S-EDI33",
    "outcome": "pasa",
    "requirements": [
-    "REQ-EDT-03",
-    "REQ-MOD-03"
+    "REQ-EDT-02"
    ],
-   "summary": "REQ-MOD-03, REQ-EDT-03: darle la vuelta a la flecha es invertir el enlace; la flecha nunca contradice el"
+   "summary": "REQ-EDT-02: por defecto solo lleva flecha un enlace que sube, y una por lazo, en el enlace más largo (figura del"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI34_agarrar_una_transicion_la_mueve",
@@ -385,6 +383,33 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-EDT-02: un enlace siempre sale de la etapa y llega a la transición (y al revés) con un tramo vertical"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI36_sin_escalones_en_el_tramo_horizontal",
+   "case": "S-EDI36",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un carril guardado cuando el enlace daba un rodeo no deja un escalón cuando ya no hace falta; con"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI37_iman_alinea_con_el_elemento_enlazado",
+   "case": "S-EDI37",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-03: al mover una etapa o una transición a dos pasos de rejilla o menos de la vertical de un elemento"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI38_panel_izquierdo_plegable_y_figura_de_la_paleta",
+   "case": "S-EDI38",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el panel izquierdo (paleta y propiedades) se pliega como los otros, desde su flecha o desde Ver, y"
   },
   {
    "test": "test_editor_escritorio.Notacion.test_SEDI16_notacion_del_usuario",

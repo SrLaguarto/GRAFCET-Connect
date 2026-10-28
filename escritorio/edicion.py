@@ -27,6 +27,7 @@ from .diagrama import REJILLA, SX, ancla_en, anclas, barra, elemento_en, enlaces
 
 HERRAMIENTAS = ("seleccionar", "etapa", "transicion", "simultaneidad")  # sin herramienta, el ratón selecciona, mueve y enlaza
 DY = 80  # distancia vertical entre una etapa y su transición (la de los ejemplos)
+IMAN = 40  # a qué distancia horizontal (dos pasos de rejilla) un elemento movido se alinea con uno enlazado
 
 
 def ajustar(v: float) -> int:
@@ -264,6 +265,21 @@ class Edicion(QObject):
             self.cambiado.emit()
         return True
 
+    def _iman(self, ident: str, x: float) -> float:
+        """Al mover una etapa o una transición cerca de la vertical de un elemento enlazado con ella (a IMAN o menos), se
+        alinea con él: el enlace queda recto, sin la S de un desplazamiento de un par de puntos de rejilla."""
+        pos = posiciones(self.M)
+        enlazados = set()
+        for t in self.M["transitions"]:
+            pasos = set(t.get("preDib", t["pre"])) | set(t.get("postDib", t["post"]))
+            if t["id"] == ident:
+                enlazados |= pasos
+            elif ident in pasos:
+                enlazados.add(t["id"])
+        xs = [pos[o][0] - SX for o in enlazados if o in pos]
+        cerca = min(xs, key=lambda v: abs(v - x), default=None)
+        return cerca if cerca is not None and 0 < abs(cerca - x) <= IMAN else x
+
     def mover(self, p: QPointF, event: Any = None) -> bool:
         if self.inicio_rama and (p - self.inicio_rama["pos"]).manhattanLength() > 8:
             self.enlace, self.inicio_rama = self.inicio_rama, None
@@ -302,6 +318,7 @@ class Edicion(QObject):
             return True
         if a:
             x, y = self._modelo(QPointF(p.x() - a["dx"], p.y() - a["dy"]))
+            x = self._iman(a["id"], x)
             if (x, y) != (a["x"], a["y"]):
                 a.update(x=x, y=y, movido=True)
                 self.reconstruir()
@@ -494,25 +511,6 @@ class Edicion(QObject):
         self.sel = [bid]
         self.cambia()
         return bid
-
-    def invertir(self) -> bool:
-        """Invierte la dirección del enlace seleccionado (REQ-MOD-03): la etapa pasa de anterior a siguiente o al revés."""
-        if len(self.sel) != 1 or "|" not in self.sel[0] or self.sel[0].endswith("|barra"):
-            return False
-        tid, sid, rol = self.sel[0].split("|")
-        t = next(v for v in self.M["transitions"] if v["id"] == tid)
-        destino = "post" if rol == "pre" else "pre"
-        if t["post" if destino == "post" else "pre"] and not t["simulPost" if destino == "post" else "simulPre"]:
-            self.mensaje = "Al otro lado ya hay una etapa: varias en una transición son una simultaneidad."
-            self.cambiado.emit()
-            return False
-        with self.ed.group("invertir enlace"):
-            self.ed.invert_link(tid, sid)
-            if self.sel[0] in self.ed.link_styles():  # el ajuste manual era del recorrido anterior
-                self.ed.set_link_style(self.sel[0], {})
-        self.sel = [f"{tid}|{sid}|{destino}"]
-        self.cambia()
-        return True
 
     def _separar_ramas(self, origen: str, destino: str) -> None:
         """Una etapa con dos transiciones (o dos transiciones hacia una etapa) es una alternativa: si la transición que se

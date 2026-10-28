@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-28T12:04:16+00:00 · Python 3.13.17 · Linux-6.18.44-fc-v180-x86_64-with-glibc2.39 · 185 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-28T12:45:43+00:00 · Python 3.13.17 · Linux-6.18.44-fc-v180-x86_64-with-glibc2.39 · 188 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 85 casos, 88 pruebas, 88 pasan.
+Pruebas suplementarias S-xx: 88 casos, 91 pruebas, 91 pasan.
 
 ## Requisitos
 
@@ -45,7 +45,7 @@ Pruebas suplementarias S-xx: 85 casos, 88 pruebas, 88 pasan.
 | REQ-CR-04 | P/alta | 02 | DOC | tests | R-01 (documental) | Ningún oráculo procede de otro producto; los oráculos son los del documento 11 |
 | REQ-MOD-01 | P/crítica | 03 | IMPL-P | model, persistence | T-21b ✔, T-22b ✔ | IDs únicos, propietario y referencias existentes; duplicados/huérfanos impiden simular |
 | REQ-MOD-02 | I/crítica | 03 | IMPL-I | model, editor | T-21b ✔ | D-ALTERNANCIA; enlaces etapa→etapa como borrador (P-IMP-05) |
-| REQ-MOD-03 | P/crítica | 03 | IMPL-P | editor | T-21c ✔, S-EDI07 ✔, S-EDI17 ✔, S-EDI18 ✔, S-EDI19 ✔, S-EDI20 ✔, S-EDI21 ✔, S-EDI23 ✔, S-EDI24 ✔, S-EDI26 ✔, S-EDI33 ✔ | Solo se conecta por operación explícita; la geometría no crea relaciones |
+| REQ-MOD-03 | P/crítica | 03 | IMPL-P | editor | T-21c ✔, S-EDI07 ✔, S-EDI17 ✔, S-EDI19 ✔, S-EDI20 ✔, S-EDI21 ✔, S-EDI23 ✔, S-EDI24 ✔, S-EDI26 ✔ | Solo se conecta por operación explícita; la geometría no crea relaciones |
 | REQ-MOD-04 | I/alta | 03 | IMPL-DEC | model, engine | T-03c ✔, T-10e ◆, T-01d ◆, S-U07 ✔, S-OPT03e ✔ | Sumideros I. U-07 cerrada por el responsable (comparador, 27-10-2026, P-IMP-22): fuente por evento una vez por flanco (6.3 A); sin etapas iniciales, fuente de nivel y transición sin lados no compilan (6.1 A, 6.2 A, 6.4 A) |
 | REQ-MOD-05 | P/alta | 03 | IMPL-P | model, expressions, editor | T-09c ✔ | Texto libre conservado como descriptivo; D-EXP-PENDIENTE localizado |
 | REQ-MOD-06 | P/crítica | 03 | IMPL-P | model, editor, engine | T-04c ✔, T-21d ✔ | Renombrar, mover u ordenar no cambia observables ni revisión semántica (H-13) |
@@ -80,8 +80,8 @@ Pruebas suplementarias S-xx: 85 casos, 88 pruebas, 88 pasan.
 | REQ-JER-06 | U/crítica | 06 | IMPL-DEC | hierarchy | T-18d ◆, T-20a ◆, T-20c ◆ | Cerradas por el responsable: 7.2 B, 7.3 A, 7.4 C, 7.5 A, 7.6 B, 7.7 A y 7.8 A (P-IMP-24 a P-IMP-26). Vaciar por forzado un recinto con su encapsulante activa no se preguntó y se detiene (U-08) |
 | REQ-JER-07 | P/alta | 06 | PEND-UI | — | T-21g —, T-24a ◐ | Plegado y navegación pertenecen a la vista |
 | REQ-EDT-01 | P/alta | 07 | PARCIAL | editor, persistence | T-21a ◐, S-EDI03 ✔, S-EDI04 ✔, S-EDI05 ✔, S-EDI08 ✔, S-EDI28 ✔, S-EDI32 ✔, S-APP06 ✔ | Crear, abrir, guardar y duplicar sin interfaz; el simulador de escritorio abre proyectos y modelos, crea un grafcet nuevo, lo guarda y lo reabre (P-IMP-29, P-IMP-32), y pregunta antes de descartar cambios; sin duplicar desde la interfaz |
-| REQ-EDT-02 | P/alta | 07 | IMPL-P | editor | T-21b ✔, T-21c ✔, S-EDI03 ✔, S-EDI10 ✔, S-EDI11 ✔, S-EDI12 ✔, S-EDI13 ✔, S-EDI14 ✔, S-EDI15 ✔, S-EDI17 ✔, S-EDI18 ✔, S-EDI19 ✔, S-EDI21 ✔, S-EDI24 ✔, S-EDI25 ✔, S-EDI28 ✔, S-EDI29 ✔, S-EDI30 ✔, S-EDI31 ✔, S-EDI34 ✔, S-EDI35 ✔, S-EDI16 ✔, S-EDI01 ✔ | Insertar, conectar, editar; borrador inválido guardable; en la interfaz de escritorio: etapas, transiciones, enlaces y receptividades de un secuencial (P-IMP-32); selección, salto y repetición con el ratón (P-IMP-33), flechas y recorridos manuales persistentes (P-IMP-35), tramos verticales mínimos y transición que se agarra sin sacar rama (P-IMP-36); panel de acciones y jerarquías, pendientes |
-| REQ-EDT-03 | P/alta | 07 | PARCIAL | editor | T-04c ✔, T-21c ✔, S-EDI10 ✔, S-EDI29 ✔, S-EDI30 ✔, S-EDI33 ✔, S-EDI01 ✔ | Mover, alinear, distribuir y deshacer; zoom en la vista del simulador (P-IMP-29); en la interfaz de escritorio, mover con rejilla de 20 y deshacer o rehacer (P-IMP-32); alinear y distribuir, pendientes en la interfaz |
+| REQ-EDT-02 | P/alta | 07 | IMPL-P | editor | T-21b ✔, T-21c ✔, S-EDI03 ✔, S-EDI10 ✔, S-EDI11 ✔, S-EDI12 ✔, S-EDI13 ✔, S-EDI14 ✔, S-EDI15 ✔, S-EDI17 ✔, S-EDI18 ✔, S-EDI19 ✔, S-EDI21 ✔, S-EDI24 ✔, S-EDI25 ✔, S-EDI28 ✔, S-EDI29 ✔, S-EDI30 ✔, S-EDI31 ✔, S-EDI33 ✔, S-EDI34 ✔, S-EDI35 ✔, S-EDI36 ✔, S-EDI38 ✔, S-EDI16 ✔, S-EDI01 ✔ | Insertar, conectar, editar; borrador inválido guardable; en la interfaz de escritorio: etapas, transiciones, enlaces y receptividades de un secuencial (P-IMP-32); selección, salto y repetición con el ratón (P-IMP-33), flechas y recorridos manuales persistentes (P-IMP-35), tramos verticales mínimos y transición que se agarra sin sacar rama (P-IMP-36), una flecha por lazo, imán y arrastre desde la paleta (P-IMP-37); panel de acciones y jerarquías, pendientes |
+| REQ-EDT-03 | P/alta | 07 | PARCIAL | editor | T-04c ✔, T-21c ✔, S-EDI10 ✔, S-EDI29 ✔, S-EDI30 ✔, S-EDI37 ✔, S-EDI01 ✔ | Mover, alinear, distribuir y deshacer; zoom en la vista del simulador (P-IMP-29); en la interfaz de escritorio, mover con rejilla de 20 y deshacer o rehacer (P-IMP-32); alinear y distribuir, pendientes en la interfaz |
 | REQ-EDT-04 | P/crítica | 07 | IMPL-P | editor | T-21e ✔ | Copiar/pegar con IDs nuevos y decisión explícita de referencias externas |
 | REQ-EDT-05 | P/crítica | 07 | IMPL-P | editor | T-21f ✔, S-EDI05 ✔ | Transacciones atómicas; fallo fuera del historial; rehacer descartado |
 | REQ-EDT-06 | P/crítica | 07 | IMPL-P | editor | T-21d ✔, S-EDI08 ✔ | Renombrar sin cambiar ID, usos actualizados, colisión diagnosticada, búsqueda con ruta |
@@ -273,7 +273,7 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-EDI15 | REQ-EDT-02 | pasa | `test_SEDI15_transiciones_mas_altas_de_acertar` | el area de una transicion es mas alta que su trazo: se acierta sin punteria. |
 | S-EDI16 | REQ-EDT-02 | pasa | `test_SEDI16_notacion_del_usuario` | ↑a, ↓a y X1 se traducen a la sintaxis del núcleo y vuelven; los espacios se ignoran al escribir y |
 | S-EDI17 | REQ-EDT-02, REQ-MOD-03 | pasa | `test_SEDI17_barra_de_simultaneidad` | la simultaneidad es una barra de doble trazo que se arrastra desde la paleta, se |
-| S-EDI18 | REQ-EDT-02, REQ-MOD-03 | pasa | `test_SEDI18_enlaces_seleccionables_flecha_e_invertir` | un enlace se selecciona con un clic en su trazo; «Invertir direccion» cambia su sentido y, |
+| S-EDI18 | REQ-EDT-02 | pasa | `test_SEDI18_enlaces_seleccionables_flecha_y_quitar` | un enlace se selecciona con un clic en su trazo; si va de abajo arriba se dibuja con flecha; se |
 | S-EDI19 | REQ-EDT-02, REQ-MOD-03 | pasa | `test_SEDI19_alternativas_con_el_raton` | la alternativa (O) no es un elemento: se construye con el raton. Una segunda transicion |
 | S-EDI20 | REQ-MOD-03 | pasa | `test_SEDI20_sentido_del_enlace_segun_el_trazo` | de arriba abajo, el enlace no lleva flecha; de abajo arriba, si (sale solo del trazo). |
 | S-EDI21 | REQ-EDT-02, REQ-MOD-03 | pasa | `test_SEDI21_abrir_ramas_con_el_raton_de_verdad` | con eventos de raton reales sobre el dibujo (pulsar, mover, soltar): arrastrar de un punto |
@@ -284,13 +284,16 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-EDI26 | REQ-MOD-03 | pasa | `test_SEDI26_geometria_comun_retorno_y_movimiento` | uniones comunes, retorno fuera de la etapa, flecha automática y recorridos iguales en Qt/web. |
 | S-EDI27 | REQ-SIM-03 | pasa | `test_SEDI27_ejemplos_seleccion_salto_repeticion` | las ramas construidas ejecutan selección, salto y repetición sin cambiar el motor. |
 | S-EDI28 | REQ-EDT-01, REQ-EDT-02 | pasa | `test_SEDI28_salto_inverso_guardar_y_reabrir` | arrastrar la entrada de una etapa a una salida crea el salto; persiste y se deshace entero. |
-| S-EDI29 | REQ-EDT-02, REQ-EDT-03 | pasa | `test_SEDI29_flecha_arrastrar_y_ocultar_sin_cambiar_modelo` | mover y ocultar la flecha son presentación; un arrastre, un deshacer. Darle la vuelta |
+| S-EDI29 | REQ-EDT-02, REQ-EDT-03 | pasa | `test_SEDI29_flecha_arrastrar_y_ocultar_sin_cambiar_modelo` | mover y ocultar la flecha son presentación; un arrastre, un deshacer. La flecha sigue |
 | S-EDI30 | REQ-EDT-02, REQ-EDT-03 | pasa | `test_SEDI30_recolocar_retorno_y_mover_etapa` | tiradores para carril y alturas; extremos conectados al mover etapas. El recorrido no |
-| S-EDI31 | REQ-EDT-02 | pasa | `test_SEDI31_flecha_union_horizontal_independiente` | la flecha de unión también se mueve y se oculta; se orienta con el tramo horizontal. |
+| S-EDI31 | REQ-EDT-02 | pasa | `test_SEDI31_flecha_union_horizontal_independiente` | la flecha de unión no sale por defecto (el enlace baja); se muestra, se mueve y se oculta; la |
 | S-EDI32 | REQ-EDT-01, REQ-SIM-03 | pasa | `test_SEDI32_dibujo_manual_persistencia_y_simulacion` | los ajustes sobreviven a guardar, abrir, simular y guardar otra copia. |
-| S-EDI33 | REQ-EDT-03, REQ-MOD-03 | pasa | `test_SEDI33_dar_la_vuelta_a_la_flecha_invierte_el_enlace` | darle la vuelta a la flecha es invertir el enlace; la flecha nunca contradice el |
+| S-EDI33 | REQ-EDT-02 | pasa | `test_SEDI33_una_flecha_por_lazo_y_ninguna_al_bajar` | por defecto solo lleva flecha un enlace que sube, y una por lazo, en el enlace más largo (figura del |
 | S-EDI34 | REQ-EDT-02 | pasa | `test_SEDI34_agarrar_una_transicion_la_mueve` | el trazo de una transición se agarra para moverla; sus puntos de unión quedan al final de su |
 | S-EDI35 | REQ-EDT-02 | pasa | `test_SEDI35_tramo_vertical_minimo_en_etapas_y_transiciones` | un enlace siempre sale de la etapa y llega a la transición (y al revés) con un tramo vertical |
+| S-EDI36 | REQ-EDT-02 | pasa | `test_SEDI36_sin_escalones_en_el_tramo_horizontal` | un carril guardado cuando el enlace daba un rodeo no deja un escalón cuando ya no hace falta; con |
+| S-EDI37 | REQ-EDT-03 | pasa | `test_SEDI37_iman_alinea_con_el_elemento_enlazado` | al mover una etapa o una transición a dos pasos de rejilla o menos de la vertical de un elemento |
+| S-EDI38 | REQ-EDT-02 | pasa | `test_SEDI38_panel_izquierdo_plegable_y_figura_de_la_paleta` | el panel izquierdo (paleta y propiedades) se pliega como los otros, desde su flecha o desde Ver, y |
 | S-EJ01 | REQ-ACT-05, REQ-EVT-03, REQ-SEM-06 | pasa | `test_SEJ01_contador_en_etapa_inestable` | ejemplo del responsable; la etapa inestable 2 suma en CT y vuelve a 1 mientras CT < 3. |
 | S-EJ02 | REQ-ACT-02, REQ-EVT-01, REQ-EVT-03 | pasa | `test_SEJ02_contador_por_flanco_en_una_etapa` | ejemplo del responsable; una cuenta por cada subida de I02 con 1 activa, ninguna en 0. |
 | S-ESC01 | REQ-ACT-03, REQ-EDT-09 | pasa | `test_SESC01_conflictos_seguros_no_compilan` | activación/activación, desactivación/desactivación, activación/desactivación y misma etapa. |

@@ -12,8 +12,8 @@ import html
 import re
 from typing import Any
 
-from PySide6.QtCore import QMimeData, QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QMimeData, QPoint, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QDrag, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel,
                                QLineEdit, QListView, QListWidget, QListWidgetItem, QPushButton, QScrollArea,
                                QStackedWidget, QVBoxLayout, QWidget)
@@ -21,7 +21,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 from grafcet.notation import a_usuario
 from grafcet.view import norm
 
-from .diagrama import COL, _html
+from .diagrama import COL, H, TB, _html
+from grafcet.routing import TALLO_E, TALLO_T
 from .edicion import HERRAMIENTAS
 
 NARANJA = COL["glow"]
@@ -59,6 +60,45 @@ def icono(h: str) -> QIcon:
     return QIcon(pm)
 
 
+def figura(h: str, escala: float = 1.0, dpr: float = 1.0) -> tuple[QPixmap, QPoint]:
+    """El elemento tal como quedará en el dibujo, al zoom del dibujo, para llevarlo pegado al puntero al arrastrarlo
+    desde la paleta, y el punto que va bajo el puntero: el que se coloca donde se suelta (el centro de la etapa o de la
+    transición; el centro del trazo superior de la barra)."""
+    m = 4  # margen, en píxeles
+    if h == "etapa":
+        w, alto, cx, cy = 2 * H, 2 * H + 2 * TALLO_E, H, TALLO_E + H
+    elif h == "transicion":
+        w, alto, cx, cy = 2 * TB, 2 * TALLO_T, TB, TALLO_T
+    else:
+        w, alto, cx, cy = 120, 4 + 2 * TALLO_E, 60, TALLO_E
+    pm = QPixmap(round((w * escala + 2 * m) * dpr), round((alto * escala + 2 * m) * dpr))
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setOpacity(0.85)
+    p.translate(m, m)
+    p.scale(escala, escala)
+    p.setPen(QPen(QColor(COL["text"]), 1.6))
+    if h == "etapa":
+        p.fillRect(QRectF(0, TALLO_E, 2 * H, 2 * H), QColor(COL["accent_soft"]))
+        p.drawRect(QRectF(0, TALLO_E, 2 * H, 2 * H))
+        p.drawLine(QPointF(H, 0), QPointF(H, TALLO_E))
+        p.drawLine(QPointF(H, TALLO_E + 2 * H), QPointF(H, alto))
+    elif h == "transicion":
+        p.drawLine(QPointF(TB, 0), QPointF(TB, alto))
+        p.setPen(QPen(QColor(COL["muted"]), 2.4))
+        p.drawLine(QPointF(0, TALLO_T), QPointF(2 * TB, TALLO_T))
+    else:
+        for x in (30, 90):
+            p.drawLine(QPointF(x, 0), QPointF(x, TALLO_E))
+        p.drawLine(QPointF(0, TALLO_E), QPointF(120, TALLO_E))
+        p.drawLine(QPointF(0, TALLO_E + 4), QPointF(120, TALLO_E + 4))
+        p.drawLine(QPointF(60, TALLO_E + 4), QPointF(60, alto))
+    p.end()
+    return pm, QPoint(round(cx * escala + m), round(cy * escala + m))
+
+
 class Paleta(QListWidget):
     """Elementos del grafcet. Se arrastran al dibujo, o se hace clic y después en el lienzo (una vez)."""
 
@@ -82,6 +122,20 @@ class Paleta(QListWidget):
         self.setCurrentRow(-1)
         self.currentItemChanged.connect(lambda it, _: it and self.elegida.emit(it.data(Qt.ItemDataRole.UserRole)))
         self.setMaximumHeight(210)
+
+    escala = staticmethod(lambda: 1.0)  # zoom del dibujo; lo pone la ventana
+
+    def startDrag(self, actions: Any) -> None:  # noqa: N802
+        """Se arrastra el elemento mismo, al tamaño con que se verá en el dibujo, no el icono de la lista."""
+        it = self.currentItem()
+        if it is None:
+            return
+        drag = QDrag(self)
+        drag.setMimeData(self.mimeData([it]))
+        pm, punto = figura(it.data(Qt.ItemDataRole.UserRole), self.escala(), self.devicePixelRatioF())
+        drag.setPixmap(pm)
+        drag.setHotSpot(punto)
+        drag.exec(Qt.DropAction.CopyAction)
 
     def mimeData(self, items: list[QListWidgetItem]) -> QMimeData:  # noqa: N802
         m = QMimeData()
@@ -222,11 +276,6 @@ class PanelPropiedades(QWidget):
         self.f_visible = QCheckBox("Mostrar flecha")
         self.f_visible.clicked.connect(lambda on: self.e.ajustar_flecha(visible=on))
         f.addWidget(self.f_visible)
-        self.f_invertir = QPushButton("Dar la vuelta a la flecha")
-        self.f_invertir.setToolTip("Invierte el enlace: la etapa pasa de anterior a siguiente de la transición, o al "
-                                   "revés. La flecha siempre indica el sentido real del enlace")
-        self.f_invertir.clicked.connect(self._invertir)
-        f.addWidget(self.f_invertir)
         self.f_auto = QPushButton("Restablecer flecha automática")
         self.f_auto.clicked.connect(lambda: self.e.restablecer_flecha())
         f.addWidget(self.f_auto)
@@ -240,11 +289,6 @@ class PanelPropiedades(QWidget):
         if self.e is not None and self.f_tipo.currentData():
             self.e.flecha = self.f_tipo.currentData()
             self.mostrar(self.e)
-
-    def _invertir(self) -> None:
-        if not self.e.invertir():
-            self.msg.setText(self.e.mensaje or "No se puede invertir este enlace.")
-            self.msg.setStyleSheet(f"color: {COL['err']}")
 
     def _barra(self) -> QWidget:
         w = QWidget()
@@ -293,11 +337,10 @@ class PanelPropiedades(QWidget):
                                   f"Por debajo: {', '.join(e.nombre(i) for i in b['abajo']) or '—'}")
         elif kind == "enlace":
             tid, sid, rol = vivo.split("|")
-            self.f_invertir.setVisible(rol != "barra")
             self.l_enlace.setText(f"{e.nombre(vivo)}<br>Arrastre la flecha a lo largo del enlace. "
                                   "Arrastre los cuadrados para recolocar los tramos. "
-                                  "Los ajustes de dibujo no cambian la simulación; «Dar la vuelta a la flecha» sí, "
-                                  "porque invierte el enlace.")
+                                  "La flecha sigue el sentido del enlace; los ajustes de dibujo no cambian la "
+                                  "simulación.")
             from .diagrama import enlaces
             ruta = next(r for r in enlaces(e.M) if r["id"] == vivo)
             kinds = ruta.get("arrowKinds", ["flow"])

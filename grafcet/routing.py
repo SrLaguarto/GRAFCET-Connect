@@ -4,6 +4,7 @@ from typing import Any
 SX, H, SIMUL, BARRA_GROSOR = 100, 22, 14, 4
 TALLO_E = 16  # tramo vertical mínimo de un enlace al salir de una etapa o al llegar a ella
 TALLO_T = 24  # ... y a cada lado de una transición: el trazo nunca llega de lado
+TALLO_CORTO = 8  # si no caben los tramos enteros, se acortan hasta aquí antes de dar un rodeo
 
 def posiciones(M):
     return {n["id"]: (n["x"] + SX, n["y"]) for key in ("steps", "macros", "transitions") for n in M.get(key, [])}
@@ -39,18 +40,50 @@ def _bajada(a: tuple[float, float], b: tuple[float, float], tallo_a: float, tall
             comun_en_a: bool) -> list[tuple[float, float]]:
     """Enlace descendente de `a` (salida inferior) a `b` (entrada superior) con su tramo horizontal a media altura, sin
     comerse el tramo vertical mínimo de cada extremo. `comun` es la línea horizontal que comparten las ramas (del lado de
-    `a` o de `b`). Si los dos elementos están tan cerca en altura que no caben los dos tramos, el enlace baja su tramo
-    desde `a`, cruza por en medio, sube hasta encima de `b` y entra por arriba (con flecha, porque sube)."""
-    lo, hi = a[1] + tallo_a, b[1] - tallo_b
+    `a` o de `b`). Si no caben los dos tramos enteros, se acortan hasta TALLO_CORTO; solo si `b` está casi a la altura de
+    `a` (o por encima), el enlace baja su tramo desde `a`, cruza por en medio, sube hasta encima de `b` y entra por arriba
+    (con flecha, porque sube): así nunca queda un escalón de pocos puntos en el tramo horizontal."""
     mid = comun if comun is not None else (a[1] + b[1]) / 2
     if abs(a[0] - b[0]) < 1:
         return [a, (a[0], mid), (b[0], mid), b]
-    if lo <= hi:
-        mid = min(max(mid, lo), hi)
-        return [a, (a[0], mid), (b[0], mid), b]
+    for ta, tb in ((tallo_a, tallo_b), (TALLO_CORTO, TALLO_CORTO)):
+        if a[1] + ta <= b[1] - tb:
+            mid = min(max(mid, a[1] + ta), b[1] - tb)
+            return [a, (a[0], mid), (b[0], mid), b]
+    lo, hi = a[1] + tallo_a, b[1] - tallo_b
     y1, y2 = (max(mid, lo), hi) if comun is not None and comun_en_a else (lo, min(mid, hi)) if comun is not None else (lo, hi)
     xm = (a[0] + b[0]) / 2
     return [a, (a[0], y1), (xm, y1), (xm, y2), (b[0], y2), b]
+
+
+def _flechas_de_lazo(out: list[dict[str, Any]]) -> set[str]:
+    """Qué enlaces que suben llevan flecha por defecto: una por lazo, en el más largo. Se recorren de mayor a menor
+    longitud; uno lleva flecha si no forma parte de ningún lazo o si alguno de sus lazos aún no tiene flecha (por
+    ejemplo, 7 → t3 → 7: la flecha va en el retorno largo de t3 a 7 y no en el enlace corto de 7 a t3)."""
+    aristas = {e["id"]: (e["sid"], e["tid"]) if e["rol"] == "pre" else (e["tid"], e["sid"])
+               for e in out if e["rol"] in ("pre", "post")}
+
+    def llega(origen: str, destino: str, sin: set[str]) -> bool:
+        vistos, pila = {origen}, [origen]
+        while pila:
+            n = pila.pop()
+            if n == destino:
+                return True
+            for ident, (a, b) in aristas.items():
+                if a == n and ident not in sin and b not in vistos:
+                    vistos.add(b)
+                    pila.append(b)
+        return False
+
+    def largo(e: dict[str, Any]) -> float:
+        return sum(abs(b[0] - a[0]) + abs(b[1] - a[1]) for a, b in zip(e["pts"], e["pts"][1:]))
+
+    con: set[str] = set()
+    for e in sorted((e for e in out if e["arriba"]), key=lambda e: (-largo(e), e["id"])):
+        a, b = aristas[e["id"]]
+        if not llega(b, a, set()) or llega(b, a, con):
+            con.add(e["id"])
+    return con
 
 
 def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
@@ -86,7 +119,7 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
                 pts = _bajada((px, py + H), (tx, ty), TALLO_E, TALLO_T, salidas.get(sid), True)
             out.append({"id": f"{t['id']}|{sid}|pre", "tid": t["id"], "sid": sid, "rol": "pre", "pts": pts,
                         "tallos": (TALLO_E, 0 if t.get("simulPre") else TALLO_T),
-                        "arriba": not t.get("simulPre") and any(b[1] < a[1] for a, b in zip(pts, pts[1:]))})
+                        "simul": bool(t.get("simulPre"))})
         for sid in t.get("postDib", t["post"]):
             if sid not in pos:
                 continue
@@ -95,7 +128,7 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
                 lx, top = _carril(lanes, left, min_x, t, tx, px), entradas.get(sid, py - H - TALLO_E)
                 pts = [(tx, ty), (tx, ty + TALLO_T), (lx, ty + TALLO_T), (lx, top), (px, top), (px, py - H)]
                 out.append({"id": f"{t['id']}|{sid}|post", "tid": t["id"], "sid": sid, "rol": "post", "pts": pts,
-                            "tallos": (TALLO_T, TALLO_E), "arriba": True})
+                            "tallos": (TALLO_T, TALLO_E), "simul": False})
                 continue
             if t.get("simulPost"):
                 pts = [(px, ty + SIMUL + 4), (px, py - H)]
@@ -103,7 +136,7 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
                 pts = _bajada((tx, ty), (px, py - H), TALLO_T, TALLO_E, entradas.get(sid), False)
             out.append({"id": f"{t['id']}|{sid}|post", "tid": t["id"], "sid": sid, "rol": "post", "pts": pts,
                         "tallos": (0 if t.get("simulPost") else TALLO_T, TALLO_E),
-                        "arriba": not t.get("simulPost") and any(b[1] < a[1] for a, b in zip(pts, pts[1:]))})
+                        "simul": bool(t.get("simulPost"))})
     steps = {s["id"] for s in M["steps"]}
     for b in M.get("bars", []):  # conectores de las barras: del elemento de arriba a la barra y de la barra al de abajo
         bx, by, w, h = barra(b)
@@ -122,7 +155,7 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
                     mid = (by + h + y0) / 2
                     pts = [(cx, by + h), (cx, mid), (ex, mid), (ex, y0)]
                 out.append({"id": f"{b['id']}|{ident}|barra", "tid": b["id"], "sid": ident, "rol": "barra", "pts": pts,
-                            "tallos": (0, 0), "arriba": False})
+                            "tallos": (0, 0), "simul": False})
     llegadas = {}
     for e in out:
         if e["rol"] == "post":
@@ -133,21 +166,28 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
         route = style.get("route", {})
         # Un tramo fijado a mano tampoco se come el tramo vertical mínimo de cada extremo
         bajo, alto = pts[0][1] + e["tallos"][0], pts[-1][1] - e["tallos"][1]
-        if "laneX" in route:
+        if "laneX" in route and len(pts) == 6:
             x = float(route["laneX"]) + SX
             y1 = max(float(route.get("exitY", bajo)), bajo)
             y2 = min(float(route.get("entryY", alto)), alto)
             a, b = pts[0], pts[-1]
             pts = [a, (a[0], y1), (x, y1), (x, y2), (b[0], y2), b]
-        elif "middleY" in route and len(pts) == 4:
-            y = float(route["middleY"])
+        elif ("middleY" in route or "laneX" in route) and len(pts) == 4:
+            # Un carril guardado cuando el enlace daba un rodeo ya no hace falta: queda su altura de salida, sin escalón
+            y = float(route.get("middleY", route.get("exitY", pts[1][1])))
             y = min(max(y, bajo), alto) if bajo <= alto else y
             pts = [pts[0], (pts[0][0], y), (pts[-1][0], y), pts[-1]]
         e["pts"] = pts
+        # Sube (y por tanto lleva flecha según la norma) si algún tramo va hacia arriba, ya recolocado
+        e["arriba"] = e["rol"] != "barra" and not e["simul"] and any(b[1] < a[1] for a, b in zip(pts, pts[1:]))
         e["handles"] = [{"segment": i, "pos": (a[0]+0.35*(b[0]-a[0]), a[1]+0.35*(b[1]-a[1])),
                           "axis": "x" if a[0] == b[0] else "y"}
                          for i, (a, b) in enumerate(zip(pts, pts[1:]))
                          if 0 < i < len(pts)-2 and a != b]
+    auto = _flechas_de_lazo(out)
+    for e in out:
+        style = M.get("linkStyles", {}).get(e["id"], {})
+        pts = e["pts"]
         segments = [(i, a, b) for i, (a, b) in enumerate(zip(pts, pts[1:])) if a != b]
         e["arrows"] = []
         if not segments:
@@ -157,10 +197,11 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
         joins = llegadas.get(e["sid"], [])
         has_join = e["rol"] == "post" and len(joins) > 1 and joins[0] == e["id"]
         e["arrowKinds"] = ["flow"] + (["join"] if has_join or "join" in style.get("arrows", {}) else [])
-        for key, auto, segment, ratio in (("flow", e["arriba"], default, 0.5),
-                                          ("join", has_join, len(pts)-2, 0.5)):
+        # Por defecto, solo la flecha de recorrido de un enlace que sube, una por lazo; la de unión se muestra a mano
+        for key, visible, segment, ratio in (("flow", e["id"] in auto, default, 0.5),
+                                             ("join", False, len(pts)-2, 0.5)):
             config = style.get("arrows", {}).get(key, {})
-            if not config.get("visible", auto):
+            if not config.get("visible", visible):
                 continue
             index = max(0, min(int(config.get("segment", segment)), len(pts)-2))
             if pts[index] == pts[index+1]:
@@ -169,7 +210,7 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
             k = max(0.0, min(1.0, float(config.get("ratio", ratio))))
             dx, dy = b[0]-a[0], b[1]-a[1]
             length = (dx*dx+dy*dy)**0.5
-            ux, uy = dx/length, dy/length  # la punta sigue el sentido lógico: darle la vuelta es invertir el enlace
+            ux, uy = dx/length, dy/length  # la punta sigue el sentido del enlace
             x, y = a[0]+k*dx, a[1]+k*dy
             triangle = [(x+6*ux, y+6*uy), (x-5*ux-5*uy, y-5*uy+5*ux), (x-5*ux+5*uy, y-5*uy-5*ux)]
             e["arrows"].append({"key": key, "pos": (x, y), "segment": index, "ratio": k, "pts": triangle})

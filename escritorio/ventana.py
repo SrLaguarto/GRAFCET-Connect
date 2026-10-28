@@ -199,8 +199,11 @@ class Ventana(QMainWindow):
         self.a_reiniciar = self._accion("Reiniciar", self.reiniciar, "Ctrl+R")
         self.a_reiniciar.setToolTip("Reiniciar la simulación (Ctrl+R)")
         ver = bar.addMenu("&Ver")
+        self.a_izquierdo = self._accion("Panel i&zquierdo (al editar)", lambda on: self._mostrar_panel("izquierdo", on),
+                                        "Ctrl+L", True)
         self.a_derecho = self._accion("Panel &derecho", lambda on: self._mostrar_panel("derecho", on), "Ctrl+B", True)
         self.a_inferior = self._accion("Panel &inferior", lambda on: self._mostrar_panel("inferior", on), "Ctrl+J", True)
+        ver.addAction(self.a_izquierdo)
         ver.addAction(self.a_derecho)
         ver.addAction(self.a_inferior)
         ver.addSeparator()
@@ -358,6 +361,7 @@ class Ventana(QMainWindow):
         # Izquierda: paleta de elementos (arriba) y propiedades del elemento seleccionado (abajo); solo al editar
         self.paleta = Paleta()
         self.paleta.elegida.connect(self.herramienta)
+        self.paleta.escala = self.diagrama.escala
         self.props = PanelPropiedades()
         izq_edit = QSplitter(Qt.Orientation.Vertical)
         izq_edit.addWidget(self.paleta)
@@ -406,14 +410,17 @@ class Ventana(QMainWindow):
         self._acciones_edicion(False)
 
     def _paneles(self) -> None:
-        """Flechas en el borde del dibujo para plegar del todo el panel derecho y el inferior, y el estado guardado."""
+        """Flechas en el borde del dibujo para plegar del todo los paneles (el izquierdo, el de la paleta y las
+        propiedades, solo existe al editar), y el estado guardado."""
         self.flechas = {}
-        for nombre, lugar in (("derecho", "derecha"), ("inferior", "abajo")):
+        for nombre, lugar in (("izquierdo", "izquierda"), ("derecho", "derecha"), ("inferior", "abajo")):
             b = QToolButton()
-            b.clicked.connect(lambda _=False, n=nombre: self._mostrar_panel(n, self._panel(n).isHidden()))
+            b.clicked.connect(lambda _=False, n=nombre: self._mostrar_panel(n, not self._accion_panel(n).isChecked()))
             self.diagrama.borde(b, lugar)
             self.flechas[nombre] = b
-        for nombre, accion in (("derecho", self.a_derecho), ("inferior", self.a_inferior)):
+        self.flechas["izquierdo"].hide()
+        for nombre in ("izquierdo", "derecho", "inferior"):
+            accion = self._accion_panel(nombre)
             visible = self.ajustes.value(f"paneles/{nombre}", True, type=bool)
             accion.blockSignals(True)
             accion.setChecked(visible)
@@ -421,17 +428,22 @@ class Ventana(QMainWindow):
             self._mostrar_panel(nombre, visible, guardar=False)
 
     def _panel(self, nombre: str) -> QWidget:
-        return self.derecho if nombre == "derecho" else self.pestanas
+        return {"izquierdo": self.dock, "derecho": self.derecho, "inferior": self.pestanas}[nombre]
+
+    def _accion_panel(self, nombre: str) -> QAction:
+        return {"izquierdo": self.a_izquierdo, "derecho": self.a_derecho, "inferior": self.a_inferior}[nombre]
 
     def _mostrar_panel(self, nombre: str, visible: bool, guardar: bool = True) -> None:
-        self._panel(nombre).setVisible(visible)
-        accion = self.a_derecho if nombre == "derecho" else self.a_inferior
+        editar = self.modo == "editar" and self.edicion is not None
+        self._panel(nombre).setVisible(visible and (editar or nombre != "izquierdo"))
+        accion = self._accion_panel(nombre)
         if accion.isChecked() != visible:
             accion.blockSignals(True)
             accion.setChecked(visible)
             accion.blockSignals(False)
         # La flecha apunta hacia donde se pliega el panel y, plegado, hacia donde se despliega
-        self.flechas[nombre].setText(("▸" if visible else "◂") if nombre == "derecho" else ("▾" if visible else "▴"))
+        self.flechas[nombre].setText({"izquierdo": "◂" if visible else "▸", "derecho": "▸" if visible else "◂",
+                                      "inferior": "▾" if visible else "▴"}[nombre])
         self.flechas[nombre].setToolTip(f"{'Plegar' if visible else 'Desplegar'} el panel {nombre}")
         if guardar:
             self.ajustes.setValue(f"paneles/{nombre}", visible)
@@ -610,7 +622,8 @@ class Ventana(QMainWindow):
             a.blockSignals(False)
         self.tb_edit.setVisible(editar)
         self.tb_sim.setVisible(not editar)
-        self.dock.setVisible(editar)
+        self.dock.setVisible(editar and self.a_izquierdo.isChecked())
+        self.flechas["izquierdo"].setVisible(editar)
         self._acciones_edicion(editar)
         for a in (self.a_ejecutar, self.a_paso, self.a_completar, self.a_reiniciar):
             a.setEnabled(not editar)  # sin simulación en curso al editar (F5 y compañía no hacen nada)

@@ -717,9 +717,9 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.ed.get(ts["t1"])["postRefs"], [ids["E1"]])
         self.assertFalse({x["id"]: x for x in enlaces(e.M)}[f"{ts['t1']}|{ids['E1']}|post"]["arriba"])
 
-    def test_SEDI18_enlaces_seleccionables_flecha_e_invertir(self):
-        """REQ-MOD-03, REQ-EDT-02: un enlace se selecciona con un clic en su trazo; «Invertir direccion» cambia su sentido y,
-        si queda de abajo arriba, se dibuja con flecha; se puede quitar sin borrar los elementos."""
+    def test_SEDI18_enlaces_seleccionables_flecha_y_quitar(self):
+        """REQ-EDT-02: un enlace se selecciona con un clic en su trazo; si va de abajo arriba se dibuja con flecha; se
+        puede quitar sin borrar los elementos. No hay botón para invertirlo (P-IMP-36): se quita y se vuelve a enlazar."""
         from escritorio.diagrama import enlaces
         w = self.w
         e, ids, ts = self.secuencial()
@@ -736,24 +736,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(w.props.pila.currentIndex(), 3)
         self.assertIn("E0 → t1", w.props.titulo.text())
         self.assertIn("E0 → t1", w.l_sel.text())
-        # Invertir: E0 pasa a ser siguiente de t1 (t1 → E0), un enlace hacia arriba con flecha
-        n = len(e.ed.undo_stack)
-        self.assertFalse(e.invertir(), "t1 ya tiene su etapa siguiente: invertir haria una simultaneidad")
-        self.assertIn("simultaneidad", e.mensaje)
-        # Una transicion nueva, debajo de E1: E1 -> t3 se lee de arriba abajo; invertido, t3 -> E1 va hacia arriba, con flecha
-        t3 = e.poner_transicion(QPointF(100 + 200, 400))
-        e.conectar(ids["E1"], t3)
-        normal = f"{t3}|{ids['E1']}|pre"
-        self.assertFalse({x["id"]: x for x in enlaces(e.M)}[normal]["arriba"])
-        e.seleccionar([normal])
-        self.assertTrue(e.invertir())
-        self.assertEqual(e.sel, [f"{t3}|{ids['E1']}|post"])
-        self.assertTrue({x["id"]: x for x in enlaces(e.M)}[f"{t3}|{ids['E1']}|post"]["arriba"])
-        e.deshacer()
-        self.assertEqual(len(e.ed.undo_stack), n + 2)
-        self.assertFalse({x["id"]: x for x in enlaces(e.M)}[normal]["arriba"])
-        e.deshacer(), e.deshacer()  # fuera t3
-        self.assertEqual(len(e.ed.undo_stack), n)
+        self.assertFalse(hasattr(w.props, "f_invertir") or hasattr(e, "invertir"))
         lista = {x["id"]: x for x in enlaces(e.M)}
         self.assertTrue(lista[f"{ts['t2']}|{ids['E0']}|post"]["arriba"], "el enlace de vuelta a E0 ya va hacia arriba")
         self.assertFalse(lista[f"{ts['t1']}|{ids['E0']}|pre"]["arriba"])
@@ -1036,8 +1019,8 @@ class Interfaz(unittest.TestCase):
         QTest.mouseRelease(d.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, d.mapFromScene(QPointF(*b)))
 
     def test_SEDI29_flecha_arrastrar_y_ocultar_sin_cambiar_modelo(self):
-        """REQ-EDT-02, REQ-EDT-03: mover y ocultar la flecha son presentación; un arrastre, un deshacer. Darle la vuelta
-        es invertir el enlace (SEDI33): aquí se rechaza, porque 2 sería una segunda etapa anterior de «retorno»."""
+        """REQ-EDT-02, REQ-EDT-03: mover y ocultar la flecha son presentación; un arrastre, un deshacer. La flecha sigue
+        el sentido del enlace: no hay botón para darle la vuelta (P-IMP-36)."""
         import copy
         from escritorio.diagrama import enlaces
         e = self.retorno_editable()
@@ -1055,12 +1038,7 @@ class Interfaz(unittest.TestCase):
         e.deshacer()
         self.assertEqual(ruta()['arrows'][0]['pos'], f['pos'])
         e.rehacer()
-        previo = ruta()['arrows'][0]
-        self.w.props.f_invertir.click()
-        self.assertIn('simultaneidad', self.w.props.msg.text())
-        self.assertEqual(e.sel, ['retorno|2|post'])
         nuevo = ruta()['arrows'][0]
-        self.assertEqual(nuevo, previo)
         self.assertLess(nuevo['pts'][0][1], nuevo['pos'][1], 'la punta sigue hacia arriba: el retorno sube')
         self.w.props.f_visible.click()
         self.assertEqual(ruta()['arrows'], [])
@@ -1101,10 +1079,17 @@ class Interfaz(unittest.TestCase):
         self.assertFalse(hasattr(self.w.props, 'r_auto'))
 
     def test_SEDI31_flecha_union_horizontal_independiente(self):
-        """REQ-EDT-02: la flecha de unión también se mueve y se oculta; se orienta con el tramo horizontal."""
+        """REQ-EDT-02: la flecha de unión no sale por defecto (el enlace baja); se muestra, se mueve y se oculta; la
+        de recorrido se orienta con el tramo horizontal."""
         from escritorio.diagrama import enlaces
         e = self.retorno_editable()
         ruta = lambda: next(r for r in enlaces(e.M) if r['id'] == 't1|2|post')
+        self.assertIn('join', ruta()['arrowKinds'])
+        self.assertEqual(ruta()['arrows'], [])
+        e.seleccionar(['t1|2|post'])
+        e.flecha = 'join'
+        self.w.props.mostrar(e)
+        self.w.props.f_visible.click()
         f = next(f for f in ruta()['arrows'] if f['key'] == 'join')
         self.arrastrar_dibujo(f['pos'], (f['pos'][0], f['pos'][1]-20))
         self.assertEqual(e.flecha, 'join')
@@ -1154,28 +1139,94 @@ class Interfaz(unittest.TestCase):
         e.cambia()
         return e, sid, tid
 
-    def test_SEDI33_dar_la_vuelta_a_la_flecha_invierte_el_enlace(self):
-        """REQ-MOD-03, REQ-EDT-03: darle la vuelta a la flecha es invertir el enlace; la flecha nunca contradice el
-        sentido real. Un deshacer lo devuelve todo, también el ajuste manual de la flecha, que era del enlace anterior."""
+    def test_SEDI33_una_flecha_por_lazo_y_ninguna_al_bajar(self):
+        """REQ-EDT-02: por defecto solo lleva flecha un enlace que sube, y una por lazo, en el enlace más largo (figura del
+        responsable: 7 → t3 → 7); un enlace que baja no la lleva, tampoco donde se unen dos ramas."""
         from escritorio.diagrama import enlaces
-        e, sid, tid = self.nuevo_par((0, 0), (0, 80))
+        e, sid, tid = self.nuevo_par((0, 0), (200, 30))
+        e.conectar(sid, tid)  # 7 → t3: t3 casi a la altura de 7, el enlace rodea y sube un poco
+        e.conectar(tid, sid)  # t3 → 7: el retorno sube por el carril
+        rutas = {r['id']: r for r in enlaces(e.M)}
+        ida, vuelta = rutas[f'{tid}|{sid}|pre'], rutas[f'{tid}|{sid}|post']
+        self.assertTrue(ida['arriba'] and vuelta['arriba'], 'los dos tienen algún tramo que sube')
+        self.assertEqual([len(ida['arrows']), len(vuelta['arrows'])], [0, 1], 'una sola flecha, en el retorno largo')
+        # Dos lazos que comparten etapas: cada retorno lleva la suya
+        e.ed.dirty = False  # sin el diálogo de cambios sin guardar
+        self.w.cargar_ejemplo('alternativas')
+        self.w.cambiar_modo('editar')
+        e = self.w.edicion
+        con = [r for r in enlaces(e.M) if r['arrows']]
+        self.assertEqual(sorted(r['id'] for r in con), sorted(r['id'] for r in enlaces(e.M) if r['arriba']))
+        self.assertFalse(any(f['key'] == 'join' for r in enlaces(e.M) for f in r['arrows']), 'sin flecha de unión')
+
+    def test_SEDI36_sin_escalones_en_el_tramo_horizontal(self):
+        """REQ-EDT-02: un carril guardado cuando el enlace daba un rodeo no deja un escalón cuando ya no hace falta; con
+        poco sitio los tramos verticales se acortan antes que dar un rodeo de unos puntos."""
+        from escritorio.diagrama import enlaces
+        from grafcet.routing import TALLO_CORTO
+        e, sid, tid = self.nuevo_par((0, 0), (420, 160))
         e.conectar(sid, tid)
         ident = f'{tid}|{sid}|pre'
-        e.seleccionar([ident])
-        e.ed.set_link_style(ident, {'arrows': {'flow': {'visible': True}}})
+        e.ed.set_link_style(ident, {'route': {'laneX': '230', 'exitY': '50', 'entryY': '56'}})
         e.cambia()
-        antes = copy.deepcopy(e.ed.model), copy.deepcopy(e.ed.link_styles())
-        self.w.props.mostrar(e)
-        self.w.props.f_invertir.click()
-        t = next(t for t in e.ed.model['transitions'] if t['id'] == tid)
-        self.assertEqual((t['preRefs'], t['postRefs']), ([], [sid]))
-        self.assertEqual(e.sel, [f'{tid}|{sid}|post'])
-        self.assertNotIn(ident, e.ed.link_styles())
-        ruta = next(r for r in enlaces(e.M) if r['id'] == e.sel[0])
-        f = ruta['arrows'][0]
-        self.assertLess(f['pts'][0][1], f['pos'][1], 'el enlace ahora sube de t3 a 6: punta hacia arriba')
-        e.deshacer()
-        self.assertEqual((e.ed.model, e.ed.link_styles()), antes)
+        pts = next(r for r in enlaces(e.M) if r['id'] == ident)['pts']
+        self.assertEqual(len(pts), 4)
+        self.assertEqual(pts[1][1], pts[2][1], 'tramo horizontal recto, a la altura de salida guardada')
+        self.assertEqual(pts[1][1], 50)
+        # 36 de hueco entre la etapa y la transición: no caben 16 + 24, pero no se da un rodeo
+        e, sid, tid = self.nuevo_par((0, 0), (200, 58))
+        e.conectar(sid, tid)
+        r = next(r for r in enlaces(e.M) if r['id'] == f'{tid}|{sid}|pre')
+        self.assertEqual(len(r['pts']), 4)
+        self.assertEqual(r['arrows'], [])
+        self.assertGreaterEqual(r['pts'][1][1] - r['pts'][0][1], TALLO_CORTO)
+        self.assertGreaterEqual(r['pts'][3][1] - r['pts'][2][1], TALLO_CORTO)
+
+    def test_SEDI37_iman_alinea_con_el_elemento_enlazado(self):
+        """REQ-EDT-03: al mover una etapa o una transición a dos pasos de rejilla o menos de la vertical de un elemento
+        enlazado, se alinea con él y el enlace queda recto (sin la S); más lejos, se queda donde se suelta."""
+        from escritorio.diagrama import enlaces
+        e, sid, tid = self.nuevo_par((0, 0), (80, 80))
+        e.conectar(sid, tid)
+        c = centro(e.M, tid)
+        for dx, esperado in ((-20, 60), (-40, 0), (-60, 0)):  # a 60 se queda; a 40 o a 20, a la vertical de la etapa
+            e.prensar(c)
+            e.mover(QPointF(c.x() + dx, c.y() + 2))
+            e.soltar(QPointF(c.x() + dx, c.y() + 2))
+            self.assertEqual(centro(e.M, tid).x() - 100, esperado)
+            e.deshacer()
+            self.assertEqual(centro(e.M, tid), c)
+        e.prensar(c)
+        e.mover(QPointF(c.x() - 50, c.y()))
+        e.soltar(QPointF(c.x() - 50, c.y()))
+        pts = next(r for r in enlaces(e.M) if r['id'] == f'{tid}|{sid}|pre')['pts']
+        self.assertTrue(all(x == pts[0][0] for x, _ in pts), 'enlace recto')
+
+    def test_SEDI38_panel_izquierdo_plegable_y_figura_de_la_paleta(self):
+        """REQ-EDT-02: el panel izquierdo (paleta y propiedades) se pliega como los otros, desde su flecha o desde Ver, y
+        se recuerda; al arrastrar de la paleta se lleva la figura del elemento al zoom del dibujo, con su centro bajo el
+        puntero."""
+        from escritorio.diagrama import H
+        from escritorio.propiedades import figura
+        from grafcet.routing import TALLO_E
+        w = self.w
+        self.assertTrue(w.flechas['izquierdo'].isHidden(), 'al simular no hay panel izquierdo')
+        w.nuevo()
+        self.assertFalse(w.dock.isHidden() or w.flechas['izquierdo'].isHidden())
+        w.flechas['izquierdo'].click()
+        self.assertTrue(w.dock.isHidden() and not w.a_izquierdo.isChecked())
+        self.assertEqual(w.flechas['izquierdo'].text(), '▸')
+        self.assertFalse(w.ajustes.value('paneles/izquierdo', True, type=bool))
+        w.cambiar_modo('simular')
+        w.cambiar_modo('editar')
+        self.assertTrue(w.dock.isHidden(), 'plegado sigue plegado al volver a editar')
+        w.a_izquierdo.setChecked(True)
+        self.assertFalse(w.dock.isHidden())
+        self.assertEqual(w.flechas['izquierdo'].text(), '◂')
+        pm, punto = figura('etapa', 2.0)
+        self.assertEqual((pm.width(), pm.height()), (2 * (2 * H) + 8, 2 * (2 * H + 2 * TALLO_E) + 8))
+        self.assertEqual((punto.x(), punto.y()), (2 * H + 4, 2 * (TALLO_E + H) + 4))
+        self.assertGreater(figura('transicion', 2.0)[0].height(), figura('transicion', 1.0)[0].height())
 
     def test_SEDI34_agarrar_una_transicion_la_mueve(self):
         """REQ-EDT-02: el trazo de una transición se agarra para moverla; sus puntos de unión quedan al final de su

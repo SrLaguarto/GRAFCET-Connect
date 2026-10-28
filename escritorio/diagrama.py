@@ -623,10 +623,10 @@ class VistaDiagrama(QGraphicsView):
         self.barra.adjustSize()
 
     def borde(self, boton: QToolButton, lugar: str) -> None:
-        """Flecha pegada a un borde del dibujo («derecha» o «abajo»): pliega el panel que hay al otro lado."""
+        """Flecha pegada a un borde del dibujo («izquierda», «derecha» o «abajo»): pliega el panel que hay al otro lado."""
         boton.setParent(self)
         boton.setStyleSheet(ESTILO_FLECHA)
-        boton.setFixedSize(*((18, 54) if lugar == "derecha" else (54, 18)))
+        boton.setFixedSize(*((54, 18) if lugar == "abajo" else (18, 54)))
         boton.show()
         self._bordes.append((boton, lugar))
         self._colocar()
@@ -637,7 +637,9 @@ class VistaDiagrama(QGraphicsView):
         sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
         self.barra.move(w - self.barra.width() - sb - 8, 8)
         for b, lugar in self._bordes:
-            if lugar == "derecha":
+            if lugar == "izquierda":
+                b.move(0, (h - b.height()) // 2)
+            elif lugar == "derecha":
                 b.move(w - b.width() - sb, (h - b.height()) // 2)
             else:
                 b.move((w - b.width()) // 2, h - b.height() - sh)
