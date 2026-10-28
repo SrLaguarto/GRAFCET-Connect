@@ -200,6 +200,21 @@ def centro(M, ident):
     return QPointF(*posiciones(M)[ident])
 
 
+def centro_caja(w, aid):
+    """El centro de la caja de una acción en el dibujo."""
+    x, y, ancho, alto = next(c for c in w.diagrama.cajas_acciones if c["id"] == aid)["rect"]
+    return QPointF(x + ancho / 2, y + alto / 2)
+
+
+def QRectF_de(r):  # noqa: N802
+    from PySide6.QtCore import QRectF
+    return QRectF(*r)
+
+
+def QRectF_contiene(r, p):  # noqa: N802
+    return QRectF_de(r).contains(p)
+
+
 COL_ERR = "#c62828"  # el rojo de los errores en el dibujo (escritorio.diagrama.COL["err"])
 
 
@@ -368,7 +383,7 @@ class Interfaz(unittest.TestCase):
         e.seleccionar([])
         w._ir_a_diagnostico(w.lista_diag.item(0))
         self.assertEqual(e.sel, [ts["t1"]])
-        self.assertIn("No compila", w.l_resumen.text())
+        self.assertEqual(w.l_resumen.text(), "No se puede simular: 1 error")
         e.poner_condicion(ts["t1"], "marcha")
         self.assertTrue(w.cambiar_modo("simular"))
 
@@ -1414,9 +1429,7 @@ class Interfaz(unittest.TestCase):
             fila = pv.tabla.rowCount() - 1
             pv.tabla.item(fila, 0).setText(nombre)  # como al escribir en la tabla
             for col, valor in ((1, papel), (2, {"kind": tipo})):
-                cb = pv.tabla.cellWidget(fila, col)
-                cb.setCurrentIndex(cb.findData(valor))
-                cb.activated.emit(cb.currentIndex())
+                pv.elegir(fila, col, valor)  # lo que hace el desplegable de la celda
         self.assertEqual([(v["name"], v["role"], v["type"]["kind"]) for v in e.ed.model["variables"]],
                          [("I00", "input", "bool"), ("I01", "input", "bool"), ("I02", "input", "bool"),
                           ("Q00", "output", "bool"), ("Q01", "output", "bool"), ("CT", "internal", "int")])
@@ -1487,34 +1500,32 @@ class Interfaz(unittest.TestCase):
                                                          ("4000000", ["0"])])
 
     def test_SEDI43_panel_de_variables(self):
-        """REQ-EDT-07, REQ-EDT-06: el diccionario muestra papel, tipo, valor inicial y usos; renombrar actualiza los
-        usos; papel y tipo se cambian; una variable usada no se quita y una sin usos sí; todo se deshace."""
+        """REQ-EDT-07, REQ-EDT-06: el diccionario muestra nombre, papel y tipo (sin inicial, unidad ni usos); renombrar
+        actualiza los usos; papel y tipo se cambian; una variable usada no se quita y una sin usos sí; todo se deshace."""
         w = self.w
         e, ids, ts = self.secuencial()
         pv = w.variables
         nombres = [pv.tabla.item(r, 0).text() for r in range(pv.tabla.rowCount())]
         self.assertEqual(nombres, ["marcha", "paro"])
-        self.assertEqual(pv.tabla.item(0, 5).text(), "1", "marcha se usa en t1")
+        self.assertEqual(pv.tabla.columnCount(), 3, "Nombre, Papel y Tipo")
         pv.tabla.item(0, 0).setText("Marcha")
         self.assertEqual(e.texto_condicion(ts["t1"]), "Marcha", "el renombrado llega a la receptividad")
-        cb = pv.tabla.cellWidget(1, 1)
-        cb.setCurrentIndex(cb.findData("output"))
-        cb.activated.emit(cb.currentIndex())
+        pv.elegir(1, 1, "output")
         self.assertEqual(e.ed.model["variables"][1]["role"], "output")
         pv.tabla.selectRow(0)
         pv.quitar()
         self.assertIn("se usa", pv.msg.text())
         pv.nueva()
-        self.assertEqual(e.ed.model["variables"][-1]["name"], "I00")
-        pv.tabla.item(2, 3).setText("1")  # valor inicial de una entrada
-        self.assertIs(e.ed.model["variables"][-1]["initialValue"], True)
-        self.assertFalse(pv.tabla.item(1, 3).flags() & Qt.ItemFlag.ItemIsEditable, "una salida empieza en 0")
+        self.assertEqual(len(e.ed.model["variables"]), 2, "la fila nueva no está en el modelo hasta tener nombre")
+        pv.tabla.item(2, 0).setText("Rearme")
+        self.assertEqual(e.ed.model["variables"][-1]["name"], "Rearme")
         pv.tabla.selectRow(2)
         pv.quitar()
         self.assertEqual(len(e.ed.model["variables"]), 2)
         e.deshacer()
-        e.deshacer()
         self.assertEqual(len(e.ed.model["variables"]), 3)
+        e.deshacer()
+        self.assertEqual(len(e.ed.model["variables"]), 2, "crear la variable con su nombre fue una operación")
 
     def test_SEDI44_acciones_desde_el_dibujo(self):
         """REQ-ACT-01, REQ-EDT-02: botón derecho en una etapa: «Añadir acción…»; la acción se dibuja a su derecha; un
@@ -1526,7 +1537,7 @@ class Interfaz(unittest.TestCase):
         c = centro(e.M, ids["1"])
         self.assertEqual(e.menu(QPointF(c.x() + 400, c.y())), [], "en un hueco, nada")
         opciones = dict(e.menu(c))
-        self.assertEqual(list(opciones), ["Añadir acción…"])
+        self.assertEqual(list(opciones), ["Añadir acción…", "Colocación de las acciones"])
         pedidas = []
         e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
         opciones["Añadir acción…"]()  # crea la acción continua unida a la etapa (borrador, sin variable) y abre Editar
@@ -1656,7 +1667,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(next(v for v in e.ed.model["variables"] if v["name"] == "CT")["role"], "internal")
         pv = self.w.variables
         fila = [pv.tabla.item(r, 0).text() for r in range(pv.tabla.rowCount())].index("CT")
-        self.assertEqual(pv.tabla.cellWidget(fila, 1).currentText(), "Memoria")
+        self.assertEqual(pv.tabla.item(fila, 1).text(), "Memoria")
 
     def test_SEDI52_texto_y_bloques_sincronizados(self):
         """REQ-EDT-02: lo escrito en el campo de texto aparece en bloques; un texto que no se puede analizar no cambia los
@@ -2431,7 +2442,7 @@ class Interfaz(unittest.TestCase):
         dict(e.menu(caja(d)))["Quitar"]()
         self.assertEqual(e.ed.draft_actions(), [])
         # el menú de la etapa conserva «Añadir acción…»
-        self.assertEqual(list(dict(e.menu(centro(e.M, ids["1"])))), ["Añadir acción…"])
+        self.assertEqual(list(dict(e.menu(centro(e.M, ids["1"])))), ["Añadir acción…", "Colocación de las acciones"])
 
     def test_SEDI73_guardar_abrir_con_borradores_avisos_y_deshacer(self):
         """REQ-DAT-01, REQ-EDT-09, REQ-EDT-14: los borradores de acción se guardan en la presentación
@@ -2632,6 +2643,443 @@ class Interfaz(unittest.TestCase):
         self.assertIn("Se ignoró un borrador de acción dañado", [d["message"] for d in e3.diagnosticos()])
         pres["draftActions"] = "roto"
         self.assertEqual(Edicion.desde(e.ed.model, {}, "x", None, pres).ed.draft_actions(), [])
+
+    # -- P-IMP-42: paneles laterales, tabla de variables, parpadeo y colocación de las acciones --------------------
+    def test_SEDI78_anchos_de_los_paneles_laterales(self):
+        """REQ-EDT-09, REQ-SIM-03: al editar, el panel izquierdo mide de lo que piden las dos columnas de la paleta (su
+        rejilla, el marco y la holgura) a un 15 % más, y el derecho tiene el mismo margen; las fichas siguen en dos
+        columnas al mínimo; nada de lo que muestran se corta; se pliegan y despliegan; al simular, el derecho es el de
+        siempre."""
+        from escritorio.diagrama import anclas
+        w = self.w
+        e, ids, ts = self.secuencial()
+        w.show()
+        self.app.processEvents()
+        minimo, maximo = w.ancho_lateral
+        pal = w.paleta
+        self.assertEqual(minimo, 2 * pal.gridSize().width() + 2 * pal.frameWidth() + 2)
+        self.assertEqual(maximo, round(minimo * 1.15))
+        for panel in (w.dock, w.derecho):
+            self.assertEqual((panel.minimumWidth(), panel.maximumWidth()), (minimo, maximo), "el mismo margen")
+            self.assertTrue(minimo <= panel.width() <= maximo, panel.width())
+        self.assertLessEqual(abs(w.dock.width() - w.derecho.width()), 2, "los dos paneles, del mismo tamaño")
+        # al ancho mínimo, las fichas siguen en dos columnas y dos filas, sin barras
+        w.resizeDocks([w.dock], [minimo], Qt.Orientation.Horizontal)
+        self.app.processEvents()
+        self.assertEqual(w.dock.width(), minimo)
+        r = [pal.visualItemRect(pal.item(i)) for i in range(4)]
+        self.assertEqual((r[0].y(), r[1].y(), r[2].y()), (r[1].y(), r[0].y(), r[0].y() + pal.gridSize().height()))
+        self.assertTrue(r[1].x() > r[0].x() and r[3].x() > r[2].x(), "dos columnas")
+        self.assertEqual((pal.verticalScrollBarPolicy(), pal.horizontalScrollBarPolicy()), (Qt.ScrollBarPolicy.ScrollBarAlwaysOff,) * 2)
+        # con cada tipo de selección, las propiedades caben en el ancho (no se cortan) y el panel derecho también
+        b = e.poner_barra(QPointF(500, 400), "Y")
+        for sel in ([ids["1"]], [ts["t1"]], [f"{ts['t1']}|{ids['0']}|pre"], [b]):
+            e.seleccionar(sel)
+            self.app.processEvents()
+            visor = w.dock.widget().widget(1)
+            self.assertLessEqual(w.props.minimumSizeHint().width(), visor.viewport().width(), sel)
+        self.assertLessEqual(w.derecho.widget(1).widget().minimumSizeHint().width(), minimo)
+        # plegar y desplegar siguen funcionando
+        w.flechas["izquierdo"].click()
+        self.assertTrue(w.dock.isHidden())
+        w.flechas["izquierdo"].click()
+        self.assertFalse(w.dock.isHidden())
+        self.assertTrue(minimo <= w.dock.width() <= maximo)
+        # al simular, el panel derecho vuelve a ser el de siempre
+        self.assertTrue(w.cambiar_modo("simular"))
+        self.assertEqual((w.derecho.minimumWidth(), w.derecho.maximumWidth()), (300, 16777215))
+        self.assertTrue(w.cambiar_modo("editar"))
+        self.assertEqual((w.derecho.minimumWidth(), w.derecho.maximumWidth()), (minimo, maximo))
+
+    def test_SEDI79_tabla_de_variables_nombre_papel_tipo(self):
+        """REQ-EDT-07: la tabla tiene solo Nombre, Papel y Tipo; se ofrecen Booleana, Entera y Decimal con 2 decimales;
+        una variable de un fichero antiguo (decimal de 1 o 3 decimales, duración) se ve con su tipo y funciona, y si se
+        le cambia el tipo solo se elige entre los tres; el valor inicial y la unidad que ya tuviera se conservan."""
+        from escritorio.variables import TIPOS
+        w = self.w
+        w.nuevo()
+        e, pv = w.edicion, w.variables
+        e.nueva_variable("a", "input")
+        e.ed.add_variable("T3", "input", {"kind": "decimal", "scale": 3}, unit="s", initial="1.500")
+        e.ed.add_variable("T1", "output", {"kind": "decimal", "scale": 1})
+        e.ed.add_variable("D", "input", {"kind": "duration"}, unit="ms")
+        e.cambia()
+        self.assertEqual([pv.tabla.horizontalHeaderItem(c).text() for c in range(pv.tabla.columnCount())],
+                         ["Nombre", "Papel", "Tipo"])
+        self.assertEqual([t for _, t in TIPOS], ["Booleana", "Entera", "Decimal (2)"])
+        self.assertEqual(TIPOS[2][0], {"kind": "decimal", "scale": 2})
+        self.assertEqual([t for _, t in pv.opciones(0, 2)], ["Booleana", "Entera", "Decimal (2)"])
+        self.assertEqual([pv.tabla.item(r, 2).text() for r in range(4)],
+                         ["Booleana", "Decimal (3)", "Decimal (1)", "Duración"])
+        self.assertEqual([pv.tabla.item(r, 1).text() for r in range(4)], ["Entrada", "Entrada", "Salida", "Entrada"])
+        self.assertTrue(all(pv.tabla.cellWidget(r, c) is None for r in range(4) for c in (1, 2)), "texto, sin desplegable")
+        # siguen funcionando: sin diagnósticos que las mencionen y usables en una receptividad
+        t1, _ = e.ed.add_transition(e.raiz, "", at=(0, 100), label="t1")
+        e.cambia()
+        self.assertIsNone(e.comprobar(t1, "T3 > 1"), "una decimal de 3 decimales se usa en una receptividad")
+        # cambiar el tipo de una antigua: solo entre los tres (la antigua figura como la actual y no cambia nada)
+        self.assertEqual([t for _, t in pv.opciones(1, 2)], ["Decimal (3)", "Booleana", "Entera", "Decimal (2)"])
+        n = len(e.ed.undo_stack)
+        pv.elegir(1, 2, pv.opciones(1, 2)[0][0])
+        self.assertEqual(len(e.ed.undo_stack), n, "elegir el que ya tiene no cambia nada")
+        pv.elegir(1, 2, {"kind": "int"})
+        v = next(x for x in e.ed.model["variables"] if x["name"] == "T3")
+        self.assertEqual(v["type"], {"kind": "int"})
+        self.assertEqual((v["unit"], len(e.ed.undo_stack)), ("s", n + 1), "la unidad se conserva; una operación")
+        self.assertEqual(pv.tabla.item(1, 2).text(), "Entera")
+        self.assertEqual(len(pv.opciones(1, 2)), 3, "ya no ofrece el tipo antiguo")
+        # renombrar y cambiar el papel conservan la unidad y el valor inicial del modelo
+        d = next(x for x in e.ed.model["variables"] if x["name"] == "D")
+        pv.tabla.item(3, 0).setText("Dur")
+        self.assertEqual((d["unit"], next(x for x in e.ed.model["variables"] if x["id"] == d["id"])["unit"]), ("ms", "ms"))
+        # los usos no se listan pero siguen impidiendo quitar la variable
+        e.poner_condicion(t1, "a", crear=False)
+        pv.tabla.selectRow(0)
+        pv.quitar()
+        self.assertIn("se usa", pv.msg.text())
+        self.assertEqual(len(e.ed.model["variables"]), 4)
+
+    def test_SEDI80_variable_nueva_sin_nombre(self):
+        """REQ-EDT-07, REQ-EDT-09: «Nueva variable» añade una fila en blanco que solo existe en la interfaz; al escribir un
+        nombre válido se crea en el modelo (una operación de deshacer); uno no válido o repetido se rechaza con su
+        mensaje y la fila sigue en blanco; con filas sin nombre no se puede simular ni guardar."""
+        w = self.w
+        w.nuevo()
+        e, pv = w.edicion, w.variables
+        n = len(e.ed.undo_stack)
+        pv.nueva()
+        self.assertEqual((pv.tabla.rowCount(), pv.tabla.item(0, 0).text(), pv.sin_nombre()), (1, "", 1))
+        self.assertEqual((e.ed.model["variables"], len(e.ed.undo_stack)), ([], n), "no está en el modelo")
+        # no válido: demasiado largo
+        pv.tabla.item(0, 0).setText("x" * 300)
+        self.assertEqual((e.ed.model["variables"], pv.tabla.item(0, 0).text(), pv.sin_nombre()), ([], "", 1))
+        self.assertIn("nombre inválido", pv.msg.text())
+        self.assertEqual(len(pv.parpadeo.ids), 1)
+        self.assertTrue(pv.parpadeo.t.isActive())
+        # el papel y el tipo de la fila pendiente se recuerdan hasta crear la variable
+        pv.elegir(0, 1, "output")
+        pv.elegir(0, 2, {"kind": "int"})
+        self.assertEqual((pv.tabla.item(0, 1).text(), pv.tabla.item(0, 2).text()), ("Salida", "Entera"))
+        self.assertEqual(e.ed.model["variables"], [])
+        pv.tabla.item(0, 0).setText("Cuenta")
+        (v,) = e.ed.model["variables"]
+        self.assertEqual((v["name"], v["role"], v["type"]), ("Cuenta", "output", {"kind": "int"}))
+        self.assertEqual((len(e.ed.undo_stack), pv.sin_nombre(), pv.tabla.item(0, 0).text()), (n + 1, 0, "Cuenta"))
+        e.deshacer()
+        self.assertEqual(e.ed.model["variables"], [])
+        e.rehacer()
+        # repetido
+        pv.nueva()
+        self.assertEqual(pv.tabla.rowCount(), 2)
+        pv.tabla.item(1, 0).setText("Cuenta")
+        self.assertEqual((len(e.ed.model["variables"]), pv.tabla.item(1, 0).text(), pv.sin_nombre()), (1, "", 1))
+        self.assertIn("ya existe", pv.msg.text())
+        # con una fila sin nombre no se simula ni se guarda
+        with mock.patch("escritorio.ventana.QFileDialog.getExistingDirectory") as carpeta, \
+                mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
+            self.assertFalse(w.cambiar_modo("simular"))
+            self.assertEqual(w.modo, "editar")
+            self.assertFalse(w.guardar())
+            carpeta.assert_not_called()
+            aviso.assert_not_called()
+        self.assertEqual(e.mensaje, "Hay una variable sin nombre: escríbale un nombre o quítela")
+        self.assertEqual(pv.msg.text(), e.mensaje)
+        self.assertEqual(pv.parpadeo.ids, {pv._clave_fila(pv._pend[0])})
+        # quitarla: solo la fila de la interfaz, sin tocar el modelo ni deshacer
+        n = len(e.ed.undo_stack)
+        pv.tabla.selectRow(1)
+        pv.quitar()
+        self.assertEqual((pv.tabla.rowCount(), pv.sin_nombre(), len(e.ed.undo_stack)), (1, 0, n))
+        # al empezar otra edición, las filas sin nombre de la anterior no pasan
+        pv.nueva()
+        w.edicion.ed.dirty = False
+        w.nuevo()
+        self.assertEqual((w.variables.sin_nombre(), w.variables.tabla.rowCount()), (0, 0))
+
+    def test_SEDI81_parpadeo_naranja_en_los_errores(self):
+        """REQ-EDT-09: un rechazo, un intento de simular con errores, un clic en Diagnósticos (también en el aviso de un
+        borrador) y el aviso de una fila sin nombre hacen parpadear en naranja los elementos afectados unas veces
+        (tres parpadeos en 1,5 s) con un temporizador; se programan los elementos correctos."""
+        from escritorio.edicion import PARPADEO_MS, PARPADEO_PASOS, Parpadeo
+        w = self.w
+        e, ids, ts = self.secuencial()
+        # el mecanismo: encendido, apagado, encendido…, tres veces encendido y se para
+        p = Parpadeo()
+        fases = []
+        p.cambia.connect(lambda: fases.append(p.fase))
+        p.iniciar(["a", "b"])
+        self.assertEqual((p.activos(), p.t.isActive(), p.t.interval()), ({"a", "b"}, True, PARPADEO_MS))
+        for _ in range(PARPADEO_PASOS):
+            p.paso()
+        self.assertEqual((fases, p.t.isActive(), p.activos(), p.ids), ([True, False, True, False, True, False, False], False, set(), set()))
+        self.assertEqual(fases.count(True), 3, "tres parpadeos")
+        self.assertEqual(PARPADEO_MS * PARPADEO_PASOS, 1500)
+        # un rechazo que se refiere a elementos: parpadean esos
+        b1, b2 = e.poner_barra(QPointF(500, 100), "Y"), e.poner_barra(QPointF(500, 200), "Y")
+        e.parpadeo.parar()
+        e.unir({"id": b1, "lado": "abajo"}, {"id": b2, "lado": "arriba"})
+        self.assertIn("otra barra", e.mensaje)
+        self.assertEqual((e.parpadeo.ids, e.parpadeo.t.isActive()), ({b1, b2}, True))
+        self.assertEqual(e.parpadeo.activos(), {b1, b2})
+        e.parpadeo.parar()
+        e.conectar(ids["0"], ts["t2"])  # t2 ya tiene una etapa anterior
+        self.assertIn("ya tiene una etapa", e.mensaje)
+        self.assertEqual(e.parpadeo.ids, {ts["t2"], ids["0"]})
+        # el dibujo recibe lo que parpadea (fase encendida) y lo dibuja en la capa naranja
+        nar = [it for it in w.diagrama.scene().items() if hasattr(it, "pen") and it.pen().color().name() == "#e36209"
+               and it.pen().widthF() >= 3.5]
+        self.assertTrue(nar, "los elementos se dibujan en naranja en la fase encendida")
+        e.parpadeo.paso()  # fase apagada
+        self.assertFalse([it for it in w.diagrama.scene().items() if hasattr(it, "pen") and it.pen().color().name() == "#e36209"
+                          and it.pen().widthF() >= 3.5])
+        e.parpadeo.parar()
+        # una acción (del modelo o borrador)
+        e.nueva_variable("Q00", "output")
+        e.poner_accion(ids["1"], {"tipo": "continua", "variable": "Q00", "condicion": ""})
+        aid = e.ed.model["actions"][0]["id"]
+        e.parpadear([aid])
+        self.assertEqual(e.parpadeo.ids, {aid})
+        nar = [it for it in w.diagrama.scene().items() if hasattr(it, "pen") and it.pen().color().name() == "#e36209"
+               and it.pen().widthF() >= 3.5]
+        self.assertTrue(nar, "la caja de la acción parpadea")
+        e.parpadeo.parar()
+        # simular con errores: cada elemento con un error de validación
+        t3 = e.poner_transicion(QPointF(300, 400))
+        with mock.patch("escritorio.ventana.QMessageBox.warning"):
+            self.assertFalse(w.cambiar_modo("simular"))
+        esperados = {d["target"] for d in e.diagnosticos() if d["blocks"] and d["target"]}
+        self.assertIn(t3, esperados)
+        self.assertEqual(e.parpadeo.ids, esperados)
+        e.parpadeo.parar()
+        # un clic en una línea de Diagnósticos
+        fila = next(i for i in range(w.lista_diag.count()) if w.lista_diag.item(i).data(Qt.ItemDataRole.UserRole) == t3)
+        w._ir_a_diagnostico(w.lista_diag.item(fila))
+        self.assertEqual((e.sel, e.parpadeo.ids), ([t3], {t3}))
+        e.parpadeo.parar()
+        # el aviso de un borrador
+        did = e.poner_accion_suelta(QPointF(520, 330))
+        fila = next(i for i in range(w.lista_diag.count()) if w.lista_diag.item(i).data(Qt.ItemDataRole.UserRole) == did)
+        w._ir_a_diagnostico(w.lista_diag.item(fila))
+        self.assertEqual(e.parpadeo.ids, {did})
+        # la fila de una variable
+        pv = w.variables
+        pv.nueva()
+        pv.avisar_sin_nombre()
+        (clave,) = pv.parpadeo.ids
+        self.assertTrue(clave.startswith("sin-nombre:"))
+        self.assertEqual(pv.tabla.item(pv.tabla.rowCount() - 1, 0).background().color().name(), "#ffd2ad")
+        pv.parpadeo.paso()
+        self.assertNotEqual(pv.tabla.item(pv.tabla.rowCount() - 1, 0).background().color().name(), "#ffd2ad")
+        # un nombre repetido en una fila existente: parpadea esa fila
+        e.nueva_variable("zz")
+        pv.tabla.item(0, 0).setText("zz")
+        self.assertEqual(pv.parpadeo.ids, {e.ed.model["variables"][0]["id"]})
+
+    def _tres_acciones(self, e, ids):
+        """Una etapa con tres acciones: continua con condición, por evento (banderita) y al desactivar."""
+        e.nueva_variable("Q00", "output")
+        e.nueva_variable("CT", "internal", {"kind": "int"})
+        e.nueva_variable("M1", "internal")
+        sid = ids["1"]
+        e.poner_accion(sid, {"tipo": "continua", "variable": "Q00", "condicion": "marcha AND NOT paro"})
+        e.poner_accion(sid, {"tipo": "evento", "variable": "CT", "valor": "CT + 1", "evento": "↑(marcha + paro)"})
+        e.poner_accion(sid, {"tipo": "desactivacion", "variable": "M1", "valor": "0"})
+        return sid
+
+    def test_SEDI82_colocacion_de_las_acciones_de_una_etapa(self):
+        """REQ-ACT-01, REQ-EDT-02, REQ-DAT-01: por defecto, cajas pegadas en fila; el botón derecho en la etapa ofrece
+        «Colocación de las acciones» (en fila pegadas, en fila separadas, en columna) con la actual marcada; se guarda por
+        etapa en `presentation.actionLayouts` (sin clave, «fila»), es una operación de vista que se deshace, no cambia el
+        modelo, viaja con el proyecto y la Vista."""
+        from escritorio.diagrama import ACT_GAP, H, _extra
+        from escritorio.edicion import Edicion
+        w = self.w
+        e, ids, ts = self.secuencial()
+        e.pedir_accion = lambda sid, aid: None  # sin diálogos
+        e.confirmar_borrado = lambda plan: True
+        sid = self._tres_acciones(e, ids)
+        aids = e.ed.get(sid)["actionRefs"]
+
+        def cajas():
+            return [next(c for c in w.diagrama.cajas_acciones if c["id"] == a)["rect"] for a in aids]
+        # por defecto: en fila, pegadas, y sin clave en la presentación
+        self.assertEqual((e.colocacion(sid), "actionLayouts" in e.ed.presentation), ("fila", False))
+        r = cajas()
+        self.assertTrue(all(abs(r[i][0] + r[i][2] - r[i + 1][0]) < 0.01 and r[i][1] == r[i + 1][1] for i in range(2)))
+        # el menú de la etapa: submenú con las tres opciones y la actual marcada
+        c = centro(e.M, sid)
+        opciones = dict(e.menu(c))
+        self.assertEqual([t for t, _ in opciones["Colocación de las acciones"]],
+                         ["En fila, pegadas", "En fila, separadas", "En columna"])
+        self.assertEqual(e.menu_marcadas, {"En fila, pegadas"})
+        menu = w.diagrama.menu_contextual(e.menu(c))
+        sub = next(a.menu() for a in menu.actions() if a.menu() is not None)
+        self.assertEqual([(a.text(), a.isChecked()) for a in sub.actions()],
+                         [("En fila, pegadas", True), ("En fila, separadas", False), ("En columna", False)])
+        modelo, revision, n = copy.deepcopy(e.ed.model), e.ed.model["revisionId"], len(e.ed.undo_stack)
+        # en fila, separadas
+        dict(opciones["Colocación de las acciones"])["En fila, separadas"]()
+        self.assertEqual((e.ed.presentation["actionLayouts"], len(e.ed.undo_stack)), ({sid: "fila-separada"}, n + 1))
+        self.assertEqual((e.ed.model, e.ed.model["revisionId"]), (modelo, revision), "solo presentación")
+        r = cajas()
+        self.assertTrue(all(abs(r[i + 1][0] - (r[i][0] + r[i][2]) - ACT_GAP) < 0.01 and r[i][1] == r[i + 1][1] for i in range(2)))
+        e.menu(c)
+        self.assertEqual(e.menu_marcadas, {"En fila, separadas"}, "el menú marca la colocación actual")
+        # en columna: una debajo de otra, del mismo ancho, con el hueco que piden sus marcas
+        e.colocar_acciones(sid, "columna")
+        self.assertEqual(e.ed.presentation["actionLayouts"], {sid: "columna"})
+        r = cajas()
+        self.assertEqual({(x, w_) for x, _, w_, _ in r}, {(r[0][0], r[0][2])})
+        acciones = [a for s in e.M["steps"] if s["id"] == sid for a in s["actions"]]
+        for i in range(2):
+            hueco = r[i + 1][1] - (r[i][1] + 2 * H)
+            self.assertGreaterEqual(hueco, _extra(acciones[i])[1] + _extra(acciones[i + 1])[0], "sitio para las marcas")
+        # una operación de vista, con deshacer y rehacer
+        e.deshacer()
+        self.assertEqual(e.colocacion(sid), "fila-separada")
+        e.deshacer()
+        self.assertEqual((e.colocacion(sid), "actionLayouts" in e.ed.presentation), ("fila", False))
+        e.rehacer()
+        e.rehacer()
+        self.assertEqual(e.colocacion(sid), "columna")
+        self.assertIn("Mover arriba", dict(e.menu(centro_caja(w, aids[0]))), "en columna se mueve arriba y abajo")
+        e.colocar_acciones(sid, "columna")  # la misma: no es una operación
+        self.assertEqual(len(e.ed.undo_stack), n + 2)
+        # un borrador unido a la etapa va al final según la colocación
+        did = e.poner_accion_suelta(QPointF(900, 600))
+        e.unir_accion(did, sid)
+        orden = [c["id"] for c in sorted((c for c in w.diagrama.cajas_acciones if c["etapa"] == sid), key=lambda c: c["rect"][1])]
+        self.assertEqual(orden[-1], did)
+        e.colocar_acciones(sid, "fila")
+        orden = [c["id"] for c in sorted((c for c in w.diagrama.cajas_acciones if c["etapa"] == sid), key=lambda c: c["rect"][0])]
+        self.assertEqual(orden[-1], did)
+        self.assertIn("Mover a la izquierda", dict(e.menu(centro_caja(w, aids[0]))))
+        e.colocar_acciones(sid, "fila-separada")
+        # guardar, abrir y simular
+        destino = Path(self.tmp.name) / "p"
+        e.guardar(destino)
+        op = open_model(destino)
+        self.assertEqual(op.presentations[0]["actionLayouts"], {sid: "fila-separada"})
+        e2 = Edicion.desde(op.doc, {}, "abierto", None, op.presentations[0])
+        self.assertEqual(e2.colocacion(sid), "fila-separada")
+        v = Vista("k", "t", "", lambda: (op.doc, layout_from_presentation(op.presentations[0])),
+                  normalize_options(None), presentation=op.presentations[0])
+        self.assertEqual({s["id"]: s["actionLayout"] for s in v.model["steps"]}[sid], "fila-separada")
+        v2 = Vista("k", "t", "", lambda: (op.doc, {}), normalize_options(None))
+        self.assertEqual({s["actionLayout"] for s in v2.model["steps"]}, {"fila"}, "sin clave, en fila")
+        # un valor desconocido en el fichero vale «fila»; uno inválido no se puede poner
+        pres = copy.deepcopy(op.presentations[0])
+        pres["actionLayouts"] = {sid: "rara"}
+        self.assertEqual(Edicion.desde(op.doc, {}, "x", None, pres).colocacion(sid), "fila")
+        with self.assertRaises(DiagnosticError):
+            e.ed.set_action_layout(sid, "rara")
+        with self.assertRaises(DiagnosticError):
+            e.ed.set_action_layout("s-no-existe", "columna")
+        # borrar la etapa borra su colocación
+        e.seleccionar([sid])
+        e.borrar()
+        self.assertNotIn("actionLayouts", e.ed.presentation)
+
+    def test_SEDI83_condicion_y_banderita_encima_sin_solaparse(self):
+        """REQ-ACT-01: en las tres colocaciones, la condición (trazo vertical a la izquierda de la caja y su texto), la
+        banderita de evento y la flecha de al activar o al desactivar se dibujan encima de su caja (la de al desactivar,
+        debajo) sin invadir a las cajas vecinas; cada caja se ensancha con su texto, con su condición y con su evento."""
+        from PySide6.QtWidgets import QGraphicsTextItem
+        from escritorio.diagrama import ACT_MIN, _Pintor, _ancho_accion
+        w = self.w
+        e, ids, ts = self.secuencial()
+        sid = self._tres_acciones(e, ids)
+        e.nueva_variable("CONTADOR12343", "internal", {"kind": "int"})
+        e.poner_accion(sid, {"tipo": "activacion", "variable": "CONTADOR12343", "valor": "CONTADOR12343 + 1"})
+        acciones = [a for s in e.M["steps"] if s["id"] == sid for a in s["actions"]]
+        for lay in ("fila", "fila-separada", "columna"):
+            e.colocar_acciones(sid, lay)
+            cajas = {c["id"]: c["rect"] for c in w.diagrama.cajas_acciones if c["etapa"] == sid}
+            for a in acciones:  # el ancho: el de su texto, y el que piden su condición o su evento
+                x, y, ancho, alto = cajas[a["id"]]
+                self.assertGreaterEqual(ancho, max(ACT_MIN, _Pintor.ancho(a["text"], 15) + 24) - 0.01, (lay, a["text"]))
+                self.assertAlmostEqual(ancho, _ancho_accion(a), delta=0.01) if lay != "columna" else None
+            if lay == "columna":
+                self.assertEqual(len({round(r[2], 2) for r in cajas.values()}), 1, "misma anchura en columna")
+            rects = list(cajas.values())
+            textos = [it for it in w.diagrama.scene().items() if isinstance(it, QGraphicsTextItem)]
+            marcas = [it for it in textos if not any(QRectF_contiene(r, it.sceneBoundingRect().center()) for r in rects)
+                      and it.sceneBoundingRect().center().x() > min(r[0] for r in rects)]
+            self.assertTrue(marcas, "la condición y el evento están dibujados")
+            for it in marcas:
+                rt = it.sceneBoundingRect()
+                for r in rects:  # no invade ninguna caja
+                    self.assertFalse(rt.adjusted(0.5, 0.5, -0.5, -0.5).intersects(QRectF_de(r)), (lay, it.toPlainText()))
+                debajo = next((r for r in rects if r[0] <= rt.left() <= r[0] + r[2]), None)
+                if debajo is not None:  # y cabe sobre su caja (no se mete en el espacio de la vecina)
+                    self.assertLessEqual(rt.right(), debajo[0] + debajo[2] + 0.5, (lay, it.toPlainText()))
+
+    def test_SEDI85_papel_y_tipo_como_texto_con_desplegable_al_editar(self):
+        """REQ-EDT-07: Papel y Tipo se ven como texto; al editar la celda aparece un desplegable con las opciones y al elegir se
+        aplica (una operación de deshacer); el nombre se estira, no hay barra horizontal y el nombre completo va en el
+        tooltip."""
+        from PySide6.QtWidgets import QComboBox
+        w = self.w
+        e, ids, ts = self.secuencial()
+        w.show()
+        self.app.processEvents()
+        pv = w.variables
+        e.nueva_variable("un_nombre_muy_largo_de_variable", "output")
+        self.app.processEvents()
+        self.assertEqual(pv.tabla.horizontalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        r = [pv.tabla.item(i, 0).text() for i in range(pv.tabla.rowCount())].index("un_nombre_muy_largo_de_variable")
+        self.assertEqual(pv.tabla.item(r, 0).toolTip(), "un_nombre_muy_largo_de_variable")
+        tabla = pv.tabla
+        self.assertLessEqual(sum(tabla.columnWidth(c) for c in range(3)), tabla.viewport().width() + 1, "sin barra horizontal")
+        deleg = tabla.itemDelegate()
+        editor = deleg.createEditor(tabla.viewport(), None, tabla.model().index(r, 1))
+        self.assertIsInstance(editor, QComboBox)
+        self.assertEqual([editor.itemText(i) for i in range(editor.count())], ["Entrada", "Salida", "Memoria"])
+        self.assertEqual(editor.currentText(), "Salida")
+        n = len(e.ed.undo_stack)
+        editor.setCurrentIndex(2)
+        editor.activated.emit(2)
+        self.assertEqual((e.ed.model["variables"][r]["role"], len(e.ed.undo_stack)), ("internal", n + 1))
+        self.assertEqual(tabla.item(r, 1).text(), "Memoria")
+        # un clic en la celda abre su editor
+        tabla.clicked.emit(tabla.model().index(r, 2))
+        self.assertEqual(tabla.state(), tabla.State.EditingState)
+
+    def test_SEDI86_limitada_dibuja_x_de_la_etiqueta_no_del_id(self):
+        """REQ-ACT-01: la condición de una acción limitada (`NOT 3s/X…`) usa la etiqueta de la etapa (X0), no su ID interno,
+        en las del modelo y en los borradores; el banco lee la misma vista."""
+        from PySide6.QtCore import QPointF
+        w = self.w
+        w.nuevo()
+        e = w.edicion
+        e.pedir_accion = lambda sid, aid: None
+        e.nueva_variable("Q01", "output")
+        sid = e.poner_etapa(QPointF(40, 60))
+        e.ed.rename(sid, "E7")
+        e.cambia()
+        self.assertNotEqual(sid, "E7")
+        e.poner_accion(sid, {"tipo": "limitada", "variable": "Q01", "limite": "3s"})
+        did = e.poner_accion_suelta(QPointF(300, 200))
+        e.ed.update_draft_action(did, tipo="limitada", etapa=sid, limite="2s")
+        e.cambia()
+        txt = lambda segs: "".join(x["t"] for x in segs)  # noqa: E731
+        (st,) = e.M["steps"]
+        self.assertEqual(txt(st["actions"][0]["cond"]), "3s/X7")
+        self.assertEqual(txt(e.M["draftActions"][0]["cond"]), "2s/X7")
+
+    def test_SEDI84_banco_dibuja_las_colocaciones_como_el_editor(self):
+        """REQ-ACT-01: tools/dibujo.js (banco y comparador) lee `actionLayout` de la vista y dibuja las tres colocaciones
+        con las mismas medidas que escritorio/diagrama.py."""
+        from escritorio import diagrama
+        js = (ROOT / "tools" / "dibujo.js").read_text(encoding="utf-8")
+        import re
+        for nombre in ("ACT_MIN", "ACT_GAP", "ACT_BUS", "ACT_COL", "ACT_LINK"):
+            valor = re.search(rf"const {nombre}\s*=\s*(\d+);", js)
+            self.assertEqual(int(valor.group(1)), getattr(diagrama, nombre), nombre)
+        for texto in ("s.actionLayout", '"fila-separada"', '"columna"', "actionExtra", "drawAction("):
+            self.assertIn(texto, js)
+        ver = Vista("k", "t", "", lambda: (new_grafcet_document("k"), {}), normalize_options(None))
+        self.assertEqual(ver.model["steps"], [])
 
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")

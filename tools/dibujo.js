@@ -11,6 +11,9 @@ const H = 22;         // semilado de la etapa cuadrada
 const TB = 14;        // semilongitud del trazo de transición (≈0,65 del lado)
 const ACT_LINK = 26;  // enlace etapa–acción (≈0,6 del lado)
 const ACT_MIN = 80;   // anchura mínima de una acción
+const ACT_GAP = 36;   // entre cajas de acción de una fila separada
+const ACT_BUS = 28;   // de la línea común de una fila separada, por debajo de las cajas
+const ACT_COL = 12;   // separación mínima entre cajas de una columna (crece lo que piden sus marcas)
 const MARK = 7;       // marcas internas de la encapsulante y divisiones de la macroetapa
 
 function el(tag, attrs={}, parent) { const e = document.createElementNS(NS, tag);
@@ -110,7 +113,7 @@ function drawDiagram(svg, M, S) {
     if (uns) txt(g, p.x, p.y+H+13, "fue inestable", {"text-anchor":"middle", class:"tag vtag"});
     if (stale) txt(g, p.x, p.y+H+13, "último estable", {"text-anchor":"middle", class:"tag stag"});
     if (cand) txt(g, p.x, p.y+H+13, "alcanzada, sin confirmar", {"text-anchor":"middle", class:"tag ctag"});
-    drawActions(g, p, s.actions, S);
+    drawActions(g, p, s.actions, S, s.actionLayout);
   });
   (M.macros || []).forEach(m => {  // macroetapa: divisiones horizontales superior e inferior
     const p = pos[m.id], act = !!(S.macros || {})[m.id];
@@ -168,38 +171,81 @@ function drawFrames(g, M, pos) {
   });
 }
 
-// Acciones a la derecha de la etapa, del alto de la etapa y contiguas (representación (2) de la norma)
-function drawActions(g, p, actions, S) {
+// Lo que sobresale la marca de una acción por encima y por debajo de su caja (condición, flecha, banderita)
+function actionExtra(a) {
+  if (a.kind === "continuous" && a.cond) return [20, 0];
+  return {event:[24, 0], activation:[20, 0], deactivation:[0, 20]}[a.trigger] || [0, 0];
+}
+
+// Una acción con su caja (a la derecha de ax, centrada en cy) y sus marcas. El ancho es el de su texto y, si lleva
+// condición o evento encima, el que éstos necesitan para no invadir a la caja vecina; las cajas de una columna miden
+// lo mismo (el mayor), por eso se devuelven los rectángulos para ajustarlos al final.
+function drawAction(g, ax, cy, a, S) {
+  const on = a.kind === "continuous" ? !!(S.outputs && S.outputs[a.target] && S.outputs[a.target].value)
+    : a.kind === "force" ? (S.forces || []).some(f => f.order === a.id) : false;
+  const ga = el("g", {class:`act ${on?"on":""} ${a.kind === "force" ? "force" : ""}`}, g);
+  const rect = el("rect", {x:ax, y:cy-H, height:2*H, width:ACT_MIN}, ga);
+  const inner = a.kind === "force" ? el("rect", {x:ax+3, y:cy-H+3, height:2*H-6, width:ACT_MIN-6, class:"inner"}, ga) : null;
+  const label = segText(ga, ax + 12, cy + 5, a.text, "atext");
+  let w = Math.max(ACT_MIN, label.getComputedTextLength() + 24);
+  const mx = ax + 12, top = cy - H, bottom = cy + H;
+  if (a.kind === "continuous" && a.cond) {             // acción condicionada: trazo y condición
+    el("line", {x1:mx, x2:mx, y1:top, y2:top-14, class:"amark"}, ga);
+    const ac = segText(ga, mx+5, top-4, a.cond, "acond");
+    w = Math.max(w, 12 + 5 + ac.getComputedTextLength() + 8);
+    timerText(ga, mx+5 + ac.getComputedTextLength() + 8, top-4, a.condRef, S);
+  } else if (a.trigger === "activation") {            // memorizada al activar: flecha hacia arriba
+    el("line", {x1:mx, x2:mx, y1:top, y2:top-11, class:"amark"}, ga);
+    el("path", {d:`M${mx-5},${top-10} L${mx},${top-19} L${mx+5},${top-10} Z`, class:"ahead"}, ga);
+  } else if (a.trigger === "deactivation") {          // memorizada al desactivar: flecha hacia abajo
+    el("line", {x1:mx, x2:mx, y1:bottom, y2:bottom+11, class:"amark"}, ga);
+    el("path", {d:`M${mx-5},${bottom+10} L${mx},${bottom+19} L${mx+5},${bottom+10} Z`, class:"ahead"}, ga);
+  } else if (a.trigger === "event") {                 // memorizada por evento: banderita y evento
+    el("line", {x1:mx, x2:mx, y1:top, y2:top-20, class:"amark"}, ga);
+    el("path", {d:`M${mx},${top-20} L${mx-9},${top-15} L${mx},${top-10} Z`, class:"ahead"}, ga);
+    const ev = segText(ga, mx+5, top-11, a.event, "acond");
+    w = Math.max(w, 12 + 5 + ev.getComputedTextLength() + 8);
+    timerText(ga, mx+5 + ev.getComputedTextLength() + 8, top-11, a.condRef, S);
+  }
+  const ajustar = ancho => { rect.setAttribute("width", ancho); if (inner) inner.setAttribute("width", ancho - 6); };
+  ajustar(w);
+  return {w, ajustar};
+}
+
+// Acciones a la derecha de la etapa, del alto de la etapa. Tres colocaciones (figuras (1)–(3) de la norma): "fila"
+// (por defecto; cajas contiguas, la representación (2)), "fila-separada" (cajas separadas, unidas a una línea común que
+// sale de la etapa) y "columna" (una debajo de otra, unidas por una línea vertical que sale de la etapa)
+function drawActions(g, p, actions, S, layout = "fila") {
   if (!actions.length) return;
   let ax = p.x + H + ACT_LINK;
   el("line", {x1:p.x+H, x2:ax, y1:p.y, y2:p.y, class:"link"}, g);
-  actions.forEach(a => {
-    const on = a.kind === "continuous" ? !!(S.outputs && S.outputs[a.target] && S.outputs[a.target].value)
-      : a.kind === "force" ? (S.forces || []).some(f => f.order === a.id) : false;
-    const ga = el("g", {class:`act ${on?"on":""} ${a.kind === "force" ? "force" : ""}`}, g);
-    const rect = el("rect", {x:ax, y:p.y-H, height:2*H, width:ACT_MIN}, ga);
-    const inner = a.kind === "force" ? el("rect", {x:ax+3, y:p.y-H+3, height:2*H-6, width:ACT_MIN-6, class:"inner"}, ga) : null;
-    const label = segText(ga, ax + 12, p.y + 5, a.text, "atext");
-    const w = Math.max(ACT_MIN, label.getComputedTextLength() + 24);
-    rect.setAttribute("width", w);
-    if (inner) inner.setAttribute("width", w - 6);  // forzado: rectángulo doble
-    const mx = ax + 12, top = p.y - H, bottom = p.y + H;
-    if (a.kind === "continuous" && a.cond) {             // acción condicionada: trazo y condición
-      el("line", {x1:mx, x2:mx, y1:top, y2:top-14, class:"amark"}, ga);
-      const ac = segText(ga, mx+5, top-4, a.cond, "acond");
-      timerText(ga, mx+5 + ac.getComputedTextLength() + 8, top-4, a.condRef, S);
-    } else if (a.trigger === "activation") {            // memorizada al activar: flecha hacia arriba
-      el("line", {x1:mx, x2:mx, y1:top, y2:top-11, class:"amark"}, ga);
-      el("path", {d:`M${mx-5},${top-10} L${mx},${top-19} L${mx+5},${top-10} Z`, class:"ahead"}, ga);
-    } else if (a.trigger === "deactivation") {          // memorizada al desactivar: flecha hacia abajo
-      el("line", {x1:mx, x2:mx, y1:bottom, y2:bottom+11, class:"amark"}, ga);
-      el("path", {d:`M${mx-5},${bottom+10} L${mx},${bottom+19} L${mx+5},${bottom+10} Z`, class:"ahead"}, ga);
-    } else if (a.trigger === "event") {                 // memorizada por evento: banderita y evento
-      el("line", {x1:mx, x2:mx, y1:top, y2:top-20, class:"amark"}, ga);
-      el("path", {d:`M${mx},${top-20} L${mx-9},${top-15} L${mx},${top-10} Z`, class:"ahead"}, ga);
-      const ev = segText(ga, mx+5, top-11, a.event, "acond");
-      timerText(ga, mx+5 + ev.getComputedTextLength() + 8, top-11, a.condRef, S);
+  const linea = d => el("path", {d, class:"link", fill:"none"}, g);
+  if (layout === "columna") {
+    const ys = [p.y];
+    for (let i = 1; i < actions.length; i++)
+      ys.push(ys[i-1] + 2*H + Math.max(ACT_COL, actionExtra(actions[i-1])[1] + actionExtra(actions[i])[0] + 4));
+    const bx = p.x + H + ACT_LINK / 2;
+    if (ys.length > 1) {
+      linea(`M${bx},${p.y} V${ys[ys.length-1]}`);
+      ys.slice(1).forEach(cy => linea(`M${bx},${cy} H${ax}`));
     }
-    ax += w;
-  });
+    const cajas = actions.map((a, i) => drawAction(g, ax, ys[i], a, S));
+    const ancho = Math.max(...cajas.map(c => c.w));
+    cajas.forEach(c => c.ajustar(ancho));
+    return;
+  }
+  if (layout === "fila-separada") {
+    const entradas = [];
+    actions.forEach((a, i) => {
+      if (i) { ax += ACT_GAP; entradas.push(ax - 14); }
+      ax += drawAction(g, ax, p.y, a, S).w;
+    });
+    if (entradas.length) {
+      const bx = p.x + H + ACT_LINK / 2, yb = p.y + H + ACT_BUS;
+      linea(`M${bx},${p.y} V${yb} H${entradas[entradas.length-1]}`);
+      entradas.forEach(ex => linea(`M${ex},${yb} V${p.y} H${ex+14}`));
+    }
+    return;
+  }
+  actions.forEach(a => { ax += drawAction(g, ax, p.y, a, S).w; });
 }

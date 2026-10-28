@@ -484,6 +484,32 @@ class Editor:
                 styles.pop(ident, None)
         self._txn("ajustar dibujo del enlace", fn, view_only=True)
 
+    # Colocación de las acciones de una etapa (presentación, `presentation.actionLayouts`: {ID de etapa: valor}); sin
+    # entrada vale «fila» (cajas pegadas en fila, la representación (2) de la norma).
+    ACTION_LAYOUTS = ("fila", "fila-separada", "columna")
+
+    def action_layouts(self) -> dict[str, str]:
+        d = self.presentation.get("actionLayouts", {})
+        return d if isinstance(d, dict) else {}
+
+    def set_action_layout(self, step: str, layout: str) -> None:
+        """Cómo se colocan las acciones de una etapa: «fila» (pegadas, por defecto), «fila-separada» o «columna». Solo
+        presentación: no cambia el modelo ni la revisión."""
+        if layout not in self.ACTION_LAYOUTS:
+            raise DiagnosticError(Diagnostic("D-FORMATO", f"colocación de acciones desconocida: {layout!r}"))
+        if not any(s["id"] == step for s in self.model["steps"]):
+            raise DiagnosticError(Diagnostic("D-REF", f"etapa inexistente: {step}", element=step))
+
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            d = p["actionLayouts"] = dict(p["actionLayouts"]) if isinstance(p.get("actionLayouts"), dict) else {}
+            if layout == "fila":
+                d.pop(step, None)
+            else:
+                d[step] = layout
+            if not d:
+                del p["actionLayouts"]
+        self._txn("colocación de las acciones", fn, view_only=True)
+
     def move(self, ident: str, x: Any, y: Any) -> None:
         def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
             lay = next((l for l in p["elementLayouts"] if l["elementRef"] == ident), None)
@@ -786,6 +812,10 @@ class Editor:
             for d in p.get("draftActions", []):  # una acción sin completar unida a una etapa borrada queda suelta
                 if d.get("etapa") in doomed:
                     del d["etapa"]
+            if isinstance(p.get("actionLayouts"), dict):  # la colocación de las acciones de una etapa borrada
+                p["actionLayouts"] = {k: v for k, v in p["actionLayouts"].items() if k not in doomed}
+                if not p["actionLayouts"]:
+                    del p["actionLayouts"]
             return plan
         return self._txn("borrar", fn)
 

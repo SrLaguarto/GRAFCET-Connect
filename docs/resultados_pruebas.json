@@ -1,9 +1,9 @@
 {
- "date": "2026-10-28T16:15:11+00:00",
+ "date": "2026-10-28T17:38:03+00:00",
  "python": "3.13.17",
  "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
  "machine": "x86_64",
- "total": 227,
+ "total": 236,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -504,7 +504,7 @@
     "REQ-EDT-06",
     "REQ-EDT-07"
    ],
-   "summary": "REQ-EDT-07, REQ-EDT-06: el diccionario muestra papel, tipo, valor inicial y usos; renombrar actualiza los"
+   "summary": "REQ-EDT-07, REQ-EDT-06: el diccionario muestra nombre, papel y tipo (sin inicial, unidad ni usos); renombrar"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI44_acciones_desde_el_dibujo",
@@ -743,6 +743,91 @@
     "REQ-EDT-09"
    ],
    "summary": "REQ-DAT-01, REQ-EDT-09: un `draftActions` corrupto no rompe la apertura: se descartan los dañados (no son"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI78_anchos_de_los_paneles_laterales",
+   "case": "S-EDI78",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-09, REQ-SIM-03: al editar, el panel izquierdo mide de lo que piden las dos columnas de la paleta (su"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI79_tabla_de_variables_nombre_papel_tipo",
+   "case": "S-EDI79",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: la tabla tiene solo Nombre, Papel y Tipo; se ofrecen Booleana, Entera y Decimal con 2 decimales;"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI80_variable_nueva_sin_nombre",
+   "case": "S-EDI80",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-07, REQ-EDT-09: «Nueva variable» añade una fila en blanco que solo existe en la interfaz; al escribir un"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI81_parpadeo_naranja_en_los_errores",
+   "case": "S-EDI81",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un rechazo, un intento de simular con errores, un clic en Diagnósticos (también en el aviso de un"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI82_colocacion_de_las_acciones_de_una_etapa",
+   "case": "S-EDI82",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-DAT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02, REQ-DAT-01: por defecto, cajas pegadas en fila; el botón derecho en la etapa ofrece"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI83_condicion_y_banderita_encima_sin_solaparse",
+   "case": "S-EDI83",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01"
+   ],
+   "summary": "REQ-ACT-01: en las tres colocaciones, la condición (trazo vertical a la izquierda de la caja y su texto), la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI84_banco_dibuja_las_colocaciones_como_el_editor",
+   "case": "S-EDI84",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01"
+   ],
+   "summary": "REQ-ACT-01: tools/dibujo.js (banco y comparador) lee `actionLayout` de la vista y dibuja las tres colocaciones"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI85_papel_y_tipo_como_texto_con_desplegable_al_editar",
+   "case": "S-EDI85",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: Papel y Tipo se ven como texto; al editar la celda aparece un desplegable con las opciones y al elegir se"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI86_limitada_dibuja_x_de_la_etiqueta_no_del_id",
+   "case": "S-EDI86",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01"
+   ],
+   "summary": "REQ-ACT-01: la condición de una acción limitada (`NOT 3s/X…`) usa la etiqueta de la etapa (X0), no su ID interno,"
   },
   {
    "test": "test_editor_escritorio.Notacion.test_SEDI16_notacion_del_usuario",

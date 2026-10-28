@@ -14,11 +14,12 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import QObject, QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QObject, QPointF, QRectF, Qt, QTimer, Signal
 
-from grafcet.diagnostics import DiagnosticError
+from grafcet.diagnostics import Diagnostic, DiagnosticError
 from grafcet.notation import a_nucleo, a_usuario, etapas_ambiguas, x_etapa
 from grafcet.editor import Editor, new_grafcet_document
+from grafcet.ids import MAX_LABEL, valid_label
 from grafcet.persistence import Project, add_document, new_project, save_project
 from grafcet.profile import normalize_options
 from grafcet.routing import project_on_link
@@ -35,6 +36,52 @@ TIPOS_ACCION = (("continua", "Continua"), ("limitada", "Continua limitada en el 
                 ("activacion", "Memorizada al activar"), ("desactivacion", "Memorizada al desactivar"),
                 ("evento", "Memorizada por evento"))
 DISPARADOR = {"activacion": "activation", "desactivacion": "deactivation", "evento": "event"}
+
+
+COLOCACIONES = (("fila", "En fila, pegadas"), ("fila-separada", "En fila, separadas"), ("columna", "En columna"))
+PARPADEO_MS, PARPADEO_PASOS = 250, 6  # tres parpadeos en 1,5 s: encendido al empezar y en los pasos 2 y 4
+
+
+class Parpadeo(QObject):
+    """Parpadeo naranja de lo que da error (REQ-EDT-09): un conjunto de ID (elementos del dibujo o filas de variables) que
+    se enciende y se apaga unas veces con un temporizador. No sabe de aspecto: quien dibuja pregunta `activos()` y
+    redibuja cuando `cambia` avisa. Sin pantalla, se comprueba el estado (`ids`, `fase`, `t.isActive()`)."""
+
+    cambia = Signal()
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.ids: set[str] = set()
+        self.fase = False
+        self.restan = 0
+        self.t = QTimer(self)
+        self.t.setInterval(PARPADEO_MS)
+        self.t.timeout.connect(self.paso)
+
+    def iniciar(self, ids: Any) -> None:
+        """Empieza a parpadear con estos ID (si ya parpadeaba otra cosa, la sustituye)."""
+        self.ids, self.fase, self.restan = set(ids), True, PARPADEO_PASOS
+        self.t.start()
+        self.cambia.emit()
+
+    def paso(self) -> None:
+        self.restan -= 1
+        if self.restan <= 0:
+            self.parar()
+            return
+        self.fase = not self.fase
+        self.cambia.emit()
+
+    def parar(self) -> None:
+        self.t.stop()
+        hubo = self.fase or bool(self.ids)
+        self.ids, self.fase, self.restan = set(), False, 0
+        if hubo:
+            self.cambia.emit()
+
+    def activos(self) -> set[str]:
+        """Los que se dibujan en naranja ahora (vacío en la fase apagada)."""
+        return set(self.ids) if self.fase else set()
 
 
 def ajustar(v: float) -> int:
@@ -57,6 +104,8 @@ class Edicion(QObject):
         self._mensaje, self.mensaje_info = "", False
         self.opciones = normalize_options(None)
         self.diagrama: Any = None
+        self.parpadeo = Parpadeo(self)  # lo que parpadea en naranja tras un error
+        self.parpadeo.cambia.connect(self.redibujar)
         self.arrastre: dict[str, Any] | None = None  # id, desplazamiento del agarre, posición actual, si se movió
         self.enlace: dict[str, Any] | None = None    # punto de unión de origen de un enlace que se está trazando
         self.inicio_rama: dict[str, Any] | None = None  # clic selecciona el enlace; arrastrar abre una rama
@@ -151,7 +200,7 @@ class Edicion(QObject):
         ed = self.ed
         self.vista = Vista(ed.model["id"], self.titulo, "", lambda: (ed.model, self.layout()), self.opciones,
                            hidden=ed.hidden_labels(), bars=self._barras(), link_styles=self.estilos_enlaces(),
-                           draft_actions=self._borradores())
+                           draft_actions=self._borradores(), action_layouts=ed.action_layouts())
         self.M = self.vista.model
         self.nombres = self.M.get("names", {})
         vivos = set(posiciones(self.M)) | {d["id"] for d in self.M.get("drafts", [])} | {e["id"] for e in enlaces(self.M)} | {b["id"] for b in self.M.get("bars", [])}
@@ -240,11 +289,31 @@ class Edicion(QObject):
         if p is None and caja:  # una acción (sus cajas están dibujadas)
             x, y, w, h = caja["rect"]
             p = (x + w / 2, y + h / 2)
+        barra_ = next((b for b in self.M.get("bars", []) if b["id"] == ident), None)
+        if p is None and barra_:
+            bx, by, w, h = barra(barra_)
+            p = (bx + w / 2, by + h / 2)
         if p is None:
             d = next((d for d in self.M.get("drafts", []) if d["id"] == ident), None)
             a, b = (posiciones(self.M).get(d["from"]), posiciones(self.M).get(d["to"])) if d else (None, None)
             p = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) if a and b else None
         return QPointF(*p) if p else None
+
+    def parpadear(self, ids: Any, centrar: bool = True) -> None:
+        """Un error que se refiere a estos elementos (etapas, transiciones, barras, acciones, enlaces): parpadean en naranja
+        y el primero se lleva a la vista si queda fuera."""
+        ids = [i for i in dict.fromkeys(ids) if i]
+        if not ids:
+            return
+        self.parpadeo.iniciar(ids)
+        c = self.centro(ids[0]) if centrar else None
+        if c is not None and hasattr(self.diagrama, "centrar_si_fuera"):
+            self.diagrama.centrar_si_fuera(c)
+
+    def rechazar(self, texto: str, *ids: str | None) -> None:
+        """Un rechazo de una operación: el mensaje (en rojo) y el parpadeo de los elementos a los que se refiere."""
+        self.mensaje = texto
+        self.parpadear([i for i in ids if i])
 
     # -- gestos del ratón (los llama VistaDiagrama) ---------------------------------------------------
     def _modelo(self, p: QPointF) -> tuple[int, int]:
@@ -545,7 +614,7 @@ class Edicion(QObject):
                 if ident is not None and any(s["id"] == ident for s in self.M["steps"]):
                     destino = sorted(anclas(self.M, ident), key=lambda a: (a["pos"] - p).manhattanLength())[0]
                 else:
-                    self.mensaje = "Una acción se une a una etapa: suelte el enlace sobre ella."
+                    self.rechazar("Una acción se une a una etapa: suelte el enlace sobre ella.", origen["id"])
                     self.cambiado.emit()
                     return True
             if destino is None and ident and "|" in ident and ident.split("|")[2] in ("pre", "post"):
@@ -577,12 +646,13 @@ class Edicion(QObject):
                 self.saltar(sid, src)
             return
         if recibe or rol != "post":
-            self.mensaje = "Una rama se une a un enlace que llega a una etapa (de una transición a su etapa siguiente)."
+            self.rechazar("Una rama se une a un enlace que llega a una etapa (de una transición a su etapa siguiente).",
+                          src, enlace)
             self.cambiado.emit()
         elif any(t["id"] == src for t in self.M["transitions"]):
             self.conectar(src, sid)
         elif src == sid:
-            self.mensaje = "Una etapa no salta a sí misma."
+            self.rechazar("Una etapa no salta a sí misma.", src)
             self.cambiado.emit()
         elif any(s["id"] == src for s in self.M["steps"]):
             self.saltar(src, sid)
@@ -595,13 +665,13 @@ class Edicion(QObject):
         es_paso = any(s["id"] == base for s in self.M["steps"])
         t = next((t for t in self.ed.model["transitions"] if t["id"] == base), None)
         if t is not None and t["postRefs" if abajo else "preRefs"]:
-            self.mensaje = (f"«{self.nombres.get(base, base)}» ya tiene una etapa {'siguiente' if abajo else 'anterior'}: "
-                            "para otra más hace falta una simultaneidad (elemento de la paleta); para una alternativa, "
-                            "abra la rama desde la etapa.")
+            self.rechazar(f"«{self.nombres.get(base, base)}» ya tiene una etapa {'siguiente' if abajo else 'anterior'}: "
+                          "para otra más hace falta una simultaneidad (elemento de la paleta); para una alternativa, "
+                          "abra la rama desde la etapa.", base)
             self.cambiado.emit()
             return None
         if not es_paso and t is None:
-            self.mensaje = "De una barra se enlaza con las etapas y transiciones existentes."
+            self.rechazar("De una barra se enlaza con las etapas y transiciones existentes.", base)
             self.cambiado.emit()
             return None
         ed = self.ed
@@ -642,12 +712,13 @@ class Edicion(QObject):
             if otro["lado"] != "izq" and any(s["id"] == otro["id"] for s in self.M["steps"]):
                 self.unir_accion(acc["id"], otro["id"])
             else:
-                self.mensaje = "Una acción se une a una etapa, no a una transición, una barra ni otra acción."
+                self.rechazar("Una acción se une a una etapa, no a una transición, una barra ni otra acción.",
+                              acc["id"], otro["id"])
                 self.cambiado.emit()
             return
         ba, bb = self._barra(origen["id"]), self._barra(destino["id"])
         if ba and bb:
-            self.mensaje = "Una barra no se une a otra barra."
+            self.rechazar("Una barra no se une a otra barra.", origen["id"], destino["id"])
             self.cambiado.emit()
         elif ba or bb:
             barra_, otro = (origen, destino) if ba else (destino, origen)
@@ -655,7 +726,8 @@ class Edicion(QObject):
                 diag = self.ed.bar_link(barra_["id"], barra_["lado"], otro["id"])
                 self.mensaje = f"{diag.code}: {substitute(diag.message, self.nombres)}" if diag else ""
             except DiagnosticError as exc:
-                self.mensaje = "; ".join(substitute(d.message, self.nombres) for d in exc.diagnostics)
+                self.rechazar("; ".join(substitute(d.message, self.nombres) for d in exc.diagnostics),
+                              barra_["id"], otro["id"])
             self.cambia()
         elif origen["lado"] == "abajo":  # el punto de abajo emite el enlace
             self.conectar(origen["id"], destino["id"])
@@ -786,7 +858,10 @@ class Edicion(QObject):
             return []
         self.sel, self.accion = [ident], None
         self.cambiado.emit()
-        return [("Añadir acción…", lambda: self.anadir_accion(ident))]
+        self.menu_marcadas = {dict(COLOCACIONES)[self.colocacion(ident)]}
+        return [("Añadir acción…", lambda: self.anadir_accion(ident)),
+                ("Colocación de las acciones", [(texto, lambda v=v: self.colocar_acciones(ident, v))
+                                                for v, texto in COLOCACIONES])]
 
     def _menu_accion(self, caja: dict[str, Any]) -> list[tuple[str, Callable[[], Any]]]:
         aid, sid, suelta = caja["id"], caja["etapa"] or None, bool(caja.get("suelta"))
@@ -800,10 +875,23 @@ class Edicion(QObject):
         if sid:
             out.append(("Separar de la etapa", lambda: self.separar_accion(aid)))
         if sid and not caja.get("borrador"):
-            out += [("Mover a la izquierda", lambda: self.mover_accion(aid, -1)),
-                    ("Mover a la derecha", lambda: self.mover_accion(aid, 1))]
+            columna = self.colocacion(sid) == "columna"
+            out += [("Mover arriba" if columna else "Mover a la izquierda", lambda: self.mover_accion(aid, -1)),
+                    ("Mover abajo" if columna else "Mover a la derecha", lambda: self.mover_accion(aid, 1))]
         out.append(("Quitar", lambda: self.quitar_accion(aid)))
         return out
+
+    def colocacion(self, sid: str) -> str:
+        """Cómo se colocan las acciones de la etapa: «fila» (por defecto), «fila-separada» o «columna»."""
+        valor = self.ed.action_layouts().get(sid, "fila")
+        return valor if valor in dict(COLOCACIONES) else "fila"
+
+    def colocar_acciones(self, sid: str, valor: str) -> None:
+        """Cambia la colocación de las acciones de una etapa (operación de vista, se deshace)."""
+        if valor == self.colocacion(sid):
+            return
+        self.ed.set_action_layout(sid, valor)
+        self.cambia()
 
     def _texto(self, eid: str | None) -> str:
         return a_usuario(next(e["text"] for e in self.ed.model["expressions"] if e["id"] == eid)) if eid else ""
@@ -1001,6 +1089,8 @@ class Edicion(QObject):
         motivo = self._atomico("unir acción a la etapa",
                                lambda: (self.ed.update_draft_action(did, etapa=sid), self._completar(did)))
         self.mensaje = motivo or ""
+        if motivo:
+            self.parpadear([did])
         self._tras_borrador(did)
         if motivo is None and self._es_borrador(did):
             self.pedir_accion(sid, did)
@@ -1037,6 +1127,8 @@ class Edicion(QObject):
                 self.ed.delete([aid])
         motivo = self._atomico("separar acción de la etapa", hacer)
         self.mensaje = motivo or ""
+        if motivo:
+            self.parpadear([aid])
         if motivo is None:
             self.sel, self.accion = [nuevo], None
             self.cambiado.emit()
@@ -1060,6 +1152,8 @@ class Edicion(QObject):
                 self.ed.update_draft_action(ident, tipo=tipo, variable=self._id_variable(d["variable"])),
                 self._completar(ident)))
             self.mensaje = motivo or ""
+            if motivo:
+                self.parpadear([ident])
             self._tras_borrador(ident)
             if motivo is None and self._es_borrador(ident) and nuevos:
                 self.pedir_accion(sid, ident)
@@ -1088,6 +1182,8 @@ class Edicion(QObject):
             self.ed.delete([aid])
         motivo = self._atomico("tipo de acción", hacer)
         self.mensaje = motivo or ""
+        if motivo:
+            self.parpadear([aid])
         if motivo is None:
             self.sel, self.accion = [sid], nuevo
             self.cambiado.emit()
@@ -1116,7 +1212,12 @@ class Edicion(QObject):
                 for v in m["variables"]]
 
     def nueva_variable(self, nombre: str, papel: str = "input", tipo: dict[str, Any] | None = None) -> str | None:
-        return self._atomico("crear variable", lambda: self.ed.add_variable(nombre, papel, tipo or {"kind": "bool"}))
+        """Crea una variable (una operación de deshacer); devuelve el motivo si el nombre no es válido o está repetido."""
+        def hacer() -> None:
+            if not valid_label(nombre):  # como al renombrar
+                raise DiagnosticError(Diagnostic("D-FORMATO", f"nombre inválido: de 1 a {MAX_LABEL} caracteres"))
+            self.ed.add_variable(nombre, papel, tipo or {"kind": "bool"})
+        return self._atomico("crear variable", hacer)
 
     def cambiar_variable(self, vid: str, nombre: str | None = None, **cambios: Any) -> str | None:
         """Cambia nombre (y el texto de sus usos), papel, tipo, unidad o valor inicial, en una sola operación."""
@@ -1204,9 +1305,9 @@ class Edicion(QObject):
             pre = destino == t["id"]
             refs, otra = (t["preRefs"], origen) if pre else (t["postRefs"], destino)
             if refs and otra not in refs and not v["simulPre" if pre else "simulPost"]:
-                self.mensaje = (f"«{self.nombres.get(t['id'], t['id'])}» ya tiene una etapa {'anterior' if pre else 'siguiente'}: "
-                                "varias en una misma transición son una simultaneidad; arrastre el elemento «Simultaneidad» "
-                                "de la paleta junto al punto de unión de la transición.")
+                self.rechazar(f"«{self.nombres.get(t['id'], t['id'])}» ya tiene una etapa {'anterior' if pre else 'siguiente'}: "
+                              "varias en una misma transición son una simultaneidad; arrastre el elemento «Simultaneidad» "
+                              "de la paleta junto al punto de unión de la transición.", t["id"], origen, destino)
                 self.cambiado.emit()
                 return
         try:
@@ -1215,7 +1316,7 @@ class Edicion(QObject):
                 self._separar_ramas(origen, destino)
             self.mensaje = f"{diag.code}: {substitute(diag.message, self.nombres)}" if diag else ""
         except DiagnosticError as exc:
-            self.mensaje = "; ".join(substitute(d.message, self.nombres) for d in exc.diagnostics)
+            self.rechazar("; ".join(substitute(d.message, self.nombres) for d in exc.diagnostics), origen, destino)
         self.cambia()
 
     def anadir_debajo(self) -> str | None:
@@ -1242,7 +1343,7 @@ class Edicion(QObject):
             self.sel = [nid]
             self.cambia()
             return nid
-        self.mensaje = "No se puede añadir nada debajo de este elemento."
+        self.rechazar("No se puede añadir nada debajo de este elemento.", ident)
         self.cambiado.emit()
         return None
 
@@ -1281,6 +1382,7 @@ class Edicion(QObject):
         try:
             self.ed.rename(ident, nuevo)
         except DiagnosticError as exc:
+            self.parpadear([ident])
             return "; ".join(f"{d.message}. {d.correction}" for d in exc.diagnostics)
         self.cambia()
         return None

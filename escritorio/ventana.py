@@ -18,7 +18,7 @@ from typing import Any
 
 from PySide6.QtCore import QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDockWidget, QDialogButtonBox, QFileDialog, QFormLayout,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDockWidget, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
                                QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
                                QPushButton, QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
@@ -39,6 +39,7 @@ from .variables import PanelVariables
 
 TITULO = "Simulador GRAFCET"
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
+MARGEN_LATERAL = 1.15  # los paneles laterales de edición se ensanchan hasta un 15 % más que su ancho mínimo
 AYUDA_EDICION = {
     "seleccionar": "Clic selecciona un elemento y muestra sus opciones a la izquierda; arrastrarlo lo mueve (a la "
                    "rejilla); de un punto de unión (arriba o abajo) sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y "
@@ -331,34 +332,47 @@ class Ventana(QMainWindow):
         # Página de edición: la herramienta, la selección y los diagnósticos (REQ-EDT-09)
         pag = QWidget()
         pl = QVBoxLayout(pag)
+        pl.setContentsMargins(2, 2, 2, 2)  # el panel es estrecho: poco marco, para que quepa la tabla de variables
         self.l_herr = QLabel()
         self.l_herr.setWordWrap(True)
         self.l_herr.setTextFormat(Qt.TextFormat.RichText)
+        self.l_herr.hide()  # la misma ayuda ya va sobre el dibujo; aquí no cabe en un panel estrecho (sigue en el objeto)
         pl.addWidget(self.l_herr)
         self.l_sel = QLabel()
         self.l_sel.setWordWrap(True)
         pl.addWidget(self.l_sel)
         self.variables = PanelVariables()
         caja_vars = QGroupBox("Variables")
-        QVBoxLayout(caja_vars).addWidget(self.variables)
+        cv = QVBoxLayout(caja_vars)
+        cv.setContentsMargins(1, 1, 1, 1)
+        cv.addWidget(self.variables)
+        self.variables.setMinimumHeight(140)
         caja = QGroupBox("Diagnósticos")
         cl = QVBoxLayout(caja)
-        self.l_resumen = QLabel()
+        cl.setContentsMargins(1, 1, 1, 1)
+        self.l_resumen = QLabel()  # una línea; el detalle va solo en la lista
         self.l_resumen.setWordWrap(True)
         cl.addWidget(self.l_resumen)
         self.lista_diag = QListWidget()
         self.lista_diag.setWordWrap(True)
         self.lista_diag.itemClicked.connect(self._ir_a_diagnostico)
+        self.lista_diag.setMinimumHeight(60)
+        self.lista_diag.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # el texto se ajusta al ancho
         cl.addWidget(self.lista_diag)
         reparto = QSplitter(Qt.Orientation.Vertical)  # variables arriba, diagnósticos abajo
         reparto.addWidget(caja_vars)
         reparto.addWidget(caja)
-        reparto.setSizes([320, 260])
+        reparto.setSizes([360, 140])
         pl.addWidget(reparto, 1)
         self.derecho = QStackedWidget()
         self.derecho.addWidget(self.scroll)
-        self.derecho.addWidget(pag)
-        self.derecho.setMinimumWidth(300)
+        pag_scroll = QScrollArea()  # si no cabe en alto, se desplaza (el ancho es el del panel, sin barra horizontal)
+        pag_scroll.setWidgetResizable(True)
+        pag_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        pag_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        pag_scroll.setWidget(pag)
+        self.derecho.addWidget(pag_scroll)
+        self.derecho.setMinimumWidth(300)  # al simular; al editar, el mismo margen de ancho que el panel izquierdo
         # Arriba, el dibujo y el panel derecho; abajo, a todo el ancho de los dos, el panel inferior (traza, leyenda,
         # bloques): así una fórmula larga se ve en una línea. El panel izquierdo es un dock, a toda la altura.
         self.split = QSplitter(Qt.Orientation.Horizontal)
@@ -372,6 +386,7 @@ class Ventana(QMainWindow):
         self.setCentralWidget(self.vsplit)
         # Izquierda: paleta de elementos (arriba) y propiedades del elemento seleccionado (abajo); solo al editar
         self.paleta = Paleta()
+        self.paleta.setMinimumWidth(self.paleta.ancho_minimo())  # las dos columnas de fichas, sin cortarse
         self.paleta.elegida.connect(self.herramienta)
         self.paleta.escala = self.diagrama.escala
         self.props = PanelPropiedades()
@@ -394,8 +409,14 @@ class Ventana(QMainWindow):
         self.dock.setObjectName("dock-elementos")
         self.dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.dock.setWidget(izq_edit)
-        self.dock.setMinimumWidth(200)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock)
+        # Anchos de los paneles laterales al editar: del que piden las dos columnas de la paleta a un 15 % más, los dos
+        # iguales (el dock y el panel derecho)
+        self.ancho_lateral = (self.dock.minimumSizeHint().width(),
+                              round(self.dock.minimumSizeHint().width() * MARGEN_LATERAL))
+        self.dock.setMinimumWidth(self.ancho_lateral[0])
+        self.dock.setMaximumWidth(self.ancho_lateral[1])
+        self.resizeDocks([self.dock], [sum(self.ancho_lateral) // 2], Qt.Orientation.Horizontal)
         self.dock.hide()
         # Barra de estado: aviso de conformidad, lecturas distintas de las decididas, instante lógico
         sb = self.statusBar()
@@ -629,6 +650,9 @@ class Ventana(QMainWindow):
             self.modo = "editar"
         else:
             if self.edicion is not None:
+                if self._variables_sin_nombre():
+                    self._poner_modo()
+                    return False
                 res = self.edicion.ed.validate()
                 if not res.can_simulate:
                     self._no_simulable()
@@ -658,6 +682,7 @@ class Ventana(QMainWindow):
         for a in (self.a_ejecutar, self.a_paso, self.a_completar, self.a_reiniciar):
             a.setEnabled(not editar)  # sin simulación en curso al editar (F5 y compañía no hacen nada)
         self.derecho.setCurrentIndex(1 if editar else 0)
+        self._anchos_laterales()
         self.pestanas.setTabVisible(self.i_bloques, editar)  # los bloques solo se programan al editar
         if not editar and self.pestanas.currentIndex() == self.i_bloques:
             self.pestanas.setCurrentIndex(0)
@@ -668,10 +693,40 @@ class Ventana(QMainWindow):
         else:
             self.diagrama.ajustar()
 
+    def _anchos_laterales(self) -> None:
+        """Al editar, el panel derecho tiene el mismo margen de ancho que el izquierdo (del que piden las dos columnas de
+        la paleta a un 15 % más) y empieza con el mismo ancho (el punto medio); al simular, el de siempre."""
+        editar = self.modo == "editar" and self.edicion is not None
+        minimo, maximo = self.ancho_lateral
+        self.derecho.setMinimumWidth(minimo if editar else 300)
+        self.derecho.setMaximumWidth(maximo if editar else 16777215)
+        inicial = (minimo + maximo) // 2
+        total = max(self.split.width(), 1000)
+        self.split.setSizes([total - inicial, inicial] if editar else [880, 460])
+        if editar:
+            self.resizeDocks([self.dock], [inicial], Qt.Orientation.Horizontal)
+
+    def showEvent(self, event: Any) -> None:  # noqa: N802
+        super().showEvent(event)
+        if self.modo == "editar" and self.edicion is not None and not getattr(self, "_anchos_puestos", False):
+            self._anchos_puestos = True  # con la ventana ya dimensionada, los dos paneles laterales con el mismo ancho
+            self._anchos_laterales()
+
     def _no_simulable(self) -> None:
         lineas = self.edicion.resumen(self.edicion.diagnosticos())
         QMessageBox.warning(self, TITULO, "El grafcet no compila, no se puede simular todavía:\n\n"
                             + "\n".join(f"• {x}" for x in lineas[:8]) + ("\n…" if len(lineas) > 8 else ""))
+        # cada elemento con un error parpadea en naranja (después del aviso, que lo tapa) y se lleva a la vista
+        self.edicion.parpadear([d["target"] for d in self.edicion.diagnosticos() if d["blocks"] and d["target"]])
+
+    def _variables_sin_nombre(self) -> bool:
+        """Si hay filas de variable sin nombre (solo de la interfaz): el aviso, el parpadeo de la fila y True; no se
+        puede simular ni guardar con ellas."""
+        if self.edicion is None or not self.variables.sin_nombre():
+            return False
+        self.edicion.mensaje = self.variables.avisar_sin_nombre()
+        self.edicion.cambiado.emit()
+        return True
 
     def herramienta(self, h: str) -> None:
         e = self.edicion
@@ -687,7 +742,7 @@ class Ventana(QMainWindow):
             return
         diags = e.diagnosticos()
         marcados = {d["target"] for d in diags if d["blocks"] and d["target"]}
-        self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), marcados)
+        self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), marcados, e.parpadeo.activos())
         self.estado.setText("editando")
         self.estado.setStyleSheet(f"color: {COL['accent']}; border: 1px solid {COL['accent']}; border-radius: 9px; "
                                   "padding: 1px 9px")
@@ -715,7 +770,7 @@ class Ventana(QMainWindow):
         self.a_debajo.setEnabled(len(e.sel) == 1)
         bloq = [d for d in diags if d["blocks"]]
         self.l_resumen.setText("El grafcet se puede simular." if not bloq else
-                               "No compila:\n" + "\n".join(e.resumen(diags)))
+                               f"No se puede simular: {len(bloq)} error{'es' if len(bloq) != 1 else ''}")
         self.l_resumen.setStyleSheet(f"color: {COL['ok'] if not bloq else COL['err']}")
         self.lista_diag.clear()
         for d in diags:
@@ -730,7 +785,9 @@ class Ventana(QMainWindow):
     def _redibujar_edicion(self) -> None:
         e = self.edicion
         if e is not None and self.modo == "editar":
-            self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), set())
+            # un arrastre no valida de nuevo; el parpadeo sí repinta lo marcado por los diagnósticos
+            self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), e.marcados() if e.parpadeo.ids else set(),
+                                  e.parpadeo.activos())
 
     def _ir_a_diagnostico(self, item: QListWidgetItem) -> None:
         """Un clic en un diagnóstico selecciona el elemento y lo centra (REQ-EDT-09)."""
@@ -740,6 +797,7 @@ class Ventana(QMainWindow):
             c = e.centro(target)
             if c is not None:
                 self.diagrama.centrar_en(c)
+            e.parpadear([target], centrar=False)  # ya está centrado
 
     def editar_condicion(self, tid: str) -> None:
         """Doble clic en una transición: la selecciona y despliega su receptividad (pestaña Bloques del panel inferior)."""
@@ -1037,6 +1095,8 @@ class Ventana(QMainWindow):
 
     def _guardar_edicion(self) -> bool:
         e = self.edicion
+        if self._variables_sin_nombre():
+            return False
         destino = e.ruta
         if destino is None:
             base = QFileDialog.getExistingDirectory(self, "Carpeta donde crear el proyecto")

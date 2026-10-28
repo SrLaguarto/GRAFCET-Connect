@@ -191,7 +191,8 @@ class Vista:
                  batches: list[tuple[int, int, dict[str, Any]]] = (), budget: int = 10_000,
                  hidden: frozenset[str] | set[str] = frozenset(), bars: list[dict[str, Any]] | None = None,
                  presentation: dict[str, Any] | None = None, link_styles: dict[str, Any] | None = None,
-                 draft_actions: list[dict[str, Any]] | None = None) -> None:
+                 draft_actions: list[dict[str, Any]] | None = None,
+                 action_layouts: dict[str, str] | None = None) -> None:
         m, layout = build()
         self.draft_actions = draft_actions or []  # acciones sueltas o sin completar, ya con su texto (editor; no se simulan)
         self.hidden = set(hidden)  # transiciones cuya etiqueta no se dibuja (presentación)
@@ -200,6 +201,10 @@ class Vista:
             self.hidden = {l["elementRef"] for l in presentation.get("elementLayouts", []) if l.get("labelVisible") is False}
             self.bars = presentation.get("barras", [])
         styles = link_styles if link_styles is not None else (presentation or {}).get("linkStyles", {})
+        crudos = action_layouts if action_layouts is not None else (presentation or {}).get("actionLayouts", {})
+        # colocación de las acciones de cada etapa (presentación); lo que no se conoce vale «fila»
+        self.action_layouts = {k: v for k, v in (crudos if isinstance(crudos, dict) else {}).items()
+                               if v in ("fila", "fila-separada", "columna")}
         doc = m.doc if isinstance(m, M) else m
         self.key, self.options, self.doc = key, options, doc
         self.texts: dict[str, str] = {}
@@ -302,7 +307,8 @@ class Vista:
             "steps": [{"id": s["id"], "label": s["label"], "initial": s["initial"],
                        "x": layout[s["id"]][0], "y": layout[s["id"]][1],
                        "partial": None if s["partialRef"] == "g" else s["partialRef"], "kind": s["kind"],
-                       "activation": s["id"] in marked, "actions": acts.get(s["id"], [])} for s in doc["steps"]],
+                       "activation": s["id"] in marked, "actions": acts.get(s["id"], []),
+                       "actionLayout": self.action_layouts.get(s["id"], "fila")} for s in doc["steps"]],
             "macros": [{"id": x["id"], "x": layout[x["id"]][0], "y": layout[x["id"]][1], "expansion": e["partialRef"],
                         "entry": e["entryRef"], "exit": e["exitRef"]}
                        for x in hier["macros"] for e in hier["expansions"] if e["id"] == x["expansionRef"]],

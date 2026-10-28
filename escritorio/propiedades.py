@@ -135,6 +135,15 @@ class Paleta(QListWidget):
         self.setCurrentRow(-1)
         self.currentItemChanged.connect(lambda it, _: it and self.elegida.emit(it.data(Qt.ItemDataRole.UserRole)))
         self.setMaximumHeight(210)
+        # Siempre dos columnas de dos filas: sin barras de desplazamiento (la de la derecha se comería parte del ancho
+        # y las fichas pasarían a una sola columna)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+    def ancho_minimo(self) -> int:
+        """El ancho que piden las dos columnas de fichas: su rejilla, el marco y 2 de holgura (con menos, el modo de iconos
+        pasa a una sola columna)."""
+        return 2 * self.gridSize().width() + 2 * self.frameWidth() + 2
 
     escala = staticmethod(lambda: 1.0)  # zoom del dibujo; lo pone la ventana
 
