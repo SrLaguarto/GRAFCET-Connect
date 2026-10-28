@@ -68,18 +68,32 @@ Cada arrastre se deshace con Ctrl+Z y se rehace con Ctrl+Y. Los extremos del enl
 
 Un enlace siempre sale de una etapa y llega a ella con un tramo vertical (16), y a cada lado de una transición con otro algo mayor (24); si no caben, se acortan, y solo si los elementos están casi a la misma altura el enlace da un rodeo y sube con flecha. Una transición se agarra por su trazo para moverla; la rama solo sale de los puntos de unión, al final de sus tramos rectos. Al mover una etapa o una transición cerca de la vertical de un elemento enlazado (dos pasos de rejilla), se alinea con él y el enlace queda recto.
 
-Los elementos de la paleta se arrastran con su figura, al zoom del dibujo. El panel izquierdo (paleta y propiedades) se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L), como los otros.
+Los elementos de la paleta se arrastran con su figura, al zoom del dibujo. La paleta tiene también la ficha «Acción»
+(ver «Acciones» abajo). El panel izquierdo (paleta y propiedades) se pliega con su flecha en el borde del dibujo o con
+«Ver > Panel izquierdo» (Ctrl+L), como los otros.
 
-Variables, acciones y programador por bloques (paso 4, P-IMP-38; rehecho en P-IMP-39)
+Variables, acciones y programador por bloques (paso 4, P-IMP-38; rehecho en P-IMP-39 y P-IMP-40)
 
 En modo Editar:
 
 - Etapas nuevas con solo el número: 0, 1, 2… En las receptividades, X1 es la etapa 1.
 - Variables (lado derecho): nombre, papel (entrada, salida o memoria), tipo (booleana, entera, decimal, duración), valor inicial (solo las entradas; las demás empiezan en 0), unidad y cuántos usos tiene. Las variables internas se llaman memorias en la pantalla; el archivo las guarda igual que antes. Cambiar el nombre actualiza las receptividades y acciones que la usan; una variable usada no se puede quitar.
-- Acciones: botón derecho en una etapa, «Añadir acción…», o el botón «Añadir…» de su panel. Tipos: continua (con condición opcional), memorizada al activar, al desactivar o por evento (por ejemplo CT := CT + 1 con ↑I02). Si la variable no existe, el diálogo la crea (salida o memoria, booleana o entera). El diálogo muestra en «En la norma» cómo quedarán la condición o el evento antes de aceptar. Si la variable no vale para esa acción (una entrada como destino, o una variable que no es booleana en una acción continua), avisa; si se acepta otra vez, se guarda como borrador y la validación lo señala. Un clic en la caja de una acción la señala; doble clic la edita; el botón derecho la mueve o la quita.
+- Acciones: botón derecho en una etapa, «Añadir acción…», o el botón «Añadir…» de su panel. También con la ficha
+  «Acción» de la paleta (Elementos): se arrastra sobre una etapa y abre «Añadir acción» de esa etapa; soltada fuera de
+  una etapa, avisa «Suelte la acción sobre una etapa». Como herramienta (Edición > Acción, Alt+5), un clic en una
+  etapa abre el mismo diálogo; Esc cancela. Tipos: continua (con condición opcional), memorizada al activar, al desactivar o por evento (por ejemplo CT := CT + 1 con ↑I02). Si la variable no existe, el diálogo la crea (salida o memoria, booleana o entera). El diálogo muestra en «En la norma» cómo quedarán la condición o el evento antes de aceptar. Si la variable no vale para esa acción (una entrada como destino, o una variable que no es booleana en una acción continua), avisa; si se acepta otra vez, se guarda como borrador y la validación lo señala. Un clic en la caja de una acción la señala; doble clic la edita; el botón derecho la mueve o la quita.
 - Programador por bloques (receptividades y condiciones), al estilo de Scratch:
-  · La paleta tiene siete categorías, cada una con un círculo de su color; debajo, sus bloques: Entradas,
-    Salidas, Memorias, Etapas X, Operadores, Comparaciones y Tiempo.
+  · Dónde está: en el panel inferior, pestaña «Bloques» (junto a Traza y Leyenda), solo en modo Editar. Al
+    seleccionar una transición, esa pestaña se abre con su receptividad. Si el panel inferior está plegado, no se
+    despliega solo: el botón «Bloques abajo ▾» del panel de la transición lo abre. En el panel izquierdo de la
+    transición quedan la etiqueta, el texto, «Escrito», «Se dibuja» y «Crear las que faltan». El panel inferior
+    ocupa el ancho del dibujo y del panel derecho, que quedan algo más bajos; el divisor se arrastra.
+  · Cómo se ve: a la izquierda, una columna con las siete categorías, cada una con un círculo de su color y su
+    nombre (Entradas, Salidas, Memorias, Etapas X, Operadores, Comparaciones y Tiempo); en el centro, los bloques
+    de la categoría elegida; a la derecha, el área con la fórmula, dibujada en una línea si cabe. Debajo, el aviso,
+    «⤢ Ampliar» y la papelera. Esta misma disposición aparece en el diálogo de acciones y en «Ampliar».
+  · En Operadores, «y» (oliva) y «o» (fucsia) tienen colores distintos entre sí; el resto (no, flancos, constantes)
+    es gris pizarra.
   · Las condiciones son bloques hexagonales: una variable booleana o una etapa, con un desplegable ▾ para elegir
     cuál.
   · «y» y «o» tienen dos huecos y se pueden anidar.

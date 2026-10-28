@@ -22,8 +22,8 @@ from typing import Any, Callable
 from PySide6.QtCore import QMimeData, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (QColor, QCursor, QDrag, QFont, QFontMetricsF, QKeySequence, QPainter, QPen, QPixmap,
                            QPolygonF, QShortcut)
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLayout, QLineEdit, QMenu, QPushButton, QSizePolicy, QToolButton,
-                               QVBoxLayout, QWidget, QWidgetItem)
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit, QMenu, QPushButton, QScrollArea,
+                               QSizePolicy, QVBoxLayout, QWidget, QWidgetItem)
 
 from grafcet.expressions import CMP, FUNCS_EXPR, FUNCS_REF, KEYWORDS, ParseError, parse, render
 from grafcet.notation import a_nucleo, a_usuario, normalizar_espacios, x_etapa
@@ -310,7 +310,8 @@ def arbol_a_texto(n: dict[str, Any] | None) -> str:
 
 # -- dibujo ------------------------------------------------------------------------------------------------
 COLORES = {"entrada": "#2F6FDE", "salida": "#2E9E57", "interna": "#E07B1A", "etapa": "#7C4DDB",
-           "operador": "#D6559B", "comparacion": "#159AAE", "tiempo": "#B07A12", "texto": "#6B7280", "error": "#C0392B"}
+           "operador": "#4B5B73", "comparacion": "#159AAE", "tiempo": "#B07A12", "texto": "#6B7280", "error": "#C0392B",
+           "y": "#5F7F0B", "o": "#B83DBA"}  # «y» (oliva) y «o» (fucsia): operadores, pero cada uno con su color
 CATEGORIAS = (("entrada", "Entradas"), ("salida", "Salidas"), ("interna", "Memorias"), ("etapa", "Etapas (X)"),
               ("operador", "Operadores"), ("comparacion", "Comparaciones"), ("tiempo", "Tiempo"))
 _PAPEL_CAT = {"input": "entrada", "output": "salida", "internal": "interna"}
@@ -397,7 +398,7 @@ class Motor:
             return "tiempo"
         if k == "texto":
             return "error" if _SIMPLE.fullmatch(n["s"]) else "texto"
-        return "operador"
+        return k if k in ("y", "o") else "operador"
 
     # -- medidas
     def pieza(self, e: tuple, maxw: float = 100000) -> _Pieza:
@@ -819,16 +820,18 @@ class PaletaBloques(_Superficie):
     """Los bloques de una categoría, uno tras otro (pasan de línea). Sus desplegables y campos se pueden cambiar antes de
     arrastrar el bloque."""
 
-    def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "") -> None:
+    def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "",
+                 columna: bool = False) -> None:
         super().__init__(fuente, grupo)
         self.clave = "entrada"
+        self.columna = columna  # uno debajo de otro (el programador); si no, uno tras otro, pasando de línea
         self.cargar("entrada")
 
     def _maqueta(self, ancho: float) -> tuple[list[tuple[_Caja, float, float]], float]:
         x, y, lh, out = float(MARGEN), float(MARGEN), 0.0, []
         for i, n in enumerate(self._raices):
             c = self.motor.caja(n, (i,), min(self.motor.natural(n, (i,)), ancho - 2 * MARGEN))
-            if x > MARGEN and x + c.w > ancho - MARGEN:
+            if x > MARGEN and (self.columna or x + c.w > ancho - MARGEN):
                 x, y, lh = float(MARGEN), y + lh + GAP * 2, 0.0
             out.append((c, x, y))
             x += c.w + GAP * 2
@@ -1093,15 +1096,42 @@ class FlowLayout(QLayout):
         return y + alto - r.y()
 
 
+def _circulo(color: str, d: int = 14) -> QPixmap:
+    """El círculo de color de una carpeta de la paleta."""
+    pm = QPixmap(d, d)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(QPen(QColor(color).darker(140), 1))
+    p.setBrush(QColor(color))
+    p.drawEllipse(QRectF(1, 1, d - 2, d - 2))
+    p.end()
+    return pm
+
+
+def _desplazable(w: QWidget, ancho: int | None = None) -> QScrollArea:
+    """Una columna que se desplaza en vertical si no cabe (nunca en horizontal)."""
+    sc = QScrollArea()
+    sc.setWidgetResizable(True)
+    sc.setFrameShape(QFrame.Shape.NoFrame)
+    sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    sc.setWidget(w)
+    if ancho:
+        sc.setFixedWidth(ancho)
+    return sc
+
+
 class Programador(QWidget):
-    """Programador por bloques: categorías con su color, los bloques de la categoría elegida (que se arrastran), el
-    área de trabajo, la papelera y el aviso. `fuente()` devuelve las variables {nombre: (papel, tipo)} y las etapas
-    (en notación X) del modelo en curso. `cambiado(texto)` se emite en cada cambio hecho con bloques (no al llamar a
-    `poner`). Con `historial`, Ctrl+Z y Ctrl+Mayús+Z deshacen y rehacen los cambios de bloques; sin él, el
-    deshacer lo pone quien lo usa (`al_deshacer`, `al_rehacer`). «⤢ Ampliar» abre el mismo programador en una
-    ventana más grande, sincronizada con éste."""
+    """Programador por bloques, a la manera de Scratch: a la izquierda las categorías como carpetas (círculo de color y
+    nombre), a su derecha los bloques de la categoría elegida, uno debajo de otro y que se arrastran, y en el resto el
+    área de trabajo con la fórmula (en línea si cabe) con el aviso, «⤢ Ampliar» y la papelera. `fuente()` devuelve las
+    variables {nombre: (papel, tipo)} y las etapas (en notación X) del modelo en curso. `cambiado(texto)` se emite en
+    cada cambio hecho con bloques (no al llamar a `poner`). Con `historial`, Ctrl+Z y Ctrl+Mayús+Z deshacen y rehacen
+    los cambios de bloques; sin él, el deshacer lo pone quien lo usa (`al_deshacer`, `al_rehacer`). «⤢ Ampliar» abre el
+    mismo programador en una ventana más grande, sincronizada con éste."""
 
     cambiado = Signal(str)
+    PALETA_MIN, PALETA_MAX = 110, 240  # la columna de bloques mide lo justo para el más ancho, entre estos límites
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], historial: bool = False,
                  ampliable: bool = True, grupo: str | None = None) -> None:
@@ -1114,39 +1144,44 @@ class Programador(QWidget):
         self._rehecho: list[Any] = []
         self._espejo: Programador | None = None
         self._ventana: QWidget | None = None
-        lay = QVBoxLayout(self)
+        lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(4)
-        fila = QWidget()
-        fl = FlowLayout(fila)
-        self.categorias: dict[str, QToolButton] = {}
+        lay.setSpacing(6)
+        # columna 1: las categorías, como carpetas
+        carpetas = QWidget()
+        cl = QVBoxLayout(carpetas)
+        cl.setContentsMargins(0, 0, 2, 0)
+        cl.setSpacing(1)
+        self.categorias: dict[str, QPushButton] = {}
         for clave, titulo in CATEGORIAS:
-            b = QToolButton()
+            b = QPushButton(titulo)
             b.setCheckable(True)
             b.setAutoExclusive(True)
-            b.setFixedSize(24, 24)
+            b.setIcon(_circulo(COLORES[clave]))
+            b.setIconSize(QSize(14, 14))
             b.setToolTip(titulo)
-            b.setStyleSheet(f"QToolButton {{ background: {COLORES[clave]}; border: 2px solid white; border-radius: 12px; }}"
-                            f"QToolButton:checked {{ border: 2px solid #1F2937; }}"
-                            f"QToolButton:hover {{ border: 2px solid #9CA3AF; }}")
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setStyleSheet("QPushButton { text-align: left; padding: 2px 6px; border: 1px solid transparent; "
+                            "border-radius: 5px; background: transparent; }"
+                            "QPushButton:hover { background: #F0F2F7; }"
+                            "QPushButton:checked { background: #E3E8F3; border: 1px solid #9AA3B5; font-weight: 600; }")
             b.clicked.connect(lambda _=False, c=clave: self.elegir_categoria(c))
-            fl.addWidget(b)
+            cl.addWidget(b)
             self.categorias[clave] = b
-        self.ampliar = QPushButton("⤢ Ampliar")
-        self.ampliar.setToolTip("Abrir el programador en una ventana más grande (sigue sincronizado con éste)")
-        self.ampliar.clicked.connect(self.ampliar_ventana)
-        self.ampliar.setVisible(ampliable)
-        fl.addWidget(self.ampliar)
-        lay.addWidget(fila)
-        self.titulo = QLabel()
-        self.titulo.setStyleSheet("font-weight: 600")
-        lay.addWidget(self.titulo)
-        self.paleta = PaletaBloques(fuente, self.grupo)
-        lay.addWidget(self.paleta)
+        cl.addStretch(1)
+        self._sc_carpetas = _desplazable(carpetas, max(b.sizeHint().width() for b in self.categorias.values()) + 10)
+        lay.addWidget(self._sc_carpetas)
+        # columna 2: los bloques de la categoría elegida
+        self.paleta = PaletaBloques(fuente, self.grupo, columna=True)
+        self._sc_paleta = _desplazable(self.paleta)
+        lay.addWidget(self._sc_paleta)
+        # columna 3: el área de trabajo y, debajo, el aviso, «Ampliar» y la papelera
+        derecha = QVBoxLayout()
+        derecha.setSpacing(4)
         self.lienzo = AreaBloques(fuente, self.grupo)
         self.lienzo.modificado.connect(self._tras_cambio)
         self.lienzo.avisa.connect(self._avisar)
-        lay.addWidget(self.lienzo, 1)  # el área es la que crece
+        derecha.addWidget(_desplazable(self.lienzo), 1)  # el área es la que crece
         pie = QHBoxLayout()
         pie.setContentsMargins(0, 0, 0, 0)
         self.aviso = QLabel()
@@ -1155,9 +1190,18 @@ class Programador(QWidget):
         self.aviso.setVisible(False)
         self.aviso.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)  # no impone su ancho
         pie.addWidget(self.aviso, 1)
+        pie.addStretch(1)
+        self.ampliar = QPushButton("⤢ Ampliar")
+        self.ampliar.setToolTip("Abrir el programador en una ventana más grande (sigue sincronizado con éste)")
+        self.ampliar.clicked.connect(self.ampliar_ventana)
+        self.ampliar.setVisible(ampliable)
+        pie.addWidget(self.ampliar)
         self.papelera = Papelera(self._a_la_papelera)
         pie.addWidget(self.papelera)
-        lay.addLayout(pie)
+        derecha.addLayout(pie)
+        lay.addLayout(derecha, 1)
+        self.setMinimumHeight(140)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         if historial:
             for atajo, f in (("Ctrl+Z", self.deshacer), ("Ctrl+Shift+Z", self.rehacer), ("Ctrl+Y", self.rehacer)):
                 s = QShortcut(QKeySequence(atajo), self)
@@ -1165,11 +1209,20 @@ class Programador(QWidget):
                 s.activated.connect(f)
         self.elegir_categoria("entrada")
 
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self._sc_carpetas.width() + self._sc_paleta.width() + 180, 140)
+
     # -- paleta
+    def _cargar_paleta(self, clave: str) -> None:
+        """Pone los bloques de la categoría y ajusta la columna a su bloque más ancho (más el margen y la barra)."""
+        self.paleta.cargar(clave)
+        m = self.paleta.motor
+        natural = max([m.natural(n, (i,)) for i, n in enumerate(self.paleta._raices)] or [0])
+        self._sc_paleta.setFixedWidth(int(min(max(natural + 2 * MARGEN + 16, self.PALETA_MIN), self.PALETA_MAX)))
+
     def elegir_categoria(self, clave: str) -> None:
         self.categorias[clave].setChecked(True)
-        self.titulo.setText(dict(CATEGORIAS)[clave])
-        self.paleta.cargar(clave)
+        self._cargar_paleta(clave)
 
     def opciones(self, cajon: str) -> list[tuple[str, str]]:
         """(texto, valor) de lo que ofrece un desplegable de la paleta: variables booleanas de un papel, o etapas."""
@@ -1180,7 +1233,7 @@ class Programador(QWidget):
 
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
-        self.paleta.cargar(self.paleta.clave)
+        self._cargar_paleta(self.paleta.clave)
 
     # -- texto <-> bloques
     def texto(self) -> str:
@@ -1191,7 +1244,7 @@ class Programador(QWidget):
         analizar, los bloques no cambian y se avisa. Si es el mismo que ya hay, no toca el árbol (salvo para releer los
         bloques de texto: una variable pudo crearse)."""
         variables, etapas = self.fuente()
-        self.paleta.cargar(self.paleta.clave)
+        self._cargar_paleta(self.paleta.clave)
         try:
             if normalizar_espacios(texto) == self.texto():
                 nuevo_ = self.lienzo.arbol
@@ -1281,7 +1334,7 @@ class Programador(QWidget):
         v = QWidget(self.window(), Qt.WindowType.Window)
         v.setWindowTitle("Programador de bloques")
         v.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        v.resize(820, 560)
+        v.resize(980, 600)
         lay = QVBoxLayout(v)
         grande = Programador(self.fuente, ampliable=False, grupo=self.grupo)
         grande.lienzo.modificado.connect(lambda: self._cambio_en_ventana(grande))  # se aplica igual que uno del panel

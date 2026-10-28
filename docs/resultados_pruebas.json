@@ -1,9 +1,9 @@
 {
- "date": "2026-10-28T14:31:17+00:00",
+ "date": "2026-10-28T15:07:15+00:00",
  "python": "3.13.17",
  "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
  "machine": "x86_64",
- "total": 208,
+ "total": 214,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -125,7 +125,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: el programador cabe a 200 px sin barra horizontal; el área crece en alto al estrecharse y los"
+   "summary": "REQ-EDT-02: el área y la paleta caben a 200 px sin barra horizontal; el área crece en alto al estrecharse y"
   },
   {
    "test": "test_editor_escritorio.Bloques.test_SEDI57_raton_clic_en_piezas_y_arrastres_recibidos",
@@ -135,6 +135,15 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-EDT-02: un clic en un desplegable abre su menú y en un campo, su editor (Intro aplica, Esc descarta);"
+  },
+  {
+   "test": "test_editor_escritorio.Bloques.test_SEDI64_disposicion_en_columnas",
+   "case": "S-EDI64",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: categorías como carpetas en una columna (las siete, con su color), a su derecha la columna de"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI03_crear_enlazar_y_simular",
@@ -562,6 +571,52 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-EDT-02, REQ-ACT-01: una receptividad «1» se guarda como true y se valida sin D-TIPO; el valor de una acción"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI59_pestana_bloques_en_el_panel_inferior",
+   "case": "S-EDI59",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el programador de la receptividad es la pestaña «Bloques» del panel inferior, solo al editar;"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI60_bloques_y_texto_sincronizados_en_la_pestana",
+   "case": "S-EDI60",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un cambio de bloques escribe el texto del panel izquierdo y es una operación del editor (Ctrl+Z);"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI61_boton_bloques_abajo_si_el_panel_esta_plegado",
+   "case": "S-EDI61",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: con el panel inferior plegado no se despliega solo; el panel de la transición ofrece «Bloques"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI62_ficha_accion_en_la_paleta",
+   "case": "S-EDI62",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: la paleta ofrece la ficha «Acción» con su figura; soltada sobre una etapa pide la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI63_y_y_o_con_colores_distintos",
+   "case": "S-EDI63",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: «y» y «o» siguen en Operadores pero se dibujan con colores distintos entre sí y del resto de"
   },
   {
    "test": "test_editor_escritorio.Notacion.test_SEDI16_notacion_del_usuario",

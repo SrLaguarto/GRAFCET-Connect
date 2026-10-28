@@ -25,7 +25,7 @@ from grafcet.view import Vista, display_names, norm, layout_from_presentation, p
 
 from .diagrama import REJILLA, SX, ancla_en, anclas, barra, elemento_en, enlaces, posiciones
 
-HERRAMIENTAS = ("seleccionar", "etapa", "transicion", "simultaneidad")  # sin herramienta, el ratón selecciona, mueve y enlaza
+HERRAMIENTAS = ("seleccionar", "etapa", "transicion", "simultaneidad", "accion")  # sin herramienta, el ratón selecciona, mueve y enlaza
 DY = 80  # distancia vertical entre una etapa y su transición (la de los ejemplos)
 IMAN = 40  # a qué distancia horizontal (dos pasos de rejilla) un elemento movido se alinea con uno enlazado
 
@@ -184,6 +184,22 @@ class Edicion(QObject):
             self.poner_transicion(p)
         elif tipo == "simultaneidad":
             self.poner_barra(p, "Y")
+        elif tipo == "accion":
+            self.poner_accion_en(p, "Suelte la acción sobre una etapa")
+
+    def poner_accion_en(self, p: QPointF, aviso: str) -> bool:
+        """La ficha «Acción» (soltada o con clic) en un punto: sobre una etapa (o sobre una de sus acciones) abre el
+        diálogo de añadir acción de esa etapa, el mismo del botón derecho; fuera, no crea nada y avisa."""
+        caja = self.accion_en(p)
+        ident = caja["etapa"] if caja else elemento_en(self.M, p)
+        if ident is None or not any(s["id"] == ident for s in self.M["steps"]):
+            self.mensaje = aviso
+            self.cambiado.emit()
+            return False
+        self.sel, self.accion, self.mensaje = [ident], None, ""
+        self.cambiado.emit()
+        self.pedir_accion(ident, None)
+        return True
 
     def _punto(self, p: QPointF, ident: str | None) -> dict[str, Any] | None:
         """El punto de unión bajo el puntero, salvo sobre el trazo de una transición: agarrarla la mueve, no saca una rama."""
@@ -206,6 +222,11 @@ class Edicion(QObject):
         ident = elemento_en(self.M, p)
         h = self.herramienta
         punto = self._punto(p, ident)
+        if h == "accion":  # clic en una etapa: el diálogo de añadir acción; la herramienta sigue hasta acertar
+            if self.poner_accion_en(p, "Haga clic en una etapa para añadirle una acción"):
+                self.herramienta = "seleccionar"
+                self.cambiado.emit()
+            return True
         caja = self.accion_en(p) if ident is None else None
         if caja and h == "seleccionar":  # clic en una acción: se selecciona su etapa y se señala la acción
             self.sel, self.accion = [caja["etapa"]], caja["id"]

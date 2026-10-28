@@ -29,7 +29,8 @@ class DialogoAccion(QDialog):
         self.e, self.sid, self.aid = edicion, sid, aid
         etapa = edicion.nombres.get(sid, sid)
         self.setWindowTitle(f"{'Cambiar' if aid else 'Añadir'} acción — etapa {etapa}")
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(620)
+        self.resize(900, 640)  # el programador por bloques (categorías, bloques y área) pide sitio; se puede ampliar
         lay = QVBoxLayout(self)
         f = QFormLayout()
         f.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
@@ -55,18 +56,22 @@ class DialogoAccion(QDialog):
         f.addRow(self.l_valor, self.valor)
         self.l_cond = QLabel("Condición (vacía: siempre)")
         self.cond = Programador(edicion.fuente_bloques, historial=True)
+        self.cond.setMinimumHeight(230)
         self.v_cond = QLabel()
         self.cond.cambiado.connect(self._previsualizar)
         f.addRow(self.l_cond)
         f.addRow(self.cond)
-        f.addRow("En la norma", self.v_cond)
+        self.n_cond = QLabel("En la norma")
+        f.addRow(self.n_cond, self.v_cond)
         self.l_evento = QLabel("Evento (por ejemplo ↑I02)")
         self.evento = Programador(edicion.fuente_bloques, historial=True)
+        self.evento.setMinimumHeight(230)
         self.v_evento = QLabel()
         self.evento.cambiado.connect(self._previsualizar)
         f.addRow(self.l_evento)
         f.addRow(self.evento)
-        f.addRow("En la norma", self.v_evento)
+        self.n_evento = QLabel("En la norma")
+        f.addRow(self.n_evento, self.v_evento)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         self._avisado: tuple | None = None  # los datos con que se mostró el aviso de «guardar como borrador»
@@ -107,9 +112,9 @@ class DialogoAccion(QDialog):
         self.crear.setVisible(nueva)
         for w in (self.l_valor, self.valor):
             w.setVisible(not continua)
-        for w in (self.l_cond, self.cond, self.v_cond):
+        for w in (self.l_cond, self.cond, self.n_cond, self.v_cond):
             w.setVisible(continua)
-        for w in (self.l_evento, self.evento, self.v_evento):
+        for w in (self.l_evento, self.evento, self.n_evento, self.v_evento):
             w.setVisible(clave == "evento")
         booleana = (self._variables()[texto.strip()][1] if existe else self._crear_como()[1]) == "bool"
         self.valor.setPlaceholderText("1 o 0" if booleana else "5, CT + 1…")

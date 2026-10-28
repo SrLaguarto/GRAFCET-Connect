@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import html
 import re
-from typing import Any
+from typing import Any, Callable
 
 from PySide6.QtCore import QMimeData, QPoint, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QDrag, QIcon, QPainter, QPen, QPixmap
@@ -22,12 +22,13 @@ from grafcet.routing import TALLO_E, TALLO_T
 from grafcet.view import norm
 
 from .bloques import FlowLayout, Programador
-from .diagrama import COL, H, TB, _html
+from .diagrama import ACT_MIN, COL, H, TB, _html
 from .edicion import HERRAMIENTAS
 
 NARANJA = COL["glow"]
-NOMBRES = {"etapa": "Etapa", "transicion": "Transición", "simultaneidad": "Simultaneidad"}
+NOMBRES = {"etapa": "Etapa", "transicion": "Transición", "simultaneidad": "Simultaneidad", "accion": "Acción"}
 AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: arrástrela al dibujo",
+          "accion": "Acción: arrástrela sobre una etapa para añadirle una acción (o clic aquí y clic en la etapa)",
           "simultaneidad": "Barra de simultaneidad (doble trazo, Y): une varias etapas a una transición, o una transición "
                            "a varias etapas. Se ensancha estirando de sus extremos. Las alternativas (O) no son un elemento: "
                            "se construyen con el ratón enlazando una etapa con una segunda transición, o arrastrando a un enlace."}
@@ -49,6 +50,9 @@ def icono(h: str) -> QIcon:
         p.drawLine(32, 2, 32, 62)
         p.setPen(QPen(QColor(COL["text"]), 4))
         p.drawLine(20, 32, 44, 32)
+    elif h == "accion":
+        p.drawLine(2, 32, 12, 32)
+        p.drawRect(QRectF(12, 18, 46, 28))
     else:
         p.drawLine(16, 2, 16, 26)
         p.drawLine(48, 2, 48, 26)
@@ -69,6 +73,8 @@ def figura(h: str, escala: float = 1.0, dpr: float = 1.0) -> tuple[QPixmap, QPoi
         w, alto, cx, cy = 2 * H, 2 * H + 2 * TALLO_E, H, TALLO_E + H
     elif h == "transicion":
         w, alto, cx, cy = 2 * TB, 2 * TALLO_T, TB, TALLO_T
+    elif h == "accion":
+        w, alto, cx, cy = ACT_MIN, 2 * H, ACT_MIN / 2, H  # un rectángulo de acción: el del dibujo, del alto de la etapa
     else:
         w, alto, cx, cy = 120, 4 + 2 * TALLO_E, 60, TALLO_E
     pm = QPixmap(round((w * escala + 2 * m) * dpr), round((alto * escala + 2 * m) * dpr))
@@ -89,6 +95,9 @@ def figura(h: str, escala: float = 1.0, dpr: float = 1.0) -> tuple[QPixmap, QPoi
         p.drawLine(QPointF(TB, 0), QPointF(TB, alto))
         p.setPen(QPen(QColor(COL["muted"]), 2.4))
         p.drawLine(QPointF(0, TALLO_T), QPointF(2 * TB, TALLO_T))
+    elif h == "accion":
+        p.fillRect(QRectF(0, 0, w, alto), QColor(COL["panel"]))
+        p.drawRect(QRectF(0, 0, w, alto))
     else:
         for x in (30, 90):
             p.drawLine(QPointF(x, 0), QPointF(x, TALLO_E))
@@ -191,11 +200,45 @@ class PanelPropiedades(QWidget):
         self.pila.addWidget(self._transicion())
         self.pila.addWidget(self._enlace())
         self.pila.addWidget(self._barra())
+        self._bloques()
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
 
     # -- páginas -----------------------------------------------------------------------------------
+    def _bloques(self) -> None:
+        """El programador por bloques de la receptividad. No va en este panel sino en la pestaña «Bloques» del panel
+        inferior de la ventana (`pagina_bloques`); aquí solo se mantiene sincronizado con el texto."""
+        self.abrir_bloques: Callable[[], Any] = lambda: None  # la ventana despliega el panel inferior
+        self.bloques_visibles: Callable[[], bool] = lambda: True  # y dice si el panel inferior está a la vista
+        self.pagina_bloques = QWidget()
+        lay = QVBoxLayout(self.pagina_bloques)
+        lay.setContentsMargins(6, 4, 6, 4)
+        self.l_bloques = QLabel()
+        self.l_bloques.setStyleSheet(f"color: {COL['muted']}")
+        lay.addWidget(self.l_bloques)
+        self.prog = Programador(lambda: self.e.fuente_bloques() if self.e is not None else ({}, []))
+        self.prog.cambiado.connect(self._desde_bloques)
+        self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()  # Ctrl+Z en la ventana ampliada
+        self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()
+        lay.addWidget(self.prog, 1)
+        lay.addStretch(0)
+        self._ver_bloques(None)
+
+    def _ver_bloques(self, nombre: str | None) -> None:
+        """La pestaña Bloques: el programador de la transición, o el aviso de que hay que elegir una."""
+        self.prog.setVisible(nombre is not None)
+        self.l_bloques.setText(f"Receptividad de la transición {nombre}" if nombre is not None
+                               else "Elija una transición para programar su receptividad")
+
+    def transicion(self) -> str | None:
+        """La transición cuyas opciones se muestran (la única seleccionada), si la hay."""
+        return self.ident if self.pila.currentIndex() == 2 else None
+
+    def actualizar_boton(self) -> None:
+        """«Bloques abajo ▾» solo se ofrece si el panel inferior (donde están los bloques) está plegado."""
+        self.t_abajo.setVisible(not self.bloques_visibles())
+
     def _vacio(self) -> QWidget:
         w = QLabel("Haga clic en un elemento del dibujo para ver y cambiar sus opciones.")
         w.setWordWrap(True)
@@ -261,12 +304,6 @@ class PanelPropiedades(QWidget):
         self.t_mostrar.clicked.connect(lambda on: self.e.mostrar_etiqueta(self.ident, on))
         f.addRow("Etiqueta", self.t_etiqueta)
         f.addRow(self.t_mostrar)
-        f.addRow(QLabel("Receptividad (bloques)"))
-        self.prog = Programador(lambda: self.e.fuente_bloques() if self.e is not None else ({}, []))
-        self.prog.cambiado.connect(self._desde_bloques)
-        self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()  # Ctrl+Z en la ventana ampliada
-        self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()
-        f.addRow(self.prog)
         self.t_texto = QLineEdit()
         self.t_texto.setPlaceholderText("o escríbala: ↑a AND NOT b, X1, 3s/X1…")
         self.t_texto.textEdited.connect(self._escrito)
@@ -280,6 +317,10 @@ class PanelPropiedades(QWidget):
         self.t_dibujo.setTextFormat(Qt.TextFormat.RichText)
         self.t_dibujo.setWordWrap(True)
         f.addRow("Se dibuja", self.t_dibujo)
+        self.t_abajo = QPushButton("Bloques abajo ▾")
+        self.t_abajo.setToolTip("Desplegar el panel inferior en la pestaña Bloques, para programar la receptividad con bloques")
+        self.t_abajo.clicked.connect(lambda: self.abrir_bloques())
+        f.addRow(self.t_abajo)
         self.t_crear = QPushButton("Crear las que faltan")
         self.t_crear.setToolTip("Declarar como entradas booleanas las variables que se usan y no existen")
         self.t_crear.clicked.connect(self._crear)
@@ -356,6 +397,7 @@ class PanelPropiedades(QWidget):
                              None: "Propiedades" if len(sel) < 2 else f"{len(sel)} elementos seleccionados"}[kind]
                             if e is not None else "Propiedades")
         self.pila.setCurrentIndex({None: 0, "etapa": 1, "transicion": 2, "enlace": 3, "barra": 4}[kind])
+        self._ver_bloques(e.nombres.get(vivo, vivo) if kind == "transicion" else None)
         if kind == "etapa":
             s = next(s for s in e.M["steps"] if s["id"] == vivo)
             self._poner(self.s_etiqueta, s["label"])
@@ -380,6 +422,7 @@ class PanelPropiedades(QWidget):
             self._poner(self.t_texto, e.texto_usuario(vivo))
             self.prog.poner(e.texto_usuario(vivo))
             self._previsualizar()
+            self.actualizar_boton()
         elif kind == "barra":
             b = next(b for b in e.M["bars"] if b["id"] == vivo)
             self.b_unidos.setText(f"Por encima: {', '.join(e.nombre(i) for i in b['arriba']) or '—'}<br>"

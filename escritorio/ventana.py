@@ -47,9 +47,11 @@ AYUDA_EDICION = {
     "transicion": "Clic en el lienzo coloca una transición (Esc cancela); su receptividad se escribe en sus opciones.",
     "simultaneidad": "Clic en el lienzo coloca una barra de simultaneidad (doble trazo); se une a las etapas y la "
                      "transición con enlaces y se ensancha estirando de sus extremos. Esc cancela.",
+    "accion": "Clic en una etapa del lienzo abre «Añadir acción» de esa etapa (Esc cancela). También se puede arrastrar "
+              "la ficha Acción de la paleta sobre una etapa.",
 }
 NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar", "etapa": "Etapa", "transicion": "Transición",
-                      "simultaneidad": "Simultaneidad"}
+                      "simultaneidad": "Simultaneidad", "accion": "Acción"}
 AVISO = "Núcleo con perfil provisional · no declara conformidad con IEC 60848 / UNE-EN 60848"
 ESTADOS = {"pausada-estable": ("estable", "ok"), "pausada-recorrido": ("en recorrido (situación inestable)", "virt"),
            "error": ("detenido por diagnóstico", "err"), "no-compilable": ("no compilable", "err"),
@@ -281,8 +283,7 @@ class Ventana(QMainWindow):
         self.ayuda.setStyleSheet(f"color: {COL['muted']}")
         il.addWidget(self.ayuda)
         self.diagrama = VistaDiagrama()
-        vsplit = QSplitter(Qt.Orientation.Vertical)
-        vsplit.addWidget(self.diagrama)
+        il.addWidget(self.diagrama, 1)
         self.pestanas = QTabWidget()
         self.traza = QListWidget()
         self.traza.setWordWrap(True)
@@ -295,9 +296,6 @@ class Ventana(QMainWindow):
         sc.setWidgetResizable(True)
         sc.setWidget(leyenda)
         self.pestanas.addTab(sc, "Leyenda")
-        vsplit.addWidget(self.pestanas)
-        vsplit.setSizes([620, 200])
-        il.addWidget(vsplit, 1)
 
         der = QWidget()
         self.lado = QVBoxLayout(der)
@@ -361,12 +359,17 @@ class Ventana(QMainWindow):
         self.derecho.addWidget(self.scroll)
         self.derecho.addWidget(pag)
         self.derecho.setMinimumWidth(300)
-        self.vsplit = vsplit
+        # Arriba, el dibujo y el panel derecho; abajo, a todo el ancho de los dos, el panel inferior (traza, leyenda,
+        # bloques): así una fórmula larga se ve en una línea. El panel izquierdo es un dock, a toda la altura.
         self.split = QSplitter(Qt.Orientation.Horizontal)
         self.split.addWidget(izq)
         self.split.addWidget(self.derecho)
         self.split.setSizes([880, 460])
-        self.setCentralWidget(self.split)
+        self.vsplit = QSplitter(Qt.Orientation.Vertical)
+        self.vsplit.addWidget(self.split)
+        self.vsplit.addWidget(self.pestanas)
+        self.vsplit.setSizes([520, 300])
+        self.setCentralWidget(self.vsplit)
         # Izquierda: paleta de elementos (arriba) y propiedades del elemento seleccionado (abajo); solo al editar
         self.paleta = Paleta()
         self.paleta.elegida.connect(self.herramienta)
@@ -380,6 +383,13 @@ class Ventana(QMainWindow):
         scroll_props.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # se estrecha: nada queda a medias
         izq_edit.addWidget(scroll_props)
         izq_edit.setSizes([210, 450])
+        # El programador por bloques de la receptividad vive en el panel inferior, solo al editar
+        self.pestanas.addTab(self.props.pagina_bloques, "Bloques")
+        self.i_bloques = self.pestanas.indexOf(self.props.pagina_bloques)
+        self.pestanas.setTabVisible(self.i_bloques, False)
+        self._transicion_bloques: str | None = None  # la transición cuya selección ya activó la pestaña
+        self.props.abrir_bloques = self._abrir_bloques
+        self.props.bloques_visibles = lambda: self.a_inferior.isChecked()
         self.dock = QDockWidget("Elementos", self)
         self.dock.setObjectName("dock-elementos")
         self.dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
@@ -440,6 +450,11 @@ class Ventana(QMainWindow):
     def _panel(self, nombre: str) -> QWidget:
         return {"izquierdo": self.dock, "derecho": self.derecho, "inferior": self.pestanas}[nombre]
 
+    def _abrir_bloques(self) -> None:
+        """«Bloques abajo ▾»: despliega el panel inferior y elige la pestaña Bloques."""
+        self._mostrar_panel("inferior", True)
+        self.pestanas.setCurrentIndex(self.i_bloques)
+
     def _accion_panel(self, nombre: str) -> QAction:
         return {"izquierdo": self.a_izquierdo, "derecho": self.a_derecho, "inferior": self.a_inferior}[nombre]
 
@@ -455,6 +470,8 @@ class Ventana(QMainWindow):
         self.flechas[nombre].setText({"izquierdo": "◂" if visible else "▸", "derecho": "▸" if visible else "◂",
                                       "inferior": "▾" if visible else "▴"}[nombre])
         self.flechas[nombre].setToolTip(f"{'Plegar' if visible else 'Desplegar'} el panel {nombre}")
+        if nombre == "inferior" and hasattr(self, "props"):
+            self.props.actualizar_boton()
         if guardar:
             self.ajustes.setValue(f"paneles/{nombre}", visible)
 
@@ -639,6 +656,10 @@ class Ventana(QMainWindow):
         for a in (self.a_ejecutar, self.a_paso, self.a_completar, self.a_reiniciar):
             a.setEnabled(not editar)  # sin simulación en curso al editar (F5 y compañía no hacen nada)
         self.derecho.setCurrentIndex(1 if editar else 0)
+        self.pestanas.setTabVisible(self.i_bloques, editar)  # los bloques solo se programan al editar
+        if not editar and self.pestanas.currentIndex() == self.i_bloques:
+            self.pestanas.setCurrentIndex(0)
+        self._transicion_bloques = None
         self.diagrama.modo_edicion(editar, self.edicion if editar else None)
         if editar:
             self.refrescar_edicion()
@@ -680,6 +701,10 @@ class Ventana(QMainWindow):
         self.a_herr[e.herramienta].setChecked(True)
         self.paleta.elegir(e.herramienta)
         self.props.mostrar(e)
+        tid = self.props.transicion()
+        if tid is not None and tid != self._transicion_bloques:  # al seleccionar una transición, sus bloques
+            self.pestanas.setCurrentIndex(self.i_bloques)
+        self._transicion_bloques = tid
         self.variables.mostrar(e)
         self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
         self.a_rehacer.setEnabled(bool(e.ed.redo_stack))

@@ -521,7 +521,7 @@ class Interfaz(unittest.TestCase):
         w.nuevo()
         e, d = w.edicion, w.diagrama
         self.assertFalse(w.dock.isHidden())
-        self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())], ["Etapa", "Transición", "Simultaneidad"],
+        self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())], ["Etapa", "Transición", "Simultaneidad", "Acción"],
                          "Seleccionar no es un elemento y la etapa inicial es una etapa con otro tipo")
         pedidas = []
         e.pedir_condicion = pedidas.append
@@ -1758,6 +1758,142 @@ class Interfaz(unittest.TestCase):
         self.assertIsNot(prog.ampliar_ventana(), v)
         prog._ventana.close()
 
+    def test_SEDI59_pestana_bloques_en_el_panel_inferior(self):
+        """REQ-EDT-02: el programador de la receptividad es la pestaña «Bloques» del panel inferior, solo al editar;
+        seleccionar una transición la activa con su receptividad; sin transición, el mensaje; hay un solo programador."""
+        from escritorio.bloques import Programador
+        w = self.w
+        e, ids, ts = self.secuencial()
+        w.resize(1360, 860)
+        w.show()
+        QApplication.processEvents()
+        i = w.i_bloques
+        self.assertEqual(w.pestanas.tabText(i), "Bloques")
+        self.assertTrue(w.pestanas.isTabVisible(i), "en Editar aparece")
+        self.assertEqual([w.pestanas.tabText(k) for k in range(2)], ["Traza", "Leyenda"])
+        self.assertEqual(len(w.findChildren(Programador)), 1, "un solo programador en la ventana")
+        self.assertTrue(w.pestanas.widget(i).isAncestorOf(w.props.prog), "vive en la pestaña")
+        e.seleccionar([])
+        w.pestanas.setCurrentIndex(0)
+        QApplication.processEvents()
+        self.assertTrue(w.props.prog.isHidden())
+        self.assertEqual(w.props.l_bloques.text(), "Elija una transición para programar su receptividad")
+        e.seleccionar([ts["t2"]])
+        self.assertEqual(w.pestanas.currentIndex(), i, "al seleccionar una transición se activa Bloques")
+        self.assertEqual((w.props.prog.texto(), w.props.prog.isHidden()), ("paro", False))
+        self.assertIn("t2", w.props.l_bloques.text())
+        w.pestanas.setCurrentIndex(1)  # otro cambio sobre la misma transición no arrebata la pestaña
+        e.poner_condicion(ts["t2"], "paro AND marcha", crear=True)
+        self.assertEqual(w.pestanas.currentIndex(), 1)
+        e.seleccionar([ts["t1"]])
+        self.assertEqual((w.pestanas.currentIndex(), w.props.prog.texto()), (i, "marcha"))
+        e.seleccionar([ids["0"]])  # una etapa: el panel sigue en Bloques, con el mensaje
+        self.assertEqual((w.pestanas.currentIndex(), w.props.prog.isHidden()), (i, True))
+        e.seleccionar([ts["t1"]])
+        w.pestanas.setCurrentIndex(i)
+        w.cambiar_modo("simular")
+        self.assertFalse(w.pestanas.isTabVisible(i), "en Simular no aparece")
+        self.assertNotEqual(w.pestanas.currentIndex(), i)
+        w.cambiar_modo("editar")
+        self.assertTrue(w.pestanas.isTabVisible(i))
+
+    def test_SEDI60_bloques_y_texto_sincronizados_en_la_pestana(self):
+        """REQ-EDT-02: un cambio de bloques escribe el texto del panel izquierdo y es una operación del editor (Ctrl+Z);
+        lo escrito en el texto aparece en los bloques; el panel izquierdo ya no lleva el programador."""
+        from escritorio import bloques
+        w = self.w
+        e, ids, ts = self.secuencial()
+        p, prog = w.props, w.props.prog
+        e.seleccionar([ts["t1"]])
+        self.assertIsNone(p.findChild(bloques.Programador), "el panel izquierdo no tiene el programador")
+        n = len(e.ed.undo_stack)
+        prog.lienzo.soltar((), bloques.nuevo("no"))
+        self.assertEqual((p.t_texto.text(), e.texto_condicion(ts["t1"]), len(e.ed.undo_stack)),
+                         ("NOT marcha", "NOT marcha", n + 1))
+        e.deshacer()
+        self.assertEqual((p.t_texto.text(), prog.texto()), ("marcha", "marcha"))
+        p.t_texto.setText("paro AND marcha")
+        p.t_texto.textEdited.emit(p.t_texto.text())
+        self.assertEqual((prog.lienzo.arbol["k"], prog.texto()), ("y", "paro AND marcha"))
+        self.assertEqual(len(e.ed.undo_stack), n, "escribir el texto no aplica hasta terminar")
+
+    def test_SEDI61_boton_bloques_abajo_si_el_panel_esta_plegado(self):
+        """REQ-EDT-02: con el panel inferior plegado no se despliega solo; el panel de la transición ofrece «Bloques
+        abajo ▾», que lo despliega y elige la pestaña Bloques; con él a la vista, el botón no aparece."""
+        w = self.w
+        e, ids, ts = self.secuencial()
+        w.resize(1360, 860)
+        w.show()
+        w._mostrar_panel("inferior", False)
+        w.pestanas.setCurrentIndex(0)
+        e.seleccionar([ts["t1"]])
+        QApplication.processEvents()
+        self.assertTrue(w.pestanas.isHidden(), "no se despliega por su cuenta")
+        self.assertEqual(w.props.t_abajo.text(), "Bloques abajo ▾")
+        self.assertFalse(w.props.t_abajo.isHidden())
+        self.assertTrue(w.props.prog.parent().isHidden() or not w.props.prog.isVisible())
+        w.props.t_abajo.click()
+        self.assertFalse(w.pestanas.isHidden())
+        self.assertEqual(w.pestanas.currentIndex(), w.i_bloques)
+        self.assertTrue(w.props.t_abajo.isHidden(), "con el panel a la vista, el botón sobra")
+        self.assertTrue(w.a_inferior.isChecked())
+        w._mostrar_panel("inferior", False)
+        self.assertFalse(w.props.t_abajo.isHidden())
+
+    def test_SEDI62_ficha_accion_en_la_paleta(self):
+        """REQ-ACT-01, REQ-EDT-02: la paleta ofrece la ficha «Acción» con su figura; soltada sobre una etapa pide la
+        acción de esa etapa (el mismo gancho que «Añadir acción…»); fuera, no crea nada y avisa en la barra de estado;
+        como herramienta, un clic en una etapa hace lo mismo."""
+        from escritorio.propiedades import figura
+        w = self.w
+        e, ids, ts = self.secuencial()
+        w.resize(1360, 860)
+        w.show()
+        textos = [w.paleta.item(k).text() for k in range(w.paleta.count())]
+        self.assertIn("Acción", textos)
+        pm, punto = figura("accion", 1.0, 1.0)
+        self.assertGreater(pm.width(), pm.height(), "un rectángulo de acción, más ancho que alto")
+        self.assertTrue(pm.rect().contains(punto))
+        pedidas = []
+        e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
+        n, acciones = len(e.ed.undo_stack), len(e.ed.model["actions"])
+        e.colocar("accion", centro(e.M, ids["1"]))
+        self.assertEqual(pedidas, [(ids["1"], None)])
+        self.assertEqual(e.sel, [ids["1"]])
+        pedidas.clear()
+        e.colocar("accion", QPointF(900, 900))  # fuera de toda etapa
+        self.assertEqual((pedidas, len(e.ed.undo_stack), len(e.ed.model["actions"])), ([], n, acciones))
+        self.assertEqual(w.statusBar().currentMessage(), "Suelte la acción sobre una etapa")
+        e.colocar("accion", centro(e.M, ts["t1"]))  # sobre una transición tampoco
+        self.assertEqual(pedidas, [])
+        # como herramienta: clic en el dibujo
+        w.paleta.setCurrentRow(textos.index("Acción"))
+        self.assertEqual(e.herramienta, "accion")
+        e.prensar(QPointF(900, 900))
+        self.assertEqual((pedidas, e.herramienta), ([], "accion"), "sin etapa, la herramienta sigue")
+        e.prensar(centro(e.M, ids["0"]))
+        self.assertEqual((pedidas, e.herramienta), ([(ids["0"], None)], "seleccionar"))
+
+    def test_SEDI63_y_y_o_con_colores_distintos(self):
+        """REQ-EDT-02: «y» y «o» siguen en Operadores pero se dibujan con colores distintos entre sí y del resto de
+        categorías (paleta, área y ventana ampliada), con texto blanco."""
+        from escritorio.bloques import COLORES, Motor, nuevo
+        y, o = COLORES["y"], COLORES["o"]
+        resto = {c for c in COLORES if c not in ("y", "o")}
+        self.assertNotEqual(y, o)
+        self.assertTrue(all(COLORES[c].lower() not in (y.lower(), o.lower()) for c in resto))
+        m = Motor(lambda: ({}, []))
+        self.assertEqual((m.categoria(nuevo("y")), m.categoria(nuevo("o")), m.categoria(nuevo("no"))), ("y", "o", "operador"))
+        e, ids, ts = self.secuencial()
+        e.seleccionar([ts["t1"]])
+        prog = self.w.props.prog
+        prog.poner("marcha AND paro OR marcha")
+        v = prog.ampliar_ventana()
+        for p in (prog, v.programador):  # área y ventana ampliada: el motor da la categoría de cada bloque
+            self.assertEqual((p.lienzo.motor.categoria(p.lienzo.arbol), p.lienzo.motor.categoria(p.lienzo.arbol["a"])),
+                             ("o", "y"))
+        v.close()
+
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
 class Bloques(unittest.TestCase):
@@ -2004,12 +2140,47 @@ class Bloques(unittest.TestCase):
         self.assertEqual(p.opciones("interna"), [("M1", "M1"), ("M2", "M2")])
         self.assertEqual(p.paleta.opciones_desplegable(p.paleta.bloques()[0], "n"), [("M1", "M1"), ("M2", "M2")])
 
+    def test_SEDI64_disposicion_en_columnas(self):
+        """REQ-EDT-02: categorías como carpetas en una columna (las siete, con su color), a su derecha la columna de
+        bloques de la categoría elegida (uno debajo de otro) y, ocupando el resto, el área de trabajo con la papelera."""
+        from PySide6.QtWidgets import QPushButton
+        p = self.prog()
+        p.resize(900, 300)
+        p.show()
+        QApplication.processEvents()
+        bs = list(p.categorias.values())
+        self.assertEqual(len(bs), 7)
+        self.assertTrue(all(isinstance(b, QPushButton) and not b.icon().isNull() for b in bs))
+        pos = [b.mapTo(p, b.rect().topLeft()) for b in bs]
+        self.assertEqual(len({q.x() for q in pos}), 1, "todas en una columna")
+        self.assertEqual(sorted(q.y() for q in pos), [q.y() for q in pos], "una debajo de otra")
+        self.assertGreater(p.paleta.mapTo(p, p.paleta.rect().topLeft()).x(), pos[0].x() + bs[0].width() - 4,
+                           "la paleta, a la derecha de las categorías")
+        self.assertGreater(p.lienzo.mapTo(p, p.lienzo.rect().topLeft()).x(),
+                           p.paleta.mapTo(p, p.paleta.rect().topLeft()).x(), "y el área, a la derecha de la paleta")
+        self.assertGreater(p.lienzo.width(), 300, "el área ocupa el resto")
+        p.elegir_categoria("operador")
+        QApplication.processEvents()
+        cajas = sorted(p.paleta._cajas, key=lambda c: c[2])
+        self.assertEqual(len(cajas), 7)
+        self.assertEqual(len({x for _, x, _ in cajas}), 1, "los bloques, en una columna")
+        self.assertEqual([c[2] for c in cajas], sorted({y for _, _, y in cajas}), "uno debajo de otro")
+        p.elegir_categoria("comparacion")
+        self.assertEqual([b["k"] for b in p.paleta.bloques()], ["cmp"], "elegir una carpeta muestra sus bloques")
+        self.assertTrue(p.categorias["comparacion"].isChecked())
+        # con fórmula larga: en línea si cabe, apilada si no
+        p.poner("(↑marcha AND NOT X0) OR (3s/X1 AND CT >= 3)")
+        a = p.lienzo
+        self.assertLess(a.heightForWidth(900), a.heightForWidth(250))
+        self.assertTrue(p.papelera.isVisible())
+        p.close()
+
     def test_SEDI56_cabe_a_200_px_y_crece_en_alto(self):
-        """REQ-EDT-02: el programador cabe a 200 px sin barra horizontal; el área crece en alto al estrecharse y los
-        bloques se apilan; la paleta pasa de línea."""
+        """REQ-EDT-02: el área y la paleta caben a 200 px sin barra horizontal; el área crece en alto al estrecharse y
+        los bloques se apilan; la paleta suelta (en línea, no la del programador) pasa de línea."""
+        from escritorio.bloques import AreaBloques, PaletaBloques
         p = self.prog()
         p.poner("(↑marcha AND NOT X0) OR (3s/X1 AND CT >= 3)")
-        self.assertLessEqual(p.minimumSizeHint().width(), 200)
         self.assertLessEqual(p.paleta.minimumSizeHint().width(), 200)
         area = p.lienzo
         self.assertTrue(area.hasHeightForWidth())
@@ -2019,7 +2190,9 @@ class Bloques(unittest.TestCase):
         for w in (200, 250, 330, 700):
             self.assertLessEqual(area.ancho_necesario(w), w, f"a {w} px los bloques no se salen")
         p.elegir_categoria("operador")
-        self.assertGreater(p.paleta.heightForWidth(200), p.paleta.heightForWidth(700), "la paleta pasa de línea")
+        suelta = PaletaBloques(lambda: (self.VARS, self.ETAPAS))
+        suelta.cargar("operador")
+        self.assertGreater(suelta.heightForWidth(200), suelta.heightForWidth(700), "la paleta en línea pasa de línea")
         self.assertLessEqual(p.paleta.ancho_necesario(200), 200)
         p.elegir_categoria("tiempo")
         self.assertLessEqual(p.paleta.ancho_necesario(200), 200, "el bloque temporizar también cabe")
@@ -2027,17 +2200,18 @@ class Bloques(unittest.TestCase):
         profundo = " AND ".join(f"(marcha OR NOT paro AND Q00 AND X{i % 2})" for i in range(4))
         p.poner(profundo)
         self.assertLessEqual(area.ancho_necesario(200), 200)
-        from PySide6.QtWidgets import QWidget
+        from PySide6.QtWidgets import QWidget, QVBoxLayout
         w = QWidget()
         w.resize(200, 400)
-        from PySide6.QtWidgets import QVBoxLayout
         lay = QVBoxLayout(w)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.addWidget(p)
+        sola = AreaBloques(lambda: (self.VARS, self.ETAPAS))  # un área suelta, a 200 px
+        sola.poner_arbol(area.arbol)
+        lay.addWidget(sola)
         w.show()
         QApplication.processEvents()
-        self.assertEqual(p.width(), 200)
-        self.assertGreaterEqual(area.height(), area.heightForWidth(200))
+        self.assertEqual(sola.width(), 200)
+        self.assertGreaterEqual(sola.height(), sola.heightForWidth(200))
         w.close()
 
     def test_SEDI57_raton_clic_en_piezas_y_arrastres_recibidos(self):

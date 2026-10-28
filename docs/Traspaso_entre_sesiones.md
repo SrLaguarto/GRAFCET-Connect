@@ -9,11 +9,11 @@ Nota para la siguiente conversación de Claude Code (coordinador). Estado al 28-
 - Pasos 1 a 4 de `docs/Plan_de_trabajo_Sonnet.md` hechos. Últimas decisiones: P-IMP-36 (tramos verticales mínimos,
   transición que se agarra sin sacar rama), P-IMP-37 (sin escalones, una flecha por lazo, imán, panel izquierdo
   plegable, arrastre visible desde la paleta), P-IMP-38 (paso 4: variables, acciones de etapa y un primer
-  programador por bloques) y P-IMP-39 (memorias, programador por bloques tipo Scratch y correcciones del paso 4).
+  programador por bloques), P-IMP-39 (memorias, programador por bloques tipo Scratch y correcciones del paso 4) y
+  P-IMP-40 (programador en el panel inferior, pestaña «Bloques»; «y»/«o» de colores distintos; ficha «Acción» en la
+  paleta).
 - Commits: `efdec32` (P-IMP-36), `60c7611` (P-IMP-37), `370f6f5` (P-IMP-38), `a61d292` (fusión de los subagentes y
-  `CLAUDE.md`).
-- Los cambios de P-IMP-39 están en el árbol de trabajo de la rama, sin commit. Los ficheros son los de la fila
-  P-IMP-39 de `docs/04_Decisiones_de_implementacion.md`.
+  `CLAUDE.md`), `08ac225` (P-IMP-39); P-IMP-40 en el commit siguiente.
 - Lista de verificación del responsable (marca bien, mal o duda con nota; se lee con la herramienta ArtifactData):
   https://claude.ai/artifact/H9AbbW2x5qPZ2d35iWyKXd — colección `checks`, documento `notas/general`. Añadir ahí las
   comprobaciones de cada paso nuevo (campos `orden`, `ronda`, `grupo`, `texto`, `como`, `estado`, `nota`).
@@ -28,8 +28,10 @@ Nota para la siguiente conversación de Claude Code (coordinador). Estado al 28-
   acciones; aviso en dos pasos al aceptar una variable que no vale para la acción; aviso cuando X1 puede ser la etapa
   E1 o la 1; constantes 1 y 0 que se escriben, se ven como 1 y 0 y se guardan como true y false (solo como condición completa);
   retardos con paréntesis anidados.
-- Pendiente: que el responsable pruebe el programador nuevo con su lista de verificación (ver arriba). No hay
-  veredicto nuevo hasta entonces.
+- Opinión del responsable sobre P-IMP-39: «no me disgusta»; pidió categorías en columna como carpetas, la fórmula
+  abajo (puede ser larga), «y»/«o» de colores distintos y no encontraba cómo poner acciones. Hecho en P-IMP-40.
+- Pendiente: que el responsable pruebe el programador (P-IMP-39 y P-IMP-40) y la ficha «Acción» con su lista de
+  verificación (ver arriba). Sin pantalla no se han probado el arrastre real ni el aspecto.
 
 ## Opiniones del responsable sobre el paso 4
 
