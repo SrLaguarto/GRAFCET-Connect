@@ -1,9 +1,9 @@
 {
- "date": "2026-10-28T17:38:03+00:00",
+ "date": "2026-10-28T19:15:36+00:00",
  "python": "3.13.17",
  "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
  "machine": "x86_64",
- "total": 236,
+ "total": 251,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -146,6 +146,15 @@
    "summary": "REQ-EDT-02: categorías como carpetas en una columna (las siete, con su color), a su derecha la columna de"
   },
   {
+   "test": "test_editor_escritorio.Bloques.test_SEDI97_y_y_o_de_varias_entradas",
+   "case": "S-EDI97",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: los bloques «y» y «o» llevan un «+» al final que añade otro hueco (y un «×» en los huecos vacíos de"
+  },
+  {
    "test": "test_editor_escritorio.Interfaz.test_SEDI03_crear_enlazar_y_simular",
    "case": "S-EDI03",
    "outcome": "pasa",
@@ -212,6 +221,25 @@
     "REQ-EDT-10"
    ],
    "summary": "REQ-EDT-10: con cambios sin guardar se copia la edición cada 30 s y se ofrece recuperarla; guardar la borra."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI100_limitada_con_condicion_a_medias_pasa_a_borrador",
+   "case": "S-EDI100",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: la condición a medias (con huecos) de una limitada de un fichero antiguo la deja como"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI101_renombrar_con_la_seleccion_cambiada_no_hace_nada",
+   "case": "S-EDI101",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un editingFinished que llega tarde (la selección cambió, o el elemento ya no existe, por ejemplo tras"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI10_el_ratón_real_y_el_dibujo",
@@ -524,7 +552,7 @@
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: el diálogo de acciones muestra la condición y el evento en la notación de la norma;"
+   "summary": "REQ-ACT-01, REQ-EDT-02: el diálogo de acciones ya no lleva programador (la condición y el evento se programan en"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI49_memorias_en_la_interfaz",
@@ -607,7 +635,7 @@
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: la paleta ofrece la ficha «Acción» con su figura (el lado izquierdo, bajo el puntero);"
+   "summary": "REQ-ACT-01, REQ-EDT-02: la carpeta «Acciones» ofrece la ficha «Continua» con su figura (el lado izquierdo, bajo"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI63_y_y_o_con_colores_distintos",
@@ -672,7 +700,7 @@
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: la ficha «Acción», soltada en cualquier sitio, crea una acción continua suelta sin"
+   "summary": "REQ-ACT-01, REQ-EDT-02: la ficha «Continua», soltada en cualquier sitio, crea una acción continua suelta sin"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI71_enlazar_una_accion_a_una_etapa_separarla_y_deshacer",
@@ -692,7 +720,7 @@
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: el botón derecho en una acción (suelta o unida) ofrece sus cinco tipos con el actual"
+   "summary": "REQ-ACT-01, REQ-EDT-02: el botón derecho en una acción (suelta o unida) ofrece un submenú «Tipo de acción» con"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI73_guardar_abrir_con_borradores_avisos_y_deshacer",
@@ -830,6 +858,115 @@
    "summary": "REQ-ACT-01: la condición de una acción limitada (`NOT 3s/X…`) usa la etiqueta de la etapa (X0), no su ID interno,"
   },
   {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI87_los_elementos_solo_se_colocan_arrastrando",
+   "case": "S-EDI87",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: no hay modo herramienta para colocar: un clic en una ficha solo muestra su ayuda, un clic en el"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI88_carpeta_de_acciones_con_sus_cinco_fichas",
+   "case": "S-EDI88",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: la paleta tiene dos carpetas, «Elementos» (etapa, transición, simultaneidad) y"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI89_punto_derecho_de_la_etapa_y_union_con_acciones_sueltas",
+   "case": "S-EDI89",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: la etapa tiene un punto de unión en el centro de su lado derecho (visible al pasar el"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI90_pegar_una_accion_al_lado_de_otra_con_iman",
+   "case": "S-EDI90",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: soltar (o mover) una acción suelta de modo que toque el lado derecho de otra acción de la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI91_grupos_sueltos_se_mueven_y_se_unen_juntos",
+   "case": "S-EDI91",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-DAT-01"
+   ],
+   "summary": "REQ-ACT-01, REQ-DAT-01: varias acciones sueltas pegadas forman un grupo suelto (`grupo` y `orden` en la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI92_el_enlace_de_las_acciones_se_selecciona_y_se_elimina",
+   "case": "S-EDI92",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: el trazo que une la etapa con sus acciones se selecciona con un clic (se resalta); Supr"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI93_condicion_y_evento_de_una_accion_en_la_pestana_bloques",
+   "case": "S-EDI93",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: al seleccionar una acción condicionada (o por evento, o una continua limitada de un"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI94_evento_acciones_sueltas_limitada_y_crear_las_que_faltan",
+   "case": "S-EDI94",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02",
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02, REQ-EDT-07: la pestaña Bloques programa también el evento de una acción, la condición de"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI95_el_dialogo_editar_conserva_condicion_evento_y_limite",
+   "case": "S-EDI95",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: el diálogo Editar no lleva programador y conserva la condición y el evento de la acción;"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI96_nombres_de_variable_reservados",
+   "case": "S-EDI96",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-07, REQ-EDT-09: en la interfaz se rechaza, con mensaje y parpadeo, un nombre de variable que no se puede"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI99_y_y_o_con_muchos_operandos",
+   "case": "S-EDI99",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un «y» o un «o» de 10, 11 o 26 operandos (las claves de los huecos no chocan con la clase del nodo):"
+  },
+  {
    "test": "test_editor_escritorio.Notacion.test_SEDI16_notacion_del_usuario",
    "case": "S-EDI16",
    "outcome": "pasa",
@@ -894,6 +1031,16 @@
     "REQ-EDT-09"
    ],
    "summary": "REQ-EDT-09: un texto mal escrito se diagnostica sin tocar el modelo; las variables que faltan se listan."
+  },
+  {
+   "test": "test_editor_escritorio.Nucleo.test_SEDI98_acciones_sueltas_en_grupo_en_el_nucleo",
+   "case": "S-EDI98",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-DAT-01"
+   ],
+   "summary": "REQ-ACT-01, REQ-DAT-01: el editor guarda en `presentation.draftActions` los grupos de acciones sueltas (`grupo`,"
   },
   {
    "test": "test_simulador_escritorio.Nucleo.test_SAPP01_abrir_lo_guardado",

@@ -385,10 +385,12 @@ class Editor:
     # -- acciones sueltas o sin completar: borradores de la presentación (P-IMP-41)
     # Una acción del modelo exige etapa y variable. Una acción suelta (o unida a una etapa a la que aún le falta algo)
     # no puede serlo: se guarda en `presentation.draftActions`, no se simula y viaja con el proyecto. Cada una lleva
-    # id, x, y (el punto medio de su lado izquierdo, donde se une), tipo (continua, limitada, activacion, desactivacion,
-    # evento) y, si los tiene, variable (ID), condicion, valor, evento y limite (en la notación del usuario) y etapa.
-    DRAFT_TIPOS = ("continua", "limitada", "activacion", "desactivacion", "evento")
-    DRAFT_CAMPOS = ("variable", "condicion", "valor", "evento", "limite", "etapa")
+    # id, x, y (el punto medio de su lado izquierdo, donde se une), tipo (continua, condicionada, limitada, activacion,
+    # desactivacion, evento) y, si los tienen, variable (ID), condicion, valor, evento y limite (en la notación del
+    # usuario), etapa, y grupo y orden: varias acciones sueltas pegadas forman un grupo (mismo `grupo`, ordenadas por
+    # `orden`; comparten x, y y la colocación de `actionLayouts[grupo]`).
+    DRAFT_TIPOS = ("continua", "condicionada", "limitada", "activacion", "desactivacion", "evento")
+    DRAFT_CAMPOS = ("variable", "condicion", "valor", "evento", "limite", "etapa", "grupo", "orden")
 
     def draft_actions(self) -> list[dict[str, Any]]:
         d = self.presentation.get("draftActions", [])
@@ -402,6 +404,10 @@ class Editor:
         if datos.get("variable") and not any(v["id"] == datos["variable"] for v in m["variables"]):
             raise DiagnosticError(Diagnostic("D-REF", f"variable inexistente: {datos['variable']}",
                                              element=datos["variable"]))
+        if datos.get("grupo") is not None and not isinstance(datos["grupo"], str):
+            raise DiagnosticError(Diagnostic("D-FORMATO", "el grupo de una acción suelta es un texto"))
+        if datos.get("orden") is not None and (not isinstance(datos["orden"], int) or isinstance(datos["orden"], bool)):
+            raise DiagnosticError(Diagnostic("D-FORMATO", "el orden de una acción suelta es un entero"))
 
     @staticmethod
     def _poner_campos(d: dict[str, Any], datos: dict[str, Any]) -> None:
@@ -439,7 +445,23 @@ class Editor:
             if "x" in datos or "y" in datos:
                 raise DiagnosticError(Diagnostic("D-FORMATO", "la posición se cambia con move_draft_action"))
             self._poner_campos(self._draft(p, did), datos)
+            self._disolver_grupos(m, p)
         self._txn("editar acción suelta", fn, view_only=True)
+
+    def update_draft_actions(self, cambios: dict[str, dict[str, Any]]) -> None:
+        """Cambia datos (también la posición, «x» e «y») de varios borradores en una sola operación; los grupos de acciones
+        sueltas se revisan al final, no entre un cambio y otro."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            for did, datos in cambios.items():
+                datos = dict(datos)
+                pos = {k: datos.pop(k) for k in ("x", "y") if k in datos}
+                self._check_draft(m, datos)
+                d = self._draft(p, did)
+                self._poner_campos(d, datos)
+                for k, v in pos.items():
+                    d[k] = _coord(v)
+            self._disolver_grupos(m, p)
+        self._txn("editar acciones sueltas", fn, view_only=True)
 
     def move_draft_action(self, did: str, x: Any, y: Any) -> None:
         def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
@@ -452,7 +474,28 @@ class Editor:
             for did in ids:
                 self._draft(p, did)
             p["draftActions"] = [d for d in p["draftActions"] if d["id"] not in ids]
+            self._disolver_grupos(m, p)
         self._txn("quitar acción suelta", fn, view_only=True)
+
+    @staticmethod
+    def _disolver_grupos(m: dict[str, Any], p: dict[str, Any]) -> None:
+        """Un grupo de acciones sueltas con menos de dos miembros deja de serlo; la colocación de un grupo que ya no existe
+        se olvida."""
+        cuenta: dict[str, int] = {}
+        for d in p.get("draftActions", []):
+            if d.get("grupo") and not d.get("etapa"):
+                cuenta[d["grupo"]] = cuenta.get(d["grupo"], 0) + 1
+        for d in p.get("draftActions", []):
+            if d.get("grupo") and d.get("etapa"):
+                d.pop("grupo", None)  # unida a una etapa: la manda la etapa
+            elif d.get("grupo") and cuenta.get(d["grupo"], 0) < 2:
+                d.pop("grupo", None)
+                d.pop("orden", None)
+        if isinstance(p.get("actionLayouts"), dict):
+            vivos = {s["id"] for s in m["steps"]} | {g for g, n in cuenta.items() if n >= 2}
+            p["actionLayouts"] = {k: v for k, v in p["actionLayouts"].items() if k in vivos}
+            if not p["actionLayouts"]:
+                del p["actionLayouts"]
 
     def delete_variable(self, vid: str) -> None:
         """Quita una variable que no se usa en ninguna expresión ni es el objetivo de una acción (REQ-EDT-07)."""
@@ -484,7 +527,8 @@ class Editor:
                 styles.pop(ident, None)
         self._txn("ajustar dibujo del enlace", fn, view_only=True)
 
-    # Colocación de las acciones de una etapa (presentación, `presentation.actionLayouts`: {ID de etapa: valor}); sin
+    # Colocación de las acciones de una etapa o de un grupo de acciones sueltas (presentación,
+    # `presentation.actionLayouts`: {ID de etapa o de grupo: valor}); sin
     # entrada vale «fila» (cajas pegadas en fila, la representación (2) de la norma).
     ACTION_LAYOUTS = ("fila", "fila-separada", "columna")
 
@@ -497,8 +541,9 @@ class Editor:
         presentación: no cambia el modelo ni la revisión."""
         if layout not in self.ACTION_LAYOUTS:
             raise DiagnosticError(Diagnostic("D-FORMATO", f"colocación de acciones desconocida: {layout!r}"))
-        if not any(s["id"] == step for s in self.model["steps"]):
-            raise DiagnosticError(Diagnostic("D-REF", f"etapa inexistente: {step}", element=step))
+        if not any(s["id"] == step for s in self.model["steps"]) and not any(
+                d.get("grupo") == step and not d.get("etapa") for d in self.draft_actions()):
+            raise DiagnosticError(Diagnostic("D-REF", f"etapa o grupo de acciones inexistente: {step}", element=step))
 
         def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
             d = p["actionLayouts"] = dict(p["actionLayouts"]) if isinstance(p.get("actionLayouts"), dict) else {}
@@ -809,9 +854,19 @@ class Editor:
             for b in p.get("barras", []):
                 b["arriba"] = [x for x in b["arriba"] if x not in doomed]
                 b["abajo"] = [x for x in b["abajo"] if x not in doomed]
+            huerfanas: dict[str, list[dict[str, Any]]] = {}
             for d in p.get("draftActions", []):  # una acción sin completar unida a una etapa borrada queda suelta
                 if d.get("etapa") in doomed:
-                    del d["etapa"]
+                    huerfanas.setdefault(d.pop("etapa"), []).append(d)
+            for sid, ds in huerfanas.items():  # las de una misma etapa quedan juntas, con la colocación que tenían
+                if len(ds) > 1:
+                    gid = self.ids.new("grupo")
+                    ds.sort(key=lambda d: d.get("orden", 0))
+                    for i, d in enumerate(ds):
+                        d.update(grupo=gid, orden=i, x=ds[0]["x"], y=ds[0]["y"])
+                    previa = (p.get("actionLayouts") or {}).get(sid) if isinstance(p.get("actionLayouts"), dict) else None
+                    if previa:
+                        p["actionLayouts"] = {**p["actionLayouts"], gid: previa}
             if isinstance(p.get("actionLayouts"), dict):  # la colocación de las acciones de una etapa borrada
                 p["actionLayouts"] = {k: v for k, v in p["actionLayouts"].items() if k not in doomed}
                 if not p["actionLayouts"]:

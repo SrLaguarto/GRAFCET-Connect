@@ -19,10 +19,11 @@ from typing import Any
 
 from grafcet.routing import TALLO_T, enlaces
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QFontMetricsF, QImage, QPainter, QPainterPath, QPen
+from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, QPainter, QPainterPath, QPen,
+                           QPixmap)
 from PySide6.QtWidgets import (QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QHBoxLayout, QLabel,
-                               QMenu, QToolButton, QWidget)
+                               QMenu, QProxyStyle, QStyle, QToolButton, QWidget)
 
 SX = 100       # margen izquierdo del dibujo
 H = 22         # semilado de la etapa cuadrada (unidad: lado = 2·H)
@@ -193,15 +194,16 @@ def barra(b: dict[str, Any]) -> tuple[float, float, float, float]:
 
 
 def anclas(M: dict[str, Any], ident: str) -> list[dict[str, Any]]:
-    """Puntos de unión de un elemento: etapa y transición, arriba (entra el enlace) y abajo (sale); una acción suelta,
-    a la izquierda."""
+    """Puntos de unión de un elemento: etapa y transición, arriba (entra el enlace) y abajo (sale); la etapa, además, en
+    el centro de su lado derecho (de ahí salen las acciones); una acción suelta (la primera de su grupo), a la
+    izquierda."""
     for b in M.get("bars", []):
         if b["id"] == ident:
             bx, by, w, h = barra(b)
             return [{"id": ident, "lado": "arriba", "pos": QPointF(bx + w / 2, by - 9)},
                     {"id": ident, "lado": "abajo", "pos": QPointF(bx + w / 2, by + h + 9)}]
     for d in M.get("draftActions", []):  # una acción suelta: un solo punto de unión, en el medio de su lado izquierdo
-        if d["id"] == ident and not d.get("etapa"):
+        if d["id"] == ident and not d.get("etapa") and d.get("cabeza", True):
             return [{"id": ident, "lado": "izq", "pos": QPointF(d["x"] + SX, d["y"])}]
     pos = posiciones(M)
     if ident not in pos:
@@ -210,8 +212,11 @@ def anclas(M: dict[str, Any], ident: str) -> list[dict[str, Any]]:
     t = next((t for t in M["transitions"] if t["id"] == ident), None)
     arriba = H if t is None else ANCLA_S if t.get("simulPre") else ANCLA
     abajo = H if t is None else ANCLA_S if t.get("simulPost") else ANCLA
-    return [{"id": ident, "lado": "arriba", "pos": QPointF(x, y - arriba)},
-            {"id": ident, "lado": "abajo", "pos": QPointF(x, y + abajo)}]
+    out = [{"id": ident, "lado": "arriba", "pos": QPointF(x, y - arriba)},
+           {"id": ident, "lado": "abajo", "pos": QPointF(x, y + abajo)}]
+    if any(st["id"] == ident for st in M["steps"]):
+        out.append({"id": ident, "lado": "der", "pos": QPointF(x + H, y)})
+    return out
 
 
 def _distancia(p: QPointF, a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -220,13 +225,18 @@ def _distancia(p: QPointF, a: tuple[float, float], b: tuple[float, float]) -> fl
     return ((p.x() - a[0] - k * dx) ** 2 + (p.y() - a[1] - k * dy) ** 2) ** 0.5
 
 
-def ancla_en(M: dict[str, Any], p: QPointF, radio: float = RADIO_ANCLA) -> dict[str, Any] | None:
-    """El punto de unión más cercano al puntero, si hay alguno a menos de `radio`."""
+def ancla_en(M: dict[str, Any], p: QPointF, radio: float = RADIO_ANCLA, sin_der: bool = False) -> dict[str, Any] | None:
+    """El punto de unión más cercano al puntero, si hay alguno a menos de `radio` (el de la derecha de una etapa, de
+    donde salen las acciones, solo a menos de 8 si la etapa ya las tiene: ahí empieza su enlace, que se selecciona; `sin_der`
+    lo ignora, para enlaces que no son de acciones)."""
     best = None
+    ocupadas = {s["id"] for s in M["steps"] if s["actions"]} | {d["etapa"] for d in M.get("draftActions", []) if d.get("etapa")}
     for ident in posiciones(M):
         for a in anclas(M, ident):
+            if a["lado"] == "der" and sin_der:
+                continue
             d = ((a["pos"].x() - p.x()) ** 2 + (a["pos"].y() - p.y()) ** 2) ** 0.5
-            if d <= radio and (best is None or d < best[0]):
+            if d <= (min(radio, 8) if a["lado"] == "der" and ident in ocupadas else radio) and (best is None or d < best[0]):
                 best = (d, a)
     for d in M.get("draftActions", []):
         for a in anclas(M, d["id"]):
@@ -321,11 +331,12 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
 
 
 def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: set[str] | None = None,
-            marcados: set[str] | None = None, naranja: set[str] | None = None) -> list[dict[str, Any]]:
+            marcados: set[str] | None = None, naranja: set[str] | None = None,
+            uniones: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """M: estructura de la vista (Vista.model); S: estado observado (Vista.state()); sel y marcados, solo al editar:
     los elementos seleccionados y los que tienen un diagnóstico; naranja, los que parpadean tras un error (en la fase
-    encendida del parpadeo). Devuelve dónde ha quedado cada acción
-    ({id, etapa, rect}), para que el editor las encuentre con el ratón."""
+    encendida del parpadeo). Devuelve dónde ha quedado cada acción ({id, etapa, rect, …}), para que el editor las
+    encuentre con el ratón; en `uniones`, si se da, los trazos que unen cada etapa con sus acciones."""
     scene.clear()
     cajas: list[dict[str, Any]] = []
     pt = _Pintor(scene)
@@ -433,7 +444,8 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
             if flag:
                 pt.text(x, y + H + 13, pt.seg(label), 10, color, Z_STEP, "middle", tip)
         unidas = [d for d in M.get("draftActions", []) if d.get("etapa") == s["id"]]  # sin completar, al final de la fila
-        _acciones(pt, x, y, s["actions"] + unidas, S, tmp, cajas, s["id"], marcadas, s.get("actionLayout", "fila"))
+        _acciones(pt, x, y, s["actions"] + unidas, S, tmp, cajas, s["id"], marcadas, s.get("actionLayout", "fila"),
+                  uniones=uniones, resaltar=f"enlaceacc:{s['id']}" in (sel or ()))
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
         x, y = pos[m["id"]]
         act = bool((S.get("macros") or {}).get(m["id"]))
@@ -444,9 +456,13 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         pt.line(x - H, y - H + MARK, x + H, y - H + MARK, pt.pen("text"), Z_STEP + 0.01, tip)
         pt.line(x - H, y + H - MARK, x + H, y + H - MARK, pt.pen("text"), Z_STEP + 0.01, tip)
         pt.text(x, y + 5, pt.seg(nombre(m["id"], m["id"])), 16, "text", Z_STEP, "middle", tip)
-    for d in M.get("draftActions", []):  # acciones sueltas: su lado izquierdo está en (x, y)
+    grupos: dict[str, list[dict[str, Any]]] = {}
+    for d in M.get("draftActions", []):  # acciones sueltas: las de un grupo, juntas desde la posición de la primera
         if not d.get("etapa"):
-            _caja_accion(pt, d["x"] + SX, d["y"], d, S, tmp, cajas, "", marcadas, suelta=True)
+            grupos.setdefault(d.get("grupo") or d["id"], []).append(d)
+    for g, miembros in grupos.items():
+        _acciones(pt, miembros[0]["x"] + SX, miembros[0]["y"], miembros, S, tmp, cajas, "", marcadas,
+                  (M.get("actionLayouts") or {}).get(g, "fila"), suelto=True, grupo=g)
     if sel or marcados or naranja or M.get("drafts"):
         _realces(pt, M, set(sel or ()), set(marcados or ()), set(naranja or ()))
     return cajas
@@ -518,53 +534,80 @@ def _ancho_accion(a: dict[str, Any]) -> float:
     return max(w, 12 + 5 + _Pintor.ancho(marca, 13) + 8) if marca else w
 
 
-def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S: dict[str, Any],
-              tmp: dict[str, list[dict[str, Any]]], cajas: list[dict[str, Any]] | None = None, etapa: str = "",
-              marcadas: set[str] = frozenset(), disposicion: str = "fila") -> None:
-    """Acciones a la derecha de la etapa, del alto de la etapa. Tres colocaciones (figuras (1)–(3) de la norma): «fila»
-    (por defecto; cajas contiguas, la representación (2)), «fila-separada» (cajas separadas, unidas a una línea común que
-    sale de la etapa) y «columna» (una debajo de otra, unidas por una línea vertical que sale de la etapa). Anota en
-    `cajas` el rectángulo de cada una; las de `marcadas` («accion:ID», al editar) se resaltan."""
+def _geometria_acciones(x: float, y: float, actions: list[dict[str, Any]], disposicion: str,
+                        suelto: bool = False) -> tuple[list[tuple[dict[str, Any], float, float, float]], list[list[tuple[float, float]]]]:
+    """Dónde va cada acción ({acción, x, y del centro, ancho}) y los trazos que las unen entre sí y con la etapa
+    (polilíneas). Tres colocaciones (figuras (1)–(3) de la norma): «fila» (por defecto; cajas contiguas, la
+    representación (2)), «fila-separada» (cajas separadas, unidas a una línea común que sale de la etapa) y «columna»
+    (una debajo de otra, unidas por una línea vertical que sale de la etapa). Una etapa está en (x, y) y las acciones
+    salen de su lado derecho; un grupo suelto empieza en (x, y), el punto medio de su lado izquierdo."""
+    ax = x if suelto else x + H + ACT_LINK
+    union: list[list[tuple[float, float]]] = [] if suelto else [[(x + H, y), (ax, y)]]
     if not actions:
-        return
-    ax = x + H + ACT_LINK
-    linea = pt.pen("text")
-    pt.line(x + H, y, ax, y, linea, Z_STEP)
+        return [], union
+    bx = ax - ACT_LINK / 2
     if disposicion == "columna":
         ancho, ys = max(_ancho_accion(a) for a in actions), [y]
         for previa, a in zip(actions, actions[1:]):  # el hueco deja sitio a las marcas de las dos cajas vecinas
             ys.append(ys[-1] + 2 * H + max(ACT_COL, _extra(previa)[1] + _extra(a)[0] + 4))
-        bx = x + H + ACT_LINK / 2
         if len(ys) > 1:
-            pt.line(bx, y, bx, ys[-1], linea, Z_STEP)
-            for cy in ys[1:]:
-                pt.line(bx, cy, ax, cy, linea, Z_STEP)
-        for a, cy in zip(actions, ys):
-            _caja_accion(pt, ax, cy, a, S, tmp, cajas, etapa, marcadas, ancho=ancho)
-        return
+            union.append([(bx, y), (bx, ys[-1])])
+            union += [[(bx, cy), (ax, cy)] for cy in (ys if suelto else ys[1:])]
+        return [(a, ax, cy, max(ancho, _ancho_accion(a))) for a, cy in zip(actions, ys)], union
     if disposicion == "fila-separada":
-        entradas = []
+        cajas, entradas = [], []
         for i, a in enumerate(actions):
             if i:
                 ax += ACT_GAP
                 entradas.append(ax - 14)
-            ax += _caja_accion(pt, ax, y, a, S, tmp, cajas, etapa, marcadas)
+            w = _ancho_accion(a)
+            cajas.append((a, ax, y, w))
+            ax += w
         if entradas:
-            bx, yb = x + H + ACT_LINK / 2, y + H + ACT_BUS
-            pt.poly([(bx, y), (bx, yb), (entradas[-1], yb)], linea, Z_STEP)
-            for ex in entradas:
-                pt.poly([(ex, yb), (ex, y), (ex + 14, y)], linea, Z_STEP)
-        return
+            yb = y + H + ACT_BUS
+            union.append([(bx, y), (bx, yb), (entradas[-1], yb)])
+            if suelto:
+                union.append([(bx, y), (cajas[0][1], y)])
+            union += [[(ex, yb), (ex, y), (ex + 14, y)] for ex in entradas]
+        return cajas, union
+    cajas = []
     for a in actions:
-        ax += _caja_accion(pt, ax, y, a, S, tmp, cajas, etapa, marcadas)
+        w = _ancho_accion(a)
+        cajas.append((a, ax, y, w))
+        ax += w
+    return cajas, union
+
+
+def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S: dict[str, Any],
+              tmp: dict[str, list[dict[str, Any]]], cajas: list[dict[str, Any]] | None = None, etapa: str = "",
+              marcadas: set[str] = frozenset(), disposicion: str = "fila", suelto: bool = False,
+              grupo: str = "", uniones: list[dict[str, Any]] | None = None, resaltar: bool = False) -> None:
+    """Las acciones de una etapa (a la derecha de ella, del alto de la etapa) o de un grupo suelto (desde (x, y)), con la
+    colocación dada (ver `_geometria_acciones`). Anota en `cajas` el rectángulo de cada una y en `uniones` los trazos de
+    la etapa a sus acciones (para seleccionarlos); las de `marcadas` («accion:ID», al editar) se resaltan y, con
+    `resaltar`, el enlace de la etapa a sus acciones."""
+    if not actions:
+        return
+    colocadas, union = _geometria_acciones(x, y, actions, disposicion, suelto)
+    linea = pt.pen("text")
+    for tramo in union:
+        pt.poly([(float(a), float(b)) for a, b in tramo], linea, Z_STEP)
+    if not suelto and uniones is not None:
+        uniones.append({"id": f"enlaceacc:{etapa}", "trazos": union})
+    if resaltar:
+        for tramo in union:
+            pt.poly([(float(a), float(b)) for a, b in tramo], pt.pen("accent", 4), Z_EDIT)
+    cabeza = actions[0].get("id", "")
+    for a, ax, cy, w in colocadas:
+        _caja_accion(pt, ax, cy, a, S, tmp, cajas, etapa, marcadas, suelta=suelto, ancho=w, grupo=grupo, cabeza=cabeza)
 
 
 def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[str, Any],
                  tmp: dict[str, list[dict[str, Any]]], cajas: list[dict[str, Any]] | None, etapa: str,
-                 marcadas: set[str], suelta: bool = False, ancho: float = 0) -> float:
+                 marcadas: set[str], suelta: bool = False, ancho: float = 0, grupo: str = "", cabeza: str = "") -> float:
     """Una acción con su caja (a la derecha de `ax`, centrada en `y`) y sus marcas: condición, flecha al activar o al
-    desactivar, banderita de evento. Un borrador (acción sin completar o suelta, solo al editar) lleva el borde
-    discontinuo y «?» en lo que falta. `ancho` es el mínimo (las cajas de una columna miden lo mismo). Devuelve su ancho."""
+    desactivar, banderita de evento. Una acción suelta o sin completar se dibuja como cualquier otra, con «?» en lo que
+    falta. `ancho` es el mínimo (las cajas de una columna miden lo mismo). Devuelve su ancho."""
     top, bottom = y - H, y + H
     force = a["kind"] == "force"
     borrador = bool(a.get("borrador"))
@@ -575,12 +618,11 @@ def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[st
     pt.text(ax + 12, y + 5, a["text"], 15, "text", Z_STEP)
     w = max(ancho, _ancho_accion(a))
     outer = (pt.pen("virt", 2.2) if force else pt.pen("ok", 2.6)) if on else pt.pen("text")
-    if borrador:
-        outer = pt.pen("glow", 1.8, (6, 4))
     pt.rect(ax, top, w, 2 * H, outer, Z_STEP - 0.02, "panel",
             "Acción sin completar: no se simula" if borrador else None)
     if cajas is not None and not force:
-        cajas.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H), "borrador": borrador, "suelta": suelta})
+        cajas.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H), "borrador": borrador, "suelta": suelta,
+                      "grupo": grupo, "cabeza": cabeza or a["id"]})
     if f"accion:{a.get('id')}" in marcadas:
         pt.rect(ax - 3, top - 3, w + 6, 2 * H + 6, pt.pen("accent", 1.6, (5, 3)), Z_EDIT)
     if f"parpadeo:{a.get('id')}" in marcadas:  # parpadeo naranja de un error
@@ -605,6 +647,65 @@ def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[st
         we = pt.text(mx + 5, top - 11, a.get("event"), 13, "text", Z_STEP)
         _estado_temporal(pt, mx + 5 + we + 8, top - 11, a.get("condRef"), tmp, Z_STEP)
     return w
+
+
+# Las cinco fichas de la carpeta «Acciones» y las del menú de tipo: nombre, ayuda y la acción de ejemplo que se dibuja
+FICHAS_ACCION = (("continua", "Continua"), ("condicionada", "Condicionada"), ("activacion", "Al activar"),
+                 ("desactivacion", "Al desactivar"), ("evento", "Por evento"))
+
+
+def _accion_ficha(tipo: str) -> dict[str, Any]:
+    q = [{"t": "Q"}]
+    if tipo in ("continua", "condicionada"):
+        return {"id": "ficha", "kind": "continuous", "text": q, "cond": [{"t": "c"}] if tipo == "condicionada" else None}
+    asigna = [{"t": "Q := 1"}]
+    return {"id": "ficha", "kind": "stored", "text": asigna,
+            "trigger": {"activacion": "activation", "desactivacion": "deactivation", "evento": "event"}[tipo],
+            "event": [{"t": "↑a"}] if tipo == "evento" else None}
+
+
+def _escena_ficha(tipo: str) -> QGraphicsScene:
+    sc = QGraphicsScene()
+    _caja_accion(_Pintor(sc), 0, 0, _accion_ficha(tipo), {}, {}, None, "", frozenset())
+    return sc
+
+
+def ficha_accion(tipo: str, escala: float = 1.0, dpr: float = 1.0, opacidad: float = 1.0,
+                 comun: bool = False) -> tuple[QPixmap, QPoint]:
+    """Una acción de ese tipo dibujada con la misma función que el diagrama (`_caja_accion`), a la escala dada, y el punto
+    de la imagen que va bajo el puntero al arrastrarla (el centro de su lado izquierdo, que es donde se coloca). Con
+    `comun`, el lienzo es el mismo para los cinco tipos (la caja queda en el mismo sitio en todos: así se alinean los
+    iconos de una lista)."""
+    sc = _escena_ficha(tipo)
+    r = sc.itemsBoundingRect()
+    if comun:
+        for t, _ in FICHAS_ACCION:
+            r = r.united(_escena_ficha(t).itemsBoundingRect())
+    r = r.adjusted(-4, -4, 4, 4)
+    pm = QPixmap(max(1, round(r.width() * escala * dpr)), max(1, round(r.height() * escala * dpr)))
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+    p.setOpacity(opacidad)
+    sc.render(p, QRectF(0, 0, r.width() * escala, r.height() * escala), r)
+    p.end()
+    return pm, QPoint(round(-r.left() * escala), round(-r.top() * escala))
+
+
+def icono_accion(tipo: str, ancho: int = 84, alto: int = 64) -> QIcon:
+    """El icono de una ficha de acción (el mismo lienzo para todas), ajustado a ese tamaño."""
+    pm, _ = ficha_accion(tipo, 1.0, 2.0, comun=True)
+    return QIcon(pm.scaled(ancho * 2, alto * 2, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+
+
+class _EstiloIconos(QProxyStyle):
+    """Iconos más grandes en un menú (los de los tipos de acción, que se ven dibujados: a 16 px no se reconocerían)."""
+
+    def pixelMetric(self, metric: Any, option: Any = None, widget: Any = None) -> int:  # noqa: N802
+        if metric == QStyle.PixelMetric.PM_SmallIconSize:
+            return 48
+        return super().pixelMetric(metric, option, widget)
 
 
 ZOOM_MIN, ZOOM_MAX, ZOOM_PASO = 0.1, 8.0, 1.15
@@ -633,6 +734,9 @@ class VistaDiagrama(QGraphicsView):
         self.goma = None  # línea provisional de un enlace que se está trazando
         self.cuadro = None  # rectángulo del lazo de selección que se está trazando
         self._marcas: list[Any] = []
+        self.iman: Any = None  # el resalte del lado donde se pegaría una acción
+        self.uniones_acciones: list[dict[str, Any]] = []  # los trazos de cada etapa a sus acciones (para seleccionarlos)
+        self.cajas_acciones: list[dict[str, Any]] = []
         self._origen = False  # en edición, hasta que se usa el ratón, el dibujo se queda arriba a la izquierda
 
     def modo_edicion(self, on: bool, controlador: Any = None) -> None:
@@ -669,6 +773,16 @@ class VistaDiagrama(QGraphicsView):
                                          QBrush(QColor(COL["accent"] if r == 6 else COL["panel"])))
             it.setZValue(Z_EDIT + 2)
             self._marcas.append(it)
+
+    def marcar_iman(self, lado: tuple[QPointF, QPointF] | None) -> None:
+        """Resalta el lado de una acción donde se pegaría la que se arrastra (None lo quita)."""
+        if self.iman is not None and self.iman.scene() is self.scene():
+            self.scene().removeItem(self.iman)
+        self.iman = None
+        if lado is not None:
+            a, b = lado
+            self.iman = self.scene().addLine(a.x(), a.y(), b.x(), b.y(), _Pintor.pen("accent", 5))
+            self.iman.setZValue(Z_EDIT + 2)
 
     def trazo_provisional(self, a: QPointF | None, b: QPointF | None = None) -> None:
         """Línea de ayuda mientras se traza un enlace (None la quita)."""
@@ -728,8 +842,9 @@ class VistaDiagrama(QGraphicsView):
         menu.exec(event.globalPos())
 
     def menu_contextual(self, opciones: list[tuple[str, Any]]) -> QMenu:
-        """El menú del botón derecho: «-» es un separador, una lista en lugar de la función es un submenú y lo que el controlador marca en `menu_marcadas` (el tipo
-        actual de una acción, como «Etapa inicial» en una etapa) lleva su marca."""
+        """El menú del botón derecho: «-» es un separador, una lista en lugar de la función es un submenú (sus opciones
+        pueden llevar un tercer elemento, el icono) y lo que el controlador marca en `menu_marcadas` (el tipo actual de
+        una acción, como «Etapa inicial» en una etapa) lleva su marca."""
         menu = QMenu(self)
         marcadas = getattr(self.controlador, "menu_marcadas", set())
         for texto, accion in opciones:
@@ -738,8 +853,12 @@ class VistaDiagrama(QGraphicsView):
                 continue
             if isinstance(accion, list):  # un submenú: sus opciones, con las marcadas del controlador
                 sub = menu.addMenu(texto)
-                for t, f in accion:
-                    a = sub.addAction(t, f)
+                if any(len(o) > 2 for o in accion):  # con iconos de verdad (dibujados): más grandes
+                    estilo = _EstiloIconos(sub.style())
+                    estilo.setParent(sub)
+                    sub.setStyle(estilo)
+                for t, f, *icono in accion:
+                    a = sub.addAction(icono[0], t, f) if icono else sub.addAction(t, f)
                     if t in marcadas:
                         a.setCheckable(True)
                         a.setChecked(True)
@@ -816,7 +935,9 @@ class VistaDiagrama(QGraphicsView):
         self.goma = None
         self.cuadro = None
         self._marcas = []
-        self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados, naranja)
+        self.uniones_acciones = []
+        self.iman = None
+        self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados, naranja, self.uniones_acciones)
         r = self.scene().itemsBoundingRect().adjusted(-14, -14, 14, 14)
         self.scene().setSceneRect(r.united(self.area_minima) if self.area_minima else r)
         if not self._manual:
@@ -880,10 +1001,17 @@ class VistaDiagrama(QGraphicsView):
 
     def dragMoveEvent(self, event: Any) -> None:  # noqa: N802
         if self.controlador is not None and event.mimeData().hasText():
+            if hasattr(self.controlador, "sobrevolar"):  # una acción que se acerca a otra: el lado donde se pegaría
+                self.controlador.sobrevolar(event.mimeData().text(), self.mapToScene(event.position().toPoint()))
             event.acceptProposedAction()
+
+    def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802
+        self.marcar_iman(None)
+        super().dragLeaveEvent(event)
 
     def dropEvent(self, event: Any) -> None:  # noqa: N802
         """Un elemento arrastrado desde la paleta se coloca donde se suelta."""
+        self.marcar_iman(None)
         if self.controlador is not None and event.mimeData().hasText():
             self.controlador.colocar(event.mimeData().text(), self.mapToScene(event.position().toPoint()))
             event.acceptProposedAction()

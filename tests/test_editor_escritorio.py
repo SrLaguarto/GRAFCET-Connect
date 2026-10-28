@@ -74,6 +74,69 @@ class Nucleo(unittest.TestCase):
         self.assertEqual(ed.undeclared_variables("marcha AND", "g"), [], "con error de sintaxis no se ofrece crear nada")
         self.assertEqual((ed.revision, ed.model["expressions"]), (antes, []))
 
+    def test_SEDI98_acciones_sueltas_en_grupo_en_el_nucleo(self):
+        """REQ-ACT-01, REQ-DAT-01: el editor guarda en `presentation.draftActions` los grupos de acciones sueltas (`grupo`,
+        `orden`) y su colocación en `actionLayouts`; `update_draft_actions` cambia varias a la vez en una operación; un
+        grupo con menos de dos miembros se disuelve; borrar una etapa deja sus acciones sin completar juntas; solo
+        presentación: la revisión semántica no cambia."""
+        ed = Editor(new_grafcet_document("m"))
+        s0 = ed.add_step("g", "0", True)
+        revision = ed.revision
+        self.assertIn("condicionada", Editor.DRAFT_TIPOS)
+        a = ed.add_draft_action((10, 20), {"tipo": "condicionada"})
+        b = ed.add_draft_action((10, 20), {"grupo": "k1", "orden": 1})
+        c = ed.add_draft_action((10, 20), {"grupo": "k1", "orden": 0, "tipo": "evento"})
+        self.assertEqual([d.get("grupo") for d in ed.draft_actions()], [None, "k1", "k1"])
+        with self.assertRaises(DiagnosticError):
+            ed.add_draft_action((0, 0), {"grupo": 3})
+        with self.assertRaises(DiagnosticError):
+            ed.add_draft_action((0, 0), {"orden": "x"})
+        with self.assertRaises(DiagnosticError):
+            ed.add_draft_action((0, 0), {"orden": True})
+        n = len(ed.undo_stack)
+        ed.update_draft_actions({a: {"grupo": "k1", "orden": 2, "x": 40, "y": 60}, b: {"x": 40, "y": 60}})
+        self.assertEqual(len(ed.undo_stack), n + 1, "una operación")
+        self.assertEqual([(d["x"], d["y"]) for d in ed.draft_actions()], [("40", "60"), ("40", "60"), ("10", "20")])
+        # una colocación para el grupo y para la etapa; un identificador que no es ni una cosa ni la otra no vale
+        ed.set_action_layout("k1", "columna")
+        ed.set_action_layout(s0, "fila-separada")
+        self.assertEqual(ed.action_layouts(), {"k1": "columna", s0: "fila-separada"})
+        with self.assertRaises(DiagnosticError):
+            ed.set_action_layout("k9", "columna")
+        # con un solo miembro, el grupo se disuelve y su colocación se olvida
+        ed.delete_draft_actions([a, b])
+        self.assertEqual(ed.draft_actions(), [{"id": c, "x": "10", "y": "20", "tipo": "evento"}])
+        self.assertEqual(ed.action_layouts(), {s0: "fila-separada"})
+        ed.undo()
+        self.assertEqual((len(ed.draft_actions()), ed.action_layouts()), (3, {"k1": "columna", s0: "fila-separada"}))
+        ed.redo()
+        # unir a una etapa manda la etapa: el grupo desaparece
+        d = ed.add_draft_action((0, 0), {"grupo": "k2", "orden": 0})
+        e2 = ed.add_draft_action((0, 0), {"grupo": "k2", "orden": 1})
+        ed.update_draft_actions({d: {"etapa": s0, "grupo": None}, e2: {"etapa": s0, "grupo": None}})
+        self.assertEqual([x.get("grupo") for x in ed.draft_actions()], [None, None, None])
+        # borrar la etapa: sus acciones sin completar quedan juntas (un grupo) y con la colocación que tenían
+        ed.update_draft_actions({d: {"orden": 1}, e2: {"orden": 0}})
+        ed.delete([s0])
+        resto = ed.draft_actions()
+        self.assertTrue(all("etapa" not in x for x in resto))
+        sueltas = [x for x in resto if x["id"] in (d, e2)]
+        gid = sueltas[0]["grupo"]
+        self.assertTrue(gid and all(x["grupo"] == gid for x in sueltas))
+        self.assertEqual(sorted(sueltas, key=lambda x: x["orden"])[0]["id"], e2, "conservan su orden")
+        self.assertEqual(ed.action_layouts(), {gid: "fila-separada"}, "y su colocación, ahora la del grupo")
+        self.assertEqual(ed.revision, ed.revision)
+        self.assertTrue(ed.validate().can_simulate)
+        # presentación: ninguna operación de grupos cambia el modelo
+        ed2 = Editor(new_grafcet_document("m2"))
+        ed2.add_step("g", "0", True)
+        rev = ed2.revision
+        x1 = ed2.add_draft_action((0, 0))
+        x2 = ed2.add_draft_action((0, 0))
+        ed2.update_draft_actions({x1: {"grupo": "k", "orden": 0}, x2: {"grupo": "k", "orden": 1}})
+        ed2.set_action_layout("k", "columna")
+        self.assertEqual(ed2.revision, rev)
+
 
 class Notacion(unittest.TestCase):
     def test_SEDI39_acciones_y_variables_en_el_nucleo(self):
@@ -241,6 +304,14 @@ class Interfaz(unittest.TestCase):
         self.w.deleteLater()
         self.tmp.cleanup()
 
+    def soltar_ficha(self, tipo, p, w=None):
+        """Suelta una ficha de la paleta en el punto p del dibujo (el evento que genera Qt al terminar el arrastre)."""
+        w = w or self.w
+        mime = QMimeData()
+        mime.setText(tipo)
+        w.diagrama.dropEvent(QDropEvent(QPointF(w.diagrama.mapFromScene(p)), Qt.DropAction.CopyAction, mime,
+                                        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+
     # -- el grafcet de la validación: E0 -marcha-> E1 -paro-> E0 ---------------------------------------
     def secuencial(self, w=None):
         """Lo construye con los gestos del ratón sobre el controlador: etapa inicial, transición, etapa..."""
@@ -248,10 +319,8 @@ class Interfaz(unittest.TestCase):
         w.nuevo()
         e = w.edicion
 
-        def clic(h, x, y):
-            e.herramienta = h
-            e.prensar(QPointF(100 + x, y))
-            e.soltar(QPointF(100 + x, y))
+        def clic(h, x, y):  # soltar la ficha de la paleta en el dibujo (los elementos solo se colocan arrastrando)
+            e.colocar(h, QPointF(100 + x, y))
 
         def enlace(a, b):
             """Del punto de abajo de a al punto de arriba de b (los dos con el ratón)."""
@@ -479,10 +548,8 @@ class Interfaz(unittest.TestCase):
         e, d = w.edicion, w.diagrama
         self.assertIs(d.controlador, e)
         self.assertEqual((d.dragMode(), d.rejilla), (d.DragMode.NoDrag, True))
-        w.herramienta("etapa")
-        QTest.mouseClick(d.viewport(), Qt.MouseButton.LeftButton, pos=d.mapFromScene(QPointF(213, 97)))
+        self.soltar_ficha("etapa", QPointF(213, 97))
         self.assertEqual([(s["label"], s["x"], s["y"]) for s in e.M["steps"]], [("0", 120.0, 100.0)])
-        w.herramienta("seleccionar")
         QTest.mouseClick(d.viewport(), Qt.MouseButton.LeftButton, pos=d.mapFromScene(QPointF(220, 100)))
         self.assertEqual(e.sel, [e.M["steps"][0]["id"]])
         textos = [it.toPlainText() for it in d.scene().items() if hasattr(it, "toPlainText")]
@@ -521,7 +588,8 @@ class Interfaz(unittest.TestCase):
         self.assertIsNone(ancla_en(e.M, c), "el centro no es un punto de unión")
         # Pasar el puntero marca los puntos del elemento
         e.pasar(QPointF(c.x() + 2, c.y() + H + 2))
-        self.assertEqual(len(w.diagrama._marcas), 2)
+        self.assertEqual(len(w.diagrama._marcas), 3, "la etapa, además, tiene su punto del centro del lado derecho")
+        self.assertEqual({a["lado"] for a in anclas(e.M, ids["0"])}, {"arriba", "abajo", "der"})
         # Del punto de abajo de E0 al punto de arriba de t1: E0 -> t1
         t1 = centro(e.M, ts["t1"])
         e.herramienta = "seleccionar"
@@ -546,8 +614,8 @@ class Interfaz(unittest.TestCase):
         w.nuevo()
         e, d = w.edicion, w.diagrama
         self.assertFalse(w.dock.isHidden())
-        self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())], ["Etapa", "Transición", "Simultaneidad", "Acción"],
-                         "Seleccionar no es un elemento y la etapa inicial es una etapa con otro tipo")
+        self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())], ["Etapa", "Transición", "Simultaneidad"],
+                         "Seleccionar no es un elemento y la etapa inicial es una etapa con otro tipo; las acciones, en su carpeta")
         pedidas = []
         e.pedir_condicion = pedidas.append
         self.assertEqual(w.paleta.mimeData([w.paleta.item(1)]).text(), "transicion")
@@ -561,10 +629,10 @@ class Interfaz(unittest.TestCase):
                          [("0", False, 200.0, 60.0), ("1", False, 200.0, 220.0)])
         self.assertEqual([(t["label"], t["y"]) for t in e.M["transitions"]], [("t1", 140.0)])
         self.assertEqual(pedidas, [], "no pide la receptividad")
-        w.paleta.setCurrentRow(0)
-        self.assertEqual(e.herramienta, "etapa")
-        e.prensar(QPointF(500, 60))  # una vez colocada, vuelve a no haber herramienta
-        self.assertEqual((e.herramienta, len(e.M["steps"]), w.paleta.currentRow()), ("seleccionar", 3, -1))
+        w.paleta.setCurrentRow(0)  # un clic en una ficha no cambia la herramienta ni coloca nada
+        self.assertEqual(e.herramienta, "seleccionar")
+        e.prensar(QPointF(500, 60))
+        self.assertEqual((e.herramienta, len(e.M["steps"])), ("seleccionar", 2))
 
     def test_SEDI13_propiedades_de_la_etapa(self):
         """REQ-EDT-02: al seleccionar una etapa, el panel de la izquierda muestra su etiqueta y su tipo, editables."""
@@ -889,8 +957,7 @@ class Interfaz(unittest.TestCase):
 
         def uno(coleccion, etiqueta):
             return next(x["id"] for x in e.M[coleccion] if x["label"] == etiqueta)
-        w.herramienta("etapa")
-        QTest.mouseClick(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, pos(QPointF(420, 60)))
+        self.soltar_ficha("etapa", QPointF(420, 60))
         e0 = uno("steps", "0")
         e.tipo_etapa(e0, True)
         # Hacia abajo, siempre arrastrando de un punto de union a un hueco: t1, E1, t2, E2
@@ -966,8 +1033,7 @@ class Interfaz(unittest.TestCase):
         # E4 -t7-> E5 -t8-> E6 -t9-> E7, y t10 a la derecha de E5, con su salida a E5 (la rama que vuelve)
         for y, tipo in ((60, "etapa"), (140, "transicion"), (220, "etapa"), (300, "transicion"), (380, "etapa"),
                         (460, "transicion"), (540, "etapa")):
-            e.herramienta = tipo
-            e.prensar(QPointF(100 + 100, y))
+            e.colocar(tipo, QPointF(100 + 100, y))
         steps = [s["id"] for s in e.M["steps"]]
         ts = [t["id"] for t in e.M["transitions"]]
         for a, b in ((steps[0], ts[0]), (ts[0], steps[1]), (steps[1], ts[1]), (ts[1], steps[2]), (steps[2], ts[2]),
@@ -1452,12 +1518,18 @@ class Interfaz(unittest.TestCase):
             d.tipo.setCurrentIndex(d.tipo.findData(datos["tipo"]))
             d.variable.setCurrentText(datos["variable"])
             d.valor.setText(datos.get("valor", ""))
-            if datos["tipo"] == "evento":
-                d.evento.colocar(bloques.var("I02", "input"))
-                d.evento.lienzo.soltar((), bloques.nuevo("sube"))  # un flanco sobre un bloque ocupado lo envuelve
-                self.assertEqual(d.evento.texto(), "↑I02")
             d.aceptar()
             self.assertEqual(d.result(), d.DialogCode.Accepted, d.msg.text())
+            if datos["tipo"] == "evento":  # el evento se programa en la pestaña Bloques (la acción es un borrador hasta entonces)
+                borrador = e.acciones(s1)[0]
+                self.assertTrue(borrador["borrador"] and e.faltan(borrador) == ["evento"])
+                e.accion = borrador["id"]
+                e.seleccionar([s1])
+                self.assertEqual(w.props.objetivo_bloques(), ("accion", borrador["id"], "evento"))
+                w.props.prog.colocar(bloques.var("I02", "input"))
+                w.props.prog.lienzo.soltar((), bloques.nuevo("sube"))  # un flanco sobre un bloque ocupado lo envuelve
+                self.assertEqual(w.props.prog.texto(), "↑I02")
+                self.assertFalse(e.acciones(s1)[0].get("borrador"), "con su evento, pasa al modelo")
         self.assertEqual([e.resumen_accion(x) for x in e.acciones(s1)],
                          ["CT := CT + 1   (con ↑I02)", "Q00   (continua)", "Q01   (continua)"])
         pasos = [(1, {"I00": True}), (2, {"I00": False}), (3, {"I02": True}), (4, {"I02": False}), (5, {"I02": True}),
@@ -1600,19 +1672,15 @@ class Interfaz(unittest.TestCase):
         self.assertNotIn("D-TIPO", [d.code for d in e.ed.validate().diagnostics])
 
     def test_SEDI48_dialogo_de_acciones_vista_previa_y_avisos(self):
-        """REQ-ACT-01, REQ-EDT-02: el diálogo de acciones muestra la condición y el evento en la notación de la norma;
-        una variable no válida para el tipo se avisa y se guarda al aceptar por segunda vez; un X1 ambiguo se avisa."""
+        """REQ-ACT-01, REQ-EDT-02: el diálogo de acciones ya no lleva programador (la condición y el evento se programan en
+        la pestaña Bloques); una variable no válida para el tipo se avisa y se guarda al aceptar por segunda vez; un X1
+        ambiguo del valor se avisa."""
         from escritorio.acciones import DialogoAccion
         e, ids, ts = self.secuencial()
         d = DialogoAccion(self.w, e, ids["1"])
+        self.assertFalse(hasattr(d, "cond") or hasattr(d, "evento"), "sin programador dentro")
         d.variable.setCurrentText("paro")  # una entrada: no se puede escribir (ni se ofrece en la lista)
-        d.cond.poner("marcha AND NOT paro")
-        d.cond.cambiado.emit(d.cond.texto())  # lo que hace un clic en un bloque
-        self.assertIn("overline", d.v_cond.text())
         d.tipo.setCurrentIndex(d.tipo.findData("evento"))
-        d.evento.poner("↑marcha")
-        d.evento.cambiado.emit(d.evento.texto())
-        self.assertIn("↑", d.v_evento.text())
         d.valor.setText("1")
         n = len(e.ed.undo_stack)
         d.aceptar()
@@ -1637,12 +1705,10 @@ class Interfaz(unittest.TestCase):
         # X1 ambiguo
         e.ed.add_step(e.raiz, "E1")
         d.valor.setText("X1")  # oculto en una continua: no cuenta para el aviso
-        d.cond.poner("")
-        d.cond.cambiado.emit(d.cond.texto())
         self.assertNotIn("puede ser la etapa", d.msg.text())
+        d.tipo.setCurrentIndex(d.tipo.findData("activacion"))
         d.valor.setText("")
-        d.cond.poner("X1")
-        d.cond.cambiado.emit(d.cond.texto())
+        d.valor.setText("X1")
         self.assertIn("puede ser la etapa E1 o la etapa 1", d.msg.text())
         self.assertIn("active(`1`)", d.msg.text())
         e.seleccionar([ts["t1"]])  # y el panel de la transición avisa igual
@@ -1705,9 +1771,9 @@ class Interfaz(unittest.TestCase):
 
     def test_SEDI53_deshacer_cambios_de_bloques(self):
         """REQ-EDT-02: en el panel de la transición cada cambio de bloques es una operación del editor y se deshace con su
-        deshacer; en el diálogo de acciones, que aplica al aceptar, el programador tiene su historial local."""
+        deshacer; un programador sin editor detrás tiene su historial local."""
         from escritorio import bloques
-        from escritorio.acciones import DialogoAccion
+        from escritorio.bloques import Programador
         from PySide6.QtGui import QShortcut
         e, ids, ts = self.secuencial()
         e.seleccionar([ts["t1"]])
@@ -1723,28 +1789,27 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(prog.texto(), "NOT marcha")
         prog.al_deshacer()  # lo que usa la ventana ampliada
         self.assertEqual(prog.texto(), "marcha")
-        # el diálogo de acciones
-        d = DialogoAccion(self.w, e, ids["1"])
-        self.assertTrue(d.cond.historial and len(d.cond.findChildren(QShortcut)) == 3, "Ctrl+Z, Ctrl+Mayús+Z, Ctrl+Y")
+        # un programador con historial local (el que no depende del deshacer del editor)
+        cond = Programador(e.fuente_bloques, historial=True)
+        self.assertTrue(cond.historial and len(cond.findChildren(QShortcut)) == 3, "Ctrl+Z, Ctrl+Mayús+Z, Ctrl+Y")
         emitidos = []
-        d.cond.cambiado.connect(emitidos.append)
-        d.cond.colocar(bloques.var("marcha", "input"))
-        d.cond.lienzo.soltar((), bloques.nuevo("no"))
-        self.assertEqual(d.cond.texto(), "NOT marcha")
-        self.assertIn("overline", d.v_cond.text())
-        d.cond.deshacer()
-        self.assertEqual(d.cond.texto(), "marcha")
-        d.cond.deshacer()
-        self.assertEqual((d.cond.texto(), d.v_cond.text()), ("", "<i>—</i>"))
-        d.cond.deshacer()  # nada más que deshacer
-        self.assertEqual(d.cond.texto(), "")
-        d.cond.rehacer()
-        d.cond.rehacer()
-        self.assertEqual(d.cond.texto(), "NOT marcha")
+        cond.cambiado.connect(emitidos.append)
+        cond.colocar(bloques.var("marcha", "input"))
+        cond.lienzo.soltar((), bloques.nuevo("no"))
+        self.assertEqual(cond.texto(), "NOT marcha")
+        cond.deshacer()
+        self.assertEqual(cond.texto(), "marcha")
+        cond.deshacer()
+        self.assertEqual(cond.texto(), "")
+        cond.deshacer()  # nada más que deshacer
+        self.assertEqual(cond.texto(), "")
+        cond.rehacer()
+        cond.rehacer()
+        self.assertEqual(cond.texto(), "NOT marcha")
         self.assertEqual(emitidos, ["marcha", "NOT marcha", "marcha", "", "marcha", "NOT marcha"])
-        d.cond.poner("paro")  # lo que viene de fuera borra el historial
-        d.cond.deshacer()
-        self.assertEqual(d.cond.texto(), "paro")
+        cond.poner("paro")  # lo que viene de fuera borra el historial
+        cond.deshacer()
+        self.assertEqual(cond.texto(), "paro")
 
     def test_SEDI55_ventana_ampliada_sincronizada(self):
         """REQ-EDT-02: «⤢ Ampliar» abre el programador en una ventana propia, no modal, con el mismo texto; los cambios de
@@ -1801,7 +1866,8 @@ class Interfaz(unittest.TestCase):
         w.pestanas.setCurrentIndex(0)
         QApplication.processEvents()
         self.assertTrue(w.props.prog.isHidden())
-        self.assertEqual(w.props.l_bloques.text(), "Elija una transición para programar su receptividad")
+        self.assertEqual(w.props.l_bloques.text(),
+                         "Elija una transición, o una acción condicionada o por evento, para programarla")
         e.seleccionar([ts["t2"]])
         self.assertEqual(w.pestanas.currentIndex(), i, "al seleccionar una transición se activa Bloques")
         self.assertEqual((w.props.prog.texto(), w.props.prog.isHidden()), ("paro", False))
@@ -1865,17 +1931,17 @@ class Interfaz(unittest.TestCase):
         self.assertFalse(w.props.t_abajo.isHidden())
 
     def test_SEDI62_ficha_accion_en_la_paleta(self):
-        """REQ-ACT-01, REQ-EDT-02: la paleta ofrece la ficha «Acción» con su figura (el lado izquierdo, bajo el puntero);
-        soltada en cualquier sitio crea una acción suelta sin abrir ningún diálogo; como herramienta, un clic hace lo
-        mismo y la herramienta vale para una."""
+        """REQ-ACT-01, REQ-EDT-02: la carpeta «Acciones» ofrece la ficha «Continua» con su figura (el lado izquierdo, bajo
+        el puntero); soltada en cualquier sitio crea una acción suelta sin abrir ningún diálogo; «accion» a secas sigue
+        siendo una continua."""
         from escritorio.propiedades import figura
         w = self.w
         e, ids, ts = self.secuencial()
         w.resize(1360, 860)
         w.show()
-        textos = [w.paleta.item(k).text() for k in range(w.paleta.count())]
-        self.assertIn("Acción", textos)
-        pm, punto = figura("accion", 1.0, 1.0)
+        textos = [w.paleta_acciones.item(k).text() for k in range(w.paleta_acciones.count())]
+        self.assertEqual(textos[0], "Continua")
+        pm, punto = figura("accion:continua", 1.0, 1.0)
         self.assertGreater(pm.width(), pm.height(), "un rectángulo de acción, más ancho que alto")
         self.assertTrue(pm.rect().contains(punto))
         self.assertLess(punto.x(), 8, "bajo el puntero, su lado izquierdo (el punto de unión)")
@@ -1887,13 +1953,8 @@ class Interfaz(unittest.TestCase):
         (b,) = e.ed.draft_actions()
         self.assertEqual((b["tipo"], "variable" in b, "etapa" in b), ("continua", False, False))
         self.assertEqual(e.sel, [b["id"]])
-        e.colocar("accion", centro(e.M, ids["1"]))  # sobre una etapa tampoco pide nada: queda suelta
+        e.colocar("accion:continua", centro(e.M, ids["1"]))  # sobre una etapa tampoco pide nada: queda suelta
         self.assertEqual((pedidas, len(e.ed.draft_actions())), ([], 2))
-        # como herramienta: clic en el dibujo
-        w.paleta.setCurrentRow(textos.index("Acción"))
-        self.assertEqual(e.herramienta, "accion")
-        e.prensar(QPointF(900, 600))
-        self.assertEqual((pedidas, e.herramienta, len(e.ed.draft_actions())), ([], "seleccionar", 3))
 
     def test_SEDI63_y_y_o_con_colores_distintos(self):
         """REQ-EDT-02: «y» y «o» siguen en Operadores pero se dibujan con colores distintos entre sí y del resto de
@@ -2050,13 +2111,6 @@ class Interfaz(unittest.TestCase):
         self.assertFalse(w.props.t_crear.isHidden())
         w.props.t_crear.click()
         self.assertIn(("nueva_in", "nueva_in"), prog.opciones("entrada"))
-        # el diálogo de acciones: sus programadores escuchan al editor
-        d = DialogoAccion(w, e, ids["1"])
-        d.cond.elegir_categoria("interna")
-        antes = d.cond.opciones("interna")
-        e.nueva_variable("M7", "internal", {"kind": "bool"})
-        self.assertEqual(d.cond.opciones("interna"), antes + [("M7", "M7")])
-        self.assertEqual(d.cond.paleta.bloques()[0]["n"], antes[0][0] if antes else "M7")
 
     def test_SEDI67_carpetas_en_su_orden_y_temporizadores(self):
         """REQ-EDT-02: las carpetas del programador van en este orden: Operadores, Entradas, Salidas, Etapas (X),
@@ -2202,10 +2256,10 @@ class Interfaz(unittest.TestCase):
         e.enlace = None
 
     def test_SEDI70_soltar_la_ficha_accion_crea_una_accion_suelta(self):
-        """REQ-ACT-01, REQ-EDT-02: la ficha «Acción», soltada en cualquier sitio, crea una acción continua suelta sin
-        variable (se dibuja con «?» y borde de borrador) y con un punto de unión a la izquierda; no abre ningún
+        """REQ-ACT-01, REQ-EDT-02: la ficha «Continua», soltada en cualquier sitio, crea una acción continua suelta sin
+        variable (se dibuja con «?», como cualquier acción) y con un punto de unión a la izquierda; no abre ningún
         diálogo; se mueve arrastrándola; es una operación de deshacer."""
-        from escritorio.diagrama import anclas
+        from escritorio.diagrama import COL, anclas
         w = self.w
         e, ids, ts = self.secuencial()
         pedidas = []
@@ -2230,10 +2284,12 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(len(w.diagrama._marcas), 1)
         e.pasar(QPointF(900, 700))
         self.assertEqual(len(w.diagrama._marcas), 0)
-        # se dibuja con borde discontinuo (el pincel de borrador)
-        rects = [it for it in w.diagrama.scene().items() if hasattr(it, "pen") and it.pen().style() == Qt.PenStyle.CustomDashLine
-                 and abs(it.boundingRect().width() - ancho) < 4]
-        self.assertTrue(rects, "borde discontinuo")
+        # se dibuja como cualquier acción: rectángulo normal, ni discontinuo ni naranja
+        rects = [it for it in w.diagrama.scene().items() if hasattr(it, "pen") and abs(it.boundingRect().width() - ancho) < 4
+                 and abs(it.boundingRect().height() - alto) < 4]
+        self.assertTrue(rects)
+        self.assertTrue(all(it.pen().style() == Qt.PenStyle.SolidLine and it.pen().color().name() != COL["glow"]
+                            for it in rects), "sin borde discontinuo ni naranja")
         # arrastrarla la mueve (una operación de deshacer por arrastre)
         n = len(e.ed.undo_stack)
         e.prensar(QPointF(x + ancho / 2, y + alto / 2))
@@ -2339,10 +2395,12 @@ class Interfaz(unittest.TestCase):
         self.assertNotIn("etapa", e.ed.draft_actions()[0])
 
     def test_SEDI72_tipo_de_accion_por_el_boton_derecho(self):
-        """REQ-ACT-01, REQ-EDT-02: el botón derecho en una acción (suelta o unida) ofrece sus cinco tipos con el actual
-        marcado, «Editar…», «Separar de la etapa» (si está unida) y «Quitar»; no ofrece el forzado. Cambiar a un tipo que
-        pide datos que faltan deja la acción con «?» y abre Editar con el tipo ya puesto; si no falta nada, se cambia en
+        """REQ-ACT-01, REQ-EDT-02: el botón derecho en una acción (suelta o unida) ofrece un submenú «Tipo de acción» con
+        los cinco tipos (icono y nombre; el actual, marcado), «Editar…», «Separar de la etapa» (si está unida) y
+        «Quitar»; no ofrece el forzado. Cambiar a un tipo que pide datos que faltan deja la acción con «?»: si falta el
+        valor se abre Editar; la condición y el evento se programan en la pestaña Bloques. Si no falta nada, se cambia en
         su sitio."""
+        from escritorio.edicion import TEXTO_LIMITADA
         w = self.w
         e, ids, ts = self.secuencial()
         pedidas = []
@@ -2353,22 +2411,27 @@ class Interfaz(unittest.TestCase):
             c = next(c for c in w.diagrama.cajas_acciones if c["id"] == i)
             x, y, ancho, alto = c["rect"]
             return QPointF(x + ancho / 2, y + alto / 2)
+
+        def tipos(opciones):
+            return {t: f for t, f, _ in dict(opciones)["Tipo de acción"]}
         opciones = e.menu(caja(aid))
         textos = [t for t, _ in opciones]
-        self.assertEqual(textos[:5], ["Continua", "Continua limitada en el tiempo", "Memorizada al activar",
-                                      "Memorizada al desactivar", "Memorizada por evento"])
+        self.assertEqual(list(tipos(opciones)), ["Continua", "Condicionada", "Al activar", "Al desactivar", "Por evento"])
+        self.assertTrue(all(len(x) == 3 and not x[2].isNull() for x in dict(opciones)["Tipo de acción"]), "con su icono")
         self.assertEqual(e.menu_marcadas, {"Continua"})
+        self.assertEqual(textos[0], "Tipo de acción")
         self.assertIn("Editar…", textos)
         self.assertIn("Separar de la etapa", textos)
         self.assertEqual(textos[-1], "Quitar")
-        self.assertFalse([t for t in textos if "orzado" in t], "el forzado no se ofrece")
-        # la barra de menú de Qt: separadores y marca del tipo actual
+        self.assertFalse([t for t in textos if "orzado" in t or "limitada" in t.lower()], "el forzado no se ofrece")
+        # la barra de menú de Qt: el submenú, con el icono de cada tipo y la marca del actual
         menu = w.diagrama.menu_contextual(opciones)
-        marcadas = [a.text() for a in menu.actions() if a.isCheckable() and a.isChecked()]
-        self.assertEqual(marcadas, ["Continua"])
+        sub = next(a for a in menu.actions() if a.text() == "Tipo de acción").menu()
+        self.assertEqual([a.text() for a in sub.actions() if a.isCheckable() and a.isChecked()], ["Continua"])
+        self.assertTrue(all(not a.icon().isNull() for a in sub.actions()))
         # a memorizada al activar: falta el valor -> borrador unido con «?», Editar abierto, tipo puesto
         n = len(e.ed.undo_stack)
-        dict(opciones)["Memorizada al activar"]()
+        tipos(opciones)["Al activar"]()
         self.assertEqual(len(e.ed.undo_stack), n + 1)
         (b,) = e.ed.draft_actions()
         self.assertEqual((b["tipo"], b["etapa"], e.ed.model["actions"]), ("activacion", ids["1"], []))
@@ -2383,12 +2446,13 @@ class Interfaz(unittest.TestCase):
         e.tipo_accion(a2, "desactivacion")
         self.assertEqual((e.acciones(ids["1"])[0]["id"], e.datos_accion(a2)["tipo"], pedidas, e.ed.draft_actions()),
                          (a2, "desactivacion", [], []))
-        # a por evento: falta el evento
+        # a por evento: falta el evento, que no se pide en un diálogo: se programa en la pestaña Bloques
         e.tipo_accion(a2, "evento")
         (b,) = e.ed.draft_actions()
-        self.assertEqual((b["tipo"], pedidas), ("evento", [(ids["1"], b["id"])]))
+        self.assertEqual((b["tipo"], pedidas), ("evento", []))
         (m,) = e.M["draftActions"]
         self.assertEqual(m["event"], [{"t": "?"}])
+        self.assertEqual((e.accion, w.props.objetivo_bloques()), (b["id"], ("accion", b["id"], "evento")))
         self.assertEqual(w.props.s_acciones.count(), 1)
         self.assertIn("?", w.props.s_acciones.item(0).text())
         e.deshacer()
@@ -2401,38 +2465,45 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((b["tipo"], "variable" in b, pedidas[-1]), ("continua", False, (ids["1"], b["id"])))
         e.deshacer()
         e.quitar_accion(ct)
-        # a continua limitada: falta el límite; con él, la acción del modelo lleva limitUs y se dibuja
+        # a condicionada: falta la condición (borrador con «?» en el trazo); con ella, pasa al modelo
         e.quitar_accion(a2)
         self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "continua", "variable": "Q00", "condicion": ""}))
         a3 = e.acciones(ids["1"])[0]["id"]
         pedidas.clear()
-        e.tipo_accion(a3, "limitada")
+        e.tipo_accion(a3, "condicionada")
         (b,) = e.ed.draft_actions()
-        self.assertEqual((b["tipo"], pedidas), ("limitada", [(ids["1"], b["id"])]))
-        self.assertEqual("".join(s["t"] for s in e.M["draftActions"][0]["cond"]), "NOT ?/X1", "el límite, como condición")
-        self.assertEqual(e.poner_accion(ids["1"], {"tipo": "limitada", "variable": "Q00", "limite": "abc"}, b["id"]).split()[0],
-                         "Límite")
-        self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "limitada", "variable": "Q00", "limite": "3s"}, b["id"]))
+        self.assertEqual((b["tipo"], pedidas, e.accion), ("condicionada", [], b["id"]))
+        self.assertEqual("".join(s["t"] for s in e.M["draftActions"][0]["cond"]), "?")
+        self.assertIsNone(e.poner_texto_accion(b["id"], "condicion", "marcha"))
         (a4,) = e.acciones(ids["1"])
-        self.assertEqual((e.datos_accion(a4["id"])["tipo"], e.datos_accion(a4["id"])["limite"]), ("limitada", "3s"))
-        self.assertEqual(e.ed.get(a4["id"])["limitUs"], "3000000")
-        self.assertEqual([s["t"] for s in e.M["steps"][1]["actions"][0]["text"]], ["Q00"])
+        self.assertEqual((e.ed.draft_actions(), e.datos_accion(a4["id"])["tipo"], e.datos_accion(a4["id"])["condicion"]),
+                         ([], "condicionada", "marcha"))
         self.assertTrue(e.ed.validate().can_simulate)
-        # de limitada a continua: en su sitio
-        e.tipo_accion(a4["id"], "continua")
+        # una condicionada con límite de tiempo (de un fichero antiguo): marcada como tal; «Condicionada» no la cambia
+        self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "limitada", "variable": "Q00", "condicion": "marcha",
+                                                    "limite": "3s"}, a4["id"]))
+        self.assertEqual(e.ed.get(a4["id"])["limitUs"], "3000000")
+        opciones = e.menu(caja(a4["id"]))
+        self.assertEqual(e.menu_marcadas, {TEXTO_LIMITADA})
+        self.assertEqual(list(tipos(opciones))[1], TEXTO_LIMITADA)
+        n = len(e.ed.undo_stack)
+        e.tipo_accion(a4["id"], "condicionada")
+        self.assertEqual((len(e.ed.undo_stack), e.ed.get(a4["id"])["limitUs"]), (n, "3000000"), "no cambia nada")
+        e.tipo_accion(a4["id"], "continua")  # una continua no lleva condición ni límite
         self.assertNotIn("limitUs", e.ed.get(a4["id"]))
+        self.assertEqual(e.datos_accion(a4["id"])["condicion"], "")
         # una acción suelta: su menú no ofrece separar; cambia de tipo y pide lo que le falta
         d = e.poner_accion_suelta(QPointF(600, 500))
         opciones = e.menu(caja(d))
         self.assertNotIn("Separar de la etapa", [t for t, _ in opciones])
         self.assertEqual(e.menu_marcadas, {"Continua"})
         pedidas.clear()
-        dict(opciones)["Memorizada por evento"]()
+        tipos(opciones)["Por evento"]()
         self.assertEqual((e.ed.draft_actions()[0]["tipo"], pedidas), ("evento", [(None, d)]))
         self.assertEqual(e.menu_marcadas, {"Continua"}, "el menú se recalcula al abrirlo")
         e.menu(caja(d))
-        self.assertEqual(e.menu_marcadas, {"Memorizada por evento"})
-        dict(opciones)["Continua"]()  # no pide nada nuevo
+        self.assertEqual(e.menu_marcadas, {"Por evento"})
+        tipos(opciones)["Continua"]()  # no pide nada nuevo
         self.assertEqual(pedidas, [(None, d)])
         # Editar…, Quitar y doble clic
         self.assertEqual(dict(e.menu(caja(d)))["Editar…"](), None)
@@ -2492,7 +2563,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e2.ed.draft_actions(), e.ed.draft_actions())
         self.assertEqual(e2.ed.revision, revision)
         self.assertEqual(len([m for m in e2.M["draftActions"] if m["etapa"] is None]), 2)
-        self.assertEqual([c for c in e2.M["draftActions"]][0]["trigger"], "event")
+        self.assertEqual(next(c for c in e2.M["draftActions"] if c["id"] == d1)["trigger"], "event")
         self.assertEqual(len([d for d in e2.diagnosticos() if d["code"] == "AVISO"]), 3)
         # la simulación no los ve
         v = Vista("m", "t", "", lambda: (copy.deepcopy(op.doc), {}), normalize_options(None), presentation=op.presentations[0])
@@ -2531,9 +2602,12 @@ class Interfaz(unittest.TestCase):
         d = DialogoAccion(w, e, None, did)
         self.assertEqual(d.windowTitle(), "Acción suelta")
         self.assertTrue(d.limite.isHidden())
-        d.tipo.setCurrentIndex(d.tipo.findData("limitada"))
+        self.assertNotIn("limitada", [d.tipo.itemData(i) for i in range(d.tipo.count())], "ya no se ofrece como tipo")
+        self.assertFalse(hasattr(d, "cond"), "sin programador dentro")
+        e.ed.update_draft_action(did, tipo="limitada")  # lo que trae un fichero antiguo
+        d = DialogoAccion(w, e, None, did)
+        self.assertEqual(d.tipo.currentText(), "Condicionada (con límite de tiempo)")
         self.assertFalse(d.limite.isHidden(), "el límite de tiempo solo en la limitada")
-        self.assertFalse(d.cond.isHidden(), "y la limitada lleva también su condición")
         d.limite.setText("2s")
         n = len(e.ed.undo_stack)
         d.aceptar()  # sin variable: se guarda igual, con «?»
@@ -2657,7 +2731,8 @@ class Interfaz(unittest.TestCase):
         self.app.processEvents()
         minimo, maximo = w.ancho_lateral
         pal = w.paleta
-        self.assertEqual(minimo, 2 * pal.gridSize().width() + 2 * pal.frameWidth() + 2)
+        self.assertGreaterEqual(minimo, 2 * pal.gridSize().width() + 2 * pal.frameWidth() + 2, "caben las dos columnas")
+        self.assertLessEqual(minimo - pal.ancho_minimo(), 8, "más el marco de las carpetas")
         self.assertEqual(maximo, round(minimo * 1.15))
         for panel in (w.dock, w.derecho):
             self.assertEqual((panel.minimumWidth(), panel.maximumWidth()), (minimo, maximo), "el mismo margen")
@@ -2667,10 +2742,15 @@ class Interfaz(unittest.TestCase):
         w.resizeDocks([w.dock], [minimo], Qt.Orientation.Horizontal)
         self.app.processEvents()
         self.assertEqual(w.dock.width(), minimo)
-        r = [pal.visualItemRect(pal.item(i)) for i in range(4)]
-        self.assertEqual((r[0].y(), r[1].y(), r[2].y()), (r[1].y(), r[0].y(), r[0].y() + pal.gridSize().height()))
-        self.assertTrue(r[1].x() > r[0].x() and r[3].x() > r[2].x(), "dos columnas")
-        self.assertEqual((pal.verticalScrollBarPolicy(), pal.horizontalScrollBarPolicy()), (Qt.ScrollBarPolicy.ScrollBarAlwaysOff,) * 2)
+        for lista, filas in ((pal, 2), (w.paleta_acciones, 3)):  # las dos carpetas: «Elementos» y «Acciones»
+            w.carpetas.setCurrentWidget(lista)
+            self.app.processEvents()
+            r = [lista.visualItemRect(lista.item(i)) for i in range(lista.count())]
+            self.assertEqual((r[0].y(), r[1].y(), r[2].y()), (r[1].y(), r[0].y(), r[0].y() + lista.gridSize().height()))
+            self.assertTrue(r[1].x() > r[0].x(), "dos columnas")
+            self.assertEqual(len({x.y() for x in r}), filas)
+            self.assertEqual((lista.verticalScrollBarPolicy(), lista.horizontalScrollBarPolicy()),
+                             (Qt.ScrollBarPolicy.ScrollBarAlwaysOff,) * 2)
         # con cada tipo de selección, las propiedades caben en el ancho (no se cortan) y el panel derecho también
         b = e.poner_barra(QPointF(500, 400), "Y")
         for sel in ([ids["1"]], [ts["t1"]], [f"{ts['t1']}|{ids['0']}|pre"], [b]):
@@ -3081,6 +3161,778 @@ class Interfaz(unittest.TestCase):
         ver = Vista("k", "t", "", lambda: (new_grafcet_document("k"), {}), normalize_options(None))
         self.assertEqual(ver.model["steps"], [])
 
+    # -- P-IMP-43: paleta solo arrastrando, carpeta de acciones, pegar y agrupar acciones, enlace de acciones, condición
+    # y evento con bloques, nombres reservados --------------------------------------------------------------------
+    def _caja(self, aid):
+        return next(c for c in self.w.diagrama.cajas_acciones if c["id"] == aid)
+
+    def _der(self, e, sid):
+        from escritorio.diagrama import anclas
+        return next(a for a in anclas(e.M, sid) if a["lado"] == "der")["pos"]
+
+    def test_SEDI87_los_elementos_solo_se_colocan_arrastrando(self):
+        """REQ-EDT-02: no hay modo herramienta para colocar: un clic en una ficha solo muestra su ayuda, un clic en el
+        dibujo no coloca nada y no hay atajos Alt+n; soltar la ficha en el dibujo sí la coloca. Solo queda la herramienta
+        que no coloca (seleccionar, Esc)."""
+        from PySide6.QtGui import QAction
+        from escritorio.edicion import HERRAMIENTAS
+        from escritorio.propiedades import AYUDAS, AYUDAS_ACCION
+        w = self.w
+        w.nuevo()
+        e = w.edicion
+        self.assertEqual(HERRAMIENTAS, ("seleccionar",))
+        self.assertEqual(list(w.a_herr), ["seleccionar"])
+        atajos = [a.shortcut().toString() for a in w.findChildren(QAction)]
+        self.assertFalse([x for x in atajos if x.startswith("Alt+")], "sin atajos de colocar")
+        self.assertIn("Esc", atajos)
+        self.assertFalse(hasattr(w.paleta, "elegida") or hasattr(w.paleta, "elegir"), "la paleta ya no elige herramienta")
+        n = len(e.ed.undo_stack)
+        w.paleta.setCurrentRow(0)
+        w.paleta.itemClicked.emit(w.paleta.item(0))  # un clic en la ficha «Etapa»
+        self.assertEqual((e.herramienta, e.mensaje, e.mensaje_info), ("seleccionar", AYUDAS["etapa"], True))
+        e.prensar(QPointF(500, 60))  # y un clic en el dibujo no coloca nada
+        e.soltar(QPointF(500, 60))
+        self.assertEqual((e.M["steps"], len(e.ed.undo_stack)), ([], n))
+        w.paleta_acciones.itemClicked.emit(w.paleta_acciones.item(1))
+        self.assertEqual(e.mensaje, AYUDAS_ACCION["condicionada"])
+        self.assertEqual(w.ayuda.text(), AYUDAS_ACCION["condicionada"])
+        self.soltar_ficha("etapa", QPointF(300, 60))  # arrastrada, sí
+        self.assertEqual(len(e.M["steps"]), 1)
+        self.assertEqual(w.l_herr.text().count("Seleccionar"), 1)
+
+    def test_SEDI88_carpeta_de_acciones_con_sus_cinco_fichas(self):
+        """REQ-ACT-01, REQ-EDT-02: la paleta tiene dos carpetas, «Elementos» (etapa, transición, simultaneidad) y
+        «Acciones» con una ficha dibujada por tipo (continua, condicionada, al activar, al desactivar, por evento) con la
+        misma función que el diagrama; arrastrar una ficha crea una acción de ese tipo donde se suelta, sin diálogo, con «?»
+        en lo que falta y dibujada como cualquier acción."""
+        from escritorio import diagrama, propiedades
+        w = self.w
+        w.nuevo()
+        e = w.edicion
+        self.assertEqual([w.carpetas.tabText(i) for i in range(2)], ["Elementos", "Acciones"])
+        self.assertIs(w.carpetas.widget(0), w.paleta)
+        self.assertIs(w.carpetas.widget(1), w.paleta_acciones)
+        pa = w.paleta_acciones
+        tipos = ["continua", "condicionada", "activacion", "desactivacion", "evento"]
+        self.assertEqual([pa.item(i).text() for i in range(pa.count())],
+                         ["Continua", "Condicionada", "Al activar", "Al desactivar", "Por evento"])
+        self.assertEqual([pa.mimeData([pa.item(i)]).text() for i in range(pa.count())], [f"accion:{t}" for t in tipos])
+        self.assertEqual(propiedades.ACCIONES, tuple(f"accion:{t}" for t in tipos))
+        imagenes = [pa.item(i).icon().pixmap(90, 76).toImage() for i in range(pa.count())]
+        self.assertTrue(all(not im.isNull() for im in imagenes))
+        self.assertEqual(len({bytes(im.constBits()) for im in imagenes}), 5, "cada ficha, su dibujo")
+        # la misma función que el diagrama: la ficha es lo que `_caja_accion` dibuja (marca encima o debajo de la caja)
+        alturas = {t: diagrama.ficha_accion(t)[0].height() for t in tipos}
+        self.assertGreater(alturas["condicionada"], alturas["continua"], "el trazo de la condición, encima")
+        self.assertGreater(alturas["desactivacion"], alturas["continua"], "la flecha ↓, debajo")
+        for t in tipos:
+            pm, punto = propiedades.figura(f"accion:{t}", 1.0, 1.0)
+            self.assertTrue(pm.rect().contains(punto) and punto.x() < 8, t)
+        # arrastrar de verdad: QDrag con la figura y el texto de cada ficha
+        capturados = []
+
+        class FalsoDrag:
+            def __init__(self, origen):
+                self.datos = {}
+                capturados.append(self)
+
+            def setMimeData(self, m):
+                self.datos["texto"] = m.text()
+
+            def setPixmap(self, pm):
+                self.datos["pm"] = pm
+
+            def setHotSpot(self, p):
+                self.datos["punto"] = p
+
+            def exec(self, *a):
+                return Qt.DropAction.IgnoreAction
+        with mock.patch.object(propiedades, "QDrag", FalsoDrag):
+            for fila in range(pa.count()):
+                pa.setCurrentRow(fila)
+                pa.startDrag(Qt.DropAction.CopyAction)
+        self.assertEqual([c.datos["texto"] for c in capturados], [f"accion:{t}" for t in tipos])
+        self.assertTrue(all(c.datos["pm"].rect().contains(c.datos["punto"]) for c in capturados))
+        # soltar cada ficha: una acción suelta de ese tipo, sin diálogo
+        pedidas = []
+        e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
+        for i, t in enumerate(tipos):
+            self.soltar_ficha(f"accion:{t}", QPointF(300 + 200 * (i % 3), 100 + 120 * (i // 3)))
+        self.assertEqual(([b["tipo"] for b in e.ed.draft_actions()], pedidas), (tipos, []))
+        self.assertTrue(all("variable" not in b and "etapa" not in b for b in e.ed.draft_actions()))
+        por_tipo = {m["id"]: m for m in e.M["draftActions"]}
+        ids = [b["id"] for b in e.ed.draft_actions()]
+        self.assertEqual(por_tipo[ids[0]]["cond"], None)
+        self.assertEqual(por_tipo[ids[1]]["cond"], [{"t": "?"}], "condicionada: el trazo con «?»")
+        self.assertEqual([por_tipo[i].get("trigger") for i in ids[2:]], ["activation", "deactivation", "event"])
+        self.assertEqual(por_tipo[ids[4]]["event"], [{"t": "?"}])
+        # sin discontinuo ni naranja, como cualquier acción
+        from PySide6.QtWidgets import QGraphicsPathItem, QGraphicsRectItem
+        trazos = [it.pen() for it in w.diagrama.scene().items() if isinstance(it, (QGraphicsRectItem, QGraphicsPathItem))
+                  and it.zValue() < 10 and it.pen().style() != Qt.PenStyle.NoPen]
+        self.assertTrue(trazos)
+        self.assertTrue(all(p.style() == Qt.PenStyle.SolidLine and p.color().name() != diagrama.COL["glow"] for p in trazos))
+
+    def test_SEDI89_punto_derecho_de_la_etapa_y_union_con_acciones_sueltas(self):
+        """REQ-ACT-01, REQ-EDT-02: la etapa tiene un punto de unión en el centro de su lado derecho (visible al pasar el
+        puntero); arrastrar de él hasta una acción suelta la une, y arrastrar del punto izquierdo de la acción hasta
+        cualquier parte de la etapa o hasta ese punto también; de él no sale nada hacia lo que no es una acción."""
+        from escritorio.diagrama import H, ancla_en
+        w = self.w
+        e, ids, ts = self.secuencial()
+        pedidas = []
+        e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
+        c = centro(e.M, ids["1"])
+        der = self._der(e, ids["1"])
+        self.assertEqual(der, QPointF(c.x() + H, c.y()))
+        self.assertEqual(ancla_en(e.M, der + QPointF(5, 3))["lado"], "der")
+        e.pasar(c + QPointF(H - 2, 2))
+        self.assertEqual(len(w.diagrama._marcas), 3)
+        # de la etapa a la acción suelta (a su caja)
+        d1 = e.poner_accion_suelta(QPointF(700, 400))
+        e.prensar(der)
+        self.assertIsNotNone(e.enlace)
+        e.mover(centro_caja(w, d1))
+        e.soltar(centro_caja(w, d1))
+        self.assertEqual((e.ed.draft_actions()[0]["etapa"], pedidas), (ids["1"], [(ids["1"], d1)]))
+        # con la etapa ya con acciones, su punto solo se agarra de cerca (ahí empieza el enlace, que se selecciona)
+        self.assertIsNone(ancla_en(e.M, der + QPointF(12, 0)), "a más de 8: no es un punto de unión")
+        self.assertIsNotNone(ancla_en(e.M, der + QPointF(4, 0)))
+        # de la acción a cualquier parte de la etapa
+        d2 = e.poner_accion_suelta(QPointF(700, 500))
+        self._enlazar_accion(e, d2, c + QPointF(5, 5))
+        self.assertEqual([b["etapa"] for b in e.ed.draft_actions()], [ids["1"], ids["1"]])
+        # y al punto del lado derecho de otra etapa
+        d3 = e.poner_accion_suelta(QPointF(700, 600))
+        self._enlazar_accion(e, d3, self._der(e, ids["0"]))
+        self.assertEqual(e.ed.draft_actions()[2]["etapa"], ids["0"])
+        # de la etapa a un hueco, o a algo que no es una acción: se rechaza
+        n = len(e.ed.undo_stack)
+        e.prensar(self._der(e, ids["0"]))
+        e.soltar(QPointF(900, 700))
+        self.assertTrue(e.mensaje.startswith("De una etapa sale el enlace a una acción suelta"), e.mensaje)
+        self.assertFalse(e.mensaje_info)
+        self.assertTrue(e.parpadeo.ids)
+        e.prensar(self._der(e, ids["0"]))
+        e.soltar(centro(e.M, ts["t1"]))
+        self.assertIn("Una acción se une a una etapa", e.mensaje)
+        self.assertEqual(len(e.ed.undo_stack), n)
+        # el punto de la derecha solo vale para el enlace de una acción: los demás enlaces lo ignoran
+        self.assertIsNone(ancla_en(e.M, self._der(e, ids["0"]), sin_der=True))
+
+    def _etapa_con_dos_acciones(self):
+        e, ids, ts = self.secuencial()
+        e.pedir_accion = lambda sid, aid: None
+        e.nueva_variable("Q00", "output", {"kind": "bool"})
+        e.nueva_variable("Q01", "output", {"kind": "bool"})
+        e.nueva_variable("Q02", "output", {"kind": "bool"})
+        self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "continua", "variable": "Q00"}))
+        self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "continua", "variable": "Q01"}))
+        return e, ids, ts
+
+    def test_SEDI90_pegar_una_accion_al_lado_de_otra_con_iman(self):
+        """REQ-ACT-01, REQ-EDT-02: soltar (o mover) una acción suelta de modo que toque el lado derecho de otra acción de la
+        etapa la añade a ella detrás de ella, con el lado resaltado antes de soltar; completa, pasa al modelo en su sitio;
+        incompleta, queda unida con «?». En columna se pega también por el lado inferior; en fila separada, en el
+        siguiente lugar. Es una sola operación de deshacer."""
+        w = self.w
+        e, ids, ts = self._etapa_con_dos_acciones()
+        s1 = ids["1"]
+        a1, a2 = [a["id"] for a in e.acciones(s1)]
+        x, y, ancho, alto = self._caja(a1)["rect"]
+        # el resalte aparece al pasar la ficha cerca del lado derecho de la primera, y se va al alejarse
+        e.sobrevolar("accion:continua", QPointF(x + ancho + 6, y + alto / 2))
+        self.assertIsNotNone(w.diagrama.iman)
+        recta = w.diagrama.iman.line()
+        self.assertEqual((round(recta.x1()), round(recta.y1()), round(recta.y2())), (round(x + ancho), round(y), round(y + alto)))
+        e.sobrevolar("accion:continua", QPointF(x + ancho + 90, y + alto / 2 + 300))
+        self.assertIsNone(w.diagrama.iman)
+        # lo mismo, con el evento de Qt cuando se arrastra una ficha sobre el dibujo
+        from PySide6.QtGui import QDragMoveEvent
+        m = QMimeData()
+        m.setText("accion:continua")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            w.diagrama.dragMoveEvent(QDragMoveEvent(w.diagrama.mapFromScene(QPointF(x + ancho + 6, y + alto / 2)),
+                                                    Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton,
+                                                    Qt.KeyboardModifier.NoModifier))
+        self.assertIsNotNone(w.diagrama.iman)
+        w.diagrama.marcar_iman(None)
+        e.sobrevolar("etapa", QPointF(x + ancho + 6, y + alto / 2))
+        self.assertIsNone(w.diagrama.iman)
+        # soltar una ficha «Al activar» (incompleta) tocando la derecha de la primera: queda unida, con «?»
+        n = len(e.ed.undo_stack)
+        self.soltar_ficha("accion:activacion", QPointF(x + ancho + 6, y + alto / 2))
+        self.assertEqual(len(e.ed.undo_stack), n + 1, "una operación de deshacer")
+        (b,) = e.ed.draft_actions()
+        self.assertEqual((b["etapa"], b["tipo"], "grupo" in b), (s1, "activacion", False))
+        self.assertEqual([a["id"] for a in e.acciones(s1)], [a1, a2, b["id"]], "los borradores, tras las del modelo")
+        self.assertEqual((e.sel, e.accion), ([s1], b["id"]))
+        e.deshacer()
+        self.assertEqual((e.ed.draft_actions(), len(e.ed.undo_stack)), ([], n))
+        # una acción suelta completa, movida con el ratón hasta tocar la derecha de la primera: pasa al modelo detrás de ella
+        d = e.poner_accion_suelta(QPointF(800, 500))
+        self.assertIsNone(e.poner_accion(None, {"tipo": "continua", "variable": "Q02"}, d))
+        cd = self._caja(d)["rect"]
+        e.prensar(QPointF(cd[0] + 20, cd[1] + 20))
+        e.mover(QPointF(x + ancho + 20 + 4, y + 20 + 2))
+        self.assertIsNotNone(w.diagrama.iman, "al mover, el lado donde se pegaría")
+        n = len(e.ed.undo_stack)
+        e.soltar(QPointF(x + ancho + 20 + 4, y + 20 + 2))
+        self.assertEqual((e.ed.draft_actions(), len(e.ed.undo_stack)), ([], n + 1))
+        nombres = [e.datos_accion(a["id"])["variable"] for a in e.acciones(s1)]
+        self.assertEqual(nombres, ["Q00", "Q02", "Q01"], "detrás de la primera, no al final")
+        self.assertIsNone(w.diagrama.iman, "ya no se resalta")
+        self.assertTrue(e.ed.validate().can_simulate)
+        e.deshacer()
+        self.assertEqual([e.datos_accion(a["id"])["variable"] for a in e.acciones(s1)], ["Q00", "Q01"])
+        self.assertEqual(len(e.ed.draft_actions()), 1, "vuelve a ser suelta, donde estaba")
+        # en columna: también por el lado inferior, en el siguiente lugar
+        e.deshacer()
+        e.deshacer()
+        e.colocar_acciones(s1, "columna")
+        x1, y1, w1, h1 = self._caja(a1)["rect"]
+        n = len(e.ed.undo_stack)
+        self.soltar_ficha("accion:continua", QPointF(x1 + 10, y1 + h1 + 8 + 22))  # su lado izquierdo, justo bajo la primera
+        (b,) = e.ed.draft_actions()
+        self.assertEqual((b["etapa"], len(e.ed.undo_stack)), (s1, n + 1))
+        # la nueva ocupa el lugar de entre medias: las de modelo antes, el borrador después (orden de dibujo)
+        orden = [c["id"] for c in w.diagrama.cajas_acciones if c["etapa"] == s1]
+        self.assertEqual(orden, [a1, a2, b["id"]])
+        e.deshacer()
+        # en fila separada: al lado derecho de la primera (en el hueco) se pega en el siguiente lugar
+        e.colocar_acciones(s1, "fila-separada")
+        x1, y1, w1, h1 = self._caja(a1)["rect"]
+        self.soltar_ficha("accion:evento", QPointF(x1 + w1 + 6, y1 + h1 / 2))
+        self.assertEqual(len(e.ed.draft_actions()), 1)
+        self.assertEqual(e.ed.draft_actions()[0]["etapa"], s1)
+
+    def test_SEDI91_grupos_sueltos_se_mueven_y_se_unen_juntos(self):
+        """REQ-ACT-01, REQ-DAT-01: varias acciones sueltas pegadas forman un grupo suelto (`grupo` y `orden` en la
+        presentación) que se selecciona entero, se mueve junto, tiene su colocación y se une a una etapa de una vez
+        (completas, al modelo; en una operación de deshacer); se guarda y se abre; la que se separa deja el grupo, que
+        se disuelve con menos de dos."""
+        from escritorio.diagrama import anclas
+        from escritorio.edicion import Edicion
+        w = self.w
+        e, ids, ts = self._etapa_con_dos_acciones()
+        s0 = ids["0"]
+        a = e.poner_accion_suelta(QPointF(600, 300))
+        x, y, ancho, alto = self._caja(a)["rect"]
+        b = e.poner_accion_suelta(QPointF(x + ancho + 4, y + alto / 2), "condicionada")  # pegada a la derecha
+        c = e.poner_accion_suelta(QPointF(x + 2 * ancho + 4, y + alto / 2), "activacion")
+        borradores = e.ed.draft_actions()
+        self.assertEqual([d["id"] for d in borradores], [a, b, c])
+        g = borradores[0]["grupo"]
+        self.assertTrue(g and all(d["grupo"] == g for d in borradores))
+        self.assertEqual([d["orden"] for d in borradores], [0, 1, 2])
+        self.assertEqual(len({(d["x"], d["y"]) for d in borradores}), 1, "comparten posición")
+        cajas = [self._caja(i)["rect"] for i in (a, b, c)]
+        self.assertEqual([r[0] for r in cajas], [cajas[0][0], cajas[0][0] + cajas[0][2], cajas[0][0] + cajas[0][2] + cajas[1][2]])
+        self.assertEqual([m["cabeza"] for m in e.M["draftActions"]], [True, False, False])
+        self.assertEqual([x["lado"] for i in (a, b, c) for x in anclas(e.M, i)], ["izq"], "un solo punto de unión: el del grupo")
+        self.assertEqual({self._caja(i)["grupo"] for i in (a, b, c)}, {g})
+        # se selecciona entero y se mueve junto (una operación)
+        cen = centro_caja(w, b)
+        e.prensar(cen)
+        e.soltar(cen)
+        self.assertEqual((e.sel, e.accion), ([a, b, c], b))
+        self.assertEqual(e.seleccion_dibujo() & {f"accion:{i}" for i in (a, b, c)}, {f"accion:{i}" for i in (a, b, c)})
+        n = len(e.ed.undo_stack)
+        e.prensar(cen)
+        e.mover(cen + QPointF(60, 40))
+        self.assertEqual(len({(m["x"], m["y"]) for m in e.M["draftActions"]}), 1, "el grupo entero, mientras se arrastra")
+        e.soltar(cen + QPointF(60, 40))
+        self.assertEqual(len(e.ed.undo_stack), n + 1)
+        self.assertEqual({(d["x"], d["y"]) for d in e.ed.draft_actions()}, {("560", "340")})
+        # colocación del grupo: en columna, la segunda debajo de la primera
+        dict(e.menu(centro_caja(w, b)))["Colocación de las acciones"][2][1]()
+        self.assertEqual(e.ed.action_layouts(), {g: "columna"})
+        r = [self._caja(i)["rect"] for i in (a, b, c)]
+        self.assertEqual((r[0][0], r[1][0], r[2][0]), (r[0][0],) * 3)
+        self.assertLess(r[0][1], r[1][1])
+        e.menu(centro_caja(w, b))
+        self.assertEqual(e.menu_marcadas & {"En columna"}, {"En columna"})
+        # se guarda y se abre tal cual
+        destino = Path(self.tmp.name) / "con-grupo"
+        e.guardar(destino)
+        e2 = Edicion.desde(open_model(destino).doc, {}, "abierto", destino, open_model(destino).presentations[0])
+        self.assertEqual(e2.ed.draft_actions(), e.ed.draft_actions())
+        self.assertEqual(e2.ed.action_layouts(), {g: "columna"})
+        # completar las dos primeras y unir el grupo a la etapa 0 de una vez: las completas pasan al modelo, en orden
+        self.assertIsNone(e.poner_accion(None, {"tipo": "continua", "variable": "Q00"}, a))
+        self.assertIsNone(e.poner_accion(None, {"tipo": "condicionada", "variable": "Q02", "condicion": "marcha"}, b))
+        n = len(e.ed.undo_stack)
+        self._enlazar_accion(e, a, centro(e.M, s0))
+        self.assertEqual(len(e.ed.undo_stack), n + 1, "una sola operación")
+        self.assertEqual([x["variable"] for x in e.acciones(s0)], ["Q00", "Q02", ""])
+        self.assertEqual([x.get("borrador") for x in e.acciones(s0)], [None, None, True])
+        self.assertEqual((len(e.ed.model["actions"]), e.ed.action_layouts()), (4, {}), "el grupo ya no existe, ni su colocación")
+        self.assertEqual({d.get("grupo") for d in e.ed.draft_actions()}, {None})
+        e.deshacer()
+        self.assertEqual(({d["grupo"] for d in e.ed.draft_actions()}, e.ed.action_layouts()), ({g}, {g: "columna"}))
+        self.assertEqual(len(e.ed.model["actions"]), 2)
+        # separar una del grupo: el grupo se disuelve con menos de dos
+        e.separar_accion(c)
+        self.assertEqual([d.get("grupo") for d in e.ed.draft_actions()], [g, g, None])
+        e.separar_accion(b)
+        self.assertEqual(({d.get("grupo") for d in e.ed.draft_actions()}, e.ed.action_layouts()), ({None}, {}))
+        # quitar y borrar un grupo con Supr
+        d1 = e.poner_accion_suelta(QPointF(900, 600))
+        d2 = e.poner_accion_suelta(QPointF(900 + 80 + 100 - 96, 600))
+        self.assertEqual(len(e._ids_grupo(d1)), 2)
+        e.seleccionar(e._ids_grupo(d1))
+        w.a_borrar.trigger()
+        self.assertNotIn(d1, [d["id"] for d in e.ed.draft_actions()])
+        self.assertNotIn(d2, [d["id"] for d in e.ed.draft_actions()])
+
+    def test_SEDI92_el_enlace_de_las_acciones_se_selecciona_y_se_elimina(self):
+        """REQ-ACT-01, REQ-EDT-02: el trazo que une la etapa con sus acciones se selecciona con un clic (se resalta); Supr
+        o botón derecho → «Eliminar el enlace» las separa de la etapa: quedan sueltas, juntas, donde estaban y con su
+        colocación, con todos sus datos; una operación de deshacer."""
+        w = self.w
+        e, ids, ts = self._etapa_con_dos_acciones()
+        s1 = ids["1"]
+        self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "activacion", "variable": "Q02", "valor": "1"}))
+        e.anadir_accion(s1)  # un borrador unido, sin variable
+        e.colocar_acciones(s1, "columna")
+        antes = [(a["id"], e.datos_accion(a["id"])) for a in e.acciones(s1)]
+        self.assertEqual(len(antes), 4)
+        x0, y0, _, alto = self._caja(antes[0][0])["rect"]
+        u = next(u for u in w.diagrama.uniones_acciones if u["id"] == f"enlaceacc:{s1}")
+        tramo = u["trazos"][0]
+        p = QPointF((tramo[0][0] + tramo[1][0]) / 2, tramo[0][1] + 2)
+        e.prensar(p)
+        e.soltar(p)
+        self.assertEqual((e.sel, e.accion), ([f"enlaceacc:{s1}"], None))
+        self.assertIn("enlace de las acciones de la etapa 1", e.nombre(e.sel[0]))
+        gruesos = [it for it in w.diagrama.scene().items() if hasattr(it, "pen") and it.pen().widthF() == 4.0
+                   and it.pen().color().name() == "#1f6feb"]
+        self.assertTrue(gruesos, "el enlace seleccionado se resalta")
+        self.assertTrue(w.a_borrar.isEnabled())
+        n = len(e.ed.undo_stack)
+        w.a_borrar.trigger()  # Supr
+        self.assertEqual(len(e.ed.undo_stack), n + 1, "una operación")
+        self.assertEqual((e.acciones(s1), e.ed.model["actions"]), ([], []))
+        sueltas = sorted(e.ed.draft_actions(), key=lambda d: d["orden"])
+        self.assertEqual(len(sueltas), 4)
+        self.assertTrue(all("etapa" not in d for d in sueltas))
+        g = sueltas[0]["grupo"]
+        self.assertTrue(all(d["grupo"] == g for d in sueltas))
+        self.assertEqual([d["orden"] for d in sueltas], [0, 1, 2, 3])
+        self.assertEqual(e.ed.action_layouts(), {s1: "columna", g: "columna"}, "con la colocación de la etapa")
+        self.assertEqual(e.sel, [d["id"] for d in sueltas])
+        # sus datos, intactos: el tipo, la variable, el valor
+        datos = [e._datos_borrador(d) for d in sueltas]
+        self.assertEqual([(d["tipo"], d["variable"]) for d in datos],
+                         [("continua", "Q00"), ("continua", "Q01"), ("activacion", "Q02"), ("continua", "")])
+        self.assertEqual(datos[2]["valor"], "1")
+        # donde estaban: la primera, con su lado izquierdo en el mismo sitio
+        x, y, _, _ = self._caja(sueltas[0]["id"])["rect"]
+        self.assertEqual((round(x), round(y)), (round(x0), round(y0)))
+        self.assertTrue(e.ed.validate().can_simulate)
+        self.assertEqual(w.edicion.diagnosticos()[-1]["code"], "AVISO")
+        e.deshacer()
+        self.assertEqual([(a["id"], e.datos_accion(a["id"])) for a in e.acciones(s1)][:3], antes[:3], "vuelven con los mismos ID")
+        self.assertEqual((e.ed.draft_actions()[0]["etapa"], e.ed.action_layouts()), (s1, {s1: "columna"}))
+        # botón derecho sobre el enlace
+        self.assertIsNone(e.union_en(QPointF(1000, 1000)))
+        opciones = e.menu(p)
+        self.assertEqual([t for t, _ in opciones], ["Eliminar el enlace"])
+        self.assertEqual(e.sel, [f"enlaceacc:{s1}"])
+        opciones[0][1]()
+        self.assertEqual((e.acciones(s1), len(e.ed.draft_actions())), ([], 4))
+        # una etapa con una sola acción: queda suelta, sin grupo
+        e.deshacer()
+        e.quitar_accion(antes[1][0])
+        e.quitar_accion(antes[2][0])
+        e.quitar_accion(e.acciones(s1)[-1]["id"])
+        e.eliminar_enlace_acciones(s1)
+        (suelta,) = e.ed.draft_actions()
+        self.assertEqual(("grupo" in suelta, suelta["tipo"]), (False, "continua"))
+        # el enlace de una etapa sin acciones no existe
+        self.assertNotIn(f"enlaceacc:{s1}", [u["id"] for u in w.diagrama.uniones_acciones])
+        # al pulsar muy cerca del punto de la derecha, empieza un enlace en lugar de seleccionarlo
+        e.deshacer()
+        e.deshacer()
+        centro1 = centro(e.M, s1)
+        e.prensar(QPointF(centro1.x() + 22 + 3, centro1.y()))
+        self.assertIsNotNone(e.enlace)
+        e.soltar(QPointF(centro1.x() + 22 + 3, centro1.y()))
+
+    def test_SEDI93_condicion_y_evento_de_una_accion_en_la_pestana_bloques(self):
+        """REQ-ACT-01, REQ-EDT-02: al seleccionar una acción condicionada (o por evento, o una continua limitada de un
+        fichero) la pestaña Bloques programa su condición (o su evento) igual que la receptividad de una transición;
+        cada cambio es una operación de deshacer; con condición válida pasa al modelo y si se vacía vuelve a ser borrador;
+        la limitada conserva su límite; las variables que faltan se crean con «Crear las que faltan»."""
+        from escritorio import bloques
+        w = self.w
+        e, ids, ts = self._etapa_con_dos_acciones()
+        s1 = ids["1"]
+        p, prog = w.props, w.props.prog
+        a1 = e.acciones(s1)[0]["id"]
+        # una continua no se programa
+        e.accion = a1
+        e.seleccionar([s1])
+        self.assertIsNone(p.objetivo_bloques())
+        self.assertEqual(p.l_bloques.text(), "Elija una transición, o una acción condicionada o por evento, para programarla")
+        # a condicionada: borrador con «?»; sus bloques, vacíos
+        e.tipo_accion(a1, "condicionada")
+        (b,) = e.ed.draft_actions()
+        self.assertEqual(p.objetivo_bloques(), ("accion", b["id"], "condicion"))
+        self.assertEqual(p.l_bloques.text(), "Condición de la acción Q00 (etapa 1)")
+        self.assertEqual((w.pestanas.currentIndex(), prog.texto(), p.t_texto.text()), (w.i_bloques, "", ""))
+        self.assertTrue(p.t_texto.isReadOnly())
+        self.assertIn("Vacía", p.t_estado.text())
+        # el primer bloque la completa: pasa al modelo, con la condición
+        n = len(e.ed.undo_stack)
+        prog.colocar(bloques.var("marcha", "input"))
+        self.assertEqual(len(e.ed.undo_stack), n + 1)
+        self.assertEqual(e.ed.draft_actions(), [])
+        nuevo = e.accion
+        self.assertEqual((e.datos_accion(nuevo)["tipo"], e.datos_accion(nuevo)["condicion"]), ("condicionada", "marcha"))
+        self.assertEqual(p.objetivo_bloques(), ("accion", nuevo, "condicion"))
+        self.assertEqual((prog.texto(), p.t_texto.text()), ("marcha", "marcha"))
+        self.assertIn("Condición correcta", p.t_estado.text())
+        self.assertIn("marcha", p.t_dibujo.text())
+        # cada cambio, una operación; se deshace
+        prog.lienzo.soltar((), bloques.nuevo("y"))  # «marcha AND ?»: a medias, vuelve a ser borrador
+        (b,) = e.ed.draft_actions()
+        self.assertEqual((b["condicion"], e.accion, p.objetivo_bloques()), ("marcha AND ?", b["id"], ("accion", b["id"], "condicion")))
+        self.assertEqual(p.t_texto.text(), "marcha AND ?")
+        prog.lienzo.soltar(("b",), bloques.var("paro", "input"))  # completa: al modelo otra vez
+        nuevo = e.accion
+        self.assertEqual((e.ed.draft_actions(), e.datos_accion(nuevo)["condicion"]), ([], "marcha AND paro"))
+        self.assertEqual(len(e.ed.undo_stack), n + 3)
+        prog.lienzo.soltar(("b",), bloques.nuevo("no"))  # completa → completa: en su sitio, con su ID
+        self.assertEqual((e.accion, e.datos_accion(nuevo)["condicion"], len(e.ed.undo_stack)),
+                         (nuevo, "marcha AND NOT paro", n + 4))
+        e.deshacer()
+        self.assertEqual((e.datos_accion(nuevo)["condicion"], prog.texto()), ("marcha AND paro", "marcha AND paro"))
+        e.deshacer()
+        self.assertEqual(e.ed.draft_actions()[0]["condicion"], "marcha AND ?")
+        self.assertIsNone(e.accion, "la acción señalada ya no existe")
+        e.deshacer()
+        self.assertEqual(e.datos_accion(e.acciones(s1)[-1]["id"])["condicion"], "marcha")
+        e.rehacer()
+        e.rehacer()
+        e.rehacer()
+        nuevo = e.acciones(s1)[-1]["id"]
+        # vaciarla: vuelve a ser borrador
+        e.accion = nuevo
+        e.seleccionar([s1])
+        prog.lienzo.quitar((0,))
+        (b,) = e.ed.draft_actions()
+        self.assertEqual((e.acciones(s1)[-1]["id"], e.accion, b.get("condicion")), (b["id"], b["id"], None))
+        # con el panel inferior plegado, la ficha de la etapa ofrece «Bloques abajo ▾»; ni sin acción programable
+        w._mostrar_panel("inferior", False)
+        e.seleccionar([s1])
+        self.assertFalse(p.s_abajo.isHidden())
+        w._mostrar_panel("inferior", True)
+        self.assertTrue(p.s_abajo.isHidden())
+        w._mostrar_panel("inferior", False)
+        e.accion = e.ed.get(s1)["actionRefs"][0]
+        e.seleccionar([s1])
+        self.assertTrue(p.s_abajo.isHidden(), "una continua no se programa")
+        w._mostrar_panel("inferior", True)
+        e.accion = b["id"]
+        e.seleccionar([s1])
+        # el enlace seleccionado explica lo que se puede hacer con él
+        e.seleccionar([f"enlaceacc:{s1}"])
+        self.assertIn("Eliminar el enlace", p.l_vacio.text())
+        e.deshacer()
+        self.assertEqual((e.ed.draft_actions(), e.datos_accion(e.acciones(s1)[-1]["id"])["condicion"]),
+                         ([], "marcha AND NOT paro"))
+
+    def test_SEDI94_evento_acciones_sueltas_limitada_y_crear_las_que_faltan(self):
+        """REQ-ACT-01, REQ-EDT-02, REQ-EDT-07: la pestaña Bloques programa también el evento de una acción, la condición de
+        una acción suelta (y de las de un grupo) y la de una limitada de un fichero antiguo, que conserva su límite;
+        «Crear las que faltan» declara las entradas que se usan y no existen; con un nombre que no vale no crea nada,
+        avisa y parpadea."""
+        from escritorio import bloques
+        w = self.w
+        e, ids, ts = self._etapa_con_dos_acciones()
+        s1 = ids["1"]
+        p, prog = w.props, w.props.prog
+        e.nueva_variable("CT", "internal", {"kind": "int"})
+        # por evento: «Evento de la acción CT (etapa 1)»
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "evento", "variable": "CT", "valor": "CT + 1"}))
+        (b,) = e.ed.draft_actions()
+        e.accion = b["id"]
+        e.seleccionar([s1])
+        self.assertEqual((p.objetivo_bloques(), p.l_bloques.text()), (("accion", b["id"], "evento"), "Evento de la acción CT (etapa 1)"))
+        self.assertIn("Vacía", p.t_estado.text())
+        prog.colocar(bloques.var("marcha", "input"))
+        prog.lienzo.soltar((), bloques.nuevo("sube"))
+        self.assertEqual(prog.texto(), "↑marcha")
+        self.assertEqual(e.ed.draft_actions(), [], "con su evento, pasa al modelo")
+        evento = e.accion
+        self.assertEqual((e.datos_accion(evento)["tipo"], e.datos_accion(evento)["evento"]), ("evento", "↑marcha"))
+        self.assertIn("Evento correcto", p.t_estado.text())
+        self.assertTrue(e.ed.validate().can_simulate)
+        # una variable que no existe: sigue siendo borrador y «Crear las que faltan» la declara y completa la acción
+        prog.lienzo.quitar((0,))
+        (b,) = e.ed.draft_actions()
+        p.t_manual.setChecked(True)
+        p.t_texto.setText("↑nueva_in")
+        p.t_texto.textEdited.emit(p.t_texto.text())
+        p._aplicar()
+        self.assertEqual(e.ed.draft_actions()[0]["evento"], "↑nueva_in")
+        self.assertIn("No existen: nueva_in", p.t_estado.text())
+        self.assertFalse(p.t_crear.isHidden())
+        n = len(e.ed.undo_stack)
+        p.t_crear.click()
+        self.assertEqual(len(e.ed.undo_stack), n + 1, "una operación: la variable y la acción")
+        self.assertEqual(next(v for v in e.ed.model["variables"] if v["name"] == "nueva_in")["role"], "input")
+        self.assertEqual((e.ed.draft_actions(), e.datos_accion(e.accion)["evento"]), ([], "↑nueva_in"))
+        # un nombre que no vale (entre comillas invertidas): no se crea, mensaje y parpadeo
+        e.accion = e.acciones(s1)[-1]["id"]
+        e.seleccionar([s1])
+        p.t_manual.setChecked(True)
+        p.t_texto.setText("↑(`OR`)")
+        p.t_texto.textEdited.emit(p.t_texto.text())
+        p._aplicar()
+        n = len(e.ed.undo_stack)
+        self.assertFalse(p.t_crear.isHidden())
+        p.t_crear.click()
+        self.assertEqual(len(e.ed.undo_stack), n)
+        self.assertNotIn("OR", [v["name"] for v in e.ed.model["variables"]])
+        self.assertEqual(p.t_estado.text(), '"OR" no puede ser nombre de variable: es una palabra de las fórmulas')
+        self.assertTrue(p.parpadeo_crear.t.isActive())
+        self.assertEqual(e.mensaje, p.t_estado.text())
+        p.parpadeo_crear.parar()
+        p.t_manual.setChecked(False)
+        # una acción suelta, y las de un grupo
+        d = e.poner_accion_suelta(QPointF(800, 300), "condicionada")
+        e.seleccionar([d])
+        self.assertEqual((p.objetivo_bloques(), p.l_bloques.text()), (("accion", d, "condicion"), "Condición de la acción ? (suelta)"))
+        prog.colocar(bloques.var("paro", "input"))
+        self.assertEqual((e.ed.draft_actions()[-1]["condicion"], e.ed.draft_actions()[-1]["id"]), ("paro", d), "sigue suelta")
+        x, y, ancho, alto = self._caja(d)["rect"]
+        d2 = e.poner_accion_suelta(QPointF(x + ancho + 3, y + alto / 2), "evento")
+        e.prensar(centro_caja(w, d2))  # el grupo entero seleccionado y la acción señalada, la pulsada
+        e.soltar(centro_caja(w, d2))
+        self.assertEqual((len(e.sel), e.accion, p.objetivo_bloques()), (2, d2, ("accion", d2, "evento")))
+        e.prensar(centro_caja(w, d))
+        e.soltar(centro_caja(w, d))
+        self.assertEqual((e.accion, p.objetivo_bloques(), prog.texto()), (d, ("accion", d, "condicion"), "paro"))
+        # una limitada de un fichero antiguo: su condición se programa y su límite se conserva
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "limitada", "variable": "Q02", "condicion": "marcha", "limite": "3s"}))
+        lim = e.ed.get(s1)["actionRefs"][-1]
+        e.accion = lim
+        e.seleccionar([s1])
+        self.assertEqual((p.objetivo_bloques(), prog.texto()), (("accion", lim, "condicion"), "marcha"))
+        prog.lienzo.soltar((), bloques.nuevo("no"))
+        self.assertEqual((e.accion, e.datos_accion(lim)["condicion"], e.ed.get(lim)["limitUs"]), (lim, "NOT marcha", "3000000"))
+        self.assertEqual(e.datos_accion(lim)["tipo"], "limitada")
+        # sin condición, una limitada solo lleva su límite: sigue completa
+        prog.lienzo.quitar((0,))
+        self.assertEqual((e.accion, e.datos_accion(lim)["condicion"], e.ed.get(lim)["limitUs"]), (lim, "", "3000000"))
+        # transición y acción comparten la pestaña: al elegir una transición, sus bloques
+        e.seleccionar([ts["t1"]])
+        self.assertEqual((p.objetivo_bloques(), p.l_bloques.text()), (("transicion", ts["t1"]), "Receptividad de la transición t1"))
+
+    def test_SEDI95_el_dialogo_editar_conserva_condicion_evento_y_limite(self):
+        """REQ-ACT-01, REQ-EDT-02: el diálogo Editar no lleva programador y conserva la condición y el evento de la acción;
+        una condicionada o por evento sin ellos se guarda como borrador unido a la etapa (se programan en Bloques);
+        «Condicionada (con límite de tiempo)» solo aparece en una limitada, y quitar su límite la deja condicionada."""
+        from escritorio.acciones import DialogoAccion
+        w = self.w
+        e, ids, ts = self._etapa_con_dos_acciones()
+        s1 = ids["1"]
+        # añadir una condicionada: sin condición, queda como borrador unido
+        d = DialogoAccion(w, e, s1)
+        self.assertEqual([d.tipo.itemData(i) for i in range(d.tipo.count())],
+                         ["continua", "condicionada", "activacion", "desactivacion", "evento"])
+        self.assertTrue(d.limite.isHidden() and d.l_bloques.isHidden())
+        d.tipo.setCurrentIndex(d.tipo.findData("condicionada"))
+        self.assertFalse(d.l_bloques.isHidden(), "avisa de dónde se programa la condición")
+        d.variable.setCurrentText("Q02")
+        n = len(e.ed.undo_stack)
+        d.aceptar()
+        self.assertEqual((d.result(), len(e.ed.undo_stack)), (d.DialogCode.Accepted, n + 1))
+        (b,) = e.ed.draft_actions()
+        self.assertEqual((b["etapa"], b["tipo"], "condicion" in b), (s1, "condicionada", False))
+        # por evento: sin evento, borrador; el valor sí se pide
+        d = DialogoAccion(w, e, s1)
+        d.tipo.setCurrentIndex(d.tipo.findData("evento"))
+        d.variable.setCurrentText("Q02")
+        d.aceptar()
+        self.assertIn("Escriba el valor", d.msg.text())
+        d.valor.setText("1")
+        d.aceptar()
+        self.assertEqual([x["tipo"] for x in e.ed.draft_actions()], ["condicionada", "evento"])
+        # una condicionada completa: abrir y aceptar conserva su condición
+        e.quitar_accion(e.ed.draft_actions()[0]["id"])
+        e.quitar_accion(e.ed.draft_actions()[0]["id"])
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "condicionada", "variable": "Q02", "condicion": "marcha AND NOT paro"}))
+        a = e.acciones(s1)[-1]["id"]
+        d = DialogoAccion(w, e, s1, a)
+        self.assertEqual((d.tipo.currentData(), d.variable.currentText()), ("condicionada", "Q02"))
+        d.variable.setCurrentText("Q01")
+        d.aceptar()
+        self.assertEqual((e.datos_accion(a)["condicion"], e.datos_accion(a)["variable"]), ("marcha AND NOT paro", "Q01"))
+        d = DialogoAccion(w, e, s1, a)  # a continua: sin condición
+        d.tipo.setCurrentIndex(d.tipo.findData("continua"))
+        d.aceptar()
+        self.assertEqual((e.datos_accion(a)["tipo"], e.datos_accion(a)["condicion"]), ("continua", ""))
+        # una limitada: «Condicionada (con límite de tiempo)»; quitar el límite la deja condicionada, con su condición
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "limitada", "variable": "Q02", "condicion": "marcha", "limite": "2s"}))
+        lim = e.acciones(s1)[-1]["id"]
+        d = DialogoAccion(w, e, s1, lim)
+        self.assertEqual(d.tipo.currentText(), "Condicionada (con límite de tiempo)")
+        self.assertEqual((d.limite.text(), d.limite.isHidden()), ("2s", False))
+        d.limite.setText("")
+        d.aceptar()
+        self.assertEqual((e.datos_accion(lim)["tipo"], e.datos_accion(lim)["condicion"]), ("condicionada", "marcha"))
+        self.assertNotIn("limitUs", e.ed.get(lim))
+        # y con otro tipo, el límite desaparece
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "limitada", "variable": "Q02", "limite": "2s"}))
+        lim = e.acciones(s1)[-1]["id"]
+        d = DialogoAccion(w, e, s1, lim)
+        d.tipo.setCurrentIndex(d.tipo.findData("continua"))
+        d.aceptar()
+        self.assertEqual((e.datos_accion(lim)["tipo"], "limitUs" in e.ed.get(lim)), ("continua", False))
+
+    def test_SEDI96_nombres_de_variable_reservados(self):
+        """REQ-EDT-07, REQ-EDT-09: en la interfaz se rechaza, con mensaje y parpadeo, un nombre de variable que no se puede
+        escribir tal cual en una fórmula (palabra reservada sin distinguir mayúsculas, espacios o símbolos, no empieza por
+        letra, o confundible con una etapa como X1); vale en la tabla de variables, en «Crear las que faltan» y en el
+        diálogo de acciones; el núcleo no cambia."""
+        from escritorio.acciones import DialogoAccion
+        w = self.w
+        e, ids, ts = self._etapa_con_dos_acciones()
+        for n in ("AND", "and", "Or", "NOT", "true", "False", "rise", "FALL", "active", "activePartial", "activeMacro",
+                  "elapsed", "delay", "DELAY"):
+            self.assertEqual(e.motivo_nombre(n), f'"{n}" no puede ser nombre de variable: es una palabra de las fórmulas', n)
+        for n in ("mi var", "1a", "a-b", "a+b", "(x)"):
+            self.assertIn("debe empezar por una letra o _", e.motivo_nombre(n), n)
+        for n in ("X1", "X12"):
+            self.assertIn("se confundiría con la actividad de la etapa", e.motivo_nombre(n), n)
+        for n in ("marcha", "Q00", "x1", "Xmarcha", "Motor_1", "I0.1", "andar", "Sí", "XX1"):
+            self.assertIsNone(e.motivo_nombre(n), n)
+        # la tabla de variables: mensaje, parpadeo y la fila vuelve a quedar en blanco
+        pv = w.variables
+        n = len(e.ed.undo_stack)
+        pv.nueva()
+        fila = pv.tabla.rowCount() - 1
+        pv.tabla.item(fila, 0).setText("AND")
+        self.assertEqual(pv.msg.text(), '"AND" no puede ser nombre de variable: es una palabra de las fórmulas')
+        self.assertTrue(pv.parpadeo.t.isActive())
+        self.assertEqual((len(e.ed.undo_stack), [v["name"] for v in e.ed.model["variables"]].count("AND")), (n, 0))
+        self.assertEqual(pv.sin_nombre(), 1, "la fila sigue en blanco")
+        pv.parpadeo.parar()
+        pv.tabla.item(fila, 0).setText("X7")
+        self.assertIn("X7", pv.msg.text())
+        pv.parpadeo.parar()
+        pv.tabla.item(fila, 0).setText("Sensor")  # uno válido sí se crea
+        self.assertEqual((pv.msg.text(), "Sensor" in [v["name"] for v in e.ed.model["variables"]]), ("", True))
+        # renombrar
+        v = next(x for x in e.ed.model["variables"] if x["name"] == "Sensor")
+        self.assertEqual(e.cambiar_variable(v["id"], nombre="OR"), '"OR" no puede ser nombre de variable: es una palabra de las fórmulas')
+        self.assertEqual(next(x for x in e.ed.model["variables"] if x["id"] == v["id"])["name"], "Sensor")
+        self.assertIsNone(e.cambiar_variable(v["id"], nombre="Sensor"), "el mismo nombre no se vuelve a comprobar")
+        self.assertIn("no puede ser nombre", e.nueva_variable("Mi variable") or "")
+        # «Crear las que faltan» en una receptividad
+        e.seleccionar([ts["t1"]])
+        res = e.poner_condicion(ts["t1"], "`AND` AND marcha", crear=True)
+        self.assertEqual(res.code, "D-FORMATO")
+        self.assertEqual(e.mensaje, res.message)
+        self.assertNotIn("AND", [x["name"] for x in e.ed.model["variables"]])
+        # el diálogo de acciones al crear una variable
+        d = DialogoAccion(w, e, ids["1"])
+        d.variable.setCurrentText("Delay")
+        d.aceptar()
+        self.assertEqual(d.msg.text(), '"Delay" no puede ser nombre de variable: es una palabra de las fórmulas')
+        self.assertTrue(d.parpadeo.t.isActive())
+        self.assertNotEqual(d.result(), d.DialogCode.Accepted)
+        d.parpadeo.parar()
+        d.variable.setCurrentText("Q09")
+        d.aceptar()
+        self.assertEqual(d.result(), d.DialogCode.Accepted)
+        self.assertIn("Q09", [x["name"] for x in e.ed.model["variables"]])
+        # el núcleo admite lo que ya estaba (ficheros antiguos): el nombre reservado entre comillas invertidas
+        vid = e.ed.add_variable("AND", "input", {"kind": "bool"})
+        e.poner_condicion(ts["t2"], "`AND`")
+        self.assertEqual(e.texto_condicion(ts["t2"]), "`AND`")
+        self.assertIsNone(e.cambiar_variable(vid, role="internal"))
+
+    def test_SEDI99_y_y_o_con_muchos_operandos(self):
+        """REQ-EDT-02: un «y» o un «o» de 10, 11 o 26 operandos (las claves de los huecos no chocan con la clase del nodo):
+        texto -> árbol -> texto estable y con el mismo significado, se dibuja sin excepción y el «+» llega al máximo."""
+        from grafcet.expressions import parse
+        from escritorio import bloques
+        from escritorio.bloques import arbol_a_texto, hijos, texto_a_arbol
+        nombres = [f"v{i}" for i in range(26)]
+        vars_ = {n: ("input", "bool") for n in nombres}
+        sig = lambda t: parse(a_nucleo(t, [], vars_.keys()), lambda clase, nombre: nombre)  # noqa: E731
+        for n_ in (10, 11, 26):
+            for op in (" OR ", " AND "):
+                t = op.join(nombres[:n_])
+                arbol = texto_a_arbol(t, vars_, [])
+                self.assertEqual(len(hijos(arbol)), n_, t)
+                self.assertNotIn("k", hijos(arbol), "la clase del nodo no es un hueco")
+                self.assertEqual(arbol_a_texto(arbol), t)
+                self.assertEqual(arbol_a_texto(texto_a_arbol(arbol_a_texto(arbol), vars_, [])), t)
+                self.assertEqual(sig(arbol_a_texto(arbol)), sig(t), "mismo significado")
+        # dibujo sin excepción, en el área, con «+» hasta el máximo
+        from escritorio.bloques import Programador
+        p = Programador(lambda: (vars_, []))
+        p.resize(900, 500)
+        p.show()
+        p.poner(" OR ".join(nombres[:10]))
+        QApplication.processEvents()
+        area = p.lienzo
+        for _ in range(40):
+            area.anadir_hueco((0,))
+            QApplication.processEvents()
+        self.assertEqual(len(hijos(area.arbol)), bloques.MAX_ENTRADAS)
+        self.assertEqual(area.arbol["k"], "o")
+        self.assertEqual(arbol_a_texto(texto_a_arbol(p.texto(), vars_, [])), p.texto())
+        self.assertTrue(area.grab().width() > 0)
+        self.assertFalse([x for x in area._piezas if x[3] == "mas"], "sin «+» en el máximo")
+        # soltar, quitar y mover con claves altas
+        area.soltar(("K",), bloques.var("v1"))
+        self.assertEqual(area.arbol["K"]["n"], "v1")
+        area.quitar((0, "K"))
+        self.assertIsNone(area.arbol["K"])
+        self.assertTrue(area.quitar_hueco((0,), "K"))
+        self.assertEqual(len(hijos(area.arbol)), bloques.MAX_ENTRADAS - 1)
+        p.close()
+
+    def test_SEDI100_limitada_con_condicion_a_medias_pasa_a_borrador(self):
+        """REQ-ACT-01, REQ-EDT-02: la condición a medias (con huecos) de una limitada de un fichero antiguo la deja como
+        borrador que conserva su límite, como en una condicionada; con una condición completa vuelve al modelo."""
+        e, ids, ts = self._etapa_con_dos_acciones()
+        s1 = ids["1"]
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "limitada", "variable": "Q02", "limite": "3s"}))
+        lim = e.ed.get(s1)["actionRefs"][-1]
+        self.assertIsNone(e.poner_texto_accion(lim, "condicion", "marcha AND ?"))
+        b = next(x for x in e.ed.draft_actions() if x["tipo"] == "limitada")
+        self.assertEqual((b["limite"], b["condicion"], b["etapa"]), ("3s", "marcha AND ?", s1))
+        self.assertIsNone(e.poner_texto_accion(b["id"], "condicion", "marcha AND paro"))
+        self.assertEqual(e.ed.draft_actions(), [])
+        nueva = e.ed.get(s1)["actionRefs"][-1]
+        self.assertEqual((e.ed.get(nueva)["limitUs"], e.datos_accion(nueva)["condicion"]), ("3000000", "marcha AND paro"))
+
+    def test_SEDI101_renombrar_con_la_seleccion_cambiada_no_hace_nada(self):
+        """REQ-EDT-02: un editingFinished que llega tarde (la selección cambió, o el elemento ya no existe, por ejemplo tras
+        deshacer) no renombra nada ni falla."""
+        w = self.w
+        e, ids, ts = self.secuencial()
+        e.seleccionar([ids["1"]])
+        p = w.props
+        p.s_etiqueta.setText("Otra")
+        e.sel = [ids["0"]]  # la selección cambió antes de que llegara el aviso (el panel aún no se ha refrescado)
+        p._renombrar(p.s_etiqueta)
+        self.assertEqual((e.nombres[ids["1"]], e.nombres[ids["0"]]), ("1", "0"))
+        e.seleccionar([ids["1"]])
+        e.confirmar_borrado = lambda plan: True
+        e.borrar()
+        p.ident = ids["1"]  # obsoleto: el elemento ya no existe
+        p.s_etiqueta.setText("Z")
+        p._renombrar(p.s_etiqueta)  # sin KeyError
+
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
 class Bloques(unittest.TestCase):
@@ -3482,6 +4334,114 @@ class Bloques(unittest.TestCase):
         a.dropEvent(QDropEvent(QPointF(20, 20), Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton,
                                Qt.KeyboardModifier.NoModifier))
         self.assertEqual(p.texto(), "NOT ?")
+        p.close()
+
+    def test_SEDI97_y_y_o_de_varias_entradas(self):
+        """REQ-EDT-02: los bloques «y» y «o» llevan un «+» al final que añade otro hueco (y un «×» en los huecos vacíos de
+        más de dos, para quitarlos); soltar un bloque sobre el «+» lo añade en un hueco nuevo; un «o» de n operandos se
+        escribe `a OR b OR c OR d` y una cadena de OR (o de AND) del mismo nivel vuelve como un solo bloque de n huecos;
+        el texto es estable y los paréntesis solo salen donde la precedencia los exige."""
+        import json
+        from PySide6.QtCore import QMimeData, QPointF
+        from PySide6.QtGui import QDropEvent
+        from escritorio import bloques
+        from escritorio.bloques import (anadir_hueco, arbol_a_texto, hijos, nuevo, quitar_hueco, soltar_en_mas,
+                                        texto_a_arbol, var)
+        a = lambda t: texto_a_arbol(t, self.VARS, self.ETAPAS)  # noqa: E731
+        # texto -> árbol: una cadena del mismo operador es un solo bloque
+        o4 = a("marcha OR paro OR Q00 OR M1")
+        self.assertEqual((o4["k"], hijos(o4), [o4[c]["n"] for c in hijos(o4)]), ("o", ("a", "b", "c", "d"), ["marcha", "paro", "Q00", "M1"]))
+        y4 = a("marcha AND paro AND Q00 AND X1")
+        self.assertEqual((y4["k"], hijos(y4), y4["d"]["k"]), ("y", ("a", "b", "c", "d"), "etapa"))
+        self.assertEqual((hijos(a("marcha OR paro")), hijos(a("marcha"))), (("a", "b"), ()))
+        # y un grupo explícito a la derecha sigue siendo un bloque dentro de otro, con sus paréntesis
+        anidado = a("marcha OR (paro OR Q00 OR M1)")
+        self.assertEqual((hijos(anidado), anidado["b"]["k"], hijos(anidado["b"])), (("a", "b"), "o", ("a", "b", "c")))
+        # árbol -> texto estable, con paréntesis solo donde la precedencia los exige
+        for t in ("marcha OR paro OR Q00 OR M1", "marcha AND paro AND Q00 AND X1", "marcha OR (paro OR Q00 OR M1)",
+                  "marcha AND (paro AND Q00 AND X1)", "(marcha OR paro) AND Q00 AND (M1 OR X1 OR CT >= 3)",
+                  "marcha AND paro OR Q00 AND M1 OR X1", "NOT marcha OR NOT paro OR ↑Q00", "marcha OR ? OR paro",
+                  "marcha AND ? AND ? AND paro"):
+            self.assertEqual(arbol_a_texto(a(t)), t, t)
+            self.assertEqual(arbol_a_texto(a(arbol_a_texto(a(t)))), arbol_a_texto(a(t)), "estable")
+        self.assertEqual(arbol_a_texto(a("(marcha OR paro) OR Q00")), "marcha OR paro OR Q00", "un grupo a la izquierda es lo mismo")
+        self.assertEqual(arbol_a_texto(a("(marcha AND paro) OR (Q00 AND M1) OR X1 AND CT < 3")),
+                         "marcha AND paro OR Q00 AND M1 OR X1 AND CT < 3", "los paréntesis que sobran no se escriben")
+        # añadir y quitar huecos
+        base = a("marcha OR paro")
+        tres = anadir_hueco(base, ())
+        self.assertEqual((arbol_a_texto(tres), hijos(tres)), ("marcha OR paro OR ?", ("a", "b", "c")))
+        self.assertEqual(arbol_a_texto(anadir_hueco(tres, ())), "marcha OR paro OR ? OR ?")
+        simple = var("marcha")
+        self.assertIs(anadir_hueco(simple, ()), simple, "solo en «y» y «o»")
+        self.assertEqual(arbol_a_texto(quitar_hueco(tres, (), "c")), "marcha OR paro")
+        self.assertEqual(arbol_a_texto(quitar_hueco(anadir_hueco(tres, ()), (), "c")), "marcha OR paro OR ?")
+        self.assertEqual(arbol_a_texto(quitar_hueco(base, (), "b")), "marcha OR paro", "sin bajar de dos")
+        lleno = a("marcha OR paro OR Q00")
+        self.assertEqual(arbol_a_texto(quitar_hueco(lleno, (), "c")), "marcha OR paro OR Q00", "solo los vacíos")
+        medio = {**lleno, "b": None}
+        self.assertEqual(arbol_a_texto(quitar_hueco(medio, (), "b")), "marcha OR Q00", "los de detrás ocupan su sitio")
+        self.assertEqual(arbol_a_texto(soltar_en_mas(base, (), var("Q00", "output"))), "marcha OR paro OR Q00")
+        mov = soltar_en_mas(a("NOT marcha AND paro"), (), a("NOT marcha")["a"], origen=("a", "a"))
+        self.assertEqual(arbol_a_texto(mov), "NOT ? AND paro AND marcha")
+        for n in range(30):
+            base = anadir_hueco(base, ())
+        self.assertEqual(len(hijos(base)), bloques.MAX_ENTRADAS)
+        # el área: el «+» y el «×» son piezas de la superficie
+        p = self.prog()
+        p.resize(500, 300)
+        p.show()
+        p.poner("marcha OR paro")
+        QApplication.processEvents()
+        area = p.lienzo
+        area._calcular(area.width())
+        botones = lambda: [x for x in area._piezas if x[1] == "boton"]  # noqa: E731
+        self.assertEqual([x[3] for x in botones()], ["mas"])
+        emitidos = []
+        p.cambiado.connect(emitidos.append)
+        QTest.mouseClick(area, Qt.MouseButton.LeftButton, pos=botones()[0][0].center().toPoint())
+        self.assertEqual((p.texto(), emitidos), ("marcha OR paro OR ?", ["marcha OR paro OR ?"]))
+        self.assertEqual([x[3] for x in botones()], ["quitar:c", "mas"], "el «×» solo en un hueco vacío de más de dos")
+        QTest.mouseClick(area, Qt.MouseButton.LeftButton, pos=botones()[-1][0].center().toPoint())
+        self.assertEqual(p.texto(), "marcha OR paro OR ? OR ?")
+        QTest.mouseClick(area, Qt.MouseButton.LeftButton, pos=botones()[0][0].center().toPoint())
+        self.assertEqual(p.texto(), "marcha OR paro OR ?")
+        self.assertEqual(len(p._pila), 0, "sin historial local: lo deshace quien lo usa")
+        # pulsar un botón y mover no arrastra el bloque
+        arrastres = []
+        with mock.patch.object(area, "_arrastrar", lambda ruta: arrastres.append(ruta)):
+            c = botones()[-1][0].center()
+            QTest.mousePress(area, Qt.MouseButton.LeftButton, pos=c.toPoint())
+            QTest.mouseMove(area, (c + QPointF(30, 30)).toPoint())
+        self.assertEqual(arrastres, [])
+        # soltar un bloque sobre el «+»: en un hueco nuevo, también uno del área
+        def mime(nodo, grupo, origen):
+            m = QMimeData()
+            m.setData(bloques.MIME, json.dumps({"nodo": nodo, "grupo": grupo, "origen": origen}).encode())
+            return m
+        mas = botones()[-1][0].center()
+        m = mime(var("M1", "internal"), "otro", None)
+        from PySide6.QtGui import QDragMoveEvent
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            area.dragMoveEvent(QDragMoveEvent(mas.toPoint(), Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton,
+                                              Qt.KeyboardModifier.NoModifier))
+        self.assertEqual((area._objetivo, area._resalte_mas is not None), (None, True), "el «+» se resalta, no el bloque")
+        area.dropEvent(QDropEvent(mas, Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+        self.assertEqual(p.texto(), "marcha OR paro OR ? OR M1")
+        area._calcular(area.width())
+        mas = botones()[-1][0].center()
+        m = mime(area.arbol["a"], p.grupo, ["a"])
+        area.dropEvent(QDropEvent(mas, Qt.DropAction.MoveAction, m, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+        self.assertEqual(p.texto(), "? OR paro OR ? OR M1 OR marcha", "movido desde el área: deja su hueco")
+        # el texto vuelve a bloques con n huecos, y «Escribir» y los bloques coinciden
+        p.poner("marcha OR paro OR Q00 OR M1 OR X1")
+        self.assertEqual((p.lienzo.arbol["k"], hijos(p.lienzo.arbol), p.texto()),
+                         ("o", ("a", "b", "c", "d", "e"), "marcha OR paro OR Q00 OR M1 OR X1"))
+        # en la paleta no hay botones
+        self.assertFalse(p.paleta.motor.botones)
+        p.elegir_categoria("operador")
+        self.assertFalse([x for x in p.paleta._piezas if x[1] == "boton"])
         p.close()
 
 

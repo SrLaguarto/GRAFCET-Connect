@@ -34,7 +34,7 @@ from grafcet.view import Vista, auto_layout, layout_from_presentation, presentat
 from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion
 from .acciones import DialogoAccion
-from .propiedades import PanelPropiedades, Paleta
+from .propiedades import PanelPropiedades, Paleta, PaletaAcciones
 from .variables import PanelVariables
 
 TITULO = "Simulador GRAFCET"
@@ -42,17 +42,11 @@ TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
 MARGEN_LATERAL = 1.15  # los paneles laterales de edición se ensanchan hasta un 15 % más que su ancho mínimo
 AYUDA_EDICION = {
     "seleccionar": "Clic selecciona un elemento y muestra sus opciones a la izquierda; arrastrarlo lo mueve (a la "
-                   "rejilla); de un punto de unión (arriba o abajo) sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y "
-                   "deshacen y rehacen. Arrastre elementos desde la paleta.",
-    "etapa": "Clic en el lienzo coloca una etapa (Esc cancela). Después se puede cambiar a inicial en sus opciones.",
-    "transicion": "Clic en el lienzo coloca una transición (Esc cancela); su receptividad se escribe en sus opciones.",
-    "simultaneidad": "Clic en el lienzo coloca una barra de simultaneidad (doble trazo); se une a las etapas y la "
-                     "transición con enlaces y se ensancha estirando de sus extremos. Esc cancela.",
-    "accion": "Clic en el lienzo coloca una acción suelta (Esc cancela); se une a una etapa arrastrando desde su punto de "
-              "unión de la izquierda hasta la etapa. También se puede arrastrar la ficha Acción de la paleta a cualquier sitio.",
+                   "rejilla); de un punto de unión (arriba o abajo de una etapa o transición, a la derecha de una etapa) "
+                   "sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y deshacen y rehacen. Los elementos y las acciones nuevos se "
+                   "arrastran desde las carpetas de la izquierda.",
 }
-NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar", "etapa": "Etapa", "transicion": "Transición",
-                      "simultaneidad": "Simultaneidad", "accion": "Acción"}
+NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar"}
 AVISO = "Núcleo con perfil provisional · no declara conformidad con IEC 60848 / UNE-EN 60848"
 ESTADOS = {"pausada-estable": ("estable", "ok"), "pausada-recorrido": ("en recorrido (situación inestable)", "virt"),
            "error": ("detenido por diagnóstico", "err"), "no-compilable": ("no compilable", "err"),
@@ -228,10 +222,9 @@ class Ventana(QMainWindow):
         self.a_simular.blockSignals(False)
         self.a_herr: dict[str, QAction] = {}
         self.g_herr = QActionGroup(self)
-        for i, h in enumerate(HERRAMIENTAS, 1):
-            atajo = "Esc" if h == "seleccionar" else f"Alt+{i}"
-            a = self._accion("Sin herramienta (Esc)" if h == "seleccionar" else NOMBRE_HERRAMIENTA[h],
-                             lambda on, h=h: on and self.herramienta(h), atajo, True)
+        for h in HERRAMIENTAS:  # solo las que no colocan elementos: los elementos y las acciones se arrastran desde la paleta
+            atajo = "Esc"
+            a = self._accion("Seleccionar (Esc)", lambda on, h=h: on and self.herramienta(h), atajo, True)
             a.setToolTip(f"{NOMBRE_HERRAMIENTA[h]} ({atajo}): {AYUDA_EDICION[h]}")
             self.g_herr.addAction(a)
             self.a_herr[h] = a
@@ -386,23 +379,27 @@ class Ventana(QMainWindow):
         self.setCentralWidget(self.vsplit)
         # Izquierda: paleta de elementos (arriba) y propiedades del elemento seleccionado (abajo); solo al editar
         self.paleta = Paleta()
-        self.paleta.setMinimumWidth(self.paleta.ancho_minimo())  # las dos columnas de fichas, sin cortarse
-        self.paleta.elegida.connect(self.herramienta)
-        self.paleta.escala = self.diagrama.escala
+        self.paleta_acciones = PaletaAcciones()
+        self.carpetas = QTabWidget()  # las dos carpetas de la paleta: «Elementos» y «Acciones»
+        for lista, titulo in ((self.paleta, "Elementos"), (self.paleta_acciones, "Acciones")):
+            lista.setMinimumWidth(lista.ancho_minimo())  # las dos columnas de fichas, sin cortarse
+            lista.ayuda.connect(self._ayuda_ficha)  # un clic en una ficha solo muestra su ayuda
+            lista.escala = self.diagrama.escala
+            self.carpetas.addTab(lista, titulo)
         self.props = PanelPropiedades()
         izq_edit = QSplitter(Qt.Orientation.Vertical)
-        izq_edit.addWidget(self.paleta)
+        izq_edit.addWidget(self.carpetas)
         scroll_props = QScrollArea()  # las opciones de una transición son largas: se desplazan
         scroll_props.setWidgetResizable(True)
         scroll_props.setWidget(self.props)
         scroll_props.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # se estrecha: nada queda a medias
         izq_edit.addWidget(scroll_props)
-        izq_edit.setSizes([210, 450])
+        izq_edit.setSizes([350, 310])
         # El programador por bloques de la receptividad vive en el panel inferior, solo al editar
         self.pestanas.addTab(self.props.pagina_bloques, "Bloques")
         self.i_bloques = self.pestanas.indexOf(self.props.pagina_bloques)
         self.pestanas.setTabVisible(self.i_bloques, False)
-        self._transicion_bloques: str | None = None  # la transición cuya selección ya activó la pestaña
+        self._objetivo_bloques: tuple | None = None  # lo que ya activó la pestaña Bloques: una transición o una acción
         self.props.abrir_bloques = self._abrir_bloques
         self.props.bloques_visibles = lambda: self.a_inferior.isChecked()
         self.dock = QDockWidget("Elementos", self)
@@ -686,7 +683,7 @@ class Ventana(QMainWindow):
         self.pestanas.setTabVisible(self.i_bloques, editar)  # los bloques solo se programan al editar
         if not editar and self.pestanas.currentIndex() == self.i_bloques:
             self.pestanas.setCurrentIndex(0)
-        self._transicion_bloques = None
+        self._objetivo_bloques = None
         self.diagrama.modo_edicion(editar, self.edicion if editar else None)
         if editar:
             self.refrescar_edicion()
@@ -736,6 +733,12 @@ class Ventana(QMainWindow):
         elif e is not None:
             self.refrescar_edicion()
 
+    def _ayuda_ficha(self, texto: str) -> None:
+        """Un clic en una ficha de la paleta: su ayuda, como aviso informativo (no coloca nada)."""
+        if self.edicion is not None:
+            self.edicion.informar(texto)
+            self.edicion.cambiado.emit()
+
     def refrescar_edicion(self) -> None:
         e = self.edicion
         if e is None or self.modo != "editar":
@@ -757,12 +760,11 @@ class Ventana(QMainWindow):
         self.l_sel.setText(("Selección: " + ", ".join(sel)) if sel else "Nada seleccionado.")
         self.l_reloj.setText(f"{len(e.M['steps'])} etapas · {len(e.M['transitions'])} transiciones")
         self.a_herr[e.herramienta].setChecked(True)
-        self.paleta.elegir(e.herramienta)
         self.props.mostrar(e)
-        tid = self.props.transicion()
-        if tid is not None and tid != self._transicion_bloques:  # al seleccionar una transición, sus bloques
+        objetivo = self.props.objetivo_bloques()
+        if objetivo is not None and objetivo != self._objetivo_bloques:  # al seleccionar una transición o una acción, sus bloques
             self.pestanas.setCurrentIndex(self.i_bloques)
-        self._transicion_bloques = tid
+        self._objetivo_bloques = objetivo
         self.variables.mostrar(e)
         self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
         self.a_rehacer.setEnabled(bool(e.ed.redo_stack))

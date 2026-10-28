@@ -30,7 +30,7 @@ from grafcet.notation import a_nucleo, a_usuario, normalizar_espacios, x_etapa
 
 # -- modelo: el árbol de bloques --------------------------------------------------------------------------
 # Un nodo es un diccionario con su clase en "k"; un hueco es None:
-#   var(n, papel)  etapa(n)  const(v)  y(a, b)  o(a, b)  no(a)  sube(a)  baja(a)  temp(t1, t2, a)
+#   var(n, papel)  etapa(n)  const(v)  y(a, b, c…)  o(a, b, c…)  no(a)  sube(a)  baja(a)  temp(t1, t2, a)
 #   cmp(n, op, v)  texto(s)  (lo que no se representa con bloques: aritmética, nombres que no existen)
 HIJOS = {"y": ("a", "b"), "o": ("a", "b"), "no": ("a",), "sube": ("a",), "baja": ("a",), "temp": ("a",)}
 ENVUELVEN = frozenset(HIJOS)  # soltados sobre un hueco ocupado, el bloque que había entra en su primer hueco
@@ -57,8 +57,22 @@ def var(nombre: str | None, papel: str = "input") -> dict[str, Any]:
     return nuevo("var", n=nombre, papel=papel)
 
 
+MAX_ENTRADAS = 26  # un «y» o un «o» llega a tantos huecos como letras (a…z)
+_LETRAS = "abcdefghijKlmnopqrstuvwxyz"  # claves de operando; la «k» minúscula es la clase del nodo, no puede ser un hueco
+
+
 def hijos(n: dict[str, Any] | None) -> tuple[str, ...]:
-    return HIJOS.get(n["k"], ()) if n else ()
+    """Las claves de los huecos de un bloque. Un «y» o un «o» tiene dos o más (a, b, c…), uno por operando."""
+    if not n:
+        return ()
+    if n["k"] in ("y", "o"):
+        out: list[str] = []
+        for c in _LETRAS:
+            if c not in n:
+                break
+            out.append(c)
+        return tuple(out)
+    return HIJOS.get(n["k"], ())
 
 
 def obtener(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> dict[str, Any] | None:
@@ -90,6 +104,48 @@ def primer_hueco(n: dict[str, Any] | None, ruta: tuple[str, ...] = ()) -> tuple[
         if h is not None:
             return h
     return None
+
+
+def anadir_hueco(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> dict[str, Any] | None:
+    """Copia del árbol con otro hueco al final del «y» o el «o» que hay en `ruta` (sin cambio si no lo es o ya tiene
+    MAX_ENTRADAS)."""
+    nueva = copy.deepcopy(raiz)
+    n = obtener(nueva, ruta)
+    if n is None or n["k"] not in ("y", "o") or len(hijos(n)) >= MAX_ENTRADAS:
+        return raiz
+    n[_LETRAS[len(hijos(n))]] = None
+    return nueva
+
+
+def quitar_hueco(raiz: dict[str, Any] | None, ruta: tuple[str, ...], clave: str) -> dict[str, Any] | None:
+    """Copia del árbol sin el hueco `clave` del «y» o el «o» de `ruta`, si está vacío y quedan al menos dos más: los de
+    detrás pasan a ocupar su lugar. Si no se puede, sin cambio."""
+    nueva = copy.deepcopy(raiz)
+    n = obtener(nueva, ruta)
+    if n is None or n["k"] not in ("y", "o") or clave not in hijos(n) or n[clave] is not None or len(hijos(n)) <= 2:
+        return raiz
+    cs = list(hijos(n))
+    valores = [n[c] for c in cs if c != clave]
+    for c in cs:
+        del n[c]
+    for c, v in zip(_LETRAS, valores):
+        n[c] = v
+    return nueva
+
+
+def soltar_en_mas(raiz: dict[str, Any] | None, ruta: tuple[str, ...], nodo: dict[str, Any],
+                  origen: tuple[str, ...] | None = None) -> dict[str, Any] | None:
+    """Suelta un bloque sobre el «+» del «y» o el «o» de `ruta`: lo añade en un hueco nuevo al final. Con `origen`, el
+    bloque ya estaba en el árbol y se mueve (se quita de allí); soltarlo sobre algo suyo no cambia nada."""
+    base = raiz
+    if origen is not None:
+        if ruta[:len(origen)] == origen:
+            return raiz
+        nodo, base = obtener(raiz, origen), quitar(raiz, origen)
+    con_hueco = anadir_hueco(base, ruta)
+    if con_hueco is base:
+        return raiz
+    return con_nodo(con_hueco, ruta + (hijos(obtener(con_hueco, ruta))[-1],), nodo)
 
 
 def soltar(raiz: dict[str, Any] | None, ruta: tuple[str, ...], nodo: dict[str, Any]) -> dict[str, Any] | None:
@@ -189,8 +245,12 @@ def _desde_significado(m: dict[str, Any], variables: dict[str, tuple[str, str]],
             return texto()  # no existe, o es «active(`1`)» con una etapa E1 que también se escribiría X1
         return nuevo("etapa", n=x)
     if op in ("and", "or"):
-        a, b = m["operands"]
-        return nuevo("y" if op == "and" else "o", a=hijo(a), b=hijo(b))
+        operandos: list[dict[str, Any]] = []  # una cadena del mismo operador (a OR b OR c) es un solo bloque de n huecos
+        while m["operator"] == op:
+            operandos.insert(0, m["operands"][1])
+            m = m["operands"][0]
+        operandos.insert(0, m)
+        return nuevo("y" if op == "and" else "o", **{c: hijo(o) for c, o in zip(_LETRAS, operandos)})
     if op in ("not", "rise", "fall"):
         return nuevo({"not": "no", "rise": "sube", "fall": "baja"}[op], a=hijo(m["operands"][0]))
     if op == "delay":
@@ -279,10 +339,9 @@ def _crudo(n: dict[str, Any] | None) -> str:
         return n["n"] or "?"
     if k == "const":
         return str(n["v"])
-    if k == "y":
-        return f"{_t(n['a'], 2)} AND {_t(n['b'], 3)}"
-    if k == "o":
-        return f"{_t(n['a'], 1)} OR {_t(n['b'], 2)}"
+    if k in ("y", "o"):  # el primer operando, a su precedencia; los demás, a una más (un «o» dentro de un «o» va entre paréntesis)
+        req = 2 if k == "y" else 1
+        return (" AND " if k == "y" else " OR ").join(_t(n[c], req if i == 0 else req + 1) for i, c in enumerate(hijos(n)))
     if k == "no":
         a = _efectivo(n["a"])
         return f"NOT ({_t(a)})" if a is not None and a["k"] == "temp" else f"NOT {_t(a, 3)}"
@@ -356,21 +415,31 @@ class Motor:
         self.fb.setBold(True)
         self.m, self.mb = QFontMetricsF(self.f), QFontMetricsF(self.fb)
         self.nat: dict[tuple, float] = {}
+        self.botones = True  # los «+» y «×» del «y» y el «o»: en la paleta no hay
 
     def reiniciar(self) -> None:
         self.vars, self.etapas = self.fuente()
         self.nat = {}
 
     # -- qué lleva cada bloque
-    @staticmethod
-    def elementos(n: dict[str, Any]) -> list[tuple]:
+    def elementos(self, n: dict[str, Any]) -> list[tuple]:
         k = n["k"]
         if k in ("var", "etapa"):
             return [("drop", "n", n["n"] or "elegir")]
         if k == "const":
             return [("txt", "", str(n["v"]))]
         if k in ("y", "o"):
-            return [("hijo", "a"), ("txt", "", "y" if k == "y" else "o"), ("hijo", "b")]
+            hs = hijos(n)
+            out: list[tuple] = []
+            for i, c in enumerate(hs):
+                if i:
+                    out.append(("txt", "", "y" if k == "y" else "o"))
+                out.append(("hijo", c))
+                if self.botones and len(hs) > 2 and n[c] is None:  # un hueco vacío de más de dos: se quita con «×»
+                    out.append(("boton", f"quitar:{c}", "×"))
+            if self.botones and len(hs) < MAX_ENTRADAS:
+                out.append(("boton", "mas", "+"))
+            return out
         if k == "no":
             return [("txt", "", "no"), ("hijo", "a")]
         if k in ("sube", "baja"):
@@ -405,6 +474,8 @@ class Motor:
         tipo = e[0]
         if tipo == "txt":
             return _Pieza("txt", "", e[2], False, self.mb.horizontalAdvance(e[2]), 16)
+        if tipo == "boton":
+            return _Pieza("boton", e[1], e[2], False, 22, ALTO)
         texto = e[2] or (e[3] if tipo == "campo" else "")
         vacio = tipo == "campo" and not e[2]
         extra = 22 if tipo == "drop" else 12
@@ -516,6 +587,14 @@ class Motor:
 
     def _pintar_pieza(self, p: QPainter, it: _Pieza, r: QRectF) -> None:
         if it.tipo == "txt":
+            p.setFont(self.fb)
+            p.setPen(QColor("#FFFFFF"))
+            p.drawText(r, Qt.AlignmentFlag.AlignCenter, it.texto)
+            return
+        if it.tipo == "boton":  # «+» añade un hueco, «×» quita uno vacío
+            p.setPen(QPen(QColor(255, 255, 255, 200), 1.2))
+            p.setBrush(QColor(255, 255, 255, 60))
+            p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 5, 5)
             p.setFont(self.fb)
             p.setPen(QColor("#FFFFFF"))
             p.drawText(r, Qt.AlignmentFlag.AlignCenter, it.texto)
@@ -741,7 +820,7 @@ class _Superficie(QWidget):
         if self._pulsado is None or not event.buttons() & Qt.MouseButton.LeftButton:
             return
         pos, que, es_pieza = self._pulsado
-        if (event.position() - pos).manhattanLength() < 6 or que is None:
+        if (event.position() - pos).manhattanLength() < 6 or que is None or (es_pieza and que[1] == "boton"):
             return
         ruta = que[2] if es_pieza else que
         self._pulsado = None
@@ -756,8 +835,13 @@ class _Superficie(QWidget):
             r, tipo, ruta, clave = que
             if tipo == "drop":
                 self._menu(ruta, clave, r)
+            elif tipo == "boton":
+                self._boton(ruta, clave)
             else:
                 self._abrir_editor(r, ruta, clave)
+
+    def _boton(self, ruta: tuple, clave: str) -> None:
+        pass
 
     def _menu(self, ruta: tuple, clave: str, r: QRectF) -> None:
         i, rr = self._partir(ruta)
@@ -823,6 +907,7 @@ class PaletaBloques(_Superficie):
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "",
                  columna: bool = False) -> None:
         super().__init__(fuente, grupo)
+        self.motor.botones = False
         self.clave = "entrada"
         self.columna = columna  # uno debajo de otro (el programador); si no, uno tras otro, pasando de línea
         self.cargar("entrada")
@@ -943,6 +1028,40 @@ class AreaBloques(_Superficie):
         if obtener(self.arbol, ruta) is not None:
             self._fijar(0, quitar(self.arbol, ruta))
 
+    def anadir_hueco(self, ruta: tuple) -> bool:
+        """El «+» de un «y» o un «o»: otro hueco al final. Devuelve si cambió algo."""
+        nueva = anadir_hueco(self.arbol, tuple(self._partir(ruta)[1]))
+        if nueva is self.arbol:
+            return False
+        self._fijar(0, nueva)
+        return True
+
+    def quitar_hueco(self, ruta: tuple, clave: str) -> bool:
+        """El «×» de un hueco vacío de un «y» o un «o» de más de dos."""
+        nueva = quitar_hueco(self.arbol, tuple(self._partir(ruta)[1]), clave)
+        if nueva is self.arbol:
+            return False
+        self._fijar(0, nueva)
+        return True
+
+    def soltar_en_mas(self, ruta: tuple, nodo: dict[str, Any], origen: tuple | None = None) -> bool:
+        """Suelta un bloque sobre el «+» del «y» o el «o» de `ruta`: lo añade en un hueco nuevo."""
+        try:
+            nueva = soltar_en_mas(self.arbol, tuple(self._partir(ruta)[1]), nodo,
+                                  None if origen is None else tuple(origen))
+        except KeyError:
+            return False
+        if nueva == self.arbol:
+            return False
+        self._fijar(0, nueva)
+        return True
+
+    def _boton(self, ruta: tuple, clave: str) -> None:
+        if clave == "mas":
+            self.anadir_hueco(ruta)
+        elif clave.startswith("quitar:"):
+            self.quitar_hueco(ruta, clave.split(":", 1)[1])
+
     def _partir(self, ruta: tuple) -> tuple[int, tuple]:
         return (0, tuple(ruta)) if not ruta or ruta[0] != 0 else (0, tuple(ruta[1:]))
 
@@ -958,7 +1077,9 @@ class AreaBloques(_Superficie):
         d = self._datos_mime(event.mimeData())
         if d is None:
             return
-        self._objetivo = self.ruta_en(event.position())
+        mas = self._mas_en(event.position())
+        self._objetivo = None if mas else self.ruta_en(event.position())
+        self._resalte_mas = mas[0] if mas else None
         self.update()
         event.setDropAction(Qt.DropAction.MoveAction if d.get("origen") is not None and d["grupo"] == self.grupo
                             else Qt.DropAction.CopyAction)
@@ -966,22 +1087,37 @@ class AreaBloques(_Superficie):
 
     def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802
         self._objetivo = None
+        self._resalte_mas = None
         self.update()
+
+    def _mas_en(self, pos: QPointF) -> tuple | None:
+        """El «+» de un «y» o un «o» bajo el puntero, si lo hay: (su rectángulo, la ruta del bloque)."""
+        pieza = self._pieza_en(pos)
+        return (pieza[0], pieza[2]) if pieza and pieza[1] == "boton" and pieza[3] == "mas" else None
 
     def dropEvent(self, event: Any) -> None:  # noqa: N802
         d = self._datos_mime(event.mimeData())
         self._objetivo = None
+        self._resalte_mas = None
         if d is None:
             return
-        ruta = self.ruta_en(event.position())
+        mas = self._mas_en(event.position())
+        ruta = None if mas else self.ruta_en(event.position())
         origen = tuple(d["origen"]) if d.get("origen") is not None and d["grupo"] == self.grupo else None
         _ARRASTRE["resuelto"] = True
         event.setDropAction(Qt.DropAction.MoveAction if origen is not None else Qt.DropAction.CopyAction)
         event.accept()
-        self.soltar(None if ruta is None else tuple(ruta[1:]), d["nodo"], origen)
+        if mas:  # sobre el «+»: en un hueco nuevo
+            self.soltar_en_mas(mas[1], d["nodo"], origen)
+        else:
+            self.soltar(None if ruta is None else tuple(ruta[1:]), d["nodo"], origen)
         self.update()
 
     def _extra(self, p: QPainter) -> None:
+        if getattr(self, "_resalte_mas", None) is not None:  # el «+» donde caería lo que se arrastra
+            p.setPen(QPen(QColor("#FFD43B"), 2.6))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRoundedRect(self._resalte_mas.adjusted(-1, -1, 1, 1), 5, 5)
         if self.arbol is None:
             c, x, y = self._cajas[0]
             p.setFont(self.motor.f)

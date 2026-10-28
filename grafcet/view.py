@@ -228,6 +228,7 @@ class Vista:
             self.model = self._structure(key, title, help_text, doc, res.can_simulate, layout)
             self.model["linkStyles"] = styles
             self.model["draftActions"] = self.draft_actions
+            self.model["actionLayouts"] = self.action_layouts  # colocación de las acciones de cada etapa o grupo suelto
             from .routing import enlaces
             self.model["links"] = enlaces(self.model)
         except (KeyError, TypeError, ValueError, AttributeError, IndexError):

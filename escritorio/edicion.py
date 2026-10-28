@@ -9,6 +9,7 @@ así que se puede probar sin pantalla.
 from __future__ import annotations
 
 import copy
+import re
 import uuid
 from fractions import Fraction
 from pathlib import Path
@@ -17,6 +18,7 @@ from typing import Any, Callable
 from PySide6.QtCore import QObject, QPointF, QRectF, Qt, QTimer, Signal
 
 from grafcet.diagnostics import Diagnostic, DiagnosticError
+from grafcet.expressions import FUNCS_EXPR, FUNCS_REF, KEYWORDS
 from grafcet.notation import a_nucleo, a_usuario, etapas_ambiguas, x_etapa
 from grafcet.editor import Editor, new_grafcet_document
 from grafcet.ids import MAX_LABEL, valid_label
@@ -27,15 +29,19 @@ from grafcet.timeutil import parse_duration
 from grafcet.view import Vista, display_names, norm, layout_from_presentation, presentation_for, substitute
 
 from .bloques import _dur_usuario, normalizar_duracion
-from .diagrama import ACT_LINK, H, REJILLA, SX, TB, ancla_en, anclas, barra, elemento_en, enlaces, posiciones
+from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, REJILLA, SX, TB, _distancia, ancla_en, anclas, barra,
+                       elemento_en, enlaces, icono_accion, posiciones)
 
-HERRAMIENTAS = ("seleccionar", "etapa", "transicion", "simultaneidad", "accion")  # sin herramienta, el ratón selecciona, mueve y enlaza
+HERRAMIENTAS = ("seleccionar",)  # el ratón selecciona, mueve y enlaza; los elementos nuevos solo se colocan arrastrándolos
 DY = 80  # distancia vertical entre una etapa y su transición (la de los ejemplos)
 IMAN = 40  # a qué distancia horizontal (dos pasos de rejilla) un elemento movido se alinea con uno enlazado
-TIPOS_ACCION = (("continua", "Continua"), ("limitada", "Continua limitada en el tiempo"),
-                ("activacion", "Memorizada al activar"), ("desactivacion", "Memorizada al desactivar"),
-                ("evento", "Memorizada por evento"))
+IMAN_ACCION = 16  # a qué distancia de otra acción se pega una acción suelta (lado derecho, o inferior en columna)
+TIPOS_ACCION = FICHAS_ACCION  # continua, condicionada, al activar, al desactivar, por evento (+ «limitada» de ficheros antiguos)
+TEXTO_LIMITADA = "Condicionada (con límite de tiempo)"
+CONTINUAS = ("continua", "condicionada", "limitada")  # los tipos de una acción continua
+CON_CONDICION = ("condicionada", "limitada")  # las continuas con condición: se programa en la pestaña Bloques
 DISPARADOR = {"activacion": "activation", "desactivacion": "deactivation", "evento": "event"}
+RESERVADAS = {p.lower() for p in KEYWORDS | set(FUNCS_REF) | FUNCS_EXPR | {"delay"}}  # palabras de las fórmulas
 
 
 COLOCACIONES = (("fila", "En fila, pegadas"), ("fila-separada", "En fila, separadas"), ("columna", "En columna"))
@@ -141,9 +147,11 @@ class Edicion(QObject):
             if not ok:
                 malos += 1
                 continue
-            for k in ("variable", "condicion", "valor", "evento", "limite", "etapa"):
+            for k in ("variable", "condicion", "valor", "evento", "limite", "etapa", "grupo"):
                 if k in b and not isinstance(b[k], str):
                     del b[k]
+            if "orden" in b and (not isinstance(b["orden"], int) or isinstance(b["orden"], bool)):
+                del b["orden"]
             if b.get("etapa") not in etapas:
                 b.pop("etapa", None)
             if b.get("variable") not in variables:
@@ -205,7 +213,11 @@ class Edicion(QObject):
         self.nombres = self.M.get("names", {})
         vivos = set(posiciones(self.M)) | {d["id"] for d in self.M.get("drafts", [])} | {e["id"] for e in enlaces(self.M)} | {b["id"] for b in self.M.get("bars", [])}
         vivos |= {a["id"] for a in ed.model["actions"]} | {d["id"] for d in ed.draft_actions()}
+        vivos |= {f"enlaceacc:{s['id']}" for s in self.M["steps"]
+                  if s["actions"] or any(d.get("etapa") == s["id"] for d in self.M.get("draftActions", []))}
         self.sel = [i for i in self.sel if i in vivos]
+        if self.accion not in vivos:  # la acción señalada ya no existe (se deshizo, cambió de ID al completarse…)
+            self.accion = None
 
     def diagnosticos(self) -> list[dict[str, Any]]:
         """Los diagnósticos del modelo para el panel (REQ-EDT-09): código, texto con nombres, corrección y elemento."""
@@ -320,25 +332,44 @@ class Edicion(QObject):
         return ajustar(p.x() - SX), ajustar(p.y())
 
     def colocar(self, tipo: str, p: QPointF) -> None:
-        """Un elemento de la paleta soltado en el dibujo."""
+        """Un elemento de la paleta soltado en el dibujo: «etapa», «transicion», «simultaneidad» o «accion:<tipo>»
+        (continua, condicionada, activacion, desactivacion, evento; «accion» a secas es una continua)."""
         if tipo == "etapa":
             self.poner_etapa(p)
         elif tipo == "transicion":
             self.poner_transicion(p)
         elif tipo == "simultaneidad":
             self.poner_barra(p, "Y")
-        elif tipo == "accion":
-            self.poner_accion_suelta(p)
+        elif tipo == "accion" or tipo.startswith("accion:"):
+            self.poner_accion_suelta(p, tipo.partition(":")[2] or "continua")
 
-    def poner_accion_suelta(self, p: QPointF) -> str:
-        """La ficha «Acción» (soltada o con clic) en un punto: una acción continua suelta, sin variable todavía (se dibuja
-        con «?», como borrador), con su punto de unión a la izquierda. No abre ningún diálogo: se une a una etapa con un
-        enlace y se completa con «Editar…» (P-IMP-41)."""
+    def poner_accion_suelta(self, p: QPointF, tipo: str = "continua") -> str:
+        """Una ficha de acción soltada en un punto: una acción suelta de ese tipo, sin variable todavía (se dibuja con «?»),
+        con su punto de unión a la izquierda. Si toca el lado derecho (o el inferior, en columna) de otra acción, se pega
+        a ella: pasa a su etapa o a su grupo. No abre ningún diálogo: se une a una etapa con un enlace y se completa con
+        «Editar…» (P-IMP-41, P-IMP-43)."""
         x, y = self._modelo(p)
-        did = self.ed.add_draft_action((x, y))
-        self.sel, self.accion = [did], None
-        self.informar("Acción suelta: arrastre desde su punto de la izquierda hasta una etapa para unirla.")
-        self.cambia()
+        iman = self._buscar_iman([], x, y, ACT_MIN)
+        did = ""
+        destino: list[Any] = [(None, [])]
+
+        def hacer() -> None:
+            nonlocal did
+            did = self.ed.add_draft_action((x, y), {"tipo": tipo})
+            if iman:
+                destino[0] = self._pegar([did], iman["objetivo"])
+        motivo = self._atomico("colocar acción", hacer)
+        if motivo:
+            self.rechazar(motivo)
+            self.cambiado.emit()
+            return ""
+        if iman:
+            self._tras_pegar([did], *destino[0])
+        else:
+            self.sel, self.accion = [did], None
+            self.informar("Acción suelta: arrástrela hasta una etapa (desde el punto de unión de su izquierda) para unirla, "
+                          "o péguela al lado de otra acción.")
+            self.cambiado.emit()
         return did
 
     def _punto(self, p: QPointF, ident: str | None) -> dict[str, Any] | None:
@@ -354,8 +385,8 @@ class Edicion(QObject):
         ident = elemento_en(self.M, p)
         cerca = self._punto(p, ident)
         caja = self.accion_en(p) if ident is None else None
-        if caja and caja.get("suelta"):  # sobre una acción suelta: se ve su punto de unión
-            ident = caja["id"]
+        if caja and caja.get("suelta"):  # sobre una acción suelta: se ve el punto de unión de su grupo
+            ident = caja["cabeza"]
         self.diagrama.marcar_anclas(anclas(self.M, ident or (cerca["id"] if cerca else "")), cerca)
 
     def _barra(self, ident: str | None) -> dict[str, Any] | None:
@@ -363,98 +394,86 @@ class Edicion(QObject):
 
     def prensar(self, p: QPointF, event: Any = None) -> bool:
         ident = elemento_en(self.M, p)
-        h = self.herramienta
         punto = self._punto(p, ident)
-        if h == "accion":  # clic en el dibujo: una acción suelta ahí; la herramienta vale para una
-            self.poner_accion_suelta(p)
-            self.herramienta = "seleccionar"
+        amplia = self._mayus(event)
+        if punto and punto["lado"] == "izq":  # el punto de unión de una acción suelta (o de su grupo)
+            self.sel, self.accion = self._ids_grupo(punto["id"]), None
+            self.enlace = punto
+            self.cambiado.emit()
+            self.enlace = punto
+            return True
+        caja = self.accion_en(p) if ident is None else None
+        if caja:
+            if caja.get("suelta"):  # una acción suelta se selecciona y se mueve, con las que lleva pegadas
+                ids = self._ids_grupo(caja["id"])
+                self.sel, self.accion = ids, caja["id"]
+                cab = self._borrador(ids[0])
+                hx, hy = float(Fraction(str(cab["x"]))), float(Fraction(str(cab["y"])))
+                self.arrastre = {"id": ids[0], "ids": ids, "tipo": "borrador", "dx": p.x() - (hx + SX), "dy": p.y() - hy,
+                                 "x": hx, "y": hy, "movido": False}
+            else:  # clic en una acción: se selecciona su etapa y se señala la acción
+                self.sel, self.accion = [caja["etapa"]], caja["id"]
             self.cambiado.emit()
             return True
-        amplia = self._mayus(event)
-        if h == "seleccionar" and punto and punto["lado"] == "izq":  # el punto de unión de una acción suelta
+        union = self.union_en(p) if ident is None and not punto else None
+        if union:  # el enlace de una etapa con sus acciones
+            self.sel, self.accion = [union], None
+            self.cambiado.emit()
+            return True
+        self.accion = None
+        rutas = enlaces(self.M)
+        # Las flechas se pueden agarrar directamente; los tiradores solo aparecen al seleccionar.
+        for r in rutas:
+            for f in r["arrows"]:
+                if (p-QPointF(*f["pos"])).manhattanLength() <= 12:
+                    self.sel, self.flecha = [r["id"]], f["key"]
+                    self.arrastre = {"id": r["id"], "tipo": "flecha", "pts": r["pts"], "movido": False,
+                                     "start": p, "style": copy.deepcopy(self.ed.link_styles().get(r["id"], {}))}
+                    self.cambiado.emit()
+                    return True
+        for r in rutas:
+            if r["id"] not in self.sel:
+                continue
+            for handle in r["handles"]:
+                if (p-QPointF(*handle["pos"])).manhattanLength() <= 12:
+                    self.arrastre = {"id": r["id"], "tipo": "tramo", "pts": r["pts"], "handle": handle,
+                                     "movido": False, "start": p,
+                                     "style": copy.deepcopy(self.ed.link_styles().get(r["id"], {}))}
+                    return True
+        for b in (self._barra(i) for i in self.sel):  # tiradores de los extremos de una barra seleccionada: se estira
+            if b:
+                bx, by, w, hh = barra(b)
+                for lado, cx in (("izq", bx), ("der", bx + w)):
+                    if abs(p.x() - cx) <= 9 and abs(p.y() - (by + hh / 2)) <= 10:
+                        self.arrastre = {"id": b["id"], "tipo": "estirar", "lado": lado, "x": b["x"], "ancho": b["ancho"],
+                                         "movido": False}
+                        return True
+        if punto:  # de un punto de unión sale directamente el enlace
             self.enlace = punto
             self.sel = [punto["id"]]
             self.cambiado.emit()
             self.enlace = punto
             return True
-        caja = self.accion_en(p) if ident is None else None
-        if caja and h == "seleccionar":
-            if caja.get("suelta"):  # una acción suelta se selecciona y se mueve
-                self.sel, self.accion = [caja["id"]], None
-                x, y, _, _ = caja["rect"]
-                self.arrastre = {"id": caja["id"], "tipo": "borrador", "dx": p.x() - x, "dy": p.y() - (y + H),
-                                 "x": x - SX, "y": y + H, "movido": False}
-            else:  # clic en una acción: se selecciona su etapa y se señala la acción
-                self.sel, self.accion = [caja["etapa"]], caja["id"]
+        if amplia and ident:  # Mayús añade a la selección (o la quita, si ya estaba) sin arrastrar
+            self.sel = [i for i in self.sel if i != ident] if ident in self.sel else self.sel + [ident]
             self.cambiado.emit()
             return True
-        self.accion = None
-        if h == "seleccionar":
-            rutas = enlaces(self.M)
-            # Las flechas se pueden agarrar directamente; los tiradores solo aparecen al seleccionar.
-            for r in rutas:
-                for f in r["arrows"]:
-                    if (p-QPointF(*f["pos"])).manhattanLength() <= 12:
-                        self.sel, self.flecha = [r["id"]], f["key"]
-                        self.arrastre = {"id": r["id"], "tipo": "flecha", "pts": r["pts"], "movido": False,
-                                         "start": p, "style": copy.deepcopy(self.ed.link_styles().get(r["id"], {}))}
-                        self.cambiado.emit()
-                        return True
-            for r in rutas:
-                if r["id"] not in self.sel:
-                    continue
-                for handle in r["handles"]:
-                    if (p-QPointF(*handle["pos"])).manhattanLength() <= 12:
-                        self.arrastre = {"id": r["id"], "tipo": "tramo", "pts": r["pts"], "handle": handle,
-                                         "movido": False, "start": p,
-                                         "style": copy.deepcopy(self.ed.link_styles().get(r["id"], {}))}
-                        return True
-            for b in (self._barra(i) for i in self.sel):  # tiradores de los extremos de una barra seleccionada: se estira
-                if b:
-                    bx, by, w, hh = barra(b)
-                    for lado, cx in (("izq", bx), ("der", bx + w)):
-                        if abs(p.x() - cx) <= 9 and abs(p.y() - (by + hh / 2)) <= 10:
-                            self.arrastre = {"id": b["id"], "tipo": "estirar", "lado": lado, "x": b["x"], "ancho": b["ancho"],
-                                             "movido": False}
-                            return True
-            if punto:  # de un punto de unión sale directamente el enlace
-                self.enlace = punto
-                self.sel = [punto["id"]]
-                self.cambiado.emit()
-                self.enlace = punto
-                return True
-            if amplia and ident:  # Mayús añade a la selección (o la quita, si ya estaba) sin arrastrar
-                self.sel = [i for i in self.sel if i != ident] if ident in self.sel else self.sel + [ident]
-                self.cambiado.emit()
-                return True
-            previa = list(self.sel) if amplia else []
-            self.sel = [ident] if ident else previa
-            if ident is None:  # un hueco: arrastrar dibuja el rectángulo de selección (el lazo)
-                self.lazo = {"ini": p, "movido": False, "previa": previa}
-            if ident and "|" in ident and ident.split("|")[2] in ("pre", "post"):
-                _, sid, rol = ident.split("|")
-                self.inicio_rama = {"id": sid, "lado": "abajo" if rol == "pre" else "arriba", "pos": p}
-            pos = posiciones(self.M).get(ident or "")
-            b = self._barra(ident)
-            if pos:
-                self.arrastre = {"id": ident, "dx": p.x() - pos[0], "dy": p.y() - pos[1], "x": pos[0] - SX, "y": pos[1],
-                                 "movido": False}
-            elif b:
-                self.arrastre = {"id": ident, "tipo": "barra", "dx": p.x() - (b["x"] + SX), "dy": p.y() - b["y"],
-                                 "x": b["x"], "y": b["y"], "movido": False}
-            self.cambiado.emit()
-        elif ident:
-            self.sel = [ident]
-            self.cambiado.emit()
-        else:
-            if h == "etapa":
-                self.poner_etapa(p)
-            elif h == "transicion":
-                self.poner_transicion(p)
-            elif h == "simultaneidad":
-                self.poner_barra(p, "Y")
-            self.herramienta = "seleccionar"  # la herramienta vale para un elemento
-            self.cambiado.emit()
+        previa = list(self.sel) if amplia else []
+        self.sel = [ident] if ident else previa
+        if ident is None:  # un hueco: arrastrar dibuja el rectángulo de selección (el lazo)
+            self.lazo = {"ini": p, "movido": False, "previa": previa}
+        if ident and "|" in ident and ident.split("|")[2] in ("pre", "post"):
+            _, sid, rol = ident.split("|")
+            self.inicio_rama = {"id": sid, "lado": "abajo" if rol == "pre" else "arriba", "pos": p}
+        pos = posiciones(self.M).get(ident or "")
+        b = self._barra(ident)
+        if pos:
+            self.arrastre = {"id": ident, "dx": p.x() - pos[0], "dy": p.y() - pos[1], "x": pos[0] - SX, "y": pos[1],
+                             "movido": False}
+        elif b:
+            self.arrastre = {"id": ident, "tipo": "barra", "dx": p.x() - (b["x"] + SX), "dy": p.y() - b["y"],
+                             "x": b["x"], "y": b["y"], "movido": False}
+        self.cambiado.emit()
         return True
 
     @staticmethod
@@ -517,12 +536,15 @@ class Edicion(QObject):
             self.reconstruir()
             self.redibujar.emit()
             return True
-        if a and a.get("tipo") == "borrador":  # una acción suelta que se mueve
+        if a and a.get("tipo") == "borrador":  # una acción suelta que se mueve (con las que lleva pegadas)
             x, y = self._modelo(QPointF(p.x() - a["dx"], p.y() - a["dy"]))
             if (x, y) != (a["x"], a["y"]):
                 a.update(x=x, y=y, movido=True)
                 self.reconstruir()
                 self.redibujar.emit()
+            if a["movido"] and self.diagrama is not None:  # si toca otra acción, el lado donde se pegaría
+                iman = self._buscar_iman(a["ids"], a["x"], a["y"])
+                self.diagrama.marcar_iman(iman["linea"] if iman else None)
             return True
         if a and a.get("tipo") == "estirar":
             gx = ajustar(p.x() - SX)
@@ -558,7 +580,7 @@ class Edicion(QObject):
                 self.diagrama.lazo(lz["ini"], p)
             return True
         if self.enlace and self.diagrama is not None:
-            destino = self._destino(p)
+            destino = self._destino(p, self.enlace)
             self.diagrama.trazo_provisional(self.enlace["pos"], destino["pos"] if destino else p)
             self.diagrama.marcar_anclas(anclas(self.M, destino["id"]) if destino else [], destino)
             return True
@@ -566,14 +588,14 @@ class Edicion(QObject):
             self.pasar(p)
         return False
 
-    def _destino(self, p: QPointF) -> dict[str, Any] | None:
+    def _destino(self, p: QPointF, origen: dict[str, Any] | None = None) -> dict[str, Any] | None:
         """El punto de unión al que llegaría un enlace soltado en p: el más cercano, o el de una acción suelta bajo el
-        puntero."""
-        destino = ancla_en(self.M, p)
+        puntero. El de la derecha de una etapa solo vale para el enlace de una acción."""
+        destino = ancla_en(self.M, p, sin_der=origen is not None and origen["lado"] != "izq")
         if destino is None and elemento_en(self.M, p) is None:
             caja = self.accion_en(p)
             if caja and caja.get("suelta"):
-                destino = anclas(self.M, caja["id"])[0]
+                destino = anclas(self.M, caja["cabeza"])[0]  # una acción de un grupo suelto: el grupo entero
         return destino
 
     def soltar(self, p: QPointF, event: Any = None) -> bool:
@@ -588,6 +610,16 @@ class Edicion(QObject):
             return True
         if self.arrastre:
             a, self.arrastre = self.arrastre, None
+            if a.get("tipo") == "borrador" and self.diagrama is not None:
+                self.diagrama.marcar_iman(None)
+            if a["movido"] and a.get("tipo") == "borrador":
+                iman = self._buscar_iman(a["ids"], a["x"], a["y"])
+                if iman:  # tocaba otra acción: se pega a ella
+                    self.reconstruir()
+                    self.pegar(a["ids"], iman["objetivo"])
+                    return True
+                self.mover_grupo(a["ids"], a["x"], a["y"])
+                return True
             if a["movido"]:  # un arrastre entero es una sola operación de deshacer
                 if a.get("tipo") in ("flecha", "tramo"):
                     self.ed.set_link_style(a["id"], a["style"])
@@ -595,8 +627,6 @@ class Edicion(QObject):
                     self.ed.resize_bar(a["id"], a["x"], a["ancho"])
                 elif a.get("tipo") == "barra":
                     self.ed.move_bar(a["id"], a["x"], a["y"])
-                elif a.get("tipo") == "borrador":
-                    self.ed.move_draft_action(a["id"], a["x"], a["y"])
                 else:
                     self.ed.move(a["id"], a["x"], a["y"])
             self.cambia()
@@ -606,10 +636,16 @@ class Edicion(QObject):
             if self.diagrama is not None:
                 self.diagrama.trazo_provisional(None)
                 self.diagrama.marcar_anclas([])
-            destino = self._destino(p)
+            destino = self._destino(p, origen)
             ident = elemento_en(self.M, p)
             if ident and "|" in ident and destino and (p - destino["pos"]).manhattanLength() > 5:
                 destino = None  # sobre el trazo manda el enlace, no el halo de un tirador vecino
+            if origen["lado"] == "der" and destino is None:  # del lado derecho de una etapa, solo a una acción suelta
+                self.rechazar("De una etapa sale el enlace a una acción suelta: suelte el enlace sobre ella."
+                              if ident is None else
+                              "Una acción se une a una etapa, no a una transición, una barra ni otra acción.", origen["id"])
+                self.cambiado.emit()
+                return True
             if origen["lado"] == "izq" and destino is None:  # de una acción suelta, solo a una etapa
                 if ident is not None and any(s["id"] == ident for s in self.M["steps"]):
                     destino = sorted(anclas(self.M, ident), key=lambda a: (a["pos"] - p).manhattanLength())[0]
@@ -624,7 +660,8 @@ class Edicion(QObject):
                 self.crear_desde(origen, p)
                 return True
             if destino is None:  # soltado sobre el cuerpo de un elemento: se une por su punto más cercano
-                cerca = sorted(anclas(self.M, ident or ""), key=lambda a: (a["pos"].x() - p.x()) ** 2 + (a["pos"].y() - p.y()) ** 2)
+                cerca = sorted((a for a in anclas(self.M, ident or "") if a["lado"] != "der" or origen["lado"] == "izq"),
+                               key=lambda a: (a["pos"].x() - p.x()) ** 2 + (a["pos"].y() - p.y()) ** 2)
                 destino = cerca[0] if cerca else None
             if destino and destino["id"] != origen["id"]:
                 self.unir(origen, destino)
@@ -707,13 +744,14 @@ class Edicion(QObject):
         """Enlaza dos puntos de unión. Manda el punto del que se arrastra: el de abajo emite el enlace (va hacia el otro
         elemento) y el de arriba lo recibe (viene del otro). Si el enlace queda de abajo arriba, se dibuja con flecha. Con una
         barra, el elemento queda por encima o por debajo según el lado de la barra."""
-        if origen["lado"] == "izq" or destino["lado"] == "izq":  # una acción suelta con una etapa
-            acc, otro = (origen, destino) if origen["lado"] == "izq" else (destino, origen)
-            if otro["lado"] != "izq" and any(s["id"] == otro["id"] for s in self.M["steps"]):
+        if {origen["lado"], destino["lado"]} & {"izq", "der"}:  # una acción suelta con una etapa
+            acc = next((x for x in (origen, destino) if x["lado"] == "izq"), None)
+            otro = destino if acc is origen else origen
+            if acc is not None and otro["lado"] != "izq" and any(s["id"] == otro["id"] for s in self.M["steps"]):
                 self.unir_accion(acc["id"], otro["id"])
             else:
                 self.rechazar("Una acción se une a una etapa, no a una transición, una barra ni otra acción.",
-                              acc["id"], otro["id"])
+                              origen["id"], destino["id"])
                 self.cambiado.emit()
             return
         ba, bb = self._barra(origen["id"]), self._barra(destino["id"])
@@ -748,16 +786,26 @@ class Edicion(QObject):
             self.pedir_etiqueta(ident)
         return True
 
-    # -- acciones (P-IMP-38, P-IMP-41) ---------------------------------------------------------------
+    # -- acciones (P-IMP-38, P-IMP-41, P-IMP-43) ---------------------------------------------------------------
     # Una acción unida a una etapa y completa es una acción del modelo. Una suelta, o unida a una etapa pero sin
-    # variable (o sin el valor, el evento o el límite que su tipo pide), es un borrador de la presentación
-    # (grafcet/editor.py, `draft_actions`): se dibuja con «?» en lo que falta y no se simula.
+    # variable (o sin el valor, la condición, el evento o el límite que su tipo pide), es un borrador de la presentación
+    # (grafcet/editor.py, `draft_actions`): se dibuja como cualquier acción, con «?» en lo que falta, y no se simula.
+    # Varias acciones sueltas pegadas forman un grupo (`grupo` y `orden` del borrador) que se mueve y se une junto.
     def accion_en(self, p: QPointF) -> dict[str, Any] | None:
-        """La caja de acción bajo el puntero, tal como quedó en el dibujo ({id, etapa, rect, borrador, suelta})."""
+        """La caja de acción bajo el puntero, tal como quedó en el dibujo ({id, etapa, rect, borrador, suelta, grupo,
+        cabeza})."""
         for c in getattr(self.diagrama, "cajas_acciones", None) or []:
             x, y, w, h = c["rect"]
             if x <= p.x() <= x + w and y <= p.y() <= y + h:
                 return c
+        return None
+
+    def union_en(self, p: QPointF) -> str | None:
+        """El enlace de una etapa con sus acciones bajo el puntero («enlaceacc:ID de la etapa»), tal como quedó dibujado."""
+        for u in getattr(self.diagrama, "uniones_acciones", None) or []:
+            for tramo in u["trazos"]:
+                if any(_distancia(p, a, b) <= 6 for a, b in zip(tramo, tramo[1:])):
+                    return u["id"]
         return None
 
     def _es_borrador(self, ident: str | None) -> bool:
@@ -765,6 +813,23 @@ class Edicion(QObject):
 
     def _borrador(self, did: str) -> dict[str, Any]:
         return next(b for b in self.ed.draft_actions() if b["id"] == did)
+
+    def _borradores_ordenados(self) -> list[dict[str, Any]]:
+        """Los borradores en el orden en que se dibujan dentro de su etapa o de su grupo: por `orden`; los que no lo tienen,
+        por orden de creación y después de los que sí."""
+        crudos = self.ed.draft_actions()
+        return [b for _, b in sorted(enumerate(crudos), key=lambda t: (t[1].get("orden", 10 ** 6 + t[0]), t[0]))]
+
+    def _ids_grupo(self, did: str) -> list[str]:
+        """Una acción suelta y las que lleva pegadas (su grupo), en orden; una unida a una etapa, solo ella."""
+        b = self._borrador(did)
+        if b.get("etapa") or not b.get("grupo"):
+            return [did]
+        return [x["id"] for x in self._borradores_ordenados() if x.get("grupo") == b["grupo"] and not x.get("etapa")]
+
+    @staticmethod
+    def _pos_borrador(b: dict[str, Any]) -> tuple[float, float]:
+        return float(Fraction(str(b["x"]))), float(Fraction(str(b["y"])))
 
     def _etiqueta_etapa(self, sid: str | None) -> str:
         return next((s["label"] for s in self.ed.model["steps"] if s["id"] == sid), "")
@@ -774,9 +839,13 @@ class Edicion(QObject):
         return v["name"] if v else ""
 
     def _datos_borrador(self, b: dict[str, Any]) -> dict[str, str]:
-        """Un borrador en la notación del usuario, con los mismos campos que `datos_accion` (vacío: lo que falta)."""
-        return {"tipo": b["tipo"], "variable": self._nombre_variable(b.get("variable")),
-                **{k: b.get(k, "") for k in ("condicion", "valor", "evento", "limite")}}
+        """Un borrador en la notación del usuario, con los mismos campos que `datos_accion` (vacío: lo que falta). Una
+        «continua» con condición (de una versión anterior) es una condicionada."""
+        d = {"tipo": b["tipo"], "variable": self._nombre_variable(b.get("variable")),
+             **{k: b.get(k, "") for k in ("condicion", "valor", "evento", "limite")}}
+        if d["tipo"] == "continua" and d["condicion"].strip():
+            d["tipo"] = "condicionada"
+        return d
 
     def seleccion_dibujo(self) -> set[str]:
         """Lo que se resalta en el dibujo: la selección y la acción señalada (también las acciones seleccionadas)."""
@@ -785,17 +854,28 @@ class Edicion(QObject):
         señalada = {self.accion} if self.accion in etapa and etapa[self.accion] in self.sel else set()
         return set(self.sel) | {f"accion:{i}" for i in (señalada | (set(self.sel) & set(etapa)))}
 
+    def _texto_valido(self, texto: str) -> bool:
+        """Si una condición o un evento escritos se interpretan (no están vacíos, ni a medias, ni usan variables que no
+        existen)."""
+        texto = texto.strip()
+        return bool(texto) and self.ed.check_expression(self._n(texto), self.raiz) is None
+
     def faltan(self, d: dict[str, str]) -> list[str]:
         """Lo que le falta a una acción (datos como `datos_accion`) para ser del modelo: la variable (o una booleana, si
-        es continua), el valor de una memorizada, el evento de una por evento y el límite de una limitada."""
+        es continua), la condición de una condicionada, el valor de una memorizada, el evento de una por evento y el límite
+        de una limitada. Una condición o un evento a medias (con huecos, o con variables que no existen) cuentan como
+        faltantes."""
         nombre, t = d.get("variable", "").strip(), d["tipo"]
         var = next((v for v in self.ed.model["variables"] if v["name"] == nombre), None) if nombre else None
         out = []
-        if var is None or (t in ("continua", "limitada") and var["type"]["kind"] != "bool"):
+        if var is None or (t in CONTINUAS and var["type"]["kind"] != "bool"):
             out.append("variable")
+        cond = d.get("condicion", "").strip()
+        if (t == "condicionada" and not self._texto_valido(cond)) or (t == "limitada" and cond and not self._texto_valido(cond)):
+            out.append("condición")  # la limitada puede no llevar condición, pero si la lleva ha de interpretarse
         if t in DISPARADOR and not d.get("valor", "").strip():
             out.append("valor")
-        if t == "evento" and not d.get("evento", "").strip():
+        if t == "evento" and not self._texto_valido(d.get("evento", "")):
             out.append("evento")
         if t == "limitada" and not normalizar_duracion(d.get("limite", "")):
             out.append("límite")
@@ -814,31 +894,44 @@ class Edicion(QObject):
         return [{"t": texto}] if diag is not None else norm(meaning["meaning"], top, nombres)
 
     def _borradores(self) -> list[dict[str, Any]]:
-        """Los borradores como los dibuja Vista (con el arrastre en curso aplicado): lo mismo que una acción del modelo, con
-        «?» en lo que falta."""
+        """Los borradores como los dibuja Vista (con el arrastre en curso aplicado), en el orden de su etapa o su grupo: lo
+        mismo que una acción del modelo, con «?» en lo que falta. Las de un grupo suelto comparten la posición de la
+        primera."""
         try:
             nombres = display_names(self.ed.model)
         except (KeyError, TypeError, AttributeError):
             nombres = {}
-        out = []
         a = self.arrastre
-        for b in self.ed.draft_actions():
+        movidos = set(a["ids"]) if a and a.get("tipo") == "borrador" else set()
+        ordenados = self._borradores_ordenados()
+        primeras: dict[str, dict[str, Any]] = {}
+        for b in ordenados:
+            if b.get("grupo") and not b.get("etapa"):
+                primeras.setdefault(b["grupo"], b)
+        out = []
+        for b in ordenados:
             d = self._datos_borrador(b)
-            x, y = float(Fraction(b["x"])), float(Fraction(b["y"]))
-            if a and a.get("tipo") == "borrador" and a["id"] == b["id"]:
+            suelta = not b.get("etapa")
+            primera = primeras.get(b["grupo"], b) if suelta and b.get("grupo") else b
+            x, y = self._pos_borrador(primera)
+            if b["id"] in movidos:
                 x, y = a["x"], a["y"]
             var = d["variable"] or "?"
             item: dict[str, Any] = {"id": b["id"], "x": x, "y": y, "etapa": b.get("etapa"), "borrador": True,
+                                    "grupo": b.get("grupo"), "cabeza": suelta and primera["id"] == b["id"],
                                     "target": None, "condRef": None, "falta": self.faltan(d)}
-            if d["tipo"] in ("continua", "limitada"):
+            if d["tipo"] in CONTINUAS:
                 cond = d["condicion"].strip()
                 if cond in ("1", "true"):
                     cond = ""
+                segmentos = self._segmentos(cond, nombres, True) if cond else None
+                if d["tipo"] == "condicionada" and not cond:
+                    segmentos = [{"t": "?"}]
                 if d["tipo"] == "limitada":  # el límite se dibuja como en la norma: una condición más, NOT d/X
-                    x = x_etapa(self._etiqueta_etapa(b.get("etapa"))) if b.get("etapa") else "X?"
-                    lim = f"NOT {d['limite'] or '?'}/{x}"
-                    cond = f"({cond}) AND {lim}" if cond else lim
-                item.update(kind="continuous", text=[{"t": var}], cond=self._segmentos(cond, nombres, True) if cond else None)
+                    xe = x_etapa(self._etiqueta_etapa(b.get("etapa"))) if b.get("etapa") else "X?"
+                    lim = f"NOT {d['limite'] or '?'}/{xe}"
+                    segmentos = self._segmentos(f"({cond}) AND {lim}" if cond else lim, nombres, True)
+                item.update(kind="continuous", text=[{"t": var}], cond=segmentos)
             else:
                 valor = self._segmentos(d["valor"], nombres) or [{"t": "?"}]
                 item.update(kind="stored", trigger=DISPARADOR[d["tipo"]], text=[{"t": f"{var} := "}] + valor,
@@ -846,14 +939,233 @@ class Edicion(QObject):
             out.append(item)
         return out
 
-    def menu(self, p: QPointF) -> list[tuple[str, Callable[[], Any]]]:
-        """Opciones del botón derecho sobre lo que hay debajo: en una etapa, «Añadir acción…»; en una acción (suelta o
-        unida), su tipo (marcado el actual), «Editar…», «Separar de la etapa» y «Quitar». El forzado no se ofrece."""
+    # -- pegar acciones y mover grupos
+    def _colocacion_de(self, caja: dict[str, Any]) -> str:
+        """La colocación de la etapa o del grupo al que pertenece una acción dibujada (una suelta sin grupo, en fila)."""
+        clave = caja["etapa"] or caja.get("grupo") or ""
+        return self.colocacion(clave) if clave else "fila"
+
+    def _buscar_iman(self, ids: list[str], x: float, y: float, ancho: float | None = None) -> dict[str, Any] | None:
+        """Si una acción suelta (la primera de `ids`, con su lado izquierdo en el punto del modelo (x, y)) toca el lado
+        derecho de otra acción, o el inferior si va en columna, a menos de IMAN_ACCION: la acción a cuya espalda se pegaría
+        ({objetivo, lado, linea: el lado que se resalta}). Las acciones de `ids` no cuentan."""
+        cajas = getattr(self.diagrama, "cajas_acciones", None) or []
+        if ancho is None:
+            propia = next((c for c in cajas if ids and c["id"] == ids[0]), None)
+            ancho = propia["rect"][2] if propia else ACT_MIN
+        izq, arriba = x + SX, y - H
+        mejor: tuple[float, dict[str, Any]] | None = None
+        for c in cajas:
+            if c["id"] in ids:
+                continue
+            tx, ty, tw, th = c["rect"]
+            candidatos = []
+            dx, dy = abs(izq - (tx + tw)), abs(y - (ty + th / 2))
+            if dx <= IMAN_ACCION and dy <= H:  # al lado derecho
+                candidatos.append((dx + dy, "der", (QPointF(tx + tw, ty), QPointF(tx + tw, ty + th))))
+            hueco = arriba - (ty + th)
+            if self._colocacion_de(c) == "columna" and -IMAN_ACCION <= hueco <= IMAN_ACCION + 12 and abs(izq - tx) <= tw / 2:
+                candidatos.append((abs(hueco) + abs(izq - tx), "abajo", (QPointF(tx, ty + th), QPointF(tx + tw, ty + th))))
+            for puntos, lado, linea in candidatos:
+                if mejor is None or puntos < mejor[0]:
+                    mejor = (puntos, {"objetivo": c["id"], "lado": lado, "linea": linea})
+        return mejor[1] if mejor else None
+
+    def sobrevolar(self, ficha: str, p: QPointF) -> None:
+        """Una ficha de acción que se arrastra desde la paleta pasa por encima del dibujo: resalta el lado de la acción donde
+        se pegaría al soltarla."""
+        if self.diagrama is None:
+            return
+        iman = None
+        if ficha == "accion" or ficha.startswith("accion:"):
+            x, y = self._modelo(p)
+            iman = self._buscar_iman([], x, y, ACT_MIN)
+        self.diagrama.marcar_iman(iman["linea"] if iman else None)
+
+    def mover_grupo(self, ids: list[str], x: float, y: float) -> None:
+        """Mueve una acción suelta, con las que lleva pegadas, a la posición del modelo (x, y): una operación de deshacer."""
+        self.ed.update_draft_actions({i: {"x": x, "y": y} for i in ids})
+        self.cambia()
+
+    def _pegar_a_grupo(self, ids: list[str], objetivo: dict[str, Any]) -> None:
+        """Pega las acciones sueltas `ids` (en orden) detrás de la suelta `objetivo`: en su grupo, que se crea si era una sola."""
+        g = objetivo.get("grupo") or self.ed.ids.new("grupo")
+        previos = self._ids_grupo(objetivo["id"]) if objetivo.get("grupo") else [objetivo["id"]]
+        x, y = self._pos_borrador(self._borrador(previos[0]))
+        previos = [i for i in previos if i not in ids]
+        k = previos.index(objetivo["id"]) + 1
+        orden = previos[:k] + list(ids) + previos[k:]
+        self.ed.update_draft_actions({i: {"grupo": g, "orden": n, "x": x, "y": y, "etapa": None} for n, i in enumerate(orden)})
+
+    def _pegar_a_etapa(self, ids: list[str], sid: str, objetivo: str | None) -> list[str]:
+        """Une las acciones sueltas `ids` (en orden) a la etapa, detrás de la acción `objetivo` (al final, sin objetivo). Las
+        completas pasan al modelo (se devuelven sus ID); las demás quedan como borradores unidos a la etapa."""
+        previos = [b["id"] for b in self._borradores_ordenados() if b.get("etapa") == sid and b["id"] not in ids]
+        k = previos.index(objetivo) + 1 if objetivo in previos else 0 if objetivo else len(previos)
+        orden = previos[:k] + list(ids) + previos[k:]
+        self.ed.update_draft_actions({i: {"etapa": sid, "grupo": None, "orden": n} for n, i in enumerate(orden)})
+        promovidas = []
+        for did in ids:
+            if self._completar(did):
+                promovidas.append(self.ed.get(sid)["actionRefs"][-1])
+        refs = self.ed.get(sid)["actionRefs"]
+        if promovidas and objetivo in refs:  # detrás de la acción del modelo a cuya espalda se pegó
+            final = [r for r in refs if r not in promovidas]
+            final[final.index(objetivo) + 1:final.index(objetivo) + 1] = promovidas
+            for n, aid in enumerate(final):
+                actual = self.ed.get(sid)["actionRefs"].index(aid)
+                if actual != n:
+                    self.ed.move_action(aid, n - actual)
+        return promovidas
+
+    def _pegar(self, ids: list[str], objetivo: str) -> tuple[str | None, list[str]]:
+        """Pega las acciones sueltas `ids` detrás de la acción `objetivo` (del modelo, o un borrador de una etapa o de un
+        grupo suelto). Devuelve la etapa a la que quedan unidas (None si quedan en un grupo suelto) y las que pasaron al
+        modelo."""
+        b = next((x for x in self.ed.draft_actions() if x["id"] == objetivo), None)
+        if b is not None and not b.get("etapa"):
+            self._pegar_a_grupo(ids, b)
+            return None, []
+        sid = b["etapa"] if b is not None else self.ed.get(objetivo)["stepRef"]
+        return sid, self._pegar_a_etapa(ids, sid, objetivo)
+
+    def pegar(self, ids: list[str], objetivo: str) -> None:
+        """Pega una acción suelta (o un grupo) detrás de otra acción: pasa a su etapa o a su grupo, en una sola operación
+        de deshacer."""
+        destino: list[Any] = [(None, [])]
+        motivo = self._atomico("pegar acciones", lambda: destino.__setitem__(0, self._pegar(ids, objetivo)))
+        self.mensaje = motivo or ""
+        if motivo:
+            self.parpadear(ids)
+            self.cambiado.emit()
+            return
+        self._tras_pegar(ids, *destino[0])
+
+    def _tras_pegar(self, ids: list[str], sid: str | None, promovidas: list[str] = ()) -> None:
+        """Deja la selección en lo pegado y, si es una sola acción que aún necesita su variable o su valor, abre Editar."""
+        vivos = [i for i in ids if self._es_borrador(i)]
+        if sid is None:  # quedaron en un grupo suelto
+            self.sel, self.accion = self._ids_grupo(ids[0]), ids[0]
+        elif vivos:
+            self.sel, self.accion = [sid], vivos[0]
+        else:
+            self.sel, self.accion = [sid], (promovidas[0] if promovidas else self.ed.get(sid)["actionRefs"][-1])
+        self.cambiado.emit()
+        if len(ids) == 1 and vivos and sid and set(self.faltan(self._datos_borrador(self._borrador(vivos[0])))) & {"variable", "valor"}:
+            self.pedir_accion(sid, vivos[0])
+
+    def unir_accion(self, did: str, sid: str) -> None:
+        """Une una acción suelta (con las que lleva pegadas) a una etapa, al final de sus acciones. Las completas pasan a
+        ser acciones del modelo; las que no, quedan unidas como borradores y, si es una sola, se abre Editar."""
+        if not self._es_borrador(did):
+            return
+        ids = self._ids_grupo(did)
+        promovidas: list[str] = []
+        motivo = self._atomico("unir acciones a la etapa", lambda: promovidas.extend(self._pegar_a_etapa(ids, sid, None)))
+        self.mensaje = motivo or ""
+        if motivo:
+            self.parpadear(ids)
+            self.cambiado.emit()
+            return
+        self._tras_pegar(ids, sid, promovidas)
+
+    # -- el enlace de una etapa con sus acciones
+    def _separar_todas(self, sid: str) -> list[str]:
+        """Las acciones de la etapa dejan de estar unidas a ella: quedan sueltas, juntas (un grupo, con la colocación de la
+        etapa), donde estaban. Una acción del modelo pasa a ser un borrador con todos sus datos. Devuelve sus ID nuevos."""
+        cajas = [c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["etapa"] == sid]
+        if not cajas:
+            return []
+        x0, y0, _, _ = cajas[0]["rect"]
+        at = (round(x0 - SX), round(y0 + H))
+        orden = [c["id"] for c in cajas]
+        gid = self.ed.ids.new("grupo") if len(orden) > 1 else None
+        nuevos: dict[str, str] = {}
+        for n, aid in enumerate(orden):
+            if not self._es_borrador(aid):
+                datos = self.datos_accion(aid)
+                nuevos[aid] = self.ed.add_draft_action(at, {
+                    "tipo": datos["tipo"], "variable": self.ed.get(aid)["targetRef"],
+                    **{k: datos[k] for k in ("condicion", "valor", "evento", "limite") if datos.get(k)},
+                    **({"grupo": gid, "orden": n} if gid else {})})
+        cambios = {aid: {"etapa": None, "x": at[0], "y": at[1], **({"grupo": gid, "orden": n} if gid else {})}
+                   for n, aid in enumerate(orden) if self._es_borrador(aid)}
+        if cambios:
+            self.ed.update_draft_actions(cambios)
+        modelo = [aid for aid in orden if aid in nuevos]
+        if modelo:
+            self.ed.delete(modelo)
+        colocacion = self.colocacion(sid)
+        if gid and colocacion != "fila":
+            self.ed.set_action_layout(gid, colocacion)
+        return [nuevos.get(aid, aid) for aid in orden]
+
+    def eliminar_enlace_acciones(self, sid: str) -> None:
+        """«Eliminar el enlace»: separa las acciones de la etapa (una sola operación de deshacer)."""
+        ids: list[str] = []
+        motivo = self._atomico("eliminar el enlace de las acciones", lambda: ids.extend(self._separar_todas(sid)))
+        self.mensaje = motivo or ""
+        if motivo:
+            self.parpadear([sid])
+        elif ids:
+            self.sel, self.accion = ids, None
+        self.cambiado.emit()
+
+    def separar_accion(self, aid: str) -> None:
+        """Separa una acción de su etapa, o de su grupo suelto: vuelve a ser suelta, a la derecha de lo que dejó. Una acción
+        del modelo pasa a ser un borrador (con todos sus datos)."""
+        cajas = getattr(self.diagrama, "cajas_acciones", None) or []
+        borrador = self._es_borrador(aid)
+        b = self._borrador(aid) if borrador else None
+        sid = b.get("etapa") if b else self.ed.get(aid)["stepRef"]
+        grupo = b.get("grupo") if b and not sid else None
+        propia = next((c for c in cajas if c["id"] == aid), None)
+        fila = [c for c in cajas if (c["etapa"] == sid if sid else c.get("grupo") == grupo)]
+        if propia and fila:
+            final = max(c["rect"][0] + c["rect"][2] for c in fila)
+            at = (round(final + 40 - SX), round(propia["rect"][1] + H))
+        else:
+            px, py = posiciones(self.M)[sid]
+            at = (ajustar(px - SX + 140), ajustar(py))
+        if borrador:
+            def hacer() -> None:
+                self.ed.update_draft_actions({aid: {"etapa": None, "grupo": None, "orden": None, "x": at[0], "y": at[1]}})
+            nuevo = aid
+        else:
+            datos = self.datos_accion(aid)
+            ref = self.ed.get(aid)["targetRef"]
+            nuevo = ""
+
+            def hacer() -> None:
+                nonlocal nuevo
+                nuevo = self.ed.add_draft_action(at, {"tipo": datos["tipo"], "variable": ref,
+                                                      **{k: datos[k] for k in ("condicion", "valor", "evento", "limite")
+                                                         if datos.get(k)}})
+                self.ed.delete([aid])
+        motivo = self._atomico("separar acción", hacer)
+        self.mensaje = motivo or ""
+        if motivo:
+            self.parpadear([aid])
+        if motivo is None:
+            self.sel, self.accion = [nuevo], None
+            self.cambiado.emit()
+
+    # -- menús
+    def menu(self, p: QPointF) -> list[tuple[str, Any]]:
+        """Opciones del botón derecho sobre lo que hay debajo: en una etapa, «Añadir acción…» y la colocación de sus
+        acciones; en una acción (suelta o unida), su tipo (submenú con iconos, marcado el actual), «Editar…», separarla y
+        «Quitar»; en el enlace de una etapa con sus acciones, «Eliminar el enlace». El forzado no se ofrece."""
         self.menu_marcadas = set()
         caja = self.accion_en(p)
         if caja:
             return self._menu_accion(caja)
         ident = elemento_en(self.M, p)
+        if ident is None:
+            union = self.union_en(p)
+            if union:
+                self.sel, self.accion = [union], None
+                self.cambiado.emit()
+                return [("Eliminar el enlace", lambda: self.eliminar_enlace_acciones(union.split(":", 1)[1]))]
         if ident is None or not any(s["id"] == ident for s in self.M["steps"]):
             return []
         self.sel, self.accion = [ident], None
@@ -863,17 +1175,26 @@ class Edicion(QObject):
                 ("Colocación de las acciones", [(texto, lambda v=v: self.colocar_acciones(ident, v))
                                                 for v, texto in COLOCACIONES])]
 
-    def _menu_accion(self, caja: dict[str, Any]) -> list[tuple[str, Callable[[], Any]]]:
+    def _menu_accion(self, caja: dict[str, Any]) -> list[tuple[str, Any]]:
         aid, sid, suelta = caja["id"], caja["etapa"] or None, bool(caja.get("suelta"))
-        self.sel, self.accion = ([aid], None) if suelta else ([sid], aid)
+        grupo = self._ids_grupo(aid) if suelta else [aid]
+        self.sel, self.accion = (grupo, aid) if suelta else ([sid], aid)
         self.cambiado.emit()
         actual = self.datos_accion(aid)["tipo"]
-        out: list[tuple[str, Callable[[], Any]]] = [(texto, lambda t=t: self.tipo_accion(aid, t))
-                                                    for t, texto in TIPOS_ACCION]
-        self.menu_marcadas = {dict(TIPOS_ACCION)[actual]}
-        out += [("-", None), ("Editar…", lambda: self.pedir_accion(sid, aid))]
+        textos = dict(TIPOS_ACCION)
+        if actual == "limitada":  # la de un fichero antiguo: una condicionada con límite de tiempo
+            textos["condicionada"] = TEXTO_LIMITADA
+        sub = [(textos[t], lambda t=t: self.tipo_accion(aid, t), icono_accion(t)) for t, _ in TIPOS_ACCION]
+        self.menu_marcadas = {textos["condicionada" if actual == "limitada" else actual]}
+        out: list[tuple[str, Any]] = [("Tipo de acción", sub), ("-", None),
+                                      ("Editar…", lambda: self.pedir_accion(sid, aid))]
         if sid:
             out.append(("Separar de la etapa", lambda: self.separar_accion(aid)))
+        elif len(grupo) > 1:
+            out.append(("Separar del grupo", lambda: self.separar_accion(aid)))
+            self.menu_marcadas.add(dict(COLOCACIONES)[self.colocacion(caja["grupo"])])
+            out.append(("Colocación de las acciones", [(texto, lambda v=v: self.colocar_acciones(caja["grupo"], v))
+                                                       for v, texto in COLOCACIONES]))
         if sid and not caja.get("borrador"):
             columna = self.colocacion(sid) == "columna"
             out += [("Mover arriba" if columna else "Mover a la izquierda", lambda: self.mover_accion(aid, -1)),
@@ -882,12 +1203,13 @@ class Edicion(QObject):
         return out
 
     def colocacion(self, sid: str) -> str:
-        """Cómo se colocan las acciones de la etapa: «fila» (por defecto), «fila-separada» o «columna»."""
+        """Cómo se colocan las acciones de la etapa (o del grupo suelto): «fila» (por defecto), «fila-separada» o
+        «columna»."""
         valor = self.ed.action_layouts().get(sid, "fila")
         return valor if valor in dict(COLOCACIONES) else "fila"
 
     def colocar_acciones(self, sid: str, valor: str) -> None:
-        """Cambia la colocación de las acciones de una etapa (operación de vista, se deshace)."""
+        """Cambia la colocación de las acciones de una etapa o de un grupo suelto (operación de vista, se deshace)."""
         if valor == self.colocacion(sid):
             return
         self.ed.set_action_layout(sid, valor)
@@ -897,9 +1219,10 @@ class Edicion(QObject):
         return a_usuario(next(e["text"] for e in self.ed.model["expressions"] if e["id"] == eid)) if eid else ""
 
     def datos_accion(self, aid: str) -> dict[str, str]:
-        """Una acción (del modelo o borrador) en la notación del usuario: tipo (continua, limitada, activacion,
-        desactivacion, evento), variable, condición (continuas; vacía si es siempre), límite (limitada), valor
-        (memorizada; 1/0 para una booleana) y evento."""
+        """Una acción (del modelo o borrador) en la notación del usuario: tipo (continua, condicionada, limitada,
+        activacion, desactivacion, evento), variable, condición (continuas; vacía si es siempre), límite (limitada), valor
+        (memorizada; 1/0 para una booleana) y evento. «limitada» (una condicionada con límite de tiempo) ya no se ofrece:
+        solo la traen los ficheros antiguos."""
         if self._es_borrador(aid):
             return self._datos_borrador(self._borrador(aid))
         m = self.ed.model
@@ -908,9 +1231,10 @@ class Edicion(QObject):
         nombre = var["name"] if var else a["targetRef"]
         if a["mode"] == "continuous":
             cond = self._texto(a["conditionRef"])
+            cond = "" if cond in ("1", "true") else cond
             limite = _dur_usuario(int(a["limitUs"])) if "limitUs" in a else ""
-            return {"tipo": "limitada" if limite else "continua", "variable": nombre,
-                    "condicion": "" if cond in ("1", "true") else cond, "limite": limite}
+            return {"tipo": "limitada" if limite else "condicionada" if cond else "continua", "variable": nombre,
+                    "condicion": cond, "limite": limite}
         trig = a["trigger"]
         valor = self._texto(a["valueRef"])
         if var and var["type"]["kind"] == "bool":
@@ -922,9 +1246,11 @@ class Edicion(QObject):
     def resumen_accion(d: dict[str, str]) -> str:
         """Una línea para la lista de acciones de la etapa."""
         var = d["variable"] or "?"
-        if d["tipo"] in ("continua", "limitada"):
+        if d["tipo"] in CONTINUAS:
             lim = f" hasta {d.get('limite') or '?'}" if d["tipo"] == "limitada" else ""
-            return var + (f"   si {d['condicion']}" if d.get("condicion") else "   (continua)") + lim
+            if d["tipo"] == "condicionada" or d.get("condicion"):
+                return var + f"   si {d.get('condicion') or '?'}" + lim
+            return var + "   (continua)" + lim
         cuando = {"activacion": "al activar ↑", "desactivacion": "al desactivar ↓",
                   "evento": f"con {d.get('evento') or '?'}"}[d["tipo"]]
         return f"{var} := {d.get('valor') or '?'}   ({cuando})"
@@ -934,7 +1260,7 @@ class Edicion(QObject):
         st = next(s for s in self.ed.model["steps"] if s["id"] == sid)
         out = [dict(self.datos_accion(aid), id=aid) for aid in st["actionRefs"]]
         return out + [dict(self._datos_borrador(b), id=b["id"], borrador=True)
-                      for b in self.ed.draft_actions() if b.get("etapa") == sid]
+                      for b in self._borradores_ordenados() if b.get("etapa") == sid]
 
     def _atomico(self, etiqueta: str, fn: Callable[[], Any]) -> str | None:
         """Varias operaciones como una sola de deshacer; si una falla, no queda ninguna y se devuelve el motivo."""
@@ -960,7 +1286,7 @@ class Edicion(QObject):
         """Escribe en el modelo la acción `d` (con su variable ya resuelta): nueva en la etapa, o la `aid` cambiada."""
         var = next(v for v in self.ed.model["variables"] if v["id"] == vid)
         booleana = var["type"]["kind"] == "bool"
-        if d["tipo"] in ("continua", "limitada"):
+        if d["tipo"] in CONTINUAS:
             cond = self._n(d.get("condicion", "")) or "true"
             limite = self._limite_us(d.get("limite", "")) if d["tipo"] == "limitada" else None
             if aid:
@@ -978,11 +1304,26 @@ class Edicion(QObject):
         else:
             self.ed.add_stored_action(sid, vid, trig, valor, evento)
 
+    @staticmethod
+    def motivo_nombre(nombre: str) -> str | None:
+        """Por qué un nombre no puede ser el de una variable en la interfaz: no se podría escribir tal cual en una fórmula
+        (palabra reservada, espacios o símbolos, no empieza por letra) o se confundiría con la actividad de una etapa (X1).
+        None si sirve. El núcleo sigue admitiendo cualquier nombre entre comillas invertidas, en ficheros antiguos."""
+        if nombre.strip().lower() in RESERVADAS:
+            return f'"{nombre}" no puede ser nombre de variable: es una palabra de las fórmulas'
+        if not re.fullmatch(r"[^\W\d]\w*(?:\.\w+)?", nombre):
+            return (f'"{nombre}" no puede ser nombre de variable: debe empezar por una letra o _ y no llevar espacios ni '
+                    "símbolos")
+        if re.fullmatch(r"X\d+", nombre):
+            return f'"{nombre}" no puede ser nombre de variable: se confundiría con la actividad de la etapa {nombre[1:]}'
+        return None
+
     def poner_accion(self, sid: str | None, d: dict[str, str], aid: str | None = None,
                      crear: tuple[str, str] | None = None) -> str | None:
         """Añade (o, con `aid`, cambia) una acción de la etapa con los datos de `datos_accion`. Si la variable no existe
         y se da `crear` (papel, tipo), se declara antes. Con el `aid` de un borrador, lo guarda (aunque le falten datos).
-        Devuelve el motivo si no se pudo; nada cambia en ese caso."""
+        Una condicionada o por evento sin su condición o su evento (se programan en la pestaña Bloques) queda como
+        borrador unido a la etapa. Devuelve el motivo si no se pudo; nada cambia en ese caso."""
         if aid and self._es_borrador(aid):
             return self._poner_borrador(aid, d, crear)
         m, nombre = self.ed.model, d.get("variable", "").strip()
@@ -991,18 +1332,26 @@ class Edicion(QObject):
             return "Elija la variable sobre la que actúa."
         if var is None and crear is None:
             return f"La variable «{nombre}» no existe."
+        if var is None and (motivo := self.motivo_nombre(nombre)):
+            return motivo
         if d["tipo"] in DISPARADOR and not d.get("valor", "").strip():
             return "Escriba el valor que se asigna (1 o 0 para una booleana; un número o una cuenta como CT + 1)."
-        if d["tipo"] == "evento" and not d.get("evento", "").strip():
-            return "Una acción por evento necesita su evento (por ejemplo ↑I02)."
         if d["tipo"] == "limitada" and normalizar_duracion(d.get("limite", "")) is None:
             return "Límite de tiempo no válido: escriba «3s», «500ms»…"
         if d["tipo"] == "limitada" and not self._limite_us(d.get("limite", "")):
             return "Escriba el límite de tiempo de la acción (por ejemplo 3s)."
+        sin_texto = bool({"condición", "evento"} & set(self.faltan({**d, "variable": nombre})))
 
         def hacer() -> None:
             vid = var["id"] if var else self.ed.add_variable(nombre, crear[0], {"kind": crear[1]})
-            self._crear_o_cambiar(sid, d, aid, vid)
+            if sin_texto:  # falta programar la condición o el evento: borrador unido a la etapa, al final de la fila
+                if aid:
+                    self.ed.delete([aid])
+                px, py = posiciones(self.M)[sid]
+                did = self.ed.add_draft_action((ajustar(px - SX + H + ACT_LINK), ajustar(py)), {"etapa": sid})
+                self.ed.update_draft_action(did, **self._campos_borrador(d, vid))
+            else:
+                self._crear_o_cambiar(sid, d, aid, vid)
         motivo = self._atomico("acción", hacer)
         if motivo is None and sid not in self.sel:
             self.sel = [sid]
@@ -1012,7 +1361,7 @@ class Edicion(QObject):
     def _revisar_textos(self, d: dict[str, str]) -> str | None:
         """Por qué un texto de la acción (condición, valor, evento) no se interpreta; None si todos sirven."""
         raiz = self.raiz
-        for campo, usa, booleana, nombre in (("condicion", d["tipo"] in ("continua", "limitada"), True, "La condición"),
+        for campo, usa, booleana, nombre in (("condicion", d["tipo"] in CONTINUAS, True, "La condición"),
                                              ("valor", d["tipo"] in DISPARADOR, False, "El valor"),
                                              ("evento", d["tipo"] == "evento", True, "El evento")):
             texto = d.get(campo, "").strip()
@@ -1024,6 +1373,14 @@ class Edicion(QObject):
             return "Límite de tiempo no válido: escriba «3s», «500ms»…"
         return None
 
+    def _campos_borrador(self, d: dict[str, str], vid: str | None) -> dict[str, Any]:
+        """Los campos de un borrador para `d` (en la notación del usuario): solo los que pide su tipo."""
+        relevantes = {"condicion": d["tipo"] in CONTINUAS, "valor": d["tipo"] in DISPARADOR,
+                      "evento": d["tipo"] == "evento", "limite": d["tipo"] == "limitada"}
+        return {"tipo": d["tipo"], "variable": vid,
+                **{k: (normalizar_duracion(d[k]) if k == "limite" else d.get(k, "").strip()) if relevantes[k] else ""
+                   for k in relevantes}}
+
     def _poner_borrador(self, did: str, d: dict[str, str], crear: tuple[str, str] | None) -> str | None:
         """Guarda los datos de un borrador (le pueden faltar); si está unido a una etapa y queda completo, pasa a ser una
         acción del modelo en la misma operación."""
@@ -1031,17 +1388,15 @@ class Edicion(QObject):
         var = next((v for v in self.ed.model["variables"] if v["name"] == nombre), None) if nombre else None
         if nombre and var is None and crear is None:
             return f"La variable «{nombre}» no existe."
+        if nombre and var is None and (motivo := self.motivo_nombre(nombre)):
+            return motivo
         motivo = self._revisar_textos(d)
         if motivo:
             return motivo
-        relevantes = {"condicion": d["tipo"] in ("continua", "limitada"), "valor": d["tipo"] in DISPARADOR,
-                      "evento": d["tipo"] == "evento", "limite": d["tipo"] == "limitada"}
 
         def hacer() -> None:
             vid = (var["id"] if var else self.ed.add_variable(nombre, crear[0], {"kind": crear[1]})) if nombre else None
-            self.ed.update_draft_action(did, tipo=d["tipo"], variable=vid,
-                                        **{k: (normalizar_duracion(d[k]) if k == "limite" else d.get(k, "").strip())
-                                           if relevantes[k] else "" for k in relevantes})
+            self.ed.update_draft_action(did, **self._campos_borrador(d, vid))
             self._completar(did)
         motivo = self._atomico("acción", hacer)
         if motivo is None:
@@ -1064,7 +1419,7 @@ class Edicion(QObject):
         borrador."""
         if self._es_borrador(did):
             b = self._borrador(did)
-            self.sel, self.accion = ([b["etapa"]], did) if b.get("etapa") else ([did], None)
+            self.sel, self.accion = ([b["etapa"]], did) if b.get("etapa") else (self._ids_grupo(did), did)
         else:
             sid = next((a["stepRef"] for a in self.ed.model["actions"][-1:]), None)
             st = next((s for s in self.ed.model["steps"] if s["id"] == sid), None)
@@ -1081,81 +1436,35 @@ class Edicion(QObject):
         self.pedir_accion(sid, did)
         return did
 
-    def unir_accion(self, did: str, sid: str) -> None:
-        """Une una acción suelta a una etapa. Si tiene la variable (y lo que su tipo pida) pasa a ser una acción del
-        modelo, la última de la etapa; si no, queda unida como borrador y se abre Editar para completarla."""
-        if not self._es_borrador(did):
-            return
-        motivo = self._atomico("unir acción a la etapa",
-                               lambda: (self.ed.update_draft_action(did, etapa=sid), self._completar(did)))
-        self.mensaje = motivo or ""
-        if motivo:
-            self.parpadear([did])
-        self._tras_borrador(did)
-        if motivo is None and self._es_borrador(did):
-            self.pedir_accion(sid, did)
-
-    def separar_accion(self, aid: str) -> None:
-        """Separa una acción de su etapa: vuelve a ser suelta, a la derecha de la fila de acciones de la etapa. Una
-        acción del modelo pasa a ser un borrador (con todos sus datos)."""
-        cajas = [c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["id"] == aid]
-        borrador = self._es_borrador(aid)
-        sid = self._borrador(aid).get("etapa") if borrador else self.ed.get(aid)["stepRef"]
-        fila = [c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["etapa"] == sid]
-        if cajas and fila:
-            x, y, _, _ = cajas[0]["rect"]
-            final = max(c["rect"][0] + c["rect"][2] for c in fila)
-            at = (ajustar(final + 40 - SX), ajustar(y + H))
-        else:
-            px, py = posiciones(self.M)[sid]
-            at = (ajustar(px - SX + 140), ajustar(py))
-        if borrador:
-            def hacer() -> None:
-                self.ed.update_draft_action(aid, etapa=None)
-                self.ed.move_draft_action(aid, *at)
-            nuevo = aid
-        else:
-            datos = self.datos_accion(aid)
-            ref = self.ed.get(aid)["targetRef"]
-            nuevo = ""
-
-            def hacer() -> None:
-                nonlocal nuevo
-                nuevo = self.ed.add_draft_action(at, {"tipo": datos["tipo"], "variable": ref,
-                                                      **{k: datos[k] for k in ("condicion", "valor", "evento", "limite")
-                                                         if datos.get(k)}})
-                self.ed.delete([aid])
-        motivo = self._atomico("separar acción de la etapa", hacer)
-        self.mensaje = motivo or ""
-        if motivo:
-            self.parpadear([aid])
-        if motivo is None:
-            self.sel, self.accion = [nuevo], None
-            self.cambiado.emit()
-
     def tipo_accion(self, ident: str, tipo: str) -> None:
         """Cambia el tipo de una acción desde el botón derecho. Una acción completa conserva su ID y su lugar. Si el tipo
-        pide datos que no hay (variable booleana, valor, evento, límite), la acción queda como borrador con «?» en lo que
-        falta, con el tipo ya puesto, y se abre Editar para completarla."""
+        pide datos que no hay (variable booleana, valor, condición, evento), la acción queda como borrador con «?» en lo
+        que falta, con el tipo ya puesto: si falta la variable o el valor se abre Editar; la condición y el evento se
+        programan en la pestaña Bloques, que se muestra al seleccionarla. Una «Continua» no lleva condición y sale del
+        tipo «limitada» (de ficheros antiguos) sin su límite."""
         d = self.datos_accion(ident)
-        antes = set(self.faltan(d))
-        if d["tipo"] == tipo:
+        if d["tipo"] == tipo or (d["tipo"] == "limitada" and tipo == "condicionada"):
             return
+        antes = set(self.faltan(d))
         d["tipo"] = tipo
+        d["limite"] = ""
+        if tipo == "continua":
+            d["condicion"] = ""
         falta = self.faltan(d)
         if "variable" in falta:
             d["variable"] = ""  # no sirve para el tipo nuevo (o no había): se vuelve a elegir
-        nuevos = set(falta) - antes
+        abrir = bool((set(falta) - antes) & {"variable", "valor"})
         if self._es_borrador(ident):
             sid = self._borrador(ident).get("etapa")
             motivo = self._atomico("tipo de acción", lambda: (
-                self.ed.update_draft_action(ident, tipo=tipo, variable=self._id_variable(d["variable"])),
+                self.ed.update_draft_action(ident, tipo=tipo, variable=self._id_variable(d["variable"]),
+                                            condicion=d.get("condicion", ""), limite=""),
                 self._completar(ident)))
             self.mensaje = motivo or ""
             if motivo:
                 self.parpadear([ident])
             self._tras_borrador(ident)
-            if motivo is None and self._es_borrador(ident) and nuevos:
+            if motivo is None and self._es_borrador(ident) and abrir:
                 self.pedir_accion(sid, ident)
             return
         sid = self.ed.get(ident)["stepRef"]
@@ -1163,23 +1472,29 @@ class Edicion(QObject):
             self.mensaje = self.poner_accion(sid, d, ident) or ""
             self.cambiado.emit()
             return
-        self.separar_como_borrador(ident, d, sid)
+        self.separar_como_borrador(ident, d, sid, abrir)
 
     def _id_variable(self, nombre: str) -> str | None:
         return next((v["id"] for v in self.ed.model["variables"] if v["name"] == nombre), None) if nombre else None
 
-    def separar_como_borrador(self, aid: str, d: dict[str, str], sid: str) -> None:
-        """Una acción del modelo a la que le faltan datos tras cambiar de tipo: pasa a ser un borrador unido a su etapa
-        (al final de su fila) y se abre Editar."""
-        nuevo = ""
+    def _a_borrador(self, aid: str, d: dict[str, str], sid: str) -> str:
+        """Una acción del modelo que ya no está completa pasa a ser un borrador unido a su etapa (al final de su fila), con
+        los datos `d`. Devuelve su ID nuevo."""
         px, py = posiciones(self.M)[sid]
+        nuevo = self.ed.add_draft_action((ajustar(px - SX + H + ACT_LINK), ajustar(py)), {
+            "tipo": d["tipo"], "etapa": sid, "variable": self._id_variable(d["variable"]),
+            **{k: d[k] for k in ("condicion", "valor", "evento", "limite") if d.get(k)}})
+        self.ed.delete([aid])
+        return nuevo
+
+    def separar_como_borrador(self, aid: str, d: dict[str, str], sid: str, abrir: bool = True) -> None:
+        """Una acción del modelo a la que le faltan datos tras cambiar de tipo: pasa a ser un borrador unido a su etapa
+        (al final de su fila); con `abrir`, se abre Editar."""
+        nuevo = ""
 
         def hacer() -> None:
             nonlocal nuevo
-            datos = {"tipo": d["tipo"], "etapa": sid, "variable": self._id_variable(d["variable"]),
-                     **{k: d[k] for k in ("condicion", "valor", "evento", "limite") if d.get(k)}}
-            nuevo = self.ed.add_draft_action((ajustar(px - SX + H + ACT_LINK), ajustar(py)), datos)
-            self.ed.delete([aid])
+            nuevo = self._a_borrador(aid, d, sid)
         motivo = self._atomico("tipo de acción", hacer)
         self.mensaje = motivo or ""
         if motivo:
@@ -1187,7 +1502,8 @@ class Edicion(QObject):
         if motivo is None:
             self.sel, self.accion = [sid], nuevo
             self.cambiado.emit()
-            self.pedir_accion(sid, nuevo)
+            if abrir:
+                self.pedir_accion(sid, nuevo)
 
     def quitar_accion(self, aid: str) -> None:
         if self._es_borrador(aid):
@@ -1204,6 +1520,75 @@ class Edicion(QObject):
         self.ed.move_action(aid, delta)
         self.cambia()
 
+    # -- la condición y el evento de una acción, en la pestaña Bloques (P-IMP-43)
+    def accion_programable(self) -> tuple[str, str] | None:
+        """La acción cuya condición o evento se programa en la pestaña Bloques: la señalada (o la única seleccionada) si es
+        condicionada (condición) o por evento (evento); (ID, «condicion» o «evento»). None si no hay."""
+        vivas = {a["id"]: a["stepRef"] for a in self.ed.model["actions"]}
+        vivas.update({b["id"]: b.get("etapa") for b in self.ed.draft_actions()})
+        aid = self.accion if self.accion in vivas and (self.accion in self.sel or vivas[self.accion] in self.sel) else None
+        if aid is None and len(self.sel) == 1 and self.sel[0] in vivas:
+            aid = self.sel[0]
+        if aid is None:
+            return None
+        tipo = self.datos_accion(aid)["tipo"]
+        return (aid, "evento" if tipo == "evento" else "condicion") if tipo in (*CON_CONDICION, "evento") else None
+
+    def titulo_accion(self, aid: str, campo: str) -> str:
+        """«Condición de la acción Q00 (etapa 1)» o «Evento de la acción …»."""
+        d = self.datos_accion(aid)
+        b = next((b for b in self.ed.draft_actions() if b["id"] == aid), None)
+        sid = b.get("etapa") if b else self.ed.get(aid)["stepRef"]
+        donde = f"etapa {self.nombres.get(sid, sid)}" if sid else "suelta"
+        return f"{'Evento' if campo == 'evento' else 'Condición'} de la acción {d['variable'] or '?'} ({donde})"
+
+    def texto_accion(self, aid: str, campo: str) -> str:
+        """La condición o el evento de una acción, en la notación del usuario."""
+        return self.datos_accion(aid).get(campo, "")
+
+    def poner_texto_accion(self, aid: str, campo: str, texto: str, crear: bool = False) -> str | None:
+        """Escribe la condición (o el evento) de una acción: una operación de deshacer. Si con ello la acción queda
+        completa (con variable, y unida a una etapa), pasa al modelo; si deja de estarlo (texto vacío, a medias o con
+        variables que no existen), pasa a ser un borrador. Con `crear`, declara antes como entradas booleanas las variables
+        que no existan. Devuelve el motivo si no se pudo (un nombre que no vale); nada cambia en ese caso."""
+        texto = texto.strip()
+        d = self.datos_accion(aid)
+        d[campo] = texto
+        if crear:
+            for nombre in self.sin_declarar(aid, texto):
+                motivo = self.motivo_nombre(nombre)
+                if motivo:
+                    self.rechazar(motivo, aid)
+                    self.cambiado.emit()
+                    return motivo
+        nuevo = [aid]
+
+        def hacer() -> None:
+            if crear:
+                for nombre in self.sin_declarar(aid, texto):
+                    self.ed.add_variable(nombre, "input", {"kind": "bool"})
+            if self._es_borrador(aid):
+                self.ed.update_draft_action(aid, **{campo: texto})
+                if self._completar(aid):
+                    nuevo[0] = self.ed.model["actions"][-1]["id"]
+                return
+            sid = self.ed.get(aid)["stepRef"]
+            if self.faltan(d):
+                nuevo[0] = self._a_borrador(aid, d, sid)
+            else:
+                self._crear_o_cambiar(sid, d, aid, self._id_variable(d["variable"]))
+        señalada, seleccion = self.accion == aid, list(self.sel)
+        motivo = self._atomico("condición de la acción" if campo == "condicion" else "evento de la acción", hacer)
+        if motivo:
+            self.mensaje = motivo
+            self.cambiado.emit()
+            return motivo
+        if nuevo[0] != aid:  # cambió de ID (pasó al modelo o salió de él): la selección la sigue
+            self.sel = [nuevo[0] if i == aid else i for i in seleccion]
+            self.accion = nuevo[0] if señalada else self.accion
+            self.cambiado.emit()
+        return None
+
     # -- variables (REQ-EDT-07, P-IMP-38) ------------------------------------------------------------
     def variables(self) -> list[dict[str, Any]]:
         """El diccionario: cada variable con cuántos usos tiene (expresiones y acciones que la escriben)."""
@@ -1214,6 +1599,9 @@ class Edicion(QObject):
     def nueva_variable(self, nombre: str, papel: str = "input", tipo: dict[str, Any] | None = None) -> str | None:
         """Crea una variable (una operación de deshacer); devuelve el motivo si el nombre no es válido o está repetido."""
         def hacer() -> None:
+            motivo = self.motivo_nombre(nombre) if nombre.strip() else None
+            if motivo:
+                raise DiagnosticError(Diagnostic("D-FORMATO", motivo))
             if not valid_label(nombre):  # como al renombrar
                 raise DiagnosticError(Diagnostic("D-FORMATO", f"nombre inválido: de 1 a {MAX_LABEL} caracteres"))
             self.ed.add_variable(nombre, papel, tipo or {"kind": "bool"})
@@ -1225,6 +1613,9 @@ class Edicion(QObject):
 
         def hacer() -> None:
             if nombre is not None and nombre != v["name"]:
+                motivo = self.motivo_nombre(nombre) if nombre.strip() else None
+                if motivo:
+                    raise DiagnosticError(Diagnostic("D-FORMATO", motivo))
                 self.ed.rename(vid, nombre)
             if cambios:
                 self.ed.change_variable(vid, **cambios)
@@ -1264,6 +1655,9 @@ class Edicion(QObject):
             d = self.datos_accion(ident)
             return f"acción {d['variable'] or '?'}" + ("" if self._es_borrador(ident) else
                                                       f" ({self.nombres.get(self.ed.get(ident)['stepRef'], '')})")
+        if ident.startswith("enlaceacc:"):
+            sid = ident.split(":", 1)[1]
+            return f"enlace de las acciones de la etapa {self.nombres.get(sid, sid)}"
         if "|" in ident:
             tid, sid, rol = ident.split("|")
             if rol == "barra":
@@ -1355,12 +1749,16 @@ class Edicion(QObject):
         barras = [i for i in sel if self._barra(i)]
         uniones = [i for i in sel if "|" in i]  # un enlace: se quita el enlace, no los elementos
         sueltas = [i for i in sel if self._es_borrador(i)]
-        resto = [i for i in sel if i not in barras and i not in uniones and i not in sueltas]
+        enlaces_acc = [i for i in sel if i.startswith("enlaceacc:")]  # el enlace de una etapa con sus acciones
+        resto = [i for i in sel if i not in barras and i not in uniones and i not in sueltas and i not in enlaces_acc]
         if resto:
             plan = self.ed.plan_delete(resto)
             if (set(plan["elements"]) > set(resto) or plan["affectedTransitions"]) and not self.confirmar_borrado(plan):
                 return False
+        separadas: list[str] = []
         with self.ed.group("borrar"):
+            for u in enlaces_acc:
+                separadas += self._separar_todas(u.split(":", 1)[1])
             if sueltas:
                 self.ed.delete_draft_actions(sueltas)
             for b in barras:
@@ -1373,7 +1771,7 @@ class Edicion(QObject):
                     self.ed.disconnect(tid, sid)
             if resto:
                 self.ed.delete(resto)
-        self.sel, self.accion = [], None
+        self.sel, self.accion = separadas, None  # las acciones que se separaron de su etapa quedan seleccionadas
         self.cambia()
         return True
 
@@ -1411,10 +1809,14 @@ class Edicion(QObject):
         out += [f"{d['code']}: {d['message']}" for d in diags if d["blocks"] and d["code"] != "D-EXP-PENDIENTE"]
         return out
 
+    def _parcial(self, ident: str) -> str:
+        """El parcial al que pertenece una transición; el de una acción (o de lo demás), el raíz."""
+        return next((t["partialRef"] for t in self.ed.model["transitions"] if t["id"] == ident), self.raiz)
+
     def comprobar(self, tid: str, texto: str) -> Any:
-        """Diagnóstico de un texto de receptividad (None si se interpreta), sin cambiar el modelo."""
-        partial = next(t["partialRef"] for t in self.ed.model["transitions"] if t["id"] == tid)
-        return self.ed.check_expression(self._n(texto), partial)
+        """Diagnóstico de un texto de receptividad, o de la condición o el evento de una acción (None si se interpreta),
+        sin cambiar el modelo."""
+        return self.ed.check_expression(self._n(texto), self._parcial(tid))
 
     def condicion(self, tid: str, texto: str) -> Any:
         diag = self.ed.set_condition(tid, self._n(texto))
@@ -1422,18 +1824,24 @@ class Edicion(QObject):
         return diag
 
     def significado(self, tid: str, texto: str) -> dict[str, Any]:
-        """El significado (árbol de la expresión) de un texto de receptividad que se interpreta, para dibujarlo."""
-        partial = next(t["partialRef"] for t in self.ed.model["transitions"] if t["id"] == tid)
-        return self.ed._make_expr(self.ed.model, self._n(texto), partial)[0]["meaning"]
+        """El significado (árbol de la expresión) de un texto de receptividad (o de condición o evento de una acción) que
+        se interpreta, para dibujarlo."""
+        return self.ed._make_expr(self.ed.model, self._n(texto), self._parcial(tid))[0]["meaning"]
 
     def sin_declarar(self, tid: str, texto: str) -> list[str]:
-        """Variables que usa la receptividad y todavía no existen."""
-        partial = next(t["partialRef"] for t in self.ed.model["transitions"] if t["id"] == tid)
-        return self.ed.undeclared_variables(self._n(texto), partial)
+        """Variables que usa la receptividad (o la condición o el evento de una acción) y todavía no existen."""
+        return self.ed.undeclared_variables(self._n(texto), self._parcial(tid))
 
     def poner_condicion(self, tid: str, texto: str, crear: bool = False) -> Any:
         """Fija la receptividad; con crear, declara antes como entradas booleanas las variables que no existan
         (el panel de variables llega en el paso 4). Todo es una sola operación de deshacer."""
+        if crear:
+            for nombre in self.sin_declarar(tid, texto):
+                motivo = self.motivo_nombre(nombre)
+                if motivo:  # no se puede escribir tal cual en una fórmula: no se crea
+                    self.rechazar(motivo, tid)
+                    self.cambiado.emit()
+                    return Diagnostic("D-FORMATO", motivo)
         with self.ed.group("receptividad"):
             if crear:
                 for nombre in self.sin_declarar(tid, texto):

@@ -2,8 +2,9 @@
 
 Una acción continua pone a 1 una variable booleana mientras la etapa está activa (y, si lleva condición, mientras
 la condición se cumple). Una memorizada asigna un valor al activar la etapa, al desactivarla o con un evento mientras
-está activa (por ejemplo CT := CT + 1 con ↑I02). La condición y el evento se escriben con el programador por bloques;
-todo lo hace Edicion.poner_accion con las operaciones de grafcet/editor.py.
+está activa (por ejemplo CT := CT + 1 con ↑I02). La condición y el evento no se escriben aquí: se programan con bloques
+en la pestaña «Bloques» del panel inferior (P-IMP-43). Todo lo hace Edicion.poner_accion con las operaciones de
+grafcet/editor.py.
 """
 from __future__ import annotations
 
@@ -12,19 +13,22 @@ from typing import Any
 from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QVBoxLayout,
                                QWidget)
 
-from .bloques import Programador
-from .diagrama import COL, _html
+from .diagrama import COL
+from .edicion import CONTINUAS, TEXTO_LIMITADA, Parpadeo
 
 TIPOS = (("continua", "Continua: mientras la etapa está activa"),
-         ("limitada", "Continua limitada en el tiempo: mientras la etapa está activa y dure menos del límite"),
+         ("condicionada", "Condicionada: continua que exige una condición (se programa en la pestaña Bloques)"),
          ("activacion", "Memorizada al activar la etapa (↑)"),
          ("desactivacion", "Memorizada al desactivar la etapa (↓)"),
-         ("evento", "Memorizada con un evento, mientras está activa (banderita)"))
+         ("evento", "Memorizada con un evento, mientras está activa (banderita; el evento se programa en la pestaña Bloques)"))
 CREAR = (("output", "bool", "Salida booleana"), ("internal", "bool", "Memoria booleana"),
          ("internal", "int", "Memoria entera (contador)"), ("output", "int", "Salida entera"))
 
 
 class DialogoAccion(QDialog):
+    """Variable, tipo, valor y límite de tiempo de una acción. La condición y el evento no se escriben aquí: se programan
+    con bloques en la pestaña «Bloques» del panel inferior al seleccionar la acción (el diálogo los conserva)."""
+
     def __init__(self, parent: QWidget | None, edicion: Any, sid: str, aid: str | None = None) -> None:
         super().__init__(parent)
         self.e, self.sid, self.aid = edicion, sid, aid
@@ -32,14 +36,19 @@ class DialogoAccion(QDialog):
         suelta = sid is None
         self.setWindowTitle("Acción suelta" if suelta else f"{'Cambiar' if aid else 'Añadir'} acción — etapa {etapa}")
         self.setMinimumWidth(620)
-        self.resize(900, 640)  # el programador por bloques (categorías, bloques y área) pide sitio; se puede ampliar
+        self.resize(660, 330)
+        self._condicion, self._evento = "", ""  # lo que el diálogo no edita
+        d = edicion.datos_accion(aid) if aid else {"tipo": "continua"}
         lay = QVBoxLayout(self)
         f = QFormLayout()
         f.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         lay.addLayout(f)
         self.tipo = QComboBox()
         for clave, texto in TIPOS:
-            self.tipo.addItem(texto, clave)
+            if clave == "condicionada" and d["tipo"] == "limitada":  # la de un fichero antiguo lleva límite de tiempo
+                self.tipo.addItem(TEXTO_LIMITADA, "limitada")
+            else:
+                self.tipo.addItem(texto, clave)
         self.tipo.currentIndexChanged.connect(self._ajustar)
         f.addRow("Tipo", self.tipo)
         self.variable = QComboBox()
@@ -47,12 +56,15 @@ class DialogoAccion(QDialog):
         self.variable.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.variable.currentTextChanged.connect(self._ajustar)
         f.addRow("Variable", self.variable)
+        self.parpadeo = Parpadeo(self)  # la variable parpadea si su nombre no vale
+        self.parpadeo.cambia.connect(lambda: self.variable.setStyleSheet(
+            f"QComboBox {{ background: {COL['glow']} }}" if self.parpadeo.activos() else ""))
         self.crear = QComboBox()
         for papel, tipo, texto in CREAR:
             self.crear.addItem(texto, f"{papel}:{tipo}")
         self.l_crear = QLabel("No existe: crearla como")
         f.addRow(self.l_crear, self.crear)
-        self.l_limite = QLabel("Límite de tiempo (3s, 500ms…)")
+        self.l_limite = QLabel("Límite de tiempo (3s, 500ms…; vacío: sin límite)")
         self.limite = QLineEdit()
         self.limite.setPlaceholderText("3s")
         f.addRow(self.l_limite, self.limite)
@@ -60,24 +72,11 @@ class DialogoAccion(QDialog):
         self.valor.setPlaceholderText("1, 0, 5, CT + 1…")
         self.l_valor = QLabel("Valor (:=)")
         f.addRow(self.l_valor, self.valor)
-        self.l_cond = QLabel("Condición (vacía: siempre)")
-        self.cond = Programador(edicion.fuente_bloques, historial=True)
-        self.cond.setMinimumHeight(230)
-        self.v_cond = QLabel()
-        self.cond.cambiado.connect(self._previsualizar)
-        f.addRow(self.l_cond)
-        f.addRow(self.cond)
-        self.n_cond = QLabel("En la norma")
-        f.addRow(self.n_cond, self.v_cond)
-        self.l_evento = QLabel("Evento (por ejemplo ↑I02)")
-        self.evento = Programador(edicion.fuente_bloques, historial=True)
-        self.evento.setMinimumHeight(230)
-        self.v_evento = QLabel()
-        self.evento.cambiado.connect(self._previsualizar)
-        f.addRow(self.l_evento)
-        f.addRow(self.evento)
-        self.n_evento = QLabel("En la norma")
-        f.addRow(self.n_evento, self.v_evento)
+        self.l_bloques = QLabel("La condición (o el evento) se programa con bloques en la pestaña «Bloques» del panel "
+                                "inferior, al seleccionar la acción.")
+        self.l_bloques.setWordWrap(True)
+        self.l_bloques.setStyleSheet(f"color: {COL['muted']}")
+        f.addRow(self.l_bloques)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         self._avisado: tuple | None = None  # los datos con que se mostró el aviso de «guardar como borrador»
@@ -89,26 +88,12 @@ class DialogoAccion(QDialog):
         botones.rejected.connect(self.reject)
         lay.addWidget(botones)
         if aid:
-            d = edicion.datos_accion(aid)
             self.tipo.setCurrentIndex(max(0, self.tipo.findData(d["tipo"])))
             self.variable.setCurrentText(d["variable"])
             self.valor.setText(d.get("valor", ""))
             self.limite.setText(d.get("limite", ""))
-            self.cond.poner(d.get("condicion", ""))
-            self.evento.poner(d.get("evento", ""))
+            self._condicion, self._evento = d.get("condicion", ""), d.get("evento", "")
         self._ajustar()
-        edicion.cambiado.connect(self._refrescar_bloques)  # variables nuevas, renombradas o quitadas: al día en el acto
-        self.finished.connect(self._soltar_escucha)
-
-    def _soltar_escucha(self, *_: Any) -> None:
-        try:
-            self.e.cambiado.disconnect(self._refrescar_bloques)
-        except (RuntimeError, TypeError):
-            pass
-
-    def _refrescar_bloques(self) -> None:
-        self.cond.refrescar()
-        self.evento.refrescar()
 
     def _variables(self) -> dict[str, tuple[str, str]]:
         return self.e.fuente_bloques()[0]
@@ -117,7 +102,7 @@ class DialogoAccion(QDialog):
         """Muestra solo lo que pide el tipo; la lista ofrece las variables que se pueden escribir (no las entradas;
         una continua, solo booleanas)."""
         clave = self.tipo.currentData()
-        continua = clave in ("continua", "limitada")
+        continua = clave in CONTINUAS
         for w in (self.l_limite, self.limite):
             w.setVisible(clave == "limitada")
         texto = self.variable.currentText()
@@ -134,24 +119,18 @@ class DialogoAccion(QDialog):
         self.crear.setVisible(nueva)
         for w in (self.l_valor, self.valor):
             w.setVisible(not continua)
-        for w in (self.l_cond, self.cond, self.n_cond, self.v_cond):
-            w.setVisible(continua)
-        for w in (self.l_evento, self.evento, self.n_evento, self.v_evento):
-            w.setVisible(clave == "evento")
+        self.l_bloques.setVisible(clave in ("condicionada", "limitada", "evento"))
         booleana = (self._variables()[texto.strip()][1] if existe else self._crear_como()[1]) == "bool"
         self.valor.setPlaceholderText("1 o 0" if booleana else "5, CT + 1…")
         self._previsualizar()
 
     def _previsualizar(self) -> None:
-        """La condición y el evento en la notación de la norma, y el aviso si un X… puede ser dos etapas."""
+        """El aviso si un X… del valor (o de la condición o el evento que ya tenía) puede ser dos etapas."""
         if not hasattr(self, "_avisado"):
             return
-        for programador, vista in ((self.cond, self.v_cond), (self.evento, self.v_evento)):
-            vista.setText(_html(self.e.vista_norma(programador.texto())) or "<i>—</i>")
         d = self.datos()
-        continua = d["tipo"] in ("continua", "limitada")
-        aviso = self.e.aviso_ambiguas(d["condicion"] if continua else "",
-                                      d["evento"] if d["tipo"] == "evento" else "",
+        continua = d["tipo"] in CONTINUAS
+        aviso = self.e.aviso_ambiguas(d["condicion"] if continua else "", d["evento"] if d["tipo"] == "evento" else "",
                                       d["valor"] if not continua else "")
         if self._avisado != tuple(d.items()):  # cambiar algo reinicia el aviso de «guardar como borrador»
             self._avisado = None
@@ -164,9 +143,12 @@ class DialogoAccion(QDialog):
         return papel, tipo
 
     def datos(self) -> dict[str, str]:
-        return {"tipo": self.tipo.currentData(), "variable": self.variable.currentText().strip(),
-                "condicion": self.cond.texto(), "valor": self.valor.text().strip(), "evento": self.evento.texto(),
-                "limite": self.limite.text().strip()}
+        tipo, limite = self.tipo.currentData(), self.limite.text().strip()
+        condicion = "" if tipo == "continua" else self._condicion
+        if tipo == "limitada" and not limite:  # quitar el límite: queda una condicionada (o una continua, sin condición)
+            tipo = "condicionada" if condicion else "continua"
+        return {"tipo": tipo, "variable": self.variable.currentText().strip(), "condicion": condicion,
+                "valor": self.valor.text().strip(), "evento": self._evento, "limite": limite if tipo == "limitada" else ""}
 
     def _reparo(self) -> str:
         """Por qué la variable escrita a mano no sirve para este tipo de acción (se guarda como borrador)."""
@@ -176,7 +158,7 @@ class DialogoAccion(QDialog):
         papel, kind = self._variables()[nombre]
         if papel == "input":
             return f"«{nombre}» es una entrada: una acción no puede escribirla"
-        if tipo in ("continua", "limitada") and kind != "bool":
+        if tipo in CONTINUAS and kind != "bool":
             return f"una acción continua necesita una variable booleana y «{nombre}» no lo es"
         return ""
 
@@ -194,5 +176,7 @@ class DialogoAccion(QDialog):
         if motivo:
             self.msg.setText(motivo)
             self.msg.setStyleSheet(f"color: {COL['err']}")
+            if "nombre de variable" in motivo:  # el nombre no se puede escribir en una fórmula
+                self.parpadeo.iniciar({"variable"})
             return
         self.accept()
