@@ -16,6 +16,7 @@ from .bloques import Programador
 from .diagrama import COL, _html
 
 TIPOS = (("continua", "Continua: mientras la etapa está activa"),
+         ("limitada", "Continua limitada en el tiempo: mientras la etapa está activa y dure menos del límite"),
          ("activacion", "Memorizada al activar la etapa (↑)"),
          ("desactivacion", "Memorizada al desactivar la etapa (↓)"),
          ("evento", "Memorizada con un evento, mientras está activa (banderita)"))
@@ -28,7 +29,8 @@ class DialogoAccion(QDialog):
         super().__init__(parent)
         self.e, self.sid, self.aid = edicion, sid, aid
         etapa = edicion.nombres.get(sid, sid)
-        self.setWindowTitle(f"{'Cambiar' if aid else 'Añadir'} acción — etapa {etapa}")
+        suelta = sid is None
+        self.setWindowTitle("Acción suelta" if suelta else f"{'Cambiar' if aid else 'Añadir'} acción — etapa {etapa}")
         self.setMinimumWidth(620)
         self.resize(900, 640)  # el programador por bloques (categorías, bloques y área) pide sitio; se puede ampliar
         lay = QVBoxLayout(self)
@@ -50,6 +52,10 @@ class DialogoAccion(QDialog):
             self.crear.addItem(texto, f"{papel}:{tipo}")
         self.l_crear = QLabel("No existe: crearla como")
         f.addRow(self.l_crear, self.crear)
+        self.l_limite = QLabel("Límite de tiempo (3s, 500ms…)")
+        self.limite = QLineEdit()
+        self.limite.setPlaceholderText("3s")
+        f.addRow(self.l_limite, self.limite)
         self.valor = QLineEdit()
         self.valor.setPlaceholderText("1, 0, 5, CT + 1…")
         self.l_valor = QLabel("Valor (:=)")
@@ -76,6 +82,7 @@ class DialogoAccion(QDialog):
         self.msg.setWordWrap(True)
         self._avisado: tuple | None = None  # los datos con que se mostró el aviso de «guardar como borrador»
         self.valor.textChanged.connect(self._previsualizar)
+        self.limite.textChanged.connect(self._previsualizar)
         lay.addWidget(self.msg)
         botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         botones.accepted.connect(self.aceptar)
@@ -86,9 +93,22 @@ class DialogoAccion(QDialog):
             self.tipo.setCurrentIndex(max(0, self.tipo.findData(d["tipo"])))
             self.variable.setCurrentText(d["variable"])
             self.valor.setText(d.get("valor", ""))
+            self.limite.setText(d.get("limite", ""))
             self.cond.poner(d.get("condicion", ""))
             self.evento.poner(d.get("evento", ""))
         self._ajustar()
+        edicion.cambiado.connect(self._refrescar_bloques)  # variables nuevas, renombradas o quitadas: al día en el acto
+        self.finished.connect(self._soltar_escucha)
+
+    def _soltar_escucha(self, *_: Any) -> None:
+        try:
+            self.e.cambiado.disconnect(self._refrescar_bloques)
+        except (RuntimeError, TypeError):
+            pass
+
+    def _refrescar_bloques(self) -> None:
+        self.cond.refrescar()
+        self.evento.refrescar()
 
     def _variables(self) -> dict[str, tuple[str, str]]:
         return self.e.fuente_bloques()[0]
@@ -97,7 +117,9 @@ class DialogoAccion(QDialog):
         """Muestra solo lo que pide el tipo; la lista ofrece las variables que se pueden escribir (no las entradas;
         una continua, solo booleanas)."""
         clave = self.tipo.currentData()
-        continua = clave == "continua"
+        continua = clave in ("continua", "limitada")
+        for w in (self.l_limite, self.limite):
+            w.setVisible(clave == "limitada")
         texto = self.variable.currentText()
         self.variable.blockSignals(True)
         self.variable.clear()
@@ -127,9 +149,10 @@ class DialogoAccion(QDialog):
         for programador, vista in ((self.cond, self.v_cond), (self.evento, self.v_evento)):
             vista.setText(_html(self.e.vista_norma(programador.texto())) or "<i>—</i>")
         d = self.datos()
-        aviso = self.e.aviso_ambiguas(d["condicion"] if d["tipo"] == "continua" else "",
+        continua = d["tipo"] in ("continua", "limitada")
+        aviso = self.e.aviso_ambiguas(d["condicion"] if continua else "",
                                       d["evento"] if d["tipo"] == "evento" else "",
-                                      d["valor"] if d["tipo"] != "continua" else "")
+                                      d["valor"] if not continua else "")
         if self._avisado != tuple(d.items()):  # cambiar algo reinicia el aviso de «guardar como borrador»
             self._avisado = None
             self.msg.setText(aviso)
@@ -142,7 +165,8 @@ class DialogoAccion(QDialog):
 
     def datos(self) -> dict[str, str]:
         return {"tipo": self.tipo.currentData(), "variable": self.variable.currentText().strip(),
-                "condicion": self.cond.texto(), "valor": self.valor.text().strip(), "evento": self.evento.texto()}
+                "condicion": self.cond.texto(), "valor": self.valor.text().strip(), "evento": self.evento.texto(),
+                "limite": self.limite.text().strip()}
 
     def _reparo(self) -> str:
         """Por qué la variable escrita a mano no sirve para este tipo de acción (se guarda como borrador)."""
@@ -152,7 +176,7 @@ class DialogoAccion(QDialog):
         papel, kind = self._variables()[nombre]
         if papel == "input":
             return f"«{nombre}» es una entrada: una acción no puede escribirla"
-        if tipo == "continua" and kind != "bool":
+        if tipo in ("continua", "limitada") and kind != "bool":
             return f"una acción continua necesita una variable booleana y «{nombre}» no lo es"
         return ""
 

@@ -47,8 +47,8 @@ AYUDA_EDICION = {
     "transicion": "Clic en el lienzo coloca una transición (Esc cancela); su receptividad se escribe en sus opciones.",
     "simultaneidad": "Clic en el lienzo coloca una barra de simultaneidad (doble trazo); se une a las etapas y la "
                      "transición con enlaces y se ensancha estirando de sus extremos. Esc cancela.",
-    "accion": "Clic en una etapa del lienzo abre «Añadir acción» de esa etapa (Esc cancela). También se puede arrastrar "
-              "la ficha Acción de la paleta sobre una etapa.",
+    "accion": "Clic en el lienzo coloca una acción suelta (Esc cancela); se une a una etapa arrastrando desde su punto de "
+              "unión de la izquierda hasta la etapa. También se puede arrastrar la ficha Acción de la paleta a cualquier sitio.",
 }
 NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar", "etapa": "Etapa", "transicion": "Transición",
                       "simultaneidad": "Simultaneidad", "accion": "Acción"}
@@ -405,6 +405,8 @@ class Ventana(QMainWindow):
         self.l_reloj = QLabel()
         self.l_reloj.setStyleSheet("font-weight: 600")
         sb.addWidget(self.l_aviso, 1)
+        # el mensaje temporal sustituye al texto fijo mientras dura (si no, se dibujan uno encima del otro)
+        sb.messageChanged.connect(lambda texto: self.l_aviso.setVisible(not texto))
         sb.addPermanentWidget(self.l_lect)
         sb.addPermanentWidget(self.l_reloj)
 
@@ -691,7 +693,8 @@ class Ventana(QMainWindow):
                                   "padding: 1px 9px")
         self.titulo.setText(f"{e.titulo}{' *' if e.ed.dirty else ''}")
         self.ayuda.setText(e.mensaje or AYUDA_EDICION[e.herramienta])
-        self.ayuda.setStyleSheet(f"color: {COL['err'] if e.mensaje else COL['muted']}; font-weight: {600 if e.mensaje else 400}")
+        error = bool(e.mensaje) and not e.mensaje_info  # un aviso informativo no va en rojo
+        self.ayuda.setStyleSheet(f"color: {COL['err'] if error else COL['muted']}; font-weight: {600 if error else 400}")
         if e.mensaje:
             self.statusBar().showMessage(e.mensaje, 9000)
         self.l_herr.setText(f"<b>{NOMBRE_HERRAMIENTA[e.herramienta]}</b>: {html.escape(AYUDA_EDICION[e.herramienta])}")
@@ -739,13 +742,13 @@ class Ventana(QMainWindow):
                 self.diagrama.centrar_en(c)
 
     def editar_condicion(self, tid: str) -> None:
-        """Doble clic en una transición: lleva el cursor a su receptividad, en el panel de propiedades."""
+        """Doble clic en una transición: la selecciona y despliega su receptividad (pestaña Bloques del panel inferior)."""
         self.edicion.seleccionar([tid])
-        self.props.t_texto.setFocus()
-        self.props.t_texto.selectAll()
+        self._abrir_bloques()
 
-    def editar_accion(self, sid: str, aid: str | None = None) -> None:
-        """Añadir (sin `aid`) o cambiar una acción de la etapa: diálogo con el programador por bloques."""
+    def editar_accion(self, sid: str | None, aid: str | None = None) -> None:
+        """Añadir (sin `aid`) o cambiar una acción (de la etapa, suelta o unida sin completar): diálogo con el
+        programador por bloques."""
         DialogoAccion(self, self.edicion, sid, aid).exec()
 
     def editar_etiqueta(self, ident: str) -> None:

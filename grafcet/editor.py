@@ -336,9 +336,10 @@ class Editor:
         return self._txn("crear acción memorizada", fn)
 
     def update_action(self, aid: str, target: str, mode: str, condition: str = "true", trigger: str | None = None,
-                      value: str | None = None, event: str | None = None) -> None:
-        """Cambia una acción de arriba abajo (continua o memorizada, objetivo, condición, disparador, valor, evento):
-        conserva su ID, su etapa y su lugar entre las acciones de la etapa (P-IMP-38)."""
+                      value: str | None = None, event: str | None = None, limit_us: int | None = None) -> None:
+        """Cambia una acción de arriba abajo (continua, con su límite de tiempo si lo lleva, o memorizada; objetivo,
+        condición, disparador, valor, evento): conserva su ID, su etapa y su lugar entre las acciones de la etapa
+        (P-IMP-38, P-IMP-41)."""
         def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
             i, old = next((i, a) for i, a in enumerate(m["actions"]) if a["id"] == aid)
             st = next(x for x in m["steps"] if x["id"] == old["stepRef"])
@@ -354,6 +355,8 @@ class Editor:
             if mode == "continuous":
                 item = {"id": aid, "stepRef": st["id"], "mode": "continuous", "targetRef": target,
                         "conditionRef": expr(condition)}
+                if limit_us is not None:
+                    item["limitUs"] = str(limit_us)
             elif mode == "stored" and trigger in ("activation", "deactivation", "event") and value is not None:
                 trig: dict[str, Any] = {"kind": trigger, "sourceRefs": []}
                 if trigger == "event":
@@ -379,9 +382,82 @@ class Editor:
             refs.insert(j, refs.pop(i))
         self._txn("ordenar acciones", fn)
 
+    # -- acciones sueltas o sin completar: borradores de la presentación (P-IMP-41)
+    # Una acción del modelo exige etapa y variable. Una acción suelta (o unida a una etapa a la que aún le falta algo)
+    # no puede serlo: se guarda en `presentation.draftActions`, no se simula y viaja con el proyecto. Cada una lleva
+    # id, x, y (el punto medio de su lado izquierdo, donde se une), tipo (continua, limitada, activacion, desactivacion,
+    # evento) y, si los tiene, variable (ID), condicion, valor, evento y limite (en la notación del usuario) y etapa.
+    DRAFT_TIPOS = ("continua", "limitada", "activacion", "desactivacion", "evento")
+    DRAFT_CAMPOS = ("variable", "condicion", "valor", "evento", "limite", "etapa")
+
+    def draft_actions(self) -> list[dict[str, Any]]:
+        d = self.presentation.get("draftActions", [])
+        return d if isinstance(d, list) else []
+
+    def _check_draft(self, m: dict[str, Any], datos: dict[str, Any]) -> None:
+        if "tipo" in datos and datos["tipo"] not in self.DRAFT_TIPOS:
+            raise DiagnosticError(Diagnostic("D-FORMATO", f"tipo de acción desconocido: {datos['tipo']!r}"))
+        if datos.get("etapa") and not any(s["id"] == datos["etapa"] for s in m["steps"]):
+            raise DiagnosticError(Diagnostic("D-REF", f"etapa inexistente: {datos['etapa']}", element=datos["etapa"]))
+        if datos.get("variable") and not any(v["id"] == datos["variable"] for v in m["variables"]):
+            raise DiagnosticError(Diagnostic("D-REF", f"variable inexistente: {datos['variable']}",
+                                             element=datos["variable"]))
+
+    @staticmethod
+    def _poner_campos(d: dict[str, Any], datos: dict[str, Any]) -> None:
+        for k in ("tipo",) + Editor.DRAFT_CAMPOS:
+            if k in datos:
+                if datos[k] in (None, ""):
+                    d.pop(k, None)
+                else:
+                    d[k] = datos[k]
+
+    def add_draft_action(self, at: tuple[Any, Any], datos: dict[str, Any] | None = None) -> str:
+        """Una acción suelta (continua sin variable, salvo que `datos` diga otra cosa) con su lado izquierdo en `at`."""
+        datos = {"tipo": "continua", **(datos or {})}
+
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> str:
+            self._check_draft(m, datos)
+            did = self.ids.new("c")
+            d: dict[str, Any] = {"id": did, "x": _coord(at[0]), "y": _coord(at[1])}
+            self._poner_campos(d, datos)
+            p.setdefault("draftActions", []).append(d)
+            return did
+        return self._txn("colocar acción", fn, view_only=True)
+
+    @staticmethod
+    def _draft(p: dict[str, Any], did: str) -> dict[str, Any]:
+        d = next((x for x in p.get("draftActions", []) if x["id"] == did), None)
+        if d is None:
+            raise DiagnosticError(Diagnostic("D-REF", f"no existe la acción suelta {did}", element=did))
+        return d
+
+    def update_draft_action(self, did: str, **datos: Any) -> None:
+        """Cambia datos de un borrador; un valor vacío o None quita el dato (etapa vacía: queda suelta)."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            self._check_draft(m, datos)
+            if "x" in datos or "y" in datos:
+                raise DiagnosticError(Diagnostic("D-FORMATO", "la posición se cambia con move_draft_action"))
+            self._poner_campos(self._draft(p, did), datos)
+        self._txn("editar acción suelta", fn, view_only=True)
+
+    def move_draft_action(self, did: str, x: Any, y: Any) -> None:
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            d = self._draft(p, did)
+            d["x"], d["y"] = _coord(x), _coord(y)
+        self._txn("mover acción suelta", fn, view_only=True)
+
+    def delete_draft_actions(self, ids: list[str]) -> None:
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            for did in ids:
+                self._draft(p, did)
+            p["draftActions"] = [d for d in p["draftActions"] if d["id"] not in ids]
+        self._txn("quitar acción suelta", fn, view_only=True)
+
     def delete_variable(self, vid: str) -> None:
         """Quita una variable que no se usa en ninguna expresión ni es el objetivo de una acción (REQ-EDT-07)."""
         usos = self.usages(vid) + [{"owner": a["id"]} for a in self.model["actions"] if a["targetRef"] == vid]
+        usos += [{"owner": d["id"]} for d in self.draft_actions() if d.get("variable") == vid]  # acciones sin completar
         if usos:
             raise DiagnosticError(Diagnostic("D-REF", f"la variable se usa en {len(usos)} sitio(s): quite antes esos usos",
                                              element=vid))
@@ -707,6 +783,9 @@ class Editor:
             for b in p.get("barras", []):
                 b["arriba"] = [x for x in b["arriba"] if x not in doomed]
                 b["abajo"] = [x for x in b["abajo"] if x not in doomed]
+            for d in p.get("draftActions", []):  # una acción sin completar unida a una etapa borrada queda suelta
+                if d.get("etapa") in doomed:
+                    del d["etapa"]
             return plan
         return self._txn("borrar", fn)
 

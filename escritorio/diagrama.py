@@ -176,12 +176,16 @@ def barra(b: dict[str, Any]) -> tuple[float, float, float, float]:
 
 
 def anclas(M: dict[str, Any], ident: str) -> list[dict[str, Any]]:
-    """Puntos de unión de un elemento: etapa y transición, arriba (entra el enlace) y abajo (sale)."""
+    """Puntos de unión de un elemento: etapa y transición, arriba (entra el enlace) y abajo (sale); una acción suelta,
+    a la izquierda."""
     for b in M.get("bars", []):
         if b["id"] == ident:
             bx, by, w, h = barra(b)
             return [{"id": ident, "lado": "arriba", "pos": QPointF(bx + w / 2, by - 9)},
                     {"id": ident, "lado": "abajo", "pos": QPointF(bx + w / 2, by + h + 9)}]
+    for d in M.get("draftActions", []):  # una acción suelta: un solo punto de unión, en el medio de su lado izquierdo
+        if d["id"] == ident and not d.get("etapa"):
+            return [{"id": ident, "lado": "izq", "pos": QPointF(d["x"] + SX, d["y"])}]
     pos = posiciones(M)
     if ident not in pos:
         return []
@@ -207,6 +211,11 @@ def ancla_en(M: dict[str, Any], p: QPointF, radio: float = RADIO_ANCLA) -> dict[
             d = ((a["pos"].x() - p.x()) ** 2 + (a["pos"].y() - p.y()) ** 2) ** 0.5
             if d <= radio and (best is None or d < best[0]):
                 best = (d, a)
+    for d in M.get("draftActions", []):
+        for a in anclas(M, d["id"]):
+            dist = ((a["pos"].x() - p.x()) ** 2 + (a["pos"].y() - p.y()) ** 2) ** 0.5
+            if dist <= radio and (best is None or dist < best[0]):
+                best = (dist, a)
     for b in M.get("bars", []):  # en una barra, el punto de unión sigue al puntero a lo largo de su ancho
         bx, by, w, h = barra(b)
         if bx - 4 <= p.x() <= bx + w + 4:
@@ -294,7 +303,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     nombre = M.get("names", {}).get  # los ID internos nunca se muestran: etapas, parciales y macroetapas, por su nombre
     pos = {s["id"]: (s["x"] + SX, s["y"]) for s in M["steps"]}
     pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
-    if not pos and not M["transitions"]:
+    if not pos and not M["transitions"] and not M.get("draftActions"):
         return cajas
     # Enlace ascendente: por la izquierda del parcial de la transición, no de todo el dibujo
     situation, virtual = set(S.get("situation") or []), set(S.get("virtual") or [])
@@ -303,6 +312,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     reached = set(blk["reached"]) if blk else set()
     _marcos(pt, M, pos)
     tmp = _temporizadores(S)
+    marcadas = {i for i in (sel or set()) if i.startswith("accion:")}
     link = pt.pen("text")
     for t in M["transitions"]:
         tx, ty = t["x"] + SX, t["y"]
@@ -393,7 +403,8 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
                                    (stale, "último estable", "muted"), (cand, "alcanzada, sin confirmar", "glow")):
             if flag:
                 pt.text(x, y + H + 13, pt.seg(label), 10, color, Z_STEP, "middle", tip)
-        _acciones(pt, x, y, s["actions"], S, tmp, cajas, s["id"], {i for i in (sel or set()) if i.startswith("accion:")})
+        unidas = [d for d in M.get("draftActions", []) if d.get("etapa") == s["id"]]  # sin completar, al final de la fila
+        _acciones(pt, x, y, s["actions"] + unidas, S, tmp, cajas, s["id"], marcadas)
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
         x, y = pos[m["id"]]
         act = bool((S.get("macros") or {}).get(m["id"]))
@@ -404,6 +415,9 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         pt.line(x - H, y - H + MARK, x + H, y - H + MARK, pt.pen("text"), Z_STEP + 0.01, tip)
         pt.line(x - H, y + H - MARK, x + H, y + H - MARK, pt.pen("text"), Z_STEP + 0.01, tip)
         pt.text(x, y + 5, pt.seg(nombre(m["id"], m["id"])), 16, "text", Z_STEP, "middle", tip)
+    for d in M.get("draftActions", []):  # acciones sueltas: su lado izquierdo está en (x, y)
+        if not d.get("etapa"):
+            _caja_accion(pt, d["x"] + SX, d["y"], d, S, tmp, cajas, "", marcadas, suelta=True)
     if sel or marcados or M.get("drafts"):
         _realces(pt, M, set(sel or ()), set(marcados or ()))
     return cajas
@@ -469,40 +483,53 @@ def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S:
         return
     ax = x + H + ACT_LINK
     pt.line(x + H, y, ax, y, pt.pen("text"), Z_STEP)
-    top, bottom = y - H, y + H
     for a in actions:
-        force = a["kind"] == "force"
-        if a["kind"] == "continuous":
-            on = bool(((S.get("outputs") or {}).get(a["target"]) or {}).get("value"))
-        else:
-            on = force and any(f["order"] == a["id"] for f in S.get("forces") or [])
-        w = max(ACT_MIN, pt.text(ax + 12, y + 5, a["text"], 15, "text", Z_STEP) + 24)
-        outer = (pt.pen("virt", 2.2) if force else pt.pen("ok", 2.6)) if on else pt.pen("text")
-        pt.rect(ax, top, w, 2 * H, outer, Z_STEP - 0.02, "panel")
-        if cajas is not None and not force:
-            cajas.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H)})
-        if f"accion:{a.get('id')}" in marcadas:
-            pt.rect(ax - 3, top - 3, w + 6, 2 * H + 6, pt.pen("accent", 1.6, (5, 3)), Z_EDIT)
-        if force:  # orden de forzado: rectángulo doble
-            pt.rect(ax + 3, top + 3, w - 6, 2 * H - 6, pt.pen("virt" if on else "text", 1.2), Z_STEP - 0.01)
-        mx = ax + 12
-        mark = pt.pen("text")
-        if a["kind"] == "continuous" and a.get("cond"):  # acción condicionada: trazo y condición
-            pt.line(mx, top, mx, top - 14, mark, Z_STEP)
-            wc = pt.text(mx + 5, top - 4, a["cond"], 13, "text", Z_STEP)  # el ancho de la caja no cambia
-            _estado_temporal(pt, mx + 5 + wc + 8, top - 4, a.get("condRef"), tmp, Z_STEP)
-        elif a.get("trigger") == "activation":  # memorizada al activar: flecha hacia arriba
-            pt.line(mx, top, mx, top - 11, mark, Z_STEP)
-            pt.poly([(mx - 5, top - 10), (mx, top - 19), (mx + 5, top - 10)], None, Z_STEP, fill="text")
-        elif a.get("trigger") == "deactivation":  # memorizada al desactivar: flecha hacia abajo
-            pt.line(mx, bottom, mx, bottom + 11, mark, Z_STEP)
-            pt.poly([(mx - 5, bottom + 10), (mx, bottom + 19), (mx + 5, bottom + 10)], None, Z_STEP, fill="text")
-        elif a.get("trigger") == "event":  # memorizada por evento: banderita y evento
-            pt.line(mx, top, mx, top - 20, mark, Z_STEP)
-            pt.poly([(mx, top - 20), (mx - 9, top - 15), (mx, top - 10)], None, Z_STEP, fill="text")
-            we = pt.text(mx + 5, top - 11, a.get("event"), 13, "text", Z_STEP)
-            _estado_temporal(pt, mx + 5 + we + 8, top - 11, a.get("condRef"), tmp, Z_STEP)
-        ax += w
+        ax += _caja_accion(pt, ax, y, a, S, tmp, cajas, etapa, marcadas)
+
+
+def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[str, Any],
+                 tmp: dict[str, list[dict[str, Any]]], cajas: list[dict[str, Any]] | None, etapa: str,
+                 marcadas: set[str], suelta: bool = False) -> float:
+    """Una acción con su caja (a la derecha de `ax`, centrada en `y`) y sus marcas: condición, flecha al activar o al
+    desactivar, banderita de evento. Un borrador (acción sin completar o suelta, solo al editar) lleva el borde
+    discontinuo y «?» en lo que falta. Devuelve su ancho."""
+    top, bottom = y - H, y + H
+    force = a["kind"] == "force"
+    borrador = bool(a.get("borrador"))
+    if a["kind"] == "continuous":
+        on = bool(((S.get("outputs") or {}).get(a.get("target")) or {}).get("value")) and not borrador
+    else:
+        on = force and any(f["order"] == a["id"] for f in S.get("forces") or [])
+    w = max(ACT_MIN, pt.text(ax + 12, y + 5, a["text"], 15, "text", Z_STEP) + 24)
+    outer = (pt.pen("virt", 2.2) if force else pt.pen("ok", 2.6)) if on else pt.pen("text")
+    if borrador:
+        outer = pt.pen("glow", 1.8, (6, 4))
+    pt.rect(ax, top, w, 2 * H, outer, Z_STEP - 0.02, "panel",
+            "Acción sin completar: no se simula" if borrador else None)
+    if cajas is not None and not force:
+        cajas.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H), "borrador": borrador, "suelta": suelta})
+    if f"accion:{a.get('id')}" in marcadas:
+        pt.rect(ax - 3, top - 3, w + 6, 2 * H + 6, pt.pen("accent", 1.6, (5, 3)), Z_EDIT)
+    if force:  # orden de forzado: rectángulo doble
+        pt.rect(ax + 3, top + 3, w - 6, 2 * H - 6, pt.pen("virt" if on else "text", 1.2), Z_STEP - 0.01)
+    mx = ax + 12
+    mark = pt.pen("text")
+    if a["kind"] == "continuous" and a.get("cond"):  # acción condicionada: trazo y condición
+        pt.line(mx, top, mx, top - 14, mark, Z_STEP)
+        wc = pt.text(mx + 5, top - 4, a["cond"], 13, "text", Z_STEP)  # el ancho de la caja no cambia
+        _estado_temporal(pt, mx + 5 + wc + 8, top - 4, a.get("condRef"), tmp, Z_STEP)
+    elif a.get("trigger") == "activation":  # memorizada al activar: flecha hacia arriba
+        pt.line(mx, top, mx, top - 11, mark, Z_STEP)
+        pt.poly([(mx - 5, top - 10), (mx, top - 19), (mx + 5, top - 10)], None, Z_STEP, fill="text")
+    elif a.get("trigger") == "deactivation":  # memorizada al desactivar: flecha hacia abajo
+        pt.line(mx, bottom, mx, bottom + 11, mark, Z_STEP)
+        pt.poly([(mx - 5, bottom + 10), (mx, bottom + 19), (mx + 5, bottom + 10)], None, Z_STEP, fill="text")
+    elif a.get("trigger") == "event":  # memorizada por evento: banderita y evento
+        pt.line(mx, top, mx, top - 20, mark, Z_STEP)
+        pt.poly([(mx, top - 20), (mx - 9, top - 15), (mx, top - 10)], None, Z_STEP, fill="text")
+        we = pt.text(mx + 5, top - 11, a.get("event"), 13, "text", Z_STEP)
+        _estado_temporal(pt, mx + 5 + we + 8, top - 11, a.get("condRef"), tmp, Z_STEP)
+    return w
 
 
 ZOOM_MIN, ZOOM_MAX, ZOOM_PASO = 0.1, 8.0, 1.15
@@ -529,6 +556,7 @@ class VistaDiagrama(QGraphicsView):
         self.rejilla = False
         self.area_minima: QRectF | None = None
         self.goma = None  # línea provisional de un enlace que se está trazando
+        self.cuadro = None  # rectángulo del lazo de selección que se está trazando
         self._marcas: list[Any] = []
         self._origen = False  # en edición, hasta que se usa el ratón, el dibujo se queda arriba a la izquierda
 
@@ -552,6 +580,7 @@ class VistaDiagrama(QGraphicsView):
             self._manual = False
             self._origen = False
         self.goma = None
+        self.cuadro = None
 
     def marcar_anclas(self, anclas_: list[dict[str, Any]], destacada: dict[str, Any] | None = None) -> None:
         """Puntos de unión del elemento bajo el puntero; el más cercano, resaltado (como el ajuste a puntos del CAD)."""
@@ -574,6 +603,16 @@ class VistaDiagrama(QGraphicsView):
         if a is not None and b is not None:
             self.goma = self.scene().addLine(a.x(), a.y(), b.x(), b.y(), _Pintor.pen("accent", 2, (6, 4)))
             self.goma.setZValue(Z_EDIT + 1)
+
+    def lazo(self, a: QPointF | None, b: QPointF | None = None) -> None:
+        """Rectángulo de selección mientras se arrastra desde un hueco (None lo quita)."""
+        if self.cuadro is not None and self.cuadro.scene() is self.scene():
+            self.scene().removeItem(self.cuadro)
+        self.cuadro = None
+        if a is not None and b is not None:
+            self.cuadro = self.scene().addRect(QRectF(a, b).normalized(), _Pintor.pen("accent", 1.2, (5, 3)),
+                                               QBrush(QColor(31, 111, 235, 28)))
+            self.cuadro.setZValue(Z_EDIT + 3)
 
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:  # noqa: N802
         super().drawBackground(painter, rect)
@@ -610,10 +649,23 @@ class VistaDiagrama(QGraphicsView):
         if not opciones:
             super().contextMenuEvent(event)
             return
-        menu = QMenu(self)
-        for texto, accion in opciones:
-            menu.addAction(texto, accion)
+        menu = self.menu_contextual(opciones)
         menu.exec(event.globalPos())
+
+    def menu_contextual(self, opciones: list[tuple[str, Any]]) -> QMenu:
+        """El menú del botón derecho: «-» es un separador y lo que el controlador marca en `menu_marcadas` (el tipo
+        actual de una acción, como «Etapa inicial» en una etapa) lleva su marca."""
+        menu = QMenu(self)
+        marcadas = getattr(self.controlador, "menu_marcadas", set())
+        for texto, accion in opciones:
+            if texto == "-":
+                menu.addSeparator()
+                continue
+            a = menu.addAction(texto, accion)
+            if texto in marcadas:
+                a.setCheckable(True)
+                a.setChecked(True)
+        return menu
 
     def _barra_zoom(self) -> None:
         """Controles del zoom sobre el dibujo, arriba a la derecha: «−», porcentaje, «+» y «Ajustar»."""
@@ -679,6 +731,7 @@ class VistaDiagrama(QGraphicsView):
         if self._origen:
             hb = vb = 0
         self.goma = None
+        self.cuadro = None
         self._marcas = []
         self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados)
         r = self.scene().itemsBoundingRect().adjusted(-14, -14, 14, 14)

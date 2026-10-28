@@ -1,7 +1,7 @@
 """Programador por bloques de receptividades y condiciones (P-IMP-38).
 
-La expresión se arma con bloques de colores que se arrastran desde una paleta (Entradas, Salidas, Memorias, Etapas,
-Operadores, Comparaciones, Tiempo) y encajan unos dentro de otros. Las condiciones son bloques hexagonales: una
+La expresión se arma con bloques de colores que se arrastran desde una paleta (Operadores, Entradas, Salidas, Etapas,
+Memorias, Comparaciones, Temporizadores) y encajan unos dentro de otros. Las condiciones son bloques hexagonales: una
 variable booleana o una etapa (con un desplegable para elegir cuál), «y» y «o» con dos huecos, «no» y los flancos ↑ ↓
 que envuelven a otro bloque, las constantes 1 y 0, «temporizar» (t1 y t2 como en la norma: 3s/X1, X1/2s) y la
 comparación de una variable numérica con un valor.
@@ -312,8 +312,8 @@ def arbol_a_texto(n: dict[str, Any] | None) -> str:
 COLORES = {"entrada": "#2F6FDE", "salida": "#2E9E57", "interna": "#E07B1A", "etapa": "#7C4DDB",
            "operador": "#4B5B73", "comparacion": "#159AAE", "tiempo": "#B07A12", "texto": "#6B7280", "error": "#C0392B",
            "y": "#5F7F0B", "o": "#B83DBA"}  # «y» (oliva) y «o» (fucsia): operadores, pero cada uno con su color
-CATEGORIAS = (("entrada", "Entradas"), ("salida", "Salidas"), ("interna", "Memorias"), ("etapa", "Etapas (X)"),
-              ("operador", "Operadores"), ("comparacion", "Comparaciones"), ("tiempo", "Tiempo"))
+CATEGORIAS = (("operador", "Operadores"), ("entrada", "Entradas"), ("salida", "Salidas"), ("etapa", "Etapas (X)"),
+              ("interna", "Memorias"), ("comparacion", "Comparaciones"), ("tiempo", "Temporizadores"))
 _PAPEL_CAT = {"input": "entrada", "output": "salida", "internal": "interna"}
 PADX, PADX_PILA, PADV, GAP, FILA = 10, 7, 3, 4, 3  # relleno lateral y vertical de un bloque, hueco entre piezas y entre filas
 ALTO = 20  # alto de las piezas (desplegables, campos)
@@ -1235,6 +1235,20 @@ class Programador(QWidget):
         super().showEvent(event)
         self._cargar_paleta(self.paleta.clave)
 
+    def refrescar(self) -> None:
+        """Las variables o las etapas del modelo cambiaron (se creó, renombró, quitó o cambió de papel o tipo una
+        variable): la paleta y los desplegables y colores del área se ponen al día en el acto. Sin cambios, no hace nada."""
+        firma = repr(self.fuente())
+        if firma == getattr(self, "_firma", None):
+            return
+        self._firma = firma
+        self._cargar_paleta(self.paleta.clave)
+        self.lienzo.invalidar()
+        if self._espejo is not None:
+            self._espejo._firma = firma
+            self._espejo._cargar_paleta(self._espejo.paleta.clave)
+            self._espejo.lienzo.invalidar()
+
     # -- texto <-> bloques
     def texto(self) -> str:
         return self.lienzo.texto()
@@ -1244,7 +1258,13 @@ class Programador(QWidget):
         analizar, los bloques no cambian y se avisa. Si es el mismo que ya hay, no toca el árbol (salvo para releer los
         bloques de texto: una variable pudo crearse)."""
         variables, etapas = self.fuente()
+        self._firma = repr((variables, etapas))
         self._cargar_paleta(self.paleta.clave)
+        self.lienzo.invalidar()
+        if self._espejo is not None:
+            self._espejo._firma = self._firma
+            self._espejo._cargar_paleta(self._espejo.paleta.clave)
+            self._espejo.lienzo.invalidar()
         try:
             if normalizar_espacios(texto) == self.texto():
                 nuevo_ = self.lienzo.arbol

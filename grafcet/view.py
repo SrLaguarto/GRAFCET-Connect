@@ -190,8 +190,10 @@ class Vista:
                  options: dict[str, str], init: dict[str, Any] | None = None,
                  batches: list[tuple[int, int, dict[str, Any]]] = (), budget: int = 10_000,
                  hidden: frozenset[str] | set[str] = frozenset(), bars: list[dict[str, Any]] | None = None,
-                 presentation: dict[str, Any] | None = None, link_styles: dict[str, Any] | None = None) -> None:
+                 presentation: dict[str, Any] | None = None, link_styles: dict[str, Any] | None = None,
+                 draft_actions: list[dict[str, Any]] | None = None) -> None:
         m, layout = build()
+        self.draft_actions = draft_actions or []  # acciones sueltas o sin completar, ya con su texto (editor; no se simulan)
         self.hidden = set(hidden)  # transiciones cuya etiqueta no se dibuja (presentación)
         self.bars = bars or []     # barras de simultaneidad y de alternativa (presentación)
         if presentation is not None:
@@ -220,6 +222,7 @@ class Vista:
         try:
             self.model = self._structure(key, title, help_text, doc, res.can_simulate, layout)
             self.model["linkStyles"] = styles
+            self.model["draftActions"] = self.draft_actions
             from .routing import enlaces
             self.model["links"] = enlaces(self.model)
         except (KeyError, TypeError, ValueError, AttributeError, IndexError):
@@ -248,7 +251,7 @@ class Vista:
                 plain = cond["mode"] == "executable" and cond["meaning"] == {"operator": "lit", "literal": {"type": "bool", "value": True}}
                 acts.setdefault(a["stepRef"], []).append({"kind": "continuous", "id": a["id"], "target": a["targetRef"],
                                                           "text": [_seg(names.get(a["targetRef"], a["targetRef"]))],
-                                                          "cond": None if plain else disp(a["conditionRef"]),
+                                                          "cond": self._cond_limitada(a, plain, disp),
                                                           "condRef": a["conditionRef"]})
                 self.where.setdefault(a["conditionRef"], f"acción {names.get(a['targetRef'], a['targetRef'])} "
                                                          f"({names.get(a['stepRef'], a['stepRef'])})")
@@ -320,6 +323,23 @@ class Vista:
             "numericInputs": {v["id"]: v["type"]["kind"] for v in doc["variables"]
                               if v["role"] == "input" and v["type"]["kind"] != "bool"},
         }
+
+    def _cond_limitada(self, a: dict[str, Any], plain: bool, disp: Callable[..., Any]) -> Any:
+        """Condición que se dibuja en una acción continua. Una limitada en el tiempo se dibuja como en la norma: su límite
+        es una condición más, NOT d/X (X, la etapa de la acción); con condición c, «c · NOT d/X». Solo dibujo: el modelo
+        guarda `limitUs` y el motor no cambia."""
+        base = None if plain else disp(a["conditionRef"])
+        if "limitUs" not in a:
+            return base
+        lit = lambda v: {"operator": "lit", "literal": {"type": "duration", "value": str(v)}}  # noqa: E731
+        m = {"operator": "not", "operands": [{"operator": "delay", "operands": [
+            lit(int(a["limitUs"])), {"operator": "active", "reference": a["stepRef"]}, lit(0)]}]}
+        c = next((e for e in self.doc["expressions"] if e["id"] == a["conditionRef"]), None)
+        if base is not None and c is not None and c["mode"] == "executable":
+            m = {"operator": "and", "operands": [c["meaning"], m]}  # con la precedencia (paréntesis) de la notación
+            return norm(m, False, self.names)
+        limite = norm(m, False, self.names)
+        return limite if base is None else base + [_seg("·")] + limite
 
     def state(self) -> dict[str, Any]:
         s = self.s

@@ -1,9 +1,9 @@
 {
- "date": "2026-10-28T15:07:15+00:00",
+ "date": "2026-10-28T16:15:11+00:00",
  "python": "3.13.17",
  "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
  "machine": "x86_64",
- "total": 214,
+ "total": 227,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -607,7 +607,7 @@
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: la paleta ofrece la ficha «Acción» con su figura; soltada sobre una etapa pide la"
+   "summary": "REQ-ACT-01, REQ-EDT-02: la paleta ofrece la ficha «Acción» con su figura (el lado izquierdo, bajo el puntero);"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI63_y_y_o_con_colores_distintos",
@@ -617,6 +617,132 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-EDT-02: «y» y «o» siguen en Operadores pero se dibujan con colores distintos entre sí y del resto de"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI65_arrastre_de_las_paletas",
+   "case": "S-EDI65",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la paleta «Elementos» se arrastra (el arrastre se activa después de fijar el modo de iconos y el"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI66_variables_nuevas_al_dia_en_el_programador",
+   "case": "S-EDI66",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-07: al crear, renombrar, quitar o cambiar de papel una variable (panel Variables, diálogo de"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI67_carpetas_en_su_orden_y_temporizadores",
+   "case": "S-EDI67",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: las carpetas del programador van en este orden: Operadores, Entradas, Salidas, Etapas (X),"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI68_receptividad_en_la_pestana_con_texto_de_solo_lectura",
+   "case": "S-EDI68",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: toda la receptividad está en la pestaña Bloques (texto de la fórmula, «Escrito», «Se dibuja» y"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI69_lazo_de_seleccion",
+   "case": "S-EDI69",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: arrastrar desde un hueco dibuja un rectángulo y selecciona lo que queda dentro (etapas,"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI70_soltar_la_ficha_accion_crea_una_accion_suelta",
+   "case": "S-EDI70",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: la ficha «Acción», soltada en cualquier sitio, crea una acción continua suelta sin"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI71_enlazar_una_accion_a_una_etapa_separarla_y_deshacer",
+   "case": "S-EDI71",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: arrastrar del punto de unión de una acción suelta a una etapa la une: con variable pasa a"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI72_tipo_de_accion_por_el_boton_derecho",
+   "case": "S-EDI72",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: el botón derecho en una acción (suelta o unida) ofrece sus cinco tipos con el actual"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI73_guardar_abrir_con_borradores_avisos_y_deshacer",
+   "case": "S-EDI73",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-01",
+    "REQ-EDT-09",
+    "REQ-EDT-14"
+   ],
+   "summary": "REQ-DAT-01, REQ-EDT-09, REQ-EDT-14: los borradores de acción se guardan en la presentación"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI74_dialogo_editar_de_una_accion_suelta_o_sin_completar",
+   "case": "S-EDI74",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: «Editar…» de una acción suelta abre el diálogo de acciones (con el límite de tiempo de"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI75_accion_limitada_se_dibuja_como_condicion_not_d_sobre_x",
+   "case": "S-EDI75",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-TMP-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-TMP-02: una acción limitada en el tiempo se dibuja como en la norma, con su límite como una"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI76_mensajes_informativos_y_barra_de_estado",
+   "case": "S-EDI76",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un aviso informativo de la edición no sale en rojo (el rojo es de los errores); el mensaje temporal"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI77_borradores_danados_al_abrir",
+   "case": "S-EDI77",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-01",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-DAT-01, REQ-EDT-09: un `draftActions` corrupto no rompe la apertura: se descartan los dañados (no son"
   },
   {
    "test": "test_editor_escritorio.Notacion.test_SEDI16_notacion_del_usuario",
