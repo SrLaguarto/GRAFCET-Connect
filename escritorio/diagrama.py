@@ -765,6 +765,7 @@ class VistaDiagrama(QGraphicsView):
         self.cuadro = None  # rectángulo del lazo de selección que se está trazando
         self._marcas: list[Any] = []
         self.iman: Any = None  # el resalte del lado donde se pegaría una acción
+        self.prohibidos: list[Any] = []  # cajas en rojo: lo que se arrastra y no se puede colocar donde está
         self.uniones_acciones: list[dict[str, Any]] = []  # los trazos de cada etapa a sus acciones (para seleccionarlos)
         self.cajas_acciones: list[dict[str, Any]] = []
         self._origen = False  # en edición, hasta que se usa el ratón, el dibujo se queda arriba a la izquierda
@@ -813,6 +814,20 @@ class VistaDiagrama(QGraphicsView):
             a, b = lado
             self.iman = self.scene().addLine(a.x(), a.y(), b.x(), b.y(), _Pintor.pen("accent", 5))
             self.iman.setZValue(Z_EDIT + 2)
+
+    def marcar_prohibido(self, cajas: list[QRectF] | None) -> None:
+        """Pone en rojo las cajas de lo que se arrastra y no se puede colocar donde está (encima de otro elemento), con el
+        cursor de prohibido; None lo quita."""
+        for it in self.prohibidos:
+            if it.scene() is self.scene():
+                self.scene().removeItem(it)
+        self.prohibidos = []
+        for r in cajas or []:
+            it = self.scene().addRect(r.adjusted(-3, -3, 3, 3), _Pintor.pen("err", 2.2), QBrush(QColor(192, 57, 43, 70)))
+            it.setZValue(Z_EDIT + 3)
+            self.prohibidos.append(it)
+        if self.controlador is not None:
+            self.viewport().setCursor(Qt.CursorShape.ForbiddenCursor if cajas else Qt.CursorShape.CrossCursor)
 
     def trazo_provisional(self, a: QPointF | None, b: QPointF | None = None) -> None:
         """Línea de ayuda mientras se traza un enlace (None la quita)."""
@@ -967,6 +982,7 @@ class VistaDiagrama(QGraphicsView):
         self._marcas = []
         self.uniones_acciones = []
         self.iman = None
+        self.prohibidos = []
         self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados, naranja, self.uniones_acciones)
         r = self.scene().itemsBoundingRect().adjusted(-14, -14, 14, 14)
         self.scene().setSceneRect(r.united(self.area_minima) if self.area_minima else r)
@@ -1031,17 +1047,23 @@ class VistaDiagrama(QGraphicsView):
 
     def dragMoveEvent(self, event: Any) -> None:  # noqa: N802
         if self.controlador is not None and event.mimeData().hasText():
+            libre = True
             if hasattr(self.controlador, "sobrevolar"):  # una acción que se acerca a otra: el lado donde se pegaría
-                self.controlador.sobrevolar(event.mimeData().text(), self.mapToScene(event.position().toPoint()))
-            event.acceptProposedAction()
+                libre = self.controlador.sobrevolar(event.mimeData().text(), self.mapToScene(event.position().toPoint()))
+            if libre is False:  # encima de otro elemento: el cursor de prohibido, y no se puede soltar
+                event.ignore()
+            else:
+                event.acceptProposedAction()
 
     def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802
         self.marcar_iman(None)
+        self.marcar_prohibido(None)
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event: Any) -> None:  # noqa: N802
         """Un elemento arrastrado desde la paleta se coloca donde se suelta."""
         self.marcar_iman(None)
+        self.marcar_prohibido(None)
         if self.controlador is not None and event.mimeData().hasText():
             self.controlador.colocar(event.mimeData().text(), self.mapToScene(event.position().toPoint()))
             event.acceptProposedAction()

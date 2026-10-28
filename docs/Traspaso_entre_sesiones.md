@@ -12,10 +12,11 @@ Nota para la siguiente conversación de Claude Code (coordinador). Estado al 28-
   programador por bloques), P-IMP-39 (memorias, programador por bloques tipo Scratch y correcciones del paso 4) P-IMP-40 (programador en el panel inferior, pestaña «Bloques»; «y»/«o» de colores distintos; ficha «Acción» en la
   paleta) P-IMP-41 (arrastre de la paleta arreglado, fórmula abajo, lazo, acciones que se sueltan y se unen a etapas) P-IMP-42 (paneles laterales de ancho fijo, tabla de variables de tres columnas, parpadeo de errores, colocación de
   las acciones) P-IMP-43 (carpeta de acciones con dibujos, pegar acciones y grupos, condición de acción con bloques,
-  «y»/«o» de n huecos, nombres reservados) y P-IMP-44 (paneles fijos, editor de acciones con lista de variables y
-  valor con bloques, botones Nueva E/S/M, comentarios en etapas y transiciones).
+  «y»/«o» de n huecos, nombres reservados) P-IMP-44 (paneles fijos, editor de acciones con lista de variables y
+  valor con bloques, botones Nueva E/S/M, comentarios en etapas y transiciones) y P-IMP-45 (panel «Opciones» abajo
+  para lo seleccionado, paleta de bloques con una ficha por elemento, Traza solo al simular, no solapar elementos).
 - Commits: `efdec32` (P-IMP-36), `60c7611` (P-IMP-37), `370f6f5` (P-IMP-38), `a61d292` (fusión de los subagentes y
-  `CLAUDE.md`), `08ac225` (P-IMP-39), `027f5e1` (P-IMP-40), `e3b4dd3` (P-IMP-41), `8bb01c5` (P-IMP-42), `a99ed39` (P-IMP-43); P-IMP-44 en el commit siguiente.
+  `CLAUDE.md`), `08ac225` (P-IMP-39), `027f5e1` (P-IMP-40), `e3b4dd3` (P-IMP-41), `8bb01c5` (P-IMP-42), `a99ed39` (P-IMP-43), `33c3cb8` (P-IMP-44); P-IMP-45 en el commit siguiente.
 - Lista de verificación del responsable (marca bien, mal o duda con nota; se lee con la herramienta ArtifactData):
   https://claude.ai/artifact/H9AbbW2x5qPZ2d35iWyKXd — colección `checks`, documento `notas/general`. Añadir ahí las
   comprobaciones de cada paso nuevo (campos `orden`, `ronda`, `grupo`, `texto`, `como`, `estado`, `nota`).
@@ -34,7 +35,7 @@ Nota para la siguiente conversación de Claude Code (coordinador). Estado al 28-
   abajo (puede ser larga), «y»/«o» de colores distintos y no encontraba cómo poner acciones. Hecho en P-IMP-40.
 - Pendiente: guardar el proyecto en un solo fichero en vez de una carpeta (petición del responsable, cambio de formato,
   U-11; aplazado). Más adelante: un elemento de texto de comentario que
-  se arrastre (petición del responsable). Que el responsable pruebe P-IMP-44 con la lista de verificación (ver arriba). Apuntado para
+  se arrastre (petición del responsable). Que el responsable pruebe P-IMP-44 y P-IMP-45 con la lista de verificación (ver arriba). Apuntado para
   otra ronda: el subíndice de X en las condiciones de acción es muy pequeño y su barra de NOT queda desplazada; la Traza
   vieja sigue al pasar a Editar con «Nuevo». Sin pantalla no se han probado el arrastre real ni el aspecto.
 

@@ -1,19 +1,21 @@
-"""Diálogo para añadir o cambiar una acción de una etapa (paso 4, P-IMP-38, P-IMP-43, P-IMP-44).
+"""Opciones de una acción en el panel inferior (paso 4, P-IMP-38, P-IMP-43, P-IMP-44).
 
 Una acción continua pone a 1 una variable booleana mientras la etapa está activa (y, si lleva condición, mientras la
 condición se cumple). Una memorizada asigna un valor al activar la etapa, al desactivarla o con un evento mientras
 está activa (por ejemplo CT := CT + 1 con ↑I02). Arriba, una frase explica la acción en lenguaje claro.
 
 - La variable se elige en una lista (nunca entradas): una continua ofrece las salidas y memorias booleanas; una
-  memorizada, las salidas y memorias de cualquier tipo, por papel. «Nueva variable…» la crea (se declara al aceptar,
-  en la misma operación de deshacer que la acción).
+  memorizada, las salidas y memorias de cualquier tipo, por papel. «Nueva variable…» la crea y la elige en la misma
+  operación de deshacer que el cambio.
 - El valor de una memorizada se programa con un programador de valor tipo Scratch, como el de bloques pero más corto:
   una booleana elige entre las fichas «1» y «0»; una numérica arma `CT + 1`, `5` o `CT * 2 - 1` con un número,
   variables numéricas y los operadores +, −, ×, ÷. El texto sigue siendo lo que se guarda y lo que el núcleo analiza.
-- La condición y el evento no se escriben aquí: el diálogo los muestra en una línea y «Programar con bloques abajo»
-  cierra el diálogo y abre la pestaña «Bloques» con ellos (P-IMP-43).
+- La condición y el evento los programa con bloques el panel de opciones (junto a este panel, en su parte de bloques).
 
-Todo lo hace Edicion.poner_accion con las operaciones de grafcet/editor.py.
+No hay Aceptar: cada cambio se aplica al momento, como una operación de deshacer (Edicion.cambiar_accion y
+Edicion.tipo_accion con las operaciones de grafcet/editor.py). Si a la acción le falta algo, queda como borrador; si la
+variable elegida no vale para este tipo, el aviso sale en naranja y parpadea. Las listas de variables se ponen al día en
+cada cambio del modelo (el panel se rellena con cada `cambiado` de la edición).
 """
 from __future__ import annotations
 
@@ -23,11 +25,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget)
 
-from grafcet.view import norm
-
-from .bloques import COLORES, Programador
-from .diagrama import COL, _html
-from .edicion import CON_CONDICION, CONTINUAS, TEXTO_LIMITADA, Edicion
+from .bloques import COLORES, FlowLayout, Programador
+from .diagrama import COL
+from .edicion import CONTINUAS, DISPARADOR, TEXTO_LIMITADA, Edicion, Parpadeo
 from .variables import PAPELES, TIPOS as TIPOS_VARIABLE, nombre_tipo
 
 TIPOS = (("continua", "Continua: mientras la etapa está activa"),
@@ -102,62 +102,58 @@ class DialogoVariableNueva(QDialog):
         self.accept()
 
 
-class DialogoAccion(QDialog):
-    """Variable, tipo y valor de una acción, con su frase explicativa. La condición y el evento se programan con bloques
-    en la pestaña «Bloques» del panel inferior (el diálogo los muestra y los conserva)."""
+class PanelAccion(QWidget):
+    """Las opciones de la acción mostrada: frase, tipo, variable y límite (esta columna) y, en `caja_valor` (que la ventana
+    del panel coloca a su lado), las plantillas y el programador del valor de una memorizada. Cada cambio se aplica en el
+    acto con la edición; `mostrar(e, aid)` rellena los campos con lo que hay, sin tocar lo que se está escribiendo."""
 
-    def __init__(self, parent: QWidget | None, edicion: Any, sid: str, aid: str | None = None) -> None:
-        super().__init__(parent)
-        self.e, self.sid, self.aid = edicion, sid, aid
-        self.etapa = edicion.nombres.get(sid, sid)
-        suelta = sid is None
-        self.setWindowTitle("Acción suelta" if suelta else f"{'Cambiar' if aid else 'Añadir'} acción — etapa {self.etapa}")
-        self.setMinimumWidth(640)
-        self.resize(700, 600)
-        self._condicion, self._evento = "", ""  # lo que el diálogo no edita
-        self._nueva: tuple[str, str, dict[str, Any]] | None = None  # la variable que «Nueva variable…» creará al aceptar
-        self._elegida = ""
+    def __init__(self) -> None:
+        super().__init__()
+        self.e: Any = None
+        self.aid: str | None = None
+        self.sid: str | None = None
+        self._llenando = False
         self._sync = False  # el texto del valor lo está escribiendo el programador
-        self.programar = False  # «Programar con bloques abajo» se pulsó
-        self.al_programar: Callable[[], Any] | None = None  # la ventana abre la pestaña Bloques
-        d = edicion.datos_accion(aid) if aid else {"tipo": "continua"}
+        self._elegida = ""
+        self._rechazado: tuple[str, str] | None = None  # (acción, aviso): lo último escrito que no se pudo guardar
+        self._firma: tuple | None = None
+        self.al_volver: Callable[[], Any] | None = None  # la ventana vuelve a las opciones de la etapa
+        self.parpadeo = Parpadeo(self)  # el campo que no vale parpadea en naranja
+        self.parpadeo.cambia.connect(self._pintar)
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.b_etapa = QPushButton()
+        self.b_etapa.setToolTip("Volver a las opciones de la etapa")
+        self.b_etapa.clicked.connect(lambda: self.al_volver and self.al_volver())
+        lay.addWidget(self.b_etapa, 0, Qt.AlignmentFlag.AlignLeft)
         self.frase = QLabel()
         self.frase.setWordWrap(True)
         self.frase.setStyleSheet("font-weight: 600")
         lay.addWidget(self.frase)
         f = QFormLayout()
-        f.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        f.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        f.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         lay.addLayout(f)
         self.tipo = QComboBox()
-        for clave, texto in TIPOS:
-            if clave == "condicionada" and d["tipo"] == "limitada":  # la de un fichero antiguo lleva límite de tiempo
-                self.tipo.addItem(TEXTO_LIMITADA, "limitada")
-            else:
-                self.tipo.addItem(texto, clave)
-        self.tipo.currentIndexChanged.connect(self._ajustar)
+        self.tipo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.tipo.setMinimumContentsLength(8)
+        self.tipo.activated.connect(self._elegir_tipo)
         f.addRow("Tipo", self.tipo)
         self.variable = _ComboVariable()
+        self.variable.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.variable.setMinimumContentsLength(8)
         self.variable.al_poner = self.poner_variable
         self.variable.activated.connect(self._elegir_variable)
         f.addRow("Variable", self.variable)
-        self.l_limite = QLabel("Límite de tiempo (3s, 500ms…; vacío: sin límite)")
+        self.l_limite = QLabel("Límite de tiempo (3s, 500ms…)")
         self.limite = QLineEdit()
         self.limite.setPlaceholderText("3s")
+        self.limite.editingFinished.connect(lambda: self._aplicar("limite"))
         f.addRow(self.l_limite, self.limite)
-        # La condición o el evento que hay, en una línea, y el paso a la pestaña Bloques
-        self.caja_cond = QWidget()
-        hl = QHBoxLayout(self.caja_cond)
-        hl.setContentsMargins(0, 0, 0, 0)
-        self.l_cond = QLabel()
-        self.l_cond.setTextFormat(Qt.TextFormat.RichText)
-        self.l_cond.setWordWrap(True)
-        hl.addWidget(self.l_cond, 1)
-        self.b_programar = QPushButton("Programar con bloques abajo")
-        self.b_programar.setToolTip("Cierra este diálogo y abre la pestaña Bloques con la condición o el evento de la acción")
-        self.b_programar.clicked.connect(lambda: self.aceptar(programar=True))
-        hl.addWidget(self.b_programar)
-        lay.addWidget(self.caja_cond)
+        self.msg = QLabel()
+        self.msg.setWordWrap(True)
+        lay.addWidget(self.msg)
+        lay.addStretch(1)
         # El valor de una memorizada: plantillas, y fichas 1/0 (booleana) o programador de valor (numérica)
         self.caja_valor = QWidget()
         vl = QVBoxLayout(self.caja_valor)
@@ -178,7 +174,7 @@ class DialogoAccion(QDialog):
             b = QPushButton(v)
             b.setCheckable(True)
             b.setStyleSheet(ESTILO_FICHA)
-            b.clicked.connect(lambda _=False, v=v: self.valor.setText(v))
+            b.clicked.connect(lambda _=False, v=v: self._poner_valor(v))
             self.grupo_fichas.addButton(b)
             self.fichas[v] = b
             fl.addWidget(b)
@@ -187,13 +183,19 @@ class DialogoAccion(QDialog):
         self.caja_numerica = QWidget()
         nl = QVBoxLayout(self.caja_numerica)
         nl.setContentsMargins(0, 0, 0, 0)
-        self.prog = Programador(lambda: (self._variables(), self.e.fuente_bloques()[1]), ampliable=False, valor=True)
+        self.prog = Programador(lambda: (self._variables(), self.e.fuente_bloques()[1] if self.e is not None else []),
+                                ampliable=False, valor=True)
         self.prog.cambiado.connect(self._desde_bloques)
+        self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()  # Ctrl+Z deshace la operación
+        self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()
         nl.addWidget(self.prog, 1)
         fila = QHBoxLayout()
         self.valor = QLineEdit()  # el texto del valor: solo se ve; «Escribir a mano» lo deja editar
         self.valor.setReadOnly(True)
         self.valor.setPlaceholderText("el valor se arma con bloques (CT + 1, 5…)")
+        self.valor.textChanged.connect(self._valor_cambiado)
+        self.valor.textEdited.connect(lambda t: self.prog.poner(t))
+        self.valor.editingFinished.connect(lambda: self._aplicar("valor"))
         self.manual = QCheckBox("Escribir a mano")
         self.manual.setToolTip("Dejar editar el texto del valor (CT + 1, 5…); lo escrito pasa a bloques")
         self.manual.toggled.connect(lambda on: self.valor.setReadOnly(not on))
@@ -202,50 +204,74 @@ class DialogoAccion(QDialog):
         fila.addWidget(self.manual)
         nl.addLayout(fila)
         vl.addWidget(self.caja_numerica, 1)
-        lay.addWidget(self.caja_valor, 1)
-        self.msg = QLabel()
-        self.msg.setWordWrap(True)
-        self._avisado: tuple | None = None  # los datos con que se mostró el aviso de «guardar como borrador»
-        self.valor.textChanged.connect(self._valor_cambiado)
-        self.limite.textChanged.connect(self._previsualizar)
-        lay.addWidget(self.msg)
-        botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        botones.accepted.connect(self.aceptar)
-        botones.rejected.connect(self.reject)
-        lay.addWidget(botones)
-        if aid:
-            self.tipo.blockSignals(True)
-            self.tipo.setCurrentIndex(max(0, self.tipo.findData(d["tipo"])))
-            self.tipo.blockSignals(False)
-            self._elegida = d["variable"] if d["variable"] in self._variables() else ""
-            self.valor.setText(d.get("valor", ""))
-            self.limite.setText(d.get("limite", ""))
-            self._condicion, self._evento = d.get("condicion", ""), d.get("evento", "")
-        self._ajustar()
 
-    # -- variables ---------------------------------------------------------------------------------
+    # -- rellenar ----------------------------------------------------------------------------------
+    def mostrar(self, e: Any, aid: str) -> None:
+        """Rellena los campos con la acción `aid` (la edición ya la tiene como está). No toca el campo que se está escribiendo
+        ni lo escrito que no se pudo guardar (un valor a medias), y pone al día la lista de variables y el programador."""
+        otra = aid != self.aid
+        self.e, self.aid = e, aid
+        self.sid = e.etapa_accion(aid)
+        d = e.datos_accion(aid)
+        if self._rechazado is not None and (otra or self._rechazado[0] != aid):
+            self._rechazado = None
+        if otra:
+            self.manual.setChecked(False)
+            self.valor.setReadOnly(True)
+        if otra:  # otra acción: lo escrito sin confirmar en un campo se descarta (nunca se aplica a la nueva)
+            for campo in (self.valor, self.limite):
+                campo.blockSignals(True)
+                campo.clearFocus()
+                campo.blockSignals(False)
+        self._llenando = True
+        esperado = ["limitada" if (c == "condicionada" and d["tipo"] == "limitada") else c for c, _ in TIPOS]
+        if [self.tipo.itemData(i) for i in range(self.tipo.count())] != esperado:
+            self.tipo.clear()
+            for clave, texto in TIPOS:
+                if clave == "condicionada" and d["tipo"] == "limitada":  # la de un fichero antiguo lleva límite de tiempo
+                    self.tipo.addItem(TEXTO_LIMITADA, "limitada")
+                else:
+                    self.tipo.addItem(texto, clave)
+        self.tipo.setCurrentIndex(max(0, self.tipo.findData(d["tipo"])))
+        self._elegida = d["variable"] if d["variable"] in self._variables() else ""
+        if self._rechazado is None:
+            if not self.valor.hasFocus() and self.valor.text() != d.get("valor", ""):
+                self.valor.setText(d.get("valor", ""))
+            if not self.limite.hasFocus() and self.limite.text() != d.get("limite", ""):
+                self.limite.setText(d.get("limite", ""))
+        self._llenando = False
+        if otra:
+            self._valor_cambiado(self.valor.text())
+        self.b_etapa.setVisible(bool(self.sid))
+        self.b_etapa.setText(f"‹ Etapa {e.nombres.get(self.sid, self.sid)}" if self.sid else "")
+        self._ajustar()
+        if self._rechazado is None:
+            self.prog.poner(self.valor.text())
+
     def _variables(self) -> dict[str, tuple[str, str]]:
-        """Las variables del modelo y, si «Nueva variable…» la pidió, la que se creará al aceptar."""
-        v = dict(self.e.fuente_bloques()[0])
-        if self._nueva and self._nueva[0] not in v:
-            v[self._nueva[0]] = (self._nueva[1], self._nueva[2]["kind"])
-        return v
+        """Las variables del modelo {nombre: (papel, tipo)}."""
+        return dict(self.e.fuente_bloques()[0]) if self.e is not None else {}
 
     def ofrecidas(self) -> list[str]:
         """Las variables que esta acción puede escribir: nunca entradas; una continua, solo booleanas."""
         continua = self.tipo.currentData() in CONTINUAS
-        return [n for n, (papel, tipo) in self._variables().items()
-                if papel != "input" and (tipo == "bool" or not continua)]
+        return [n for n, (papel, tipo) in self._variables().items() if papel != "input" and (tipo == "bool" or not continua)]
 
     def poner_variable(self, nombre: str) -> None:
-        """Elige una variable por su nombre (si no existe, queda sin elegir)."""
-        self._elegida = nombre.strip() if nombre.strip() in self._variables() else ""
-        self._ajustar()
+        """Elige una variable por su nombre (si no existe, no hace nada) y lo aplica."""
+        if nombre.strip() in self._variables():
+            self._elegida = nombre.strip()
+            self._rellenar_variables()
+            self._aplicar("variable")
 
     def _rellenar_variables(self) -> None:
-        """La lista: Salidas y luego Memorias (con su tipo), la variable elegida aunque no valga para este tipo (se avisa
-        al aceptar) y, al final, «Nueva variable…»."""
+        """La lista: Salidas y luego Memorias (con su tipo), la variable elegida aunque no valga para este tipo (se avisa) y,
+        al final, «Nueva variable…». Solo se rehace si cambió algo."""
         v, ofrecidas = self._variables(), self.ofrecidas()
+        firma = (tuple(v.items()), self._elegida, self.tipo.currentData())
+        if firma == self._firma:
+            return
+        self._firma = firma
         c = self.variable
         c.blockSignals(True)
         c.clear()
@@ -264,36 +290,11 @@ class DialogoAccion(QDialog):
         c.setCurrentIndex(max(0, c.findData(self._elegida)))
         c.blockSignals(False)
 
-    def _elegir_variable(self, _: int = 0) -> None:
-        if self.variable.currentData() == NUEVA:
-            if not self.nueva_variable():
-                self._rellenar_variables()  # canceló: vuelve a la que había
-            return
-        self._elegida = self.variable.currentText()
-        self._ajustar()
-
-    def nueva_variable(self, nombre: str | None = None, papel: str = "output", tipo: dict[str, Any] | None = None) -> bool:
-        """«Nueva variable…»: pide nombre, papel y tipo (o los toma de los argumentos) y la elige; se declara al aceptar,
-        en la misma operación que la acción. Devuelve si se eligió una."""
-        continua = self.tipo.currentData() in CONTINUAS
-        if nombre is None:
-            dlg = DialogoVariableNueva(self, set(self._variables()), solo_booleana=continua)
-            if dlg.exec() != QDialog.DialogCode.Accepted or dlg.resultado is None:
-                return False
-            nombre, papel, tipo = dlg.resultado
-        if continua and (tipo or {"kind": "bool"})["kind"] != "bool":
-            return False  # una continua solo escribe booleanas
-        self._nueva = (nombre, papel, dict(tipo or {"kind": "bool"}))
-        self._elegida = nombre
-        self._ajustar()
-        return True
-
     def _tipo_variable(self) -> str:
         """El tipo (bool, int…) de la variable elegida; vacío si no hay."""
         return self._variables().get(self._elegida, ("", ""))[1]
 
-    # -- lo que se ve según el tipo ----------------------------------------------------------------------
-    def _ajustar(self, _: int = 0) -> None:
+    def _ajustar(self) -> None:
         """Muestra solo lo que pide el tipo y el de la variable; pone al día la lista, las plantillas y la frase."""
         clave = self.tipo.currentData()
         continua = clave in CONTINUAS
@@ -306,58 +307,34 @@ class DialogoAccion(QDialog):
         self.caja_numerica.setVisible(not continua and not booleana)
         self.prog.refrescar()
         self._plantillas(booleana)
-        self._linea_condicion()
         self._previsualizar()
 
     def _plantillas(self, booleana: bool) -> None:
         """Las plantillas de un clic: «:= 1» y «:= 0» (booleana); «+1», «−1» y «:= 0» (numérica: V + 1, V - 1, 0)."""
+        v = self._elegida or "V"
+        opciones = ((":= 1", "1"), (":= 0", "0")) if booleana else (("+1", f"{v} + 1"), ("−1", f"{v} - 1"), (":= 0", "0"))
+        if [(t, b.toolTip()) for t, b in self.plantillas.items()] == [(t, f"Valor: {val}") for t, val in opciones]:
+            return
         for b in self.plantillas.values():
             self.fila_plantillas.removeWidget(b)
             b.hide()
             b.setParent(None)
             b.deleteLater()
         self.plantillas = {}
-        v = self._elegida or "V"
-        opciones = ((":= 1", "1"), (":= 0", "0")) if booleana else (("+1", f"{v} + 1"), ("−1", f"{v} - 1"), (":= 0", "0"))
         for i, (texto, valor) in enumerate(opciones):
             b = QPushButton(texto)
             b.setToolTip(f"Valor: {valor}")
-            b.clicked.connect(lambda _=False, valor=valor: self.valor.setText(valor))
+            b.clicked.connect(lambda _=False, valor=valor: self._poner_valor(valor))
             self.fila_plantillas.insertWidget(1 + i, b)
             self.plantillas[texto] = b
-
-    def _linea_condicion(self) -> None:
-        """«Condición: marcha·paro» (con el dibujo de la norma), «Evento: ↑I02» o «Condición: siempre (continua)»."""
-        clave = self.tipo.currentData()
-        evento = clave == "evento"
-        self.caja_cond.setVisible(clave in CONTINUAS or evento)
-        self.b_programar.setVisible(evento or clave in CON_CONDICION)
-        texto = self._evento if evento else self._condicion
-        if clave == "continua":
-            self.l_cond.setText("Condición: siempre (continua)")
-        elif not texto:
-            self.l_cond.setText(f"{'Evento' if evento else 'Condición'}: sin programar "
-                                "(hasta entonces la acción queda como borrador)")
-        else:
-            self.l_cond.setText(f"{'Evento' if evento else 'Condición'}: {self._dibujo(texto)}")
-
-    def _dibujo(self, texto: str) -> str:
-        """El texto de una condición o evento con el dibujo de la norma, si se interpreta; si no, el texto."""
-        import html
-        try:
-            if self.e.comprobar(self.sid or "", texto) is None and not self.e.sin_declarar(self.sid or "", texto):
-                return _html(norm(self.e.significado(self.sid or "", texto), True, self.e.nombres))
-        except Exception:  # noqa: BLE001 - un texto a medias no debe romper el diálogo
-            pass
-        return html.escape(texto)
 
     def frase_explicativa(self) -> str:
         """La acción en lenguaje claro, según su tipo."""
         d = self.datos()
-        etapa = f"la etapa {self.etapa}" if self.sid else "la etapa a la que se una"
+        etapa = f"la etapa {self.e.nombres.get(self.sid, self.sid)}" if self.sid else "la etapa a la que se una"
         var = d["variable"] or "?"
         if d["tipo"] in CONTINUAS:
-            cond = " (y se cumpla la condición)" if d["tipo"] in CON_CONDICION else ""
+            cond = " (y se cumpla la condición)" if d["tipo"] in ("condicionada", "limitada") else ""
             lim = f", como mucho durante {d['limite']}" if d["tipo"] == "limitada" else ""
             return f"Mientras {etapa} esté activa{cond}{lim}, {var} vale 1."
         asignacion = f"{var} := {d['valor'] or '?'}"
@@ -367,53 +344,29 @@ class DialogoAccion(QDialog):
             return f"Al desactivarse {etapa}: {asignacion}."
         return f"Con cada {d['evento'] or 'evento sin programar'} mientras {etapa} está activa: {asignacion}."
 
-    # -- el valor ----------------------------------------------------------------------------------------
-    def _desde_bloques(self, texto: str) -> None:
-        self._sync = True
-        self.valor.setText(texto)
-        self._sync = False
-
-    def _valor_cambiado(self, texto: str) -> None:
-        """El texto del valor cambió (plantilla, ficha, bloques o a mano): las fichas y los bloques lo siguen."""
-        t = texto.strip()
-        for v, b in self.fichas.items():
-            b.setChecked(t == v)
-        if not self._sync:
-            self.prog.poner(texto)
-        self._previsualizar()
-
     def _previsualizar(self) -> None:
-        """La frase y el aviso si un X… del valor (o de la condición o el evento que ya tenía) puede ser dos etapas."""
-        if not hasattr(self, "_avisado"):
+        """La frase y el aviso: lo último que no se pudo guardar, la variable que no vale para este tipo o un X… del valor,
+        la condición o el evento que puede ser dos etapas (todo en naranja)."""
+        if self.e is None or self.aid is None:
             return
         self.frase.setText(self.frase_explicativa())
-        d = self.datos()
-        continua = d["tipo"] in CONTINUAS
-        aviso = self.e.aviso_ambiguas(d["condicion"] if continua else "", d["evento"] if d["tipo"] == "evento" else "",
-                                      d["valor"] if not continua else "")
-        if self._avisado != tuple(d.items()):  # cambiar algo reinicia el aviso de «guardar como borrador»
-            self._avisado = None
-            self.msg.setText(aviso)
-            self.msg.setStyleSheet(f"color: {COL['glow']}")
-
-    def _crear_como(self) -> tuple[str, dict[str, Any]] | None:
-        """Papel y tipo con que se declara la variable elegida, si es la de «Nueva variable…» y aún no existe."""
-        n = self._nueva
-        if n and self._elegida == n[0] and n[0] not in self.e.fuente_bloques()[0]:
-            return n[1], n[2]
-        return None
-
-    def datos(self) -> dict[str, str]:
-        tipo, limite = self.tipo.currentData(), self.limite.text().strip()
-        condicion = "" if tipo == "continua" else self._condicion
-        if tipo == "limitada" and not limite:  # quitar el límite: queda una condicionada (o una continua, sin condición)
-            tipo = "condicionada" if condicion else "continua"
-        return {"tipo": tipo, "variable": self.variable.currentText().strip(), "condicion": condicion,
-                "valor": self.valor.text().strip(), "evento": self._evento, "limite": limite if tipo == "limitada" else ""}
+        if self._rechazado is not None:
+            aviso = self._rechazado[1]
+        else:
+            d = self.datos()
+            continua = d["tipo"] in CONTINUAS
+            reparo = self._reparo()
+            aviso = " ".join(x for x in (
+                f"{reparo}. La validación lo señalará." if reparo else "",
+                self.e.aviso_ambiguas(d.get("condicion", "") if continua else "", d.get("evento", "") if d["tipo"] == "evento" else "",
+                                      d.get("valor", "") if not continua else "")) if x)
+        self.msg.setText(aviso)
+        self.msg.setStyleSheet(f"color: {COL['glow']}")
+        self.msg.setVisible(bool(aviso))
 
     def _reparo(self) -> str:
-        """Por qué la variable elegida no sirve para este tipo de acción (se guarda como borrador)."""
-        nombre, tipo = self.variable.currentText().strip(), self.tipo.currentData()
+        """Por qué la variable elegida no sirve para este tipo de acción (la validación lo señalará)."""
+        nombre, tipo = self._elegida, self.tipo.currentData()
         if nombre not in self._variables():
             return ""
         papel, kind = self._variables()[nombre]
@@ -423,34 +376,91 @@ class DialogoAccion(QDialog):
             return f"una acción continua necesita una variable booleana y «{nombre}» no lo es"
         return ""
 
-    def aceptar(self, programar: bool = False) -> None:
-        reparo = self._reparo()
-        if reparo and self._avisado != tuple(self.datos().items()):
-            self._avisado = tuple(self.datos().items())
-            self.msg.setText(f"{reparo}. Se guardará como borrador y la validación lo señalará; "
-                             "pulse Aceptar otra vez para guardarla así.")
-            self.msg.setStyleSheet(f"color: {COL['glow']}")
-            return
-        motivo = self.e.poner_accion(self.sid, self.datos(), self.aid, self._crear_como())
-        if motivo:
-            self.msg.setText(motivo)
-            self.msg.setStyleSheet(f"color: {COL['err']}")
-            return
-        self.programar = programar
-        if programar:
-            self._señalar()
-        self.accept()
-        if programar and self.al_programar is not None:
-            self.al_programar()
+    # -- los datos ---------------------------------------------------------------------------------
+    def datos(self) -> dict[str, str]:
+        """La acción como la dejan los campos: lo que no se edita aquí (la condición y el evento, que son de los bloques) es
+        lo guardado."""
+        d = dict(self.e.datos_accion(self.aid))
+        d["variable"] = self._elegida
+        if d["tipo"] in DISPARADOR:
+            d["valor"] = self.valor.text().strip()
+        if d["tipo"] == "limitada":
+            limite = self.limite.text().strip()
+            d["limite"] = limite
+            if not limite:  # quitar el límite: queda una condicionada (o una continua, sin condición)
+                d["tipo"] = "condicionada" if d.get("condicion") else "continua"
+        return d
 
-    def _señalar(self) -> None:
-        """Deja señalada la acción guardada para que la pestaña Bloques programe su condición o su evento."""
-        e = self.e
-        if self.sid is None:  # suelta: ya la dejó señalada Edicion
+    # -- cambios (cada uno se aplica en el acto) ---------------------------------------------------
+    def _elegir_tipo(self, _: int = 0) -> None:
+        if self.e is not None and self.aid is not None:
+            self.e.tipo_accion(self.aid, self.tipo.currentData())
+
+    def _elegir_variable(self, _: int = 0) -> None:
+        if self.variable.currentData() == NUEVA:
+            if not self.nueva_variable():
+                self._firma = None
+                self._rellenar_variables()  # canceló: vuelve a la que había
             return
-        acc = e.acciones(self.sid)
-        if not acc:
-            return
-        e.accion = self.aid if any(a["id"] == self.aid for a in acc) else acc[-1]["id"]
-        e.sel = [self.sid]
-        e.cambiado.emit()
+        self._elegida = self.variable.currentText()
+        self._aplicar("variable")
+
+    def nueva_variable(self, nombre: str | None = None, papel: str = "output", tipo: dict[str, Any] | None = None) -> bool:
+        """«Nueva variable…»: pide nombre, papel y tipo (o los toma de los argumentos), la crea y la elige en la misma
+        operación de deshacer. Devuelve si se hizo."""
+        continua = self.tipo.currentData() in CONTINUAS
+        if nombre is None:
+            dlg = DialogoVariableNueva(self, set(self._variables()), solo_booleana=continua)
+            if dlg.exec() != QDialog.DialogCode.Accepted or dlg.resultado is None:
+                return False
+            nombre, papel, tipo = dlg.resultado
+        if continua and (tipo or {"kind": "bool"})["kind"] != "bool":
+            return False  # una continua solo escribe booleanas
+        self._elegida = nombre
+        return self._aplicar("variable", (papel, dict(tipo or {"kind": "bool"})))
+
+    def _poner_valor(self, texto: str) -> None:
+        self.valor.setText(texto)
+        self._aplicar("valor")
+
+    def _desde_bloques(self, texto: str) -> None:
+        self._sync = True
+        self.valor.setText(texto)
+        self._sync = False
+        self._aplicar("valor")
+
+    def _valor_cambiado(self, texto: str) -> None:
+        """El texto del valor cambió (plantilla, ficha, bloques o a mano): las fichas siguen al texto y la frase también."""
+        t = texto.strip()
+        for v, b in self.fichas.items():
+            b.setChecked(t == v)
+        if not self._llenando and self.e is not None and self.aid is not None:
+            self.frase.setText(self.frase_explicativa())
+
+    def _aplicar(self, campo: str = "", crear: tuple[str, Any] | None = None) -> bool:
+        """Aplica lo que hay en los campos a la acción, como una operación de deshacer. Si no se puede (un valor a medias,
+        un nombre que no vale), el motivo sale en naranja, parpadea el campo y no cambia nada. Devuelve si se aplicó."""
+        if self._llenando or self.e is None or self.aid is None:
+            return False
+        d = self.datos()
+        if d["tipo"] in DISPARADOR and campo != "valor":
+            d["valor"] = self.e.datos_accion(self.aid).get("valor", "")  # solo cambia lo que se tocó
+        if campo == "valor" and d["tipo"] not in DISPARADOR:
+            return False
+        antes = self.aid
+        motivo = self.e.cambiar_accion(self.aid, d, crear)
+        if motivo:
+            self._rechazado = (antes, motivo)
+            self._previsualizar()
+            self.parpadeo.iniciar({campo or "variable"})
+            return False
+        self._rechazado = None
+        if self._reparo():  # la variable no vale para este tipo: se aplica, y el aviso (naranja) parpadea
+            self.parpadeo.iniciar({"variable"})
+        return True
+
+    def _pintar(self) -> None:
+        """Colorea de naranja el campo que parpadea mientras dura la fase encendida."""
+        activos = self.parpadeo.activos()
+        for clave, w in (("variable", self.variable), ("valor", self.valor), ("limite", self.limite)):
+            w.setStyleSheet(f"background: {COL['glow']}" if clave in activos else "")

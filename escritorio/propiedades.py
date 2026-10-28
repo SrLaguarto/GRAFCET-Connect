@@ -1,12 +1,17 @@
-"""Paleta de elementos y de acciones, y panel de propiedades del editor (P-IMP-32, P-IMP-43).
+"""Paleta de elementos y de acciones, y panel de opciones del editor (P-IMP-32, P-IMP-43, P-IMP-44).
 
-La paleta (izquierda, arriba) tiene dos carpetas, «Elementos» (etapa, transición, simultaneidad) y «Acciones» (una ficha
-dibujada por tipo de acción); sus fichas solo se colocan arrastrándolas al dibujo, y un clic solo muestra su ayuda. El
-panel de propiedades (izquierda, abajo) muestra las opciones del elemento seleccionado: una etapa, su etiqueta, su tipo y
-sus acciones; una transición, su etiqueta y si se dibuja. Su receptividad, y la condición o el evento de una acción
-condicionada o por evento, se programan con bloques en la pestaña «Bloques» del panel inferior de la ventana (el texto de
-la fórmula, cómo se escribe y cómo se dibuja, y «Crear las que faltan» para las variables que no existen, en naranja).
-Todo lo que cambia lo hace con las operaciones de Edicion / grafcet/editor.py.
+La paleta (izquierda) tiene dos carpetas, «Elementos» (etapa, transición, simultaneidad) y «Acciones» (una ficha
+dibujada por tipo de acción); sus fichas solo se colocan arrastrándolas al dibujo, y un clic solo muestra su ayuda.
+
+El panel de opciones (abajo, a todo el ancho, al editar) muestra y cambia la configuración de lo seleccionado, con dos
+zonas: a la izquierda una columna estrecha con los campos y a la derecha lo ancho.
+- Transición: etiqueta, si se muestra y comentario; a la derecha, el programador por bloques de la receptividad (con el
+  texto de la fórmula, cómo se escribe y cómo se dibuja, y «Crear las que faltan» para las variables que no existen).
+- Etapa: etiqueta, tipo, comentario y colocación de las acciones; a la derecha, la lista de sus acciones y sus botones.
+- Acción: frase, tipo, variable (y límite de una acción antigua) a la izquierda (`PanelAccion`); a la derecha el
+  programador del valor de una memorizada y, si es condicionada o por evento, el de su condición o su evento.
+- Enlace, barra de simultaneidad, varios elementos o nada: lo suyo, o la invitación a elegir un elemento.
+Cada cambio se aplica al momento con las operaciones de Edicion / grafcet/editor.py (una operación de deshacer).
 """
 from __future__ import annotations
 
@@ -16,18 +21,20 @@ from typing import Any, Callable
 
 from PySide6.QtCore import QMimeData, QPoint, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QDrag, QIcon, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QGridLayout, QLabel,
-                               QLineEdit, QListView, QListWidget, QListWidgetItem, QPushButton, QScrollArea,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QGridLayout, QHBoxLayout, QLabel,
+                               QLineEdit, QListView, QListWidget, QListWidgetItem, QPushButton,
                                QStackedWidget, QVBoxLayout, QWidget)
 
 from grafcet.routing import TALLO_E, TALLO_T
 from grafcet.view import norm
 
+from .acciones import PanelAccion
 from .bloques import FlowLayout, Programador
 from .diagrama import COL, FICHAS_ACCION, H, TB, _html, ficha_accion, icono_accion
-from .edicion import Parpadeo
+from .edicion import COLOCACIONES, CONTINUAS, Parpadeo
 
 NARANJA = COL["glow"]
+ANCHO_COLUMNA = 230  # la columna estrecha de campos del panel de opciones
 NOMBRES = {"etapa": "Etapa", "transicion": "Transición", "simultaneidad": "Simultaneidad"}
 AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: arrástrela al dibujo",
           "simultaneidad": "Barra de simultaneidad (doble trazo, Y): une varias etapas a una transición, o una transición "
@@ -38,11 +45,11 @@ AYUDAS_ACCION = {
     "continua": "Acción continua: se cumple mientras la etapa está activa. Arrástrela al dibujo (queda suelta, con «?»); se une "
                 "a una etapa arrastrando desde su punto de unión de la izquierda hasta la etapa, o pegándola al lado de otra acción",
     "condicionada": "Acción condicionada: continua que además exige una condición (el trazo de encima). La condición se programa "
-                    "en la pestaña Bloques al seleccionarla. Arrástrela al dibujo",
+                    "en el panel de opciones al seleccionarla. Arrástrela al dibujo",
     "activacion": "Acción memorizada al activar la etapa (flecha ↑): asigna un valor al activarse. Arrástrela al dibujo",
     "desactivacion": "Acción memorizada al desactivar la etapa (flecha ↓): asigna un valor al desactivarse. Arrástrela al dibujo",
     "evento": "Acción memorizada por evento (banderita): asigna un valor cuando ocurre su evento con la etapa activa. El evento "
-              "se programa en la pestaña Bloques al seleccionarla. Arrástrela al dibujo"}
+              "se programa en el panel de opciones al seleccionarla. Arrástrela al dibujo"}
 ACCIONES = tuple(f"accion:{t}" for t, _ in FICHAS_ACCION)  # lo que viaja al arrastrar una ficha de la carpeta «Acciones»
 
 
@@ -201,7 +208,7 @@ class PaletaAcciones(Paleta):
 
 
 def _formulario(w: QWidget) -> QFormLayout:
-    """Formulario arriba de la página y que se estrecha: si no cabe, el rótulo va encima del campo."""
+    """Formulario arriba de la columna y que se estrecha: si no cabe, el rótulo va encima del campo."""
     lay = QVBoxLayout(w)
     lay.setContentsMargins(0, 0, 0, 0)
     f = QFormLayout()
@@ -221,44 +228,63 @@ def _desplegable() -> QComboBox:
 
 
 class PanelPropiedades(QWidget):
-    """Las opciones del elemento seleccionado, con campos editables."""
+    """Las opciones del elemento seleccionado, con campos editables (el panel «Opciones» de abajo)."""
 
     def __init__(self) -> None:
         super().__init__()
         self.e: Any = None
         self.ident: str | None = None
         self._llenando = False
-        self._anterior: tuple | None = None  # lo que programó la pestaña Bloques la última vez (para volver al texto de solo lectura)
-        self._objetivo: tuple | None = None  # lo que programa la pestaña Bloques: ("transicion", ID) o ("accion", ID, campo)
+        self._anterior: tuple | None = None  # lo que programaron los bloques la última vez (para volver al texto de solo lectura)
+        self._objetivo: tuple | None = None  # lo que programan los bloques: ("transicion", ID) o ("accion", ID, campo)
+        self.pagina = "vacio"
         self.parpadeo_crear = Parpadeo(self)  # «Crear las que faltan» parpadea si un nombre no vale
         self.parpadeo_crear.cambia.connect(self._pintar_crear)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(4, 4, 4, 4)
+        lay.setContentsMargins(6, 4, 6, 4)
+        lay.setSpacing(3)
         self.titulo = QLabel()
         self.titulo.setStyleSheet("font-weight: 600")
         lay.addWidget(self.titulo)
-        self.pila = QStackedWidget()
-        lay.addWidget(self.pila, 1)
-        self.pila.addWidget(self._vacio())
-        self.pila.addWidget(self._etapa())
-        self.pila.addWidget(self._transicion())
-        self.pila.addWidget(self._enlace())
-        self.pila.addWidget(self._barra())
-        self._bloques()
+        cuerpo = QHBoxLayout()
+        cuerpo.setSpacing(10)
+        lay.addLayout(cuerpo, 1)
+        # Izquierda, la columna estrecha de campos; derecha, lo ancho (lista de acciones, programadores, enlace, barra)
+        self.izq = QStackedWidget()
+        self.izq.setFixedWidth(ANCHO_COLUMNA)
+        self.izq.addWidget(QWidget())  # 0: nada que mostrar en la columna
+        self.izq.addWidget(self._etapa())  # 1
+        self.izq.addWidget(self._transicion())  # 2
+        self.accion = PanelAccion()  # 3
+        self.accion.al_volver = self._volver_a_la_etapa
+        self.izq.addWidget(self.accion)
+        cuerpo.addWidget(self.izq)
+        self.der = QStackedWidget()
+        self.der.addWidget(self._vacio())  # 0
+        self.der.addWidget(self._lista_acciones())  # 1
+        self.der.addWidget(self._programacion())  # 2
+        self.der.addWidget(self._enlace())  # 3
+        self.der.addWidget(self._barra())  # 4
+        cuerpo.addWidget(self.der, 1)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
 
     # -- páginas -----------------------------------------------------------------------------------
-    def _bloques(self) -> None:
-        """El programador por bloques de la receptividad de una transición o de la condición (o el evento) de una acción.
-        No va en este panel sino en la pestaña «Bloques» del panel inferior de la ventana (`pagina_bloques`); aquí solo se
-        mantiene sincronizado con el texto."""
-        self.abrir_bloques: Callable[[], Any] = lambda: None  # la ventana despliega el panel inferior
-        self.bloques_visibles: Callable[[], bool] = lambda: True  # y dice si el panel inferior está a la vista
+    def _programacion(self) -> QWidget:
+        """Lo ancho de una transición o una acción: a la izquierda el programador del valor de una acción memorizada y,
+        a su derecha, el programador por bloques de la receptividad de una transición o de la condición (o el evento) de una
+        acción, con su texto, cómo se escribe, cómo se dibuja y «Crear las que faltan»."""
+        w = QWidget()
+        hl = QHBoxLayout(w)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(10)
+        hl.addWidget(self.accion.caja_valor, 1)
         self.pagina_bloques = QWidget()
+        hl.addWidget(self.pagina_bloques, 1)
         lay = QVBoxLayout(self.pagina_bloques)
-        lay.setContentsMargins(6, 4, 6, 4)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(2)
         self.l_bloques = QLabel()
         self.l_bloques.setStyleSheet(f"color: {COL['muted']}")
         lay.addWidget(self.l_bloques)
@@ -303,34 +329,22 @@ class PanelPropiedades(QWidget):
         g.addWidget(self.t_crear, 3, 2)
         g.setColumnStretch(1, 1)
         lay.addWidget(self.caja_formula)
-        lay.addStretch(0)
         self._ver_bloques(None)
+        return w
 
     def _ver_bloques(self, titulo: str | None) -> None:
-        """La pestaña Bloques: el programador de la transición o de la acción, o el aviso de que hay que elegir una."""
-        self.prog.setVisible(titulo is not None)
-        self.caja_formula.setVisible(titulo is not None)
-        self.l_bloques.setText(titulo if titulo is not None else
-                               "Elija una transición, o una acción condicionada o por evento, para programarla")
-
-    def transicion(self) -> str | None:
-        """La transición cuyas opciones se muestran (la única seleccionada), si la hay."""
-        return self.ident if self.pila.currentIndex() == 2 else None
+        """El programador de la transición o de la acción (condición o evento), o nada si no hay que programar."""
+        self.pagina_bloques.setVisible(titulo is not None)
+        self.l_bloques.setText(titulo or "")
 
     def objetivo_bloques(self) -> tuple | None:
-        """Lo que programa la pestaña Bloques ahora: ("transicion", ID) o ("accion", ID, «condicion» o «evento»)."""
+        """Lo que programan los bloques ahora: ("transicion", ID) o ("accion", ID, «condicion» o «evento»)."""
         return self._objetivo
 
     def _guardado(self) -> str:
-        """El texto guardado de lo que programa la pestaña (receptividad, condición o evento), en la notación del usuario."""
+        """El texto guardado de lo que programan los bloques (receptividad, condición o evento), en la notación del usuario."""
         o = self._objetivo
         return self.e.texto_usuario(o[1]) if o[0] == "transicion" else self.e.texto_accion(o[1], o[2])
-
-    def actualizar_boton(self) -> None:
-        """«Bloques abajo ▾» solo se ofrece si el panel inferior (donde están los bloques) está plegado."""
-        plegado = not self.bloques_visibles()
-        self.t_abajo.setVisible(plegado)
-        self.s_abajo.setVisible(plegado and self._objetivo is not None and self._objetivo[0] == "accion")
 
     TEXTO_VACIO = "Haga clic en un elemento del dibujo para ver y cambiar sus opciones."
 
@@ -354,50 +368,70 @@ class PanelPropiedades(QWidget):
         self.s_comentario.setPlaceholderText("sin comentario")
         self.s_comentario.setToolTip("Comentario de la etapa: se dibuja entre comillas a su derecha (no entra en la simulación)")
         self.s_comentario.editingFinished.connect(lambda: self._comentar(self.s_comentario))
+        self.s_colocacion = _desplegable()
+        for valor, texto in COLOCACIONES:
+            self.s_colocacion.addItem(texto, valor)
+        self.s_colocacion.setToolTip("Cómo se colocan las acciones de la etapa en el dibujo")
+        self.s_colocacion.activated.connect(lambda _: self.e.colocar_acciones(self.ident, self.s_colocacion.currentData()))
         f.addRow("Etiqueta", self.s_etiqueta)
         f.addRow("Tipo", self.s_tipo)
         f.addRow("Comentario", self.s_comentario)
-        f.addRow(QLabel("Acciones"))
+        f.addRow("Colocación", self.s_colocacion)
+        return w
+
+    def _lista_acciones(self) -> QWidget:
+        """Lo ancho de una etapa: la lista de sus acciones y los botones para añadir, editar, quitar y mover."""
+        w = QWidget()
+        hl = QHBoxLayout(w)
+        hl.setContentsMargins(0, 0, 0, 0)
+        izq = QVBoxLayout()
+        izq.addWidget(QLabel("Acciones"))
         self.s_acciones = QListWidget()
         self.s_acciones.setWordWrap(True)
-        self.s_acciones.setMaximumHeight(140)
-        self.s_acciones.itemDoubleClicked.connect(lambda it: self._accion(it.data(Qt.ItemDataRole.UserRole)))
+        self.s_acciones.itemDoubleClicked.connect(lambda it: self._editar(it.data(Qt.ItemDataRole.UserRole)))
         self.s_acciones.currentItemChanged.connect(self._accion_señalada)
-        f.addRow(self.s_acciones)
-        fila = QWidget()
-        fl = FlowLayout(fila)
+        izq.addWidget(self.s_acciones, 1)
+        hl.addLayout(izq, 1)
+        col = QVBoxLayout()
+        col.addSpacing(18)
         for texto, tip, accion in (("Añadir…", "Añadir una acción a la etapa (también con el botón derecho en la etapa)",
-                                    lambda: self._accion(None)),
-                                   ("Editar…", "Cambiar la acción elegida (o doble clic en ella)", lambda: self._accion(self._elegida())),
+                                    self._anadir),
+                                   ("Editar…", "Abrir las opciones de la acción elegida (o doble clic en ella)",
+                                    lambda: self._editar(self._elegida())),
                                    ("Quitar", "Quitar la acción elegida", lambda: self._elegida() and self.e.quitar_accion(self._elegida())),
                                    ("◀", "Más a la izquierda en el dibujo", lambda: self._elegida() and self.e.mover_accion(self._elegida(), -1)),
                                    ("▶", "Más a la derecha", lambda: self._elegida() and self.e.mover_accion(self._elegida(), 1))):
             b = QPushButton(texto)
             b.setToolTip(tip)
-            b.clicked.connect(accion)
-            fl.addWidget(b)
-        f.addRow(fila)
-        self.s_abajo = QPushButton("Bloques abajo ▾")
-        self.s_abajo.setToolTip("Desplegar el panel inferior en la pestaña Bloques: ahí se programa la condición o el evento de "
-                                "la acción elegida")
-        self.s_abajo.clicked.connect(lambda: self.abrir_bloques())
-        self.s_abajo.hide()
-        f.addRow(self.s_abajo)
+            b.clicked.connect(lambda _=False, f=accion: f())
+            col.addWidget(b)
+        col.addStretch(1)
+        hl.addLayout(col)
         return w
 
     def _elegida(self) -> str | None:
         it = self.s_acciones.currentItem()
         return it.data(Qt.ItemDataRole.UserRole) if it else None
 
-    def _accion(self, aid: str | None) -> None:
+    def _anadir(self) -> None:
+        """«Añadir…»: una acción continua unida a la etapa, sin variable todavía; sus opciones se abren en el panel."""
         if self.e is not None and self.ident:
+            self.e.anadir_accion(self.ident)
+
+    def _editar(self, aid: str | None) -> None:
+        if self.e is not None and self.ident and aid:
             self.e.pedir_accion(self.ident, aid)
+
+    def _volver_a_la_etapa(self) -> None:
+        if self.e is not None:
+            self.e.ver_accion = False
+            self.e.cambiado.emit()
 
     def _accion_señalada(self, it: Any, _: Any = None) -> None:
         """Elegir una acción en la lista la resalta en el dibujo."""
         aid = it.data(Qt.ItemDataRole.UserRole) if it else None
         if self.e is not None and aid != self.e.accion and not self._llenando:
-            self.e.accion = aid
+            self.e.accion, self.e.ver_accion = aid, False
             self.e.cambiado.emit()
 
     def _transicion(self) -> QWidget:
@@ -416,11 +450,6 @@ class PanelPropiedades(QWidget):
         f.addRow("Etiqueta", self.t_etiqueta)
         f.addRow(self.t_mostrar)
         f.addRow("Comentario", self.t_comentario)
-        self.t_abajo = QPushButton("Bloques abajo ▾")
-        self.t_abajo.setToolTip("Desplegar el panel inferior en la pestaña Bloques: ahí está toda la receptividad "
-                                "(bloques, texto de la fórmula y su dibujo)")
-        self.t_abajo.clicked.connect(lambda: self.abrir_bloques())
-        f.addRow(self.t_abajo)
         return w
 
     def _desde_bloques(self, texto: str) -> None:
@@ -448,18 +477,22 @@ class PanelPropiedades(QWidget):
         self.l_enlace.setWordWrap(True)
         f.addWidget(self.l_enlace)
         self.f_tipo = QComboBox()
+        self.f_tipo.setMaximumWidth(260)
         self.f_tipo.currentIndexChanged.connect(self._elegir_flecha)
         f.addWidget(self.f_tipo)
         self.f_visible = QCheckBox("Mostrar flecha")
         self.f_visible.clicked.connect(lambda on: self.e.ajustar_flecha(visible=on))
         f.addWidget(self.f_visible)
+        fila = QHBoxLayout()
         self.f_auto = QPushButton("Flecha automática")
         self.f_auto.setToolTip("Restablecer la flecha: su sitio y si se ve, como los pone el programa")
         self.f_auto.clicked.connect(lambda: self.e.restablecer_flecha())
-        f.addWidget(self.f_auto)
+        fila.addWidget(self.f_auto)
         q = QPushButton("Quitar el enlace")
         q.clicked.connect(lambda: self.e.borrar())
-        f.addWidget(q)
+        fila.addWidget(q)
+        fila.addStretch(1)
+        f.addLayout(fila)
         f.addStretch(1)
         return w
 
@@ -470,7 +503,7 @@ class PanelPropiedades(QWidget):
 
     def _barra(self) -> QWidget:
         w = QWidget()
-        f = _formulario(w)
+        f = QVBoxLayout(w)
         self.b_tipo = QLabel("Simultaneidad (doble trazo, Y)")
         self.b_tipo.setWordWrap(True)
         self.b_unidos = QLabel()
@@ -479,10 +512,16 @@ class PanelPropiedades(QWidget):
         q.clicked.connect(lambda: self.e.borrar())
         ayuda = QLabel("Arrastre de un extremo para ensancharla; de un punto de unión sale un enlace.")
         ayuda.setWordWrap(True)
-        f.addRow("Tipo", self.b_tipo)
-        f.addRow("Unidos", self.b_unidos)
-        f.addRow(ayuda)
-        f.addRow(q)
+        f.addWidget(QLabel("<b>Tipo</b>"))
+        f.addWidget(self.b_tipo)
+        f.addWidget(QLabel("<b>Unidos</b>"))
+        f.addWidget(self.b_unidos)
+        f.addWidget(ayuda)
+        fila = QHBoxLayout()
+        fila.addWidget(q)
+        fila.addStretch(1)
+        f.addLayout(fila)
+        f.addStretch(1)
         return w
 
     # -- estado ------------------------------------------------------------------------------------
@@ -490,27 +529,49 @@ class PanelPropiedades(QWidget):
         """Rellena el panel con el elemento seleccionado (o lo vacía); respeta el campo que se está escribiendo."""
         self.e = e
         if e is not None:
-            self.prog.refrescar()  # las variables pudieron cambiar (panel Variables, diálogo de acciones, «Crear las que faltan»)
+            self.prog.refrescar()  # las variables pudieron cambiar (panel Variables, panel de la acción, «Crear las que faltan»)
         sel = e.sel if e is not None else []
         vivo = sel[0] if len(sel) == 1 else None
-        kind = ("enlace" if "|" in vivo else
+        aid = e.accion_activa() if e is not None else None
+        kind = ("accion" if aid else
+                "enlace" if "|" in vivo else
                 "barra" if any(b["id"] == vivo for b in e.M.get("bars", [])) else
                 "etapa" if any(s["id"] == vivo for s in e.M["steps"]) else
-                "transicion" if any(t["id"] == vivo for t in e.M["transitions"]) else None) if vivo else None
-        self.ident = vivo if kind else None
-        self.titulo.setText({"etapa": f"Etapa {e.nombres.get(vivo)}", "transicion": f"Transición {e.nombres.get(vivo)}",
-                             "enlace": f"Enlace {e.nombre(vivo)}" if vivo else "", "barra": e.nombre(vivo) if vivo else "",
-                             None: "Propiedades" if len(sel) < 2 else f"{len(sel)} elementos seleccionados"}[kind]
-                            if e is not None else "Propiedades")
-        self.pila.setCurrentIndex({None: 0, "etapa": 1, "transicion": 2, "enlace": 3, "barra": 4}[kind])
+                "transicion" if any(t["id"] == vivo for t in e.M["transitions"]) else None) if (vivo or aid) else None
+        ident = aid if kind == "accion" else vivo if kind else None
+        if (kind, ident) != (getattr(self, "_mostrado", None)):  # otro elemento: lo escrito sin confirmar se descarta
+            for campo in (self.s_etiqueta, self.s_comentario, self.t_etiqueta, self.t_comentario):
+                campo.blockSignals(True)
+                campo.clearFocus()
+                campo.blockSignals(False)
+        self._mostrado = (kind, ident)
+        self.ident = ident
+        self.pagina = kind or "vacio"  # qué opciones se muestran: etapa, transicion, accion, enlace, barra o vacio
+        etapa_a = e.nombres.get(e.etapa_accion(aid), "") if kind == "accion" else ""
+        titulo = {"etapa": f"Etapa {e.nombres.get(vivo)}", "transicion": f"Transición {e.nombres.get(vivo)}",
+                  "enlace": f"Enlace {e.nombre(vivo)}" if vivo else "", "barra": e.nombre(vivo) if vivo else "",
+                  "accion": f"Acción {(e.datos_accion(aid)['variable'] or '?') if aid else ''}" + (f" · etapa {etapa_a}" if etapa_a else " · suelta"),
+                  None: "" if len(sel) < 2 else f"{len(sel)} elementos seleccionados"}[kind] if e is not None else ""
+        self.titulo.setText(f"Opciones · {titulo}" if titulo else "Opciones")
+        self.izq.setCurrentIndex({None: 0, "etapa": 1, "transicion": 2, "accion": 3, "enlace": 0, "barra": 0}[kind])
+        self.izq.setVisible(kind in ("etapa", "transicion", "accion"))
         self.l_vacio.setText("Enlace de la etapa con sus acciones: Supr (o botón derecho, «Eliminar el enlace») las separa de la "
                              "etapa; quedan sueltas e independientes, cada una donde estaba."
                              if len(sel) == 1 and sel[0].startswith("enlaceacc:") else self.TEXTO_VACIO)
         acc = e.accion_programable() if e is not None else None
-        self._objetivo = (("transicion", vivo) if kind == "transicion" else ("accion", *acc) if acc else None)
+        self._objetivo = (("transicion", vivo) if kind == "transicion" else ("accion", *acc) if acc and kind == "accion" else None)
         self._ver_bloques(None if self._objetivo is None else
                           f"Receptividad de la transición {e.nombres.get(vivo, vivo)}" if kind == "transicion" else
                           e.titulo_accion(acc[0], acc[1]))
+        if kind == "accion":
+            self.accion.mostrar(e, aid)
+            memorizada = self.accion.tipo.currentData() not in CONTINUAS
+            self.der.setCurrentIndex(2 if (memorizada or self._objetivo is not None) else 0)
+            if not (memorizada or self._objetivo is not None):
+                self.l_vacio.setText("Acción continua: vale 1 mientras la etapa está activa, y no lleva nada más. Cambie el tipo "
+                                     "para añadirle una condición, o para que asigne un valor.")
+        else:
+            self.accion.caja_valor.setVisible(False)
         if self._objetivo is not None:
             if self._objetivo != self._anterior:  # otro objetivo: el texto vuelve a ser de solo lectura
                 self.t_manual.blockSignals(True)
@@ -524,14 +585,14 @@ class PanelPropiedades(QWidget):
             self._poner(self.t_texto, guardado)
             self.prog.poner(guardado)
             self._previsualizar()
-            self.actualizar_boton()
         self._anterior = self._objetivo
         if kind == "etapa":
             s = next(s for s in e.M["steps"] if s["id"] == vivo)
             self._poner(self.s_etiqueta, s["label"])
             self._poner(self.s_comentario, e.comentario(vivo))
             self.s_tipo.setCurrentIndex(1 if s["initial"] else 0)
-            self.actualizar_boton()
+            self.s_colocacion.setCurrentIndex(max(0, self.s_colocacion.findData(e.colocacion(vivo))))
+            self.der.setCurrentIndex(1)
             self._llenando = True
             self.s_acciones.clear()
             for d in e.acciones(vivo):
@@ -550,10 +611,12 @@ class PanelPropiedades(QWidget):
             self._poner(self.t_etiqueta, t["label"])
             self._poner(self.t_comentario, e.comentario(vivo))
             self.t_mostrar.setChecked(t.get("showLabel", True))
+            self.der.setCurrentIndex(2)
         elif kind == "barra":
             b = next(b for b in e.M["bars"] if b["id"] == vivo)
             self.b_unidos.setText(f"Por encima: {', '.join(e.nombre(i) for i in b['arriba']) or '—'}<br>"
                                   f"Por debajo: {', '.join(e.nombre(i) for i in b['abajo']) or '—'}")
+            self.der.setCurrentIndex(4)
         elif kind == "enlace":
             tid, sid, rol = vivo.split("|")
             self.l_enlace.setText(f"{e.nombre(vivo)}<br>Arrastre la flecha a lo largo del enlace. "
@@ -573,6 +636,9 @@ class PanelPropiedades(QWidget):
             self.f_tipo.blockSignals(False)
             visible = any(a["key"] == e.flecha for a in ruta["arrows"])
             self.f_visible.setChecked(visible)
+            self.der.setCurrentIndex(3)
+        elif kind is None:
+            self.der.setCurrentIndex(0)
         self.msg.setText("")
 
     @staticmethod

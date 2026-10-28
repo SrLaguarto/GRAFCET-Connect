@@ -320,17 +320,17 @@ class Ventana(unittest.TestCase):
         from PySide6.QtCore import QSettings
         from escritorio.ventana import Ventana as V
         w = self.w
-        self.assertFalse(w.derecho.isHidden() or w.pestanas.isHidden())
+        self.assertFalse(w.derecho.isHidden() or w.inferior.isHidden())
         w.flechas["derecho"].click()
         self.assertTrue(w.derecho.isHidden() and not w.a_derecho.isChecked())
         self.assertEqual(w.flechas["derecho"].text(), "◂")
         w.flechas["inferior"].click()
-        self.assertTrue(w.pestanas.isHidden() and not w.a_inferior.isChecked())
+        self.assertTrue(w.inferior.isHidden() and not w.a_inferior.isChecked())
         self.assertEqual(w.flechas["inferior"].text(), "▴")
         self.assertFalse(w.ajustes.value("paneles/derecho", True, type=bool))
         w.a_derecho.setChecked(True)  # desde el menú Ver
         w.a_inferior.setChecked(True)
-        self.assertFalse(w.derecho.isHidden() or w.pestanas.isHidden())
+        self.assertFalse(w.derecho.isHidden() or w.inferior.isHidden())
         self.assertTrue(w.ajustes.value("paneles/inferior", False, type=bool))
         self.assertEqual(w.flechas["derecho"].text(), "▸")
         w.a_derecho.setChecked(False)  # un arranque posterior lo recuerda

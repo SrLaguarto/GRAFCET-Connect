@@ -513,6 +513,7 @@ class Motor:
         self.m, self.mb = QFontMetricsF(self.f), QFontMetricsF(self.fb)
         self.nat: dict[tuple, float] = {}
         self.botones = True  # el «+» del «y» y el «o»: en la paleta no hay
+        self.fijo = False  # en la paleta, una ficha por elemento: el nombre ya va elegido y no lleva desplegable (▾)
 
     def reiniciar(self) -> None:
         self.vars, self.etapas = self.fuente()
@@ -521,6 +522,8 @@ class Motor:
     # -- qué lleva cada bloque
     def elementos(self, n: dict[str, Any]) -> list[tuple]:
         k = n["k"]
+        if k in ("var", "etapa", "vnum") and self.fijo and n["n"]:
+            return [("txt", "", n["n"])]
         if k in ("var", "etapa"):
             return [("drop", "n", n["n"] or "elegir")]
         if k == "const":
@@ -581,7 +584,8 @@ class Motor:
     def pieza(self, e: tuple, maxw: float = 100000) -> _Pieza:
         tipo = e[0]
         if tipo == "txt":
-            return _Pieza("txt", "", e[2], False, self.mb.horizontalAdvance(e[2]), 16)
+            vis = self.mb.elidedText(e[2], Qt.TextElideMode.ElideRight, maxw) if maxw < 100000 else e[2]
+            return _Pieza("txt", "", vis, False, self.mb.horizontalAdvance(vis), 16)
         if tipo == "boton":
             return _Pieza("boton", e[1], e[2], False, 22, ALTO)
         texto = e[2] or (e[3] if tipo == "campo" else "")
@@ -1022,6 +1026,7 @@ class PaletaBloques(_Superficie):
                  columna: bool = False, valor: bool = False) -> None:
         super().__init__(fuente, grupo)
         self.motor.botones = False
+        self.motor.fijo = True
         self.valor = valor  # las categorías de un valor numérico (número, variables, operadores)
         self.clave = "numero" if valor else "entrada"
         self.columna = columna  # uno debajo de otro (el programador); si no, uno tras otro, pasando de línea
@@ -1038,9 +1043,16 @@ class PaletaBloques(_Superficie):
             lh = max(lh, c.h)
         return out, y + lh + MARGEN
 
+    @staticmethod
+    def _orden(nombre: str) -> list[Any]:
+        """Orden natural y sin distinguir mayúsculas: I2 antes que I10; las etapas, por su número."""
+        return [(0, int(x), "") if x.isdigit() else (1, 0, x.lower()) for x in re.split(r"(\d+)", nombre) if x]
+
     def cargar(self, clave: str) -> None:
-        """Pone los bloques de la categoría con las variables y etapas del modelo; conserva lo elegido en un
-        desplegable si sigue existiendo."""
+        """Pone los bloques de la categoría con las variables y etapas del modelo. Entradas, salidas, memorias, etapas y
+        variables numéricas llevan una ficha por cada elemento que existe (etapas por número, variables por nombre), ya
+        elegido, que se arrastra tal cual; sin elementos, un bloque vacío. Lo elegido en el desplegable de comparaciones
+        y el retardo escrito se conservan si siguen valiendo."""
         self.clave = clave
         self.motor.reiniciar()
         v, etapas = self.motor.vars, list(dict.fromkeys(self.motor.etapas))
@@ -1049,18 +1061,16 @@ class PaletaBloques(_Superficie):
         if clave == "numero":
             nodos = [nuevo("num", v=(previo.get("num") or {}).get("v", "1"))]
         elif clave == "vnum":
-            numericas = [nom for nom, (_, t) in v.items() if t != "bool"]
-            elegido = previo.get("vnum", {}).get("n")
-            nodos = [nuevo("vnum", n=elegido if elegido in numericas else (numericas[0] if numericas else None))]
+            numericas = sorted((nom for nom, (_, t) in v.items() if t != "bool"), key=self._orden)
+            nodos = [nuevo("vnum", n=nom) for nom in numericas] or [nuevo("vnum", n=None)]
         elif clave == "aritm":
             nodos = [nuevo("ar", op=o) for o in OP_ARIT]
         elif clave in PAPEL:
-            validas = [nom for nom, (r, t) in v.items() if r == PAPEL[clave] and t == "bool"]
-            elegido = previo.get("var", {}).get("n")
-            nodos = [var(elegido if elegido in validas else (validas[0] if validas else None), PAPEL[clave])]
+            validas = sorted((nom for nom, (r, t) in v.items() if r == PAPEL[clave] and t == "bool"), key=self._orden)
+            nodos = [var(nom, PAPEL[clave]) for nom in validas] or [var(None, PAPEL[clave])]
         elif clave == "etapa":
-            elegido = previo.get("etapa", {}).get("n")
-            nodos = [nuevo("etapa", n=elegido if elegido in etapas else (etapas[0] if etapas else None))]
+            por_numero = lambda x: (0, int(x[1:]), "") if re.fullmatch(r"X\d+", x) else (1, 0, x.lower())  # noqa: E731
+            nodos = [nuevo("etapa", n=x) for x in sorted(etapas, key=por_numero)] or [nuevo("etapa", n=None)]
         elif clave == "operador":
             nodos = [nuevo("y"), nuevo("o"), nuevo("no"), nuevo("sube"), nuevo("baja"), nuevo("const", v=1),
                      nuevo("const", v=0)]

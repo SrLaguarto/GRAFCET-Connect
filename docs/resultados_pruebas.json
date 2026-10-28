@@ -1,9 +1,9 @@
 {
- "date": "2026-10-28T20:26:07+00:00",
+ "date": "2026-10-28T21:21:43+00:00",
  "python": "3.13.17",
  "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
  "machine": "x86_64",
- "total": 260,
+ "total": 266,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -262,7 +262,7 @@
    "summary": "REQ-EDT-07, REQ-EDT-09: la tabla de variables tiene «Nueva E», «Nueva S» y «Nueva M» (tooltips Nueva entrada,"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI104_dialogo_de_acciones_lista_de_variables_y_nueva_variable",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI104_panel_de_acciones_lista_de_variables_y_nueva_variable",
    "case": "S-EDI104",
    "outcome": "pasa",
    "requirements": [
@@ -279,17 +279,17 @@
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: el valor de una memorizada se programa en el diálogo: una booleana elige entre las fichas"
+   "summary": "REQ-ACT-01, REQ-EDT-02: el valor de una memorizada se programa en el panel de la acción: una booleana elige entre las fichas"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI106_frase_explicativa_condicion_y_boton_a_bloques",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI106_frase_explicativa_y_condicion_con_bloques_al_lado",
    "case": "S-EDI106",
    "outcome": "pasa",
    "requirements": [
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: arriba del diálogo, una frase explica la acción según su tipo; una línea muestra la"
+   "summary": "REQ-ACT-01, REQ-EDT-02: arriba del panel de la acción, una frase la explica según su tipo; la condición (o el"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI107_comentarios_en_la_presentacion_guardar_deshacer_y_borrar",
@@ -339,6 +339,63 @@
     "REQ-EDT-07"
    ],
    "summary": "REQ-ACT-01, REQ-EDT-07: al cambiar de tipo o de variable hay una sola etiqueta «Plantillas» y los botones"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI111_paleta_de_bloques_una_ficha_por_elemento",
+   "case": "S-EDI111",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-07: en Entradas, Salidas, Etapas, Memorias (y Variables del valor) hay una ficha por cada"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI112_panel_de_opciones_etapa_transicion_y_encaje_a_1360x860",
+   "case": "S-EDI112",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: el panel de opciones de abajo muestra, de una etapa, etiqueta, tipo, comentario y"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI113_traza_en_simular_y_leyenda_en_ayuda",
+   "case": "S-EDI113",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: al simular el panel inferior muestra la traza (y se pliega y recuerda como siempre); la leyenda es"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI114_variables_nuevas_visibles_al_instante_en_la_accion",
+   "case": "S-EDI114",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-07: con las opciones de la acción a la vista, una variable que se crea, renombra, quita o cambia"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI115_no_colocar_un_elemento_encima_de_otro",
+   "case": "S-EDI115",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: al soltar una ficha de la paleta o al terminar de mover (un elemento o un grupo de acciones), si su caja"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI116_lo_escrito_sin_confirmar_no_se_aplica_a_otro_elemento",
+   "case": "S-EDI116",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: si el elemento mostrado en el panel de opciones cambia sin clic (deshacer, rehacer o selección por"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI11_puntos_de_union",
@@ -634,14 +691,14 @@
    "summary": "REQ-ACT-01, REQ-EDT-02: botón derecho en una etapa: «Añadir acción…»; la acción se dibuja a su derecha; un"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI48_dialogo_de_acciones_vista_previa_y_avisos",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI48_panel_de_acciones_vista_previa_y_avisos",
    "case": "S-EDI48",
    "outcome": "pasa",
    "requirements": [
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: el diálogo de acciones ya no lleva programador (la condición y el evento se programan en"
+   "summary": "REQ-ACT-01, REQ-EDT-02: el panel de la acción no lleva programador de condición dentro (la condición y el evento se"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI49_memorias_en_la_interfaz",
@@ -690,31 +747,31 @@
    "summary": "REQ-EDT-02, REQ-ACT-01: una receptividad «1» se guarda como true y se valida sin D-TIPO; el valor de una acción"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI59_pestana_bloques_en_el_panel_inferior",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI59_panel_de_opciones_abajo_sin_pestanas",
    "case": "S-EDI59",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: el programador de la receptividad es la pestaña «Bloques» del panel inferior, solo al editar;"
+   "summary": "REQ-EDT-02: el panel inferior, al editar, es un único panel «Opciones» (sin pestañas) con la receptividad de la"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI60_bloques_y_texto_sincronizados_en_la_pestana",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI60_bloques_y_texto_sincronizados_en_el_panel",
    "case": "S-EDI60",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: un cambio de bloques escribe el texto del panel izquierdo y es una operación del editor (Ctrl+Z);"
+   "summary": "REQ-EDT-02: un cambio de bloques escribe el texto de la fórmula del panel de opciones y es una operación del"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI61_boton_bloques_abajo_si_el_panel_esta_plegado",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI61_panel_plegado_se_despliega_con_el_doble_clic",
    "case": "S-EDI61",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: con el panel inferior plegado no se despliega solo; el panel de la transición ofrece «Bloques"
+   "summary": "REQ-EDT-02: con el panel inferior plegado no se despliega solo al seleccionar; el doble clic en una transición,"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI62_ficha_accion_en_la_paleta",
@@ -752,7 +809,7 @@
     "REQ-EDT-02",
     "REQ-EDT-07"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-07: al crear, renombrar, quitar o cambiar de papel una variable (panel Variables, diálogo de"
+   "summary": "REQ-EDT-02, REQ-EDT-07: al crear, renombrar, quitar o cambiar de papel una variable (panel Variables, panel de"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI67_carpetas_en_su_orden_y_temporizadores",
@@ -764,13 +821,13 @@
    "summary": "REQ-EDT-02: las carpetas del programador van en este orden: Operadores, Entradas, Salidas, Etapas (X),"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI68_receptividad_en_la_pestana_con_texto_de_solo_lectura",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI68_receptividad_en_el_panel_con_texto_de_solo_lectura",
    "case": "S-EDI68",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: toda la receptividad está en la pestaña Bloques (texto de la fórmula, «Escrito», «Se dibuja» y"
+   "summary": "REQ-EDT-02: toda la receptividad está a la derecha del panel de opciones (texto de la fórmula, «Escrito», «Se"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI69_lazo_de_seleccion",
@@ -823,14 +880,14 @@
    "summary": "REQ-DAT-01, REQ-EDT-09, REQ-EDT-14: los borradores de acción se guardan en la presentación"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI74_dialogo_editar_de_una_accion_suelta_o_sin_completar",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI74_opciones_de_una_accion_suelta_o_sin_completar",
    "case": "S-EDI74",
    "outcome": "pasa",
    "requirements": [
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: «Editar…» de una acción suelta abre el diálogo de acciones (con el límite de tiempo de"
+   "summary": "REQ-ACT-01, REQ-EDT-02: «Editar…» de una acción suelta abre sus opciones en el panel inferior (con el límite de"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI75_accion_limitada_se_dibuja_como_condicion_not_d_sobre_x",
@@ -1006,7 +1063,7 @@
    "summary": "REQ-ACT-01, REQ-EDT-02: el trazo que une la etapa con sus acciones se selecciona con un clic (se resalta); Supr"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI93_condicion_y_evento_de_una_accion_en_la_pestana_bloques",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI93_condicion_y_evento_de_una_accion_en_el_panel_de_opciones",
    "case": "S-EDI93",
    "outcome": "pasa",
    "requirements": [
@@ -1024,17 +1081,17 @@
     "REQ-EDT-02",
     "REQ-EDT-07"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02, REQ-EDT-07: la pestaña Bloques programa también el evento de una acción, la condición de"
+   "summary": "REQ-ACT-01, REQ-EDT-02, REQ-EDT-07: el panel de opciones programa también el evento de una acción, la condición de"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI95_el_dialogo_editar_conserva_condicion_evento_y_limite",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI95_el_panel_conserva_condicion_evento_y_limite",
    "case": "S-EDI95",
    "outcome": "pasa",
    "requirements": [
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: el diálogo Editar no lleva programador y conserva la condición y el evento de la acción;"
+   "summary": "REQ-ACT-01, REQ-EDT-02: el panel de la acción no lleva programador de condición dentro y conserva la condición y el"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI96_nombres_de_variable_reservados",

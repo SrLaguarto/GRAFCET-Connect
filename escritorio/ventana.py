@@ -33,18 +33,18 @@ from grafcet.view import Vista, auto_layout, layout_from_presentation, presentat
 
 from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion
-from .acciones import DialogoAccion
 from .propiedades import PanelPropiedades, Paleta, PaletaAcciones
 from .variables import PanelVariables
 
 TITULO = "Simulador GRAFCET"
 ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
+ALTO_INFERIOR = {"simular": 300, "editar": 380}  # altura inicial del panel inferior: la traza, o las opciones de lo seleccionado
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
 AYUDA_EDICION = {
-    "seleccionar": "Clic selecciona un elemento y muestra sus opciones a la izquierda; arrastrarlo lo mueve (a la "
-                   "rejilla); de un punto de unión (arriba o abajo de una etapa o transición, a la derecha de una etapa) "
-                   "sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y deshacen y rehacen. Los elementos y las acciones nuevos se "
-                   "arrastran desde las carpetas de la izquierda.",
+    "seleccionar": "Clic selecciona un elemento y muestra sus opciones abajo; arrastrarlo lo mueve (a la "
+                   "rejilla, y no encima de otro elemento); de un punto de unión (arriba o abajo de una etapa o transición, "
+                   "a la derecha de una etapa) sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y deshacen y rehacen. Los "
+                   "elementos y las acciones nuevos se arrastran desde las carpetas de la izquierda.",
 }
 NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar"}
 AVISO = "Núcleo con perfil provisional · no declara conformidad con IEC 60848 / UNE-EN 60848"
@@ -145,6 +145,7 @@ class Ventana(QMainWindow):
         self.rt.timeout.connect(self._tick)
         self.reloj = QElapsedTimer()
         self.edicion: Edicion | None = None
+        self._alturas = dict(ALTO_INFERIOR)
         self.modo = "simular"
         # Recuperación automática cada 30 s mientras hay cambios sin guardar (REQ-EDT-10)
         self.recup = Recovery(recuperacion or Path(QStandardPaths.writableLocation(
@@ -253,7 +254,7 @@ class Ventana(QMainWindow):
         m_ajustes = bar.addMenu("A&justes")
         m_ajustes.addAction("&Lecturas de interpretación…", self.lecturas)
         ayuda = bar.addMenu("A&yuda")
-        ayuda.addAction("&Leyenda del dibujo", lambda: self.pestanas.setCurrentIndex(1))
+        ayuda.addAction("&Leyenda del dibujo", self.leyenda)
         ayuda.addAction("&Acerca de", self.acerca)
 
     def _caja(self, titulo: str) -> tuple[QGroupBox, QVBoxLayout]:
@@ -278,18 +279,16 @@ class Ventana(QMainWindow):
         il.addWidget(self.ayuda)
         self.diagrama = VistaDiagrama()
         il.addWidget(self.diagrama, 1)
-        self.pestanas = QTabWidget()
+        # Panel inferior: al simular, la traza; al editar, las opciones de lo seleccionado
         self.traza = QListWidget()
         self.traza.setWordWrap(True)
-        self.pestanas.addTab(self.traza, "Traza")
-        leyenda = QLabel(LEYENDA)
-        leyenda.setWordWrap(True)
-        leyenda.setAlignment(Qt.AlignmentFlag.AlignTop)
-        leyenda.setMargin(8)
-        sc = QScrollArea()
-        sc.setWidgetResizable(True)
-        sc.setWidget(leyenda)
-        self.pestanas.addTab(sc, "Leyenda")
+        caja_traza = QGroupBox("Traza")
+        QVBoxLayout(caja_traza).addWidget(self.traza)
+        self.props = PanelPropiedades()
+        self.inferior = QStackedWidget()
+        self.inferior.addWidget(caja_traza)
+        self.inferior.addWidget(self.props)
+        self._leyenda: QDialog | None = None
 
         der = QWidget()
         self.lado = QVBoxLayout(der)
@@ -366,18 +365,18 @@ class Ventana(QMainWindow):
         pag_scroll.setWidget(pag)
         self.derecho.addWidget(pag_scroll)
         self.derecho.setMinimumWidth(300)  # al simular; al editar, el mismo margen de ancho que el panel izquierdo
-        # Arriba, el dibujo y el panel derecho; abajo, a todo el ancho de los dos, el panel inferior (traza, leyenda,
-        # bloques): así una fórmula larga se ve en una línea. El panel izquierdo es un dock, a toda la altura.
+        # Arriba, el dibujo y el panel derecho; abajo, a todo el ancho de los dos, el panel inferior (traza,
+        # opciones): así una fórmula larga se ve en una línea. El panel izquierdo es un dock, a toda la altura.
         self.split = QSplitter(Qt.Orientation.Horizontal)
         self.split.addWidget(izq)
         self.split.addWidget(self.derecho)
         self.split.setSizes([880, 460])
         self.vsplit = QSplitter(Qt.Orientation.Vertical)
         self.vsplit.addWidget(self.split)
-        self.vsplit.addWidget(self.pestanas)
-        self.vsplit.setSizes([520, 300])
+        self.vsplit.addWidget(self.inferior)
+        self.vsplit.setSizes([520, ALTO_INFERIOR["simular"]])
         self.setCentralWidget(self.vsplit)
-        # Izquierda: paleta de elementos (arriba) y propiedades del elemento seleccionado (abajo); solo al editar
+        # Izquierda: la paleta (carpetas Elementos y Acciones); solo al editar. Las opciones de lo seleccionado van abajo.
         self.paleta = Paleta()
         self.paleta_acciones = PaletaAcciones()
         self.carpetas = QTabWidget()  # las dos carpetas de la paleta: «Elementos» y «Acciones»
@@ -386,22 +385,11 @@ class Ventana(QMainWindow):
             lista.ayuda.connect(self._ayuda_ficha)  # un clic en una ficha solo muestra su ayuda
             lista.escala = self.diagrama.escala
             self.carpetas.addTab(lista, titulo)
-        self.props = PanelPropiedades()
-        izq_edit = QSplitter(Qt.Orientation.Vertical)
-        izq_edit.addWidget(self.carpetas)
-        scroll_props = QScrollArea()  # las opciones de una transición son largas: se desplazan
-        scroll_props.setWidgetResizable(True)
-        scroll_props.setWidget(self.props)
-        scroll_props.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # se estrecha: nada queda a medias
-        izq_edit.addWidget(scroll_props)
-        izq_edit.setSizes([350, 310])
-        # El programador por bloques de la receptividad vive en el panel inferior, solo al editar
-        self.pestanas.addTab(self.props.pagina_bloques, "Bloques")
-        self.i_bloques = self.pestanas.indexOf(self.props.pagina_bloques)
-        self.pestanas.setTabVisible(self.i_bloques, False)
-        self._objetivo_bloques: tuple | None = None  # lo que ya activó la pestaña Bloques: una transición o una acción
-        self.props.abrir_bloques = self._abrir_bloques
-        self.props.bloques_visibles = lambda: self.a_inferior.isChecked()
+        izq_edit = QWidget()
+        vl = QVBoxLayout(izq_edit)
+        vl.setContentsMargins(0, 0, 0, 0)
+        vl.addWidget(self.carpetas)
+        vl.addStretch(1)
         self.dock = QDockWidget("Elementos", self)
         self.dock.setObjectName("dock-elementos")
         self.dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
@@ -468,12 +456,11 @@ class Ventana(QMainWindow):
             self._mostrar_panel(nombre, visible, guardar=False)
 
     def _panel(self, nombre: str) -> QWidget:
-        return {"izquierdo": self.dock, "derecho": self.derecho, "inferior": self.pestanas}[nombre]
+        return {"izquierdo": self.dock, "derecho": self.derecho, "inferior": self.inferior}[nombre]
 
-    def _abrir_bloques(self) -> None:
-        """«Bloques abajo ▾»: despliega el panel inferior y elige la pestaña Bloques."""
+    def _abrir_opciones(self) -> None:
+        """Despliega el panel inferior (las opciones de lo seleccionado), si estaba plegado."""
         self._mostrar_panel("inferior", True)
-        self.pestanas.setCurrentIndex(self.i_bloques)
 
     def _accion_panel(self, nombre: str) -> QAction:
         return {"izquierdo": self.a_izquierdo, "derecho": self.a_derecho, "inferior": self.a_inferior}[nombre]
@@ -490,8 +477,6 @@ class Ventana(QMainWindow):
         self.flechas[nombre].setText({"izquierdo": "◂" if visible else "▸", "derecho": "▸" if visible else "◂",
                                       "inferior": "▾" if visible else "▴"}[nombre])
         self.flechas[nombre].setToolTip(f"{'Plegar' if visible else 'Desplegar'} el panel {nombre}")
-        if nombre == "inferior" and hasattr(self, "props"):
-            self.props.actualizar_boton()
         if guardar:
             self.ajustes.setValue(f"paneles/{nombre}", visible)
 
@@ -679,11 +664,9 @@ class Ventana(QMainWindow):
         for a in (self.a_ejecutar, self.a_paso, self.a_completar, self.a_reiniciar):
             a.setEnabled(not editar)  # sin simulación en curso al editar (F5 y compañía no hacen nada)
         self.derecho.setCurrentIndex(1 if editar else 0)
+        self.inferior.setCurrentIndex(1 if editar else 0)  # la traza al simular; las opciones al editar
         self._anchos_laterales()
-        self.pestanas.setTabVisible(self.i_bloques, editar)  # los bloques solo se programan al editar
-        if not editar and self.pestanas.currentIndex() == self.i_bloques:
-            self.pestanas.setCurrentIndex(0)
-        self._objetivo_bloques = None
+        self._alto_inferior(editar)
         self.diagrama.modo_edicion(editar, self.edicion if editar else None)
         if editar:
             self.refrescar_edicion()
@@ -703,11 +686,23 @@ class Ventana(QMainWindow):
         if editar:
             self.resizeDocks([self.dock], [ancho], Qt.Orientation.Horizontal)
 
+    def _alto_inferior(self, editar: bool) -> None:
+        """Al cambiar de modo, el panel inferior recupera la altura que tenía en ese modo (la inicial, o la que dejó el
+        divisor): el dibujo y el panel se reparten el alto."""
+        if self.isVisible() and self.inferior.isVisible():
+            self._alturas["simular" if editar else "editar"] = self.vsplit.sizes()[1]
+        if self.inferior.isHidden() and self.isVisible():
+            return  # plegado: al desplegarlo vuelve a su altura
+        alto = self._alturas["editar" if editar else "simular"]
+        total = max(sum(self.vsplit.sizes()), alto + 200)
+        self.vsplit.setSizes([total - alto, alto])
+
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
         if self.modo == "editar" and self.edicion is not None and not getattr(self, "_anchos_puestos", False):
             self._anchos_puestos = True  # con la ventana ya dimensionada, los dos paneles laterales con el mismo ancho
             self._anchos_laterales()
+            self._alto_inferior(True)
 
     def _no_simulable(self) -> None:
         lineas = self.edicion.resumen(self.edicion.diagnosticos())
@@ -761,10 +756,6 @@ class Ventana(QMainWindow):
         self.l_reloj.setText(f"{len(e.M['steps'])} etapas · {len(e.M['transitions'])} transiciones")
         self.a_herr[e.herramienta].setChecked(True)
         self.props.mostrar(e)
-        objetivo = self.props.objetivo_bloques()
-        if objetivo is not None and objetivo != self._objetivo_bloques:  # al seleccionar una transición o una acción, sus bloques
-            self.pestanas.setCurrentIndex(self.i_bloques)
-        self._objetivo_bloques = objetivo
         self.variables.mostrar(e)
         self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
         self.a_rehacer.setEnabled(bool(e.ed.redo_stack))
@@ -802,22 +793,50 @@ class Ventana(QMainWindow):
             e.parpadear([target], centrar=False)  # ya está centrado
 
     def editar_condicion(self, tid: str) -> None:
-        """Doble clic en una transición: la selecciona y despliega su receptividad (pestaña Bloques del panel inferior)."""
+        """Doble clic en una transición: la selecciona y despliega el panel inferior con su receptividad."""
         self.edicion.seleccionar([tid])
-        self._abrir_bloques()
+        self._abrir_opciones()
 
     def editar_accion(self, sid: str | None, aid: str | None = None) -> None:
-        """Añadir (sin `aid`) o cambiar una acción (de la etapa, suelta o unida sin completar): diálogo con el
-        programador de valor; «Programar con bloques abajo» abre la pestaña Bloques con su condición o evento."""
-        d = DialogoAccion(self, self.edicion, sid, aid)
-        d.al_programar = self._abrir_bloques
-        d.exec()
+        """Doble clic en una acción, «Editar…» o una acción recién unida a una etapa: la selecciona y despliega el panel inferior
+        con sus opciones (tipo, variable, valor, condición o evento: todo se aplica al momento). Sin `aid`, añade una acción
+        nueva a la etapa."""
+        e = self.edicion
+        if aid is None:
+            if sid:
+                e.anadir_accion(sid)
+            return
+        e.accion, e.ver_accion = aid, True
+        e.sel = [sid] if sid else (e.sel if aid in e.sel else [aid])
+        e.cambiado.emit()
+        self._abrir_opciones()
 
     def editar_etiqueta(self, ident: str) -> None:
-        """Doble clic en una etapa: lleva el cursor a su etiqueta, en el panel de propiedades."""
+        """Doble clic en una etapa: despliega las opciones y lleva el cursor a su etiqueta."""
         self.edicion.seleccionar([ident])
+        self._abrir_opciones()
         self.props.s_etiqueta.setFocus()
         self.props.s_etiqueta.selectAll()
+
+    def leyenda(self) -> None:
+        """«Ayuda > Leyenda del dibujo»: una ventana propia (no modal) con lo que significa cada trazo y color."""
+        if self._leyenda is None:
+            d = QDialog(self)
+            d.setWindowTitle("Leyenda del dibujo")
+            d.resize(640, 420)
+            lay = QVBoxLayout(d)
+            texto = QLabel(LEYENDA)
+            texto.setWordWrap(True)
+            texto.setAlignment(Qt.AlignmentFlag.AlignTop)
+            texto.setMargin(8)
+            sc = QScrollArea()
+            sc.setWidgetResizable(True)
+            sc.setWidget(texto)
+            lay.addWidget(sc)
+            self._leyenda = d
+        self._leyenda.show()
+        self._leyenda.raise_()
+        self._leyenda.activateWindow()
 
     def _confirmar_borrado(self, plan: dict[str, list[str]]) -> bool:
         e = self.edicion
