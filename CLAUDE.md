@@ -9,8 +9,9 @@ Las reglas del proyecto ya escritas siguen vigentes y mandan sobre este fichero 
 
 ## Arquitectura de agentes
 
-La sesión principal es el **coordinador** y se ejecuta con Opus (`/model opus` o `claude --model opus`). Los
-subagentes de proyecto están en `.claude/agents/`:
+La sesión principal es el **coordinador** y se ejecuta con Opus: `.claude/settings.json` fija `"model": "opus"`
+para el proyecto. No es un fichero de `.claude/agents/`, sino la conversación desde la que se lanzan los
+subagentes. Los subagentes de proyecto están en `.claude/agents/`:
 
 | Agente | Modelo | Papel | Puede modificar |
 |---|---|---|---|

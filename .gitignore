@@ -3,8 +3,9 @@ __pycache__/
 .recuperacion/
 *.new
 commit.json.tmp
-# Configuración local de Claude Code; los subagentes del proyecto sí se versionan
+# Configuración local de Claude Code; los subagentes y los ajustes del proyecto sí se versionan
 .claude/*
 !.claude/agents/
+!.claude/settings.json
 build/
 dist/
