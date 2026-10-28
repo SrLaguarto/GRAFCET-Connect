@@ -116,10 +116,11 @@ class Editor:
             self.undo_stack.append((label, entries[0][1], entries[-1][2]))
 
     def next_label(self, kind: str) -> str:
-        """Etiqueta libre para un elemento nuevo: E0, E1… para etapas y t1, t2… para transiciones."""
+        """Etiqueta libre para un elemento nuevo: 0, 1, 2… para etapas (solo el número, como en la norma) y t1, t2… para
+        transiciones."""
         coll = self.model["steps"] if kind == "step" else self.model["transitions"]
         used = {label_key(x["label"]) for x in coll if x.get("label")} | {x["id"] for x in coll}  # el ID también cuenta (ejemplos)
-        prefix, n = ("E", 0) if kind == "step" else ("t", 1)
+        prefix, n = ("", 0) if kind == "step" else ("t", 1)
         while f"{prefix}{n}" in used:
             n += 1
         return f"{prefix}{n}"
@@ -333,6 +334,61 @@ class Editor:
             st["actionRefs"].append(aid)
             return aid
         return self._txn("crear acción memorizada", fn)
+
+    def update_action(self, aid: str, target: str, mode: str, condition: str = "true", trigger: str | None = None,
+                      value: str | None = None, event: str | None = None) -> None:
+        """Cambia una acción de arriba abajo (continua o memorizada, objetivo, condición, disparador, valor, evento):
+        conserva su ID, su etapa y su lugar entre las acciones de la etapa (P-IMP-38)."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            i, old = next((i, a) for i, a in enumerate(m["actions"]) if a["id"] == aid)
+            st = next(x for x in m["steps"] if x["id"] == old["stepRef"])
+            viejas = {old.get("conditionRef"), old.get("valueRef"), (old.get("trigger") or {}).get("expressionRef")}
+            nuevas = []
+
+            def expr(text: str) -> str:
+                e, diag = self._make_expr(m, text, st["partialRef"])
+                if diag:
+                    raise DiagnosticError(diag)
+                nuevas.append(e)
+                return e["id"]
+            if mode == "continuous":
+                item = {"id": aid, "stepRef": st["id"], "mode": "continuous", "targetRef": target,
+                        "conditionRef": expr(condition)}
+            elif mode == "stored" and trigger in ("activation", "deactivation", "event") and value is not None:
+                trig: dict[str, Any] = {"kind": trigger, "sourceRefs": []}
+                if trigger == "event":
+                    if not event:
+                        raise DiagnosticError(Diagnostic("D-TIPO-EVENTO", "una acción por evento necesita su evento", element=aid))
+                    trig["expressionRef"] = expr(event)
+                item = {"id": aid, "stepRef": st["id"], "mode": "stored", "targetRef": target, "trigger": trig,
+                        "valueRef": expr(value)}
+            else:
+                raise DiagnosticError(Diagnostic("D-FORMATO", "acción continua, o memorizada al activar, al desactivar o "
+                                                 "por evento con su valor", element=aid))
+            m["actions"][i] = item
+            m["expressions"] = [e for e in m["expressions"] if e["id"] not in viejas] + nuevas
+        self._txn("editar acción", fn)
+
+    def move_action(self, aid: str, delta: int) -> None:
+        """Cambia el lugar de una acción entre las de su etapa (el orden en que se dibujan, de izquierda a derecha)."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            a = next(x for x in m["actions"] if x["id"] == aid)
+            refs = next(x for x in m["steps"] if x["id"] == a["stepRef"])["actionRefs"]
+            i = refs.index(aid)
+            j = max(0, min(len(refs) - 1, i + delta))
+            refs.insert(j, refs.pop(i))
+        self._txn("ordenar acciones", fn)
+
+    def delete_variable(self, vid: str) -> None:
+        """Quita una variable que no se usa en ninguna expresión ni es el objetivo de una acción (REQ-EDT-07)."""
+        usos = self.usages(vid) + [{"owner": a["id"]} for a in self.model["actions"] if a["targetRef"] == vid]
+        if usos:
+            raise DiagnosticError(Diagnostic("D-REF", f"la variable se usa en {len(usos)} sitio(s): quite antes esos usos",
+                                             element=vid))
+
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            m["variables"] = [v for v in m["variables"] if v["id"] != vid]
+        self._txn("quitar variable", fn)
 
     # -- conexión explícita (REQ-MOD-02, REQ-MOD-03; P-IMP-05)
     def connect(self, src: str, dst: str) -> Diagnostic | None:
@@ -637,6 +693,8 @@ class Editor:
             for pt in m["partials"]:
                 pt["stepRefs"] = [s for s in pt["stepRefs"] if s not in doomed]
                 pt["transitionRefs"] = [t for t in pt["transitionRefs"] if t not in doomed]
+            for st in m["steps"]:  # una acción borrada sola deja de figurar en su etapa
+                st["actionRefs"] = [a for a in st["actionRefs"] if a not in doomed]
             if not keep_dangling:
                 for t in m["transitions"]:
                     t["preRefs"] = [s for s in t["preRefs"] if s not in doomed]

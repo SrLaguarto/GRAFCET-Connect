@@ -16,7 +16,7 @@ from typing import Any, Callable
 from PySide6.QtCore import QObject, QPointF, Signal
 
 from grafcet.diagnostics import DiagnosticError
-from grafcet.notation import a_nucleo, a_usuario
+from grafcet.notation import a_nucleo, a_usuario, x_etapa
 from grafcet.editor import Editor, new_grafcet_document
 from grafcet.persistence import Project, add_document, new_project, save_project
 from grafcet.profile import normalize_options
@@ -53,10 +53,12 @@ class Edicion(QObject):
         self.enlace: dict[str, Any] | None = None    # punto de unión de origen de un enlace que se está trazando
         self.inicio_rama: dict[str, Any] | None = None  # clic selecciona el enlace; arrastrar abre una rama
         self.flecha = "flow"
+        self.accion: str | None = None  # la acción señalada de la etapa seleccionada (clic en su caja)
         self.M: dict[str, Any] = {}
         # Ganchos de interfaz: la ventana los sustituye por diálogos
         self.pedir_condicion: Callable[[str], None] = lambda tid: None
         self.pedir_etiqueta: Callable[[str], None] = lambda ident: None
+        self.pedir_accion: Callable[[str, str | None], None] = lambda sid, aid: None
         self.confirmar_borrado: Callable[[dict[str, list[str]]], bool] = lambda plan: True
         self.reconstruir()
 
@@ -204,6 +206,12 @@ class Edicion(QObject):
         ident = elemento_en(self.M, p)
         h = self.herramienta
         punto = self._punto(p, ident)
+        caja = self.accion_en(p) if ident is None else None
+        if caja and h == "seleccionar":  # clic en una acción: se selecciona su etapa y se señala la acción
+            self.sel, self.accion = [caja["etapa"]], caja["id"]
+            self.cambiado.emit()
+            return True
+        self.accion = None
         if h == "seleccionar":
             rutas = enlaces(self.M)
             # Las flechas se pueden agarrar directamente; los tiradores solo aparecen al seleccionar.
@@ -464,6 +472,10 @@ class Edicion(QObject):
             self.conectar(destino["id"], origen["id"])
 
     def doble(self, p: QPointF, event: Any = None) -> bool:
+        caja = self.accion_en(p)
+        if caja:  # doble clic en una acción: se edita
+            self.pedir_accion(caja["etapa"], caja["id"])
+            return True
         ident = elemento_en(self.M, p)
         if not ident:
             return False
@@ -472,6 +484,161 @@ class Edicion(QObject):
         elif any(s["id"] == ident for s in self.M["steps"]):
             self.pedir_etiqueta(ident)
         return True
+
+    # -- acciones (P-IMP-38) ------------------------------------------------------------------------
+    def accion_en(self, p: QPointF) -> dict[str, Any] | None:
+        """La caja de acción bajo el puntero, tal como quedó en el dibujo ({id, etapa, rect})."""
+        for c in getattr(self.diagrama, "cajas_acciones", None) or []:
+            x, y, w, h = c["rect"]
+            if x <= p.x() <= x + w and y <= p.y() <= y + h:
+                return c
+        return None
+
+    def seleccion_dibujo(self) -> set[str]:
+        """Lo que se resalta en el dibujo: la selección y la acción señalada."""
+        a = next((x for x in self.ed.model["actions"] if x["id"] == self.accion), None)
+        return set(self.sel) | ({f"accion:{a['id']}"} if a and a["stepRef"] in self.sel else set())
+
+    def menu(self, p: QPointF) -> list[tuple[str, Callable[[], Any]]]:
+        """Opciones del botón derecho sobre lo que hay debajo."""
+        caja = self.accion_en(p)
+        ident = caja["etapa"] if caja else elemento_en(self.M, p)
+        if ident is None or not any(s["id"] == ident for s in self.M["steps"]):
+            return []
+        self.sel, self.accion = [ident], caja["id"] if caja else None
+        self.cambiado.emit()
+        out = [("Añadir acción…", lambda: self.pedir_accion(ident, None))]
+        if caja:
+            aid = caja["id"]
+            out += [("Editar acción…", lambda: self.pedir_accion(ident, aid)),
+                    ("Mover a la izquierda", lambda: self.mover_accion(aid, -1)),
+                    ("Mover a la derecha", lambda: self.mover_accion(aid, 1)),
+                    ("Quitar acción", lambda: self.quitar_accion(aid))]
+        return out
+
+    def _texto(self, eid: str | None) -> str:
+        return a_usuario(next(e["text"] for e in self.ed.model["expressions"] if e["id"] == eid)) if eid else ""
+
+    def datos_accion(self, aid: str) -> dict[str, str]:
+        """Una acción en la notación del usuario: tipo (continua, activacion, desactivacion, evento), variable,
+        condición (continua; vacía si es siempre), valor (memorizada; 1/0 para una booleana) y evento."""
+        m = self.ed.model
+        a = self.ed.get(aid)
+        var = next((v for v in m["variables"] if v["id"] == a["targetRef"]), None)
+        nombre = var["name"] if var else a["targetRef"]
+        if a["mode"] == "continuous":
+            cond = self._texto(a["conditionRef"])
+            return {"tipo": "continua", "variable": nombre, "condicion": "" if cond == "true" else cond}
+        trig = a["trigger"]
+        valor = self._texto(a["valueRef"])
+        if var and var["type"]["kind"] == "bool":
+            valor = {"true": "1", "false": "0"}.get(valor, valor)
+        return {"tipo": {"activation": "activacion", "deactivation": "desactivacion", "event": "evento"}[trig["kind"]],
+                "variable": nombre, "valor": valor, "evento": self._texto(trig.get("expressionRef"))}
+
+    @staticmethod
+    def resumen_accion(d: dict[str, str]) -> str:
+        """Una línea para la lista de acciones de la etapa."""
+        if d["tipo"] == "continua":
+            return d["variable"] + (f"   si {d['condicion']}" if d.get("condicion") else "   (continua)")
+        cuando = {"activacion": "al activar ↑", "desactivacion": "al desactivar ↓",
+                  "evento": f"con {d.get('evento') or '…'}"}[d["tipo"]]
+        return f"{d['variable']} := {d.get('valor', '')}   ({cuando})"
+
+    def acciones(self, sid: str) -> list[dict[str, str]]:
+        st = next(s for s in self.ed.model["steps"] if s["id"] == sid)
+        return [dict(self.datos_accion(aid), id=aid) for aid in st["actionRefs"]]
+
+    def _atomico(self, etiqueta: str, fn: Callable[[], Any]) -> str | None:
+        """Varias operaciones como una sola de deshacer; si una falla, no queda ninguna y se devuelve el motivo."""
+        n, r = len(self.ed.undo_stack), len(self.ed.redo_stack)
+        try:
+            with self.ed.group(etiqueta):
+                fn()
+        except DiagnosticError as exc:
+            while len(self.ed.undo_stack) > n:
+                self.ed.undo()
+            del self.ed.redo_stack[r:]
+            return "; ".join(substitute(d.message, self.nombres) for d in exc.diagnostics)
+        self.cambia()
+        return None
+
+    def poner_accion(self, sid: str, d: dict[str, str], aid: str | None = None,
+                     crear: tuple[str, str] | None = None) -> str | None:
+        """Añade (o, con `aid`, cambia) una acción de la etapa con los datos de `datos_accion`. Si la variable no existe
+        y se da `crear` (papel, tipo), se declara antes. Devuelve el motivo si no se pudo; nada cambia en ese caso."""
+        m, nombre = self.ed.model, d.get("variable", "").strip()
+        var = next((v for v in m["variables"] if v["name"] == nombre), None)
+        if not nombre:
+            return "Elija la variable sobre la que actúa."
+        if var is None and crear is None:
+            return f"La variable «{nombre}» no existe."
+        if d["tipo"] != "continua" and not d.get("valor", "").strip():
+            return "Escriba el valor que se asigna (1 o 0 para una booleana; un número o una cuenta como CT + 1)."
+        if d["tipo"] == "evento" and not d.get("evento", "").strip():
+            return "Una acción por evento necesita su evento (por ejemplo ↑I02)."
+        booleana = (var["type"]["kind"] if var else crear[1]) == "bool"
+
+        def hacer() -> None:
+            vid = var["id"] if var else self.ed.add_variable(nombre, crear[0], {"kind": crear[1]})
+            if d["tipo"] == "continua":
+                cond = self._n(d.get("condicion", "")) or "true"
+                if aid:
+                    self.ed.update_action(aid, vid, "continuous", condition=cond)
+                else:
+                    self.ed.add_continuous_action(sid, vid, cond)
+                return
+            valor = d["valor"].strip()
+            valor = self._n({"1": "true", "0": "false"}.get(valor, valor) if booleana else valor)
+            trig = {"activacion": "activation", "desactivacion": "deactivation", "evento": "event"}[d["tipo"]]
+            evento = self._n(d["evento"]) if trig == "event" else None
+            if aid:
+                self.ed.update_action(aid, vid, "stored", trigger=trig, value=valor, event=evento)
+            else:
+                self.ed.add_stored_action(sid, vid, trig, valor, evento)
+        motivo = self._atomico("acción", hacer)
+        if motivo is None and sid not in self.sel:
+            self.sel = [sid]
+            self.cambiado.emit()
+        return motivo
+
+    def quitar_accion(self, aid: str) -> None:
+        self.ed.delete([aid])
+        self.accion = None
+        self.cambia()
+
+    def mover_accion(self, aid: str, delta: int) -> None:
+        self.ed.move_action(aid, delta)
+        self.cambia()
+
+    # -- variables (REQ-EDT-07, P-IMP-38) ------------------------------------------------------------
+    def variables(self) -> list[dict[str, Any]]:
+        """El diccionario: cada variable con cuántos usos tiene (expresiones y acciones que la escriben)."""
+        m = self.ed.model
+        return [dict(v, usos=len(self.ed.usages(v["id"])) + sum(a["targetRef"] == v["id"] for a in m["actions"]))
+                for v in m["variables"]]
+
+    def nueva_variable(self, nombre: str, papel: str = "input", tipo: dict[str, Any] | None = None) -> str | None:
+        return self._atomico("crear variable", lambda: self.ed.add_variable(nombre, papel, tipo or {"kind": "bool"}))
+
+    def cambiar_variable(self, vid: str, nombre: str | None = None, **cambios: Any) -> str | None:
+        """Cambia nombre (y el texto de sus usos), papel, tipo, unidad o valor inicial, en una sola operación."""
+        v = next(x for x in self.ed.model["variables"] if x["id"] == vid)
+
+        def hacer() -> None:
+            if nombre is not None and nombre != v["name"]:
+                self.ed.rename(vid, nombre)
+            if cambios:
+                self.ed.change_variable(vid, **cambios)
+        return self._atomico("cambiar variable", hacer)
+
+    def quitar_variable(self, vid: str) -> str | None:
+        return self._atomico("quitar variable", lambda: self.ed.delete_variable(vid))
+
+    def fuente_bloques(self) -> tuple[dict[str, tuple[str, str]], list[str]]:
+        """Lo que ofrece el programador por bloques: variables {nombre: (papel, tipo)} y etapas en notación X."""
+        m = self.ed.model
+        return ({v["name"]: (v["role"], v["type"]["kind"]) for v in m["variables"]}, [x_etapa(s["label"]) for s in m["steps"]])
 
     # -- operaciones -------------------------------------------------------------------------------
     def poner_etapa(self, p: QPointF, inicial: bool = False) -> str:

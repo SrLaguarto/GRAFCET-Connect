@@ -69,3 +69,13 @@ Cada arrastre se deshace con Ctrl+Z y se rehace con Ctrl+Y. Los extremos del enl
 Un enlace siempre sale de una etapa y llega a ella con un tramo vertical (16), y a cada lado de una transición con otro algo mayor (24); si no caben, se acortan, y solo si los elementos están casi a la misma altura el enlace da un rodeo y sube con flecha. Una transición se agarra por su trazo para moverla; la rama solo sale de los puntos de unión, al final de sus tramos rectos. Al mover una etapa o una transición cerca de la vertical de un elemento enlazado (dos pasos de rejilla), se alinea con él y el enlace queda recto.
 
 Los elementos de la paleta se arrastran con su figura, al zoom del dibujo. El panel izquierdo (paleta y propiedades) se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L), como los otros.
+
+Variables, acciones y programador por bloques (paso 4, P-IMP-38)
+
+En modo Editar:
+
+- Etapas nuevas con solo el número: 0, 1, 2… En las receptividades, X1 es la etapa 1.
+- Variables (lado derecho): nombre, papel (entrada, salida, interna), tipo (booleana, entera, decimal, duración), valor inicial (solo las entradas; las demás empiezan en 0), unidad y cuántos usos tiene. Cambiar el nombre actualiza las receptividades y acciones que la usan; una variable usada no se puede quitar.
+- Acciones: botón derecho en una etapa, «Añadir acción…», o el botón «Añadir…» de su panel. Tipos: continua (con condición opcional), memorizada al activar, al desactivar o por evento (por ejemplo CT := CT + 1 con ↑I02). Si la variable no existe, el diálogo la crea. Un clic en la caja de una acción la señala; doble clic la edita; el botón derecho la mueve o la quita.
+- Programador por bloques (receptividades y condiciones): los cajones Entradas, Salidas, Internas, Etapas X y Constantes ofrecen lo que existe; cada variable o etapa es un bloque de color. Entre dos bloques se pone · (Y) solo; un clic en · lo cambia a + (O). Con un bloque elegido (Mayús+clic para varios): NOT pone la barra encima (sobre varios, los agrupa), ↑ y ↓ ponen el flanco delante, ( ) los agrupa y ⌫ los quita. Los paréntesis cambian de color con el nivel. «Comparar…» hace [CT ≥ 3] y «Temporizar…» convierte el bloque elegido en 3s/X1. El texto sigue debajo: se puede escribir y se vuelve a ver en bloques.
+- El panel izquierdo se puede estrechar: los rótulos pasan encima de los campos y los botones a la línea siguiente.

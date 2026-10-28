@@ -1,9 +1,9 @@
 {
- "date": "2026-10-28T12:45:43+00:00",
+ "date": "2026-10-28T13:12:40+00:00",
  "python": "3.13.17",
  "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
  "machine": "x86_64",
- "total": 188,
+ "total": 194,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -412,6 +412,56 @@
    "summary": "REQ-EDT-02: el panel izquierdo (paleta y propiedades) se pliega como los otros, desde su flecha o desde Ver, y"
   },
   {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI40_contador_por_flanco_con_el_editor",
+   "case": "S-EDI40",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-07, REQ-ACT-01, REQ-SIM-03: el ejemplo «contador-flanco» del responsable, hecho con el editor"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI41_retardo_3s_X1_con_el_asistente",
+   "case": "S-EDI41",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-TMP-01"
+   ],
+   "summary": "REQ-EDT-02, REQ-TMP-01: con la etapa X1 en bloques y «Temporizar…», la receptividad es 3s/X1, se guarda como"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI42_programador_por_bloques",
+   "case": "S-EDI42",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: los bloques trocean y vuelven a juntar el mismo texto; entre dos operandos ponen ·; NOT y los"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI43_panel_de_variables",
+   "case": "S-EDI43",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-06",
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07, REQ-EDT-06: el diccionario muestra papel, tipo, valor inicial y usos; renombrar actualiza los"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI44_acciones_desde_el_dibujo",
+   "case": "S-EDI44",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: botón derecho en una etapa: «Añadir acción…»; la acción se dibuja a su derecha; un"
+  },
+  {
    "test": "test_editor_escritorio.Notacion.test_SEDI16_notacion_del_usuario",
    "case": "S-EDI16",
    "outcome": "pasa",
@@ -421,6 +471,16 @@
    "summary": "REQ-EDT-02: ↑a, ↓a y X1 se traducen a la sintaxis del núcleo y vuelven; los espacios se ignoran al escribir y"
   },
   {
+   "test": "test_editor_escritorio.Notacion.test_SEDI39_acciones_y_variables_en_el_nucleo",
+   "case": "S-EDI39",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07, REQ-ACT-01: una acción se cambia de arriba abajo conservando su ID y su lugar, se ordena y se quita"
+  },
+  {
    "test": "test_editor_escritorio.Nucleo.test_SEDI01_parcial_raiz_etiquetas_y_agrupar",
    "case": "S-EDI01",
    "outcome": "pasa",
@@ -428,7 +488,7 @@
     "REQ-EDT-02",
     "REQ-EDT-03"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-03: el grafcet nuevo tiene el parcial raíz «g»; las etiquetas nuevas son E0.. y t1..;"
+   "summary": "REQ-EDT-02, REQ-EDT-03: el grafcet nuevo tiene el parcial raíz «g»; las etiquetas nuevas son 0, 1… (solo el"
   },
   {
    "test": "test_editor_escritorio.Nucleo.test_SEDI02_comprobar_receptividad_sin_cambiar_el_modelo",

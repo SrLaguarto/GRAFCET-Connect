@@ -22,7 +22,7 @@ from grafcet.routing import TALLO_T, enlaces
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetricsF, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QHBoxLayout, QLabel,
-                               QToolButton, QWidget)
+                               QMenu, QToolButton, QWidget)
 
 SX = 100       # margen izquierdo del dibujo
 H = 22         # semilado de la etapa cuadrada (unidad: lado = 2·H)
@@ -284,16 +284,18 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str]) 
 
 
 def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: set[str] | None = None,
-            marcados: set[str] | None = None) -> None:
+            marcados: set[str] | None = None) -> list[dict[str, Any]]:
     """M: estructura de la vista (Vista.model); S: estado observado (Vista.state()); sel y marcados, solo al editar:
-    los elementos seleccionados y los que tienen un diagnóstico."""
+    los elementos seleccionados y los que tienen un diagnóstico. Devuelve dónde ha quedado cada acción
+    ({id, etapa, rect}), para que el editor las encuentre con el ratón."""
     scene.clear()
+    cajas: list[dict[str, Any]] = []
     pt = _Pintor(scene)
     nombre = M.get("names", {}).get  # los ID internos nunca se muestran: etapas, parciales y macroetapas, por su nombre
     pos = {s["id"]: (s["x"] + SX, s["y"]) for s in M["steps"]}
     pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
     if not pos and not M["transitions"]:
-        return
+        return cajas
     # Enlace ascendente: por la izquierda del parcial de la transición, no de todo el dibujo
     situation, virtual = set(S.get("situation") or []), set(S.get("virtual") or [])
     unstable, cleared = set(S.get("unstable") or []), set(S.get("lastCleared") or [])
@@ -391,7 +393,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
                                    (stale, "último estable", "muted"), (cand, "alcanzada, sin confirmar", "glow")):
             if flag:
                 pt.text(x, y + H + 13, pt.seg(label), 10, color, Z_STEP, "middle", tip)
-        _acciones(pt, x, y, s["actions"], S, tmp)
+        _acciones(pt, x, y, s["actions"], S, tmp, cajas, s["id"], {i for i in (sel or set()) if i.startswith("accion:")})
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
         x, y = pos[m["id"]]
         act = bool((S.get("macros") or {}).get(m["id"]))
@@ -404,6 +406,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         pt.text(x, y + 5, pt.seg(nombre(m["id"], m["id"])), 16, "text", Z_STEP, "middle", tip)
     if sel or marcados or M.get("drafts"):
         _realces(pt, M, set(sel or ()), set(marcados or ()))
+    return cajas
 
 
 def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]]) -> None:
@@ -458,8 +461,10 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]])
 
 
 def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S: dict[str, Any],
-              tmp: dict[str, list[dict[str, Any]]]) -> None:
-    """Acciones a la derecha de la etapa, del alto de la etapa y contiguas (representación (2) de la norma)."""
+              tmp: dict[str, list[dict[str, Any]]], cajas: list[dict[str, Any]] | None = None, etapa: str = "",
+              marcadas: set[str] = frozenset()) -> None:
+    """Acciones a la derecha de la etapa, del alto de la etapa y contiguas (representación (2) de la norma). Anota
+    en `cajas` el rectángulo de cada una; las de `marcadas` («accion:ID», al editar) se resaltan."""
     if not actions:
         return
     ax = x + H + ACT_LINK
@@ -474,14 +479,18 @@ def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S:
         w = max(ACT_MIN, pt.text(ax + 12, y + 5, a["text"], 15, "text", Z_STEP) + 24)
         outer = (pt.pen("virt", 2.2) if force else pt.pen("ok", 2.6)) if on else pt.pen("text")
         pt.rect(ax, top, w, 2 * H, outer, Z_STEP - 0.02, "panel")
+        if cajas is not None and not force:
+            cajas.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H)})
+        if f"accion:{a.get('id')}" in marcadas:
+            pt.rect(ax - 3, top - 3, w + 6, 2 * H + 6, pt.pen("accent", 1.6, (5, 3)), Z_EDIT)
         if force:  # orden de forzado: rectángulo doble
             pt.rect(ax + 3, top + 3, w - 6, 2 * H - 6, pt.pen("virt" if on else "text", 1.2), Z_STEP - 0.01)
         mx = ax + 12
         mark = pt.pen("text")
         if a["kind"] == "continuous" and a.get("cond"):  # acción condicionada: trazo y condición
             pt.line(mx, top, mx, top - 14, mark, Z_STEP)
-            w = pt.text(mx + 5, top - 4, a["cond"], 13, "text", Z_STEP)
-            _estado_temporal(pt, mx + 5 + w + 8, top - 4, a.get("condRef"), tmp, Z_STEP)
+            wc = pt.text(mx + 5, top - 4, a["cond"], 13, "text", Z_STEP)  # el ancho de la caja no cambia
+            _estado_temporal(pt, mx + 5 + wc + 8, top - 4, a.get("condRef"), tmp, Z_STEP)
         elif a.get("trigger") == "activation":  # memorizada al activar: flecha hacia arriba
             pt.line(mx, top, mx, top - 11, mark, Z_STEP)
             pt.poly([(mx - 5, top - 10), (mx, top - 19), (mx + 5, top - 10)], None, Z_STEP, fill="text")
@@ -491,8 +500,8 @@ def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S:
         elif a.get("trigger") == "event":  # memorizada por evento: banderita y evento
             pt.line(mx, top, mx, top - 20, mark, Z_STEP)
             pt.poly([(mx, top - 20), (mx - 9, top - 15), (mx, top - 10)], None, Z_STEP, fill="text")
-            w = pt.text(mx + 5, top - 11, a.get("event"), 13, "text", Z_STEP)
-            _estado_temporal(pt, mx + 5 + w + 8, top - 11, a.get("condRef"), tmp, Z_STEP)
+            we = pt.text(mx + 5, top - 11, a.get("event"), 13, "text", Z_STEP)
+            _estado_temporal(pt, mx + 5 + we + 8, top - 11, a.get("condRef"), tmp, Z_STEP)
         ax += w
 
 
@@ -595,6 +604,17 @@ class VistaDiagrama(QGraphicsView):
         if not self._evento("soltar", event):
             super().mouseReleaseEvent(event)
 
+    def contextMenuEvent(self, event: Any) -> None:  # noqa: N802
+        """Al editar, el botón derecho ofrece lo que se puede hacer con lo que hay debajo (añadir acción, editarla…)."""
+        opciones = self.controlador.menu(self.mapToScene(event.pos())) if self.controlador is not None else []
+        if not opciones:
+            super().contextMenuEvent(event)
+            return
+        menu = QMenu(self)
+        for texto, accion in opciones:
+            menu.addAction(texto, accion)
+        menu.exec(event.globalPos())
+
     def _barra_zoom(self) -> None:
         """Controles del zoom sobre el dibujo, arriba a la derecha: «−», porcentaje, «+» y «Ajustar»."""
         self.barra = QFrame(self)
@@ -660,7 +680,7 @@ class VistaDiagrama(QGraphicsView):
             hb = vb = 0
         self.goma = None
         self._marcas = []
-        dibujar(self.scene(), M, S, sel, marcados)
+        self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados)
         r = self.scene().itemsBoundingRect().adjusted(-14, -14, 14, 14)
         self.scene().setSceneRect(r.united(self.area_minima) if self.area_minima else r)
         if not self._manual:

@@ -53,6 +53,12 @@ def _operando(t: str, i: int) -> tuple[str, int] | None:
     return m.group(0), m.end()
 
 
+def x_etapa(etiqueta: str) -> str:
+    """Cómo se escribe la actividad de una etapa en la notación del usuario: `X1` para «1» o «E1»; las demás, con
+    `active(…)`."""
+    return a_usuario(f"active({etiqueta})" if re.fullmatch(_NOMBRE, etiqueta) else f"active(`{etiqueta}`)")
+
+
 def a_nucleo(texto: str, etapas: Iterable[str] = (), variables: Iterable[str] = ()) -> str:
     """De la notación del usuario a la del analizador: `↑a` → `rise(a)`, `↓(a AND b)` → `fall(a AND b)`, `X1` →
     `active(E1)` si existe una etapa E1 (o 1) y ninguna variable llamada X1."""
@@ -76,15 +82,15 @@ def a_nucleo(texto: str, etapas: Iterable[str] = (), variables: Iterable[str] = 
         if mo.group(0) in variables:
             return mo.group(0)
         for etiqueta in (f"E{n}", n):
-            if etiqueta in etapas:
-                return f"active({etiqueta})"
+            if etiqueta in etapas:  # una etiqueta que empieza por cifra («1») va entre comillas invertidas
+                return f"active({etiqueta})" if re.fullmatch(_NOMBRE, etiqueta) else f"active(`{etiqueta}`)"
         return mo.group(0)
     return normalizar_espacios(re.sub(r"(?<![\w.])X(\w+)(?![\w(])", x, t))
 
 
 def a_usuario(texto: str) -> str:
-    """De la notación del analizador a la del usuario: `rise(a)` → `↑a`, `active(E1)` → `X1`."""
-    t = re.sub(r"\bactive\(E(\d+)\)", r"X\1", texto)
+    """De la notación del analizador a la del usuario: `rise(a)` → `↑a`, `active(E1)` y `active(`1`)` → `X1`."""
+    t = re.sub(r"\bactive\((?:E(\d+)|`(\d+)`)\)", lambda mo: "X" + (mo.group(1) or mo.group(2)), texto)
     previo = None
     while previo != t:  # las funciones más internas primero
         previo = t

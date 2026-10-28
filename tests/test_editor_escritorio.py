@@ -38,16 +38,16 @@ except ImportError:
 
 class Nucleo(unittest.TestCase):
     def test_SEDI01_parcial_raiz_etiquetas_y_agrupar(self):
-        """REQ-EDT-02, REQ-EDT-03: el grafcet nuevo tiene el parcial raíz «g»; las etiquetas nuevas son E0.. y t1..;
-        varias operaciones agrupadas se deshacen y se rehacen de una vez."""
+        """REQ-EDT-02, REQ-EDT-03: el grafcet nuevo tiene el parcial raíz «g»; las etiquetas nuevas son 0, 1… (solo el
+        número) y t1..; varias operaciones agrupadas se deshacen y se rehacen de una vez."""
         ed = Editor(new_grafcet_document("m"))
         self.assertEqual([p["id"] for p in ed.model["partials"]], ["g"])
-        self.assertEqual((ed.next_label("step"), ed.next_label("transition")), ("E0", "t1"))
+        self.assertEqual((ed.next_label("step"), ed.next_label("transition")), ("0", "t1"))
         with ed.group("dos etapas"):
-            ed.add_step("g", "E0", True, at=(0, 60))
-            ed.add_step("g", "E1", at=(0, 220))
+            ed.add_step("g", "0", True, at=(0, 60))
+            ed.add_step("g", "1", at=(0, 220))
         self.assertEqual(len(ed.undo_stack), 1)
-        self.assertEqual(ed.next_label("step"), "E2")
+        self.assertEqual(ed.next_label("step"), "2")
         t, _ = ed.add_transition("g", "", label=ed.next_label("transition"))
         self.assertEqual(ed.get(t)["label"], "t1")
         self.assertEqual(ed.next_label("transition"), "t2")
@@ -73,6 +73,38 @@ class Nucleo(unittest.TestCase):
 
 
 class Notacion(unittest.TestCase):
+    def test_SEDI39_acciones_y_variables_en_el_nucleo(self):
+        """REQ-EDT-07, REQ-ACT-01: una acción se cambia de arriba abajo conservando su ID y su lugar, se ordena y se quita
+        sola (sin dejar referencias); una variable usada no se quita y una sin usos sí; todo se deshace."""
+        ed = Editor(new_grafcet_document("m"))
+        s0 = ed.add_step("g", "0", True)
+        q = ed.add_variable("Q00", "output", {"kind": "bool"})
+        ct = ed.add_variable("CT", "internal", {"kind": "int"})
+        i2 = ed.add_variable("I02", "input", {"kind": "bool"})
+        a1 = ed.add_continuous_action(s0, q)
+        a2 = ed.add_stored_action(s0, ct, "activation", "CT + 1")
+        n = len(ed.undo_stack)
+        ed.update_action(a2, ct, "stored", trigger="event", value="CT + 1", event="rise(I02)")
+        a = ed.get(a2)
+        self.assertEqual((a["trigger"]["kind"], ed.get(s0)["actionRefs"]), ("event", [a1, a2]))
+        self.assertEqual(len(ed.model["expressions"]), 3, "las expresiones de antes se retiran")
+        self.assertTrue(ed.validate().can_simulate)
+        with self.assertRaises(DiagnosticError):
+            ed.update_action(a2, ct, "stored", trigger="event", value="CT + 1")  # evento sin expresión
+        ed.move_action(a2, -1)
+        self.assertEqual(ed.get(s0)["actionRefs"], [a2, a1])
+        with self.assertRaises(DiagnosticError):
+            ed.delete_variable(ct)  # objetivo de una acción y usada en su valor
+        ed.delete([a2])
+        self.assertEqual(ed.get(s0)["actionRefs"], [a1])
+        self.assertTrue(ed.validate().can_simulate)
+        ed.delete_variable(i2)
+        self.assertEqual([v["name"] for v in ed.model["variables"]], ["Q00", "CT"])
+        while len(ed.undo_stack) > n:
+            ed.undo()
+        self.assertEqual(ed.get(a2)["trigger"]["kind"], "activation")
+        self.assertEqual(len(ed.model["variables"]), 3)
+
     def test_SEDI16_notacion_del_usuario(self):
         """REQ-EDT-02: ↑a, ↓a y X1 se traducen a la sintaxis del núcleo y vuelven; los espacios se ignoran al escribir y
         se normalizan siempre; el analizador no cambia."""
@@ -158,10 +190,10 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(len(e.ed.validate().diagnostics) > 0, True, "una transición nueva queda pendiente, sin pedir nada")
         e.poner_condicion(ts["t1"], "marcha", crear=True)
         e.poner_condicion(ts["t2"], "paro", crear=True)
-        enlace(ids["E0"], ts["t1"])
-        enlace(ts["t1"], ids["E1"])
-        enlace(ids["E1"], ts["t2"])
-        enlace(ts["t2"], ids["E0"])
+        enlace(ids["0"], ts["t1"])
+        enlace(ts["t1"], ids["1"])
+        enlace(ids["1"], ts["t2"])
+        enlace(ts["t2"], ids["0"])
         return e, ids, ts
 
     def test_SEDI03_crear_enlazar_y_simular(self):
@@ -169,34 +201,34 @@ class Interfaz(unittest.TestCase):
         se valida, se simula (cada vez, una ejecución nueva) y vuelve a Editar."""
         w = self.w
         e, ids, ts = self.secuencial()
-        self.assertEqual(sorted(ids), ["E0", "E1"])
+        self.assertEqual(sorted(ids), ["0", "1"])
         self.assertEqual(sorted(ts), ["t1", "t2"])
         self.assertTrue(e.ed.validate().can_simulate, [str(d) for d in e.ed.validate().diagnostics])
         self.assertEqual({t["label"]: t["cond"] for t in e.M["transitions"]}["t1"], [{"t": "marcha"}])
-        self.assertEqual(e.ed.get(ids["E0"])["initial"], True)
+        self.assertEqual(e.ed.get(ids["0"])["initial"], True)
         self.assertTrue(w.cambiar_modo("simular"))
         self.assertEqual(w.modo, "simular")
-        self.assertEqual(w.v.state()["situation"], [ids["E0"]])
+        self.assertEqual(w.v.state()["situation"], [ids["0"]])
         self.assertEqual(sorted(w.botones.values(), key=lambda b: b.text())[0].text(), "marcha = 0")
         nombre = {b.text().split(" ")[0]: v for v, b in w.botones.items()}
         w.botones[nombre["marcha"]].click()
-        self.assertEqual(w.v.state()["situation"], [ids["E1"]])
+        self.assertEqual(w.v.state()["situation"], [ids["1"]])
         w.botones[nombre["marcha"]].click()  # se suelta: con marcha y paro a 1, E0 y E1 se alternarían sin fin
         w.botones[nombre["paro"]].click()
-        self.assertEqual(w.v.state()["situation"], [ids["E0"]])
+        self.assertEqual(w.v.state()["situation"], [ids["0"]])
         # Editar y simular otra vez: ejecución nueva, desde la situación inicial
         w.botones[nombre["marcha"]].click()
         self.assertTrue(w.cambiar_modo("editar"))
         self.assertEqual((w.modo, w.derecho.currentIndex()), ("editar", 1))
         self.assertTrue(w.cambiar_modo("simular"))
-        self.assertEqual(w.v.state()["situation"], [ids["E0"]])
+        self.assertEqual(w.v.state()["situation"], [ids["0"]])
 
     def test_SEDI04_guardar_abrir_y_simular(self):
         """REQ-EDT-01, REQ-DAT-02: el grafcet creado se guarda como proyecto, se abre y simula igual; en Editar se
         recupera con sus posiciones."""
         w = self.w
         e, ids, ts = self.secuencial()
-        e.ed.move(ids["E1"], 240, 220)
+        e.ed.move(ids["1"], 240, 220)
         e.cambia()
         dest = Path(self.tmp.name) / "mi-grafcet"
         with mock.patch("escritorio.ventana.QFileDialog.getExistingDirectory", return_value=str(dest.parent)):
@@ -206,16 +238,16 @@ class Interfaz(unittest.TestCase):
         self.assertTrue((dest / "manifest.json").exists())
         op = open_model(dest)
         self.assertTrue(op.executable)
-        self.assertEqual(layout_from_presentation(op.presentations[0])[ids["E1"]], (240.0, 220.0))
+        self.assertEqual(layout_from_presentation(op.presentations[0])[ids["1"]], (240.0, 220.0))
         self.assertTrue(w.abrir_ruta(dest))
-        self.assertEqual(w.v.state()["situation"], [ids["E0"]])
+        self.assertEqual(w.v.state()["situation"], [ids["0"]])
         nombre = {b.text().split(" ")[0]: v for v, b in w.botones.items()}
         w.botones[nombre["marcha"]].click()
-        self.assertEqual(w.v.state()["situation"], [ids["E1"]])
+        self.assertEqual(w.v.state()["situation"], [ids["1"]])
         # Editar el modelo abierto: copia con sus posiciones y, al guardar, en su misma carpeta
         self.assertTrue(w.cambiar_modo("editar"))
         self.assertEqual(w.edicion.ruta, dest)
-        self.assertEqual(w.edicion.layout()[ids["E1"]], (240.0, 220.0))
+        self.assertEqual(w.edicion.layout()[ids["1"]], (240.0, 220.0))
 
     def test_SEDI05_deshacer_rehacer_mover_y_borrar(self):
         """REQ-EDT-01, REQ-EDT-05: un arrastre es una sola operación de deshacer; borrar avisa de lo que arrastra y se
@@ -224,29 +256,29 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         n = len(e.ed.undo_stack)
         e.herramienta = "seleccionar"
-        p = centro(e.M, ids["E1"])
+        p = centro(e.M, ids["1"])
         e.prensar(p)
         for k in (1, 2, 3, 4):  # varios movimientos, una sola operación
             e.mover(QPointF(p.x() + 13 * k, p.y() + 7 * k))
         e.soltar(QPointF(p.x() + 52, p.y() + 28))
         self.assertEqual(len(e.ed.undo_stack), n + 1)
-        self.assertEqual(e.layout()[ids["E1"]], (60.0, 240.0), "a la rejilla de 20")
+        self.assertEqual(e.layout()[ids["1"]], (60.0, 240.0), "a la rejilla de 20")
         e.deshacer()
-        self.assertEqual(e.layout()[ids["E1"]], (0.0, 220.0))
+        self.assertEqual(e.layout()[ids["1"]], (0.0, 220.0))
         e.rehacer()
-        self.assertEqual(e.layout()[ids["E1"]], (60.0, 240.0))
+        self.assertEqual(e.layout()[ids["1"]], (60.0, 240.0))
         # Borrar E1 avisa de las transiciones que quedan sin enlace
         avisos = []
         e.confirmar_borrado = lambda plan: avisos.append(plan) or False
-        e.seleccionar([ids["E1"]])
+        e.seleccionar([ids["1"]])
         self.assertFalse(e.borrar())
         self.assertEqual(avisos[0]["affectedTransitions"], sorted(ts.values()))
         self.assertEqual(len(e.M["steps"]), 2)
         e.confirmar_borrado = lambda plan: True
         self.assertTrue(e.borrar())
-        self.assertEqual([s["label"] for s in e.M["steps"]], ["E0"])
+        self.assertEqual([s["label"] for s in e.M["steps"]], ["0"])
         e.deshacer()
-        self.assertEqual(sorted(s["label"] for s in e.M["steps"]), ["E0", "E1"])
+        self.assertEqual(sorted(s["label"] for s in e.M["steps"]), ["0", "1"])
         self.assertTrue(e.ed.validate().can_simulate, "deshacer devuelve también los enlaces")
 
     def test_SEDI06_receptividad_mal_escrita_y_diagnosticos(self):
@@ -282,8 +314,8 @@ class Interfaz(unittest.TestCase):
         def punto(i, lado):
             return next(x for x in anclas(e.M, i) if x["lado"] == lado)["pos"]
         e.herramienta = "seleccionar"
-        e.prensar(punto(ids["E0"], "abajo"))
-        e.soltar(punto(ids["E1"], "arriba"))
+        e.prensar(punto(ids["0"], "abajo"))
+        e.soltar(punto(ids["1"], "arriba"))
         self.assertEqual(len(e.M["drafts"]), 1)
         self.assertIn("D-ALTERNANCIA", e.mensaje)
         self.assertIn("D-ALTERNANCIA", [d["code"] for d in e.diagnosticos()])
@@ -291,25 +323,25 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(e.borrar())
         self.assertEqual(e.M["drafts"], [])
         # Enlace duplicado: se rechaza con su motivo
-        e.prensar(punto(ids["E0"], "abajo"))
+        e.prensar(punto(ids["0"], "abajo"))
         e.soltar(punto(ts["t1"], "arriba"))
         self.assertIn("duplicado", e.mensaje)
         # Una segunda etapa en la misma transición sería una simultaneidad: no se hace por accidente
-        e.prensar(punto(ids["E1"], "abajo"))
+        e.prensar(punto(ids["1"], "abajo"))
         e.soltar(punto(ts["t1"], "arriba"))
         self.assertIn("simultaneidad", e.mensaje)
-        self.assertEqual(next(t for t in e.M["transitions"] if t["id"] == ts["t1"])["pre"], [ids["E0"]])
+        self.assertEqual(next(t for t in e.M["transitions"] if t["id"] == ts["t1"])["pre"], [ids["0"]])
         # Añadir debajo
         pedidas = []
         e.pedir_condicion = pedidas.append  # pide la receptividad de la transición nueva, que es otra operación
-        e.seleccionar([ids["E1"]])
+        e.seleccionar([ids["1"]])
         n = len(e.ed.undo_stack)
         nuevo = e.anadir_debajo()
         self.assertEqual(len(e.ed.undo_stack), n + 1)
         self.assertEqual(len(pedidas), 0, "añadir debajo no pide receptividad")
         self.assertEqual((len(e.M["steps"]), len(e.M["transitions"])), (3, 3))
         t3 = next(t for t in e.M["transitions"] if t["label"] == "t3")
-        self.assertEqual((t3["pre"], t3["post"]), ([ids["E1"]], [nuevo]))
+        self.assertEqual((t3["pre"], t3["post"]), ([ids["1"]], [nuevo]))
         e.deshacer()
         self.assertEqual((len(e.M["steps"]), len(e.M["transitions"])), (2, 2))
 
@@ -318,9 +350,9 @@ class Interfaz(unittest.TestCase):
         guardar, abrir otro modelo o cerrar pregunta."""
         w = self.w
         e, ids, ts = self.secuencial()
-        self.assertIn("ya existe", e.renombrar(ids["E1"], "E0"))
-        self.assertIsNone(e.renombrar(ids["E1"], "Marcha"))
-        self.assertEqual({s["id"]: s["label"] for s in e.M["steps"]}[ids["E1"]], "Marcha")
+        self.assertIn("ya existe", e.renombrar(ids["1"], "0"))
+        self.assertIsNone(e.renombrar(ids["1"], "Marcha"))
+        self.assertEqual({s["id"]: s["label"] for s in e.M["steps"]}[ids["1"]], "Marcha")
         self.assertTrue(e.ed.dirty)
         pregunta = mock.patch("escritorio.ventana.QMessageBox.question", return_value=mock.sentinel.cancelar)
         from PySide6.QtWidgets import QMessageBox
@@ -350,7 +382,7 @@ class Interfaz(unittest.TestCase):
             w.edicion = None
             self.assertTrue(w.ofrecer_recuperacion())
         r = w.edicion
-        self.assertEqual(sorted(s["label"] for s in r.M["steps"]), ["E0", "E1"])
+        self.assertEqual(sorted(s["label"] for s in r.M["steps"]), ["0", "1"])
         self.assertTrue(r.ed.dirty)
         self.assertTrue(r.ed.validate().can_simulate)
         with mock.patch("escritorio.ventana.QFileDialog.getExistingDirectory", return_value=self.tmp.name):
@@ -367,12 +399,12 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((d.dragMode(), d.rejilla), (d.DragMode.NoDrag, True))
         w.herramienta("etapa")
         QTest.mouseClick(d.viewport(), Qt.MouseButton.LeftButton, pos=d.mapFromScene(QPointF(213, 97)))
-        self.assertEqual([(s["label"], s["x"], s["y"]) for s in e.M["steps"]], [("E0", 120.0, 100.0)])
+        self.assertEqual([(s["label"], s["x"], s["y"]) for s in e.M["steps"]], [("0", 120.0, 100.0)])
         w.herramienta("seleccionar")
         QTest.mouseClick(d.viewport(), Qt.MouseButton.LeftButton, pos=d.mapFromScene(QPointF(220, 100)))
         self.assertEqual(e.sel, [e.M["steps"][0]["id"]])
         textos = [it.toPlainText() for it in d.scene().items() if hasattr(it, "toPlainText")]
-        self.assertIn("E0", textos)
+        self.assertIn("0", textos)
         from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsPathItem
         self.assertTrue([it for it in d.scene().items() if it.zValue() >= 10], "la selección y sus tiradores se dibujan")
         # Doble clic sobre la etapa: pide su etiqueta
@@ -400,8 +432,8 @@ class Interfaz(unittest.TestCase):
         for _ in range(4):
             e.deshacer()  # quita los cuatro enlaces
         self.assertTrue(all(not t["pre"] and not t["post"] for t in e.M["transitions"]))
-        c = centro(e.M, ids["E0"])
-        puntos = {a["lado"]: a["pos"] for a in anclas(e.M, ids["E0"])}
+        c = centro(e.M, ids["0"])
+        puntos = {a["lado"]: a["pos"] for a in anclas(e.M, ids["0"])}
         self.assertEqual((puntos["arriba"], puntos["abajo"]), (QPointF(c.x(), c.y() - H), QPointF(c.x(), c.y() + H)))
         self.assertEqual(ancla_en(e.M, QPointF(c.x() + 3, c.y() + H + 4))["lado"], "abajo")
         self.assertIsNone(ancla_en(e.M, c), "el centro no es un punto de unión")
@@ -416,12 +448,12 @@ class Interfaz(unittest.TestCase):
         e.mover(QPointF(t1.x(), t1.y() - 12))
         e.soltar(QPointF(t1.x(), t1.y() - 12))
         t = next(t for t in e.M["transitions"] if t["id"] == ts["t1"])
-        self.assertEqual(t["pre"], [ids["E0"]])
+        self.assertEqual(t["pre"], [ids["0"]])
         # Del punto de arriba de E1 (que recibe) al de abajo de t1: t1 -> E1
-        c1 = centro(e.M, ids["E1"])
+        c1 = centro(e.M, ids["1"])
         e.prensar(QPointF(c1.x(), c1.y() - H))
         e.soltar(QPointF(t1.x(), t1.y() + 12))
-        self.assertEqual(next(t for t in e.M["transitions"] if t["id"] == ts["t1"])["post"], [ids["E1"]])
+        self.assertEqual(next(t for t in e.M["transitions"] if t["id"] == ts["t1"])["post"], [ids["1"]])
 
     def test_SEDI12_paleta_arrastrar_y_sin_pedir_receptividad(self):
         """REQ-EDT-02: los elementos de la paleta, a la izquierda, se arrastran al dibujo; una transicion se coloca sin
@@ -444,7 +476,7 @@ class Interfaz(unittest.TestCase):
                             Qt.KeyboardModifier.NoModifier)
             d.dropEvent(ev)
         self.assertEqual([(s["label"], s["initial"], s["x"], s["y"]) for s in e.M["steps"]],
-                         [("E0", False, 200.0, 60.0), ("E1", False, 200.0, 220.0)])
+                         [("0", False, 200.0, 60.0), ("1", False, 200.0, 220.0)])
         self.assertEqual([(t["label"], t["y"]) for t in e.M["transitions"]], [("t1", 140.0)])
         self.assertEqual(pedidas, [], "no pide la receptividad")
         w.paleta.setCurrentRow(0)
@@ -456,19 +488,19 @@ class Interfaz(unittest.TestCase):
         """REQ-EDT-02: al seleccionar una etapa, el panel de la izquierda muestra su etiqueta y su tipo, editables."""
         w = self.w
         e, ids, ts = self.secuencial()
-        e.seleccionar([ids["E1"]])
+        e.seleccionar([ids["1"]])
         p = w.props
-        self.assertEqual((p.pila.currentIndex(), p.s_etiqueta.text(), p.s_tipo.currentText()), (1, "E1", "Normal"))
+        self.assertEqual((p.pila.currentIndex(), p.s_etiqueta.text(), p.s_tipo.currentText()), (1, "1", "Normal"))
         p.s_etiqueta.setText("Marcha")
         p.s_etiqueta.editingFinished.emit()
-        self.assertEqual(e.nombres[ids["E1"]], "Marcha")
-        p.s_etiqueta.setText("E0")  # ya existe
+        self.assertEqual(e.nombres[ids["1"]], "Marcha")
+        p.s_etiqueta.setText("0")  # ya existe
         p.s_etiqueta.editingFinished.emit()
         self.assertIn("ya existe", p.msg.text())
         self.assertEqual(p.s_etiqueta.text(), "Marcha")
         p.s_tipo.setCurrentIndex(1)
         p.s_tipo.activated.emit(1)
-        self.assertTrue(e.ed.get(ids["E1"])["initial"])
+        self.assertTrue(e.ed.get(ids["1"])["initial"])
         e.seleccionar([])
         self.assertEqual(p.pila.currentIndex(), 0)
 
@@ -516,11 +548,11 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(e.ed.validate().can_simulate)
         p.mostrar(e)
         self.assertTrue(p.t_crear.isHidden())
-        self.assertIn("Entradas: fin", [p.c_var.itemText(i) for i in range(p.c_var.count())])
-        self.assertIn("X1", [p.c_etapa.itemData(i) for i in range(p.c_etapa.count())], "active(E1) se escribe X1")
+        self.assertIn(("fin", "fin"), p.prog.opciones("entrada"), "el cajón de entradas")
+        self.assertIn(("X1", "X1"), p.prog.opciones("etapa"), "la etapa 1 se escribe X1")
         p.t_texto.setText("X1 AND  ↑marcha")
         p.t_texto.editingFinished.emit()
-        self.assertEqual(e.texto_condicion(ts["t2"]), "active(E1) AND rise(marcha)", "espacios normalizados")
+        self.assertEqual(e.texto_condicion(ts["t2"]), "active(`1`) AND rise(marcha)", "espacios normalizados")
         self.assertEqual(p.t_texto.text(), "X1 AND ↑marcha")
         p.t_texto.setText("paro")
         p.t_texto.editingFinished.emit()
@@ -560,7 +592,7 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         e.poner_condicion(ts["t2"], "paro")
         e.poner_etapa(QPointF(100 + 200, 220))
-        e2 = next(s["id"] for s in e.M["steps"] if s["label"] == "E2")
+        e2 = next(s["id"] for s in e.M["steps"] if s["label"] == "2")
         pt = lambda i, lado: next(a for a in anclas(e.M, i) if a["lado"] == lado)["pos"]
         # Directo, una segunda etapa en la transicion se rechaza
         e.prensar(pt(ts["t1"], "abajo"))
@@ -574,18 +606,18 @@ class Interfaz(unittest.TestCase):
         bx, by, ancho, alto = barra(b)
         self.assertEqual(alto, 4, "doble trazo")
         # t1 -> barra (por encima) y barra -> E1 y E2 (por debajo): se parte el enlace directo t1 -> E1
-        e.ed.disconnect(ts["t1"], ids["E1"])
+        e.ed.disconnect(ts["t1"], ids["1"])
         e.cambia()
         for origen, destino in ((pt(ts["t1"], "abajo"), None), ):
             pass
         e.prensar(pt(ts["t1"], "abajo"))
         e.soltar(QPointF(bx + 30, by - 8))
         self.assertEqual(e.M["bars"][0]["arriba"], [ts["t1"]])
-        for etapa in (ids["E1"], e2):
+        for etapa in (ids["1"], e2):
             e.prensar(pt(etapa, "arriba"))
             e.soltar(QPointF(bx + 80, by + alto + 8))
-        self.assertEqual(sorted(e.M["bars"][0]["abajo"]), sorted([ids["E1"], e2]))
-        self.assertEqual(sorted(e.ed.get(ts["t1"])["postRefs"]), sorted([ids["E1"], e2]), "el modelo, con enlaces normales")
+        self.assertEqual(sorted(e.M["bars"][0]["abajo"]), sorted([ids["1"], e2]))
+        self.assertEqual(sorted(e.ed.get(ts["t1"])["postRefs"]), sorted([ids["1"], e2]), "el modelo, con enlaces normales")
         self.assertEqual(len(e.M["bars"][0]["abajo"]) + len(e.M["bars"][0]["arriba"]), 3)
         self.assertTrue(e.ed.validate().can_simulate)
         # Estirar del extremo derecho: una sola operacion; se guarda
@@ -614,7 +646,7 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(w.cambiar_modo("simular"))
         nombre = {bt.text().split(" ")[0]: v for v, bt in w.botones.items()}
         w.botones[nombre["marcha"]].click()
-        self.assertEqual(sorted(w.v.state()["situation"]), sorted([ids["E1"], e2]))
+        self.assertEqual(sorted(w.v.state()["situation"]), sorted([ids["1"], e2]))
         # Quitar un elemento de la barra deshace su enlace; borrar la barra, los demas
         self.assertTrue(w.cambiar_modo("editar"))
         e = w.edicion
@@ -622,7 +654,7 @@ class Interfaz(unittest.TestCase):
         e.seleccionar([f"{bid}|{e2}|barra"])
         self.assertEqual(w.props.pila.currentIndex(), 3)
         self.assertTrue(e.borrar())
-        self.assertEqual(e.ed.get(ts["t1"])["postRefs"], [ids["E1"]])
+        self.assertEqual(e.ed.get(ts["t1"])["postRefs"], [ids["1"]])
         e.seleccionar([bid])
         self.assertEqual(w.props.pila.currentIndex(), 4)
         self.assertTrue(e.borrar())
@@ -644,7 +676,7 @@ class Interfaz(unittest.TestCase):
         # Alternativa en el origen: una segunda transicion desde E0, justo debajo de t1, se aparta a un lado
         e.poner_transicion(QPointF(100 + 20, 190))  # casi debajo de t1
         t3 = next(t["id"] for t in e.M["transitions"] if t["label"] == "t3")
-        e.prensar(pt(ids["E0"], "abajo"))
+        e.prensar(pt(ids["0"], "abajo"))
         e.soltar(pt(t3, "arriba"))
         x1, x3 = centro(e.M, ts["t1"]).x(), centro(e.M, t3).x()
         self.assertGreaterEqual(abs(x3 - x1), 160, "la rama se ve: t3 queda a un lado de t1")
@@ -652,26 +684,26 @@ class Interfaz(unittest.TestCase):
         e.poner_condicion(t3, "alterna", crear=True)
         # Una etapa nueva E2 debajo, y una transicion t4 de E2 a ... se une al enlace t1 -> E1 (rama que vuelve)
         e.poner_etapa(QPointF(100 + 200, 420))
-        e2 = next(s["id"] for s in e.M["steps"] if s["label"] == "E2")
+        e2 = next(s["id"] for s in e.M["steps"] if s["label"] == "2")
         e.conectar(t3, e2)
         e.poner_transicion(QPointF(100 + 200, 520))
         t4 = next(t["id"] for t in e.M["transitions"] if t["label"] == "t4")
         e.conectar(e2, t4)
         e.poner_condicion(t4, "vuelve", crear=True)
         lista = {x["id"]: x for x in enlaces(e.M)}
-        enlace = lista[f"{ts['t1']}|{ids['E1']}|post"]["pts"]
+        enlace = lista[f"{ts['t1']}|{ids['1']}|post"]["pts"]
         punto = sobre(enlace)
         e.prensar(pt(t4, "abajo"))
         e.mover(punto)
         e.soltar(punto)
-        self.assertEqual(e.ed.get(t4)["postRefs"], [ids["E1"]], "t4 vuelve a E1: dos ramas llegan a una etapa")
+        self.assertEqual(e.ed.get(t4)["postRefs"], [ids["1"]], "t4 vuelve a E1: dos ramas llegan a una etapa")
         self.assertTrue(w.cambiar_modo("simular"))
         nombre = {b.text().split(" ")[0]: v for v, b in w.botones.items()}
         w.botones[nombre["alterna"]].click()  # el otro camino: E0 -t3-> E2
         self.assertEqual(w.v.state()["situation"], [e2])
         w.botones[nombre["alterna"]].click()
         w.botones[nombre["vuelve"]].click()
-        self.assertEqual(w.v.state()["situation"], [ids["E1"]])
+        self.assertEqual(w.v.state()["situation"], [ids["1"]])
         # Salto de secuencia: de E0 al enlace que llega a E2 (de t3): una transicion nueva E0 -> E2
         self.assertTrue(w.cambiar_modo("editar"))
         e = w.edicion
@@ -679,17 +711,17 @@ class Interfaz(unittest.TestCase):
         enlace = lista[f"{t3}|{e2}|post"]["pts"]
         punto = sobre(enlace)
         n = len(e.ed.model["transitions"])
-        e.prensar(pt(ids["E0"], "abajo"))
+        e.prensar(pt(ids["0"], "abajo"))
         e.soltar(punto)
         self.assertEqual(len(e.ed.model["transitions"]), n + 1)
         salto = next(t for t in e.ed.model["transitions"] if t["id"] not in (ts["t1"], ts["t2"], t3, t4))
-        self.assertEqual((salto["preRefs"], salto["postRefs"], salto["label"]), ([ids["E0"]], [e2], "t5"))
+        self.assertEqual((salto["preRefs"], salto["postRefs"], salto["label"]), ([ids["0"]], [e2], "t5"))
         self.assertEqual(e.sel, [salto["id"]])
         # Una rama solo se une a un enlace que llega a una etapa
         antes = len(e.ed.undo_stack)
-        e.prensar(pt(ids["E1"], "abajo"))
+        e.prensar(pt(ids["1"], "abajo"))
         lista = {x["id"]: x for x in enlaces(e.M)}
-        pre = lista[f"{ts['t1']}|{ids['E0']}|pre"]["pts"]
+        pre = lista[f"{ts['t1']}|{ids['0']}|pre"]["pts"]
         e.soltar(sobre(pre[:2], 0.5))  # el primer tramo, lejos de la transicion
         self.assertIn("llega a una etapa", e.mensaje)
         self.assertEqual(len(e.ed.undo_stack), antes)
@@ -701,21 +733,21 @@ class Interfaz(unittest.TestCase):
         for _ in range(4):
             e.deshacer()
         pt = lambda i, lado: next(a for a in anclas(e.M, i) if a["lado"] == lado)["pos"]
-        e.prensar(pt(ids["E0"], "abajo"))  # E0 (arriba) a t1 (debajo)
+        e.prensar(pt(ids["0"], "abajo"))  # E0 (arriba) a t1 (debajo)
         e.soltar(pt(ts["t1"], "arriba"))
-        self.assertFalse({x["id"]: x for x in enlaces(e.M)}[f"{ts['t1']}|{ids['E0']}|pre"]["arriba"])
-        e.prensar(pt(ids["E1"], "abajo"))  # E1 (abajo) a t1 (arriba): el flujo sube, y E1 es anterior de t2... de t1 no
+        self.assertFalse({x["id"]: x for x in enlaces(e.M)}[f"{ts['t1']}|{ids['0']}|pre"]["arriba"])
+        e.prensar(pt(ids["1"], "abajo"))  # E1 (abajo) a t1 (arriba): el flujo sube, y E1 es anterior de t2... de t1 no
         e.soltar(pt(ts["t2"], "arriba"))
-        self.assertFalse({x["id"]: x for x in enlaces(e.M)}[f"{ts['t2']}|{ids['E1']}|pre"]["arriba"])
+        self.assertFalse({x["id"]: x for x in enlaces(e.M)}[f"{ts['t2']}|{ids['1']}|pre"]["arriba"])
         # De t2 (abajo) a E0 (arriba): el enlace va hacia arriba, con flecha
         e.prensar(pt(ts["t2"], "abajo"))
-        e.soltar(pt(ids["E0"], "arriba"))
-        self.assertTrue({x["id"]: x for x in enlaces(e.M)}[f"{ts['t2']}|{ids['E0']}|post"]["arriba"])
+        e.soltar(pt(ids["0"], "arriba"))
+        self.assertTrue({x["id"]: x for x in enlaces(e.M)}[f"{ts['t2']}|{ids['0']}|post"]["arriba"])
         # Del punto de arriba de E1 al de abajo de t1: E1 recibe, y t1 -> E1 baja sin flecha
-        e.prensar(pt(ids["E1"], "arriba"))
+        e.prensar(pt(ids["1"], "arriba"))
         e.soltar(pt(ts["t1"], "abajo"))
-        self.assertEqual(e.ed.get(ts["t1"])["postRefs"], [ids["E1"]])
-        self.assertFalse({x["id"]: x for x in enlaces(e.M)}[f"{ts['t1']}|{ids['E1']}|post"]["arriba"])
+        self.assertEqual(e.ed.get(ts["t1"])["postRefs"], [ids["1"]])
+        self.assertFalse({x["id"]: x for x in enlaces(e.M)}[f"{ts['t1']}|{ids['1']}|post"]["arriba"])
 
     def test_SEDI18_enlaces_seleccionables_flecha_y_quitar(self):
         """REQ-EDT-02: un enlace se selecciona con un clic en su trazo; si va de abajo arriba se dibuja con flecha; se
@@ -725,7 +757,7 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         lista = {x["id"]: x for x in enlaces(e.M)}
         self.assertEqual(len(lista), 4)
-        enlace = f"{ts['t1']}|{ids['E0']}|pre"
+        enlace = f"{ts['t1']}|{ids['0']}|pre"
         self.assertIn(enlace, lista)
         a, b = lista[enlace]["pts"][0], lista[enlace]["pts"][1]
         punto = QPointF((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
@@ -734,12 +766,12 @@ class Interfaz(unittest.TestCase):
         e.soltar(punto)
         self.assertEqual(e.sel, [enlace])
         self.assertEqual(w.props.pila.currentIndex(), 3)
-        self.assertIn("E0 → t1", w.props.titulo.text())
-        self.assertIn("E0 → t1", w.l_sel.text())
+        self.assertIn("0 → t1", w.props.titulo.text())
+        self.assertIn("0 → t1", w.l_sel.text())
         self.assertFalse(hasattr(w.props, "f_invertir") or hasattr(e, "invertir"))
         lista = {x["id"]: x for x in enlaces(e.M)}
-        self.assertTrue(lista[f"{ts['t2']}|{ids['E0']}|post"]["arriba"], "el enlace de vuelta a E0 ya va hacia arriba")
-        self.assertFalse(lista[f"{ts['t1']}|{ids['E0']}|pre"]["arriba"])
+        self.assertTrue(lista[f"{ts['t2']}|{ids['0']}|post"]["arriba"], "el enlace de vuelta a E0 ya va hacia arriba")
+        self.assertFalse(lista[f"{ts['t1']}|{ids['0']}|pre"]["arriba"])
         # Quitar el enlace: las dos etapas y las dos transiciones siguen
         e.seleccionar([enlace])
         self.assertTrue(e.borrar())
@@ -777,17 +809,17 @@ class Interfaz(unittest.TestCase):
             return next(x["id"] for x in e.M[coleccion] if x["label"] == etiqueta)
         w.herramienta("etapa")
         QTest.mouseClick(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, pos(QPointF(420, 60)))
-        e0 = uno("steps", "E0")
+        e0 = uno("steps", "0")
         e.tipo_etapa(e0, True)
         # Hacia abajo, siempre arrastrando de un punto de union a un hueco: t1, E1, t2, E2
         arrastrar(punto(e0, "abajo"), QPointF(420, 140))
         t1 = uno("transitions", "t1")
         arrastrar(punto(t1, "abajo"), QPointF(420, 220))
-        e1 = uno("steps", "E1")
+        e1 = uno("steps", "1")
         arrastrar(punto(e1, "abajo"), QPointF(420, 300))
         t2 = uno("transitions", "t2")
         arrastrar(punto(t2, "abajo"), QPointF(420, 380))
-        e2 = uno("steps", "E2")
+        e2 = uno("steps", "2")
         self.assertEqual((len(e.M["steps"]), len(e.M["transitions"])), (3, 2))
         self.assertEqual((e.ed.get(t1)["preRefs"], e.ed.get(t1)["postRefs"]), ([e0], [e1]))
         # Una alternativa: de E0 a otro hueco a un lado: una segunda transicion desde la misma etapa (salto de secuencia)
@@ -886,7 +918,7 @@ class Interfaz(unittest.TestCase):
         from escritorio.diagrama import anclas, enlaces
         e, ids, ts = self.secuencial()
         nuevo = e.poner_transicion(QPointF(500, 140))
-        pre = next(x for x in enlaces(e.M) if x['id'] == f"{ts['t1']}|{ids['E0']}|pre")
+        pre = next(x for x in enlaces(e.M) if x['id'] == f"{ts['t1']}|{ids['0']}|pre")
         a, b = pre['pts'][:2]
         destino = QPointF((a[0]+b[0])/2, (a[1]+b[1])/2)
         origen = anclas(e.M, nuevo)[0]['pos']
@@ -897,14 +929,14 @@ class Interfaz(unittest.TestCase):
             QTest.mouseRelease(d.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, d.mapFromScene(b))
         n = len(e.ed.undo_stack)
         arrastrar(origen, destino)
-        self.assertEqual(e.ed.get(nuevo)['preRefs'], [ids['E0']])
+        self.assertEqual(e.ed.get(nuevo)['preRefs'], [ids['0']])
         self.assertEqual(e.ed.get(nuevo)['postRefs'], [])
-        self.assertEqual(e.ed.get(ts['t1'])['preRefs'], [ids['E0']])
+        self.assertEqual(e.ed.get(ts['t1'])['preRefs'], [ids['0']])
         self.assertEqual(len(e.ed.undo_stack), n+1)
         e.deshacer()
         self.assertEqual(e.ed.get(nuevo)['preRefs'], [])
         e.rehacer()
-        self.assertEqual(e.ed.get(nuevo)['preRefs'], [ids['E0']])
+        self.assertEqual(e.ed.get(nuevo)['preRefs'], [ids['0']])
 
     def test_SEDI25_arrastrar_desde_linea_de_seleccion(self):
         """REQ-EDT-02: clic selecciona un enlace; arrastre desde él abre otra rama en una transacción."""
@@ -1281,6 +1313,252 @@ class Interfaz(unittest.TestCase):
         e.cambia()
         tramos(ruta(e, r['id'])['pts'], TALLO_E, TALLO_T)
 
+
+    # -- paso 4: variables, acciones y programador por bloques (P-IMP-38) ------------------------------------
+    def _recorrido(self, doc, pasos, horizonte):
+        """Ejecuta un modelo con entradas por nombre y devuelve, en cada situación estable, el instante, las etapas,
+        las salidas y los valores, todo por nombre (los ID del editor y los del ejemplo no coinciden)."""
+        from helpers import S as SEG, records, session
+        from grafcet.model import validate_model
+        res = validate_model(doc)
+        self.assertTrue(res.can_simulate, [d.message for d in res.diagnostics])
+        nom = {s["id"]: s["label"] for s in doc["steps"]} | {v["id"]: v["name"] for v in doc["variables"]}
+        var = {v["name"]: v["id"] for v in doc["variables"]}
+        ses = session(res.model, None, [(t * SEG, 0, {var[k]: x for k, x in ch.items()}) for t, ch in pasos],
+                      horizon=horizonte * SEG)
+        ses.run()
+        return [(r["timeUs"], sorted(nom[x] for x in r["situation"]), {nom[k]: x for k, x in r["outputs"].items()},
+                 {nom[k]: x for k, x in r["values"].items()}) for r in records(ses, "estable")]
+
+    def test_SEDI40_contador_por_flanco_con_el_editor(self):
+        """REQ-EDT-07, REQ-ACT-01, REQ-SIM-03: el ejemplo «contador-flanco» del responsable, hecho con el editor
+        (variables en su panel, receptividades con bloques, acciones con su diálogo), simula igual que el ejemplo: I00
+        lleva a 1 e I01 vuelve a 0; en 1, cada subida de I02 suma 1 a CT y mantenerla no vuelve a contar; Q00 y Q01
+        encendidas en 1."""
+        from escritorio.acciones import DialogoAccion
+        from grafcet.examples import EJEMPLOS
+        w = self.w
+        w.nuevo()
+        e, pv = w.edicion, w.variables
+        for nombre, papel, tipo in (("I00", "input", "bool"), ("I01", "input", "bool"), ("I02", "input", "bool"),
+                                    ("Q00", "output", "bool"), ("Q01", "output", "bool"), ("CT", "internal", "int")):
+            pv.nueva()
+            fila = pv.tabla.rowCount() - 1
+            pv.tabla.item(fila, 0).setText(nombre)  # como al escribir en la tabla
+            for col, valor in ((1, papel), (2, {"kind": tipo})):
+                cb = pv.tabla.cellWidget(fila, col)
+                cb.setCurrentIndex(cb.findData(valor))
+                cb.activated.emit(cb.currentIndex())
+        self.assertEqual([(v["name"], v["role"], v["type"]["kind"]) for v in e.ed.model["variables"]],
+                         [("I00", "input", "bool"), ("I01", "input", "bool"), ("I02", "input", "bool"),
+                          ("Q00", "output", "bool"), ("Q01", "output", "bool"), ("CT", "internal", "int")])
+        s0 = e.poner_etapa(QPointF(260, 60))
+        e.tipo_etapa(s0, True)
+        e.seleccionar([s0])
+        s1 = e.anadir_debajo()
+        t1 = next(t["id"] for t in e.M["transitions"])
+        e.seleccionar([s1])
+        t2 = e.poner_transicion(QPointF(260, 300))
+        e.conectar(s1, t2)
+        e.conectar(t2, s0)
+        for tid, nombre in ((t1, "I00"), (t2, "I01")):  # receptividades con el cajón de entradas
+            e.seleccionar([tid])
+            w.props.prog.poner_bloque(nombre, "entrada")
+        self.assertEqual((e.texto_condicion(t1), e.texto_condicion(t2)), ("I00", "I01"))
+        for datos in ({"tipo": "evento", "variable": "CT", "valor": "CT + 1"}, {"tipo": "continua", "variable": "Q00"},
+                      {"tipo": "continua", "variable": "Q01"}):
+            d = DialogoAccion(w, e, s1)
+            d.tipo.setCurrentIndex(d.tipo.findData(datos["tipo"]))
+            d.variable.setCurrentText(datos["variable"])
+            d.valor.setText(datos.get("valor", ""))
+            if datos["tipo"] == "evento":
+                d.evento.poner_bloque("I02", "entrada")
+                d.evento.lienzo.e.sel = (0, 1)
+                d.evento.botones["sube"].click()
+                self.assertEqual(d.evento.texto(), "↑I02")
+            d.aceptar()
+            self.assertEqual(d.result(), d.DialogCode.Accepted, d.msg.text())
+        self.assertEqual([e.resumen_accion(x) for x in e.acciones(s1)],
+                         ["CT := CT + 1   (con ↑I02)", "Q00   (continua)", "Q01   (continua)"])
+        pasos = [(1, {"I00": True}), (2, {"I00": False}), (3, {"I02": True}), (4, {"I02": False}), (5, {"I02": True}),
+                 (6, {}), (7, {"I02": False}), (8, {"I01": True}), (9, {"I02": True}), (10, {"I02": False})]
+        ejemplo, _ = EJEMPLOS["contador-flanco"][2]()
+        hecho = self._recorrido(e.ed.model, pasos, 12)
+        self.assertEqual(hecho, self._recorrido(ejemplo.doc, pasos, 12))
+        self.assertIn(("5000000", ["1"], {"Q00": True, "Q01": True}), [x[:3] for x in hecho])
+        self.assertEqual([x[3]["CT"] for x in hecho if "CT" in x[3]][-1], "2",
+                         "dos subidas en 1; mantener I02 o subir en 0 no cuenta")
+
+    def test_SEDI41_retardo_3s_X1_con_el_asistente(self):
+        """REQ-EDT-02, REQ-TMP-01: con la etapa X1 en bloques y «Temporizar…», la receptividad es 3s/X1, se guarda como
+        delay(3 s, active(1), 0 s) y la transición franquea a los 3 s de activarse la etapa 1."""
+        from escritorio import bloques
+        w = self.w
+        w.nuevo()
+        e = w.edicion
+        s0 = e.poner_etapa(QPointF(260, 60))
+        e.tipo_etapa(s0, True)
+        e.seleccionar([s0])
+        s1 = e.anadir_debajo()
+        t1 = next(t["id"] for t in e.M["transitions"])
+        e.nueva_variable("I00")
+        e.seleccionar([s1])
+        t2 = e.poner_transicion(QPointF(260, 300))
+        e.conectar(s1, t2)
+        e.conectar(t2, s0)
+        e.seleccionar([t1])
+        w.props.prog.poner_bloque("I00", "entrada")
+        e.seleccionar([t2])
+        prog = w.props.prog
+        prog.poner_bloque("X1", "etapa")
+        prog.lienzo.e.sel = (0, 1)
+        with mock.patch.object(bloques._Dialogo, "exec", return_value=bloques.QDialog.DialogCode.Accepted):
+            prog.botones["temporizar"].click()  # el asistente, con sus valores: 3 s, la etapa elegida, 0 s
+        self.assertEqual(w.props.t_texto.text(), "3s/X1")
+        self.assertEqual(e.texto_condicion(t2), "delay(3 s, active(`1`), 0 s)")
+        self.assertEqual(prog.lienzo.e.b[0]["cat"], "tiempo")
+        hecho = self._recorrido(e.ed.model, [(1, {"I00": True}), (2, {"I00": False})], 8)
+        self.assertEqual([(x[0], x[1]) for x in hecho], [("0", ["0"]), ("1000000", ["1"]), ("2000000", ["1"]),
+                                                         ("4000000", ["0"])])
+
+    def test_SEDI42_programador_por_bloques(self):
+        """REQ-EDT-02: los bloques trocean y vuelven a juntar el mismo texto; entre dos operandos ponen ·; NOT y los
+        flancos van sobre un bloque o un grupo; los paréntesis se quitan con su pareja; un clic en · lo cambia a +."""
+        from escritorio.bloques import Expresion, categoria, juntar, trocear
+        roles = {"marcha": "input", "paro": "input", "Q00": "output", "CT": "internal"}
+        clase = lambda t: categoria(t, roles, {"X1"})
+        for t in ("↑marcha AND NOT paro", "NOT (marcha OR X1) AND CT >= 3", "3s/X1 OR NOT marcha/2s", "↓(marcha AND paro)",
+                  "X1 AND (marcha OR (paro AND NOT Q00))", "1", "NOT ↑marcha"):
+            self.assertEqual(juntar(trocear(t, clase)), t)
+        self.assertEqual([b["cat"] for b in trocear("marcha AND Q00 AND CT >= 3 AND X1 AND 3s/X1 AND nada AND 1", clase)
+                          if b["k"] == "atomo"], ["entrada", "salida", "comparacion", "etapa", "tiempo", "otro", "constante"])
+        e = Expresion()
+        bloque = lambda t: [{"k": "atomo", "t": t, "cat": clase(t), "neg": False, "flanco": ""}]
+        e.insertar(bloque("marcha"))
+        e.insertar(bloque("X1"))
+        self.assertEqual(e.texto(), "marcha AND X1", "entre dos operandos, Y")
+        e.sel = (0, 1)
+        e.negar()
+        e.sel = (0, 3)
+        e.negar()
+        self.assertEqual(e.texto(), "NOT (NOT marcha AND X1)", "NOT sobre varios bloques: entre paréntesis")
+        e.sel, e.cursor = None, len(e.b)
+        e.flanco("↑")  # sobre el grupo que acaba de cerrar
+        e.insertar([{"k": "op", "t": "OR"}])
+        e.insertar(bloque("paro"))
+        self.assertEqual(e.texto(), "NOT ↑(NOT marcha AND X1) OR paro")
+        e.sel = (0, 1)
+        e.quitar()  # el paréntesis se va con su pareja
+        self.assertEqual(e.texto(), "NOT marcha AND X1 OR paro")
+        e.sel = (2, 5)
+        self.assertTrue(e.envolver())
+        self.assertEqual(e.texto(), "NOT marcha AND (X1 OR paro)")
+        # En el panel: cada cambio en los bloques es la receptividad; un clic en · la cambia a +
+        w = self.w
+        e2, ids, ts = self.secuencial()
+        e2.seleccionar([ts["t1"]])
+        prog = w.props.prog
+        prog.poner_bloque("paro", "entrada")
+        self.assertEqual(e2.texto_condicion(ts["t1"]), "marcha AND paro")
+        lienzo = prog.lienzo
+        lienzo.resize(400, 60)
+        lienzo._cajas, lienzo._huecos, _ = lienzo._maqueta(400)
+        QTest.mouseClick(lienzo, Qt.MouseButton.LeftButton, pos=lienzo._cajas[1].center().toPoint())
+        self.assertEqual(e2.texto_condicion(ts["t1"]), "marcha OR paro")
+        n = len(e2.ed.undo_stack)
+        QTest.mouseClick(lienzo, Qt.MouseButton.LeftButton, pos=lienzo._cajas[2].center().toPoint())
+        prog.botones["not"].click()
+        self.assertEqual((e2.texto_condicion(ts["t1"]), len(e2.ed.undo_stack)), ("marcha OR NOT paro", n + 1))
+        QTest.keyClick(lienzo, Qt.Key.Key_Delete)
+        self.assertEqual(e2.texto_condicion(ts["t1"]), "marcha")
+        # Escribir el texto a mano vuelve a trocearlo en bloques
+        w.props.t_texto.setText("↑marcha AND NOT X1")
+        w.props.t_texto.textEdited.emit(w.props.t_texto.text())
+        self.assertEqual([(b["t"], b["neg"], b["flanco"]) for b in prog.lienzo.e.b if b["k"] == "atomo"],
+                         [("marcha", False, "↑"), ("X1", True, "")])
+
+    def test_SEDI43_panel_de_variables(self):
+        """REQ-EDT-07, REQ-EDT-06: el diccionario muestra papel, tipo, valor inicial y usos; renombrar actualiza los
+        usos; papel y tipo se cambian; una variable usada no se quita y una sin usos sí; todo se deshace."""
+        w = self.w
+        e, ids, ts = self.secuencial()
+        pv = w.variables
+        nombres = [pv.tabla.item(r, 0).text() for r in range(pv.tabla.rowCount())]
+        self.assertEqual(nombres, ["marcha", "paro"])
+        self.assertEqual(pv.tabla.item(0, 5).text(), "1", "marcha se usa en t1")
+        pv.tabla.item(0, 0).setText("Marcha")
+        self.assertEqual(e.texto_condicion(ts["t1"]), "Marcha", "el renombrado llega a la receptividad")
+        cb = pv.tabla.cellWidget(1, 1)
+        cb.setCurrentIndex(cb.findData("output"))
+        cb.activated.emit(cb.currentIndex())
+        self.assertEqual(e.ed.model["variables"][1]["role"], "output")
+        pv.tabla.selectRow(0)
+        pv.quitar()
+        self.assertIn("se usa", pv.msg.text())
+        pv.nueva()
+        self.assertEqual(e.ed.model["variables"][-1]["name"], "I00")
+        pv.tabla.item(2, 3).setText("1")  # valor inicial de una entrada
+        self.assertIs(e.ed.model["variables"][-1]["initialValue"], True)
+        self.assertFalse(pv.tabla.item(1, 3).flags() & Qt.ItemFlag.ItemIsEditable, "una salida empieza en 0")
+        pv.tabla.selectRow(2)
+        pv.quitar()
+        self.assertEqual(len(e.ed.model["variables"]), 2)
+        e.deshacer()
+        e.deshacer()
+        self.assertEqual(len(e.ed.model["variables"]), 3)
+
+    def test_SEDI44_acciones_desde_el_dibujo(self):
+        """REQ-ACT-01, REQ-EDT-02: botón derecho en una etapa: «Añadir acción…»; la acción se dibuja a su derecha; un
+        clic en su caja selecciona la etapa y la señala; doble clic la edita; el diálogo explica lo que falta, crea la
+        variable si no existe y se deshace de una vez."""
+        from escritorio.acciones import DialogoAccion
+        w = self.w
+        e, ids, ts = self.secuencial()
+        c = centro(e.M, ids["1"])
+        self.assertEqual(e.menu(QPointF(c.x() + 400, c.y())), [], "en un hueco, nada")
+        opciones = dict(e.menu(c))
+        self.assertEqual(list(opciones), ["Añadir acción…"])
+        pedidas = []
+        e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
+        opciones["Añadir acción…"]()
+        self.assertEqual(pedidas, [(ids["1"], None)])
+        d = DialogoAccion(w, e, ids["1"])
+        d.tipo.setCurrentIndex(d.tipo.findData("activacion"))
+        d.variable.setCurrentText("CT")
+        self.assertFalse(d.crear.isHidden(), "no existe: se ofrece crearla")
+        d.crear.setCurrentIndex(d.crear.findData("internal:int"))
+        n = len(e.ed.undo_stack)
+        d.aceptar()
+        self.assertIn("valor", d.msg.text())
+        d.valor.setText("CT + 1")
+        d.aceptar()
+        self.assertEqual(len(e.ed.undo_stack), n + 1, "variable y acción, una sola operación")
+        self.assertEqual(e.datos_accion(e.acciones(ids["1"])[0]["id"])["valor"], "CT + 1")
+        self.assertTrue(e.ed.validate().can_simulate)
+        aid = e.acciones(ids["1"])[0]["id"]
+        caja = next(x for x in w.diagrama.cajas_acciones if x["id"] == aid)
+        x, y, ancho, alto = caja["rect"]
+        dentro = QPointF(x + ancho / 2, y + alto / 2)
+        e.prensar(dentro)
+        e.soltar(dentro)
+        self.assertEqual((e.sel, e.accion), ([ids["1"]], aid))
+        self.assertIn(f"accion:{aid}", e.seleccion_dibujo())
+        self.assertEqual(w.props.s_acciones.currentItem().data(Qt.ItemDataRole.UserRole), aid)
+        self.assertIn("Quitar acción", dict(e.menu(dentro)))
+        e.doble(dentro)
+        self.assertEqual(pedidas[-1], (ids["1"], aid))
+        d = DialogoAccion(w, e, ids["1"], aid)  # cambiarla: memorizada al desactivar, CT := 0
+        self.assertEqual((d.tipo.currentData(), d.variable.currentText(), d.valor.text()), ("activacion", "CT", "CT + 1"))
+        d.tipo.setCurrentIndex(d.tipo.findData("desactivacion"))
+        d.valor.setText("0")
+        d.aceptar()
+        self.assertEqual(e.datos_accion(aid)["tipo"], "desactivacion")
+        self.assertEqual(e.acciones(ids["1"])[0]["id"], aid, "conserva su ID")
+        e.quitar_accion(aid)
+        self.assertEqual(e.acciones(ids["1"]), [])
+        e.deshacer()
+        e.deshacer()
+        self.assertEqual(e.datos_accion(aid)["tipo"], "activacion")
 
 if __name__ == "__main__":
     unittest.main()

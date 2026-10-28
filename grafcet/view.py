@@ -246,7 +246,7 @@ class Vista:
             if a["mode"] == "continuous":
                 cond = exprs[a["conditionRef"]]
                 plain = cond["mode"] == "executable" and cond["meaning"] == {"operator": "lit", "literal": {"type": "bool", "value": True}}
-                acts.setdefault(a["stepRef"], []).append({"kind": "continuous", "target": a["targetRef"],
+                acts.setdefault(a["stepRef"], []).append({"kind": "continuous", "id": a["id"], "target": a["targetRef"],
                                                           "text": [_seg(names.get(a["targetRef"], a["targetRef"]))],
                                                           "cond": None if plain else disp(a["conditionRef"]),
                                                           "condRef": a["conditionRef"]})
@@ -255,12 +255,15 @@ class Vista:
             else:
                 trig = a["trigger"]
                 acts.setdefault(a["stepRef"], []).append({
-                    "kind": "stored", "target": a["targetRef"], "trigger": trig["kind"],
+                    "kind": "stored", "id": a["id"], "target": a["targetRef"], "trigger": trig["kind"],
                     "text": [_seg(f"{names.get(a['targetRef'], a['targetRef'])} := ")] + disp(a["valueRef"]),
                     "event": disp(trig.get("expressionRef")), "condRef": trig.get("expressionRef")})
                 if trig.get("expressionRef"):
                     self.where.setdefault(trig["expressionRef"], f"evento de {names.get(a['targetRef'], a['targetRef'])} "
                                                                  f"({names.get(a['stepRef'], a['stepRef'])})")
+        orden = {aid: i for st in doc["steps"] for i, aid in enumerate(st["actionRefs"])}
+        for lista in acts.values():  # de izquierda a derecha, en el orden de la etapa
+            lista.sort(key=lambda a: orden.get(a["id"], 0))
         # Jerarquía, con la notación de las figuras de la norma (tablas 8–11; imágenes P40-02, P42-02..05,
         # P43-01, P43-02, P44-01, P45-01, P47-01..03): orden de forzado «G12{8,9,11}» en rectángulo doble, «*» de
         # enlace de activación, recinto con su encapsulante y su nombre, expansión unida a su macroetapa

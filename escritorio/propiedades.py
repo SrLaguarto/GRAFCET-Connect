@@ -14,15 +14,15 @@ from typing import Any
 
 from PySide6.QtCore import QMimeData, QPoint, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QDrag, QIcon, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QLabel,
                                QLineEdit, QListView, QListWidget, QListWidgetItem, QPushButton, QScrollArea,
                                QStackedWidget, QVBoxLayout, QWidget)
 
-from grafcet.notation import a_usuario
+from grafcet.routing import TALLO_E, TALLO_T
 from grafcet.view import norm
 
+from .bloques import FlowLayout, Programador
 from .diagrama import COL, H, TB, _html
-from grafcet.routing import TALLO_E, TALLO_T
 from .edicion import HERRAMIENTAS
 
 NARANJA = COL["glow"]
@@ -151,17 +151,24 @@ class Paleta(QListWidget):
             self.blockSignals(False)
 
 
-class _Dialogo(QDialog):
-    def __init__(self, parent: QWidget, titulo: str) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(titulo)
-        self.form = QFormLayout(self)
+def _formulario(w: QWidget) -> QFormLayout:
+    """Formulario arriba de la página y que se estrecha: si no cabe, el rótulo va encima del campo."""
+    lay = QVBoxLayout(w)
+    lay.setContentsMargins(0, 0, 0, 0)
+    f = QFormLayout()
+    f.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+    f.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+    lay.addLayout(f)
+    lay.addStretch(1)
+    return f
 
-    def cerrar(self) -> None:
-        b = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        b.accepted.connect(self.accept)
-        b.rejected.connect(self.reject)
-        self.form.addRow(b)
+
+def _desplegable() -> QComboBox:
+    """Desplegable que no impone su ancho al panel."""
+    c = QComboBox()
+    c.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    c.setMinimumContentsLength(6)
+    return c
 
 
 class PanelPropiedades(QWidget):
@@ -171,6 +178,7 @@ class PanelPropiedades(QWidget):
         super().__init__()
         self.e: Any = None
         self.ident: str | None = None
+        self._llenando = False
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
         self.titulo = QLabel()
@@ -197,72 +205,94 @@ class PanelPropiedades(QWidget):
 
     def _etapa(self) -> QWidget:
         w = QWidget()
-        f = QFormLayout(w)
+        f = _formulario(w)
         self.s_etiqueta = QLineEdit()
         self.s_etiqueta.editingFinished.connect(lambda: self._renombrar(self.s_etiqueta))
-        self.s_tipo = QComboBox()
+        self.s_tipo = _desplegable()
         self.s_tipo.addItem("Normal", False)
         self.s_tipo.addItem("Inicial", True)
         self.s_tipo.activated.connect(lambda _: self.e.tipo_etapa(self.ident, self.s_tipo.currentData()))
         f.addRow("Etiqueta", self.s_etiqueta)
-        f.addRow("Tipo de etapa", self.s_tipo)
+        f.addRow("Tipo", self.s_tipo)
+        f.addRow(QLabel("Acciones"))
+        self.s_acciones = QListWidget()
+        self.s_acciones.setWordWrap(True)
+        self.s_acciones.setMaximumHeight(140)
+        self.s_acciones.itemDoubleClicked.connect(lambda it: self._accion(it.data(Qt.ItemDataRole.UserRole)))
+        self.s_acciones.currentItemChanged.connect(self._accion_señalada)
+        f.addRow(self.s_acciones)
+        fila = QWidget()
+        fl = FlowLayout(fila)
+        for texto, tip, accion in (("Añadir…", "Añadir una acción a la etapa (también con el botón derecho en la etapa)",
+                                    lambda: self._accion(None)),
+                                   ("Editar…", "Cambiar la acción elegida (o doble clic en ella)", lambda: self._accion(self._elegida())),
+                                   ("Quitar", "Quitar la acción elegida", lambda: self._elegida() and self.e.quitar_accion(self._elegida())),
+                                   ("◀", "Más a la izquierda en el dibujo", lambda: self._elegida() and self.e.mover_accion(self._elegida(), -1)),
+                                   ("▶", "Más a la derecha", lambda: self._elegida() and self.e.mover_accion(self._elegida(), 1))):
+            b = QPushButton(texto)
+            b.setToolTip(tip)
+            b.clicked.connect(accion)
+            fl.addWidget(b)
+        f.addRow(fila)
         return w
+
+    def _elegida(self) -> str | None:
+        it = self.s_acciones.currentItem()
+        return it.data(Qt.ItemDataRole.UserRole) if it else None
+
+    def _accion(self, aid: str | None) -> None:
+        if self.e is not None and self.ident:
+            self.e.pedir_accion(self.ident, aid)
+
+    def _accion_señalada(self, it: Any, _: Any = None) -> None:
+        """Elegir una acción en la lista la resalta en el dibujo."""
+        aid = it.data(Qt.ItemDataRole.UserRole) if it else None
+        if self.e is not None and aid != self.e.accion and not self._llenando:
+            self.e.accion = aid
+            self.e.cambiado.emit()
 
     def _transicion(self) -> QWidget:
         w = QWidget()
-        f = QFormLayout(w)
+        f = _formulario(w)
         self.t_etiqueta = QLineEdit()
         self.t_etiqueta.editingFinished.connect(lambda: self._renombrar(self.t_etiqueta))
-        self.t_mostrar = QCheckBox("Mostrar la etiqueta en el dibujo")
+        self.t_mostrar = QCheckBox("Mostrar etiqueta")
+        self.t_mostrar.setToolTip("Dibujar la etiqueta (t1) junto a la transición")
         self.t_mostrar.clicked.connect(lambda on: self.e.mostrar_etiqueta(self.ident, on))
-        self.t_texto = QLineEdit()
-        self.t_texto.setPlaceholderText("receptividad: use los botones o escriba")
-        self.t_texto.textEdited.connect(self._previsualizar)
-        self.t_texto.editingFinished.connect(self._aplicar)
         f.addRow("Etiqueta", self.t_etiqueta)
-        f.addRow("", self.t_mostrar)
-        f.addRow("Receptividad", self.t_texto)
-        fila = QHBoxLayout()
-        for texto, prefijo, tip in (("↑", "↑", "Flanco ascendente de lo seleccionado (o de lo que escriba a continuación)"),
-                                    ("↓", "↓", "Flanco descendente"), ("NOT", "NOT ", "Negación: con texto seleccionado, "
-                                    "NOT y la selección entre paréntesis")):
-            b = QPushButton(texto)
-            b.setToolTip(tip)
-            b.setMaximumWidth(56)
-            b.clicked.connect(lambda _=False, p=prefijo: self._prefijar(p))
-            fila.addWidget(b)
-        for texto, ins in (("AND", " AND "), ("OR", " OR "), ("(", "("), (")", ")")):
-            b = QPushButton(texto)
-            b.setToolTip({"AND": "Y (·)", "OR": "O (+)"}.get(texto, ""))
-            b.setMaximumWidth(56)
-            b.clicked.connect(lambda _=False, i=ins: self._insertar(i))
-            fila.addWidget(b)
-        f.addRow("", fila)
-        self.c_var = QComboBox()
-        self.c_var.activated.connect(lambda i: self._elegir(self.c_var))
-        self.c_etapa = QComboBox()
-        self.c_etapa.activated.connect(lambda i: self._elegir(self.c_etapa))
-        f.addRow("Variable", self.c_var)
-        f.addRow("Etapa activa (X)", self.c_etapa)
-        fila = QHBoxLayout()
-        b = QPushButton("Comparar…")
-        b.clicked.connect(self._comparar)
-        fila.addWidget(b)
-        b = QPushButton("Temporizar…")
-        b.clicked.connect(self._temporizar)
-        fila.addWidget(b)
-        f.addRow("", fila)
+        f.addRow(self.t_mostrar)
+        f.addRow(QLabel("Receptividad (bloques)"))
+        self.prog = Programador(lambda: self.e.fuente_bloques() if self.e is not None else ({}, []))
+        self.prog.cambiado.connect(self._desde_bloques)
+        f.addRow(self.prog)
+        self.t_texto = QLineEdit()
+        self.t_texto.setPlaceholderText("o escríbala: ↑a AND NOT b, X1, 3s/X1…")
+        self.t_texto.textEdited.connect(self._escrito)
+        self.t_texto.editingFinished.connect(self._aplicar)
+        f.addRow("Texto", self.t_texto)
         self.t_vista = QLabel()
         self.t_vista.setWordWrap(True)
         self.t_vista.setTextFormat(Qt.TextFormat.RichText)
-        f.addRow("Texto", self.t_vista)
+        f.addRow("Escrito", self.t_vista)
         self.t_dibujo = QLabel()
         self.t_dibujo.setTextFormat(Qt.TextFormat.RichText)
+        self.t_dibujo.setWordWrap(True)
         f.addRow("Se dibuja", self.t_dibujo)
-        self.t_crear = QPushButton("Crear como entradas las variables que faltan")
+        self.t_crear = QPushButton("Crear las que faltan")
+        self.t_crear.setToolTip("Declarar como entradas booleanas las variables que se usan y no existen")
         self.t_crear.clicked.connect(self._crear)
-        f.addRow("", self.t_crear)
+        f.addRow(self.t_crear)
         return w
+
+    def _desde_bloques(self, texto: str) -> None:
+        """Cada cambio en los bloques escribe el texto y se aplica (una operación de deshacer)."""
+        self.t_texto.setText(texto)
+        self._previsualizar()
+        self._aplicar()
+
+    def _escrito(self) -> None:
+        self.prog.poner(self.t_texto.text())
+        self._previsualizar()
 
     def _enlace(self) -> QWidget:
         w = QWidget()
@@ -276,7 +306,8 @@ class PanelPropiedades(QWidget):
         self.f_visible = QCheckBox("Mostrar flecha")
         self.f_visible.clicked.connect(lambda on: self.e.ajustar_flecha(visible=on))
         f.addWidget(self.f_visible)
-        self.f_auto = QPushButton("Restablecer flecha automática")
+        self.f_auto = QPushButton("Flecha automática")
+        self.f_auto.setToolTip("Restablecer la flecha: su sitio y si se ve, como los pone el programa")
         self.f_auto.clicked.connect(lambda: self.e.restablecer_flecha())
         f.addWidget(self.f_auto)
         q = QPushButton("Quitar el enlace")
@@ -292,16 +323,19 @@ class PanelPropiedades(QWidget):
 
     def _barra(self) -> QWidget:
         w = QWidget()
-        f = QFormLayout(w)
+        f = _formulario(w)
         self.b_tipo = QLabel("Simultaneidad (doble trazo, Y)")
+        self.b_tipo.setWordWrap(True)
         self.b_unidos = QLabel()
         self.b_unidos.setWordWrap(True)
         q = QPushButton("Quitar la barra")
         q.clicked.connect(lambda: self.e.borrar())
+        ayuda = QLabel("Arrastre de un extremo para ensancharla; de un punto de unión sale un enlace.")
+        ayuda.setWordWrap(True)
         f.addRow("Tipo", self.b_tipo)
         f.addRow("Unidos", self.b_unidos)
-        f.addRow("", QLabel("Arrastre de un extremo para ensancharla; de un punto de unión sale un enlace."))
-        f.addRow("", q)
+        f.addRow(ayuda)
+        f.addRow(q)
         return w
 
     # -- estado ------------------------------------------------------------------------------------
@@ -324,12 +358,25 @@ class PanelPropiedades(QWidget):
             s = next(s for s in e.M["steps"] if s["id"] == vivo)
             self._poner(self.s_etiqueta, s["label"])
             self.s_tipo.setCurrentIndex(1 if s["initial"] else 0)
+            self._llenando = True
+            self.s_acciones.clear()
+            for d in e.acciones(vivo):
+                it = QListWidgetItem(e.resumen_accion(d))
+                it.setData(Qt.ItemDataRole.UserRole, d["id"])
+                self.s_acciones.addItem(it)
+                if d["id"] == e.accion:
+                    self.s_acciones.setCurrentItem(it)
+            if not self.s_acciones.count():
+                it = QListWidgetItem("Sin acciones: «Añadir…» o botón derecho en la etapa")
+                it.setFlags(Qt.ItemFlag.NoItemFlags)
+                self.s_acciones.addItem(it)
+            self._llenando = False
         elif kind == "transicion":
             t = next(t for t in e.M["transitions"] if t["id"] == vivo)
             self._poner(self.t_etiqueta, t["label"])
             self.t_mostrar.setChecked(t.get("showLabel", True))
             self._poner(self.t_texto, e.texto_usuario(vivo))
-            self._listas()
+            self.prog.poner(e.texto_usuario(vivo))
             self._previsualizar()
         elif kind == "barra":
             b = next(b for b in e.M["bars"] if b["id"] == vivo)
@@ -361,29 +408,12 @@ class PanelPropiedades(QWidget):
         if not campo.hasFocus() and campo.text() != texto:
             campo.setText(texto)
 
-    def _listas(self) -> None:
-        m = self.e.ed.model
-        self.c_var.clear()
-        self.c_var.addItem("Insertar variable…", None)
-        for rol, titulo in (("input", "Entradas"), ("output", "Salidas")):  # las internas no se ofrecen a priori
-            for v in m["variables"]:
-                if v["role"] == rol:
-                    self.c_var.addItem(f"{titulo}: {v['name']}", v["name"])
-        self.c_etapa.clear()
-        self.c_etapa.addItem("Insertar etapa…", None)
-        for s in m["steps"]:
-            self.c_etapa.addItem(s["label"], a_usuario(f"active({s['label']})"))
-
-    def _elegir(self, combo: QComboBox) -> None:
-        if combo.currentData():
-            self._insertar(combo.currentData())
-        combo.setCurrentIndex(0)
-
     def _insertar(self, texto: str) -> None:
         if self.ident is None:
             return
         self.t_texto.setFocus()
         self.t_texto.insert(f" {texto.strip()} ")  # siempre un espacio delante y otro detrás; los sobrantes se quitan al guardar
+        self.prog.poner(self.t_texto.text())
         self._previsualizar()
 
     def _prefijar(self, prefijo: str) -> None:
@@ -442,40 +472,3 @@ class PanelPropiedades(QWidget):
         if self.ident is not None:
             self.e.poner_condicion(self.ident, self.t_texto.text().strip(), crear=True)
 
-    def _comparar(self) -> None:
-        nombres = [v["name"] for v in self.e.ed.model["variables"] if v["type"]["kind"] in ("int", "decimal")]
-        d = _Dialogo(self, "Comparar")
-        var = QComboBox()  # solo variables numéricas (enteros, analógicas, decimales)
-        var.setEditable(True)
-        var.addItems(nombres)
-        op = QComboBox()
-        for texto, sim in (("=", "="), ("≠", "!="), ("<", "<"), ("≤", "<="), (">", ">"), ("≥", ">=")):
-            op.addItem(texto, sim)
-        valor = QLineEdit("0")
-        d.form.addRow("Variable", var)
-        d.form.addRow("Comparación", op)
-        d.form.addRow("Valor", valor)
-        d.cerrar()
-        if d.exec() == QDialog.DialogCode.Accepted and var.currentText().strip():
-            self._insertar(f"{var.currentText().strip()} {op.currentData()} {valor.text().strip() or '0'}")
-
-    def _temporizar(self) -> None:
-        d = _Dialogo(self, "Temporizar")
-        t1, cond, t2 = QLineEdit("3 s"), QComboBox(), QLineEdit("0 s")
-        cond.setEditable(True)  # etapas (X), entradas y salidas del grafcet; también se puede escribir
-        m = self.e.ed.model
-        cond.addItems([a_usuario(f"active({s['label']})") for s in m["steps"]]
-                      + [v["name"] for v in m["variables"] if v["role"] in ("input", "output")])
-        cond.setCurrentText(self.t_texto.selectedText().strip())
-        negar = QCheckBox("Negar la condición (NOT)")
-        d.form.addRow("Retardo a la conexión (t1)", t1)
-        d.form.addRow("Condición", cond)
-        d.form.addRow("", negar)
-        d.form.addRow("Retardo a la desconexión (t2)", t2)
-        d.cerrar()
-        if d.exec() == QDialog.DialogCode.Accepted and cond.currentText().strip():
-            c = cond.currentText().strip()
-            c = f"NOT {c}" if negar.isChecked() and not c.startswith("NOT ") else c
-            cero = lambda x: x in ("", "0", "0 s", "0s")
-            partes = ([] if cero(t1.text().strip()) else [re.sub(r"\s+", "", t1.text().strip())]) + [c]                 + ([] if cero(t2.text().strip()) else [re.sub(r"\s+", "", t2.text().strip())])
-            self._insertar("/".join(partes))  # como en la norma: 3s/X1, X1/2s, 3s/NOT marcha/2s

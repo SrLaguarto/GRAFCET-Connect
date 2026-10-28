@@ -33,7 +33,9 @@ from grafcet.view import Vista, auto_layout, layout_from_presentation, presentat
 
 from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion
+from .acciones import DialogoAccion
 from .propiedades import PanelPropiedades, Paleta
+from .variables import PanelVariables
 
 TITULO = "Simulador GRAFCET"
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
@@ -338,6 +340,9 @@ class Ventana(QMainWindow):
         self.l_sel = QLabel()
         self.l_sel.setWordWrap(True)
         pl.addWidget(self.l_sel)
+        self.variables = PanelVariables()
+        caja_vars = QGroupBox("Variables")
+        QVBoxLayout(caja_vars).addWidget(self.variables)
         caja = QGroupBox("Diagnósticos")
         cl = QVBoxLayout(caja)
         self.l_resumen = QLabel()
@@ -347,7 +352,11 @@ class Ventana(QMainWindow):
         self.lista_diag.setWordWrap(True)
         self.lista_diag.itemClicked.connect(self._ir_a_diagnostico)
         cl.addWidget(self.lista_diag)
-        pl.addWidget(caja, 1)
+        reparto = QSplitter(Qt.Orientation.Vertical)  # variables arriba, diagnósticos abajo
+        reparto.addWidget(caja_vars)
+        reparto.addWidget(caja)
+        reparto.setSizes([320, 260])
+        pl.addWidget(reparto, 1)
         self.derecho = QStackedWidget()
         self.derecho.addWidget(self.scroll)
         self.derecho.addWidget(pag)
@@ -368,13 +377,14 @@ class Ventana(QMainWindow):
         scroll_props = QScrollArea()  # las opciones de una transición son largas: se desplazan
         scroll_props.setWidgetResizable(True)
         scroll_props.setWidget(self.props)
+        scroll_props.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # se estrecha: nada queda a medias
         izq_edit.addWidget(scroll_props)
         izq_edit.setSizes([210, 450])
         self.dock = QDockWidget("Elementos", self)
         self.dock.setObjectName("dock-elementos")
         self.dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.dock.setWidget(izq_edit)
-        self.dock.setMinimumWidth(290)
+        self.dock.setMinimumWidth(200)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock)
         self.dock.hide()
         # Barra de estado: aviso de conformidad, lecturas distintas de las decididas, instante lógico
@@ -584,6 +594,7 @@ class Ventana(QMainWindow):
         e.redibujar.connect(self._redibujar_edicion)
         e.pedir_condicion = self.editar_condicion
         e.pedir_etiqueta = self.editar_etiqueta
+        e.pedir_accion = self.editar_accion
         e.confirmar_borrado = self._confirmar_borrado
         self.cambiar_modo("editar")
 
@@ -653,7 +664,7 @@ class Ventana(QMainWindow):
             return
         diags = e.diagnosticos()
         marcados = {d["target"] for d in diags if d["blocks"] and d["target"]}
-        self.diagrama.mostrar(e.M, {}, set(e.sel), marcados)
+        self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), marcados)
         self.estado.setText("editando")
         self.estado.setStyleSheet(f"color: {COL['accent']}; border: 1px solid {COL['accent']}; border-radius: 9px; "
                                   "padding: 1px 9px")
@@ -669,6 +680,7 @@ class Ventana(QMainWindow):
         self.a_herr[e.herramienta].setChecked(True)
         self.paleta.elegir(e.herramienta)
         self.props.mostrar(e)
+        self.variables.mostrar(e)
         self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
         self.a_rehacer.setEnabled(bool(e.ed.redo_stack))
         self.a_borrar.setEnabled(bool(e.sel))
@@ -690,7 +702,7 @@ class Ventana(QMainWindow):
     def _redibujar_edicion(self) -> None:
         e = self.edicion
         if e is not None and self.modo == "editar":
-            self.diagrama.mostrar(e.M, {}, set(e.sel), set())
+            self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), set())
 
     def _ir_a_diagnostico(self, item: QListWidgetItem) -> None:
         """Un clic en un diagnóstico selecciona el elemento y lo centra (REQ-EDT-09)."""
@@ -706,6 +718,10 @@ class Ventana(QMainWindow):
         self.edicion.seleccionar([tid])
         self.props.t_texto.setFocus()
         self.props.t_texto.selectAll()
+
+    def editar_accion(self, sid: str, aid: str | None = None) -> None:
+        """Añadir (sin `aid`) o cambiar una acción de la etapa: diálogo con el programador por bloques."""
+        DialogoAccion(self, self.edicion, sid, aid).exec()
 
     def editar_etiqueta(self, ident: str) -> None:
         """Doble clic en una etapa: lleva el cursor a su etiqueta, en el panel de propiedades."""
