@@ -55,15 +55,15 @@ Licencias
   la carpeta _internal y pueden sustituirse por otras versiones compatibles.
 
 
-Ajustar flechas y realimentaciones (P-IMP-35)
+Ajustar flechas y realimentaciones (P-IMP-35, P-IMP-36)
 
 En modo Editar:
 
 1. Arrastre una flecha directamente para desplazarla por su enlace, incluidos los tramos horizontales.
-2. Con la flecha seleccionada, use «Mostrar flecha» para ocultarla o recuperarla y «Dar la vuelta a la flecha» para invertir su orientación visual. Si el enlace tiene flecha de recorrido y de unión, el selector permite ajustar cada una.
-3. Seleccione el enlace de realimentación. Aparecen cuadrados: arrastre el del tramo vertical para llevar el retorno a izquierda o derecha; los de los tramos horizontales cambian sus alturas.
-4. «Restablecer recorrido automático» y «Restablecer flecha automática» recuperan cada ajuste por separado.
+2. Con la flecha seleccionada, use «Mostrar flecha» para ocultarla o recuperarla. «Dar la vuelta a la flecha» invierte el enlace: la etapa pasa de anterior a siguiente de la transición o al revés, así que cambia el GRAFCET y la simulación. La flecha siempre indica el sentido real. Si el enlace tiene flecha de recorrido y de unión, el selector permite ajustar cada una.
+3. Seleccione el enlace de realimentación. Aparecen cuadrados: arrastre el del tramo vertical para llevar el retorno a izquierda o derecha; los de los tramos horizontales cambian sus alturas. El recorrido se recoloca a mano.
+4. «Restablecer flecha automática» devuelve la flecha a su sitio.
 
 Cada arrastre se deshace con Ctrl+Z y se rehace con Ctrl+Y. Los extremos del enlace siguen a las etapas/transiciones; los tramos fijados a mano conservan sus coordenadas. Todo se guarda con el proyecto y se mantiene al simular.
 
-La inversión gráfica de la flecha no cambia el funcionamiento. «Invertir conexión lógica» es la operación que intercambia la relación anterior/siguiente y modifica el GRAFCET.
+Un enlace siempre sale de una etapa y llega a ella con un tramo vertical, y a cada lado de una transición con otro algo mayor, aunque estén casi a la misma altura. Una transición se agarra por su trazo para moverla; la rama solo sale de los puntos de unión, al final de sus tramos rectos.

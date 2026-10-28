@@ -6,6 +6,7 @@ instalado y usan la plataforma «offscreen»: no abren ventanas ni diálogos (lo
 Ninguna es oráculo del documento 11: comprueban que el editor usa las operaciones de grafcet/editor.py y que lo
 que se dibuja y se simula es lo que decide el núcleo.
 """
+import copy
 import os
 import sys
 import tempfile
@@ -1034,8 +1035,9 @@ class Interfaz(unittest.TestCase):
             QTest.mouseMove(d.viewport(), d.mapFromScene(QPointF(a[0]+k*(b[0]-a[0]), a[1]+k*(b[1]-a[1]))))
         QTest.mouseRelease(d.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, d.mapFromScene(QPointF(*b)))
 
-    def test_SEDI29_flecha_arrastrar_ocultar_invertir_sin_cambiar_modelo(self):
-        """REQ-EDT-02, REQ-EDT-03: mover, ocultar e invertir la flecha son presentación; un arrastre, un deshacer."""
+    def test_SEDI29_flecha_arrastrar_y_ocultar_sin_cambiar_modelo(self):
+        """REQ-EDT-02, REQ-EDT-03: mover y ocultar la flecha son presentación; un arrastre, un deshacer. Darle la vuelta
+        es invertir el enlace (SEDI33): aquí se rechaza, porque 2 sería una segunda etapa anterior de «retorno»."""
         import copy
         from escritorio.diagrama import enlaces
         e = self.retorno_editable()
@@ -1055,9 +1057,11 @@ class Interfaz(unittest.TestCase):
         e.rehacer()
         previo = ruta()['arrows'][0]
         self.w.props.f_invertir.click()
+        self.assertIn('simultaneidad', self.w.props.msg.text())
+        self.assertEqual(e.sel, ['retorno|2|post'])
         nuevo = ruta()['arrows'][0]
-        self.assertEqual(nuevo['pos'], previo['pos'])
-        self.assertGreater(nuevo['pts'][0][1], nuevo['pos'][1], 'punta hacia abajo al invertir solo la flecha')
+        self.assertEqual(nuevo, previo)
+        self.assertLess(nuevo['pts'][0][1], nuevo['pos'][1], 'la punta sigue hacia arriba: el retorno sube')
         self.w.props.f_visible.click()
         self.assertEqual(ruta()['arrows'], [])
         self.assertFalse(self.w.props.f_visible.isChecked())
@@ -1068,7 +1072,8 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(ruta()['arrows'][0], f)
 
     def test_SEDI30_recolocar_retorno_y_mover_etapa(self):
-        """REQ-EDT-02, REQ-EDT-03: tiradores para carril y alturas; extremos conectados al mover etapas; restaurar automático."""
+        """REQ-EDT-02, REQ-EDT-03: tiradores para carril y alturas; extremos conectados al mover etapas. El recorrido no
+        tiene botón de restaurar: se recoloca a mano."""
         from escritorio.diagrama import enlaces
         e = self.retorno_editable()
         ruta = lambda: next(r for r in enlaces(e.M) if r['id'] == 'retorno|2|post')
@@ -1093,11 +1098,10 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(ruta()['pts'][2][0], 700)
         self.assertEqual(ruta()['pts'][3][1], 120)
         self.assertEqual(ruta()['pts'][-1], (440, 218))
-        self.w.props.r_auto.click()
-        self.assertNotEqual(ruta()['pts'][2][0], 700)
+        self.assertFalse(hasattr(self.w.props, 'r_auto'))
 
     def test_SEDI31_flecha_union_horizontal_independiente(self):
-        """REQ-EDT-02: la flecha de unión también se mueve, gira y oculta; se orienta con el tramo horizontal."""
+        """REQ-EDT-02: la flecha de unión también se mueve y se oculta; se orienta con el tramo horizontal."""
         from escritorio.diagrama import enlaces
         e = self.retorno_editable()
         ruta = lambda: next(r for r in enlaces(e.M) if r['id'] == 't1|2|post')
@@ -1122,7 +1126,7 @@ class Interfaz(unittest.TestCase):
         from escritorio.diagrama import enlaces
         e = self.retorno_editable()
         style = {'route': {'laneX': '580', 'exitY': '500', 'entryY': '160'},
-                 'arrows': {'flow': {'reverse': True, 'segment': 2, 'ratio': '0.7'}}}
+                 'arrows': {'flow': {'segment': 2, 'ratio': '0.7'}}}
         e.ed.set_link_style(e.sel[0], style)
         e.cambia()
         expected = enlaces(e.M)
@@ -1138,6 +1142,93 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(open_model(otra).presentations[0]['linkStyles']['retorno|2|post'], style)
         self.assertTrue(self.w.cambiar_modo('editar'))
         self.assertEqual(enlaces(self.w.edicion.M), expected)
+
+    def nuevo_par(self, etapa, transicion):
+        """Un grafcet nuevo con una etapa y una transición en las posiciones dadas (coordenadas del modelo)."""
+        if self.w.edicion is not None:
+            self.w.edicion.ed.dirty = False  # descartar el anterior sin el diálogo de cambios sin guardar
+        self.w.nuevo()
+        e = self.w.edicion
+        sid = e.ed.add_step(e.raiz, "6", at=etapa)
+        tid, _ = e.ed.add_transition(e.raiz, "", at=transicion, label="t3")
+        e.cambia()
+        return e, sid, tid
+
+    def test_SEDI33_dar_la_vuelta_a_la_flecha_invierte_el_enlace(self):
+        """REQ-MOD-03, REQ-EDT-03: darle la vuelta a la flecha es invertir el enlace; la flecha nunca contradice el
+        sentido real. Un deshacer lo devuelve todo, también el ajuste manual de la flecha, que era del enlace anterior."""
+        from escritorio.diagrama import enlaces
+        e, sid, tid = self.nuevo_par((0, 0), (0, 80))
+        e.conectar(sid, tid)
+        ident = f'{tid}|{sid}|pre'
+        e.seleccionar([ident])
+        e.ed.set_link_style(ident, {'arrows': {'flow': {'visible': True}}})
+        e.cambia()
+        antes = copy.deepcopy(e.ed.model), copy.deepcopy(e.ed.link_styles())
+        self.w.props.mostrar(e)
+        self.w.props.f_invertir.click()
+        t = next(t for t in e.ed.model['transitions'] if t['id'] == tid)
+        self.assertEqual((t['preRefs'], t['postRefs']), ([], [sid]))
+        self.assertEqual(e.sel, [f'{tid}|{sid}|post'])
+        self.assertNotIn(ident, e.ed.link_styles())
+        ruta = next(r for r in enlaces(e.M) if r['id'] == e.sel[0])
+        f = ruta['arrows'][0]
+        self.assertLess(f['pts'][0][1], f['pos'][1], 'el enlace ahora sube de t3 a 6: punta hacia arriba')
+        e.deshacer()
+        self.assertEqual((e.ed.model, e.ed.link_styles()), antes)
+
+    def test_SEDI34_agarrar_una_transicion_la_mueve(self):
+        """REQ-EDT-02: el trazo de una transición se agarra para moverla; sus puntos de unión quedan al final de su
+        tramo recto, arriba y abajo, y solo de ahí sale una rama."""
+        from escritorio.diagrama import ALTO_T, anclas
+        from grafcet.routing import TALLO_T
+        e, sid, tid = self.nuevo_par((0, 0), (0, 160))
+        c = centro(e.M, tid)
+        puntos = {a['lado']: a['pos'] for a in anclas(e.M, tid)}
+        self.assertEqual((puntos['arriba'].y(), puntos['abajo'].y()), (c.y() - TALLO_T, c.y() + TALLO_T))
+        for dy in (-ALTO_T, -6, 0, 6, ALTO_T):
+            e.prensar(QPointF(c.x() + 4, c.y() + dy))
+            self.assertIsNone(e.enlace, f'a {dy} del trazo se agarra la transición')
+            self.assertEqual(e.arrastre['id'], tid)
+            e.soltar(QPointF(c.x() + 4, c.y() + dy))
+        e.prensar(puntos['abajo'])
+        self.assertEqual((e.enlace['id'], e.enlace['lado']), (tid, 'abajo'))
+        e.soltar(puntos['abajo'])
+
+    def test_SEDI35_tramo_vertical_minimo_en_etapas_y_transiciones(self):
+        """REQ-EDT-02: un enlace siempre sale de la etapa y llega a la transición (y al revés) con un tramo vertical
+        mínimo, aunque estén casi a la misma altura (figura del responsable: 6 y t3); si no cabe, sube con flecha."""
+        from escritorio.diagrama import enlaces
+        from grafcet.routing import TALLO_E, TALLO_T
+
+        def ruta(e, ident):
+            return next(r for r in enlaces(e.M) if r['id'] == ident)
+
+        def tramos(pts, ini, fin):
+            (a, b), (c, d) = pts[:2], pts[-2:]
+            self.assertEqual((a[0], c[0]), (b[0], d[0]), 'primer y último tramo verticales')
+            self.assertGreaterEqual(b[1] - a[1], ini)
+            self.assertGreaterEqual(d[1] - c[1], fin)
+        # Como en la figura: t3 a la izquierda de 6, casi a la altura de su borde inferior
+        e, sid, tid = self.nuevo_par((200, 40), (0, 60))
+        e.conectar(sid, tid)
+        r = ruta(e, f'{tid}|{sid}|pre')
+        tramos(r['pts'], TALLO_E, TALLO_T)
+        self.assertTrue(r['arrows'], 'el tramo que sube lleva flecha')
+        # Transición encima de una etapa muy próxima
+        e, sid, tid = self.nuevo_par((200, 130), (0, 100))
+        e.conectar(tid, sid)
+        tramos(ruta(e, f'{tid}|{sid}|post')['pts'], TALLO_T, TALLO_E)
+        # Con sitio, el recorrido de siempre: tramo horizontal a media altura y sin flecha
+        e, sid, tid = self.nuevo_par((200, 0), (0, 80))
+        e.conectar(sid, tid)
+        r = ruta(e, f'{tid}|{sid}|pre')
+        self.assertEqual(len(r['pts']), 4)
+        self.assertEqual(r['arrows'], [])
+        # Un tramo recolocado a mano tampoco se come los tramos mínimos
+        e.ed.set_link_style(r['id'], {'route': {'middleY': '24'}})
+        e.cambia()
+        tramos(ruta(e, r['id'])['pts'], TALLO_E, TALLO_T)
 
 
 if __name__ == "__main__":

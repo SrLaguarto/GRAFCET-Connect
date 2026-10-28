@@ -17,7 +17,7 @@ from __future__ import annotations
 import html
 from typing import Any
 
-from grafcet.routing import enlaces
+from grafcet.routing import TALLO_T, enlaces
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetricsF, QImage, QPainter, QPainterPath, QPen
@@ -146,7 +146,8 @@ def _estado_temporal(pt: _Pintor, x: float, y: float, ref: str | None, tmp: dict
 
 REJILLA = 20   # paso de la rejilla del editor (coordenadas del modelo)
 ALTO_T = 14    # semialtura del área de una transición al editar (el trazo es fino: se acierta mejor así)
-ANCLA = 12     # distancia de los puntos de unión de una transición a su centro
+ANCLA = TALLO_T  # distancia de los puntos de unión de una transición a su centro: al final de su tramo recto, lejos del
+                 # trazo, para que agarrar la transición la mueva y no saque una rama
 ANCLA_S = 28   # ... y si ese lado es una simultaneidad (el punto queda fuera del doble trazo)
 SIMUL = 14     # distancia del doble trazo de una simultaneidad al centro de la transición
 RADIO_ANCLA = 14  # a qué distancia del puntero se marca un punto de unión (generoso: se agarra sin puntería)
@@ -317,9 +318,9 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
             pt.line(min(xs) - 8, yy, max(xs) + 8, yy, link, Z_LINK)
             pt.line(min(xs) - 8, yy + 4, max(xs) + 8, yy + 4, link, Z_LINK)
         if not pre:
-            pt.line(tx, ty - 16, tx, ty, link, Z_LINK)  # transición fuente
+            pt.line(tx, ty - TALLO_T, tx, ty, link, Z_LINK)  # transición fuente: su tramo recto es parte de ella
         if not post:
-            pt.line(tx, ty, tx, ty + 16, link, Z_LINK)  # transición sumidero
+            pt.line(tx, ty, tx, ty + TALLO_T, link, Z_LINK)  # transición sumidero
         color, width = "muted", 2.4
         if ob.get("validated"):
             color = "text"

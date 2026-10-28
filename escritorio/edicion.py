@@ -151,15 +151,13 @@ class Edicion(QObject):
         self.ed.set_link_style(ident, style)
         self.cambia()
 
-    def restablecer_enlace(self, flecha: bool = False) -> None:
+    def restablecer_flecha(self) -> None:
+        """Quita el ajuste manual de la flecha elegida del enlace seleccionado (el recorrido se recoloca a mano)."""
         if len(self.sel) != 1:
             return
         ident = self.sel[0]
         style = copy.deepcopy(self.ed.link_styles().get(ident, {}))
-        if flecha:
-            style.get("arrows", {}).pop(self.flecha, None)
-        else:
-            style.pop("route", None)
+        style.get("arrows", {}).pop(self.flecha, None)
         self.ed.set_link_style(ident, style)
         self.cambia()
 
@@ -184,12 +182,18 @@ class Edicion(QObject):
         elif tipo == "simultaneidad":
             self.poner_barra(p, "Y")
 
+    def _punto(self, p: QPointF, ident: str | None) -> dict[str, Any] | None:
+        """El punto de unión bajo el puntero, salvo sobre el trazo de una transición: agarrarla la mueve, no saca una rama."""
+        if ident and any(t["id"] == ident for t in self.M["transitions"]):
+            return None
+        return ancla_en(self.M, p)
+
     def pasar(self, p: QPointF) -> None:
         """Sin pulsar: marca los puntos de unión del elemento bajo el puntero y resalta el más cercano."""
         if self.diagrama is None:
             return
         ident = elemento_en(self.M, p)
-        cerca = ancla_en(self.M, p)
+        cerca = self._punto(p, ident)
         self.diagrama.marcar_anclas(anclas(self.M, ident or (cerca["id"] if cerca else "")), cerca)
 
     def _barra(self, ident: str | None) -> dict[str, Any] | None:
@@ -198,7 +202,7 @@ class Edicion(QObject):
     def prensar(self, p: QPointF, event: Any = None) -> bool:
         ident = elemento_en(self.M, p)
         h = self.herramienta
-        punto = ancla_en(self.M, p)
+        punto = self._punto(p, ident)
         if h == "seleccionar":
             rutas = enlaces(self.M)
             # Las flechas se pueden agarrar directamente; los tiradores solo aparecen al seleccionar.
@@ -502,7 +506,10 @@ class Edicion(QObject):
             self.mensaje = "Al otro lado ya hay una etapa: varias en una transición son una simultaneidad."
             self.cambiado.emit()
             return False
-        self.ed.invert_link(tid, sid)
+        with self.ed.group("invertir enlace"):
+            self.ed.invert_link(tid, sid)
+            if self.sel[0] in self.ed.link_styles():  # el ajuste manual era del recorrido anterior
+                self.ed.set_link_style(self.sel[0], {})
         self.sel = [f"{tid}|{sid}|{destino}"]
         self.cambia()
         return True

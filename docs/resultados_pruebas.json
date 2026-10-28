@@ -1,9 +1,9 @@
 {
- "date": "2026-10-28T10:14:28+01:00",
- "python": "3.12.10",
- "platform": "Windows-11-10.0.26200-SP0",
- "machine": "AMD64",
- "total": 182,
+ "date": "2026-10-28T12:04:16+00:00",
+ "python": "3.13.17",
+ "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
+ "machine": "x86_64",
+ "total": 185,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -320,14 +320,14 @@
    "summary": "REQ-EDT-01, REQ-EDT-02: arrastrar la entrada de una etapa a una salida crea el salto; persiste y se deshace entero."
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI29_flecha_arrastrar_ocultar_invertir_sin_cambiar_modelo",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI29_flecha_arrastrar_y_ocultar_sin_cambiar_modelo",
    "case": "S-EDI29",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-02",
     "REQ-EDT-03"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-03: mover, ocultar e invertir la flecha son presentación; un arrastre, un deshacer."
+   "summary": "REQ-EDT-02, REQ-EDT-03: mover y ocultar la flecha son presentación; un arrastre, un deshacer. Darle la vuelta"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI30_recolocar_retorno_y_mover_etapa",
@@ -337,7 +337,7 @@
     "REQ-EDT-02",
     "REQ-EDT-03"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-03: tiradores para carril y alturas; extremos conectados al mover etapas; restaurar automático."
+   "summary": "REQ-EDT-02, REQ-EDT-03: tiradores para carril y alturas; extremos conectados al mover etapas. El recorrido no"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI31_flecha_union_horizontal_independiente",
@@ -346,7 +346,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: la flecha de unión también se mueve, gira y oculta; se orienta con el tramo horizontal."
+   "summary": "REQ-EDT-02: la flecha de unión también se mueve y se oculta; se orienta con el tramo horizontal."
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI32_dibujo_manual_persistencia_y_simulacion",
@@ -357,6 +357,34 @@
     "REQ-SIM-03"
    ],
    "summary": "REQ-EDT-01, REQ-SIM-03: los ajustes sobreviven a guardar, abrir, simular y guardar otra copia."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI33_dar_la_vuelta_a_la_flecha_invierte_el_enlace",
+   "case": "S-EDI33",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-03: darle la vuelta a la flecha es invertir el enlace; la flecha nunca contradice el"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI34_agarrar_una_transicion_la_mueve",
+   "case": "S-EDI34",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el trazo de una transición se agarra para moverla; sus puntos de unión quedan al final de su"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI35_tramo_vertical_minimo_en_etapas_y_transiciones",
+   "case": "S-EDI35",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un enlace siempre sale de la etapa y llega a la transición (y al revés) con un tramo vertical"
   },
   {
    "test": "test_editor_escritorio.Notacion.test_SEDI16_notacion_del_usuario",

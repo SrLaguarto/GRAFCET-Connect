@@ -64,8 +64,8 @@ function drawDiagram(svg, M, S) {
       [yy, yy+4].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl"}, links));
       el("path", {d:`M${tx},${ty} V${yy}`, class:"link"}, links);
     }
-    if (!pre.length) el("path", {d:`M${tx},${ty-16} V${ty}`, class:"link"}, links);    // transición fuente
-    if (!post.length) el("path", {d:`M${tx},${ty} V${ty+16}`, class:"link"}, links);   // transición sumidero
+    if (!pre.length) el("path", {d:`M${tx},${ty-24} V${ty}`, class:"link"}, links);    // transición fuente
+    if (!post.length) el("path", {d:`M${tx},${ty} V${ty+24}`, class:"link"}, links);   // transición sumidero
     const cls = ["tr", ob.validated?"validated":"", ob.fireable?"fireable":"", cleared.has(t.id)?"cleared":"",
                  blk && blk.element === t.id ? "question" : ""].join(" ");
     const g = el("g", {class:cls}, bars);

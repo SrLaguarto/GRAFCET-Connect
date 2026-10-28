@@ -223,19 +223,13 @@ class PanelPropiedades(QWidget):
         self.f_visible.clicked.connect(lambda on: self.e.ajustar_flecha(visible=on))
         f.addWidget(self.f_visible)
         self.f_invertir = QPushButton("Dar la vuelta a la flecha")
-        self.f_invertir.clicked.connect(self._girar_flecha)
+        self.f_invertir.setToolTip("Invierte el enlace: la etapa pasa de anterior a siguiente de la transición, o al "
+                                   "revés. La flecha siempre indica el sentido real del enlace")
+        self.f_invertir.clicked.connect(self._invertir)
         f.addWidget(self.f_invertir)
         self.f_auto = QPushButton("Restablecer flecha automática")
-        self.f_auto.clicked.connect(lambda: self.e.restablecer_enlace(flecha=True))
+        self.f_auto.clicked.connect(lambda: self.e.restablecer_flecha())
         f.addWidget(self.f_auto)
-        self.r_auto = QPushButton("Restablecer recorrido automático")
-        self.r_auto.clicked.connect(lambda: self.e.restablecer_enlace())
-        f.addWidget(self.r_auto)
-        self.b_invertir = QPushButton("Invertir conexión lógica")
-        self.b_invertir.setToolTip("La etapa pasa de anterior a siguiente de la transición, o al revés; si queda hacia "
-                                   "arriba, el enlace lleva flecha. También sale solo: de abajo arriba, con flecha")
-        self.b_invertir.clicked.connect(self._invertir)
-        f.addWidget(self.b_invertir)
         q = QPushButton("Quitar el enlace")
         q.clicked.connect(lambda: self.e.borrar())
         f.addWidget(q)
@@ -246,10 +240,6 @@ class PanelPropiedades(QWidget):
         if self.e is not None and self.f_tipo.currentData():
             self.e.flecha = self.f_tipo.currentData()
             self.mostrar(self.e)
-
-    def _girar_flecha(self) -> None:
-        config = self.e.ed.link_styles().get(self.ident, {}).get("arrows", {}).get(self.e.flecha, {})
-        self.e.ajustar_flecha(reverse=not config.get("reverse", False))
 
     def _invertir(self) -> None:
         if not self.e.invertir():
@@ -303,10 +293,11 @@ class PanelPropiedades(QWidget):
                                   f"Por debajo: {', '.join(e.nombre(i) for i in b['abajo']) or '—'}")
         elif kind == "enlace":
             tid, sid, rol = vivo.split("|")
-            self.b_invertir.setVisible(rol != "barra")
+            self.f_invertir.setVisible(rol != "barra")
             self.l_enlace.setText(f"{e.nombre(vivo)}<br>Arrastre la flecha a lo largo del enlace. "
                                   "Arrastre los cuadrados para recolocar los tramos. "
-                                  "Los ajustes de dibujo no cambian la simulación; «Invertir conexión lógica» sí.")
+                                  "Los ajustes de dibujo no cambian la simulación; «Dar la vuelta a la flecha» sí, "
+                                  "porque invierte el enlace.")
             from .diagrama import enlaces
             ruta = next(r for r in enlaces(e.M) if r["id"] == vivo)
             kinds = ruta.get("arrowKinds", ["flow"])
@@ -320,7 +311,6 @@ class PanelPropiedades(QWidget):
             self.f_tipo.blockSignals(False)
             visible = any(a["key"] == e.flecha for a in ruta["arrows"])
             self.f_visible.setChecked(visible)
-            self.f_invertir.setEnabled(visible)
         self.msg.setText("")
 
     @staticmethod
