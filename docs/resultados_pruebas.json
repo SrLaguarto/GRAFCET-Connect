@@ -1,9 +1,9 @@
 {
- "date": "2026-10-27T18:06:05+01:00",
+ "date": "2026-10-28T10:14:28+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 150,
+ "total": 182,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -80,6 +80,311 @@
     "REQ-EVT-03"
    ],
    "summary": "REQ-EVT-01, REQ-ACT-02, REQ-EVT-03: ejemplo del responsable; una cuenta por cada subida de I02 con 1 activa, ninguna en 0."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI03_crear_enlazar_y_simular",
+   "case": "S-EDI03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01",
+    "REQ-EDT-02",
+    "REQ-EDT-14"
+   ],
+   "summary": "REQ-EDT-01, REQ-EDT-02, REQ-EDT-14: E0 (inicial) → t1 «marcha» → E1 → t2 «paro» → E0 se crea con el ratón,"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI04_guardar_abrir_y_simular",
+   "case": "S-EDI04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01, REQ-DAT-02: el grafcet creado se guarda como proyecto, se abre y simula igual; en Editar se"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI05_deshacer_rehacer_mover_y_borrar",
+   "case": "S-EDI05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01",
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-01, REQ-EDT-05: un arrastre es una sola operación de deshacer; borrar avisa de lo que arrastra y se"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI06_receptividad_mal_escrita_y_diagnosticos",
+   "case": "S-EDI06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: una receptividad que no se interpreta se conserva como texto, se diagnostica con su corrección,"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI07_enlaces_en_borrador_y_añadir_debajo",
+   "case": "S-EDI07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03: dos elementos del mismo tipo quedan como borrador con su diagnóstico; «añadir debajo» crea"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI08_etiquetas_y_cambios_sin_guardar",
+   "case": "S-EDI08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01",
+    "REQ-EDT-06"
+   ],
+   "summary": "REQ-EDT-01, REQ-EDT-06: renombrar una etapa conserva su identidad y actualiza el dibujo; con cambios sin"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI09_recuperacion_automatica",
+   "case": "S-EDI09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-10"
+   ],
+   "summary": "REQ-EDT-10: con cambios sin guardar se copia la edición cada 30 s y se ofrece recuperarla; guardar la borra."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI10_el_ratón_real_y_el_dibujo",
+   "case": "S-EDI10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-03: los clics del ratón sobre el dibujo llegan al editor; la selección y las marcas se"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI11_puntos_de_union",
+   "case": "S-EDI11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: etapas y transiciones tienen puntos de unión arriba y abajo; al acercarse se marcan y del punto"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI12_paleta_arrastrar_y_sin_pedir_receptividad",
+   "case": "S-EDI12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: los elementos de la paleta, a la izquierda, se arrastran al dibujo; una transicion se coloca sin"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI13_propiedades_de_la_etapa",
+   "case": "S-EDI13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: al seleccionar una etapa, el panel de la izquierda muestra su etiqueta y su tipo, editables."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI14_propiedades_de_la_transicion",
+   "case": "S-EDI14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: la receptividad se arma con botones, variables, comparaciones y temporizadores; lo que"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI15_transiciones_mas_altas_de_acertar",
+   "case": "S-EDI15",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el area de una transicion es mas alta que su trazo: se acierta sin punteria."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI17_barra_de_simultaneidad",
+   "case": "S-EDI17",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: la simultaneidad es una barra de doble trazo que se arrastra desde la paleta, se"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI18_enlaces_seleccionables_flecha_e_invertir",
+   "case": "S-EDI18",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: un enlace se selecciona con un clic en su trazo; «Invertir direccion» cambia su sentido y,"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI19_alternativas_con_el_raton",
+   "case": "S-EDI19",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: la alternativa (O) no es un elemento: se construye con el raton. Una segunda transicion"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI20_sentido_del_enlace_segun_el_trazo",
+   "case": "S-EDI20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03: de arriba abajo, el enlace no lleva flecha; de abajo arriba, si (sale solo del trazo)."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI21_abrir_ramas_con_el_raton_de_verdad",
+   "case": "S-EDI21",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: con eventos de raton reales sobre el dibujo (pulsar, mover, soltar): arrastrar de un punto"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI22_ejemplo_alternativas",
+   "case": "S-EDI22",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: el ejemplo «alternativas» se simula, se dibuja con la flecha de union y se puede editar."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI23_el_punto_de_arriba_recibe_y_el_enlace_entra_por_arriba",
+   "case": "S-EDI23",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03: lo que se arrastra desde el punto de arriba de una transicion es lo que le llega (viene de la etapa"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI24_entrada_de_transicion_a_enlace_de_salida",
+   "case": "S-EDI24",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-MOD-03: arrastrar la entrada a un enlace de salida crea otra alternativa, no una simultaneidad."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI25_arrastrar_desde_linea_de_seleccion",
+   "case": "S-EDI25",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: clic selecciona un enlace; arrastre desde él abre otra rama en una transacción."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI26_geometria_comun_retorno_y_movimiento",
+   "case": "S-EDI26",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03: uniones comunes, retorno fuera de la etapa, flecha automática y recorridos iguales en Qt/web."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI27_ejemplos_seleccion_salto_repeticion",
+   "case": "S-EDI27",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: las ramas construidas ejecutan selección, salto y repetición sin cambiar el motor."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI28_salto_inverso_guardar_y_reabrir",
+   "case": "S-EDI28",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-01, REQ-EDT-02: arrastrar la entrada de una etapa a una salida crea el salto; persiste y se deshace entero."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI29_flecha_arrastrar_ocultar_invertir_sin_cambiar_modelo",
+   "case": "S-EDI29",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-03: mover, ocultar e invertir la flecha son presentación; un arrastre, un deshacer."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI30_recolocar_retorno_y_mover_etapa",
+   "case": "S-EDI30",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-03: tiradores para carril y alturas; extremos conectados al mover etapas; restaurar automático."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI31_flecha_union_horizontal_independiente",
+   "case": "S-EDI31",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la flecha de unión también se mueve, gira y oculta; se orienta con el tramo horizontal."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI32_dibujo_manual_persistencia_y_simulacion",
+   "case": "S-EDI32",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-01, REQ-SIM-03: los ajustes sobreviven a guardar, abrir, simular y guardar otra copia."
+  },
+  {
+   "test": "test_editor_escritorio.Notacion.test_SEDI16_notacion_del_usuario",
+   "case": "S-EDI16",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: ↑a, ↓a y X1 se traducen a la sintaxis del núcleo y vuelven; los espacios se ignoran al escribir y"
+  },
+  {
+   "test": "test_editor_escritorio.Nucleo.test_SEDI01_parcial_raiz_etiquetas_y_agrupar",
+   "case": "S-EDI01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-03: el grafcet nuevo tiene el parcial raíz «g»; las etiquetas nuevas son E0.. y t1..;"
+  },
+  {
+   "test": "test_editor_escritorio.Nucleo.test_SEDI02_comprobar_receptividad_sin_cambiar_el_modelo",
+   "case": "S-EDI02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un texto mal escrito se diagnostica sin tocar el modelo; las variables que faltan se listan."
   },
   {
    "test": "test_simulador_escritorio.Nucleo.test_SAPP01_abrir_lo_guardado",

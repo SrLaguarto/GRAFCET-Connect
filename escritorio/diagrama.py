@@ -17,6 +17,8 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from grafcet.routing import enlaces
+
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetricsF, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QHBoxLayout, QLabel,
@@ -142,13 +144,148 @@ def _estado_temporal(pt: _Pintor, x: float, y: float, ref: str | None, tmp: dict
                      bold=True) + 8
 
 
-def _parcial(pid: str | None) -> str:
-    """Parcial de un elemento; "" para el grafcet raíz (las etapas lo indican con None y las transiciones con "g")."""
-    return "" if pid in (None, "g") else pid
+REJILLA = 20   # paso de la rejilla del editor (coordenadas del modelo)
+ALTO_T = 14    # semialtura del área de una transición al editar (el trazo es fino: se acierta mejor así)
+ANCLA = 12     # distancia de los puntos de unión de una transición a su centro
+ANCLA_S = 28   # ... y si ese lado es una simultaneidad (el punto queda fuera del doble trazo)
+SIMUL = 14     # distancia del doble trazo de una simultaneidad al centro de la transición
+RADIO_ANCLA = 14  # a qué distancia del puntero se marca un punto de unión (generoso: se agarra sin puntería)
+Z_EDIT = 10    # selección, tiradores y marcas por encima de todo el dibujo
 
 
-def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None:
-    """M: estructura de la vista (Vista.model); S: estado observado (Vista.state())."""
+def posiciones(M: dict[str, Any]) -> dict[str, tuple[float, float]]:
+    """Centro, en el dibujo, de cada etapa, macroetapa y transición."""
+    pos = {s["id"]: (s["x"] + SX, s["y"]) for s in M["steps"]}
+    pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
+    pos.update({t["id"]: (t["x"] + SX, t["y"]) for t in M["transitions"]})
+    return pos
+
+
+def _segmento(M: dict[str, Any], pos: dict[str, tuple[float, float]], d: dict[str, Any]) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    a, b = pos.get(d["from"]), pos.get(d["to"])
+    return (a, b) if a and b else None
+
+
+BARRA_GROSOR = 4   # separación de las dos líneas de una barra de simultaneidad
+
+
+def barra(b: dict[str, Any]) -> tuple[float, float, float, float]:
+    """Una barra en el dibujo: x, y de arriba, ancho y alto."""
+    return b["x"] + SX, b["y"], b["ancho"], BARRA_GROSOR if b["kind"] == "Y" else 0
+
+
+def anclas(M: dict[str, Any], ident: str) -> list[dict[str, Any]]:
+    """Puntos de unión de un elemento: etapa y transición, arriba (entra el enlace) y abajo (sale)."""
+    for b in M.get("bars", []):
+        if b["id"] == ident:
+            bx, by, w, h = barra(b)
+            return [{"id": ident, "lado": "arriba", "pos": QPointF(bx + w / 2, by - 9)},
+                    {"id": ident, "lado": "abajo", "pos": QPointF(bx + w / 2, by + h + 9)}]
+    pos = posiciones(M)
+    if ident not in pos:
+        return []
+    x, y = pos[ident]
+    t = next((t for t in M["transitions"] if t["id"] == ident), None)
+    arriba = H if t is None else ANCLA_S if t.get("simulPre") else ANCLA
+    abajo = H if t is None else ANCLA_S if t.get("simulPost") else ANCLA
+    return [{"id": ident, "lado": "arriba", "pos": QPointF(x, y - arriba)},
+            {"id": ident, "lado": "abajo", "pos": QPointF(x, y + abajo)}]
+
+
+def _distancia(p: QPointF, a: tuple[float, float], b: tuple[float, float]) -> float:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    k = max(0.0, min(1.0, ((p.x() - a[0]) * dx + (p.y() - a[1]) * dy) / ((dx * dx + dy * dy) or 1)))
+    return ((p.x() - a[0] - k * dx) ** 2 + (p.y() - a[1] - k * dy) ** 2) ** 0.5
+
+
+def ancla_en(M: dict[str, Any], p: QPointF, radio: float = RADIO_ANCLA) -> dict[str, Any] | None:
+    """El punto de unión más cercano al puntero, si hay alguno a menos de `radio`."""
+    best = None
+    for ident in posiciones(M):
+        for a in anclas(M, ident):
+            d = ((a["pos"].x() - p.x()) ** 2 + (a["pos"].y() - p.y()) ** 2) ** 0.5
+            if d <= radio and (best is None or d < best[0]):
+                best = (d, a)
+    for b in M.get("bars", []):  # en una barra, el punto de unión sigue al puntero a lo largo de su ancho
+        bx, by, w, h = barra(b)
+        if bx - 4 <= p.x() <= bx + w + 4:
+            x = min(max(p.x(), bx), bx + w)
+            for lado, y in (("arriba", by - 9), ("abajo", by + h + 9)):
+                d = abs(p.y() - y)
+                if d <= min(radio, 7) and (best is None or d < best[0]):
+                    best = (d, {"id": b["id"], "lado": lado, "pos": QPointF(x, y)})
+    return best[1] if best else None
+
+
+def elemento_en(M: dict[str, Any], p: QPointF) -> str | None:
+    """El elemento bajo un punto del dibujo: etapa, transición (su trazo) o enlace en borrador."""
+    pos = posiciones(M)
+    for t in M["transitions"]:  # el trazo, su designación a la izquierda y su receptividad a la derecha
+        x, y = pos[t["id"]]
+        ancho = 8 * sum(len(sg["t"]) for sg in (t.get("cond") or []))
+        if -(TB + 44) <= p.x() - x <= TB + 12 + ancho and abs(p.y() - y) <= ALTO_T:
+            return t["id"]
+    for s in list(M["steps"]) + list(M.get("macros", [])):
+        x, y = pos[s["id"]]
+        if abs(p.x() - x) <= H + 4 and abs(p.y() - y) <= H + 4:
+            return s["id"]
+    for b in M.get("bars", []):
+        bx, by, w, h = barra(b)
+        if bx - 6 <= p.x() <= bx + w + 6 and by - 6 <= p.y() <= by + h + 6:
+            return b["id"]
+    for d in M.get("drafts", []):
+        seg = _segmento(M, pos, d)
+        if seg and _distancia(p, *seg) <= 6:
+            return d["id"]
+    for e in enlaces(M):  # los enlaces, al final: lo que hay encima manda
+        if any(_distancia(p, a, b) <= 7 for a, b in zip(e["pts"], e["pts"][1:])):
+            return e["id"]
+    return None
+
+
+def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str]) -> None:
+    """Edición: enlaces en borrador, elementos en cuestión (rojo discontinuo) y selección con sus tiradores."""
+    pos = posiciones(M)
+    for d in M.get("drafts", []):
+        seg = _segmento(M, pos, d)
+        if seg:
+            (x1, y1), (x2, y2) = seg
+            pt.line(x1, y1, x2, y2, pt.pen("err", 3 if d["id"] in sel else 1.8, (6, 4)), Z_EDIT,
+                    "Enlace en borrador: une dos elementos del mismo tipo y no es ejecutable")
+    trans = {t["id"] for t in M["transitions"]}
+    rutas = {e["id"]: e for e in enlaces(M)}
+    barras = {b["id"]: b for b in M.get("bars", [])}
+    for ident, color, width in [(i, "err", 1.8) for i in marcados] + [(i, "accent", 1.6) for i in sel]:
+        if ident in rutas:  # un enlace seleccionado se remarca a lo largo de su recorrido
+            pt.poly([(float(x), float(y)) for x, y in rutas[ident]["pts"]], pt.pen("accent", 4), Z_EDIT)
+            for h in rutas[ident]["handles"]:
+                x, y = h["pos"]
+                pt.rect(x-5, y-5, 10, 10, pt.pen("accent", 1.5), Z_EDIT+1, "panel",
+                        "Arrastre este cuadrado para recolocar el tramo")
+            for f in rutas[ident]["arrows"]:
+                pt.poly(f["pts"], None, Z_EDIT+2, fill="accent", tip="Arrastre la flecha a lo largo del enlace")
+            continue
+        if ident in barras:
+            bx, by, w, h = barra(barras[ident])
+            pt.rect(bx - 5, by - 7, w + 10, h + 14, pt.pen(color, width, (5, 3)), Z_EDIT)
+            if color == "accent":  # tiradores en los extremos: se estira de ellos
+                for cx in (bx, bx + w):
+                    pt.rect(cx - 4, by + h / 2 - 4, 8, 8, pt.pen("accent", 1.4), Z_EDIT + 0.1, "panel")
+            continue
+        if ident not in pos:
+            continue
+        x, y = pos[ident]
+        hx, hy = (TB + 6, ALTO_T) if ident in trans else (H + 6, H + 6)
+        pt.rect(x - hx, y - hy, 2 * hx, 2 * hy, pt.pen(color, width, (5, 3)), Z_EDIT)
+        if color == "accent":  # tiradores en las esquinas
+            for cx, cy in ((x - hx, y - hy), (x + hx, y - hy), (x - hx, y + hy), (x + hx, y + hy)):
+                pt.rect(cx - 3, cy - 3, 6, 6, pt.pen("accent", 1), Z_EDIT + 0.1, "panel")
+
+
+def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: set[str] | None = None,
+            marcados: set[str] | None = None) -> None:
+    """M: estructura de la vista (Vista.model); S: estado observado (Vista.state()); sel y marcados, solo al editar:
+    los elementos seleccionados y los que tienen un diagnóstico."""
     scene.clear()
     pt = _Pintor(scene)
     nombre = M.get("names", {}).get  # los ID internos nunca se muestran: etapas, parciales y macroetapas, por su nombre
@@ -156,14 +293,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
     pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
     if not pos and not M["transitions"]:
         return
-    min_x = min((p[0] for p in pos.values()), default=SX)
     # Enlace ascendente: por la izquierda del parcial de la transición, no de todo el dibujo
-    left: dict[str, float] = {}
-    for s in M["steps"]:
-        k = _parcial(s.get("partial"))
-        left[k] = min(left.get(k, pos[s["id"]][0]), pos[s["id"]][0])
-    for m in M.get("macros", []):
-        left[""] = min(left.get("", pos[m["id"]][0]), pos[m["id"]][0])
     situation, virtual = set(S.get("situation") or []), set(S.get("virtual") or [])
     unstable, cleared = set(S.get("unstable") or []), set(S.get("lastCleared") or [])
     blk = S.get("blocked")
@@ -174,36 +304,18 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
     for t in M["transitions"]:
         tx, ty = t["x"] + SX, t["y"]
         ob = (S.get("transitions") or {}).get(t["id"], {})
-        pre = [pos[p] for p in t["pre"] if p in pos]
-        post = [pos[p] for p in t["post"] if p in pos]
-        if len(pre) > 1:  # sincronización: doble trazo sobre la transición
-            xs, yy = [p[0] for p in pre], ty - 14
+        pre = [pos[p] for p in t.get("preDib", t["pre"]) if p in pos]
+        post = [pos[p] for p in t.get("postDib", t["post"]) if p in pos]
+        if len(pre) > 1 or t.get("simulPre"):
+            xs, yy = [p[0] for p in pre] + [tx], ty - SIMUL
             pt.line(min(xs) - 8, yy, max(xs) + 8, yy, link, Z_LINK)
             pt.line(min(xs) - 8, yy - 4, max(xs) + 8, yy - 4, link, Z_LINK)
-            for p in pre:
-                pt.line(p[0], p[1] + H, p[0], yy - 4, link, Z_LINK)
             pt.line(tx, yy, tx, ty, link, Z_LINK)
-        else:
-            for p in pre:
-                mid = (p[1] + H + ty) / 2
-                pt.poly([(p[0], p[1] + H), (p[0], mid), (tx, mid), (tx, ty)], link, Z_LINK)
-        down, up = [p for p in post if p[1] > ty], [p for p in post if p[1] <= ty]
-        if len(down) > 1:  # divergencia simultánea: doble trazo bajo la transición
-            xs, yy = [p[0] for p in down], ty + 14
+        if t.get("simulPost"):
+            xs, yy = [p[0] for p in post] + [tx], ty + SIMUL
             pt.line(tx, ty, tx, yy, link, Z_LINK)
             pt.line(min(xs) - 8, yy, max(xs) + 8, yy, link, Z_LINK)
             pt.line(min(xs) - 8, yy + 4, max(xs) + 8, yy + 4, link, Z_LINK)
-            for p in down:
-                pt.line(p[0], yy + 4, p[0], p[1] - H, link, Z_LINK)
-        else:
-            for p in down:
-                mid = (ty + p[1] - H) / 2
-                pt.poly([(tx, ty), (tx, mid), (p[0], mid), (p[0], p[1] - H)], link, Z_LINK)
-        for p in up:  # enlace ascendente con flecha
-            lx, top = min(left.get(_parcial(t.get("partial")), min_x), tx) - 70, p[1] - H - 16
-            pt.poly([(tx, ty), (tx, ty + 14), (lx, ty + 14), (lx, top), (p[0], top), (p[0], p[1] - H)], link, Z_LINK)
-            my = (ty + 14 + top) / 2
-            pt.poly([(lx - 5, my + 6), (lx, my - 4), (lx + 5, my + 6)], None, Z_LINK, fill="text")
         if not pre:
             pt.line(tx, ty - 16, tx, ty, link, Z_LINK)  # transición fuente
         if not post:
@@ -221,9 +333,20 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
                f"{'verdadera' if ob.get('receptivity') else 'falsa'}"
                + ("; su parcial está forzado y no evoluciona" if ob.get("forced") else ""))
         pt.line(tx - TB, ty, tx + TB, ty, pt.pen(color, width), Z_BAR, tip)
-        pt.text(tx - TB - 6, ty + 5, pt.seg(f"({t.get('label', t['id'])})"), 13, "muted", Z_BAR, "end", tip)
+        if t.get("showLabel", True):
+            pt.text(tx - TB - 6, ty + 5, pt.seg(f"({t.get('label', t['id'])})"), 13, "muted", Z_BAR, "end", tip)
         w = pt.text(tx + TB + 8, ty + 5, t.get("cond"), 14, "text", Z_BAR, tip=tip)
         _estado_temporal(pt, tx + TB + 8 + w + (10 if w else 0), ty + 5, t.get("conditionRef"), tmp, Z_BAR, tip)
+    for b in M.get("bars", []):  # barras de simultaneidad (doble trazo) y de alternativa (trazo simple), con sus conectores
+        bx, by, w, h = barra(b)
+        tipo = "Simultaneidad" if b["kind"] == "Y" else "Alternativa"
+        pt.line(bx, by, bx + w, by, link, Z_LINK + 0.5, tipo)
+        if b["kind"] == "Y":
+            pt.line(bx, by + h, bx + w, by + h, link, Z_LINK + 0.5, tipo)
+    for e in enlaces(M):
+        pt.poly([(float(x), float(y)) for x, y in e["pts"]], link, Z_LINK)
+        for flecha in e["arrows"]:
+            pt.poly(flecha["pts"], None, Z_LINK + 0.1, fill="text")
     for s in M["steps"]:
         x, y = pos[s["id"]]
         sid = s["id"]
@@ -278,6 +401,8 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any]) -> None
         pt.line(x - H, y - H + MARK, x + H, y - H + MARK, pt.pen("text"), Z_STEP + 0.01, tip)
         pt.line(x - H, y + H - MARK, x + H, y + H - MARK, pt.pen("text"), Z_STEP + 0.01, tip)
         pt.text(x, y + 5, pt.seg(nombre(m["id"], m["id"])), 16, "text", Z_STEP, "middle", tip)
+    if sel or marcados or M.get("drafts"):
+        _realces(pt, M, set(sel or ()), set(marcados or ()))
 
 
 def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]]) -> None:
@@ -390,6 +515,84 @@ class VistaDiagrama(QGraphicsView):
         self._manual = False
         self._bordes: list[tuple[QWidget, str]] = []
         self._barra_zoom()
+        self.controlador: Any = None  # al editar: recibe prensar / mover / soltar / doble con puntos del dibujo
+        self.rejilla = False
+        self.area_minima: QRectF | None = None
+        self.goma = None  # línea provisional de un enlace que se está trazando
+        self._marcas: list[Any] = []
+        self._origen = False  # en edición, hasta que se usa el ratón, el dibujo se queda arriba a la izquierda
+
+    def modo_edicion(self, on: bool, controlador: Any = None) -> None:
+        """Al editar: sin arrastre de mano, rejilla, un área fija (el dibujo no se recoloca al añadir elementos) y el
+        zoom manual; al simular, el comportamiento de siempre."""
+        self.controlador = controlador if on else None
+        self.rejilla = on
+        self.area_minima = QRectF(0, 0, 1100, 760) if on else None
+        self.setDragMode(QGraphicsView.DragMode.NoDrag if on else QGraphicsView.DragMode.ScrollHandDrag)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop if on else Qt.AlignmentFlag.AlignCenter)
+        self.setMouseTracking(on)
+        self.setAcceptDrops(on)
+        self.viewport().setCursor(Qt.CursorShape.CrossCursor if on else Qt.CursorShape.ArrowCursor)
+        if on:
+            self.resetTransform()
+            self._origen = True  # el primer dibujo en edición empieza arriba a la izquierda
+            self._manual = True
+            self._notificar()
+        else:
+            self._manual = False
+            self._origen = False
+        self.goma = None
+
+    def marcar_anclas(self, anclas_: list[dict[str, Any]], destacada: dict[str, Any] | None = None) -> None:
+        """Puntos de unión del elemento bajo el puntero; el más cercano, resaltado (como el ajuste a puntos del CAD)."""
+        for it in getattr(self, "_marcas", []):
+            if it.scene() is self.scene():
+                self.scene().removeItem(it)
+        self._marcas = []
+        for a in anclas_:
+            r = 6 if destacada and a["id"] == destacada["id"] and a["lado"] == destacada["lado"] else 4
+            it = self.scene().addEllipse(a["pos"].x() - r, a["pos"].y() - r, 2 * r, 2 * r, _Pintor.pen("accent", 1.6),
+                                         QBrush(QColor(COL["accent"] if r == 6 else COL["panel"])))
+            it.setZValue(Z_EDIT + 2)
+            self._marcas.append(it)
+
+    def trazo_provisional(self, a: QPointF | None, b: QPointF | None = None) -> None:
+        """Línea de ayuda mientras se traza un enlace (None la quita)."""
+        if self.goma is not None and self.goma.scene() is self.scene():
+            self.scene().removeItem(self.goma)
+        self.goma = None
+        if a is not None and b is not None:
+            self.goma = self.scene().addLine(a.x(), a.y(), b.x(), b.y(), _Pintor.pen("accent", 2, (6, 4)))
+            self.goma.setZValue(Z_EDIT + 1)
+
+    def drawBackground(self, painter: QPainter, rect: QRectF) -> None:  # noqa: N802
+        super().drawBackground(painter, rect)
+        if not self.rejilla or self.escala() < 0.45:
+            return
+        painter.setPen(QPen(QColor("#e3e6ec"), 0))
+        x0 = int(rect.left() // REJILLA) * REJILLA + (SX % REJILLA)
+        y0 = int(rect.top() // REJILLA) * REJILLA
+        for gx in range(x0, int(rect.right()) + 1, REJILLA):
+            for gy in range(y0, int(rect.bottom()) + 1, REJILLA):
+                painter.drawPoint(gx, gy)
+
+    def _evento(self, nombre: str, event: Any) -> bool:
+        if self.controlador is None or event.button() != Qt.MouseButton.LeftButton and nombre != "mover":
+            return False
+        return bool(getattr(self.controlador, nombre)(self.mapToScene(event.position().toPoint()), event))
+
+    def mousePressEvent(self, event: Any) -> None:  # noqa: N802
+        self._origen = False
+        if not self._evento("prensar", event):
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802
+        if not self._evento("mover", event):
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802
+        if not self._evento("soltar", event):
+            super().mouseReleaseEvent(event)
 
     def _barra_zoom(self) -> None:
         """Controles del zoom sobre el dibujo, arriba a la derecha: «−», porcentaje, «+» y «Ajustar»."""
@@ -447,17 +650,24 @@ class VistaDiagrama(QGraphicsView):
         self.l_zoom.setText(f"{round(self.escala() * 100)} %")
         self.zoomCambiado.emit(self.escala())
 
-    def mostrar(self, M: dict[str, Any], S: dict[str, Any]) -> None:
-        centro = self.mapToScene(self.viewport().rect().center())  # al refrescar, la vista no se desplaza ni se reescala
-        dibujar(self.scene(), M, S)
-        self.scene().setSceneRect(self.scene().itemsBoundingRect().adjusted(-14, -14, 14, 14))
+    def mostrar(self, M: dict[str, Any], S: dict[str, Any], sel: set[str] | None = None,
+                marcados: set[str] | None = None) -> None:
+        hb, vb = self.horizontalScrollBar().value(), self.verticalScrollBar().value()  # al refrescar, no se desplaza
+        if self._origen:
+            hb = vb = 0
+        self.goma = None
+        self._marcas = []
+        dibujar(self.scene(), M, S, sel, marcados)
+        r = self.scene().itemsBoundingRect().adjusted(-14, -14, 14, 14)
+        self.scene().setSceneRect(r.united(self.area_minima) if self.area_minima else r)
         if not self._manual:
             self.ajustar()
         else:
-            self.centerOn(centro)
+            self.horizontalScrollBar().setValue(hb)
+            self.verticalScrollBar().setValue(vb)
 
     def ajustar(self) -> None:
-        self._manual = False
+        self._manual = self.controlador is not None  # al editar, el zoom no se recoloca solo
         r = self.scene().sceneRect()
         if r.width() <= 0 or r.height() <= 0:
             return
@@ -481,12 +691,16 @@ class VistaDiagrama(QGraphicsView):
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802
         super().resizeEvent(event)
+        if self._origen:
+            self.horizontalScrollBar().setValue(0)
+            self.verticalScrollBar().setValue(0)
         if not self._manual:
             self.ajustar()
         self._colocar()
 
     def wheelEvent(self, event: Any) -> None:  # noqa: N802
         """La rueda (con o sin Ctrl) acerca o aleja alrededor del puntero; el dibujo se mueve arrastrándolo."""
+        self._origen = False
         if not event.angleDelta().y():
             return
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
@@ -495,7 +709,28 @@ class VistaDiagrama(QGraphicsView):
         event.accept()
 
     def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802
-        self.ajustar()
+        if self.controlador is not None:
+            if self._evento("doble", event):
+                return
+        else:
+            self.ajustar()
+
+    def dragEnterEvent(self, event: Any) -> None:  # noqa: N802
+        if self.controlador is not None and event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event: Any) -> None:  # noqa: N802
+        if self.controlador is not None and event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: Any) -> None:  # noqa: N802
+        """Un elemento arrastrado desde la paleta se coloca donde se suelta."""
+        if self.controlador is not None and event.mimeData().hasText():
+            self.controlador.colocar(event.mimeData().text(), self.mapToScene(event.position().toPoint()))
+            event.acceptProposedAction()
+
+    def centrar_en(self, p: QPointF) -> None:
+        self.centerOn(p)
 
 
 def imagen(M: dict[str, Any], S: dict[str, Any], escala: float = 2.0) -> QImage:

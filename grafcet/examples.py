@@ -95,6 +95,22 @@ def ej_macroetapa() -> tuple[M, dict]:
                "E1": (430, 100), "tq": (430, 180), "K": (430, 260), "tr": (430, 340), "S1": (430, 420)}
 
 
+def ej_alternativas() -> tuple[M, dict]:
+    """Una secuencia con una alternativa que la salta (E0 → E2) y una rama que vuelve (E2 → E1), para probar el editor."""
+    m = M()
+    for v in ("marcha", "rapida", "fin1", "fin2", "repetir", "reinicio"):
+        m.var(v)
+    m.var("motor", "output").var("luz", "output").var("fin", "output")
+    m.step("E0", True).step("E1").step("E2").step("E3")
+    m.trans("t1", ["E0"], ["E1"], "marcha").trans("t2", ["E1"], ["E2"], "fin1").trans("t3", ["E2"], ["E3"], "fin2")
+    m.trans("t4", ["E3"], ["E0"], "reinicio")
+    m.trans("t5", ["E0"], ["E2"], "rapida")      # salto de secuencia: se salta t1, E1 y t2
+    m.trans("t6", ["E2"], ["E1"], "repetir")     # rama que vuelve al enlace entre t1 y E1
+    m.cont("E1", "motor").cont("E2", "luz").cont("E3", "fin")
+    return m, {"E0": (220, 60), "t1": (220, 140), "E1": (220, 220), "t2": (220, 300), "E2": (220, 380),
+               "t3": (220, 460), "E3": (220, 540), "t4": (220, 620), "t5": (400, 260), "t6": (400, 440)}
+
+
 def ej_encapsulacion() -> tuple[M, dict]:
     m = M().partial("R").var("p").var("q").var("r").var("luz", "output")
     m.step("H", True, kind="enclosing").step("Z")
@@ -116,7 +132,52 @@ def ej_forzado() -> tuple[M, dict]:
                "A": (480, 60), "ta": (480, 140), "B": (480, 220), "tb": (480, 300), "C": (480, 380), "tc": (480, 450)}
 
 
+def ej_seleccion() -> tuple[M, dict]:
+    """Selección de secuencia con condiciones mutuamente excluyentes (referencias del responsable)."""
+    m = M().var("a").var("b")
+    m.step("5", True).step("6").step("7")
+    m.trans("t1", ["5"], ["6"], "a AND NOT b").trans("t2", ["5"], ["7"], "NOT a AND b")
+    return m, {"5": (120, 60), "t1": (120, 160), "6": (120, 260), "t2": (340, 160), "7": (340, 260)}
+
+
+def ej_salto() -> tuple[M, dict]:
+    m = M()
+    for v in ("avanzar1", "avanzar2", "avanzar3", "saltar"):
+        m.var(v)
+    m.step("1", True).step("2").step("3").step("4")
+    for n in range(1, 4):
+        m.trans(f"t{n}", [str(n)], [str(n+1)], f"avanzar{n}")
+    m.trans("salto", ["1"], ["4"], "saltar")
+    return m, {"1": (300, 60), "t1": (300, 140), "2": (300, 220), "t2": (300, 300),
+               "3": (300, 380), "t3": (300, 460), "4": (300, 540), "salto": (80, 140)}
+
+
+def ej_repeticion() -> tuple[M, dict]:
+    _, layout = ej_salto()
+    # Otro modelo: la decisión se toma después de 3; vuelve a 2 o continúa a 4.
+    m = M()
+    for v in ("inicio", "avance", "fin", "repetir"):
+        m.var(v)
+    m.step("1", True).step("2").step("3").step("4")
+    m.trans("t1", ["1"], ["2"], "inicio").trans("t2", ["2"], ["3"], "avance")
+    m.trans("t3", ["3"], ["4"], "fin AND NOT repetir")
+    m.trans("retorno", ["3"], ["2"], "repetir")
+    layout.pop("salto")
+    layout["retorno"] = (80, 460)
+    return m, layout
+
+
 EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
+    "seleccion": ("Selección de secuencia", "Desde 5, active solo a para ir a 6, o solo b para ir a 7. "
+                  "Las dos transiciones salen de una línea común. En Editar puede cambiar las condiciones a a y NOT a.", ej_seleccion),
+    "salto": ("Salto de etapas", "Desde 1, active saltar para ir directamente a 4. La rama lateral contiene su propia transición.", ej_salto),
+    "repeticion": ("Repetición de secuencia", "Active inicio para ir a 2; desactívelo. Active avance para ir a 3 y desactívelo. "
+                   "Active repetir para volver a 2, o fin para ir a 4. El retorno lleva una flecha ascendente automática.", ej_repeticion),
+    "alternativas": ("Alternativas y salto de secuencia", "E0 → E1 → E2 → E3 con dos alternativas: «rapida» salta de E0 a E2 "
+                     "(salto de secuencia) y «repetir» devuelve de E2 a E1 (rama que vuelve: dos ramas llegan a E1 y a "
+                     "E2). Pulse «marcha» o «rapida» desde E0; en E2, «fin2» sigue y «repetir» vuelve. Pase a «Editar» "
+                     "para ver cómo está construido y abrir sus propias ramas arrastrando de un punto de unión a un "
+                     "hueco (crea el elemento siguiente) o a un enlace (la rama se une ahí).", ej_alternativas),
     "temporizada": ("Secuencia con temporización", "Pulse «marcha»: E1 activa el motor; a los 3 s pasa a E2 (luz, "
                     "ciclos+1). «fin» vuelve a E0. Pruebe a soltar «marcha» y poner «fin»=1 antes de los 3 s: E2 es "
                     "una etapa inestable (sin luz, pero ciclos+1 se ejecuta). Con «marcha»=1 y «fin»=1, E1 sale y vuelve "

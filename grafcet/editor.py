@@ -9,9 +9,10 @@ explícita: cruzar líneas nunca conecta (REQ-MOD-03).
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
 from fractions import Fraction
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from . import expressions as ex
 from .diagnostics import Diagnostic, DiagnosticError
@@ -25,6 +26,13 @@ def new_model_document(model_id: str) -> dict[str, Any]:
     return {"family": "model", "formatVersion": FORMAT_VERSION, "id": model_id, "revisionId": "",
             "partials": [], "steps": [], "transitions": [], "variables": [], "expressions": [], "actions": [],
             "forces": [], "hierarchy": {"macros": [], "expansions": [], "enclosures": []}, "draftLinks": []}
+
+
+def new_grafcet_document(model_id: str) -> dict[str, Any]:
+    """Modelo vacío con el parcial raíz «g», el de los ejemplos: el grafcet que se dibuja sin marco de parcial."""
+    doc = new_model_document(model_id)
+    doc["partials"].append({"id": "g", "label": "g", "stepRefs": [], "transitionRefs": []})
+    return doc
 
 
 def new_presentation(model_id: str) -> dict[str, Any]:
@@ -96,6 +104,47 @@ class Editor:
         self.model, self.presentation = after
         self.undo_stack.append((label, before, after))
         return label
+
+    @contextmanager
+    def group(self, label: str) -> Iterator[None]:
+        """Varias operaciones que se deshacen y se rehacen de una sola vez (por ejemplo, «añadir debajo»)."""
+        n = len(self.undo_stack)
+        yield
+        if len(self.undo_stack) - n > 1:
+            entries = self.undo_stack[n:]
+            del self.undo_stack[n:]
+            self.undo_stack.append((label, entries[0][1], entries[-1][2]))
+
+    def next_label(self, kind: str) -> str:
+        """Etiqueta libre para un elemento nuevo: E0, E1… para etapas y t1, t2… para transiciones."""
+        coll = self.model["steps"] if kind == "step" else self.model["transitions"]
+        used = {label_key(x["label"]) for x in coll if x.get("label")} | {x["id"] for x in coll}  # el ID también cuenta (ejemplos)
+        prefix, n = ("E", 0) if kind == "step" else ("t", 1)
+        while f"{prefix}{n}" in used:
+            n += 1
+        return f"{prefix}{n}"
+
+    def check_expression(self, text: str, partial: str) -> Diagnostic | None:
+        """Comprueba el texto de una receptividad o condición sin cambiar el modelo: None si se interpreta."""
+        return self._make_expr(self.model, text, partial)[1]
+
+    def undeclared_variables(self, text: str, partial: str) -> list[str]:
+        """Nombres de variable que el texto usa y no existen (vacío si el texto no se interpreta por otra causa)."""
+        lookup, missing = self._lookup(self.model, partial), []
+
+        def resolve(kind: str, name: str) -> str:
+            ident = lookup(kind, name)
+            if ident is None:
+                if kind != "var":
+                    raise ex.Unresolved(kind, name)
+                missing.append(name)
+                return "?"
+            return ident
+        try:
+            ex.parse(text, resolve)
+        except (ex.ParseError, ex.Unresolved):
+            return []
+        return list(dict.fromkeys(missing))
 
     def validate(self) -> ValidationResult:
         return validate_model(self.model)
@@ -207,13 +256,18 @@ class Editor:
         return self._txn("crear etapa", fn)
 
     def add_transition(self, partial: str, condition: str, pre: list[str] = (), post: list[str] = (),
-                       at: tuple[Any, Any] | None = None) -> tuple[str, Diagnostic | None]:
+                       at: tuple[Any, Any] | None = None, label: str | None = None) -> tuple[str, Diagnostic | None]:
         def fn(m: dict[str, Any], p: dict[str, Any]) -> tuple[str, Diagnostic | None]:
             tid = self.ids.new("t")
             expr, diag = self._make_expr(m, condition, partial)
             m["expressions"].append(expr)
-            m["transitions"].append({"id": tid, "partialRef": partial, "preRefs": list(pre), "postRefs": list(post),
-                                     "conditionRef": expr["id"]})
+            item = {"id": tid, "partialRef": partial, "preRefs": list(pre), "postRefs": list(post),
+                    "conditionRef": expr["id"]}
+            if label is not None:
+                if not valid_label(label):
+                    raise DiagnosticError(Diagnostic("D-FORMATO", "etiqueta inválida"))
+                item["label"] = label
+            m["transitions"].append(item)
             next(x for x in m["partials"] if x["id"] == partial)["transitionRefs"].append(tid)
             self._layout(p, tid, at)
             return tid, diag
@@ -282,27 +336,22 @@ class Editor:
 
     # -- conexión explícita (REQ-MOD-02, REQ-MOD-03; P-IMP-05)
     def connect(self, src: str, dst: str) -> Diagnostic | None:
-        def fn(m: dict[str, Any], p: dict[str, Any]) -> Diagnostic | None:
-            idx = self._index(m)
-            ks, kd = idx[src][0], idx[dst][0]
-            if ks == "steps" and kd == "transitions":
-                refs = idx[dst][1]["preRefs"]
-                item = src
-            elif ks == "transitions" and kd == "steps":
-                refs = idx[src][1]["postRefs"]
-                item = dst
-            else:
-                did = self.ids.new("l")
-                m["draftLinks"].append({"id": did, "fromRef": src, "toRef": dst})
-                return Diagnostic("D-ALTERNANCIA", f"{src}→{dst} une dos elementos del mismo tipo; se guarda como "
-                                  "borrador no ejecutable", element=did)
-            if item in refs:
-                raise DiagnosticError(Diagnostic("D-FORMATO", "enlace duplicado entre los mismos extremos", element=dst))
-            refs.append(item)
-            return None
-        return self._txn("conectar", fn)
+        return self._txn("conectar", lambda m, p: self._link_in(m, src, dst))
 
     # -- vista (solo presentación)
+    def link_styles(self) -> dict[str, Any]:
+        return self.presentation.get("linkStyles", {})
+
+    def set_link_style(self, ident: str, style: dict[str, Any]) -> None:
+        """Recorrido y flechas manuales; nunca cambia conexiones ni revisión semántica."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            styles = p.setdefault("linkStyles", {})
+            if style:
+                styles[ident] = copy.deepcopy(style)
+            else:
+                styles.pop(ident, None)
+        self._txn("ajustar dibujo del enlace", fn, view_only=True)
+
     def move(self, ident: str, x: Any, y: Any) -> None:
         def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
             lay = next((l for l in p["elementLayouts"] if l["elementRef"] == ident), None)
@@ -311,6 +360,159 @@ class Editor:
             else:
                 lay["x"], lay["y"] = _coord(x), _coord(y)
         self._txn("mover", fn, view_only=True)
+
+    def set_initial(self, step: str, initial: bool) -> None:
+        """Tipo de etapa: inicial o normal."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            next(s for s in m["steps"] if s["id"] == step)["initial"] = bool(initial)
+        self._txn("tipo de etapa", fn)
+
+    def invert_link(self, tid: str, sid: str) -> None:
+        """Invierte la dirección de un enlace: la etapa pasa de anterior a siguiente de la transición o al revés."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            t = next(x for x in m["transitions"] if x["id"] == tid)
+            if sid in t["preRefs"]:
+                t["preRefs"].remove(sid)
+                t["postRefs"].append(sid)
+            elif sid in t["postRefs"]:
+                t["postRefs"].remove(sid)
+                t["preRefs"].append(sid)
+            else:
+                raise DiagnosticError(Diagnostic("D-REF", f"{sid} no está enlazada con {tid}", element=tid))
+        self._txn("invertir enlace", fn)
+
+    def disconnect(self, tid: str, sid: str) -> None:
+        """Quita el enlace entre una transición y una etapa (no borra ninguna de las dos)."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            t = next(x for x in m["transitions"] if x["id"] == tid)
+            if sid not in t["preRefs"] and sid not in t["postRefs"]:
+                raise DiagnosticError(Diagnostic("D-REF", f"{sid} no está enlazada con {tid}", element=tid))
+            t["preRefs"] = [s for s in t["preRefs"] if s != sid]
+            t["postRefs"] = [s for s in t["postRefs"] if s != sid]
+        self._txn("quitar enlace", fn)
+
+    # -- barras: simultaneidad (Y, doble trazo) y alternativa (O, trazo simple), P-IMP-32
+    # La barra es presentación (la forma de dibujar varias etapas o varias transiciones en un mismo punto); lo que
+    # une es modelo: cada pareja (elemento de arriba, elemento de abajo) deja su enlace normal en las transiciones, así
+    # que el motor no sabe nada de las barras y la simulación es la de siempre.
+    def bars(self) -> list[dict[str, Any]]:
+        return self.presentation.get("barras", [])
+
+    @staticmethod
+    def _bar(p: dict[str, Any], bid: str) -> dict[str, Any]:
+        return next(b for b in p.get("barras", []) if b["id"] == bid)
+
+    def add_bar(self, kind: str, at: tuple[Any, Any], width: int = 120) -> str:
+        if kind not in ("Y", "O"):
+            raise DiagnosticError(Diagnostic("D-FORMATO", "tipo de barra desconocido (Y u O)"))
+
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> str:
+            bid = self.ids.new("b")
+            p.setdefault("barras", []).append({"id": bid, "kind": kind, "x": _coord(at[0]), "y": _coord(at[1]),
+                                               "ancho": _coord(width), "arriba": [], "abajo": []})
+            return bid
+        return self._txn("colocar barra", fn, view_only=True)
+
+    def move_bar(self, bid: str, x: Any, y: Any) -> None:
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            b = self._bar(p, bid)
+            b["x"], b["y"] = _coord(x), _coord(y)
+        self._txn("mover barra", fn, view_only=True)
+
+    def resize_bar(self, bid: str, x: Any, width: Any) -> None:
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            if Fraction(str(width)) < 40:
+                raise DiagnosticError(Diagnostic("D-FORMATO", "la barra no puede ser más estrecha que 40"))
+            b = self._bar(p, bid)
+            b["x"], b["ancho"] = _coord(x), _coord(width)
+        self._txn("ensanchar barra", fn, view_only=True)
+
+    def set_bar_kind(self, bid: str, kind: str) -> None:
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            self._bar(p, bid)["kind"] = kind
+        self._txn("tipo de barra", fn, view_only=True)
+
+    def bar_link(self, bid: str, side: str, ident: str) -> Diagnostic | None:
+        """Une un elemento a una barra, por encima («arriba») o por debajo («abajo»). Con elementos a los dos lados,
+        cada pareja queda enlazada en el modelo (etapa → transición o transición → etapa)."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> Diagnostic | None:
+            b = self._bar(p, bid)
+            if ident in b["arriba"] or ident in b["abajo"]:
+                raise DiagnosticError(Diagnostic("D-FORMATO", "el elemento ya está unido a esta barra", element=ident))
+            b[side].append(ident)
+            diag = None
+            for other in b["abajo" if side == "arriba" else "arriba"]:
+                a, z = (ident, other) if side == "arriba" else (other, ident)
+                diag = diag or self._link_in(m, a, z, quiet=True)
+            return diag
+        return self._txn("unir a la barra", fn)
+
+    def bar_unlink(self, bid: str, ident: str) -> None:
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            b = self._bar(p, bid)
+            side = "arriba" if ident in b["arriba"] else "abajo"
+            b[side].remove(ident)
+            for other in b["abajo" if side == "arriba" else "arriba"]:
+                self._unlink_in(m, *((ident, other) if side == "arriba" else (other, ident)))
+        self._txn("quitar de la barra", fn)
+
+    def delete_bar(self, bid: str) -> None:
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            b = self._bar(p, bid)
+            for a in b["arriba"]:
+                for z in b["abajo"]:
+                    self._unlink_in(m, a, z)
+            p["barras"] = [x for x in p["barras"] if x["id"] != bid]
+        self._txn("borrar barra", fn)
+
+    def _link_in(self, m: dict[str, Any], src: str, dst: str, quiet: bool = False) -> Diagnostic | None:
+        idx = self._index(m)
+        ks, kd = idx[src][0], idx[dst][0]
+        if ks == "steps" and kd == "transitions":
+            refs, item = idx[dst][1]["preRefs"], src
+        elif ks == "transitions" and kd == "steps":
+            refs, item = idx[src][1]["postRefs"], dst
+        else:
+            if quiet and any(d["fromRef"] == src and d["toRef"] == dst for d in m["draftLinks"]):
+                return None
+            did = self.ids.new("l")
+            m["draftLinks"].append({"id": did, "fromRef": src, "toRef": dst})
+            return Diagnostic("D-ALTERNANCIA", f"{src}→{dst} une dos elementos del mismo tipo; se guarda como "
+                              "borrador no ejecutable", element=did)
+        if item in refs:
+            if quiet:
+                return None
+            raise DiagnosticError(Diagnostic("D-FORMATO", "enlace duplicado entre los mismos extremos", element=dst))
+        refs.append(item)
+        return None
+
+    def _unlink_in(self, m: dict[str, Any], src: str, dst: str) -> None:
+        idx = self._index(m)
+        ks, kd = idx[src][0], idx[dst][0]
+        if ks == "steps" and kd == "transitions":
+            t = idx[dst][1]
+            t["preRefs"] = [x for x in t["preRefs"] if x != src]
+        elif ks == "transitions" and kd == "steps":
+            t = idx[src][1]
+            t["postRefs"] = [x for x in t["postRefs"] if x != dst]
+        else:
+            m["draftLinks"] = [d for d in m["draftLinks"] if not (d["fromRef"] == src and d["toRef"] == dst)]
+
+    def hidden_labels(self) -> set[str]:
+        """Elementos cuya etiqueta no se dibuja (presentación; no cambia el modelo)."""
+        return {l["elementRef"] for l in self.presentation["elementLayouts"] if l.get("labelVisible") is False}
+
+    def set_label_visible(self, ident: str, visible: bool, at: tuple[Any, Any] = (0, 0)) -> None:
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            lay = next((l for l in p["elementLayouts"] if l["elementRef"] == ident), None)
+            if lay is None:
+                self._layout(p, ident, at)
+                lay = p["elementLayouts"][-1]
+            if visible:
+                lay.pop("labelVisible", None)
+            else:
+                lay["labelVisible"] = False
+        self._txn("mostrar la etiqueta" if visible else "ocultar la etiqueta", fn, view_only=True)
 
     def align(self, ids: list[str], axis: str = "x") -> None:
         def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
@@ -444,6 +646,9 @@ class Editor:
                 used |= {a.get("conditionRef"), a.get("valueRef"), (a.get("trigger") or {}).get("expressionRef")}
             m["expressions"] = [e for e in m["expressions"] if e["id"] in used]
             p["elementLayouts"] = [l for l in p["elementLayouts"] if l["elementRef"] not in doomed]
+            for b in p.get("barras", []):
+                b["arriba"] = [x for x in b["arriba"] if x not in doomed]
+                b["abajo"] = [x for x in b["abajo"] if x not in doomed]
             return plan
         return self._txn("borrar", fn)
 

@@ -18,12 +18,52 @@ Qué hace
   detiene con su cuestión U en vez de aproximarse. Si se elige otra, la barra de estado lo avisa.
 - Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J).
 - Zoom del dibujo: «−», «+», «Ajustar», rueda del ratón, Ctrl+= y Ctrl+−; el zoom elegido se mantiene.
-- Archivo > Guardar como proyecto: guarda el modelo en curso con su dibujo, para abrirlo después.
+- Archivo > Guardar proyecto: guarda el modelo en curso con su dibujo, para abrirlo después.
+- Editor de un grafcet secuencial (Archivo > Nuevo grafcet, o «Editar» sobre cualquier modelo): paleta a la
+  izquierda (iconos que se arrastran al dibujo; sin herramienta, el ratón selecciona, mueve y enlaza),
+  puntos de unión arriba y abajo
+  (al acercar el puntero se marcan y de ellos sale el enlace), panel de propiedades del elemento seleccionado
+  (etiqueta, tipo de etapa, receptividad con botones para flancos, negación, y, o, variables, etapas,
+  comparaciones y temporizadores; se escribe ↑a, ↓a y X1, y las variables que no existen salen en naranja), mover con rejilla, borrar,
+  deshacer y rehacer (Ctrl+Z, Ctrl+Y), «Añadir debajo» (Ctrl+Intro) y panel de diagnósticos.
+  Los enlaces se seleccionan con un clic (se pueden invertir o quitar); el sentido sale del trazo (de abajo
+  arriba lleva flecha). La simultaneidad (doble trazo) es una barra de la paleta que se suelta en el dibujo, se
+  enlaza con etapas y transiciones y se ensancha estirando de sus extremos. Las alternativas se construyen con
+  el ratón, arrastrando de un punto de unión: a un hueco crea lo que sigue (una transición desde una etapa, una
+  etapa desde una transición: así se abre una rama), a un enlace une la rama ahí (si sale de una transición) o
+  hace un salto de secuencia (si sale de una etapa). El ejemplo «Alternativas y salto de secuencia» lo muestra. Los retardos se escriben como 3s/X1. «Simular» valida el grafcet y lo
+  ejecuta; si no compila, dice por qué. Cada cierto tiempo se guarda una copia de recuperación.
+
+
+Selección, salto y repetición (corrección del paso 3, P-IMP-33)
+
+- Selección: arrastre desde la salida inferior de una etapa, o desde su enlace de salida, hasta un hueco lateral: se crea otra transición. De su salida, arrastre a una etapa o a otro hueco para crearla. Las ramas comparten la línea horizontal.
+- Salto de etapas: arrastre desde la salida inferior de la etapa inicial del salto hasta un enlace que llegue a la etapa de destino. Se crea una transición lateral con receptividad pendiente. También funciona desde la entrada superior del destino hasta un enlace de salida del origen.
+- Repetición: haga el mismo gesto hacia el enlace de entrada de una etapa anterior. También puede crear una transición lateral y unir su salida a esa etapa. El retorno lleva flecha ascendente automáticamente.
+- Unir una entrada: desde el punto superior de una transición hasta un enlace que salga de una etapa se toma esa etapa como anterior; no se añade una segunda etapa a la transición del enlace.
+- Arriba recibe y abajo emite, independientemente de dónde esté el otro elemento. Un clic en un enlace lo selecciona; arrastrarlo abre una rama. Cada conexión o creación se deshace con Ctrl+Z.
+- Una transición con varias etapas anteriores o siguientes sigue siendo una simultaneidad, y usa la barra de la paleta.
+
+El menú Ejemplos incluye «Selección de secuencia», «Salto de etapas» y «Repetición de secuencia» para probar cada caso por separado. El retorno se actualiza al mover los elementos; se guarda la topología y la posición, no una flecha decorativa independiente.
 
 Qué no es
-- No es el editor: los modelos aún no se dibujan ni se modifican aquí.
+- Todavía no edita variables ni acciones con un panel propio, ni jerarquías; selección, salto y repetición sí se editan.
 - Usa un perfil provisional y NO declara conformidad con IEC 60848 / UNE-EN 60848.
 
 Licencias
 - Interfaz con Qt for Python (PySide6), bajo LGPL v3. Las bibliotecas de Qt están como ficheros separados en
   la carpeta _internal y pueden sustituirse por otras versiones compatibles.
+
+
+Ajustar flechas y realimentaciones (P-IMP-35)
+
+En modo Editar:
+
+1. Arrastre una flecha directamente para desplazarla por su enlace, incluidos los tramos horizontales.
+2. Con la flecha seleccionada, use «Mostrar flecha» para ocultarla o recuperarla y «Dar la vuelta a la flecha» para invertir su orientación visual. Si el enlace tiene flecha de recorrido y de unión, el selector permite ajustar cada una.
+3. Seleccione el enlace de realimentación. Aparecen cuadrados: arrastre el del tramo vertical para llevar el retorno a izquierda o derecha; los de los tramos horizontales cambian sus alturas.
+4. «Restablecer recorrido automático» y «Restablecer flecha automática» recuperan cada ajuste por separado.
+
+Cada arrastre se deshace con Ctrl+Z y se rehace con Ctrl+Y. Los extremos del enlace siguen a las etapas/transiciones; los tramos fijados a mano conservan sus coordenadas. Todo se guarda con el proyecto y se mantiene al simular.
+
+La inversión gráfica de la flecha no cambia el funcionamiento. «Invertir conexión lógica» es la operación que intercambia la relación anterior/siguiente y modifica el GRAFCET.

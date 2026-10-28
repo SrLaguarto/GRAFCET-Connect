@@ -104,7 +104,9 @@ def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = Non
     if op == "ref":
         return [_seg(names.get(m["reference"], m["reference"]))]
     if op in ("active", "activePartial", "activeMacro"):
-        return [_seg("X"), _seg(names.get(m["reference"], m["reference"]), s=True)]
+        nombre = names.get(m["reference"], m["reference"])
+        num = re.fullmatch(r"E(\d+)", nombre) if op == "active" else None  # la etapa E1 es X1 en la notación de la norma
+        return [_seg("X"), _seg(num.group(1) if num else nombre, s=True)]
     if op in ("rise", "fall"):
         inner = m["operands"][0]
         body = norm(inner, False, names)
@@ -186,8 +188,16 @@ class Vista:
 
     def __init__(self, key: str, title: str, help_text: str, build: Build,
                  options: dict[str, str], init: dict[str, Any] | None = None,
-                 batches: list[tuple[int, int, dict[str, Any]]] = (), budget: int = 10_000) -> None:
+                 batches: list[tuple[int, int, dict[str, Any]]] = (), budget: int = 10_000,
+                 hidden: frozenset[str] | set[str] = frozenset(), bars: list[dict[str, Any]] | None = None,
+                 presentation: dict[str, Any] | None = None, link_styles: dict[str, Any] | None = None) -> None:
         m, layout = build()
+        self.hidden = set(hidden)  # transiciones cuya etiqueta no se dibuja (presentación)
+        self.bars = bars or []     # barras de simultaneidad y de alternativa (presentación)
+        if presentation is not None:
+            self.hidden = {l["elementRef"] for l in presentation.get("elementLayouts", []) if l.get("labelVisible") is False}
+            self.bars = presentation.get("barras", [])
+        styles = link_styles if link_styles is not None else (presentation or {}).get("linkStyles", {})
         doc = m.doc if isinstance(m, M) else m
         self.key, self.options, self.doc = key, options, doc
         self.texts: dict[str, str] = {}
@@ -209,6 +219,9 @@ class Vista:
             self.start_diags = self.s.start()
         try:
             self.model = self._structure(key, title, help_text, doc, res.can_simulate, layout)
+            self.model["linkStyles"] = styles
+            from .routing import enlaces
+            self.model["links"] = enlaces(self.model)
         except (KeyError, TypeError, ValueError, AttributeError, IndexError):
             # Documento demasiado dañado para dibujarlo: no se dibuja nada y se listan los errores
             self.texts = {}
@@ -262,8 +275,24 @@ class Vista:
                    "initial": "{INIT}"}[f["targetKind"]]
             acts.setdefault(f["sourceStepRef"], []).append({"kind": "force", "id": f["id"], "target": f["targetPartialRef"],
                                                            "text": [_seg(f"{labels[f['targetPartialRef']]}{sit}")]})
+        # Barras: solo las que tienen elementos existentes; las parejas que enlazan se dibujan por la barra, no directas
+        vivos = {s["id"] for s in doc["steps"]} | {t["id"] for t in doc["transitions"]}
+        barras, cubiertos = [], set()
+        for n, b in enumerate(self.bars, 1):
+            arriba = [i for i in b.get("arriba", []) if i in vivos]
+            abajo = [i for i in b.get("abajo", []) if i in vivos]
+            barras.append({"id": b["id"], "kind": b["kind"], "x": float(Fraction(b["x"])), "y": float(Fraction(b["y"])),
+                           "ancho": float(Fraction(b["ancho"])), "arriba": arriba, "abajo": abajo,
+                           "label": f"{'Simultaneidad' if b['kind'] == 'Y' else 'Alternativa'} {n}"})
+            tr = {t["id"] for t in doc["transitions"]}
+            for a_ in arriba:
+                for z in abajo:
+                    if a_ in tr and z not in tr:
+                        cubiertos.add((a_, z, "post"))
+                    elif z in tr and a_ not in tr:
+                        cubiertos.add((z, a_, "pre"))
         return {
-            "key": key, "title": title, "help": help_text, "compilable": compilable, "names": names,
+            "key": key, "title": title, "help": help_text, "compilable": compilable, "names": names, "bars": barras,
             "steps": [{"id": s["id"], "label": s["label"], "initial": s["initial"],
                        "x": layout[s["id"]][0], "y": layout[s["id"]][1],
                        "partial": None if s["partialRef"] == "g" else s["partialRef"], "kind": s["kind"],
@@ -274,10 +303,16 @@ class Vista:
             "partials": [{"id": p["id"], "label": p["label"], "owner": p.get("ownerRef"),
                           **kinds.get(p["id"], {"kind": "partial"})}
                          for p in doc["partials"] if p["id"] != "g" and p["stepRefs"]],
-            "transitions": [{"id": t["id"], "label": names[t["id"]], "pre": t["preRefs"], "post": t["postRefs"],
+            "transitions": [{"id": t["id"], "label": names[t["id"]], "showLabel": t["id"] not in self.hidden,
+                             "preDib": [s for s in t["preRefs"] if (t["id"], s, "pre") not in cubiertos],
+                             "postDib": [s for s in t["postRefs"] if (t["id"], s, "post") not in cubiertos],
+                             "simulPre": len([s for s in t["preRefs"] if (t["id"], s, "pre") not in cubiertos]) > 1,
+                             "simulPost": len([s for s in t["postRefs"] if (t["id"], s, "post") not in cubiertos]) > 1,
+                             "pre": t["preRefs"], "post": t["postRefs"],
                              "partial": t["partialRef"], "cond": disp(t["conditionRef"], top=True),
                              "conditionRef": t["conditionRef"],
                              "x": layout[t["id"]][0], "y": layout[t["id"]][1]} for t in doc["transitions"]],
+            "drafts": [{"id": d["id"], "from": d["fromRef"], "to": d["toRef"]} for d in doc.get("draftLinks", [])],
             "inputs": sorted((v["id"] for v in doc["variables"] if v["role"] == "input"), key=lambda i: (names[i], i)),
             "numericInputs": {v["id"]: v["type"]["kind"] for v in doc["variables"]
                               if v["role"] == "input" and v["type"]["kind"] != "bool"},

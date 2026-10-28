@@ -33,7 +33,7 @@ con un clic, tiempo real desde que se carga (como un autómata; los retardos se 
 «1,2 s / 3 s»), pausa y paso, evolución a evolución, traza, salidas, variables y todas las lecturas de interpretación
 (menú «Ajustes»). Los paneles derecho e inferior se pliegan, y el dibujo admite zoom (P-IMP-30). «Abrir modelo» admite
 un proyecto (su `manifest.json`) o un documento de modelo; «Guardar como proyecto» guarda el modelo en curso con su
-dibujo. No es el editor.
+dibujo. Con «Archivo > Nuevo grafcet», o «Editar» sobre un ejemplo o un modelo abierto, se pasa al editor de un secuencial: etapas, transiciones, enlaces, receptividades, deshacer, diagnósticos y recuperación (P-IMP-32).
 
 - Desde el código: doble clic en «Abrir simulador.bat», o `python escritorio/simulador.py [modelo]`.
 - Versión portable: «Construir ejecutable.bat» (o `python tools/construir_ejecutable.py`) deja el programa en
@@ -81,6 +81,18 @@ python tools/banco_de_pruebas.py --abrir --comparar
 | `tools/banco_de_pruebas.py`, `comparador.html`, `decisiones.py`, `dibujo.js` | Banco de pruebas y comparador de decisiones (no es la interfaz del producto) | SEM-09, NOR-02 |
 | `tests/` | Casos T-01…T-26 del documento 11 y suplementarios S-xx | — |
 
+
+## Selección, salto y repetición (corrección del paso 3, P-IMP-33)
+
+- **Selección:** arrastre desde la salida inferior de una etapa, o desde su enlace de salida, hasta un hueco lateral: se crea otra transición. De su salida, arrastre a una etapa o a otro hueco para crearla. Las ramas comparten la línea horizontal.
+- **Salto de etapas:** arrastre desde la salida inferior de la etapa inicial del salto hasta un enlace que llegue a la etapa de destino. Se crea una transición lateral con receptividad pendiente. También funciona desde la entrada superior del destino hasta un enlace de salida del origen.
+- **Repetición:** haga el mismo gesto hacia el enlace de entrada de una etapa anterior. También puede crear una transición lateral y unir su salida a esa etapa. El retorno lleva flecha ascendente automáticamente.
+- **Unir una entrada:** desde el punto superior de una transición hasta un enlace que salga de una etapa se toma esa etapa como anterior; no se añade una segunda etapa a la transición del enlace.
+- Arriba recibe y abajo emite, independientemente de dónde esté el otro elemento. Un clic en un enlace lo selecciona; arrastrarlo abre una rama. Cada conexión o creación se deshace con Ctrl+Z.
+- Una transición con varias etapas anteriores o siguientes sigue siendo una simultaneidad, y usa la barra de la paleta.
+
+El menú Ejemplos incluye «Selección de secuencia», «Salto de etapas» y «Repetición de secuencia» para probar cada caso por separado. El retorno se actualiza al mover los elementos; se guarda la topología y la posición, no una flecha decorativa independiente.
+
 ## Convención de commits
 
 Cada commit traza requisito, cambio y prueba:
@@ -99,6 +111,20 @@ El núcleo se ha hecho solo con los doce documentos del paquete. El 25-10-2026, 
 - Jerarquías: forzado, macroetapas y encapsulación se ejecutan (P-IMP-23) y sus interacciones están decididas (P-IMP-24 a P-IMP-26), salvo vaciar por forzado un recinto con su encapsulante activa, que se detiene.
 - `elapsed(etapa)` en expresiones: no se ejecuta todavía (su valor con la etapa inactiva ya está decidido, 4.5 A).
 - Siguen deteniéndose, sin preguntar todavía: eventos internos y de franqueamiento (U-03, caso T-11b), vencimientos simultáneos que dependen del orden (U-06) y vaciar por forzado un recinto con su encapsulante activa (U-08). Las cuestiones del comparador están todas respondidas.
-- Editor gráfico, navegación jerárquica, exportación SVG/PDF y accesibilidad. El simulador de escritorio (P-IMP-29) ya simula, abre y guarda modelos, pero todavía no los edita.
+- Editor gráfico, navegación jerárquica, exportación SVG/PDF y accesibilidad. El simulador de escritorio (P-IMP-29, P-IMP-32) ya crea, edita, guarda y simula un grafcet secuencial; faltan los paneles completos de variables y acciones (paso 4), comodidades del editor de ramas (paso 5) y jerarquías (paso 6); las selecciones, saltos y repeticiones ya se construyen con el ratón (P-IMP-33).
 - Instalador y actualización, matriz de sistemas y medición en el equipo de referencia (U-10). Por ahora solo hay una versión portable para Windows, sin instalador.
 - Ratificación del formato 0.1 (U-11) y cierre de las U normativas, que permitiría desbloquear capacidades.
+
+
+## Ajustar flechas y realimentaciones (P-IMP-35)
+
+En modo Editar:
+
+1. Arrastre una flecha directamente para desplazarla por su enlace, incluidos los tramos horizontales.
+2. Con la flecha seleccionada, use «Mostrar flecha» para ocultarla o recuperarla y «Dar la vuelta a la flecha» para invertir su orientación visual. Si el enlace tiene flecha de recorrido y de unión, el selector permite ajustar cada una.
+3. Seleccione el enlace de realimentación. Aparecen cuadrados: arrastre el del tramo vertical para llevar el retorno a izquierda o derecha; los de los tramos horizontales cambian sus alturas.
+4. «Restablecer recorrido automático» y «Restablecer flecha automática» recuperan cada ajuste por separado.
+
+Cada arrastre se deshace con Ctrl+Z y se rehace con Ctrl+Y. Los extremos del enlace siguen a las etapas/transiciones; los tramos fijados a mano conservan sus coordenadas. Todo se guarda con el proyecto y se mantiene al simular.
+
+La inversión gráfica de la flecha no cambia el funcionamiento. «Invertir conexión lógica» es la operación que intercambia la relación anterior/siguiente y modifica el GRAFCET.

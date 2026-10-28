@@ -8,30 +8,46 @@ cuestiones U se muestran tal cual. No es el editor ni declara conformidad con IE
 """
 from __future__ import annotations
 
+import copy
 import html
 import re
+import shutil
+import time
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QElapsedTimer, QSettings, Qt, QTimer
+from PySide6.QtCore import QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDockWidget, QDialogButtonBox, QFileDialog, QFormLayout,
                                QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
-                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QScrollArea,
-                               QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolBar, QToolButton,
-                               QVBoxLayout, QWidget)
+                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
+                               QPushButton, QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
+                               QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from grafcet.diagnostics import DiagnosticError
 from grafcet.examples import EJEMPLOS
-from grafcet.persistence import add_document, new_project, open_model, save_project
+from grafcet.persistence import Recovery, add_document, new_project, open_model, save_project
 from grafcet.profile import APP_VERSION, SEMANTIC_OPTIONS, normalize_options
 from grafcet.timeutil import parse_duration
 from grafcet.view import Vista, auto_layout, layout_from_presentation, presentation_for, t_trunc
 
-from .diagrama import COL, VistaDiagrama
+from .diagrama import COL, VistaDiagrama, imagen
+from .edicion import HERRAMIENTAS, Edicion
+from .propiedades import PanelPropiedades, Paleta
 
 TITULO = "Simulador GRAFCET"
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
+AYUDA_EDICION = {
+    "seleccionar": "Clic selecciona un elemento y muestra sus opciones a la izquierda; arrastrarlo lo mueve (a la "
+                   "rejilla); de un punto de unión (arriba o abajo) sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y "
+                   "deshacen y rehacen. Arrastre elementos desde la paleta.",
+    "etapa": "Clic en el lienzo coloca una etapa (Esc cancela). Después se puede cambiar a inicial en sus opciones.",
+    "transicion": "Clic en el lienzo coloca una transición (Esc cancela); su receptividad se escribe en sus opciones.",
+    "simultaneidad": "Clic en el lienzo coloca una barra de simultaneidad (doble trazo); se une a las etapas y la "
+                     "transición con enlaces y se ensancha estirando de sus extremos. Esc cancela.",
+}
+NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar", "etapa": "Etapa", "transicion": "Transición",
+                      "simultaneidad": "Simultaneidad"}
 AVISO = "Núcleo con perfil provisional · no declara conformidad con IEC 60848 / UNE-EN 60848"
 ESTADOS = {"pausada-estable": ("estable", "ok"), "pausada-recorrido": ("en recorrido (situación inestable)", "virt"),
            "error": ("detenido por diagnóstico", "err"), "no-compilable": ("no compilable", "err"),
@@ -113,7 +129,7 @@ class Lecturas(QDialog):
 
 
 class Ventana(QMainWindow):
-    def __init__(self, ajustes: QSettings | None = None) -> None:
+    def __init__(self, ajustes: QSettings | None = None, recuperacion: Path | None = None) -> None:
         super().__init__()
         self.setWindowTitle(TITULO)
         self.resize(1360, 860)
@@ -129,6 +145,15 @@ class Ventana(QMainWindow):
         self.rt.setInterval(TICK_MS)
         self.rt.timeout.connect(self._tick)
         self.reloj = QElapsedTimer()
+        self.edicion: Edicion | None = None
+        self.modo = "simular"
+        # Recuperación automática cada 30 s mientras hay cambios sin guardar (REQ-EDT-10)
+        self.recup = Recovery(recuperacion or Path(QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.AppLocalDataLocation)))
+        self.t_auto = QTimer(self)
+        self.t_auto.setInterval(30_000)
+        self.t_auto.timeout.connect(self.autoguardar)
+        self.t_auto.start()
         self._menus()
         self._interfaz()
         self._barra_herramientas()
@@ -147,9 +172,10 @@ class Ventana(QMainWindow):
     def _menus(self) -> None:
         bar = self.menuBar()
         archivo = bar.addMenu("&Archivo")
+        archivo.addAction(self._accion("&Nuevo grafcet", self.nuevo, "Ctrl+N"))
         a = archivo.addAction("&Abrir modelo…", self.abrir)
         a.setShortcut(QKeySequence.StandardKey.Open)
-        self.a_guardar = archivo.addAction("&Guardar como proyecto…", self.guardar)
+        self.a_guardar = archivo.addAction("&Guardar proyecto…", self.guardar)
         self.a_guardar.setShortcut(QKeySequence.StandardKey.Save)
         archivo.addAction("Guardar el &dibujo como imagen…", self.guardar_imagen)
         archivo.addSeparator()
@@ -181,6 +207,43 @@ class Ventana(QMainWindow):
         ver.addAction(self._accion("&Acercar", lambda: self.diagrama.acercar(), ["Ctrl+=", "Ctrl++"]))
         ver.addAction(self._accion("A&lejar", lambda: self.diagrama.alejar(), "Ctrl+-"))
         ver.addAction(self._accion("A&justar el dibujo", lambda: self.diagrama.ajustar(), "Ctrl+0"))
+        # Modo y edición
+        self.a_editar = self._accion("Editar", lambda on: on and self.cambiar_modo("editar"), "Ctrl+1", True)
+        self.a_simular = self._accion("Simular", lambda on: on and self.cambiar_modo("simular"), "Ctrl+2", True)
+        self.a_editar.setToolTip("Editar el grafcet (Ctrl+1)")
+        self.a_simular.setToolTip("Simular el grafcet; si no compila, se muestran los diagnósticos (Ctrl+2)")
+        self.g_modo = QActionGroup(self)
+        for a in (self.a_editar, self.a_simular):
+            self.g_modo.addAction(a)
+        self.a_simular.blockSignals(True)
+        self.a_simular.setChecked(True)
+        self.a_simular.blockSignals(False)
+        self.a_herr: dict[str, QAction] = {}
+        self.g_herr = QActionGroup(self)
+        for i, h in enumerate(HERRAMIENTAS, 1):
+            atajo = "Esc" if h == "seleccionar" else f"Alt+{i}"
+            a = self._accion("Sin herramienta (Esc)" if h == "seleccionar" else NOMBRE_HERRAMIENTA[h],
+                             lambda on, h=h: on and self.herramienta(h), atajo, True)
+            a.setToolTip(f"{NOMBRE_HERRAMIENTA[h]} ({atajo}): {AYUDA_EDICION[h]}")
+            self.g_herr.addAction(a)
+            self.a_herr[h] = a
+        self.a_herr["seleccionar"].blockSignals(True)
+        self.a_herr["seleccionar"].setChecked(True)
+        self.a_herr["seleccionar"].blockSignals(False)
+        self.a_deshacer = self._accion("&Deshacer", lambda: self.edicion and self.edicion.deshacer(), "Ctrl+Z")
+        self.a_rehacer = self._accion("&Rehacer", lambda: self.edicion and self.edicion.rehacer(), ["Ctrl+Y", "Ctrl+Shift+Z"])
+        self.a_borrar = self._accion("&Borrar la selección", lambda: self.edicion and self.edicion.borrar(), "Del")
+        self.a_debajo = self._accion("&Añadir debajo", lambda: self.edicion and self.edicion.anadir_debajo(), "Ctrl+Return")
+        self.a_debajo.setToolTip("Con una etapa seleccionada: transición y etapa enlazadas debajo (Ctrl+Intro)")
+        edicion = bar.addMenu("&Edición")
+        for a in (self.a_editar, self.a_simular):
+            edicion.addAction(a)
+        edicion.addSeparator()
+        for a in (self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo):
+            edicion.addAction(a)
+        edicion.addSeparator()
+        for a in self.a_herr.values():
+            edicion.addAction(a)
         sim = bar.addMenu("&Simulación")
         for a in (self.a_ejecutar, self.a_paso, self.a_completar, self.a_reiniciar):
             sim.addAction(a)
@@ -261,14 +324,55 @@ class Ventana(QMainWindow):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setWidget(der)
-        self.scroll.setMinimumWidth(400)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Página de edición: la herramienta, la selección y los diagnósticos (REQ-EDT-09)
+        pag = QWidget()
+        pl = QVBoxLayout(pag)
+        self.l_herr = QLabel()
+        self.l_herr.setWordWrap(True)
+        self.l_herr.setTextFormat(Qt.TextFormat.RichText)
+        pl.addWidget(self.l_herr)
+        self.l_sel = QLabel()
+        self.l_sel.setWordWrap(True)
+        pl.addWidget(self.l_sel)
+        caja = QGroupBox("Diagnósticos")
+        cl = QVBoxLayout(caja)
+        self.l_resumen = QLabel()
+        self.l_resumen.setWordWrap(True)
+        cl.addWidget(self.l_resumen)
+        self.lista_diag = QListWidget()
+        self.lista_diag.setWordWrap(True)
+        self.lista_diag.itemClicked.connect(self._ir_a_diagnostico)
+        cl.addWidget(self.lista_diag)
+        pl.addWidget(caja, 1)
+        self.derecho = QStackedWidget()
+        self.derecho.addWidget(self.scroll)
+        self.derecho.addWidget(pag)
+        self.derecho.setMinimumWidth(300)
         self.vsplit = vsplit
         self.split = QSplitter(Qt.Orientation.Horizontal)
         self.split.addWidget(izq)
-        self.split.addWidget(self.scroll)
+        self.split.addWidget(self.derecho)
         self.split.setSizes([880, 460])
         self.setCentralWidget(self.split)
+        # Izquierda: paleta de elementos (arriba) y propiedades del elemento seleccionado (abajo); solo al editar
+        self.paleta = Paleta()
+        self.paleta.elegida.connect(self.herramienta)
+        self.props = PanelPropiedades()
+        izq_edit = QSplitter(Qt.Orientation.Vertical)
+        izq_edit.addWidget(self.paleta)
+        scroll_props = QScrollArea()  # las opciones de una transición son largas: se desplazan
+        scroll_props.setWidgetResizable(True)
+        scroll_props.setWidget(self.props)
+        izq_edit.addWidget(scroll_props)
+        izq_edit.setSizes([210, 450])
+        self.dock = QDockWidget("Elementos", self)
+        self.dock.setObjectName("dock-elementos")
+        self.dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+        self.dock.setWidget(izq_edit)
+        self.dock.setMinimumWidth(290)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock)
+        self.dock.hide()
         # Barra de estado: aviso de conformidad, lecturas distintas de las decididas, instante lógico
         sb = self.statusBar()
         self.l_aviso = QLabel(AVISO)
@@ -281,14 +385,25 @@ class Ventana(QMainWindow):
         sb.addPermanentWidget(self.l_reloj)
 
     def _barra_herramientas(self) -> None:
-        tb = QToolBar("Simulación")
-        tb.setMovable(False)
-        tb.setObjectName("barra-simulacion")
+        self.tb_modo = QToolBar("Modo")
+        self.tb_modo.setMovable(False)
+        for a in (self.a_editar, self.a_simular):
+            self.tb_modo.addAction(a)
+        self.addToolBar(self.tb_modo)
+        self.tb_sim = QToolBar("Simulación")
+        self.tb_sim.setMovable(False)
         for a in (self.a_ejecutar, self.a_paso, self.a_completar):
-            tb.addAction(a)
-        tb.addSeparator()
-        tb.addAction(self.a_reiniciar)
-        self.addToolBar(tb)
+            self.tb_sim.addAction(a)
+        self.tb_sim.addSeparator()
+        self.tb_sim.addAction(self.a_reiniciar)
+        self.addToolBar(self.tb_sim)
+        self.tb_edit = QToolBar("Edición")
+        self.tb_edit.setMovable(False)
+        for a in (self.a_debajo, self.a_deshacer, self.a_rehacer, self.a_borrar):
+            self.tb_edit.addAction(a)
+        self.addToolBar(self.tb_edit)
+        self.tb_edit.hide()
+        self._acciones_edicion(False)
 
     def _paneles(self) -> None:
         """Flechas en el borde del dibujo para plegar del todo el panel derecho y el inferior, y el estado guardado."""
@@ -306,7 +421,7 @@ class Ventana(QMainWindow):
             self._mostrar_panel(nombre, visible, guardar=False)
 
     def _panel(self, nombre: str) -> QWidget:
-        return self.scroll if nombre == "derecho" else self.pestanas
+        return self.derecho if nombre == "derecho" else self.pestanas
 
     def _mostrar_panel(self, nombre: str, visible: bool, guardar: bool = True) -> None:
         self._panel(nombre).setVisible(visible)
@@ -335,11 +450,16 @@ class Ventana(QMainWindow):
 
     # -- fuentes: ejemplo o modelo guardado ------------------------------------------------------------
     def cargar_ejemplo(self, key: str) -> None:
+        if not self._salir_de_edicion():
+            self.acciones_ej[key].setChecked(False)
+            return
         self.fuente = {"tipo": "ejemplo", "clave": key}
         self.acciones_ej[key].setChecked(True)
         self._cargar()
 
     def abrir_ruta(self, ruta: Path) -> bool:
+        if not self._salir_de_edicion():
+            return False
         try:
             op = open_model(ruta)
         except (DiagnosticError, OSError) as exc:
@@ -354,8 +474,9 @@ class Ventana(QMainWindow):
         ayuda = (f"Modelo abierto de {ruta}. "
                  + ("Posiciones de su presentación." if layout else "Sin presentación: colocado automáticamente.")
                  + (" Avisos: " + "; ".join(avisos) if avisos else ""))
+        proyecto = ruta if ruta.is_dir() else ruta.parent if ruta.name == "manifest.json" else None
         self.fuente = {"tipo": "fichero", "ruta": ruta, "doc": op.doc, "layout": layout, "titulo": op.title,
-                       "ayuda": ayuda}
+                       "ayuda": ayuda, "raiz": proyecto, "presentacion": op.presentations[0] if op.presentations else None}
         checked = self.grupo.checkedAction()
         if checked:
             self.grupo.setExclusive(False)
@@ -376,8 +497,13 @@ class Ventana(QMainWindow):
             if f["tipo"] == "ejemplo":
                 title, help_text, build = EJEMPLOS[f["clave"]]
                 self.v = Vista(f["clave"], title, help_text, build, self.options)
+            elif f["tipo"] == "editor":  # lo que se está editando, tal como está: cada simulación es una ejecución nueva
+                e = self.edicion
+                self.v = Vista(e.ed.model["id"], e.titulo, "Simulación del grafcet que se está editando.",
+                               lambda: (copy.deepcopy(e.ed.model), e.layout()), self.options, presentation=e.ed.presentation)
             else:
-                self.v = Vista(f["ruta"].stem, f["titulo"], f["ayuda"], lambda: (f["doc"], f["layout"]), self.options)
+                self.v = Vista(f["ruta"].stem, f["titulo"], f["ayuda"], lambda: (f["doc"], f["layout"]), self.options,
+                               presentation=f.get("presentacion"))
         except ERRORES as exc:
             QMessageBox.warning(self, TITULO, f"No se pudo preparar la simulación:\n\n{exc}")
             return
@@ -390,6 +516,229 @@ class Ventana(QMainWindow):
 
     def reiniciar(self) -> None:
         self._cargar()
+
+    # -- edición: modos, herramientas y diálogos ---------------------------------------------------
+    def _acciones_edicion(self, on: bool) -> None:
+        for a in (*self.a_herr.values(), self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo):
+            a.setEnabled(on)
+
+    def _titulo_ventana(self) -> None:
+        e = self.edicion
+        if self.modo == "editar" and e is not None:
+            self.setWindowTitle(f"{e.titulo}{' *' if e.ed.dirty else ''} (editando) — {TITULO}")
+
+    def _salir_de_edicion(self) -> bool:
+        """Antes de cargar otro modelo: si hay cambios sin guardar, pregunta. Descarta la edición en curso."""
+        e = self.edicion
+        if e is not None and e.ed.dirty:
+            r = QMessageBox.question(self, TITULO, f"«{e.titulo}» tiene cambios sin guardar. ¿Guardarlos?",
+                                     QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
+                                     | QMessageBox.StandardButton.Cancel)
+            if r == QMessageBox.StandardButton.Cancel or (r == QMessageBox.StandardButton.Save and not self.guardar()):
+                return False
+        if e is not None:
+            shutil.rmtree(self.recup.dir, ignore_errors=True)
+            self.edicion = None
+            self.modo = "simular"
+            self._poner_modo()
+        return True
+
+    def closeEvent(self, event: Any) -> None:  # noqa: N802
+        if self._salir_de_edicion():
+            self.a_ejecutar.setChecked(False)
+            self.t_auto.stop()
+            event.accept()
+        else:
+            event.ignore()
+
+    def nuevo(self) -> None:
+        if not self._salir_de_edicion():
+            return
+        self._empezar_edicion(Edicion.nuevo())
+
+    def _edicion_desde_fuente(self) -> Edicion:
+        """Copia editable de lo que se está simulando (un ejemplo o un modelo abierto)."""
+        f = self.fuente
+        if f["tipo"] == "ejemplo":
+            title, _, build = EJEMPLOS[f["clave"]]
+            m, layout = build()
+            return Edicion.desde(m.doc, layout, title)
+        return Edicion.desde(f["doc"], f["layout"], f["titulo"], f.get("raiz"), f.get("presentacion"))
+
+    def _empezar_edicion(self, e: Edicion) -> None:
+        self.edicion = e
+        e.diagrama = self.diagrama
+        e.cambiado.connect(self.refrescar_edicion)
+        e.redibujar.connect(self._redibujar_edicion)
+        e.pedir_condicion = self.editar_condicion
+        e.pedir_etiqueta = self.editar_etiqueta
+        e.confirmar_borrado = self._confirmar_borrado
+        self.cambiar_modo("editar")
+
+    def cambiar_modo(self, modo: str) -> bool:
+        if modo == "editar":
+            if self.edicion is None:
+                if self.v is None:
+                    self._empezar_edicion(Edicion.nuevo())
+                else:
+                    self._empezar_edicion(self._edicion_desde_fuente())
+                return True
+            self.a_ejecutar.setChecked(False)
+            self.modo = "editar"
+        else:
+            if self.edicion is not None:
+                res = self.edicion.ed.validate()
+                if not res.can_simulate:
+                    self._no_simulable()
+                    self._poner_modo()
+                    return False
+                self.fuente = {"tipo": "editor"}
+                self.modo = "simular"
+                self._poner_modo()
+                self._cargar()
+                return True
+            self.modo = "simular"
+        self._poner_modo()
+        return True
+
+    def _poner_modo(self) -> None:
+        """Ajusta la interfaz al modo: herramientas, panel derecho, dibujo y acciones."""
+        editar = self.modo == "editar" and self.edicion is not None
+        for a, on in ((self.a_editar, editar), (self.a_simular, not editar)):
+            a.blockSignals(True)
+            a.setChecked(on)
+            a.blockSignals(False)
+        self.tb_edit.setVisible(editar)
+        self.tb_sim.setVisible(not editar)
+        self.dock.setVisible(editar)
+        self._acciones_edicion(editar)
+        for a in (self.a_ejecutar, self.a_paso, self.a_completar, self.a_reiniciar):
+            a.setEnabled(not editar)  # sin simulación en curso al editar (F5 y compañía no hacen nada)
+        self.derecho.setCurrentIndex(1 if editar else 0)
+        self.diagrama.modo_edicion(editar, self.edicion if editar else None)
+        if editar:
+            self.refrescar_edicion()
+        else:
+            self.diagrama.ajustar()
+
+    def _no_simulable(self) -> None:
+        lineas = self.edicion.resumen(self.edicion.diagnosticos())
+        QMessageBox.warning(self, TITULO, "El grafcet no compila, no se puede simular todavía:\n\n"
+                            + "\n".join(f"• {x}" for x in lineas[:8]) + ("\n…" if len(lineas) > 8 else ""))
+
+    def herramienta(self, h: str) -> None:
+        e = self.edicion
+        if e is not None and e.herramienta != h:
+            e.herramienta, e.enlace, e.mensaje = h, None, ""
+            self.refrescar_edicion()
+        elif e is not None:
+            self.refrescar_edicion()
+
+    def refrescar_edicion(self) -> None:
+        e = self.edicion
+        if e is None or self.modo != "editar":
+            return
+        diags = e.diagnosticos()
+        marcados = {d["target"] for d in diags if d["blocks"] and d["target"]}
+        self.diagrama.mostrar(e.M, {}, set(e.sel), marcados)
+        self.estado.setText("editando")
+        self.estado.setStyleSheet(f"color: {COL['accent']}; border: 1px solid {COL['accent']}; border-radius: 9px; "
+                                  "padding: 1px 9px")
+        self.titulo.setText(f"{e.titulo}{' *' if e.ed.dirty else ''}")
+        self.ayuda.setText(e.mensaje or AYUDA_EDICION[e.herramienta])
+        self.ayuda.setStyleSheet(f"color: {COL['err'] if e.mensaje else COL['muted']}; font-weight: {600 if e.mensaje else 400}")
+        if e.mensaje:
+            self.statusBar().showMessage(e.mensaje, 9000)
+        self.l_herr.setText(f"<b>{NOMBRE_HERRAMIENTA[e.herramienta]}</b>: {html.escape(AYUDA_EDICION[e.herramienta])}")
+        sel = [e.nombre(i) for i in e.sel]
+        self.l_sel.setText(("Selección: " + ", ".join(sel)) if sel else "Nada seleccionado.")
+        self.l_reloj.setText(f"{len(e.M['steps'])} etapas · {len(e.M['transitions'])} transiciones")
+        self.a_herr[e.herramienta].setChecked(True)
+        self.paleta.elegir(e.herramienta)
+        self.props.mostrar(e)
+        self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
+        self.a_rehacer.setEnabled(bool(e.ed.redo_stack))
+        self.a_borrar.setEnabled(bool(e.sel))
+        self.a_debajo.setEnabled(len(e.sel) == 1)
+        bloq = [d for d in diags if d["blocks"]]
+        self.l_resumen.setText("El grafcet se puede simular." if not bloq else
+                               "No compila:\n" + "\n".join(e.resumen(diags)))
+        self.l_resumen.setStyleSheet(f"color: {COL['ok'] if not bloq else COL['err']}")
+        self.lista_diag.clear()
+        for d in diags:
+            q = f" · {d['question']}" if d["question"] else ""
+            item = QListWidgetItem(f"{d['code']}{q}: {d['message']}")
+            item.setData(Qt.ItemDataRole.UserRole, d["target"])
+            item.setToolTip(d["correction"])
+            item.setForeground(QColor(COL["err"] if d["blocks"] else COL["muted"]))
+            self.lista_diag.addItem(item)
+        self._titulo_ventana()
+
+    def _redibujar_edicion(self) -> None:
+        e = self.edicion
+        if e is not None and self.modo == "editar":
+            self.diagrama.mostrar(e.M, {}, set(e.sel), set())
+
+    def _ir_a_diagnostico(self, item: QListWidgetItem) -> None:
+        """Un clic en un diagnóstico selecciona el elemento y lo centra (REQ-EDT-09)."""
+        e, target = self.edicion, item.data(Qt.ItemDataRole.UserRole)
+        if e is not None and target:
+            e.seleccionar([target])
+            c = e.centro(target)
+            if c is not None:
+                self.diagrama.centrar_en(c)
+
+    def editar_condicion(self, tid: str) -> None:
+        """Doble clic en una transición: lleva el cursor a su receptividad, en el panel de propiedades."""
+        self.edicion.seleccionar([tid])
+        self.props.t_texto.setFocus()
+        self.props.t_texto.selectAll()
+
+    def editar_etiqueta(self, ident: str) -> None:
+        """Doble clic en una etapa: lleva el cursor a su etiqueta, en el panel de propiedades."""
+        self.edicion.seleccionar([ident])
+        self.props.s_etiqueta.setFocus()
+        self.props.s_etiqueta.selectAll()
+
+    def _confirmar_borrado(self, plan: dict[str, list[str]]) -> bool:
+        e = self.edicion
+        n = e.nombres
+        extra = [n.get(i, i) for i in plan["elements"] if i not in e.sel]
+        texto = f"Se borrará: {', '.join(n.get(i, i) for i in e.sel)}."
+        if extra:
+            texto += f"\n\nTambién se lleva consigo: {', '.join(extra)}."
+        if plan["affectedTransitions"]:
+            texto += f"\n\nQuedan sin enlace en este extremo: {', '.join(n.get(i, i) for i in plan['affectedTransitions'])}."
+        return QMessageBox.question(self, TITULO, texto + "\n\nSe puede deshacer con Ctrl+Z. ¿Continuar?") \
+            == QMessageBox.StandardButton.Yes
+
+    # -- recuperación automática (REQ-EDT-10) -----------------------------------------------------------
+    def autoguardar(self, ahora: float | None = None) -> bool:
+        e = self.edicion
+        if e is None or not e.ed.dirty:
+            return False
+        try:
+            return self.recup.maybe_autosave(time.time() if ahora is None else ahora, True, e.proyecto(), e.ed.revision)
+        except (DiagnosticError, OSError):
+            return False
+
+    def ofrecer_recuperacion(self) -> bool:
+        """Al arrancar: si quedó una copia de recuperación de una edición sin guardar, se ofrece abrirla."""
+        try:
+            info = self.recup.available()
+            if not info:
+                return False
+            op = open_model(self.recup.dir)
+        except (DiagnosticError, OSError):
+            return False
+        if QMessageBox.question(self, TITULO, "Quedó una edición sin guardar (copia de recuperación). ¿Abrirla?") \
+                != QMessageBox.StandardButton.Yes:
+            shutil.rmtree(self.recup.dir, ignore_errors=True)
+            return False
+        e = Edicion.desde(op.doc, {}, op.title, None, op.presentations[0] if op.presentations else None)
+        e.ed.dirty = True
+        self._empezar_edicion(e)
+        return True
 
     def paso_evolucion(self) -> None:
         """Paso: una evolución del recorrido pendiente; con la situación estable, hasta el próximo vencimiento."""
@@ -606,41 +955,73 @@ class Ventana(QMainWindow):
         self.traza.scrollToBottom()
 
     # -- guardar ------------------------------------------------------------------------------
-    def guardar(self) -> None:
-        """Guarda el modelo en curso, con sus posiciones, como proyecto (documento 09) que luego puede abrirse."""
+    def guardar(self) -> bool:
+        """Guarda el modelo en curso, con sus posiciones, como proyecto (documento 09) que luego puede abrirse.
+        Si se está editando, guarda lo editado en su carpeta (la primera vez pregunta cuál)."""
+        if self.edicion is not None:
+            return self._guardar_edicion()
         f = self.fuente
         base = QFileDialog.getExistingDirectory(self, "Carpeta donde crear el proyecto")
         if not base:
-            return
+            return False
         name = f["clave"] if f["tipo"] == "ejemplo" else f["ruta"].stem
         destino = Path(base) / re.sub(r"[^A-Za-z0-9._-]", "-", name)
         if destino.exists() and any(destino.iterdir()):
             r = QMessageBox.question(self, TITULO, f"{destino} ya existe y no está vacía. ¿Sobrescribir el proyecto?")
             if r != QMessageBox.StandardButton.Yes:
-                return
+                return False
         try:
             self.guardar_en(destino)
         except (DiagnosticError, OSError) as exc:
             QMessageBox.warning(self, TITULO, f"No se pudo guardar:\n\n{exc}")
-            return
+            return False
         self.statusBar().showMessage(f"Proyecto guardado en {destino}", 8000)
+        return True
+
+    def _guardar_edicion(self) -> bool:
+        e = self.edicion
+        destino = e.ruta
+        if destino is None:
+            base = QFileDialog.getExistingDirectory(self, "Carpeta donde crear el proyecto")
+            if not base:
+                return False
+            destino = Path(base) / (re.sub(r"[^A-Za-z0-9._-]", "-", e.titulo).strip("-") or "grafcet")
+            if destino.exists() and any(destino.iterdir()):
+                r = QMessageBox.question(self, TITULO, f"{destino} ya existe y no está vacía. ¿Sobrescribir el proyecto?")
+                if r != QMessageBox.StandardButton.Yes:
+                    return False
+        try:
+            e.guardar(destino)
+        except (DiagnosticError, OSError) as exc:
+            QMessageBox.warning(self, TITULO, f"No se pudo guardar:\n\n{exc}")
+            return False
+        shutil.rmtree(self.recup.dir, ignore_errors=True)  # lo guardado ya no necesita su copia de recuperación
+        self.recup.last_save_s = None
+        self.statusBar().showMessage(f"Proyecto guardado en {destino}", 8000)
+        self._titulo_ventana()
+        return True
 
     def guardar_en(self, destino: Path) -> None:
         f, doc = self.fuente, self.v.doc
-        if f["tipo"] == "ejemplo":
+        if f["tipo"] == "editor":
+            layout = {**auto_layout(doc), **self.edicion.layout()}
+        elif f["tipo"] == "ejemplo":
             layout = EJEMPLOS[f["clave"]][2]()[1]
         else:
             layout = {**auto_layout(doc), **f["layout"]}
         ident = re.sub(r"[^A-Za-z0-9._-]", "-", destino.name)[:120] or "proyecto"
         project = new_project(ident, self.v.model["title"])
         add_document(project, doc)
-        add_document(project, presentation_for(doc, layout))
+        pres = self.edicion.ed.presentation if f["tipo"] == "editor" else f.get("presentacion")
+        add_document(project, copy.deepcopy(pres) if pres else presentation_for(doc, layout))
         save_project(destino, project)
 
     def guardar_imagen(self) -> None:
-        from .diagrama import imagen
-        ruta, _ = QFileDialog.getSaveFileName(self, "Guardar el dibujo", f"{self.v.key}.png", "Imagen PNG (*.png)")
-        if ruta and not imagen(self.v.model, self.v.state()).save(ruta):
+        editando = self.modo == "editar" and self.edicion is not None
+        ruta, _ = QFileDialog.getSaveFileName(self, "Guardar el dibujo", f"{self.edicion.titulo if editando else self.v.key}.png",
+                                              "Imagen PNG (*.png)")
+        img = imagen(self.edicion.M, {}) if editando else imagen(self.v.model, self.v.state()) if ruta else None
+        if ruta and not img.save(ruta):
             QMessageBox.warning(self, TITULO, f"No se pudo guardar {ruta}")
 
     def acerca(self) -> None:
@@ -663,6 +1044,8 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName(TITULO)
     w = Ventana()
+    if not args.captura:
+        w.ofrecer_recuperacion()
     if args.ejemplo:
         w.cargar_ejemplo(args.ejemplo)
     if args.modelo and not w.abrir_ruta(Path(args.modelo)):

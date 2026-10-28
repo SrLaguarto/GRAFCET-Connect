@@ -10,8 +10,10 @@ Qt (LGPL v3) quedan como ficheros separados y sustituibles. Necesita PySide6-Ess
 from __future__ import annotations
 
 import shutil
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,11 +30,31 @@ def main() -> int:
             "--specpath", str(work), *[f"--exclude-module={m}" for m in EXCLUIR],
             str(ROOT / "escritorio" / "simulador.py")]
     print(" ".join(args), flush=True)
-    r = subprocess.run(args, cwd=ROOT)
+    # PATH de herramientas ajenas puede contener DLL con el mismo nombre y otra ABI
+    # (p. ej. icuuc.dll de Poppler). Qt usa la ICU de Windows. La compilación solo
+    # necesita el intérprete actual y las herramientas del sistema, no ese PATH.
+    env = os.environ.copy()
+    windows = Path(env.get("SystemRoot", r"C:\Windows"))
+    env["PATH"] = os.pathsep.join(map(str, (Path(sys.executable).parent, windows / "System32", windows)))
+    r = subprocess.run(args, cwd=ROOT, env=env)
     if r.returncode:
         return r.returncode
     dist = ROOT / "dist" / NOMBRE
     shutil.copy(ROOT / "escritorio" / "LEEME.txt", dist / "LEEME.txt")
+    # Un build correcto no basta: comprobar la carga de Qt y el dibujo en el EXE.
+    with tempfile.TemporaryDirectory(prefix="grafcet-arranque-") as tmp:
+        captura = Path(tmp) / "arranque.png"
+        prueba_env = {**env, "QT_QPA_PLATFORM": "offscreen", "QT_QPA_FONTDIR": str(windows / "Fonts")}
+        try:
+            prueba = subprocess.run([str(dist / (NOMBRE + ".exe")), "--ejemplo", "repeticion", "--captura", str(captura)],
+                                    cwd=dist, env=prueba_env, timeout=30)
+        except subprocess.TimeoutExpired:
+            print("ERROR: el ejecutable no completó la prueba de arranque en 30 s.", flush=True)
+            return 1
+        if prueba.returncode or not captura.is_file() or captura.stat().st_size == 0:
+            print("ERROR: el ejecutable no pudo arrancar y generar su captura.", flush=True)
+            return 1
+        print("Prueba de arranque del ejecutable superada (Qt y captura).", flush=True)
     size = sum(f.stat().st_size for f in dist.rglob("*") if f.is_file())
     print(f"\nListo: {dist / (NOMBRE + '.exe')}  ({size / 1e6:.0f} MB en la carpeta)")
     return 0

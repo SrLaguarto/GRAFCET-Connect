@@ -45,12 +45,6 @@ function drawDiagram(svg, M, S) {
   const pos = {};
   M.steps.forEach(s => pos[s.id] = {x:s.x+SX, y:s.y});
   (M.macros || []).forEach(m => pos[m.id] = {x:m.x+SX, y:m.y});
-  const nodes = Object.values(pos);
-  const minX = Math.min(...nodes.map(p=>p.x));
-  // Enlace ascendente: por la izquierda del parcial de la transición, no de todo el dibujo
-  const part = p => (p === "g" || p == null) ? "" : p, leftOf = {};
-  M.steps.forEach(s => { const k = part(s.partial); leftOf[k] = Math.min(leftOf[k] ?? Infinity, pos[s.id].x); });
-  (M.macros || []).forEach(m => { leftOf[""] = Math.min(leftOf[""] ?? Infinity, pos[m.id].x); });
   const situation = new Set(S.situation || []), virtual = new Set(S.virtual || []);
   const unstable = new Set(S.unstable || []);
   const cleared = new Set(S.lastCleared || []);
@@ -59,28 +53,17 @@ function drawDiagram(svg, M, S) {
   drawFrames(frames, M, pos);
   M.transitions.forEach(t => {
     const tx = t.x + SX, ty = t.y, ob = (S.transitions||{})[t.id] || {};
-    const pre = t.pre.map(p => pos[p]), post = t.post.map(p => pos[p]);
-    if (pre.length > 1) {   // sincronización: doble trazo sobre la transición
-      const xs = pre.map(p=>p.x), yy = ty - 14;
-      el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:yy, y2:yy, class:"dbl"}, links);
-      el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:yy-4, y2:yy-4, class:"dbl"}, links);
-      pre.forEach(p => el("path", {d:`M${p.x},${p.y+H} V${yy-4}`, class:"link"}, links));
+    const pre = (t.preDib || t.pre).map(p => pos[p]), post = (t.postDib || t.post).map(p => pos[p]);
+    if (t.simulPre) {
+      const xs = [...pre.map(p=>p.x), tx], yy = ty - 14;
+      [yy, yy-4].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl"}, links));
       el("path", {d:`M${tx},${yy} V${ty}`, class:"link"}, links);
-    } else pre.forEach(p => el("path", {d:`M${p.x},${p.y+H} V${(p.y+H+ty)/2} H${tx} V${ty}`, class:"link"}, links));
-    const down = post.filter(p => p.y > ty), up = post.filter(p => p.y <= ty);
-    if (down.length > 1) {  // divergencia simultánea: doble trazo bajo la transición
-      const xs = down.map(p=>p.x), yy = ty + 14;
+    }
+    if (t.simulPost) {
+      const xs = [...post.map(p=>p.x), tx], yy = ty + 14;
+      [yy, yy+4].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl"}, links));
       el("path", {d:`M${tx},${ty} V${yy}`, class:"link"}, links);
-      el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:yy, y2:yy, class:"dbl"}, links);
-      el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:yy+4, y2:yy+4, class:"dbl"}, links);
-      down.forEach(p => el("path", {d:`M${p.x},${yy+4} V${p.y-H}`, class:"link"}, links));
-    } else down.forEach(p => el("path", {d:`M${tx},${ty} V${(ty+p.y-H)/2} H${p.x} V${p.y-H}`, class:"link"}, links));
-    up.forEach(p => {       // enlace ascendente con flecha
-      const lx = Math.min(leftOf[part(t.partial)] ?? minX, tx) - 70, top = p.y - H - 16;
-      el("path", {d:`M${tx},${ty} V${ty+14} H${lx} V${top} H${p.x} V${p.y-H}`, class:"link"}, links);
-      const my = (ty + 14 + top) / 2;
-      el("path", {d:`M${lx-5},${my+6} L${lx},${my-4} L${lx+5},${my+6} Z`, class:"arrow"}, links);
-    });
+    }
     if (!pre.length) el("path", {d:`M${tx},${ty-16} V${ty}`, class:"link"}, links);    // transición fuente
     if (!post.length) el("path", {d:`M${tx},${ty} V${ty+16}`, class:"link"}, links);   // transición sumidero
     const cls = ["tr", ob.validated?"validated":"", ob.fireable?"fireable":"", cleared.has(t.id)?"cleared":"",
@@ -89,9 +72,18 @@ function drawDiagram(svg, M, S) {
     el("title", {}, g).textContent = `Transición ${t.label}: validada ${ob.validated?"sí":"no"}, receptividad ${ob.receptivity?"verdadera":"falsa"}` +
       (ob.forced ? "; su parcial está forzado y no evoluciona" : "");
     el("line", {x1:tx-TB, x2:tx+TB, y1:ty, y2:ty, class:"bar"}, g);
-    txt(g, tx-TB-6, ty+5, `(${t.label})`, {"text-anchor":"end", class:"tdes"});
+    if (t.showLabel !== false) txt(g, tx-TB-6, ty+5, `(${t.label})`, {"text-anchor":"end", class:"tdes"});
     const tc = segText(g, tx+TB+8, ty+5, t.cond, "tcond");
     timerText(g, tx+TB+8 + tc.getComputedTextLength() + (t.cond ? 10 : 0), ty+5, t.conditionRef, S);
+  });
+  // Exactamente los mismos recorridos que Qt y la detección del ratón.
+  (M.links || []).forEach(e => {
+    el("path", {d:e.pts.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" "), class:"link"}, links);
+    (e.arrows || []).forEach(a => el("path", {d:a.pts.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" ")+" Z", class:"arrow"}, links));
+  });
+  (M.bars || []).forEach(b => {
+    const x = b.x + SX;
+    [0, ...(b.kind === "Y" ? [4] : [])].forEach(dy => el("line", {x1:x, x2:x+b.ancho, y1:b.y+dy, y2:b.y+dy, class:"dbl"}, links));
   });
   M.steps.forEach(s => {
     const p = pos[s.id], stale = !!blk && situation.has(s.id), act = !blk && situation.has(s.id);

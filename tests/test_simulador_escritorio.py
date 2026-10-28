@@ -143,7 +143,7 @@ class Nucleo(unittest.TestCase):
         self.assertEqual(sorted(t["label"] for t in M["transitions"]), ["t1", "t2"], "sin etiqueta, t1, t2… y no el ID")
         con = {t["label"]: t["cond"] for t in M["transitions"]}
         self.assertEqual(sorted(con.values(), key=lambda c: c[0]["t"]),
-                         [[{"t": "2s"}, {"t": "/"}, {"t": "X"}, {"t": "E1", "s": True}], [{"t": "marcha"}]])
+                         [[{"t": "2s"}, {"t": "/"}, {"t": "X"}, {"t": "1", "s": True}], [{"t": "marcha"}]])  # la etapa E1 es X1
         acc = next(a for s in M["steps"] for a in s["actions"])
         self.assertEqual((acc["text"], acc["target"]), ([{"t": "motor"}], motor), "se muestra el nombre, la clave es el ID")
         st = run(v, ("entrada", {"var": marcha}), ("avanzar", {"us": 500_000}))
@@ -320,9 +320,9 @@ class Ventana(unittest.TestCase):
         from PySide6.QtCore import QSettings
         from escritorio.ventana import Ventana as V
         w = self.w
-        self.assertFalse(w.scroll.isHidden() or w.pestanas.isHidden())
+        self.assertFalse(w.derecho.isHidden() or w.pestanas.isHidden())
         w.flechas["derecho"].click()
-        self.assertTrue(w.scroll.isHidden() and not w.a_derecho.isChecked())
+        self.assertTrue(w.derecho.isHidden() and not w.a_derecho.isChecked())
         self.assertEqual(w.flechas["derecho"].text(), "◂")
         w.flechas["inferior"].click()
         self.assertTrue(w.pestanas.isHidden() and not w.a_inferior.isChecked())
@@ -330,14 +330,14 @@ class Ventana(unittest.TestCase):
         self.assertFalse(w.ajustes.value("paneles/derecho", True, type=bool))
         w.a_derecho.setChecked(True)  # desde el menú Ver
         w.a_inferior.setChecked(True)
-        self.assertFalse(w.scroll.isHidden() or w.pestanas.isHidden())
+        self.assertFalse(w.derecho.isHidden() or w.pestanas.isHidden())
         self.assertTrue(w.ajustes.value("paneles/inferior", False, type=bool))
         self.assertEqual(w.flechas["derecho"].text(), "▸")
         w.a_derecho.setChecked(False)  # un arranque posterior lo recuerda
         w.ajustes.sync()
         otra = V(QSettings(w.ajustes.fileName(), QSettings.Format.IniFormat))
         try:
-            self.assertTrue(otra.scroll.isHidden() and not otra.a_derecho.isChecked())
+            self.assertTrue(otra.derecho.isHidden() and not otra.a_derecho.isChecked())
         finally:
             otra.a_ejecutar.setChecked(False)
             otra.deleteLater()

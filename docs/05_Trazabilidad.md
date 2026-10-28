@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-27T18:06:05+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 150 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-28T10:14:28+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 182 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 50 casos, 53 pruebas, 53 pasan.
+Pruebas suplementarias S-xx: 82 casos, 85 pruebas, 85 pasan.
 
 ## Requisitos
 
@@ -45,7 +45,7 @@ Pruebas suplementarias S-xx: 50 casos, 53 pruebas, 53 pasan.
 | REQ-CR-04 | P/alta | 02 | DOC | tests | R-01 (documental) | Ningún oráculo procede de otro producto; los oráculos son los del documento 11 |
 | REQ-MOD-01 | P/crítica | 03 | IMPL-P | model, persistence | T-21b ✔, T-22b ✔ | IDs únicos, propietario y referencias existentes; duplicados/huérfanos impiden simular |
 | REQ-MOD-02 | I/crítica | 03 | IMPL-I | model, editor | T-21b ✔ | D-ALTERNANCIA; enlaces etapa→etapa como borrador (P-IMP-05) |
-| REQ-MOD-03 | P/crítica | 03 | IMPL-P | editor | T-21c ✔ | Solo se conecta por operación explícita; la geometría no crea relaciones |
+| REQ-MOD-03 | P/crítica | 03 | IMPL-P | editor | T-21c ✔, S-EDI07 ✔, S-EDI17 ✔, S-EDI18 ✔, S-EDI19 ✔, S-EDI20 ✔, S-EDI21 ✔, S-EDI23 ✔, S-EDI24 ✔, S-EDI26 ✔ | Solo se conecta por operación explícita; la geometría no crea relaciones |
 | REQ-MOD-04 | I/alta | 03 | IMPL-DEC | model, engine | T-03c ✔, T-10e ◆, T-01d ◆, S-U07 ✔, S-OPT03e ✔ | Sumideros I. U-07 cerrada por el responsable (comparador, 27-10-2026, P-IMP-22): fuente por evento una vez por flanco (6.3 A); sin etapas iniciales, fuente de nivel y transición sin lados no compilan (6.1 A, 6.2 A, 6.4 A) |
 | REQ-MOD-05 | P/alta | 03 | IMPL-P | model, expressions, editor | T-09c ✔ | Texto libre conservado como descriptivo; D-EXP-PENDIENTE localizado |
 | REQ-MOD-06 | P/crítica | 03 | IMPL-P | model, editor, engine | T-04c ✔, T-21d ✔ | Renombrar, mover u ordenar no cambia observables ni revisión semántica (H-13) |
@@ -79,30 +79,30 @@ Pruebas suplementarias S-xx: 50 casos, 53 pruebas, 53 pasan.
 | REQ-JER-05 | I/crítica | 06 | IMPL-I | model, hierarchy | T-19a ✔, T-19b ✔, T-19c ✔ | Al arrancar, iniciales; al reentrar, enlaces de activación; al salir, se desactivan todos los descendientes (P-IMP-23). Encapsulante en permanencia: el contenido se mantiene (comparador, 3.4 A) |
 | REQ-JER-06 | U/crítica | 06 | IMPL-DEC | hierarchy | T-18d ◆, T-20a ◆, T-20c ◆ | Cerradas por el responsable: 7.2 B, 7.3 A, 7.4 C, 7.5 A, 7.6 B, 7.7 A y 7.8 A (P-IMP-24 a P-IMP-26). Vaciar por forzado un recinto con su encapsulante activa no se preguntó y se detiene (U-08) |
 | REQ-JER-07 | P/alta | 06 | PEND-UI | — | T-21g —, T-24a ◐ | Plegado y navegación pertenecen a la vista |
-| REQ-EDT-01 | P/alta | 07 | PARCIAL | editor, persistence | T-21a ◐, S-APP06 ✔ | Crear, abrir, guardar y duplicar sin interfaz; el simulador de escritorio abre proyectos y modelos y guarda como proyecto (P-IMP-29); diálogo de cierre con cambios pendiente del editor |
-| REQ-EDT-02 | P/alta | 07 | IMPL-P | editor | T-21b ✔, T-21c ✔ | Insertar, conectar, editar; borrador inválido guardable |
-| REQ-EDT-03 | P/alta | 07 | PARCIAL | editor | T-04c ✔, T-21c ✔ | Mover, alinear, distribuir y deshacer; zoom y desplazamiento en la vista del simulador (P-IMP-29), pendientes en el editor |
+| REQ-EDT-01 | P/alta | 07 | PARCIAL | editor, persistence | T-21a ◐, S-EDI03 ✔, S-EDI04 ✔, S-EDI05 ✔, S-EDI08 ✔, S-EDI28 ✔, S-EDI32 ✔, S-APP06 ✔ | Crear, abrir, guardar y duplicar sin interfaz; el simulador de escritorio abre proyectos y modelos, crea un grafcet nuevo, lo guarda y lo reabre (P-IMP-29, P-IMP-32), y pregunta antes de descartar cambios; sin duplicar desde la interfaz |
+| REQ-EDT-02 | P/alta | 07 | IMPL-P | editor | T-21b ✔, T-21c ✔, S-EDI03 ✔, S-EDI10 ✔, S-EDI11 ✔, S-EDI12 ✔, S-EDI13 ✔, S-EDI14 ✔, S-EDI15 ✔, S-EDI17 ✔, S-EDI18 ✔, S-EDI19 ✔, S-EDI21 ✔, S-EDI24 ✔, S-EDI25 ✔, S-EDI28 ✔, S-EDI29 ✔, S-EDI30 ✔, S-EDI31 ✔, S-EDI16 ✔, S-EDI01 ✔ | Insertar, conectar, editar; borrador inválido guardable; en la interfaz de escritorio: etapas, transiciones, enlaces y receptividades de un secuencial (P-IMP-32); selección, salto y repetición con el ratón (P-IMP-33), flechas y recorridos manuales persistentes (P-IMP-35); panel de acciones y jerarquías, pendientes |
+| REQ-EDT-03 | P/alta | 07 | PARCIAL | editor | T-04c ✔, T-21c ✔, S-EDI10 ✔, S-EDI29 ✔, S-EDI30 ✔, S-EDI01 ✔ | Mover, alinear, distribuir y deshacer; zoom en la vista del simulador (P-IMP-29); en la interfaz de escritorio, mover con rejilla de 20 y deshacer o rehacer (P-IMP-32); alinear y distribuir, pendientes en la interfaz |
 | REQ-EDT-04 | P/crítica | 07 | IMPL-P | editor | T-21e ✔ | Copiar/pegar con IDs nuevos y decisión explícita de referencias externas |
-| REQ-EDT-05 | P/crítica | 07 | IMPL-P | editor | T-21f ✔ | Transacciones atómicas; fallo fuera del historial; rehacer descartado |
-| REQ-EDT-06 | P/crítica | 07 | IMPL-P | editor | T-21d ✔ | Renombrar sin cambiar ID, usos actualizados, colisión diagnosticada, búsqueda con ruta |
+| REQ-EDT-05 | P/crítica | 07 | IMPL-P | editor | T-21f ✔, S-EDI05 ✔ | Transacciones atómicas; fallo fuera del historial; rehacer descartado |
+| REQ-EDT-06 | P/crítica | 07 | IMPL-P | editor | T-21d ✔, S-EDI08 ✔ | Renombrar sin cambiar ID, usos actualizados, colisión diagnosticada, búsqueda con ruta |
 | REQ-EDT-07 | P/alta | 07 | IMPL-P | editor | T-09b ✔, T-21d ✔, S-APP14 ✔, S-APP16 ✔ | Diccionario de variables y usos afectados por un cambio |
 | REQ-EDT-08 | P/alta | 07 | PEND-UI | — | T-21g — | Navegación jerárquica |
-| REQ-EDT-09 | P/alta | 07 | IMPL-P | diagnostics | T-21b ✔, T-09c ✔, S-ESC01 ✔ | Código, gravedad, elemento, evidencia y corrección; foco en interfaz pendiente |
-| REQ-EDT-10 | P/crítica | 07 | IMPL-P | persistence | T-22d ✔ | Recuperación separada cada 30 s si hay cambios, sin sobrescritura |
+| REQ-EDT-09 | P/alta | 07 | IMPL-P | diagnostics | T-21b ✔, T-09c ✔, S-EDI06 ✔, S-EDI14 ✔, S-EDI02 ✔, S-ESC01 ✔ | Código, gravedad, elemento, evidencia y corrección; panel de diagnósticos del editor de escritorio con clic que selecciona y centra el elemento (P-IMP-32); foco de teclado pendiente |
+| REQ-EDT-10 | P/crítica | 07 | IMPL-P | persistence | T-22d ✔, S-EDI09 ✔ | Recuperación separada cada 30 s si hay cambios, sin sobrescritura; conectada al editor de escritorio, que la ofrece al arrancar (P-IMP-32) |
 | REQ-EDT-11 | P/alta | 07 | PEND-UI | — | T-21h — | Exportación SVG/PDF no implementada en esta iteración (el simulador guarda el dibujo como PNG) |
 | REQ-EDT-12 | P/alta | 07 | PEND-UI | — | T-21g —, T-25a ◐ | Diagramas extensos: vista general, zoom y filtros |
 | REQ-EDT-13 | P/alta | 07 | PEND-UI | — | T-26a —, T-26b — | Teclado y accesibilidad |
-| REQ-EDT-14 | P/crítica | 07 | IMPL-P | editor, engine | T-23d ✔ | Edición semántica = revisión nueva; la ejecución conserva la suya |
+| REQ-EDT-14 | P/crítica | 07 | IMPL-P | editor, engine | T-23d ✔, S-EDI03 ✔ | Edición semántica = revisión nueva; la ejecución conserva la suya |
 | REQ-SIM-01 | P/crítica | 08 | IMPL-P | engine | T-23a ✔, T-23b ✔ | Estados de sesión, pausas en frontera completa, microavance, puntos antes/después |
 | REQ-SIM-02 | P/crítica | 08 | IMPL-P | scenario, engine | T-10b ✔, T-23c ✔, S-APP04 ✔ | Escenarios y entradas manuales registradas con origen y ordinal |
-| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-APP14 ✔, S-APP15 ✔, S-APP05 ✔, S-APP09 ✔, S-APP10 ✔, S-APP11 ✔, S-APP12 ✔, S-APP13 ✔, S-APP16 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
+| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-EDI22 ✔, S-EDI27 ✔, S-EDI32 ✔, S-APP14 ✔, S-APP15 ✔, S-APP05 ✔, S-APP09 ✔, S-APP10 ✔, S-APP11 ✔, S-APP12 ✔, S-APP13 ✔, S-APP16 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
 | REQ-SIM-04 | P/crítica | 08 | IMPL-P | engine | T-23c ✔, T-22f ✔, T-23f ✔, S-OPT03d ✔ | Instantánea con Z completo y compatibilidad exacta; dentro de recorrido D-INSTANTANEA-FASE |
 | REQ-SIM-05 | P/crítica | 08 | IMPL-P | trace | T-04a ✔, T-22g ✔, S-OPT03b ✔ | Traza con conjuntos E, causas, cierre y digest |
 | REQ-SIM-06 | P/crítica | 08 | IMPL-P | engine | T-09d ✔, T-23b ✔ | Observar y pausar no modifican comportamiento |
 | REQ-SIM-07 | P/crítica | 08 | IMPL-P | engine | T-23e ✔ | Intervención E en pausa estable, rama auditable |
 | REQ-SIM-08 | P/alta | 08 | IMPL-P | diagnostics, engine | T-08a ✔, T-08b ✔, T-16a ✔, S-08a ✔ | Evidencia y corrección recomendada en cada diagnóstico |
 | REQ-DAT-01 | P/crítica | 09 | IMPL-P | model, persistence, ids | T-22b ✔, T-21e ✔, S-H12 ✔ | Identidades, referencias y propiedad; nombres hexadecimales (H-12) |
-| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-CMP04 ✔, S-APP01 ✔, S-APP06 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
+| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-CMP04 ✔, S-EDI04 ✔, S-APP01 ✔, S-APP06 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
 | REQ-DAT-03 | P/crítica | 09 | IMPL-P | persistence | T-22c ✔, T-22e ✔, S-APP02 ✔ | Versión mayor/menor, desconocidos y migración con copia e informe |
 | REQ-DAT-04 | P/crítica | 09 | IMPL-P | engine | T-22f ✔, T-23c ✔, T-23f ✔, S-OPT03d ✔ | Instantánea íntegra y compatibilidad exacta; campos U no aplicables declarados |
 | REQ-DAT-05 | P/crítica | 09 | IMPL-P | canonical, timeutil | T-24a ◐, T-24b ✔, S-CAN ✔ | Representación canónica y SHA-256 independientes de región |
@@ -256,6 +256,38 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-CMP05 | REQ-NOR-02, REQ-SEM-09 | pasa | `test_SCMP05_lecturas_por_defecto_son_las_respuestas_incorporadas` | las respuestas incorporadas (hoja 08 y comparador) son las lecturas por defecto; lo abierto se detiene. |
 | S-DEC | REQ-EXP-01, REQ-TMP-01 | pasa | `test_SDEC_decimales_y_enteros_exactos` | sin redondeo silencioso ni desbordamiento. |
 | S-DECL | REQ-ALC-03, REQ-NOR-01, REQ-NOR-02 | pasa | `test_SDECL_declaracion_sin_conformidad` | la declaración excluye U críticas y no afirma conformidad. |
+| S-EDI01 | REQ-EDT-02, REQ-EDT-03 | pasa | `test_SEDI01_parcial_raiz_etiquetas_y_agrupar` | el grafcet nuevo tiene el parcial raíz «g»; las etiquetas nuevas son E0.. y t1..; |
+| S-EDI02 | REQ-EDT-09 | pasa | `test_SEDI02_comprobar_receptividad_sin_cambiar_el_modelo` | un texto mal escrito se diagnostica sin tocar el modelo; las variables que faltan se listan. |
+| S-EDI03 | REQ-EDT-01, REQ-EDT-02, REQ-EDT-14 | pasa | `test_SEDI03_crear_enlazar_y_simular` | E0 (inicial) → t1 «marcha» → E1 → t2 «paro» → E0 se crea con el ratón, |
+| S-EDI04 | REQ-DAT-02, REQ-EDT-01 | pasa | `test_SEDI04_guardar_abrir_y_simular` | el grafcet creado se guarda como proyecto, se abre y simula igual; en Editar se |
+| S-EDI05 | REQ-EDT-01, REQ-EDT-05 | pasa | `test_SEDI05_deshacer_rehacer_mover_y_borrar` | un arrastre es una sola operación de deshacer; borrar avisa de lo que arrastra y se |
+| S-EDI06 | REQ-EDT-09 | pasa | `test_SEDI06_receptividad_mal_escrita_y_diagnosticos` | una receptividad que no se interpreta se conserva como texto, se diagnostica con su corrección, |
+| S-EDI07 | REQ-MOD-03 | pasa | `test_SEDI07_enlaces_en_borrador_y_añadir_debajo` | dos elementos del mismo tipo quedan como borrador con su diagnóstico; «añadir debajo» crea |
+| S-EDI08 | REQ-EDT-01, REQ-EDT-06 | pasa | `test_SEDI08_etiquetas_y_cambios_sin_guardar` | renombrar una etapa conserva su identidad y actualiza el dibujo; con cambios sin |
+| S-EDI09 | REQ-EDT-10 | pasa | `test_SEDI09_recuperacion_automatica` | con cambios sin guardar se copia la edición cada 30 s y se ofrece recuperarla; guardar la borra. |
+| S-EDI10 | REQ-EDT-02, REQ-EDT-03 | pasa | `test_SEDI10_el_ratón_real_y_el_dibujo` | los clics del ratón sobre el dibujo llegan al editor; la selección y las marcas se |
+| S-EDI11 | REQ-EDT-02 | pasa | `test_SEDI11_puntos_de_union` | etapas y transiciones tienen puntos de unión arriba y abajo; al acercarse se marcan y del punto |
+| S-EDI12 | REQ-EDT-02 | pasa | `test_SEDI12_paleta_arrastrar_y_sin_pedir_receptividad` | los elementos de la paleta, a la izquierda, se arrastran al dibujo; una transicion se coloca sin |
+| S-EDI13 | REQ-EDT-02 | pasa | `test_SEDI13_propiedades_de_la_etapa` | al seleccionar una etapa, el panel de la izquierda muestra su etiqueta y su tipo, editables. |
+| S-EDI14 | REQ-EDT-02, REQ-EDT-09 | pasa | `test_SEDI14_propiedades_de_la_transicion` | la receptividad se arma con botones, variables, comparaciones y temporizadores; lo que |
+| S-EDI15 | REQ-EDT-02 | pasa | `test_SEDI15_transiciones_mas_altas_de_acertar` | el area de una transicion es mas alta que su trazo: se acierta sin punteria. |
+| S-EDI16 | REQ-EDT-02 | pasa | `test_SEDI16_notacion_del_usuario` | ↑a, ↓a y X1 se traducen a la sintaxis del núcleo y vuelven; los espacios se ignoran al escribir y |
+| S-EDI17 | REQ-EDT-02, REQ-MOD-03 | pasa | `test_SEDI17_barra_de_simultaneidad` | la simultaneidad es una barra de doble trazo que se arrastra desde la paleta, se |
+| S-EDI18 | REQ-EDT-02, REQ-MOD-03 | pasa | `test_SEDI18_enlaces_seleccionables_flecha_e_invertir` | un enlace se selecciona con un clic en su trazo; «Invertir direccion» cambia su sentido y, |
+| S-EDI19 | REQ-EDT-02, REQ-MOD-03 | pasa | `test_SEDI19_alternativas_con_el_raton` | la alternativa (O) no es un elemento: se construye con el raton. Una segunda transicion |
+| S-EDI20 | REQ-MOD-03 | pasa | `test_SEDI20_sentido_del_enlace_segun_el_trazo` | de arriba abajo, el enlace no lleva flecha; de abajo arriba, si (sale solo del trazo). |
+| S-EDI21 | REQ-EDT-02, REQ-MOD-03 | pasa | `test_SEDI21_abrir_ramas_con_el_raton_de_verdad` | con eventos de raton reales sobre el dibujo (pulsar, mover, soltar): arrastrar de un punto |
+| S-EDI22 | REQ-SIM-03 | pasa | `test_SEDI22_ejemplo_alternativas` | el ejemplo «alternativas» se simula, se dibuja con la flecha de union y se puede editar. |
+| S-EDI23 | REQ-MOD-03 | pasa | `test_SEDI23_el_punto_de_arriba_recibe_y_el_enlace_entra_por_arriba` | lo que se arrastra desde el punto de arriba de una transicion es lo que le llega (viene de la etapa |
+| S-EDI24 | REQ-EDT-02, REQ-MOD-03 | pasa | `test_SEDI24_entrada_de_transicion_a_enlace_de_salida` | arrastrar la entrada a un enlace de salida crea otra alternativa, no una simultaneidad. |
+| S-EDI25 | REQ-EDT-02 | pasa | `test_SEDI25_arrastrar_desde_linea_de_seleccion` | clic selecciona un enlace; arrastre desde él abre otra rama en una transacción. |
+| S-EDI26 | REQ-MOD-03 | pasa | `test_SEDI26_geometria_comun_retorno_y_movimiento` | uniones comunes, retorno fuera de la etapa, flecha automática y recorridos iguales en Qt/web. |
+| S-EDI27 | REQ-SIM-03 | pasa | `test_SEDI27_ejemplos_seleccion_salto_repeticion` | las ramas construidas ejecutan selección, salto y repetición sin cambiar el motor. |
+| S-EDI28 | REQ-EDT-01, REQ-EDT-02 | pasa | `test_SEDI28_salto_inverso_guardar_y_reabrir` | arrastrar la entrada de una etapa a una salida crea el salto; persiste y se deshace entero. |
+| S-EDI29 | REQ-EDT-02, REQ-EDT-03 | pasa | `test_SEDI29_flecha_arrastrar_ocultar_invertir_sin_cambiar_modelo` | mover, ocultar e invertir la flecha son presentación; un arrastre, un deshacer. |
+| S-EDI30 | REQ-EDT-02, REQ-EDT-03 | pasa | `test_SEDI30_recolocar_retorno_y_mover_etapa` | tiradores para carril y alturas; extremos conectados al mover etapas; restaurar automático. |
+| S-EDI31 | REQ-EDT-02 | pasa | `test_SEDI31_flecha_union_horizontal_independiente` | la flecha de unión también se mueve, gira y oculta; se orienta con el tramo horizontal. |
+| S-EDI32 | REQ-EDT-01, REQ-SIM-03 | pasa | `test_SEDI32_dibujo_manual_persistencia_y_simulacion` | los ajustes sobreviven a guardar, abrir, simular y guardar otra copia. |
 | S-EJ01 | REQ-ACT-05, REQ-EVT-03, REQ-SEM-06 | pasa | `test_SEJ01_contador_en_etapa_inestable` | ejemplo del responsable; la etapa inestable 2 suma en CT y vuelve a 1 mientras CT < 3. |
 | S-EJ02 | REQ-ACT-02, REQ-EVT-01, REQ-EVT-03 | pasa | `test_SEJ02_contador_por_flanco_en_una_etapa` | ejemplo del responsable; una cuenta por cada subida de I02 con 1 activa, ninguna en 0. |
 | S-ESC01 | REQ-ACT-03, REQ-EDT-09 | pasa | `test_SESC01_conflictos_seguros_no_compilan` | activación/activación, desactivación/desactivación, activación/desactivación y misma etapa. |
