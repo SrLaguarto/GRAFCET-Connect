@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDia
                                QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
                                QPushButton, QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
-                               QTabBar, QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle)
+                               QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle)
 
 from grafcet.diagnostics import DiagnosticError
 from grafcet.examples import EJEMPLOS
@@ -163,21 +163,12 @@ class Ventana(QMainWindow):
         self._menus()
         self._interfaz()
         self.panel_es = PanelES()
-        self.pestanas_es = QTabBar()
         central = self.takeCentralWidget()
         self.paginas_es = QStackedWidget()
         self.paginas_es.addWidget(central)
         self.paginas_es.addWidget(self.panel_es)
-        self.pestanas_es.addTab("GRAFCET")
-        self.pestanas_es.addTab("E/S externas")
-        self.pestanas_es.currentChanged.connect(self.paginas_es.setCurrentIndex)
-        contenedor = QWidget()
-        layout_es = QVBoxLayout(contenedor)
-        layout_es.setContentsMargins(0, 0, 0, 0)
-        layout_es.setSpacing(0)
-        layout_es.addWidget(self.pestanas_es)
-        layout_es.addWidget(self.paginas_es, 1)
-        self.setCentralWidget(contenedor)
+        self.setCentralWidget(self.paginas_es)
+        self.panel_es.volver.connect(lambda: self.paginas_es.setCurrentIndex(0))
         self.panel_es.conectar.connect(self._conectar_modbus)
         self.panel_es.probar.connect(lambda: self._conectar_modbus(prueba=True))
         self.panel_es.desconectar.connect(self._desconectar_modbus)
@@ -493,6 +484,14 @@ class Ventana(QMainWindow):
         self.tb_sim.addSeparator()
         self.tb_sim.addAction(self.a_reiniciar)
         self.addToolBar(self.tb_sim)
+        self.tb_conexion = QToolBar("Conexión")
+        self.tb_conexion.setMovable(False)
+        self.tb_conexion.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.a_es = self._accion("E/S externas", lambda: self.paginas_es.setCurrentIndex(1))
+        self.a_es.setToolTip("Conectar sensores y actuadores · volver con la flecha Atrás")
+        self.a_es.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DriveNetIcon))
+        self.tb_conexion.addAction(self.a_es)
+        self.addToolBar(self.tb_conexion)
         self.tb_edit = QToolBar("Edición")
         self.tb_edit.setMovable(False)
         for a in (self.a_debajo, self.a_deshacer, self.a_rehacer, self.a_borrar):
@@ -1179,7 +1178,7 @@ class Ventana(QMainWindow):
                 Path(__file__).resolve().parents[1] / "pruebas_manuales" / "factoryio_digital")
         if self.abrir_ruta(raiz / "manifest.json"):
             self.a_ejecutar.setChecked(False)
-            self.pestanas_es.setCurrentIndex(1)
+            self.paginas_es.setCurrentIndex(1)
             self.panel_es.estado.setText("Prueba preparada · desconectado. Comprueba la IP de Factory I/O y pulsa «Probar conexión».")
 
     def _desconectar_modbus(self):

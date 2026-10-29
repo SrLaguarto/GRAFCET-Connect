@@ -42,7 +42,7 @@ dibujo. Con «Archivo > Nuevo grafcet», o «Editar» sobre un ejemplo o un mode
 
 ### Conectar con Factory I/O (P-IMP-50)
 
-Para una primera prueba sin crear un modelo, abra **E/S externas → Configuración
+Para una primera prueba sin crear un modelo, pulse el botón **E/S externas → Configuración
 → Abrir prueba guiada** y siga [la guía paso a paso](docs/PRIMERA_CONEXION_FACTORY_IO.md). El
 ejemplo coincide con el mapa facilitado por el responsable; compruebe su IP actual.
 
@@ -50,7 +50,8 @@ En Factory I/O seleccione **Modbus TCP/IP Server** y asigne sensores a entradas
 discretas/input registers y actuadores a coils/holding registers. Confirme IP,
 puerto, Slave ID y direcciones en su instalación; no se asignan automáticamente.
 
-En GrafConnect, simule el modelo y abra **E/S externas**. Arrastre las variables
+En GrafConnect, simule el modelo y pulse **E/S externas** en la barra. La flecha
+Atrás vuelve al GRAFCET sin desconectar. Arrastre las variables
 a los terminales I/Q (digitales) o AI/AQ (analógicos). En **Configuración** puede
 ajustar área, dirección **base cero**, formato BOOL/INT16/UINT16 y escala. En señales
 analógicas, `valor GRAFCET = registro / escala`; para 3,14 use escala 100 y registro

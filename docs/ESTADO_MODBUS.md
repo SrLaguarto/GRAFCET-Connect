@@ -82,8 +82,28 @@ Ejecutar/Pausa en lugar de glifos dentro del texto. Paquete intacto y trazabilid
 regenerada; portable reconstruido con arranque/captura verificados. Vista de
 1200×800 revisada. Las respuestas del responsable siguen sin tocarse ni incluirse.
 
-Siguiente tarea exacta: el responsable valida sencillez, arrastre y check de esta
-nueva pantalla con su escena ya funcional. Prueba guiada ahora se abre desde
+P-IMP-54: el responsable rechaza la estética de P-IMP-53 y revoca expresamente
+horizontal/industrial. Nueva vista oscura: listas transparentes izquierda/derecha,
+módulo central vertical compacto y terminales en filas. Configuración con servidor
+en vertical y detalles técnicos plegados. Se conservan los mapas, arrastre,
+analógicas y conexión. Motor y transporte intactos. Capturas principal y ajustes
+revisadas, SFIO20 comprueba disposición y ocultación progresiva de detalles.
+
+P-IMP-55: sin pestañas GRAFCET/E/S. Botón E/S externas después de Reiniciar;
+flecha Atrás en conexión vuelve al dibujo sin desconectar. SFIO18 comprueba ida
+y vuelta. El usuario ha cerrado el ejecutable para permitir su reconstrucción.
+Primer intento de empaquetado bloqueado por qwindows.dll en uso; empaquetado
+alternativo no superó arranque y NO se entrega. Se reconstruye con el procedimiento
+habitual y PATH limpio para evitar DLL ajenas (tal como hace el script existente).
+
+Entrega final P-IMP-54/55: 306 pruebas OK; trazabilidad regenerada y paquete
+intacto. Portable habitual dist/GRAFCET/GRAFCET.exe reconstruido y verificado
+con arranque/captura tanto de ejemplo como del proyecto de dos cintas. Capturas
+finales revisadas y copiadas como Vista_conexion.png y Vista_configuracion.png.
+La carpeta alternativa fallida está marcada NO_USAR; no es la entrega válida.
+
+Siguiente tarea exacta: el responsable revisa la estética y la navegación por
+botón/Atrás. Prueba guiada en botón
 E/S externas → Configuración → Abrir prueba guiada.
 Quedan después pruebas reales de pausa, pérdida de red y analógicas.
 Commits incrementales autorizados; consultar git log. Sin push ni subagentes.

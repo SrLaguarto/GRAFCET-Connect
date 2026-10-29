@@ -8,7 +8,8 @@ de Factory I/O, copia los nuevos valores en GrafConnect.
 
 1. Cierra la versión anterior de GrafConnect. Abre **dist/GRAFCET/GRAFCET.exe**
    desde la carpeta `implementacion` de este proyecto.
-2. Pulsa la pestaña **E/S externas → Configuración → Abrir prueba guiada**.
+2. Pulsa el botón **E/S externas** de la barra superior, junto a Reiniciar;
+   después **Configuración → Abrir prueba guiada**. La flecha Atrás vuelve al GRAFCET.
 3. El título debe indicar «Prueba Factory I O - PM y dos cintas». Este proyecto
    ya tiene etapa inicial, variables y acción. También está disponible en
    `prueba_factoryio_digital/manifest.json`, junto al ejecutable, por si quieres

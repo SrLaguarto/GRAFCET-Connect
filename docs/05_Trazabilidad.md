@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-29T12:50:57+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 306 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-29T13:04:57+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 306 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
