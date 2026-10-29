@@ -16,7 +16,9 @@ de Factory I/O, copia los nuevos valores en GrafConnect.
    abrirlo con **Proyecto → Abrir modelo…**.
 4. En **E/S externas** deben aparecer PM en I00, Q00 en Q00 y Q01 en Q01.
    El ejemplo ya está asignado. Para asignar otro modelo, arrastra sus variables
-   desde la lista a los terminales. Botón derecho permite quitar una asignación.
+   desde la lista a los terminales. La **×** quita una asignación y también puedes
+   arrastrar una señal desde su slot a otro. Si estás conectado, pulsa primero
+   **Desconectar / editar**.
 
 ## 2. Comprueba estos valores, sin cambiar tu escena
 
@@ -54,6 +56,24 @@ Las tres señales son digitales: formato **BOOL (apagado/encendido)** y escala *
 La escala **100** que se ve en Factory I/O sirve para las señales numéricas y no
 debes copiarla en estas tres señales digitales. No cambies los demás ajustes de
 Factory I/O para esta primera prueba.
+
+### Cantidades y direcciones de canales
+
+En **Configuración → Canales del servidor** copia el offset y la cantidad de
+Factory I/O. En tu última captura: offset 0 en las cuatro filas; cantidades
+**I=16, Q=16, AI=4, AQ=4**. El ejemplo guiado ya contiene esos valores.
+También puedes abrir esta sección desde **+ Canales**, en la cabecera del PLC.
+Estos cambios solo ajustan GrafConnect: no crean canales en Factory I/O.
+No se pueden deducir por Modbus: tu servidor responde incluso en dirección 65535.
+Si reduces un rango y una señal quedaría fuera, quítala o muévela primero.
+Con muchos canales, desplaza verticalmente la zona central para ver los demás.
+
+### Solo observar sensores
+
+Puedes conectar con únicamente entradas asignadas, desde Editar y sin un
+GRAFCET compilable. Se activa observación de solo lectura: no escribe ninguna
+salida ni ejecuta el motor. Para controlar actuadores sí necesitas un GRAFCET
+válido en Simular. El estado de conexión muestra el detalle al pasar el ratón.
 
 ## 3. Comprueba la conexión, todavía sin mover la cinta
 

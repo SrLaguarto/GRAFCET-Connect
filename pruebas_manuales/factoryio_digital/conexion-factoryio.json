@@ -28,5 +28,23 @@
       "escala": "1"
     }
   ],
+  "canales": {
+    "discrete": {
+      "offset": 0,
+      "cantidad": 16
+    },
+    "coil": {
+      "offset": 0,
+      "cantidad": 16
+    },
+    "input-register": {
+      "offset": 0,
+      "cantidad": 4
+    },
+    "holding": {
+      "offset": 0,
+      "cantidad": 4
+    }
+  },
   "version": 1
 }

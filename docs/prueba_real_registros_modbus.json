@@ -37,5 +37,36 @@
     0,
     0
   ],
-  "restauracion_confirmada": true
+  "restauracion_confirmada": true,
+  "observacion_sin_programa": {
+    "input_0": false,
+    "motor": null,
+    "salidas": [],
+    "conexion": "confirmada"
+  },
+  "sondeo_de_limites": {
+    "cantidades_segun_captura": {
+      "discrete": 16,
+      "coil": 16,
+      "input-register": 4,
+      "holding": 4
+    },
+    "direcciones_digitales_aceptadas": [
+      0,
+      15,
+      16,
+      255,
+      256,
+      65535
+    ],
+    "direcciones_registros_aceptadas": [
+      0,
+      3,
+      4,
+      63,
+      64,
+      65535
+    ],
+    "conclusion": "No permite inferir cantidades configuradas, asignacion de etiquetas ni formato por respuesta Modbus"
+  }
 }

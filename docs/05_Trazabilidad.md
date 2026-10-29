@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-29T13:40:28+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 308 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-29T13:51:46+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 311 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 208 casos, 211 pruebas, 211 pasan.
+Pruebas suplementarias S-xx: 211 casos, 214 pruebas, 214 pasan.
 
 ## Requisitos
 
@@ -95,14 +95,14 @@ Pruebas suplementarias S-xx: 208 casos, 211 pruebas, 211 pasan.
 | REQ-EDT-14 | P/crítica | 07 | IMPL-P | editor, engine | T-23d ✔, S-EDI03 ✔, S-EDI107 ✔, S-EDI108 ✔, S-EDI109 ✔, S-EDI73 ✔ | Edición semántica = revisión nueva; la ejecución conserva la suya |
 | REQ-SIM-01 | P/crítica | 08 | IMPL-P | engine | T-23a ✔, T-23b ✔ | Estados de sesión, pausas en frontera completa, microavance, puntos antes/después |
 | REQ-SIM-02 | P/crítica | 08 | IMPL-P | scenario, engine | T-10b ✔, T-23c ✔, S-FIO01 ✔, S-FIO06 ✔, S-FIO11 ✔, S-FIO09 ✔, S-FIO16 ✔, S-FIO18 ✔, S-APP04 ✔ | Escenarios y entradas manuales registradas con origen y ordinal |
-| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-EDI109 ✔, S-EDI113 ✔, S-EDI22 ✔, S-EDI27 ✔, S-EDI32 ✔, S-EDI40 ✔, S-EDI78 ✔, S-FIO08 ✔, S-FIO16 ✔, S-FIO17 ✔, S-FIO19 ✔, S-FIO20 ✔, S-FIO22 ✔, S-APP14 ✔, S-APP15 ✔, S-APP05 ✔, S-APP09 ✔, S-APP10 ✔, S-APP11 ✔, S-APP12 ✔, S-APP13 ✔, S-APP16 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
+| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-EDI109 ✔, S-EDI113 ✔, S-EDI22 ✔, S-EDI27 ✔, S-EDI32 ✔, S-EDI40 ✔, S-EDI78 ✔, S-FIO08 ✔, S-FIO16 ✔, S-FIO17 ✔, S-FIO19 ✔, S-FIO20 ✔, S-FIO22 ✔, S-FIO24 ✔, S-FIO25 ✔, S-APP14 ✔, S-APP15 ✔, S-APP05 ✔, S-APP09 ✔, S-APP10 ✔, S-APP11 ✔, S-APP12 ✔, S-APP13 ✔, S-APP16 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
 | REQ-SIM-04 | P/crítica | 08 | IMPL-P | engine | T-23c ✔, T-22f ✔, T-23f ✔, S-FIO21 ✔, S-OPT03d ✔ | Instantánea con Z completo y compatibilidad exacta; dentro de recorrido D-INSTANTANEA-FASE |
 | REQ-SIM-05 | P/crítica | 08 | IMPL-P | trace | T-04a ✔, T-22g ✔, S-OPT03b ✔ | Traza con conjuntos E, causas, cierre y digest |
 | REQ-SIM-06 | P/crítica | 08 | IMPL-P | engine | T-09d ✔, T-23b ✔ | Observar y pausar no modifican comportamiento |
 | REQ-SIM-07 | P/crítica | 08 | IMPL-P | engine | T-23e ✔ | Intervención E en pausa estable, rama auditable |
 | REQ-SIM-08 | P/alta | 08 | IMPL-P | diagnostics, engine | T-08a ✔, T-08b ✔, T-16a ✔, S-08a ✔ | Evidencia y corrección recomendada en cada diagnóstico |
 | REQ-DAT-01 | P/crítica | 09 | IMPL-P | model, persistence, ids | T-22b ✔, T-21e ✔, S-EDI107 ✔, S-EDI118 ✔, S-EDI124 ✔, S-EDI73 ✔, S-EDI77 ✔, S-EDI82 ✔, S-EDI91 ✔, S-EDI98 ✔, S-H12 ✔ | Identidades, referencias y propiedad; nombres hexadecimales (H-12) |
-| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-CMP04 ✔, S-EDI04 ✔, S-FIO04 ✔, S-APP01 ✔, S-APP06 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
+| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-CMP04 ✔, S-EDI04 ✔, S-FIO04 ✔, S-FIO23 ✔, S-FIO24 ✔, S-APP01 ✔, S-APP06 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
 | REQ-DAT-03 | P/crítica | 09 | IMPL-P | persistence | T-22c ✔, T-22e ✔, S-APP02 ✔ | Versión mayor/menor, desconocidos y migración con copia e informe |
 | REQ-DAT-04 | P/crítica | 09 | IMPL-P | engine | T-22f ✔, T-23c ✔, T-23f ✔, S-OPT03d ✔ | Instantánea íntegra y compatibilidad exacta; campos U no aplicables declarados |
 | REQ-DAT-05 | P/crítica | 09 | IMPL-P | canonical, timeutil | T-24a ◐, T-24b ✔, S-CAN ✔ | Representación canónica y SHA-256 independientes de región |
@@ -419,6 +419,9 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-FIO20 | REQ-SIM-03 | pasa | `test_SFIO20_pantalla_simple_y_check_confirmado` | ajustes fuera de pantalla principal y check de conexión real. |
 | S-FIO21 | REQ-SIM-04 | pasa | `test_SFIO21_reinicio_descarta_lectura_pendiente_sin_cerrar_tcp` | reinicio de ejecución independiente del transporte externo. |
 | S-FIO22 | REQ-SIM-03 | pasa | `test_SFIO22_observar_solo_entradas_desde_editor` | conexión de observación sin programa compilado ni salidas. |
+| S-FIO23 | REQ-DAT-02 | pasa | `test_SFIO23_limites_de_canales_configurados` | rangos explícitos, asignaciones fuera y compatibilidad sin rangos. |
+| S-FIO24 | REQ-DAT-02, REQ-SIM-03 | pasa | `test_SFIO24_canales_offset_mover_desasignar_y_persistir` | canales explícitos y movimiento desde el slot. |
+| S-FIO25 | REQ-SIM-03 | pasa | `test_SFIO25_arrastre_desde_tarjeta_asignada` | el gesto comienza sobre la tarjeta, no solo sobre la lista. |
 | S-H05 | REQ-EVT-03, REQ-SEM-05 | pasa | `test_SH05_activar_etapa_ya_activa_no_ejecuta_sus_acciones` | hallazgo H-05, cerrado por el comparador (3.3 A). Con «detener», U-04. |
 | S-H07 | REQ-ACT-02, REQ-SEM-01 | pasa | `test_SH07_memoria_inicial_no_nula_no_compila` | hoja 08, 1.5 A (cierra H-07); otro valor inicial se pone al activar la etapa inicial. |
 | S-H08 | REQ-JER-01, REQ-MOD-07 | pasa | `test_SH08_parcial_dentro_de_otro` | hallazgo H-08, cerrado por el responsable (8.1 C): sin encapsulante no compila; como recinto, sí. |

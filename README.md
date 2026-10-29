@@ -58,6 +58,12 @@ analógicas, `valor GRAFCET = registro / escala`; para 3,14 use escala 100 y reg
 314. INT16 admite −32768…32767 y UINT16 0…65535, antes del escalado. Valores no
 representables detienen la conexión; no hay redondeo ni saturación.
 
+**+ Canales** abre los campos de offset/cantidad de I/Q/AI/AQ; copie la configuración
+de Factory I/O. Modbus no permite deducir sus cantidades reales por sondeo en este
+servidor. Use la **×** para desasignar o arrastre desde el propio slot para mover;
+si está conectado, pulse **Desconectar / editar** primero. Con solo entradas se
+admite observación sin motor compilado, también desde Editar, sin escribir salidas.
+
 La asignación por arrastre se aplica al soltar y se guarda si el proyecto tiene
 carpeta. **Configuración** reúne los ajustes, **Guardar configuración…** y
 **Probar conexión** (sin escribir). El mapa se guarda aparte en

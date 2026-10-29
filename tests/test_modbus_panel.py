@@ -18,6 +18,79 @@ from grafcet.builder import M
 
 @unittest.skipUnless(QT, "Falta PySide6")
 class PanelTests(unittest.TestCase):
+    def test_SFIO25_arrastre_desde_tarjeta_asignada(self):
+        """REQ-SIM-03: el gesto comienza sobre la tarjeta, no solo sobre la lista."""
+        from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+        from PySide6.QtGui import QMouseEvent
+        from PySide6.QtWidgets import QFrame
+        from unittest.mock import patch
+        app = QApplication.instance() or QApplication([])
+        p = PanelES()
+        try:
+            p.cargar(M().var("a").step("0", True).doc,
+                     Configuracion(senales=[Senal("a", "discrete", 0)]))
+            p.show()
+            app.processEvents()
+            tarjeta = p.terminales[("discrete",0)].findChild(QFrame,"asignacionES")
+            inicio = QPoint(10,10)
+            app.sendEvent(tarjeta, QMouseEvent(QEvent.Type.MouseButtonPress,QPointF(inicio),
+                          QPointF(tarjeta.mapToGlobal(inicio)),Qt.MouseButton.LeftButton,
+                          Qt.MouseButton.LeftButton,Qt.KeyboardModifier.NoModifier))
+            fin = QPoint(60,10)
+            with patch("escritorio.entradas_salidas.QDrag") as arrastre:
+                app.sendEvent(tarjeta,QMouseEvent(QEvent.Type.MouseMove,QPointF(fin),
+                              QPointF(tarjeta.mapToGlobal(fin)),Qt.MouseButton.NoButton,
+                              Qt.MouseButton.LeftButton,Qt.KeyboardModifier.NoModifier))
+                self.assertTrue(arrastre.return_value.exec.called)
+        finally:
+            p.close()
+            p.deleteLater()
+            app.processEvents()
+
+    def test_SFIO24_canales_offset_mover_desasignar_y_persistir(self):
+        """REQ-DAT-02, REQ-SIM-03: canales explícitos y movimiento desde el slot."""
+        from PySide6.QtCore import QPoint, QPointF, Qt
+        from PySide6.QtGui import QDragEnterEvent, QDropEvent
+        app = QApplication.instance() or QApplication([])
+        p = PanelES()
+        try:
+            doc = M().var("a").var("b").var("q", "output").step("0", True).doc
+            p.cargar(doc)
+            p.offsets["discrete"].setValue(5)
+            p.cantidades["discrete"].setValue(2)
+            p.cantidades["coil"].setValue(1)
+            self.assertTrue(p._aplicar())
+            self.assertEqual({d for a, d in p.terminales if a == "discrete"}, {5,6})
+            p.show()
+            app.processEvents()
+            self.assertTrue(p.asignar("a", "discrete", 5))
+            mime = p.terminales[("discrete",5)].mimeData()
+            destino = p.terminales[("discrete",6)]
+            app.sendEvent(destino, QDragEnterEvent(QPoint(5,5), Qt.DropAction.MoveAction, mime,
+                          Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+            drop = QDropEvent(QPointF(5,5), Qt.DropAction.MoveAction, mime,
+                             Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+            app.sendEvent(destino, drop)
+            self.assertTrue(drop.isAccepted())
+            self.assertEqual([(s.variable,s.direccion) for s in p.obtener().senales], [("a",6)])
+            p.terminales[("discrete",6)].b_quitar.click()
+            self.assertEqual(p.obtener().senales, [])
+            p.asignar("b", "discrete",6)
+            p.cantidades["discrete"].setValue(1)
+            self.assertFalse(p._aplicar())
+            self.assertIn("fuera", p.error_config.text())
+            p.quitar("b")
+            self.assertEqual({d for a,d in p.terminales if a=="discrete"}, {5})
+            with tempfile.TemporaryDirectory() as tmp:
+                ruta=Path(tmp)/"conexion.json"
+                p.obtener().guardar(ruta,doc)
+                c=Configuracion.cargar(ruta,doc)
+                self.assertEqual(c.canales["discrete"], {"offset":5,"cantidad":1})
+        finally:
+            p.close()
+            p.deleteLater()
+            app.processEvents()
+
     def test_SFIO22_observar_solo_entradas_desde_editor(self):
         """REQ-SIM-03: conexión de observación sin programa compilado ni salidas."""
         from escritorio.ventana import Ventana

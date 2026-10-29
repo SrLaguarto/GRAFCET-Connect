@@ -9,6 +9,20 @@ from grafcet.persistence import add_document, new_project, save_project
 
 
 class ConfigTests(unittest.TestCase):
+    def test_SFIO23_limites_de_canales_configurados(self):
+        """REQ-DAT-02: rangos explícitos, asignaciones fuera y compatibilidad sin rangos."""
+        for rango in ({"offset":0,"cantidad":257}, {"offset":65535,"cantidad":2},
+                      {"offset":-1,"cantidad":2}, {"offset":0,"cantidad":True}):
+            with self.subTest(rango=rango), self.assertRaises(ValueError):
+                Configuracion(canales={"discrete":rango}).validar(self.doc)
+        c=Configuracion(senales=[Senal(self.var["id"],"discrete",5)])
+        c.validar(self.doc)
+        c.canales={"discrete":{"offset":6,"cantidad":2}}
+        with self.assertRaises(ValueError):
+            c.validar(self.doc)
+        c.canales={"discrete":{"offset":5,"cantidad":1}}
+        c.validar(self.doc)
+
     def setUp(self):
         self.doc = EJEMPLOS[next(iter(EJEMPLOS))][2]()[0].doc
         self.var = next(v for v in self.doc["variables"] if v["role"] == "input" and v["type"]["kind"] == "bool")

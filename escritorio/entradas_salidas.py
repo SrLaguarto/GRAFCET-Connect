@@ -1,11 +1,12 @@
 """Conexión de E/S: variables laterales y asignación sobre un módulo central."""
 from PySide6.QtCore import Signal, Qt, QMimeData, QSize
+from PySide6.QtGui import QDrag
 from fractions import Fraction
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
                                QDialog, QDialogButtonBox, QListWidget, QListWidgetItem,
-                               QAbstractItemView, QMenu, QInputDialog)
+                               QAbstractItemView, QMenu, QApplication, QGridLayout)
 
 from conexion.configuracion import Configuracion, Senal
 
@@ -37,6 +38,7 @@ class TerminalES(QFrame):
     def __init__(self, panel, area, direccion, variable=None):
         super().__init__()
         self.panel, self.area, self.direccion, self.variable = panel, area, direccion, variable
+        self._inicio_arrastre = None
         self.setAcceptDrops(not panel.bloqueado)
         self.setObjectName("senalPLC")
         self.setMinimumWidth(205)
@@ -61,6 +63,8 @@ class TerminalES(QFrame):
         self.nombre = QLabel(variable["name"] if variable else "Sin asignar")
         self.nombre.setWordWrap(True)
         self.valor = QLabel("—" if variable else "")
+        for etiqueta in (canal, self.led, self.nombre, self.valor):
+            etiqueta.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.nombre.setStyleSheet(f"color:{'#e0ecf7' if variable else '#80a1b8'}; font-size:14px; font-weight:{'600' if variable else '400'}")
         self.valor.setStyleSheet("color:#a7c3d7; font-size:11px")
         if variable:
@@ -76,7 +80,36 @@ class TerminalES(QFrame):
         else:
             l.addWidget(canal)
             l.addWidget(señal, 1)
+        self.b_quitar = None
+        if variable:
+            self.b_quitar = QPushButton("×")
+            self.b_quitar.setFixedSize(22, 28)
+            self.b_quitar.setStyleSheet("padding:0; color:#9cb5c8; font-size:18px; background:transparent")
+            self.b_quitar.setToolTip("Desconecta para desasignar" if panel.bloqueado else "Desasignar esta señal")
+            self.b_quitar.setEnabled(not panel.bloqueado)
+            self.b_quitar.clicked.connect(lambda: panel.quitar(variable["id"]))
+            l.addWidget(self.b_quitar)
         self.setToolTip(f"{AREAS[area]} · dirección {direccion}\nArrastra una variable. Botón derecho para quitar o configurar.")
+
+    def mimeData(self):
+        datos = QMimeData()
+        if self.variable:
+            datos.setData(MIME_VARIABLE, self.variable["id"].encode("utf-8"))
+        return datos
+
+    def mousePressEvent(self, evento):
+        if evento.button() == Qt.MouseButton.LeftButton:
+            self._inicio_arrastre = evento.position().toPoint()
+        super().mousePressEvent(evento)
+
+    def mouseMoveEvent(self, evento):
+        if self.panel.bloqueado or self.variable is None or self._inicio_arrastre is None:
+            return
+        if evento.buttons() & Qt.MouseButton.LeftButton and (evento.position().toPoint() - self._inicio_arrastre).manhattanLength() >= QApplication.startDragDistance():
+            self._inicio_arrastre = None
+            arrastre = QDrag(self.panel)
+            arrastre.setMimeData(self.mimeData())
+            arrastre.exec(Qt.DropAction.MoveAction | Qt.DropAction.CopyAction, Qt.DropAction.MoveAction)
 
     def _variable_evento(self, evento):
         if self.panel.bloqueado or not evento.mimeData().hasFormat(MIME_VARIABLE):
@@ -231,6 +264,11 @@ class PanelES(QWidget):
         nombre_plc = QLabel("PLC VIRTUAL")
         nombre_plc.setStyleSheet("color:#e9f4ff; font-weight:600; font-size:17px")
         encabezado_plc.addWidget(nombre_plc)
+        self.b_canales = QPushButton("+ Canales")
+        self.b_canales.setToolTip("Configurar offset y cantidad de entradas y salidas")
+        self.b_canales.setStyleSheet("color:#91c9f0; background:#29485e; padding:5px 10px; border-radius:4px")
+        self.b_canales.clicked.connect(self.abrir_configuracion)
+        encabezado_plc.addWidget(self.b_canales)
         self.online = QLabel("● OFFLINE")
         self.online.setStyleSheet("color:#7991a4; font-weight:600; font-size:11px")
         encabezado_plc.addWidget(self.online, 1, Qt.AlignmentFlag.AlignRight)
@@ -334,6 +372,32 @@ class PanelES(QWidget):
         for texto, widget in (("IP (Host)", self.host), ("Puerto", self.puerto), ("Esclavo ID", self.unidad)):
             endpoint.addRow(texto, widget)
         configuracion.addLayout(endpoint)
+        titulo_canales = QLabel("Canales del servidor")
+        titulo_canales.setStyleSheet("font-size:17px; color:#c4dfae; padding-top:10px")
+        configuracion.addWidget(titulo_canales)
+        rejilla_canales = QGridLayout()
+        rejilla_canales.addWidget(QLabel("Offset (desde)"), 0, 1)
+        rejilla_canales.addWidget(QLabel("Cantidad"), 0, 2)
+        self.offsets, self.cantidades = {}, {}
+        self.canales_editados = False
+        for fila, (area, texto) in enumerate((("discrete", "I · Entradas digitales"), ("coil", "Q · Salidas digitales"),
+                                             ("input-register", "AI · Entradas numéricas"), ("holding", "AQ · Salidas numéricas")), 1):
+            offset, cantidad = QSpinBox(), QSpinBox()
+            offset.setRange(0, 65535)
+            cantidad.setRange(0, 256 if area in ("discrete", "coil") else 64)
+            offset.setFixedWidth(110)
+            cantidad.setFixedWidth(110)
+            offset.valueChanged.connect(self._marcar_canales)
+            cantidad.valueChanged.connect(self._marcar_canales)
+            self.offsets[area], self.cantidades[area] = offset, cantidad
+            rejilla_canales.addWidget(QLabel(texto), fila, 0)
+            rejilla_canales.addWidget(offset, fila, 1)
+            rejilla_canales.addWidget(cantidad, fila, 2)
+        configuracion.addLayout(rejilla_canales)
+        ayuda_canales = QLabel("Copia offset y cantidad de Factory I/O. Estos ajustes no modifican el servidor.")
+        ayuda_canales.setWordWrap(True)
+        ayuda_canales.setStyleSheet("color:#98adbd; font-size:11px")
+        configuracion.addWidget(ayuda_canales)
         self.b_avanzado = QPushButton("Asignaciones y ajustes avanzados  ›")
         self.b_avanzado.setStyleSheet("text-align:left; margin-top:12px; background:transparent; color:#b9beca")
         self.b_avanzado.clicked.connect(self._alternar_avanzado)
@@ -364,7 +428,7 @@ class PanelES(QWidget):
         self.b_probar.clicked.connect(self.probar)
         self.b_conectar = QPushButton("Conectar")
         self.b_conectar.clicked.connect(self.conectar)
-        self.b_desconectar = QPushButton("Desconectar")
+        self.b_desconectar = QPushButton("Desconectar / editar")
         self.b_desconectar.clicked.connect(self.desconectar)
         self.b_desconectar.setEnabled(False)
         for b in (self.b_aplicar, self.b_cargar, self.b_guardar):
@@ -393,6 +457,9 @@ class PanelES(QWidget):
     def abrir_configuracion(self):
         self.dialogo_config.show()
         self.dialogo_config.raise_()
+
+    def _marcar_canales(self):
+        self.canales_editados = True
 
     def _alternar_avanzado(self):
         mostrar = self.avanzado.isHidden()
@@ -446,15 +513,26 @@ class PanelES(QWidget):
         self._aplicar()
 
     def agregar_terminal(self, area):
-        direccion, ok = QInputDialog.getInt(self, "Añadir terminal", "Dirección (empieza en 0)", 4, 0, 65535)
-        if ok:
-            self.extras[area].add(direccion)
-            self._dibujar()
+        self.abrir_configuracion()
+        self.cantidades[area].setFocus()
+        self.cantidades[area].selectAll()
 
     def cargar(self, doc, config=None):
         self.doc = doc
         self.config = config or Configuracion(modelo=doc["id"])
         c = self.config
+        for area in AREAS:
+            posiciones = [s.direccion for s in c.senales if s.area == area]
+            rol = "input" if area == "input-register" else "output"
+            base = (4 if area == "discrete" else 2 if area == "coil" else
+                    2 if any(v["role"] == rol and v["type"]["kind"] in ("int", "decimal") for v in doc["variables"]) else 0)
+            limite = 256 if area in ("discrete", "coil") else 64
+            offset = min(posiciones) if posiciones and max(posiciones) >= limite else 0
+            cantidad = max(base, max(posiciones) - offset + 1 if posiciones else 0)
+            rango = c.canales.get(area, {"offset": offset, "cantidad": cantidad})
+            self.offsets[area].setValue(rango["offset"])
+            self.cantidades[area].setValue(rango["cantidad"])
+        self.canales_editados = False
         self.destino.setText(f"{c.host}:{c.puerto}\nEsclavo ID: {c.unidad}")
         self.host.setText(c.host)
         for w, valor in ((self.puerto, c.puerto), (self.unidad, c.unidad), (self.periodo, c.periodo_ms), (self.timeout, c.timeout_ms)):
@@ -509,6 +587,8 @@ class PanelES(QWidget):
                                      self.tabla.cellWidget(fila, 7).text()))
         c = Configuracion(self.host.text().strip(), self.puerto.value(), self.unidad.value(),
                           self.periodo.value(), self.timeout.value(), self.doc["id"], senales)
+        c.canales = ({area: {"offset": self.offsets[area].value(), "cantidad": self.cantidades[area].value()}
+                      for area in AREAS} if self.canales_editados or self.config.canales else {})
         c.validar(self.doc)
         return c
 
@@ -574,9 +654,13 @@ class PanelES(QWidget):
         for area in AREAS:
             numerica = area in ("input-register", "holding")
             entrada = area in ("discrete", "input-register")
-            if numerica and not any(v["type"]["kind"] in ("int", "decimal") and v["role"] == ("input" if entrada else "output") for v in self.variables):
+            if numerica and area not in self.config.canales and not any(v["type"]["kind"] in ("int", "decimal") and v["role"] == ("input" if entrada else "output") for v in self.variables):
                 continue
-            direcciones = set(range(2 if numerica or not entrada else 4)) | self.extras[area] | {d for a, d in mapa if a == area}
+            if area in self.config.canales:
+                rango = self.config.canales[area]
+                direcciones = range(rango["offset"], rango["offset"] + rango["cantidad"])
+            else:
+                direcciones = set(range(2 if numerica or not entrada else 4)) | {d for a, d in mapa if a == area}
             fila = self.fila_entradas if entrada else self.fila_salidas
             for direccion in sorted(direcciones):
                 s = mapa.get((area, direccion))
@@ -586,12 +670,6 @@ class PanelES(QWidget):
                 self.terminales[(area, direccion)] = terminal
                 if v:
                     self.indicadores[v["id"]] = (terminal.led, terminal.valor)
-            mas = QPushButton("+")
-            mas.setFixedWidth(28)
-            mas.setToolTip(f"Añadir terminal: {AREAS[area]}")
-            mas.setEnabled(not self.bloqueado)
-            mas.clicked.connect(lambda _=False, a=area: self.agregar_terminal(a))
-            fila.addWidget(mas)
         self.fila_entradas.addStretch()
         self.fila_salidas.addStretch()
         ni = sum(variables[s.variable]["role"] == "input" for s in self.config.senales if s.variable in variables)
@@ -636,6 +714,9 @@ class PanelES(QWidget):
         self.lista_salidas.setDragEnabled(not on)
         for terminal in self.terminales.values():
             terminal.setAcceptDrops(not on)
+            if terminal.b_quitar:
+                terminal.b_quitar.setEnabled(not on)
+                terminal.b_quitar.setToolTip("Pulsa «Desconectar / editar» para desasignar" if on else "Desasignar esta señal")
         for fila in (self.fila_entradas, self.fila_salidas):
             for i in range(fila.count()):
                 widget = fila.itemAt(i).widget()

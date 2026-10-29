@@ -27,6 +27,7 @@ class Configuracion:
     timeout_ms: int = 500
     modelo: str = ""
     senales: list[Senal] = field(default_factory=list)
+    canales: dict[str, dict[str, int]] = field(default_factory=dict)
 
     def validar(self, doc: dict):
         if not isinstance(self.host, str) or not self.host.strip():
@@ -37,6 +38,15 @@ class Configuracion:
                 raise ValueError("Puerto, unidad, periodo o timeout fuera de rango")
         if self.modelo and self.modelo != doc["id"]:
             raise ValueError("El mapa pertenece a otro modelo")
+        if not isinstance(self.canales, dict):
+            raise ValueError("Configuración de canales inválida")
+        for area, rango in self.canales.items():
+            if area not in ("discrete", "coil", "input-register", "holding") or not isinstance(rango, dict):
+                raise ValueError("Área de canales inválida")
+            inicio, cantidad = rango.get("offset"), rango.get("cantidad")
+            limite = 256 if area in ("discrete", "coil") else 64
+            if type(inicio) is not int or type(cantidad) is not int or not 0 <= inicio <= 65535 or not 0 <= cantidad <= limite or inicio + cantidad > 65536:
+                raise ValueError(f"Offset o cantidad fuera de rango en {area}")
         variables = {v["id"]: v for v in doc["variables"]}
         ids, destinos = set(), set()
         for s in self.senales:
@@ -46,6 +56,10 @@ class Configuracion:
             ids.add(s.variable)
             if type(s.direccion) is not int or not 0 <= s.direccion <= 65535:
                 raise ValueError("Dirección Modbus fuera de rango")
+            if s.area in self.canales:
+                rango = self.canales[s.area]
+                if not rango["offset"] <= s.direccion < rango["offset"] + rango["cantidad"]:
+                    raise ValueError(f"{v['name']} queda fuera de los canales configurados; quita o mueve su asignación antes de reducirlos")
             permitidas = ("discrete", "coil", "input-register", "holding") if v["role"] == "input" else ("coil", "holding")
             if s.area not in permitidas:
                 raise ValueError("Área incompatible con la dirección de la señal")
