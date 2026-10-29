@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-29T13:51:46+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 311 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-29T14:22:04+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 312 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 211 casos, 214 pruebas, 214 pasan.
+Pruebas suplementarias S-xx: 212 casos, 215 pruebas, 215 pasan.
 
 ## Requisitos
 
@@ -102,7 +102,7 @@ Pruebas suplementarias S-xx: 211 casos, 214 pruebas, 214 pasan.
 | REQ-SIM-07 | P/crítica | 08 | IMPL-P | engine | T-23e ✔ | Intervención E en pausa estable, rama auditable |
 | REQ-SIM-08 | P/alta | 08 | IMPL-P | diagnostics, engine | T-08a ✔, T-08b ✔, T-16a ✔, S-08a ✔ | Evidencia y corrección recomendada en cada diagnóstico |
 | REQ-DAT-01 | P/crítica | 09 | IMPL-P | model, persistence, ids | T-22b ✔, T-21e ✔, S-EDI107 ✔, S-EDI118 ✔, S-EDI124 ✔, S-EDI73 ✔, S-EDI77 ✔, S-EDI82 ✔, S-EDI91 ✔, S-EDI98 ✔, S-H12 ✔ | Identidades, referencias y propiedad; nombres hexadecimales (H-12) |
-| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-CMP04 ✔, S-EDI04 ✔, S-FIO04 ✔, S-FIO23 ✔, S-FIO24 ✔, S-APP01 ✔, S-APP06 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
+| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-CMP04 ✔, S-EDI04 ✔, S-FIO04 ✔, S-FIO23 ✔, S-FIO26 ✔, S-FIO24 ✔, S-APP01 ✔, S-APP06 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
 | REQ-DAT-03 | P/crítica | 09 | IMPL-P | persistence | T-22c ✔, T-22e ✔, S-APP02 ✔ | Versión mayor/menor, desconocidos y migración con copia e informe |
 | REQ-DAT-04 | P/crítica | 09 | IMPL-P | engine | T-22f ✔, T-23c ✔, T-23f ✔, S-OPT03d ✔ | Instantánea íntegra y compatibilidad exacta; campos U no aplicables declarados |
 | REQ-DAT-05 | P/crítica | 09 | IMPL-P | canonical, timeutil | T-24a ◐, T-24b ✔, S-CAN ✔ | Representación canónica y SHA-256 independientes de región |
@@ -422,6 +422,7 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-FIO23 | REQ-DAT-02 | pasa | `test_SFIO23_limites_de_canales_configurados` | rangos explícitos, asignaciones fuera y compatibilidad sin rangos. |
 | S-FIO24 | REQ-DAT-02, REQ-SIM-03 | pasa | `test_SFIO24_canales_offset_mover_desasignar_y_persistir` | canales explícitos y movimiento desde el slot. |
 | S-FIO25 | REQ-SIM-03 | pasa | `test_SFIO25_arrastre_desde_tarjeta_asignada` | el gesto comienza sobre la tarjeta, no solo sobre la lista. |
+| S-FIO26 | REQ-DAT-02 | pasa | `test_SFIO26_escala_factoryio_100_y_migracion` | entradas/salidas numéricas usan 100 incluso en mapas anteriores. |
 | S-H05 | REQ-EVT-03, REQ-SEM-05 | pasa | `test_SH05_activar_etapa_ya_activa_no_ejecuta_sus_acciones` | hallazgo H-05, cerrado por el comparador (3.3 A). Con «detener», U-04. |
 | S-H07 | REQ-ACT-02, REQ-SEM-01 | pasa | `test_SH07_memoria_inicial_no_nula_no_compila` | hoja 08, 1.5 A (cierra H-07); otro valor inicial se pone al activar la etapa inicial. |
 | S-H08 | REQ-JER-01, REQ-MOD-07 | pasa | `test_SH08_parcial_dentro_de_otro` | hallazgo H-08, cerrado por el responsable (8.1 C): sin encapsulante no compila; como recinto, sí. |

@@ -9,6 +9,24 @@ from grafcet.persistence import add_document, new_project, save_project
 
 
 class ConfigTests(unittest.TestCase):
+    def test_SFIO26_escala_factoryio_100_y_migracion(self):
+        """REQ-DAT-02: entradas/salidas numéricas usan 100 incluso en mapas anteriores."""
+        import json
+        from grafcet.builder import M
+        doc=M().var("sensor",kind="decimal",scale=2).var("consigna","output","int").step("0",True).doc
+        c=Configuracion(senales=[Senal("sensor","input-register",0,"INT16"),
+                                 Senal("consigna","holding",0,"UINT16")])
+        self.assertEqual([s.escala for s in c.senales],["100","100"])
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta=Path(tmp)/"conexion.json"
+            c.guardar(ruta,doc)
+            datos=json.loads(ruta.read_text(encoding="utf-8"))
+            for s in datos["senales"]:
+                s["escala"]="1"
+            ruta.write_text(json.dumps(datos),encoding="utf-8")
+            cargada=Configuracion.cargar(ruta,doc)
+            self.assertEqual([s.escala for s in cargada.senales],["100","100"])
+
     def test_SFIO23_limites_de_canales_configurados(self):
         """REQ-DAT-02: rangos explícitos, asignaciones fuera y compatibilidad sin rangos."""
         for rango in ({"offset":0,"cantidad":257}, {"offset":65535,"cantidad":2},

@@ -15,7 +15,11 @@ class Senal:
     area: str  # discrete, coil, input-register, holding
     direccion: int
     formato: str = "BOOL"  # BOOL, INT16, UINT16
-    escala: str = "1"  # valor del motor = valor de registro / escala
+    escala: str | None = None  # valor del motor = valor de registro / escala
+
+    def __post_init__(self):
+        if self.escala is None:
+            self.escala = "1" if self.formato == "BOOL" else "100"
 
 
 @dataclass
@@ -28,6 +32,10 @@ class Configuracion:
     modelo: str = ""
     senales: list[Senal] = field(default_factory=list)
     canales: dict[str, dict[str, int]] = field(default_factory=dict)
+
+    def fijar_escalas_factoryio(self):
+        for s in self.senales:
+            s.escala = "1" if s.formato == "BOOL" else "100"
 
     def validar(self, doc: dict):
         if not isinstance(self.host, str) or not self.host.strip():
@@ -80,6 +88,7 @@ class Configuracion:
             destinos.add(destino)
 
     def guardar(self, ruta: Path, doc: dict):
+        self.fijar_escalas_factoryio()
         self.validar(doc)
         datos = {**asdict(self), "modelo": doc["id"], "version": 1}
         ruta.parent.mkdir(parents=True, exist_ok=True)
@@ -102,6 +111,7 @@ class Configuracion:
                 raise ValueError("Versión de conexión desconocida")
             datos["senales"] = [Senal(**s) for s in datos["senales"]]
             config = cls(**datos)
+            config.fijar_escalas_factoryio()
             config.validar(doc)
             return config
         except (KeyError, TypeError, AttributeError) as exc:

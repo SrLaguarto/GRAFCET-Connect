@@ -48,6 +48,17 @@ arranque/captura verificados. Capturas principal y configuración revisadas.
 No tocar respuestas del responsable en docs/VALIDACION_FACTORY_IO.md, .codex/
 ni AGENTS.md (estos dos últimos estaban sin seguimiento al inicio).
 Commits incrementales autorizados; sin push ni subagentes.
-Siguiente tarea exacta: el responsable prueba desasignar/mover y configurar
+P-IMP-59: escala fija 100 para entradas y salidas numéricas en la aplicación,
+también al cargar/guardar mapas anteriores; digitales 1. Campo no editable.
+Driver Factory I/O debe seguir en 100; recepción fraccionaria requiere Decimal,
+sin redondeos a Entera. Límites de representación INT16/UINT16 siguen vigentes.
+SFIO26 verifica valor inicial 100 y migración de mapas. Validación final:
+312 pruebas OK (26 Modbus), paquete intacto y trazabilidad regenerada.
+Portable reconstruido y arranque/captura verificados. La prueba real histórica
+del JSON se hizo con escala 1 antes de esta política; no confundir sus registros
+con la conversión actual. Falta validar recepción fraccionaria real con 100.
+
+Siguiente tarea exacta: validar recepción fraccionaria con escala 100 en la escena.
+El responsable prueba también desasignar/mover y configurar
 cantidades con el portable actualizado. Después validar
 reinicio real, lectura de sensores numéricos, escalado y pérdida/reconexión.

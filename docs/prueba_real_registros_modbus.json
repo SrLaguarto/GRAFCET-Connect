@@ -68,5 +68,7 @@
       65535
     ],
     "conclusion": "No permite inferir cantidades configuradas, asignacion de etiquetas ni formato por respuesta Modbus"
-  }
+  },
+  "escala_de_la_prueba_historica": 1,
+  "nota_politica_actual": "La prueba se realizó antes de P-IMP-59. La aplicación ahora usa escala fija 100 para señales numéricas; los valores históricos no prueban esa conversión física."
 }

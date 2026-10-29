@@ -521,6 +521,7 @@ class PanelES(QWidget):
         self.doc = doc
         self.config = config or Configuracion(modelo=doc["id"])
         c = self.config
+        c.fijar_escalas_factoryio()
         for area in AREAS:
             posiciones = [s.direccion for s in c.senales if s.area == area]
             rol = "input" if area == "input-register" else "output"
@@ -574,7 +575,10 @@ class PanelES(QWidget):
                 formato.addItem(FORMATOS[clave], clave)
             formato.setCurrentIndex(formato.findData(s.formato) if s else 0)
             self.tabla.setCellWidget(fila, 6, formato)
-            self.tabla.setCellWidget(fila, 7, QLineEdit(s.escala if s else "1"))
+            escala = QLineEdit("1" if digital else "100")
+            escala.setReadOnly(True)
+            escala.setToolTip("Escala fija: 100 para señales numéricas de entrada y salida; 1 para digitales")
+            self.tabla.setCellWidget(fila, 7, escala)
         self.tabla.resizeColumnsToContents()
         self._dibujar()
 
@@ -589,6 +593,7 @@ class PanelES(QWidget):
                           self.periodo.value(), self.timeout.value(), self.doc["id"], senales)
         c.canales = ({area: {"offset": self.offsets[area].value(), "cantidad": self.cantidades[area].value()}
                       for area in AREAS} if self.canales_editados or self.config.canales else {})
+        c.fijar_escalas_factoryio()
         c.validar(self.doc)
         return c
 

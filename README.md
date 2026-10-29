@@ -53,7 +53,8 @@ puerto, Slave ID y direcciones en su instalación; no se asignan automáticament
 En GrafConnect, simule el modelo y pulse **E/S externas** en la barra. La flecha
 Atrás vuelve al GRAFCET sin desconectar. Arrastre las variables
 a los terminales I/Q (digitales) o AI/AQ (analógicos). En **Configuración** puede
-ajustar área, dirección **base cero**, formato BOOL/INT16/UINT16 y escala. En señales
+ajustar área, dirección **base cero** y formato BOOL/INT16/UINT16. La escala numérica
+es fija en **100** en ambas direcciones; las digitales usan 1. En señales
 analógicas, `valor GRAFCET = registro / escala`; para 3,14 use escala 100 y registro
 314. INT16 admite −32768…32767 y UINT16 0…65535, antes del escalado. Valores no
 representables detienen la conexión; no hay redondeo ni saturación.

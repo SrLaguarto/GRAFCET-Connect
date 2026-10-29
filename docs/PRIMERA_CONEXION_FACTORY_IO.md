@@ -163,8 +163,12 @@ la prueba del pulsador y del movimiento de la cinta desde la interfaz.
   un sensor/actuador numérico de la escena. Añadir una variable Entera en
   GrafConnect por sí solo no crea ese canal en Factory I/O.
 - Para una consigna decimal 3,14 con escala 100 se envía el registro 314. La escala
-  configurada en el driver Factory I/O debe ser coherente con la del mapa. Factory
+  está fijada ahora en 100 para todas las señales numéricas de GrafConnect,
+  tanto de entrada como de salida, incluidos los mapas guardados antes. Mantén
+  el driver Factory I/O también en 100. Factory
   recibe direcciones y valores, no nombres de variables ni acciones GRAFCET.
+- Para recibir valores con decimales usa una variable **Decimal**: un registro
+  125 representa 1,25 y no cabe exactamente en una variable Entera. No se redondea.
 - Analógicas probadas con servidor simulado; quedan por validar con tu escena,
   junto con pérdida de red y reconexión. No se ha implementado FLOAT32 directo ni
   números de 32/64 bits repartidos entre varios registros.
