@@ -5,8 +5,9 @@ condición se cumple). Una memorizada asigna un valor al activar la etapa, al de
 está activa (por ejemplo CT := CT + 1 con ↑I02). Arriba, una frase explica la acción en lenguaje claro.
 
 - La variable se elige en una lista (nunca entradas): una continua ofrece las salidas y memorias booleanas; una
-  memorizada, las salidas y memorias de cualquier tipo, por papel. «Nueva variable…» la crea y la elige en la misma
-  operación de deshacer que el cambio.
+  memorizada, las salidas y memorias de cualquier tipo, por papel. Aquí no se crean variables: se crean en la tabla de
+  variables (y sus botones Nueva E, S y M); sin ninguna que valga, la lista lo dice (P-IMP-46).
+- El tipo de la acción no se cambia aquí: se cambia con botón derecho sobre la acción, «Tipo de acción».
 - El valor de una memorizada se programa con un programador de valor tipo Scratch, como el de bloques pero más corto:
   una booleana elige entre las fichas «1» y «0»; una numérica arma `CT + 1`, `5` o `CT * 2 - 1` con un número,
   variables numéricas y los operadores +, −, ×, ÷. El texto sigue siendo lo que se guarda y lo que el núcleo analiza.
@@ -22,21 +23,15 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
-                               QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
+                               QPushButton, QVBoxLayout, QWidget)
 
-from .bloques import COLORES, FlowLayout, Programador
+from .bloques import COLORES, Programador, _citar
 from .diagrama import COL
-from .edicion import CONTINUAS, DISPARADOR, TEXTO_LIMITADA, Edicion, Parpadeo
-from .variables import PAPELES, TIPOS as TIPOS_VARIABLE, nombre_tipo
+from .edicion import CONTINUAS, DISPARADOR, Edicion, Parpadeo
+from .variables import nombre_tipo
 
-TIPOS = (("continua", "Continua: mientras la etapa está activa"),
-         ("condicionada", "Condicionada: continua que exige una condición (se programa con bloques)"),
-         ("activacion", "Memorizada al activar la etapa (↑)"),
-         ("desactivacion", "Memorizada al desactivar la etapa (↓)"),
-         ("evento", "Memorizada con un evento, mientras está activa (banderita; el evento se programa con bloques)"))
-NUEVA = "\0nueva"  # el dato de la última opción de la lista de variables, «Nueva variable…»
-PAPELES_NUEVA = tuple((clave, texto) for clave, texto in PAPELES if clave != "input")  # una acción no escribe entradas
+SIN_VARIABLES = "(sin variables: créelas en la tabla de variables)"  # la lista de variables, si no hay ninguna que valga
 ESTILO_FICHA = (f"QPushButton {{ background: {COLORES['comparacion']}; color: white; font-weight: 600; border: 2px solid "
                 f"transparent; border-radius: 9px; padding: 5px 22px; }}"
                 "QPushButton:checked { border: 3px solid #FFD43B; }")
@@ -44,7 +39,7 @@ ESTILO_FICHA = (f"QPushButton {{ background: {COLORES['comparacion']}; color: wh
 
 class _ComboVariable(QComboBox):
     """Lista de variables: su texto (`currentText`) es el nombre de la variable elegida, no el de la fila; `setCurrentText`
-    elige una variable por su nombre (el diálogo la pone en la lista si hace falta)."""
+    elige una variable por su nombre."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -52,54 +47,11 @@ class _ComboVariable(QComboBox):
 
     def currentText(self) -> str:  # noqa: N802
         d = self.currentData()
-        return d if isinstance(d, str) and d != NUEVA else ""
+        return d if isinstance(d, str) else ""
 
     def setCurrentText(self, texto: str) -> None:  # noqa: N802
         if self.al_poner is not None:
             self.al_poner(texto)
-
-
-class DialogoVariableNueva(QDialog):
-    """«Nueva variable…»: nombre (con las reglas de nombres de las variables), papel (salida o memoria) y tipo. Si el
-    nombre no vale, avisa y no se cierra."""
-
-    def __init__(self, parent: QWidget | None, existentes: set[str], solo_booleana: bool = False) -> None:
-        super().__init__(parent)
-        self.existentes = existentes
-        self.resultado: tuple[str, str, dict[str, Any]] | None = None
-        self.setWindowTitle("Nueva variable")
-        lay = QVBoxLayout(self)
-        f = QFormLayout()
-        lay.addLayout(f)
-        self.nombre = QLineEdit()
-        self.papel = QComboBox()
-        for clave, texto in PAPELES_NUEVA:
-            self.papel.addItem(texto, clave)
-        self.tipo = QComboBox()
-        for t, texto in TIPOS_VARIABLE:
-            if t["kind"] == "bool" or not solo_booleana:  # una continua solo escribe booleanas
-                self.tipo.addItem(texto, t)
-        f.addRow("Nombre", self.nombre)
-        f.addRow("Papel", self.papel)
-        f.addRow("Tipo", self.tipo)
-        self.msg = QLabel()
-        self.msg.setWordWrap(True)
-        self.msg.setStyleSheet(f"color: {COL['err']}")
-        lay.addWidget(self.msg)
-        botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        botones.accepted.connect(self.aceptar)
-        botones.rejected.connect(self.reject)
-        lay.addWidget(botones)
-
-    def aceptar(self) -> None:
-        nombre = self.nombre.text().strip()
-        motivo = ("Escriba el nombre de la variable." if not nombre else Edicion.motivo_nombre(nombre)
-                  or (f"Ya existe una variable «{nombre}»." if nombre in self.existentes else None))
-        if motivo:
-            self.msg.setText(motivo)
-            return
-        self.resultado = (nombre, self.papel.currentData(), dict(self.tipo.currentData()))
-        self.accept()
 
 
 class PanelAccion(QWidget):
@@ -115,6 +67,7 @@ class PanelAccion(QWidget):
         self._llenando = False
         self._sync = False  # el texto del valor lo está escribiendo el programador
         self._elegida = ""
+        self.clave_tipo = ""  # el tipo de la acción mostrada (continua, activacion…): se cambia con botón derecho sobre ella
         self._rechazado: tuple[str, str] | None = None  # (acción, aviso): lo último escrito que no se pudo guardar
         self._firma: tuple | None = None
         self.al_volver: Callable[[], Any] | None = None  # la ventana vuelve a las opciones de la etapa
@@ -134,11 +87,6 @@ class PanelAccion(QWidget):
         f.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         f.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         lay.addLayout(f)
-        self.tipo = QComboBox()
-        self.tipo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-        self.tipo.setMinimumContentsLength(8)
-        self.tipo.activated.connect(self._elegir_tipo)
-        f.addRow("Tipo", self.tipo)
         self.variable = _ComboVariable()
         self.variable.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.variable.setMinimumContentsLength(8)
@@ -224,15 +172,7 @@ class PanelAccion(QWidget):
                 campo.clearFocus()
                 campo.blockSignals(False)
         self._llenando = True
-        esperado = ["limitada" if (c == "condicionada" and d["tipo"] == "limitada") else c for c, _ in TIPOS]
-        if [self.tipo.itemData(i) for i in range(self.tipo.count())] != esperado:
-            self.tipo.clear()
-            for clave, texto in TIPOS:
-                if clave == "condicionada" and d["tipo"] == "limitada":  # la de un fichero antiguo lleva límite de tiempo
-                    self.tipo.addItem(TEXTO_LIMITADA, "limitada")
-                else:
-                    self.tipo.addItem(texto, clave)
-        self.tipo.setCurrentIndex(max(0, self.tipo.findData(d["tipo"])))
+        self.clave_tipo = d["tipo"]
         self._elegida = d["variable"] if d["variable"] in self._variables() else ""
         if self._rechazado is None:
             if not self.valor.hasFocus() and self.valor.text() != d.get("valor", ""):
@@ -254,7 +194,7 @@ class PanelAccion(QWidget):
 
     def ofrecidas(self) -> list[str]:
         """Las variables que esta acción puede escribir: nunca entradas; una continua, solo booleanas."""
-        continua = self.tipo.currentData() in CONTINUAS
+        continua = self.clave_tipo in CONTINUAS
         return [n for n, (papel, tipo) in self._variables().items() if papel != "input" and (tipo == "bool" or not continua)]
 
     def poner_variable(self, nombre: str) -> None:
@@ -265,18 +205,21 @@ class PanelAccion(QWidget):
             self._aplicar("variable")
 
     def _rellenar_variables(self) -> None:
-        """La lista: Salidas y luego Memorias (con su tipo), la variable elegida aunque no valga para este tipo (se avisa) y,
-        al final, «Nueva variable…». Solo se rehace si cambió algo."""
+        """La lista: Salidas y luego Memorias (con su tipo) y la variable elegida aunque no valga para este tipo (se avisa).
+        Sin ninguna que valga ni elegida, un texto que manda a la tabla de variables (aquí no se crean). Solo se rehace si
+        cambió algo."""
         v, ofrecidas = self._variables(), self.ofrecidas()
-        firma = (tuple(v.items()), self._elegida, self.tipo.currentData())
+        firma = (tuple(v.items()), self._elegida, self.clave_tipo)
         if firma == self._firma:
             return
         self._firma = firma
         c = self.variable
         c.blockSignals(True)
         c.clear()
-        if not self._elegida:
-            c.addItem("Elija la variable…", "")
+        if not self._elegida:  # nada elegido: «Elija…», o, si no hay ninguna que ofrecer, a dónde ir a crearlas
+            c.addItem("Elija la variable…" if ofrecidas else SIN_VARIABLES, "")
+            if not ofrecidas:
+                c.model().item(0).setEnabled(False)
         for papel, titulo in (("output", "Salidas"), ("internal", "Memorias")):
             nombres = [n for n in ofrecidas if v[n][0] == papel]
             if nombres:
@@ -286,7 +229,6 @@ class PanelAccion(QWidget):
                 c.addItem(f"   {n}  ({nombre_tipo({'kind': v[n][1]})})", n)
         if self._elegida and self._elegida not in ofrecidas:  # una entrada, o no booleana en una continua
             c.addItem(f"{self._elegida}  (no se puede escribir aquí)", self._elegida)
-        c.addItem("Nueva variable…", NUEVA)
         c.setCurrentIndex(max(0, c.findData(self._elegida)))
         c.blockSignals(False)
 
@@ -296,7 +238,7 @@ class PanelAccion(QWidget):
 
     def _ajustar(self) -> None:
         """Muestra solo lo que pide el tipo y el de la variable; pone al día la lista, las plantillas y la frase."""
-        clave = self.tipo.currentData()
+        clave = self.clave_tipo
         continua = clave in CONTINUAS
         for w in (self.l_limite, self.limite):
             w.setVisible(clave == "limitada")
@@ -311,7 +253,7 @@ class PanelAccion(QWidget):
 
     def _plantillas(self, booleana: bool) -> None:
         """Las plantillas de un clic: «:= 1» y «:= 0» (booleana); «+1», «−1» y «:= 0» (numérica: V + 1, V - 1, 0)."""
-        v = self._elegida or "V"
+        v = _citar(self._elegida) if self._elegida else "V"  # con comillas invertidas si el nombre las pide (`1CT`)
         opciones = ((":= 1", "1"), (":= 0", "0")) if booleana else (("+1", f"{v} + 1"), ("−1", f"{v} - 1"), (":= 0", "0"))
         if [(t, b.toolTip()) for t, b in self.plantillas.items()] == [(t, f"Valor: {val}") for t, val in opciones]:
             return
@@ -366,7 +308,7 @@ class PanelAccion(QWidget):
 
     def _reparo(self) -> str:
         """Por qué la variable elegida no sirve para este tipo de acción (la validación lo señalará)."""
-        nombre, tipo = self._elegida, self.tipo.currentData()
+        nombre, tipo = self._elegida, self.clave_tipo
         if nombre not in self._variables():
             return ""
         papel, kind = self._variables()[nombre]
@@ -392,32 +334,9 @@ class PanelAccion(QWidget):
         return d
 
     # -- cambios (cada uno se aplica en el acto) ---------------------------------------------------
-    def _elegir_tipo(self, _: int = 0) -> None:
-        if self.e is not None and self.aid is not None:
-            self.e.tipo_accion(self.aid, self.tipo.currentData())
-
     def _elegir_variable(self, _: int = 0) -> None:
-        if self.variable.currentData() == NUEVA:
-            if not self.nueva_variable():
-                self._firma = None
-                self._rellenar_variables()  # canceló: vuelve a la que había
-            return
         self._elegida = self.variable.currentText()
         self._aplicar("variable")
-
-    def nueva_variable(self, nombre: str | None = None, papel: str = "output", tipo: dict[str, Any] | None = None) -> bool:
-        """«Nueva variable…»: pide nombre, papel y tipo (o los toma de los argumentos), la crea y la elige en la misma
-        operación de deshacer. Devuelve si se hizo."""
-        continua = self.tipo.currentData() in CONTINUAS
-        if nombre is None:
-            dlg = DialogoVariableNueva(self, set(self._variables()), solo_booleana=continua)
-            if dlg.exec() != QDialog.DialogCode.Accepted or dlg.resultado is None:
-                return False
-            nombre, papel, tipo = dlg.resultado
-        if continua and (tipo or {"kind": "bool"})["kind"] != "bool":
-            return False  # una continua solo escribe booleanas
-        self._elegida = nombre
-        return self._aplicar("variable", (papel, dict(tipo or {"kind": "bool"})))
 
     def _poner_valor(self, texto: str) -> None:
         self.valor.setText(texto)
@@ -437,7 +356,7 @@ class PanelAccion(QWidget):
         if not self._llenando and self.e is not None and self.aid is not None:
             self.frase.setText(self.frase_explicativa())
 
-    def _aplicar(self, campo: str = "", crear: tuple[str, Any] | None = None) -> bool:
+    def _aplicar(self, campo: str = "") -> bool:
         """Aplica lo que hay en los campos a la acción, como una operación de deshacer. Si no se puede (un valor a medias,
         un nombre que no vale), el motivo sale en naranja, parpadea el campo y no cambia nada. Devuelve si se aplicó."""
         if self._llenando or self.e is None or self.aid is None:
@@ -448,7 +367,7 @@ class PanelAccion(QWidget):
         if campo == "valor" and d["tipo"] not in DISPARADOR:
             return False
         antes = self.aid
-        motivo = self.e.cambiar_accion(self.aid, d, crear)
+        motivo = self.e.cambiar_accion(self.aid, d)
         if motivo:
             self._rechazado = (antes, motivo)
             self._previsualizar()

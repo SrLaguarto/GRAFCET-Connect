@@ -9,6 +9,7 @@ así que se puede probar sin pantalla.
 from __future__ import annotations
 
 import copy
+import math
 import re
 import uuid
 from fractions import Fraction
@@ -29,8 +30,8 @@ from grafcet.timeutil import parse_duration
 from grafcet.view import Vista, display_names, norm, layout_from_presentation, presentation_for, substitute
 
 from .bloques import _dur_usuario, normalizar_duracion
-from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, REJILLA, SX, TB, _distancia, ancla_en, anclas, barra,
-                       elemento_en, enlaces, icono_accion, posiciones)
+from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, REJILLA, SX, TB, _distancia, _extra, _geometria_acciones, _Pintor,
+                       ancla_en, anclas, barra, elemento_en, enlaces, icono_accion, posiciones)
 
 HERRAMIENTAS = ("seleccionar",)  # el ratón selecciona, mueve y enlaza; los elementos nuevos solo se colocan arrastrándolos
 DY = 80  # distancia vertical entre una etapa y su transición (la de los ejemplos)
@@ -44,10 +45,15 @@ DISPARADOR = {"activacion": "activation", "desactivacion": "deactivation", "even
 RESERVADAS = {p.lower() for p in KEYWORDS | set(FUNCS_REF) | FUNCS_EXPR | {"delay"}}  # palabras de las fórmulas
 
 
-COLOCACIONES = (("fila", "En fila, pegadas"), ("fila-separada", "En fila, separadas"), ("columna", "En columna"))
+COLOCACIONES = (("fila", "En fila, pegadas"), ("fila-separada", "En fila, separadas"), ("matriz-2", "En matriz de 2"),
+                ("columna", "En columna"))
 PARPADEO_MS, PARPADEO_PASOS = 250, 6  # tres parpadeos en 1,5 s: encendido al empezar y en los pasos 2 y 4
 MARGEN_SOLAPE = 8  # un elemento no se coloca a menos de esto de la caja de otro (en unidades del dibujo)
 MSG_SOLAPE = "No se puede poner encima de otro elemento"
+MSG_ENCIMA = "Las acciones quedan encima de otro elemento: apártelo"  # aviso (no error): no se pudo abrir hueco
+DESPLAZA_MAX = 600  # lo más que se desplaza a la derecha lo que estorba a las acciones de una etapa (P-IMP-48)
+BARRA_ALTO_MIN = 4  # alto con el que una barra cuenta como obstáculo aunque se dibuje sin grosor (la «O»)
+DESPLAZA_PASADAS = 4  # veces que se recalcula el hueco tras desplazar, por si sigue habiendo algo que estorba
 
 
 class Parpadeo(QObject):
@@ -110,6 +116,7 @@ class Edicion(QObject):
         self.herramienta = "seleccionar"
         self.sel: list[str] = []
         self._mensaje, self.mensaje_info = "", False
+        self._encima: list[str] = []  # etapas o grupos cuyas acciones quedaron encima de algo en la última operación atómica
         self.opciones = normalize_options(None)
         self.diagrama: Any = None
         self.parpadeo = Parpadeo(self)  # lo que parpadea en naranja tras un error
@@ -707,6 +714,183 @@ class Edicion(QObject):
         otros = [r for i, r, etapa in self._elementos() if i not in propios and etapa not in propios]
         return [h for h in huella if any(h.adjusted(-m, -m, m, m).intersects(r) for r in otros)]
 
+    # -- las acciones de una etapa tampoco se quedan encima de otro elemento: se aparta lo que estorba (P-IMP-48) ----
+    def _colocadas(self) -> list[dict[str, Any]]:
+        """Dónde quedan las acciones de cada etapa y de cada grupo suelto según el modelo y su colocación, sin esperar a
+        que se dibujen: {id, etapa, grupo, rect, extra: lo que sobresalen sus marcas por arriba y por abajo}."""
+        M, pos, out = self.M, posiciones(self.M), []
+        unidas = M.get("draftActions", [])
+
+        def anotar(acciones: list[dict[str, Any]], x: float, y: float, disposicion: str, suelto: bool, etapa: str,
+                   grupo: str) -> None:
+            for a, ax, cy, w in _geometria_acciones(x, y, acciones, disposicion, suelto)[0]:
+                out.append({"id": a.get("id", ""), "etapa": etapa, "grupo": grupo, "rect": (ax, cy - H, w, 2 * H),
+                            "extra": _extra(a)})
+        for s in M["steps"]:
+            acciones = s["actions"] + [d for d in unidas if d.get("etapa") == s["id"]]
+            if acciones:
+                anotar(acciones, *pos[s["id"]], s.get("actionLayout", "fila"), False, s["id"], "")
+        grupos: dict[str, list[dict[str, Any]]] = {}
+        for d in unidas:
+            if not d.get("etapa"):
+                grupos.setdefault(d.get("grupo") or d["id"], []).append(d)
+        for g, miembros in grupos.items():
+            anotar(miembros, miembros[0]["x"] + SX, miembros[0]["y"], (M.get("actionLayouts") or {}).get(g, "fila"),
+                   True, "", g)
+        return out
+
+    def _textos_transiciones(self) -> list[tuple[QRectF, str]]:
+        """Lo que ocupan los textos de las transiciones (su etiqueta a la izquierda y su receptividad a la derecha), con la
+        transición a la que pertenecen."""
+        out = []
+        for t in self.M["transitions"]:
+            tx, ty = t["x"] + SX, t["y"]
+            if t.get("showLabel", True):
+                w = _Pintor.ancho([{"t": f"({t.get('label', t['id'])})"}], 13)
+                out.append((QRectF(tx - TB - 6 - w, ty - 12, w, 21), t["id"]))
+            if t.get("cond"):
+                out.append((QRectF(tx + TB + 8, ty - 12, _Pintor.ancho(t["cond"], 14), 21), t["id"]))
+        return out
+
+    def _situacion(self, clave: str) -> tuple[float, float, list[dict[str, Any]], bool] | None:
+        """Dónde empiezan (x, y en el dibujo) y cuáles son las acciones de la etapa o del grupo suelto `clave`, y si es un
+        grupo suelto; None si no tiene ninguna (con el modelo ya rehecho: `reconstruir`)."""
+        M = self.M
+        unidas = M.get("draftActions", [])
+        if any(s["id"] == clave for s in M["steps"]):
+            paso = next(s for s in M["steps"] if s["id"] == clave)
+            acciones = paso["actions"] + [d for d in unidas if d.get("etapa") == clave]
+            return (*posiciones(M)[clave], acciones, False) if acciones else None
+        acciones = [d for d in unidas if not d.get("etapa") and (d.get("grupo") or d["id"]) == clave]
+        return (acciones[0]["x"] + SX, acciones[0]["y"], acciones, True) if acciones else None
+
+    def _choques(self, clave: str, disposicion: str) -> list[tuple[QRectF, float, float, float]]:
+        """Con qué choca la colocación `disposicion` de las acciones de la etapa (o del grupo suelto) `clave`: las etapas,
+        transiciones, barras, textos de transición y acciones de lo demás que quedan a menos de MARGEN_SOLAPE de sus cajas, o
+        que sus trazos cruzan. Cada choque: (caja del obstáculo, `ancla`, `izq`, hasta dónde llega por la derecha lo suyo que
+        toca, con el margen). `ancla` es la referencia con la que `_desplazar` decide qué se mueve: el centro x de la etapa
+        o transición que lleva el obstáculo (una acción, el de su etapa; un texto, el de su transición), de modo que toda
+        una columna se mueve junta; para una barra o un grupo suelto, su borde izquierdo (se mueven si ese borde llega al
+        corte). `izq` es el borde izquierdo de ese mismo elemento, solo para saber si el obstáculo empieza antes que las
+        acciones (`_despejar`). Las barras cuentan con un alto mínimo (BARRA_ALTO_MIN) aunque midan 0. Vacío: cabe."""
+        sit = self._situacion(clave)
+        if sit is None:
+            return []
+        x, y, acciones, suelto = sit
+        m = MARGEN_SOLAPE
+        cajas, trazos = _geometria_acciones(x, y, acciones, disposicion, suelto)
+        huella = [QRectF(ax, cy - H - _extra(a)[0], w, 2 * H + _extra(a)[0] + _extra(a)[1]).adjusted(-m, -m, m, m)
+                  for a, ax, cy, w in cajas]
+        lineas = [QRectF(min(x1, x2) - 1, min(y1, y2) - 1, abs(x2 - x1) + 2, abs(y2 - y1) + 2).adjusted(0, 0, m, 0)
+                  for tramo in trazos for (x1, y1), (x2, y2) in zip(tramo, tramo[1:])]
+        trans = {t["id"] for t in self.M["transitions"]}
+        pos = posiciones(self.M)
+        obstaculos: list[tuple[QRectF, float, float]] = []
+        for i, (px, py) in pos.items():
+            if i != clave:
+                r = QRectF(px - TB, py - 2, 2 * TB, 4) if i in trans else QRectF(px - H, py - H, 2 * H, 2 * H)
+                obstaculos.append((r, px, r.left()))
+        for b in self.M.get("bars", []):
+            bx, by, bw, bh = barra(b)
+            r = QRectF(bx, by - (BARRA_ALTO_MIN - bh) / 2, bw, BARRA_ALTO_MIN) if bh < BARRA_ALTO_MIN else QRectF(bx, by, bw, bh)
+            obstaculos.append((r, bx, bx))  # (QRectF.intersects es falso con alto 0: una barra «O» nunca estorbaría)
+        otras = [c for c in self._colocadas() if clave not in (c["etapa"], c["grupo"])]
+        izq_grupo: dict[str, float] = {}
+        for c in otras:
+            if not c["etapa"]:
+                izq_grupo[c["grupo"]] = min(izq_grupo.get(c["grupo"], c["rect"][0]), c["rect"][0])
+        for c in otras:
+            if c["etapa"]:
+                obstaculos.append((QRectF(*c["rect"]), pos[c["etapa"]][0], pos[c["etapa"]][0] - H))
+            else:
+                obstaculos.append((QRectF(*c["rect"]), izq_grupo[c["grupo"]], izq_grupo[c["grupo"]]))
+        obstaculos += [(r, pos[tid][0], pos[tid][0] - TB) for r, tid in self._textos_transiciones()]
+        out = []
+        for r, ancla, izq in obstaculos:
+            toca = [h.right() for h in huella if h.intersects(r)] + [ln.right() for ln in lineas if ln.intersects(r)]
+            if toca:
+                out.append((r, ancla, izq, max(toca)))
+        return out
+
+    def _desplazar(self, corte: float, d: int, propio: str) -> None:
+        """Mueve `d` a la derecha, con operaciones del editor, todo lo que está en `corte` o a su derecha (en el dibujo).
+        La referencia de cada elemento es la misma que la `ancla` de `_choques`: el centro x de una etapa, macroetapa o
+        transición (así una columna entera se mueve junta, aunque su obstáculo sea una transición y no una etapa) y el
+        borde izquierdo de una barra o de un grupo suelto (menos el grupo `propio`); una barra que empieza antes del corte
+        y acaba después se ensancha. Las acciones de una etapa y los textos van con ella. También las vías de los enlaces
+        con recorrido propio."""
+        ed, pos = self.ed, posiciones(self.M)
+        for i, (px, py) in pos.items():
+            if px >= corte:
+                ed.move(i, px - SX + d, py)
+        for b in ed.bars():
+            izq, ancho = Fraction(str(b["x"])), Fraction(str(b["ancho"]))
+            if izq + SX >= corte:
+                ed.move_bar(b["id"], izq + d, b["y"])
+            elif izq + SX + ancho > corte:  # empieza antes del corte y acaba después: sigue llegando a lo que se movió
+                ed.resize_bar(b["id"], izq, ancho + d)
+        sueltas = {s["id"]: {"x": Fraction(str(s["x"])) + d} for s in ed.draft_actions()
+                   if not s.get("etapa") and (s.get("grupo") or s["id"]) != propio and Fraction(str(s["x"])) + SX >= corte}
+        if sueltas:
+            ed.update_draft_actions(sueltas)
+        for lid, estilo in list(ed.link_styles().items()):
+            via = estilo.get("route", {}).get("laneX") if isinstance(estilo, dict) else None
+            if via is not None and float(via) + SX >= corte:
+                nuevo = copy.deepcopy(estilo)
+                nuevo["route"]["laneX"] = str(int(float(via) + d)) if float(via) == int(float(via)) else str(float(via) + d)
+                ed.set_link_style(lid, nuevo)
+
+    def _despejar(self, clave: str) -> bool:
+        """Que las acciones de la etapa (o del grupo suelto) `clave`, con la colocación elegida, no queden encima de otro
+        elemento. Si ya caben, no hace nada. Si no, abre hueco: desplaza a la derecha, con sus enlaces, todo lo que empieza
+        donde empieza el primer obstáculo o más allá (`_desplazar`), lo justo para dejar el margen y en pasos de rejilla, hasta
+        DESPLAZA_MAX. Si no se consigue (el obstáculo está a la izquierda de la etapa o debajo de ella, o pide más de
+        DESPLAZA_MAX), deshace lo desplazado y lo deja como está. Devuelve si cabe. Va dentro de una operación atómica."""
+        self.reconstruir()
+        disposicion = self.colocacion(clave)
+        choques = self._choques(clave, disposicion)
+        if not choques:
+            return True
+        x, _, _, suelto = self._situacion(clave)
+        n, rehacer, total = len(self.ed.undo_stack), list(self.ed.redo_stack), 0
+        for _ in range(DESPLAZA_PASADAS):
+            corte = min(ancla for _, ancla, _, _ in choques)
+            if min(izq for _, _, izq, _ in choques) < (x if suelto else x + H):
+                break  # un obstáculo empieza antes que las acciones: no se aparta a la derecha
+            d = math.ceil(max(derecha - r.left() for r, _, _, derecha in choques) / REJILLA) * REJILLA
+            total += d
+            if total > DESPLAZA_MAX:
+                break
+            self._desplazar(corte, d, clave)
+            self.reconstruir()
+            choques = self._choques(clave, disposicion)
+            if not choques:
+                return True
+        while len(self.ed.undo_stack) > n:  # no se pudo: ningún desplazamiento a medias
+            self.ed.undo()
+        self.ed.redo_stack[:] = rehacer  # (lo deshecho no se puede rehacer: la pila de rehacer, como estaba)
+        self.reconstruir()
+        return False
+
+    def _firmas(self) -> dict[str, tuple[Any, ...]]:
+        """Por cada etapa y grupo suelto con acciones, dónde y de qué tamaño quedan sus cajas (con el modelo ya rehecho);
+        cambia si se añade, se quita, se ensancha o se coloca de otro modo alguna de sus acciones."""
+        out: dict[str, list[Any]] = {}
+        for c in self._colocadas():
+            out.setdefault(c["etapa"] or c["grupo"], []).append((c["id"], *(round(v, 1) for v in c["rect"]), *c["extra"]))
+        return {k: tuple(v) for k, v in out.items()}
+
+    def _asegurar_hueco(self, antes: dict[str, tuple[Any, ...]]) -> list[str]:
+        """Tras una edición (dentro de su operación atómica): las etapas y grupos sueltos cuyas acciones cambiaron respecto a
+        `antes` (`_firmas`) se despejan (`_despejar`), y también las etapas que pasan a tener acciones. Un grupo suelto que
+        no estaba en `antes` (las acciones que se acaban de separar de su etapa) no se despeja: se queda donde estaba.
+        Devuelve los que no se pudieron: sus acciones quedan encima de algo."""
+        self.reconstruir()
+        despues = self._firmas()
+        etapas = {s["id"] for s in self.M["steps"]}
+        return [k for k, v in despues.items()
+                if (k in antes or k in etapas) and antes.get(k) != v and not self._despejar(k)]
+
     def _huella_arrastre(self, a: dict[str, Any]) -> list[QRectF]:
         """Las cajas de lo que se está moviendo, en su posición actual: el elemento y, de una etapa, sus acciones; de un
         grupo de acciones sueltas, cada una."""
@@ -1126,7 +1310,7 @@ class Edicion(QObject):
         de deshacer."""
         destino: list[Any] = [(None, [])]
         motivo = self._atomico("pegar acciones", lambda: destino.__setitem__(0, self._pegar(ids, objetivo)))
-        self.mensaje = motivo or ""
+        self._decir(motivo)
         if motivo:
             self.parpadear(ids)
             self.cambiado.emit()
@@ -1154,7 +1338,7 @@ class Edicion(QObject):
         ids = self._ids_grupo(did)
         promovidas: list[str] = []
         motivo = self._atomico("unir acciones a la etapa", lambda: promovidas.extend(self._pegar_a_etapa(ids, sid, None)))
-        self.mensaje = motivo or ""
+        self._decir(motivo)
         if motivo:
             self.parpadear(ids)
             self.cambiado.emit()
@@ -1191,7 +1375,7 @@ class Edicion(QObject):
         """«Eliminar el enlace»: separa las acciones de la etapa (una sola operación de deshacer)."""
         ids: list[str] = []
         motivo = self._atomico("eliminar el enlace de las acciones", lambda: ids.extend(self._separar_todas(sid)))
-        self.mensaje = motivo or ""
+        self._decir(motivo)
         if motivo:
             self.parpadear([sid])
         elif ids:
@@ -1230,7 +1414,7 @@ class Edicion(QObject):
                                                          if datos.get(k)}})
                 self.ed.delete([aid])
         motivo = self._atomico("separar acción", hacer)
-        self.mensaje = motivo or ""
+        self._decir(motivo)
         if motivo:
             self.parpadear([aid])
         if motivo is None:
@@ -1291,8 +1475,8 @@ class Edicion(QObject):
         return out
 
     def colocacion(self, sid: str) -> str:
-        """Cómo se colocan las acciones de la etapa (o del grupo suelto): «fila» (por defecto), «fila-separada» o
-        «columna»."""
+        """Cómo se colocan las acciones de la etapa (o del grupo suelto): «fila» (por defecto), «fila-separada»,
+        «matriz-2» o «columna»."""
         valor = self.ed.action_layouts().get(sid, "fila")
         return valor if valor in dict(COLOCACIONES) else "fila"
 
@@ -1300,8 +1484,10 @@ class Edicion(QObject):
         """Cambia la colocación de las acciones de una etapa o de un grupo suelto (operación de vista, se deshace)."""
         if valor == self.colocacion(sid):
             return
-        self.ed.set_action_layout(sid, valor)
-        self.cambia()
+        motivo = self._atomico("colocación de las acciones", lambda: self.ed.set_action_layout(sid, valor))
+        self._decir(motivo)
+        if motivo:
+            self.parpadear([sid])
 
     def _texto(self, eid: str | None) -> str:
         return a_usuario(next(e["text"] for e in self.ed.model["expressions"] if e["id"] == eid)) if eid else ""
@@ -1352,17 +1538,33 @@ class Edicion(QObject):
 
     def _atomico(self, etiqueta: str, fn: Callable[[], Any]) -> str | None:
         """Varias operaciones como una sola de deshacer; si una falla, no queda ninguna y se devuelve el motivo."""
-        n, r = len(self.ed.undo_stack), len(self.ed.redo_stack)
+        n, rehacer = len(self.ed.undo_stack), list(self.ed.redo_stack)
+        self._encima = []
         try:
             with self.ed.group(etiqueta):
+                self.reconstruir()
+                antes = self._firmas()
                 fn()
+                self._encima = self._asegurar_hueco(antes)  # lo que ensanchó o añadió acciones aparta lo que estorba
         except DiagnosticError as exc:
+            self._encima = []
             while len(self.ed.undo_stack) > n:
                 self.ed.undo()
-            del self.ed.redo_stack[r:]
+            self.ed.redo_stack[:] = rehacer  # (como estaba, aunque fn haya hecho varias operaciones)
+            self.reconstruir()  # (una operación pudo haber rehecho la vista a medias)
             return "; ".join(substitute(d.message, self.nombres) for d in exc.diagnostics)
         self.cambia()
+        if self._encima:  # no se pudo abrir hueco: se deja como está, con un aviso que no es un error
+            self.informar(MSG_ENCIMA)
+            self.parpadear(self._encima)
         return None
+
+    def _decir(self, motivo: str | None) -> None:
+        """El mensaje tras una operación atómica: su motivo si falló; si no, el aviso de que quedó encima de algo (si es el
+        caso) o nada."""
+        self.mensaje = motivo or ""
+        if not motivo and self._encima:
+            self.informar(MSG_ENCIMA)
 
     @staticmethod
     def _limite_us(texto: str) -> int | None:
@@ -1394,14 +1596,23 @@ class Edicion(QObject):
 
     @staticmethod
     def motivo_nombre(nombre: str) -> str | None:
-        """Por qué un nombre no puede ser el de una variable en la interfaz: no se podría escribir tal cual en una fórmula
-        (palabra reservada, espacios o símbolos, no empieza por letra) o se confundiría con la actividad de una etapa (X1).
-        None si sirve. El núcleo sigue admitiendo cualquier nombre entre comillas invertidas, en ficheros antiguos."""
+        """Por qué un nombre no puede ser el de una variable en la interfaz: no se podría escribir en una fórmula (palabra
+        reservada, espacios o símbolos, solo cifras o parecido a una duración) o se confundiría con la actividad de una
+        etapa (X1). None si sirve. Un nombre que empieza por cifra (1M1, 2S3: nomenclatura industrial) vale si lleva alguna
+        letra; en las fórmulas se escribe entre comillas invertidas (`1M1`), como cualquier nombre que no sea una palabra
+        simple, y el resto de la interfaz lo muestra sin ellas (P-IMP-46). El núcleo sigue admitiendo cualquier nombre
+        entre comillas invertidas, en ficheros antiguos."""
         if nombre.strip().lower() in RESERVADAS:
             return f'"{nombre}" no puede ser nombre de variable: es una palabra de las fórmulas'
-        if not re.fullmatch(r"[^\W\d]\w*(?:\.\w+)?", nombre):
-            return (f'"{nombre}" no puede ser nombre de variable: debe empezar por una letra o _ y no llevar espacios ni '
-                    "símbolos")
+        if re.fullmatch(r"\d+(?:[.,]\d+)?\s*(?:us|µs|μs|ms|s)", nombre):
+            return (f'"{nombre}" no puede ser nombre de variable: se leería como una duración (3s, 500ms…); '
+                    "añada alguna letra más, como 1S2")
+        if re.fullmatch(r"\d+(?:[.,]\d+)?", nombre):
+            return f'"{nombre}" no puede ser nombre de variable: es solo un número; añada alguna letra, como 1M1'
+        if not (re.fullmatch(r"[^\W\d]\w*(?:\.\w+)?", nombre)
+                or re.fullmatch(r"\d\w*", nombre) and re.search(r"[^\W\d_]", nombre)):
+            return (f'"{nombre}" no puede ser nombre de variable: debe empezar por una letra o _ (o por una cifra, si lleva '
+                    "alguna letra, como 1M1) y no llevar espacios ni símbolos")
         if re.fullmatch(r"X\d+", nombre):
             return f'"{nombre}" no puede ser nombre de variable: se confundiría con la actividad de la etapa {nombre[1:]}'
         return None
@@ -1441,6 +1652,8 @@ class Edicion(QObject):
             else:
                 self._crear_o_cambiar(sid, d, aid, vid)
         motivo = self._atomico("acción", hacer)
+        if motivo:
+            self.parpadear([sid])
         if motivo is None and sid not in self.sel:
             self.sel = [sid]
             self.cambiado.emit()
@@ -1559,7 +1772,16 @@ class Edicion(QObject):
         """«Añadir acción…» en una etapa: una acción continua unida a ella, sin variable todavía, y se abre Editar para
         completarla (si se cierra sin completar, queda con «?»)."""
         x, y = posiciones(self.M)[sid][0] - SX, posiciones(self.M)[sid][1]
-        did = self.ed.add_draft_action((ajustar(x + H + ACT_LINK), ajustar(y)), {"etapa": sid})
+        did = ""
+
+        def hacer() -> None:
+            nonlocal did
+            did = self.ed.add_draft_action((ajustar(x + H + ACT_LINK), ajustar(y)), {"etapa": sid})
+        motivo = self._atomico("añadir acción", hacer)
+        if motivo:
+            self.rechazar(motivo, sid)
+            self.cambiado.emit()
+            return ""
         self.sel, self.accion, self.ver_accion = [sid], did, True
         self.cambia()
         self.pedir_accion(sid, did)
@@ -1589,7 +1811,7 @@ class Edicion(QObject):
                 self.ed.update_draft_action(ident, tipo=tipo, variable=self._id_variable(d["variable"]),
                                             condicion=d.get("condicion", ""), limite=""),
                 self._completar(ident)))
-            self.mensaje = motivo or ""
+            self._decir(motivo)
             if motivo:
                 self.parpadear([ident])
             self._tras_borrador(ident)
@@ -1598,7 +1820,7 @@ class Edicion(QObject):
             return
         sid = self.ed.get(ident)["stepRef"]
         if not falta:  # completa: se cambia en su sitio
-            self.mensaje = self.poner_accion(sid, d, ident) or ""
+            self._decir(self.poner_accion(sid, d, ident))
             self.cambiado.emit()
             return
         self.separar_como_borrador(ident, d, sid, abrir)
@@ -1625,7 +1847,7 @@ class Edicion(QObject):
             nonlocal nuevo
             nuevo = self._a_borrador(aid, d, sid)
         motivo = self._atomico("tipo de acción", hacer)
-        self.mensaje = motivo or ""
+        self._decir(motivo)
         if motivo:
             self.parpadear([aid])
         if motivo is None:
@@ -1646,8 +1868,7 @@ class Edicion(QObject):
     def mover_accion(self, aid: str, delta: int) -> None:
         if self._es_borrador(aid):
             return  # los borradores van al final de la fila, en el orden en que se unieron
-        self.ed.move_action(aid, delta)
-        self.cambia()
+        self._decir(self._atomico("mover acción", lambda: self.ed.move_action(aid, delta)))
 
     # -- la condición y el evento de una acción, en el panel de opciones (P-IMP-43)
     def accion_activa(self) -> str | None:

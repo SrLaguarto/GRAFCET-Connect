@@ -34,6 +34,7 @@ MARK = 7       # divisiones de la macroetapa
 ACT_GAP = 36   # entre cajas de acción de una fila separada
 ACT_BUS = 28   # de la línea común de una fila separada, por debajo de las cajas
 ACT_COL = 12   # separación mínima entre cajas de una columna (crece lo que piden sus marcas)
+ACT_CANAL = 7  # de la derivación a la segunda columna de una matriz, por debajo de su fila
 
 # Colores del tema claro de tools/dibujo.css: el dibujo es negro sobre blanco, como en la norma
 COL = {"panel": "#ffffff", "text": "#1d2330", "muted": "#6b7385", "accent": "#1f6feb", "accent_soft": "#dbe8ff",
@@ -567,9 +568,11 @@ def _ancho_accion(a: dict[str, Any]) -> float:
 def _geometria_acciones(x: float, y: float, actions: list[dict[str, Any]], disposicion: str,
                         suelto: bool = False) -> tuple[list[tuple[dict[str, Any], float, float, float]], list[list[tuple[float, float]]]]:
     """Dónde va cada acción ({acción, x, y del centro, ancho}) y los trazos que las unen entre sí y con la etapa
-    (polilíneas). Tres colocaciones (figuras (1)–(3) de la norma): «fila» (por defecto; cajas contiguas, la
-    representación (2)), «fila-separada» (cajas separadas, unidas a una línea común que sale de la etapa) y «columna»
-    (una debajo de otra, unidas por una línea vertical que sale de la etapa). Una etapa está en (x, y) y las acciones
+    (polilíneas). Cuatro colocaciones (figuras (1)–(3) de la norma): «fila» (por defecto; cajas contiguas, la
+    representación (2)), «fila-separada» (cajas separadas, unidas a una línea común que sale de la etapa), «matriz-2»
+    (cuadrícula de dos columnas, de izquierda a derecha y de arriba abajo; una barra vertical común a su izquierda con
+    una derivación a cada fila: la de la segunda columna pasa por debajo de la caja de la primera y sube a la suya) y
+    «columna» (una debajo de otra, unidas por una línea vertical que sale de la etapa). Una etapa está en (x, y) y las acciones
     salen de su lado derecho; un grupo suelto empieza en (x, y), el punto medio de su lado izquierdo."""
     ax = x if suelto else x + H + ACT_LINK
     union: list[list[tuple[float, float]]] = [] if suelto else [[(x + H, y), (ax, y)]]
@@ -584,6 +587,24 @@ def _geometria_acciones(x: float, y: float, actions: list[dict[str, Any]], dispo
             union.append([(bx, y), (bx, ys[-1])])
             union += [[(bx, cy), (ax, cy)] for cy in (ys if suelto else ys[1:])]
         return [(a, ax, cy, max(ancho, _ancho_accion(a))) for a, cy in zip(actions, ys)], union
+    if disposicion == "matriz-2":
+        filas = [actions[i:i + 2] for i in range(0, len(actions), 2)]
+        w1 = max(_ancho_accion(f[0]) for f in filas)
+        w2 = max((_ancho_accion(f[1]) for f in filas if len(f) > 1), default=0)
+        x2, ys, canales = ax + w1 + ACT_GAP, [y], []
+        for n, f in enumerate(filas):
+            if n:  # el hueco deja sitio a las marcas y al canal de la derivación de la fila de arriba
+                ys.append(ys[-1] + 2 * H + max(ACT_COL, max(_extra(a)[1] for a in filas[n - 1])
+                                               + max(_extra(a)[0] for a in f) + 2 * ACT_CANAL))
+            canales.append(ys[-1] + H + max(_extra(a)[1] for a in f) + ACT_CANAL)  # por debajo de la fila, entre las dos cajas
+        cajas = [(a, ax if i % 2 == 0 else x2, ys[i // 2], w1 if i % 2 == 0 else w2) for i, a in enumerate(actions)]
+        if len(actions) > 1:
+            fin = canales[-1] if len(filas[-1]) > 1 else ys[-1]
+            union.append([(bx, y), (bx, fin)])
+            union += [[(bx, cy), (ax, cy)] for cy in (ys if suelto else ys[1:])]
+            union += [[(bx, canales[n]), (x2 - 14, canales[n]), (x2 - 14, ys[n]), (x2, ys[n])]
+                      for n, f in enumerate(filas) if len(f) > 1]
+        return cajas, union
     if disposicion == "fila-separada":
         cajas, entradas = [], []
         for i, a in enumerate(actions):
@@ -679,7 +700,8 @@ def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[st
     return w
 
 
-# Las cinco fichas de la carpeta «Acciones» y las del menú de tipo: nombre, ayuda y la acción de ejemplo que se dibuja
+# Los cinco tipos de acción del menú «Tipo de acción» (botón derecho) y de la ficha «Acción» de la paleta (la continua): nombre y la
+# acción de ejemplo que se dibuja
 FICHAS_ACCION = (("continua", "Continua"), ("condicionada", "Condicionada"), ("activacion", "Al activar"),
                  ("desactivacion", "Al desactivar"), ("evento", "Por evento"))
 

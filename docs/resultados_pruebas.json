@@ -1,9 +1,9 @@
 {
- "date": "2026-10-28T21:21:43+00:00",
- "python": "3.13.17",
- "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
- "machine": "x86_64",
- "total": 266,
+ "date": "2026-10-29T10:37:55+01:00",
+ "python": "3.12.10",
+ "platform": "Windows-11-10.0.26200-SP0",
+ "machine": "AMD64",
+ "total": 288,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -262,14 +262,14 @@
    "summary": "REQ-EDT-07, REQ-EDT-09: la tabla de variables tiene «Nueva E», «Nueva S» y «Nueva M» (tooltips Nueva entrada,"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI104_panel_de_acciones_lista_de_variables_y_nueva_variable",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI104_panel_de_acciones_lista_de_variables_sin_crear_desde_aqui",
    "case": "S-EDI104",
    "outcome": "pasa",
    "requirements": [
     "REQ-ACT-01",
     "REQ-EDT-07"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-07: la variable se elige en una lista ordenada por papel (Salidas, Memorias) con su tipo y"
+   "summary": "REQ-ACT-01, REQ-EDT-07: la variable se elige en una lista ordenada por papel (Salidas, Memorias) con su tipo; nunca"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI105_programador_de_valor_de_una_accion_memorizada",
@@ -331,7 +331,7 @@
    "summary": "REQ-EDT-02, REQ-EDT-03: los clics del ratón sobre el dibujo llegan al editor; la selección y las marcas se"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI110_plantillas_sin_acumularse_y_nueva_variable_booleana_en_continuas",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI110_plantillas_sin_acumularse",
    "case": "S-EDI110",
    "outcome": "pasa",
    "requirements": [
@@ -398,6 +398,37 @@
    "summary": "REQ-EDT-02: si el elemento mostrado en el panel de opciones cambia sin clic (deshacer, rehacer o selección por"
   },
   {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI117_lista_de_variables_vacia_o_sin_la_variable_actual",
+   "case": "S-EDI117",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-07: si no hay ninguna variable que la acción pueda escribir (o la elegida ya no existe), la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI118_nombres_de_variable_con_cifra_delante",
+   "case": "S-EDI118",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-01",
+    "REQ-EDT-07",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-07, REQ-EDT-09, REQ-DAT-01: un nombre como 1M1 o 2S3 (nomenclatura industrial) vale como variable: se"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI119_bloque_parentesis_en_todos_los_programadores",
+   "case": "S-EDI119",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: el bloque «( )» está en la carpeta Operadores de todos los programadores (receptividad"
+  },
+  {
    "test": "test_editor_escritorio.Interfaz.test_SEDI11_puntos_de_union",
    "case": "S-EDI11",
    "outcome": "pasa",
@@ -407,6 +438,107 @@
    "summary": "REQ-EDT-02: etapas y transiciones tienen puntos de unión arriba y abajo; al acercarse se marcan y del punto"
   },
   {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI120_dibujo_del_bloque_parentesis_y_de_las_operaciones_anidadas",
+   "case": "S-EDI120",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el bloque «( )» se dibuja con un paréntesis a cada lado, tan altos como lo que encierra (también si"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI121_panel_inferior_a_todo_el_ancho_y_laterales_solo_arriba",
+   "case": "S-EDI121",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09, REQ-EDT-02: el panel inferior ocupa todo el ancho de la ventana, por debajo del dibujo y de los"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI122_opciones_sin_controles_cortados_ni_solapes",
+   "case": "S-EDI122",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09, REQ-EDT-02: con una acción por evento (programador del valor y del evento a la vez) y con una"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI123_las_acciones_de_una_etapa_apartan_lo_que_estorba",
+   "case": "S-EDI123",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: al añadir acciones a una etapa (Añadir…, el panel o unir una suelta; pegar, en"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI124_colocacion_en_matriz_de_dos_columnas",
+   "case": "S-EDI124",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-DAT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02, REQ-DAT-01: «En matriz de 2» (menú de la etapa y panel de opciones) coloca las acciones en"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI125_plantillas_mas_uno_y_menos_uno_con_nombre_de_cifra_delante",
+   "case": "S-EDI125",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-07",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-07, REQ-EDT-09, REQ-ACT-01: las plantillas «+1» y «−1» de una acción sobre una variable entera cuyo nombre"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI126_ejemplos_paralelo_y_alternativas_con_una_accion_mas",
+   "case": "S-EDI126",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: en el ejemplo «paralelo», una acción en la etapa B (con la C a 140 de ella) desplaza C, su"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI127_sin_poder_apartar_la_accion_se_queda_encima_con_un_aviso",
+   "case": "S-EDI127",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: si no se puede abrir hueco a la derecha (el obstáculo está debajo de la etapa, o pide más"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI128_editar_una_accion_ya_colocada_aparta_lo_que_pisa",
+   "case": "S-EDI128",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: cambiar la variable (de nombre largo), la condición o el tipo de una acción colocada, o la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI129_apartar_mueve_barras_acciones_sueltas_y_vias_de_enlaces",
+   "case": "S-EDI129",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: al apartar lo que estorba, lo que queda a la derecha del primer obstáculo se mueve con sus"
+  },
+  {
    "test": "test_editor_escritorio.Interfaz.test_SEDI12_paleta_arrastrar_y_sin_pedir_receptividad",
    "case": "S-EDI12",
    "outcome": "pasa",
@@ -414,6 +546,96 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-EDT-02: los elementos de la paleta, a la izquierda, se arrastran al dibujo; una transicion se coloca sin"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI130_el_corte_no_parte_una_columna",
+   "case": "S-EDI130",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: si lo que estorba es una transición de una columna, se mueve la columna entera (etapas y"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI131_una_barra_de_alternativa_tambien_se_aparta",
+   "case": "S-EDI131",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: una barra «O» (se dibuja sin grosor) cuenta como obstáculo, con un alto mínimo: si las"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI132_separar_acciones_no_mueve_nada_y_la_primera_accion_si_despeja",
+   "case": "S-EDI132",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: «Eliminar el enlace» y «Separar» dejan cada acción donde estaba y no mueven ninguna otra"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI133_pegar_una_accion_a_una_etapa_aparta_lo_que_estorba",
+   "case": "S-EDI133",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: pegar una acción suelta a una etapa sigue la misma política que añadirla: si cabe, no se"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI134_cambiar_el_tipo_de_una_accion_aparta_lo_que_estorba",
+   "case": "S-EDI134",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: cambiar el tipo de una acción colocada a otro que se dibuja más ancho («al activar», con"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI135_mover_una_accion_de_orden_aparta_lo_que_estorba",
+   "case": "S-EDI135",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: subir o bajar una acción en la etapa (en una matriz de 2, cuyas columnas toman el ancho de"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI136_renombrar_una_variable_que_ensancha_una_accion_aparta_lo_que_estorba",
+   "case": "S-EDI136",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02, REQ-EDT-09: renombrar una variable con un nombre más largo ensancha las acciones que la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI137_sin_hueco_tras_desplazar_se_revierte_el_desplazamiento",
+   "case": "S-EDI137",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: si tras desplazar sigue habiendo algo que estorba (aquí, forzado), lo desplazado se"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI138_la_pila_de_rehacer_queda_como_estaba_si_algo_se_deshace",
+   "case": "S-EDI138",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: una operación atómica que falla con un rehacer pendiente (aunque haga varias operaciones antes de"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI13_propiedades_de_la_etapa",
@@ -781,7 +1003,7 @@
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: la carpeta «Acciones» ofrece la ficha «Continua» con su figura (el lado izquierdo, bajo"
+   "summary": "REQ-ACT-01, REQ-EDT-02: la paleta ofrece la ficha «Acción» (continua) con su figura (el lado izquierdo, bajo"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI63_y_y_o_con_colores_distintos",
@@ -983,7 +1205,7 @@
    "requirements": [
     "REQ-ACT-01"
    ],
-   "summary": "REQ-ACT-01: tools/dibujo.js (banco y comparador) lee `actionLayout` de la vista y dibuja las tres colocaciones"
+   "summary": "REQ-ACT-01: tools/dibujo.js (banco y comparador) lee `actionLayout` de la vista y dibuja las cuatro colocaciones"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI85_papel_y_tipo_como_texto_con_desplegable_al_editar",
@@ -1013,14 +1235,14 @@
    "summary": "REQ-EDT-02: no hay modo herramienta para colocar: un clic en una ficha solo muestra su ayuda, un clic en el"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI88_carpeta_de_acciones_con_sus_cinco_fichas",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI88_paleta_con_una_sola_ficha_de_accion",
    "case": "S-EDI88",
    "outcome": "pasa",
    "requirements": [
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: la paleta tiene dos carpetas, «Elementos» (etapa, transición, simultaneidad) y"
+   "summary": "REQ-ACT-01, REQ-EDT-02: la paleta es una sola lista, sin carpetas, con etapa, transición, simultaneidad y una"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI89_punto_derecho_de_la_etapa_y_union_con_acciones_sueltas",

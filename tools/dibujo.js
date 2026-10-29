@@ -14,6 +14,7 @@ const ACT_MIN = 80;   // anchura mínima de una acción
 const ACT_GAP = 36;   // entre cajas de acción de una fila separada
 const ACT_BUS = 28;   // de la línea común de una fila separada, por debajo de las cajas
 const ACT_COL = 12;   // separación mínima entre cajas de una columna (crece lo que piden sus marcas)
+const ACT_CANAL = 7;  // de la derivación a la segunda columna de una matriz, por debajo de su fila
 const MARK = 7;       // marcas internas de la encapsulante y divisiones de la macroetapa
 
 function el(tag, attrs={}, parent) { const e = document.createElementNS(NS, tag);
@@ -236,9 +237,11 @@ function drawAction(g, ax, cy, a, S) {
   return {w, ajustar};
 }
 
-// Acciones a la derecha de la etapa, del alto de la etapa. Tres colocaciones (figuras (1)–(3) de la norma): "fila"
+// Acciones a la derecha de la etapa, del alto de la etapa. Cuatro colocaciones (figuras (1)–(3) de la norma): "fila"
 // (por defecto; cajas contiguas, la representación (2)), "fila-separada" (cajas separadas, unidas a una línea común que
-// sale de la etapa) y "columna" (una debajo de otra, unidas por una línea vertical que sale de la etapa)
+// sale de la etapa), "matriz-2" (cuadrícula de dos columnas, de izquierda a derecha y de arriba abajo; una barra vertical
+// común a su izquierda con una derivación a cada fila: la de la segunda columna pasa por debajo de la caja de la primera y
+// sube a la suya) y "columna" (una debajo de otra, unidas por una línea vertical que sale de la etapa)
 function drawActions(g, p, actions, S, layout = "fila") {
   if (!actions.length) return;
   let ax = p.x + H + ACT_LINK;
@@ -257,6 +260,30 @@ function drawActions(g, p, actions, S, layout = "fila") {
     const ancho = Math.max(...cajas.map(c => c.w));
     cajas.forEach(c => c.ajustar(ancho));
     return ax + ancho;
+  }
+  if (layout === "matriz-2") {
+    const filas = [];
+    for (let i = 0; i < actions.length; i += 2) filas.push(actions.slice(i, i + 2));
+    const alto = (f, k) => Math.max(...f.map(a => actionExtra(a)[k]));
+    const ys = [p.y], canales = [];
+    filas.forEach((f, n) => {
+      if (n) ys.push(ys[n-1] + 2*H + Math.max(ACT_COL, alto(filas[n-1], 1) + alto(f, 0) + 2*ACT_CANAL));
+      canales.push(ys[n] + H + alto(f, 1) + ACT_CANAL);
+    });
+    const bx = p.x + H + ACT_LINK / 2;
+    const c1 = filas.map((f, n) => drawAction(g, ax, ys[n], f[0], S));
+    const w1 = Math.max(...c1.map(c => c.w));
+    c1.forEach(c => c.ajustar(w1));
+    const x2 = ax + w1 + ACT_GAP;
+    const c2 = filas.map((f, n) => f.length > 1 ? drawAction(g, x2, ys[n], f[1], S) : null).filter(c => c);
+    const w2 = c2.length ? Math.max(...c2.map(c => c.w)) : 0;
+    c2.forEach(c => c.ajustar(w2));
+    if (actions.length > 1) {
+      linea(`M${bx},${p.y} V${filas[filas.length-1].length > 1 ? canales[canales.length-1] : ys[ys.length-1]}`);
+      ys.slice(1).forEach(cy => linea(`M${bx},${cy} H${ax}`));
+      filas.forEach((f, n) => { if (f.length > 1) linea(`M${bx},${canales[n]} H${x2-14} V${ys[n]} H${x2}`); });
+    }
+    return c2.length ? x2 + w2 : ax + w1;
   }
   if (layout === "fila-separada") {
     const entradas = [];

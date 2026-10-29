@@ -208,7 +208,7 @@ class Vista:
         crudos = action_layouts if action_layouts is not None else (presentation or {}).get("actionLayouts", {})
         # colocación de las acciones de cada etapa (presentación); lo que no se conoce vale «fila»
         self.action_layouts = {k: v for k, v in (crudos if isinstance(crudos, dict) else {}).items()
-                               if v in ("fila", "fila-separada", "columna")}
+                               if v in ("fila", "fila-separada", "matriz-2", "columna")}
         doc = m.doc if isinstance(m, M) else m
         self.key, self.options, self.doc = key, options, doc
         self.texts: dict[str, str] = {}

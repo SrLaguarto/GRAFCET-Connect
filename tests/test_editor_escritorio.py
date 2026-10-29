@@ -324,17 +324,16 @@ class Interfaz(unittest.TestCase):
 
     @staticmethod
     def poner_tipo(d, tipo):
-        """Elige el tipo de la acción en la lista del panel (lo que hace el usuario: se aplica al momento)."""
-        d.tipo.setCurrentIndex(d.tipo.findData(tipo))
-        d.tipo.activated.emit(d.tipo.currentIndex())
+        """Cambia el tipo de la acción como lo hace el usuario: botón derecho sobre ella, «Tipo de acción» (el panel de
+        opciones ya no tiene lista de tipos, P-IMP-46)."""
+        d.e.tipo_accion(d.aid, tipo)
 
     def anadir_accion(self, sid, tipo="continua", variable="", valor=""):
         """Lo que hacía el diálogo «Añadir acción»: «Añadir…» y luego, en el panel, tipo, variable y valor (cada campo se
         aplica al momento). Devuelve el panel."""
         a = self.panel_accion(sid)
         if tipo != "continua":
-            a.tipo.setCurrentIndex(a.tipo.findData(tipo))
-            a.tipo.activated.emit(a.tipo.currentIndex())
+            self.poner_tipo(a, tipo)
         if variable:
             a.variable.setCurrentText(variable)
         if valor:
@@ -644,8 +643,8 @@ class Interfaz(unittest.TestCase):
         w.nuevo()
         e, d = w.edicion, w.diagrama
         self.assertFalse(w.dock.isHidden())
-        self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())], ["Etapa", "Transición", "Simultaneidad"],
-                         "Seleccionar no es un elemento y la etapa inicial es una etapa con otro tipo; las acciones, en su carpeta")
+        self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())], ["Etapa", "Transición", "Simultaneidad", "Acción"],
+                         "Seleccionar no es un elemento y la etapa inicial es una etapa con otro tipo; una sola lista, con la acción continua")
         pedidas = []
         e.pedir_condicion = pedidas.append
         self.assertEqual(w.paleta.mimeData([w.paleta.item(1)]).text(), "transicion")
@@ -1640,13 +1639,15 @@ class Interfaz(unittest.TestCase):
         e.deshacer()
         self.assertEqual(e.ed.draft_actions(), [])
         d = self.panel_accion(ids["1"])
-        d.tipo.setCurrentIndex(d.tipo.findData("activacion"))
-        d.tipo.activated.emit(d.tipo.currentIndex())
+        self.poner_tipo(d, "activacion")
         self.assertNotIn("CT", d.ofrecidas())
+        e.nueva_variable("CT", "internal", {"kind": "int"})  # se crea en la tabla de variables, no desde el panel de la acción
+        d = self.panel_accion(ids["1"], e.acciones(ids["1"])[0]["id"])
+        self.assertIn("CT", d.ofrecidas())
         n = len(e.ed.undo_stack)
-        self.assertTrue(d.nueva_variable("CT", "internal", {"kind": "int"}), "no existe: «Nueva variable…» la crea")
+        d.variable.setCurrentText("CT")
         self.assertEqual(d.variable.currentText(), "CT")
-        self.assertEqual(len(e.ed.undo_stack), n + 1, "la variable y su elección, una sola operación")
+        self.assertEqual(len(e.ed.undo_stack), n + 1, "la elección de la variable, una operación")
         self.assertEqual(e.faltan(e.acciones(ids["1"])[0]), ["valor"], "sin valor, la acción queda como borrador")
         d.valor.setText("CT + 1")
         d.valor.editingFinished.emit()
@@ -1666,9 +1667,8 @@ class Interfaz(unittest.TestCase):
         e.doble(dentro)
         self.assertEqual(pedidas[-1], (ids["1"], aid))
         d = self.panel_accion(ids["1"], aid)  # cambiarla: memorizada al desactivar, CT := 0
-        self.assertEqual((d.tipo.currentData(), d.variable.currentText(), d.valor.text()), ("activacion", "CT", "CT + 1"))
-        d.tipo.setCurrentIndex(d.tipo.findData("desactivacion"))
-        d.tipo.activated.emit(d.tipo.currentIndex())
+        self.assertEqual((d.clave_tipo, d.variable.currentText(), d.valor.text()), ("activacion", "CT", "CT + 1"))
+        self.poner_tipo(d, "desactivacion")
         d.valor.setText("0")
         d.valor.editingFinished.emit()
         self.assertEqual(e.datos_accion(aid)["tipo"], "desactivacion")
@@ -1703,8 +1703,7 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         d = self.panel_accion(ids["1"])
         self.assertFalse(hasattr(d, "cond") or hasattr(d, "evento"), "sin programador de condición dentro")
-        d.tipo.setCurrentIndex(d.tipo.findData("evento"))
-        d.tipo.activated.emit(d.tipo.currentIndex())
+        self.poner_tipo(d, "evento")
         d.valor.setText("1")
         d.valor.editingFinished.emit()
         n = len(e.ed.undo_stack)
@@ -1729,8 +1728,7 @@ class Interfaz(unittest.TestCase):
         self.assertNotIn("puede ser la etapa", d.msg.text())
         d = self.panel_accion(ids["1"])
         d.variable.setCurrentText("M1")
-        d.tipo.setCurrentIndex(d.tipo.findData("activacion"))
-        d.tipo.activated.emit(d.tipo.currentIndex())
+        self.poner_tipo(d, "activacion")
         d.valor.setText("X1")
         d.valor.editingFinished.emit()
         self.assertIn("puede ser la etapa E1 o la etapa 1", d.msg.text())
@@ -1743,13 +1741,11 @@ class Interfaz(unittest.TestCase):
     def test_SEDI49_memorias_en_la_interfaz(self):
         """REQ-EDT-07: las variables internas se llaman «memorias» en la interfaz; el papel guardado sigue siendo
         «internal»."""
-        from escritorio.acciones import PAPELES_NUEVA
         from escritorio.variables import PAPELES
         e, ids, ts = self.secuencial()
         self.assertIn(("internal", "Memoria"), PAPELES)
-        self.assertEqual(PAPELES_NUEVA, (("output", "Salida"), ("internal", "Memoria")), "una acción no escribe entradas")
-        d = self.anadir_accion(ids["1"], "activacion")
-        d.nueva_variable("CT", "internal", {"kind": "int"})
+        e.nueva_variable("CT", "internal", {"kind": "int"})
+        d = self.anadir_accion(ids["1"], "activacion", "CT")
         d.valor.setText("CT + 1")
         d.valor.editingFinished.emit()
         self.assertEqual(next(v for v in e.ed.model["variables"] if v["name"] == "CT")["role"], "internal")
@@ -1957,7 +1953,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((w.props.pagina, w.props.accion.aid), ("accion", aid))
 
     def test_SEDI62_ficha_accion_en_la_paleta(self):
-        """REQ-ACT-01, REQ-EDT-02: la carpeta «Acciones» ofrece la ficha «Continua» con su figura (el lado izquierdo, bajo
+        """REQ-ACT-01, REQ-EDT-02: la paleta ofrece la ficha «Acción» (continua) con su figura (el lado izquierdo, bajo
         el puntero); soltada en cualquier sitio crea una acción suelta sin abrir ningún diálogo; «accion» a secas sigue
         siendo una continua."""
         from escritorio.propiedades import figura
@@ -1965,8 +1961,8 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         w.resize(1360, 860)
         w.show()
-        textos = [w.paleta_acciones.item(k).text() for k in range(w.paleta_acciones.count())]
-        self.assertEqual(textos[0], "Continua")
+        textos = [w.paleta.item(k).text() for k in range(w.paleta.count())]
+        self.assertEqual(textos[-1], "Acción")
         pm, punto = figura("accion:continua", 1.0, 1.0)
         self.assertGreater(pm.width(), pm.height(), "un rectángulo de acción, más ancho que alto")
         self.assertTrue(pm.rect().contains(punto))
@@ -2629,12 +2625,12 @@ class Interfaz(unittest.TestCase):
         d = self.panel_accion(None, did)
         self.assertEqual(w.props.titulo.text(), "Opciones · Acción ? · suelta")
         self.assertTrue(d.limite.isHidden())
-        self.assertNotIn("limitada", [d.tipo.itemData(i) for i in range(d.tipo.count())], "ya no se ofrece como tipo")
+        self.assertFalse(hasattr(d, "tipo"), "el panel no lleva lista de tipos: se cambia con botón derecho (P-IMP-46)")
         self.assertFalse(hasattr(d, "cond"), "sin programador dentro")
         e.ed.update_draft_action(did, tipo="limitada")  # lo que trae un fichero antiguo
         e.cambia()
         d = self.panel_accion(None, did)
-        self.assertEqual(d.tipo.currentText(), "Condicionada (con límite de tiempo)")
+        self.assertEqual(d.clave_tipo, "limitada")
         self.assertFalse(d.limite.isHidden(), "el límite de tiempo solo en la limitada")
         d.limite.setText("2s")
         n = len(e.ed.undo_stack)
@@ -2645,14 +2641,18 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(("".join(s["t"] for s in e.M["draftActions"][0]["cond"]), e.M["draftActions"][0]["text"]),
                          ("NOT 2s/X?", [{"t": "?"}]))
         d = self.panel_accion(None, did)  # se reabre con lo guardado
-        self.assertEqual((d.tipo.currentData(), d.limite.text()), ("limitada", "2s"))
+        self.assertEqual((d.clave_tipo, d.limite.text()), ("limitada", "2s"))
         d.variable.setCurrentText("Q00")
         self.assertEqual(e.ed.draft_actions()[0]["variable"], next(v["id"] for v in e.ed.model["variables"] if v["name"] == "Q00"))
         self.assertEqual(e.ed.model["actions"], [], "suelta: no es del modelo aunque esté completa")
         # una variable que no existe se crea con la elección, en la misma operación
+        # una variable nueva se crea en la tabla de variables (aquí no) y se elige en la lista
+        d = self.panel_accion(None, did)
+        self.assertEqual(d.variable.findData("Q11"), -1)
+        e.nueva_variable("Q11", "output", {"kind": "bool"})
         d = self.panel_accion(None, did)
         n = len(e.ed.undo_stack)
-        d.nueva_variable("Q11", "output", {"kind": "bool"})
+        d.variable.setCurrentText("Q11")
         self.assertEqual((len(e.ed.undo_stack), [v["name"] for v in e.ed.model["variables"]]), (n + 1, ["marcha", "paro", "Q00", "Q11"]))
         # unida a una etapa y completa: pasa al modelo con su límite, en una operación
         e.unir_accion(did, ids["1"])
@@ -2762,19 +2762,15 @@ class Interfaz(unittest.TestCase):
             self.assertEqual(panel.width(), minimo, panel.width())
         self.assertFalse(w.split.handle(1).isEnabled(), "sin divisor que mueva el panel derecho")
         w.split.moveSplitter(w.split.width() - 400, 1)  # intentar estirarlo no cambia nada
-        w.resizeDocks([w.dock], [minimo + 60], Qt.Orientation.Horizontal)
         self.app.processEvents()
         self.assertEqual((w.dock.width(), w.derecho.width()), (minimo, minimo))
         # al ancho mínimo, las fichas siguen en dos columnas y dos filas, sin barras
-        for lista, filas in ((pal, 2), (w.paleta_acciones, 3)):  # las dos carpetas: «Elementos» y «Acciones»
-            w.carpetas.setCurrentWidget(lista)
-            self.app.processEvents()
-            r = [lista.visualItemRect(lista.item(i)) for i in range(lista.count())]
-            self.assertEqual((r[0].y(), r[1].y(), r[2].y()), (r[1].y(), r[0].y(), r[0].y() + lista.gridSize().height()))
-            self.assertTrue(r[1].x() > r[0].x(), "dos columnas")
-            self.assertEqual(len({x.y() for x in r}), filas)
-            self.assertEqual((lista.verticalScrollBarPolicy(), lista.horizontalScrollBarPolicy()),
-                             (Qt.ScrollBarPolicy.ScrollBarAlwaysOff,) * 2)
+        r = [pal.visualItemRect(pal.item(i)) for i in range(pal.count())]
+        self.assertEqual((r[0].y(), r[1].y(), r[2].y()), (r[1].y(), r[0].y(), r[0].y() + pal.gridSize().height()))
+        self.assertTrue(r[1].x() > r[0].x(), "dos columnas")
+        self.assertEqual(len({x.y() for x in r}), 2)
+        self.assertEqual((pal.verticalScrollBarPolicy(), pal.horizontalScrollBarPolicy()),
+                         (Qt.ScrollBarPolicy.ScrollBarAlwaysOff,) * 2)
         # con cada tipo de selección, las opciones caben en el ancho del panel de abajo (no se cortan) y el panel derecho también
         b = e.poner_barra(QPointF(500, 400), "Y")
         for sel in ([ids["1"]], [ts["t1"]], [f"{ts['t1']}|{ids['0']}|pre"], [b]):
@@ -2979,8 +2975,16 @@ class Interfaz(unittest.TestCase):
         pv.tabla.item(0, 0).setText("zz")
         self.assertEqual(pv.parpadeo.ids, {e.ed.model["variables"][0]["id"]})
 
+    @staticmethod
+    def _apartar_t2(e):
+        """Baja la transición t2 para dejar sitio, bajo la etapa 1, a una columna de acciones (P-IMP-48: las acciones no se
+        colocan encima del texto de una transición)."""
+        e.ed.move(next(t["id"] for t in e.M["transitions"] if t["label"] == "t2"), 0, 800)
+        e.cambia()
+
     def _tres_acciones(self, e, ids):
         """Una etapa con tres acciones: continua con condición, por evento (banderita) y al desactivar."""
+        self._apartar_t2(e)
         e.nueva_variable("Q00", "output")
         e.nueva_variable("CT", "internal", {"kind": "int"})
         e.nueva_variable("M1", "internal")
@@ -3014,12 +3018,13 @@ class Interfaz(unittest.TestCase):
         c = centro(e.M, sid)
         opciones = dict(e.menu(c))
         self.assertEqual([t for t, _ in opciones["Colocación de las acciones"]],
-                         ["En fila, pegadas", "En fila, separadas", "En columna"])
+                         ["En fila, pegadas", "En fila, separadas", "En matriz de 2", "En columna"])
         self.assertEqual(e.menu_marcadas, {"En fila, pegadas"})
         menu = w.diagrama.menu_contextual(e.menu(c))
         sub = next(a.menu() for a in menu.actions() if a.menu() is not None)
         self.assertEqual([(a.text(), a.isChecked()) for a in sub.actions()],
-                         [("En fila, pegadas", True), ("En fila, separadas", False), ("En columna", False)])
+                         [("En fila, pegadas", True), ("En fila, separadas", False), ("En matriz de 2", False),
+                          ("En columna", False)])
         modelo, revision, n = copy.deepcopy(e.ed.model), e.ed.model["revisionId"], len(e.ed.undo_stack)
         # en fila, separadas
         dict(opciones["Colocación de las acciones"])["En fila, separadas"]()
@@ -3172,15 +3177,15 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(txt(e.M["draftActions"][0]["cond"]), "2s/X7")
 
     def test_SEDI84_banco_dibuja_las_colocaciones_como_el_editor(self):
-        """REQ-ACT-01: tools/dibujo.js (banco y comparador) lee `actionLayout` de la vista y dibuja las tres colocaciones
+        """REQ-ACT-01: tools/dibujo.js (banco y comparador) lee `actionLayout` de la vista y dibuja las cuatro colocaciones
         con las mismas medidas que escritorio/diagrama.py."""
         from escritorio import diagrama
         js = (ROOT / "tools" / "dibujo.js").read_text(encoding="utf-8")
         import re
-        for nombre in ("ACT_MIN", "ACT_GAP", "ACT_BUS", "ACT_COL", "ACT_LINK"):
+        for nombre in ("ACT_MIN", "ACT_GAP", "ACT_BUS", "ACT_COL", "ACT_LINK", "ACT_CANAL"):
             valor = re.search(rf"const {nombre}\s*=\s*(\d+);", js)
             self.assertEqual(int(valor.group(1)), getattr(diagrama, nombre), nombre)
-        for texto in ("s.actionLayout", '"fila-separada"', '"columna"', "actionExtra", "drawAction("):
+        for texto in ("s.actionLayout", '"fila-separada"', '"matriz-2"', '"columna"', "actionExtra", "drawAction("):
             self.assertIn(texto, js)
         ver = Vista("k", "t", "", lambda: (new_grafcet_document("k"), {}), normalize_options(None))
         self.assertEqual(ver.model["steps"], [])
@@ -3200,7 +3205,7 @@ class Interfaz(unittest.TestCase):
         que no coloca (seleccionar, Esc)."""
         from PySide6.QtGui import QAction
         from escritorio.edicion import HERRAMIENTAS
-        from escritorio.propiedades import AYUDAS, AYUDAS_ACCION
+        from escritorio.propiedades import AYUDAS
         w = self.w
         w.nuevo()
         e = w.edicion
@@ -3217,42 +3222,43 @@ class Interfaz(unittest.TestCase):
         e.prensar(QPointF(500, 60))  # y un clic en el dibujo no coloca nada
         e.soltar(QPointF(500, 60))
         self.assertEqual((e.M["steps"], len(e.ed.undo_stack)), ([], n))
-        w.paleta_acciones.itemClicked.emit(w.paleta_acciones.item(1))
-        self.assertEqual(e.mensaje, AYUDAS_ACCION["condicionada"])
-        self.assertEqual(w.ayuda.text(), AYUDAS_ACCION["condicionada"])
+        w.paleta.itemClicked.emit(w.paleta.item(3))  # la ficha «Acción»
+        self.assertEqual(e.mensaje, AYUDAS["accion:continua"])
+        self.assertEqual(w.ayuda.text(), AYUDAS["accion:continua"])
         self.soltar_ficha("etapa", QPointF(300, 60))  # arrastrada, sí
         self.assertEqual(len(e.M["steps"]), 1)
         self.assertEqual(w.l_herr.text().count("Seleccionar"), 1)
 
-    def test_SEDI88_carpeta_de_acciones_con_sus_cinco_fichas(self):
-        """REQ-ACT-01, REQ-EDT-02: la paleta tiene dos carpetas, «Elementos» (etapa, transición, simultaneidad) y
-        «Acciones» con una ficha dibujada por tipo (continua, condicionada, al activar, al desactivar, por evento) con la
-        misma función que el diagrama; arrastrar una ficha crea una acción de ese tipo donde se suelta, sin diálogo, con «?»
-        en lo que falta y dibujada como cualquier acción."""
+    def test_SEDI88_paleta_con_una_sola_ficha_de_accion(self):
+        """REQ-ACT-01, REQ-EDT-02: la paleta es una sola lista, sin carpetas, con etapa, transición, simultaneidad y una
+        ficha «Acción» (la continua, dibujada con la misma función que el diagrama); arrastrarla crea una acción continua
+        suelta donde se suelta, sin diálogo, con «?» en lo que falta; los otros tipos se piden con botón derecho
+        (conservan su ficha dibujada en el menú «Tipo de acción»)."""
+        from PySide6.QtWidgets import QTabWidget
         from escritorio import diagrama, propiedades
         w = self.w
         w.nuevo()
         e = w.edicion
-        self.assertEqual([w.carpetas.tabText(i) for i in range(2)], ["Elementos", "Acciones"])
-        self.assertIs(w.carpetas.widget(0), w.paleta)
-        self.assertIs(w.carpetas.widget(1), w.paleta_acciones)
-        pa = w.paleta_acciones
-        tipos = ["continua", "condicionada", "activacion", "desactivacion", "evento"]
-        self.assertEqual([pa.item(i).text() for i in range(pa.count())],
-                         ["Continua", "Condicionada", "Al activar", "Al desactivar", "Por evento"])
-        self.assertEqual([pa.mimeData([pa.item(i)]).text() for i in range(pa.count())], [f"accion:{t}" for t in tipos])
-        self.assertEqual(propiedades.ACCIONES, tuple(f"accion:{t}" for t in tipos))
-        imagenes = [pa.item(i).icon().pixmap(90, 76).toImage() for i in range(pa.count())]
-        self.assertTrue(all(not im.isNull() for im in imagenes))
-        self.assertEqual(len({bytes(im.constBits()) for im in imagenes}), 5, "cada ficha, su dibujo")
-        # la misma función que el diagrama: la ficha es lo que `_caja_accion` dibuja (marca encima o debajo de la caja)
-        alturas = {t: diagrama.ficha_accion(t)[0].height() for t in tipos}
-        self.assertGreater(alturas["condicionada"], alturas["continua"], "el trazo de la condición, encima")
-        self.assertGreater(alturas["desactivacion"], alturas["continua"], "la flecha ↓, debajo")
-        for t in tipos:
-            pm, punto = propiedades.figura(f"accion:{t}", 1.0, 1.0)
-            self.assertTrue(pm.rect().contains(punto) and punto.x() < 8, t)
-        # arrastrar de verdad: QDrag con la figura y el texto de cada ficha
+        self.assertFalse(hasattr(w, "carpetas") or hasattr(w, "paleta_acciones") or hasattr(propiedades, "PaletaAcciones"))
+        self.assertEqual(w.dock.findChildren(QTabWidget), [], "sin pestañas: la lista, directamente")
+        self.assertIs(w.paleta.parent(), w.dock)
+        pa = w.paleta
+        self.assertEqual([pa.item(i).text() for i in range(pa.count())], ["Etapa", "Transición", "Simultaneidad", "Acción"])
+        self.assertEqual([pa.mimeData([pa.item(i)]).text() for i in range(pa.count())],
+                         ["etapa", "transicion", "simultaneidad", "accion:continua"])
+        self.assertEqual(propiedades.COLOCABLES, ("etapa", "transicion", "simultaneidad", "accion:continua"))
+        self.assertFalse(pa.item(3).icon().pixmap(80, 64).toImage().isNull())
+        self.assertIn("Tipo de acción", propiedades.AYUDAS["accion:continua"], "la ayuda dice cómo cambiar el tipo")
+        self.assertNotIn("carpeta", w.ayuda.text())
+        self.assertIn("paleta", w.ayuda.text())
+        # la figura es lo que `_caja_accion` dibuja, y el icono de cada tipo sigue existiendo para el menú de tipo
+        tipos = [t for t, _ in diagrama.FICHAS_ACCION]
+        self.assertEqual(tipos, ["continua", "condicionada", "activacion", "desactivacion", "evento"])
+        imagenes = [diagrama.icono_accion(t).pixmap(84, 64).toImage() for t in tipos]
+        self.assertEqual(len({bytes(im.constBits()) for im in imagenes}), 5, "cada tipo, su dibujo en el menú")
+        pm, punto = propiedades.figura("accion:continua", 1.0, 1.0)
+        self.assertTrue(pm.rect().contains(punto) and punto.x() < 8)
+        # arrastrar de verdad: QDrag con la figura y el texto de la ficha
         capturados = []
 
         class FalsoDrag:
@@ -3272,30 +3278,26 @@ class Interfaz(unittest.TestCase):
             def exec(self, *a):
                 return Qt.DropAction.IgnoreAction
         with mock.patch.object(propiedades, "QDrag", FalsoDrag):
-            for fila in range(pa.count()):
-                pa.setCurrentRow(fila)
-                pa.startDrag(Qt.DropAction.CopyAction)
-        self.assertEqual([c.datos["texto"] for c in capturados], [f"accion:{t}" for t in tipos])
+            pa.setCurrentRow(3)
+            pa.startDrag(Qt.DropAction.CopyAction)
+        self.assertEqual([c.datos["texto"] for c in capturados], ["accion:continua"])
         self.assertTrue(all(c.datos["pm"].rect().contains(c.datos["punto"]) for c in capturados))
-        # soltar cada ficha: una acción suelta de ese tipo, sin diálogo
+        # soltar la ficha en vacío: una acción continua suelta, sin diálogo, con «?» y dibujada como cualquier acción
         pedidas = []
         e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
-        for i, t in enumerate(tipos):
-            self.soltar_ficha(f"accion:{t}", QPointF(300 + 200 * (i % 3), 100 + 120 * (i // 3)))
-        self.assertEqual(([b["tipo"] for b in e.ed.draft_actions()], pedidas), (tipos, []))
-        self.assertTrue(all("variable" not in b and "etapa" not in b for b in e.ed.draft_actions()))
-        por_tipo = {m["id"]: m for m in e.M["draftActions"]}
-        ids = [b["id"] for b in e.ed.draft_actions()]
-        self.assertEqual(por_tipo[ids[0]]["cond"], None)
-        self.assertEqual(por_tipo[ids[1]]["cond"], [{"t": "?"}], "condicionada: el trazo con «?»")
-        self.assertEqual([por_tipo[i].get("trigger") for i in ids[2:]], ["activation", "deactivation", "event"])
-        self.assertEqual(por_tipo[ids[4]]["event"], [{"t": "?"}])
+        self.soltar_ficha("accion:continua", QPointF(300, 100))
+        (b,) = e.ed.draft_actions()
+        self.assertEqual((b["tipo"], pedidas), ("continua", []))
+        self.assertTrue("variable" not in b and "etapa" not in b)
         # sin discontinuo ni naranja, como cualquier acción
         from PySide6.QtWidgets import QGraphicsPathItem, QGraphicsRectItem
         trazos = [it.pen() for it in w.diagrama.scene().items() if isinstance(it, (QGraphicsRectItem, QGraphicsPathItem))
                   and it.zValue() < 10 and it.pen().style() != Qt.PenStyle.NoPen]
         self.assertTrue(trazos)
         self.assertTrue(all(p.style() == Qt.PenStyle.SolidLine and p.color().name() != diagrama.COL["glow"] for p in trazos))
+        # el tipo se cambia con botón derecho (la operación del menú «Tipo de acción»)
+        e.tipo_accion(b["id"], "evento")
+        self.assertEqual(e.ed.draft_actions()[0]["tipo"], "evento")
 
     def test_SEDI89_punto_derecho_de_la_etapa_y_union_con_acciones_sueltas(self):
         """REQ-ACT-01, REQ-EDT-02: la etapa tiene un punto de unión en el centro de su lado derecho (visible al pasar el
@@ -3346,6 +3348,7 @@ class Interfaz(unittest.TestCase):
 
     def _etapa_con_dos_acciones(self):
         e, ids, ts = self.secuencial()
+        self._apartar_t2(e)
         e.pedir_accion = lambda sid, aid: None
         e.nueva_variable("Q00", "output", {"kind": "bool"})
         e.nueva_variable("Q01", "output", {"kind": "bool"})
@@ -3470,7 +3473,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(len(e.ed.undo_stack), n + 1)
         self.assertEqual({(d["x"], d["y"]) for d in e.ed.draft_actions()}, {("560", "340")})
         # colocación del grupo: en columna, la segunda debajo de la primera
-        dict(e.menu(centro_caja(w, b)))["Colocación de las acciones"][2][1]()
+        dict(e.menu(centro_caja(w, b)))["Colocación de las acciones"][3][1]()
         self.assertEqual(e.ed.action_layouts(), {g: "columna"})
         r = [self._caja(i)["rect"] for i in (a, b, c)]
         self.assertEqual((r[0][0], r[1][0], r[2][0]), (r[0][0],) * 3)
@@ -3743,18 +3746,15 @@ class Interfaz(unittest.TestCase):
     def test_SEDI95_el_panel_conserva_condicion_evento_y_limite(self):
         """REQ-ACT-01, REQ-EDT-02: el panel de la acción no lleva programador de condición dentro y conserva la condición y el
         evento de la acción; una condicionada o por evento sin ellos queda como borrador unido a la etapa (se programan con
-        los bloques de su lado); «Condicionada (con límite de tiempo)» solo aparece en una limitada, y quitar su límite la
-        deja condicionada."""
+        los bloques de su lado); el límite de tiempo solo aparece en una limitada, y quitarlo la deja condicionada."""
         w = self.w
         e, ids, ts = self._etapa_con_dos_acciones()
         s1 = ids["1"]
         # añadir una condicionada: sin condición, queda como borrador unido
         d = self.panel_accion(s1)
-        self.assertEqual([d.tipo.itemData(i) for i in range(d.tipo.count())],
-                         ["continua", "condicionada", "activacion", "desactivacion", "evento"])
+        self.assertFalse(hasattr(d, "tipo"), "sin lista de tipos: el tipo se cambia con botón derecho sobre la acción")
         self.assertTrue(d.limite.isHidden())
-        d.tipo.setCurrentIndex(d.tipo.findData("condicionada"))
-        d.tipo.activated.emit(d.tipo.currentIndex())
+        self.poner_tipo(d, "condicionada")
         d.variable.setCurrentText("Q02")
         (b,) = e.ed.draft_actions()
         self.assertEqual((b["etapa"], b["tipo"], "condicion" in b), (s1, "condicionada", False))
@@ -3772,17 +3772,16 @@ class Interfaz(unittest.TestCase):
         self.assertIsNone(e.poner_accion(s1, {"tipo": "condicionada", "variable": "Q02", "condicion": "marcha AND NOT paro"}))
         a = e.acciones(s1)[-1]["id"]
         d = self.panel_accion(s1, a)
-        self.assertEqual((d.tipo.currentData(), d.variable.currentText()), ("condicionada", "Q02"))
+        self.assertEqual((d.clave_tipo, d.variable.currentText()), ("condicionada", "Q02"))
         d.variable.setCurrentText("Q01")
         self.assertEqual((e.datos_accion(a)["condicion"], e.datos_accion(a)["variable"]), ("marcha AND NOT paro", "Q01"))
-        d.tipo.setCurrentIndex(d.tipo.findData("continua"))  # a continua: sin condición
-        d.tipo.activated.emit(d.tipo.currentIndex())
+        self.poner_tipo(d, "continua")  # a continua: sin condición
         self.assertEqual((e.datos_accion(a)["tipo"], e.datos_accion(a)["condicion"]), ("continua", ""))
         # una limitada: «Condicionada (con límite de tiempo)»; quitar el límite la deja condicionada, con su condición
         self.assertIsNone(e.poner_accion(s1, {"tipo": "limitada", "variable": "Q02", "condicion": "marcha", "limite": "2s"}))
         lim = e.acciones(s1)[-1]["id"]
         d = self.panel_accion(s1, lim)
-        self.assertEqual(d.tipo.currentText(), "Condicionada (con límite de tiempo)")
+        self.assertEqual(d.clave_tipo, "limitada")
         self.assertEqual((d.limite.text(), d.limite.isHidden()), ("2s", False))
         d.limite.setText("")
         d.limite.editingFinished.emit()
@@ -3792,25 +3791,29 @@ class Interfaz(unittest.TestCase):
         self.assertIsNone(e.poner_accion(s1, {"tipo": "limitada", "variable": "Q02", "limite": "2s"}))
         lim = e.acciones(s1)[-1]["id"]
         d = self.panel_accion(s1, lim)
-        d.tipo.setCurrentIndex(d.tipo.findData("continua"))
-        d.tipo.activated.emit(d.tipo.currentIndex())
+        self.poner_tipo(d, "continua")
         self.assertEqual((e.datos_accion(lim)["tipo"], "limitUs" in e.ed.get(lim)), ("continua", False))
 
     def test_SEDI96_nombres_de_variable_reservados(self):
         """REQ-EDT-07, REQ-EDT-09: en la interfaz se rechaza, con mensaje y parpadeo, un nombre de variable que no se puede
-        escribir tal cual en una fórmula (palabra reservada sin distinguir mayúsculas, espacios o símbolos, no empieza por
-        letra, o confundible con una etapa como X1); vale en la tabla de variables, en «Crear las que faltan» y en el
-        panel de la acción; el núcleo no cambia."""
+        escribir en una fórmula (palabra reservada sin distinguir mayúsculas, espacios o símbolos, no empieza por letra ni
+        por cifra con alguna letra como 1M1, solo cifras, parecido a una duración como 2s, o confundible con una etapa
+        como X1); vale en la tabla de variables y en «Crear las que faltan»; el núcleo no cambia."""
         w = self.w
         e, ids, ts = self._etapa_con_dos_acciones()
         for n in ("AND", "and", "Or", "NOT", "true", "False", "rise", "FALL", "active", "activePartial", "activeMacro",
                   "elapsed", "delay", "DELAY"):
             self.assertEqual(e.motivo_nombre(n), f'"{n}" no puede ser nombre de variable: es una palabra de las fórmulas', n)
-        for n in ("mi var", "1a", "a-b", "a+b", "(x)"):
+        for n in ("mi var", "a-b", "a+b", "(x)", "1 M1", "1M-1", "1_", "1_2", "1.5a"):
             self.assertIn("debe empezar por una letra o _", e.motivo_nombre(n), n)
+        for n in ("2", "10", "1.5", "1,5"):  # solo un número: no es un nombre
+            self.assertIn("es solo un número", e.motivo_nombre(n), n)
+        for n in ("2s", "10ms", "3us", "0.5s", "1 s"):  # se leería como una duración
+            self.assertIn("se leería como una duración", e.motivo_nombre(n), n)
         for n in ("X1", "X12"):
             self.assertIn("se confundiría con la actividad de la etapa", e.motivo_nombre(n), n)
-        for n in ("marcha", "Q00", "x1", "Xmarcha", "Motor_1", "I0.1", "andar", "Sí", "XX1"):
+        for n in ("marcha", "Q00", "x1", "Xmarcha", "Motor_1", "I0.1", "andar", "Sí", "XX1", "_",
+                  "1M1", "2S3", "1M2", "10M", "1S", "2s3", "1X2", "9_b"):  # con cifra delante, si lleva alguna letra (P-IMP-46)
             self.assertIsNone(e.motivo_nombre(n), n)
         # la tabla de variables: mensaje, parpadeo y la fila vuelve a quedar en blanco
         pv = w.variables
@@ -3840,27 +3843,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(res.code, "D-FORMATO")
         self.assertEqual(e.mensaje, res.message)
         self.assertNotIn("AND", [x["name"] for x in e.ed.model["variables"]])
-        # el panel de la acción al crear una variable
-        from escritorio.acciones import DialogoVariableNueva
-        d = self.panel_accion(ids["1"])
-        nueva = DialogoVariableNueva(d, set())  # «Nueva variable…»: el nombre se comprueba al pedirlo
-        nueva.nombre.setText("Delay")
-        nueva.aceptar()
-        self.assertEqual(nueva.msg.text(), '"Delay" no puede ser nombre de variable: es una palabra de las fórmulas')
-        self.assertIsNone(nueva.resultado)
-        nueva.nombre.setText("marcha")
-        nueva.aceptar()
-        self.assertNotIn("Ya existe", nueva.msg.text(), "no sabe de las variables si no se le dan")
-        nueva = DialogoVariableNueva(d, set(d._variables()))
-        nueva.nombre.setText("marcha")
-        nueva.aceptar()
-        self.assertIn("Ya existe", nueva.msg.text())
-        self.assertFalse(d.nueva_variable("Delay", "output", {"kind": "bool"}))  # y si se cuela, tampoco se crea
-        self.assertEqual(d.msg.text(), '"Delay" no puede ser nombre de variable: es una palabra de las fórmulas')
-        self.assertTrue(d.parpadeo.t.isActive(), "el aviso, en naranja y parpadeando")
-        self.assertNotIn("Delay", [x["name"] for x in e.ed.model["variables"]])
-        self.assertTrue(d.nueva_variable("Q09", "output", {"kind": "bool"}))
-        self.assertIn("Q09", [x["name"] for x in e.ed.model["variables"]])
+        # el panel de la acción ya no crea variables (P-IMP-46); la tabla de variables es el único sitio
         # el núcleo admite lo que ya estaba (ficheros antiguos): el nombre reservado entre comillas invertidas
         vid = e.ed.add_variable("AND", "input", {"kind": "bool"})
         e.poner_condicion(ts["t2"], "`AND`")
@@ -3997,22 +3980,20 @@ class Interfaz(unittest.TestCase):
         e.nueva_variable("I02", "input", {"kind": "bool"})
         return e, ids, ts
 
-    def test_SEDI104_panel_de_acciones_lista_de_variables_y_nueva_variable(self):
-        """REQ-ACT-01, REQ-EDT-07: la variable se elige en una lista ordenada por papel (Salidas, Memorias) con su tipo y
-        con «Nueva variable…» al final; nunca ofrece entradas; una continua o condicionada solo booleanas; una memorizada,
-        de cualquier tipo; «Nueva variable…» pide nombre, papel (salida o memoria) y tipo y la crea y la elige en una sola
-        operación; cancelar deja lo que había."""
-        from escritorio.acciones import NUEVA, DialogoVariableNueva
-        from PySide6.QtWidgets import QDialog
-        w = self.w
+    def test_SEDI104_panel_de_acciones_lista_de_variables_sin_crear_desde_aqui(self):
+        """REQ-ACT-01, REQ-EDT-07: la variable se elige en una lista ordenada por papel (Salidas, Memorias) con su tipo; nunca
+        ofrece entradas; una continua o condicionada solo booleanas; una memorizada, de cualquier tipo. La lista ya no ofrece
+        «Nueva variable…» (las variables se crean en la tabla de variables, P-IMP-46); sin ninguna que valga, lo dice."""
         e, ids, ts = self._dialogo_con_memorias()
         s1 = ids["1"]
         d = self.panel_accion(s1)
         datos = lambda: [d.variable.itemData(i) for i in range(d.variable.count())]  # noqa: E731
         self.assertEqual(d.ofrecidas(), ["Q00", "Q01", "Q02", "M1"], "continua: salidas y memorias booleanas, sin entradas")
-        self.assertEqual(datos(), ["", None, "Q00", "Q01", "Q02", None, "M1", NUEVA])
+        self.assertEqual(datos(), ["", None, "Q00", "Q01", "Q02", None, "M1"])
         textos = [d.variable.itemText(i) for i in range(d.variable.count())]
-        self.assertEqual((textos[1], textos[5], textos[-1]), ("Salidas", "Memorias", "Nueva variable…"))
+        self.assertEqual((textos[1], textos[5]), ("Salidas", "Memorias"))
+        self.assertNotIn("Nueva variable…", textos)
+        self.assertFalse(hasattr(d, "nueva_variable"), "ni método ni diálogo para crear variables desde la acción")
         self.assertIn("Booleana", textos[2])
         self.assertFalse(d.variable.model().item(1).isEnabled(), "los rótulos no se eligen")
         self.poner_tipo(d, "condicionada")
@@ -4023,28 +4004,17 @@ class Interfaz(unittest.TestCase):
             self.assertNotIn("I02", d.ofrecidas())
         self.assertTrue(any("Entera" in d.variable.itemText(i) and d.variable.itemData(i) == "CT"
                             for i in range(d.variable.count())), "con su tipo")
-        # «Nueva variable…»: cancelar no cambia nada; aceptar la crea y la elige, en una sola operación
+        # una variable creada en la tabla aparece enseguida en la lista y se elige como cualquier otra
         d.poner_variable("CT")
-        with mock.patch.object(DialogoVariableNueva, "exec", lambda self: QDialog.DialogCode.Rejected):
-            d.variable.setCurrentIndex(d.variable.findData(NUEVA))
-            d._elegir_variable()
-        self.assertEqual(d.variable.currentText(), "CT")
-
-        def acepta(self):
-            self.resultado = ("TOT", "internal", {"kind": "int"})
-            return QDialog.DialogCode.Accepted
         n = len(e.ed.undo_stack)
-        with mock.patch.object(DialogoVariableNueva, "exec", acepta):
-            d.variable.setCurrentIndex(d.variable.findData(NUEVA))
-            d._elegir_variable()
-        self.assertEqual(d.variable.currentText(), "TOT")
+        self.assertIsNone(e.nueva_variable("TOT", "internal", {"kind": "int"}))
         self.assertIn("TOT", d.ofrecidas())
-        v = next(v for v in e.ed.model["variables"] if v["name"] == "TOT")
-        self.assertEqual((v["role"], v["type"]["kind"]), ("internal", "int"), "ya existe: se crea al elegirla")
-        self.assertEqual(len(e.ed.undo_stack), n + 1, "variable y elección, una sola operación")
+        d.poner_variable("TOT")
+        self.assertEqual(d.variable.currentText(), "TOT")
+        self.assertEqual(len(e.ed.undo_stack), n + 2, "crear la variable y elegirla: dos operaciones")
         d.valor.setText("TOT + 1")
         d.valor.editingFinished.emit()
-        self.assertEqual(len(e.ed.undo_stack), n + 2)
+        self.assertEqual(len(e.ed.undo_stack), n + 3)
         # una continua no escribe una variable entera: al cambiar de tipo se vuelve a elegir
         a = e.acciones(s1)[-1]["id"]
         d = self.panel_accion(s1, a)
@@ -4052,14 +4022,23 @@ class Interfaz(unittest.TestCase):
         self.poner_tipo(d, "continua")
         self.assertEqual(d.variable.currentText(), "")
         self.assertNotIn("TOT", d.ofrecidas())
-        # el diálogo de «Nueva variable…» ofrece solo salida y memoria, con los tres tipos
-        dv = DialogoVariableNueva(d, set())
-        self.assertEqual([dv.papel.itemData(i) for i in range(dv.papel.count())], ["output", "internal"])
-        self.assertEqual([dv.tipo.itemText(i) for i in range(dv.tipo.count())], ["Booleana", "Entera", "Decimal (2)"])
-        dv.nombre.setText("DEC")
-        dv.tipo.setCurrentIndex(2)
-        dv.aceptar()
-        self.assertEqual(dv.resultado, ("DEC", "output", {"kind": "decimal", "scale": 2}))
+
+    def test_SEDI117_lista_de_variables_vacia_o_sin_la_variable_actual(self):
+        """REQ-ACT-01, REQ-EDT-07: si no hay ninguna variable que la acción pueda escribir (o la elegida ya no existe), la
+        lista muestra «(sin variables: créelas en la tabla de variables)» y no se rompe; al crear una, se ofrece."""
+        from escritorio.acciones import SIN_VARIABLES
+        e, ids, ts = self.secuencial()  # solo hay entradas (marcha, paro)
+        d = self.panel_accion(ids["1"])
+        self.assertEqual((d.ofrecidas(), d.variable.count(), d.variable.itemText(0)), ([], 1, SIN_VARIABLES))
+        self.assertEqual(d.variable.currentText(), "")
+        self.assertFalse(d.variable.model().item(0).isEnabled())
+        d.variable.activated.emit(0)  # no hay nada que elegir: no pasa nada
+        self.assertEqual(e.acciones(ids["1"])[-1]["variable"], "")
+        e.nueva_variable("Q00", "output", {"kind": "bool"})
+        self.assertEqual(d.ofrecidas(), ["Q00"])
+        self.assertEqual(d.variable.itemText(0), "Elija la variable…")
+        self.poner_tipo(d, "activacion")  # y otro tipo conserva la lista sin romperse
+        self.assertEqual(d.ofrecidas(), ["Q00"])
 
     def test_SEDI105_programador_de_valor_de_una_accion_memorizada(self):
         """REQ-ACT-01, REQ-EDT-02: el valor de una memorizada se programa en el panel de la acción: una booleana elige entre las fichas
@@ -4104,7 +4083,8 @@ class Interfaz(unittest.TestCase):
         d.prog.elegir_categoria("vnum")
         self.assertEqual([n["n"] for n in d.prog.paleta._raices], ["CT"], "una ficha por variable numérica, de cualquier papel")
         d.prog.elegir_categoria("aritm")
-        self.assertEqual([n["op"] for n in d.prog.paleta._raices], ["+", "-", "*", "/"])
+        self.assertEqual([n["op"] if n["k"] == "ar" else n["k"] for n in d.prog.paleta._raices],
+                         ["+", "-", "*", "/", "par"], "los cuatro operadores y el paréntesis")
         # con bloques: CT * 2 - 1, anidado (un operador sobre otro lo envuelve); lo a medias no se guarda
         d.valor.setText("")
         d.valor.editingFinished.emit()
@@ -4136,7 +4116,8 @@ class Interfaz(unittest.TestCase):
         d.manual.setChecked(True)
         d.valor.setText("(CT + 1) * 2")
         d.valor.textEdited.emit(d.valor.text())
-        self.assertEqual((lienzo.arbol["op"], lienzo.arbol["a"]["op"]), ("*", "+"))
+        self.assertEqual((lienzo.arbol["op"], lienzo.arbol["a"]["k"], lienzo.arbol["a"]["a"]["op"]), ("*", "par", "+"),
+                         "el paréntesis escrito es un bloque «( )»")
         # lo escrito se guarda al terminar: el texto de siempre, que el núcleo analiza como siempre
         d.valor.setText("CT * 2 - 1")
         d.valor.editingFinished.emit()
@@ -4158,11 +4139,10 @@ class Interfaz(unittest.TestCase):
         d.prog.colocar(d.prog.paleta.bloques()[0])
         self.assertEqual(d.valor.text(), "1")
 
-    def test_SEDI110_plantillas_sin_acumularse_y_nueva_variable_booleana_en_continuas(self):
+    def test_SEDI110_plantillas_sin_acumularse(self):
         """REQ-ACT-01, REQ-EDT-07: al cambiar de tipo o de variable hay una sola etiqueta «Plantillas» y los botones
-        correctos; «Nueva variable…» desde una continua o condicionada solo ofrece Booleana (y no crea una entera)."""
+        correctos."""
         from PySide6.QtWidgets import QLabel
-        from escritorio.acciones import DialogoVariableNueva
         w = self.w
         e, ids, ts = self._dialogo_con_memorias()
         d = self.panel_accion(ids["1"])
@@ -4178,16 +4158,6 @@ class Interfaz(unittest.TestCase):
             self.assertEqual(botones(), ["Plantillas", *esperadas])
             self.assertEqual(list(d.plantillas), esperadas)
             self.assertEqual(d.fila_plantillas.count(), len(esperadas) + 2, "etiqueta, botones y estiramiento")
-        for tipo in ("continua", "condicionada"):
-            self.poner_tipo(d, tipo)
-            dv = DialogoVariableNueva(d, set(), solo_booleana=True)
-            self.assertEqual([dv.tipo.itemText(i) for i in range(dv.tipo.count())], ["Booleana"])
-            self.assertFalse(d.nueva_variable("ENT", "internal", {"kind": "int"}), "una continua no escribe enteras")
-            self.assertNotIn("ENT", d._variables())
-            self.assertTrue(d.nueva_variable("BOOL1", "output", {"kind": "bool"}))
-        self.poner_tipo(d, "activacion")
-        self.assertEqual(DialogoVariableNueva(d, set()).tipo.count(), 3)
-        self.assertTrue(d.nueva_variable("ENT", "internal", {"kind": "int"}), "una memorizada sí")
 
     def test_SEDI106_frase_explicativa_y_condicion_con_bloques_al_lado(self):
         """REQ-ACT-01, REQ-EDT-02: arriba del panel de la acción, una frase la explica según su tipo; la condición (o el
@@ -4435,7 +4405,6 @@ class Interfaz(unittest.TestCase):
         w.show()
         QApplication.processEvents()
         p = w.props
-        self.assertEqual([w.carpetas.tabText(i) for i in range(w.carpetas.count())], ["Elementos", "Acciones"])
         self.assertFalse(w.dock.isAncestorOf(p))
         e.seleccionar([ids["1"]])
         QApplication.processEvents()
@@ -4472,6 +4441,101 @@ class Interfaz(unittest.TestCase):
         QApplication.processEvents()
         self.assertTrue(p.accion.caja_valor.isVisible() and p.pagina_bloques.isVisible())
         self.assertLessEqual(p.minimumSizeHint().width(), w.inferior.width())
+
+    def _con_accion_por_evento(self):
+        """Un grafcet con una acción memorizada por evento (valor y evento a la vez) y su transición; devuelve (e, ids, ts, aid)."""
+        e, ids, ts = self.secuencial()
+        e.nueva_variable("CT", "internal", {"kind": "int"})
+        e.nueva_variable("I02", "input")
+        self.assertIsNone(e.poner_accion(ids["0"], {"tipo": "evento", "variable": "CT", "valor": "CT + 1", "evento": "↑I02"}))
+        return e, ids, ts, e.acciones(ids["0"])[0]["id"]
+
+    def test_SEDI121_panel_inferior_a_todo_el_ancho_y_laterales_solo_arriba(self):
+        """REQ-EDT-09, REQ-EDT-02: el panel inferior ocupa todo el ancho de la ventana, por debajo del dibujo y de los
+        paneles laterales; el izquierdo (paleta) y el derecho quedan encima, a la altura del dibujo; plegarlos o
+        desplegarlos no cambia el panel inferior; su altura se mueve con el divisor y no baja de lo que pide su contenido."""
+        from PySide6.QtWidgets import QDockWidget
+        w = self.w
+        e, ids, ts, aid = self._con_accion_por_evento()
+        self.assertEqual(w.findChildren(QDockWidget), [], "el panel izquierdo ya no es un dock de toda la altura")
+        for tam in ((2000, 1000), (1366, 768)):
+            w.resize(*tam)
+            w.show()
+            w.editar_accion(ids["0"], aid)
+            QApplication.processEvents()
+            ventana = w.centralWidget()
+            inf = QRectF(w.inferior.mapTo(ventana, QPoint(0, 0)), w.inferior.size())
+            self.assertEqual((inf.left(), inf.width()), (0, ventana.width()), f"{tam}: el inferior, de borde a borde")
+            for panel in (w.dock, w.derecho, w.diagrama):
+                self.assertTrue(panel.isVisible(), panel)
+                alto = panel.mapTo(ventana, QPoint(0, panel.height())).y()
+                self.assertLessEqual(alto, inf.top(), f"{tam}: {panel} no invade el panel inferior")
+            self.assertGreater(w.dock.mapTo(ventana, QPoint(0, 0)).x() + w.dock.width(), 0)
+            antes = (w.inferior.geometry(), w.vsplit.sizes())
+            w.flechas["izquierdo"].click()
+            w.flechas["derecho"].click()
+            QApplication.processEvents()
+            self.assertTrue(w.dock.isHidden() and w.derecho.isHidden())
+            self.assertEqual((w.inferior.geometry(), w.vsplit.sizes()), antes, "plegar los laterales no toca el inferior")
+            w.flechas["izquierdo"].click()
+            w.flechas["derecho"].click()
+            QApplication.processEvents()
+            self.assertEqual((w.dock.width(), w.derecho.width()), (w.ancho_lateral, w.ancho_lateral))
+            self.assertEqual((w.inferior.geometry(), w.vsplit.sizes()), antes)
+        # altura: el divisor la mueve y hay un mínimo que deja ver los programadores
+        minimo = w.props.minimumSizeHint().height()
+        self.assertGreaterEqual(w.inferior.height(), minimo)
+        w.vsplit.moveSplitter(w.vsplit.height() - 20, 1)  # intento de dejarlo casi sin altura
+        QApplication.processEvents()
+        self.assertGreaterEqual(w.inferior.height(), minimo, "no se aprieta por debajo de lo que pide el panel")
+        w.vsplit.moveSplitter(0, 1)  # y de comerse el dibujo
+        QApplication.processEvents()
+        self.assertGreater(w.vsplit.widget(0).height(), 0)
+        # plegado con ▾: desaparece y vuelve a su altura
+        w.flechas["inferior"].click()
+        self.assertTrue(w.inferior.isHidden())
+        w.flechas["inferior"].click()
+        self.assertFalse(w.inferior.isHidden())
+
+    def test_SEDI122_opciones_sin_controles_cortados_ni_solapes(self):
+        """REQ-EDT-09, REQ-EDT-02: con una acción por evento (programador del valor y del evento a la vez) y con una
+        transición, a 2000×1000 y a 1366×768, todos los controles del panel de opciones (Escribir a mano, Ampliar, papelera,
+        botones) quedan dentro del panel y de la ventana, y el programador del valor y el del evento no se solapan."""
+        from PySide6.QtWidgets import QAbstractButton
+        w = self.w
+        e, ids, ts, aid = self._con_accion_por_evento()
+        p = w.props
+
+        def sin_cortes(sel, tam):
+            QApplication.processEvents()
+            raiz = QRectF(p.rect())
+            botones = [b for b in p.findChildren(QAbstractButton) if b.isVisibleTo(p)]
+            self.assertGreater(len(botones), 3, sel)
+            for b in botones:
+                r = QRectF(b.mapTo(p, QPoint(0, 0)), b.size())
+                self.assertTrue(raiz.contains(r), f"{tam} {sel}: «{b.text() or b.toolTip()}» fuera del panel {r} {raiz}")
+                g = QRectF(b.mapTo(w, QPoint(0, 0)), b.size())
+                self.assertTrue(QRectF(w.rect()).contains(g), f"{tam} {sel}: «{b.text() or b.toolTip()}» fuera de la ventana")
+            for nombre in ("t_manual", "t_crear"):
+                c = getattr(p, nombre)
+                if c.isVisibleTo(p):
+                    self.assertGreaterEqual(c.width(), c.sizeHint().width(), f"{tam} {sel}: {nombre} recortado")
+        for tam in ((2000, 1000), (1366, 768)):
+            w.resize(*tam)
+            w.show()
+            w.editar_accion(ids["0"], aid)
+            QApplication.processEvents()
+            self.assertTrue(p.accion.caja_valor.isVisibleTo(p) and p.pagina_bloques.isVisibleTo(p))
+            a = QRectF(p.accion.caja_valor.mapTo(p, QPoint(0, 0)), p.accion.caja_valor.size())
+            b = QRectF(p.pagina_bloques.mapTo(p, QPoint(0, 0)), p.pagina_bloques.size())
+            self.assertFalse(a.intersects(b), f"{tam}: el valor y el evento no se solapan")
+            self.assertLess(a.right(), b.left() + 1)
+            sin_cortes("accion_evento", tam)
+            e.seleccionar([ts["t1"]])
+            QApplication.processEvents()
+            self.assertEqual(p.pagina, "transicion")
+            sin_cortes("transicion", tam)
+            self.assertLessEqual(p.minimumSizeHint().width(), w.inferior.width())
 
     def test_SEDI113_traza_en_simular_y_leyenda_en_ayuda(self):
         """REQ-SIM-03: al simular el panel inferior muestra la traza (y se pliega y recuerda como siempre); la leyenda es
@@ -4633,6 +4697,976 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((len(e.M["bars"]), e.mensaje, e.mensaje_info), (n, MSG_SOLAPE, True))
 
 
+    def test_SEDI118_nombres_de_variable_con_cifra_delante(self):
+        """REQ-EDT-07, REQ-EDT-09, REQ-DAT-01: un nombre como 1M1 o 2S3 (nomenclatura industrial) vale como variable: se
+        crea en la tabla de variables, en las fórmulas se escribe entre comillas invertidas (`1M1`), la ida y vuelta texto,
+        bloques y texto lo conserva, los bloques, «Se dibuja», la tabla y el dibujo lo muestran sin ellas, se guarda, se
+        abre y se simula; los números y lo que parece una duración (2s) siguen rechazados."""
+        from escritorio import bloques
+        w = self.w
+        e, ids, ts = self.secuencial()
+        pv = w.variables
+        pv.nueva()
+        fila = pv.tabla.rowCount() - 1
+        for malo, parte in (("2s", "duración"), ("10ms", "duración"), ("3us", "duración"), ("12", "solo un número")):
+            pv.tabla.item(fila, 0).setText(malo)
+            self.assertIn(parte, pv.msg.text(), malo)
+            self.assertEqual(pv.sin_nombre(), 1, "la fila sigue en blanco")
+            pv.parpadeo.parar()
+        pv.tabla.item(fila, 0).setText("1M2")
+        self.assertEqual(pv.msg.text(), "")
+        v = next(x for x in e.ed.model["variables"] if x["name"] == "1M2")
+        self.assertEqual((v["role"], v["type"]["kind"]), ("input", "bool"))
+        self.assertIsNone(e.nueva_variable("2S3", "output", {"kind": "bool"}))
+        # la receptividad: el nombre va entre comillas invertidas en el texto
+        e.seleccionar([ts["t1"]])
+        p, prog = w.props, w.props.prog
+        self.assertIsNone(e.comprobar(ts["t1"], "`1M2` AND NOT paro"))
+        self.assertIsNotNone(e.comprobar(ts["t1"], "1M2 AND NOT paro"), "sin comillas invertidas no se puede leer")
+        prog.lienzo.soltar((), bloques.var("1M2", "input"))
+        self.assertEqual((p.t_texto.text(), e.texto_condicion(ts["t1"])), ("`1M2`", "`1M2`"))
+        prog.lienzo.soltar((), bloques.nuevo("y"))
+        prog.lienzo.soltar(("b",), bloques.nuevo("no", a=bloques.var("paro", "input")))
+        self.assertEqual((p.t_texto.text(), e.texto_condicion(ts["t1"])), ("`1M2` AND NOT paro",) * 2)
+        self.assertEqual(prog.texto(), "`1M2` AND NOT paro")
+        self.assertEqual(prog.lienzo.arbol["a"], {"k": "var", "n": "1M2", "papel": "input"})
+        # ida y vuelta: texto -> bloques -> texto
+        for t in ("`1M2` AND NOT paro", "↑(`1M2`) OR `2S3`", "`1M2`", "3s/(`1M2`)", "NOT `2S3` AND (`1M2` OR paro)"):
+            prog.poner(t)
+            self.assertEqual(prog.texto(), t, t)
+        prog.poner("`1M2` AND NOT paro")
+        # el nombre se ve sin comillas en los bloques (desplegable), en «Se dibuja» y en el dibujo
+        motor = bloques.Motor(prog.fuente)
+        motor.reiniciar()
+        self.assertEqual([x[2] for x in motor.elementos(prog.lienzo.arbol["a"])], ["1M2"])
+        p._previsualizar()
+        self.assertIn("1M2", p.t_dibujo.text())
+        self.assertNotIn("`", p.t_dibujo.text())
+        cond = "".join(x["t"] for x in next(t for t in e.M["transitions"] if t["id"] == ts["t1"])["cond"])
+        self.assertIn("1M2", cond)
+        self.assertNotIn("`", cond)
+        self.assertIn("1M2", [pv.tabla.item(r, 0).text() for r in range(pv.tabla.rowCount())])
+        # también como destino de una acción (la lista, sin comillas) y en un valor numérico
+        e.nueva_variable("1CT", "internal", {"kind": "int"})
+        d = self.anadir_accion(ids["1"], "activacion", "1CT", "`1CT` + 1")
+        self.assertIn("1CT", [d.variable.itemData(i) for i in range(d.variable.count())])
+        aid = e.acciones(ids["1"])[-1]["id"]
+        self.assertEqual(e.datos_accion(aid)["valor"], "`1CT` + 1")
+        self.assertEqual(d.prog.texto(), "`1CT` + 1")
+        self.assertEqual(d.prog.lienzo.arbol["a"], {"k": "vnum", "n": "1CT"})
+        self.assertTrue(e.ed.validate().can_simulate)
+        # se guarda, se abre y se simula
+        destino = Path(self.tmp.name) / "con-cifras"
+        e.guardar(destino)
+        ab = open_model(destino)
+        self.assertIn("1M2", [x["name"] for x in ab.doc["variables"]])
+        from escritorio.edicion import Edicion
+        e2 = Edicion.desde(ab.doc, {}, "abierto", destino, ab.presentations[0])
+        self.assertEqual(e2.texto_condicion(ts["t1"]), "`1M2` AND NOT paro")
+        self.assertTrue(e2.ed.validate().can_simulate)
+        # renombrar una variable a un nombre con cifra reescribe sus usos entre comillas invertidas
+        vid = next(x["id"] for x in e.ed.model["variables"] if x["name"] == "paro")
+        self.assertIsNone(e.cambiar_variable(vid, nombre="3P3"))
+        self.assertEqual(e.texto_condicion(ts["t1"]), "`1M2` AND NOT `3P3`")
+        self.assertTrue(e.ed.validate().can_simulate)
+
+    def test_SEDI119_bloque_parentesis_en_todos_los_programadores(self):
+        """REQ-EDT-02, REQ-EDT-09: el bloque «( )» está en la carpeta Operadores de todos los programadores (receptividad
+        de una transición, condición y evento de una acción, y valor de una acción) y se suelta en cualquier hueco; con él se
+        arma `((CT - 5 + N5) * 1 / 1) + 1` y `(a OR b) AND NOT c`; el texto conserva los paréntesis, y al pasar de texto a
+        bloques vuelven como bloques «( )» sin añadir otros; el significado no cambia."""
+        from escritorio import bloques
+        from escritorio.bloques import arbol_a_texto, nuevo, texto_a_arbol, texto_a_arbol_valor
+        from grafcet.expressions import parse
+        w = self.w
+        e, ids, ts = self.secuencial()
+        for nombre, papel, tipo in (("CT", "internal", {"kind": "int"}), ("N5", "internal", {"kind": "int"}),
+                                    ("a", "input", {"kind": "bool"}), ("b", "input", {"kind": "bool"}),
+                                    ("c", "input", {"kind": "bool"}), ("DEC", "internal", {"kind": "decimal", "scale": 2})):
+            e.nueva_variable(nombre, papel, tipo)
+        # la receptividad de una transición: (a OR b) AND NOT c, con el bloque
+        e.seleccionar([ts["t1"]])
+        p, prog = w.props, w.props.prog
+        prog.elegir_categoria("operador")
+        par = next((n for n in prog.paleta.bloques() if n["k"] == "par"), None)
+        self.assertEqual(par, {"k": "par", "a": None})
+        prog.lienzo.soltar((), nuevo("y"))
+        prog.lienzo.soltar(("a",), par)
+        prog.lienzo.soltar(("a", "a"), nuevo("o"))
+        prog.lienzo.soltar(("a", "a", "a"), bloques.var("a", "input"))
+        prog.lienzo.soltar(("a", "a", "b"), bloques.var("b", "input"))
+        prog.lienzo.soltar(("b",), nuevo("no", a=bloques.var("c", "input")))
+        self.assertEqual((p.t_texto.text(), e.texto_condicion(ts["t1"])), ("(a OR b) AND NOT c",) * 2)
+        # vuelve a bloques con el mismo paréntesis, sin añadir otros
+        prog.poner("a OR b")
+        prog.poner("(a OR b) AND NOT c")
+        self.assertEqual((prog.lienzo.arbol["a"]["k"], prog.lienzo.arbol["a"]["a"]["k"], prog.lienzo.arbol["b"]["k"]),
+                         ("par", "o", "no"))
+        self.assertEqual(prog.texto(), "(a OR b) AND NOT c")
+        # sin el bloque, la precedencia sigue siendo la del analizador: a OR b AND NOT c = a OR (b AND NOT c)
+        prog.poner("a OR b AND NOT c")
+        self.assertEqual((prog.lienzo.arbol["k"], prog.lienzo.arbol["b"]["k"], prog.texto()), ("o", "y", "a OR b AND NOT c"))
+        # soltar el bloque sobre un bloque ocupado lo envuelve
+        prog.poner("a OR b")
+        prog.lienzo.soltar(("a",), nuevo("par"))
+        self.assertEqual(prog.texto(), "(a) OR b")
+        prog.poner("a OR b")
+        # el valor de una acción: ((CT - 5 + N5) * 1 / 1) + 1
+        d = self.anadir_accion(ids["1"], "activacion", "DEC")  # la división da un decimal
+        d.prog.elegir_categoria("aritm")
+        self.assertEqual([n["k"] for n in d.prog.paleta.bloques()], ["ar"] * 4 + ["par"])
+        lienzo = d.prog.lienzo
+        d.valor.setText("")
+        d.valor.editingFinished.emit()
+        lienzo.soltar((), nuevo("ar", op="+"))
+        lienzo.soltar(("b",), nuevo("num", v="1"))
+        lienzo.soltar(("a",), nuevo("par"))
+        lienzo.soltar(("a", "a"), nuevo("ar", op="/"))
+        lienzo.soltar(("a", "a", "b"), nuevo("num", v="1"))
+        lienzo.soltar(("a", "a", "a"), nuevo("ar", op="*"))
+        lienzo.soltar(("a", "a", "a", "b"), nuevo("num", v="1"))
+        lienzo.soltar(("a", "a", "a", "a"), nuevo("par"))
+        lienzo.soltar(("a", "a", "a", "a", "a"), nuevo("ar", op="+"))
+        lienzo.soltar(("a", "a", "a", "a", "a", "b"), nuevo("vnum", n="N5"))
+        lienzo.soltar(("a", "a", "a", "a", "a", "a"), nuevo("ar", op="-"))
+        lienzo.soltar(("a", "a", "a", "a", "a", "a", "a"), nuevo("vnum", n="CT"))
+        lienzo.soltar(("a", "a", "a", "a", "a", "a", "b"), nuevo("num", v="5"))
+        esperado = "((CT - 5 + N5) * 1 / 1) + 1"
+        self.assertEqual((d.valor.text(), arbol_a_texto(lienzo.arbol)), (esperado, esperado))
+        self.assertEqual(e.datos_accion(e.acciones(ids["1"])[-1]["id"])["valor"], esperado)
+        self.assertTrue(e.ed.validate().can_simulate)
+        # la ida y vuelta de texto a bloques y a texto, también con el hueco «?» del ejemplo del responsable
+        vars_ = {"CT": ("internal", "int"), "N5": ("internal", "int")}
+        for t in ("((CT - 5 + ?) * 1 / 1) + 1", esperado, "(CT)", "((CT))", "CT * (N5 + 1)", "(CT + 1) * 2", "-(CT + 1)",
+                  "CT - (N5 - 1)", "(CT - N5) - 1", "(((1)))"):
+            arbol = texto_a_arbol_valor(t, vars_, [])
+            self.assertEqual(arbol_a_texto(arbol), t, t)
+            self.assertEqual(arbol_a_texto(texto_a_arbol_valor(arbol_a_texto(arbol), vars_, [])), t, t)
+        self.assertEqual(texto_a_arbol_valor("((CT - 5 + ?) * 1 / 1) + 1", vars_, [])["a"]["k"], "par")
+        # en la condición y el evento de una acción (mismo programador): paréntesis conservados
+        acc = {"a": ("input", "bool"), "b": ("input", "bool"), "c": ("input", "bool"), "CT": ("internal", "int")}
+        for t in ("(a OR b) AND NOT c", "NOT (a AND b)", "↑((a AND b))", "↑(a OR b)", "3s/((a AND b))", "3s/(a AND b)",
+                  "(CT > 3) AND a", "CT > (CT + 1) * 2", "((a))", "a AND (b AND c)", "(a AND b) AND c", "a AND (? OR b)"):
+            self.assertEqual(arbol_a_texto(texto_a_arbol(t, acc, [])), t, t)
+        e.seleccionar([ids["1"]])
+        e.poner_accion(ids["1"], {"tipo": "condicionada", "variable": "Q00", "condicion": "(a OR b) AND NOT c"}, None,
+                       ("output", "bool"))
+        aid = e.acciones(ids["1"])[-1]["id"]
+        w.editar_accion(ids["1"], aid)
+        self.assertEqual(w.props.prog.texto(), "(a OR b) AND NOT c")
+        self.assertEqual(w.props.prog.lienzo.arbol["a"]["k"], "par")
+        self.assertEqual(w.props.prog.categorias["operador"].text(), "Operadores")
+        # el significado no cambia: los paréntesis solo agrupan
+        igual = lambda x, y: parse(a_nucleo(x, [], acc), lambda c, n: n) == parse(a_nucleo(y, [], acc), lambda c, n: n)  # noqa: E731
+        self.assertTrue(igual("(a OR b) AND NOT c", "(a OR b) AND (NOT c)") and igual("((a))", "a"))
+        self.assertFalse(igual("(a OR b) AND c", "a OR b AND c"))
+
+    def test_SEDI120_dibujo_del_bloque_parentesis_y_de_las_operaciones_anidadas(self):
+        """REQ-EDT-02: el bloque «( )» se dibuja con un paréntesis a cada lado, tan altos como lo que encierra (también si
+        se apila); las operaciones aritméticas encadenadas se leen de izquierda a derecha con el operador entre sus
+        operandos (sin bloques uno dentro de otro) y, si no caben, pasan de línea sin dejar un operador suelto al final;
+        se dibuja a cualquier ancho."""
+        from escritorio import bloques
+        from escritorio.bloques import Programador, texto_a_arbol_valor
+        from PySide6.QtCore import QRectF
+        vars_ = {"CT": ("internal", "int"), "N5": ("internal", "int")}
+        prog = Programador(lambda: (vars_, []), ampliable=False, valor=True)
+        t = "((CT - 5 + N5) * 1 / 1) + 1"
+        arbol = texto_a_arbol_valor(t, vars_, [])
+        prog.lienzo.poner_arbol(arbol)
+        motor = prog.lienzo.motor
+        motor.reiniciar()
+        # en una fila: cada paréntesis mide lo que el bloque que encierra
+        c = motor.caja(arbol, (0,), motor.natural(arbol, (0,)) + 10)
+        pares = []
+
+        def recorre(caja):
+            for _, _, it in caja.items:
+                if isinstance(it, bloques._Caja):
+                    recorre(it)
+                elif it.tipo == "paren":
+                    pares.append((caja, it))
+        recorre(c)
+        self.assertEqual(len(pares), 4, "dos bloques «( )», dos paréntesis cada uno")
+        for caja, it in pares:
+            hijo = next(x for _, _, x in caja.items if isinstance(x, bloques._Caja))
+            self.assertEqual(it.h, hijo.h)
+        # apilado a poco ancho: sigue sin salirse
+        for ancho in (240, 300, 400, 500):
+            motor.reiniciar()
+            c = motor.caja(arbol, (0,), ancho)
+            self.assertLessEqual(c.w, ancho + 1, ancho)
+        # una cadena a - b + c se pone en línea (sin un bloque dentro de otro): leída de izquierda a derecha, con el operador
+        # entre sus operandos; el bloque de dentro (a - b) conserva su sitio, que es el de su operador
+        motor.reiniciar()
+        cadena = texto_a_arbol_valor("CT - 5 + N5", vars_, [])
+        c = motor.caja(cadena, (0,), 400)
+        self.assertEqual([x[2].tipo if not isinstance(x[2], bloques._Caja) else x[2].nodo["k"] for x in c.items],
+                         ["vnum", "txt", "num", "txt", "vnum"])
+        self.assertEqual(len({round(x[1] + x[2].h / 2) for x in c.items}), 1, "todo en una fila")
+        self.assertEqual([(f[1], f[2]["op"]) for f in c.fantasmas], [((0, "a"), "-")])
+        # uno que lleva paréntesis (a - (b - c)) queda como un bloque dentro
+        c = motor.caja(texto_a_arbol_valor("CT - (5 - N5)", vars_, []), (0,), 400)
+        self.assertEqual(c.fantasmas, [])
+        # a un ancho en que no cabe, pasa de línea y nunca deja un operador al final de una
+        c = motor.caja(cadena, (0,), 100)
+        lineas = {}
+        for x, y, it in c.items:
+            lineas.setdefault(round(y + it.h / 2), []).append((x, it))
+        self.assertGreater(len(lineas), 1)
+        for fila in lineas.values():
+            ultimo = max(fila, key=lambda q: q[0])[1]
+            self.assertFalse(isinstance(ultimo, bloques._Pieza) and ultimo.tipo == "txt", "operador al final de línea")
+        # el ratón: el operador de dentro pertenece al bloque de dentro, y el de fuera al de fuera
+        prog.lienzo.poner_arbol(cadena)
+        prog.resize(520, 200)
+        prog.show()
+        QApplication.processEvents()
+        lienzo = prog.lienzo
+        lienzo._calcular(lienzo.width())
+        ops = [(r, it) for _, (c0, ox, oy) in enumerate(lienzo._cajas) for r, it in
+               [(QRectF(ox + x, oy + y, it.w, it.h), it) for x, y, it in c0.items
+                if not isinstance(it, bloques._Caja) and it.tipo == "txt"]]
+        self.assertEqual([lienzo.ruta_en(r.center()) for r, _ in ops], [(0, "a"), (0,)])
+        # el dibujo no falla (con y sin hueco)
+        for t_ in (t, "((CT - 5 + ?) * 1 / 1) + 1", "(?)"):
+            prog.lienzo.poner_arbol(texto_a_arbol_valor(t_, vars_, []))
+            prog.resize(520, 300)
+            prog.show()
+            QApplication.processEvents()
+            self.assertFalse(prog.lienzo.grab().isNull())
+        prog.close()
+
+    # -- P-IMP-48: las acciones de una etapa no se colocan encima de otros elementos; colocación «matriz de 2» -----------
+    def _solapes_de_acciones(self, e):
+        """Lo que se toca en el dibujo: cada caja de acción dibujada contra las etapas, las transiciones, los textos de las
+        transiciones (los que dibuja la escena, con el aviso de la transición) y las demás acciones."""
+        from PySide6.QtWidgets import QGraphicsTextItem
+        from escritorio.diagrama import H, TB, posiciones
+        w = self.w
+        cajas = [(c["id"], QRectF(*c["rect"])) for c in w.diagrama.cajas_acciones]
+        fijos = [(i, QRectF(x - TB, y - 2, 2 * TB, 4) if any(t["id"] == i for t in e.M["transitions"])
+                  else QRectF(x - H, y - H, 2 * H, 2 * H)) for i, (x, y) in posiciones(e.M).items()]
+        fijos += [("texto", it.sceneBoundingRect()) for it in w.diagrama.scene().items()
+                  if isinstance(it, QGraphicsTextItem) and it.toolTip().startswith("Transición")]
+        malos = [(a, i) for a, r in cajas for i, q in fijos if r.intersects(q)]
+        malos += [(a, b) for k, (a, r) in enumerate(cajas) for b, q in cajas[k + 1:] if r.intersects(q)]
+        return malos
+
+    def test_SEDI124_colocacion_en_matriz_de_dos_columnas(self):
+        """REQ-ACT-01, REQ-EDT-02, REQ-DAT-01: «En matriz de 2» (menú de la etapa y panel de opciones) coloca las acciones en
+        una cuadrícula de dos columnas, de izquierda a derecha y de arriba abajo (1.ª y 2.ª en la primera fila, 3.ª y 4.ª en
+        la segunda…), con el mismo ancho en cada columna; una barra vertical común las une a la etapa, con una derivación a
+        cada fila (la de la 2.ª columna pasa por debajo de la 1.ª y sube a su caja); se guarda en `presentation.actionLayouts`,
+        se deshace, vale también en un grupo suelto y el banco la dibuja igual."""
+        import re
+        from escritorio.diagrama import ACT_CANAL, ACT_GAP, ACT_LINK, H
+        from escritorio.edicion import COLOCACIONES, Edicion
+        w = self.w
+        w.nuevo()
+        e = w.edicion
+        e.pedir_accion = lambda sid, aid: None
+        e.colocar("etapa", QPointF(120, 100))
+        sid = e.M["steps"][0]["id"]
+        for n in ("Q00", "Q01", "Q02", "Q03", "Q04"):
+            e.nueva_variable(n, "output")
+        e.nueva_variable("CT", "internal", {"kind": "int"})
+        self.assertEqual([v for v, _ in COLOCACIONES], ["fila", "fila-separada", "matriz-2", "columna"])
+        self.assertEqual(dict(COLOCACIONES)["matriz-2"], "En matriz de 2")
+        self.assertIn("matriz-2", e.ed.ACTION_LAYOUTS)
+        # el menú de la etapa y el panel de opciones la ofrecen
+        e.seleccionar([sid])
+        self.assertIn("En matriz de 2", [t for t, _ in dict(e.menu(centro(e.M, sid)))["Colocación de las acciones"]])
+        self.assertIn("matriz-2", [w.props.s_colocacion.itemData(i) for i in range(w.props.s_colocacion.count())])
+        resultados = {}
+        for n in (1, 2, 3, 5):
+            for a in list(e.ed.get(sid)["actionRefs"]):
+                e.quitar_accion(a)
+            for k in range(n):
+                d = ({"tipo": "activacion", "variable": "CT", "valor": "CT + 1"} if k == 1 else
+                     {"tipo": "continua", "variable": f"Q0{k}", "condicion": "Q00 AND Q01"} if k == 2 else
+                     {"tipo": "desactivacion", "variable": "Q03", "valor": "0"} if k == 3 else
+                     {"tipo": "continua", "variable": f"Q0{k}"})
+                self.assertIsNone(e.poner_accion(sid, d))
+            aids = e.ed.get(sid)["actionRefs"]
+            e.colocar_acciones(sid, "matriz-2")
+            self.assertEqual((e.colocacion(sid), e.ed.presentation["actionLayouts"]), ("matriz-2", {sid: "matriz-2"}))
+            r = [self._caja(a)["rect"] for a in aids]
+            self.assertEqual(self._solapes_de_acciones(e), [])
+            # la cuadrícula: la 1.ª y la 2.ª en la misma fila, la 3.ª y la 4.ª en la siguiente…
+            for i, (x, y, ancho, alto) in enumerate(r):
+                self.assertAlmostEqual(y, r[i - i % 2][1], delta=0.01, msg=f"{n}: la acción {i} va en la fila {i // 2}")
+                self.assertAlmostEqual(x, r[i % 2][0], delta=0.01, msg=f"{n}: y en la columna {i % 2}")
+                self.assertAlmostEqual(ancho, r[i % 2][2], delta=0.01, msg="mismo ancho en cada columna")
+                if i >= 2:
+                    self.assertGreater(y, r[i - 2][1] + alto, "cada fila, debajo de la anterior")
+            if n > 1:
+                self.assertAlmostEqual(r[1][0], r[0][0] + r[0][2] + ACT_GAP, delta=0.01)
+            # los trazos: la barra común a la izquierda y una derivación a cada fila; la de la 2.ª columna, por debajo de
+            # la fila y subiendo a su caja
+            u = next(u for u in w.diagrama.uniones_acciones if u["id"] == f"enlaceacc:{sid}")["trazos"]
+            px, py = centro(e.M, sid).x(), centro(e.M, sid).y()
+            bx = px + H + ACT_LINK / 2
+            self.assertEqual(u[0], [(px + H, py), (px + H + ACT_LINK, py)], "el enlace de la etapa")
+            if n > 1:
+                barra = u[1]
+                self.assertEqual(barra[0], (bx, py))
+                self.assertAlmostEqual(barra[1][0], bx, delta=0.01)
+                filas = [r[i:i + 2] for i in range(0, n, 2)]
+                derivaciones = [t for t in u[2:] if len(t) == 2]
+                self.assertEqual(len(derivaciones), len(filas) - 1, "una por cada fila salvo la primera (la del enlace)")
+                for f, t in zip(filas, [t for t in u[2:] if len(t) == 4]):
+                    self.assertEqual(t[0][0], bx)
+                    self.assertAlmostEqual(t[1][0], f[1][0] - 14, delta=0.01)  # sube justo antes de la 2.ª caja
+                    self.assertAlmostEqual(t[3][0], f[1][0], delta=0.01)
+                    self.assertAlmostEqual(t[3][1], f[1][1] + H, delta=0.01)  # y entra por su lado izquierdo
+                    self.assertGreater(t[0][1], f[0][1] + 2 * H, "por debajo de la caja de la 1.ª columna")
+                    self.assertGreaterEqual(t[0][1] - (f[0][1] + 2 * H), ACT_CANAL - 0.01)
+            resultados[n] = r
+        # una operación de vista: se deshace y se rehace, y no cambia el modelo
+        modelo = copy.deepcopy(e.ed.model)
+        e.colocar_acciones(sid, "columna")
+        self.assertEqual(e.ed.model, modelo)
+        e.deshacer()
+        self.assertEqual(e.colocacion(sid), "matriz-2")
+        e.rehacer()
+        e.deshacer()
+        # guardar y abrir
+        destino = Path(self.tmp.name) / "matriz"
+        e.guardar(destino)
+        op = open_model(destino)
+        self.assertEqual(op.presentations[0]["actionLayouts"], {sid: "matriz-2"})
+        self.assertEqual(Edicion.desde(op.doc, {}, "abierto", None, op.presentations[0]).colocacion(sid), "matriz-2")
+        v = Vista("k", "t", "", lambda: (op.doc, layout_from_presentation(op.presentations[0])), normalize_options(None),
+                  presentation=op.presentations[0])
+        self.assertEqual({s["id"]: s["actionLayout"] for s in v.model["steps"]}[sid], "matriz-2")
+        # un grupo de acciones sueltas también la admite
+        a = e.poner_accion_suelta(QPointF(700, 300))
+        x, y, ancho, alto = self._caja(a)["rect"]
+        b = e.poner_accion_suelta(QPointF(x + ancho + 4, y + alto / 2))
+        c = e.poner_accion_suelta(QPointF(x + 2 * ancho + 4, y + alto / 2))
+        g = e._borrador(a)["grupo"]
+        e.colocar_acciones(g, "matriz-2")
+        self.assertEqual(e.colocacion(g), "matriz-2")
+        r = [self._caja(i)["rect"] for i in (a, b, c)]
+        self.assertEqual(r[0][1], r[1][1])
+        self.assertGreater(r[2][1], r[0][1])
+        self.assertEqual(r[2][0], r[0][0])
+        # el banco dibuja la misma colocación con las mismas medidas
+        js = (ROOT / "tools" / "dibujo.js").read_text(encoding="utf-8")
+        self.assertEqual(int(re.search(r"const ACT_CANAL\s*=\s*(\d+);", js).group(1)), ACT_CANAL)
+        for texto in ('"matriz-2"', "ACT_CANAL", "filas", "canales"):
+            self.assertIn(texto, js)
+
+    def test_SEDI125_plantillas_mas_uno_y_menos_uno_con_nombre_de_cifra_delante(self):
+        """REQ-EDT-07, REQ-EDT-09, REQ-ACT-01: las plantillas «+1» y «−1» de una acción sobre una variable entera cuyo nombre
+        empieza por cifra (`1CT`) escriben el nombre entre comillas invertidas, y el valor es válido: la acción queda
+        completa (no borrador) y el grafcet se puede simular; con un nombre normal siguen escribiendo «ct + 1»."""
+        w = self.w
+        e, ids, ts = self.secuencial()
+        e.nueva_variable("1CT", "internal", {"kind": "int"})
+        e.nueva_variable("ct", "internal", {"kind": "int"})
+        d = self.anadir_accion(ids["1"], "activacion", "1CT")
+        for texto, esperado in (("+1", "`1CT` + 1"), ("−1", "`1CT` - 1")):
+            self.assertIn(texto, d.plantillas)
+            d.plantillas[texto].click()
+            self.assertEqual(d.valor.text(), esperado)
+            self.assertEqual(d.msg.text(), "", "sin aviso: el valor se aplicó")
+            aid = e.acciones(ids["1"])[-1]["id"]
+            self.assertFalse(e._es_borrador(aid), "la acción quedó completa")
+            self.assertEqual(e.datos_accion(aid)["valor"], esperado)
+            self.assertTrue(e.ed.validate().can_simulate)
+        # un nombre normal sigue sin comillas
+        d.variable.setCurrentText("ct")
+        d.plantillas["+1"].click()
+        self.assertEqual(d.valor.text(), "ct + 1")
+        self.assertEqual(e.datos_accion(e.acciones(ids["1"])[-1]["id"])["valor"], "ct + 1")
+
+    def _captura1(self):
+        """El caso de la captura 1: una etapa (la «1», con t2 «paro» debajo) y otra a su derecha, a su altura. Devuelve el
+        editor, los ID de las etapas y la de la derecha."""
+        e, ids, ts = self.secuencial()
+        e.pedir_accion = lambda sid, aid: None
+        for n in ("Q00", "Q01", "Q02", "Q03", "Q04"):
+            e.nueva_variable(n, "output")
+        e.colocar("etapa", QPointF(100 + 200, 220))
+        s2 = next(s["id"] for s in e.M["steps"] if s["id"] not in ids.values())
+        return e, ids, ts, s2
+
+    def test_SEDI123_las_acciones_de_una_etapa_apartan_lo_que_estorba(self):
+        """REQ-EDT-02, REQ-ACT-01: al añadir acciones a una etapa (Añadir…, el panel o unir una suelta; pegar, en
+        S-EDI133), si su colocación llega a menos de 8 de otra etapa, transición, texto o acción, la etapa se queda como está y se desplaza hacia la
+        derecha lo que estorba y lo que queda a su derecha, en la misma operación de deshacer; la colocación elegida no
+        cambia sola. El caso de la captura 1: la etapa 1 con tres acciones en fila y la 2 a su derecha y a su altura."""
+        w = self.w
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        pos0 = posiciones_modelo(e)
+        diag0 = [str(d) for d in e.ed.validate().diagnostics]
+        self.assertEqual(pos0[s2], (200, 220))
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q00"}))
+        self.assertEqual(posiciones_modelo(e), pos0, "con sitio, no se mueve nada")
+        n = len(e.ed.undo_stack)
+        # la segunda en fila llegaría a la etapa 2: se aparta, y no cambia la colocación (antes pasaba a «matriz de 2»)
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q01"}))
+        x2 = posiciones_modelo(e)[s2][0]
+        self.assertGreater(x2, 200)
+        self.assertEqual(x2 % 20, 0, "en pasos de rejilla")
+        self.assertEqual(len(e.ed.undo_stack), n + 1, "la acción y el desplazamiento, una sola operación")
+        self.assertEqual((e.colocacion(s1), e.ed.action_layouts()), ("fila", {}), "la colocación elegida no cambia sola")
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        self.assertEqual(e.mensaje, "")
+        self.assertEqual({i: p for i, p in posiciones_modelo(e).items() if i != s2},
+                         {i: p for i, p in pos0.items() if i != s2}, "lo demás (a su izquierda y debajo) no se mueve")
+        self.assertEqual(posiciones_modelo(e)[s2][1], 220)
+        e.deshacer()  # la acción y el desplazamiento vuelven juntos
+        self.assertEqual((posiciones_modelo(e), len(e.acciones(s1))), (pos0, 1))
+        e.rehacer()
+        self.assertEqual((posiciones_modelo(e)[s2][0], len(e.acciones(s1))), (x2, 2))
+        # la tercera: otro desplazamiento, y sigue en fila
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q02"}))
+        x3 = posiciones_modelo(e)[s2][0]
+        self.assertGreater(x3, x2)
+        self.assertEqual((e.colocacion(s1), len(e.acciones(s1)), self._solapes_de_acciones(e)), ("fila", 3, []))
+        # «Añadir acción…» y unir una suelta: lo mismo
+        self.assertTrue(e.anadir_accion(s1))
+        x4 = posiciones_modelo(e)[s2][0]
+        self.assertGreater(x4, x3)
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        d = e.poner_accion_suelta(QPointF(900, 500))
+        e.unir_accion(d, s1)
+        self.assertEqual(e._borrador(d).get("etapa"), s1)
+        self.assertGreater(posiciones_modelo(e)[s2][0], x4)
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        # los ID no cambian, y las acciones siguen unidas a la etapa 1; nada de lo que se simula cambió por moverse
+        self.assertEqual({s["label"]: s["id"] for s in e.M["steps"] if s["id"] != s2}, ids)
+        self.assertEqual([str(x) for x in e.ed.validate().diagnostics if "acci" not in str(x).lower()],
+                         [x for x in diag0 if "acci" not in x.lower()])
+        modelo = copy.deepcopy(e.ed.model)
+        e.ed.move(s2, 100, 220)  # lo vuelve a poner encima: apartarlo es solo presentación
+        e.cambia()
+        self.assertTrue(e._despejar(s1))
+        self.assertEqual(e.ed.model, modelo, "el modelo (y su revisión) no cambia al apartar")
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        # guardar y abrir: las posiciones nuevas viajan
+        destino = Path(self.tmp.name) / "apartado"
+        e.guardar(destino)
+        self.assertEqual(layout_from_presentation(open_model(destino).presentations[0]), posiciones_modelo(e))
+
+    def test_SEDI126_ejemplos_paralelo_y_alternativas_con_una_accion_mas(self):
+        """REQ-EDT-02, REQ-ACT-01: en el ejemplo «paralelo», una acción en la etapa B (con la C a 140 de ella) desplaza C, su
+        transición y E a la derecha, sin solapes y en una sola operación de deshacer; la acción queda unida a B y el grafcet
+        valida igual. Lo mismo en «alternativas»: una acción en la E1 aparta la transición t5 y lo que hay a su derecha."""
+        from escritorio.diagrama import ACT_LINK, H
+        w = self.w
+        w.cargar_ejemplo("paralelo")
+        w.a_ejecutar.setChecked(False)
+        self.assertTrue(w.cambiar_modo("editar"))
+        e = w.edicion
+        e.pedir_accion = lambda sid, aid: None
+        e.nueva_variable("Q00", "output")
+        antes, diag0 = posiciones_modelo(e), [str(d) for d in e.ed.validate().diagnostics]
+        pila = len(e.ed.undo_stack)
+        self.assertIsNone(e.poner_accion("B", {"tipo": "continua", "variable": "Q00"}))
+        despues = posiciones_modelo(e)
+        movidos = {i for i in antes if despues[i] != antes[i]}
+        self.assertEqual(movidos, {"C", "t3", "E"}, "la rama de la derecha")
+        saltos = {despues[i][0] - antes[i][0] for i in movidos}
+        self.assertEqual(len(saltos), 1, "todos lo mismo: se conservan las posiciones relativas")
+        self.assertTrue(0 < saltos.pop() < 100)
+        self.assertTrue(all(despues[i][1] == antes[i][1] for i in antes), "solo a la derecha")
+        self.assertEqual(len(e.ed.undo_stack), pila + 1, "una sola operación")
+        self.assertEqual(e.ed.get("B")["actionRefs"], [e.ed.get("B")["actionRefs"][0]])
+        caja = next(c for c in w.diagrama.cajas_acciones if c["etapa"] == "B")
+        self.assertAlmostEqual(caja["rect"][0], despues["B"][0] + 100 + H + ACT_LINK, delta=0.01)
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        self.assertEqual([str(d) for d in e.ed.validate().diagnostics], diag0)
+        self.assertTrue(e.ed.validate().can_simulate)
+        e.deshacer()
+        self.assertEqual((posiciones_modelo(e), e.ed.get("B")["actionRefs"]), (antes, []))
+        e.rehacer()
+        self.assertEqual(posiciones_modelo(e), despues)
+        # la otra rama, la D: su vecina E también se aparta
+        self.assertIsNone(e.poner_accion("D", {"tipo": "continua", "variable": "Q00"}))
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        self.assertTrue(e.ed.validate().can_simulate)
+        e.ed.dirty = False  # (sin preguntar por lo no guardado)
+        # «alternativas»: la E1 ya tiene una acción; con otra, t5 (a 180 de ella) se aparta con t6, que está debajo a su derecha
+        w.cargar_ejemplo("alternativas")
+        w.a_ejecutar.setChecked(False)
+        self.assertTrue(w.cambiar_modo("editar"))
+        e = w.edicion
+        e.pedir_accion = lambda sid, aid: None
+        e.nueva_variable("Q00", "output")
+        antes = posiciones_modelo(e)
+        self.assertIsNone(e.poner_accion("E1", {"tipo": "continua", "variable": "Q00"}))
+        despues = posiciones_modelo(e)
+        self.assertEqual({i for i in antes if despues[i] != antes[i]}, {"t5", "t6"})
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        self.assertEqual(e.mensaje, "")
+        e.deshacer()
+        self.assertEqual(posiciones_modelo(e), antes)
+
+    def test_SEDI127_sin_poder_apartar_la_accion_se_queda_encima_con_un_aviso(self):
+        """REQ-EDT-02, REQ-ACT-01: si no se puede abrir hueco a la derecha (el obstáculo está debajo de la etapa, o pide más
+        del tope), la acción se añade igualmente, encima de lo que haya, sin error ni desplazamientos a medias, con un
+        aviso suave (mensaje que no es un error y la etapa parpadea en naranja)."""
+        from escritorio import edicion as modulo
+        w = self.w
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        # 1. en columna, la segunda acción llega al texto «paro» de t2, que está debajo de la etapa: no hay a dónde apartarlo
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q00"}))
+        e.colocar_acciones(s1, "columna")
+        self.assertEqual((e.colocacion(s1), e.mensaje), ("columna", ""), "una sola cabe")
+        e.ed.move(s2, 600, 220)  # la etapa 2 lejos
+        e.cambia()
+        pos0, pila, modelo_antes = posiciones_modelo(e), len(e.ed.undo_stack), copy.deepcopy(e.ed.model)
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q01"}))
+        self.assertEqual(len(e.acciones(s1)), 2, "se añade igualmente")
+        self.assertNotEqual(self._solapes_de_acciones(e), [], "y queda encima")
+        self.assertEqual((posiciones_modelo(e), len(e.ed.undo_stack)), (pos0, pila + 1), "sin desplazamientos a medias")
+        self.assertEqual(e.ed.redo_stack, [])
+        self.assertEqual((e.mensaje, e.mensaje_info), (modulo.MSG_ENCIMA, True), "un aviso, no un error")
+        self.assertEqual(e.parpadeo.ids, {s1}, "la etapa parpadea")
+        self.assertTrue(e.ed.validate().can_simulate or len(e.ed.validate().diagnostics) > 0)
+        e.deshacer()
+        self.assertEqual((len(e.acciones(s1)), posiciones_modelo(e)), (1, pos0))
+        self.assertEqual(e.ed.model, modelo_antes)
+        # 2. más allá del tope: la etapa 2 estorba pero apartarla pide más de lo permitido
+        e.colocar_acciones(s1, "fila")
+        e.ed.move(s2, 220, 220)
+        e.cambia()
+        with mock.patch.object(modulo, "DESPLAZA_MAX", 10):
+            pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+            self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q03"}))
+            self.assertEqual(len(e.acciones(s1)), 2)
+            self.assertEqual((posiciones_modelo(e), len(e.ed.undo_stack)), (pos0, pila + 1))
+            self.assertEqual((e.mensaje, e.mensaje_info), (modulo.MSG_ENCIMA, True))
+        # con el tope normal y editando la acción, se aparta (la edición recalcula)
+        e.ed.move(s2, 220, 220)
+        e.cambia()
+        self.assertTrue(e._despejar(s1))
+        self.assertEqual(self._solapes_de_acciones(e), [])
+
+    def test_SEDI128_editar_una_accion_ya_colocada_aparta_lo_que_pisa(self):
+        """REQ-EDT-02, REQ-ACT-01: cambiar la variable (de nombre largo), la condición o el tipo de una acción colocada, o la
+        colocación elegida, la ensancha; lo que pisa se aparta hacia la derecha en la misma operación de deshacer, y la
+        colocación elegida no cambia. Con el panel, solo al aplicar (no en cada pulsación)."""
+        w = self.w
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        e.nueva_variable("VariableDeNombreMuyLargoParaEnsanchar", "output")
+        e.nueva_variable("marcha2", "input")
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q00"}))
+        aid = e.ed.get(s1)["actionRefs"][0]
+        pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+        # un cambio que no ensancha no mueve nada
+        self.assertIsNone(e.cambiar_accion(aid, {**e.datos_accion(aid), "variable": "Q01"}))
+        self.assertEqual(posiciones_modelo(e), pos0)
+        # la variable de nombre largo la ensancha: se aparta la etapa 2, en la misma operación que el cambio
+        pila = len(e.ed.undo_stack)
+        self.assertIsNone(e.cambiar_accion(aid, {**e.datos_accion(aid), "variable": "VariableDeNombreMuyLargoParaEnsanchar"}))
+        self.assertGreater(posiciones_modelo(e)[s2][0], 200)
+        self.assertEqual(len(e.ed.undo_stack), pila + 1)
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        self.assertEqual(e.mensaje, "")
+        e.deshacer()
+        self.assertEqual((posiciones_modelo(e), e.datos_accion(aid)["variable"]), (pos0, "Q01"))
+        e.rehacer()
+        self.assertGreater(posiciones_modelo(e)[s2][0], 200)
+        # por el panel de opciones: el nombre se aplica al terminar (editingFinished), una sola vez
+        e.deshacer()
+        w.editar_accion(s1, aid)
+        panel = w.props.accion
+        pila = len(e.ed.undo_stack)
+        panel.variable.setCurrentText("VariableDeNombreMuyLargoParaEnsanchar")
+        self.assertEqual(len(e.ed.undo_stack), pila + 1)
+        self.assertEqual((posiciones_modelo(e)[s2][0] > 200, self._solapes_de_acciones(e)), (True, []))
+        e.deshacer()
+        # el texto de una condición escrita a medias no mueve nada; la condición larga, sí
+        self.assertIsNone(e.cambiar_accion(aid, {**e.datos_accion(aid), "variable": "Q00"}))
+        e.tipo_accion(aid, "condicionada")
+        aid = e.acciones(s1)[0]["id"]
+        pos0 = posiciones_modelo(e)
+        self.assertIsNone(e.poner_texto_accion(aid, "condicion", "marcha2"))
+        e.deshacer()
+        self.assertEqual(posiciones_modelo(e), pos0)
+        self.assertIsNone(e.poner_texto_accion(aid, "condicion", "marcha2 AND VariableDeNombreMuyLargoParaEnsanchar"))
+        aid = e.acciones(s1)[0]["id"]
+        self.assertGreater(posiciones_modelo(e)[s2][0], 200)
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        # la colocación elegida a mano: «en fila, separadas» ocupa más; se aparta lo que pisa y la colocación queda elegida
+        e.ed.dirty = False  # (sin preguntar por lo no guardado)
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        e.ed.move(s2, 260, 220)
+        e.cambia()
+        for n in ("Q00", "Q01"):
+            self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": n}))
+        pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+        self.assertEqual(pos0[s2], (260, 220), "dos en fila caben")
+        e.colocar_acciones(s1, "fila-separada")
+        self.assertEqual((e.colocacion(s1), len(e.ed.undo_stack)), ("fila-separada", pila + 1))
+        self.assertGreater(posiciones_modelo(e)[s2][0], 260)
+        self.assertEqual((self._solapes_de_acciones(e), e.mensaje), ([], ""))
+        e.deshacer()  # la colocación y el desplazamiento vuelven juntos
+        self.assertEqual((e.colocacion(s1), posiciones_modelo(e)), ("fila", pos0))
+        e.rehacer()
+        self.assertEqual(e.colocacion(s1), "fila-separada")
+
+    def test_SEDI129_apartar_mueve_barras_acciones_sueltas_y_vias_de_enlaces(self):
+        """REQ-EDT-02, REQ-ACT-01: al apartar lo que estorba, lo que queda a la derecha del primer obstáculo se mueve con sus
+        posiciones relativas: las barras de simultaneidad que empiezan a su derecha, las acciones sueltas y la vía de un
+        enlace con recorrido propio; una barra que cruza el corte se ensancha lo mismo. Lo de la izquierda no se mueve."""
+        w = self.w
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        # una barra que cruza (empieza a la izquierda de la etapa 2 y acaba a su derecha), otra que empieza a su derecha, una
+        # acción suelta a su derecha, una a su izquierda y la vía de un enlace
+        cruza = e.ed.add_bar("Y", (100, 500), 400)
+        derecha = e.ed.add_bar("O", (400, 540), 100)
+        izquierda = e.ed.add_bar("Y", (-60, 580), 100)
+        e.cambia()
+        e.ed.set_link_style("via|a|post", {"route": {"laneX": "500", "exitY": "300", "entryY": "400"}})
+        e.ed.set_link_style("via|b|post", {"route": {"laneX": "20", "exitY": "300", "entryY": "400"}})
+        sd = e.poner_accion_suelta(QPointF(100 + 700, 500))
+        si = e.poner_accion_suelta(QPointF(100 + 0, 700))
+        antes = {b["id"]: (b["x"], b["ancho"]) for b in e.ed.bars()}
+        xs = {i: e._borrador(i)["x"] for i in (sd, si)}
+        pila = len(e.ed.undo_stack)
+        for n in ("Q00", "Q01"):
+            self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": n}))
+        d = posiciones_modelo(e)[s2][0] - 200
+        self.assertGreater(d, 0)
+        despues = {b["id"]: (b["x"], b["ancho"]) for b in e.ed.bars()}
+        from fractions import Fraction as F
+        self.assertEqual(F(despues[cruza][0]), F(antes[cruza][0]), "la que cruza empieza donde estaba")
+        self.assertEqual(F(despues[cruza][1]), F(antes[cruza][1]) + d, "y acaba lo mismo más a la derecha")
+        self.assertEqual(F(despues[derecha][0]), F(antes[derecha][0]) + d)
+        self.assertEqual(despues[derecha][1], antes[derecha][1])
+        self.assertEqual(despues[izquierda], antes[izquierda])
+        self.assertEqual(F(e._borrador(sd)["x"]), F(xs[sd]) + d, "la suelta de la derecha se mueve")
+        self.assertEqual(e._borrador(si)["x"], xs[si], "la de la izquierda, no")
+        estilos = e.ed.link_styles()
+        self.assertEqual((float(estilos["via|a|post"]["route"]["laneX"]), float(estilos["via|b|post"]["route"]["laneX"])),
+                         (500 + d, 20))
+        self.assertEqual(estilos["via|a|post"]["route"]["exitY"], "300")
+        e.deshacer()  # lo de la última acción, de una vez
+        e.deshacer()
+        self.assertEqual(len(e.ed.undo_stack), pila)
+        self.assertEqual({b["id"]: (b["x"], b["ancho"]) for b in e.ed.bars()}, antes)
+        self.assertEqual((e._borrador(sd)["x"], e.ed.link_styles()["via|a|post"]["route"]["laneX"]), (xs[sd], "500"))
+        e.rehacer()
+        e.rehacer()
+        self.assertEqual(float(e.ed.link_styles()["via|a|post"]["route"]["laneX"]), 500 + d)
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        # guardar y abrir
+        destino = Path(self.tmp.name) / "apartado2"
+        e.guardar(destino)
+        pres = open_model(destino).presentations[0]
+        self.assertEqual(layout_from_presentation(pres)[s2], (200 + d, 220))
+        self.assertEqual({b["id"]: (b["x"], b["ancho"]) for b in pres["barras"]}, despues)
+
+
+    # -- el despeje de las acciones de una etapa, caso por caso (P-IMP-48) -------------------------------------------
+    def _rects(self, sid=None):
+        """Las esquinas (x, y) de las cajas de acción dibujadas, ordenadas; las de una etapa, o las de todas."""
+        return sorted((round(c["rect"][0], 1), round(c["rect"][1], 1)) for c in self.w.diagrama.cajas_acciones
+                      if sid is None or c["etapa"] == sid)
+
+    def _poner_etapa(self, e, sid, x, y=220):
+        """Pone la etapa `sid` en (x, y) del modelo sin pasar por el despeje."""
+        e.ed.move(sid, x, y)
+        e.cambia()
+
+    def test_SEDI130_el_corte_no_parte_una_columna(self):
+        """REQ-EDT-02, REQ-ACT-01: si lo que estorba es una transición de una columna, se mueve la columna entera (etapas y
+        transiciones con el mismo x) y no solo esa transición: el corte y la referencia de cada elemento son el mismo centro
+        x. Cada acción, con su desplazamiento, es una sola operación de deshacer; lo que no está en la columna no se mueve."""
+        e, ids, ts = self.secuencial()
+        e.pedir_accion = lambda sid, aid: None
+        for n in ("Q00", "Q01"):
+            e.nueva_variable(n, "output")
+        s1 = ids["1"]
+
+        def enlace(a, b):
+            from escritorio.diagrama import anclas
+            pa = next(x for x in anclas(e.M, a) if x["lado"] == "abajo")["pos"]
+            pb = next(x for x in anclas(e.M, b) if x["lado"] == "arriba")["pos"]
+            e.herramienta = "seleccionar"
+            e.prensar(pa)
+            e.mover(pb)
+            e.soltar(pb)
+        antes = set(posiciones_modelo(e))
+        e.colocar("etapa", QPointF(100 + 180, 140))
+        e.colocar("transicion", QPointF(100 + 180, 220))
+        e.colocar("etapa", QPointF(100 + 180, 300))
+        columna = [i for i in posiciones_modelo(e) if i not in antes]
+        a, t, b = sorted(columna, key=lambda i: posiciones_modelo(e)[i][1])
+        enlace(a, t)
+        enlace(t, b)
+        pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+        self.assertEqual({pos0[i][0] for i in columna}, {180})
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q00"}))
+        self.assertEqual(posiciones_modelo(e), pos0, "una acción cabe: no se mueve nada")
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q01"}))  # la segunda llega a la transición
+        pos1 = posiciones_modelo(e)
+        self.assertEqual(len({pos1[i][0] - pos0[i][0] for i in columna}), 1, "las tres, lo mismo")
+        self.assertGreater(pos1[t][0], 180)
+        self.assertEqual({i: p for i, p in pos1.items() if i not in columna}, {i: p for i, p in pos0.items() if i not in columna})
+        self.assertTrue(all(pos1[i][1] == pos0[i][1] for i in columna))
+        self.assertEqual(len(e.ed.undo_stack), pila + 2)
+        self.assertEqual((self._solapes_de_acciones(e), e.mensaje), ([], ""))
+        e.deshacer()
+        self.assertEqual(posiciones_modelo(e), pos0)
+
+    def test_SEDI131_una_barra_de_alternativa_tambien_se_aparta(self):
+        """REQ-EDT-02, REQ-ACT-01: una barra «O» (se dibuja sin grosor) cuenta como obstáculo, con un alto mínimo: si las
+        acciones de una etapa llegan a ella, se aparta en la misma operación; nunca queda tapada en silencio. Sin ese alto
+        mínimo la barra pasaría inadvertida (el defecto)."""
+        from escritorio import edicion as modulo
+        e, ids, ts = self.secuencial()
+        e.pedir_accion = lambda sid, aid: None
+        for n in ("Q00", "Q01"):
+            e.nueva_variable(n, "output")
+        s1 = ids["1"]
+        o = e.ed.add_bar("O", (120, 220), 200)
+        e.cambia()
+        x0 = next(b["x"] for b in e.ed.bars() if b["id"] == o)
+        pila = len(e.ed.undo_stack)
+        with mock.patch.object(modulo, "BARRA_ALTO_MIN", 0):  # sin el alto mínimo: la barra no estorba
+            for n in ("Q00", "Q01"):
+                self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": n}))
+            self.assertEqual(next(b["x"] for b in e.ed.bars() if b["id"] == o), x0)
+            self.assertEqual(e.mensaje, "", "tapada y sin aviso")
+        e.deshacer()
+        e.deshacer()
+        self.assertEqual((len(e.ed.undo_stack), len(e.acciones(s1))), (pila, 0))
+        for n in ("Q00", "Q01"):
+            self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": n}))
+        derecha = max(c["rect"][0] + c["rect"][2] for c in self.w.diagrama.cajas_acciones)
+        izquierda = float(next(b["x"] for b in e.ed.bars() if b["id"] == o)) + 100  # (x del dibujo)
+        self.assertGreaterEqual(izquierda, derecha + modulo.MARGEN_SOLAPE)
+        self.assertEqual((len(e.ed.undo_stack), e.mensaje), (pila + 2, ""))
+        e.deshacer()
+        e.deshacer()
+        self.assertEqual(next(b["x"] for b in e.ed.bars() if b["id"] == o), x0, "la barra vuelve con las acciones")
+
+    def test_SEDI132_separar_acciones_no_mueve_nada_y_la_primera_accion_si_despeja(self):
+        """REQ-EDT-02, REQ-ACT-01: «Eliminar el enlace» y «Separar» dejan cada acción donde estaba y no mueven ninguna otra
+        cosa del dibujo (las acciones sueltas nuevas, aunque queden sin hueco entre sí, no se apartan); añadir la primera
+        acción a una etapa que no tenía ninguna sí aparta lo que estorba. Cada gesto, una operación de deshacer."""
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        # la primera acción de una etapa sin acciones, con la etapa 2 muy cerca
+        self._poner_etapa(e, s2, 140)
+        pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q00"}))
+        self.assertGreater(posiciones_modelo(e)[s2][0], 140)
+        self.assertEqual((len(e.ed.undo_stack), self._solapes_de_acciones(e)), (pila + 1, []))
+        e.deshacer()
+        self.assertEqual(posiciones_modelo(e), pos0)
+        # tres acciones en fila y la etapa 2 muy a la derecha
+        self._poner_etapa(e, s2, 700)
+        for n in ("Q00", "Q01", "Q02"):
+            self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": n}))
+        pos0, pila, cajas0 = posiciones_modelo(e), len(e.ed.undo_stack), self._rects()
+        self.assertEqual((pos0[s2], len(cajas0)), ((700, 220), 3))
+        e.eliminar_enlace_acciones(s1)
+        self.assertEqual(self._rects(), cajas0, "cada una, donde estaba")
+        self.assertEqual(posiciones_modelo(e), pos0, "y la etapa de la derecha, sin moverse")
+        self.assertEqual(len(e.ed.undo_stack), pila + 1)
+        self.assertEqual((len(e.acciones(s1)), len([b for b in e.ed.draft_actions() if not b.get("etapa")])), (0, 3))
+        e.deshacer()
+        self.assertEqual((self._rects(), posiciones_modelo(e), len(e.acciones(s1))), (cajas0, pos0, 3))
+        # separar una sola (la del medio): las otras dos no se mueven; la separada queda a la derecha de la fila
+        aid = e.ed.get(s1)["actionRefs"][1]
+        e.separar_accion(aid)
+        self.assertEqual((posiciones_modelo(e), len(e.ed.undo_stack), len(e.acciones(s1))), (pos0, pila + 1, 2))
+        sueltas = [c for c in self.w.diagrama.cajas_acciones if not c["etapa"]]
+        self.assertEqual(len(sueltas), 1)
+        self.assertGreater(sueltas[0]["rect"][0], max(x for x, _ in cajas0))
+        self.assertEqual((self._solapes_de_acciones(e), e.mensaje), ([], ""))
+        e.deshacer()
+        self.assertEqual((posiciones_modelo(e), len(e.acciones(s1))), (pos0, 3))
+
+    def test_SEDI133_pegar_una_accion_a_una_etapa_aparta_lo_que_estorba(self):
+        """REQ-EDT-02, REQ-ACT-01: pegar una acción suelta a una etapa sigue la misma política que añadirla: si cabe, no se
+        mueve nada; si no, se desplaza lo que estorba (en la misma operación de deshacer); si no se puede, queda con un
+        aviso y sin desplazamientos a medias."""
+        from escritorio import edicion as modulo
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q00"}))
+        aid = e.ed.get(s1)["actionRefs"][0]
+        d = e.poner_accion_suelta(QPointF(900, 500))
+        # 1. cabe: la etapa 2 está lejos
+        self._poner_etapa(e, s2, 700)
+        pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+        e.pegar([d], aid)
+        self.assertEqual((e._borrador(d).get("etapa"), posiciones_modelo(e), len(e.ed.undo_stack)), (s1, pos0, pila + 1))
+        e.deshacer()
+        # 2. no cabe: se aparta
+        self._poner_etapa(e, s2, 200)
+        pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+        e.pegar([d], aid)
+        self.assertEqual(e._borrador(d).get("etapa"), s1)
+        self.assertGreater(posiciones_modelo(e)[s2][0], 200)
+        self.assertEqual(len(e.ed.undo_stack), pila + 1, "pegar y desplazar, una sola operación")
+        self.assertEqual((self._solapes_de_acciones(e), e.mensaje), ([], ""))
+        e.deshacer()
+        self.assertEqual(posiciones_modelo(e), pos0)
+        self.assertIsNone(e._borrador(d).get("etapa"))
+        # 3. no se puede: queda encima con el aviso
+        with mock.patch.object(modulo, "DESPLAZA_MAX", 10):
+            e.pegar([d], aid)
+            self.assertEqual((e._borrador(d).get("etapa"), posiciones_modelo(e)), (s1, pos0))
+            self.assertEqual((e.mensaje, e.mensaje_info, len(e.ed.undo_stack)), (modulo.MSG_ENCIMA, True, pila + 1))
+            self.assertEqual(e.parpadeo.ids, {s1})
+
+    def test_SEDI134_cambiar_el_tipo_de_una_accion_aparta_lo_que_estorba(self):
+        """REQ-ACT-01, REQ-EDT-02: cambiar el tipo de una acción colocada a otro que se dibuja más ancho («al activar», con
+        su marca) aparta lo que pisa, en la misma operación; un cambio que no ensancha no mueve nada."""
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q00"}))
+        self._poner_etapa(e, s2, 158)  # la caja de 80 llega a 228; la etapa 2 empieza a 236 (con el margen): cabe justo
+        pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+        e.tipo_accion(e.acciones(s1)[0]["id"], "condicionada")  # sin condición, mide lo mismo
+        self.assertEqual(posiciones_modelo(e), pos0)
+        pila = len(e.ed.undo_stack)
+        e.tipo_accion(e.acciones(s1)[0]["id"], "activacion")  # unos píxeles más ancha
+        self.assertGreater(posiciones_modelo(e)[s2][0], 158)
+        self.assertEqual(len(e.ed.undo_stack), pila + 1)
+        self.assertEqual((self._solapes_de_acciones(e), e.mensaje), ([], ""))
+        e.deshacer()
+        self.assertEqual((posiciones_modelo(e), e.datos_accion(e.acciones(s1)[0]["id"])["tipo"]), (pos0, "condicionada"))
+
+    def test_SEDI135_mover_una_accion_de_orden_aparta_lo_que_estorba(self):
+        """REQ-ACT-01, REQ-EDT-02: subir o bajar una acción en la etapa (en una matriz de 2, cuyas columnas toman el ancho de
+        su acción más ancha) puede ensanchar el conjunto: lo que pisa se aparta en la misma operación. Si no ensancha, no se
+        mueve nada."""
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        largo = "VariableDeNombreMuyLargoParaEnsanchar"
+        e.nueva_variable(largo, "output")
+        e.ed.move(ts["t2"], 0, 600)  # la matriz ocupa dos filas: la transición de debajo, lejos
+        e.cambia()
+        for n in (largo, "Q01", largo, "Q02"):
+            self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": n}))
+        e.colocar_acciones(s1, "matriz-2")
+        refs = list(e.ed.get(s1)["actionRefs"])
+        self.assertEqual(len(refs), 4)
+        derecha = max(c["rect"][0] + c["rect"][2] for c in self.w.diagrama.cajas_acciones)
+        self._poner_etapa(e, s2, derecha + 8 + 22 - 100)  # la etapa 2, justo al margen del conjunto
+        pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+        self.assertEqual(self._solapes_de_acciones(e), [])
+        e.mover_accion(refs[2], -1)  # [L, Q01, L, Q02] -> [L, L, Q01, Q02]: la 2.ª columna pasa a ser tan ancha como L
+        self.assertEqual(e.ed.get(s1)["actionRefs"], [refs[0], refs[2], refs[1], refs[3]])
+        self.assertGreater(posiciones_modelo(e)[s2][0], pos0[s2][0])
+        self.assertEqual(len(e.ed.undo_stack), pila + 1)
+        self.assertEqual((self._solapes_de_acciones(e), e.mensaje), ([], ""))
+        e.deshacer()
+        self.assertEqual((posiciones_modelo(e), e.ed.get(s1)["actionRefs"]), (pos0, refs))
+        e.rehacer()
+        pos1 = posiciones_modelo(e)
+        e.mover_accion(refs[1], +1)  # [L, L, Q01, Q02] -> [L, L, Q02, Q01]: las columnas miden lo mismo
+        self.assertEqual((e.ed.get(s1)["actionRefs"][2], posiciones_modelo(e), e.mensaje), (refs[3], pos1, ""))
+
+    def test_SEDI136_renombrar_una_variable_que_ensancha_una_accion_aparta_lo_que_estorba(self):
+        """REQ-ACT-01, REQ-EDT-02, REQ-EDT-09: renombrar una variable con un nombre más largo ensancha las acciones que la
+        usan: lo que pisa se aparta, junto con el cambio de nombre y en una sola operación de deshacer; un nombre igual de
+        corto no mueve nada."""
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q00"}))
+        self._poner_etapa(e, s2, 160)
+        pos0 = posiciones_modelo(e)
+        vid = next(v["id"] for v in e.ed.model["variables"] if v["name"] == "Q00")
+        self.assertIsNone(e.cambiar_variable(vid, "Q10"))
+        self.assertEqual(posiciones_modelo(e), pos0)
+        pila = len(e.ed.undo_stack)
+        self.assertIsNone(e.cambiar_variable(vid, "VariableDeNombreMuyLargoParaEnsanchar"))
+        self.assertGreater(posiciones_modelo(e)[s2][0], 160)
+        self.assertEqual(len(e.ed.undo_stack), pila + 1)
+        self.assertEqual((self._solapes_de_acciones(e), e.mensaje), ([], ""))
+        e.deshacer()
+        self.assertEqual((posiciones_modelo(e), next(v["name"] for v in e.ed.model["variables"] if v["id"] == vid)),
+                         (pos0, "Q10"))
+
+    def test_SEDI137_sin_hueco_tras_desplazar_se_revierte_el_desplazamiento(self):
+        """REQ-EDT-02, REQ-ACT-01: si tras desplazar sigue habiendo algo que estorba (aquí, forzado), lo desplazado se
+        deshace: queda solo la edición (una operación en la pila), la pila de rehacer vacía, las posiciones como estaban,
+        el aviso y la etapa que parpadea."""
+        from escritorio import edicion as modulo
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q00"}))
+        pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+        real, vistos = e._choques, []
+
+        def terco(clave, disposicion):  # el primer resultado, siempre: como si lo desplazado no bastara
+            if not vistos:
+                vistos.extend(real(clave, disposicion))
+            return list(vistos)
+        e._choques = terco
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q01"}))
+        self.assertTrue(vistos, "había con qué chocar")
+        self.assertEqual(posiciones_modelo(e), pos0, "ningún desplazamiento a medias")
+        self.assertEqual(len(e.ed.undo_stack), pila + 1, "solo la edición")
+        self.assertEqual(e.ed.redo_stack, [])
+        self.assertEqual(len(e.acciones(s1)), 2)
+        self.assertEqual(e._encima, [s1])
+        self.assertEqual((e.mensaje, e.mensaje_info), (modulo.MSG_ENCIMA, True))
+        self.assertEqual(e.parpadeo.ids, {s1})
+        e.deshacer()
+        self.assertEqual((posiciones_modelo(e), len(e.acciones(s1))), (pos0, 1))
+
+    def test_SEDI138_la_pila_de_rehacer_queda_como_estaba_si_algo_se_deshace(self):
+        """REQ-EDT-02: una operación atómica que falla con un rehacer pendiente (aunque haga varias operaciones antes de
+        fallar) y un despeje que no consigue hueco dejan la pila de rehacer exactamente como estaba: rehacer sigue
+        rehaciendo lo mismo y no queda ningún «mover» ajeno."""
+        from grafcet.diagnostics import Diagnostic
+        e, ids, ts, s2 = self._captura1()
+        s1 = ids["1"]
+        self.assertIsNone(e.poner_accion(s1, {"tipo": "continua", "variable": "Q00"}))
+        e.nueva_variable("Q09", "output")
+        e.deshacer()  # queda un rehacer pendiente (la variable)
+        rehacer = list(e.ed.redo_stack)
+        self.assertEqual(len(rehacer), 1)
+        pos0, pila = posiciones_modelo(e), len(e.ed.undo_stack)
+
+        def dos_y_falla():
+            e.ed.move(s2, 400, 220)
+            e.ed.move(s2, 420, 220)
+            raise DiagnosticError(Diagnostic("D-FORMATO", "falla a propósito"))
+        motivo = e._atomico("falla", dos_y_falla)
+        self.assertIn("falla a propósito", motivo)
+        self.assertEqual(e.ed.redo_stack, rehacer, "idéntica, sin ningún «mover» ajeno")
+        self.assertEqual((posiciones_modelo(e), len(e.ed.undo_stack)), (pos0, pila))
+        e.rehacer()  # y rehace lo mismo de antes
+        self.assertEqual(next(v["name"] for v in e.ed.model["variables"] if v["name"] == "Q09"), "Q09")
+        e.deshacer()
+        # el despeje que no consigue hueco, llamado directamente con un rehacer pendiente
+        self._poner_etapa(e, s2, 150)  # pisa la caja de la acción
+        e.nueva_variable("Q08", "output")
+        e.deshacer()
+        rehacer = list(e.ed.redo_stack)
+        self.assertEqual(len(rehacer), 1)
+        real, vistos = e._choques, []
+
+        def terco(clave, disposicion):
+            if not vistos:
+                vistos.extend(real(clave, disposicion))
+            return list(vistos)
+        e._choques = terco
+        pos0 = posiciones_modelo(e)
+        self.assertFalse(e._despejar(s1))
+        self.assertTrue(vistos)
+        self.assertEqual((posiciones_modelo(e), e.ed.redo_stack), (pos0, rehacer))
+
+
 @unittest.skipUnless(QT, "PySide6 no está instalado")
 class Bloques(unittest.TestCase):
     """El programador por bloques sin el panel: el modelo (texto <-> árbol, soltar, envolver, quitar), el área y la
@@ -4678,15 +5712,17 @@ class Bloques(unittest.TestCase):
             self.assertEqual(arbol_a_texto(a(txt)), txt, txt)
             self.assertEqual(a_nucleo(txt, [], ["marcha"]), a_nucleo(arbol_a_texto(a(txt)), [], ["marcha"]), txt)
         self.assertEqual(arbol_a_texto(nuevo("temp", t1="", t2="1s", a=sb)), "(↑↓marcha)/1s")
-        # redundancias: los paréntesis que sobran y los espacios no se conservan
-        self.assertEqual(arbol_a_texto(a("(marcha) AND   (paro OR (Q00 AND M1))")), "marcha AND (paro OR Q00 AND M1)")
+        # los paréntesis escritos se conservan como bloques «( )», también los que la precedencia no exige (P-IMP-46); los
+        # espacios sobrantes, no
+        self.assertEqual(arbol_a_texto(a("(marcha) AND   (paro OR (Q00 AND M1))")), "(marcha) AND (paro OR (Q00 AND M1))")
         self.assertEqual(arbol_a_texto(a("a AND ?")), "a AND ?")
         # la estructura
         y = a("(↑marcha AND NOT X0) OR (3s/X1 AND CT >= 3)")
-        self.assertEqual((y["k"], y["a"]["k"], y["a"]["a"]["k"], y["a"]["b"]["a"]["k"]), ("o", "y", "sube", "etapa"))
-        t = y["b"]["a"]
+        self.assertEqual((y["k"], y["a"]["k"], y["a"]["a"]["k"], y["a"]["a"]["a"]["k"], y["a"]["a"]["b"]["a"]["k"]),
+                         ("o", "par", "y", "sube", "etapa"))
+        t = y["b"]["a"]["a"]
         self.assertEqual((t["k"], t["t1"], t["t2"], t["a"]["n"]), ("temp", "3s", "", "X1"))
-        c = y["b"]["b"]
+        c = y["b"]["a"]["b"]
         self.assertEqual((c["k"], c["n"], c["op"], c["v"]), ("cmp", "CT", ">=", "3"))
         self.assertEqual(a("X1/2s")["t2"], "2s")
         self.assertEqual(a("1.5s/X1")["t1"], "1500ms")
@@ -4854,7 +5890,7 @@ class Bloques(unittest.TestCase):
             self.assertTrue(p.categorias[clave].isChecked())
         p.elegir_categoria("operador")
         self.assertEqual([b["k"] if b["k"] != "const" else b["v"] for b in p.paleta.bloques()],
-                         ["y", "o", "no", "sube", "baja", 1, 0])
+                         ["y", "o", "no", "par", "sube", "baja", 1, 0], "con el bloque «( )» (P-IMP-46)")
         p.elegir_categoria("tiempo")
         self.assertEqual([(b["k"], b["t1"], b["t2"]) for b in p.paleta.bloques()], [("temp", "3s", "")])
         self.assertEqual(p.opciones("interna"), [("M1", "M1")], "las memorias booleanas")
@@ -4901,7 +5937,7 @@ class Bloques(unittest.TestCase):
         p.elegir_categoria("operador")
         QApplication.processEvents()
         cajas = sorted(p.paleta._cajas, key=lambda c: c[2])
-        self.assertEqual(len(cajas), 7)
+        self.assertEqual(len(cajas), 8, "y, o, no, ( ), flancos y las constantes 1 y 0")
         self.assertEqual(len({x for _, x, _ in cajas}), 1, "los bloques, en una columna")
         self.assertEqual([c[2] for c in cajas], sorted({y for _, _, y in cajas}), "uno debajo de otro")
         p.elegir_categoria("comparacion")
@@ -5040,7 +6076,7 @@ class Bloques(unittest.TestCase):
         """REQ-EDT-02: los bloques «y» y «o» llevan un «+» al final que añade otro hueco (sin «×»: un hueco vacío
         sobrante se quita con el botón derecho o con Supr, y al sacar un bloque su hueco desaparece); soltar un bloque sobre el «+» lo añade en un hueco nuevo; un «o» de n operandos se
         escribe `a OR b OR c OR d` y una cadena de OR (o de AND) del mismo nivel vuelve como un solo bloque de n huecos;
-        el texto es estable y los paréntesis solo salen donde la precedencia los exige."""
+        el texto es estable y los paréntesis salen donde la precedencia los exige y donde hay un bloque «( )»."""
         import json
         from PySide6.QtCore import QMimeData, QPointF
         from PySide6.QtGui import QContextMenuEvent, QDropEvent
@@ -5056,7 +6092,8 @@ class Bloques(unittest.TestCase):
         self.assertEqual((hijos(a("marcha OR paro")), hijos(a("marcha"))), (("a", "b"), ()))
         # y un grupo explícito a la derecha sigue siendo un bloque dentro de otro, con sus paréntesis
         anidado = a("marcha OR (paro OR Q00 OR M1)")
-        self.assertEqual((hijos(anidado), anidado["b"]["k"], hijos(anidado["b"])), (("a", "b"), "o", ("a", "b", "c")))
+        self.assertEqual((hijos(anidado), anidado["b"]["k"], anidado["b"]["a"]["k"], hijos(anidado["b"]["a"])),
+                         (("a", "b"), "par", "o", ("a", "b", "c")))
         # árbol -> texto estable, con paréntesis solo donde la precedencia los exige
         for t in ("marcha OR paro OR Q00 OR M1", "marcha AND paro AND Q00 AND X1", "marcha OR (paro OR Q00 OR M1)",
                   "marcha AND (paro AND Q00 AND X1)", "(marcha OR paro) AND Q00 AND (M1 OR X1 OR CT >= 3)",
@@ -5064,9 +6101,10 @@ class Bloques(unittest.TestCase):
                   "marcha AND ? AND ? AND paro"):
             self.assertEqual(arbol_a_texto(a(t)), t, t)
             self.assertEqual(arbol_a_texto(a(arbol_a_texto(a(t)))), arbol_a_texto(a(t)), "estable")
-        self.assertEqual(arbol_a_texto(a("(marcha OR paro) OR Q00")), "marcha OR paro OR Q00", "un grupo a la izquierda es lo mismo")
+        self.assertEqual(arbol_a_texto(a("(marcha OR paro) OR Q00")), "(marcha OR paro) OR Q00",
+                         "un grupo escrito es un bloque «( )» y se conserva (P-IMP-46)")
         self.assertEqual(arbol_a_texto(a("(marcha AND paro) OR (Q00 AND M1) OR X1 AND CT < 3")),
-                         "marcha AND paro OR Q00 AND M1 OR X1 AND CT < 3", "los paréntesis que sobran no se escriben")
+                         "(marcha AND paro) OR (Q00 AND M1) OR X1 AND CT < 3", "también los que la precedencia no exige")
         # añadir y quitar huecos
         base = a("marcha OR paro")
         tres = anadir_hueco(base, ())
@@ -5090,7 +6128,7 @@ class Bloques(unittest.TestCase):
         self.assertEqual(arbol_a_texto(retirar(a("NOT marcha AND paro"), ("a", "a"))), "NOT ? AND paro")
         self.assertEqual(arbol_a_texto(mover(a("marcha OR paro OR Q00 OR M1"), ("b",), ("d",))), "marcha OR Q00 OR paro",
                          "el destino se resuelve antes de quitar el hueco de origen")
-        self.assertEqual(arbol_a_texto(mover(a("(marcha OR paro OR Q00) AND M1"), ("a", "b"), ("b",))),
+        self.assertEqual(arbol_a_texto(mover(a("(marcha OR paro OR Q00) AND M1"), ("a", "a", "b"), ("b",))),
                          "(marcha OR Q00) AND paro", "los de detrás ocupan el sitio")
         for n in range(30):
             base = anadir_hueco(base, ())

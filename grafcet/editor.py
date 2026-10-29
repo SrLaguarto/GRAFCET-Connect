@@ -530,15 +530,15 @@ class Editor:
     # Colocación de las acciones de una etapa o de un grupo de acciones sueltas (presentación,
     # `presentation.actionLayouts`: {ID de etapa o de grupo: valor}); sin
     # entrada vale «fila» (cajas pegadas en fila, la representación (2) de la norma).
-    ACTION_LAYOUTS = ("fila", "fila-separada", "columna")
+    ACTION_LAYOUTS = ("fila", "fila-separada", "matriz-2", "columna")
 
     def action_layouts(self) -> dict[str, str]:
         d = self.presentation.get("actionLayouts", {})
         return d if isinstance(d, dict) else {}
 
     def set_action_layout(self, step: str, layout: str) -> None:
-        """Cómo se colocan las acciones de una etapa: «fila» (pegadas, por defecto), «fila-separada» o «columna». Solo
-        presentación: no cambia el modelo ni la revisión."""
+        """Cómo se colocan las acciones de una etapa: «fila» (pegadas, por defecto), «fila-separada», «matriz-2» o
+        «columna». Solo presentación: no cambia el modelo ni la revisión."""
         if layout not in self.ACTION_LAYOUTS:
             raise DiagnosticError(Diagnostic("D-FORMATO", f"colocación de acciones desconocida: {layout!r}"))
         if not any(s["id"] == step for s in self.model["steps"]) and not any(

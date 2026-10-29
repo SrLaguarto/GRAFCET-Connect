@@ -133,9 +133,9 @@ Un enlace siempre sale de una etapa y llega a ella con un tramo vertical (16), y
 
 En modo Editar, la pantalla tiene tres zonas:
 
-- **Paleta (panel izquierdo):** solo tiene la paleta, con dos carpetas. «Elementos» tiene la etapa, la transición y la simultaneidad (barra de doble trazo). «Acciones» tiene una ficha por tipo de acción, con su dibujo. Las fichas se colocan **arrastrándolas** al dibujo; un clic en una ficha solo muestra su ayuda. El panel izquierdo se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L).
+- **Paleta (panel izquierdo):** solo tiene la paleta, en una sola lista: la etapa, la transición, la simultaneidad (barra de doble trazo) y la acción (la ficha «Acción» es la continua; los otros tipos se eligen con el botón derecho, en «Tipo de acción»). Las fichas se colocan **arrastrándolas** al dibujo; un clic en una ficha solo muestra su ayuda. El panel izquierdo se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L).
 - **Dibujo (centro):** donde se ve y se toca el grafcet. Con el ratón se selecciona, se mueve y se enlaza; la rueda hace zoom.
-- **Opciones (panel inferior):** muestra la configuración de lo que está seleccionado. Sin selección, dice «Haga clic en un elemento del dibujo para ver y cambiar sus opciones». Se despliega y se pliega con su flecha; el divisor con el dibujo se arrastra, y el programa recuerda la altura que le dio en Editar y en Simular por separado.
+- **Opciones (panel inferior):** ocupa todo el ancho de la ventana, debajo de los paneles laterales. Muestra la configuración de lo que está seleccionado. Sin selección, dice «Haga clic en un elemento del dibujo para ver y cambiar sus opciones». Se despliega y se pliega con su flecha; el divisor con el dibujo se arrastra, y el programa recuerda la altura que le dio en Editar y en Simular por separado.
 
 ### Dónde se cambia cada cosa
 
@@ -143,7 +143,7 @@ El panel de Opciones es uno solo, sin pestañas, y cambia según lo seleccionado
 
 - **Transición:** a la izquierda, la etiqueta, «Mostrar etiqueta» y el comentario. A la derecha, la receptividad, con el programador de bloques (ver «Bloques» más abajo).
 - **Etapa:** etiqueta, tipo (normal o inicial), comentario y colocación de las acciones. Debajo, la lista de sus acciones con los botones «Añadir…», «Editar…», «Quitar», ◀ y ▶. Desde una acción, «‹ Etapa X» vuelve a la etapa.
-- **Acción:** una frase que dice en lenguaje claro lo que hace (por ejemplo «Al activarse la etapa 2: CT := CT + 1.»), y debajo el tipo, la variable, el valor (si es memorizada) y la condición o el evento con el programador de bloques (si es condicionada o por evento).
+- **Acción:** una frase que dice en lenguaje claro lo que hace (por ejemplo «Al activarse la etapa 2: CT := CT + 1.»), y debajo la variable, el valor (si es memorizada) y la condición o el evento con el programador de bloques (si es condicionada o por evento).
 - **Enlace, barra de simultaneidad, varios elementos o nada:** lo que ya mostraba antes el panel para cada caso.
 
 Cada cambio se aplica al momento y se deshace con Ctrl+Z, una vez por cambio. **No hay botón de Aceptar** ni ventana aparte para las acciones: el antiguo diálogo «Editar…» ya no existe. Doble clic en una acción, o «Editar…» en su menú, despliega el panel con esa acción; seleccionar un elemento no lo despliega.
@@ -152,20 +152,23 @@ Si una variable que se usa no existe, aparece en naranja y parpadea en el panel.
 
 ### Traza y Leyenda
 
-- **Traza:** en Simular, el panel inferior muestra la traza de la evolución. En Editar ya no hay pestaña de traza.
+- **Traza:** en Simular, el panel inferior, que ocupa todo el ancho de la ventana, muestra la traza de la evolución. En Editar ya no hay pestaña de traza.
 - **Leyenda:** está en el menú **Ayuda > Leyenda del dibujo**, en una ventana aparte que se puede dejar abierta mientras se trabaja.
 
 ### No se puede poner un elemento encima de otro
 
-Ningún elemento (etapa, transición, barra de simultaneidad, acción o grupo de acciones) se puede soltar ni mover encima de otro. Se mide con un margen de 8 unidades del dibujo alrededor de cada caja (no depende del zoom). Los comentarios no cuentan.
+Ningún elemento (etapa, transición, barra de simultaneidad, acción o grupo de acciones) se puede soltar ni mover a mano encima de otro. Se mide con un margen de 8 unidades del dibujo alrededor de cada caja (no depende del zoom). Los comentarios no cuentan.
 
 - **Desde la paleta:** si la caja cae sobre otro elemento, no se crea nada.
 - **Al mover:** uno o varios elementos vuelven a su sitio.
+- **Al añadir, pegar o unir acciones a una etapa, al editar una acción ya colocada o al cambiar la colocación de las acciones:** el programa comprueba que las acciones de la etapa (o del grupo) no queden encima de etapas, macroetapas, transiciones y sus textos, barras, otras acciones o grupos sueltos, ni crucen sus líneas. Si no caben, aparta hacia la derecha lo que estorba y lo que queda a su derecha, conservando sus posiciones relativas, hasta que quepan. Todo ello se deshace de una vez con Deshacer (Ctrl+Z). Si no puede (el estorbo está debajo de la etapa o hay que apartar demasiado), deja las acciones como se pusieron, encima, y avisa con el mensaje «Las acciones quedan encima de otro elemento: apártelo».
+- **Al separar acciones** («Separar de la etapa» o «Eliminar el enlace»): no se aparta nada; cada acción queda donde estaba.
+- **La colocación elegida no cambia sola:** si una colocación no cabe, la etapa conserva la que eligió y el programa aparta lo que estorba o avisa.
 - **Durante el arrastre:** la caja se ve en rojo y el cursor es el de «prohibido». Al soltar, aparece el mensaje «No se puede poner encima de otro elemento».
 
 Siguen funcionando el imán para pegar una acción a otra (con 16 píxeles) y unir una acción a una etapa; y una transición que se suelta sobre el enlace entre dos etapas se inserta en él, como antes.
 
-Limitación: al estirar una barra de simultaneidad no se comprueban solapes.
+Limitaciones: no se aparta lo que está en la columna de la etapa ni debajo de ella; una columna o una matriz de más de una fila bajo una etapa con transición suele quedar encima, con aviso. El desplazamiento mueve también lo que está a la derecha del corte, aunque no estorbe. Al estirar una barra de simultaneidad no se comprueban solapes. Los lazos de enlace no se tienen en cuenta al apartar lo que estorba. Una barra de alternativa no impide soltar un elemento encima de ella al arrastrarlo a mano.
 
 ## Variables, acciones y bloques (paso 4, P-IMP-38; rehecho en P-IMP-39, P-IMP-40, P-IMP-41, P-IMP-43, P-IMP-44 y P-IMP-45)
 
@@ -182,9 +185,9 @@ En modo Editar:
 Una acción es algo que la etapa hace mientras está activa, o cuando se activa o desactiva, según su tipo.
 
 - **Tipos:** Continua (vale mientras la etapa está activa), Condicionada (continua que además exige una condición), Al activar (memorizada, flecha ↑), Al desactivar (memorizada, flecha ↓) y Por evento (memorizada con banderita, que asigna un valor cuando ocurre su evento). Cada tipo tiene su dibujo, que es el de la norma.
-- **Cómo se crea:** arrastrando una ficha de la carpeta «Acciones» al dibujo, donde se suelta; con el botón derecho en una etapa, «Añadir acción…»; o con el botón «Añadir…» del panel de la etapa.
+- **Cómo se crea:** arrastrando la ficha «Acción» (la continua) al dibujo, donde se suelta; con el botón derecho en una etapa, «Añadir acción…»; o con el botón «Añadir…» del panel de la etapa.
 - **Acción suelta:** una ficha soltada en el dibujo crea una acción sin etapa y sin variable, con «?». No abre ningún diálogo. Una acción soltada sin tocar nada es continua. Se une a una etapa arrastrando desde su punto de unión de la izquierda hasta la etapa, o desde el de la derecha de la etapa hasta la acción.
-- **Variable:** se elige en una lista. Una continua ofrece solo salidas y memorias booleanas. Una memorizada ofrece salidas y memorias de cualquier tipo. La última opción, «Nueva variable…», pide nombre, papel (salida o memoria) y tipo, y la crea en la misma operación que la acción. Las entradas nunca se ofrecen como destino.
+- **Variable:** se elige en una lista con las que valen para esa acción. Una continua ofrece solo salidas y memorias booleanas. Una memorizada ofrece salidas y memorias de cualquier tipo. Las entradas nunca se ofrecen como destino. Las variables se crean solo en la tabla de variables (con «Nueva E», «Nueva S» o «Nueva M»); la lista de la acción no tiene «Nueva variable…». Sin variables, la lista dice «(sin variables: créelas en la tabla de variables)».
 - **Valor** (solo en memorizadas), que se arma con bloques:
   - Si la variable es **booleana**, se elige la ficha «1» o la «0» (`:= 1` o `:= 0`). También se puede pulsar la plantilla «:= 1» o «:= 0».
   - Si es **numérica**, el valor puede ser un número (por ejemplo `5`), una variable numérica, o una operación «+», «−», «×» o «÷» entre dos huecos. Las operaciones se pueden anidar: `CT * 2 - 1` es una resta cuyo primer operando es «CT × 2». Las plantillas «+1» y «−1» ponen `CT + 1` y `CT - 1` con la variable elegida, y «:= 0» pone `0`.
@@ -199,7 +202,7 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
 - **Enlace de la etapa:** el trazo horizontal que une la etapa con sus acciones se selecciona con un clic. Supr, o botón derecho → «Eliminar el enlace», separa todas las acciones de la etapa: cada una queda suelta, donde estaba. «Separar de la etapa» separa solo la acción elegida; «Separar del grupo», en un grupo suelto, la saca del grupo; «Quitar» la borra.
 - **Borrar una etapa:** borra también sus acciones y los borradores unidos a ella. Ctrl+Z lo restaura todo.
 - **Tipo por botón derecho:** en una acción, «Tipo de acción» es un submenú con los cinco tipos, con sus dibujos, y marca el actual. Después van «Editar…», la separación, «Colocación de las acciones» (en un grupo suelto), «Mover a la izquierda» o «a la derecha» (en columna, «Mover arriba» o «Mover abajo») y «Quitar». Si al cambiar de tipo faltan datos, la acción queda con «?» en lo que falta y se abre el panel para completarlo.
-- **Colocación de las acciones de una etapa:** con el botón derecho en la etapa, «Colocación de las acciones» ofrece tres formas, con la actual marcada: «En fila, pegadas» (por defecto), «En fila, separadas» (cada caja unida a una línea común que sale de la etapa) y «En columna» (una debajo de otra, unidas por una línea vertical). Cada caja se ensancha con su texto. La colocación se guarda en el proyecto, etapa por etapa, o por grupo suelto.
+- **Colocación de las acciones de una etapa:** con el botón derecho en la etapa, «Colocación de las acciones» ofrece cuatro formas, con la actual marcada: «En fila, pegadas» (por defecto), «En fila, separadas» (cada caja unida a una línea común que sale de la etapa), «En matriz de 2» (dos columnas, en orden de lectura: se llenan dos huecos y se cambia de fila; una barra común a la izquierda, que sale del enlace de la etapa) y «En columna» (una debajo de otra, unidas por una línea vertical). Cada caja se ensancha con su texto. La colocación se guarda en el proyecto, etapa por etapa, o por grupo suelto. Si la colocación elegida no cabe, se aparta lo que estorba (ver «No se puede poner un elemento encima de otro»); la colocación no cambia sola.
 - **Acciones limitadas de ficheros antiguos:** una continua con límite de tiempo de un fichero anterior se sigue dibujando y simulando igual, con su límite como una condición más (`NOT 3s/X1`). En el menú y en el panel aparece como «Condicionada (con límite de tiempo)». Ese tipo ya no se ofrece; al editar su condición se conserva el límite, salvo que se quite.
 
 ### Bloques (programador de receptividades, condiciones y eventos)
@@ -212,8 +215,9 @@ El programador es de bloques, al estilo de Scratch: se arma una receptividad, un
 - **Bloques ya puestos:** cada bloque del área tiene su ▾ para cambiar de elemento (otra etapa, otra variable).
 - **Fórmula en texto:** es de solo lectura. La casilla «Escribir a mano» la deja editar; lo escrito pasa a bloques. Al desmarcarla vuelve a ser de solo lectura.
 - **Operadores:** «y» (oliva) y «o» (fucsia) tienen colores distintos; «no», «flanco de subida ↑», «flanco de bajada ↓» y los demás son gris pizarra. Las condiciones son bloques hexagonales: una variable booleana o una etapa, con un ▾ para elegir cuál.
-  - «y» y «o» tienen dos huecos y se pueden anidar. El «+» al final añade un hueco. Un hueco sobra cuando se saca un bloque de un «y» o un «o» de más de dos huecos; un hueco vacío sobrante se quita con botón derecho → «Quitar hueco», o seleccionándolo y pulsando Supr. Nunca bajan de dos. En el texto, varios operandos se escriben `a AND b AND c`, y los paréntesis salen solo donde la precedencia los exige.
+  - «y» y «o» tienen dos huecos y se pueden anidar. El «+» al final añade un hueco. Un hueco sobra cuando se saca un bloque de un «y» o un «o» de más de dos huecos; un hueco vacío sobrante se quita con botón derecho → «Quitar hueco», o seleccionándolo y pulsando Supr. Nunca bajan de dos. En el texto, varios operandos se escriben `a AND b AND c`, y los paréntesis salen donde la precedencia los exige y donde hay un bloque «( )».
   - «no», «↑» y «↓» envuelven a otro bloque. «temporizar» envuelve a otro bloque y tiene dos tiempos, t1 y t2, como en la norma (`3s/X1`, `X1/2s`).
+  - «( )» tiene un hueco y sirve para agrupar, en todos los programadores (receptividad de transición, condición y evento de acción, y valor numérico). Los paréntesis escritos en el texto vuelven como bloques «( )» al pasar a bloques, incluso los que la precedencia exige; son solo agrupación y no cambian el significado. Las operaciones aritméticas encadenadas que se leen igual sin paréntesis se dibujan en línea.
   - Comparación: [variable ▾][= ≠ < ≤ > ≥ ▾][valor], por ejemplo `CT ≥ 3`. Constantes 1 y 0.
 - **Cómo se mueven los bloques:** arrastrar un bloque a un hueco lo encaja. Soltar un bloque que envuelve (no, ↑, ↓ o temporizar) sobre otro lo envuelve. Arrastrarlo fuera o a la papelera lo quita y deja su hueco.
 - **Hueco sin llenar:** se muestra como «?»; la receptividad queda pendiente y no se puede ejecutar.
@@ -222,11 +226,11 @@ El programador es de bloques, al estilo de Scratch: se arma una receptividad, un
 - **Constantes:** 1 y 0 se escriben y se ven así. Cuando son una condición completa se guardan como `true` y `false`; en `CT = 1` o `n := 1` siguen siendo números.
 - **X1 ambiguo:** si `X1` puede ser la etapa E1 o la etapa 1, se usa E1 y el programa avisa. Para la etapa 1 se escribe ``active(`1`)``.
 - **Retardos** con paréntesis anidados, como `3s/(a AND (b OR c))`, ya se entienden.
-- **Nombres no válidos:** las variables no pueden llamarse como una palabra de las fórmulas (NOT, AND, OR, true, false, rise, fall, active, activePartial, activeMacro, elapsed y delay, sin distinguir mayúsculas), ni tener espacios o símbolos, ni empezar por algo que no sea letra o «_», ni parecerse a una etapa (X seguida de cifras, como X1). Por ejemplo: «"AND" no puede ser nombre de variable: es una palabra de las fórmulas».
+- **Nombres no válidos:** las variables no pueden llamarse como una palabra de las fórmulas (NOT, AND, OR, true, false, rise, fall, active, activePartial, activeMacro, elapsed y delay, sin distinguir mayúsculas), ni tener espacios o símbolos (salvo «_»), ni empezar por algo que no sea letra o «_» (una cifra inicial vale si el nombre lleva además una letra: 1M1, 2S3, 10M), ni ser solo un número, ni parecer una duración (2s, 10ms, 3us, 0.5s), ni parecerse a una etapa (X seguida de cifras, como X1). En el texto de las fórmulas, esos nombres van entre acentos graves (`1M2`); bloques, «Se dibuja», la tabla y el dibujo los muestran sin acentos. Por ejemplo: «"AND" no puede ser nombre de variable: es una palabra de las fórmulas».
 
 ### Anchos de los paneles laterales
 
-Al editar, el panel izquierdo (la paleta) y el derecho (Variables y Diagnósticos) tienen un ancho fijo de 212 píxeles, o más si su contenido lo necesita. Se pliegan y se despliegan del todo, como antes. Al simular, el derecho conserva su ancho de siempre.
+Al editar, el panel izquierdo (la paleta) y el derecho (Variables y Diagnósticos) tienen un ancho fijo de 212 píxeles, o más si su contenido lo necesita. Quedan arriba, a la altura del dibujo, encima del panel inferior. Se pliegan y se despliegan del todo, como antes. Al simular, el derecho conserva su ancho de siempre.
 
 ## Comentarios de etapas y transiciones (P-IMP-44)
 

@@ -1,14 +1,16 @@
-"""Paleta de elementos y de acciones, y panel de opciones del editor (P-IMP-32, P-IMP-43, P-IMP-44).
+"""Paleta de elementos y panel de opciones del editor (P-IMP-32, P-IMP-43, P-IMP-44, P-IMP-47).
 
-La paleta (izquierda) tiene dos carpetas, «Elementos» (etapa, transición, simultaneidad) y «Acciones» (una ficha
-dibujada por tipo de acción); sus fichas solo se colocan arrastrándolas al dibujo, y un clic solo muestra su ayuda.
+La paleta (izquierda) es una sola lista de fichas: etapa, transición, simultaneidad y «Acción» (la continua, con su
+dibujo; otro tipo se elige con botón derecho sobre la acción, «Tipo de acción»). Sus fichas solo se colocan
+arrastrándolas al dibujo, y un clic solo muestra su ayuda.
 
 El panel de opciones (abajo, a todo el ancho, al editar) muestra y cambia la configuración de lo seleccionado, con dos
 zonas: a la izquierda una columna estrecha con los campos y a la derecha lo ancho.
 - Transición: etiqueta, si se muestra y comentario; a la derecha, el programador por bloques de la receptividad (con el
   texto de la fórmula, cómo se escribe y cómo se dibuja, y «Crear las que faltan» para las variables que no existen).
 - Etapa: etiqueta, tipo, comentario y colocación de las acciones; a la derecha, la lista de sus acciones y sus botones.
-- Acción: frase, tipo, variable (y límite de una acción antigua) a la izquierda (`PanelAccion`); a la derecha el
+- Acción: frase, variable (y límite de una acción antigua) a la izquierda (`PanelAccion`; el tipo se cambia con botón
+  derecho sobre la acción); a la derecha el
   programador del valor de una memorizada y, si es condicionada o por evento, el de su condición o su evento.
 - Enlace, barra de simultaneidad, varios elementos o nada: lo suyo, o la invitación a elegir un elemento.
 Cada cambio se aplica al momento con las operaciones de Edicion / grafcet/editor.py (una operación de deshacer).
@@ -30,34 +32,28 @@ from grafcet.view import norm
 
 from .acciones import PanelAccion
 from .bloques import FlowLayout, Programador
-from .diagrama import COL, FICHAS_ACCION, H, TB, _html, ficha_accion, icono_accion
+from .diagrama import COL, H, TB, _html, ficha_accion, icono_accion
 from .edicion import COLOCACIONES, CONTINUAS, Parpadeo
 
 NARANJA = COL["glow"]
 ANCHO_COLUMNA = 230  # la columna estrecha de campos del panel de opciones
-NOMBRES = {"etapa": "Etapa", "transicion": "Transición", "simultaneidad": "Simultaneidad"}
+NOMBRES = {"etapa": "Etapa", "transicion": "Transición", "simultaneidad": "Simultaneidad", "accion:continua": "Acción"}
 AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: arrástrela al dibujo",
           "simultaneidad": "Barra de simultaneidad (doble trazo, Y): une varias etapas a una transición, o una transición "
                            "a varias etapas. Se ensancha estirando de sus extremos. Las alternativas (O) no son un elemento: "
-                           "se construyen con el ratón enlazando una etapa con una segunda transición, o arrastrando a un enlace."}
-COLOCABLES = tuple(NOMBRES)  # los elementos de la carpeta «Elementos»: solo se colocan arrastrándolos al dibujo
-AYUDAS_ACCION = {
-    "continua": "Acción continua: se cumple mientras la etapa está activa. Arrástrela al dibujo (queda suelta, con «?»); se une "
-                "a una etapa arrastrando desde su punto de unión de la izquierda hasta la etapa, o pegándola al lado de otra acción",
-    "condicionada": "Acción condicionada: continua que además exige una condición (el trazo de encima). La condición se programa "
-                    "en el panel de opciones al seleccionarla. Arrástrela al dibujo",
-    "activacion": "Acción memorizada al activar la etapa (flecha ↑): asigna un valor al activarse. Arrástrela al dibujo",
-    "desactivacion": "Acción memorizada al desactivar la etapa (flecha ↓): asigna un valor al desactivarse. Arrástrela al dibujo",
-    "evento": "Acción memorizada por evento (banderita): asigna un valor cuando ocurre su evento con la etapa activa. El evento "
-              "se programa en el panel de opciones al seleccionarla. Arrástrela al dibujo"}
-ACCIONES = tuple(f"accion:{t}" for t, _ in FICHAS_ACCION)  # lo que viaja al arrastrar una ficha de la carpeta «Acciones»
+                           "se construyen con el ratón enlazando una etapa con una segunda transición, o arrastrando a un enlace.",
+          "accion:continua": "Acción continua: se cumple mientras la etapa está activa. Arrástrela al dibujo (queda suelta, con «?»); "
+                             "se une a una etapa arrastrando desde su punto de unión de la izquierda hasta la etapa, o pegándola al "
+                             "lado de otra acción. Para otro tipo (condicionada, al activar, al desactivar, por evento), botón "
+                             "derecho sobre la acción, «Tipo de acción»"}
+COLOCABLES = tuple(NOMBRES)  # las fichas de la paleta: solo se colocan arrastrándolas al dibujo
 
 
 def icono(h: str) -> QIcon:
     """Dibujo del elemento, para reconocerlo en la paleta (con el trazo de la norma: etapa cuadrada, transición, barras);
     una acción, como la dibuja el diagrama."""
     if h.startswith("accion:"):
-        return icono_accion(h.partition(":")[2], 90, 76)
+        return icono_accion(h.partition(":")[2], 80, 64)
     pm = QPixmap(64, 64)
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm)
@@ -124,12 +120,12 @@ def figura(h: str, escala: float = 1.0, dpr: float = 1.0) -> tuple[QPixmap, QPoi
 
 
 class Paleta(QListWidget):
-    """Una carpeta de fichas del grafcet («Elementos» o «Acciones»). Las fichas solo se colocan arrastrándolas al
-    dibujo; un clic en una ficha no hace nada salvo mostrar su ayuda (señal `ayuda`)."""
+    """La lista de fichas del grafcet (etapa, transición, simultaneidad y acción). Las fichas solo se colocan
+    arrastrándolas al dibujo; un clic en una ficha no hace nada salvo mostrar su ayuda (señal `ayuda`)."""
 
     ayuda = Signal(str)
     REJILLA = QSize(92, 96)
-    ICONO = QSize(56, 56)
+    ICONO = QSize(80, 64)
     FILAS = 2
     CLAVES: tuple[str, ...] = COLOCABLES
 
@@ -187,24 +183,6 @@ class Paleta(QListWidget):
         m = QMimeData()
         m.setText(items[0].data(Qt.ItemDataRole.UserRole))
         return m
-
-
-class PaletaAcciones(Paleta):
-    """La carpeta «Acciones»: una ficha con su dibujo por tipo (Continua, Condicionada, Al activar, Al desactivar, Por
-    evento), dibujada con la misma función que el diagrama. Arrastrar una crea una acción de ese tipo donde se suelta."""
-
-    ICONO = QSize(90, 76)
-    REJILLA = QSize(92, 100)
-    FILAS = 3
-    CLAVES = ACCIONES
-
-    @staticmethod
-    def nombre(h: str) -> str:
-        return dict(FICHAS_ACCION)[h.partition(":")[2]]
-
-    @staticmethod
-    def texto_ayuda(h: str) -> str:
-        return AYUDAS_ACCION[h.partition(":")[2]]
 
 
 def _formulario(w: QWidget) -> QFormLayout:
@@ -565,11 +543,12 @@ class PanelPropiedades(QWidget):
                           e.titulo_accion(acc[0], acc[1]))
         if kind == "accion":
             self.accion.mostrar(e, aid)
-            memorizada = self.accion.tipo.currentData() not in CONTINUAS
+            memorizada = self.accion.clave_tipo not in CONTINUAS
             self.der.setCurrentIndex(2 if (memorizada or self._objetivo is not None) else 0)
             if not (memorizada or self._objetivo is not None):
                 self.l_vacio.setText("Acción continua: vale 1 mientras la etapa está activa, y no lleva nada más. Cambie el tipo "
-                                     "para añadirle una condición, o para que asigne un valor.")
+                                     "(botón derecho sobre la acción, «Tipo de acción») para añadirle una condición, o para que "
+                                     "asigne un valor.")
         else:
             self.accion.caja_valor.setVisible(False)
         if self._objetivo is not None:

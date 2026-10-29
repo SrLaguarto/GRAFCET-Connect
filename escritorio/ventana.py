@@ -18,11 +18,11 @@ from typing import Any
 
 from PySide6.QtCore import QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDockWidget, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
                                QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
                                QPushButton, QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
-                               QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget)
+                               QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from grafcet.diagnostics import DiagnosticError
 from grafcet.examples import EJEMPLOS
@@ -33,7 +33,7 @@ from grafcet.view import Vista, auto_layout, layout_from_presentation, presentat
 
 from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion
-from .propiedades import PanelPropiedades, Paleta, PaletaAcciones
+from .propiedades import PanelPropiedades, Paleta
 from .variables import PanelVariables
 
 TITULO = "Simulador GRAFCET"
@@ -44,7 +44,8 @@ AYUDA_EDICION = {
     "seleccionar": "Clic selecciona un elemento y muestra sus opciones abajo; arrastrarlo lo mueve (a la "
                    "rejilla, y no encima de otro elemento); de un punto de unión (arriba o abajo de una etapa o transición, "
                    "a la derecha de una etapa) sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y deshacen y rehacen. Los "
-                   "elementos y las acciones nuevos se arrastran desde las carpetas de la izquierda.",
+                   "elementos y las acciones nuevos se arrastran desde la paleta de la izquierda; otro tipo de acción, con botón derecho "
+                   "sobre ella.",
 }
 NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar"}
 AVISO = "Núcleo con perfil provisional · no declara conformidad con IEC 60848 / UNE-EN 60848"
@@ -365,44 +366,43 @@ class Ventana(QMainWindow):
         pag_scroll.setWidget(pag)
         self.derecho.addWidget(pag_scroll)
         self.derecho.setMinimumWidth(300)  # al simular; al editar, el mismo margen de ancho que el panel izquierdo
-        # Arriba, el dibujo y el panel derecho; abajo, a todo el ancho de los dos, el panel inferior (traza,
-        # opciones): así una fórmula larga se ve en una línea. El panel izquierdo es un dock, a toda la altura.
+        # Izquierda: la paleta (una sola lista de fichas); solo al editar. Las opciones de lo seleccionado van abajo.
+        self.paleta = Paleta()
+        self.paleta.setMinimumWidth(self.paleta.ancho_minimo())  # las dos columnas de fichas, sin cortarse
+        self.paleta.ayuda.connect(self._ayuda_ficha)  # un clic en una ficha solo muestra su ayuda
+        self.paleta.escala = self.diagrama.escala
+        self.dock = QWidget()  # panel izquierdo: solo a la altura del dibujo, no del panel inferior
+        vl = QVBoxLayout(self.dock)
+        vl.setContentsMargins(0, 0, 0, 0)
+        vl.addWidget(self.paleta)
+        vl.addStretch(1)
+        # Ancho de los paneles laterales al editar: único y fijo (lo que piden las dos columnas de la paleta y, como mínimo,
+        # lo que hace falta para que la tabla de variables deje ver los nombres), el mismo en el panel izquierdo y en el
+        # derecho; no se pueden estirar, solo plegar
+        self.ancho_lateral = max(self.dock.minimumSizeHint().width(), ANCHO_LATERAL)
+        self.dock.setFixedWidth(self.ancho_lateral)
+        self.dock.hide()
+        # Arriba, el panel izquierdo (solo al editar), el dibujo y el panel derecho; abajo, a todo el ancho de la ventana, el
+        # panel inferior (traza, opciones): así una fórmula larga o dos programadores por bloques caben sin apretarse.
         self.split = QSplitter(Qt.Orientation.Horizontal)
         self.split.addWidget(izq)
         self.split.addWidget(self.derecho)
         self.split.setSizes([880, 460])
+        arriba = QWidget()
+        al = QHBoxLayout(arriba)
+        al.setContentsMargins(0, 0, 0, 0)
+        al.setSpacing(0)
+        al.addWidget(self.dock)
+        al.addWidget(self.split, 1)
         self.vsplit = QSplitter(Qt.Orientation.Vertical)
-        self.vsplit.addWidget(self.split)
+        self.vsplit.addWidget(arriba)
         self.vsplit.addWidget(self.inferior)
+        self.vsplit.setCollapsible(0, False)
+        self.vsplit.setCollapsible(1, False)  # el panel inferior se pliega con su flecha, no arrastrando: nunca por debajo de lo que pide
+        self.vsplit.setStretchFactor(0, 1)  # al agrandar la ventana crece el dibujo; el panel inferior conserva su altura
+        self.vsplit.setStretchFactor(1, 0)
         self.vsplit.setSizes([520, ALTO_INFERIOR["simular"]])
         self.setCentralWidget(self.vsplit)
-        # Izquierda: la paleta (carpetas Elementos y Acciones); solo al editar. Las opciones de lo seleccionado van abajo.
-        self.paleta = Paleta()
-        self.paleta_acciones = PaletaAcciones()
-        self.carpetas = QTabWidget()  # las dos carpetas de la paleta: «Elementos» y «Acciones»
-        for lista, titulo in ((self.paleta, "Elementos"), (self.paleta_acciones, "Acciones")):
-            lista.setMinimumWidth(lista.ancho_minimo())  # las dos columnas de fichas, sin cortarse
-            lista.ayuda.connect(self._ayuda_ficha)  # un clic en una ficha solo muestra su ayuda
-            lista.escala = self.diagrama.escala
-            self.carpetas.addTab(lista, titulo)
-        izq_edit = QWidget()
-        vl = QVBoxLayout(izq_edit)
-        vl.setContentsMargins(0, 0, 0, 0)
-        vl.addWidget(self.carpetas)
-        vl.addStretch(1)
-        self.dock = QDockWidget("Elementos", self)
-        self.dock.setObjectName("dock-elementos")
-        self.dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
-        self.dock.setWidget(izq_edit)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock)
-        # Ancho de los paneles laterales al editar: único y fijo (lo que piden las dos columnas de la paleta y, como mínimo,
-        # lo que hace falta para que la tabla de variables deje ver los nombres), el mismo en el dock y en el panel derecho;
-        # no se pueden estirar, solo plegar
-        self.ancho_lateral = max(self.dock.minimumSizeHint().width(), ANCHO_LATERAL)
-        self.dock.setMinimumWidth(self.ancho_lateral)
-        self.dock.setMaximumWidth(self.ancho_lateral)
-        self.resizeDocks([self.dock], [self.ancho_lateral], Qt.Orientation.Horizontal)
-        self.dock.hide()
         # Barra de estado: aviso de conformidad, lecturas distintas de las decididas, instante lógico
         sb = self.statusBar()
         self.l_aviso = QLabel(AVISO)
@@ -683,8 +683,6 @@ class Ventana(QMainWindow):
         self.split.handle(1).setEnabled(not editar)
         total = max(self.split.width(), 1000)
         self.split.setSizes([total - ancho, ancho] if editar else [880, 460])
-        if editar:
-            self.resizeDocks([self.dock], [ancho], Qt.Orientation.Horizontal)
 
     def _alto_inferior(self, editar: bool) -> None:
         """Al cambiar de modo, el panel inferior recupera la altura que tenía en ese modo (la inicial, o la que dejó el

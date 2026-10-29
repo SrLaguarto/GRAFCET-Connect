@@ -20,21 +20,22 @@ from collections import Counter
 from typing import Any, Callable
 
 from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import (QColor, QCursor, QDrag, QFont, QFontMetricsF, QKeySequence, QPainter, QPen, QPixmap,
-                           QPolygonF, QShortcut)
+from PySide6.QtGui import (QColor, QCursor, QDrag, QFont, QFontMetricsF, QKeySequence, QPainter, QPainterPath, QPen,
+                           QPixmap, QPolygonF, QShortcut)
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit, QMenu, QPushButton, QScrollArea,
                                QSizePolicy, QVBoxLayout, QWidget, QWidgetItem)
 
-from grafcet.expressions import CMP, FUNCS_EXPR, FUNCS_REF, KEYWORDS, ParseError, parse, render
+from grafcet.expressions import CMP, FUNCS_EXPR, FUNCS_REF, KEYWORDS, ParseError, _Parser, parse, render
 from grafcet.notation import a_nucleo, a_usuario, normalizar_espacios, x_etapa
 
 # -- modelo: el árbol de bloques --------------------------------------------------------------------------
 # Un nodo es un diccionario con su clase en "k"; un hueco es None:
 #   var(n, papel)  etapa(n)  const(v)  y(a, b, c…)  o(a, b, c…)  no(a)  sube(a)  baja(a)  temp(t1, t2, a)
-#   cmp(n, op, v)  texto(s)  (lo que no se representa con bloques: aritmética, nombres que no existen)
+#   cmp(n, op, v)  par(a)  texto(s)  (lo que no se representa con bloques: aritmética, nombres que no existen)
+# par(a) es un paréntesis de agrupación (P-IMP-46): se escribe «(…)» y solo agrupa, no cambia lo que significa.
 # Solo el programador de valores de una acción (modo «valor», P-IMP-44): num(v)  vnum(n)  ar(op, a, b)
 HIJOS = {"y": ("a", "b"), "o": ("a", "b"), "no": ("a",), "sube": ("a",), "baja": ("a",), "temp": ("a",),
-         "ar": ("a", "b")}
+         "ar": ("a", "b"), "par": ("a",)}
 ENVUELVEN = frozenset(HIJOS)  # soltados sobre un hueco ocupado, el bloque que había entra en su primer hueco
 HUECO = "__hueco__"  # nombre reservado con que se lee un «?» (hueco) del texto
 OPERADORES_CMP = ("=", "!=", "<", "<=", ">", ">=")
@@ -53,7 +54,7 @@ def nuevo(k: str, **campos: Any) -> dict[str, Any]:
         "var": {"n": None, "papel": "input"}, "etapa": {"n": None}, "const": {"v": 1}, "y": {"a": None, "b": None},
         "o": {"a": None, "b": None}, "no": {"a": None}, "sube": {"a": None}, "baja": {"a": None},
         "temp": {"t1": "3s", "t2": "", "a": None}, "cmp": {"n": None, "op": "=", "v": "0"}, "texto": {"s": ""},
-        "num": {"v": "1"}, "vnum": {"n": None}, "ar": {"op": "+", "a": None, "b": None}}[k]
+        "num": {"v": "1"}, "vnum": {"n": None}, "ar": {"op": "+", "a": None, "b": None}, "par": {"a": None}}[k]
     return {"k": k, **copy.deepcopy(base), **campos}
 
 
@@ -256,10 +257,45 @@ def _dur_usuario(us: int) -> str:
     return f"{us // 1_000_000}s" if us % 1_000_000 == 0 else f"{us // 1000}ms" if us % 1000 == 0 else f"{us}us"
 
 
+class _AnalizadorConGrupos(_Parser):
+    """El analizador del núcleo, que descarta los paréntesis de agrupación, pero aquí cada «( … )» queda como un nodo
+    `grupo` de un operando (solo para pasar a bloques, P-IMP-46): el núcleo, su significado y su forma canónica no cambian.
+    Los paréntesis de una llamada (`rise(…)`, `delay(…)`) no son grupos."""
+
+    def primary(self) -> dict[str, Any]:
+        tipo, valor, _ = self.peek()
+        if tipo == "op" and valor == "(":
+            self.take()
+            nodo = self.or_()
+            self.take("op", ")")
+            return {"operator": "grupo", "operands": [nodo]}
+        return super().primary()
+
+
+def _analizar(nucleo: str) -> dict[str, Any]:
+    """Texto del núcleo -> significado con los paréntesis de agrupación como nodos `grupo`."""
+    return _AnalizadorConGrupos(nucleo, lambda clase, nombre: nombre).parse()
+
+
+def _render_grupos(m: dict[str, Any]) -> str:
+    """`render` del núcleo, que escribe los paréntesis solo donde la precedencia los pide, más los nodos `grupo`: cada
+    uno se escribe como «( … )». Los grupos se apartan con un nombre provisional (que `render` trata como un operando) y
+    se vuelven a poner al final."""
+    grupos: list[str] = []
+
+    def sin_grupos(o: dict[str, Any]) -> dict[str, Any]:
+        if o["operator"] == "grupo":
+            grupos.append(_render_grupos(o["operands"][0]))
+            return {"operator": "ref", "reference": f"__grupo{len(grupos) - 1}__"}
+        return {**o, "operands": [sin_grupos(x) for x in o["operands"]]} if "operands" in o else o
+    t = render(sin_grupos(m), lambda r: r)
+    return re.sub(r"(?<![\w`])__grupo(\d+)__(?![\w`])", lambda mo: f"({grupos[int(mo.group(1))]})", t)
+
+
 def _crudo_de(m: dict[str, Any]) -> str:
     """El significado como texto del usuario; las duraciones (que `render` da en µs) como las escribe quien dibuja."""
     t = re.sub(r"`[^`]*`|(?<![\w.])(\d+) us\b", lambda mo: mo.group(0) if mo.group(1) is None
-               else _dur_usuario(int(mo.group(1))), render(m, lambda r: r))
+               else _dur_usuario(int(mo.group(1))), _render_grupos(m))
     return a_usuario(t).replace(HUECO, "?")
 
 
@@ -298,10 +334,14 @@ def _desde_significado(m: dict[str, Any], variables: dict[str, tuple[str, str]],
             m = m["operands"][0]
         operandos.insert(0, m)
         return nuevo("y" if op == "and" else "o", **{c: hijo(o) for c, o in zip(_LETRAS, operandos)})
+    if op == "grupo":
+        return nuevo("par", a=hijo(m["operands"][0]))
     if op in ("not", "rise", "fall"):
         return nuevo({"not": "no", "rise": "sube", "fall": "baja"}[op], a=hijo(m["operands"][0]))
     if op == "delay":
         t1, a, t2 = m["operands"]
+        if a["operator"] == "grupo":  # el paréntesis de `3s/(…)` es de la escritura de «temporizar»; uno más sería un «( )»
+            a = a["operands"][0]
         d1, d2 = _duracion(t1), _duracion(t2)
         return texto() if d1 is None or d2 is None else nuevo("temp", t1=d1, t2=d2, a=hijo(a))
     if op in CMP.values():
@@ -324,8 +364,7 @@ def texto_a_arbol(texto: str, variables: dict[str, tuple[str, str]], etapas: lis
     t = re.sub(r"`[^`]*`|\?", lambda m: HUECO if m.group(0) == "?" else m.group(0), t)
     try:
         nucleo = a_nucleo(t, _etiquetas(etapas), variables.keys(), True)
-        significado = parse(nucleo, lambda clase, nombre: nombre)
-        return _desde_significado(significado, variables, etapas)
+        return _desde_significado(_analizar(nucleo), variables, etapas)
     except ParseError as e:
         raise ValueError(re.sub(r"\s*\(posición \d+\)$", "", str(e)).replace(HUECO, "?")) from e
     except Exception as e:  # noqa: BLE001 - un texto a medias no debe romper la interfaz
@@ -348,6 +387,8 @@ def _desde_valor(m: dict[str, Any], variables: dict[str, tuple[str, str]], etapa
         if nombre == HUECO:
             return None
         return nuevo("vnum", n=nombre) if nombre in variables and variables[nombre][1] != "bool" else texto()
+    if op == "grupo":
+        return nuevo("par", a=_desde_valor(m["operands"][0], variables, etapas))
     if op in _ARIT_OP:
         a, b = m["operands"]
         return nuevo("ar", op=_ARIT_OP[op], a=_desde_valor(a, variables, etapas), b=_desde_valor(b, variables, etapas))
@@ -363,7 +404,7 @@ def texto_a_arbol_valor(texto: str, variables: dict[str, tuple[str, str]], etapa
     t = re.sub(r"`[^`]*`|\?", lambda m: HUECO if m.group(0) == "?" else m.group(0), t)
     try:
         nucleo = a_nucleo(t, _etiquetas(etapas), variables.keys(), False)
-        return _desde_valor(parse(nucleo, lambda clase, nombre: nombre), variables, etapas)
+        return _desde_valor(_analizar(nucleo), variables, etapas)
     except ParseError as e:
         raise ValueError(re.sub(r"\s*\(posición \d+\)$", "", str(e)).replace(HUECO, "?")) from e
     except Exception as e:  # noqa: BLE001 - un texto a medias no debe romper la interfaz
@@ -451,6 +492,8 @@ def _crudo(n: dict[str, Any] | None) -> str:
         return n["v"].strip() or "0"
     if k == "vnum":
         return _citar(n["n"]) if n["n"] else "?"
+    if k == "par":  # el bloque «( )»: siempre se escribe con sus paréntesis
+        return f"({_t(n['a'])})"
     if k == "ar":  # izquierda a su precedencia; derecha a una más (a - (b - c) lleva paréntesis)
         pr = 5 if n["op"] in "+-" else 6
         return f"{_t(n['a'], pr)} {n['op']} {_t(n['b'], pr + 1)}"
@@ -474,6 +517,7 @@ _PAPEL_CAT = {"input": "entrada", "output": "salida", "internal": "interna"}
 PADX, PADX_PILA, PADV, GAP, FILA = 10, 7, 3, 4, 3  # relleno lateral y vertical de un bloque, hueco entre piezas y entre filas
 ALTO = 20  # alto de las piezas (desplegables, campos)
 HUECO_W, HUECO_H = 34, 22
+PAREN_W = 10  # ancho de cada paréntesis del bloque «( )»; miden lo que el bloque que encierran
 SANGRIA = {"no": 8, "sube": 8, "baja": 8, "temp": 8}  # el hijo de un bloque que envuelve, algo hundido
 PUNTA = 8  # cuánto entra la punta de un hexágono
 MARGEN = 6
@@ -495,6 +539,8 @@ class _Caja:
     def __init__(self, nodo: dict[str, Any] | None, ruta: tuple, w: float, h: float, cat: str = "") -> None:
         self.nodo, self.ruta, self.w, self.h, self.cat = nodo, ruta, w, h, cat
         self.items: list[tuple[float, float, Any]] = []
+        self.fantasmas: list[tuple[QRectF, tuple, dict[str, Any]]] = []  # operaciones en línea: sin dibujo propio, pero con sitio
+        self.sin_fondo = False  # no pinta su hexágono (el de fuera ya los rodea): una operación dentro de un paréntesis
 
 
 class Motor:
@@ -553,7 +599,9 @@ class Motor:
         if k == "vnum":
             return [("drop", "n", n["n"] or "elegir")]
         if k == "ar":
-            return [("hijo", "a"), ("txt", "", OP_ARIT[n["op"]]), ("hijo", "b")]
+            return self._plano(n)[0]
+        if k == "par":
+            return [("paren", "izq", "("), ("hijo", "a"), ("paren", "der", ")")]
         return [("campo", "s", n["s"], "texto")]
 
     def categoria(self, n: dict[str, Any]) -> str:
@@ -588,6 +636,8 @@ class Motor:
             return _Pieza("txt", "", vis, False, self.mb.horizontalAdvance(vis), 16)
         if tipo == "boton":
             return _Pieza("boton", e[1], e[2], False, 22, ALTO)
+        if tipo == "paren":
+            return _Pieza("paren", e[1], e[2], False, PAREN_W, 16)
         texto = e[2] or (e[3] if tipo == "campo" else "")
         vacio = tipo == "campo" and not e[2]
         extra = 22 if tipo == "drop" else 12
@@ -598,7 +648,7 @@ class Motor:
         if n is None:
             return HUECO_W
         if ruta not in self.nat:
-            ws = [self.natural(n[e[1]], ruta + (e[1],)) if e[0] == "hijo" else self.pieza(e).w
+            ws = [self.natural(*self._sub(n, e[1], ruta)) if e[0] == "hijo" else self.pieza(e).w
                   for e in self.elementos(n)]
             self.nat[ruta] = 2 * PADX + sum(ws) + GAP * (len(ws) - 1)
         return self.nat[ruta]
@@ -606,12 +656,16 @@ class Motor:
     def caja(self, n: dict[str, Any] | None, ruta: tuple, ancho: float) -> _Caja:
         if n is None:
             return _Caja(None, ruta, HUECO_W, HUECO_H)
+        if n["k"] == "par":
+            return self._caja_par(n, ruta, ancho)
+        if n["k"] == "ar":
+            return self._caja_ar(n, ruta, ancho)
         elems = self.elementos(n)
         c = _Caja(n, ruta, 0, 0, self.categoria(n))
         if self.natural(n, ruta) <= ancho:  # todo en una fila
             x, partes = PADX, []
             for e in elems:
-                p = self.caja(n[e[1]], ruta + (e[1],), self.natural(n[e[1]], ruta + (e[1],))) if e[0] == "hijo" \
+                p = self.caja(*self._sub(n, e[1], ruta), self.natural(*self._sub(n, e[1], ruta))) if e[0] == "hijo" \
                     else self.pieza(e)
                 partes.append((x, p))
                 x += p.w + GAP
@@ -647,7 +701,7 @@ class Motor:
         for e in elems:
             if e[0] == "hijo":
                 vaciar()
-                h = self.caja(n[e[1]], ruta + (e[1],), interior - sangria)
+                h = self.caja(*self._sub(n, e[1], ruta), interior - sangria)
                 c.items.append((px + sangria, y, h))
                 derecha = max(derecha, px + sangria + h.w)
                 y += h.h + FILA
@@ -657,13 +711,110 @@ class Motor:
         c.h, c.w = y - FILA + PADV, derecha + px
         return c
 
+    def _caja_par(self, n: dict[str, Any], ruta: tuple, ancho: float) -> _Caja:
+        """El bloque «( )»: un paréntesis a cada lado del bloque que encierra, tan altos como él (también si éste se apila)."""
+        clave = ruta + ("a",)
+        interior = max(ancho - 2 * PADX - 2 * PAREN_W - 2 * GAP, 40)
+        h = self.caja(n["a"], clave, min(self.natural(n["a"], clave), interior))
+        h.sin_fondo = n["a"] is not None and n["a"]["k"] == "ar"  # una operación dentro de «( )»: ya está rodeada
+        c = _Caja(n, ruta, PADX + 2 * PAREN_W + 2 * GAP + h.w + PADX, h.h + 2 * PADV, self.categoria(n))
+        c.items = [(PADX, PADV, _Pieza("paren", "izq", "(", False, PAREN_W, h.h)),
+                   (PADX + PAREN_W + GAP, PADV, h),
+                   (PADX + PAREN_W + 2 * GAP + h.w, PADV, _Pieza("paren", "der", ")", False, PAREN_W, h.h))]
+        return c
+
+    @staticmethod
+    def _sub(n: dict[str, Any], clave: str | tuple, ruta: tuple) -> tuple[dict[str, Any] | None, tuple]:
+        """El bloque (o hueco) de un hijo y su ruta. La clave es la del hijo, o un camino de claves (las operaciones
+        aritméticas puestas en línea, ver `_plano`)."""
+        camino = clave if isinstance(clave, tuple) else (clave,)
+        return obtener(n, camino), ruta + camino
+
+    @staticmethod
+    def _prec_ar(n: dict[str, Any]) -> int:
+        return 5 if n["op"] in "+-" else 6
+
+    def _plano(self, n: dict[str, Any]) -> tuple[list[tuple], list[tuple]]:
+        """Los elementos de una operación aritmética, con puestas en línea las operaciones encadenadas que, escritas, no
+        llevan paréntesis (la de la izquierda de igual o mayor precedencia, la de la derecha de mayor): `a - b + c` se ve
+        «a − b + c», de izquierda a derecha, y no con bloques uno dentro de otro. Una que sí los lleva queda como un bloque
+        dentro. Devuelve los elementos (`("hijo", camino)` o `("txt", "", operador)`) y las operaciones en línea
+        (camino, nodo, primer elemento, último + 1)."""
+        elems: list[tuple] = []
+        fantasmas: list[tuple] = []
+
+        def rec(m: dict[str, Any], camino: tuple) -> None:
+            pr, desde = self._prec_ar(m), len(elems)
+            for clave, req in (("a", pr), ("b", pr + 1)):
+                if clave == "b":
+                    elems.append(("txt", "", OP_ARIT[m["op"]]))
+                h = m[clave]
+                if h is not None and h["k"] == "ar" and self._prec_ar(h) >= req:
+                    rec(h, camino + (clave,))
+                else:
+                    elems.append(("hijo", camino + (clave,)))
+            if camino:
+                fantasmas.append((camino, m, desde, len(elems)))
+        rec(n, ())
+        return elems, fantasmas
+
+    def _caja_ar(self, n: dict[str, Any], ruta: tuple, ancho: float) -> _Caja:
+        """Una operación aritmética: sus elementos en una fila si caben y, si no, en varias, pasando de línea sin dejar un
+        operador al final de una (va con el operando que le sigue)."""
+        elems, fantasmas = self._plano(n)
+        c = _Caja(n, ruta, 0, 0, self.categoria(n))
+        px = PADX if self.natural(n, ruta) <= ancho else PADX_PILA
+        interior = max(ancho - 2 * px, 40)
+        partes: list[Any] = []
+        for e in elems:
+            if e[0] == "hijo":
+                nodo, r = self._sub(n, e[1], ruta)
+                partes.append(self.caja(nodo, r, min(self.natural(nodo, r), interior)))
+            else:
+                partes.append(self.pieza(e))
+        unidades: list[list[int]] = []  # un operador va con el operando que le sigue
+        for i, e in enumerate(elems):
+            if unidades and elems[unidades[-1][-1]][0] == "txt":
+                unidades[-1].append(i)
+            else:
+                unidades.append([i])
+        lineas: list[list[int]] = [[]]
+        x = 0.0
+        for u in unidades:
+            ancho_u = sum(partes[i].w for i in u) + GAP * (len(u) - 1)
+            if lineas[-1] and x + ancho_u > interior:
+                lineas.append([])
+                x = 0.0
+            lineas[-1].extend(u)
+            x += ancho_u + GAP
+        rects: dict[int, tuple[float, float, float, float]] = {}
+        y, derecha = float(PADV), 0.0
+        for linea in lineas:
+            h = max(partes[i].h for i in linea)
+            x = float(px)
+            for i in linea:
+                p = partes[i]
+                c.items.append((x, y + (h - p.h) / 2, p))
+                rects[i] = (x, y + (h - p.h) / 2, p.w, p.h)
+                x += p.w + GAP
+            derecha = max(derecha, x - GAP)
+            y += h + FILA
+        c.h, c.w = y - FILA + PADV, derecha + px
+        for camino, nodo, desde, hasta in fantasmas:
+            rs = [rects[i] for i in range(desde, hasta)]
+            x0, y0 = min(r[0] for r in rs) - 3, min(r[1] for r in rs) - 2
+            x1, y1 = max(r[0] + r[2] for r in rs) + 3, max(r[1] + r[3] for r in rs) + 2
+            c.fantasmas.append((QRectF(x0, y0, x1 - x0, y1 - y0), ruta + camino, nodo))
+        return c
+
     # -- registro de lo que hay en cada sitio (para el ratón)
     def registrar(self, c: _Caja, ox: float, oy: float, bloques: list, piezas: list) -> None:
         bloques.append((QRectF(ox, oy, c.w, c.h), c.ruta, c.nodo))
+        bloques.extend((r.translated(ox, oy), ruta, nodo) for r, ruta, nodo in c.fantasmas)
         for x, y, it in c.items:
             if isinstance(it, _Caja):
                 self.registrar(it, ox + x, oy + y, bloques, piezas)
-            elif it.tipo != "txt":
+            elif it.tipo not in ("txt", "paren"):
                 piezas.append((QRectF(ox + x, oy + y, it.w, it.h), it.tipo, c.ruta, it.clave))
 
     # -- dibujo
@@ -684,9 +835,10 @@ class Motor:
             p.drawPolygon(self.hexagono(r.adjusted(0.5, 0.5, -0.5, -0.5)))
         else:
             color = QColor(COLORES[c.cat])
-            p.setPen(QPen(color.darker(145), 1.2))
-            p.setBrush(color)
-            p.drawPolygon(self.hexagono(r.adjusted(0.5, 0.5, -0.5, -0.5)))
+            if not c.sin_fondo:
+                p.setPen(QPen(color.darker(145), 1.2))
+                p.setBrush(color)
+                p.drawPolygon(self.hexagono(r.adjusted(0.5, 0.5, -0.5, -0.5)))
             for x, y, it in c.items:
                 if isinstance(it, _Caja):
                     self.pintar(p, it, ox + x, oy + y, color, objetivo)
@@ -696,12 +848,27 @@ class Motor:
             p.setPen(QPen(QColor("#FFD43B"), 2.6))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawPolygon(self.hexagono(r.adjusted(-0.5, -0.5, 0.5, 0.5)))
+        for fr, ruta, _ in c.fantasmas:  # una operación puesta en línea que recibiría lo arrastrado: se remarca su tramo
+            if objetivo is not None and ruta == objetivo:
+                p.setPen(QPen(QColor("#FFD43B"), 2.6))
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawRoundedRect(fr.translated(ox, oy), 6, 6)
 
     def _pintar_pieza(self, p: QPainter, it: _Pieza, r: QRectF) -> None:
         if it.tipo == "txt":
             p.setFont(self.fb)
             p.setPen(QColor("#FFFFFF"))
             p.drawText(r, Qt.AlignmentFlag.AlignCenter, it.texto)
+            return
+        if it.tipo == "paren":  # un paréntesis alto y curvo, en blanco
+            izq = it.clave == "izq"
+            punta, panza = (r.right() - 2, r.left() + 1.5) if izq else (r.left() + 2, r.right() - 1.5)
+            camino = QPainterPath(QPointF(punta, r.top() + 1))
+            camino.cubicTo(QPointF(panza, r.top() + r.height() * 0.28), QPointF(panza, r.bottom() - r.height() * 0.28),
+                           QPointF(punta, r.bottom() - 1))
+            p.setPen(QPen(QColor("#FFFFFF"), 2.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPath(camino)
             return
         if it.tipo == "boton":  # «+» añade un hueco
             p.setPen(QPen(QColor(255, 255, 255, 200), 1.2))
@@ -1064,7 +1231,7 @@ class PaletaBloques(_Superficie):
             numericas = sorted((nom for nom, (_, t) in v.items() if t != "bool"), key=self._orden)
             nodos = [nuevo("vnum", n=nom) for nom in numericas] or [nuevo("vnum", n=None)]
         elif clave == "aritm":
-            nodos = [nuevo("ar", op=o) for o in OP_ARIT]
+            nodos = [nuevo("ar", op=o) for o in OP_ARIT] + [nuevo("par")]
         elif clave in PAPEL:
             validas = sorted((nom for nom, (r, t) in v.items() if r == PAPEL[clave] and t == "bool"), key=self._orden)
             nodos = [var(nom, PAPEL[clave]) for nom in validas] or [var(None, PAPEL[clave])]
@@ -1072,8 +1239,8 @@ class PaletaBloques(_Superficie):
             por_numero = lambda x: (0, int(x[1:]), "") if re.fullmatch(r"X\d+", x) else (1, 0, x.lower())  # noqa: E731
             nodos = [nuevo("etapa", n=x) for x in sorted(etapas, key=por_numero)] or [nuevo("etapa", n=None)]
         elif clave == "operador":
-            nodos = [nuevo("y"), nuevo("o"), nuevo("no"), nuevo("sube"), nuevo("baja"), nuevo("const", v=1),
-                     nuevo("const", v=0)]
+            nodos = [nuevo("y"), nuevo("o"), nuevo("no"), nuevo("par"), nuevo("sube"), nuevo("baja"),
+                     nuevo("const", v=1), nuevo("const", v=0)]
         elif clave == "comparacion":
             numericas = [nom for nom, (_, t) in v.items() if t != "bool"]
             c = previo.get("cmp") or nuevo("cmp")
