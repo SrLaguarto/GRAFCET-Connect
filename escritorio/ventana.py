@@ -172,6 +172,7 @@ class Ventana(QMainWindow):
         self.panel_es.probar.connect(lambda: self._conectar_modbus(prueba=True))
         self.panel_es.desconectar.connect(self._desconectar_modbus)
         self.panel_es.guardar.connect(self._guardar_config_modbus)
+        self.panel_es.cargar_archivo.connect(self._abrir_config_modbus)
         self._barra_herramientas()
         self._paneles()
         self.cargar_ejemplo(next(iter(EJEMPLOS)))
@@ -1068,6 +1069,16 @@ class Ventana(QMainWindow):
             self.panel_es.estado.setText(f"Configuración guardada: {ruta}")
         except (ValueError, OSError) as exc:
             self.panel_es.estado.setText(f"No se pudo guardar: {exc}")
+
+    def _abrir_config_modbus(self):
+        nombre, _ = QFileDialog.getOpenFileName(self, "Cargar configuración Modbus", "", "JSON (*.json)")
+        if nombre:
+            try:
+                config = Configuracion.cargar(Path(nombre), self.v.doc)
+                self.panel_es.cargar(self.v.doc, config)
+                self.panel_es.estado.setText("Mapa cargado · desconectado")
+            except (ValueError, OSError) as exc:
+                self.panel_es.estado.setText(f"No se pudo cargar: {exc}")
 
     def _conectar_modbus(self, prueba=False):
         if self.modo != "simular" or not self.v or not self.v.s or self.v.s.status != "pausada-estable":

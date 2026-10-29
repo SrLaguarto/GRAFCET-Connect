@@ -2,6 +2,7 @@
 import socketserver
 import struct
 import threading
+import time
 import unittest
 from contextlib import contextmanager
 
@@ -9,13 +10,16 @@ from conexion.modbus import ClienteModbus, ErrorModbus
 
 
 @contextmanager
-def servidor(responder):
+def servidor(responder, transformar=None):
     class Handler(socketserver.BaseRequestHandler):
         def handle(self):
             def recibir(n):
                 datos = b""
                 while len(datos) < n:
-                    parte = self.request.recv(n - len(datos))
+                    try:
+                        parte = self.request.recv(n - len(datos))
+                    except OSError:
+                        return None
                     if not parte:
                         return None
                     datos += parte
@@ -32,6 +36,8 @@ def servidor(responder):
                 if respuesta is None:
                     return
                 datos = struct.pack(">HHHB", tid, 0, len(respuesta) + 1, unidad) + respuesta
+                if transformar:
+                    datos = transformar(datos)
                 try:
                     for octeto in datos:  # obliga al cliente a soportar fragmentación TCP
                         self.request.sendall(bytes([octeto]))
@@ -53,6 +59,26 @@ def servidor(responder):
 
 
 class ModbusTests(unittest.TestCase):
+    def test_SFIO14_mbap_y_timeout(self):
+        """REQ-ROB-01: cabecera incoherente y servidor silencioso no bloquean el cliente."""
+        for posicion, valor in ((1, 99), (3, 1), (6, 99), (4, 1)):
+            def alterar(datos):
+                b = bytearray(datos)
+                b[posicion] = valor
+                return bytes(b)
+            with self.subTest(posicion=posicion), servidor(lambda p: b"\x02\x01\x01", alterar) as c:
+                with self.assertRaises(ErrorModbus):
+                    c.leer_bits(0)
+        def lento(p):
+            time.sleep(.2)
+            return b"\x02\x01\x01"
+        with servidor(lento) as c:
+            c.timeout = .03
+            inicio = time.monotonic()
+            with self.assertRaises(ErrorModbus):
+                c.leer_bits(0)
+            self.assertLess(time.monotonic() - inicio, .15)
+
     def test_SFIO01_digitales_fragmentacion(self):
         """REQ-SIM-02: E/S externas por transporte separado del motor."""
         peticiones = []

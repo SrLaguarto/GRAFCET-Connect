@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import socket
 import struct
+from time import monotonic
 
 
 class ErrorModbus(Exception):
@@ -32,6 +33,10 @@ class ClienteModbus:
     def _recibir(self, cantidad: int) -> bytes:
         datos = bytearray()
         while len(datos) < cantidad:
+            restante = self._limite - monotonic()
+            if restante <= 0:
+                raise ErrorModbus("Tiempo de espera Modbus agotado")
+            self._socket.settimeout(restante)
             bloque = self._socket.recv(cantidad - len(datos))
             if not bloque:
                 raise ErrorModbus("El servidor cerró la conexión")
@@ -44,6 +49,8 @@ class ClienteModbus:
         self._transaccion = (self._transaccion + 1) & 0xffff
         cabecera = struct.pack(">HHHB", self._transaccion, 0, len(datos) + 2, self.unidad)
         try:
+            self._limite = monotonic() + self.timeout
+            self._socket.settimeout(self.timeout)
             self._socket.sendall(cabecera + bytes([funcion]) + datos)
             tid, protocolo, longitud, unidad = struct.unpack(">HHHB", self._recibir(7))
             if (tid, protocolo, unidad) != (self._transaccion, 0, self.unidad) or not 2 <= longitud <= 254:
@@ -86,3 +93,22 @@ class ClienteModbus:
         if respuesta != prefijo:
             self.cerrar()
             raise ErrorModbus("Confirmación de escritura inválida")
+
+    def leer_registros(self, direccion: int, cantidad: int = 1, *, entradas: bool = True) -> list[int]:
+        self._rango(direccion, cantidad, 125)
+        datos = self._peticion(4 if entradas else 3, struct.pack(">HH", direccion, cantidad))
+        if len(datos) != cantidad * 2 + 1 or datos[0] != cantidad * 2:
+            self.cerrar()
+            raise ErrorModbus("Longitud de lectura de registros inválida")
+        return list(struct.unpack(f">{cantidad}H", datos[1:]))
+
+    def escribir_registros(self, direccion: int, valores: list[int]):
+        self._rango(direccion, len(valores), 123)
+        if any(type(v) is not int or not 0 <= v <= 65535 for v in valores):
+            raise ValueError("Los registros requieren enteros UINT16 de transporte")
+        prefijo = struct.pack(">HH", direccion, len(valores))
+        datos = struct.pack(f">{len(valores)}H", *valores)
+        respuesta = self._peticion(16, prefijo + bytes([len(datos)]) + datos)
+        if respuesta != prefijo:
+            self.cerrar()
+            raise ErrorModbus("Confirmación de registros inválida")

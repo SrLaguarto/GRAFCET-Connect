@@ -27,7 +27,7 @@ class Adaptador:
                     raise ValueError("Registro de entrada inválido")
                 numero = raw - 65536 if senal.formato == "INT16" and raw >= 32768 else raw
                 valor = check_fits(v.type, Fraction(numero) / Fraction(senal.escala))
-            if not in_domain(v.type, valor, v.domain):
+            if not in_domain(v.type, v.domain, valor):
                 raise ValueError(f"Entrada {v.name} fuera de dominio")
             if s.z.values[senal.variable] != valor:
                 cambios[senal.variable] = valor

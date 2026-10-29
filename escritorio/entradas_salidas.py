@@ -1,6 +1,4 @@
 """Panel horizontal de E/S externas y configuración del mapa Modbus."""
-from fractions import Fraction
-
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox,
@@ -15,6 +13,7 @@ class PanelES(QWidget):
     desconectar = Signal()
     probar = Signal()
     guardar = Signal()
+    cargar_archivo = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -75,6 +74,8 @@ class PanelES(QWidget):
         self.b_aplicar.clicked.connect(self._aplicar)
         self.b_guardar = QPushButton("Guardar configuración…")
         self.b_guardar.clicked.connect(self.guardar)
+        self.b_cargar = QPushButton("Cargar configuración…")
+        self.b_cargar.clicked.connect(self.cargar_archivo)
         self.b_probar = QPushButton("Probar conexión")
         self.b_probar.clicked.connect(self.probar)
         self.b_conectar = QPushButton("Conectar")
@@ -82,7 +83,7 @@ class PanelES(QWidget):
         self.b_desconectar = QPushButton("Desconectar")
         self.b_desconectar.clicked.connect(self.desconectar)
         self.b_desconectar.setEnabled(False)
-        for b in (self.b_aplicar, self.b_guardar, self.b_probar, self.b_conectar, self.b_desconectar):
+        for b in (self.b_aplicar, self.b_cargar, self.b_guardar, self.b_probar, self.b_conectar, self.b_desconectar):
             botones.addWidget(b)
         raiz.addLayout(botones)
         nota = QLabel("Factory I/O: driver Modbus TCP/IP Server. Escala: valor GRAFCET = registro / escala. "
@@ -194,6 +195,6 @@ class PanelES(QWidget):
 
     def ocupado(self, on):
         self.config_widget.setEnabled(not on)
-        for b in (self.b_aplicar, self.b_guardar, self.b_probar, self.b_conectar):
+        for b in (self.b_aplicar, self.b_cargar, self.b_guardar, self.b_probar, self.b_conectar):
             b.setEnabled(not on)
         self.b_desconectar.setEnabled(on)

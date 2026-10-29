@@ -17,6 +17,27 @@ def esperar(c, condicion, ejecutar=False):
 
 
 class CicloTests(unittest.TestCase):
+    def test_SFIO15_temporizacion_sin_cambios_sensor(self):
+        """REQ-TMP-02: el reloj existente dispara salidas aunque la muestra no cambie."""
+        with servidor(lambda p: b"\x02\x01\x01" if p[0] == 2 else p[:5]) as sc:
+            m = M().var("sensor").var("motor", "output").step("E0", True)
+            m.cont("E0", "motor", "delay(1s, sensor, 0s)")
+            s = session(m.compile())
+            cfg = Configuracion(puerto=sc.puerto, periodo_ms=20,
+                                senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            c = Coordinador()
+            try:
+                c.iniciar(cfg, s)
+                esperar(c, lambda: c.estado == "conectado")
+                esperar(c, lambda: s.z.values["sensor"], True)
+                self.assertFalse(s.z.outputs["motor"])
+                s.advance_to(1000000)  # representa el avance del único QTimer de la ventana
+                esperar(c, lambda: c.escritos.get("motor") is True, True)
+                c.desconectar()
+                esperar(c, lambda: c.estado == "desconectado")
+            finally:
+                c.cerrar()
+
     def test_SFIO09_ciclo_pausa_diagnostico(self):
         """REQ-SIM-02: ciclo completo, pausa conserva y diagnóstico solicita cero."""
         peticiones = []
