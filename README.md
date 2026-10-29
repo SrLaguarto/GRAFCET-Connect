@@ -42,6 +42,10 @@ dibujo. Con «Archivo > Nuevo grafcet», o «Editar» sobre un ejemplo o un mode
 
 ### Conectar con Factory I/O (P-IMP-50)
 
+Para una primera prueba sin crear un modelo, abra **E/S externas → Abrir prueba
+guiada** y siga [la guía paso a paso](docs/PRIMERA_CONEXION_FACTORY_IO.md). El
+ejemplo coincide con el mapa facilitado por el responsable; compruebe su IP actual.
+
 En Factory I/O seleccione **Modbus TCP/IP Server** y asigne sensores a entradas
 discretas/input registers y actuadores a coils/holding registers. Confirme IP,
 puerto, Slave ID y direcciones en su instalación; no se asignan automáticamente.

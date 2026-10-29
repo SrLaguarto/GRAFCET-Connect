@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-29T12:03:46+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 302 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-29T12:32:30+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 304 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 202 casos, 205 pruebas, 205 pasan.
+Pruebas suplementarias S-xx: 204 casos, 207 pruebas, 207 pasan.
 
 ## Requisitos
 
@@ -94,8 +94,8 @@ Pruebas suplementarias S-xx: 202 casos, 205 pruebas, 205 pasan.
 | REQ-EDT-13 | P/alta | 07 | PEND-UI | — | T-26a —, T-26b — | Teclado y accesibilidad |
 | REQ-EDT-14 | P/crítica | 07 | IMPL-P | editor, engine | T-23d ✔, S-EDI03 ✔, S-EDI107 ✔, S-EDI108 ✔, S-EDI109 ✔, S-EDI73 ✔ | Edición semántica = revisión nueva; la ejecución conserva la suya |
 | REQ-SIM-01 | P/crítica | 08 | IMPL-P | engine | T-23a ✔, T-23b ✔ | Estados de sesión, pausas en frontera completa, microavance, puntos antes/después |
-| REQ-SIM-02 | P/crítica | 08 | IMPL-P | scenario, engine | T-10b ✔, T-23c ✔, S-FIO01 ✔, S-FIO06 ✔, S-FIO11 ✔, S-FIO09 ✔, S-FIO16 ✔, S-APP04 ✔ | Escenarios y entradas manuales registradas con origen y ordinal |
-| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-EDI109 ✔, S-EDI113 ✔, S-EDI22 ✔, S-EDI27 ✔, S-EDI32 ✔, S-EDI40 ✔, S-EDI78 ✔, S-FIO08 ✔, S-FIO16 ✔, S-APP14 ✔, S-APP15 ✔, S-APP05 ✔, S-APP09 ✔, S-APP10 ✔, S-APP11 ✔, S-APP12 ✔, S-APP13 ✔, S-APP16 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
+| REQ-SIM-02 | P/crítica | 08 | IMPL-P | scenario, engine | T-10b ✔, T-23c ✔, S-FIO01 ✔, S-FIO06 ✔, S-FIO11 ✔, S-FIO09 ✔, S-FIO16 ✔, S-FIO18 ✔, S-APP04 ✔ | Escenarios y entradas manuales registradas con origen y ordinal |
+| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-EDI109 ✔, S-EDI113 ✔, S-EDI22 ✔, S-EDI27 ✔, S-EDI32 ✔, S-EDI40 ✔, S-EDI78 ✔, S-FIO08 ✔, S-FIO16 ✔, S-FIO17 ✔, S-APP14 ✔, S-APP15 ✔, S-APP05 ✔, S-APP09 ✔, S-APP10 ✔, S-APP11 ✔, S-APP12 ✔, S-APP13 ✔, S-APP16 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
 | REQ-SIM-04 | P/crítica | 08 | IMPL-P | engine | T-23c ✔, T-22f ✔, T-23f ✔, S-OPT03d ✔ | Instantánea con Z completo y compatibilidad exacta; dentro de recorrido D-INSTANTANEA-FASE |
 | REQ-SIM-05 | P/crítica | 08 | IMPL-P | trace | T-04a ✔, T-22g ✔, S-OPT03b ✔ | Traza con conjuntos E, causas, cierre y digest |
 | REQ-SIM-06 | P/crítica | 08 | IMPL-P | engine | T-09d ✔, T-23b ✔ | Observar y pausar no modifican comportamiento |
@@ -413,6 +413,8 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-FIO14 | REQ-ROB-01 | pasa | `test_SFIO14_mbap_y_timeout` | cabecera incoherente y servidor silencioso no bloquean el cliente. |
 | S-FIO15 | REQ-TMP-02 | pasa | `test_SFIO15_temporizacion_sin_cambios_sensor` | el reloj existente dispara salidas aunque la muestra no cambie. |
 | S-FIO16 | REQ-SIM-02, REQ-SIM-03 | pasa | `test_SFIO16_ventana_ciclo_y_reinicio` | controles Qt y descarte al reiniciar sesión. |
+| S-FIO17 | REQ-SIM-03 | pasa | `test_SFIO17_etiquetas_y_direcciones_independientes` | etiquetas explicadas conservan claves de conexión y separan áreas. |
+| S-FIO18 | REQ-SIM-02 | pasa | `test_SFIO18_proyecto_listo_y_avisos` | proyecto manual preparado y mensajes accionables sin red. |
 | S-H05 | REQ-EVT-03, REQ-SEM-05 | pasa | `test_SH05_activar_etapa_ya_activa_no_ejecuta_sus_acciones` | hallazgo H-05, cerrado por el comparador (3.3 A). Con «detener», U-04. |
 | S-H07 | REQ-ACT-02, REQ-SEM-01 | pasa | `test_SH07_memoria_inicial_no_nula_no_compila` | hoja 08, 1.5 A (cierra H-07); otro valor inicial se pone al activar la etapa inicial. |
 | S-H08 | REQ-JER-01, REQ-MOD-07 | pasa | `test_SH08_parcial_dentro_de_otro` | hallazgo H-08, cerrado por el responsable (8.1 C): sin encapsulante no compila; como recinto, sí. |

@@ -183,6 +183,7 @@ class Ventana(QMainWindow):
         self.panel_es.desconectar.connect(self._desconectar_modbus)
         self.panel_es.guardar.connect(self._guardar_config_modbus)
         self.panel_es.cargar_archivo.connect(self._abrir_config_modbus)
+        self.panel_es.abrir_prueba.connect(self._abrir_prueba_modbus)
         self._barra_herramientas()
         self._paneles()
         self.cargar_ejemplo(next(iter(EJEMPLOS)))
@@ -1093,13 +1094,27 @@ class Ventana(QMainWindow):
                 self.panel_es.estado.setText(f"No se pudo cargar: {exc}")
 
     def _conectar_modbus(self, prueba=False):
-        if self.modo != "simular" or not self.v or not self.v.s or self.v.s.status != "pausada-estable":
-            self.panel_es.estado.setText("Simule un modelo compilable y estable antes de conectar")
+        if self.modo != "simular":
+            self.panel_es.estado.setText("Desconectado. Pulsa «Simular» en la barra superior antes de conectar.")
+            return
+        if not self.v or not self.v.s:
+            detalle = ""
+            if self.v:
+                diagnosticos = self.v.compile_diags or self.v.start_diags
+                detalle = " · " + str(diagnosticos[0]) if diagnosticos else ""
+            self.panel_es.estado.setText("Desconectado. El GRAFCET no está listo: revisa los diagnósticos en la pestaña «GRAFCET»."
+                                        + detalle + " Puedes abrir el proyecto de prueba preparado en pruebas_manuales/factoryio_digital/manifest.json.")
+            return
+        if self.v.s.status != "pausada-estable":
+            diagnosticos = self.v.start_diags or self.v.s.diagnostics
+            detalle = " · " + str(diagnosticos[-1]) if diagnosticos else ""
+            self.panel_es.estado.setText("Desconectado. El motor está detenido o tiene un recorrido pendiente. "
+                                        "Revisa «GRAFCET» y sus diagnósticos antes de conectar." + detalle)
             return
         try:
             config = self.panel_es.obtener()
             if not config.senales:
-                raise ValueError("Asigne al menos una señal")
+                raise ValueError("Marca al menos una casilla «Usar» en la tabla de variables")
             self.a_ejecutar.setChecked(False)
             self.modbus.iniciar(config, self.v.s, prueba)
             self.panel_es.config = config
@@ -1111,6 +1126,15 @@ class Ventana(QMainWindow):
             self.rt.start()
         except (ValueError, RuntimeError) as exc:
             self.panel_es.estado.setText(f"No se pudo conectar: {exc}")
+
+    def _abrir_prueba_modbus(self):
+        import sys
+        raiz = (Path(sys.executable).parent / "prueba_factoryio_digital" if getattr(sys, "frozen", False) else
+                Path(__file__).resolve().parents[1] / "pruebas_manuales" / "factoryio_digital")
+        if self.abrir_ruta(raiz / "manifest.json"):
+            self.a_ejecutar.setChecked(False)
+            self.pestanas_es.setCurrentIndex(1)
+            self.panel_es.estado.setText("Prueba preparada · desconectado. Comprueba la IP de Factory I/O y pulsa «Probar conexión».")
 
     def _desconectar_modbus(self):
         self.a_ejecutar.setChecked(False)

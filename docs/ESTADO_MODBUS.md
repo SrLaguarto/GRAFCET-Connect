@@ -32,18 +32,29 @@ portable. Ejecutable: dist/GRAFCET/GRAFCET.exe (copiar la carpeta completa).
 
 Límites: lectura/escritura por señal; el periodo efectivo incluye red y turnos Qt,
 pueden perderse pulsos cortos. No tiempo real garantizado; sin garantía de salidas
-al perder red. No hay redondeo/saturación de analógicas. No se ha probado Factory I/O.
+al perder red. No hay redondeo/saturación de analógicas. Control real completo pendiente.
 
 Hoja de aceptación creada: docs/VALIDACION_FACTORY_IO.md, con resultados
 BIEN/MAL/DUDAS/NO PROBADO y comentarios por caso. Pendiente de rellenar;
-no se ha realizado ni declarado una prueba real. Cambio documental: revisado
+en la primera entrega no se realizó una prueba real. Cambio documental: revisado
 contenido y diff; no se repite la batería automática por añadir esta hoja.
 
-Siguiente tarea exacta: el responsable rellena primero los casos 1–7 de esa hoja;
-después continúa con red, reinicio y analógicas, o comunica el primer fallo.
-El responsable abre el portable, confirma edición/driver
-Modbus TCP/IP Server, IP/puerto/Slave ID, asigna una escena sencilla y guarda
-conexion-factoryio.json; comprobar Probar → Conectar → Ejecutar, sensores,
-actuadores, analógicas, pausa y reconexión. Registrar el resultado real antes de
-dar por cerrada la aceptación. Guía breve en README, apartado Factory I/O.
+Seguimiento P-IMP-51: instrucciones iniciales insuficientes para el responsable.
+Etiquetas explicadas, ayudas y diagnóstico concreto; direcciones propuestas por
+área, botón Abrir prueba guiada y proyecto con PM/Input 0, PP/Input 1, Q/Coil 0.
+Guía específica en docs/PRIMERA_CONEXION_FACTORY_IO.md; incluida en el portable
+junto al proyecto. No se sobrescriben ni incluyen en commit las respuestas que
+el responsable empezó a escribir en docs/VALIDACION_FACTORY_IO.md.
+
+Comprobación REAL parcial (29-10-2026): servidor 192.168.1.133:502, unidad 1,
+respondió a FC02, Input 0/1 = False/False. Solo lectura; ninguna salida escrita.
+Esto verifica acceso y lectura real, no movimiento de actuadores desde la GUI.
+Última validación tras P-IMP-51: 304 pruebas OK (18 Modbus), trazabilidad
+regenerada y paquete intacto. Portable reconstruido y arranque/captura OK;
+incluye prueba_factoryio_digital y la guía. Captura a 1020×850 revisada.
+
+Siguiente tarea exacta: el responsable abre el portable actualizado, E/S externas
+→ Abrir prueba guiada y sigue docs/PRIMERA_CONEXION_FACTORY_IO.md. Solo falta
+que confirme lectura al accionar Pulsador marcha y control de Cinta entrada;
+después ampliar validación a pausa, red y analógicas. Registrar los resultados.
 Commits incrementales autorizados; consultar git log. Sin push ni subagentes.

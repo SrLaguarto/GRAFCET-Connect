@@ -41,6 +41,8 @@ def main() -> int:
         return r.returncode
     dist = ROOT / "dist" / NOMBRE
     shutil.copy(ROOT / "escritorio" / "LEEME.txt", dist / "LEEME.txt")
+    shutil.copytree(ROOT / "pruebas_manuales" / "factoryio_digital", dist / "prueba_factoryio_digital", dirs_exist_ok=True)
+    shutil.copy(ROOT / "docs" / "PRIMERA_CONEXION_FACTORY_IO.md", dist / "PRIMERA_CONEXION_FACTORY_IO.md")
     # Un build correcto no basta: comprobar la carga de Qt y el dibujo en el EXE.
     with tempfile.TemporaryDirectory(prefix="grafcet-arranque-") as tmp:
         captura = Path(tmp) / "arranque.png"

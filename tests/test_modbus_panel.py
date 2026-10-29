@@ -18,6 +18,63 @@ from grafcet.builder import M
 
 @unittest.skipUnless(QT, "Falta PySide6")
 class PanelTests(unittest.TestCase):
+    def test_SFIO17_etiquetas_y_direcciones_independientes(self):
+        """REQ-SIM-03: etiquetas explicadas conservan claves de conexión y separan áreas."""
+        app = QApplication.instance() or QApplication([])
+        p = PanelES()
+        try:
+            doc = M().var("PM").var("PP").var("Q", "output").step("0", True).doc
+            p.cargar(doc)
+            self.assertTrue(p.ayuda_vacio.isVisibleTo(p))
+            for fila in range(3):
+                p.tabla.cellWidget(fila, 0).setChecked(True)
+                self.assertIn("(", p.tabla.cellWidget(fila, 4).currentText())
+                self.assertIn("(", p.tabla.cellWidget(fila, 6).currentText())
+            config = p.obtener()
+            self.assertEqual([(s.area, s.direccion, s.formato) for s in config.senales],
+                             [("discrete", 0, "BOOL"), ("discrete", 1, "BOOL"), ("coil", 0, "BOOL")])
+            p._aplicar()
+            self.assertFalse(p.ayuda_vacio.isVisibleTo(p))
+            self.assertEqual(set(p.indicadores), {"PM", "PP", "Q"})
+        finally:
+            p.close()
+            p.deleteLater()
+            app.processEvents()
+
+    def test_SFIO18_proyecto_listo_y_avisos(self):
+        """REQ-SIM-02/03: proyecto manual preparado y mensajes accionables sin red."""
+        from escritorio.ventana import Ventana
+        from conexion.adaptador import Adaptador
+        app = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory() as tmp:
+            w = Ventana(recuperacion=Path(tmp))
+            try:
+                w.panel_es.b_prueba_guiada.click()
+                self.assertIn("pulsador y cinta", w.windowTitle())
+                self.assertEqual(w.pestanas_es.currentIndex(), 1)
+                self.assertFalse(w.a_ejecutar.isChecked())
+                config = w.panel_es.obtener()
+                self.assertEqual(config.host, "192.168.1.133")
+                self.assertEqual([(s.variable, s.area, s.direccion) for s in config.senales],
+                                 [("PM", "discrete", 0), ("PP", "discrete", 1), ("Q", "coil", 0)])
+                a = Adaptador(config, w.v.s)
+                for pm in (True, False):
+                    a.aplicar({"PM": pm, "PP": True})
+                    self.assertEqual(a.valores_salida(), {"Q": pm})
+                for fila in range(3):
+                    w.panel_es.tabla.cellWidget(fila, 0).setChecked(False)
+                w._conectar_modbus()
+                self.assertIn("Usar", w.panel_es.estado.text())
+                self.assertFalse(w.modbus.activo)
+                w.v.s = None
+                w._conectar_modbus()
+                self.assertIn("diagnósticos", w.panel_es.estado.text())
+                self.assertIn("manifest.json", w.panel_es.estado.text())
+            finally:
+                w.close()
+                w.deleteLater()
+                app.processEvents()
+
     def test_SFIO16_ventana_ciclo_y_reinicio(self):
         """REQ-SIM-02, REQ-SIM-03: controles Qt y descarte al reiniciar sesión."""
         from escritorio.ventana import Ventana

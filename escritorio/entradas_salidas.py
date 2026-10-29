@@ -6,6 +6,14 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxL
 
 from conexion.configuracion import Configuracion, Senal
 
+AREAS = {"discrete": "Inputs (entradas digitales 0/1)",
+         "coil": "Coils (señales digitales 0/1)",
+         "input-register": "Input Registers (números de entrada)",
+         "holding": "Holding Registers (números modificables)"}
+FORMATOS = {"BOOL": "BOOL (apagado/encendido)", "INT16": "INT16 (entero con signo)",
+            "UINT16": "UINT16 (entero sin signo)"}
+TIPOS = {"bool": "Booleana (0/1)", "int": "Entera", "decimal": "Decimal", "duration": "Duración"}
+
 
 class PanelES(QWidget):
     aplicar = Signal(object)
@@ -14,6 +22,7 @@ class PanelES(QWidget):
     probar = Signal()
     guardar = Signal()
     cargar_archivo = Signal()
+    abrir_prueba = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -22,12 +31,21 @@ class PanelES(QWidget):
         self.indicadores = {}
         raiz = QVBoxLayout(self)
         self.estado = QLabel("Desconectado · configuración local, sin red")
-        raiz.addWidget(self.estado)
+        self.estado.setWordWrap(True)
+        cabecera = QHBoxLayout()
+        cabecera.addWidget(self.estado, 1)
+        self.b_prueba_guiada = QPushButton("Abrir prueba guiada")
+        self.b_prueba_guiada.clicked.connect(self.abrir_prueba)
+        cabecera.addWidget(self.b_prueba_guiada)
+        raiz.addLayout(cabecera)
         self.modulo = QFrame()
         self.modulo.setObjectName("moduloPLC")
         self.modulo.setStyleSheet("QFrame#moduloPLC {background:#26333d; border:2px solid #75828a; border-radius:8px;}"
                                  "QLabel {color:#edf1f3;} QFrame#senalPLC {border:1px solid #75828a; border-radius:4px;}")
         cuerpo = QVBoxLayout(self.modulo)
+        self.ayuda_vacio = QLabel("Sin señales asignadas. Marca las casillas «Usar» en la tabla inferior y pulsa «Aplicar mapa».")
+        self.ayuda_vacio.setWordWrap(True)
+        cuerpo.addWidget(self.ayuda_vacio)
         cuerpo.addWidget(QLabel("ENTRADAS · sensores → GRAFCET"))
         self.fila_entradas = QHBoxLayout()
         cuerpo.addLayout(self.fila_entradas)
@@ -57,7 +75,9 @@ class PanelES(QWidget):
         self.timeout = QSpinBox()
         self.timeout.setRange(10, 10000)
         self.timeout.setSuffix(" ms")
-        for texto, widget in (("IP / host", self.host), ("Puerto", self.puerto), ("Unidad", self.unidad),
+        self.host.setToolTip("Copia el Host que muestra Factory I/O en CONFIGURACIÓN. Debe coincidir con el servidor activo.")
+        self.unidad.setToolTip("El mismo número que «Esclavo ID» en Factory I/O; normalmente 1.")
+        for texto, widget in (("IP (Host)", self.host), ("Puerto", self.puerto), ("Esclavo ID", self.unidad),
                               ("Periodo", self.periodo), ("Espera", self.timeout)):
             f = QFormLayout()
             f.addRow(texto, widget)
@@ -100,6 +120,7 @@ class PanelES(QWidget):
             w.setValue(valor)
         self.variables = [v for v in doc["variables"] if v["role"] in ("input", "output")]
         mapa = {s.variable: s for s in c.senales}
+        ocupadas = {area: {s.direccion for s in c.senales if s.area == area} for area in AREAS}
         self.tabla.setRowCount(len(self.variables))
         for fila, v in enumerate(self.variables):
             s = mapa.get(v["id"])
@@ -108,23 +129,31 @@ class PanelES(QWidget):
             usar.setChecked(s is not None)
             usar.setEnabled(v["type"]["kind"] in ("bool", "int", "decimal"))
             self.tabla.setCellWidget(fila, 0, usar)
-            for col, texto in ((1, v["name"]), (2, "Entrada" if v["role"] == "input" else "Salida"), (3, v["type"]["kind"])):
+            for col, texto in ((1, v["name"]), (2, "Entrada" if v["role"] == "input" else "Salida"), (3, TIPOS[v["type"]["kind"]])):
                 item = QTableWidgetItem(texto)
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 item.setToolTip(v["id"])
                 self.tabla.setItem(fila, col, item)
             area = QComboBox()
-            area.addItems((["discrete", "coil"] if digital else ["input-register", "holding"])
-                          if v["role"] == "input" else (["coil"] if digital else ["holding"]))
-            area.setCurrentText(s.area if s else area.itemText(0))
+            claves = ((["discrete", "coil"] if digital else ["input-register", "holding"])
+                      if v["role"] == "input" else (["coil"] if digital else ["holding"]))
+            for clave in claves:
+                area.addItem(AREAS[clave], clave)
+            area.setCurrentIndex(area.findData(s.area) if s else 0)
+            area.setToolTip("Normalmente: Inputs para sensores y Coils para actuadores. Copia la asignación de Factory I/O.")
             self.tabla.setCellWidget(fila, 4, area)
             direccion = QSpinBox()
             direccion.setRange(0, 65535)
-            direccion.setValue(s.direccion if s else fila)
+            propuestas = ocupadas[area.currentData()]
+            propuesta = next((n for n in range(65536) if n not in propuestas), 0)
+            direccion.setValue(s.direccion if s else propuesta)
+            propuestas.add(direccion.value())
+            direccion.setToolTip("El número exacto de Input o Coil en Factory I/O: Input 0 → 0, Coil 0 → 0. Son áreas independientes.")
             self.tabla.setCellWidget(fila, 5, direccion)
             formato = QComboBox()
-            formato.addItems(["BOOL"] if digital else ["INT16", "UINT16"])
-            formato.setCurrentText(s.formato if s else formato.itemText(0))
+            for clave in (["BOOL"] if digital else ["INT16", "UINT16"]):
+                formato.addItem(FORMATOS[clave], clave)
+            formato.setCurrentIndex(formato.findData(s.formato) if s else 0)
             self.tabla.setCellWidget(fila, 6, formato)
             self.tabla.setCellWidget(fila, 7, QLineEdit(s.escala if s else "1"))
         self.tabla.resizeColumnsToContents()
@@ -134,8 +163,8 @@ class PanelES(QWidget):
         senales = []
         for fila, v in enumerate(self.variables):
             if self.tabla.cellWidget(fila, 0).isChecked():
-                senales.append(Senal(v["id"], self.tabla.cellWidget(fila, 4).currentText(),
-                                     self.tabla.cellWidget(fila, 5).value(), self.tabla.cellWidget(fila, 6).currentText(),
+                senales.append(Senal(v["id"], self.tabla.cellWidget(fila, 4).currentData(),
+                                     self.tabla.cellWidget(fila, 5).value(), self.tabla.cellWidget(fila, 6).currentData(),
                                      self.tabla.cellWidget(fila, 7).text()))
         c = Configuracion(self.host.text().strip(), self.puerto.value(), self.unidad.value(),
                           self.periodo.value(), self.timeout.value(), self.doc["id"], senales)
@@ -150,10 +179,12 @@ class PanelES(QWidget):
             return
         self.config = c
         self._dibujar()
+        self.estado.setText("Mapa aplicado · desconectado. Pulsa «Probar conexión» y después «Conectar».")
         self.aplicar.emit(c)
 
     def _dibujar(self):
         self.indicadores.clear()
+        self.ayuda_vacio.setVisible(not self.config.senales)
         for fila in (self.fila_entradas, self.fila_salidas):
             while fila.count():
                 item = fila.takeAt(0)
@@ -174,7 +205,9 @@ class PanelES(QWidget):
             nombre.setAlignment(Qt.AlignmentFlag.AlignCenter)
             valor = QLabel("—")
             valor.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            for w in (punto, nombre, QLabel(f"{s.formato} · {s.area}:{s.direccion}"), valor):
+            detalle = QLabel(f"{FORMATOS[s.formato]}\n{AREAS[s.area]} · {s.direccion}")
+            detalle.setWordWrap(True)
+            for w in (punto, nombre, detalle, valor):
                 l.addWidget(w)
             tarjeta.setToolTip(f"{v['name']} ({s.variable}) · escala {s.escala}")
             (self.fila_entradas if v["role"] == "input" else self.fila_salidas).addWidget(tarjeta)
@@ -194,6 +227,7 @@ class PanelES(QWidget):
             led.setStyleSheet(f"color:{color}; font-size:18px")
 
     def ocupado(self, on):
+        self.b_prueba_guiada.setEnabled(not on)
         self.config_widget.setEnabled(not on)
         for b in (self.b_aplicar, self.b_cargar, self.b_guardar, self.b_probar, self.b_conectar):
             b.setEnabled(not on)

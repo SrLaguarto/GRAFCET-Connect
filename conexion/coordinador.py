@@ -30,6 +30,9 @@ class Coordinador:
     def solicitar_ejecucion(self, ejecutar):
         if ejecutar != self._ejecutar:
             self.en_marcha = False
+            if self.estado == "conectado":
+                self.mensaje = ("Conectado · leyendo sensores antes de ejecutar…" if ejecutar else
+                                "Conectado · Pausa · estado y salidas conservados")
             # Una lectura enviada antes de Ejecutar no sirve para reanudar.
             self._descartar_lectura = ejecutar and self.futuro is not None and self.fase == "leer"
             self._ejecutar = ejecutar
@@ -97,6 +100,7 @@ class Coordinador:
                             self.adaptador.aplicar(resultado)
                             if self.adaptador.sesion.status == "pausada-estable":
                                 self.en_marcha = True
+                                self.mensaje = "Conectado · Ejecutando · intercambio de sensores y actuadores activo"
                                 valores = self.adaptador.valores_salida()
                                 self._enviar("escribir", self._escribir, valores)
                     elif fase in ("escribir", "cero"):
