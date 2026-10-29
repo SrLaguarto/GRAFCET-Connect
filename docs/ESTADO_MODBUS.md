@@ -34,7 +34,14 @@ Límites: lectura/escritura por señal; el periodo efectivo incluye red y turnos
 pueden perderse pulsos cortos. No tiempo real garantizado; sin garantía de salidas
 al perder red. No hay redondeo/saturación de analógicas. No se ha probado Factory I/O.
 
-Siguiente tarea exacta: el responsable abre el portable, confirma edición/driver
+Hoja de aceptación creada: docs/VALIDACION_FACTORY_IO.md, con resultados
+BIEN/MAL/DUDAS/NO PROBADO y comentarios por caso. Pendiente de rellenar;
+no se ha realizado ni declarado una prueba real. Cambio documental: revisado
+contenido y diff; no se repite la batería automática por añadir esta hoja.
+
+Siguiente tarea exacta: el responsable rellena primero los casos 1–7 de esa hoja;
+después continúa con red, reinicio y analógicas, o comunica el primer fallo.
+El responsable abre el portable, confirma edición/driver
 Modbus TCP/IP Server, IP/puerto/Slave ID, asigna una escena sencilla y guarda
 conexion-factoryio.json; comprobar Probar → Conectar → Ejecutar, sensores,
 actuadores, analógicas, pausa y reconexión. Registrar el resultado real antes de
