@@ -16,13 +16,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer
+from PySide6.QtCore import QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer, QSize
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
                                QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
                                QPushButton, QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
-                               QTabBar, QToolBar, QToolButton, QVBoxLayout, QWidget)
+                               QTabBar, QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle)
 
 from grafcet.diagnostics import DiagnosticError
 from grafcet.examples import EJEMPLOS
@@ -184,6 +184,7 @@ class Ventana(QMainWindow):
         self.panel_es.guardar.connect(self._guardar_config_modbus)
         self.panel_es.cargar_archivo.connect(self._abrir_config_modbus)
         self.panel_es.abrir_prueba.connect(self._abrir_prueba_modbus)
+        self.panel_es.aplicar.connect(self._persistir_mapa_modbus)
         self._barra_herramientas()
         self._paneles()
         self.cargar_ejemplo(next(iter(EJEMPLOS)))
@@ -199,9 +200,10 @@ class Ventana(QMainWindow):
 
     def _menus(self) -> None:
         bar = self.menuBar()
-        archivo = bar.addMenu("&Archivo")
-        archivo.addAction(self._accion("&Nuevo grafcet", self.nuevo, "Ctrl+N"))
-        a = archivo.addAction("&Abrir modelo…", self.abrir)
+        archivo = bar.addMenu("&Proyecto")
+        self.a_nuevo = self._accion("&Nuevo grafcet", self.nuevo, "Ctrl+N")
+        archivo.addAction(self.a_nuevo)
+        a = self.a_abrir = archivo.addAction("&Abrir modelo…", self.abrir)
         a.setShortcut(QKeySequence.StandardKey.Open)
         self.a_guardar = archivo.addAction("&Guardar proyecto…", self.guardar)
         self.a_guardar.setShortcut(QKeySequence.StandardKey.Save)
@@ -218,7 +220,7 @@ class Ventana(QMainWindow):
             self.grupo.addAction(act)
             self.acciones_ej[key] = act
         # Acciones de la simulación: también van en la barra de herramientas
-        self.a_ejecutar = self._accion("▶ Ejecutar", self._ejecutar, "F5", marcable=True)
+        self.a_ejecutar = self._accion("Ejecutar", self._ejecutar, "F5", marcable=True)
         self.a_ejecutar.setToolTip("Ejecutar / pausar el tiempo real (F5)")
         self.a_paso = self._accion("Paso", self.paso_evolucion, "F10")
         self.a_paso.setToolTip("Una evolución; con la situación estable, hasta el próximo vencimiento (F10)")
@@ -284,6 +286,9 @@ class Ventana(QMainWindow):
         ayuda = bar.addMenu("A&yuda")
         ayuda.addAction("&Leyenda del dibujo", self.leyenda)
         ayuda.addAction("&Acerca de", self.acerca)
+        for menu in (archivo, edicion, ver, ejemplos, sim, m_ajustes, ayuda):
+            bar.removeAction(menu.menuAction())
+            bar.addAction(menu.menuAction())
 
     def _caja(self, titulo: str) -> tuple[QGroupBox, QVBoxLayout]:
         box = QGroupBox(titulo)
@@ -444,6 +449,37 @@ class Ventana(QMainWindow):
         sb.addPermanentWidget(self.l_reloj)
 
     def _barra_herramientas(self) -> None:
+        iconos = {self.a_nuevo: QStyle.StandardPixmap.SP_FileIcon,
+                  self.a_abrir: QStyle.StandardPixmap.SP_DirOpenIcon,
+                  self.a_guardar: QStyle.StandardPixmap.SP_DialogSaveButton,
+                  self.a_deshacer: QStyle.StandardPixmap.SP_ArrowBack,
+                  self.a_rehacer: QStyle.StandardPixmap.SP_ArrowForward,
+                  self.a_borrar: QStyle.StandardPixmap.SP_TrashIcon,
+                  self.a_debajo: QStyle.StandardPixmap.SP_ArrowDown,
+                  self.a_ejecutar: QStyle.StandardPixmap.SP_MediaPlay,
+                  self.a_paso: QStyle.StandardPixmap.SP_MediaSkipForward,
+                  self.a_completar: QStyle.StandardPixmap.SP_MediaSeekForward,
+                  self.a_reiniciar: QStyle.StandardPixmap.SP_BrowserReload}
+        for accion, icono in iconos.items():
+            accion.setIcon(self.style().standardIcon(icono))
+        self.tb_proyecto = QToolBar("Proyecto")
+        self.tb_proyecto.setMovable(False)
+        self.tb_proyecto.setIconSize(QSize(20, 20))
+        for accion in (self.a_nuevo, self.a_abrir, self.a_guardar):
+            self.tb_proyecto.addAction(accion)
+        self.tb_proyecto.widgetForAction(self.a_guardar).setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.addToolBar(self.tb_proyecto)
+        self.setStyleSheet(self.styleSheet() + """
+            QMenuBar { background: #f6f7f9; padding: 2px 6px; }
+            QMenuBar::item { padding: 5px 9px; border-radius: 4px; }
+            QMenuBar::item:selected { background: #e0eaf5; }
+            QToolBar { background: #f6f7f9; border: 0; spacing: 4px; padding: 4px; }
+            QToolBar QToolButton { padding: 5px 7px; border-radius: 5px; }
+            QToolBar QToolButton:hover { background: #e0eaf5; }
+            QToolBar QToolButton:checked { background: #d5e6f7; color: #163e65; }
+            QTabBar::tab { padding: 7px 18px; border: 0; background: #edf0f4; }
+            QTabBar::tab:selected { background: white; border-bottom: 2px solid #377ab8; }
+        """)
         self.tb_modo = QToolBar("Modo")
         self.tb_modo.setMovable(False)
         for a in (self.a_editar, self.a_simular):
@@ -451,6 +487,7 @@ class Ventana(QMainWindow):
         self.addToolBar(self.tb_modo)
         self.tb_sim = QToolBar("Simulación")
         self.tb_sim.setMovable(False)
+        self.tb_sim.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         for a in (self.a_ejecutar, self.a_paso, self.a_completar):
             self.tb_sim.addAction(a)
         self.tb_sim.addSeparator()
@@ -1012,7 +1049,8 @@ class Ventana(QMainWindow):
             self._opciones(d.options())
 
     def _ejecutar(self, on: bool) -> None:
-        self.a_ejecutar.setText("‖ Pausa" if on else "▶ Ejecutar")
+        self.a_ejecutar.setText("Pausa" if on else "Ejecutar")
+        self.a_ejecutar.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause if on else QStyle.StandardPixmap.SP_MediaPlay))
         if self.modbus.activo:
             self.modbus.solicitar_ejecucion(on)
         if on:
@@ -1031,7 +1069,7 @@ class Ventana(QMainWindow):
             self.modbus.tick(ejecutar)
             if self.modbus.estado != "conectado":
                 self.a_ejecutar.setChecked(False)
-            self.panel_es.estado.setText(self.modbus.mensaje)
+            self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
             self.panel_es.ocupado(self.modbus.activo)
             self.refrescar()
             if not self.modbus.activo:
@@ -1051,6 +1089,14 @@ class Ventana(QMainWindow):
         if self.fuente.get("tipo") == "editor" and self.edicion:
             return self.edicion.ruta
         return self.fuente.get("raiz")
+
+    def _persistir_mapa_modbus(self, config):
+        raiz = self._raiz_modbus()
+        if raiz and self.v:
+            try:
+                config.guardar(raiz / ARCHIVO, self.v.doc)
+            except (OSError, ValueError) as exc:
+                self.panel_es.estado.setText(f"No se pudo guardar el mapa: {exc}")
 
     def _cargar_config_modbus(self):
         raiz = self._raiz_modbus()

@@ -1,8 +1,10 @@
 """Panel horizontal de E/S externas y configuración del mapa Modbus."""
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Signal, Qt, QMimeData
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+                               QDialog, QDialogButtonBox, QListWidget, QListWidgetItem,
+                               QAbstractItemView, QMenu, QInputDialog)
 
 from conexion.configuracion import Configuracion, Senal
 
@@ -13,6 +15,95 @@ AREAS = {"discrete": "Inputs (entradas digitales 0/1)",
 FORMATOS = {"BOOL": "BOOL (apagado/encendido)", "INT16": "INT16 (entero con signo)",
             "UINT16": "UINT16 (entero sin signo)"}
 TIPOS = {"bool": "Booleana (0/1)", "int": "Entera", "decimal": "Decimal", "duration": "Duración"}
+MIME_VARIABLE = "application/x-grafconnect-variable"
+
+
+class ListaVariables(QListWidget):
+    def __init__(self):
+        super().__init__()
+        self.setDragEnabled(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.setDefaultDropAction(Qt.DropAction.CopyAction)
+
+    def mimeData(self, items):
+        datos = QMimeData()
+        if items:
+            datos.setData(MIME_VARIABLE, items[0].data(Qt.ItemDataRole.UserRole).encode("utf-8"))
+        return datos
+
+
+class TerminalES(QFrame):
+    def __init__(self, panel, area, direccion, variable=None):
+        super().__init__()
+        self.panel, self.area, self.direccion, self.variable = panel, area, direccion, variable
+        self.setAcceptDrops(not panel.bloqueado)
+        self.setObjectName("senalPLC")
+        self.setMinimumWidth(116)
+        l = QVBoxLayout(self)
+        prefijo = {"discrete": "I", "coil": "Q", "input-register": "AI", "holding": "AQ"}[area]
+        self.led = QLabel(f"●  {prefijo}{direccion:02}")
+        self.led.setStyleSheet("color:#87939c; font-size:18px")
+        self.nombre = QLabel(variable["name"] if variable else "Arrastra aquí")
+        self.valor = QLabel("—" if variable else "")
+        for w in (self.led, self.nombre, self.valor):
+            w.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            l.addWidget(w)
+        self.setToolTip(f"{AREAS[area]} · dirección {direccion}\nArrastra una variable. Botón derecho para quitar o configurar.")
+
+    def _variable_evento(self, evento):
+        if self.panel.bloqueado or not evento.mimeData().hasFormat(MIME_VARIABLE):
+            return None
+        try:
+            vid = bytes(evento.mimeData().data(MIME_VARIABLE)).decode("utf-8")
+        except UnicodeError:
+            return None
+        return vid if self.panel.admite(vid, self.area) else None
+
+    def dragEnterEvent(self, evento):
+        if self._variable_evento(evento):
+            evento.acceptProposedAction()
+
+    def dropEvent(self, evento):
+        vid = self._variable_evento(evento)
+        if vid and self.panel.asignar(vid, self.area, self.direccion):
+            evento.acceptProposedAction()
+
+    def contextMenuEvent(self, evento):
+        if self.panel.bloqueado or not self.variable:
+            return
+        menu = QMenu(self)
+        quitar = menu.addAction("Quitar asignación")
+        ajustar = menu.addAction("Configurar señal…")
+        elegido = menu.exec(evento.globalPos())
+        if elegido == quitar:
+            self.panel.quitar(self.variable["id"])
+        elif elegido == ajustar:
+            self.panel.abrir_configuracion()
+
+
+class EstadoConexion(QLabel):
+    def setText(self, texto):
+        self.setToolTip(texto)
+        if texto.startswith("Conectado"):
+            corto = "Conectado"
+        elif texto.startswith(("Prueba preparada", "Mapa aplicado", "Configuración guardada", "Mapa cargado")):
+            corto = "Desconectado"
+        elif texto.startswith("Desconectado"):
+            corto = "Revisar GRAFCET" if "GRAFCET" in texto else "Desconectado"
+        elif texto.startswith("Conexión probada"):
+            corto = "Conexión probada"
+        else:
+            corto = texto
+        super().setText(corto)
+
+
+class DialogoConfiguracion(QDialog):
+    def closeEvent(self, evento):
+        panel = self.parent()
+        if panel.bloqueado or panel.doc is None or panel._aplicar():
+            evento.accept()
+        else:
+            evento.ignore()
 
 
 class PanelES(QWidget):
@@ -29,27 +120,36 @@ class PanelES(QWidget):
         self.doc = None
         self.config = Configuracion()
         self.indicadores = {}
+        self.terminales = {}
+        self.bloqueado = False
+        self.extras = {a: set() for a in AREAS}
         raiz = QVBoxLayout(self)
-        self.estado = QLabel("Desconectado · configuración local, sin red")
+        self.estado = EstadoConexion()
+        self.estado.setText("Desconectado")
         self.estado.setWordWrap(True)
         cabecera = QHBoxLayout()
+        cabecera.addWidget(QLabel("Modbus TCP"))
+        self.check = QLabel("●")
+        self.check.setStyleSheet("color:#87939c; font-size:22px")
+        cabecera.addWidget(self.check)
         cabecera.addWidget(self.estado, 1)
         self.b_prueba_guiada = QPushButton("Abrir prueba guiada")
         self.b_prueba_guiada.clicked.connect(self.abrir_prueba)
-        cabecera.addWidget(self.b_prueba_guiada)
+        self.b_configuracion = QPushButton("Configuración")
+        self.b_configuracion.clicked.connect(self.abrir_configuracion)
         raiz.addLayout(cabecera)
         self.modulo = QFrame()
         self.modulo.setObjectName("moduloPLC")
         self.modulo.setStyleSheet("QFrame#moduloPLC {background:#26333d; border:2px solid #75828a; border-radius:8px;}"
                                  "QLabel {color:#edf1f3;} QFrame#senalPLC {border:1px solid #75828a; border-radius:4px;}")
         cuerpo = QVBoxLayout(self.modulo)
-        self.ayuda_vacio = QLabel("Sin señales asignadas. Marca las casillas «Usar» en la tabla inferior y pulsa «Aplicar mapa».")
+        self.ayuda_vacio = QLabel("Arrastra las variables a las entradas y salidas.")
         self.ayuda_vacio.setWordWrap(True)
         cuerpo.addWidget(self.ayuda_vacio)
         cuerpo.addWidget(QLabel("ENTRADAS · sensores → GRAFCET"))
         self.fila_entradas = QHBoxLayout()
         cuerpo.addLayout(self.fila_entradas)
-        marca = QLabel("GrafConnect  |  E/S EXTERNAS  |  MODBUS TCP")
+        marca = QLabel("E/S")
         marca.setAlignment(Qt.AlignmentFlag.AlignCenter)
         marca.setMinimumHeight(48)
         cuerpo.addWidget(marca)
@@ -60,7 +160,21 @@ class PanelES(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.modulo)
         scroll.setMinimumHeight(280)
-        raiz.addWidget(scroll, 1)
+        zona = QHBoxLayout()
+        listas = QVBoxLayout()
+        self.lista_entradas, self.lista_salidas = ListaVariables(), ListaVariables()
+        for titulo, lista in (("Entradas", self.lista_entradas), ("Salidas", self.lista_salidas)):
+            listas.addWidget(QLabel(titulo))
+            lista.setFixedWidth(180)
+            listas.addWidget(lista, 1)
+        zona.addLayout(listas)
+        zona.addWidget(scroll, 1)
+        raiz.addLayout(zona, 1)
+        self.dialogo_config = DialogoConfiguracion(self)
+        self.dialogo_config.setWindowTitle("Configuración Modbus TCP")
+        self.dialogo_config.resize(1050, 480)
+        self.b_prueba_guiada.clicked.connect(self.dialogo_config.hide)
+        ajustes = QVBoxLayout(self.dialogo_config)
         self.config_widget = QWidget()
         configuracion = QVBoxLayout(self.config_widget)
         endpoint = QHBoxLayout()
@@ -88,7 +202,7 @@ class PanelES(QWidget):
         self.tabla.horizontalHeader().setStretchLastSection(True)
         self.tabla.setMinimumHeight(150)
         configuracion.addWidget(self.tabla)
-        raiz.addWidget(self.config_widget)
+        ajustes.addWidget(self.config_widget)
         botones = QHBoxLayout()
         self.b_aplicar = QPushButton("Aplicar mapa")
         self.b_aplicar.clicked.connect(self._aplicar)
@@ -103,13 +217,71 @@ class PanelES(QWidget):
         self.b_desconectar = QPushButton("Desconectar")
         self.b_desconectar.clicked.connect(self.desconectar)
         self.b_desconectar.setEnabled(False)
-        for b in (self.b_aplicar, self.b_cargar, self.b_guardar, self.b_probar, self.b_conectar, self.b_desconectar):
+        for b in (self.b_aplicar, self.b_cargar, self.b_guardar, self.b_probar, self.b_prueba_guiada):
             botones.addWidget(b)
-        raiz.addLayout(botones)
+        ajustes.addLayout(botones)
+        for b in (self.b_conectar, self.b_desconectar, self.b_configuracion):
+            cabecera.addWidget(b)
+        self.b_desconectar.hide()
         nota = QLabel("Factory I/O: driver Modbus TCP/IP Server. Escala: valor GRAFCET = registro / escala. "
                       "Los pulsos más cortos que el intervalo efectivo pueden perderse.")
         nota.setWordWrap(True)
-        raiz.addWidget(nota)
+        ajustes.addWidget(nota)
+        self.error_config = QLabel()
+        self.error_config.setWordWrap(True)
+        self.error_config.setStyleSheet("color:#b13d3d")
+        ajustes.addWidget(self.error_config)
+        cerrar = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        cerrar.rejected.connect(self._cerrar_configuracion)
+        ajustes.addWidget(cerrar)
+
+    def abrir_configuracion(self):
+        self.dialogo_config.show()
+        self.dialogo_config.raise_()
+
+    def _cerrar_configuracion(self):
+        self.dialogo_config.close()
+
+    def mostrar_estado(self, estado, mensaje):
+        self.estado.setText(mensaje)
+        conectado = estado == "conectado"
+        self.check.setText("✓" if conectado else "✕" if estado in ("error", "diagnostico") else "●")
+        self.check.setStyleSheet(f"color:{'#24a565' if conectado else '#c84b4b' if estado in ('error','diagnostico') else '#87939c'}; font-size:22px; font-weight:600")
+        self.check.setToolTip(mensaje)
+
+    def admite(self, vid, area):
+        v = next((v for v in self.variables if v["id"] == vid), None)
+        return bool(v and not self.bloqueado and v["role"] == ("input" if area in ("discrete", "input-register") else "output")
+                    and (v["type"]["kind"] == "bool" if area in ("discrete", "coil") else v["type"]["kind"] in ("int", "decimal")))
+
+    def asignar(self, vid, area, direccion):
+        if not self.admite(vid, area):
+            return False
+        for fila, v in enumerate(self.variables):
+            if v["id"] != vid and self.tabla.cellWidget(fila, 0).isChecked() and self.tabla.cellWidget(fila, 4).currentData() == area and self.tabla.cellWidget(fila, 5).value() == direccion:
+                self.tabla.cellWidget(fila, 0).setChecked(False)
+            if v["id"] == vid:
+                seleccionada = fila
+        combo = self.tabla.cellWidget(seleccionada, 4)
+        combo.setCurrentIndex(combo.findData(area))
+        self.tabla.cellWidget(seleccionada, 5).setValue(direccion)
+        self.tabla.cellWidget(seleccionada, 0).setChecked(True)
+        self._aplicar()
+        return True
+
+    def quitar(self, vid):
+        if self.bloqueado:
+            return
+        for fila, v in enumerate(self.variables):
+            if v["id"] == vid:
+                self.tabla.cellWidget(fila, 0).setChecked(False)
+        self._aplicar()
+
+    def agregar_terminal(self, area):
+        direccion, ok = QInputDialog.getInt(self, "Añadir terminal", "Dirección (empieza en 0)", 4, 0, 65535)
+        if ok:
+            self.extras[area].add(direccion)
+            self._dibujar()
 
     def cargar(self, doc, config=None):
         self.doc = doc
@@ -176,14 +348,18 @@ class PanelES(QWidget):
             c = self.obtener()
         except ValueError as exc:
             self.estado.setText(f"Mapa inválido: {exc}")
-            return
+            self.error_config.setText(f"Mapa inválido: {exc}")
+            return False
+        self.error_config.clear()
         self.config = c
         self._dibujar()
         self.estado.setText("Mapa aplicado · desconectado. Pulsa «Probar conexión» y después «Conectar».")
         self.aplicar.emit(c)
+        return True
 
     def _dibujar(self):
         self.indicadores.clear()
+        self.terminales.clear()
         self.ayuda_vacio.setVisible(not self.config.senales)
         for fila in (self.fila_entradas, self.fila_salidas):
             while fila.count():
@@ -191,27 +367,37 @@ class PanelES(QWidget):
                 if item.widget():
                     item.widget().deleteLater()
         variables = {v["id"]: v for v in self.variables}
-        for s in self.config.senales:
-            v = variables.get(s.variable)
-            if not v:
+        self.lista_entradas.clear()
+        self.lista_salidas.clear()
+        for v in self.variables:
+            item = QListWidgetItem(v["name"])
+            item.setData(Qt.ItemDataRole.UserRole, v["id"])
+            item.setToolTip(TIPOS[v["type"]["kind"]])
+            if v["type"]["kind"] == "duration":
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
+            (self.lista_entradas if v["role"] == "input" else self.lista_salidas).addItem(item)
+        mapa = {(s.area, s.direccion): s for s in self.config.senales}
+        for area in AREAS:
+            numerica = area in ("input-register", "holding")
+            entrada = area in ("discrete", "input-register")
+            if numerica and not any(v["type"]["kind"] in ("int", "decimal") and v["role"] == ("input" if entrada else "output") for v in self.variables):
                 continue
-            tarjeta = QFrame()
-            tarjeta.setObjectName("senalPLC")
-            tarjeta.setMinimumWidth(116)
-            l = QVBoxLayout(tarjeta)
-            punto = QLabel("●  ○  ○")
-            punto.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            nombre = QLabel(v["name"])
-            nombre.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            valor = QLabel("—")
-            valor.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            detalle = QLabel(f"{FORMATOS[s.formato]}\n{AREAS[s.area]} · {s.direccion}")
-            detalle.setWordWrap(True)
-            for w in (punto, nombre, detalle, valor):
-                l.addWidget(w)
-            tarjeta.setToolTip(f"{v['name']} ({s.variable}) · escala {s.escala}")
-            (self.fila_entradas if v["role"] == "input" else self.fila_salidas).addWidget(tarjeta)
-            self.indicadores[s.variable] = (punto, valor)
+            direcciones = set(range(2 if numerica else 4)) | self.extras[area] | {d for a, d in mapa if a == area}
+            fila = self.fila_entradas if entrada else self.fila_salidas
+            for direccion in sorted(direcciones):
+                s = mapa.get((area, direccion))
+                v = variables.get(s.variable) if s else None
+                terminal = TerminalES(self, area, direccion, v)
+                fila.addWidget(terminal)
+                self.terminales[(area, direccion)] = terminal
+                if v:
+                    self.indicadores[v["id"]] = (terminal.led, terminal.valor)
+            mas = QPushButton("+")
+            mas.setFixedWidth(28)
+            mas.setToolTip(f"Añadir terminal: {AREAS[area]}")
+            mas.setEnabled(not self.bloqueado)
+            mas.clicked.connect(lambda _=False, a=area: self.agregar_terminal(a))
+            fila.addWidget(mas)
         self.fila_entradas.addStretch()
         self.fila_salidas.addStretch()
 
@@ -227,6 +413,18 @@ class PanelES(QWidget):
             led.setStyleSheet(f"color:{color}; font-size:18px")
 
     def ocupado(self, on):
+        self.bloqueado = on
+        self.lista_entradas.setDragEnabled(not on)
+        self.lista_salidas.setDragEnabled(not on)
+        for terminal in self.terminales.values():
+            terminal.setAcceptDrops(not on)
+        for fila in (self.fila_entradas, self.fila_salidas):
+            for i in range(fila.count()):
+                widget = fila.itemAt(i).widget()
+                if isinstance(widget, QPushButton):
+                    widget.setEnabled(not on)
+        self.b_conectar.setVisible(not on)
+        self.b_desconectar.setVisible(on)
         self.b_prueba_guiada.setEnabled(not on)
         self.config_widget.setEnabled(not on)
         for b in (self.b_aplicar, self.b_cargar, self.b_guardar, self.b_probar, self.b_conectar):

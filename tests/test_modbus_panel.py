@@ -18,6 +18,72 @@ from grafcet.builder import M
 
 @unittest.skipUnless(QT, "Falta PySide6")
 class PanelTests(unittest.TestCase):
+    def test_SFIO19_arrastrar_mover_y_reemplazar(self):
+        """REQ-SIM-03: eventos de arrastre, movimiento, sustitución, tipos y bloqueo."""
+        from PySide6.QtCore import QPoint, QPointF, Qt
+        from PySide6.QtGui import QDragEnterEvent, QDropEvent
+        app = QApplication.instance() or QApplication([])
+        p = PanelES()
+        try:
+            p.cargar(M().var("a").var("b").var("q", "output").step("0", True).doc)
+            p.show()
+            app.processEvents()
+            def soltar(lista, indice, area, direccion):
+                mime = lista.mimeData([lista.item(indice)])
+                terminal = p.terminales[(area, direccion)]
+                entrar = QDragEnterEvent(QPoint(5, 5), Qt.DropAction.CopyAction, mime,
+                                         Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+                app.sendEvent(terminal, entrar)
+                drop = QDropEvent(QPointF(5, 5), Qt.DropAction.CopyAction, mime,
+                                  Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+                app.sendEvent(terminal, drop)
+                return drop.isAccepted()
+            self.assertTrue(soltar(p.lista_entradas, 0, "discrete", 0))
+            self.assertTrue(soltar(p.lista_entradas, 0, "discrete", 1))
+            self.assertEqual([(s.variable, s.direccion) for s in p.obtener().senales], [("a", 1)])
+            self.assertTrue(soltar(p.lista_entradas, 1, "discrete", 1))
+            self.assertEqual([(s.variable, s.direccion) for s in p.obtener().senales], [("b", 1)])
+            self.assertFalse(soltar(p.lista_salidas, 0, "discrete", 0))
+            self.assertTrue(soltar(p.lista_salidas, 0, "coil", 0))
+            p.ocupado(True)
+            self.assertFalse(p.admite("a", "discrete"))
+            self.assertFalse(p.terminales[("coil", 0)].acceptDrops())
+            p.quitar("q")
+            self.assertEqual(len(p.obtener().senales), 2)
+            p.ocupado(False)
+            p.quitar("q")
+            self.assertEqual([s.variable for s in p.obtener().senales], ["b"])
+        finally:
+            p.close()
+            p.deleteLater()
+            app.processEvents()
+
+    def test_SFIO20_pantalla_simple_y_check_confirmado(self):
+        """REQ-SIM-03: ajustes fuera de pantalla principal y check de conexión real."""
+        app = QApplication.instance() or QApplication([])
+        p = PanelES()
+        try:
+            p.cargar(M().var("sensor").step("0", True).doc)
+            p.show()
+            app.processEvents()
+            self.assertFalse(p.tabla.isVisible())
+            self.assertFalse(p.host.isVisible())
+            p.mostrar_estado("conectando", "Conectando…")
+            self.assertNotEqual(p.check.text(), "✓")
+            p.mostrar_estado("conectado", "Conectado · Ejecutando")
+            self.assertEqual(p.check.text(), "✓")
+            self.assertEqual(p.estado.text(), "Conectado")
+            p.mostrar_estado("error", "Conexión perdida")
+            self.assertEqual(p.check.text(), "✕")
+            p.b_configuracion.click()
+            self.assertTrue(p.tabla.isVisible())
+            self.assertTrue(p.host.isVisible())
+        finally:
+            p.dialogo_config.close()
+            p.close()
+            p.deleteLater()
+            app.processEvents()
+
     def test_SFIO17_etiquetas_y_direcciones_independientes(self):
         """REQ-SIM-03: etiquetas explicadas conservan claves de conexión y separan áreas."""
         app = QApplication.instance() or QApplication([])
@@ -75,8 +141,9 @@ class PanelTests(unittest.TestCase):
                 self.assertFalse(w.modbus.activo)
                 w.v.s = None
                 w._conectar_modbus()
-                self.assertIn("diagnósticos", w.panel_es.estado.text())
-                self.assertIn("manifest.json", w.panel_es.estado.text())
+                self.assertEqual(w.panel_es.estado.text(), "Revisar GRAFCET")
+                self.assertIn("diagnósticos", w.panel_es.estado.toolTip())
+                self.assertIn("manifest.json", w.panel_es.estado.toolTip())
             finally:
                 w.close()
                 w.deleteLater()

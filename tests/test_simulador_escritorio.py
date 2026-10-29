@@ -415,9 +415,11 @@ class Ventana(unittest.TestCase):
         w._act("avanzar", us=1)
         self.assertEqual((w.t_temp.item(0, 2).text(), w.l_reloj.text().split(" · ")[0]), ("1,24 s", "τ = 1,24 s"))
         self.assertEqual(w.t_temp.item(0, 3).text(), "3 s")
-        self.assertEqual(w.a_ejecutar.text(), "▶ Ejecutar")
+        self.assertEqual(w.a_ejecutar.text(), "Ejecutar")
+        self.assertFalse(w.a_ejecutar.icon().isNull(), "el símbolo se muestra ahora como icono de la barra")
         w.a_ejecutar.setChecked(True)
-        self.assertEqual(w.a_ejecutar.text(), "‖ Pausa")
+        self.assertEqual(w.a_ejecutar.text(), "Pausa")
+        self.assertFalse(w.a_ejecutar.icon().isNull())
         w.a_ejecutar.setChecked(False)
 
 

@@ -1,9 +1,9 @@
 {
- "date": "2026-10-29T12:32:30+01:00",
+ "date": "2026-10-29T12:50:57+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 304,
+ "total": 306,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -1551,6 +1551,24 @@
     "REQ-SIM-02"
    ],
    "summary": "REQ-SIM-02/03: proyecto manual preparado y mensajes accionables sin red."
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO19_arrastrar_mover_y_reemplazar",
+   "case": "S-FIO19",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: eventos de arrastre, movimiento, sustitución, tipos y bloqueo."
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO20_pantalla_simple_y_check_confirmado",
+   "case": "S-FIO20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: ajustes fuera de pantalla principal y check de conexión real."
   },
   {
    "test": "test_simulador_escritorio.Nucleo.test_SAPP01_abrir_lo_guardado",

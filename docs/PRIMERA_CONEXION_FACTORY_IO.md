@@ -8,14 +8,14 @@ de Factory I/O, copia los nuevos valores en GrafConnect.
 
 1. Cierra la versión anterior de GrafConnect. Abre **dist/GRAFCET/GRAFCET.exe**
    desde la carpeta `implementacion` de este proyecto.
-2. Pulsa la pestaña **E/S externas** y el botón **Abrir prueba guiada**, arriba a
-   la derecha. Si no aparece ese botón, estás usando la versión anterior.
+2. Pulsa la pestaña **E/S externas → Configuración → Abrir prueba guiada**.
 3. El título debe indicar «Prueba Factory I O - PM y dos cintas». Este proyecto
    ya tiene etapa inicial, variables y acción. También está disponible en
    `prueba_factoryio_digital/manifest.json`, junto al ejecutable, por si quieres
-   abrirlo con **Archivo → Abrir modelo…**.
-4. En **E/S externas**, las tres casillas «Usar» deben estar marcadas
-   y deben aparecer tres tarjetas. Si no sucede, no continúes: anótalo abajo.
+   abrirlo con **Proyecto → Abrir modelo…**.
+4. En **E/S externas** deben aparecer PM en I00, Q00 en Q00 y Q01 en Q01.
+   El ejemplo ya está asignado. Para asignar otro modelo, arrastra sus variables
+   desde la lista a los terminales. Botón derecho permite quitar una asignación.
 
 ## 2. Comprueba estos valores, sin cambiar tu escena
 
@@ -35,7 +35,7 @@ El GRAFCET ya está hecho: **etapa 0 inicial (espera) → transición PM → eta
 (acciones continuas Q00 y Q01)**. Al pulsar PM, las dos cintas arrancan y siguen
 activas al soltarlo. No hay transición de parada en este ejemplo.
 
-En GrafConnect comprueba los campos situados encima de la tabla:
+En GrafConnect abre **Configuración** para comprobar los campos de conexión:
 
 | Campo | Valor de tu última captura |
 |---|---|
@@ -59,10 +59,12 @@ Factory I/O para esta primera prueba.
 1. En Factory I/O deja activo el driver **Modbus TCP/IP Server**. En tu captura
    aparece un indicador verde y la opción «PARAR»: no pulses PARAR para esta prueba.
    Ese indicador por sí solo no demuestra que GrafConnect esté conectado.
-2. En GrafConnect pulsa **Aplicar mapa** y después **Probar conexión**.
-3. Arriba del panel debe aparecer **«Conexión probada; no se han escrito actuadores»**.
+2. En Configuración puedes pulsar **Probar conexión** (opcional, sin escribir salidas).
+3. Arriba del panel debe aparecer **«Conexión probada»**; el detalle está al dejar
+   el ratón sobre el estado.
    Si aparece otra cosa, copia el mensaje exacto abajo y detente en este punto.
-4. Pulsa **Conectar**. Debe aparecer **«Conectado · actuadores a cero · pulse Ejecutar»**.
+4. Cierra Configuración y pulsa **Conectar** en el panel. Debe aparecer un
+   **check verde y «Conectado»**. Sigue pendiente pulsar Ejecutar para mover las cintas.
    Conectar y Probar conexión son dos operaciones distintas: Probar termina su
    comprobación y cierra la conexión; Conectar la mantiene abierta.
 

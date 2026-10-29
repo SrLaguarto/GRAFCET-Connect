@@ -64,9 +64,26 @@ revisada; portable reconstruido con el ejemplo y prueba de arranque superada.
 No se repite la batería completa por este cambio de ejemplo, según trabajo por
 unidades solicitado. La evidencia general anterior sigue siendo 304 pruebas OK.
 
-Siguiente tarea exacta: abrir portable actualizado, E/S externas → Abrir prueba
-guiada; Probar conexión → Conectar → Ejecutar; poner en marcha Factory I/O y
-accionar Pulsador marcha. Confirmar que ambas cintas arrancan y siguen al soltar.
-Guía actualizada en docs/PRIMERA_CONEXION_FACTORY_IO.md; después validar pausa,
-red y analógicas. Para repetir: Reiniciar → Conectar → Ejecutar, y pulsar PM.
+ACEPTACIÓN REAL PARCIAL: el responsable confirma en el chat «Ha funcionado»
+para el GRAFCET PM/I00 → Q00/Q01 y ambas cintas. No presupone validación de
+analógicas, pérdida de red ni todos los casos de la hoja anterior.
+
+P-IMP-53 IMPLEMENTADA, pendiente aceptación visual: panel E/S simplificado con arrastre de variables a
+terminales, check verde de conexión confirmada y configuración separada.
+Analógicas/formatos/escalas siguen disponibles; asociaciones se guardan en la
+carpeta del proyecto si la tiene. Menú compacto Proyecto y barra con iconos.
+No se toca el motor ni el cliente Modbus. No se alteran respuestas del responsable
+en docs/VALIDACION_FACTORY_IO.md. SFIO19/20 cubren eventos de arrastre y estado.
+
+Regresión final: 306 pruebas OK, incluidas SFIO19/20 (arrastre, sustitución,
+rechazo por tipo, bloqueo conectado, ajustes ocultos y check confirmado).
+SAPP13 conserva sus comprobaciones temporales y ahora comprueba iconos de
+Ejecutar/Pausa en lugar de glifos dentro del texto. Paquete intacto y trazabilidad
+regenerada; portable reconstruido con arranque/captura verificados. Vista de
+1200×800 revisada. Las respuestas del responsable siguen sin tocarse ni incluirse.
+
+Siguiente tarea exacta: el responsable valida sencillez, arrastre y check de esta
+nueva pantalla con su escena ya funcional. Prueba guiada ahora se abre desde
+E/S externas → Configuración → Abrir prueba guiada.
+Quedan después pruebas reales de pausa, pérdida de red y analógicas.
 Commits incrementales autorizados; consultar git log. Sin push ni subagentes.
