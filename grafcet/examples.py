@@ -169,13 +169,13 @@ def ej_repeticion() -> tuple[M, dict]:
 
 EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
     "seleccion": ("Selección de secuencia", "Desde 5, active solo a para ir a 6, o solo b para ir a 7. "
-                  "Las dos transiciones salen de una línea común. En Editar puede cambiar las condiciones a a y NOT a.", ej_seleccion),
+                  "Las dos transiciones salen de una línea común. En Pausa puede cambiar las condiciones a a y NOT a.", ej_seleccion),
     "salto": ("Salto de etapas", "Desde 1, active saltar para ir directamente a 4. La rama lateral contiene su propia transición.", ej_salto),
     "repeticion": ("Repetición de secuencia", "Active inicio para ir a 2; desactívelo. Active avance para ir a 3 y desactívelo. "
                    "Active repetir para volver a 2, o fin para ir a 4. El retorno lleva una flecha ascendente automática.", ej_repeticion),
     "alternativas": ("Alternativas y salto de secuencia", "E0 → E1 → E2 → E3 con dos alternativas: «rapida» salta de E0 a E2 "
                      "(salto de secuencia) y «repetir» devuelve de E2 a E1 (rama que vuelve: dos ramas llegan a E1 y a "
-                     "E2). Pulse «marcha» o «rapida» desde E0; en E2, «fin2» sigue y «repetir» vuelve. Pase a «Editar» "
+                     "E2). Pulse «marcha» o «rapida» desde E0; en E2, «fin2» sigue y «repetir» vuelve. Pulse Pausa "
                      "para ver cómo está construido y abrir sus propias ramas arrastrando de un punto de unión a un "
                      "hueco (crea el elemento siguiente) o a un enlace (la rama se une ahí).", ej_alternativas),
     "temporizada": ("Secuencia con temporización", "Pulse «marcha»: E1 activa el motor; a los 3 s pasa a E2 (luz, "

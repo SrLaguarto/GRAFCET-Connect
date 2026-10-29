@@ -18,7 +18,7 @@ from typing import Any
 
 from PySide6.QtCore import QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer, QSize
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
                                QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
                                QPushButton, QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
@@ -150,9 +150,16 @@ class Ventana(QMainWindow):
         self.reloj = QElapsedTimer()
         self.edicion: Edicion | None = None
         self._alturas = dict(ALTO_INFERIOR)
-        self.modo = "simular"
+        self.modo = "editar"  # solo cambia con Play (simular) y Pausa (editar)
         self.modbus = Coordinador()
-        self._recargar_modbus = False
+        self._transicion_ui = False  # Play/Pausa en curso: los cambios que él mismo provoca no lo repiten
+        self._aviso_inestable_sesion = None  # sesión de la que ya se avisó (un solo aviso por episodio)
+        self._popup_inestable = None
+        self._avisos_ejecucion: list[str] = []  # por qué se paró el motor: se muestra entre los diagnósticos al editar
+        self._ayuda = ""  # ayuda del ejemplo o modelo abierto, para mostrarla al simular lo que aún no se ha editado
+        self._proyecto: Any = None  # qué proyecto hay abierto (los ID de modelo no lo distinguen: todos los ejemplos son «m»)
+        self._proyecto_modbus: Any = None  # de qué proyecto es el mapa que tiene cargado el panel de E/S
+        self._n_nuevos = 0
         # Recuperación automática cada 30 s mientras hay cambios sin guardar (REQ-EDT-10)
         self.recup = Recovery(recuperacion or Path(QStandardPaths.writableLocation(
             QStandardPaths.StandardLocation.AppLocalDataLocation)))
@@ -210,15 +217,13 @@ class Ventana(QMainWindow):
             act.triggered.connect(lambda _=False, k=key: self.cargar_ejemplo(k))
             self.grupo.addAction(act)
             self.acciones_ej[key] = act
-        # Acciones de la simulación: también van en la barra de herramientas
+        # Un solo control de ejecución: Play simula (traza abajo, sin paleta) y Pausa detiene y vuelve a editar
         self.a_ejecutar = self._accion("Ejecutar", self._ejecutar, "F5", marcable=True)
-        self.a_ejecutar.setToolTip("Ejecutar / pausar el tiempo real (F5)")
-        self.a_paso = self._accion("Paso", self.paso_evolucion, "F10")
-        self.a_paso.setToolTip("Una evolución; con la situación estable, hasta el próximo vencimiento (F10)")
-        self.a_completar = self._accion("Completar recorrido", lambda: self._act("estabilizar"), "F11")
-        self.a_completar.setToolTip("Terminar las evoluciones pendientes hasta la situación estable (F11)")
+        self.a_ejecutar.setToolTip("Play: simular · Pausa: detener y editar (F5)")
         self.a_reiniciar = self._accion("Reiniciar", self.reiniciar, "Ctrl+R")
-        self.a_reiniciar.setToolTip("Reiniciar la simulación (Ctrl+R)")
+        self.a_reiniciar.setToolTip("Volver a la situación inicial; en Play sigue en Play (Ctrl+R)")
+        self.a_avanzar = self._accion("&Avanzar el tiempo…", self.avanzar_tiempo)
+        self.a_avanzar.setToolTip("Herramienta de depuración: solo en Play y sin E/S externas")
         ver = bar.addMenu("&Ver")
         self.a_izquierdo = self._accion("Panel i&zquierdo (al editar)", lambda on: self._mostrar_panel("izquierdo", on),
                                         "Ctrl+L", True)
@@ -231,17 +236,7 @@ class Ventana(QMainWindow):
         ver.addAction(self._accion("&Acercar", lambda: self.diagrama.acercar(), ["Ctrl+=", "Ctrl++"]))
         ver.addAction(self._accion("A&lejar", lambda: self.diagrama.alejar(), "Ctrl+-"))
         ver.addAction(self._accion("A&justar el dibujo", lambda: self.diagrama.ajustar(), "Ctrl+0"))
-        # Modo y edición
-        self.a_editar = self._accion("Editar", lambda on: on and self.cambiar_modo("editar"), "Ctrl+1", True)
-        self.a_simular = self._accion("Simular", lambda on: on and self.cambiar_modo("simular"), "Ctrl+2", True)
-        self.a_editar.setToolTip("Editar el grafcet (Ctrl+1)")
-        self.a_simular.setToolTip("Simular el grafcet; si no compila, se muestran los diagnósticos (Ctrl+2)")
-        self.g_modo = QActionGroup(self)
-        for a in (self.a_editar, self.a_simular):
-            self.g_modo.addAction(a)
-        self.a_simular.blockSignals(True)
-        self.a_simular.setChecked(True)
-        self.a_simular.blockSignals(False)
+        # Edición
         self.a_herr: dict[str, QAction] = {}
         self.g_herr = QActionGroup(self)
         for h in HERRAMIENTAS:  # solo las que no colocan elementos: los elementos y las acciones se arrastran desde la paleta
@@ -259,19 +254,16 @@ class Ventana(QMainWindow):
         self.a_debajo = self._accion("&Añadir debajo", lambda: self.edicion and self.edicion.anadir_debajo(), "Ctrl+Return")
         self.a_debajo.setToolTip("Con una etapa seleccionada: transición y etapa enlazadas debajo (Ctrl+Intro)")
         edicion = bar.addMenu("&Edición")
-        for a in (self.a_editar, self.a_simular):
-            edicion.addAction(a)
-        edicion.addSeparator()
         for a in (self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo):
             edicion.addAction(a)
         edicion.addSeparator()
         for a in self.a_herr.values():
             edicion.addAction(a)
         sim = bar.addMenu("&Simulación")
-        for a in (self.a_ejecutar, self.a_paso, self.a_completar, self.a_reiniciar):
+        for a in (self.a_ejecutar, self.a_reiniciar):
             sim.addAction(a)
         sim.addSeparator()
-        sim.addAction("&Avanzar el tiempo…", self.avanzar_tiempo).setToolTip("Herramienta de depuración")
+        sim.addAction(self.a_avanzar)
         m_ajustes = bar.addMenu("A&justes")
         m_ajustes.addAction("&Lecturas de interpretación…", self.lecturas)
         ayuda = bar.addMenu("A&yuda")
@@ -330,8 +322,6 @@ class Ventana(QMainWindow):
         self.aviso.setWordWrap(True)
         self.aviso.setStyleSheet(f"color: {COL['err']}")
         lay.addWidget(self.aviso)
-        self.paso = QCheckBox("Paso a paso (detener tras cada evolución)")
-        lay.addWidget(self.paso)
 
         _, lay = self._caja("Salidas y variables")
         self.t_vars = self._tabla(["Variable", "Modo", "Valor", "Contribuyen"])
@@ -448,8 +438,6 @@ class Ventana(QMainWindow):
                   self.a_borrar: QStyle.StandardPixmap.SP_TrashIcon,
                   self.a_debajo: QStyle.StandardPixmap.SP_ArrowDown,
                   self.a_ejecutar: QStyle.StandardPixmap.SP_MediaPlay,
-                  self.a_paso: QStyle.StandardPixmap.SP_MediaSkipForward,
-                  self.a_completar: QStyle.StandardPixmap.SP_MediaSeekForward,
                   self.a_reiniciar: QStyle.StandardPixmap.SP_BrowserReload}
         for accion, icono in iconos.items():
             accion.setIcon(self.style().standardIcon(icono))
@@ -471,16 +459,10 @@ class Ventana(QMainWindow):
             QTabBar::tab { padding: 7px 18px; border: 0; background: #edf0f4; }
             QTabBar::tab:selected { background: white; border-bottom: 2px solid #377ab8; }
         """)
-        self.tb_modo = QToolBar("Modo")
-        self.tb_modo.setMovable(False)
-        for a in (self.a_editar, self.a_simular):
-            self.tb_modo.addAction(a)
-        self.addToolBar(self.tb_modo)
         self.tb_sim = QToolBar("Simulación")
         self.tb_sim.setMovable(False)
         self.tb_sim.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        for a in (self.a_ejecutar,):
-            self.tb_sim.addAction(a)
+        self.tb_sim.addAction(self.a_ejecutar)
         self.tb_sim.addSeparator()
         self.tb_sim.addAction(self.a_reiniciar)
         self.addToolBar(self.tb_sim)
@@ -598,12 +580,12 @@ class Ventana(QMainWindow):
             self.abrir_ruta(Path(ruta))
 
     def _cargar(self) -> None:
-        if self.modbus.activo:
-            self._desconectar_modbus()
-            self._recargar_modbus = True
-            self.panel_es.estado.setText("Desconectando antes de cargar el modelo…")
-            return
-        self.a_ejecutar.setChecked(False)  # ejecución nueva; si se puede, el tiempo real arranca al final
+        """Carga la fuente (ejemplo, modelo o lo que se edita) y deja el programa en Pausa: parado y editable. La
+        conexión Modbus, si la hay, no se toca: solo se para el GRAFCET (se conservan TCP y salidas)."""
+        self.modbus.pausar()
+        self._marcar_play(False)
+        self._aviso_inestable_sesion = None
+        self._avisos_ejecucion = []
         f = self.fuente
         try:
             if f["tipo"] == "ejemplo":
@@ -619,39 +601,80 @@ class Ventana(QMainWindow):
         except ERRORES as exc:
             QMessageBox.warning(self, TITULO, f"No se pudo preparar la simulación:\n\n{exc}")
             return
+        if f["tipo"] != "editor":
+            self._ayuda = self.v.model["help"]
+            self._proyecto = ("ejemplo", f["clave"]) if f["tipo"] == "ejemplo" else ("fichero", str(f["ruta"]))
         self.setWindowTitle(f"{self.v.model['title']} — {TITULO}")
         self.diagrama.ajustar()
         self._entradas()
+        if self.edicion is None or f["tipo"] != "editor":  # siempre se abre editable: Play simula una copia compilada
+            self._establecer_edicion(self._edicion_desde_fuente())
+        self.modo = "editar"
         self._cargar_config_modbus()
+        self._poner_modo()
         self.refrescar()
-        # Como un autómata: el tiempo corre desde que se carga (si el modelo compila y la situación es estable)
-        self.a_ejecutar.setChecked(self.v.s is not None and self.v.s.status == "pausada-estable")
+        if not self.modbus.activo:
+            self.rt.stop()
 
     def reiniciar(self) -> None:
-        if self.modbus.activo:
-            if self.modbus.adaptador.sesion is None:
-                self.panel_es.estado.setText("Conectado · solo observación de entradas; no hay una ejecución que reiniciar")
-                return
-            if self.modbus.estado not in ("conectado", "diagnostico") or not self.v or not self.v.s:
-                self.panel_es.estado.setText("Espera a que termine la operación de conexión antes de reiniciar")
-                return
-            self.a_ejecutar.setChecked(False)
-            nueva = self.v.s.restart(f"reinicio-{time.monotonic_ns()}")
-            if nueva.status != "pausada-estable":
-                self.aviso.setText("No se pudo reiniciar: revisa los diagnósticos del modelo")
-                return
-            try:
-                self.modbus.reiniciar(nueva)
-            except ERRORES as exc:
-                self.aviso.setText(f"No se pudo reiniciar: {exc}")
-                return
-            self.v.s = nueva
-            self.v.start_diags = []
-            self.reloj.restart()
-            self.rt.start()
-            self.refrescar()
+        """Vuelve a la situación inicial: en Play sigue en Play y en Pausa deja el estado inicial. Con E/S externas la
+        conexión se conserva: solo se vincula una sesión nueva y se reescriben las salidas iniciales."""
+        play = self.a_ejecutar.isChecked()
+        if not self._preparar_sesion(reiniciar=True, observar_despues=not play):
+            if play:
+                self.a_ejecutar.setChecked(False)  # no se ha podido: Pausa
             return
-        self._cargar()
+        if play:
+            self.reloj.restart()
+            self.refrescar()
+        else:
+            self.refrescar_edicion()
+
+    def _preparar_sesion(self, reiniciar: bool = False, observar_despues: bool = False) -> bool:
+        """Compila lo que se edita y deja en self.v una sesión estable: la que había (si es la misma y no se pide reinicio) o
+        una nueva desde la situación inicial. Con Modbus vivo la vincula al TCP existente, sin reconectar. Si no puede,
+        avisa y devuelve False sin tocar la conexión."""
+        if self.edicion is None:
+            self._establecer_edicion(self._edicion_desde_fuente() if self.v else Edicion.nuevo())
+        if self._variables_sin_nombre():
+            return False
+        e = self.edicion
+        if not e.ed.validate().can_simulate:
+            self._no_simulable()
+            return False
+        ayuda = self._ayuda if self._ayuda and not e.ed.undo_stack else "Simulación del grafcet."
+        nueva = Vista(e.ed.model["id"], e.titulo, ayuda, lambda: (copy.deepcopy(e.ed.model), e.layout()), self.options,
+                      presentation=e.ed.presentation)
+        anterior = self.v.s if self.v else None
+        if (not reiniciar and nueva.s is not None and anterior is not None and anterior.status == "pausada-estable"
+                and anterior.cm.revision == nueva.s.cm.revision and anterior.options == self.options):
+            nueva.s = anterior  # Pausa y Play sin editar entre medias: sigue donde estaba (Reiniciar vuelve al principio)
+            nueva.start_diags = []
+        if nueva.s is None:  # compila con las lecturas por defecto, pero no con las activas (diálogo «Lecturas»)
+            lineas = [f"• {d['code']}: {d['message']}" for d in map(nueva._diag, nueva.compile_diags)]
+            QMessageBox.warning(self, TITULO, "El grafcet no compila con las lecturas de interpretación activas, no se puede "
+                                "simular todavía:\n\n" + "\n".join(lineas[:8]) + ("\n…" if len(lineas) > 8 else ""))
+            return False
+        if nueva.s.status != "pausada-estable":
+            self._avisar_motor(nueva, al_arrancar=True)
+            return False
+        if self.modbus.activo:
+            try:
+                config = self.panel_es.obtener()
+                config.validar(e.ed.model)  # lo editado puede haber dejado el mapa sin variable o de otro tipo
+                if reiniciar or self.modbus.adaptador.sesion is not nueva.s:
+                    self.modbus.vincular(nueva.s, config, e.ed.model, observar_despues)
+            except ERRORES as exc:
+                texto = f"No se puede ejecutar con la conexión y las asignaciones actuales: {exc}. Revise la asignación; la conexión se conserva."
+                self.modbus.mensaje = texto
+                self.panel_es.mostrar_estado(self.modbus.estado, texto)
+                QMessageBox.warning(self, TITULO, texto)
+                return False
+        self.v = nueva
+        self.fuente = {"tipo": "editor"}
+        self._avisos_ejecucion = []
+        self._entradas()
+        return True
 
     # -- edición: modos, herramientas y diálogos ---------------------------------------------------
     def _acciones_edicion(self, on: bool) -> None:
@@ -664,7 +687,7 @@ class Ventana(QMainWindow):
             self.setWindowTitle(f"{e.titulo}{' *' if e.ed.dirty else ''} (editando) — {TITULO}")
 
     def _salir_de_edicion(self) -> bool:
-        """Antes de cargar otro modelo: si hay cambios sin guardar, pregunta. Descarta la edición en curso."""
+        """Antes de cargar otro modelo: si hay cambios sin guardar, pregunta. Quien carga sustituye la edición en curso."""
         e = self.edicion
         if e is not None and e.ed.dirty:
             r = QMessageBox.question(self, TITULO, f"«{e.titulo}» tiene cambios sin guardar. ¿Guardarlos?",
@@ -674,13 +697,11 @@ class Ventana(QMainWindow):
                 return False
         if e is not None:
             shutil.rmtree(self.recup.dir, ignore_errors=True)
-            self.edicion = None
-            self.modo = "simular"
-            self._poner_modo()
         return True
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802
         if self._salir_de_edicion():
+            self._transicion_ui = True
             self.a_ejecutar.setChecked(False)
             self.t_auto.stop()
             self.rt.stop()
@@ -693,10 +714,14 @@ class Ventana(QMainWindow):
         if not self._salir_de_edicion():
             return
         self._empezar_edicion(Edicion.nuevo())
+        if self.modbus.activo:  # la conexión sigue; el modelo nuevo trae su propio mapa (vacío)
+            self._cargar_config_modbus(self.edicion.ed.model)
 
     def _edicion_desde_fuente(self) -> Edicion:
         """Copia editable de lo que se está simulando (un ejemplo o un modelo abierto)."""
         f = self.fuente
+        if f["tipo"] == "editor":
+            return Edicion.desde(self.v.doc, auto_layout(self.v.doc), self.v.model["title"])
         if f["tipo"] == "ejemplo":
             title, _, build = EJEMPLOS[f["clave"]]
             m, layout = build()
@@ -704,6 +729,13 @@ class Ventana(QMainWindow):
         return Edicion.desde(f["doc"], f["layout"], f["titulo"], f.get("raiz"), f.get("presentacion"))
 
     def _empezar_edicion(self, e: Edicion) -> None:
+        self._ayuda = ""
+        self._n_nuevos += 1
+        self._proyecto = ("nuevo", self._n_nuevos)
+        self._establecer_edicion(e)
+        self.cambiar_modo("editar")
+
+    def _establecer_edicion(self, e: Edicion) -> None:
         self.edicion = e
         e.diagrama = self.diagrama
         e.cambiado.connect(self.refrescar_edicion)
@@ -712,55 +744,25 @@ class Ventana(QMainWindow):
         e.pedir_etiqueta = self.editar_etiqueta
         e.pedir_accion = self.editar_accion
         e.confirmar_borrado = self._confirmar_borrado
-        self.cambiar_modo("editar")
 
     def cambiar_modo(self, modo: str) -> bool:
-        if modo == "editar" and self.modbus.activo:
-            self._desconectar_modbus()
-            self.panel_es.estado.setText("Desconectando antes de editar; vuelva a pulsar Editar")
-            return False
-        if modo == "editar":
-            if self.edicion is None:
-                if self.v is None:
-                    self._empezar_edicion(Edicion.nuevo())
-                else:
-                    self._empezar_edicion(self._edicion_desde_fuente())
-                return True
-            self.a_ejecutar.setChecked(False)
-            self.modo = "editar"
+        """Los modos solo se alternan con Play (simular) y Pausa (editar); esto es el mismo control por dentro. Devuelve si
+        el programa ha quedado en el modo pedido (Play puede negarse: no compila, inestable…)."""
+        on = modo == "simular"
+        if self.a_ejecutar.isChecked() != on:
+            self.a_ejecutar.setChecked(on)
         else:
-            if self.edicion is not None:
-                if self._variables_sin_nombre():
-                    self._poner_modo()
-                    return False
-                res = self.edicion.ed.validate()
-                if not res.can_simulate:
-                    self._no_simulable()
-                    self._poner_modo()
-                    return False
-                self.fuente = {"tipo": "editor"}
-                self.modo = "simular"
-                self._poner_modo()
-                self._cargar()
-                return True
-            self.modo = "simular"
-        self._poner_modo()
-        return True
+            self._ejecutar(on)
+        return self.modo == modo
 
     def _poner_modo(self) -> None:
         """Ajusta la interfaz al modo: herramientas, panel derecho, dibujo y acciones."""
         editar = self.modo == "editar" and self.edicion is not None
-        for a, on in ((self.a_editar, editar), (self.a_simular, not editar)):
-            a.blockSignals(True)
-            a.setChecked(on)
-            a.blockSignals(False)
         self.tb_edit.setVisible(editar)
-        self.tb_sim.setVisible(not editar)
         self.dock.setVisible(editar and self.a_izquierdo.isChecked())
         self.flechas["izquierdo"].setVisible(editar)
         self._acciones_edicion(editar)
-        for a in (self.a_ejecutar, self.a_paso, self.a_completar, self.a_reiniciar):
-            a.setEnabled(not editar)  # sin simulación en curso al editar (F5 y compañía no hacen nada)
+        self.a_avanzar.setEnabled(not editar)  # la depuración del tiempo solo tiene sentido en Play
         self.derecho.setCurrentIndex(1 if editar else 0)
         self.inferior.setCurrentIndex(1 if editar else 0)  # la traza al simular; las opciones al editar
         self._anchos_laterales()
@@ -769,6 +771,8 @@ class Ventana(QMainWindow):
         if editar:
             self.refrescar_edicion()
         else:
+            if self.v is not None:
+                self.setWindowTitle(f"{self.v.model['title']} — {TITULO}")
             self.diagrama.ajustar()
 
     def _anchos_laterales(self) -> None:
@@ -868,6 +872,10 @@ class Ventana(QMainWindow):
             item.setData(Qt.ItemDataRole.UserRole, d["target"])
             item.setToolTip(d["correction"])
             item.setForeground(QColor(COL["err"] if d["blocks"] else COL["muted"]))
+            self.lista_diag.addItem(item)
+        for texto in self._avisos_ejecucion:  # por qué paró el motor la última vez que se simuló
+            item = QListWidgetItem(f"Simulación detenida · {texto}")
+            item.setForeground(QColor(COL["err"]))
             self.lista_diag.addItem(item)
         self._titulo_ventana()
 
@@ -974,22 +982,8 @@ class Ventana(QMainWindow):
         self._empezar_edicion(e)
         return True
 
-    def paso_evolucion(self) -> None:
-        """Paso: una evolución del recorrido pendiente; con la situación estable, hasta el próximo vencimiento."""
-        if self.v is None or self.v.s is None:
-            return
-        st = self.v.s.status
-        if st == "pausada-recorrido":
-            self._act("evolucion")
-        elif st == "pausada-estable":
-            sig = self.v.state().get("nextEventUs")
-            if sig is None:
-                self.aviso.setText("No hay ningún vencimiento pendiente: la situación solo cambia con las entradas.")
-            else:
-                self._act("hasta", us=sig)
-
     def avanzar_tiempo(self) -> None:
-        """Depuración: avanza el tiempo lógico una duración dada (por ejemplo «0,5», «2 s» o «350 ms»)."""
+        """Depuración (solo en Play): avanza el tiempo lógico una duración dada (por ejemplo «0,5», «2 s» o «350 ms»)."""
         if self.v is None or self.v.s is None or self.v.s.status != "pausada-estable":
             QMessageBox.information(self, TITULO, "El tiempo solo puede avanzarse con la situación estable.")
             return
@@ -1003,7 +997,6 @@ class Ventana(QMainWindow):
         except DiagnosticError as exc:
             QMessageBox.warning(self, TITULO, f"No es una duración válida: {exc}")
             return
-        self.a_ejecutar.setChecked(False)  # el tiempo avanzado a mano no se mezcla con el del reloj
         self._act("avanzar", us=us)
 
     # -- acciones de simulación -------------------------------------------------------------------
@@ -1046,7 +1039,7 @@ class Ventana(QMainWindow):
                 continue
             b = QPushButton()
             b.setCheckable(True)
-            b.clicked.connect(lambda _=False, v=var: self._act("entrada", var=v, paso=self.paso.isChecked()))
+            b.clicked.connect(lambda _=False, v=var: self._act("entrada", var=v))
             self.rejilla.addWidget(b, fila, col)
             self.botones[var] = b
             col += 1
@@ -1060,68 +1053,144 @@ class Ventana(QMainWindow):
         return self.v.model.get("names", {}).get(ident, ident) if self.v else ident
 
     def _valor(self, var: str) -> None:
-        self._act("valor", var=var, texto=self.campos[var].text(), paso=self.paso.isChecked())
+        self._act("valor", var=var, texto=self.campos[var].text())
 
     def _opciones(self, options: dict[str, str]) -> None:
         self.options = normalize_options(options)  # cambia el perfil efectivo: ejecución nueva
+        play = self.a_ejecutar.isChecked()
+        if self.edicion is not None:
+            self.fuente = {"tipo": "editor"}
         self._cargar()
+        if play:
+            self.a_ejecutar.setChecked(True)
 
     def lecturas(self) -> None:
         d = Lecturas(self, self.options)
         if d.exec() == QDialog.DialogCode.Accepted and d.options() != self.options:
             self._opciones(d.options())
 
-    def _ejecutar(self, on: bool) -> None:
+    def _marcar_play(self, on: bool) -> None:
+        """Pone el aspecto del control de ejecución (marca, texto e icono) sin provocar la transición."""
+        self.a_ejecutar.blockSignals(True)
+        self.a_ejecutar.setChecked(on)
+        self.a_ejecutar.blockSignals(False)
         self.a_ejecutar.setText("Pausa" if on else "Ejecutar")
-        self.a_ejecutar.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause if on else QStyle.StandardPixmap.SP_MediaPlay))
-        if self.modbus.activo:
-            self.modbus.solicitar_ejecucion(on)
-        if on:
-            self.reloj.start()
-            self.rt.start()
-        else:
-            if not self.modbus.activo:
+        self.a_ejecutar.setIcon(self.style().standardIcon(
+            QStyle.StandardPixmap.SP_MediaPause if on else QStyle.StandardPixmap.SP_MediaPlay))
+
+    def _ejecutar(self, on: bool) -> None:
+        """Play (on) o Pausa: el único control de ejecución. Play compila lo editado, arranca y pasa a simular; Pausa
+        detiene la evolución y vuelve a editar. La conexión Modbus no se toca: Pausa conserva TCP y salidas y Play vincula
+        la sesión al TCP existente."""
+        if self._transicion_ui:
+            return
+        self._transicion_ui = True
+        try:
+            if on and not self._preparar_sesion():
+                on = False  # no arranca (no compila, inestable, mapa de E/S inválido…): sigue en Pausa
+            self.modo = "simular" if on else "editar"
+            self._marcar_play(on)
+            if not on:
+                self.modbus.pausar()
+                if self.edicion is None:
+                    self._establecer_edicion(self._edicion_desde_fuente() if self.v else Edicion.nuevo())
+            self._poner_modo()
+            if on:
+                self.refrescar()
+            if self.modbus.activo:
+                self.modbus.solicitar_ejecucion(on)
+            if on or self.modbus.activo:  # con la conexión viva el temporizador sigue en Pausa: observa las entradas
+                self.reloj.start()
+                self.rt.start()
+            else:
                 self.rt.stop()
+        finally:
+            self._transicion_ui = False
+
+    def _vigilar_motor(self) -> bool:
+        """En Play, si el motor deja de estar en situación estable (inestable o detenido por un diagnóstico): se para, pasa a
+        Pausa/edición y se cuenta por qué. Devuelve si ha parado."""
+        s = self.v.s if self.v else None
+        if s is None or s.status == "pausada-estable":
+            return False
+        self._avisar_motor(self.v)
+        self.a_ejecutar.setChecked(False)
+        return True
+
+    def _avisar_motor(self, vista: Vista, al_arrancar: bool = False) -> None:
+        """El motor no ha quedado en situación estable. Inestable (D-LIM-EVOL: no la alcanza dentro de su límite de
+        evoluciones): aviso modal, una sola vez por episodio. Otro diagnóstico: mensaje en la barra de estado (o aviso, si
+        era al arrancar). Con Modbus vivo, lo que ya se estuviera controlando pasa a estado seguro (cero) sin cerrar la
+        conexión. Los detalles se quedan entre los diagnósticos del panel de edición."""
+        d = vista._diag(vista.s.diagnostics[-1]) if vista.s.diagnostics else None  # con nombres, no ID internos
+        inestable = d is not None and d["code"] == "D-LIM-EVOL"
+        m = self.modbus
+        if m.activo and (inestable or not al_arrancar) and (m.adaptador.sesion is not None or m.escritos):
+            m.pausar(diagnostico=True)
+        evoluciones = [r["text"] for r in vista.state().get("trace", []) if r["kind"] == "evolucion"][-4:]
+        self._avisos_ejecucion = ([f"{d['code']}: {d['message']}"] if d else []) \
+            + ([f"Últimas evoluciones: {' · '.join(evoluciones)}"] if inestable and evoluciones else [])
+        if inestable:
+            if self._aviso_inestable_sesion is not vista.s:
+                self._aviso_inestable_sesion = vista.s
+                self._avisar_inestable()
+        elif al_arrancar:
+            QMessageBox.warning(self, TITULO, "No se puede ejecutar: revise los diagnósticos del GRAFCET."
+                                + (f"\n\n{d['code']}: {d['message']}" if d else ""))
+        else:
+            self.statusBar().showMessage("El motor se ha detenido por un diagnóstico"
+                                         + (f" ({d['code']})" if d else "") + ": véalo en el panel de diagnósticos.", 12000)
+
+    def _avisar_inestable(self) -> None:
+        """Ventana modal con un solo botón; no abre un bucle de eventos propio (se llama desde el temporizador)."""
+        cuadro = QMessageBox(QMessageBox.Icon.Warning, TITULO,
+                             "El GRAFCET es inestable: no alcanza una situación estable. Revise las transiciones.",
+                             QMessageBox.StandardButton.Ok, self)
+        cuadro.button(QMessageBox.StandardButton.Ok).setText("Aceptar")
+        cuadro.finished.connect(lambda _=0: setattr(self, "_popup_inestable", None))
+        self._popup_inestable = cuadro
+        cuadro.open()
 
     def _tick(self) -> None:
         us = self.reloj.restart() * 1000
         if self.modbus.activo:
-            if self.modbus.adaptador.sesion is None:
+            if self.modbus.adaptador.sesion is None:  # Pausa con la conexión viva: solo se observan las entradas
                 self.modbus.tick(False)
                 self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
                 self.panel_es.ocupado(self.modbus.activo)
                 self.panel_es.mostrar_muestra(self.modbus.muestra, self.modbus.adaptador.entradas)
-                self.a_ejecutar.setChecked(False)
+                if self.a_ejecutar.isChecked():
+                    self.a_ejecutar.setChecked(False)
                 if not self.modbus.activo:
                     self.rt.stop()
                     self.rt.setInterval(TICK_MS)
-                    self.a_ejecutar.setEnabled(self.modo == "simular" and self.v is not None and self.v.s is not None and self.v.s.status == "pausada-estable")
-                    if self._recargar_modbus:
-                        self._recargar_modbus = False
-                        self._cargar()
-                        self.a_ejecutar.setChecked(False)
                 return
             ejecutar = self.a_ejecutar.isChecked() and self.modbus.estado == "conectado" and not self.modbus.reiniciando
             if ejecutar and self.modbus.en_marcha and self.v and self.v.s and self.v.s.status == "pausada-estable":
                 self.v.s.advance_to(self.v.s.z.time + us)
             self.modbus.tick(ejecutar)
-            if self.modbus.estado != "conectado":
+            if self.a_ejecutar.isChecked() and self._vigilar_motor():
+                self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
+                return
+            if self.modbus.estado in ("error", "desconectado", "diagnostico"):
                 self.a_ejecutar.setChecked(False)
             self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
             self.panel_es.ocupado(self.modbus.activo)
-            self.refrescar()
+            if self.modo == "simular":
+                self.refrescar()
             if not self.modbus.activo:
                 self.rt.setInterval(TICK_MS)
                 self.rt.stop()
-                if self._recargar_modbus:
-                    self._recargar_modbus = False
-                    self._cargar()
-                    self.a_ejecutar.setChecked(False)
             return
-        if self.v is None or self.v.s is None or self.v.s.status != "pausada-estable":
+        if not self.a_ejecutar.isChecked():  # Pausa sin conexión: el reloj no tiene nada que avanzar
+            self.rt.stop()
+            self.rt.setInterval(TICK_MS)
+            return
+        if self.v is None or self.v.s is None:
             self.a_ejecutar.setChecked(False)
             return
-        self._act("avanzar", us=us)
+        if not self._vigilar_motor():
+            self._act("avanzar", us=us)
 
     def _raiz_modbus(self):
         if (self.modo == "editar" or self.fuente.get("tipo") == "editor") and self.edicion:
@@ -1136,19 +1205,38 @@ class Ventana(QMainWindow):
             except (OSError, ValueError) as exc:
                 self.panel_es.estado.setText(f"No se pudo guardar el mapa: {exc}")
 
-    def _cargar_config_modbus(self):
+    def _cargar_config_modbus(self, doc: dict[str, Any] | None = None) -> None:
+        doc = doc or self.v.doc
         raiz = self._raiz_modbus()
         config = None
-        # Reiniciar conserva el mapa en memoria; cambiar de modelo exige un mapa propio.
+        # Recargar el mismo proyecto conserva el mapa en memoria; cambiar de proyecto exige un mapa propio.
         anterior = self.panel_es.config
-        if anterior.modelo == self.v.doc["id"]:
+        cambio = self._proyecto != self._proyecto_modbus
+        self._proyecto_modbus = self._proyecto
+        if not cambio and anterior.modelo == doc["id"]:
             config = anterior
         elif raiz and (raiz / ARCHIVO).exists():
             try:
-                config = Configuracion.cargar(raiz / ARCHIVO, self.v.doc)
+                config = Configuracion.cargar(raiz / ARCHIVO, doc)
             except (ValueError, OSError) as exc:
                 self.panel_es.estado.setText(f"No se pudo cargar el mapa: {exc}")
-        self.panel_es.cargar(self.v.doc, config)
+        if self.modbus.activo:
+            config = copy.deepcopy(config or Configuracion(modelo=doc["id"]))
+            config.host, config.puerto, config.unidad = self.modbus.cliente.host, self.modbus.cliente.puerto, self.modbus.cliente.unidad
+        self.panel_es.cargar(doc, config)
+        if self.modbus.activo and cambio:
+            self._cambiar_modelo_modbus(doc)
+
+    def _cambiar_modelo_modbus(self, doc: dict[str, Any]) -> None:
+        """Otro modelo con la conexión viva: TCP se conserva, pero lo que el modelo anterior hubiera escrito ya no lo controla
+        nadie (cero) y la lectura sigue con el mapa del modelo nuevo."""
+        anterior = self.modbus.adaptador  # no depende de lo ya confirmado: una escritura en vuelo puede haber llegado a la planta
+        if anterior is not None and (anterior.salidas or getattr(anterior, "salidas_control", [])):
+            self.modbus.pausar(diagnostico=True)
+        try:
+            self.modbus.observar(self.panel_es.config, doc)
+        except ERRORES as exc:
+            self.modbus.mensaje = f"Conectado · el mapa de este modelo no es válido: {exc}"
 
     def _guardar_config_modbus(self):
         try:
@@ -1181,7 +1269,9 @@ class Ventana(QMainWindow):
         if not self.modbus.activo:
             doc = self.edicion.ed.model if self.modo == "editar" and self.edicion else self.v.doc if self.v else None
             if doc is not None and doc != self.panel_es.doc:
-                self.panel_es.cargar(doc, self.panel_es.config if self.panel_es.config.modelo == doc["id"] else None)
+                mismo = self._proyecto == self._proyecto_modbus and self.panel_es.config.modelo == doc["id"]
+                self._proyecto_modbus = self._proyecto
+                self.panel_es.cargar(doc, self.panel_es.config if mismo else None)
         self.paginas_es.setCurrentIndex(1)
 
     def _conectar_modbus(self, prueba=False):
@@ -1192,37 +1282,12 @@ class Ventana(QMainWindow):
         except (ValueError, RuntimeError) as exc:
             self.panel_es.estado.setText(f"No se pudo conectar: {exc}")
             return
-        roles = {v["id"]: v["role"] for v in self.panel_es.doc["variables"]}
-        solo_entradas = all(roles[s.variable] == "input" for s in config.senales)
-        sesion = self.v.s if self.modo == "simular" and self.v else None
-        if solo_entradas and (sesion is None or sesion.status != "pausada-estable"):
-            self._iniciar_conexion_modbus(config, None, prueba)
-            return
-        if self.modo != "simular":
-            self.panel_es.estado.setText("Desconectado. Pulsa «Simular» en la barra superior antes de conectar.")
-            return
-        if not self.v or not self.v.s:
-            detalle = ""
-            if self.v:
-                diagnosticos = self.v.compile_diags or self.v.start_diags
-                detalle = " · " + str(diagnosticos[0]) if diagnosticos else ""
-            self.panel_es.estado.setText("Desconectado. El GRAFCET no está listo: revisa los diagnósticos en la pestaña «GRAFCET»."
-                                        + detalle + " Puedes abrir el proyecto de prueba preparado en pruebas_manuales/factoryio_digital/manifest.json.")
-            return
-        if self.v.s.status != "pausada-estable":
-            diagnosticos = self.v.start_diags or self.v.s.diagnostics
-            detalle = " · " + str(diagnosticos[-1]) if diagnosticos else ""
-            self.panel_es.estado.setText("Desconectado. El motor está detenido o tiene un recorrido pendiente. "
-                                        "Revisa «GRAFCET» y sus diagnósticos antes de conectar." + detalle)
-            return
-        self._iniciar_conexion_modbus(config, self.v.s, prueba)
+        self._iniciar_conexion_modbus(config, None, prueba)
 
     def _iniciar_conexion_modbus(self, config, sesion, prueba):
         try:
             self.a_ejecutar.setChecked(False)
             self.modbus.iniciar(config, sesion, prueba, documento=self.panel_es.doc)
-            if sesion is None:
-                self.a_ejecutar.setEnabled(False)
             self.panel_es.config = config
             self.panel_es._dibujar()
             self.panel_es.ocupado(True)
@@ -1250,16 +1315,21 @@ class Ventana(QMainWindow):
 
     # -- presentación del estado ----------------------------------------------------------------
     def refrescar(self) -> None:
+        if self.a_ejecutar.isChecked() and self._vigilar_motor():
+            return
         M, S = self.v.model, self.v.state()
-        label, color = ESTADOS.get(S["status"], (S["status"], "muted"))
-        self.estado.setText(label)
-        self.estado.setStyleSheet(f"color: {COL[color]}; border: 1px solid {COL[color]}; border-radius: 9px; "
-                                  "padding: 1px 9px")
-        self.titulo.setText(M["title"])
-        self.ayuda.setText(M["help"])
+        simulando = self.modo == "simular"  # al editar, el dibujo, el estado y el título son los de la edición
+        if simulando:
+            label, color = ESTADOS.get(S["status"], (S["status"], "muted"))
+            self.estado.setText(label)
+            self.estado.setStyleSheet(f"color: {COL[color]}; border: 1px solid {COL[color]}; border-radius: 9px; "
+                                      "padding: 1px 9px")
+            self.titulo.setText(M["title"])
+            self.ayuda.setText(M["help"])
         stable, rec = S["status"] == "pausada-estable", S["status"] == "pausada-recorrido"
         self._diagnostico(S, rec)
-        self.diagrama.mostrar(M, S if "time" in S else {})
+        if simulando:
+            self.diagrama.mostrar(M, S if "time" in S else {})
         values = S.get("values", {})
         for var, b in self.botones.items():
             b.setEnabled(stable)
@@ -1273,13 +1343,9 @@ class Ventana(QMainWindow):
             b.setText(f"{self.nombre(var)} = {1 if on else 0}")
             b.setStyleSheet(f"background: {COL['accent_soft']}; border: 1px solid {COL['accent']}; color: #1d2330; "
                             "padding: 5px 10px" if on else "padding: 5px 10px")
-        self.a_completar.setEnabled(rec)
-        self.a_paso.setEnabled(rec or (stable and S.get("nextEventUs") is not None))
-        self.a_ejecutar.setEnabled(stable or self.a_ejecutar.isChecked())
-        if self.a_ejecutar.isChecked() and not stable:
-            self.a_ejecutar.setChecked(False)  # error o recorrido pendiente: el tiempo real se pausa solo
-        self.l_reloj.setText(f"τ = {t_trunc(S['timeUs']) if 'timeUs' in S else '—'}"
-                             + (f" · próximo vencimiento: {S['nextEvent']}" if S.get("nextEvent") else ""))
+        if simulando:
+            self.l_reloj.setText(f"τ = {t_trunc(S['timeUs']) if 'timeUs' in S else '—'}"
+                                 + (f" · próximo vencimiento: {S['nextEvent']}" if S.get("nextEvent") else ""))
         self._lecturas()
         self._variables(M, S)
         self._traza(S)
@@ -1309,8 +1375,6 @@ class Ventana(QMainWindow):
                         self.botones[vid].setEnabled(False)
                         if vid in self.campos:
                             self.campos[vid].setEnabled(False)
-                for accion in (self.a_paso, self.a_completar):
-                    accion.setEnabled(False)
             self.panel_es.mostrar_valores(valores)
 
     def _diagnostico(self, S: dict[str, Any], rec: bool) -> None:

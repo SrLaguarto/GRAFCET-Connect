@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from fractions import Fraction
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -257,32 +258,140 @@ class Ventana(unittest.TestCase):
         self.assertNotIn("Lecturas de interpretación", [g.title() for g in self.w.scroll.findChildren(QGroupBox)])
         self.assertEqual(self.w.scroll.findChildren(QComboBox), [], "el panel derecho no tiene combos de lecturas")
 
-    def test_SAPP09_tiempo_real_pausa_y_paso(self):
-        """REQ-SIM-03: al cargar, el tiempo real está activo; pausa, paso y reinicio funcionan."""
-        self.w.cargar_ejemplo("temporizada")
-        self.assertTrue(self.w.a_ejecutar.isChecked() and self.w.rt.isActive(), "corre desde que se carga")
+    def test_SAPP09_play_pausa_y_un_solo_control(self):
+        """REQ-SIM-03: un solo control de ejecución. Play simula en tiempo real (traza abajo, sin paleta) y Pausa detiene y
+        vuelve a editar; ya no hay botones, menús ni atajos Editar, Simular, Paso ni Completar. Excepción registrada a
+        «al cargar, el tiempo real corre» (P-IMP-60): al abrir, el programa queda en Pausa."""
+        from PySide6.QtGui import QAction
+        w = self.w
+        w.cargar_ejemplo("temporizada")
+        self.assertEqual((w.modo, w.a_ejecutar.isChecked(), w.rt.isActive()), ("editar", False, False), "abrir deja Pausa")
+        self.assertEqual(w.a_ejecutar.text(), "Ejecutar")
+        self.assertIsNotNone(w.edicion)
+        self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (1, 1), "paleta, propiedades y opciones")
+        self.assertFalse(w.dock.isHidden())
+        for nombre in ("a_editar", "a_simular", "a_paso", "a_completar", "tb_modo", "g_modo", "paso", "paso_evolucion"):
+            self.assertFalse(hasattr(w, nombre), nombre)
+        textos = {a.text().replace("&", "") for a in w.findChildren(QAction)}
+        self.assertFalse(textos & {"Editar", "Simular", "Paso", "Completar recorrido"}, textos)
+        atajos = {k.toString() for a in w.findChildren(QAction) for k in a.shortcuts()}
+        self.assertFalse(atajos & {"Ctrl+1", "Ctrl+2", "F10", "F11"}, atajos)
+        self.assertIn("F5", atajos)
+        # Play: simula, el tiempo real corre
+        w.a_ejecutar.setChecked(True)
+        self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("simular", "Pausa", True))
+        self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (0, 0), "entradas y traza")
+        self.assertTrue(w.dock.isHidden() and w.flechas["izquierdo"].isHidden(), "sin paleta")
         self.assertFalse(hasattr(self.w, "b_tiempo"), "ya no hay botones de tiempo lógico")
-        self.w.a_ejecutar.setChecked(False)
-        self.assertFalse(self.w.rt.isActive())
-        self.assertFalse(self.w.a_paso.isEnabled(), "estable y sin vencimientos: Paso no tiene nada que hacer")
-        self.w.botones["marcha"].click()
-        self.assertEqual(self.w.v.state()["situation"], ["E1"])
-        self.assertEqual(self.w.v.state()["nextEvent"], "3 s")
-        self.assertTrue(self.w.a_paso.isEnabled())
-        self.w.paso_evolucion()  # hasta el vencimiento exacto de 3 s
-        self.assertEqual((self.w.v.state()["time"], self.w.v.state()["situation"]), ("3 s", ["E2"]))
-        self.assertIn("τ = 3 s", self.w.l_reloj.text())
-        self.w.reiniciar()
-        self.assertEqual(self.w.v.state()["situation"], ["E0"])
-        self.assertTrue(self.w.a_ejecutar.isChecked(), "tras reiniciar vuelve a correr")
-        self.w.cargar_ejemplo("conflicto")  # el motor no arranca: no hay tiempo real
-        self.assertFalse(self.w.a_ejecutar.isChecked())
+        w.botones["marcha"].click()
+        self.assertEqual((w.v.state()["situation"], w.v.state()["nextEvent"]), (["E1"], "3 s"))
+        w._act("avanzar", us=3_000_000)  # lo que hace el tiempo real hasta el vencimiento exacto de 3 s
+        self.assertEqual((w.v.state()["time"], w.v.state()["situation"]), ("3 s", ["E2"]))
+        self.assertIn("τ = 3 s", w.l_reloj.text())
+        # Pausa: detiene y vuelve a editar
+        w.a_ejecutar.setChecked(False)
+        self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("editar", "Ejecutar", False))
+        self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (1, 1))
+        self.assertFalse(w.dock.isHidden())
+        # Play otra vez, sin editar entre medias: sigue donde estaba
+        w.a_ejecutar.setChecked(True)
+        self.assertEqual(w.v.state()["situation"], ["E2"])
+        w.a_ejecutar.setChecked(False)
+        w.cargar_ejemplo("conflicto")  # no compila: Play avisa y sigue en Pausa
+        with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
+            w.a_ejecutar.setChecked(True)
+        self.assertEqual((aviso.call_count, w.a_ejecutar.isChecked(), w.modo), (1, False, "editar"))
+
+    def test_SAPP17_reiniciar_en_play_y_en_pausa(self):
+        """REQ-SIM-03, REQ-SIM-04: Reiniciar vuelve a la situación inicial; en Play sigue en Play y en Pausa deja el
+        estado inicial (parado y editable)."""
+        w = self.w
+        w.cargar_ejemplo("temporizada")
+        w.a_ejecutar.setChecked(True)
+        w.botones["marcha"].click()
+        self.assertEqual(w.v.state()["situation"], ["E1"])
+        anterior = w.v.s
+        w.reiniciar()
+        self.assertIsNot(w.v.s, anterior)
+        self.assertEqual((w.v.state()["situation"], w.v.state()["time"]), (["E0"], "0 s"))
+        self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.rt.isActive()), (True, "simular", True), "sigue en Play")
+        self.assertEqual(w.botones["marcha"].text(), "marcha = 0", "las entradas vuelven a su valor inicial")
+        w.botones["marcha"].click()
+        w.a_ejecutar.setChecked(False)
+        w.reiniciar()  # en Pausa
+        self.assertEqual(w.v.state()["situation"], ["E0"])
+        self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.rt.isActive()), (False, "editar", False), "sigue en Pausa")
+        w.a_ejecutar.setChecked(True)
+        self.assertEqual(w.v.state()["situation"], ["E0"], "Play arranca desde el estado inicial")
+        w.a_ejecutar.setChecked(False)
+
+    def test_SAPP18_abrir_ejemplo_o_modelo_deja_pausa_y_edicion(self):
+        """REQ-SIM-03, REQ-EDT-01: al abrir un ejemplo o un modelo guardado, el programa queda parado y editable aunque
+        estuviera en Play; Play arranca."""
+        w = self.w
+        w.cargar_ejemplo("temporizada")
+        w.a_ejecutar.setChecked(True)
+        self.assertTrue(w.rt.isActive())
+        w.cargar_ejemplo("macroetapa")  # desde Play
+        self.assertEqual((w.a_ejecutar.isChecked(), w.a_ejecutar.text(), w.modo, w.rt.isActive()),
+                         (False, "Ejecutar", "editar", False))
+        self.assertEqual(w.edicion.titulo, w.v.model["title"])
+        with tempfile.TemporaryDirectory() as tmp:
+            w.guardar_en(Path(tmp) / "macro")
+            w.a_ejecutar.setChecked(True)
+            self.assertTrue(w.abrir_ruta(Path(tmp) / "macro"))
+            self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (False, "editar"))
+            self.assertTrue(w.edicion.ed.validate().can_simulate)
+            w.a_ejecutar.setChecked(True)
+            self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.v.state()["status"]), (True, "simular", "pausada-estable"))
+            w.a_ejecutar.setChecked(False)
+
+    def test_SAPP19_inestable_avisa_una_vez_y_para(self):
+        """REQ-SEM-07, REQ-SIM-03: si en Play el motor no alcanza una situación estable (D-LIM-EVOL), se detiene, pasa a
+        Pausa/edición y aparece una sola ventana modal «El GRAFCET es inestable…» con un botón; los detalles quedan entre
+        los diagnósticos. Una etapa inestable normal no avisa."""
+        from PySide6.QtWidgets import QMessageBox
+        w = self.w
+        w.cargar_ejemplo("contador-inestable")  # la etapa 2 es inestable en cada bajada de I02 y no es un error
+        w.a_ejecutar.setChecked(True)
+        with mock.patch.object(type(w), "_avisar_inestable", autospec=True) as aviso:
+            w.botones["I00"].click()
+            w.botones["I02"].click()
+            w.botones["I02"].click()
+            self.assertEqual((aviso.call_count, w.a_ejecutar.isChecked()), (0, True), "etapa inestable normal: sin aviso")
+        w.a_ejecutar.setChecked(False)
+        w.cargar_ejemplo("temporizada")
+        w.a_ejecutar.setChecked(True)
+        w.botones["marcha"].click()
+        w.botones["fin"].click()  # con marcha y fin, al vencer 3 s el ciclo no termina nunca
+        w._act("avanzar", us=3_000_000)
+        cuadro = w._popup_inestable
+        self.assertIsNotNone(cuadro)
+        self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Ejecutar"))
+        self.assertEqual(cuadro.text(), "El GRAFCET es inestable: no alcanza una situación estable. Revise las transiciones.")
+        self.assertEqual([b.text() for b in cuadro.buttons()], ["Aceptar"])
+        self.assertTrue(cuadro.isModal())
+        textos = [w.lista_diag.item(i).text() for i in range(w.lista_diag.count())]
+        self.assertTrue(any("D-LIM-EVOL" in t for t in textos), textos)
+        self.assertTrue(any("franquea" in t and "t3" in t for t in textos), "qué transiciones")
+        # No se repite por tic: más refrescos y tics del mismo episodio no abren otra ventana
+        with mock.patch.object(type(w), "_avisar_inestable", autospec=True) as otro:
+            w.refrescar_edicion()
+            w.refrescar()
+            w._tick()
+            self.assertEqual((otro.call_count, w.a_ejecutar.isChecked()), (0, False))
+        cuadro.button(QMessageBox.StandardButton.Ok).click()
+        self.assertIsNone(w._popup_inestable)
+        self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (False, "editar"), "al aceptar queda parado y editable")
+        w.a_ejecutar.setChecked(True)  # se puede volver a ejecutar: nueva ejecución desde el principio
+        self.assertEqual((w.modo, w.v.state()["status"]), ("simular", "pausada-estable"))
+        w.a_ejecutar.setChecked(False)
 
     def test_SAPP10_temporizador_en_dibujo_y_tabla(self):
         """REQ-SIM-03: «temporizada», con E1 activa y 1 s transcurrido, muestra «1 s / 3 s» junto a la receptividad y en
         la tabla de temporizadores; al vencer, «3 s ✓»."""
         self.w.cargar_ejemplo("temporizada")
-        self.w.a_ejecutar.setChecked(False)
+        self.w.a_ejecutar.setChecked(True)  # el dibujo del simulador es el de Play
         self.assertFalse(self.w.c_temp.isHidden())
         self.assertEqual(self.w.t_temp.rowCount(), 1)
         self.assertEqual(self.w.t_temp.item(0, 1).text(), "parado")
@@ -298,6 +407,7 @@ class Ventana(unittest.TestCase):
         self.assertEqual(self.w.v.state()["situation"], ["E2"])
         self.assertNotIn("1 s / 3 s", textos())
         self.assertEqual(self.w.t_temp.item(0, 1).text(), "parado")
+        self.w.a_ejecutar.setChecked(False)
         # Un retardo en la condición de una acción: «2 s ✓» al vencer, junto a la condición de la acción
         from PySide6.QtWidgets import QGraphicsScene
         from escritorio.diagrama import dibujar
@@ -347,7 +457,7 @@ class Ventana(unittest.TestCase):
         """REQ-SIM-03: «+», «−» y la rueda con Ctrl cambian el zoom; un refresco lo conserva; «Ajustar» vuelve a encajar."""
         w, d = self.w, self.w.diagrama
         w.cargar_ejemplo("contador-flanco")
-        w.a_ejecutar.setChecked(False)
+        w.a_ejecutar.setChecked(True)
         d.ajustar()
         base = d.escala()
         d.b_mas.click()
@@ -375,6 +485,7 @@ class Ventana(unittest.TestCase):
                 self.assertEqual(d.escala() > k, sentido > 0, f"rueda {delta} con {mod}")
             self.assertAlmostEqual(d.escala(), antes, places=6)
         d.ajustar()
+        w.a_ejecutar.setChecked(False)
 
     def test_SAPP16_ventana_con_nombres(self):
         """REQ-EDT-07, REQ-SIM-03: un modelo del editor, guardado y abierto en la ventana, muestra nombres en el dibujo,
@@ -387,7 +498,7 @@ class Ventana(unittest.TestCase):
             save_project(Path(tmp) / "p", project)
             self.assertTrue(self.w.abrir_ruta(Path(tmp) / "p"))
         w = self.w
-        w.a_ejecutar.setChecked(False)
+        w.a_ejecutar.setChecked(True)
         self.assertEqual(list(w.botones), [marcha])
         self.assertEqual(w.botones[marcha].text(), "marcha = 0")
         w.botones[marcha].click()
@@ -401,12 +512,39 @@ class Ventana(unittest.TestCase):
             self.assertIn(esperado, textos)
         self.assertFalse(any(t.startswith(("s-", "v-", "g-")) for t in textos), textos)
         self.assertTrue(any("S = {E1}" in w.traza.item(i).text() for i in range(w.traza.count())))
+        w.a_ejecutar.setChecked(False)
+
+    def test_SAPP20_play_con_lecturas_que_no_compilan_avisa_y_queda_en_pausa(self):
+        """REQ-SIM-03, REQ-JER-04: si el modelo compila con las lecturas por defecto pero no con las activas (7.7 = B con una
+        etapa inicial dentro de una expansión), Play avisa con los diagnósticos, no lanza excepción y queda en Pausa."""
+        from grafcet.examples import ej_macroetapa
+        w = self.w
+        m, layout = ej_macroetapa()
+        next(s for s in m.doc["steps"] if s["id"] == "K")["initial"] = True  # etapa inicial dentro de la expansión
+        w.fuente = {"tipo": "fichero", "ruta": Path(self.tmp.name) / "macro.json", "doc": m.doc, "layout": layout,
+                    "titulo": "Macro", "ayuda": "", "raiz": None}
+        try:
+            w._cargar()
+            w._opciones({"7.7": "B"})
+            self.assertIsNone(w.v.s, "con 7.7 = B no compila")
+            with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
+                w.a_ejecutar.setChecked(True)
+            self.assertEqual(aviso.call_count, 1)
+            self.assertIn("lecturas", aviso.call_args.args[2])
+            self.assertIn("7.7", aviso.call_args.args[2])
+            self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Ejecutar"))
+            w._opciones({})  # lecturas por defecto: se puede ejecutar
+            w.a_ejecutar.setChecked(True)
+            self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (True, "simular"))
+        finally:
+            w.a_ejecutar.setChecked(False)
+            w._opciones({})
 
     def test_SAPP13_tiempos_truncados_a_dos_decimales(self):
         """REQ-SIM-03: lo que lleva un temporizador y τ se muestran truncados a la baja a 2 decimales; el preset, tal cual."""
         w = self.w
         w.cargar_ejemplo("temporizada")
-        w.a_ejecutar.setChecked(False)
+        w.a_ejecutar.setChecked(True)
         w.botones["marcha"].click()
         w._act("avanzar", us=1_239_999)
         self.assertEqual(w.v.state()["time"], "1,239999 s", "el estado exacto no se toca")
@@ -415,12 +553,11 @@ class Ventana(unittest.TestCase):
         w._act("avanzar", us=1)
         self.assertEqual((w.t_temp.item(0, 2).text(), w.l_reloj.text().split(" · ")[0]), ("1,24 s", "τ = 1,24 s"))
         self.assertEqual(w.t_temp.item(0, 3).text(), "3 s")
-        self.assertEqual(w.a_ejecutar.text(), "Ejecutar")
-        self.assertFalse(w.a_ejecutar.icon().isNull(), "el símbolo se muestra ahora como icono de la barra")
-        w.a_ejecutar.setChecked(True)
         self.assertEqual(w.a_ejecutar.text(), "Pausa")
-        self.assertFalse(w.a_ejecutar.icon().isNull())
+        self.assertFalse(w.a_ejecutar.icon().isNull(), "el símbolo se muestra ahora como icono de la barra")
         w.a_ejecutar.setChecked(False)
+        self.assertEqual(w.a_ejecutar.text(), "Ejecutar")
+        self.assertFalse(w.a_ejecutar.icon().isNull())
 
 
 if __name__ == "__main__":

@@ -111,6 +111,55 @@ class CicloTests(unittest.TestCase):
             finally:
                 c.cerrar()
 
+    def test_SFIO30_pausar_vincular_y_observar_sin_cerrar_tcp(self):
+        """REQ-SIM-02, REQ-SIM-04: Pausa conserva TCP y salidas; Play vincula una sesión al TCP existente; un diagnóstico
+        pide cero; observar cambia el mapa de lectura; nada de eso reconecta."""
+        escrituras = []
+        def responder(p):
+            if p[0] == 15:
+                escrituras.append((int.from_bytes(p[1:3], "big"), p[6] & 1))
+            return b"\x02\x01\x01" if p[0] == 2 else p[:5]
+        with servidor(responder) as sc:
+            m = M().var("sensor").var("motor", "output").step("E0", True)
+            m.cont("E0", "motor", "sensor")
+            cm = m.compile()
+            cfg = Configuracion(puerto=sc.puerto, periodo_ms=20,
+                                senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            c = Coordinador()
+            try:
+                c.iniciar(cfg, None, documento=m.doc)  # solo observación: sin sesión ni escrituras
+                esperar(c, lambda: c.estado == "conectado")
+                socket = c.cliente._socket
+                self.assertEqual((c.adaptador.sesion, escrituras), (None, []))
+                c.vincular(session(cm), cfg, m.doc)  # Play
+                esperar(c, lambda: not c.reiniciando)
+                esperar(c, lambda: c.escritos.get("motor") is True, True)
+                n = len(escrituras)
+                c.pausar()  # Pausa: TCP y salidas se conservan, la lectura sigue
+                for _ in range(60):
+                    c.tick(False)
+                    time.sleep(.001)
+                self.assertEqual((len(escrituras), c.escritos, c.estado), (n, {"motor": True}, "conectado"))
+                self.assertIsNone(c.adaptador.sesion)
+                self.assertEqual([s.variable for s in c.adaptador.entradas], ["sensor"])
+                self.assertIs(c.cliente._socket, socket)
+                c.vincular(session(cm), cfg, m.doc)  # Play otra vez: sesión nueva, mismo TCP
+                esperar(c, lambda: not c.reiniciando)
+                esperar(c, lambda: c.escritos.get("motor") is True, True)
+                c.pausar(diagnostico=True)  # estado seguro por un diagnóstico: cero, sin cerrar
+                esperar(c, lambda: c.escritos == {"motor": False} and escrituras[-1] == (0, 0))
+                self.assertEqual(c.estado, "conectado")
+                c.observar(Configuracion(puerto=sc.puerto, periodo_ms=20, senales=[]), m.doc)  # otro modelo: mapa vacío
+                self.assertEqual((c.adaptador.entradas, c.muestra), ([], {}))
+                for _ in range(20):
+                    c.tick(False)
+                    time.sleep(.001)
+                self.assertIs(c.cliente._socket, socket)
+                c.desconectar()
+                esperar(c, lambda: c.estado == "desconectado")
+            finally:
+                c.cerrar()
+
     def test_SFIO10_perdida_y_reconexion_manual(self):
         """REQ-ROB-01: pérdida de red detiene; reconectar no reanuda el motor."""
         responde = [True]

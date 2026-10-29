@@ -29,11 +29,14 @@ El primer comando comprueba la parte automatizable de R-02: el paquete sigue sie
 ### Simulador de escritorio (P-IMP-29)
 
 Primera versión para Windows: simula los ejemplos y los modelos guardados con el dibujo de la norma. Tiene entradas
-con un clic, tiempo real desde que se carga (como un autómata; los retardos se ven como temporizadores que cuentan:
-«1,2 s / 3 s»), pausa y paso, evolución a evolución, traza, salidas, variables y todas las lecturas de interpretación
+con un clic. Al abrir un ejemplo o un modelo, el programa queda en **Pausa**, que es el modo de edición (en el resto de
+este documento, «modo Editar»). **Play** (F5, «Ejecutar») compila lo editado y simula en tiempo real, como un autómata;
+los retardos se ven como temporizadores que cuentan («1,2 s / 3 s»). **Pausa** detiene y vuelve a editar: si no se ha
+editado entre medias, Play continúa donde estaba, y si se ha editado, empieza una sesión nueva. **Reiniciar** (Ctrl+R)
+vuelve a la situación inicial. Hay traza, salidas, variables y todas las lecturas de interpretación
 (menú «Ajustes»). Los paneles derecho e inferior se pliegan, y el dibujo admite zoom (P-IMP-30). «Abrir modelo» admite
-un proyecto (su `manifest.json`) o un documento de modelo; «Guardar como proyecto» guarda el modelo en curso con su
-dibujo. Con «Archivo > Nuevo grafcet», o «Editar» sobre un ejemplo o un modelo abierto, se pasa al editor de un secuencial: etapas, transiciones, enlaces, receptividades, deshacer, diagnósticos y recuperación (P-IMP-32).
+un proyecto (su `manifest.json`) o un documento de modelo; «Guardar proyecto» guarda el modelo en curso con su
+dibujo. Con «Proyecto > Nuevo grafcet» se crea un modelo vacío; en Pausa, un ejemplo o un modelo abierto se edita con el editor de un secuencial: etapas, transiciones, enlaces, receptividades, deshacer, diagnósticos y recuperación (P-IMP-32).
 
 - Desde el código: doble clic en «Abrir simulador.bat», o `python escritorio/simulador.py [modelo]`.
 - Versión portable: «Construir ejecutable.bat» (o `python tools/construir_ejecutable.py`) deja el programa en
@@ -63,7 +66,7 @@ representables detienen la conexión; no hay redondeo ni saturación.
 de Factory I/O. Modbus no permite deducir sus cantidades reales por sondeo en este
 servidor. Use la **×** para desasignar o arrastre desde el propio slot para mover;
 si está conectado, pulse **Desconectar / editar** primero. Con solo entradas se
-admite observación sin motor compilado, también desde Editar, sin escribir salidas.
+admite observación sin motor compilado, también en Pausa, sin escribir salidas.
 
 La asignación por arrastre se aplica al soltar y se guarda si el proyecto tiene
 carpeta. **Configuración** reúne los ajustes, **Guardar configuración…** y
@@ -71,10 +74,13 @@ carpeta. **Configuración** reúne los ajustes, **Guardar configuración…** y
 `conexion-factoryio.json` dentro del proyecto; también
 puede cargarlo desde otro archivo. El **check verde** confirma conexión mantenida.
 **Conectar** solicita cero y lee sensores; pulse
-**Ejecutar** para comenzar. Pausa conserva estado y salidas. Un diagnóstico del
+**Ejecutar** (Play) para comenzar. Pausa conserva estado y salidas, y sigue observando las entradas. Un diagnóstico del
 motor solicita cero; pérdida de red pausa sin garantizar el estado de los actuadores.
-La reconexión es manual y exige volver a pulsar Ejecutar. Para editar o depurar,
-desconecte; al cambiar modelo se descartan las respuestas pendientes.
+La reconexión es manual y exige volver a pulsar Ejecutar. **Conectar** y **Probar conexión** con Play activo pasan a
+Pausa. La conexión solo se cierra con **Desconectar**, al cerrar el programa o por un fallo real de red o del servidor:
+ni Play, ni Pausa, ni Reiniciar, ni editar, guardar o abrir otro proyecto la cierran. Si lo editado invalida el mapa de
+señales, Play no arranca, avisa y la conexión se mantiene. Al abrir otro proyecto con conexión viva, las salidas del
+modelo anterior pasan a cero y el mapa se sustituye por el del proyecto nuevo.
 
 El periodo de servicio es configurable (50 ms iniciales). El intervalo efectivo
 incluye latencia y lecturas/escrituras por señal; pulsos breves pueden perderse.
@@ -177,7 +183,7 @@ En modo Editar, la pantalla tiene tres zonas:
 
 - **Paleta (panel izquierdo):** solo tiene la paleta, en una sola lista: la etapa, la transición, la simultaneidad (barra de doble trazo) y la acción (la ficha «Acción» es la continua; los otros tipos se eligen con el botón derecho, en «Tipo de acción»). Las fichas se colocan **arrastrándolas** al dibujo; un clic en una ficha solo muestra su ayuda. El panel izquierdo se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L).
 - **Dibujo (centro):** donde se ve y se toca el grafcet. Con el ratón se selecciona, se mueve y se enlaza; la rueda hace zoom.
-- **Opciones (panel inferior):** ocupa todo el ancho de la ventana, debajo de los paneles laterales. Muestra la configuración de lo que está seleccionado. Sin selección, dice «Haga clic en un elemento del dibujo para ver y cambiar sus opciones». Se despliega y se pliega con su flecha; el divisor con el dibujo se arrastra, y el programa recuerda la altura que le dio en Editar y en Simular por separado.
+- **Opciones (panel inferior):** ocupa todo el ancho de la ventana, debajo de los paneles laterales. Muestra la configuración de lo que está seleccionado. Sin selección, dice «Haga clic en un elemento del dibujo para ver y cambiar sus opciones». Se despliega y se pliega con su flecha; el divisor con el dibujo se arrastra, y el programa recuerda la altura que le dio en Pausa (edición) y en Play (simulación) por separado.
 
 ### Dónde se cambia cada cosa
 
@@ -194,7 +200,7 @@ Si una variable que se usa no existe, aparece en naranja y parpadea en el panel.
 
 ### Traza y Leyenda
 
-- **Traza:** en Simular, el panel inferior, que ocupa todo el ancho de la ventana, muestra la traza de la evolución. En Editar ya no hay pestaña de traza.
+- **Traza:** en Play (simulación), el panel inferior, que ocupa todo el ancho de la ventana, muestra la traza de la evolución. En Pausa (edición) ese panel muestra las opciones de lo seleccionado.
 - **Leyenda:** está en el menú **Ayuda > Leyenda del dibujo**, en una ventana aparte que se puede dejar abierta mientras se trabaja.
 
 ### No se puede poner un elemento encima de otro
@@ -279,7 +285,7 @@ Al editar, el panel izquierdo (la paleta) y el derecho (Variables y Diagnóstico
 En modo Editar, el panel de Opciones de una **etapa** y el de una **transición** tienen el campo «Comentario», de una línea. Vacío significa sin comentario. Cada cambio se deshace con Ctrl+Z.
 
 - Se dibuja entre comillas tipográficas, en cursiva y gris: el de una transición, a la derecha de su receptividad (o de su etiqueta, si no tiene receptividad); el de una etapa, a la derecha de la etapa, o de su última acción si la tiene. Si es largo, se ajusta en varias líneas, con un ancho máximo de 190 px.
-- No entra en la simulación, ni en la receptividad, ni en los diagnósticos. Se ve también en modo Simular, y `tools/dibujo.js` lo dibuja igual.
+- No entra en la simulación, ni en la receptividad, ni en los diagnósticos. Se ve también al simular (Play), y `tools/dibujo.js` lo dibuja igual.
 - Se guarda en `presentation.notes`, con `kind: "comment"`. Borrar el elemento borra su comentario, y Ctrl+Z lo devuelve.
 - Las acciones no llevan comentario.
 - Limitaciones: un comentario largo con elementos muy juntos puede pisar a un vecino (no se mueve nada solo); si el texto ya lleva comillas, salen dobles. Copiar y pegar elementos aún no existe. Más adelante se añadirá un elemento de texto de comentario que se pueda arrastrar.

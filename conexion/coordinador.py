@@ -29,8 +29,12 @@ class Coordinador:
         self._generacion = 0
         self.reiniciando = False
         self._cerrado = False
+        self._observar_despues = False
+        self._salidas_seguras = None
 
     def solicitar_ejecucion(self, ejecutar):
+        if ejecutar:
+            self._observar_despues = False  # la intención más reciente (Play) manda sobre un Reiniciar en Pausa
         if ejecutar != self._ejecutar:
             self.en_marcha = False
             if self.estado == "conectado":
@@ -55,17 +59,53 @@ class Coordinador:
         """Cambia sesión sin cerrar TCP; descarta respuestas de la ejecución anterior."""
         if self.estado not in ("conectado", "diagnostico") or self.adaptador.sesion is None or sesion.cm.revision != self.adaptador.sesion.cm.revision:
             raise RuntimeError("El reinicio requiere conexión estable y el mismo modelo")
-        adaptador = Adaptador(self.adaptador.config, sesion)
+        self.vincular(sesion)
+
+    def vincular(self, sesion, config=None, documento=None, observar_despues=False):
+        """Vincula una ejecución a TCP existente; no vuelve a conectar."""
+        if self.estado not in ("conectado", "diagnostico"):
+            raise RuntimeError("Espera a que termine la conexión")
+        config = config or self.adaptador.config
+        if documento is not None:
+            config.validar(documento)
+        adaptador = Adaptador(config, sesion)
         valores = adaptador.valores_salida()
         self._generacion += 1
         self.adaptador = adaptador
         self._valores_reinicio = valores
         self.reiniciando = True
+        self._observar_despues = observar_despues
         self.en_marcha = self._ejecutar = self.fallo_motor = self.cero_pendiente = False
         self._descartar_lectura = False
         self.muestra = {}
         self.estado = "conectado"
         self.mensaje = "Conectado · reiniciando GRAFCET y salidas iniciales…"
+
+    def pausar(self, diagnostico=False):
+        """Conserva transporte y salidas; un diagnóstico solicita cero."""
+        if not self.activo or self.adaptador is None or (self.adaptador.sesion is None and not diagnostico):
+            return
+        anterior = self.adaptador
+        if diagnostico:
+            salidas = list(anterior.salidas or getattr(anterior, "salidas_control", []))
+            self._salidas_seguras = (salidas, {s.variable: False if s.formato == "BOOL" else 0 for s in salidas})
+        self._generacion += 1
+        self.adaptador = MonitorEntradas.desde_adaptador(anterior)
+        self.en_marcha = self._ejecutar = self.reiniciando = self.fallo_motor = self.cero_pendiente = False
+        if self.estado == "diagnostico":
+            self.estado = "conectado"
+        if self.estado == "conectado":
+            self.mensaje = "Conectado · GRAFCET parado · edición habilitada"
+
+    def observar(self, config, documento):
+        """Cambia el mapa de lectura (otro modelo) con el GRAFCET parado, sin tocar TCP; descarta lo que estuviera en vuelo."""
+        if not self.activo:
+            return
+        monitor = MonitorEntradas(config, documento)
+        self._generacion += 1
+        self.adaptador = monitor
+        self.muestra = {}
+        self.en_marcha = self._ejecutar = self.reiniciando = self.fallo_motor = self.cero_pendiente = False
 
     def iniciar(self, config, sesion, prueba=False, documento=None):
         if self.activo or self.futuro is not None:
@@ -77,6 +117,8 @@ class Coordinador:
         self.muestra, self.escritos = {}, {}
         self.fallo_motor = self.cero_pendiente = False
         self.reiniciando = False
+        self._observar_despues = False
+        self._salidas_seguras = None
         self.en_marcha = self._ejecutar = self._descartar_lectura = False
         # Calcular valores del motor en el hilo propietario, antes de encolar red.
         cero = self.adaptador.valores_salida(cero=True)
@@ -128,7 +170,7 @@ class Coordinador:
                                 self.en_marcha = True
                                 self.mensaje = "Conectado · Ejecutando · intercambio de sensores y actuadores activo"
                                 valores = self.adaptador.valores_salida()
-                                self._enviar("escribir", self._escribir, valores)
+                                self._enviar("escribir", self._escribir, valores, list(self.adaptador.salidas))
                     elif fase in ("escribir", "cero"):
                         self.escritos = resultado
                         if fase == "cero":
@@ -139,6 +181,11 @@ class Coordinador:
                         self.escritos, self.muestra = resultado
                         self.reiniciando = False
                         self.mensaje = "Conectado · GRAFCET reiniciado · pulse Ejecutar"
+                        if self._observar_despues:
+                            self.adaptador = MonitorEntradas.desde_adaptador(self.adaptador)
+                    elif fase == "seguras":
+                        self.escritos = resultado
+                        self._salidas_seguras = None
             except Exception as exc:
                 # También incluye conversión inválida: no seguir controlando con muestras malas.
                 self.estado, self.mensaje = "error", f"Conexión detenida: {exc}. Salidas no garantizadas."
@@ -154,12 +201,18 @@ class Coordinador:
             return
         if self.estado not in ("conectado", "diagnostico"):
             return
+        if self._salidas_seguras is not None:
+            if self.futuro is None:
+                senales, valores = self._salidas_seguras
+                self._enviar("seguras", self._escribir, valores, senales)
+            return
         if self.reiniciando:
             if self.futuro is None:
                 valores = self._valores_reinicio
+                salidas, entradas = list(self.adaptador.salidas), list(self.adaptador.entradas)
                 def reinicio_red():
-                    self._escribir(valores)
-                    return valores, leer_entradas(self.cliente, self.adaptador.entradas)
+                    self._escribir(valores, salidas)
+                    return valores, leer_entradas(self.cliente, entradas)
                 self._enviar("reiniciar", reinicio_red)
             return
         if self.adaptador.sesion is not None and self.adaptador.sesion.status != "pausada-estable" and not self.fallo_motor:
@@ -170,13 +223,13 @@ class Coordinador:
             return
         if self.cero_pendiente:
             self.cero_pendiente = False
-            self._enviar("cero", self._escribir, self.adaptador.valores_salida(cero=True))
+            self._enviar("cero", self._escribir, self.adaptador.valores_salida(cero=True), list(self.adaptador.salidas))
         elif not self.fallo_motor and monotonic() >= self.proxima:
             self.proxima = monotonic() + self.adaptador.config.periodo_ms / 1000
             self._enviar("leer", leer_entradas, self.cliente, self.adaptador.entradas)
 
-    def _escribir(self, valores):
-        escribir_salidas(self.cliente, self.adaptador.salidas, valores)
+    def _escribir(self, valores, senales=None):
+        escribir_salidas(self.cliente, self.adaptador.salidas if senales is None else senales, valores)
         return valores
 
     def cerrar(self):

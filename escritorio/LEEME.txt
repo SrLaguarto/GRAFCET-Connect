@@ -5,22 +5,22 @@ Abrir: doble clic en GRAFCET.exe. No necesita instalación ni conexión a la red
 programa: puede copiarse a otro sitio o a un USB, pero GRAFCET.exe no funciona separado de ella.
 
 Qué hace
-- Simula los ejemplos (menú Ejemplos) y los modelos guardados (Archivo > Abrir modelo): un proyecto (su
+- Simula los ejemplos (menú Ejemplos) y los modelos guardados (Proyecto > Abrir modelo): un proyecto (su
   manifest.json) o un documento de modelo (model-….json).
 - Dibuja el grafcet con la notación de la norma y muestra la evolución: etapas activas e inestables,
   transiciones validadas y franqueables, acciones, salidas, variables, temporizadores y traza.
-- Entradas con un clic (las numéricas se escriben). El tiempo corre en tiempo real desde que se carga el
-  modelo, como un autómata: cada retardo es un temporizador que se ve contar («1,2 s / 3 s») junto a su
-  receptividad. Barra de herramientas: Ejecutar/Pausa, Paso y Reiniciar. «Simulación > Avanzar el tiempo…» es
-  una herramienta de depuración.
-- Evolución a evolución con «Paso a paso» (en Entradas) y «Paso».
+- Entradas con un clic (las numéricas se escriben). Al abrir un ejemplo o un modelo, el programa queda en Pausa, que
+  es el modo de edición. Play (Ejecutar, F5) compila lo editado y simula en tiempo real, como un autómata: cada
+  retardo es un temporizador que se ve contar («1,2 s / 3 s») junto a su receptividad. Pausa (F5 de nuevo) detiene y
+  vuelve a editar; si no se ha editado entre medias, Play continúa donde estaba. Barra de herramientas: Ejecutar/Pausa
+  y Reiniciar (Ctrl+R). «Simulación > Avanzar el tiempo…» es una herramienta de depuración, solo en Play.
 - Ajustes > Lecturas de interpretación: por defecto, las decididas por el responsable; lo que sigue abierto se
   detiene con su cuestión U en vez de aproximarse. Si se elige otra, la barra de estado lo avisa.
 - Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J). Al simular, el
   panel inferior muestra la traza.
 - Zoom del dibujo: «−», «+», «Ajustar», rueda del ratón, Ctrl+= y Ctrl+−; el zoom elegido se mantiene.
-- Archivo > Guardar proyecto: guarda el modelo en curso con su dibujo, para abrirlo después.
-- Editor de un grafcet secuencial (Archivo > Nuevo grafcet, o «Editar» sobre cualquier modelo): paleta a la
+- Proyecto > Guardar proyecto: guarda el modelo en curso con su dibujo, para abrirlo después.
+- Editor de un grafcet secuencial (Proyecto > Nuevo grafcet, o editar en Pausa cualquier modelo abierto): paleta a la
   izquierda, con la etapa, la transición, la simultaneidad y la acción (las fichas se arrastran al dibujo; sin herramienta, el ratón
   selecciona, mueve y enlaza). Puntos de unión arriba y abajo (al acercar el puntero se marcan y de ellos sale el
   enlace). Panel de Opciones abajo, con la configuración de lo seleccionado (ver más abajo). Mover con rejilla,
@@ -31,8 +31,8 @@ Qué hace
   el ratón, arrastrando de un punto de unión: a un hueco crea lo que sigue (una transición desde una etapa, una
   etapa desde una transición: así se abre una rama), a un enlace une la rama ahí (si sale de una transición) o
   hace un salto de secuencia (si sale de una etapa). El ejemplo «Alternativas y salto de secuencia» lo muestra.
-  Los retardos se escriben como 3s/X1. «Simular» valida el grafcet y lo ejecuta; si no compila, dice por qué y
-  parpadean en naranja los elementos con error. Cada cierto tiempo se guarda una copia de recuperación.
+  Los retardos se escriben como 3s/X1. Play valida el grafcet y lo ejecuta; si no compila o está vacío, dice por qué,
+  queda en Pausa y parpadean en naranja los elementos con error. Cada cierto tiempo se guarda una copia de recuperación.
 - Ayuda > Leyenda del dibujo: ventana con lo que significa cada trazo y cada color.
 
 
@@ -83,7 +83,7 @@ En modo Editar, la pantalla tiene tres zonas:
 - Opciones (panel inferior): ocupa todo el ancho de la ventana, debajo de los paneles laterales. Muestra la
   configuración de lo que está seleccionado. Sin selección, dice «Haga clic en
   un elemento del dibujo para ver y cambiar sus opciones». Se despliega y se pliega con su flecha; el divisor con el
-  dibujo se arrastra, y el programa recuerda la altura que le dio en Editar y en Simular por separado.
+  dibujo se arrastra, y el programa recuerda la altura que le dio en Pausa y en Play por separado.
 
 Dónde se cambia cada cosa
 
@@ -108,7 +108,7 @@ hasta que está completo: la acción queda como borrador (con «?») hasta enton
 
 Traza y Leyenda
 
-- Traza: en Simular, el panel inferior, que ocupa todo el ancho de la ventana, muestra la traza de la evolución. En Editar ya no hay pestaña de traza.
+- Traza: en Play (simulación), el panel inferior, que ocupa todo el ancho de la ventana, muestra la traza de la evolución. En Pausa (edición) ese panel muestra las opciones de lo seleccionado.
 - Leyenda: está en el menú Ayuda > Leyenda del dibujo, en una ventana aparte que se puede dejar abierta mientras
   se trabaja.
 
@@ -166,7 +166,7 @@ En modo Editar:
   «Guardar como»): el aviso dice «Hay una variable sin nombre: escríbale un nombre o quítela» y la fila parpadea.
 - Errores en naranja: el elemento con un error parpadea en naranja (unas tres veces en 1,5 s) y se centra en la vista
   si está fuera: una etapa, transición, barra, enlace, acción (del modelo o borrador) o fila de variable. Parpadea al
-  rechazar una operación del editor que se refiere a un elemento; al pulsar «Simular» con errores de validación (cada
+  rechazar una operación del editor que se refiere a un elemento; al pulsar Play con errores de validación (cada
   elemento con error); al hacer clic en una línea de Diagnósticos, y al pulsar el aviso de un borrador de acción.
   Diagnósticos resume en una línea: «No se puede simular: N errores» o «El grafcet se puede simular».
 
@@ -302,7 +302,7 @@ Vacío significa sin comentario. Cada cambio se deshace con Ctrl+Z.
 - Se dibuja entre comillas tipográficas, en cursiva y gris: el de una transición, a la derecha de su receptividad (o de
   su etiqueta, si no tiene receptividad); el de una etapa, a la derecha de la etapa, o de su última acción si la tiene.
   Si es largo, se ajusta en varias líneas, con un ancho máximo de 190 px.
-- No entra en la simulación, ni en la receptividad, ni en los diagnósticos. Se ve también en modo Simular, y
+- No entra en la simulación, ni en la receptividad, ni en los diagnósticos. Se ve también al simular (Play), y
   tools/dibujo.js lo dibuja igual.
 - Se guarda en presentation.notes, con kind: "comment". Borrar el elemento borra su comentario, y Ctrl+Z lo devuelve.
 - Las acciones no llevan comentario.

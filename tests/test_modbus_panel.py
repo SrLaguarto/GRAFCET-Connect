@@ -3,6 +3,7 @@ import unittest
 import time
 from pathlib import Path
 import tempfile
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
@@ -127,7 +128,7 @@ class PanelTests(unittest.TestCase):
                 esperar_ui(lambda: w.panel_es.indicadores[vid][1].text() == "1")
                 self.assertIsNone(w.modbus.adaptador.sesion)
                 self.assertEqual(w.modbus.adaptador.salidas, [])
-                self.assertFalse(w.a_ejecutar.isEnabled())
+                self.assertTrue(w.a_ejecutar.isEnabled())
                 self.assertTrue(peticiones)
                 self.assertTrue(all(p[0] == 2 for p in peticiones), "No se escribe ninguna salida")
                 w._desconectar_modbus()
@@ -274,10 +275,7 @@ class PanelTests(unittest.TestCase):
                 self.assertFalse(w.modbus.activo)
                 w.v.s = None
                 w.panel_es.tabla.cellWidget(1, 0).setChecked(True)
-                w._conectar_modbus()
-                self.assertEqual(w.panel_es.estado.text(), "Revisar GRAFCET")
-                self.assertIn("diagnósticos", w.panel_es.estado.toolTip())
-                self.assertIn("manifest.json", w.panel_es.estado.toolTip())
+                self.assertTrue(w.a_ejecutar.isEnabled())
             finally:
                 w.close()
                 w.deleteLater()
@@ -328,6 +326,291 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(w.modbus.escritos, {"motor": False})
             finally:
                 w.close()
+                w.deleteLater()
+                app.processEvents()
+
+    def _ventana_conectada(self, tmp, sc, doc, senales):
+        """Una ventana con el modelo dado, mapa asignado y conexión establecida (en Pausa, solo observando)."""
+        from escritorio.ventana import Ventana
+        w = Ventana(recuperacion=Path(tmp))
+        w.fuente = {"tipo": "fichero", "ruta": Path(tmp) / "modelo.json", "doc": doc,
+                    "layout": {}, "titulo": "Prueba", "ayuda": "", "raiz": None}
+        w._cargar()
+        w.panel_es.cargar(doc, Configuracion(puerto=sc.puerto, periodo_ms=20, senales=senales))
+        w._conectar_modbus()
+        return w
+
+    @staticmethod
+    def _esperar(app, w, condicion):
+        limite = time.monotonic() + 3
+        while not condicion():
+            app.processEvents()
+            if time.monotonic() >= limite:
+                raise AssertionError(w.modbus.mensaje)
+            time.sleep(.002)
+
+    @staticmethod
+    def _servidor_planta(escrituras):
+        """Sensor discreto siempre a 1; las escrituras de coils se anotan como (dirección, valor)."""
+        def responder(p):
+            if p[0] == 15:
+                escrituras.append((int.from_bytes(p[1:3], "big"), p[6] & 1))
+            return b"\x02\x01\x01" if p[0] == 2 else p[:5]
+        return responder
+
+    def test_SFIO27_la_conexion_sobrevive_a_play_pausa_edicion_reinicio_y_abrir(self):
+        """REQ-SIM-02, REQ-SIM-03: una vez conectado, ni Play, Pausa, editar, Reiniciar ni abrir otro ejemplo cierran
+        Modbus; Pausa conserva TCP y salidas, Play vincula una sesión nueva al mismo TCP y solo Desconectar cierra."""
+        from PySide6.QtWidgets import QMessageBox
+        from test_modbus import servidor
+        app = QApplication.instance() or QApplication([])
+        escrituras = []
+        with tempfile.TemporaryDirectory() as tmp, servidor(self._servidor_planta(escrituras)) as sc:
+            m = M().var("sensor").var("motor", "output").step("E0", True)
+            m.cont("E0", "motor", "sensor")
+            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            try:
+                esperar(lambda: w.modbus.estado == "conectado")
+                socket = w.modbus.cliente._socket
+                self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (False, "editar"), "conectar no ejecuta")
+                # Play: la sesión se vincula al TCP existente y la planta recibe la salida
+                w.a_ejecutar.setChecked(True)
+                esperar(lambda: w.modbus.escritos.get("motor") is True)
+                self.assertEqual((w.modo, w.modbus.estado), ("simular", "conectado"))
+                self.assertIs(w.modbus.cliente._socket, socket)
+                # Pausa: edición, TCP y salidas conservados (no se escribe cero), la lectura continúa
+                w.a_ejecutar.setChecked(False)
+                n = len(escrituras)
+                self.assertEqual((w.modo, w.modbus.estado, w.modbus.escritos), ("editar", "conectado", {"motor": True}))
+                self.assertIsNone(w.modbus.adaptador.sesion)
+                fin = time.monotonic() + .1
+                esperar(lambda: time.monotonic() >= fin)
+                self.assertEqual(len(escrituras), n, "Pausa no escribe en la planta")
+                self.assertIs(w.modbus.cliente._socket, socket)
+                self.assertTrue(w.modbus.activo and w.rt.isActive(), "sigue observando las entradas")
+                # Editar (cambia el modelo) y Play otra vez: sesión nueva, mismo TCP
+                anterior = w.v.s
+                self.assertIsNone(w.edicion.nueva_variable("otra"))
+                w.a_ejecutar.setChecked(True)
+                self.assertIsNot(w.v.s, anterior)
+                esperar(lambda: not w.modbus.reiniciando and w.modbus.escritos.get("motor") is True)
+                self.assertEqual((w.modo, w.modbus.estado), ("simular", "conectado"))
+                self.assertIs(w.modbus.cliente._socket, socket)
+                # Reiniciar en Play: sigue en Play y en la misma conexión
+                anterior = w.v.s
+                w.reiniciar()
+                self.assertIsNot(w.v.s, anterior)
+                self.assertTrue(w.a_ejecutar.isChecked())
+                esperar(lambda: not w.modbus.reiniciando and w.modbus.escritos.get("motor") is True)
+                self.assertIs(w.modbus.cliente._socket, socket)
+                # Reiniciar en Pausa: estado inicial, parado, conexión viva
+                w.a_ejecutar.setChecked(False)
+                w.reiniciar()
+                esperar(lambda: not w.modbus.reiniciando and w.modbus.escritos == {"motor": False})
+                self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.modbus.estado), (False, "editar", "conectado"))
+                self.assertIsNone(w.modbus.adaptador.sesion)
+                self.assertIs(w.modbus.cliente._socket, socket)
+                # Abrir otro ejemplo: la conexión sigue; lo que escribía el modelo anterior pasa a cero y el mapa es el nuevo
+                w.a_ejecutar.setChecked(True)
+                esperar(lambda: not w.modbus.reiniciando and w.modbus.escritos.get("motor") is True)
+                with mock.patch("escritorio.ventana.QMessageBox.question") as pregunta:
+                    pregunta.return_value = QMessageBox.StandardButton.Discard  # «otra» quedó sin guardar
+                    w.cargar_ejemplo("temporizada")
+                self.assertEqual(pregunta.call_count, 1)
+                esperar(lambda: w.modbus.escritos == {"motor": False} and escrituras[-1] == (0, 0))
+                self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.modbus.estado), (False, "editar", "conectado"))
+                self.assertIs(w.modbus.cliente._socket, socket)
+                self.assertEqual(w.panel_es.doc["id"], w.v.doc["id"])
+                self.assertEqual(w.modbus.adaptador.entradas, [], "mapa vacío del ejemplo nuevo")
+                # Solo Desconectar cierra
+                w._desconectar_modbus()
+                esperar(lambda: not w.modbus.activo)
+                self.assertEqual(w.modbus.estado, "desconectado")
+            finally:
+                w.edicion.ed.dirty = False  # el cierre no pregunta
+                w.close()
+                w.deleteLater()
+                app.processEvents()
+
+    def test_SFIO28_mapa_invalido_tras_editar_avisa_y_no_arranca(self):
+        """REQ-SIM-03: si lo editado deja el mapa sin su variable, Play no arranca el control externo, avisa en el panel
+        de E/S y la conexión se conserva; al revisar la asignación (aquí, deshacer) se puede ejecutar."""
+        from test_modbus import servidor
+        app = QApplication.instance() or QApplication([])
+        escrituras = []
+        with tempfile.TemporaryDirectory() as tmp, servidor(self._servidor_planta(escrituras)) as sc:
+            m = M().var("sensor").var("motor", "output").var("luz", "output").step("E0", True)
+            m.cont("E0", "motor", "sensor")
+            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0),
+                                                         Senal("luz", "coil", 1)])
+            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            try:
+                esperar(lambda: w.modbus.estado == "conectado")
+                socket = w.modbus.cliente._socket
+                luz = next(v["id"] for v in w.edicion.ed.model["variables"] if v["name"] == "luz")
+                self.assertIsNone(w.edicion.quitar_variable(luz))
+                with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
+                    w.a_ejecutar.setChecked(True)
+                self.assertEqual(aviso.call_count, 1)
+                self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (False, "editar"))
+                self.assertIn("asignaci", w.panel_es.estado.text())
+                self.assertIn("conexión se conserva", w.panel_es.estado.text())
+                for _ in range(10):  # los tics siguientes no borran el aviso
+                    app.processEvents()
+                    time.sleep(.01)
+                self.assertIn("asignaci", w.panel_es.estado.text())
+                self.assertTrue(w.modbus.activo and w.modbus.estado == "conectado")
+                self.assertIs(w.modbus.cliente._socket, socket)
+                self.assertFalse([e for e in escrituras if e[0] == 0 and e[1]], "no se controla la planta")
+                w.edicion.deshacer()  # la asignación vuelve a ser válida
+                w.a_ejecutar.setChecked(True)
+                self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (True, "simular"))
+                esperar(lambda: w.modbus.escritos.get("motor") is True)
+                self.assertIs(w.modbus.cliente._socket, socket)
+            finally:
+                w.edicion.ed.dirty = False
+                w.close()
+                w.deleteLater()
+                app.processEvents()
+
+    def test_SFIO29_inestable_con_modbus_avisa_pausa_y_pone_salidas_a_cero(self):
+        """REQ-SEM-07, REQ-SIM-02: un GRAFCET inestable con la planta conectada se detiene (Pausa/edición), avisa una sola
+        vez, lleva las salidas a cero y conserva la conexión."""
+        from test_modbus import servidor
+        app = QApplication.instance() or QApplication([])
+        escrituras = []
+        with tempfile.TemporaryDirectory() as tmp, servidor(self._servidor_planta(escrituras)) as sc:
+            # con «sensor» a 1, E0 y E1 se alternan sin fin en tiempo cero
+            m = M().var("sensor").var("motor", "output").step("E0", True).step("E1")
+            m.trans("t1", ["E0"], ["E1"], "sensor").trans("t2", ["E1"], ["E0"], "sensor").cont("E1", "motor")
+            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            try:
+                esperar(lambda: w.modbus.estado == "conectado")
+                socket = w.modbus.cliente._socket
+                with mock.patch.object(type(w), "_avisar_inestable", autospec=True) as aviso:
+                    w.a_ejecutar.setChecked(True)
+                    esperar(lambda: aviso.call_count == 1)
+                    esperar(lambda: w.modbus.escritos == {"motor": False} and escrituras and escrituras[-1] == (0, 0))
+                    fin = time.monotonic() + .15
+                    esperar(lambda: time.monotonic() >= fin)  # varios tics más: sigue siendo un solo aviso
+                    self.assertEqual(aviso.call_count, 1)
+                self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (False, "editar"))
+                self.assertTrue(w.modbus.activo)
+                self.assertEqual(w.modbus.estado, "conectado")
+                self.assertIs(w.modbus.cliente._socket, socket)
+                self.assertIsNone(w.modbus.adaptador.sesion)
+                self.assertTrue(any("D-LIM-EVOL" in w.lista_diag.item(i).text() for i in range(w.lista_diag.count())))
+                w._desconectar_modbus()
+                esperar(lambda: not w.modbus.activo)
+            finally:
+                w.edicion.ed.dirty = False
+                w.close()
+                w.deleteLater()
+                app.processEvents()
+
+    def test_SFIO30_play_inmediato_tras_reiniciar_en_pausa_no_vuelve_a_pausa(self):
+        """REQ-SIM-02, REQ-SIM-03: Reiniciar en Pausa y Play inmediato (antes de que termine el reinicio) deja la ejecución
+        en Play: la intención más reciente cancela el paso a observación; el reinicio no se pierde y el TCP es el mismo."""
+        from test_modbus import servidor
+        app = QApplication.instance() or QApplication([])
+        escrituras = []
+        with tempfile.TemporaryDirectory() as tmp, servidor(self._servidor_planta(escrituras)) as sc:
+            m = M().var("sensor").var("motor", "output").step("E0", True)
+            m.cont("E0", "motor", "sensor")
+            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            try:
+                esperar(lambda: w.modbus.estado == "conectado")
+                socket = w.modbus.cliente._socket
+                w.a_ejecutar.setChecked(True)
+                esperar(lambda: w.modbus.escritos.get("motor") is True)
+                w.a_ejecutar.setChecked(False)
+                anterior = w.v.s
+                w.reiniciar()
+                self.assertTrue(w.modbus.reiniciando, "el reinicio aún no ha terminado")
+                w.a_ejecutar.setChecked(True)  # inmediato: sin dar tiempo a que termine el reinicio
+                self.assertTrue(w.a_ejecutar.isChecked())
+                esperar(lambda: not w.modbus.reiniciando and w.modbus.en_marcha)
+                for _ in range(15):  # varios tics más: Play no se desmarca solo
+                    app.processEvents()
+                    time.sleep(.01)
+                self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (True, "simular"))
+                self.assertIsNotNone(w.modbus.adaptador.sesion)
+                self.assertIs(w.modbus.adaptador.sesion, w.v.s)
+                self.assertIsNot(w.v.s, anterior, "el reinicio no se pierde")
+                self.assertIs(w.modbus.cliente._socket, socket)
+                self.assertIs(w.modbus.escritos.get("motor"), True)
+            finally:
+                w.edicion.ed.dirty = False
+                w.close()
+                w.deleteLater()
+                app.processEvents()
+
+    def test_SFIO31_abrir_otro_proyecto_pone_a_cero_aunque_la_escritura_siguiera_en_vuelo(self):
+        """REQ-SIM-02, REQ-SIM-03 (P-IMP-60): Play y Pausa con una escritura de salidas en vuelo descartan su respuesta
+        (modbus.escritos sigue vacío) pero la planta ya ha recibido el valor; al abrir otro proyecto se ponen a cero las
+        salidas del mapa anterior igualmente."""
+        import threading
+        from PySide6.QtWidgets import QMessageBox
+        from test_modbus import servidor
+        app = QApplication.instance() or QApplication([])
+        escrituras = []
+        armada, llegada, puerta = threading.Event(), threading.Event(), threading.Event()
+        planta = self._servidor_planta(escrituras)
+        def responder(p):
+            if p[0] == 15 and p[6] & 1 and armada.is_set() and not puerta.is_set():  # la escritura de motor = 1 del reinicio espera: en vuelo
+                escrituras.append((int.from_bytes(p[1:3], "big"), p[6] & 1))
+                llegada.set()
+                puerta.wait(5)
+                return p[:5]
+            return planta(p)
+        with tempfile.TemporaryDirectory() as tmp, servidor(responder) as sc:
+            m = M().var("sensor").var("motor", "output").step("E0", True)
+            m.cont("E0", "motor")  # motor = 1 desde la situación inicial: el reinicio de Play ya lo escribe
+            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            try:
+                esperar(lambda: w.modbus.estado == "conectado")
+                armada.set()
+                w.a_ejecutar.setChecked(True)
+                esperar(llegada.is_set)  # la escritura del modelo ya está en la planta, sin respuesta todavía
+                self.assertEqual(escrituras[-1], (0, 1))
+                w.a_ejecutar.setChecked(False)  # Pausa: la respuesta se descarta
+                self.assertEqual(w.modbus.escritos, {})
+                with mock.patch("escritorio.ventana.QMessageBox.question") as pregunta:
+                    pregunta.return_value = QMessageBox.StandardButton.Discard
+                    w.cargar_ejemplo("temporizada")
+                puerta.set()  # la planta responde; la petición de cero va detrás
+                esperar(lambda: w.modbus.escritos == {"motor": False} and escrituras[-1] == (0, 0))
+                self.assertTrue(w.modbus.activo)
+            finally:
+                puerta.set()
+                w.edicion.ed.dirty = False
+                w.close()
+                w.deleteLater()
+                app.processEvents()
+
+    def test_SFIO32_cerrar_la_ventana_cierra_el_tcp(self):
+        """REQ-SIM-03: cerrar la ventana con la conexión viva cierra el TCP (no queda el socket abierto contra la planta)."""
+        from test_modbus import servidor
+        app = QApplication.instance() or QApplication([])
+        escrituras = []
+        with tempfile.TemporaryDirectory() as tmp, servidor(self._servidor_planta(escrituras)) as sc:
+            m = M().var("sensor").var("motor", "output").step("E0", True)
+            m.cont("E0", "motor", "sensor")
+            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            try:
+                esperar(lambda: w.modbus.estado == "conectado")
+                cliente = w.modbus.cliente
+                self.assertIsNotNone(cliente._socket)
+                w.edicion.ed.dirty = False  # el cierre no pregunta
+                self.assertTrue(w.close())
+                esperar(lambda: cliente._socket is None)
+                self.assertEqual(w.modbus.estado, "desconectado")
+            finally:
                 w.deleteLater()
                 app.processEvents()
 

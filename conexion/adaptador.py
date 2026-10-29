@@ -9,12 +9,21 @@ class MonitorEntradas:
     def __init__(self, config, documento):
         config.validar(documento)
         roles = {v["id"]: v["role"] for v in documento["variables"]}
-        if not config.senales or any(roles[s.variable] != "input" for s in config.senales):
-            raise ValueError("La observación sin GRAFCET solo admite entradas")
         self.config = config
         self.sesion = None
-        self.entradas = list(config.senales)
+        self.entradas = [s for s in config.senales if roles[s.variable] == "input"]
         self.salidas = []
+        self.salidas_control = [s for s in config.senales if roles[s.variable] == "output"]
+
+    @classmethod
+    def desde_adaptador(cls, adaptador):
+        monitor = object.__new__(cls)
+        monitor.config = adaptador.config
+        monitor.sesion = None
+        monitor.entradas = list(adaptador.entradas)
+        monitor.salidas = []
+        monitor.salidas_control = list(adaptador.salidas or getattr(adaptador, "salidas_control", []))
+        return monitor
 
     def valores_salida(self, cero=False):
         return {}

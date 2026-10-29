@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-10-29T14:22:04+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 312 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-10-29T16:26:37+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 323 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 212 casos, 215 pruebas, 215 pasan.
+Pruebas suplementarias S-xx: 222 casos, 226 pruebas, 226 pasan.
 
 ## Requisitos
 
@@ -56,7 +56,7 @@ Pruebas suplementarias S-xx: 212 casos, 215 pruebas, 215 pasan.
 | REQ-SEM-04 | I/crítica | 04 | IMPL-I | engine | T-04a ✔, T-04b ✔, T-04c ✔, T-06a ✔, T-06b ✔, T-13d ✔ | Conjunto simultáneo completo; sin prioridad por orden |
 | REQ-SEM-05 | I/crítica | 04 | IMPL-DEC | engine | T-05a ✔, T-05b ◆, S-H05 ✔ | Actividad I. Efectos decididos por el responsable (comparador, 27-10-2026, P-IMP-22): en permanencia o reactivación no se ejecutan acciones al activar ni al desactivar y la duración sigue (3.1 A, 3.2 A, 3.3 A; cierra H-05) |
 | REQ-SEM-06 | I/crítica | 04 | IMPL-I | engine | T-07a ✔, T-07b ✔, T-07c ✔, S-EJ01 ✔, S-H09 ✔ | Etapas inestables sin pulso continuo; memorizadas conservadas; eventos en el recorrido según la lectura 5.1 (P-IMP-22) |
-| REQ-SEM-07 | P/crítica | 04 | IMPL-P | engine | T-08a ✔, T-08b ✔, S-08a ✔, S-H09b ✔, S-OPT03c ✔ | D-LIM-EVOL recuperable, τ sin avanzar, sin falsa estabilidad (T-08a con su oráculo original desde la respuesta 1.2 A; S-08a) |
+| REQ-SEM-07 | P/crítica | 04 | IMPL-P | engine | T-08a ✔, T-08b ✔, S-FIO29 ✔, S-APP19 ✔, S-08a ✔, S-H09b ✔, S-OPT03c ✔ | D-LIM-EVOL recuperable, τ sin avanzar, sin falsa estabilidad (T-08a con su oráculo original desde la respuesta 1.2 A; S-08a) |
 | REQ-SEM-08 | P/crítica | 04 | IMPL-P | engine, trace | T-04c ✔, T-23b ✔, T-24a ◐, S-U06 ✔ | Mismos observables con independencia de recorrido, geometría y control; entre sistemas: U-10 |
 | REQ-SEM-09 | U/crítica | 04 | IMPL-DEC | engine | T-10d ◆, T-11b ⛔, T-15c ◆, S-CMP01 ✔, S-CMP02 ✔, S-CMP03 ✔, S-CMP05 ✔, S-APP08 ✔, S-U05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔ | U-05 (P-IMP-20) y U-03, U-04, U-06, U-07 (comparador, 27-10-2026, P-IMP-22) cerradas por el responsable; cada lectura sigue siendo seleccionable, «detener» incluida en el banco (P-IMP-15, P-IMP-21; el simulador de escritorio no la ofrece, P-IMP-30). Siguen deteniéndose los eventos internos y de franqueamiento (U-03), 0s/p/d2 y los vencimientos que dependen del orden (U-06) |
 | REQ-ACT-01 | I/crítica | 05 | IMPL-I | engine | T-14a ✔, T-14b ✔, T-14c ✔, T-07a ✔, T-12c ✔, S-EDI100 ✔, S-EDI102 ✔, S-EDI104 ✔, S-EDI105 ✔, S-EDI106 ✔, S-EDI114 ✔, S-EDI117 ✔, S-EDI123 ✔, S-EDI124 ✔, S-EDI126 ✔, S-EDI127 ✔, S-EDI128 ✔, S-EDI129 ✔, S-EDI130 ✔, S-EDI131 ✔, S-EDI132 ✔, S-EDI133 ✔, S-EDI134 ✔, S-EDI135 ✔, S-EDI136 ✔, S-EDI137 ✔, S-EDI40 ✔, S-EDI44 ✔, S-EDI48 ✔, S-EDI58 ✔, S-EDI62 ✔, S-EDI70 ✔, S-EDI71 ✔, S-EDI72 ✔, S-EDI74 ✔, S-EDI75 ✔, S-EDI82 ✔, S-EDI83 ✔, S-EDI84 ✔, S-EDI86 ✔, S-EDI88 ✔, S-EDI89 ✔, S-EDI90 ✔, S-EDI91 ✔, S-EDI92 ✔, S-EDI93 ✔, S-EDI94 ✔, S-EDI95 ✔, S-EDI39 ✔, S-EDI98 ✔, S-H10 ✔ | Disyunción sobre situación efectiva; una salida continua leída en una expresión vale según la situación del momento (comparador, 8.2 C; cierra H-10) |
@@ -75,11 +75,11 @@ Pruebas suplementarias S-xx: 212 casos, 215 pruebas, 215 pasan.
 | REQ-JER-01 | I/crítica | 06 | IMPL-I | engine, model | T-04c ✔, T-20b ✔, S-H08 ✔ | Partición sin orden y XG derivada de sus etapas. Un parcial dentro de otro solo como recinto o expansión; sin encapsulante no compila (chat 27-10-2026, 8.1 C; cierra H-08) |
 | REQ-JER-02 | I/crítica | 06 | IMPL-I | hierarchy, engine | T-17a ✔, T-17b ◐ | Forzado explícito, actual (captura), vacío e inicial; el destino no evoluciona mientras está vigente; la retirada libera desde la situación resultante (documento 06, P-IMP-23). Momento, temporizadores, recintos y acciones: U-08 (7.2–7.4, 7.8) |
 | REQ-JER-03 | P/crítica | 06 | IMPL-P | model, hierarchy | T-17c ✔, T-17d ✔ | Ciclos D-JERARQUIA-CICLO; conflicto posible avisado al validar y detenido al ejecutar (D-FORZADO-CONFLICTO) sin prioridad por ID |
-| REQ-JER-04 | I/crítica | 06 | IMPL-I | model, hierarchy, engine | T-18a ✔, T-18b ✔, T-18c ✔, T-18e ◐ | Relación expandida: llegar activa la entrada, salir exige la salida; XM por la expansión; reentrada sin borrar memorias (P-IMP-23). Ramas residuales: U-08 (7.5). Iniciales en la expansión: se admiten (7.7 A, P-IMP-24) |
+| REQ-JER-04 | I/crítica | 06 | IMPL-I | model, hierarchy, engine | T-18a ✔, T-18b ✔, T-18c ✔, T-18e ◐, S-APP20 ✔ | Relación expandida: llegar activa la entrada, salir exige la salida; XM por la expansión; reentrada sin borrar memorias (P-IMP-23). Ramas residuales: U-08 (7.5). Iniciales en la expansión: se admiten (7.7 A, P-IMP-24) |
 | REQ-JER-05 | I/crítica | 06 | IMPL-I | model, hierarchy | T-19a ✔, T-19b ✔, T-19c ✔ | Al arrancar, iniciales; al reentrar, enlaces de activación; al salir, se desactivan todos los descendientes (P-IMP-23). Encapsulante en permanencia: el contenido se mantiene (comparador, 3.4 A) |
 | REQ-JER-06 | U/crítica | 06 | IMPL-DEC | hierarchy | T-18d ◆, T-20a ◆, T-20c ◆ | Cerradas por el responsable: 7.2 B, 7.3 A, 7.4 C, 7.5 A, 7.6 B, 7.7 A y 7.8 A (P-IMP-24 a P-IMP-26). Vaciar por forzado un recinto con su encapsulante activa no se preguntó y se detiene (U-08) |
 | REQ-JER-07 | P/alta | 06 | PEND-UI | — | T-21g —, T-24a ◐ | Plegado y navegación pertenecen a la vista |
-| REQ-EDT-01 | P/alta | 07 | PARCIAL | editor, persistence | T-21a ◐, S-EDI03 ✔, S-EDI04 ✔, S-EDI05 ✔, S-EDI08 ✔, S-EDI28 ✔, S-EDI32 ✔, S-APP06 ✔ | Crear, abrir, guardar y duplicar sin interfaz; el simulador de escritorio abre proyectos y modelos, crea un grafcet nuevo, lo guarda y lo reabre (P-IMP-29, P-IMP-32), y pregunta antes de descartar cambios; sin duplicar desde la interfaz |
+| REQ-EDT-01 | P/alta | 07 | PARCIAL | editor, persistence | T-21a ◐, S-EDI03 ✔, S-EDI04 ✔, S-EDI05 ✔, S-EDI08 ✔, S-EDI28 ✔, S-EDI32 ✔, S-APP06 ✔, S-APP18 ✔ | Crear, abrir, guardar y duplicar sin interfaz; el simulador de escritorio abre proyectos y modelos, crea un grafcet nuevo, lo guarda y lo reabre (P-IMP-29, P-IMP-32), y pregunta antes de descartar cambios; sin duplicar desde la interfaz |
 | REQ-EDT-02 | P/alta | 07 | IMPL-P | editor | T-21b ✔, T-21c ✔, S-EDI42 ✔, S-EDI50 ✔, S-EDI51 ✔, S-EDI54 ✔, S-EDI56 ✔, S-EDI57 ✔, S-EDI64 ✔, S-EDI97 ✔, S-EDI03 ✔, S-EDI100 ✔, S-EDI101 ✔, S-EDI105 ✔, S-EDI106 ✔, S-EDI10 ✔, S-EDI111 ✔, S-EDI112 ✔, S-EDI115 ✔, S-EDI116 ✔, S-EDI119 ✔, S-EDI11 ✔, S-EDI120 ✔, S-EDI121 ✔, S-EDI122 ✔, S-EDI123 ✔, S-EDI124 ✔, S-EDI126 ✔, S-EDI127 ✔, S-EDI128 ✔, S-EDI129 ✔, S-EDI12 ✔, S-EDI130 ✔, S-EDI131 ✔, S-EDI132 ✔, S-EDI133 ✔, S-EDI134 ✔, S-EDI135 ✔, S-EDI136 ✔, S-EDI137 ✔, S-EDI138 ✔, S-EDI13 ✔, S-EDI14 ✔, S-EDI15 ✔, S-EDI17 ✔, S-EDI18 ✔, S-EDI19 ✔, S-EDI21 ✔, S-EDI24 ✔, S-EDI25 ✔, S-EDI28 ✔, S-EDI29 ✔, S-EDI30 ✔, S-EDI31 ✔, S-EDI33 ✔, S-EDI34 ✔, S-EDI35 ✔, S-EDI36 ✔, S-EDI38 ✔, S-EDI41 ✔, S-EDI44 ✔, S-EDI48 ✔, S-EDI52 ✔, S-EDI53 ✔, S-EDI55 ✔, S-EDI58 ✔, S-EDI59 ✔, S-EDI60 ✔, S-EDI61 ✔, S-EDI62 ✔, S-EDI63 ✔, S-EDI65 ✔, S-EDI66 ✔, S-EDI67 ✔, S-EDI68 ✔, S-EDI69 ✔, S-EDI70 ✔, S-EDI71 ✔, S-EDI72 ✔, S-EDI74 ✔, S-EDI82 ✔, S-EDI87 ✔, S-EDI88 ✔, S-EDI89 ✔, S-EDI90 ✔, S-EDI92 ✔, S-EDI93 ✔, S-EDI94 ✔, S-EDI95 ✔, S-EDI99 ✔, S-EDI16 ✔, S-EDI45 ✔, S-EDI46 ✔, S-EDI47 ✔, S-EDI01 ✔ | Insertar, conectar, editar; borrador inválido guardable; en la interfaz de escritorio: etapas, transiciones, enlaces y receptividades de un secuencial (P-IMP-32); selección, salto y repetición con el ratón (P-IMP-33), flechas y recorridos manuales persistentes (P-IMP-35), tramos verticales mínimos y transición que se agarra sin sacar rama (P-IMP-36), una flecha por lazo, imán y arrastre desde la paleta (P-IMP-37), receptividades con un programador por bloques y acciones desde la etapa (P-IMP-38); panel de acciones y jerarquías, pendientes |
 | REQ-EDT-03 | P/alta | 07 | PARCIAL | editor | T-04c ✔, T-21c ✔, S-EDI10 ✔, S-EDI29 ✔, S-EDI30 ✔, S-EDI37 ✔, S-EDI01 ✔ | Mover, alinear, distribuir y deshacer; zoom en la vista del simulador (P-IMP-29); en la interfaz de escritorio, mover con rejilla de 20 y deshacer o rehacer (P-IMP-32); alinear y distribuir, pendientes en la interfaz |
 | REQ-EDT-04 | P/crítica | 07 | IMPL-P | editor | T-21e ✔ | Copiar/pegar con IDs nuevos y decisión explícita de referencias externas |
@@ -94,9 +94,9 @@ Pruebas suplementarias S-xx: 212 casos, 215 pruebas, 215 pasan.
 | REQ-EDT-13 | P/alta | 07 | PEND-UI | — | T-26a —, T-26b — | Teclado y accesibilidad |
 | REQ-EDT-14 | P/crítica | 07 | IMPL-P | editor, engine | T-23d ✔, S-EDI03 ✔, S-EDI107 ✔, S-EDI108 ✔, S-EDI109 ✔, S-EDI73 ✔ | Edición semántica = revisión nueva; la ejecución conserva la suya |
 | REQ-SIM-01 | P/crítica | 08 | IMPL-P | engine | T-23a ✔, T-23b ✔ | Estados de sesión, pausas en frontera completa, microavance, puntos antes/después |
-| REQ-SIM-02 | P/crítica | 08 | IMPL-P | scenario, engine | T-10b ✔, T-23c ✔, S-FIO01 ✔, S-FIO06 ✔, S-FIO11 ✔, S-FIO09 ✔, S-FIO16 ✔, S-FIO18 ✔, S-APP04 ✔ | Escenarios y entradas manuales registradas con origen y ordinal |
-| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-EDI109 ✔, S-EDI113 ✔, S-EDI22 ✔, S-EDI27 ✔, S-EDI32 ✔, S-EDI40 ✔, S-EDI78 ✔, S-FIO08 ✔, S-FIO16 ✔, S-FIO17 ✔, S-FIO19 ✔, S-FIO20 ✔, S-FIO22 ✔, S-FIO24 ✔, S-FIO25 ✔, S-APP14 ✔, S-APP15 ✔, S-APP05 ✔, S-APP09 ✔, S-APP10 ✔, S-APP11 ✔, S-APP12 ✔, S-APP13 ✔, S-APP16 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
-| REQ-SIM-04 | P/crítica | 08 | IMPL-P | engine | T-23c ✔, T-22f ✔, T-23f ✔, S-FIO21 ✔, S-OPT03d ✔ | Instantánea con Z completo y compatibilidad exacta; dentro de recorrido D-INSTANTANEA-FASE |
+| REQ-SIM-02 | P/crítica | 08 | IMPL-P | scenario, engine | T-10b ✔, T-23c ✔, S-FIO01 ✔, S-FIO06 ✔, S-FIO11 ✔, S-FIO09 ✔, S-FIO30 ✔, S-FIO16 ✔, S-FIO18 ✔, S-FIO27 ✔, S-FIO29 ✔, S-FIO31 ✔, S-APP04 ✔ | Escenarios y entradas manuales registradas con origen y ordinal |
+| REQ-SIM-03 | P/alta | 08 | IMPL-P | engine | T-02a ✔, T-02b ✔, T-02c ✔, T-23a ✔, S-EDI109 ✔, S-EDI113 ✔, S-EDI22 ✔, S-EDI27 ✔, S-EDI32 ✔, S-EDI40 ✔, S-EDI78 ✔, S-FIO08 ✔, S-FIO16 ✔, S-FIO17 ✔, S-FIO19 ✔, S-FIO20 ✔, S-FIO22 ✔, S-FIO24 ✔, S-FIO25 ✔, S-FIO27 ✔, S-FIO28 ✔, S-FIO30 ✔, S-FIO31 ✔, S-FIO32 ✔, S-APP14 ✔, S-APP15 ✔, S-APP05 ✔, S-APP09 ✔, S-APP10 ✔, S-APP11 ✔, S-APP12 ✔, S-APP13 ✔, S-APP16 ✔, S-APP17 ✔, S-APP18 ✔, S-APP19 ✔, S-APP20 ✔ | Observación de actividad, validación, receptividad y franqueamiento |
+| REQ-SIM-04 | P/crítica | 08 | IMPL-P | engine | T-23c ✔, T-22f ✔, T-23f ✔, S-FIO21 ✔, S-FIO30 ✔, S-APP17 ✔, S-OPT03d ✔ | Instantánea con Z completo y compatibilidad exacta; dentro de recorrido D-INSTANTANEA-FASE |
 | REQ-SIM-05 | P/crítica | 08 | IMPL-P | trace | T-04a ✔, T-22g ✔, S-OPT03b ✔ | Traza con conjuntos E, causas, cierre y digest |
 | REQ-SIM-06 | P/crítica | 08 | IMPL-P | engine | T-09d ✔, T-23b ✔ | Observar y pausar no modifican comportamiento |
 | REQ-SIM-07 | P/crítica | 08 | IMPL-P | engine | T-23e ✔ | Intervención E en pausa estable, rama auditable |
@@ -240,7 +240,7 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-APP06 | REQ-DAT-02, REQ-EDT-01 | pasa | `test_SAPP06_guardar_y_abrir_en_la_ventana` | «Guardar como proyecto» y «Abrir modelo» conservan el modelo y su dibujo. |
 | S-APP07 |  | pasa | `test_SAPP07_lecturas_reinician` | Cambiar una lectura reinicia la simulación y se señala como distinta de la decidida. |
 | S-APP08 | REQ-SEM-09 | pasa | `test_SAPP08_ajustes_y_lecturas` | «Ajustes» (entre Simulación y Ayuda) tiene las lecturas; el diálogo no ofrece «detener» y el |
-| S-APP09 | REQ-SIM-03 | pasa | `test_SAPP09_tiempo_real_pausa_y_paso` | al cargar, el tiempo real está activo; pausa, paso y reinicio funcionan. |
+| S-APP09 | REQ-SIM-03 | pasa | `test_SAPP09_play_pausa_y_un_solo_control` | un solo control de ejecución. Play simula en tiempo real (traza abajo, sin paleta) y Pausa detiene y |
 | S-APP10 | REQ-SIM-03 | pasa | `test_SAPP10_temporizador_en_dibujo_y_tabla` | «temporizada», con E1 activa y 1 s transcurrido, muestra «1 s / 3 s» junto a la receptividad y en |
 | S-APP11 | REQ-SIM-03 | pasa | `test_SAPP11_paneles_plegables` | el panel derecho y el inferior se pliegan del todo con su flecha y desde «Ver»; el estado se guarda. |
 | S-APP12 | REQ-SIM-03 | pasa | `test_SAPP12_zoom_se_conserva` | «+», «−» y la rueda con Ctrl cambian el zoom; un refresco lo conserva; «Ajustar» vuelve a encajar. |
@@ -248,6 +248,10 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-APP14 | REQ-EDT-07, REQ-SIM-03 | pasa | `test_SAPP14_nombres_en_vez_de_id` | un modelo hecho con el editor (ID internos) se dibuja y se traza con los nombres: |
 | S-APP15 | REQ-SIM-03 | pasa | `test_SAPP15_ejemplos_no_cambian` | en los ejemplos el ID es el nombre: mostrar nombres no cambia nada del dibujo ni de la traza. |
 | S-APP16 | REQ-EDT-07, REQ-SIM-03 | pasa | `test_SAPP16_ventana_con_nombres` | un modelo del editor, guardado y abierto en la ventana, muestra nombres en el dibujo, |
+| S-APP17 | REQ-SIM-03, REQ-SIM-04 | pasa | `test_SAPP17_reiniciar_en_play_y_en_pausa` | Reiniciar vuelve a la situación inicial; en Play sigue en Play y en Pausa deja el |
+| S-APP18 | REQ-EDT-01, REQ-SIM-03 | pasa | `test_SAPP18_abrir_ejemplo_o_modelo_deja_pausa_y_edicion` | al abrir un ejemplo o un modelo guardado, el programa queda parado y editable aunque |
+| S-APP19 | REQ-SEM-07, REQ-SIM-03 | pasa | `test_SAPP19_inestable_avisa_una_vez_y_para` | si en Play el motor no alcanza una situación estable (D-LIM-EVOL), se detiene, pasa a |
+| S-APP20 | REQ-JER-04, REQ-SIM-03 | pasa | `test_SAPP20_play_con_lecturas_que_no_compilan_avisa_y_queda_en_pausa` | si el modelo compila con las lecturas por defecto pero no con las activas (7.7 = B con una |
 | S-CAN | REQ-DAT-05, REQ-DAT-06 | pasa | `test_SCAN_formato_canonico` | reglas de representación canónica y lectura estricta (09). |
 | S-CMP01 | REQ-NOR-02, REQ-SEM-09 | pasa | `test_SCMP01_catalogo_coherente` | cada lectura del comparador existe en el perfil, tiene su texto y se comprueba. |
 | S-CMP02 | REQ-ACT-02, REQ-EVT-03, REQ-SEM-01, REQ-SEM-09, REQ-TMP-03 | pasa | `test_SCMP02_cada_lectura_hace_lo_que_anuncia` | cada alternativa evoluciona como dice su panel. |
@@ -423,6 +427,13 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-FIO24 | REQ-DAT-02, REQ-SIM-03 | pasa | `test_SFIO24_canales_offset_mover_desasignar_y_persistir` | canales explícitos y movimiento desde el slot. |
 | S-FIO25 | REQ-SIM-03 | pasa | `test_SFIO25_arrastre_desde_tarjeta_asignada` | el gesto comienza sobre la tarjeta, no solo sobre la lista. |
 | S-FIO26 | REQ-DAT-02 | pasa | `test_SFIO26_escala_factoryio_100_y_migracion` | entradas/salidas numéricas usan 100 incluso en mapas anteriores. |
+| S-FIO27 | REQ-SIM-02, REQ-SIM-03 | pasa | `test_SFIO27_la_conexion_sobrevive_a_play_pausa_edicion_reinicio_y_abrir` | una vez conectado, ni Play, Pausa, editar, Reiniciar ni abrir otro ejemplo cierran |
+| S-FIO28 | REQ-SIM-03 | pasa | `test_SFIO28_mapa_invalido_tras_editar_avisa_y_no_arranca` | si lo editado deja el mapa sin su variable, Play no arranca el control externo, avisa en el panel |
+| S-FIO29 | REQ-SEM-07, REQ-SIM-02 | pasa | `test_SFIO29_inestable_con_modbus_avisa_pausa_y_pone_salidas_a_cero` | un GRAFCET inestable con la planta conectada se detiene (Pausa/edición), avisa una sola |
+| S-FIO30 | REQ-SIM-02, REQ-SIM-04 | pasa | `test_SFIO30_pausar_vincular_y_observar_sin_cerrar_tcp` | Pausa conserva TCP y salidas; Play vincula una sesión al TCP existente; un diagnóstico |
+| S-FIO30 | REQ-SIM-02, REQ-SIM-03 | pasa | `test_SFIO30_play_inmediato_tras_reiniciar_en_pausa_no_vuelve_a_pausa` | Reiniciar en Pausa y Play inmediato (antes de que termine el reinicio) deja la ejecución |
+| S-FIO31 | REQ-SIM-02, REQ-SIM-03 | pasa | `test_SFIO31_abrir_otro_proyecto_pone_a_cero_aunque_la_escritura_siguiera_en_vuelo` | Play y Pausa con una escritura de salidas en vuelo descartan su respuesta |
+| S-FIO32 | REQ-SIM-03 | pasa | `test_SFIO32_cerrar_la_ventana_cierra_el_tcp` | cerrar la ventana con la conexión viva cierra el TCP (no queda el socket abierto contra la planta). |
 | S-H05 | REQ-EVT-03, REQ-SEM-05 | pasa | `test_SH05_activar_etapa_ya_activa_no_ejecuta_sus_acciones` | hallazgo H-05, cerrado por el comparador (3.3 A). Con «detener», U-04. |
 | S-H07 | REQ-ACT-02, REQ-SEM-01 | pasa | `test_SH07_memoria_inicial_no_nula_no_compila` | hoja 08, 1.5 A (cierra H-07); otro valor inicial se pone al activar la etapa inicial. |
 | S-H08 | REQ-JER-01, REQ-MOD-07 | pasa | `test_SH08_parcial_dentro_de_otro` | hallazgo H-08, cerrado por el responsable (8.1 C): sin encapsulante no compila; como recinto, sí. |

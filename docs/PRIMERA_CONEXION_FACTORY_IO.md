@@ -70,10 +70,10 @@ Con muchos canales, desplaza verticalmente la zona central para ver los demás.
 
 ### Solo observar sensores
 
-Puedes conectar con únicamente entradas asignadas, desde Editar y sin un
+Puedes conectar con únicamente entradas asignadas, desde Pausa (edición) y sin un
 GRAFCET compilable. Se activa observación de solo lectura: no escribe ninguna
 salida ni ejecuta el motor. Para controlar actuadores sí necesitas un GRAFCET
-válido en Simular. El estado de conexión muestra el detalle al pasar el ratón.
+válido y pulsar Ejecutar (Play). El estado de conexión muestra el detalle al pasar el ratón.
 
 ## 3. Comprueba la conexión, todavía sin mover la cinta
 
@@ -87,14 +87,20 @@ válido en Simular. El estado de conexión muestra el detalle al pasar el ratón
 4. Cierra Configuración y pulsa **Conectar** en el panel. Debe aparecer un
    **check verde y «Conectado»**. Sigue pendiente pulsar Ejecutar para mover las cintas.
    Conectar y Probar conexión son dos operaciones distintas: Probar termina su
-   comprobación y cierra la conexión; Conectar la mantiene abierta.
+   comprobación y cierra la conexión; Conectar la mantiene abierta. Si Ejecutar
+   está activo, Conectar o Probar conexión lo pasan a Pausa.
 
 ## 4. Arranca las dos cintas con el pulsador
 
+Hay un solo control de ejecución: **Ejecutar** (Play) simula y **Pausa** vuelve a editar. Al abrir el ejemplo, el
+programa queda en Pausa; con la conexión viva, en Pausa se siguen observando las entradas (PM) y las salidas se
+conservan.
+
 1. En Factory I/O vuelve desde DRIVER a la escena con la flecha de atrás y pon
    la escena en marcha con su botón de reproducción (▶).
-2. En GrafConnect pulsa **Ejecutar** en la barra superior. Si el botón muestra
-   **Pausa**, ya has dado la orden de ejecutar.
+2. En GrafConnect pulsa **Ejecutar** (Play, F5) en la barra superior. El botón pasa
+   a decir **Pausa** mientras la simulación corre; Pausa detiene y vuelve a editar,
+   sin cerrar la conexión.
 3. Acciona el **Pulsador marcha de la escena**, manteniéndolo aproximadamente un
    segundo. No basta con seleccionar su nombre en la lista de asignaciones DRIVER.
 4. Al activar el pulsador, **PM debe indicar 1** y la etapa 1 debe quedar activa.
@@ -103,11 +109,13 @@ válido en Simular. El estado de conexión muestra el detalle al pasar el ratón
    permanece en la etapa 1.
 5. No hace falta generar cajas, activar el Emisor ni probar toda la instalación.
    Para detener la planta simulada, usa su control de pausa en Factory I/O.
-   Pausa en GrafConnect conserva las salidas: no apaga las cintas. Para repetir
-   desde la etapa 0, pulsa Reiniciar en GrafConnect: mantiene Modbus conectado y
-   publica las salidas iniciales. Después pulsa Ejecutar y vuelve a accionar PM.
+   Pausa en GrafConnect conserva las salidas: no apaga las cintas, y sigue
+   observando PM. Para repetir desde la etapa 0, pulsa Reiniciar (Ctrl+R) en
+   GrafConnect: mantiene Modbus conectado y publica las salidas iniciales. Si
+   estabas en Ejecutar, la simulación sigue en marcha; si estabas en Pausa, pulsa
+   después Ejecutar y vuelve a accionar PM.
 
-Si PM cambia pero Q00 y Q01 no, comprueba primero que GrafConnect está en Ejecutar.
+Si PM cambia pero Q00 y Q01 no, comprueba primero que GrafConnect está en Play (el botón muestra «Pausa»).
 Si PM y las salidas cambian pero las cintas no, anota ese resultado: no es el mismo problema que
 un fallo de conexión. Si PM no cambia, anota si el pulsador aparece activo en Factory I/O.
 
@@ -147,11 +155,11 @@ la prueba del pulsador y del movimiento de la cinta desde la interfaz.
 ## Qué está listo y qué falta verificar
 
 - El responsable ya confirmó el arranque real de las dos cintas con PM.
-- Reiniciar ahora mantiene TCP y vuelve al estado y salidas iniciales; queda en
-  pausa. Falta confirmar esta nueva conducta en la escena real.
-- Paso y Completar recorrido están en el menú Simulación para depurar sin Modbus:
-  Paso avanza una evolución; Completar termina un recorrido pendiente. No son
-  necesarios para controlar la escena y no aparecen en la barra principal.
+- Reiniciar mantiene TCP y vuelve al estado y salidas iniciales: en Play sigue en
+  Play y en Pausa queda en pausa. Falta confirmar esta nueva conducta en la escena real.
+- Paso y Completar recorrido se han retirado: el único control de ejecución es
+  Ejecutar (Play, F5), y Pausa vuelve a editar. Para depurar sin Modbus use Play y
+  Pausa, y «Avanzar el tiempo…» (menú Simulación, solo en Play).
 - Se pueden crear variables **Enteras** y **Decimales**. Para enviarlas deben tener
   papel **Salida**, asignarse a un canal numérico AQ y al Holding Register del
   actuador correspondiente. Los sensores numéricos se leen por AI/Input Registers.

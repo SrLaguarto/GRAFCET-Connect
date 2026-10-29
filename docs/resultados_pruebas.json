@@ -1,9 +1,9 @@
 {
- "date": "2026-10-29T14:22:04+01:00",
+ "date": "2026-10-29T16:26:37+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 312,
+ "total": 323,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -1507,6 +1507,16 @@
    "summary": "REQ-SIM-04: reinicio de ejecución independiente del transporte externo."
   },
   {
+   "test": "test_modbus_ciclo.CicloTests.test_SFIO30_pausar_vincular_y_observar_sin_cerrar_tcp",
+   "case": "S-FIO30",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02",
+    "REQ-SIM-04"
+   ],
+   "summary": "REQ-SIM-02, REQ-SIM-04: Pausa conserva TCP y salidas; Play vincula una sesión al TCP existente; un diagnóstico"
+  },
+  {
    "test": "test_modbus_configuracion.ConfigTests.test_SFIO04_persistencia_separada",
    "case": "S-FIO04",
    "outcome": "pasa",
@@ -1626,6 +1636,64 @@
    "summary": "REQ-SIM-03: el gesto comienza sobre la tarjeta, no solo sobre la lista."
   },
   {
+   "test": "test_modbus_panel.PanelTests.test_SFIO27_la_conexion_sobrevive_a_play_pausa_edicion_reinicio_y_abrir",
+   "case": "S-FIO27",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-02, REQ-SIM-03: una vez conectado, ni Play, Pausa, editar, Reiniciar ni abrir otro ejemplo cierran"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO28_mapa_invalido_tras_editar_avisa_y_no_arranca",
+   "case": "S-FIO28",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: si lo editado deja el mapa sin su variable, Play no arranca el control externo, avisa en el panel"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO29_inestable_con_modbus_avisa_pausa_y_pone_salidas_a_cero",
+   "case": "S-FIO29",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SEM-07",
+    "REQ-SIM-02"
+   ],
+   "summary": "REQ-SEM-07, REQ-SIM-02: un GRAFCET inestable con la planta conectada se detiene (Pausa/edición), avisa una sola"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO30_play_inmediato_tras_reiniciar_en_pausa_no_vuelve_a_pausa",
+   "case": "S-FIO30",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-02, REQ-SIM-03: Reiniciar en Pausa y Play inmediato (antes de que termine el reinicio) deja la ejecución"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO31_abrir_otro_proyecto_pone_a_cero_aunque_la_escritura_siguiera_en_vuelo",
+   "case": "S-FIO31",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-02, REQ-SIM-03 (P-IMP-60): Play y Pausa con una escritura de salidas en vuelo descartan su respuesta"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO32_cerrar_la_ventana_cierra_el_tcp",
+   "case": "S-FIO32",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: cerrar la ventana con la conexión viva cierra el TCP (no queda el socket abierto contra la planta)."
+  },
+  {
    "test": "test_simulador_escritorio.Nucleo.test_SAPP01_abrir_lo_guardado",
    "case": "S-APP01",
    "outcome": "pasa",
@@ -1715,13 +1783,13 @@
    "summary": "REQ-SEM-09: «Ajustes» (entre Simulación y Ayuda) tiene las lecturas; el diálogo no ofrece «detener» y el"
   },
   {
-   "test": "test_simulador_escritorio.Ventana.test_SAPP09_tiempo_real_pausa_y_paso",
+   "test": "test_simulador_escritorio.Ventana.test_SAPP09_play_pausa_y_un_solo_control",
    "case": "S-APP09",
    "outcome": "pasa",
    "requirements": [
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03: al cargar, el tiempo real está activo; pausa, paso y reinicio funcionan."
+   "summary": "REQ-SIM-03: un solo control de ejecución. Play simula en tiempo real (traza abajo, sin paleta) y Pausa detiene y"
   },
   {
    "test": "test_simulador_escritorio.Ventana.test_SAPP10_temporizador_en_dibujo_y_tabla",
@@ -1768,6 +1836,46 @@
     "REQ-SIM-03"
    ],
    "summary": "REQ-EDT-07, REQ-SIM-03: un modelo del editor, guardado y abierto en la ventana, muestra nombres en el dibujo,"
+  },
+  {
+   "test": "test_simulador_escritorio.Ventana.test_SAPP17_reiniciar_en_play_y_en_pausa",
+   "case": "S-APP17",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03",
+    "REQ-SIM-04"
+   ],
+   "summary": "REQ-SIM-03, REQ-SIM-04: Reiniciar vuelve a la situación inicial; en Play sigue en Play y en Pausa deja el"
+  },
+  {
+   "test": "test_simulador_escritorio.Ventana.test_SAPP18_abrir_ejemplo_o_modelo_deja_pausa_y_edicion",
+   "case": "S-APP18",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-EDT-01: al abrir un ejemplo o un modelo guardado, el programa queda parado y editable aunque"
+  },
+  {
+   "test": "test_simulador_escritorio.Ventana.test_SAPP19_inestable_avisa_una_vez_y_para",
+   "case": "S-APP19",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SEM-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SEM-07, REQ-SIM-03: si en Play el motor no alcanza una situación estable (D-LIM-EVOL), se detiene, pasa a"
+  },
+  {
+   "test": "test_simulador_escritorio.Ventana.test_SAPP20_play_con_lecturas_que_no_compilan_avisa_y_queda_en_pausa",
+   "case": "S-APP20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-04",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-JER-04: si el modelo compila con las lecturas por defecto pero no con las activas (7.7 = B con una"
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU03_accion_por_evento_en_etapa_que_sale",

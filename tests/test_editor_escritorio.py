@@ -543,8 +543,9 @@ class Interfaz(unittest.TestCase):
             self.assertFalse(w._salir_de_edicion())
         with mock.patch("escritorio.ventana.QMessageBox.question", return_value=QMessageBox.StandardButton.Discard):
             w.cargar_ejemplo("temporizada")
-        self.assertIsNone(w.edicion)
-        self.assertEqual((w.modo, w.v.key), ("simular", "temporizada"))
+        self.assertIsNot(w.edicion, e, "descartar sustituye lo editado por una copia editable de lo que se abre")
+        self.assertFalse(w.edicion.ed.dirty)
+        self.assertEqual((w.modo, w.v.key, w.a_ejecutar.isChecked()), ("editar", "temporizada", False), "al abrir: Pausa")
         del pregunta
 
     def test_SEDI09_recuperacion_automatica(self):
@@ -1419,8 +1420,10 @@ class Interfaz(unittest.TestCase):
         from escritorio.propiedades import figura
         from grafcet.routing import TALLO_E
         w = self.w
-        self.assertTrue(w.flechas['izquierdo'].isHidden(), 'al simular no hay panel izquierdo')
-        w.nuevo()
+        self.assertFalse(w.flechas['izquierdo'].isHidden(), 'al abrir está en Pausa/edición: hay panel izquierdo')
+        self.assertTrue(w.cambiar_modo('simular'))
+        self.assertTrue(w.flechas['izquierdo'].isHidden(), 'en Play no hay panel izquierdo')
+        self.secuencial()  # un grafcet propio y simulable (un grafcet vacío no arranca)
         self.assertFalse(w.dock.isHidden() or w.flechas['izquierdo'].isHidden())
         w.flechas['izquierdo'].click()
         self.assertTrue(w.dock.isHidden() and not w.a_izquierdo.isChecked())
