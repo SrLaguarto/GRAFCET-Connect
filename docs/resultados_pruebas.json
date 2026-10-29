@@ -1,9 +1,9 @@
 {
- "date": "2026-10-29T16:26:37+01:00",
+ "date": "2026-10-29T20:13:06+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 323,
+ "total": 371,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -645,6 +645,114 @@
    "summary": "REQ-EDT-02: el area de una transicion es mas alta que su trazo: se acierta sin punteria."
   },
   {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI170_fichas_macroetapa_y_encapsulante_con_su_dibujo_y_su_ayuda",
+   "case": "S-EDI170",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-04, REQ-JER-05: la paleta ofrece «Macroetapa» y «Encapsulante» tras las demás fichas; su icono"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI171_soltar_la_ficha_macroetapa_crea_la_macroetapa_con_su_expansion",
+   "case": "S-EDI171",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05",
+    "REQ-JER-04",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-04, REQ-MOD-07, REQ-EDT-05: soltar «Macroetapa» crea la macroetapa en el punto, con su"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI172_lo_soltado_en_el_marco_de_la_expansion_es_de_su_parcial",
+   "case": "S-EDI172",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-JER-04, REQ-MOD-07, REQ-EDT-02: lo que se suelta dentro de la zona de una expansión (etapa, encapsulante,"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI173_una_macroetapa_soltada_en_una_expansion_o_un_recinto_queda_anidada",
+   "case": "S-EDI173",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-04",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-JER-04, REQ-MOD-07: una macroetapa soltada dentro de la zona de otra expansión, o en el marco de un recinto, es de"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI174_recinto_vacio_se_ve_se_selecciona_y_se_rellena_arrastrando",
+   "case": "S-EDI174",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05",
+    "REQ-EDT-09",
+    "REQ-JER-05",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-JER-05, REQ-MOD-07, REQ-EDT-02, REQ-EDT-05, REQ-EDT-09: «Añadir recinto…» pide el nombre y crea el recinto de la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI175_convertir_en_encapsulante_y_volver_a_etapa_ordinaria",
+   "case": "S-EDI175",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-05, REQ-EDT-09: el botón derecho en una etapa ordinaria ofrece «Convertir en encapsulante»; en una"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI176_enlace_de_activacion_como_casilla_marcada_o_desmarcada",
+   "case": "S-EDI176",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-05: el botón derecho en una etapa de un recinto ofrece «Enlace de activación» como casilla (marcada si lo"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI177_abrir_expansion_lleva_la_vista_y_la_resalta_sin_tocar_el_modelo",
+   "case": "S-EDI177",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-08",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-EDT-08, REQ-JER-07: «Abrir expansión» en una macroetapa lleva la vista a la zona de su expansión y la resalta"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI178_borrar_solo_la_entrada_o_la_salida_avisa_y_no_cambia_nada",
+   "case": "S-EDI178",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-EDT-09",
+    "REQ-JER-04"
+   ],
+   "summary": "REQ-EDT-05, REQ-EDT-09, REQ-JER-04: borrar solo la entrada o la salida de una expansión (el núcleo lo rechaza con"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI179_deshacer_y_rehacer_de_toda_la_jerarquia_y_guardar_y_abrir",
+   "case": "S-EDI179",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-01",
+    "REQ-EDT-05",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-EDT-05, REQ-DAT-01, REQ-MOD-07: macroetapa, contenido de su expansión, encapsulante, recinto, sus etapas, enlace de"
+  },
+  {
    "test": "test_editor_escritorio.Interfaz.test_SEDI17_barra_de_simultaneidad",
    "case": "S-EDI17",
    "outcome": "pasa",
@@ -655,6 +763,112 @@
    "summary": "REQ-MOD-03, REQ-EDT-02: la simultaneidad es una barra de doble trazo que se arrastra desde la paleta, se"
   },
   {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI180_la_ficha_que_se_arrastra_recuadra_el_parcial_donde_caeria",
+   "case": "S-EDI180",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-04: al arrastrar una etapa, una encapsulante, una macroetapa o una transición sobre el marco de"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI181_marcos_de_los_parciales_como_los_dibuja_el_banco",
+   "case": "S-EDI181",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-04",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-JER-04, REQ-JER-07: el rectángulo de cada parcial que entrega el dibujo (y con el que el editor decide dónde cae lo"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI182_la_macroetapa_se_enlaza_como_una_etapa_y_lo_construido_simula",
+   "case": "S-EDI182",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-JER-04, REQ-EDT-02, REQ-SIM-03: construida con los gestos del editor (ficha de macroetapa, «Añadir debajo»,"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI183_forzar_un_parcial_crea_la_orden_con_nombres_y_en_una_sola_operacion",
+   "case": "S-EDI183",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05",
+    "REQ-EDT-09",
+    "REQ-JER-02",
+    "REQ-JER-03"
+   ],
+   "summary": "REQ-JER-02, REQ-JER-03, REQ-EDT-02, REQ-EDT-05, REQ-EDT-09: «Forzar un parcial…» en una etapa pide (gancho"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI184_la_caja_de_la_orden_se_selecciona_y_se_edita_o_se_quita_desde_su_menu",
+   "case": "S-EDI184",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-JER-02, REQ-EDT-05: la caja «R{…}» de una orden se selecciona con un clic (no se arrastra: no es una acción) y"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI185_el_panel_de_opciones_muestra_la_ficha_de_jerarquia_con_los_botones_del_menu",
+   "case": "S-EDI185",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-08",
+    "REQ-EDT-09",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-EDT-08, REQ-JER-07, REQ-EDT-09: al seleccionar una macroetapa, una encapsulante, una etapa de un recinto, la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI186_ir_a_la_macroetapa_o_a_la_encapsulante_y_doble_clic_son_solo_navegacion",
+   "case": "S-EDI186",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-08",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-EDT-08, REQ-JER-07: «Ir a la macroetapa» en la entrada y la salida de una expansión (y en su zona), «Ir a la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI187_la_zona_de_suelta_de_un_parcial_incluye_un_margen_a_la_derecha_y_debajo",
+   "case": "S-EDI187",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04"
+   ],
+   "summary": "REQ-JER-04, REQ-EDT-02: lo que se suelta a una etapa de ancho (a la derecha) o de alto (debajo) del marco de un"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI188_el_marco_de_un_recinto_vacio_se_arrastra_con_una_sola_operacion_de_deshacer",
+   "case": "S-EDI188",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-EDT-05",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-EDT-03, REQ-EDT-05, REQ-JER-05: el marco de un recinto sin etapas se mueve arrastrando su borde (a la rejilla; se"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI189_las_condiciones_de_una_accion_se_leen_en_el_parcial_de_su_etapa",
+   "case": "S-EDI189",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-ACT-01, REQ-MOD-07: la condición, el valor o el evento de una acción se comprueban con los nombres del parcial de"
+  },
+  {
    "test": "test_editor_escritorio.Interfaz.test_SEDI18_enlaces_seleccionables_flecha_y_quitar",
    "case": "S-EDI18",
    "outcome": "pasa",
@@ -662,6 +876,80 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-EDT-02: un enlace se selecciona con un clic en su trazo; si va de abajo arriba se dibuja con flecha; se"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI190_el_ejemplo_forzado_construido_solo_con_gestos_simula_como_el_del_constructor",
+   "case": "S-EDI190",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-JER-02, REQ-EDT-02, REQ-SIM-03: el ejemplo «forzado» rehecho con gestos del editor (fichas, enlaces,"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI191_el_ejemplo_forzado_abierto_se_edita_su_orden_con_el_menu_y_simula_igual",
+   "case": "S-EDI191",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-JER-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-JER-02, REQ-EDT-05, REQ-SIM-03: sobre el ejemplo «forzado» del constructor, el botón derecho en la caja «G{B}»"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI192_dialogo_de_la_orden_de_forzado_con_nombres_formas_y_etapas",
+   "case": "S-EDI192",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-JER-02, REQ-EDT-09: el diálogo de «Forzar un parcial…» (el de la ventana, sustituible) ofrece los parciales por su"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI194_la_macroetapa_unida_a_una_barra_se_ve_unida_a_ella_en_el_editor",
+   "case": "S-EDI194",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-JER-04, REQ-MOD-03, REQ-EDT-02: una etapa y una macroetapa unidas con el ratón por encima de una barra Y, y la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI195_un_enlace_soltado_en_el_borde_o_el_nombre_de_un_marco_abre_la_rama_como_en_un_hueco",
+   "case": "S-EDI195",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-03: soltar el enlace que sale de un punto de unión en el borde o en el nombre del marco de un"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI196_borrar_avisa_de_las_ordenes_y_los_recintos_que_pierden_etapas",
+   "case": "S-EDI196",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-JER-02",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-EDT-05, REQ-JER-02, REQ-JER-05: el aviso de borrado enseña, con nombres, el recinto que pierde su enlace de"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI197_un_borrado_rechazado_deja_la_marca_de_cambios_como_estaba",
+   "case": "S-EDI197",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-EDT-10"
+   ],
+   "summary": "REQ-EDT-05, REQ-EDT-10: si `borrar` se rechaza (la entrada de una expansión sola, junto a una barra que ya se había"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI19_alternativas_con_el_raton",
@@ -1221,7 +1509,7 @@
     "REQ-ACT-01",
     "REQ-EDT-02"
    ],
-   "summary": "REQ-ACT-01, REQ-EDT-02: la paleta es una sola lista, sin carpetas, con etapa, transición, simultaneidad y una"
+   "summary": "REQ-ACT-01, REQ-EDT-02: la paleta es una sola lista, sin carpetas, con etapa, transición, simultaneidad, una"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI89_punto_derecho_de_la_etapa_y_union_con_acciones_sueltas",
@@ -1388,6 +1676,218 @@
     "REQ-DAT-01"
    ],
    "summary": "REQ-ACT-01, REQ-DAT-01: el editor guarda en `presentation.draftActions` los grupos de acciones sueltas (`grupo`,"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI139_macroetapa_con_su_expansion_entrada_y_salida",
+   "case": "S-EDI139",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-JER-04",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-JER-04, REQ-MOD-07, REQ-EDT-05: `add_macro` crea la macroetapa, su expansión (un parcial dentro del"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI140_ejemplo_macroetapa_reconstruido_con_el_editor",
+   "case": "S-EDI140",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04"
+   ],
+   "summary": "REQ-JER-04, REQ-EDT-02: el ejemplo «macroetapa» hecho con el editor simula igual que el del constructor."
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI141_ejemplo_encapsulacion_reconstruido_con_el_editor",
+   "case": "S-EDI141",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-05, REQ-EDT-02: el ejemplo «encapsulacion», con un recinto nuevo o con un parcial ya creado, simula"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI142_ejemplo_forzado_reconstruido_con_el_editor",
+   "case": "S-EDI142",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-JER-02, REQ-EDT-02: el ejemplo «forzado» hecho con el editor simula igual que el del constructor: G no"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI143_las_cuatro_formas_de_forzado",
+   "case": "S-EDI143",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-JER-02: explícita, actual, vacía e inicial, hechas con `add_force`, imponen lo mismo que las del"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI144_recintos_varios_encapsulantes_anidadas_y_marcas",
+   "case": "S-EDI144",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-05",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-JER-05, REQ-MOD-07: una encapsulante con varios recintos (y una encapsulante dentro de un recinto) se"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI145_rechazo_de_macroetapas_y_recintos_invalidos",
+   "case": "S-EDI145",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-JER-04",
+    "REQ-JER-05",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-MOD-07, REQ-JER-04, REQ-JER-05, REQ-EDT-05: lo estructuralmente inválido se rechaza con los diagnósticos"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI146_rechazo_de_ordenes_de_forzado_invalidas_y_conflicto_posible",
+   "case": "S-EDI146",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-02",
+    "REQ-JER-03"
+   ],
+   "summary": "REQ-JER-02, REQ-JER-03: ciclos, referencias y formas inválidas se rechazan; dos órdenes con igual destino y"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI147_editar_ordenes_de_forzado",
+   "case": "S-EDI147",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-JER-02, REQ-EDT-05: `set_force` cambia destino, forma, etapas y origen conservando el ID de la orden;"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI148_vaciar_un_recinto_activo_sigue_deteniendose_u08",
+   "case": "S-EDI148",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-06"
+   ],
+   "summary": "REQ-JER-06, U-08: forzar vacío un recinto con su encapsulante activa se detiene con D-SEM-PENDIENTE (U-08); con"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI149_borrar_una_macroetapa_con_todo_lo_suyo",
+   "case": "S-EDI149",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-EDT-05, REQ-MOD-07: borrar una macroetapa se lleva su expansión, su entrada y su salida, lo de dentro (también"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI150_borrar_encapsulantes_recintos_y_etapas_con_marcas_u_ordenes",
+   "case": "S-EDI150",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-EDT-05, REQ-JER-05: borrar una etapa marcada o una de un conjunto explícito las quita de su recinto y de su"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI151_renombrar_parciales_y_macroetapas",
+   "case": "S-EDI151",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-06",
+    "REQ-MOD-06"
+   ],
+   "summary": "REQ-EDT-06, REQ-MOD-06: `rename` cambia la etiqueta de un parcial o de una macroetapa conservando su ID y la"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI152_mover_la_macroetapa_y_consultar_la_jerarquia",
+   "case": "S-EDI152",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-EDT-08",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-EDT-03, REQ-JER-07, REQ-EDT-08: `move` coloca una macroetapa como a una etapa (solo presentación: la"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI153_deshacer_y_rehacer_cada_operacion_de_jerarquia",
+   "case": "S-EDI153",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-05: cada operación de jerarquía es una transacción que se deshace y se rehace sin dejar restos, también"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI154_ida_y_vuelta_y_vista_con_macroetapas_recintos_y_ordenes",
+   "case": "S-EDI154",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-JER-07",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-DAT-02, REQ-MOD-07, REQ-JER-07: un modelo con macroetapa, recinto con enlace de activación y orden de forzado,"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI155_el_recinto_toma_el_dueno_y_el_contenido_cuenta_en_el_dueno",
+   "case": "S-EDI155",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-05",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-JER-05, REQ-MOD-07, P-IMP-27: `add_enclosure` pone como dueño del parcial el de la encapsulante si no declara"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI156_add_partial_rechaza_un_nombre_repetido",
+   "case": "S-EDI156",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-06"
+   ],
+   "summary": "REQ-EDT-06: dos parciales no se llaman igual (D-NOMBRE-COLISION), como al renombrarlos o al crear la expansión"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI157_nombres_visibles_de_ordenes_recintos_y_expansiones_tambien_en_los_diagnosticos",
+   "case": "S-EDI157",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-EDT-09, REQ-JER-07: `display_names` da nombre a las órdenes de forzado, a los recintos y a las expansiones sin"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI158_pegar_ignora_la_jerarquia_y_pega_las_etapas_como_ordinarias",
+   "case": "S-EDI158",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-04",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-EDT-04, REQ-MOD-07: `copy` ignora las macroetapas, los recintos y las órdenes (aunque estén en la selección) y"
+  },
+  {
+   "test": "test_editor_jerarquias.EditorDeJerarquias.test_SEDI193_una_macroetapa_unida_a_una_barra_se_ve_unida_en_la_vista",
+   "case": "S-EDI193",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-04",
+    "REQ-MOD-03",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-JER-04, REQ-MOD-03, REQ-MOD-07: una etapa y una macroetapa por encima de una barra de simultaneidad Y y la barra"
   },
   {
    "test": "test_modbus.ModbusTests.test_SFIO01_digitales_fragmentacion",

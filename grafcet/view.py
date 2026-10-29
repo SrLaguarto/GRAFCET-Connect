@@ -54,10 +54,18 @@ def _dur(us: int) -> str:
 _INTERNO = re.compile(r"[a-z]-[0-9a-f]{32}")  # el ID que crea grafcet.ids.IdGenerator: no es para mostrar
 
 
+def force_situation(f: dict[str, Any], names: dict[str, str]) -> str:
+    """La situación que impone una orden de forzado, como se dibuja: «{B,C}», «{*}», «{ }» o «{INIT}»."""
+    return {"explicit": "{" + ",".join(names.get(i, i) for i in f.get("targetSteps", [])) + "}", "current": "{*}",
+            "empty": "{ }", "initial": "{INIT}"}[f["targetKind"]]
+
+
 def display_names(doc: dict[str, Any]) -> dict[str, str]:
     """Nombre visible de cada elemento: variable → name, etapa → label, parcial y macroetapa → label, transición →
     label si lo tiene o, si no, t1, t2… cuando su ID es interno. Un nombre repetido en otro parcial lleva el del parcial delante, como en el texto de las
-    expresiones (grafcet/editor.py). El dibujo y las tablas nunca muestran los ID internos que crea el editor."""
+    expresiones (grafcet/editor.py). Una expansión es «expansión de <macroetapa>», un recinto «recinto <parcial>» y una
+    orden de forzado «orden G{…} de <etapa>», las tres solo si su ID es interno (el de un ejemplo o el de un modelo
+    escrito a mano sigue siendo su nombre). El dibujo y las tablas nunca muestran los ID internos que crea el editor."""
     plabel = {p["id"]: p["label"] for p in doc["partials"]}
     out: dict[str, str] = {}
     for coll, key, scope in (("variables", "name", "scopeRef"), ("steps", "label", "partialRef")):
@@ -66,6 +74,17 @@ def display_names(doc: dict[str, Any]) -> dict[str, str]:
             out[x["id"]] = x[key] if len(same) == 1 else f"{plabel.get(x[scope], x[scope])}.{x[key]}"
     out.update({p["id"]: p["label"] for p in doc["partials"]})
     out.update({x["id"]: x.get("label", x["id"]) for x in doc["hierarchy"]["macros"]})
+    out.update({x["id"]: f"expansión de {out.get(x['ownerMacroRef'], x['ownerMacroRef'])}"
+                for x in doc["hierarchy"]["expansions"] if _INTERNO.fullmatch(x["id"])})
+    out.update({x["id"]: f"recinto {plabel.get(x['partialRef'], x['partialRef'])}"
+                for x in doc["hierarchy"]["enclosures"] if _INTERNO.fullmatch(x["id"])})
+    for f in doc["forces"]:  # una forma desconocida no impide nombrar las demás (el modelo la diagnostica)
+        if _INTERNO.fullmatch(f["id"]):
+            try:
+                sit = force_situation(f, out)
+            except KeyError:
+                sit = "{?}"
+            out[f["id"]] = f"orden {plabel.get(f['targetPartialRef'], f['targetPartialRef'])}{sit} de "                            f"{out.get(f['sourceStepRef'], f['sourceStepRef'])}"
     taken = {t["label"] for t in doc["transitions"] if t.get("label")}
     for n, t in enumerate(doc["transitions"], 1):  # sin etiqueta, una transición del editor se numera: t1, t2…
         name = t.get("label")
@@ -287,12 +306,12 @@ class Vista:
                                             for x in hier["expansions"]}
         kinds.update({e["partialRef"]: {"kind": "enclosure", "ownerStep": e["ownerStepRef"]} for e in hier["enclosures"]})
         for f in doc["forces"]:
-            sit = {"explicit": "{" + ",".join(names.get(i, i) for i in f.get("targetSteps", [])) + "}", "current": "{*}", "empty": "{ }",
-                   "initial": "{INIT}"}[f["targetKind"]]
+            sit = force_situation(f, names)
             acts.setdefault(f["sourceStepRef"], []).append({"kind": "force", "id": f["id"], "target": f["targetPartialRef"],
                                                            "text": [_seg(f"{labels[f['targetPartialRef']]}{sit}")]})
         # Barras: solo las que tienen elementos existentes; las parejas que enlazan se dibujan por la barra, no directas
-        vivos = {s["id"] for s in doc["steps"]} | {t["id"] for t in doc["transitions"]}
+        vivos = ({s["id"] for s in doc["steps"]} | {t["id"] for t in doc["transitions"]}
+                 | {x["id"] for x in hier["macros"]})  # una macroetapa se une a una barra como una etapa
         barras, cubiertos = [], set()
         for n, b in enumerate(self.bars, 1):
             arriba = [i for i in b.get("arriba", []) if i in vivos]
@@ -386,9 +405,13 @@ class Vista:
         return out
 
     def _diag(self, d: Any) -> dict[str, Any]:
-        """Diagnóstico para mostrar: el elemento sigue siendo su ID (el dibujo lo busca), el texto usa nombres."""
+        """Diagnóstico para mostrar: el elemento sigue siendo su ID (el dibujo lo busca), el texto (también el de la
+        evidencia) usa nombres."""
         x = d.to_dict()
-        return {**x, **{k: substitute(x[k], self.names) for k in ("message", "correction") if isinstance(x.get(k), str)}}
+        out = {**x, **{k: substitute(x[k], self.names) for k in ("message", "correction") if isinstance(x.get(k), str)}}
+        if isinstance(x.get("evidence"), dict):
+            out["evidence"] = {k: substitute(v, self.names) if isinstance(v, str) else v for k, v in x["evidence"].items()}
+        return out
 
     def _blocked(self, closed: str | None) -> dict[str, Any] | None:
         """Contexto rechazado: hasta dónde el recorrido está determinado y qué elemento queda en cuestión

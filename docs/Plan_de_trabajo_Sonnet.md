@@ -372,6 +372,29 @@ responsable.
 El motor ya ejecuta macroetapas, encapsulación y forzado (P-IMP-23 a P-IMP-27), pero `grafcet/editor.py` **no tiene
 operaciones** para crearlos. Solo `add_partial` y el borrado los conocen.
 
+**Estado.** Hecho en el núcleo y en la interfaz (P-IMP-61 y P-IMP-62; pruebas SEDI139–SEDI158 y SEDI170–SEDI192):
+
+- Núcleo: `add_macro`, `add_enclosure` (con `new_enclosure` para crear el recinto con su parcial), `add_force`, y lo
+  necesario para editarlas y borrarlas (`macro_info`, `set_step_kind`, `set_activation`, `set_force`, `delete_force`,
+  `partial_roles`), con borrado, nombres y pegado coherentes con la jerarquía.
+- Reglas: 8.1 C se aplica en `add_enclosure` (D-FORMATO si el parcial declara otro dueño). La regla 7.7 A (etapas
+  iniciales dentro de una expansión) se comprobó en la verificación: el editor la acepta sin diagnóstico y la etapa
+  arranca activa, como decide P-IMP-24.
+- Interfaz: fichas Macroetapa y Encapsulante; recintos; enlace de activación; «Abrir expansión», doble clic y «Ir a…»;
+  «Forzar un parcial…» con sus cuatro formas, y órdenes G{…} en rectángulo doble con «Editar orden de forzado…» y
+  «Quitar orden de forzado».
+- Aceptación: los ejemplos «macroetapa», «encapsulacion» y «forzado» reconstruidos con el editor simulan igual que los
+  del constructor (SEDI140 a SEDI142; el de «forzado» también solo con gestos, SEDI190). U-08 sigue deteniéndose (SEDI148).
+
+**Queda pendiente:**
+
+- Crear un parcial suelto (que no sea recinto ni expansión) con gestos del editor.
+- Atajos de teclado para las acciones nuevas (hoy, solo ratón y menús).
+- La vuelta completa de la navegación («ir y volver», REQ-EDT-08).
+- Comprobar los arrastres con ratón real en pantalla (las pruebas usan gestos programáticos).
+- Limitaciones anotadas en P-IMP-62: renombrar un parcial no reescribe los textos «G.x»; el texto de los borradores de
+  acción no tiene ámbito de parcial.
+
 **Tareas**
 
 - Añade al núcleo, con transacción y deshacer:

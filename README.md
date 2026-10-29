@@ -159,7 +159,7 @@ El núcleo se ha hecho solo con los doce documentos del paquete. El 25-10-2026, 
 - Jerarquías: forzado, macroetapas y encapsulación se ejecutan (P-IMP-23) y sus interacciones están decididas (P-IMP-24 a P-IMP-26), salvo vaciar por forzado un recinto con su encapsulante activa, que se detiene.
 - `elapsed(etapa)` en expresiones: no se ejecuta todavía (su valor con la etapa inactiva ya está decidido, 4.5 A).
 - Siguen deteniéndose, sin preguntar todavía: eventos internos y de franqueamiento (U-03, caso T-11b), vencimientos simultáneos que dependen del orden (U-06) y vaciar por forzado un recinto con su encapsulante activa (U-08). Las cuestiones del comparador están todas respondidas.
-- Editor gráfico, navegación jerárquica, exportación SVG/PDF y accesibilidad. El simulador de escritorio (P-IMP-29, P-IMP-32) ya crea, edita, guarda y simula un grafcet secuencial; ya tiene panel de variables (con memorias), acciones en las etapas y un programador por bloques para receptividades y condiciones (paso 4, P-IMP-38, rehecho en P-IMP-39 y P-IMP-45); faltan comodidades del editor de ramas (paso 5) y jerarquías (paso 6); las selecciones, saltos y repeticiones ya se construyen con el ratón (P-IMP-33).
+- Editor gráfico, ir y volver entre niveles de la jerarquía (REQ-EDT-08), exportación SVG/PDF y accesibilidad. El simulador de escritorio (P-IMP-29, P-IMP-32) ya crea, edita, guarda y simula un grafcet secuencial; ya tiene panel de variables (con memorias), acciones en las etapas y un programador por bloques para receptividades y condiciones (paso 4, P-IMP-38, rehecho en P-IMP-39 y P-IMP-45); faltan comodidades del editor de ramas (paso 5) y lo que queda de jerarquías (paso 6, ver «Jerarquías»); las selecciones, saltos y repeticiones ya se construyen con el ratón (P-IMP-33).
 - Instalador y actualización, matriz de sistemas y medición en el equipo de referencia (U-10). Por ahora solo hay una versión portable para Windows, sin instalador.
 - Ratificación del formato 0.1 (U-11) y cierre de las U normativas, que permitiría desbloquear capacidades.
 
@@ -289,3 +289,44 @@ En modo Editar, el panel de Opciones de una **etapa** y el de una **transición*
 - Se guarda en `presentation.notes`, con `kind: "comment"`. Borrar el elemento borra su comentario, y Ctrl+Z lo devuelve.
 - Las acciones no llevan comentario.
 - Limitaciones: un comentario largo con elementos muy juntos puede pisar a un vecino (no se mueve nada solo); si el texto ya lleva comillas, salen dobles. Copiar y pegar elementos aún no existe. Más adelante se añadirá un elemento de texto de comentario que se pueda arrastrar.
+
+## Jerarquías: macroetapas, encapsulantes y forzado (P-IMP-61, P-IMP-62)
+
+En modo Editar, la paleta tiene las fichas **Macroetapa** y **Encapsulante**, que se arrastran al dibujo como las demás.
+Cada operación se deshace con Ctrl+Z. Lo que se suelta dentro del marco de un recinto o de la zona de una expansión
+pertenece a ese parcial (con un margen de una etapa a la derecha y abajo); moverlo a otro marco solo cambia su posición
+en el dibujo, no su parcial.
+
+- **Macroetapa.** Al soltar la ficha se crea la macroetapa (M1, M2…) con su expansión a la derecha: un parcial con una
+  etapa de entrada (E1, E2…) y una de salida (S1, S2…), unidas a la macroetapa por trazos discontinuos. La expansión no
+  lleva ruta interior: se rellena soltando etapas y transiciones dentro de su zona. Botón derecho: «Abrir expansión» y
+  «Renombrar…». El doble clic también abre la expansión.
+- **Encapsulante.** Se arrastra la ficha, o se convierte una etapa con el botón derecho, «Convertir en encapsulante».
+  «Convertir en etapa ordinaria» la devuelve si no tiene recintos.
+- **Recintos.** Botón derecho en la encapsulante, «Añadir recinto…», y el nombre (R1, R2…). El marco vacío aparece a su
+  derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos.
+- **Enlace de activación.** Botón derecho en una etapa de un recinto, «Enlace de activación» (casilla). La etapa marcada
+  lleva un «\*» y se activa cuando se activa la encapsulante (P-IMP-23).
+- **Forzar un parcial.** Botón derecho en una etapa, «Forzar un parcial…»: se elige el parcial destino y la forma. La
+  orden se dibuja como una caja `G{…}` en rectángulo doble, con las acciones de esa etapa, y está vigente mientras la etapa
+  esté activa. Las cuatro formas, con las palabras de la tabla del documento 06:
+  - **Explícita:** el destino mantiene el conjunto de etapas que se elige.
+  - **Actual** («La situación actual» en el diálogo): el destino mantiene la situación que tiene al entrar en vigor la
+    orden.
+  - **Vacía:** el destino no tiene etapas activas mientras la orden está vigente.
+  - **Inicial:** el destino mantiene su situación inicial.
+
+  «Editar orden de forzado…» y «Quitar orden de forzado» están en el menú de la caja.
+- **Navegación.** «Abrir expansión» y el doble clic en la macroetapa llevan la vista a su expansión y la recuadran; no
+  cambian el modelo ni el historial de deshacer. «Ir a la macroetapa» (desde la entrada o la salida de una expansión) e
+  «Ir a la encapsulante» (desde una etapa de un recinto o desde su marco) seleccionan ese elemento y llevan la vista a
+  él. La leyenda (Ayuda > Leyenda del dibujo) explica los símbolos de la jerarquía.
+- **Errores.** Un rechazo sale como aviso en rojo y el elemento parpadea en naranja; la operación no deja nada a medias.
+
+**Límites de esta versión:**
+
+- No se puede crear todavía un parcial suelto (que no sea recinto ni expansión) con gestos del editor.
+- Renombrar un parcial no reescribe los textos que lo nombran con nombre calificado (`G.x`).
+- No hay atajos de teclado para estas acciones.
+- El ir y volver entre niveles no está completo (REQ-EDT-08).
+- Los arrastres con ratón real no se han comprobado en pantalla: las pruebas usan gestos programáticos.

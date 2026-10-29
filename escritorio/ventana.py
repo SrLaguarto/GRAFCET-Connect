@@ -18,10 +18,10 @@ from typing import Any
 
 from PySide6.QtCore import QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer, QSize
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
-from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
-                               QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
-                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
-                               QPushButton, QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
+                               QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
+                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QRadioButton,
+                               QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
                                QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle)
 
 from grafcet.diagnostics import DiagnosticError
@@ -75,6 +75,80 @@ LEYENDA = (
 
 def _q_key(q: str) -> list[Any]:
     return [(0, int(x), "") if x.isdigit() else (1, 0, x) for x in re.split(r"[.-]", q)]  # números antes que letras
+
+
+class DialogoForzado(QDialog):
+    """«Forzar un parcial…» y «Editar orden de forzado…»: el parcial destino (por su nombre), la forma de la orden (explícita, la
+    situación actual, vacía o inicial) y, solo si es explícita, las etapas del destino que se imponen (selección múltiple por
+    nombre). `datos` es lo que prepara `Edicion._datos_forzado`; el resultado (`resultado`) lleva los ID de lo elegido. No
+    valida: si la orden no vale (una explícita sin etapas, un ciclo de forzado), lo dice la edición con el aviso en rojo."""
+
+    def __init__(self, parent: QWidget, datos: dict[str, Any]) -> None:
+        super().__init__(parent)
+        self.datos = datos
+        actual = datos.get("actual")
+        self.setWindowTitle("Editar orden de forzado" if actual else "Forzar un parcial")
+        self.resize(420, 460)
+        lay = QVBoxLayout(self)
+        nota = QLabel(f"Orden de forzado de la etapa {html.escape(datos['origen'])}: mientras esa etapa esté activa, impone una "
+                      "situación al parcial que elija.")
+        nota.setWordWrap(True)
+        lay.addWidget(nota)
+        form = QFormLayout()
+        self.destino = QComboBox()
+        for pid, nombre in datos["destinos"]:
+            self.destino.addItem(nombre, pid)
+        form.addRow("Parcial que se fuerza", self.destino)
+        lay.addLayout(form)
+        caja = QGroupBox("Situación que se impone")
+        cl = QVBoxLayout(caja)
+        self.grupo = QButtonGroup(self)
+        self.formas: dict[str, QRadioButton] = {}
+        for clave, texto in datos["formas"]:
+            b = QRadioButton(texto)
+            self.grupo.addButton(b)
+            self.formas[clave] = b
+            cl.addWidget(b)
+        lay.addWidget(caja)
+        self.l_etapas = QLabel("Etapas del parcial que quedan activas (solo en la forma Explícita):")
+        self.l_etapas.setWordWrap(True)
+        lay.addWidget(self.l_etapas)
+        self.etapas = QListWidget()
+        lay.addWidget(self.etapas, 1)
+        botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        botones.accepted.connect(self.accept)
+        botones.rejected.connect(self.reject)
+        lay.addWidget(botones)
+        if actual:
+            self.destino.setCurrentIndex(max(0, self.destino.findData(actual["destino"])))
+        self.formas[actual["forma"] if actual and actual["forma"] in self.formas else "explicit"].setChecked(True)
+        self._llenar(actual["etapas"] if actual else [])
+        self.destino.currentIndexChanged.connect(lambda _: self._llenar([]))
+        self.grupo.buttonToggled.connect(lambda *_: self._habilitar())
+
+    def _llenar(self, marcadas: list[str]) -> None:
+        """Las etapas del parcial elegido, con casilla, con las `marcadas` ya puestas."""
+        self.etapas.clear()
+        for sid, nombre in self.datos["etapas"].get(self.destino.currentData(), []):
+            it = QListWidgetItem(nombre)
+            it.setData(Qt.ItemDataRole.UserRole, sid)
+            it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            it.setCheckState(Qt.CheckState.Checked if sid in marcadas else Qt.CheckState.Unchecked)
+            self.etapas.addItem(it)
+        self._habilitar()
+
+    def _habilitar(self) -> None:
+        explicita = self.formas["explicit"].isChecked()
+        self.etapas.setEnabled(explicita)
+        self.l_etapas.setEnabled(explicita)
+
+    def resultado(self) -> dict[str, Any]:
+        """Lo elegido: {destino: ID del parcial, forma: explicit|current|empty|initial, etapas: [ID] (solo las marcadas, y
+        solo si la forma es explícita)}."""
+        forma = next(k for k, b in self.formas.items() if b.isChecked())
+        marcadas = [self.etapas.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.etapas.count())
+                    if self.etapas.item(i).checkState() == Qt.CheckState.Checked] if forma == "explicit" else []
+        return {"destino": self.destino.currentData(), "forma": forma, "etapas": marcadas}
 
 
 class Lecturas(QDialog):
@@ -744,6 +818,8 @@ class Ventana(QMainWindow):
         e.pedir_etiqueta = self.editar_etiqueta
         e.pedir_accion = self.editar_accion
         e.confirmar_borrado = self._confirmar_borrado
+        e.pedir_texto = lambda titulo, etiqueta, actual: self._pedir_texto(titulo, etiqueta, actual)
+        e.pedir_forzado = lambda datos: self._pedir_forzado(datos)
 
     def cambiar_modo(self, modo: str) -> bool:
         """Los modos solo se alternan con Play (simular) y Pausa (editar); esto es el mismo control por dentro. Devuelve si
@@ -942,15 +1018,31 @@ class Ventana(QMainWindow):
         self._leyenda.raise_()
         self._leyenda.activateWindow()
 
+    def _pedir_texto(self, titulo: str, etiqueta: str, actual: str) -> str | None:
+        """Un nombre que pide la edición («Añadir recinto…», «Renombrar…» de una macroetapa): el texto escrito, o None si se
+        cancela. Es un método propio para poder sustituirlo en las pruebas, sin bloquear con el diálogo."""
+        texto, ok = QInputDialog.getText(self, titulo, etiqueta, text=actual)
+        return texto if ok else None
+
+    def _pedir_forzado(self, datos: dict[str, Any]) -> dict[str, Any] | None:
+        """La orden de forzado que pide la edición («Forzar un parcial…», «Editar orden de forzado…»): lo elegido en
+        `DialogoForzado`, o None si se cancela. Método propio para poder sustituirlo en las pruebas, sin bloquear."""
+        d = DialogoForzado(self, datos)
+        return d.resultado() if d.exec() == QDialog.DialogCode.Accepted else None
+
     def _confirmar_borrado(self, plan: dict[str, list[str]]) -> bool:
         e = self.edicion
         n = e.nombres
-        extra = [n.get(i, i) for i in plan["elements"] if i not in e.sel]
-        texto = f"Se borrará: {', '.join(n.get(i, i) for i in e.sel)}."
+        elegidos = list(dict.fromkeys(e.nombre(i) for i in e.sel))  # con nombres, sin repetir (una macroetapa y su expansión)
+        extra = [t for t in dict.fromkeys(e.nombre(i) for i in plan["elements"] if i not in e.sel) if t not in elegidos]
+        texto = f"Se borrará: {', '.join(elegidos)}."
         if extra:
             texto += f"\n\nTambién se lleva consigo: {', '.join(extra)}."
         if plan["affectedTransitions"]:
             texto += f"\n\nQuedan sin enlace en este extremo: {', '.join(n.get(i, i) for i in plan['affectedTransitions'])}."
+        avisos = e.avisos_borrado(plan)  # recintos y órdenes que pierden etapas de su enlace de activación o de su conjunto
+        if avisos:
+            texto += "\n\nTambién cambia la jerarquía:\n" + "\n".join(f"• {a[0].upper()}{a[1:]}." for a in avisos)
         return QMessageBox.question(self, TITULO, texto + "\n\nSe puede deshacer con Ctrl+Z. ¿Continuar?") \
             == QMessageBox.StandardButton.Yes
 

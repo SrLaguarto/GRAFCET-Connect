@@ -4,7 +4,9 @@ Cada operación es una transacción: se aplica completa o no se aplica; una oper
 fallida no entra en el historial; una edición nueva descarta la rama de rehacer
 (REQ-EDT-05). Las operaciones de vista solo cambian el documento de presentación y no
 cambian la revisión semántica (REQ-EDT-03, REQ-EDT-14). Conectar exige una relación
-explícita: cruzar líneas nunca conecta (REQ-MOD-03).
+explícita: cruzar líneas nunca conecta (REQ-MOD-03). Las jerarquías (macroetapas, recintos con su
+encapsulante y órdenes de forzado; documento 06, REQ-JER-02, 04, 05, 07) se construyen y se editan con las
+operaciones de la sección «jerarquías».
 """
 from __future__ import annotations
 
@@ -12,7 +14,7 @@ import copy
 from contextlib import contextmanager
 from fractions import Fraction
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, NamedTuple
 
 from . import expressions as ex
 from .diagnostics import Diagnostic, DiagnosticError
@@ -59,6 +61,21 @@ class Fragment:
     entities: dict[str, list[dict[str, Any]]]
     layouts: list[dict[str, Any]]
     external_refs: dict[str, str] = field(default_factory=dict)  # id externo -> clase
+
+
+class MacroIds(NamedTuple):
+    """Los IDs de una macroetapa y de su expansión (`Editor.add_macro`, `Editor.macro_info`)."""
+    macro: str
+    expansion: str  # el elemento de `hierarchy.expansions`
+    partial: str  # el parcial de la expansión
+    entry: str
+    exit: str
+
+
+class EnclosureIds(NamedTuple):
+    """El ID de un recinto y el de su parcial (`Editor.new_enclosure`)."""
+    enclosure: str
+    partial: str
 
 
 class Editor:
@@ -226,9 +243,9 @@ class Editor:
 
     # -- creación
     def add_partial(self, label: str, owner: str | None = None) -> str:
+        """Un parcial nuevo. Su nombre es único entre los parciales (D-NOMBRE-COLISION), como al renombrarlo."""
         def fn(m: dict[str, Any], p: dict[str, Any]) -> str:
-            if not valid_label(label):
-                raise DiagnosticError(Diagnostic("D-FORMATO", "etiqueta inválida"))
+            self._free_label(m["partials"], label, "parcial")
             pid = self.ids.new("g")
             item = {"id": pid, "label": label, "stepRefs": [], "transitionRefs": []}
             if owner:
@@ -668,12 +685,16 @@ class Editor:
             p["barras"] = [x for x in p["barras"] if x["id"] != bid]
         self._txn("borrar barra", fn)
 
+    # Una macroetapa se enlaza con las transiciones como una etapa (documento 06: M como siguiente es su entrada y
+    # como precedente, su salida; lo resuelve el modelo al compilar)
+    _ETAPAS = ("steps", "macros")
+
     def _link_in(self, m: dict[str, Any], src: str, dst: str, quiet: bool = False) -> Diagnostic | None:
         idx = self._index(m)
         ks, kd = idx[src][0], idx[dst][0]
-        if ks == "steps" and kd == "transitions":
+        if ks in self._ETAPAS and kd == "transitions":
             refs, item = idx[dst][1]["preRefs"], src
-        elif ks == "transitions" and kd == "steps":
+        elif ks == "transitions" and kd in self._ETAPAS:
             refs, item = idx[src][1]["postRefs"], dst
         else:
             if quiet and any(d["fromRef"] == src and d["toRef"] == dst for d in m["draftLinks"]):
@@ -692,10 +713,10 @@ class Editor:
     def _unlink_in(self, m: dict[str, Any], src: str, dst: str) -> None:
         idx = self._index(m)
         ks, kd = idx[src][0], idx[dst][0]
-        if ks == "steps" and kd == "transitions":
+        if ks in self._ETAPAS and kd == "transitions":
             t = idx[dst][1]
             t["preRefs"] = [x for x in t["preRefs"] if x != src]
-        elif ks == "transitions" and kd == "steps":
+        elif ks == "transitions" and kd in self._ETAPAS:
             t = idx[src][1]
             t["postRefs"] = [x for x in t["postRefs"] if x != dst]
         else:
@@ -777,12 +798,19 @@ class Editor:
             if not valid_label(new_name):
                 raise DiagnosticError(Diagnostic("D-FORMATO", "nombre inválido"))
             coll, it = self._index(m)[ident]
+            if coll not in ("variables", "steps", "transitions", "partials", "macros"):
+                raise DiagnosticError(Diagnostic("D-FORMATO", "este elemento no tiene nombre", element=ident))
             fld = "name" if coll == "variables" else "label"
             scope_fld = {"variables": "scopeRef", "steps": "partialRef"}.get(coll)
             if scope_fld and any(o is not it and o.get(scope_fld) == it[scope_fld] and label_key(o[fld]) == label_key(new_name)
                                  for o in m[coll]):
                 raise DiagnosticError(Diagnostic("D-NOMBRE-COLISION", f"«{new_name}» ya existe en el ámbito; el ID no cambia",
                                                  element=ident))
+            if coll in ("partials", "macros"):  # el nombre de un parcial o de una macroetapa es único en el modelo
+                same = m["partials"] if coll == "partials" else m["hierarchy"]["macros"]
+                if any(o is not it and label_key(o["label"]) == label_key(new_name) for o in same):
+                    raise DiagnosticError(Diagnostic("D-NOMBRE-COLISION", f"«{new_name}» ya existe; el ID no cambia",
+                                                     element=ident))
             it[fld] = new_name
             name_of = self._render_names(m)
             touched = []
@@ -817,33 +845,278 @@ class Editor:
         self._txn("cambiar variable", fn)
         return impact
 
+    # -- jerarquías: macroetapas, recintos con su encapsulante y órdenes de forzado (documento 06; P-IMP-23..27)
+    # Cada operación deja el modelo como lo declara el documento 09. Si deja algo mal formado (una referencia que no
+    # existe, un recinto con dos encapsulantes, un ciclo, una etapa fuera del recinto o del destino), no se aplica y el
+    # error trae los diagnósticos que da `validate()` (D-REF, D-PROPIETARIO, D-JERARQUIA-CICLO, D-FORMATO). Lo que se
+    # completa después (la etapa inicial de un recinto, un conflicto posible entre órdenes) no se rechaza: lo informa
+    # `validate()`. Colocar una macroetapa en el dibujo es presentación: `move` la mueve como a una etapa.
+    _ESTRUCTURALES = ("D-REF", "D-PROPIETARIO", "D-JERARQUIA-CICLO", "D-FORMATO", "D-ID")
+    # Lo que un diseño a medias aún no cumple (sin etapas iniciales, transición sin un lado, memoria con valor inicial)
+    # no es estructura: lo informa `validate()`, pero no impide crear lo primero (una macroetapa en un grafcet vacío)
+    _A_MEDIAS = {"1.5": "B", "6.1": "B", "6.2": "B", "6.4": "B"}
+
+    def _estructurales(self, m: dict[str, Any]) -> list[Diagnostic]:
+        return [d for d in validate_model(m, self._A_MEDIAS).diagnostics if d.code in self._ESTRUCTURALES and d.blocks_start]
+
+    def _sin_nuevos(self, m: dict[str, Any], antes: list[Diagnostic]) -> None:
+        """Rechaza la operación si deja un diagnóstico estructural que antes de ella no estaba."""
+        vistos = {(d.code, d.element, d.message) for d in antes}
+        nuevos = [d for d in self._estructurales(m) if (d.code, d.element, d.message) not in vistos]
+        if nuevos:
+            raise DiagnosticError(*nuevos)
+
+    @staticmethod
+    def _find(items: list[dict[str, Any]], ident: str, what: str) -> dict[str, Any]:
+        it = next((x for x in items if x["id"] == ident), None)
+        if it is None:
+            raise DiagnosticError(Diagnostic("D-REF", f"no existe {what}: {ident}", element=ident))
+        return it
+
+    @staticmethod
+    def _free_label(items: list[dict[str, Any]], label: str, what: str) -> None:
+        if not valid_label(label):
+            raise DiagnosticError(Diagnostic("D-FORMATO", "etiqueta inválida"))
+        if any(label_key(x["label"]) == label_key(label) for x in items):
+            raise DiagnosticError(Diagnostic("D-NOMBRE-COLISION", f"«{label}» ya existe como {what}"))
+
+    def add_macro(self, partial: str, label: str, at: tuple[Any, Any] | None = None, entry_label: str | None = None,
+                  exit_label: str | None = None, expansion_label: str | None = None) -> MacroIds:
+        """Una macroetapa en `partial`, con su expansión: un parcial nuevo dentro de `partial` (regla 8.1 C) con su etapa
+        de entrada y su etapa de salida (kind entry y exit); una expansión por macroetapa (T-18c). Si no se dan, las
+        etiquetas de la entrada y la salida son E<n> y S<n> con el primer n libre, y la del parcial es la de la
+        macroetapa. `at` coloca la macroetapa en el dibujo; la entrada y la salida se colocan con `move`."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> MacroIds:
+            antes = self._estructurales(m)
+            self._find(m["partials"], partial, "el parcial")
+            self._free_label(m["hierarchy"]["macros"], label, "macroetapa")
+            exp_label = label if expansion_label is None else expansion_label
+            self._free_label(m["partials"], exp_label, "parcial")
+            usadas = {label_key(s["label"]) for s in m["steps"]} | {s["id"] for s in m["steps"]}
+            n = 1
+            while f"E{n}" in usadas or f"S{n}" in usadas:
+                n += 1
+            ent = f"E{n}" if entry_label is None else entry_label
+            sal = f"S{n}" if exit_label is None else exit_label
+            for lab in (ent, sal):
+                if not valid_label(lab):
+                    raise DiagnosticError(Diagnostic("D-FORMATO", "etiqueta inválida"))
+            if label_key(ent) == label_key(sal):
+                raise DiagnosticError(Diagnostic("D-NOMBRE-COLISION", f"la entrada y la salida de la expansión no pueden "
+                                                 f"llamarse igual («{ent}»)"))
+            xp, mid, xid = self.ids.new("g"), self.ids.new("m"), self.ids.new("x")
+            eid, sid = self.ids.new("s"), self.ids.new("s")
+            m["partials"].append({"id": xp, "label": exp_label, "stepRefs": [eid, sid], "transitionRefs": [],
+                                  "ownerRef": partial})
+            for ident, lab, kind in ((eid, ent, "entry"), (sid, sal, "exit")):
+                m["steps"].append({"id": ident, "label": lab, "partialRef": xp, "kind": kind, "initial": False,
+                                   "actionRefs": []})
+            m["hierarchy"]["macros"].append({"id": mid, "label": label, "partialRef": partial, "expansionRef": xid})
+            m["hierarchy"]["expansions"].append({"id": xid, "ownerMacroRef": mid, "partialRef": xp, "entryRef": eid,
+                                                 "exitRef": sid})
+            self._layout(p, mid, at)
+            self._sin_nuevos(m, antes)
+            return MacroIds(mid, xid, xp, eid, sid)
+        return self._txn("crear macroetapa", fn)
+
+    def macro_info(self, macro: str) -> MacroIds:
+        """Los IDs de la macroetapa y de su expansión: lo que hace falta para abrirla (REQ-EDT-08, REQ-JER-07)."""
+        mac = self._find(self.model["hierarchy"]["macros"], macro, "la macroetapa")
+        x = self._find(self.model["hierarchy"]["expansions"], mac["expansionRef"], "la expansión")
+        return MacroIds(macro, x["id"], x["partialRef"], x["entryRef"], x["exitRef"])
+
+    def set_step_kind(self, step: str, kind: str) -> None:
+        """Convierte una etapa ordinaria en encapsulante («enclosing») o la devuelve a «ordinary». Una encapsulante con
+        recintos no vuelve a ordinaria hasta que se borran; la entrada y la salida de una expansión no cambian de tipo."""
+        st = self._find(self.model["steps"], step, "la etapa")
+        if kind not in ("ordinary", "enclosing"):
+            raise DiagnosticError(Diagnostic("D-FORMATO", f"tipo de etapa desconocido: {kind!r}", element=step))
+        if st["kind"] in ("entry", "exit"):
+            raise DiagnosticError(Diagnostic("D-FORMATO", f"«{st['label']}» es la entrada o la salida de una expansión: "
+                                             "no cambia de tipo", element=step))
+        if st["kind"] == kind:
+            return
+        recintos = [x["id"] for x in self.model["hierarchy"]["enclosures"] if x["ownerStepRef"] == step]
+        if kind == "ordinary" and recintos:
+            raise DiagnosticError(Diagnostic("D-FORMATO", f"«{st['label']}» es la encapsulante de {len(recintos)} "
+                                             "recinto(s): bórrelos antes de devolverla a ordinaria", element=step))
+
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            self._find(m["steps"], step, "la etapa")["kind"] = kind
+        self._txn("convertir en encapsulante" if kind == "enclosing" else "devolver a ordinaria", fn)
+
+    def add_enclosure(self, owner_step: str, partial: str, activation_steps: list[str] = ()) -> str:
+        """Un recinto: `partial`, ya creado (por ejemplo con `add_partial(label, owner=…)`), pasa a ser recinto de la
+        encapsulante `owner_step` (kind enclosing), con las etapas de `activation_steps` marcadas con el enlace de
+        activación. Cada recinto tiene una sola encapsulante; una encapsulante puede tener varios recintos. Si el
+        parcial no declara dueño (`ownerRef`), pasa a ser el parcial de la encapsulante (P-IMP-27: así su contenido
+        cuenta en X_dueño); si declara otro, se rechaza (D-FORMATO). Devuelve el ID del recinto."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> str:
+            antes = self._estructurales(m)
+            owner = self._find(m["steps"], owner_step, "la etapa")
+            part = self._find(m["partials"], partial, "el parcial")
+            if owner["kind"] != "enclosing":
+                raise DiagnosticError(Diagnostic("D-FORMATO", f"«{owner['label']}» debe ser una etapa encapsulante "
+                                                 "(kind=enclosing): conviértala antes", element=owner_step))
+            if part.get("ownerRef", owner["partialRef"]) != owner["partialRef"]:
+                raise DiagnosticError(Diagnostic("D-FORMATO", f"el parcial «{part['label']}» está dentro de otro parcial "
+                                                 f"que el de la encapsulante «{owner['label']}»", element=partial,
+                                                 field="ownerRef"))
+            part.setdefault("ownerRef", owner["partialRef"])
+            rid = self.ids.new("r")
+            m["hierarchy"]["enclosures"].append({"id": rid, "ownerStepRef": owner_step, "partialRef": partial,
+                                                 "activationRefs": list(dict.fromkeys(activation_steps))})
+            self._sin_nuevos(m, antes)
+            return rid
+        return self._txn("crear recinto", fn)
+
+    def new_enclosure(self, owner_step: str, label: str) -> EnclosureIds:
+        """Un recinto nuevo para la encapsulante: un parcial vacío, dentro del de la etapa, sin ninguna etapa marcada
+        todavía (`set_activation`). Si la encapsulante es inicial, `validate()` avisa (D-JERARQUIA-INICIAL) hasta que el
+        recinto tenga su etapa inicial."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> EnclosureIds:
+            antes = self._estructurales(m)
+            owner = self._find(m["steps"], owner_step, "la etapa")
+            if owner["kind"] != "enclosing":
+                raise DiagnosticError(Diagnostic("D-FORMATO", f"«{owner['label']}» debe ser una etapa encapsulante "
+                                                 "(kind=enclosing): conviértala antes", element=owner_step))
+            self._free_label(m["partials"], label, "parcial")
+            pid, rid = self.ids.new("g"), self.ids.new("r")
+            m["partials"].append({"id": pid, "label": label, "stepRefs": [], "transitionRefs": [],
+                                  "ownerRef": owner["partialRef"]})
+            m["hierarchy"]["enclosures"].append({"id": rid, "ownerStepRef": owner_step, "partialRef": pid,
+                                                 "activationRefs": []})
+            self._sin_nuevos(m, antes)
+            return EnclosureIds(rid, pid)
+        return self._txn("crear recinto", fn)
+
+    def set_activation(self, step: str, on: bool = True) -> None:
+        """Marca (o desmarca) una etapa de un recinto con el enlace de activación: al activarse la encapsulante, esa
+        etapa se activa (el «*» del dibujo). Inicial y enlace de activación son cosas distintas (documento 06)."""
+        st = self._find(self.model["steps"], step, "la etapa")
+        recintos = [x for x in self.model["hierarchy"]["enclosures"] if x["partialRef"] == st["partialRef"]]
+        if not recintos:
+            raise DiagnosticError(Diagnostic("D-REF", f"«{st['label']}» no está en ningún recinto: el enlace de activación "
+                                             "es de las etapas de un recinto", element=step))
+        if all((step in x["activationRefs"]) == bool(on) for x in recintos):
+            return
+
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            for x in m["hierarchy"]["enclosures"]:
+                if x["partialRef"] == st["partialRef"]:
+                    refs = [s for s in x["activationRefs"] if s != step]
+                    x["activationRefs"] = refs + [step] if on else refs
+        self._txn("enlace de activación" if on else "quitar el enlace de activación", fn)
+
+    # Órdenes de forzado (LOC tabla 9): `kind` es «explicit» (con el conjunto `steps` de etapas del destino), «current»
+    # (la situación que tenga el destino al entrar en vigor), «empty» o «initial»
+    def add_force(self, source_step: str, target_partial: str, kind: str, steps: list[str] | None = None) -> str:
+        """Una orden de forzado vinculada a `source_step`: mientras esa etapa está activa, impone al parcial destino
+        la situación de `kind`. `steps` solo va con «explicit». Un ciclo en la relación superior→inferior se rechaza
+        (D-JERARQUIA-CICLO); dos órdenes con igual destino y objetivo distinto se aceptan y `validate()` avisa
+        (D-FORZADO-CONFLICTO). Devuelve el ID de la orden."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> str:
+            antes = self._estructurales(m)
+            fid = self.ids.new("f")
+            item: dict[str, Any] = {"id": fid, "sourceStepRef": source_step, "targetPartialRef": target_partial,
+                                    "targetKind": kind}
+            if steps is not None:
+                item["targetSteps"] = list(dict.fromkeys(steps))
+            m["forces"].append(item)
+            self._sin_nuevos(m, antes)
+            return fid
+        return self._txn("crear orden de forzado", fn)
+
+    def set_force(self, fid: str, target_partial: str | None = None, kind: str | None = None,
+                  steps: list[str] | None = None, source_step: str | None = None) -> None:
+        """Cambia el destino, la forma, las etapas o el origen de una orden (lo que sea None no cambia). Con la forma
+        «explicit» y sin `steps`, conserva las que tenía; con otra forma, quita las etapas."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            antes = self._estructurales(m)
+            f = self._find(m["forces"], fid, "la orden de forzado")
+            if source_step is not None:
+                f["sourceStepRef"] = source_step
+            if target_partial is not None:
+                f["targetPartialRef"] = target_partial
+            if kind is not None:
+                f["targetKind"] = kind
+            if steps is not None:
+                f["targetSteps"] = list(dict.fromkeys(steps))
+            elif f["targetKind"] != "explicit":
+                f.pop("targetSteps", None)
+            self._sin_nuevos(m, antes)
+        self._txn("editar orden de forzado", fn)
+
+    def delete_force(self, fid: str) -> None:
+        self._find(self.model["forces"], fid, "la orden de forzado")
+        self.delete([fid])
+
+    # -- consulta de solo lectura, para mostrar y navegar la jerarquía (REQ-EDT-08, REQ-JER-07)
+    def partial_roles(self) -> dict[str, dict[str, Any]]:
+        """De qué tipo es cada parcial: «root» (no está dentro de otro), «expansion» (expansión de una macroetapa) o
+        «enclosure» (recinto de una encapsulante). Además: `parent` (el parcial que lo contiene, que es el de la
+        macroetapa o el de la encapsulante), `text` (para mostrar) y, según el tipo, `macro`, `expansion`, `entry` y `exit`,
+        o bien `enclosure`, `ownerStep` y `activation`."""
+        m = self.model
+        name_of = self._render_names(m)
+        steps = {s["id"]: s for s in m["steps"]}
+        macros = {x["id"]: x for x in m["hierarchy"]["macros"]}
+        roles: dict[str, dict[str, Any]] = {p["id"]: {"kind": "root", "parent": None, "text": "raíz"} for p in m["partials"]}
+        for x in m["hierarchy"]["expansions"]:
+            if x["partialRef"] in roles and x["ownerMacroRef"] in macros:
+                roles[x["partialRef"]] = {
+                    "kind": "expansion", "parent": macros[x["ownerMacroRef"]]["partialRef"], "macro": x["ownerMacroRef"],
+                    "expansion": x["id"], "entry": x["entryRef"], "exit": x["exitRef"],
+                    "text": f"expansión de la macroetapa {name_of(x['ownerMacroRef'])}"}
+        for x in m["hierarchy"]["enclosures"]:
+            if x["partialRef"] in roles and x["ownerStepRef"] in steps:
+                roles[x["partialRef"]] = {
+                    "kind": "enclosure", "parent": steps[x["ownerStepRef"]]["partialRef"], "enclosure": x["id"],
+                    "ownerStep": x["ownerStepRef"], "activation": list(x["activationRefs"]),
+                    "text": f"recinto de la encapsulante {name_of(x['ownerStepRef'])}"}
+        return roles
+
     # -- borrado con dependencias (REQ-EDT-05, documento 07 «Borrado y reparación»)
     def plan_delete(self, ids: list[str]) -> dict[str, list[str]]:
+        """Todo lo que se llevaría borrar `ids`. Una macroetapa se va con su expansión (y al revés: sin expansión no hay
+        macroetapa) y un recinto con su encapsulante, con todo lo que contienen; un parcial, con lo que tiene dentro. Una
+        orden de forzado se va con su etapa de origen o con su parcial destino. `affectedHierarchy` son los recintos y las
+        órdenes que se quedan y pierden una etapa de su enlace de activación o de su conjunto explícito."""
         m = self.model
         doomed = set(ids)
+        expansions = {e["id"]: e for e in m["hierarchy"]["expansions"]}
         changed = True
         while changed:
             changed = False
             for x in m["hierarchy"]["enclosures"]:
-                if x["ownerStepRef"] in doomed and x["id"] not in doomed:
-                    doomed |= {x["id"], x["partialRef"]}
+                own = {x["id"], x["partialRef"]}
+                if (x["ownerStepRef"] in doomed or doomed & own) and not own <= doomed:
+                    doomed |= own
                     changed = True
             for x in m["hierarchy"]["macros"]:
-                if x["id"] in doomed and x["expansionRef"] not in doomed:
-                    exp = next(e for e in m["hierarchy"]["expansions"] if e["id"] == x["expansionRef"])
-                    doomed |= {exp["id"], exp["partialRef"]}
+                exp = expansions.get(x["expansionRef"])
+                own = {x["id"]} | ({exp["id"], exp["partialRef"]} if exp else set())
+                if (x["partialRef"] in doomed or doomed & own) and not own <= doomed:
+                    doomed |= own
                     changed = True
             for pt in m["partials"]:
                 if pt["id"] in doomed:
                     new = (set(pt["stepRefs"]) | set(pt["transitionRefs"])) - doomed
-                    if new:
-                        doomed |= new
-                        changed = True
+                elif pt.get("ownerRef") in doomed:
+                    new = {pt["id"]}
+                else:
+                    continue
+                if new:
+                    doomed |= new
+                    changed = True
         for s in m["steps"]:
             if s["id"] in doomed:
                 doomed |= set(s["actionRefs"])
+        doomed |= {f["id"] for f in m["forces"] if f["sourceStepRef"] in doomed or f["targetPartialRef"] in doomed}
         links = [t["id"] for t in m["transitions"] if t["id"] not in doomed and (set(t["preRefs"]) | set(t["postRefs"])) & doomed]
-        return {"elements": sorted(doomed), "affectedTransitions": sorted(links),
+        marks = [x["id"] for x in m["hierarchy"]["enclosures"] if x["id"] not in doomed and set(x["activationRefs"]) & doomed]
+        marks += [f["id"] for f in m["forces"] if f["id"] not in doomed and set(f.get("targetSteps", [])) & doomed]
+        return {"elements": sorted(doomed), "affectedTransitions": sorted(links), "affectedHierarchy": sorted(marks),
                 "sharedVariablesKept": sorted({v["id"] for v in m["variables"]} & {u for e in m["expressions"]
                                                                                     for u in e.get("bindings", {}).values()})}
 
@@ -853,12 +1126,24 @@ class Editor:
             raise DiagnosticError(Diagnostic("D-REF", f"no existen {sorted(unknown)}; no se borra nada"))
         plan = self.plan_delete(ids)
         doomed = set(plan["elements"])
+        for x in self.model["hierarchy"]["expansions"]:  # la entrada y la salida de una expansión no se borran solas
+            sueltas = sorted({x["entryRef"], x["exitRef"]} & doomed)
+            if x["id"] not in doomed and sueltas:
+                name_of = self._render_names(self.model)
+                raise DiagnosticError(Diagnostic(
+                    "D-REF", f"«{name_of(sueltas[0])}» es la entrada o la salida de la expansión de la macroetapa "
+                    f"«{name_of(x['ownerMacroRef'])}»: borre la macroetapa entera, no solo esa etapa", element=sueltas[0]))
 
         def fn(m: dict[str, Any], p: dict[str, Any]) -> dict[str, list[str]]:
             for coll in ("partials", "steps", "transitions", "actions", "forces", "draftLinks"):
                 m[coll] = [x for x in m[coll] if x["id"] not in doomed]
             for coll in ("macros", "expansions", "enclosures"):
                 m["hierarchy"][coll] = [x for x in m["hierarchy"][coll] if x["id"] not in doomed]
+            for x in m["hierarchy"]["enclosures"]:  # el enlace de activación de una etapa borrada desaparece con ella
+                x["activationRefs"] = [s for s in x["activationRefs"] if s not in doomed]
+            for f in m["forces"]:
+                if "targetSteps" in f:
+                    f["targetSteps"] = [s for s in f["targetSteps"] if s not in doomed]
             for pt in m["partials"]:
                 pt["stepRefs"] = [s for s in pt["stepRefs"] if s not in doomed]
                 pt["transitionRefs"] = [t for t in pt["transitionRefs"] if t not in doomed]
@@ -900,8 +1185,12 @@ class Editor:
 
     # -- copiar y pegar sin referencias accidentales (REQ-EDT-04)
     def copy(self, ids: list[str]) -> Fragment:
+        """Copia etapas, transiciones y acciones (con sus expresiones). Las macroetapas, los recintos y las órdenes de
+        forzado no se copian: se ignoran aunque estén en `ids`, y una transición que enlaza con una macroetapa la trata
+        como referencia externa. Al pegar, una etapa encapsulante, de entrada o de salida pasa a ser ordinaria."""
         m = self.model
-        chosen = set(ids)
+        jerarquia = {x["id"] for c in ("macros", "expansions", "enclosures") for x in m["hierarchy"][c]}
+        chosen = set(ids) - jerarquia - {f["id"] for f in m["forces"]}
         for s in m["steps"]:
             if s["id"] in chosen:
                 chosen |= set(s["actionRefs"])
@@ -971,6 +1260,8 @@ class Editor:
                         new["meaning"] = _remap_meaning(new["meaning"], mp)
                     if coll == "steps" and any(s["partialRef"] == partial and s["label"] == new["label"] for s in m["steps"]):
                         new["label"] = f"{new['label']} (copia)"
+                    if coll == "steps":
+                        new["kind"] = "ordinary"  # sin la estructura de la copia (recinto, expansión): una etapa ordinaria
                     m[coll].append(new)
                     if coll in ("steps", "transitions"):
                         tgt = next(x for x in m["partials"] if x["id"] == partial)

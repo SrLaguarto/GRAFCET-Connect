@@ -279,8 +279,32 @@ def ancla_en(M: dict[str, Any], p: QPointF, radio: float = RADIO_ANCLA, sin_der:
     return best[1] if best else None
 
 
+def marco_en(M: dict[str, Any], p: QPointF, borde: float = 6) -> str | None:
+    """El parcial cuyo marco (recinto o parcial; la expansión no tiene) se toca en el punto: su borde, a `borde` o menos, o
+    su nombre. Dentro del marco, lejos del borde, no hay nada que agarrar: ahí se suelta, se traza el lazo… Si hay varios,
+    el más pequeño."""
+    cajas = cajas_parciales(M)
+    mejor: tuple[float, str] | None = None
+    for part in M.get("partials") or []:
+        b = cajas.get(part["id"])
+        if not b or part["kind"] not in ("enclosure", "partial"):
+            continue
+        x0, y0, x1, y1 = b["x0"], b["y0"], b["x1"], b["y1"]
+        cerca = x0 - borde <= p.x() <= x1 + borde and y0 - borde <= p.y() <= y1 + borde
+        interior = x0 + borde < p.x() < x1 - borde and y0 + borde < p.y() < y1 - borde
+        w = 8 * len(part["label"]) + 8  # lo que ocupa el nombre del parcial, abajo (a la izquierda en un recinto, a la derecha si no)
+        xn = x0 + 26 if part["kind"] == "enclosure" else x1 - 34 - w
+        en_nombre = xn <= p.x() <= xn + w + 8 and y1 - 8 <= p.y() <= y1 + 12
+        if (cerca and not interior) or en_nombre:
+            area = (x1 - x0) * (y1 - y0)
+            if mejor is None or area < mejor[0]:
+                mejor = (area, part["id"])
+    return mejor[1] if mejor else None
+
+
 def elemento_en(M: dict[str, Any], p: QPointF) -> str | None:
-    """El elemento bajo un punto del dibujo: etapa, transición (su trazo) o enlace en borrador."""
+    """El elemento bajo un punto del dibujo: etapa, transición (su trazo), enlace en borrador, enlace o, al final y solo
+    en su borde o su nombre, el marco de un parcial."""
     pos = posiciones(M)
     for t in M["transitions"]:  # el trazo, su designación a la izquierda y su receptividad a la derecha
         x, y = pos[t["id"]]
@@ -302,7 +326,7 @@ def elemento_en(M: dict[str, Any], p: QPointF) -> str | None:
     for e in enlaces(M):  # los enlaces, al final: lo que hay encima manda
         if any(_distancia(p, a, b) <= 7 for a, b in zip(e["pts"], e["pts"][1:])):
             return e["id"]
-    return None
+    return marco_en(M, p)
 
 
 def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], naranja: set[str] = frozenset()) -> None:
@@ -318,7 +342,12 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
     trans = {t["id"] for t in M["transitions"]}
     rutas = {e["id"]: e for e in enlaces(M)}
     barras = {b["id"]: b for b in M.get("bars", [])}
+    marcos = cajas_parciales(M, pos)  # un parcial (recinto, expansión) seleccionado o en cuestión se remarca en su marco
     for ident, color, width in [(i, "err", 1.8) for i in marcados] + [(i, "accent", 1.6) for i in sel]:
+        if ident in marcos:
+            b = marcos[ident]
+            pt.rect(b["x0"] - 6, b["y0"] - 6, b["x1"] - b["x0"] + 12, b["y1"] - b["y0"] + 12, pt.pen(color, width, (5, 3)), Z_EDIT)
+            continue
         if ident in rutas:  # un enlace seleccionado se remarca a lo largo de su recorrido
             pt.poly([(float(x), float(y)) for x, y in rutas[ident]["pts"]], pt.pen("accent", 4), Z_EDIT)
             for h in rutas[ident]["handles"]:
@@ -344,7 +373,10 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
             for cx, cy in ((x - hx, y - hy), (x + hx, y - hy), (x - hx, y + hy), (x + hx, y + hy)):
                 pt.rect(cx - 3, cy - 3, 6, 6, pt.pen("accent", 1), Z_EDIT + 0.1, "panel")
     for ident in sorted(naranja):  # parpadeo naranja de un error
-        if ident in rutas:
+        if ident in marcos:
+            b = marcos[ident]
+            pt.rect(b["x0"] - 8, b["y0"] - 8, b["x1"] - b["x0"] + 16, b["y1"] - b["y0"] + 16, pt.pen("glow", 3.5), Z_EDIT + 0.5)
+        elif ident in rutas:
             pt.poly([(float(x), float(y)) for x, y in rutas[ident]["pts"]], pt.pen("glow", 5), Z_EDIT + 0.5)
         elif ident in barras:
             bx, by, w, h = barra(barras[ident])
@@ -357,11 +389,12 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
 
 def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: set[str] | None = None,
             marcados: set[str] | None = None, naranja: set[str] | None = None,
-            uniones: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+            uniones: list[dict[str, Any]] | None = None, ordenes: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """M: estructura de la vista (Vista.model); S: estado observado (Vista.state()); sel y marcados, solo al editar:
     los elementos seleccionados y los que tienen un diagnóstico; naranja, los que parpadean tras un error (en la fase
     encendida del parpadeo). Devuelve dónde ha quedado cada acción ({id, etapa, rect, …}), para que el editor las
-    encuentre con el ratón; en `uniones`, si se da, los trazos que unen cada etapa con sus acciones."""
+    encuentre con el ratón; en `uniones`, si se da, los trazos que unen cada etapa con sus acciones, y en `ordenes` el
+    rectángulo de cada orden de forzado ({id, etapa, rect}: no son acciones, pero también se señalan con el ratón)."""
     scene.clear()
     cajas: list[dict[str, Any]] = []
     pt = _Pintor(scene)
@@ -473,7 +506,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
                 pt.text(x, y + H + 13, pt.seg(label), 10, color, Z_STEP, "middle", tip)
         unidas = [d for d in M.get("draftActions", []) if d.get("etapa") == s["id"]]  # sin completar, al final de la fila
         _acciones(pt, x, y, s["actions"] + unidas, S, tmp, cajas, s["id"], marcadas, s.get("actionLayout", "fila"),
-                  uniones=uniones, resaltar=f"enlaceacc:{s['id']}" in (sel or ()))
+                  uniones=uniones, resaltar=f"enlaceacc:{s['id']}" in (sel or ()), ordenes=ordenes)
         if s.get("comment"):  # a la derecha de la etapa, o de su última acción si las tiene
             cajas_ = _geometria_acciones(x, y, s["actions"] + unidas, s.get("actionLayout", "fila"))[0]
             pt.comentario(max([ax + w for _, ax, _, w in cajas_] + [x + H]) + 10, y, s["comment"], Z_STEP)
@@ -499,10 +532,17 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     return cajas
 
 
-def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]]) -> None:
-    """Parciales según las figuras de la norma: recinto (marco continuo, encapsulante arriba y nombre abajo),
-    parcial (marco redondeado con su nombre; un hijo dentro de su padre) y expansión (trazos discontinuos de la
-    macroetapa a su entrada y a su salida, sin marco)."""
+VACIO_W, VACIO_H = 180, 120  # tamaño del marco de un recinto sin etapas (el editor lo anota con `vacio`, ver `cajas_parciales`)
+
+
+def cajas_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]] | None = None) -> dict[str, dict[str, float]]:
+    """El rectángulo (x0, y0, x1, y1, en el dibujo) de cada parcial con contenido: el de sus etapas y transiciones con el
+    margen de la norma, más el de sus parciales hijos. Es el marco que pinta `_marcos` (un recinto o un parcial) y, en una
+    expansión, la zona que ocupa aunque no se dibuje (el editor la usa para saber en qué parcial cae lo que se suelta).
+    Solo el editor anota un parcial con `vacio` (un recinto recién creado, sin etapas), con su esquina superior izquierda
+    en `x`, `y` (coordenadas del modelo): se dibuja como marco vacío de VACIO_W × VACIO_H. Un parcial sin contenido ni
+    `vacio` no tiene caja."""
+    pos = pos if pos is not None else posiciones(M)
     parts = M.get("partials") or []
     box: dict[str, dict[str, float] | None] = {}
 
@@ -516,6 +556,10 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]])
         pts = own(pid)
         b = ({"x0": min(p[0] for p in pts) - H - 26, "x1": max(p[0] for p in pts) + H + 70,
               "y0": min(p[1] for p in pts) - H - 22, "y1": max(p[1] for p in pts) + H + 22} if pts else None)
+        if b is None:
+            vacio = next((c for c in parts if c["id"] == pid and c.get("vacio")), None)
+            if vacio is not None:
+                b = {"x0": vacio["x"] + SX, "x1": vacio["x"] + SX + VACIO_W, "y0": vacio["y"], "y1": vacio["y"] + VACIO_H}
         for c in parts:
             if c.get("owner") == pid and c["kind"] == "partial":
                 cb = frame(c["id"])
@@ -527,6 +571,16 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]])
         box[pid] = b
         return b
 
+    return {c["id"]: b for c in parts if (b := frame(c["id"]))}
+
+
+def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]]) -> None:
+    """Parciales según las figuras de la norma: recinto (marco continuo, encapsulante arriba y nombre abajo),
+    parcial (marco redondeado con su nombre; un hijo dentro de su padre) y expansión (trazos discontinuos de la
+    macroetapa a su entrada y a su salida, sin marco)."""
+    parts = M.get("partials") or []
+    cajas = cajas_parciales(M, pos)
+
     for p in parts:
         if p["kind"] == "expansion":
             m = next((x for x in M.get("macros", []) if x["id"] == p.get("macro")), None)
@@ -537,7 +591,7 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]])
             pt.line(mx + H, my - H, ex - H, ey - H, dash, Z_FRAME)
             pt.line(mx + H, my + H, sx - H, sy + H, dash, Z_FRAME)
             continue
-        b = frame(p["id"])
+        b = cajas.get(p["id"])
         if not b:
             continue
         if p["kind"] == "enclosure":
@@ -632,7 +686,8 @@ def _geometria_acciones(x: float, y: float, actions: list[dict[str, Any]], dispo
 def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S: dict[str, Any],
               tmp: dict[str, list[dict[str, Any]]], cajas: list[dict[str, Any]] | None = None, etapa: str = "",
               marcadas: set[str] = frozenset(), disposicion: str = "fila", suelto: bool = False,
-              grupo: str = "", uniones: list[dict[str, Any]] | None = None, resaltar: bool = False) -> None:
+              grupo: str = "", uniones: list[dict[str, Any]] | None = None, resaltar: bool = False,
+              ordenes: list[dict[str, Any]] | None = None) -> None:
     """Las acciones de una etapa (a la derecha de ella, del alto de la etapa) o de un grupo suelto (desde (x, y)), con la
     colocación dada (ver `_geometria_acciones`). Anota en `cajas` el rectángulo de cada una y en `uniones` los trazos de
     la etapa a sus acciones (para seleccionarlos); las de `marcadas` («accion:ID», al editar) se resaltan y, con
@@ -650,12 +705,14 @@ def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S:
             pt.poly([(float(a), float(b)) for a, b in tramo], pt.pen("accent", 4), Z_EDIT)
     cabeza = actions[0].get("id", "")
     for a, ax, cy, w in colocadas:
-        _caja_accion(pt, ax, cy, a, S, tmp, cajas, etapa, marcadas, suelta=suelto, ancho=w, grupo=grupo, cabeza=cabeza)
+        _caja_accion(pt, ax, cy, a, S, tmp, cajas, etapa, marcadas, suelta=suelto, ancho=w, grupo=grupo, cabeza=cabeza,
+                     ordenes=ordenes)
 
 
 def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[str, Any],
                  tmp: dict[str, list[dict[str, Any]]], cajas: list[dict[str, Any]] | None, etapa: str,
-                 marcadas: set[str], suelta: bool = False, ancho: float = 0, grupo: str = "", cabeza: str = "") -> float:
+                 marcadas: set[str], suelta: bool = False, ancho: float = 0, grupo: str = "", cabeza: str = "",
+                 ordenes: list[dict[str, Any]] | None = None) -> float:
     """Una acción con su caja (a la derecha de `ax`, centrada en `y`) y sus marcas: condición, flecha al activar o al
     desactivar, banderita de evento. Una acción suelta o sin completar se dibuja como cualquier otra, con «?» en lo que
     falta. `ancho` es el mínimo (las cajas de una columna miden lo mismo). Devuelve su ancho."""
@@ -674,6 +731,8 @@ def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[st
     if cajas is not None and not force:
         cajas.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H), "borrador": borrador, "suelta": suelta,
                       "grupo": grupo, "cabeza": cabeza or a["id"]})
+    if ordenes is not None and force:  # una orden de forzado no es una acción, pero se selecciona y tiene su menú
+        ordenes.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H)})
     if f"accion:{a.get('id')}" in marcadas:
         pt.rect(ax - 3, top - 3, w + 6, 2 * H + 6, pt.pen("accent", 1.6, (5, 3)), Z_EDIT)
     if f"parpadeo:{a.get('id')}" in marcadas:  # parpadeo naranja de un error
@@ -787,9 +846,11 @@ class VistaDiagrama(QGraphicsView):
         self.cuadro = None  # rectángulo del lazo de selección que se está trazando
         self._marcas: list[Any] = []
         self.iman: Any = None  # el resalte del lado donde se pegaría una acción
+        self.destino: Any = None  # el recuadro del parcial (recinto, expansión) donde caería lo que se arrastra desde la paleta
         self.prohibidos: list[Any] = []  # cajas en rojo: lo que se arrastra y no se puede colocar donde está
         self.uniones_acciones: list[dict[str, Any]] = []  # los trazos de cada etapa a sus acciones (para seleccionarlos)
         self.cajas_acciones: list[dict[str, Any]] = []
+        self.cajas_ordenes: list[dict[str, Any]] = []  # el rectángulo de cada orden de forzado dibujada
         self._origen = False  # en edición, hasta que se usa el ratón, el dibujo se queda arriba a la izquierda
 
     def modo_edicion(self, on: bool, controlador: Any = None) -> None:
@@ -836,6 +897,18 @@ class VistaDiagrama(QGraphicsView):
             a, b = lado
             self.iman = self.scene().addLine(a.x(), a.y(), b.x(), b.y(), _Pintor.pen("accent", 5))
             self.iman.setZValue(Z_EDIT + 2)
+
+    def marcar_destino(self, caja: dict[str, float] | None) -> None:
+        """Recuadra el parcial (su marco, o la zona de una expansión, que no tiene) donde caería una etapa, una transición o
+        una macroetapa soltada ahora desde la paleta; None lo quita. Fuera de todo marco cae en el parcial raíz: no se marca."""
+        if self.destino is not None and self.destino.scene() is self.scene():
+            self.scene().removeItem(self.destino)
+        self.destino = None
+        if caja is not None:
+            self.destino = self.scene().addRect(QRectF(caja["x0"] - 4, caja["y0"] - 4, caja["x1"] - caja["x0"] + 8,
+                                                       caja["y1"] - caja["y0"] + 8), _Pintor.pen("accent", 2, (6, 4)),
+                                                QBrush(QColor(31, 111, 235, 18)))
+            self.destino.setZValue(Z_EDIT + 2)
 
     def marcar_prohibido(self, cajas: list[QRectF] | None) -> None:
         """Pone en rojo las cajas de lo que se arrastra y no se puede colocar donde está (encima de otro elemento), con el
@@ -911,9 +984,11 @@ class VistaDiagrama(QGraphicsView):
     def menu_contextual(self, opciones: list[tuple[str, Any]]) -> QMenu:
         """El menú del botón derecho: «-» es un separador, una lista en lugar de la función es un submenú (sus opciones
         pueden llevar un tercer elemento, el icono) y lo que el controlador marca en `menu_marcadas` (el tipo actual de
-        una acción, como «Etapa inicial» en una etapa) lleva su marca."""
+        una acción, como «Etapa inicial» en una etapa) lleva su marca. Lo que está en `menu_desmarcadas` también es una
+        casilla (como «Enlace de activación» en una etapa de un recinto), pero sin marcar."""
         menu = QMenu(self)
         marcadas = getattr(self.controlador, "menu_marcadas", set())
+        desmarcadas = getattr(self.controlador, "menu_desmarcadas", set())
         for texto, accion in opciones:
             if texto == "-":
                 menu.addSeparator()
@@ -931,9 +1006,9 @@ class VistaDiagrama(QGraphicsView):
                         a.setChecked(True)
                 continue
             a = menu.addAction(texto, accion)
-            if texto in marcadas:
+            if texto in marcadas or texto in desmarcadas:
                 a.setCheckable(True)
-                a.setChecked(True)
+                a.setChecked(texto in marcadas)
         return menu
 
     def _barra_zoom(self) -> None:
@@ -1003,9 +1078,11 @@ class VistaDiagrama(QGraphicsView):
         self.cuadro = None
         self._marcas = []
         self.uniones_acciones = []
+        self.cajas_ordenes = []
         self.iman = None
+        self.destino = None
         self.prohibidos = []
-        self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados, naranja, self.uniones_acciones)
+        self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados, naranja, self.uniones_acciones, self.cajas_ordenes)
         r = self.scene().itemsBoundingRect().adjusted(-14, -14, 14, 14)
         self.scene().setSceneRect(r.united(self.area_minima) if self.area_minima else r)
         if not self._manual:
@@ -1079,12 +1156,14 @@ class VistaDiagrama(QGraphicsView):
 
     def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802
         self.marcar_iman(None)
+        self.marcar_destino(None)
         self.marcar_prohibido(None)
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event: Any) -> None:  # noqa: N802
         """Un elemento arrastrado desde la paleta se coloca donde se suelta."""
         self.marcar_iman(None)
+        self.marcar_destino(None)
         self.marcar_prohibido(None)
         if self.controlador is not None and event.mimeData().hasText():
             self.controlador.colocar(event.mimeData().text(), self.mapToScene(event.position().toPoint()))

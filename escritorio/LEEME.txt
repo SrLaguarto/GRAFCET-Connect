@@ -48,7 +48,7 @@ Selección, salto y repetición (corrección del paso 3, P-IMP-33)
 El menú Ejemplos incluye «Selección de secuencia», «Salto de etapas» y «Repetición de secuencia» para probar cada caso por separado. El retorno se actualiza al mover los elementos; se guarda la topología y la posición, no una flecha decorativa independiente.
 
 Qué no es
-- Todavía no edita jerarquías; variables, acciones, receptividades, selección, salto y repetición sí se editan.
+- Edita macroetapas, encapsulantes con recintos y órdenes de forzado (ver «Jerarquías»), pero todavía no crea un parcial suelto. Variables, acciones, receptividades, selección, salto y repetición sí se editan.
 - Usa un perfil provisional y NO declara conformidad con IEC 60848 / UNE-EN 60848.
 
 Licencias
@@ -309,3 +309,43 @@ Vacío significa sin comentario. Cada cambio se deshace con Ctrl+Z.
 - Limitaciones: un comentario largo con elementos muy juntos puede pisar a un vecino (no se mueve nada solo); si el
   texto ya lleva comillas, salen dobles. Copiar y pegar elementos aún no existe. Más adelante se añadirá un elemento de
   texto de comentario que se pueda arrastrar.
+
+
+Jerarquías: macroetapas, encapsulantes y forzado (paso 6, P-IMP-61 y P-IMP-62)
+
+En modo Editar, la paleta tiene las fichas Macroetapa y Encapsulante, que se arrastran al dibujo como las demás. Cada
+operación se deshace con Ctrl+Z. Lo que se suelta dentro del marco de un recinto o de la zona de una expansión pertenece
+a ese parcial (con un margen de una etapa a la derecha y abajo); moverlo a otro marco solo cambia su posición en el
+dibujo.
+
+- Macroetapa: al soltar la ficha se crea la macroetapa (M1, M2…) con su expansión a la derecha: un parcial con una etapa
+  de entrada (E1, E2…) y una de salida (S1, S2…), unidas a la macroetapa por trazos discontinuos. La expansión no lleva
+  ruta interior: se rellena soltando etapas y transiciones dentro de su zona. Botón derecho: «Abrir expansión» y
+  «Renombrar…». El doble clic también abre la expansión.
+- Encapsulante: se arrastra la ficha, o se convierte una etapa con el botón derecho, «Convertir en encapsulante».
+  «Convertir en etapa ordinaria» la devuelve si no tiene recintos.
+- Recintos: botón derecho en la encapsulante, «Añadir recinto…», y el nombre (R1, R2…). El marco vacío aparece a su
+  derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos.
+- Enlace de activación: botón derecho en una etapa de un recinto, «Enlace de activación» (casilla). La etapa marcada
+  lleva un «*» y se activa cuando se activa la encapsulante (P-IMP-23).
+- Forzar un parcial: botón derecho en una etapa, «Forzar un parcial…»: se elige el parcial destino y la forma. La orden
+  se dibuja como una caja G{…} en rectángulo doble, con las acciones de esa etapa, y está vigente mientras la etapa esté activa.
+  Las cuatro formas, con las palabras de la tabla del documento 06:
+  · Explícita: el destino mantiene el conjunto de etapas que se elige.
+  · Actual («La situación actual» en el diálogo): el destino mantiene la situación que tiene al entrar en vigor la orden.
+  · Vacía: el destino no tiene etapas activas mientras la orden está vigente.
+  · Inicial: el destino mantiene su situación inicial.
+  «Editar orden de forzado…» y «Quitar orden de forzado» están en el menú de la caja.
+- Navegación: «Abrir expansión» y el doble clic en la macroetapa llevan a su expansión y la recuadran; no cambian el
+  modelo ni el deshacer. «Ir a la macroetapa» (desde la entrada o la salida de una expansión) y «Ir a la encapsulante»
+  (desde una etapa de un recinto o desde su marco) seleccionan ese elemento y llevan la vista a él. Ayuda > Leyenda del
+  dibujo explica los símbolos de la jerarquía.
+- Errores: un rechazo sale en rojo como aviso, y el elemento parpadea en naranja; la operación no deja nada a medias.
+
+Limitaciones de esta versión:
+
+- No se puede crear todavía un parcial suelto (que no sea recinto ni expansión) con gestos del editor.
+- Renombrar un parcial no reescribe los textos que lo nombran como «G.x».
+- No hay atajos de teclado para estas acciones.
+- El ir y volver entre niveles no está completo.
+- Los arrastres con ratón real no se han comprobado en pantalla; las pruebas usan gestos programáticos.

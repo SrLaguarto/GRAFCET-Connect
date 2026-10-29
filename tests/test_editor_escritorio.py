@@ -644,8 +644,10 @@ class Interfaz(unittest.TestCase):
         w.nuevo()
         e, d = w.edicion, w.diagrama
         self.assertFalse(w.dock.isHidden())
-        self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())], ["Etapa", "Transición", "Simultaneidad", "Acción"],
-                         "Seleccionar no es un elemento y la etapa inicial es una etapa con otro tipo; una sola lista, con la acción continua")
+        self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())],
+                         ["Etapa", "Transición", "Simultaneidad", "Acción", "Macroetapa", "Encapsulante"],
+                         "Seleccionar no es un elemento y la etapa inicial es una etapa con otro tipo; una sola lista, con la acción "
+                         "continua y, al final, las dos de la jerarquía")
         pedidas = []
         e.pedir_condicion = pedidas.append
         self.assertEqual(w.paleta.mimeData([w.paleta.item(1)]).text(), "transicion")
@@ -1633,7 +1635,7 @@ class Interfaz(unittest.TestCase):
         c = centro(e.M, ids["1"])
         self.assertEqual(e.menu(QPointF(c.x() + 400, c.y())), [], "en un hueco, nada")
         opciones = dict(e.menu(c))
-        self.assertEqual(list(opciones), ["Añadir acción…", "Colocación de las acciones"])
+        self.assertEqual(list(opciones), ["Añadir acción…", "Colocación de las acciones", "-", "Convertir en encapsulante"])
         pedidas = []
         e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
         opciones["Añadir acción…"]()  # crea la acción continua unida a la etapa (borrador, sin variable) y abre Editar
@@ -1965,7 +1967,7 @@ class Interfaz(unittest.TestCase):
         w.resize(1360, 860)
         w.show()
         textos = [w.paleta.item(k).text() for k in range(w.paleta.count())]
-        self.assertEqual(textos[-1], "Acción")
+        self.assertEqual(textos[3], "Acción")
         pm, punto = figura("accion:continua", 1.0, 1.0)
         self.assertGreater(pm.width(), pm.height(), "un rectángulo de acción, más ancho que alto")
         self.assertTrue(pm.rect().contains(punto))
@@ -2540,7 +2542,8 @@ class Interfaz(unittest.TestCase):
         dict(e.menu(caja(d)))["Quitar"]()
         self.assertEqual(e.ed.draft_actions(), [])
         # el menú de la etapa conserva «Añadir acción…»
-        self.assertEqual(list(dict(e.menu(centro(e.M, ids["1"])))), ["Añadir acción…", "Colocación de las acciones"])
+        self.assertEqual(list(dict(e.menu(centro(e.M, ids["1"])))),
+                         ["Añadir acción…", "Colocación de las acciones", "-", "Convertir en encapsulante"])
 
     def test_SEDI73_guardar_abrir_con_borradores_avisos_y_deshacer(self):
         """REQ-DAT-01, REQ-EDT-09, REQ-EDT-14: los borradores de acción se guardan en la presentación
@@ -2767,11 +2770,11 @@ class Interfaz(unittest.TestCase):
         w.split.moveSplitter(w.split.width() - 400, 1)  # intentar estirarlo no cambia nada
         self.app.processEvents()
         self.assertEqual((w.dock.width(), w.derecho.width()), (minimo, minimo))
-        # al ancho mínimo, las fichas siguen en dos columnas y dos filas, sin barras
+        # al ancho mínimo, las fichas siguen en dos columnas y tres filas, sin barras
         r = [pal.visualItemRect(pal.item(i)) for i in range(pal.count())]
         self.assertEqual((r[0].y(), r[1].y(), r[2].y()), (r[1].y(), r[0].y(), r[0].y() + pal.gridSize().height()))
         self.assertTrue(r[1].x() > r[0].x(), "dos columnas")
-        self.assertEqual(len({x.y() for x in r}), 2)
+        self.assertEqual(len({x.y() for x in r}), 3)
         self.assertEqual((pal.verticalScrollBarPolicy(), pal.horizontalScrollBarPolicy()),
                          (Qt.ScrollBarPolicy.ScrollBarAlwaysOff,) * 2)
         # con cada tipo de selección, las opciones caben en el ancho del panel de abajo (no se cortan) y el panel derecho también
@@ -3233,8 +3236,9 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(w.l_herr.text().count("Seleccionar"), 1)
 
     def test_SEDI88_paleta_con_una_sola_ficha_de_accion(self):
-        """REQ-ACT-01, REQ-EDT-02: la paleta es una sola lista, sin carpetas, con etapa, transición, simultaneidad y una
-        ficha «Acción» (la continua, dibujada con la misma función que el diagrama); arrastrarla crea una acción continua
+        """REQ-ACT-01, REQ-EDT-02: la paleta es una sola lista, sin carpetas, con etapa, transición, simultaneidad, una
+        ficha «Acción» (la continua, dibujada con la misma función que el diagrama) y las de jerarquía (macroetapa y
+        encapsulante, S-EDI170); arrastrar la de acción crea una acción continua
         suelta donde se suelta, sin diálogo, con «?» en lo que falta; los otros tipos se piden con botón derecho
         (conservan su ficha dibujada en el menú «Tipo de acción»)."""
         from PySide6.QtWidgets import QTabWidget
@@ -3246,10 +3250,12 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(w.dock.findChildren(QTabWidget), [], "sin pestañas: la lista, directamente")
         self.assertIs(w.paleta.parent(), w.dock)
         pa = w.paleta
-        self.assertEqual([pa.item(i).text() for i in range(pa.count())], ["Etapa", "Transición", "Simultaneidad", "Acción"])
+        self.assertEqual([pa.item(i).text() for i in range(pa.count())],
+                         ["Etapa", "Transición", "Simultaneidad", "Acción", "Macroetapa", "Encapsulante"])
         self.assertEqual([pa.mimeData([pa.item(i)]).text() for i in range(pa.count())],
-                         ["etapa", "transicion", "simultaneidad", "accion:continua"])
-        self.assertEqual(propiedades.COLOCABLES, ("etapa", "transicion", "simultaneidad", "accion:continua"))
+                         ["etapa", "transicion", "simultaneidad", "accion:continua", "macroetapa", "encapsulante"])
+        self.assertEqual(propiedades.COLOCABLES, ("etapa", "transicion", "simultaneidad", "accion:continua", "macroetapa",
+                                                  "encapsulante"))
         self.assertFalse(pa.item(3).icon().pixmap(80, 64).toImage().isNull())
         self.assertIn("Tipo de acción", propiedades.AYUDAS["accion:continua"], "la ayuda dice cómo cambiar el tipo")
         self.assertNotIn("carpeta", w.ayuda.text())
@@ -5623,6 +5629,1537 @@ class Interfaz(unittest.TestCase):
         self.assertFalse(e._despejar(s1))
         self.assertTrue(vistos)
         self.assertEqual((posiciones_modelo(e), e.ed.redo_stack), (pos0, rehacer))
+
+    # -- jerarquías en la interfaz (paso 6, encargo B1): macroetapas, encapsulantes y recintos ------------------------
+    def vacio(self, nombres=True):
+        """Un grafcet nuevo, sin cambios pendientes y con los diálogos sin bloquear: el de borrado confirma y el de nombre
+        (con `nombres`) acepta el que se propone."""
+        w = self.w
+        if w.edicion is not None:
+            w.edicion.ed.dirty = False  # (una segunda edición en la misma prueba: sin preguntar si se guarda)
+        w.nuevo()
+        e = w.edicion
+        e.ed.dirty = False
+        e.confirmar_borrado = lambda plan: True
+        if nombres:
+            e.pedir_texto = lambda titulo, etiqueta, actual: actual
+        return w, e
+
+    @staticmethod
+    def estado(e):
+        """Lo que deshacer y rehacer deben devolver tal cual: el modelo y la presentación."""
+        return copy.deepcopy((e.ed.model, e.ed.presentation))
+
+    @staticmethod
+    def estructura(e):
+        """Los diagnósticos de estructura (referencias, propiedad, ciclos, formato) del modelo, salvo que todavía no tenga
+        etapas iniciales (el grafcet de estas pruebas no las lleva)."""
+        return [(d.code, d.message) for d in e.ed.validate().diagnostics
+                if d.code in ("D-REF", "D-PROPIETARIO", "D-FORMATO", "D-JERARQUIA-CICLO") and "sin etapas iniciales" not in d.message]
+
+    @staticmethod
+    def sin_ids(texto):
+        """Ningún ID interno (`s-…`, `g-…`, `m-…`, `x-…`, `r-…`) en un texto que se le muestra al usuario."""
+        import re
+        return re.search(r"\b[a-z]-[0-9a-f]{32}\b", texto) is None
+
+    @staticmethod
+    def recuadros(w):
+        """Los recuadros discontinuos azules del dibujo (la selección de un parcial, el parcial donde caería una ficha)."""
+        return [it for it in w.diagrama.scene().items() if hasattr(it, "pen") and it.pen().color().name() == "#1f6feb"
+                and it.pen().style() == Qt.PenStyle.CustomDashLine]
+
+    def test_SEDI170_fichas_macroetapa_y_encapsulante_con_su_dibujo_y_su_ayuda(self):
+        """REQ-EDT-02, REQ-JER-04, REQ-JER-05: la paleta ofrece «Macroetapa» y «Encapsulante» tras las demás fichas; su icono
+        y la figura que se lleva al arrastrar reproducen el símbolo del diagrama (divisiones horizontales arriba y abajo;
+        esquinas cortadas); un clic en la ficha muestra su ayuda y arrastrarla lleva su clave."""
+        from escritorio import diagrama, propiedades
+        w, e = self.vacio()
+        pa = w.paleta
+        self.assertEqual([(pa.item(i).text(), pa.mimeData([pa.item(i)]).text()) for i in (4, 5)],
+                         [("Macroetapa", "macroetapa"), ("Encapsulante", "encapsulante")])
+        self.assertEqual(pa.maximumHeight(), pa.minimumHeight(), "las tres filas caben, sin desplazar")
+
+        def imagen(h):
+            return propiedades.icono(h).pixmap(64, 64).toImage()
+
+        def tinta(img, x, y):
+            return img.pixelColor(x, y).alpha() > 0
+        # el icono: la etapa lisa; la macroetapa con dos divisiones horizontales; la encapsulante con las cuatro esquinas
+        etapa, macro, enc = imagen("etapa"), imagen("macroetapa"), imagen("encapsulante")
+        k = 32 / (2 * diagrama.H)
+        arriba, abajo = round(14 + diagrama.MARK * k), round(46 - diagrama.MARK * k)
+        self.assertFalse(tinta(etapa, 32, arriba) or tinta(etapa, 32, abajo))
+        self.assertTrue(all(tinta(macro, x, arriba) and tinta(macro, x, abajo) for x in (22, 32, 42)),
+                        "dos divisiones horizontales, de lado a lado")
+        esquinas = ((19, 17), (44, 17), (19, 42), (44, 42))
+        self.assertFalse(any(tinta(etapa, x, y) for x, y in esquinas))
+        self.assertTrue(all(tinta(enc, x, y) for x, y in esquinas), "las cuatro esquinas cortadas")
+        self.assertFalse(tinta(enc, 32, arriba), "la encapsulante no lleva las divisiones")
+        # la figura que va pegada al puntero es lo mismo, a la escala del dibujo, y se coloca por su centro
+        figuras = {h: propiedades.figura(h, 1.0, 1.0) for h in ("etapa", "macroetapa", "encapsulante")}
+        self.assertEqual(len({bytes(pm.toImage().constBits()) for pm, _ in figuras.values()}), 3)
+        for pm, punto in figuras.values():
+            self.assertTrue(pm.rect().contains(punto))
+            self.assertEqual(punto, figuras["etapa"][1])
+        # un clic en la ficha solo muestra su ayuda
+        n = len(e.ed.undo_stack)
+        for fila, clave in ((4, "macroetapa"), (5, "encapsulante")):
+            pa.itemClicked.emit(pa.item(fila))
+            self.assertEqual((e.mensaje, e.mensaje_info, w.ayuda.text()),
+                             (propiedades.AYUDAS[clave], True, propiedades.AYUDAS[clave]))
+        self.assertEqual(len(e.ed.undo_stack), n)
+        self.assertIn("Abrir expansión", propiedades.AYUDAS["macroetapa"])
+        self.assertIn("Añadir recinto", propiedades.AYUDAS["encapsulante"])
+
+    def test_SEDI171_soltar_la_ficha_macroetapa_crea_la_macroetapa_con_su_expansion(self):
+        """REQ-EDT-02, REQ-JER-04, REQ-MOD-07, REQ-EDT-05: soltar «Macroetapa» crea la macroetapa en el punto, con su
+        expansión (un parcial nuevo dentro del raíz con su entrada y su salida) a la derecha, en una sola operación de
+        deshacer; si esa columna está ocupada la corre a la derecha; encima de otro elemento no se coloca."""
+        from escritorio.diagrama import cajas_parciales
+        w, e = self.vacio()
+        n = len(e.ed.undo_stack)
+        self.soltar_ficha("macroetapa", QPointF(260, 220))
+        m = e.ed.model
+        (mac,) = m["hierarchy"]["macros"]
+        (exp,) = m["hierarchy"]["expansions"]
+        xp = next(p for p in m["partials"] if p["id"] == exp["partialRef"])
+        self.assertEqual((mac["label"], mac["partialRef"], exp["ownerMacroRef"]), ("M1", "g", mac["id"]))
+        self.assertEqual((xp["label"], xp["ownerRef"], sorted(xp["stepRefs"])),
+                         ("M1", "g", sorted([exp["entryRef"], exp["exitRef"]])))
+        self.assertEqual({s["id"]: (s["label"], s["kind"], s["partialRef"]) for s in m["steps"]},
+                         {exp["entryRef"]: ("E1", "entry", xp["id"]), exp["exitRef"]: ("S1", "exit", xp["id"])})
+        self.assertEqual(len(e.ed.undo_stack), n + 1, "una sola operación de deshacer")
+        lay = posiciones_modelo(e)
+        self.assertEqual((lay[mac["id"]], lay[exp["entryRef"]], lay[exp["exitRef"]]),
+                         ((160.0, 220.0), (440.0, 220.0), (440.0, 540.0)),
+                         "la entrada a la altura de la macroetapa, la salida más abajo, las dos a su derecha")
+        self.assertEqual(e.sel, [mac["id"]])
+        self.assertTrue(e.mensaje_info and "M1" in e.mensaje and self.sin_ids(e.mensaje))
+        self.assertEqual([(x["id"], x["entry"], x["exit"]) for x in e.M["macros"]],
+                         [(mac["id"], exp["entryRef"], exp["exitRef"])])
+        self.assertEqual([(p["kind"], p["label"]) for p in e.M["partials"]], [("expansion", "M1")])
+        self.assertEqual(self.estructura(e), [])
+        despues = self.estado(e)
+        e.deshacer()
+        self.assertEqual((e.ed.model["hierarchy"]["macros"], e.ed.model["steps"], [p["id"] for p in e.ed.model["partials"]]),
+                         ([], [], ["g"]))
+        e.rehacer()
+        self.assertEqual(self.estado(e), despues)
+        # su columna ocupada por la expansión anterior: la segunda se coloca más a la derecha, sin tocar la zona de la primera
+        self.soltar_ficha("macroetapa", QPointF(260, 400))
+        m2 = e.ed.model["hierarchy"]["macros"][1]
+        x2 = e.ed.macro_info(m2["id"])
+        self.assertEqual((m2["label"], posiciones_modelo(e)[x2.entry]), ("M2", (600.0, 400.0)))
+        a, b = (cajas_parciales(e.M)[p] for p in (exp["partialRef"], x2.partial))
+        self.assertTrue(a["x1"] < b["x0"] or b["x1"] < a["x0"], "las dos zonas no se tocan")
+        # encima de otro elemento no se coloca
+        n = len(e.ed.undo_stack)
+        self.soltar_ficha("macroetapa", centro(e.M, mac["id"]))
+        self.assertEqual((len(e.ed.undo_stack), e.mensaje, len(e.ed.model["hierarchy"]["macros"])),
+                         (n, "No se puede poner encima de otro elemento", 2))
+
+    def test_SEDI172_lo_soltado_en_el_marco_de_la_expansion_es_de_su_parcial(self):
+        """REQ-JER-04, REQ-MOD-07, REQ-EDT-02: lo que se suelta dentro de la zona de una expansión (etapa, encapsulante,
+        transición) es de su parcial; fuera de todo marco, del raíz. Lo que nace de una etapa o de una transición (arrastrar
+        de su punto de unión, «Añadir debajo») es del parcial de ésta, y mover un elemento a otro marco es solo de
+        presentación: no cambia su parcial (el marco se ajusta a las etapas que son suyas)."""
+        from escritorio.diagrama import anclas, cajas_parciales
+        w, e = self.vacio()
+        mid = e.poner_macro(QPointF(260, 220))
+        x = e.ed.macro_info(mid)
+        b = cajas_parciales(e.M)[x.partial]
+        self.assertEqual((b["x0"], b["x1"], b["y0"], b["y1"]), (492.0, 632.0, 176.0, 584.0))
+        self.assertEqual((e.parcial_en(QPointF(540, 380)), e.parcial_en(QPointF(260, 380)), e.parcial_en(QPointF(700, 380))),
+                         (x.partial, "g", "g"))
+        # «Añadir debajo» de la entrada: la transición y la etapa son de la expansión
+        e.sel = [x.entry]
+        nueva = e.anadir_debajo()
+        debajo = next(t for t in e.ed.model["transitions"] if x.entry in t["preRefs"])
+        self.assertEqual((e.parcial_de(debajo["id"]), e.parcial_de(nueva)), (x.partial, x.partial))
+        # soltar: una etapa, una transición y una encapsulante dentro; otra etapa fuera, en el raíz
+        self.soltar_ficha("etapa", QPointF(610, 340))
+        k = e.sel[0]
+        self.soltar_ficha("transicion", QPointF(610, 420))
+        t = e.sel[0]
+        self.soltar_ficha("encapsulante", QPointF(610, 500))
+        h = e.sel[0]
+        self.soltar_ficha("etapa", QPointF(260, 60))
+        fuera = e.sel[0]
+        self.assertEqual([e.parcial_de(i) for i in (k, t, h, fuera)], [x.partial] * 3 + ["g"])
+        self.assertEqual(next(s for s in e.ed.model["steps"] if s["id"] == h)["kind"], "enclosing")
+        pr = next(p for p in e.ed.model["partials"] if p["id"] == x.partial)
+        self.assertEqual((sorted(pr["stepRefs"]), sorted(pr["transitionRefs"])),
+                         (sorted([x.entry, x.exit, nueva, k, h]), sorted([debajo["id"], t])))
+        self.assertEqual(next(p for p in e.ed.model["partials"] if p["id"] == "g")["stepRefs"], [fuera])
+        # del punto de unión a un hueco: lo que nace es del parcial de la etapa o transición, aunque el hueco caiga fuera
+        origen = next(a for a in anclas(e.M, x.exit) if a["lado"] == "abajo")
+        e.crear_desde(origen, QPointF(700, 640))
+        self.assertEqual(e.parcial_de(e.sel[0]), x.partial)
+        origen = next(a for a in anclas(e.M, e.sel[0]) if a["lado"] == "abajo")
+        e.crear_desde(origen, QPointF(700, 800))  # de una transición, una etapa
+        self.assertEqual(e.parcial_de(e.sel[0]), x.partial)
+        # mover es solo presentación: la etapa del raíz arrastrada al marco sigue siendo del raíz...
+        destino = QPointF(620, 740)
+        e.prensar(centro(e.M, fuera))
+        e.mover(destino)
+        e.soltar(destino)
+        self.assertEqual((e.parcial_de(fuera), e.parcial_en(centro(e.M, fuera))), ("g", x.partial))
+        self.assertIn(fuera, [s["id"] for s in e.M["steps"] if s["partial"] is None], "el dibujo la sigue llevando en el raíz")
+        # ... y la salida, arrastrada lejos, sigue siendo de la expansión (cuyo marco la sigue)
+        e.prensar(centro(e.M, x.exit))
+        e.mover(QPointF(1000, 900))
+        e.soltar(QPointF(1000, 900))
+        self.assertEqual((e.parcial_de(x.exit), e.parcial_en(centro(e.M, x.exit))), (x.partial, x.partial))
+        self.assertEqual([m for _, m in self.estructura(e) if "transición sin etapas" not in m], [],
+                         "(la transición suelta de la prueba no se enlaza: eso sí lo avisa)")
+
+    def test_SEDI173_una_macroetapa_soltada_en_una_expansion_o_un_recinto_queda_anidada(self):
+        """REQ-JER-04, REQ-MOD-07: una macroetapa soltada dentro de la zona de otra expansión, o en el marco de un recinto, es de
+        ese parcial y su expansión cuelga de él (regla 8.1 C: un parcial dentro de otro solo como expansión de una macroetapa
+        de éste, o como recinto de una encapsulante)."""
+        w, e = self.vacio()
+        mid = e.poner_macro(QPointF(260, 220))
+        x = e.ed.macro_info(mid)
+        self.soltar_ficha("macroetapa", QPointF(540, 380))
+        interior = e.sel[0]
+        xi = e.ed.macro_info(interior)
+        m = e.ed.model
+        self.assertEqual(next(p for p in m["hierarchy"]["macros"] if p["id"] == interior)["partialRef"], x.partial)
+        self.assertEqual(next(p for p in m["partials"] if p["id"] == xi.partial)["ownerRef"], x.partial)
+        self.assertEqual(next(p for p in m["partials"] if p["id"] == x.partial)["ownerRef"], "g")
+        self.assertEqual(self.estructura(e), [])
+        self.assertEqual(e.ed.partial_roles()[xi.partial]["parent"], x.partial)
+        self.assertEqual([mm["label"] for mm in m["hierarchy"]["macros"]], ["M1", "M2"])
+        # en el marco de un recinto: la macroetapa es del recinto y su expansión cuelga de él
+        self.soltar_ficha("encapsulante", QPointF(260, 900))
+        r = e.anadir_recinto(e.sel[0])
+        b = next(p for p in e.M["partials"] if p["id"] == r)
+        e.colocar("macroetapa", QPointF(b["x"] + 100 + 90, b["y"] + 60))
+        anidada = e.sel[0]
+        self.assertEqual(e.parcial_de(anidada), r)
+        self.assertEqual(e.ed.partial_roles()[e.ed.macro_info(anidada).partial]["parent"], r)
+        self.assertEqual(self.estructura(e), [])
+        e.deshacer()
+        self.assertNotIn(anidada, [mm["id"] for mm in e.ed.model["hierarchy"]["macros"]])
+        self.assertIn(r, [p["id"] for p in e.ed.model["partials"]])
+
+    def test_SEDI174_recinto_vacio_se_ve_se_selecciona_y_se_rellena_arrastrando(self):
+        """REQ-JER-05, REQ-MOD-07, REQ-EDT-02, REQ-EDT-05, REQ-EDT-09: «Añadir recinto…» pide el nombre y crea el recinto de la
+        encapsulante; vacío se ve como un marco mínimo (con su nombre y el de la encapsulante), se selecciona con un clic en su
+        borde o su nombre y se rellena soltando etapas dentro (que pasan a su parcial); todo se deshace y se rehace; el
+        diálogo del nombre es el de la ventana y se puede sustituir."""
+        from escritorio.diagrama import cajas_parciales, elemento_en
+        w, e = self.vacio(nombres=False)
+        # el diálogo de nombre es el de la ventana (QInputDialog) y un nombre cancelado devuelve None
+        with mock.patch("escritorio.ventana.QInputDialog.getText", return_value=("Z", True)) as g:
+            self.assertEqual(e.pedir_texto("Título", "Rótulo", "propuesta"), "Z")
+            self.assertEqual(g.call_args.args[1:3], ("Título", "Rótulo"))
+            self.assertEqual(g.call_args.kwargs, {"text": "propuesta"})
+        with mock.patch("escritorio.ventana.QInputDialog.getText", return_value=("", False)):
+            self.assertIsNone(e.pedir_texto("Título", "Rótulo", "propuesta"))
+        self.soltar_ficha("encapsulante", QPointF(260, 60))
+        h = e.sel[0]
+        preguntas = []
+
+        def pedir(titulo, etiqueta, actual):
+            preguntas.append((titulo, etiqueta, actual))
+            return "Recinto A"
+        e.pedir_texto = pedir
+        n = len(e.ed.undo_stack)
+        antes = self.estado(e)
+        r = e.anadir_recinto(h)
+        self.assertEqual(preguntas, [("Añadir recinto", "Nombre del recinto de la encapsulante 0:", "R1")])
+        self.assertEqual(len(e.ed.undo_stack), n + 1, "una sola operación de deshacer (recinto y posición del marco)")
+        m = e.ed.model
+        (rec,) = m["hierarchy"]["enclosures"]
+        parte = next(p for p in m["partials"] if p["id"] == r)
+        self.assertEqual((rec["ownerStepRef"], rec["partialRef"], rec["activationRefs"]), (h, r, []))
+        self.assertEqual((parte["label"], parte["ownerRef"], parte["stepRefs"]), ("Recinto A", "g", []))
+        self.assertEqual((e.sel, e.nombre(r), self.sin_ids(e.mensaje), e.mensaje_info), ([r], "recinto Recinto A", True, True))
+        self.assertIn("Selección: recinto Recinto A", w.l_sel.text())
+        # sin etapas, Vista no lo lleva: el editor lo anota para que se dibuje un marco vacío mínimo
+        (p,) = e.M["partials"]
+        self.assertEqual((p["kind"], p["vacio"], p["label"], p["ownerStep"]), ("enclosure", True, "Recinto A", h))
+        caja = cajas_parciales(e.M)[r]
+        self.assertEqual((caja["x1"] - caja["x0"], caja["y1"] - caja["y0"]), (180.0, 120.0))
+        self.assertTrue(caja["x0"] > centro(e.M, h).x(), "a la derecha de su encapsulante")
+        # se ve (con su nombre) y se selecciona con su borde o su nombre; dentro, no
+        textos = [it.toPlainText() for it in w.diagrama.scene().items() if hasattr(it, "toPlainText")]
+        self.assertIn("Recinto A", textos)
+        self.assertEqual(elemento_en(e.M, QPointF(caja["x0"], caja["y0"] + 50)), r)
+        self.assertEqual(elemento_en(e.M, QPointF(caja["x0"] + 40, caja["y1"] + 4)), r, "su nombre")
+        centro_marco = QPointF((caja["x0"] + caja["x1"]) / 2, (caja["y0"] + caja["y1"]) / 2)
+        self.assertIsNone(elemento_en(e.M, centro_marco))
+        e.seleccionar([])
+        e.prensar(QPointF(caja["x1"], caja["y0"] + 50))
+        e.soltar(QPointF(caja["x1"], caja["y0"] + 50))
+        self.assertEqual(e.sel, [r])
+        self.assertTrue(self.recuadros(w), "el recinto seleccionado se remarca")
+        e.seleccionar([])
+        self.assertEqual(([t for t, _ in e.menu(QPointF(caja["x0"], caja["y0"] + 50))], e.sel), (["Ir a la encapsulante"], [r]),
+                         "el botón derecho lo selecciona")
+        # se rellena soltando etapas dentro de su marco: son del recinto, y el marco pasa a ser el de sus etapas
+        self.assertEqual(e.parcial_en(centro_marco), r)
+        self.soltar_ficha("etapa", centro_marco)
+        i = e.sel[0]
+        self.assertEqual(e.parcial_de(i), r)
+        self.assertNotIn("vacio", [p for p in e.M["partials"] if p["id"] == r][0], "ya tiene etapas: lo dibuja Vista")
+        # (con etapas, el marco es el de ellas: una segunda cabe a su derecha, dentro del margen; después se arrastra)
+        self.soltar_ficha("etapa", QPointF(centro(e.M, i).x() + 70, centro(e.M, i).y()))
+        j = e.sel[0]
+        self.assertEqual((e.parcial_de(j), e.ed.partial_roles()[r]["kind"]), (r, "enclosure"))
+        self.assertEqual(next(p for p in e.ed.model["partials"] if p["id"] == r)["stepRefs"], [i, j])
+        # deshacer y rehacer: las dos etapas, el recinto y su marco vacío
+        listo = self.estado(e)
+        for _ in range(3):
+            e.deshacer()
+        self.assertEqual((self.estado(e), e.M["partials"]), (antes, []))
+        for _ in range(3):
+            e.rehacer()
+        self.assertEqual(self.estado(e), listo)
+        # cancelar el nombre no hace nada; uno repetido o vacío se rechaza con aviso y parpadeo, sin cambiar nada
+        n, antes2 = len(e.ed.undo_stack), self.estado(e)
+        e.pedir_texto = lambda *a: None
+        self.assertIsNone(e.anadir_recinto(h))
+        self.assertEqual((len(e.ed.undo_stack), self.estado(e)), (n, antes2))
+        for malo in ("Recinto A", "  ", "g"):
+            e.pedir_texto = lambda *a, malo=malo: malo
+            e.parpadeo.parar()
+            self.assertIsNone(e.anadir_recinto(h))
+            self.assertEqual((len(e.ed.undo_stack), self.estado(e)), (n, antes2))
+            self.assertTrue(e.mensaje and not e.mensaje_info and self.sin_ids(e.mensaje), e.mensaje)
+            self.assertEqual(e.parpadeo.ids, {h})
+        e.parpadeo.parar()
+        # un segundo recinto de la misma encapsulante: otro marco, a su lado
+        e.pedir_texto = lambda *a: "Recinto B"
+        r2 = e.anadir_recinto(h)
+        c1, c2 = (cajas_parciales(e.M)[p] for p in (r, r2))
+        self.assertTrue(c1["x1"] < c2["x0"] or c2["x1"] < c1["x0"], "los marcos no se montan")
+        self.assertEqual([x["ownerStepRef"] for x in e.ed.model["hierarchy"]["enclosures"]], [h, h])
+        # una encapsulante inicial con un recinto sin etapa inicial: el diagnóstico señala la encapsulante, con nombres
+        e.tipo_etapa(h, True)
+        d = next(d for d in e.diagnosticos() if d["code"] == "D-JERARQUIA-INICIAL")
+        self.assertEqual(d["target"], h)
+        self.assertTrue(self.sin_ids(d["message"]), d["message"])
+
+    def test_SEDI175_convertir_en_encapsulante_y_volver_a_etapa_ordinaria(self):
+        """REQ-JER-05, REQ-EDT-09: el botón derecho en una etapa ordinaria ofrece «Convertir en encapsulante»; en una
+        encapsulante, «Añadir recinto…» y «Convertir en etapa ordinaria» (solo si no tiene recintos); la entrada y la salida
+        de una expansión no ofrecen nada. Lo que el núcleo rechaza se muestra en rojo y con parpadeo, sin cambiar nada."""
+        w, e = self.vacio()
+        self.soltar_ficha("etapa", QPointF(260, 60))
+        s = e.sel[0]
+
+        def tipo():
+            return next(x for x in e.ed.model["steps"] if x["id"] == s)["kind"]
+        opciones = e.menu(centro(e.M, s))
+        self.assertEqual([t for t, _ in opciones], ["Añadir acción…", "Colocación de las acciones", "-", "Convertir en encapsulante"])
+        n = len(e.ed.undo_stack)
+        dict(opciones)["Convertir en encapsulante"]()
+        self.assertEqual((tipo(), len(e.ed.undo_stack)), ("enclosing", n + 1))
+        self.assertTrue(e.mensaje_info and self.sin_ids(e.mensaje))
+        self.assertEqual([x["kind"] for x in e.M["steps"]], ["enclosing"], "el dibujo recibe el tipo")
+        opciones = e.menu(centro(e.M, s))
+        self.assertEqual([t for t, _ in opciones][2:], ["-", "Añadir recinto…", "Convertir en etapa ordinaria"])
+        # con un recinto ya no se ofrece volver a ordinaria; si se fuerza, el núcleo lo rechaza y no cambia nada
+        e.anadir_recinto(s)
+        self.assertEqual([t for t, _ in e.menu(centro(e.M, s))][2:], ["-", "Añadir recinto…", "Forzar un parcial…"])
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        e.parpadeo.parar()
+        e.tipo_encapsulante(s, False)
+        self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
+        self.assertTrue(e.mensaje and not e.mensaje_info and self.sin_ids(e.mensaje) and "recinto" in e.mensaje, e.mensaje)
+        self.assertEqual(e.parpadeo.ids, {s})
+        e.parpadeo.parar()
+        # sin recintos, vuelve a ser una etapa ordinaria; deshacer y rehacer
+        e.deshacer()
+        self.assertEqual(e.ed.model["hierarchy"]["enclosures"], [])
+        dict(e.menu(centro(e.M, s)))["Convertir en etapa ordinaria"]()
+        self.assertEqual(tipo(), "ordinary")
+        e.deshacer()
+        self.assertEqual(tipo(), "enclosing")
+        e.rehacer()
+        self.assertEqual(tipo(), "ordinary")
+        # la entrada y la salida de una expansión no cambian de tipo, y el botón derecho no lo ofrece
+        mid = e.poner_macro(QPointF(260, 400))
+        x = e.ed.macro_info(mid)
+        self.assertEqual([t for t, _ in e.menu(centro(e.M, x.entry))],
+                         ["Añadir acción…", "Colocación de las acciones", "-", "Ir a la macroetapa", "Forzar un parcial…"])
+        antes = self.estado(e)
+        e.tipo_encapsulante(x.exit, True)
+        self.assertEqual(self.estado(e), antes)
+        self.assertTrue(e.mensaje and not e.mensaje_info and self.sin_ids(e.mensaje))
+
+    def test_SEDI176_enlace_de_activacion_como_casilla_marcada_o_desmarcada(self):
+        """REQ-JER-05: el botón derecho en una etapa de un recinto ofrece «Enlace de activación» como casilla (marcada si lo
+        tiene, sin marcar si no) que se alterna con una operación de deshacer y se dibuja con «*»; una etapa fuera de un
+        recinto no lo ofrece y, si se fuerza, el núcleo lo rechaza."""
+        from escritorio.diagrama import cajas_parciales
+        w, e = self.vacio()
+        self.soltar_ficha("encapsulante", QPointF(260, 60))
+        h = e.sel[0]
+        r = e.anadir_recinto(h)
+        caja = cajas_parciales(e.M)[r]
+        self.soltar_ficha("etapa", QPointF((caja["x0"] + caja["x1"]) / 2, (caja["y0"] + caja["y1"]) / 2))
+        i = e.sel[0]
+
+        def marcas():
+            return e.ed.model["hierarchy"]["enclosures"][0]["activationRefs"]
+
+        def casilla():
+            menu = w.diagrama.menu_contextual(e.menu(centro(e.M, i)))
+            return next(a for a in menu.actions() if a.text() == "Enlace de activación")
+        # sin marcar: una casilla sin marcar
+        self.assertIn("Enlace de activación", dict(e.menu(centro(e.M, i))))
+        self.assertEqual(("Enlace de activación" in e.menu_marcadas, "Enlace de activación" in e.menu_desmarcadas), (False, True))
+        a = casilla()
+        self.assertEqual((a.isCheckable(), a.isChecked()), (True, False))
+        n = len(e.ed.undo_stack)
+        a.trigger()  # como lo haría el usuario con el menú
+        self.assertEqual((marcas(), len(e.ed.undo_stack)), ([i], n + 1))
+        self.assertTrue(next(s for s in e.M["steps"] if s["id"] == i)["activation"])
+        textos = [it.toPlainText() for it in w.diagrama.scene().items() if hasattr(it, "toPlainText")]
+        self.assertIn("*", textos, "el «*» del enlace de activación")
+        # marcada: una casilla marcada; al pulsarla otra vez, se quita
+        a = casilla()
+        self.assertEqual(("Enlace de activación" in e.menu_marcadas, "Enlace de activación" in e.menu_desmarcadas), (True, False))
+        self.assertEqual((a.isCheckable(), a.isChecked()), (True, True))
+        a.trigger()
+        self.assertEqual(marcas(), [])
+        self.assertFalse(next(s for s in e.M["steps"] if s["id"] == i)["activation"])
+        e.deshacer()
+        self.assertEqual(marcas(), [i])
+        e.rehacer()
+        self.assertEqual(marcas(), [])
+        e.deshacer()
+        e.deshacer()
+        self.assertEqual(marcas(), [])
+        # fuera de un recinto: no se ofrece; si se fuerza, el núcleo lo rechaza (aviso en rojo, parpadeo, nada cambia)
+        self.assertNotIn("Enlace de activación", dict(e.menu(centro(e.M, h))))
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        e.enlace_activacion(h)
+        self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
+        self.assertTrue(e.mensaje and not e.mensaje_info and self.sin_ids(e.mensaje) and e.parpadeo.ids == {h}, e.mensaje)
+        e.parpadeo.parar()
+
+    def test_SEDI177_abrir_expansion_lleva_la_vista_y_la_resalta_sin_tocar_el_modelo(self):
+        """REQ-EDT-08, REQ-JER-07: «Abrir expansión» en una macroetapa lleva la vista a la zona de su expansión y la resalta
+        (selecciona su parcial: recuadro discontinuo) sin tocar el modelo, la presentación ni el historial; «Renombrar…» cambia
+        el nombre de la macroetapa y el de su expansión en una sola operación de deshacer."""
+        from escritorio.diagrama import cajas_parciales
+        w, e = self.vacio()
+        mid = e.poner_macro(QPointF(260, 220))
+        x = e.ed.macro_info(mid)
+        opciones = e.menu(centro(e.M, mid))
+        self.assertEqual([t for t, _ in opciones], ["Abrir expansión", "Renombrar…"])
+        self.assertEqual(e.sel, [mid])
+        centrados = []
+        w.diagrama.centrar_en = lambda p: centrados.append((p.x(), p.y()))
+        antes, n, rev = self.estado(e), len(e.ed.undo_stack), e.ed.revision
+        dict(opciones)["Abrir expansión"]()
+        b = cajas_parciales(e.M)[x.partial]
+        self.assertEqual(centrados, [((b["x0"] + b["x1"]) / 2, (b["y0"] + b["y1"]) / 2)])
+        self.assertEqual((e.sel, e.nombre(x.partial), len(e.ed.undo_stack), e.ed.revision, self.estado(e)),
+                         ([x.partial], "expansión de M1", n, rev, antes))
+        self.assertTrue(e.mensaje_info and "M1" in e.mensaje and self.sin_ids(e.mensaje))
+        self.assertIn("Selección: expansión de M1", w.l_sel.text())
+        self.assertTrue([it for it in self.recuadros(w) if hasattr(it, "rect") and abs(it.rect().x() - (b["x0"] - 6)) < 1],
+                        "su zona, recuadrada")
+        # renombrar: pide el nombre con el actual de propuesta y cambia la macroetapa y su expansión
+        preguntas = []
+        e.pedir_texto = lambda *a: preguntas.append(a) or "Lavado"
+        self.assertEqual(e.renombrar_macro(mid), "Lavado")
+        self.assertEqual(preguntas, [("Renombrar la macroetapa", "Nuevo nombre de la macroetapa M1:", "M1")])
+        m = e.ed.model
+        self.assertEqual(([mm["label"] for mm in m["hierarchy"]["macros"]], next(p["label"] for p in m["partials"] if p["id"] == x.partial)),
+                         (["Lavado"], "Lavado"))
+        self.assertEqual(e.nombres[mid], "Lavado")
+        self.assertEqual(len(e.ed.undo_stack), n + 1)
+        hecho = self.estado(e)
+        e.deshacer()
+        self.assertEqual(self.estado(e), antes)
+        e.rehacer()
+        self.assertEqual(self.estado(e), hecho)
+        # cancelar o dejar el mismo nombre no hace nada; un nombre repetido se rechaza sin dejar nada a medias
+        self.soltar_ficha("macroetapa", QPointF(260, 700))
+        otra = e.sel[0]
+        self.assertEqual(e.nombres[otra], "M1")
+        n = len(e.ed.undo_stack)
+        for texto in (None, "M1"):
+            e.pedir_texto = lambda *a, texto=texto: texto
+            self.assertIsNone(e.renombrar_macro(otra))
+            self.assertEqual(len(e.ed.undo_stack), n)
+        e.pedir_texto = lambda *a: "Lavado"
+        antes = self.estado(e)
+        e.parpadeo.parar()
+        self.assertIsNone(e.renombrar_macro(otra))
+        self.assertEqual((self.estado(e), e.parpadeo.ids), (antes, {otra}))
+        self.assertTrue(e.mensaje and not e.mensaje_info and self.sin_ids(e.mensaje), e.mensaje)
+        e.parpadeo.parar()
+
+    def test_SEDI178_borrar_solo_la_entrada_o_la_salida_avisa_y_no_cambia_nada(self):
+        """REQ-EDT-05, REQ-EDT-09, REQ-JER-04: borrar solo la entrada o la salida de una expansión (el núcleo lo rechaza con
+        D-REF) muestra el aviso en rojo con nombres y hace parpadear la etapa, sin dejar el estado a medias (ni siquiera lo
+        que se borraba junto a ella); borrar la macroetapa entera pregunta con nombres y se deshace de una vez."""
+        from PySide6.QtWidgets import QMessageBox
+        w, e = self.vacio()
+        mid = e.poner_macro(QPointF(260, 220))
+        x = e.ed.macro_info(mid)
+        barra = e.poner_barra(QPointF(700, 100), "Y")
+        antes, n, rehacer = self.estado(e), len(e.ed.undo_stack), list(e.ed.redo_stack)
+        for sel in ([x.entry], [x.exit], [barra, x.entry]):
+            e.parpadeo.parar()
+            e.sel = list(sel)
+            self.assertFalse(e.borrar())
+            self.assertEqual((self.estado(e), len(e.ed.undo_stack), e.ed.redo_stack), (antes, n, rehacer), sel)
+            self.assertTrue(e.mensaje and not e.mensaje_info and self.sin_ids(e.mensaje), e.mensaje)
+            self.assertIn("macroetapa", e.mensaje)
+            self.assertEqual(e.parpadeo.ids, set(sel) - {barra}, "la etapa que no se puede borrar parpadea")
+        self.assertEqual(w.ayuda.text(), e.mensaje)
+        self.assertEqual(w.ayuda.styleSheet().count("#c62828"), 1, "en rojo")
+        e.parpadeo.parar()
+        # la macroetapa entera: pregunta (con nombres) y se lleva su expansión; Ctrl+Z lo devuelve todo
+        e.confirmar_borrado = lambda plan: False
+        e.sel = [mid]
+        self.assertFalse(e.borrar())
+        self.assertEqual(self.estado(e), antes)
+        textos = []
+        e.confirmar_borrado = w._confirmar_borrado
+        with mock.patch("escritorio.ventana.QMessageBox.question",
+                        side_effect=lambda *a: textos.append(a[2]) or QMessageBox.StandardButton.Yes):
+            self.assertTrue(e.borrar())
+        e.confirmar_borrado = lambda plan: True
+        self.assertTrue(self.sin_ids(textos[0]), textos[0])
+        self.assertIn("Se borrará: M1.", textos[0])
+        self.assertTrue("E1" in textos[0] and "S1" in textos[0], textos[0])
+        self.assertEqual(textos[0].count("expansión de M1"), 1, "sin repetir lo que se llama igual")
+        m = e.ed.model
+        self.assertEqual((m["hierarchy"], [p["id"] for p in m["partials"]], m["steps"]),
+                         ({"macros": [], "expansions": [], "enclosures": []}, ["g"], []))
+        e.deshacer()
+        self.assertEqual(self.estado(e), antes)
+        e.rehacer()
+        self.assertEqual(e.ed.model["steps"], [])
+        e.deshacer()
+        # un recinto vacío seleccionado por su marco se borra como cualquier elemento (y se deshace)
+        self.soltar_ficha("encapsulante", QPointF(260, 700))
+        r = e.anadir_recinto(e.sel[0])
+        listo = self.estado(e)
+        e.sel = [r]
+        self.assertTrue(e.borrar())
+        self.assertEqual((e.ed.model["hierarchy"]["enclosures"], r in [p["id"] for p in e.ed.model["partials"]],
+                          [p for p in e.M["partials"] if p.get("vacio")]), ([], False, []))
+        self.assertNotIn(r, e.sel)
+        e.deshacer()
+        self.assertEqual(self.estado(e), listo)
+
+    def test_SEDI179_deshacer_y_rehacer_de_toda_la_jerarquia_y_guardar_y_abrir(self):
+        """REQ-EDT-05, REQ-DAT-01, REQ-MOD-07: macroetapa, contenido de su expansión, encapsulante, recinto, sus etapas, enlace de
+        activación y renombrado se deshacen y rehacen paso a paso devolviendo el modelo y la presentación tal cual; guardado y
+        abierto, la jerarquía se conserva y el recinto vacío sigue en su sitio."""
+        from escritorio.diagrama import cajas_parciales
+        from escritorio.edicion import Edicion
+        w, e = self.vacio()
+        pasos = []
+
+        def paso(accion):
+            accion()
+            pasos.append(self.estado(e))
+        paso(lambda: e.colocar("macroetapa", QPointF(260, 220)))
+        mid = e.sel[0]
+        paso(lambda: e.colocar("etapa", QPointF(540, 380)))
+        paso(lambda: e.colocar("encapsulante", QPointF(260, 620)))
+        h = e.sel[0]
+        e.pedir_texto = lambda *a: "Recinto"
+        paso(lambda: e.anadir_recinto(h))
+        r = e.sel[0]
+        c = cajas_parciales(e.M)[r]
+        paso(lambda: e.colocar("etapa", QPointF((c["x0"] + c["x1"]) / 2, (c["y0"] + c["y1"]) / 2)))
+        i = e.sel[0]
+        paso(lambda: e.enlace_activacion(i))
+        e.pedir_texto = lambda *a: "Lavado"
+        paso(lambda: e.renombrar_macro(mid))
+        self.assertEqual(len(pasos), 7)
+        self.assertEqual(len({str(p) for p in pasos}), 7, "cada paso cambia algo")
+        for k in range(len(pasos) - 1, 0, -1):  # hacia atrás, paso a paso
+            e.deshacer()
+            self.assertEqual(self.estado(e), pasos[k - 1], f"deshacer el paso {k}")
+        e.deshacer()
+        self.assertEqual((e.ed.model["steps"], e.ed.model["hierarchy"]["macros"], e.ed.undo_stack), ([], [], []))
+        for k in range(len(pasos)):  # y hacia delante
+            e.rehacer()
+            self.assertEqual(self.estado(e), pasos[k], f"rehacer el paso {k}")
+        self.assertFalse(e.ed.redo_stack)
+        # guardar y abrir: la jerarquía y la posición del marco
+        destino = Path(self.tmp.name) / "jerarquia"
+        e.guardar(destino)
+        op = open_model(destino)
+        e2 = Edicion.desde(op.doc, {}, "abierto", destino, op.presentations[0])
+        self.assertEqual(e2.ed.model["hierarchy"], e.ed.model["hierarchy"])
+        self.assertEqual(cajas_parciales(e2.M)[r], cajas_parciales(e.M)[r])
+        self.assertEqual({p["id"]: p["label"] for p in e2.M["partials"]}, {p["id"]: p["label"] for p in e.M["partials"]})
+        self.assertEqual(e2.nombres[mid], "Lavado")
+        self.assertEqual([p for p in e2.ed.model["hierarchy"]["enclosures"]][0]["activationRefs"], [i])
+        # un recinto vacío: su marco sobrevive al guardado
+        e.pedir_texto = lambda *a: "Vacío"
+        r2 = e.anadir_recinto(h)
+        e.guardar(destino)
+        op = open_model(destino)
+        e3 = Edicion.desde(op.doc, {}, "abierto", destino, op.presentations[0])
+        self.assertEqual((cajas_parciales(e3.M)[r2], [p["vacio"] for p in e3.M["partials"] if p["id"] == r2]),
+                         (cajas_parciales(e.M)[r2], [True]))
+
+    def test_SEDI180_la_ficha_que_se_arrastra_recuadra_el_parcial_donde_caeria(self):
+        """REQ-EDT-02, REQ-JER-04: al arrastrar una etapa, una encapsulante, una macroetapa o una transición sobre el marco de
+        un parcial (también sobre la zona de una expansión, que no se dibuja) se recuadra el parcial donde caería; fuera de todo
+        marco (el raíz), con la simultaneidad o con la acción, no; al soltar o salir se quita."""
+        from PySide6.QtGui import QDragLeaveEvent
+        from escritorio.diagrama import cajas_parciales
+        w, e = self.vacio()
+        mid = e.poner_macro(QPointF(260, 220))
+        x = e.ed.macro_info(mid)
+        b = cajas_parciales(e.M)[x.partial]
+        dentro, fuera = QPointF(540, 380), QPointF(260, 60)
+        for ficha in ("etapa", "encapsulante", "macroetapa", "transicion"):
+            self.assertTrue(e.sobrevolar(ficha, dentro))
+            self.assertIsNotNone(w.diagrama.destino, ficha)
+            r = w.diagrama.destino.rect()
+            self.assertEqual((r.x(), r.y(), r.width(), r.height()),
+                             (b["x0"] - 4, b["y0"] - 4, b["x1"] - b["x0"] + 8, b["y1"] - b["y0"] + 8))
+            e.sobrevolar(ficha, fuera)
+            self.assertIsNone(w.diagrama.destino, ficha)
+        for ficha in ("simultaneidad", "accion:continua"):
+            e.sobrevolar(ficha, dentro)
+            self.assertIsNone(w.diagrama.destino, ficha)
+        self.assertFalse(e.sobrevolar("etapa", QPointF(540, 220)), "encima de la entrada no se puede soltar")
+        self.assertIsNone(w.diagrama.destino, "y no se recuadra")
+        e.sobrevolar("etapa", dentro)
+        self.assertIsNotNone(w.diagrama.destino)
+        self.soltar_ficha("etapa", dentro)  # al soltar se quita
+        self.assertIsNone(w.diagrama.destino)
+        self.assertEqual(e.parcial_de(e.sel[0]), x.partial)
+        e.sobrevolar("etapa", QPointF(540, 480))
+        self.assertIsNotNone(w.diagrama.destino)
+        w.diagrama.dragLeaveEvent(QDragLeaveEvent())  # al salir se quita
+        self.assertIsNone(w.diagrama.destino)
+
+    def test_SEDI181_marcos_de_los_parciales_como_los_dibuja_el_banco(self):
+        """REQ-JER-04, REQ-JER-07: el rectángulo de cada parcial que entrega el dibujo (y con el que el editor decide dónde cae lo
+        que se suelta) es el marco de siempre de las figuras de la norma: el recinto y el parcial de los ejemplos, y la zona de
+        la expansión; tools/dibujo.js usa la misma cuenta. Un recinto vacío solo lo anota el editor: Vista (banco, comparador,
+        simulador) no lo lleva, y dibujo.js no cambia."""
+        from escritorio.diagrama import cajas_parciales, elemento_en
+        from escritorio.edicion import Edicion
+        from grafcet.examples import EJEMPLOS
+        from grafcet.view import Vista
+        esperado = {"encapsulacion": {"R": (482.0, 772.0, 26.0, 274.0)}, "macroetapa": {"X": (482.0, 622.0, 56.0, 464.0)},
+                    "forzado": {"G": (532.0, 672.0, 16.0, 494.0)}}
+        for clave, cajas in esperado.items():
+            titulo, _, construir = EJEMPLOS[clave]
+            m, layout = construir()
+            e = Edicion.desde(m.doc, layout, titulo)
+            self.assertEqual({p: (b["x0"], b["x1"], b["y0"], b["y1"]) for p, b in cajas_parciales(e.M).items()}, cajas, clave)
+            self.assertFalse([p for p in e.M["partials"] if p.get("vacio")])
+        # un parcial de los de siempre (marco redondeado) también se toca por su borde y recibe lo que se suelta dentro
+        self.assertEqual((elemento_en(e.M, QPointF(532, 200)), e.parcial_en(QPointF(600, 300)), e.parcial_en(QPointF(300, 300))),
+                         ("G", "G", e.raiz))
+        js = (ROOT / "tools" / "dibujo.js").read_text(encoding="utf-8")
+        for cuenta in ("Math.min(...pts.map(p => p.x)) - H - 26", "Math.max(...pts.map(p => p.x)) + H + 70",
+                       "Math.min(...pts.map(p => p.y)) - H - 22", "Math.max(...pts.map(p => p.y)) + H + 22"):
+            self.assertIn(cuenta, js)
+        self.assertNotIn("vacio", js, "el banco no sabe de marcos vacíos: solo los pone el editor")
+        w, e = self.vacio()
+        self.soltar_ficha("encapsulante", QPointF(260, 60))
+        r = e.anadir_recinto(e.sel[0])
+        self.assertEqual([p["id"] for p in e.M["partials"]], [r], "lo de Vista más lo que anota el editor")
+        pura = Vista("x", "t", "", lambda: (e.ed.model, e.layout()), e.opciones)
+        self.assertEqual(pura.model["partials"], [], "Vista no lleva el recinto vacío")
+
+    def test_SEDI182_la_macroetapa_se_enlaza_como_una_etapa_y_lo_construido_simula(self):
+        """REQ-JER-04, REQ-EDT-02, REQ-SIM-03: construida con los gestos del editor (ficha de macroetapa, «Añadir debajo»,
+        etapas y transiciones soltadas en su expansión, enlaces), la macroetapa se comporta como la del ejemplo: la llegada
+        activa su entrada y solo se sale de ella cuando su salida está activa."""
+        from escritorio.diagrama import anclas
+        w, e = self.vacio()
+        e.colocar("etapa", QPointF(260, 60))
+        a = e.sel[0]
+        e.tipo_etapa(a, True)
+        e.colocar("macroetapa", QPointF(260, 220))
+        mid = e.sel[0]
+        x = e.ed.macro_info(mid)
+
+        def enlazar(origen, destino):
+            pa = next(q for q in anclas(e.M, origen) if q["lado"] == "abajo")["pos"]
+            pb = next(q for q in anclas(e.M, destino) if q["lado"] == "arriba")["pos"]
+            e.prensar(pa)
+            e.mover(pb)
+            e.soltar(pb)
+        e.colocar("transicion", QPointF(260, 140))
+        t1 = e.sel[0]
+        enlazar(a, t1)
+        enlazar(t1, mid)
+        e.sel = [mid]
+        b = e.anadir_debajo()  # de una macroetapa: transición y etapa, en su parcial
+        t2 = next(t for t in e.ed.model["transitions"] if mid in t["preRefs"])["id"]
+        self.assertEqual((e.parcial_de(t2), e.parcial_de(b)), ("g", "g"))
+        e.colocar("transicion", QPointF(540, 300))
+        te = e.sel[0]
+        e.colocar("etapa", QPointF(540, 380))
+        k = e.sel[0]
+        e.colocar("transicion", QPointF(540, 460))
+        tk = e.sel[0]
+        for origen, destino in ((x.entry, te), (te, k), (k, tk), (tk, x.exit)):
+            enlazar(origen, destino)
+        self.assertEqual([e.parcial_de(i) for i in (te, k, tk)], [x.partial] * 3)
+        for tid, cond in ((t1, "p"), (t2, "s"), (te, "r"), (tk, "q")):
+            e.poner_condicion(tid, cond, crear=True)
+        self.assertEqual([d for d in e.diagnosticos() if d["blocks"]], [])
+        self.assertTrue(e.ed.validate().can_simulate)
+        ids = {v["name"]: v["id"] for v in e.ed.model["variables"]}
+        v = e.vista
+
+        def situacion():
+            return sorted(e.nombres[i] for i in v.state()["situation"])
+
+        def pulsar(nombre):
+            v.act("fijar", {"cambios": {ids[nombre]: True}})
+            v.act("fijar", {"cambios": {ids[nombre]: False}})
+        self.assertEqual(situacion(), ["0"])
+        pulsar("s")
+        self.assertEqual(situacion(), ["0"], "sin la macroetapa activa, s no hace nada")
+        pulsar("p")
+        self.assertEqual(situacion(), ["E1"], "la llegada activa la entrada de la expansión")
+        pulsar("s")
+        self.assertEqual(situacion(), ["E1"], "aunque s valga 1, no se sale sin la salida activa")
+        pulsar("r")
+        self.assertEqual(situacion(), [e.nombres[k]])
+        pulsar("q")
+        self.assertEqual(situacion(), ["S1"])
+        pulsar("s")
+        self.assertEqual(situacion(), [e.nombres[b]])
+
+    # -- jerarquías en la interfaz (paso 6, encargo B2): órdenes de forzado, panel de opciones y navegación ---------------
+    @staticmethod
+    def textos_dibujo(w):
+        """Los textos que lleva el dibujo ahora."""
+        return [it.toPlainText() for it in w.diagrama.scene().items() if hasattr(it, "toPlainText")]
+
+    @staticmethod
+    def centro_orden(w, fid):
+        """El centro de la caja de una orden de forzado en el dibujo."""
+        x, y, ancho, alto = next(c for c in w.diagrama.cajas_ordenes if c["id"] == fid)["rect"]
+        return QPointF(x + ancho / 2, y + alto / 2)
+
+    def con_recinto(self, nombre="R"):
+        """Con gestos: una etapa H en el raíz y una encapsulante E0 con su recinto, que lleva las etapas A y B (con una
+        transición entre las dos). Devuelve la ventana, la edición y los ID."""
+        from escritorio.diagrama import cajas_parciales
+        w, e = self.vacio()
+        e.colocar("etapa", QPointF(260, 60))
+        h = e.sel[0]
+        e.colocar("encapsulante", QPointF(260, 300))
+        e0 = e.sel[0]
+        e.pedir_texto = lambda *a: nombre
+        r = e.anadir_recinto(e0)
+        c = cajas_parciales(e.M)[r]
+        e.colocar("etapa", QPointF((c["x0"] + c["x1"]) / 2, (c["y0"] + c["y1"]) / 2))
+        a = e.sel[0]
+        e.sel = [a]
+        b = e.anadir_debajo()
+        for sid, n in ((h, "H"), (e0, "E0"), (a, "A"), (b, "B")):
+            self.assertIsNone(e.renombrar(sid, n))
+        return w, e, {"h": h, "e0": e0, "r": r, "a": a, "b": b}
+
+    def test_SEDI183_forzar_un_parcial_crea_la_orden_con_nombres_y_en_una_sola_operacion(self):
+        """REQ-JER-02, REQ-JER-03, REQ-EDT-02, REQ-EDT-05, REQ-EDT-09: «Forzar un parcial…» en una etapa pide (gancho
+        sustituible) el parcial destino, la forma y, si es explícita, las etapas, todo con nombres; crea la orden en una
+        sola operación de deshacer y se dibuja «R{…}» en rectángulo doble; sin otro parcial no se ofrece; una orden que el
+        núcleo rechaza (ciclo) o una explícita sin etapas dan el aviso en rojo con parpadeo y no cambian nada."""
+        w, e = self.vacio()
+        e.colocar("etapa", QPointF(260, 60))
+        solo = e.sel[0]
+        self.assertNotIn("Forzar un parcial…", dict(e.menu(centro(e.M, solo))), "sin otro parcial no hay a quién forzar")
+        antes = self.estado(e)
+        self.assertIsNone(e.forzar(solo))
+        self.assertEqual(self.estado(e), antes)
+        self.assertTrue(e.mensaje and not e.mensaje_info and "otro parcial" in e.mensaje)
+        w, e, d = self.con_recinto()
+        h, r, a, b = d["h"], d["r"], d["a"], d["b"]
+        pedidas, respuesta = [], [None]
+        e.pedir_forzado = lambda datos: pedidas.append(datos) or respuesta[0]
+        opciones = e.menu(centro(e.M, h))
+        self.assertEqual([t for t, _ in opciones][2:], ["-", "Convertir en encapsulante", "Forzar un parcial…"])
+        # lo que se le enseña al diálogo: nombres (los ID solo para devolver la elección); cancelar no cambia nada
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        self.assertIsNone(dict(opciones)["Forzar un parcial…"]())
+        datos = pedidas[-1]
+        self.assertEqual((datos["origen"], datos["destinos"], datos["actual"]), ("H", [(r, "recinto R")], None))
+        self.assertEqual(datos["etapas"], {r: [(a, "A"), (b, "B")]})
+        self.assertEqual([t for _, t in datos["formas"]], ["Explícita", "La situación actual", "Vacía", "Inicial"])
+        self.assertEqual([k for k, _ in datos["formas"]], ["explicit", "current", "empty", "initial"])
+        self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
+        # explícita {B}: la orden, una sola operación, seleccionada, dibujada
+        respuesta[0] = {"destino": r, "forma": "explicit", "etapas": [b]}
+        fid = dict(e.menu(centro(e.M, h)))["Forzar un parcial…"]()
+        (f,) = e.ed.model["forces"]
+        self.assertEqual((f["id"], f["sourceStepRef"], f["targetPartialRef"], f["targetKind"], f["targetSteps"]),
+                         (fid, h, r, "explicit", [b]))
+        self.assertEqual(len(e.ed.undo_stack), n + 1)
+        self.assertEqual((e.sel, e.mensaje_info, e.mensaje), ([fid], True, "Orden: H fuerza R a {B}."))
+        self.assertEqual([(c["id"], c["etapa"]) for c in w.diagrama.cajas_ordenes], [(fid, h)])
+        self.assertIn("R{B}", self.textos_dibujo(w))
+        hecho = self.estado(e)
+        e.deshacer()
+        self.assertEqual((self.estado(e), w.diagrama.cajas_ordenes), (antes, []))
+        e.rehacer()
+        self.assertEqual(self.estado(e), hecho)
+        # las otras tres formas (sin etapas, aunque el diálogo las devuelva); dos objetivos distintos para el mismo destino
+        # no se rechazan: validate() avisa (D-FORZADO-CONFLICTO), y es un aviso, no un error
+        for forma, texto, dibujo in (("current", "a la situación actual", "R{*}"), ("empty", "a la situación vacía", "R{ }"),
+                                     ("initial", "a su situación inicial", "R{INIT}")):
+            respuesta[0] = {"destino": r, "forma": forma, "etapas": ["no-se-usa"]}
+            n = len(e.ed.undo_stack)
+            nuevo = e.forzar(h)
+            f = next(f for f in e.ed.model["forces"] if f["id"] == nuevo)
+            self.assertEqual((f["targetKind"], "targetSteps" in f, len(e.ed.undo_stack)), (forma, False, n + 1))
+            self.assertEqual(e.mensaje, f"Orden: H fuerza R {texto}.")
+            self.assertIn(dibujo, self.textos_dibujo(w))
+        conflicto = [x for x in e.diagnosticos() if x["code"] == "D-FORZADO-CONFLICTO"]
+        self.assertTrue(conflicto and not conflicto[0]["blocks"] and self.sin_ids(conflicto[0]["message"]))
+        # una explícita sin etapas, y un ciclo (A, del recinto, fuerza al raíz que H ya fuerza al recinto): rechazos
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        for caso, origen, motivo in (({"destino": r, "forma": "explicit", "etapas": []}, h, "al menos una etapa"),
+                                     ({"destino": "g", "forma": "empty", "etapas": []}, a, "ciclo")):
+            respuesta[0] = caso
+            e.parpadeo.parar()
+            self.assertIsNone(e.forzar(origen))
+            self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
+            self.assertTrue(e.mensaje and not e.mensaje_info and motivo in e.mensaje and self.sin_ids(e.mensaje), e.mensaje)
+            self.assertEqual(e.parpadeo.ids, {origen})
+        self.assertEqual([x for _, x in pedidas[-1]["destinos"]], ["g"], "el parcial de la propia etapa no se ofrece")
+        e.parpadeo.parar()
+
+    def test_SEDI184_la_caja_de_la_orden_se_selecciona_y_se_edita_o_se_quita_desde_su_menu(self):
+        """REQ-JER-02, REQ-EDT-05: la caja «R{…}» de una orden se selecciona con un clic (no se arrastra: no es una acción) y
+        su botón derecho ofrece «Editar orden de forzado…» (el mismo diálogo, con los valores actuales; `set_force`) y
+        «Quitar orden de forzado» (`delete_force`), cada una en una sola operación de deshacer; Supr también la quita; no se
+        coloca nada encima de ella."""
+        w, e, d = self.con_recinto()
+        h, r, a, b = d["h"], d["r"], d["a"], d["b"]
+        e.pedir_forzado = lambda datos: {"destino": r, "forma": "explicit", "etapas": [b]}
+        fid = e.forzar(h)
+        # un clic la selecciona y la resalta; arrastrarla no la mueve ni cambia nada
+        antes = self.estado(e)
+        e.seleccionar([])
+        pc = self.centro_orden(w, fid)
+        e.prensar(pc)
+        self.assertEqual((e.sel, e.arrastre), ([fid], None))
+        e.mover(QPointF(pc.x() + 300, pc.y() + 200))
+        e.soltar(QPointF(pc.x() + 300, pc.y() + 200))
+        self.assertEqual((e.sel, self.estado(e)), ([fid], antes))
+        x0 = next(c for c in w.diagrama.cajas_ordenes if c["id"] == fid)["rect"][0]
+        self.assertTrue([it for it in self.recuadros(w) if hasattr(it, "rect") and abs(it.rect().x() - (x0 - 3)) < 1],
+                        "la caja seleccionada, recuadrada")
+        self.assertEqual(w.props.pagina, "orden")
+        # el menú de la caja (y no el de la etapa)
+        opciones = e.menu(pc)
+        self.assertEqual([t for t, _ in opciones], ["Editar orden de forzado…", "Quitar orden de forzado"])
+        self.assertNotIn("Editar orden de forzado…", dict(e.menu(centro(e.M, h))))
+        # editar: el diálogo recibe los valores actuales; cambiar a «La situación actual»
+        vistos = []
+        respuesta = [{"destino": r, "forma": "current", "etapas": []}]
+        e.pedir_forzado = lambda datos: vistos.append(datos) or respuesta[0]
+        n = len(e.ed.undo_stack)
+        self.assertEqual(dict(opciones)["Editar orden de forzado…"](), fid)
+        self.assertEqual(vistos[0]["actual"], {"destino": r, "forma": "explicit", "etapas": [b]})
+        self.assertEqual((vistos[0]["origen"], vistos[0]["destinos"]), ("H", [(r, "recinto R")]))
+        (f,) = e.ed.model["forces"]
+        self.assertEqual((f["id"], f["targetKind"], "targetSteps" in f, len(e.ed.undo_stack)), (fid, "current", False, n + 1))
+        self.assertEqual(e.mensaje, "Orden: H fuerza R a la situación actual.")
+        self.assertIn("R{*}", self.textos_dibujo(w))
+        self.assertNotIn("R{B}", self.textos_dibujo(w))
+        e.deshacer()
+        self.assertEqual(e.ed.model["forces"][0]["targetSteps"], [b])
+        e.rehacer()
+        # editar a explícita con las dos etapas; cancelar no cambia nada; una explícita sin etapas se rechaza
+        respuesta[0] = {"destino": r, "forma": "explicit", "etapas": [a, b]}
+        e.editar_orden(fid)
+        self.assertEqual((e.ed.model["forces"][0]["targetKind"], e.ed.model["forces"][0]["targetSteps"]), ("explicit", [a, b]))
+        self.assertIn("R{A,B}", self.textos_dibujo(w))
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        for caso in (None, {"destino": r, "forma": "explicit", "etapas": []}):
+            respuesta[0] = caso
+            e.parpadeo.parar()
+            self.assertIsNone(e.editar_orden(fid))
+            self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
+        self.assertTrue(e.mensaje and not e.mensaje_info and self.sin_ids(e.mensaje))
+        self.assertEqual(e.parpadeo.ids, {fid})
+        e.parpadeo.parar()
+        # quitar desde el menú de la caja, y se devuelve con Ctrl+Z
+        pc = self.centro_orden(w, fid)
+        n = len(e.ed.undo_stack)
+        self.assertTrue(dict(e.menu(pc))["Quitar orden de forzado"]())
+        self.assertEqual((e.ed.model["forces"], e.sel, len(e.ed.undo_stack), w.diagrama.cajas_ordenes), ([], [], n + 1, []))
+        e.deshacer()
+        self.assertEqual([f["id"] for f in e.ed.model["forces"]], [fid])
+        # Supr, con la caja seleccionada, también la quita
+        e.seleccionar([fid])
+        self.assertTrue(e.borrar())
+        self.assertEqual((e.ed.model["forces"], len(e.ed.undo_stack)), ([], n + 1))
+        e.deshacer()
+        # nada se coloca encima de su caja (se cuenta como un elemento más)
+        n = len(e.ed.undo_stack)
+        self.soltar_ficha("etapa", self.centro_orden(w, fid))
+        self.assertEqual((len(e.ed.undo_stack), e.mensaje), (n, "No se puede poner encima de otro elemento"))
+
+    def test_SEDI185_el_panel_de_opciones_muestra_la_ficha_de_jerarquia_con_los_botones_del_menu(self):
+        """REQ-EDT-08, REQ-JER-07, REQ-EDT-09: al seleccionar una macroetapa, una encapsulante, una etapa de un recinto, la
+        entrada de una expansión, un recinto (su marco), una expansión o una orden, el panel de opciones enseña su descripción
+        con nombres y los mismos botones que el botón derecho (casillas incluidas), que hacen lo mismo; sin selección no hay
+        ficha; los botones caben en el panel a 1366×768."""
+        from PySide6.QtCore import QPoint
+        w, e, d = self.con_recinto()
+        h, e0, r, a, b = d["h"], d["e0"], d["r"], d["a"], d["b"]
+        w.resize(1366, 768)
+        w.show()
+        QApplication.processEvents()
+        mid = e.poner_macro(QPointF(260, 600))
+        x = e.ed.macro_info(mid)
+        e.pedir_forzado = lambda datos: {"destino": r, "forma": "explicit", "etapas": [b]}
+        fid = e.forzar(h)
+        izq, der = w.props.ficha_izq, w.props.ficha_etapa
+
+        def ver(ident, pagina, ficha, texto, botones):
+            e.seleccionar([ident])
+            QApplication.processEvents()
+            self.assertEqual(w.props.pagina, pagina, ident)
+            self.assertEqual((ficha.isHidden(), ficha.texto.text(), ficha.textos_visibles()), (False, texto, botones), ident)
+            self.assertTrue(self.sin_ids(ficha.texto.text()))
+            raiz = QRectF(w.props.rect())
+            for t in ficha.textos_visibles():  # todos los botones caben en el panel
+                bt = ficha.botones[t]
+                self.assertTrue(raiz.contains(QRectF(bt.mapTo(w.props, QPoint(0, 0)), bt.size())), (ident, t))
+        ver(mid, "macro", izq, "Macroetapa M1 · expansión M1 · entrada E1 · salida S1", ["Abrir expansión", "Renombrar…"])
+        self.assertIn("Macroetapa M1", w.props.titulo.text())
+        ver(r, "marco", izq, "Recinto R de E0 · activación: ninguna", ["Ir a la encapsulante"])
+        ver(fid, "orden", izq, "Orden: H fuerza R a {B}", ["Editar orden de forzado…", "Quitar orden de forzado"])
+        ver(e0, "etapa", der, "Encapsulante E0 · recintos: R", ["Añadir recinto…", "Forzar un parcial…"])
+        ver(x.entry, "etapa", der, "Entrada de la expansión de la macroetapa M1", ["Ir a la macroetapa", "Forzar un parcial…"])
+        ver(a, "etapa", der, "Del recinto R de E0 · sin enlace de activación",
+            ["Convertir en encapsulante", "Enlace de activación", "Ir a la encapsulante", "Forzar un parcial…"])
+        ver(x.partial, "marco", izq, "Expansión de la macroetapa M1 · entrada E1 · salida S1", ["Ir a la macroetapa"])
+        # los botones hacen lo que el menú: la casilla del enlace de activación, abrir, renombrar, ir a, editar y quitar
+        e.seleccionar([a])
+        casilla = der.botones["Enlace de activación"]
+        self.assertEqual((casilla.isCheckable(), casilla.isChecked()), (True, False))
+        n = len(e.ed.undo_stack)
+        casilla.click()
+        self.assertEqual((e.ed.model["hierarchy"]["enclosures"][0]["activationRefs"], len(e.ed.undo_stack)), ([a], n + 1))
+        self.assertEqual((der.botones["Enlace de activación"].isChecked(), der.texto.text()),
+                         (True, "Del recinto R de E0 · con enlace de activación"), "la casilla y el texto siguen al modelo")
+        ver(r, "marco", izq, "Recinto R de E0 · activación: A", ["Ir a la encapsulante"])
+        izq.botones["Ir a la encapsulante"].click()
+        self.assertEqual(e.sel, [e0])
+        centrados = []
+        w.diagrama.centrar_en = lambda p: centrados.append(p)
+        e.seleccionar([mid])
+        izq.botones["Abrir expansión"].click()
+        self.assertEqual((e.sel, len(centrados)), ([x.partial], 1))
+        e.seleccionar([mid])
+        e.pedir_texto = lambda *args: "Lavado"
+        izq.botones["Renombrar…"].click()
+        self.assertEqual(e.nombres[mid], "Lavado")
+        self.assertEqual(izq.texto.text(), "Macroetapa Lavado · expansión Lavado · entrada E1 · salida S1")
+        e.seleccionar([fid])
+        e.pedir_forzado = lambda datos: {"destino": r, "forma": "empty", "etapas": []}
+        izq.botones["Editar orden de forzado…"].click()
+        self.assertEqual(izq.texto.text(), "Orden: H fuerza R a la situación vacía")
+        izq.botones["Quitar orden de forzado"].click()
+        self.assertEqual((e.ed.model["forces"], e.sel, w.props.pagina), ([], [], "vacio"))
+        # una etapa ordinaria del raíz sin otro parcial al que forzar solo ofrece convertirla en encapsulante, sin descripción
+        w2, e2 = self.vacio()
+        e2.colocar("etapa", QPointF(260, 60))
+        e2.seleccionar([e2.sel[0]])
+        self.assertEqual((w2.props.ficha_etapa.texto.isHidden(), w2.props.ficha_etapa.textos_visibles()),
+                         (True, ["Convertir en encapsulante"]))
+        e2.seleccionar([])
+        self.assertEqual((w2.props.pagina, w2.props.ficha_etapa.isHidden(), w2.props.ficha_izq.isHidden()), ("vacio", True, True))
+
+    def test_SEDI186_ir_a_la_macroetapa_o_a_la_encapsulante_y_doble_clic_son_solo_navegacion(self):
+        """REQ-EDT-08, REQ-JER-07: «Ir a la macroetapa» en la entrada y la salida de una expansión (y en su zona), «Ir a la
+        encapsulante» en las etapas de un recinto y en su marco, y doble clic en una macroetapa («Abrir expansión») seleccionan
+        y llevan la vista al elemento sin tocar el modelo, el historial ni la marca de cambios."""
+        from escritorio.diagrama import cajas_parciales
+        w, e, d = self.con_recinto()
+        e0, r, a = d["e0"], d["r"], d["a"]
+        mid = e.poner_macro(QPointF(260, 600))
+        x = e.ed.macro_info(mid)
+        e.ed.dirty = False
+        centrados = []
+        w.diagrama.centrar_en = lambda p: centrados.append((p.x(), p.y()))
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+
+        # la entrada y la salida: «Ir a la macroetapa»
+        for sid in (x.entry, x.exit):
+            e.seleccionar([])
+            opciones = e.menu(centro(e.M, sid))
+            self.assertIn("Ir a la macroetapa", dict(opciones))
+            self.assertEqual(dict(opciones)["Ir a la macroetapa"](), True)
+            self.assertEqual(e.sel, [mid])
+            self.assertEqual(centrados[-1], (centro(e.M, mid).x(), centro(e.M, mid).y()))
+            self.assertTrue(e.mensaje_info and self.sin_ids(e.mensaje) and "M1" in e.mensaje)
+        # una etapa del recinto, y su marco: «Ir a la encapsulante»
+        e.seleccionar([])
+        dict(e.menu(centro(e.M, a)))["Ir a la encapsulante"]()
+        self.assertEqual((e.sel, centrados[-1]), ([e0], (centro(e.M, e0).x(), centro(e.M, e0).y())))
+        c = cajas_parciales(e.M)[r]
+        e.seleccionar([])
+        opciones = e.menu(QPointF(c["x0"], c["y0"] + 10))
+        self.assertEqual([t for t, _ in opciones], ["Ir a la encapsulante"])
+        self.assertEqual(e.sel, [r])
+        dict(opciones)["Ir a la encapsulante"]()
+        self.assertEqual(e.sel, [e0])
+        # la zona de la expansión (su parcial seleccionado) vuelve a la macroetapa
+        e.seleccionar([x.partial])
+        self.assertEqual([t for t, _, _ in e.ficha_jerarquia(x.partial)["botones"]], ["Ir a la macroetapa"])
+        e.ficha_jerarquia(x.partial)["botones"][0][1]()
+        self.assertEqual(e.sel, [mid])
+        # doble clic en una macroetapa: abre su expansión; en una etapa, sigue pidiendo su etiqueta
+        centrados.clear()
+        e.seleccionar([])
+        self.assertTrue(e.doble(centro(e.M, mid)))
+        b = cajas_parciales(e.M)[x.partial]
+        self.assertEqual((e.sel, centrados), ([x.partial], [((b["x0"] + b["x1"]) / 2, (b["y0"] + b["y1"]) / 2)]))
+        pedidas = []
+        e.pedir_etiqueta = pedidas.append
+        e.doble(centro(e.M, a))
+        self.assertEqual(pedidas, [a])
+        # nada de esto toca el modelo, el historial ni la marca de cambios
+        self.assertEqual((self.estado(e), len(e.ed.undo_stack), e.ed.dirty), (antes, n, False))
+
+    def test_SEDI187_la_zona_de_suelta_de_un_parcial_incluye_un_margen_a_la_derecha_y_debajo(self):
+        """REQ-JER-04, REQ-EDT-02: lo que se suelta a una etapa de ancho (a la derecha) o de alto (debajo) del marco de un
+        parcial que no es el raíz es de ese parcial, para poder seguir rellenándolo; nunca a su izquierda ni arriba, el margen no
+        quita lo que cae dentro del marco de otro parcial, y a más distancia es del raíz. El recuadro de destino lo anuncia."""
+        from escritorio import edicion
+        from escritorio.diagrama import cajas_parciales
+        w, e = self.vacio()
+        m1 = e.poner_macro(QPointF(260, 220))
+        x1 = e.ed.macro_info(m1)
+        b = cajas_parciales(e.M)[x1.partial]
+        self.assertEqual((b["x0"], b["x1"], b["y0"], b["y1"], edicion.MARGEN_SUELTA), (492.0, 632.0, 176.0, 584.0, 44))
+        pe = e.parcial_en
+        self.assertEqual((pe(QPointF(632 + 30, 380)), pe(QPointF(632 + 44, 380)), pe(QPointF(632 + 45, 380))),
+                         (x1.partial, x1.partial, "g"), "a la derecha, una etapa de margen")
+        self.assertEqual((pe(QPointF(540, 584 + 30)), pe(QPointF(540, 584 + 44)), pe(QPointF(540, 584 + 45))),
+                         (x1.partial, x1.partial, "g"), "debajo, una etapa de margen")
+        self.assertEqual((pe(QPointF(492 - 10, 380)), pe(QPointF(540, 176 - 10)), pe(QPointF(492 - 10, 176 - 10))),
+                         ("g", "g", "g"), "ni a la izquierda ni arriba")
+        self.assertEqual(pe(QPointF(632 + 30, 584 + 30)), x1.partial, "ni en la esquina")
+        # el margen no quita lo que cae dentro del marco de otro parcial: una segunda expansión pegada a la primera
+        m2 = e.poner_macro(QPointF(260, 400))
+        x2 = e.ed.macro_info(m2)
+        b2 = cajas_parciales(e.M)[x2.partial]
+        self.assertTrue(b["x1"] < b2["x0"] < b["x1"] + 44, "los márgenes se solapan con el marco de la segunda")
+        self.assertEqual((pe(QPointF(b["x1"] + 3, 380)), pe(QPointF(b2["x0"] + 3, 380))), (x1.partial, x2.partial))
+        # el recuadro de destino y soltar: debajo de la salida cabe otra etapa, y es de la expansión
+        w2, e2 = self.vacio()
+        mid = e2.poner_macro(QPointF(260, 220))
+        x = e2.ed.macro_info(mid)
+        punto = QPointF(540, 584 + 30)
+        self.assertTrue(e2.sobrevolar("etapa", punto))
+        self.assertIsNotNone(w2.diagrama.destino, "se recuadra la expansión")
+        self.soltar_ficha("etapa", punto, w2)
+        self.assertEqual(e2.parcial_de(e2.sel[0]), x.partial)
+        self.assertTrue(cajas_parciales(e2.M)[x.partial]["y1"] > 584 + 30, "el marco crece con lo que se le suelta")
+        self.soltar_ficha("etapa", QPointF(540, 584 + 200), w2)
+        self.assertEqual(e2.parcial_de(e2.sel[0]), "g")
+        # lo mismo con el marco de un recinto con etapas
+        w3, e3, d = self.con_recinto()
+        c = cajas_parciales(e3.M)[d["r"]]
+        e3.colocar("etapa", QPointF(c["x1"] + 30, c["y0"] + 40))
+        self.assertEqual(e3.parcial_de(e3.sel[0]), d["r"])
+        e3.colocar("encapsulante", QPointF(260, 700))
+        self.assertEqual(e3.parcial_de(e3.sel[0]), "g")
+
+    def test_SEDI188_el_marco_de_un_recinto_vacio_se_arrastra_con_una_sola_operacion_de_deshacer(self):
+        """REQ-EDT-03, REQ-EDT-05, REQ-JER-05: el marco de un recinto sin etapas se mueve arrastrando su borde (a la rejilla; se
+        ve moverse), y la posición se guarda con una sola operación de deshacer; no se pone encima de otro elemento ni del
+        marco de otro parcial; un clic sin mover no cambia nada; el marco de un parcial con etapas solo se selecciona."""
+        from escritorio.diagrama import cajas_parciales
+        w, e = self.vacio()
+        self.soltar_ficha("encapsulante", QPointF(260, 60))
+        h = e.sel[0]
+        r = e.anadir_recinto(h)
+        c0 = cajas_parciales(e.M)[r]
+        # un clic sin mover: selecciona, y no cambia nada
+        borde = QPointF(c0["x0"], c0["y0"] + 60)
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        e.seleccionar([])
+        e.prensar(borde)
+        e.soltar(borde)
+        self.assertEqual((e.sel, self.estado(e), len(e.ed.undo_stack)), ([r], antes, n))
+        # arrastrar: el marco sigue al puntero mientras se arrastra
+        destino = QPointF(borde.x() + 200, borde.y() + 160)
+        e.prensar(borde)
+        self.assertEqual(e.arrastre["tipo"], "marco")
+        e.mover(destino)
+        c1 = cajas_parciales(e.M)[r]
+        self.assertEqual((c1["x0"], c1["y0"]), (c0["x0"] + 200, c0["y0"] + 160), "se ve moverse, a la rejilla")
+        self.assertEqual(self.estado(e), antes, "sin soltar, el modelo y la presentación no cambian")
+        e.soltar(destino)
+        c1 = cajas_parciales(e.M)[r]
+        self.assertEqual((c1["x0"], c1["y0"], len(e.ed.undo_stack)), (c0["x0"] + 200, c0["y0"] + 160, n + 1))
+        self.assertEqual(posiciones_modelo(e)[r], (c1["x0"] - 100, c1["y0"]))
+        despues = self.estado(e)
+        e.deshacer()
+        self.assertEqual((self.estado(e), cajas_parciales(e.M)[r]), (antes, c0))
+        e.rehacer()
+        self.assertEqual(self.estado(e), despues)
+        # no encima de otro elemento ni del marco de otro parcial: vuelve a su sitio con el aviso
+        e.colocar("etapa", QPointF(c1["x0"] + 600, c1["y0"] + 40))
+        otra = e.sel[0]
+        n, antes = len(e.ed.undo_stack), self.estado(e)
+        c1 = cajas_parciales(e.M)[r]
+        origen = QPointF(c1["x0"], c1["y0"] + 60)
+        e.prensar(origen)
+        sobre = QPointF(centro(e.M, otra).x() - 90, origen.y())  # el marco taparía a la etapa
+        e.mover(sobre)
+        self.assertTrue(e.diagrama.prohibidos, "en rojo mientras tapa algo")
+        e.soltar(sobre)
+        self.assertEqual((self.estado(e), len(e.ed.undo_stack), e.mensaje), (antes, n, "No se puede poner encima de otro elemento"))
+        # el marco de otro parcial (otro recinto vacío): tampoco, aunque no tape ninguna etapa
+        r2 = e.anadir_recinto(h)
+        otro = cajas_parciales(e.M)[r2]
+        n, antes = len(e.ed.undo_stack), self.estado(e)
+        c1 = cajas_parciales(e.M)[r]
+        origen = QPointF(c1["x0"], c1["y0"] + 60)
+        e.prensar(origen)
+        sobre = QPointF(otro["x0"] - 90, otro["y0"] + 20 + 60)  # la mitad de un marco sobre la mitad del otro
+        e.mover(sobre)
+        self.assertTrue(e.diagrama.prohibidos)
+        e.soltar(sobre)
+        self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
+        # el de un parcial con etapas solo se selecciona: no se arrastra
+        self.soltar_ficha("etapa", QPointF((c1["x0"] + c1["x1"]) / 2, (c1["y0"] + c1["y1"]) / 2))
+        c2 = cajas_parciales(e.M)[r]
+        antes = self.estado(e)
+        e.seleccionar([])
+        e.prensar(QPointF(c2["x0"], (c2["y0"] + c2["y1"]) / 2))
+        self.assertEqual((e.sel, e.arrastre), ([r], None))
+        e.mover(QPointF(c2["x0"] + 100, c2["y0"] + 100))
+        e.soltar(QPointF(c2["x0"] + 100, c2["y0"] + 100))
+        self.assertEqual(self.estado(e), antes)
+
+    def test_SEDI189_las_condiciones_de_una_accion_se_leen_en_el_parcial_de_su_etapa(self):
+        """REQ-ACT-01, REQ-MOD-07: la condición, el valor o el evento de una acción se comprueban con los nombres del parcial de
+        su etapa y no con los del raíz: «XZ» es ambigua en el raíz si hay una etapa Z en dos recintos, pero vale en el recinto de
+        cada una; la acción de esa etapa se completa y pasa al modelo."""
+        from escritorio.diagrama import cajas_parciales
+        w, e = self.vacio()
+        zs = []
+        for y in (60, 500):
+            e.colocar("encapsulante", QPointF(260, y))
+            r = e.anadir_recinto(e.sel[0])
+            c = cajas_parciales(e.M)[r]
+            e.colocar("etapa", QPointF((c["x0"] + c["x1"]) / 2, (c["y0"] + c["y1"]) / 2))
+            self.assertIsNone(e.renombrar(e.sel[0], "Z"))
+            zs.append((e.sel[0], r))
+        (z1, r1), (z2, r2) = zs
+        self.assertEqual((e.nombres[z1], e.nombres[z2]), ("R1.Z", "R2.Z"))
+        self.assertEqual((e._texto_valido("XZ"), e._texto_valido("XZ", r1), e._texto_valido("XZ", r2)), (False, True, True))
+        e.nueva_variable("Q", "output")
+        datos = {"tipo": "condicionada", "variable": "Q", "condicion": "XZ"}
+        self.assertEqual((e.faltan(datos), e.faltan(datos, r1)), (["condición"], []))
+        self.assertIsNone(e._revisar_textos({**datos, "tipo": "evento", "evento": "↑XZ"}, r1))
+        self.assertIn("no es válido", e._revisar_textos({**datos, "tipo": "evento", "evento": "↑XZ"}))
+        # la acción de la etapa Z del primer recinto, con su condición, es una acción del modelo (no un borrador)
+        self.assertIsNone(e.poner_accion(z1, datos))
+        (acc,) = e.ed.model["actions"]
+        self.assertEqual((acc["stepRef"], e.ed.draft_actions()), (z1, []))
+        condicion = next(x for x in e.ed.model["expressions"] if x["id"] == acc["conditionRef"])
+        self.assertEqual(list(condicion["bindings"].values()), [z1], "la Z del recinto de la etapa, y no la del otro")
+        self.assertEqual(e._parcial(acc["id"]), r1, "y su ámbito es el de su parcial")
+        # escribir su condición con el panel (poner_texto_accion) también usa ese ámbito: sigue siendo una acción del modelo
+        self.assertIsNone(e.poner_texto_accion(acc["id"], "condicion", "XZ"))
+        self.assertEqual((len(e.ed.model["actions"]), e.ed.draft_actions()), (1, []))
+        # cambiarla a «por evento» la deja como borrador unido a la etapa; al completar valor y evento, vuelve al modelo
+        e.tipo_accion(acc["id"], "evento")
+        (b,) = e.ed.draft_actions()
+        self.assertIsNone(e.poner_texto_accion(b["id"], "valor", "1"))
+        self.assertEqual(len(e.ed.draft_actions()), 1)
+        self.assertIsNone(e.poner_texto_accion(b["id"], "evento", "↑XZ"))
+        self.assertEqual(e.ed.draft_actions(), [], "el evento se lee en el ámbito del recinto y la acción se completa")
+        (nueva,) = e.ed.model["actions"]
+        self.assertEqual((nueva["stepRef"], e.datos_accion(nueva["id"])["tipo"]), (z1, "evento"))
+
+    def test_SEDI190_el_ejemplo_forzado_construido_solo_con_gestos_simula_como_el_del_constructor(self):
+        """REQ-JER-02, REQ-EDT-02, REQ-SIM-03: el ejemplo «forzado» rehecho con gestos del editor (fichas, enlaces,
+        «Añadir debajo», recinto con «Añadir recinto…», «Forzar un parcial…»; sin llamar a add_force) simula igual, paso a
+        paso, que el del constructor: mientras H está activa, el parcial G no evoluciona aunque se pulsen a, b o c; al quitar f
+        se retira la orden y G sigue desde B."""
+        from escritorio.diagrama import anclas, cajas_parciales
+        from grafcet.examples import EJEMPLOS
+        from grafcet.view import Vista
+        w, e = self.vacio()
+        e.pedir_texto = lambda *args: "G"
+
+        def enlazar(origen, destino):
+            pa = next(q for q in anclas(e.M, origen) if q["lado"] == "abajo")["pos"]
+            pb = next(q for q in anclas(e.M, destino) if q["lado"] == "arriba")["pos"]
+            e.prensar(pa)
+            e.mover(pb)
+            e.soltar(pb)
+        # el raíz: H2 -t1(f)-> H -t2(NOT f)-> H2
+        e.colocar("etapa", QPointF(260, 60))
+        h2 = e.sel[0]
+        e.tipo_etapa(h2, True)
+        e.colocar("transicion", QPointF(260, 140))
+        t1 = e.sel[0]
+        e.colocar("etapa", QPointF(260, 220))
+        h = e.sel[0]
+        e.colocar("transicion", QPointF(260, 300))
+        t2 = e.sel[0]
+        for origen, destino in ((h2, t1), (t1, h), (h, t2), (t2, h2)):
+            enlazar(origen, destino)
+        # una encapsulante inicial con su recinto G (que se rellena soltando A y con «Añadir debajo»): A -ta-> B -tb-> C -tc-> A
+        e.colocar("encapsulante", QPointF(260, 460))
+        e0 = e.sel[0]
+        e.tipo_etapa(e0, True)
+        g = e.anadir_recinto(e0)
+        c = cajas_parciales(e.M)[g]
+        e.colocar("etapa", QPointF((c["x0"] + c["x1"]) / 2, (c["y0"] + c["y1"]) / 2))
+        a = e.sel[0]
+        e.tipo_etapa(a, True)
+        e.sel = [a]
+        b = e.anadir_debajo()
+        e.sel = [b]
+        cc = e.anadir_debajo()
+        origen = next(q for q in anclas(e.M, cc) if q["lado"] == "abajo")
+        e.crear_desde(origen, QPointF(500, 900))
+        tc = e.sel[0]
+        enlazar(tc, a)
+        ta = next(t["id"] for t in e.ed.model["transitions"] if a in t["preRefs"])
+        tb = next(t["id"] for t in e.ed.model["transitions"] if b in t["preRefs"])
+        self.assertEqual({e.parcial_de(i) for i in (a, b, cc, ta, tb, tc)}, {g}, "todo lo de dentro es del recinto")
+        for sid, nombre in ((h2, "H2"), (h, "H"), (a, "A"), (b, "B"), (cc, "C"), (e0, "E0")):
+            self.assertIsNone(e.renombrar(sid, nombre))
+        for tid, cond in ((t1, "f"), (t2, "NOT f"), (ta, "a"), (tb, "b"), (tc, "c")):
+            e.poner_condicion(tid, cond, crear=True)
+        # la orden, con el botón derecho en H y el diálogo (sustituido): G{B}
+        pedidas = []
+        e.pedir_forzado = lambda datos: pedidas.append(datos) or {"destino": g, "forma": "explicit", "etapas": [b]}
+        fid = dict(e.menu(centro(e.M, h)))["Forzar un parcial…"]()
+        self.assertEqual((pedidas[0]["destinos"], pedidas[0]["etapas"][g]), ([(g, "recinto G")], [(a, "A"), (b, "B"), (cc, "C")]))
+        self.assertEqual((e.mensaje, [f["id"] for f in e.ed.model["forces"]]), ("Orden: H fuerza G a {B}.", [fid]))
+        self.assertIn("G{B}", self.textos_dibujo(w))
+        self.assertEqual([d for d in e.diagnosticos() if d["blocks"]], [])
+        self.assertTrue(e.ed.validate().can_simulate)
+        # lo mismo que el ejemplo del constructor, con los mismos nombres: en la situación solo sobra la encapsulante E0
+        construir = EJEMPLOS["forzado"][2]
+        modelo, disposicion = construir()
+        ref = Vista("ref", "t", "", lambda: (modelo, disposicion), e.opciones)
+        mio = e.vista
+        ids = {v["name"]: v["id"] for v in e.ed.model["variables"]}
+        ids_ref = {v["name"]: v["id"] for v in ref.doc["variables"]}
+
+        def situacion(v):
+            return sorted(n for n in (v.names.get(i, i) for i in v.state()["situation"]) if n != "E0")
+
+        def mover(v, var, valor):
+            v.act("fijar", {"cambios": {(ids if v is mio else ids_ref)[var]: valor}})
+        self.assertEqual((situacion(mio), situacion(ref)), (["A", "H2"], ["A", "H2"]))
+        guion = [("f", True), ("a", None), ("b", None), ("c", None), ("f", False), ("b", None), ("c", None), ("a", None),
+                 ("f", True), ("a", None), ("b", None), ("f", False), ("a", None), ("b", None), ("b", None), ("c", None)]
+        vistas = []
+        for var, valor in guion:
+            for v in (mio, ref):
+                if valor is None:  # un pulso
+                    mover(v, var, True)
+                    mover(v, var, False)
+                else:
+                    mover(v, var, valor)
+            vistas.append(situacion(mio))
+            self.assertEqual(situacion(mio), situacion(ref), (var, valor))
+        self.assertIn(["B", "H"], vistas, "con f, H activa y G forzado a B")
+        self.assertIn(["C", "H2"], vistas, "sin la orden, G sigue desde B")
+
+    def test_SEDI191_el_ejemplo_forzado_abierto_se_edita_su_orden_con_el_menu_y_simula_igual(self):
+        """REQ-JER-02, REQ-EDT-05, REQ-SIM-03: sobre el ejemplo «forzado» del constructor, el botón derecho en la caja «G{B}»
+        edita la orden (otra forma, otras etapas) y la quita; volver a ponerla con «Forzar un parcial…» en H deja un modelo que
+        simula igual que el original; todo se deshace de una vez por operación."""
+        from grafcet.examples import EJEMPLOS
+        from grafcet.view import Vista
+        w = self.w
+        w.cargar_ejemplo("forzado")
+        e = w.edicion
+        e.ed.dirty = False
+        original = Vista("o", "t", "", lambda: EJEMPLOS["forzado"][2](), e.opciones)
+        (f0,) = e.ed.model["forces"]
+        self.assertEqual(e.descripcion_jerarquia(f0["id"]), "Orden: H fuerza G a {B}")
+        pc = self.centro_orden(w, f0["id"])
+        self.assertEqual([t for t, _ in e.menu(pc)], ["Editar orden de forzado…", "Quitar orden de forzado"])
+        # editar: «Vacía» y luego «La situación actual»; el parcial G de los ejemplos aparece por su nombre
+        vistos = []
+        e.pedir_forzado = lambda datos: vistos.append(datos) or {"destino": "G", "forma": "empty", "etapas": []}
+        n = len(e.ed.undo_stack)
+        e.editar_orden(f0["id"])
+        self.assertEqual(vistos[0]["actual"], {"destino": "G", "forma": "explicit", "etapas": ["B"]})
+        self.assertEqual([x for _, x in vistos[0]["destinos"]], ["G"])
+        self.assertEqual((e.ed.model["forces"][0]["targetKind"], len(e.ed.undo_stack)), ("empty", n + 1))
+        self.assertIn("G{ }", self.textos_dibujo(w))
+        e.deshacer()
+        self.assertEqual(e.ed.model["forces"], [f0])
+        # quitar con el menú, y volver a poner la misma orden desde la etapa H
+        self.assertTrue(dict(e.menu(self.centro_orden(w, f0["id"])))["Quitar orden de forzado"]())
+        self.assertEqual((e.ed.model["forces"], w.diagrama.cajas_ordenes), ([], []))
+        e.pedir_forzado = lambda datos: {"destino": "G", "forma": "explicit", "etapas": ["B"]}
+        nueva = dict(e.menu(centro(e.M, "H")))["Forzar un parcial…"]()
+        (f1,) = e.ed.model["forces"]
+        self.assertEqual({k: v for k, v in f1.items() if k != "id"}, {k: v for k, v in f0.items() if k != "id"})
+        mio = e.vista
+        ids = {v["name"]: v["id"] for v in e.ed.model["variables"]}
+        ids_o = {v["name"]: v["id"] for v in original.doc["variables"]}
+        self.assertEqual(f1["id"], nueva)
+        for var, valor in (("f", True), ("a", None), ("b", None), ("f", False), ("b", None), ("c", None), ("f", True), ("c", None)):
+            for v, tabla in ((mio, ids), (original, ids_o)):
+                if valor is None:
+                    v.act("fijar", {"cambios": {tabla[var]: True}})
+                    v.act("fijar", {"cambios": {tabla[var]: False}})
+                else:
+                    v.act("fijar", {"cambios": {tabla[var]: valor}})
+            self.assertEqual(sorted(mio.state()["situation"]), sorted(original.state()["situation"]), (var, valor))
+
+    def test_SEDI192_dialogo_de_la_orden_de_forzado_con_nombres_formas_y_etapas(self):
+        """REQ-JER-02, REQ-EDT-09: el diálogo de «Forzar un parcial…» (el de la ventana, sustituible) ofrece los parciales por su
+        nombre, las cuatro formas con sus términos y, solo con la forma Explícita, las etapas del parcial elegido con casilla;
+        devuelve los ID de lo elegido; al editar parte de los valores actuales; ningún texto lleva IDs; el gancho de la
+        edición lo abre y cancelar devuelve None."""
+        from PySide6.QtWidgets import QDialog
+        from escritorio.ventana import DialogoForzado
+        w, e, d = self.con_recinto()
+        h, r, a, b = d["h"], d["r"], d["a"], d["b"]
+        mid = e.poner_macro(QPointF(260, 600))
+        x = e.ed.macro_info(mid)
+        dlg = DialogoForzado(w, e._datos_forzado(h))
+        self.assertEqual(dlg.windowTitle(), "Forzar un parcial")
+        self.assertEqual([dlg.destino.itemText(i) for i in range(dlg.destino.count())], ["recinto R", "expansión de M1"])
+        self.assertEqual([bt.text() for bt in dlg.formas.values()], ["Explícita", "La situación actual", "Vacía", "Inicial"])
+        self.assertEqual(dlg.resultado(), {"destino": r, "forma": "explicit", "etapas": []}, "por defecto, explícita y sin etapas")
+        items = [dlg.etapas.item(i) for i in range(dlg.etapas.count())]
+        self.assertEqual([it.text() for it in items], ["A", "B"])
+        self.assertTrue(dlg.etapas.isEnabled())
+        items[1].setCheckState(Qt.CheckState.Checked)
+        self.assertEqual(dlg.resultado(), {"destino": r, "forma": "explicit", "etapas": [b]})
+        # otra forma: las etapas se deshabilitan y no se devuelven
+        dlg.formas["current"].setChecked(True)
+        self.assertEqual((dlg.etapas.isEnabled(), dlg.resultado()), (False, {"destino": r, "forma": "current", "etapas": []}))
+        # otro parcial: su lista de etapas, sin marcar
+        dlg.destino.setCurrentIndex(1)
+        dlg.formas["explicit"].setChecked(True)
+        self.assertEqual([dlg.etapas.item(i).text() for i in range(dlg.etapas.count())], ["E1", "S1"])
+        dlg.etapas.item(0).setCheckState(Qt.CheckState.Checked)
+        self.assertEqual(dlg.resultado(), {"destino": x.partial, "forma": "explicit", "etapas": [x.entry]})
+        textos = [dlg.destino.itemText(i) for i in range(dlg.destino.count())] + [bt.text() for bt in dlg.formas.values()]
+        textos += [dlg.etapas.item(i).text() for i in range(dlg.etapas.count())]
+        self.assertTrue(all(self.sin_ids(t) for t in textos))
+        # al editar: parte de la orden actual
+        e.pedir_forzado = lambda datos: {"destino": r, "forma": "explicit", "etapas": [a, b]}
+        fid = e.forzar(h)
+        orden = e.ed.model["forces"][0]
+        dlg = DialogoForzado(w, e._datos_forzado(h, orden))
+        self.assertEqual(dlg.windowTitle(), "Editar orden de forzado")
+        self.assertEqual((dlg.destino.currentData(), [dlg.etapas.item(i).checkState() for i in range(2)]),
+                         (r, [Qt.CheckState.Checked] * 2))
+        self.assertEqual(dlg.resultado(), {"destino": r, "forma": "explicit", "etapas": [a, b]})
+        dlg = DialogoForzado(w, e._datos_forzado(h, {**orden, "targetKind": "initial"}))
+        self.assertTrue(dlg.formas["initial"].isChecked() and not dlg.etapas.isEnabled())
+        # el gancho de la edición es el de la ventana (`_pedir_forzado`): abre el diálogo y devuelve lo elegido, o None
+        e.pedir_forzado = lambda datos: w._pedir_forzado(datos)
+        with mock.patch.object(DialogoForzado, "exec", return_value=QDialog.DialogCode.Accepted):
+            self.assertEqual(e.pedir_forzado(e._datos_forzado(h, orden)), {"destino": r, "forma": "explicit", "etapas": [a, b]})
+        with mock.patch.object(DialogoForzado, "exec", return_value=QDialog.DialogCode.Rejected):
+            n = len(e.ed.undo_stack)
+            self.assertIsNone(e.editar_orden(fid))
+            self.assertEqual(len(e.ed.undo_stack), n)
+
+    # -- correcciones de la ronda B3 -----------------------------------------------------------------------------------
+    def test_SEDI194_la_macroetapa_unida_a_una_barra_se_ve_unida_a_ella_en_el_editor(self):
+        """REQ-JER-04, REQ-MOD-03, REQ-EDT-02: una etapa y una macroetapa unidas con el ratón por encima de una barra Y, y la
+        barra por encima de una transición, dejan la transición con las dos como etapas anteriores; la vista y el dibujo la
+        muestran unida a la barra (su conector se dibuja y el ratón lo encuentra) y sin enlace directo a la transición."""
+        from escritorio.diagrama import barra as caja_barra, elemento_en, posiciones
+        w, e = self.vacio()
+        e.colocar("etapa", QPointF(360, 60))
+        a = e.sel[0]
+        mid = e.poner_macro(QPointF(460, 60))
+        e.colocar("transicion", QPointF(410, 300))
+        t1 = e.sel[0]
+        b = e.poner_barra(QPointF(410, 160), "Y")
+        e.unir({"id": b, "lado": "arriba"}, {"id": a, "lado": "abajo"})
+        e.unir({"id": b, "lado": "arriba"}, {"id": mid, "lado": "abajo"})
+        e.unir({"id": b, "lado": "abajo"}, {"id": t1, "lado": "arriba"})
+        self.assertEqual(e.ed.get(t1)["preRefs"], [a, mid], "el modelo: las dos son anteriores a la transición")
+        (bv,) = e.M["bars"]
+        self.assertEqual((bv["arriba"], bv["abajo"]), ([a, mid], [t1]), "la vista lleva la macroetapa en la barra")
+        tr = next(t for t in e.M["transitions"] if t["id"] == t1)
+        self.assertEqual((tr["pre"], tr["preDib"]), ([a, mid], []), "y no la dibuja directa a la transición")
+        enlaces_ = {x["id"]: x for x in e.M["links"]}
+        self.assertTrue({f"{b}|{a}|barra", f"{b}|{mid}|barra", f"{b}|{t1}|barra"} <= set(enlaces_))
+        self.assertFalse([i for i in enlaces_ if i in (f"{t1}|{a}|pre", f"{t1}|{mid}|pre")])
+        # el dibujo pinta el conector de la macroetapa a la barra (de su centro a la barra), y el ratón lo encuentra
+        ex, ey = posiciones(e.M)[mid]
+        pts = enlaces_[f"{b}|{mid}|barra"]["pts"]
+        self.assertEqual((tuple(pts[0]), pts[-1][1]), ((ex, ey), caja_barra(bv)[1]))
+        trazo = [q for i, q in enumerate(pts) if i == 0 or tuple(q) != tuple(pts[i - 1])]  # (Qt junta los puntos repetidos)
+        pintados = [it for it in w.diagrama.scene().items() if hasattr(it, "path") and it.path().elementCount() == len(trazo)
+                    and all(abs(it.path().elementAt(i).x - trazo[i][0]) < 1e-6 and abs(it.path().elementAt(i).y - trazo[i][1]) < 1e-6
+                            for i in range(len(trazo)))]
+        self.assertTrue(pintados, "el conector de la macroetapa a la barra está en el dibujo")
+        self.assertEqual(elemento_en(e.M, QPointF(ex, ey + 40)), f"{b}|{mid}|barra")
+        # y se quita como cualquier unión a una barra: el conector seleccionado y Supr
+        e.seleccionar([f"{b}|{mid}|barra"])
+        self.assertTrue(e.borrar())
+        self.assertEqual((e.ed.get(t1)["preRefs"], e.M["bars"][0]["arriba"]), ([a], [a]))
+        e.deshacer()
+        self.assertEqual(e.ed.get(t1)["preRefs"], [a, mid])
+
+    def test_SEDI195_un_enlace_soltado_en_el_borde_o_el_nombre_de_un_marco_abre_la_rama_como_en_un_hueco(self):
+        """REQ-EDT-02, REQ-EDT-03: soltar el enlace que sale de un punto de unión en el borde o en el nombre del marco de un
+        parcial (que se selecciona con el ratón, pero no es un elemento al que unir nada) se trata como soltarlo en un hueco:
+        abre una rama, con el elemento que sigue, en el parcial del que sale; antes no hacía nada ni avisaba."""
+        from escritorio.diagrama import anclas, cajas_parciales, elemento_en
+        w, e, d = self.con_recinto()
+        h, r = d["h"], d["r"]
+        c = cajas_parciales(e.M)[r]
+        for gesto, punto in (("el borde", QPointF(c["x0"], c["y0"] + 10)), ("el nombre", QPointF(c["x0"] + 40, c["y1"] + 4))):
+            self.assertEqual(elemento_en(e.M, punto), r, gesto)
+            antes, n = len(e.ed.model["transitions"]), len(e.ed.undo_stack)
+            origen = next(q for q in anclas(e.M, h) if q["lado"] == "abajo")
+            e.prensar(origen["pos"])
+            e.mover(punto)
+            e.soltar(punto)
+            self.assertEqual((len(e.ed.model["transitions"]), len(e.ed.undo_stack)), (antes + 1, n + 1), gesto)
+            nueva = next(t for t in e.ed.model["transitions"] if t["id"] == e.sel[0])
+            self.assertEqual((nueva["preRefs"], nueva["partialRef"]), ([h], "g"), f"{gesto}: una rama que sale de H, en su parcial")
+            self.assertTrue(e.mensaje_info and "Rama abierta" in e.mensaje)
+            e.deshacer()
+        # lo mismo desde una transición: lo que sigue es una etapa, y es del parcial de la transición
+        e.colocar("transicion", QPointF(700, 60))
+        t = e.sel[0]
+        origen = next(q for q in anclas(e.M, t) if q["lado"] == "abajo")
+        n = len(e.ed.model["steps"])
+        punto = QPointF(c["x0"], c["y0"] + 10)
+        e.prensar(origen["pos"])
+        e.mover(punto)
+        e.soltar(punto)
+        self.assertEqual(len(e.ed.model["steps"]), n + 1)
+        self.assertEqual(e.ed.get(t)["postRefs"], [e.sel[0]])
+        # desde el punto de una acción suelta, un marco tampoco es una etapa: el mismo aviso que en un hueco
+        e.colocar("accion", QPointF(900, 200))
+        ac = e.sel[0]
+        origen = next(q for q in anclas(e.M, ac) if q["lado"] == "izq")
+        antes = self.estado(e)
+        nombre = QPointF(c["x0"] + 40, c["y1"] + 4)  # (en el borde se acaba de crear una etapa: aquí no hay nada)
+        self.assertEqual(elemento_en(e.M, nombre), r)
+        e.prensar(origen["pos"])
+        e.mover(nombre)
+        e.soltar(nombre)
+        self.assertEqual(self.estado(e), antes)
+        self.assertTrue(e.mensaje and not e.mensaje_info and "etapa" in e.mensaje, e.mensaje)
+
+    def test_SEDI196_borrar_avisa_de_las_ordenes_y_los_recintos_que_pierden_etapas(self):
+        """REQ-EDT-05, REQ-JER-02, REQ-JER-05: el aviso de borrado enseña, con nombres, el recinto que pierde su enlace de
+        activación y la orden de forzado que pierde etapas («pierde la etapa B»; si no le queda ninguna, «pasa a ser una orden
+        explícita sin etapas: fuerza el parcial a vacío»); pregunta aunque no haya nada más que avisar; el borrado sigue
+        siendo el del núcleo (queda el conjunto reducido) y se deshace de una vez."""
+        from PySide6.QtWidgets import QMessageBox
+        w, e, d = self.con_recinto()
+        h, r, a, b = d["h"], d["r"], d["a"], d["b"]
+        e.enlace_activacion(a)
+        e.enlace_activacion(b)
+        e.pedir_forzado = lambda datos: {"destino": r, "forma": "explicit", "etapas": [a, b]}
+        fid = e.forzar(h)
+        preguntas = []
+        e.confirmar_borrado = lambda plan: preguntas.append(plan) or False
+        # una etapa de las dos: la orden pierde una etapa y el recinto una marca; cancelar no cambia nada
+        antes = self.estado(e)
+        e.seleccionar([b])
+        self.assertFalse(e.borrar())
+        self.assertEqual((self.estado(e), len(preguntas)), (antes, 1))
+        self.assertEqual(e.avisos_borrado(preguntas[0]), ["el recinto R pierde su enlace de activación en B",
+                                                         "la orden R{A,B} de H pierde la etapa B"])
+        textos = []
+        e.confirmar_borrado = w._confirmar_borrado
+        with mock.patch("escritorio.ventana.QMessageBox.question",
+                        side_effect=lambda *args: textos.append(args[2]) or QMessageBox.StandardButton.Yes):
+            self.assertTrue(e.borrar())
+        self.assertTrue(self.sin_ids(textos[0]), textos[0])
+        self.assertIn("También cambia la jerarquía:", textos[0])
+        self.assertIn("• El recinto R pierde su enlace de activación en B.", textos[0])
+        self.assertIn("• La orden R{A,B} de H pierde la etapa B.", textos[0])
+        self.assertNotIn("sin etapas", textos[0])
+        # el borrado en sí no cambia: queda el conjunto reducido
+        m = e.ed.model
+        self.assertEqual((m["forces"][0]["targetSteps"], m["hierarchy"]["enclosures"][0]["activationRefs"]), ([a], [a]))
+        e.deshacer()
+        self.assertEqual(self.estado(e), antes)
+        # las dos: la orden se queda sin etapas, y lo dice
+        e.confirmar_borrado = w._confirmar_borrado
+        e.seleccionar([a, b])
+        textos.clear()
+        with mock.patch("escritorio.ventana.QMessageBox.question",
+                        side_effect=lambda *args: textos.append(args[2]) or QMessageBox.StandardButton.Yes):
+            self.assertTrue(e.borrar())
+        self.assertTrue(self.sin_ids(textos[0]), textos[0])
+        self.assertIn("• La orden R{A,B} de H pierde las etapas A, B y pasa a ser una orden explícita sin etapas: "
+                      "fuerza el parcial a vacío.", textos[0])
+        self.assertIn("• El recinto R pierde su enlace de activación en A, B.", textos[0])
+        self.assertEqual((e.ed.model["forces"][0]["targetKind"], e.ed.model["forces"][0]["targetSteps"],
+                          e.ed.model["hierarchy"]["enclosures"][0]["activationRefs"]), ("explicit", [], []))
+        e.deshacer()
+        self.assertEqual(self.estado(e), antes)
+        # una etapa suelta del recinto con enlace de activación y nada más que avisar: también pregunta
+        from escritorio.diagrama import cajas_parciales
+        c = cajas_parciales(e.M)[r]
+        e.colocar("etapa", QPointF(c["x1"] + 30, c["y0"] + 40))
+        suelta = e.sel[0]
+        e.enlace_activacion(suelta)
+        preguntas.clear()
+        e.confirmar_borrado = lambda plan: preguntas.append(plan) or False
+        e.seleccionar([suelta])
+        self.assertFalse(e.borrar())
+        self.assertEqual(len(preguntas), 1)
+        self.assertEqual((preguntas[0]["elements"], preguntas[0]["affectedTransitions"]), ([suelta], []))
+        self.assertEqual(e.avisos_borrado(preguntas[0]), ["el recinto R pierde su enlace de activación en " + e.nombres[suelta]])
+        # una etapa que ninguna orden ni recinto marca se borra sin preguntar, como siempre
+        preguntas.clear()
+        e.colocar("etapa", QPointF(260, 700))
+        e.seleccionar([e.sel[0]])
+        self.assertTrue(e.borrar())
+        self.assertEqual(preguntas, [])
+
+    def test_SEDI197_un_borrado_rechazado_deja_la_marca_de_cambios_como_estaba(self):
+        """REQ-EDT-05, REQ-EDT-10: si `borrar` se rechaza (la entrada de una expansión sola, junto a una barra que ya se había
+        quitado) se deshace todo y la marca de cambios sin guardar vuelve a lo que era: no queda como modificado un
+        documento que no cambió."""
+        w, e = self.vacio()
+        mid = e.poner_macro(QPointF(260, 220))
+        x = e.ed.macro_info(mid)
+        barra = e.poner_barra(QPointF(700, 100), "Y")
+        antes = self.estado(e)
+        for sucio in (False, True):
+            e.ed.dirty = sucio
+            e.sel = [barra, x.entry]
+            self.assertFalse(e.borrar())
+            self.assertEqual((e.ed.dirty, self.estado(e)), (sucio, antes), f"antes dirty={sucio}")
+            self.assertTrue(e.mensaje and not e.mensaje_info and self.sin_ids(e.mensaje))
+        # y un borrado que sí se hace la marca
+        e.ed.dirty = False
+        e.sel = [barra]
+        self.assertTrue(e.borrar())
+        self.assertTrue(e.ed.dirty)
 
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
