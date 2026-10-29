@@ -1,5 +1,6 @@
 import time
 import unittest
+import threading
 
 from conexion.coordinador import Coordinador
 from conexion.configuracion import Configuracion, Senal
@@ -17,6 +18,44 @@ def esperar(c, condicion, ejecutar=False):
 
 
 class CicloTests(unittest.TestCase):
+    def test_SFIO21_reinicio_descarta_lectura_pendiente_sin_cerrar_tcp(self):
+        """REQ-SIM-04: reinicio de ejecución independiente del transporte externo."""
+        bloquear, iniciada, liberar = threading.Event(), threading.Event(), threading.Event()
+        def responder(p):
+            if p[0] == 2:
+                if bloquear.is_set():
+                    iniciada.set()
+                    liberar.wait(1)
+                return b"\x02\x01\x01"
+            return p[:5]
+        with servidor(responder) as sc:
+            m = M().var("sensor").var("motor", "output").step("E0", True)
+            m.cont("E0", "motor", "sensor")
+            cfg = Configuracion(puerto=sc.puerto, periodo_ms=20, timeout_ms=2000,
+                                senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            c = Coordinador()
+            try:
+                c.iniciar(cfg, session(m.compile()))
+                esperar(c, lambda: c.estado == "conectado")
+                socket = c.cliente._socket
+                bloquear.set()
+                esperar(c, iniciada.is_set)
+                nueva = c.adaptador.sesion.restart("reinicio1")
+                c.reiniciar(nueva)
+                ultima = nueva.restart("reinicio2")
+                c.reiniciar(ultima)
+                liberar.set()
+                esperar(c, lambda: not c.reiniciando)
+                self.assertIs(c.cliente._socket, socket)
+                self.assertIs(c.adaptador.sesion, ultima)
+                self.assertEqual(c.estado, "conectado")
+                self.assertFalse(ultima.z.values["sensor"])
+                self.assertEqual(c.escritos, {"motor": False})
+                esperar(c, lambda: c.escritos.get("motor") is True, True)
+            finally:
+                liberar.set()
+                c.cerrar()
+
     def test_SFIO15_temporizacion_sin_cambios_sensor(self):
         """REQ-TMP-02: el reloj existente dispara salidas aunque la muestra no cambie."""
         with servidor(lambda p: b"\x02\x01\x01" if p[0] == 2 else p[:5]) as sc:

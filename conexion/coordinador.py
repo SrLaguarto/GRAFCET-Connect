@@ -26,6 +26,9 @@ class Coordinador:
         self.en_marcha = False
         self._ejecutar = False
         self._descartar_lectura = False
+        self._generacion = 0
+        self.reiniciando = False
+        self._cerrado = False
 
     def solicitar_ejecucion(self, ejecutar):
         if ejecutar != self._ejecutar:
@@ -45,7 +48,24 @@ class Coordinador:
         if self.futuro is not None:
             raise RuntimeError("Ya hay una petición Modbus pendiente")
         self.fase = fase
+        self._generacion_peticion = self._generacion
         self.futuro = self.executor.submit(funcion, *args)
+
+    def reiniciar(self, sesion):
+        """Cambia sesión sin cerrar TCP; descarta respuestas de la ejecución anterior."""
+        if self.estado not in ("conectado", "diagnostico") or sesion.cm.revision != self.adaptador.sesion.cm.revision:
+            raise RuntimeError("El reinicio requiere conexión estable y el mismo modelo")
+        adaptador = Adaptador(self.adaptador.config, sesion)
+        valores = adaptador.valores_salida()
+        self._generacion += 1
+        self.adaptador = adaptador
+        self._valores_reinicio = valores
+        self.reiniciando = True
+        self.en_marcha = self._ejecutar = self.fallo_motor = self.cero_pendiente = False
+        self._descartar_lectura = False
+        self.muestra = {}
+        self.estado = "conectado"
+        self.mensaje = "Conectado · reiniciando GRAFCET y salidas iniciales…"
 
     def iniciar(self, config, sesion, prueba=False):
         if self.activo or self.futuro is not None:
@@ -56,6 +76,7 @@ class Coordinador:
         self.mensaje = "Probando conexión…" if prueba else "Conectando; actuadores a cero…"
         self.muestra, self.escritos = {}, {}
         self.fallo_motor = self.cero_pendiente = False
+        self.reiniciando = False
         self.en_marcha = self._ejecutar = self._descartar_lectura = False
         # Calcular valores del motor en el hilo propietario, antes de encolar red.
         cero = self.adaptador.valores_salida(cero=True)
@@ -79,13 +100,16 @@ class Coordinador:
 
     def tick(self, ejecutar=False):
         """Recoger red y aplicar muestras; llamar exclusivamente desde el hilo de sesión."""
-        self.solicitar_ejecucion(ejecutar)
+        if self._cerrado:
+            return
+        self.solicitar_ejecucion(ejecutar and not self.reiniciando)
         if self.futuro is not None and self.futuro.done():
             futuro, fase = self.futuro, self.fase
+            generacion = self._generacion_peticion
             self.futuro = None
             try:
                 resultado = futuro.result()
-                if self.estado != "cerrando":
+                if self.estado != "cerrando" and generacion == self._generacion:
                     if fase == "prueba":
                         self.estado, self.mensaje = "desconectado", "Conexión probada; no se han escrito actuadores"
                     elif fase == "inicio":
@@ -109,10 +133,15 @@ class Coordinador:
                             self.mensaje = "Motor detenido · cero confirmado · desconecte y corrija el diagnóstico"
                     elif fase == "cerrar":
                         self.estado, self.mensaje = "desconectado", "Desconectado · salidas no garantizadas"
+                    elif fase == "reiniciar":
+                        self.escritos, self.muestra = resultado
+                        self.reiniciando = False
+                        self.mensaje = "Conectado · GRAFCET reiniciado · pulse Ejecutar"
             except Exception as exc:
                 # También incluye conversión inválida: no seguir controlando con muestras malas.
                 self.estado, self.mensaje = "error", f"Conexión detenida: {exc}. Salidas no garantizadas."
                 self.en_marcha = False
+                self.reiniciando = False
                 self.cliente.cerrar()  # la petición ya ha terminado
         if self.estado == "cerrando":
             if self.futuro is None:
@@ -122,6 +151,14 @@ class Coordinador:
                     self._enviar("cerrar", self.cliente.cerrar)
             return
         if self.estado not in ("conectado", "diagnostico"):
+            return
+        if self.reiniciando:
+            if self.futuro is None:
+                valores = self._valores_reinicio
+                def reinicio_red():
+                    self._escribir(valores)
+                    return valores, leer_entradas(self.cliente, self.adaptador.entradas)
+                self._enviar("reiniciar", reinicio_red)
             return
         if self.adaptador.sesion.status != "pausada-estable" and not self.fallo_motor:
             self.fallo_motor = self.cero_pendiente = True
@@ -142,6 +179,10 @@ class Coordinador:
 
     def cerrar(self):
         # No destruir un trabajador activo: el cierre se serializa después de la petición.
+        if self._cerrado:
+            return
+        self._cerrado = True
+        self.estado = "desconectado"
         if self.cliente is not None:
             self.executor.submit(self.cliente.cerrar)
         self.executor.shutdown(wait=False, cancel_futures=False)

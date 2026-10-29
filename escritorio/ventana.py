@@ -479,7 +479,7 @@ class Ventana(QMainWindow):
         self.tb_sim = QToolBar("Simulación")
         self.tb_sim.setMovable(False)
         self.tb_sim.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        for a in (self.a_ejecutar, self.a_paso, self.a_completar):
+        for a in (self.a_ejecutar,):
             self.tb_sim.addAction(a)
         self.tb_sim.addSeparator()
         self.tb_sim.addAction(self.a_reiniciar)
@@ -628,6 +628,26 @@ class Ventana(QMainWindow):
         self.a_ejecutar.setChecked(self.v.s is not None and self.v.s.status == "pausada-estable")
 
     def reiniciar(self) -> None:
+        if self.modbus.activo:
+            if self.modbus.estado not in ("conectado", "diagnostico") or not self.v or not self.v.s:
+                self.panel_es.estado.setText("Espera a que termine la operación de conexión antes de reiniciar")
+                return
+            self.a_ejecutar.setChecked(False)
+            nueva = self.v.s.restart(f"reinicio-{time.monotonic_ns()}")
+            if nueva.status != "pausada-estable":
+                self.aviso.setText("No se pudo reiniciar: revisa los diagnósticos del modelo")
+                return
+            try:
+                self.modbus.reiniciar(nueva)
+            except ERRORES as exc:
+                self.aviso.setText(f"No se pudo reiniciar: {exc}")
+                return
+            self.v.s = nueva
+            self.v.start_diags = []
+            self.reloj.restart()
+            self.rt.start()
+            self.refrescar()
+            return
         self._cargar()
 
     # -- edición: modos, herramientas y diálogos ---------------------------------------------------
@@ -660,6 +680,7 @@ class Ventana(QMainWindow):
         if self._salir_de_edicion():
             self.a_ejecutar.setChecked(False)
             self.t_auto.stop()
+            self.rt.stop()
             self.modbus.cerrar()
             event.accept()
         else:
@@ -1062,7 +1083,7 @@ class Ventana(QMainWindow):
     def _tick(self) -> None:
         us = self.reloj.restart() * 1000
         if self.modbus.activo:
-            ejecutar = self.a_ejecutar.isChecked() and self.modbus.estado == "conectado"
+            ejecutar = self.a_ejecutar.isChecked() and self.modbus.estado == "conectado" and not self.modbus.reiniciando
             if ejecutar and self.modbus.en_marcha and self.v and self.v.s and self.v.s.status == "pausada-estable":
                 self.v.s.advance_to(self.v.s.z.time + us)
             self.modbus.tick(ejecutar)

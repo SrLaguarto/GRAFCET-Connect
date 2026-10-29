@@ -1,7 +1,7 @@
 # Estado Modbus — 29-10-2026
 
-Objetivo implementado: conexión directa Factory I/O, pestaña E/S con módulo PLC
-horizontal, digitales y analógicas INT16/UINT16 con escala exacta. Sin puente ni
+Objetivo implementado: conexión directa Factory I/O, botón E/S con panel de
+asignación educativo, digitales y analógicas INT16/UINT16 con escala exacta. Sin puente ni
 dependencias nuevas; núcleo grafcet/ intacto y proyectos anteriores compatibles.
 
 Arquitectura: conexion/ sin Qt, un trabajador de red; sesión exclusiva del hilo
@@ -13,11 +13,12 @@ continuas/memorizadas. Comunicación opcional, desactivada al abrir el programa.
 Políticas (P-IMP-50): pausa conserva estado/salidas; diagnóstico detiene y solicita
 cero; pérdida pausa sin garantizar cero; reconectar solicita cero, lee sensores y
 exige Ejecutar. Probar no escribe. Desconectar manualmente no fuerza cero.
-Al reiniciar/cambiar modelo se desconecta y descartan respuestas pendientes.
+Reiniciar conserva TCP, descarta respuestas anteriores, publica salidas iniciales
+y queda en pausa (P-IMP-56). Cambiar de modelo sí desconecta.
 
 Fases 1–7 COMPLETADAS: transporte digital, mapa/persistencia, adaptador, panel,
 integración Qt, ciclo simulado y analógicas. Fase 8: regresión, guía y portable
-COMPLETADAS; aceptación con una escena real PENDIENTE.
+COMPLETADAS; escena digital real confirmada; analógicas/red reales PENDIENTES.
 
 Archivos: conexion/{__init__,modbus,configuracion,adaptador,coordinador}.py,
 escritorio/{entradas_salidas,ventana}.py, tests/test_modbus*.py, README, docs/04,
@@ -102,8 +103,28 @@ con arranque/captura tanto de ejemplo como del proyecto de dos cintas. Capturas
 finales revisadas y copiadas como Vista_conexion.png y Vista_configuracion.png.
 La carpeta alternativa fallida está marcada NO_USAR; no es la entrega válida.
 
-Siguiente tarea exacta: el responsable revisa la estética y la navegación por
-botón/Atrás. Prueba guiada en botón
-E/S externas → Configuración → Abrir prueba guiada.
+P-IMP-56 IMPLEMENTADA: reinicio de GRAFCET conserva la conexión TCP, sustituye
+sesión mediante Session.restart, invalida respuestas antiguas por generación y
+escribe salidas iniciales; queda en pausa. SFIO16/21 verifican mismo socket,
+reinicio con lectura pendiente y reinicios repetidos. Cierre detiene el QTimer
+y el coordinador deja de aceptar trabajo. Cambiar modelo aún desconecta.
+Nueva estética conforme a última referencia: tres paneles azul oscuro, tarjetas
+arrastrables, canales fijos, LED, asignaciones y contadores. Las listas representan
+variables GRAFCET, no un inventario automático de etiquetas de Factory I/O.
+Paso/Completar recorrido solo en menú Simulación (depuración, sin Modbus).
+
+Enteros del modelo ya disponibles. Transporte BOOL, INT16/UINT16 y decimal con
+escala; no hay FLOAT32 directo ni registros compuestos de 32/64 bits. Digitales
+probadas realmente por el responsable; analógicas solo con servidor simulado.
+Consulta oficial del driver limitada al contrato de E/S y escalado, no a semántica
+GRAFCET: https://docs.factoryio.com/manual/drivers/modbus-server/.
+
+Validación final: 307 pruebas OK (21 Modbus), paquete intacto y trazabilidad
+regenerada. Portable reconstruido y arranque/captura OK; captura de la nueva
+vista revisada y guardada en dist/GRAFCET/Vista_conexion.png.
+
+Siguiente tarea exacta: validar reinicio conectado en la escena del responsable.
+Después validar entradas/salidas analógicas y
+pérdida/reconexión reales. Guía: docs/PRIMERA_CONEXION_FACTORY_IO.md.
 Quedan después pruebas reales de pausa, pérdida de red y analógicas.
 Commits incrementales autorizados; consultar git log. Sin push ni subagentes.

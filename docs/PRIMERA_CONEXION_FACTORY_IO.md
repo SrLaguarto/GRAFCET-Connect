@@ -84,8 +84,8 @@ Factory I/O para esta primera prueba.
 5. No hace falta generar cajas, activar el Emisor ni probar toda la instalación.
    Para detener la planta simulada, usa su control de pausa en Factory I/O.
    Pausa en GrafConnect conserva las salidas: no apaga las cintas. Para repetir
-   desde la etapa 0, pulsa Reiniciar en GrafConnect (desconecta), luego Conectar
-   (solicita cero) y Ejecutar; vuelve a accionar PM.
+   desde la etapa 0, pulsa Reiniciar en GrafConnect: mantiene Modbus conectado y
+   publica las salidas iniciales. Después pulsa Ejecutar y vuelve a accionar PM.
 
 Si PM cambia pero Q00 y Q01 no, comprueba primero que GrafConnect está en Ejecutar.
 Si PM y las salidas cambian pero las cintas no, anota ese resultado: no es el mismo problema que
@@ -123,3 +123,28 @@ Comprobación parcial realizada por Codex el 29-10-2026: el servidor real
 192.168.1.133:502, Esclavo ID 1, respondió a la lectura de Input 0 y Input 1,
 ambos con valor 0 en ese momento. No se escribió ninguna salida. Queda pendiente
 la prueba del pulsador y del movimiento de la cinta desde la interfaz.
+
+## Qué está listo y qué falta verificar
+
+- El responsable ya confirmó el arranque real de las dos cintas con PM.
+- Reiniciar ahora mantiene TCP y vuelve al estado y salidas iniciales; queda en
+  pausa. Falta confirmar esta nueva conducta en la escena real.
+- Paso y Completar recorrido están en el menú Simulación para depurar sin Modbus:
+  Paso avanza una evolución; Completar termina un recorrido pendiente. No son
+  necesarios para controlar la escena y no aparecen en la barra principal.
+- Se pueden crear variables **Enteras** y **Decimales**. Para enviarlas deben tener
+  papel **Salida**, asignarse a un canal numérico AQ y al Holding Register del
+  actuador correspondiente. Los sensores numéricos se leen por AI/Input Registers.
+- El transporte admite INT16 (−32768…32767), UINT16 (0…65535) y decimales escalados.
+  El modelo admite enteros más grandes, pero no todos caben en un registro Modbus.
+  No se redondea ni se recorta automáticamente.
+- En las capturas iniciales de tu driver, las cantidades de registros numéricos
+  estaban a 0. Para probar números, habilita registros en Factory I/O y asigna
+  un sensor/actuador numérico de la escena. Añadir una variable Entera en
+  GrafConnect por sí solo no crea ese canal en Factory I/O.
+- Para una consigna decimal 3,14 con escala 100 se envía el registro 314. La escala
+  configurada en el driver Factory I/O debe ser coherente con la del mapa. Factory
+  recibe direcciones y valores, no nombres de variables ni acciones GRAFCET.
+- Analógicas probadas con servidor simulado; quedan por validar con tu escena,
+  junto con pérdida de red y reconexión. No se ha implementado FLOAT32 directo ni
+  números de 32/64 bits repartidos entre varios registros.

@@ -1,6 +1,6 @@
 """Conexión de E/S: variables laterales y asignación sobre un módulo central."""
-from PySide6.QtCore import Signal, Qt, QMimeData
-from PySide6.QtGui import QIcon, QPixmap, QColor
+from PySide6.QtCore import Signal, Qt, QMimeData, QSize
+from fractions import Fraction
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
@@ -39,21 +39,43 @@ class TerminalES(QFrame):
         self.panel, self.area, self.direccion, self.variable = panel, area, direccion, variable
         self.setAcceptDrops(not panel.bloqueado)
         self.setObjectName("senalPLC")
-        self.setMinimumWidth(165)
-        self.setFixedHeight(36)
+        self.setMinimumWidth(205)
+        self.setFixedHeight(60)
         l = QHBoxLayout(self)
         l.setContentsMargins(7, 2, 7, 2)
         l.setSpacing(7)
         prefijo = {"discrete": "I", "coil": "Q", "input-register": "AI", "holding": "AQ"}[area]
-        self.led = QLabel(f"●  {prefijo}{direccion:02}")
-        self.led.setStyleSheet("color:#a7adb8; font-size:12px")
-        self.nombre = QLabel(variable["name"] if variable else "—")
+        canal = QLabel(f"{prefijo}{direccion:02}")
+        canal.setFixedWidth(44)
+        canal.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        canal.setStyleSheet("background:#293f50; color:#d5eaff; border:1px solid #4b687c; border-radius:5px; font-weight:600; font-size:13px")
+        señal = QFrame()
+        señal.setObjectName("asignacionES")
+        señal.setStyleSheet("QFrame#asignacionES { background:#304c60; border:1px solid #587b94; border-radius:5px; }" if variable else
+                            "QFrame#asignacionES { background:transparent; border:1px dashed #49687e; border-radius:5px; }")
+        sl = QHBoxLayout(señal)
+        sl.setContentsMargins(8, 4, 8, 4)
+        sl.setSpacing(5)
+        self.led = QLabel("●")
+        self.led.setStyleSheet("color:#718393; font-size:17px")
+        self.nombre = QLabel(variable["name"] if variable else "Sin asignar")
+        self.nombre.setWordWrap(True)
         self.valor = QLabel("—" if variable else "")
-        self.nombre.setStyleSheet("color:#eef0f4")
-        self.valor.setStyleSheet("color:#9ba3b2; font-size:11px")
-        l.addWidget(self.led)
-        l.addWidget(self.nombre, 1)
-        l.addWidget(self.valor)
+        self.nombre.setStyleSheet(f"color:{'#e0ecf7' if variable else '#80a1b8'}; font-size:14px; font-weight:{'600' if variable else '400'}")
+        self.valor.setStyleSheet("color:#a7c3d7; font-size:11px")
+        if variable:
+            sl.addWidget(self.led)
+        sl.addWidget(self.nombre, 1)
+        if area in ("input-register", "holding"):
+            sl.addWidget(self.valor)
+        else:
+            self.valor.hide()
+        if area in ("coil", "holding"):
+            l.addWidget(señal, 1)
+            l.addWidget(canal)
+        else:
+            l.addWidget(canal)
+            l.addWidget(señal, 1)
         self.setToolTip(f"{AREAS[area]} · dirección {direccion}\nArrastra una variable. Botón derecho para quitar o configurar.")
 
     def _variable_evento(self, evento):
@@ -133,18 +155,19 @@ class PanelES(QWidget):
         self.setObjectName("conexionES")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet("""
-            QWidget#conexionES { background:#303034; color:#e9e9ee; }
-            QWidget#conexionES QLabel { color:#d5d5df; background:transparent; }
-            QFrame#cabeceraES { background:#26262c; border:0; }
-            QFrame#moduloPLC { background:#33343a; border:1px solid #71747d; border-radius:6px; }
+            QWidget#conexionES { background:#111c24; color:#dfedf8; }
+            QWidget#conexionES QLabel { color:#cfdfed; background:transparent; }
+            QFrame#cabeceraES { background:#111c24; border:0; border-bottom:1px solid #304655; }
+            QFrame#moduloPLC { background:#1e303e; border:1px solid #4b667b; border-radius:10px; }
+            QFrame#lateralES { background:#1a2a36; border:1px solid #344d60; border-radius:10px; }
             QFrame#senalPLC { border:0; background:transparent; border-radius:4px; }
-            QFrame#senalPLC:hover { background:#41434c; }
+            QFrame#senalPLC:hover { background:#294354; }
             QListWidget { background:transparent; border:0; outline:0; color:#dadbe3; font-size:13px; }
-            QListWidget::item { padding:9px 12px; border-radius:4px; }
-            QListWidget::item:hover { background:#3d3e47; }
-            QListWidget::item:selected { background:#414d48; color:#cbefb6; }
+            QListWidget::item { padding:0; border-radius:6px; }
+            QListWidget::item:hover { background:#304c61; }
+            QListWidget::item:selected { background:#33566e; color:#e4f4ff; }
             QPushButton { background:transparent; color:#c8cad4; border:0; padding:7px 12px; border-radius:4px; }
-            QPushButton:hover { background:#41434d; color:white; }
+            QPushButton:hover { background:#304c61; color:white; }
             QPushButton:disabled { color:#747680; }
             QScrollArea { background:transparent; border:0; }
             QDialog { background:#303034; color:#e9e9ee; }
@@ -152,6 +175,7 @@ class PanelES(QWidget):
         self.doc = None
         self.config = Configuracion()
         self.indicadores = {}
+        self.indicadores_listas = {}
         self.terminales = {}
         self.bloqueado = False
         self.extras = {a: set() for a in AREAS}
@@ -163,7 +187,7 @@ class PanelES(QWidget):
         self.estado.setWordWrap(True)
         banda = QFrame()
         banda.setObjectName("cabeceraES")
-        banda.setMinimumHeight(64)
+        banda.setMinimumHeight(94)
         cabecera = QHBoxLayout(banda)
         cabecera.setContentsMargins(28, 12, 24, 12)
         cabecera.setSpacing(16)
@@ -173,17 +197,26 @@ class PanelES(QWidget):
         self.b_volver.setStyleSheet("font-size:23px; padding:0")
         self.b_volver.clicked.connect(self.volver)
         cabecera.addWidget(self.b_volver)
-        titulo = QLabel("CONEXIÓN")
-        titulo.setStyleSheet("font-size:16px; color:#f1f1f6; letter-spacing:1px")
-        cabecera.addWidget(titulo)
-        driver = QLabel("Modbus TCP · Factory I/O")
-        driver.setStyleSheet("border:1px solid #62646f; border-radius:4px; padding:7px 18px; color:#e5e6ec")
-        cabecera.addWidget(driver)
+        textos = QVBoxLayout()
+        titulo = QLabel("Asignación de E/S")
+        titulo.setStyleSheet("font-size:20px; color:#eff7ff; font-weight:600")
+        textos.addWidget(titulo)
+        subtitulo = QLabel("Arrastra las señales a los canales del PLC virtual")
+        subtitulo.setStyleSheet("color:#8fb9d9; font-size:12px")
+        textos.addWidget(subtitulo)
+        cabecera.addLayout(textos)
+        cabecera.addStretch()
         self.check = QLabel("●")
         self.check.setStyleSheet("color:#87939c; font-size:22px")
-        cabecera.addWidget(self.check)
-        cabecera.addWidget(self.estado)
-        cabecera.addStretch()
+        self.badge = QFrame()
+        self.badge.setFixedHeight(40)
+        bl = QHBoxLayout(self.badge)
+        bl.setContentsMargins(12, 7, 12, 7)
+        bl.setSpacing(7)
+        bl.addWidget(self.check)
+        bl.addWidget(self.estado)
+        self.badge.setStyleSheet("background:#20313d; border-radius:7px")
+        cabecera.addWidget(self.badge)
         self.b_prueba_guiada = QPushButton("Abrir prueba guiada")
         self.b_prueba_guiada.clicked.connect(self.abrir_prueba)
         self.b_configuracion = QPushButton("Configuración")
@@ -194,9 +227,17 @@ class PanelES(QWidget):
         cuerpo = QVBoxLayout(self.modulo)
         cuerpo.setContentsMargins(14, 16, 14, 12)
         cuerpo.setSpacing(12)
+        encabezado_plc = QHBoxLayout()
+        nombre_plc = QLabel("PLC VIRTUAL")
+        nombre_plc.setStyleSheet("color:#e9f4ff; font-weight:600; font-size:17px")
+        encabezado_plc.addWidget(nombre_plc)
+        self.online = QLabel("● OFFLINE")
+        self.online.setStyleSheet("color:#7991a4; font-weight:600; font-size:11px")
+        encabezado_plc.addWidget(self.online, 1, Qt.AlignmentFlag.AlignRight)
+        cuerpo.addLayout(encabezado_plc)
         self.destino = QLabel()
         self.destino.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.destino.setStyleSheet("color:#aeb1be; font-size:11px; padding-bottom:8px")
+        self.destino.setStyleSheet("color:#90bad7; font-size:11px; padding-bottom:8px")
         cuerpo.addWidget(self.destino)
         self.ayuda_vacio = QLabel("Arrastra las variables a las entradas y salidas.")
         self.ayuda_vacio.setWordWrap(True)
@@ -208,37 +249,50 @@ class PanelES(QWidget):
         self.fila_salidas = QVBoxLayout()
         self.fila_entradas.setSpacing(2)
         self.fila_salidas.setSpacing(2)
+        etiquetas = QHBoxLayout()
+        etiquetas.addWidget(QLabel("ENTRADAS"))
+        etiquetas.addWidget(QLabel("SALIDAS"), 1, Qt.AlignmentFlag.AlignRight)
+        cuerpo.addLayout(etiquetas)
         puertos.addLayout(self.fila_entradas)
         puertos.addLayout(self.fila_salidas)
         cuerpo.addLayout(puertos)
         cuerpo.addWidget(self.ayuda_vacio)
+        self.resumen = QLabel()
+        self.resumen.setStyleSheet("border-top:1px solid #3b5264; padding-top:12px; color:#8ab4d1; font-size:11px")
+        cuerpo.addWidget(self.resumen)
         scroll = QScrollArea()
         centro = QWidget()
-        centro.setStyleSheet("background:transparent")
+        centro.setObjectName("zonaPLC")
+        centro.setStyleSheet("QWidget#zonaPLC { background:transparent; }")
         central = QVBoxLayout(centro)
-        central.setContentsMargins(20, 18, 20, 0)
-        central.addWidget(self.modulo, 0, Qt.AlignmentFlag.AlignHCenter)
-        central.addStretch(1)
+        central.setContentsMargins(0, 0, 0, 0)
+        central.addWidget(self.modulo, 1)
         scroll.setWidgetResizable(True)
         scroll.setWidget(centro)
         zona = QHBoxLayout()
-        zona.setContentsMargins(36, 28, 36, 20)
-        zona.setSpacing(18)
+        zona.setContentsMargins(24, 20, 24, 16)
+        zona.setSpacing(14)
+        self.cuentas = {}
         self.lista_entradas, self.lista_salidas = ListaVariables(), ListaVariables()
         for titulo, lista in (("Entradas", self.lista_entradas), ("Salidas", self.lista_salidas)):
-            listas = QVBoxLayout()
+            lado = QFrame()
+            lado.setObjectName("lateralES")
+            listas = QVBoxLayout(lado)
             listas.setSpacing(18)
-            listas.setContentsMargins(0, 0, 0, 0)
-            etiqueta = QLabel(titulo.upper())
-            etiqueta.setStyleSheet("font-size:14px; color:#f0f0f5; padding-left:12px")
+            listas.setContentsMargins(12, 18, 12, 14)
+            etiqueta = QLabel("SENSORES" if lista is self.lista_entradas else "ACTUADORES")
+            etiqueta.setStyleSheet("font-size:13px; font-weight:600; color:#d5e9fb")
             listas.addWidget(etiqueta)
+            self.cuentas["input" if lista is self.lista_entradas else "output"] = etiqueta
             lista.setMinimumWidth(165)
-            lista.setMaximumWidth(240)
             listas.addWidget(lista, 1)
             if lista is self.lista_salidas:
                 zona.addWidget(scroll, 2)
-            zona.addLayout(listas, 1)
+            zona.addWidget(lado, 1)
         raiz.addLayout(zona, 1)
+        leyenda = QLabel('<span style="color:#4fe3a2">●</span> Señal activa　 <span style="color:#718393">●</span> Inactiva　 <span style="color:#52bdff">✓</span> Asignada　 ·　 I / Q = posición fija')
+        leyenda.setStyleSheet("color:#8fb9d9; padding:4px 26px 20px; font-size:12px")
+        raiz.addWidget(leyenda)
         self.dialogo_config = DialogoConfiguracion(self)
         self.dialogo_config.setWindowTitle("Configuración Modbus TCP")
         self.dialogo_config.resize(640, 380)
@@ -357,6 +411,11 @@ class PanelES(QWidget):
         self.check.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.estado.setVisible(not conectado)
         self.check.setToolTip(mensaje)
+        self.estado.setVisible(True)
+        self.estado.setStyleSheet(f"color:{'#59e5ae' if conectado else '#aec1d2'}; font-size:12px")
+        self.badge.setStyleSheet(f"background:{'#193e33' if conectado else '#20313d'}; border:1px solid {'#32634e' if conectado else '#385061'}; border-radius:7px")
+        self.online.setText("● ONLINE" if conectado else "● OFFLINE")
+        self.online.setStyleSheet(f"color:{'#59e5ae' if conectado else '#7991a4'}; font-weight:600; font-size:11px")
 
     def admite(self, vid, area):
         v = next((v for v in self.variables if v["id"] == vid), None)
@@ -479,23 +538,45 @@ class PanelES(QWidget):
         variables = {v["id"]: v for v in self.variables}
         self.lista_entradas.clear()
         self.lista_salidas.clear()
+        self.indicadores_listas.clear()
+        asignadas = {s.variable for s in self.config.senales}
+        for rol, titulo in (("input", "SENSORES"), ("output", "ACTUADORES")):
+            self.cuentas[rol].setText(f"{titulo}     {sum(v['role'] == rol for v in self.variables)}")
         for v in self.variables:
             item = QListWidgetItem(v["name"])
-            marca = QPixmap(6, 12)
-            marca.fill(QColor("#a1cc59" if v["type"]["kind"] == "bool" else "#6aafd1" if v["type"]["kind"] == "decimal" else "#d3ac64"))
-            item.setIcon(QIcon(marca))
+            item.setSizeHint(QSize(180, 54))
             item.setData(Qt.ItemDataRole.UserRole, v["id"])
             item.setToolTip(TIPOS[v["type"]["kind"]])
             if v["type"]["kind"] == "duration":
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
-            (self.lista_entradas if v["role"] == "input" else self.lista_salidas).addItem(item)
+            lista = self.lista_entradas if v["role"] == "input" else self.lista_salidas
+            lista.setSpacing(3)
+            lista.addItem(item)
+            tarjeta = QFrame()
+            tarjeta.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            tarjeta.setStyleSheet("QFrame { background:#243b4b; border:1px solid #3c5c72; border-radius:6px; }")
+            fila_tarjeta = QHBoxLayout(tarjeta)
+            fila_tarjeta.setContentsMargins(9, 4, 9, 4)
+            asa = QLabel("⠿")
+            asa.setStyleSheet("color:#6488a1; font-size:16px; border:0; background:transparent")
+            nombre = QLabel(v["name"])
+            nombre.setStyleSheet("color:#dbeeff; font-weight:600; font-size:14px; border:0; background:transparent")
+            nombre.setWordWrap(True)
+            led = QLabel("●")
+            led.setStyleSheet("color:#718393; font-size:17px; border:0; background:transparent")
+            marca = QLabel("✓" if v["id"] in asignadas else "○")
+            marca.setStyleSheet("color:#52bdff; font-size:18px; border:0; background:transparent")
+            for w in (asa, nombre, led, marca):
+                fila_tarjeta.addWidget(w, 1 if w is nombre else 0)
+            lista.setItemWidget(item, tarjeta)
+            self.indicadores_listas[v["id"]] = led
         mapa = {(s.area, s.direccion): s for s in self.config.senales}
         for area in AREAS:
             numerica = area in ("input-register", "holding")
             entrada = area in ("discrete", "input-register")
             if numerica and not any(v["type"]["kind"] in ("int", "decimal") and v["role"] == ("input" if entrada else "output") for v in self.variables):
                 continue
-            direcciones = set(range(2 if numerica else 4)) | self.extras[area] | {d for a, d in mapa if a == area}
+            direcciones = set(range(2 if numerica or not entrada else 4)) | self.extras[area] | {d for a, d in mapa if a == area}
             fila = self.fila_entradas if entrada else self.fila_salidas
             for direccion in sorted(direcciones):
                 s = mapa.get((area, direccion))
@@ -513,8 +594,20 @@ class PanelES(QWidget):
             fila.addWidget(mas)
         self.fila_entradas.addStretch()
         self.fila_salidas.addStretch()
+        ni = sum(variables[s.variable]["role"] == "input" for s in self.config.senales if s.variable in variables)
+        nq = len(self.config.senales) - ni
+        ti = sum(a in ("discrete", "input-register") for a, _ in self.terminales)
+        tq = len(self.terminales) - ti
+        self.resumen.setText(f"{ni}/{ti} entradas asignadas                 {nq}/{tq} salidas asignadas")
 
     def mostrar_valores(self, valores):
+        def activo(valor):
+            try:
+                return bool(Fraction(valor)) if isinstance(valor, str) else bool(valor)
+            except (ValueError, TypeError, ZeroDivisionError):
+                return False
+        for vid, led in self.indicadores_listas.items():
+            led.setStyleSheet(f"color:{'#4fe3a2' if activo(valores.get(vid)) else '#718393'}; font-size:17px; border:0; background:transparent")
         for vid, (led, etiqueta) in self.indicadores.items():
             valor = valores.get(vid)
             if valor is None:
@@ -522,8 +615,8 @@ class PanelES(QWidget):
                 color = "#87939c"
             else:
                 etiqueta.setText(str(int(valor)) if type(valor) is bool else str(valor))
-                color = "#58ed91" if valor else "#87939c"
-            led.setStyleSheet(f"color:{color}; font-size:12px")
+                color = "#4fe3a2" if activo(valor) else "#718393"
+            led.setStyleSheet(f"color:{color}; font-size:17px")
 
     def ocupado(self, on):
         self.bloqueado = on

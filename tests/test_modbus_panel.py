@@ -196,11 +196,15 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(w.v.s.z.time, instante)
                 self.assertFalse(w.botones["sensor"].isEnabled())
                 anterior = w.v.s
+                socket_anterior = w.modbus.cliente._socket
                 w.reiniciar()
-                esperar_ui(lambda: w.v.s is not anterior)
-                self.assertFalse(w.modbus.activo)
+                esperar_ui(lambda: w.v.s is not anterior and not w.modbus.reiniciando)
+                self.assertTrue(w.modbus.activo)
+                self.assertEqual(w.modbus.estado, "conectado")
+                self.assertIs(w.modbus.cliente._socket, socket_anterior)
                 self.assertFalse(w.a_ejecutar.isChecked())
                 self.assertFalse(w.v.s.z.values["sensor"])
+                self.assertEqual(w.modbus.escritos, {"motor": False})
             finally:
                 w.close()
                 w.deleteLater()
