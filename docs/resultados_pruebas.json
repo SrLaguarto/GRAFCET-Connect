@@ -1,9 +1,9 @@
 {
- "date": "2026-10-29T11:23:36+01:00",
+ "date": "2026-10-29T12:03:46+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 286,
+ "total": 302,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -1388,6 +1388,151 @@
     "REQ-DAT-01"
    ],
    "summary": "REQ-ACT-01, REQ-DAT-01: el editor guarda en `presentation.draftActions` los grupos de acciones sueltas (`grupo`,"
+  },
+  {
+   "test": "test_modbus.ModbusTests.test_SFIO01_digitales_fragmentacion",
+   "case": "S-FIO01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02"
+   ],
+   "summary": "REQ-SIM-02: E/S externas por transporte separado del motor."
+  },
+  {
+   "test": "test_modbus.ModbusTests.test_SFIO02_errores_y_reconexion",
+   "case": "S-FIO02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01: rechaza respuestas defectuosas sin reutilizar el flujo."
+  },
+  {
+   "test": "test_modbus.ModbusTests.test_SFIO03_limites_y_confirmacion",
+   "case": "S-FIO03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01: direcciones, booleanos y confirmación de escritura."
+  },
+  {
+   "test": "test_modbus.ModbusTests.test_SFIO14_mbap_y_timeout",
+   "case": "S-FIO14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01: cabecera incoherente y servidor silencioso no bloquean el cliente."
+  },
+  {
+   "test": "test_modbus_adaptador.AdaptadorTests.test_SFIO06_lote_y_salidas",
+   "case": "S-FIO06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02"
+   ],
+   "summary": "REQ-SIM-02: lote único y salidas efectivas continuas y memorizadas."
+  },
+  {
+   "test": "test_modbus_adaptador.AdaptadorTests.test_SFIO07_muestra_atomica",
+   "case": "S-FIO07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01: una muestra incompleta o inválida no entra en el motor."
+  },
+  {
+   "test": "test_modbus_analogicas.AnalogicasTests.test_SFIO11_registros_red",
+   "case": "S-FIO11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02"
+   ],
+   "summary": "REQ-SIM-02: registros Modbus big endian y escrituras confirmadas."
+  },
+  {
+   "test": "test_modbus_analogicas.AnalogicasTests.test_SFIO12_escalado_y_limites",
+   "case": "S-FIO12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EXP-01"
+   ],
+   "summary": "REQ-EXP-01: INT16/UINT16 y escala exacta, sin redondeos implícitos."
+  },
+  {
+   "test": "test_modbus_analogicas.AnalogicasTests.test_SFIO13_rechaza_perdida_precision",
+   "case": "S-FIO13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EXP-01"
+   ],
+   "summary": "REQ-EXP-01: una entrada no representable no entra en el motor."
+  },
+  {
+   "test": "test_modbus_ciclo.CicloTests.test_SFIO09_ciclo_pausa_diagnostico",
+   "case": "S-FIO09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02"
+   ],
+   "summary": "REQ-SIM-02: ciclo completo, pausa conserva y diagnóstico solicita cero."
+  },
+  {
+   "test": "test_modbus_ciclo.CicloTests.test_SFIO10_perdida_y_reconexion_manual",
+   "case": "S-FIO10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01: pérdida de red detiene; reconectar no reanuda el motor."
+  },
+  {
+   "test": "test_modbus_ciclo.CicloTests.test_SFIO15_temporizacion_sin_cambios_sensor",
+   "case": "S-FIO15",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-TMP-02"
+   ],
+   "summary": "REQ-TMP-02: el reloj existente dispara salidas aunque la muestra no cambie."
+  },
+  {
+   "test": "test_modbus_configuracion.ConfigTests.test_SFIO04_persistencia_separada",
+   "case": "S-FIO04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: configuración externa no cambia el documento ni se borra al guardar."
+  },
+  {
+   "test": "test_modbus_configuracion.ConfigTests.test_SFIO05_mapa_invalido",
+   "case": "S-FIO05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01: no admite asociaciones incompatibles o repetidas."
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO08_panel_y_mapa",
+   "case": "S-FIO08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: E/S externas configurables con tipo y valor visibles."
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO16_ventana_ciclo_y_reinicio",
+   "case": "S-FIO16",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-02, REQ-SIM-03: controles Qt y descarte al reiniciar sesión."
   },
   {
    "test": "test_simulador_escritorio.Nucleo.test_SAPP01_abrir_lo_guardado",

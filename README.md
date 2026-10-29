@@ -40,6 +40,32 @@ dibujo. Con «Archivo > Nuevo grafcet», o «Editar» sobre un ejemplo o un mode
   `dist/GRAFCET/`. Esa carpeta entera es el programa: se copia donde se quiera y se abre `GRAFCET.exe`, sin instalar
   Python. `dist/` y `build/` no se versionan.
 
+### Conectar con Factory I/O (P-IMP-50)
+
+En Factory I/O seleccione **Modbus TCP/IP Server** y asigne sensores a entradas
+discretas/input registers y actuadores a coils/holding registers. Confirme IP,
+puerto, Slave ID y direcciones en su instalación; no se asignan automáticamente.
+
+En GrafConnect, simule el modelo y abra **E/S externas**. Marque las variables,
+elija área, dirección **base cero**, formato BOOL/INT16/UINT16 y escala. En señales
+analógicas, `valor GRAFCET = registro / escala`; para 3,14 use escala 100 y registro
+314. INT16 admite −32768…32767 y UINT16 0…65535, antes del escalado. Valores no
+representables detienen la conexión; no hay redondeo ni saturación.
+
+Use **Aplicar mapa**, **Guardar configuración…** y **Probar conexión** (sin escribir).
+El mapa se guarda aparte en `conexion-factoryio.json` dentro del proyecto; también
+puede cargarlo desde otro archivo. **Conectar** solicita cero y lee sensores; pulse
+**Ejecutar** para comenzar. Pausa conserva estado y salidas. Un diagnóstico del
+motor solicita cero; pérdida de red pausa sin garantizar el estado de los actuadores.
+La reconexión es manual y exige volver a pulsar Ejecutar. Para editar o depurar,
+desconecte; al cambiar modelo se descartan las respuestas pendientes.
+
+El periodo de servicio es configurable (50 ms iniciales). El intervalo efectivo
+incluye latencia y lecturas/escrituras por señal; pulsos breves pueden perderse.
+El panel muestra la última lectura y la última escritura confirmada mientras está
+conectado, no una confirmación física del actuador. La integración se prueba con
+servidores locales simulados: **pendiente validar una escena real con Factory I/O**.
+
 ### Banco de pruebas y comparador de decisiones
 
 Doble clic en «Probar banco de pruebas.bat» abre el banco en el navegador: ejemplos que se pueden ejecutar cambiando entradas y avanzando el tiempo. «Comparar decisiones.bat» abre el comparador (P-IMP-21): para cada cuestión abierta de la hoja 08, el mismo ejemplo se ejecuta una vez por lectura, lado a lado, con un guion de pasos. Se elige con «Esta es la buena» o «Dejar abierta», y la respuesta queda en `docs/decisiones.json`. También se puede abrir desde la consola:

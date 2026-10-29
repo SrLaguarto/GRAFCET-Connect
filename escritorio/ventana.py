@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDia
                                QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
                                QPushButton, QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
-                               QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget)
+                               QTabBar, QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from grafcet.diagnostics import DiagnosticError
 from grafcet.examples import EJEMPLOS
@@ -163,11 +163,21 @@ class Ventana(QMainWindow):
         self._menus()
         self._interfaz()
         self.panel_es = PanelES()
-        self.pestanas = QTabWidget()
+        self.pestanas_es = QTabBar()
         central = self.takeCentralWidget()
-        self.pestanas.addTab(central, "GRAFCET")
-        self.pestanas.addTab(self.panel_es, "E/S externas")
-        self.setCentralWidget(self.pestanas)
+        self.paginas_es = QStackedWidget()
+        self.paginas_es.addWidget(central)
+        self.paginas_es.addWidget(self.panel_es)
+        self.pestanas_es.addTab("GRAFCET")
+        self.pestanas_es.addTab("E/S externas")
+        self.pestanas_es.currentChanged.connect(self.paginas_es.setCurrentIndex)
+        contenedor = QWidget()
+        layout_es = QVBoxLayout(contenedor)
+        layout_es.setContentsMargins(0, 0, 0, 0)
+        layout_es.setSpacing(0)
+        layout_es.addWidget(self.pestanas_es)
+        layout_es.addWidget(self.paginas_es, 1)
+        self.setCentralWidget(contenedor)
         self.panel_es.conectar.connect(self._conectar_modbus)
         self.panel_es.probar.connect(lambda: self._conectar_modbus(prueba=True))
         self.panel_es.desconectar.connect(self._desconectar_modbus)
@@ -1002,6 +1012,8 @@ class Ventana(QMainWindow):
 
     def _ejecutar(self, on: bool) -> None:
         self.a_ejecutar.setText("‖ Pausa" if on else "▶ Ejecutar")
+        if self.modbus.activo:
+            self.modbus.solicitar_ejecucion(on)
         if on:
             self.reloj.start()
             self.rt.start()
@@ -1013,7 +1025,7 @@ class Ventana(QMainWindow):
         us = self.reloj.restart() * 1000
         if self.modbus.activo:
             ejecutar = self.a_ejecutar.isChecked() and self.modbus.estado == "conectado"
-            if ejecutar and self.v and self.v.s and self.v.s.status == "pausada-estable":
+            if ejecutar and self.modbus.en_marcha and self.v and self.v.s and self.v.s.status == "pausada-estable":
                 self.v.s.advance_to(self.v.s.z.time + us)
             self.modbus.tick(ejecutar)
             if self.modbus.estado != "conectado":

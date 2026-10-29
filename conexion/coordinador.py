@@ -23,6 +23,16 @@ class Coordinador:
         self.fallo_motor = False
         self.cero_pendiente = False
         self.proxima = 0
+        self.en_marcha = False
+        self._ejecutar = False
+        self._descartar_lectura = False
+
+    def solicitar_ejecucion(self, ejecutar):
+        if ejecutar != self._ejecutar:
+            self.en_marcha = False
+            # Una lectura enviada antes de Ejecutar no sirve para reanudar.
+            self._descartar_lectura = ejecutar and self.futuro is not None and self.fase == "leer"
+            self._ejecutar = ejecutar
 
     @property
     def activo(self):
@@ -43,6 +53,7 @@ class Coordinador:
         self.mensaje = "Probando conexión…" if prueba else "Conectando; actuadores a cero…"
         self.muestra, self.escritos = {}, {}
         self.fallo_motor = self.cero_pendiente = False
+        self.en_marcha = self._ejecutar = self._descartar_lectura = False
         # Calcular valores del motor en el hilo propietario, antes de encolar red.
         cero = self.adaptador.valores_salida(cero=True)
         def conectar():
@@ -65,6 +76,7 @@ class Coordinador:
 
     def tick(self, ejecutar=False):
         """Recoger red y aplicar muestras; llamar exclusivamente desde el hilo de sesión."""
+        self.solicitar_ejecucion(ejecutar)
         if self.futuro is not None and self.futuro.done():
             futuro, fase = self.futuro, self.fase
             self.futuro = None
@@ -79,9 +91,12 @@ class Coordinador:
                         self.escritos = self.adaptador.valores_salida(cero=True)
                     elif fase == "leer":
                         self.muestra = resultado
-                        if ejecutar and not self.fallo_motor and self.adaptador.sesion.status == "pausada-estable":
+                        descartar = self._descartar_lectura
+                        self._descartar_lectura = False
+                        if ejecutar and not descartar and not self.fallo_motor and self.adaptador.sesion.status == "pausada-estable":
                             self.adaptador.aplicar(resultado)
                             if self.adaptador.sesion.status == "pausada-estable":
+                                self.en_marcha = True
                                 valores = self.adaptador.valores_salida()
                                 self._enviar("escribir", self._escribir, valores)
                     elif fase in ("escribir", "cero"):
@@ -93,6 +108,7 @@ class Coordinador:
             except Exception as exc:
                 # También incluye conversión inválida: no seguir controlando con muestras malas.
                 self.estado, self.mensaje = "error", f"Conexión detenida: {exc}. Salidas no garantizadas."
+                self.en_marcha = False
                 self.cliente.cerrar()  # la petición ya ha terminado
         if self.estado == "cerrando":
             if self.futuro is None:
@@ -105,6 +121,7 @@ class Coordinador:
             return
         if self.adaptador.sesion.status != "pausada-estable" and not self.fallo_motor:
             self.fallo_motor = self.cero_pendiente = True
+            self.en_marcha = False
             self.estado, self.mensaje = "diagnostico", "Motor detenido · solicitando cero · reconecte para continuar"
         if self.futuro is not None:
             return
