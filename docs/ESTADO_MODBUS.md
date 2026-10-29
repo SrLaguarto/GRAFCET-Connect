@@ -9,7 +9,7 @@ Políticas acordadas: pausa conserva estado/salidas; diagnóstico detiene y soli
 cero; desconexión pausa (no garantiza cero); reconexión solicita cero, lee sensores
 y exige Ejecutar. No reanudar automáticamente. Conexión apagada por defecto.
 
-Fases: 1 cliente digital COMPLETADA; 2 configuración/mapa COMPLETADA; 3 adaptador EN CURSO; 4 panel PLC;
+Fases: 1 cliente digital COMPLETADA; 2 configuración/mapa COMPLETADA; 3 adaptador digital COMPLETADA; 4 panel PLC EN CURSO;
 5 integración Qt/políticas; 6 ciclo completo; 7 analógicas; 8 regresión/guía/prueba real.
 Archivos propios: `conexion/__init__.py`, `conexion/modbus.py`, este registro.
 No tocar `.codex/` ni `AGENTS.md`: estaban sin seguimiento al empezar.
@@ -19,5 +19,7 @@ No se ha probado Factory I/O real. Pendiente ampliar pruebas de timeout/MBAP.
 Decisión: implementar primero FC01/02/15; ampliar funciones con sus consumidores.
 Fase 2: `conexion/configuracion.py`, `tests/test_modbus_configuracion.py`;
 2 pruebas OK (persistencia independiente, preservación por save_project, mapas inválidos).
-Siguiente tarea exacta: adaptador digital, lote simultáneo, salidas continuas/memorizadas.
+Fase 3: `conexion/adaptador.py`, `tests/test_modbus_adaptador.py`; 2 pruebas OK
+(lote simultáneo, muestras inválidas, salidas continuas/memorizadas, cero sin cambiar motor).
+Siguiente tarea exacta: panel E/S y configuración Qt; después trabajador y ciclo.
 Commits autorizados por el usuario, solo pruebas relevantes por unidad; sin push.
