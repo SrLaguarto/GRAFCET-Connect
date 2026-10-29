@@ -1,0 +1,41 @@
+{
+  "fecha_utc": "2026-10-29T12:33:04.202924+00:00",
+  "servidor": "192.168.1.133:502",
+  "unidad": 1,
+  "asignacion_segun_captura": {
+    "holding_0": "Pick & Place 0 Y Set Point (V)",
+    "holding_1": "Pick & Place 0 Z Set Point (V)"
+  },
+  "alcance": "Modelo GRAFCET con dos salidas Enteras -> adaptador INT16 -> cliente de produccion -> Factory I/O real -> lectura de confirmacion. No GUI.",
+  "limites": "Solo valor positivo 1; no verifica negativos, limites, escala fisica, movimiento ni lectura de sensores reales. Input Registers sin etiquetas asignadas en captura.",
+  "input_registers_0_3": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "holding_antes_0_3": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "valores_motor": {
+    "ConsignaY": "1",
+    "ConsignaZ": "1"
+  },
+  "valores_adaptador": {
+    "ConsignaY": 1,
+    "ConsignaZ": 1
+  },
+  "holding_leido_0_1": [
+    1,
+    1
+  ],
+  "escritura_confirmada": true,
+  "holding_restaurado_0_1": [
+    0,
+    0
+  ],
+  "restauracion_confirmada": true
+}

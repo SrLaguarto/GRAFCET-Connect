@@ -115,7 +115,11 @@ Paso/Completar recorrido solo en menú Simulación (depuración, sin Modbus).
 
 Enteros del modelo ya disponibles. Transporte BOOL, INT16/UINT16 y decimal con
 escala; no hay FLOAT32 directo ni registros compuestos de 32/64 bits. Digitales
-probadas realmente por el responsable; analógicas solo con servidor simulado.
+probadas realmente por el responsable. Registros reales probados el 29-10:
+modelo con salidas Enteras 1/1 → adaptador INT16 → Holding 0/1; lectura 1/1
+confirmada y restauración a 0/0 confirmada. Evidencia:
+docs/prueba_real_registros_modbus.json. No prueba negativos, escala física ni GUI.
+Input Registers 0..3 responden, pero sin sensores asignados según captura.
 Consulta oficial del driver limitada al contrato de E/S y escalado, no a semántica
 GRAFCET: https://docs.factoryio.com/manual/drivers/modbus-server/.
 
@@ -123,8 +127,18 @@ Validación final: 307 pruebas OK (21 Modbus), paquete intacto y trazabilidad
 regenerada. Portable reconstruido y arranque/captura OK; captura de la nueva
 vista revisada y guardada en dist/GRAFCET/Vista_conexion.png.
 
-Siguiente tarea exacta: validar reinicio conectado en la escena del responsable.
-Después validar entradas/salidas analógicas y
-pérdida/reconexión reales. Guía: docs/PRIMERA_CONEXION_FACTORY_IO.md.
+Observación de entradas sin programa: MonitorEntradas solo lectura permite
+conectar desde Editar o sin motor compilado; ninguna escritura de salida.
+SFIO22 verifica UI y persistencia; conexión real Input 0 confirmada con motor=None
+y salidas vacías. Se conserva exigir simulación válida para controlar actuadores.
+
+Detección automática descartada: el servidor real responde a direcciones 65535
+en las cuatro áreas aunque la captura muestre 16 bits/4 registros. No puede
+inferirse cantidad, asignación ni tipo/escalado por respuesta o valor cero.
+El control de Windows se detuvo con Escape; se usó captura del usuario y TCP.
+
+Siguiente tarea exacta: campos offset/cantidad visibles, × de desasignación y
+arrastre desde el propio terminal. Validar y empaquetar ambos cambios de UI.
+Pendientes reales: reinicio, señales de sensores numéricos, escalado y red.
 Quedan después pruebas reales de pausa, pérdida de red y analógicas.
 Commits incrementales autorizados; consultar git log. Sin push ni subagentes.

@@ -4,6 +4,22 @@ from fractions import Fraction
 from grafcet.values import check_fits, in_domain
 
 
+class MonitorEntradas:
+    """Lectura externa sin motor compilado; no puede escribir actuadores."""
+    def __init__(self, config, documento):
+        config.validar(documento)
+        roles = {v["id"]: v["role"] for v in documento["variables"]}
+        if not config.senales or any(roles[s.variable] != "input" for s in config.senales):
+            raise ValueError("La observación sin GRAFCET solo admite entradas")
+        self.config = config
+        self.sesion = None
+        self.entradas = list(config.senales)
+        self.salidas = []
+
+    def valores_salida(self, cero=False):
+        return {}
+
+
 class Adaptador:
     def __init__(self, config, sesion):
         self.config, self.sesion = config, sesion

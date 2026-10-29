@@ -618,6 +618,18 @@ class PanelES(QWidget):
                 color = "#4fe3a2" if activo(valor) else "#718393"
             led.setStyleSheet(f"color:{color}; font-size:17px")
 
+    def mostrar_muestra(self, muestra, senales):
+        valores = {}
+        for s in senales:
+            if s.variable not in muestra:
+                continue
+            raw = muestra[s.variable]
+            if s.formato != "BOOL":
+                raw = raw - 65536 if s.formato == "INT16" and raw >= 32768 else raw
+                raw = Fraction(raw) / Fraction(s.escala)
+            valores[s.variable] = raw
+        self.mostrar_valores(valores)
+
     def ocupado(self, on):
         self.bloqueado = on
         self.lista_entradas.setDragEnabled(not on)

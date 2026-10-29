@@ -18,6 +18,53 @@ from grafcet.builder import M
 
 @unittest.skipUnless(QT, "Falta PySide6")
 class PanelTests(unittest.TestCase):
+    def test_SFIO22_observar_solo_entradas_desde_editor(self):
+        """REQ-SIM-03: conexión de observación sin programa compilado ni salidas."""
+        from escritorio.ventana import Ventana
+        from test_modbus import servidor
+        app = QApplication.instance() or QApplication([])
+        peticiones = []
+        def responder(p):
+            peticiones.append(p)
+            return b"\x02\x01\x01"
+        def esperar_ui(condicion):
+            limite = time.monotonic() + 3
+            while not condicion():
+                app.processEvents()
+                if time.monotonic() >= limite:
+                    self.fail(w.modbus.mensaje)
+                time.sleep(.002)
+        with tempfile.TemporaryDirectory() as tmp, servidor(responder) as sc:
+            w = Ventana(recuperacion=Path(tmp))
+            try:
+                w.nuevo()
+                self.assertIsNone(w.edicion.nueva_variable("sensor"))
+                vid = w.edicion.ed.model["variables"][0]["id"]
+                w.a_es.trigger()
+                self.assertEqual(w.panel_es.doc, w.edicion.ed.model)
+                w.panel_es.cargar(w.panel_es.doc, Configuracion(puerto=sc.puerto, periodo_ms=20,
+                                        senales=[Senal(vid, "discrete", 0)]))
+                ruta = Path(tmp) / "proyecto"
+                w.edicion.guardar(ruta)
+                w.panel_es._aplicar()
+                guardado = Configuracion.cargar(ruta / "conexion-factoryio.json", w.edicion.ed.model)
+                self.assertEqual([s.variable for s in guardado.senales], [vid])
+                w._conectar_modbus()
+                esperar_ui(lambda: w.modbus.estado == "conectado")
+                esperar_ui(lambda: w.panel_es.indicadores[vid][1].text() == "1")
+                self.assertIsNone(w.modbus.adaptador.sesion)
+                self.assertEqual(w.modbus.adaptador.salidas, [])
+                self.assertFalse(w.a_ejecutar.isEnabled())
+                self.assertTrue(peticiones)
+                self.assertTrue(all(p[0] == 2 for p in peticiones), "No se escribe ninguna salida")
+                w._desconectar_modbus()
+                esperar_ui(lambda: not w.modbus.activo)
+            finally:
+                w.edicion = None  # descarta solo el documento de esta prueba
+                w.close()
+                w.deleteLater()
+                app.processEvents()
+
     def test_SFIO19_arrastrar_mover_y_reemplazar(self):
         """REQ-SIM-03: eventos de arrastre, movimiento, sustitución, tipos y bloqueo."""
         from PySide6.QtCore import QPoint, QPointF, Qt
@@ -153,6 +200,7 @@ class PanelTests(unittest.TestCase):
                 self.assertIn("Usar", w.panel_es.estado.text())
                 self.assertFalse(w.modbus.activo)
                 w.v.s = None
+                w.panel_es.tabla.cellWidget(1, 0).setChecked(True)
                 w._conectar_modbus()
                 self.assertEqual(w.panel_es.estado.text(), "Revisar GRAFCET")
                 self.assertIn("diagnósticos", w.panel_es.estado.toolTip())

@@ -487,7 +487,7 @@ class Ventana(QMainWindow):
         self.tb_conexion = QToolBar("Conexión")
         self.tb_conexion.setMovable(False)
         self.tb_conexion.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.a_es = self._accion("E/S externas", lambda: self.paginas_es.setCurrentIndex(1))
+        self.a_es = self._accion("E/S externas", self.mostrar_es)
         self.a_es.setToolTip("Conectar sensores y actuadores · volver con la flecha Atrás")
         self.a_es.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DriveNetIcon))
         self.tb_conexion.addAction(self.a_es)
@@ -629,6 +629,9 @@ class Ventana(QMainWindow):
 
     def reiniciar(self) -> None:
         if self.modbus.activo:
+            if self.modbus.adaptador.sesion is None:
+                self.panel_es.estado.setText("Conectado · solo observación de entradas; no hay una ejecución que reiniciar")
+                return
             if self.modbus.estado not in ("conectado", "diagnostico") or not self.v or not self.v.s:
                 self.panel_es.estado.setText("Espera a que termine la operación de conexión antes de reiniciar")
                 return
@@ -1083,6 +1086,21 @@ class Ventana(QMainWindow):
     def _tick(self) -> None:
         us = self.reloj.restart() * 1000
         if self.modbus.activo:
+            if self.modbus.adaptador.sesion is None:
+                self.modbus.tick(False)
+                self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
+                self.panel_es.ocupado(self.modbus.activo)
+                self.panel_es.mostrar_muestra(self.modbus.muestra, self.modbus.adaptador.entradas)
+                self.a_ejecutar.setChecked(False)
+                if not self.modbus.activo:
+                    self.rt.stop()
+                    self.rt.setInterval(TICK_MS)
+                    self.a_ejecutar.setEnabled(self.modo == "simular" and self.v is not None and self.v.s is not None and self.v.s.status == "pausada-estable")
+                    if self._recargar_modbus:
+                        self._recargar_modbus = False
+                        self._cargar()
+                        self.a_ejecutar.setChecked(False)
+                return
             ejecutar = self.a_ejecutar.isChecked() and self.modbus.estado == "conectado" and not self.modbus.reiniciando
             if ejecutar and self.modbus.en_marcha and self.v and self.v.s and self.v.s.status == "pausada-estable":
                 self.v.s.advance_to(self.v.s.z.time + us)
@@ -1106,15 +1124,15 @@ class Ventana(QMainWindow):
         self._act("avanzar", us=us)
 
     def _raiz_modbus(self):
-        if self.fuente.get("tipo") == "editor" and self.edicion:
+        if (self.modo == "editar" or self.fuente.get("tipo") == "editor") and self.edicion:
             return self.edicion.ruta
         return self.fuente.get("raiz")
 
     def _persistir_mapa_modbus(self, config):
         raiz = self._raiz_modbus()
-        if raiz and self.v:
+        if raiz and self.panel_es.doc:
             try:
-                config.guardar(raiz / ARCHIVO, self.v.doc)
+                config.guardar(raiz / ARCHIVO, self.panel_es.doc)
             except (OSError, ValueError) as exc:
                 self.panel_es.estado.setText(f"No se pudo guardar el mapa: {exc}")
 
@@ -1143,7 +1161,7 @@ class Ventana(QMainWindow):
                 if not nombre:
                     return
                 ruta = Path(nombre)
-            config.guardar(ruta, self.v.doc)
+            config.guardar(ruta, self.panel_es.doc)
             self.panel_es.config = config
             self.panel_es.estado.setText(f"Configuración guardada: {ruta}")
         except (ValueError, OSError) as exc:
@@ -1153,13 +1171,33 @@ class Ventana(QMainWindow):
         nombre, _ = QFileDialog.getOpenFileName(self, "Cargar configuración Modbus", "", "JSON (*.json)")
         if nombre:
             try:
-                config = Configuracion.cargar(Path(nombre), self.v.doc)
-                self.panel_es.cargar(self.v.doc, config)
+                config = Configuracion.cargar(Path(nombre), self.panel_es.doc)
+                self.panel_es.cargar(self.panel_es.doc, config)
                 self.panel_es.estado.setText("Mapa cargado · desconectado")
             except (ValueError, OSError) as exc:
                 self.panel_es.estado.setText(f"No se pudo cargar: {exc}")
 
+    def mostrar_es(self):
+        if not self.modbus.activo:
+            doc = self.edicion.ed.model if self.modo == "editar" and self.edicion else self.v.doc if self.v else None
+            if doc is not None and doc != self.panel_es.doc:
+                self.panel_es.cargar(doc, self.panel_es.config if self.panel_es.config.modelo == doc["id"] else None)
+        self.paginas_es.setCurrentIndex(1)
+
     def _conectar_modbus(self, prueba=False):
+        try:
+            config = self.panel_es.obtener()
+            if not config.senales:
+                raise ValueError("Marca al menos una casilla «Usar» en la tabla de variables")
+        except (ValueError, RuntimeError) as exc:
+            self.panel_es.estado.setText(f"No se pudo conectar: {exc}")
+            return
+        roles = {v["id"]: v["role"] for v in self.panel_es.doc["variables"]}
+        solo_entradas = all(roles[s.variable] == "input" for s in config.senales)
+        sesion = self.v.s if self.modo == "simular" and self.v else None
+        if solo_entradas and (sesion is None or sesion.status != "pausada-estable"):
+            self._iniciar_conexion_modbus(config, None, prueba)
+            return
         if self.modo != "simular":
             self.panel_es.estado.setText("Desconectado. Pulsa «Simular» en la barra superior antes de conectar.")
             return
@@ -1177,12 +1215,14 @@ class Ventana(QMainWindow):
             self.panel_es.estado.setText("Desconectado. El motor está detenido o tiene un recorrido pendiente. "
                                         "Revisa «GRAFCET» y sus diagnósticos antes de conectar." + detalle)
             return
+        self._iniciar_conexion_modbus(config, self.v.s, prueba)
+
+    def _iniciar_conexion_modbus(self, config, sesion, prueba):
         try:
-            config = self.panel_es.obtener()
-            if not config.senales:
-                raise ValueError("Marca al menos una casilla «Usar» en la tabla de variables")
             self.a_ejecutar.setChecked(False)
-            self.modbus.iniciar(config, self.v.s, prueba)
+            self.modbus.iniciar(config, sesion, prueba, documento=self.panel_es.doc)
+            if sesion is None:
+                self.a_ejecutar.setEnabled(False)
             self.panel_es.config = config
             self.panel_es._dibujar()
             self.panel_es.ocupado(True)

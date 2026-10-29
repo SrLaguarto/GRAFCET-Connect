@@ -5,7 +5,7 @@ No crea relojes ni ejecuta el motor desde el trabajador. La reconexión es manua
 from concurrent.futures import ThreadPoolExecutor
 from time import monotonic
 
-from .adaptador import Adaptador, escribir_salidas, leer_entradas
+from .adaptador import Adaptador, MonitorEntradas, escribir_salidas, leer_entradas
 from .modbus import ClienteModbus
 
 
@@ -53,7 +53,7 @@ class Coordinador:
 
     def reiniciar(self, sesion):
         """Cambia sesión sin cerrar TCP; descarta respuestas de la ejecución anterior."""
-        if self.estado not in ("conectado", "diagnostico") or sesion.cm.revision != self.adaptador.sesion.cm.revision:
+        if self.estado not in ("conectado", "diagnostico") or self.adaptador.sesion is None or sesion.cm.revision != self.adaptador.sesion.cm.revision:
             raise RuntimeError("El reinicio requiere conexión estable y el mismo modelo")
         adaptador = Adaptador(self.adaptador.config, sesion)
         valores = adaptador.valores_salida()
@@ -67,10 +67,10 @@ class Coordinador:
         self.estado = "conectado"
         self.mensaje = "Conectado · reiniciando GRAFCET y salidas iniciales…"
 
-    def iniciar(self, config, sesion, prueba=False):
+    def iniciar(self, config, sesion, prueba=False, documento=None):
         if self.activo or self.futuro is not None:
             raise RuntimeError("Desconecte antes de cambiar la conexión")
-        self.adaptador = Adaptador(config, sesion)
+        self.adaptador = Adaptador(config, sesion) if sesion is not None else MonitorEntradas(config, documento)
         self.cliente = ClienteModbus(config.host, config.puerto, config.unidad, config.timeout_ms / 1000)
         self.estado = "probando" if prueba else "conectando"
         self.mensaje = "Probando conexión…" if prueba else "Conectando; actuadores a cero…"
@@ -116,11 +116,13 @@ class Coordinador:
                         self.muestra = resultado
                         self.estado, self.mensaje = "conectado", "Conectado · actuadores a cero · pulse Ejecutar"
                         self.escritos = self.adaptador.valores_salida(cero=True)
+                        if self.adaptador.sesion is None:
+                            self.mensaje = "Conectado · observación de entradas · sin escritura de salidas"
                     elif fase == "leer":
                         self.muestra = resultado
                         descartar = self._descartar_lectura
                         self._descartar_lectura = False
-                        if ejecutar and not descartar and not self.fallo_motor and self.adaptador.sesion.status == "pausada-estable":
+                        if self.adaptador.sesion is not None and ejecutar and not descartar and not self.fallo_motor and self.adaptador.sesion.status == "pausada-estable":
                             self.adaptador.aplicar(resultado)
                             if self.adaptador.sesion.status == "pausada-estable":
                                 self.en_marcha = True
@@ -160,7 +162,7 @@ class Coordinador:
                     return valores, leer_entradas(self.cliente, self.adaptador.entradas)
                 self._enviar("reiniciar", reinicio_red)
             return
-        if self.adaptador.sesion.status != "pausada-estable" and not self.fallo_motor:
+        if self.adaptador.sesion is not None and self.adaptador.sesion.status != "pausada-estable" and not self.fallo_motor:
             self.fallo_motor = self.cero_pendiente = True
             self.en_marcha = False
             self.estado, self.mensaje = "diagnostico", "Motor detenido · solicitando cero · reconecte para continuar"
