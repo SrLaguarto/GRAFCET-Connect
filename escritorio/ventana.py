@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDia
                                QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
                                QPushButton, QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
-                               QToolBar, QToolButton, QVBoxLayout, QWidget)
+                               QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from grafcet.diagnostics import DiagnosticError
 from grafcet.examples import EJEMPLOS
@@ -35,6 +35,9 @@ from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion
 from .propiedades import PanelPropiedades, Paleta
 from .variables import PanelVariables
+from .entradas_salidas import PanelES
+from conexion.configuracion import ARCHIVO, Configuracion
+from conexion.coordinador import Coordinador
 
 TITULO = "Simulador GRAFCET"
 ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
@@ -148,6 +151,8 @@ class Ventana(QMainWindow):
         self.edicion: Edicion | None = None
         self._alturas = dict(ALTO_INFERIOR)
         self.modo = "simular"
+        self.modbus = Coordinador()
+        self._recargar_modbus = False
         # Recuperación automática cada 30 s mientras hay cambios sin guardar (REQ-EDT-10)
         self.recup = Recovery(recuperacion or Path(QStandardPaths.writableLocation(
             QStandardPaths.StandardLocation.AppLocalDataLocation)))
@@ -157,6 +162,16 @@ class Ventana(QMainWindow):
         self.t_auto.start()
         self._menus()
         self._interfaz()
+        self.panel_es = PanelES()
+        self.pestanas = QTabWidget()
+        central = self.takeCentralWidget()
+        self.pestanas.addTab(central, "GRAFCET")
+        self.pestanas.addTab(self.panel_es, "E/S externas")
+        self.setCentralWidget(self.pestanas)
+        self.panel_es.conectar.connect(self._conectar_modbus)
+        self.panel_es.probar.connect(lambda: self._conectar_modbus(prueba=True))
+        self.panel_es.desconectar.connect(self._desconectar_modbus)
+        self.panel_es.guardar.connect(self._guardar_config_modbus)
         self._barra_herramientas()
         self._paneles()
         self.cargar_ejemplo(next(iter(EJEMPLOS)))
@@ -535,6 +550,11 @@ class Ventana(QMainWindow):
             self.abrir_ruta(Path(ruta))
 
     def _cargar(self) -> None:
+        if self.modbus.activo:
+            self._desconectar_modbus()
+            self._recargar_modbus = True
+            self.panel_es.estado.setText("Desconectando antes de cargar el modelo…")
+            return
         self.a_ejecutar.setChecked(False)  # ejecución nueva; si se puede, el tiempo real arranca al final
         f = self.fuente
         try:
@@ -554,6 +574,7 @@ class Ventana(QMainWindow):
         self.setWindowTitle(f"{self.v.model['title']} — {TITULO}")
         self.diagrama.ajustar()
         self._entradas()
+        self._cargar_config_modbus()
         self.refrescar()
         # Como un autómata: el tiempo corre desde que se carga (si el modelo compila y la situación es estable)
         self.a_ejecutar.setChecked(self.v.s is not None and self.v.s.status == "pausada-estable")
@@ -591,6 +612,7 @@ class Ventana(QMainWindow):
         if self._salir_de_edicion():
             self.a_ejecutar.setChecked(False)
             self.t_auto.stop()
+            self.modbus.cerrar()
             event.accept()
         else:
             event.ignore()
@@ -621,6 +643,10 @@ class Ventana(QMainWindow):
         self.cambiar_modo("editar")
 
     def cambiar_modo(self, modo: str) -> bool:
+        if modo == "editar" and self.modbus.activo:
+            self._desconectar_modbus()
+            self.panel_es.estado.setText("Desconectando antes de editar; vuelva a pulsar Editar")
+            return False
         if modo == "editar":
             if self.edicion is None:
                 if self.v is None:
@@ -910,6 +936,9 @@ class Ventana(QMainWindow):
 
     # -- acciones de simulación -------------------------------------------------------------------
     def _act(self, op: str, **body: Any) -> None:
+        if self.modbus.activo:
+            self.aviso.setText("Con E/S externas use Ejecutar/Pausa; desconecte para depurar manualmente")
+            return
         if self.v is None:
             return
         try:
@@ -976,14 +1005,95 @@ class Ventana(QMainWindow):
             self.reloj.start()
             self.rt.start()
         else:
-            self.rt.stop()
+            if not self.modbus.activo:
+                self.rt.stop()
 
     def _tick(self) -> None:
         us = self.reloj.restart() * 1000
+        if self.modbus.activo:
+            ejecutar = self.a_ejecutar.isChecked() and self.modbus.estado == "conectado"
+            if ejecutar and self.v and self.v.s and self.v.s.status == "pausada-estable":
+                self.v.s.advance_to(self.v.s.z.time + us)
+            self.modbus.tick(ejecutar)
+            if self.modbus.estado != "conectado":
+                self.a_ejecutar.setChecked(False)
+            self.panel_es.estado.setText(self.modbus.mensaje)
+            self.panel_es.ocupado(self.modbus.activo)
+            self.refrescar()
+            if not self.modbus.activo:
+                self.rt.setInterval(TICK_MS)
+                self.rt.stop()
+                if self._recargar_modbus:
+                    self._recargar_modbus = False
+                    self._cargar()
+                    self.a_ejecutar.setChecked(False)
+            return
         if self.v is None or self.v.s is None or self.v.s.status != "pausada-estable":
             self.a_ejecutar.setChecked(False)
             return
         self._act("avanzar", us=us)
+
+    def _raiz_modbus(self):
+        if self.fuente.get("tipo") == "editor" and self.edicion:
+            return self.edicion.ruta
+        return self.fuente.get("raiz")
+
+    def _cargar_config_modbus(self):
+        raiz = self._raiz_modbus()
+        config = None
+        # Reiniciar conserva el mapa en memoria; cambiar de modelo exige un mapa propio.
+        anterior = self.panel_es.config
+        if anterior.modelo == self.v.doc["id"]:
+            config = anterior
+        elif raiz and (raiz / ARCHIVO).exists():
+            try:
+                config = Configuracion.cargar(raiz / ARCHIVO, self.v.doc)
+            except (ValueError, OSError) as exc:
+                self.panel_es.estado.setText(f"No se pudo cargar el mapa: {exc}")
+        self.panel_es.cargar(self.v.doc, config)
+
+    def _guardar_config_modbus(self):
+        try:
+            config = self.panel_es.obtener()
+            raiz = self._raiz_modbus()
+            if raiz:
+                ruta = raiz / ARCHIVO
+            else:
+                nombre, _ = QFileDialog.getSaveFileName(self, "Guardar configuración Modbus", ARCHIVO, "JSON (*.json)")
+                if not nombre:
+                    return
+                ruta = Path(nombre)
+            config.guardar(ruta, self.v.doc)
+            self.panel_es.config = config
+            self.panel_es.estado.setText(f"Configuración guardada: {ruta}")
+        except (ValueError, OSError) as exc:
+            self.panel_es.estado.setText(f"No se pudo guardar: {exc}")
+
+    def _conectar_modbus(self, prueba=False):
+        if self.modo != "simular" or not self.v or not self.v.s or self.v.s.status != "pausada-estable":
+            self.panel_es.estado.setText("Simule un modelo compilable y estable antes de conectar")
+            return
+        try:
+            config = self.panel_es.obtener()
+            if not config.senales:
+                raise ValueError("Asigne al menos una señal")
+            self.a_ejecutar.setChecked(False)
+            self.modbus.iniciar(config, self.v.s, prueba)
+            self.panel_es.config = config
+            self.panel_es._dibujar()
+            self.panel_es.ocupado(True)
+            self.panel_es.estado.setText(self.modbus.mensaje)
+            self.rt.setInterval(config.periodo_ms)
+            self.reloj.start()
+            self.rt.start()
+        except (ValueError, RuntimeError) as exc:
+            self.panel_es.estado.setText(f"No se pudo conectar: {exc}")
+
+    def _desconectar_modbus(self):
+        self.a_ejecutar.setChecked(False)
+        self.modbus.desconectar()
+        self.panel_es.estado.setText(self.modbus.mensaje)
+        self.rt.start()
 
     # -- presentación del estado ----------------------------------------------------------------
     def refrescar(self) -> None:
@@ -1020,6 +1130,35 @@ class Ventana(QMainWindow):
         self._lecturas()
         self._variables(M, S)
         self._traza(S)
+        if hasattr(self, "panel_es"):
+            valores = dict(S.get("values", {}))
+            valores.update({k: x["value"] for k, x in S.get("outputs", {}).items()})
+            if self.modbus.activo:
+                a = self.modbus.adaptador
+                for senal in a.entradas:
+                    if senal.variable in self.modbus.muestra:
+                        raw = self.modbus.muestra[senal.variable]
+                        if senal.formato != "BOOL":
+                            from fractions import Fraction
+                            raw = raw - 65536 if senal.formato == "INT16" and raw >= 32768 else raw
+                            raw = Fraction(raw) / Fraction(senal.escala)
+                        valores[senal.variable] = raw
+                for senal in a.salidas:
+                    if senal.variable in self.modbus.escritos:
+                        raw = self.modbus.escritos[senal.variable]
+                        if senal.formato != "BOOL":
+                            from fractions import Fraction
+                            raw = raw - 65536 if senal.formato == "INT16" and raw >= 32768 else raw
+                            raw = Fraction(raw) / Fraction(senal.escala)
+                        valores[senal.variable] = raw
+                for vid in self.botones:
+                    if vid in self.panel_es.indicadores:
+                        self.botones[vid].setEnabled(False)
+                        if vid in self.campos:
+                            self.campos[vid].setEnabled(False)
+                for accion in (self.a_paso, self.a_completar):
+                    accion.setEnabled(False)
+            self.panel_es.mostrar_valores(valores)
 
     def _diagnostico(self, S: dict[str, Any], rec: bool) -> None:
         e = html.escape

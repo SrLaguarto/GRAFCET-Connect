@@ -10,7 +10,8 @@ cero; desconexión pausa (no garantiza cero); reconexión solicita cero, lee sen
 y exige Ejecutar. No reanudar automáticamente. Conexión apagada por defecto.
 
 Fases: 1 cliente digital COMPLETADA; 2 configuración/mapa COMPLETADA; 3 adaptador digital COMPLETADA; 4 panel PLC COMPLETADA;
-5 integración Qt/políticas; 6 ciclo completo; 7 analógicas; 8 regresión/guía/prueba real.
+5 integración Qt/políticas COMPLETADA; 6 ciclo completo digital COMPLETADA;
+7 analógicas EN CURSO; 8 regresión/guía/prueba real pendiente.
 Archivos propios: `conexion/__init__.py`, `conexion/modbus.py`, este registro.
 No tocar `.codex/` ni `AGENTS.md`: estaban sin seguimiento al empezar.
 Pruebas: `python -m unittest discover -s tests -t tests -p test_modbus.py`: 3 OK
@@ -23,5 +24,9 @@ Fase 3: `conexion/adaptador.py`, `tests/test_modbus_adaptador.py`; 2 pruebas OK
 (lote simultáneo, muestras inválidas, salidas continuas/memorizadas, cero sin cambiar motor).
 Fase 4: `escritorio/entradas_salidas.py`, `tests/test_modbus_panel.py`; prueba Qt
 offscreen OK: mapa digital/analógico, valores, bloqueo de configuración al conectar.
-Siguiente tarea exacta: integrar pestaña y coordinador asíncrono usando solo QTimer existente.
+Fases 5/6: coordinador con un trabajador de red y recogida desde QTimer existente;
+pestaña en ventana. 10 pruebas Modbus y 16 del simulador OK. Ciclo simulado verifica
+pausa, cero por diagnóstico, pérdida y reconexión sin reanudar; motor intacto.
+Siguiente tarea exacta: terminar pruebas de registros/escalado, revisar visualmente;
+regresión focalizada, guía breve y decisiones P-IMP. Prueba real requiere Factory I/O.
 Commits autorizados por el usuario, solo pruebas relevantes por unidad; sin push.
