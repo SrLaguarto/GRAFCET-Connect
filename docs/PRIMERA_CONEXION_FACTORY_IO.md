@@ -10,7 +10,7 @@ de Factory I/O, copia los nuevos valores en GrafConnect.
    desde la carpeta `implementacion` de este proyecto.
 2. Pulsa la pestaña **E/S externas** y el botón **Abrir prueba guiada**, arriba a
    la derecha. Si no aparece ese botón, estás usando la versión anterior.
-3. El título debe indicar «Prueba Factory I O - pulsador y cinta». Este proyecto
+3. El título debe indicar «Prueba Factory I O - PM y dos cintas». Este proyecto
    ya tiene etapa inicial, variables y acción. También está disponible en
    `prueba_factoryio_digital/manifest.json`, junto al ejecutable, por si quieres
    abrirlo con **Archivo → Abrir modelo…**.
@@ -23,13 +23,17 @@ En Factory I/O, tus capturas muestran **Modbus TCP/IP Server** y este mapa:
 
 | Elemento de la escena | Terminal de Factory I/O | Variable de GrafConnect | Área en GrafConnect | Dirección |
 |---|---|---|---|---|
-| Pulsador marcha | Input 0 | PM | Inputs (entradas digitales 0/1) | 0 |
-| Sensor emisor | Input 1 | PP | Inputs (entradas digitales 0/1) | 1 |
-| Cinta entrada | Coil 0 | Q | Coils (señales digitales 0/1) | 0 |
+| Pulsador marcha | Input 0 (I00) | PM | Inputs (entradas digitales 0/1) | 0 |
+| Cinta entrada | Coil 0 (Q00) | Q00 | Coils (señales digitales 0/1) | 0 |
+| Cinta acumulación | Coil 1 (Q01) | Q01 | Coils (señales digitales 0/1) | 1 |
 
-**Q debe tener dirección 0, no 2.** Las entradas y las salidas tienen numeraciones
-independientes. Coil 1 corresponde a «Cinta acumulación» y no participa en esta prueba.
-PP es aquí el sensor emisor; no significa parada ni detiene la cinta.
+Las entradas y las salidas tienen numeraciones independientes. No escribas I00
+o Q00 en la columna Dirección: escribe solo **0**, o **1** para Q01.
+El ejemplo no utiliza el sensor emisor ni necesita una entrada PP.
+
+El GRAFCET ya está hecho: **etapa 0 inicial (espera) → transición PM → etapa 1
+(acciones continuas Q00 y Q01)**. Al pulsar PM, las dos cintas arrancan y siguen
+activas al soltarlo. No hay transición de parada en este ejemplo.
 
 En GrafConnect comprueba los campos situados encima de la tabla:
 
@@ -62,7 +66,7 @@ Factory I/O para esta primera prueba.
    Conectar y Probar conexión son dos operaciones distintas: Probar termina su
    comprobación y cierra la conexión; Conectar la mantiene abierta.
 
-## 4. Prueba solo el pulsador y la cinta de entrada
+## 4. Arranca las dos cintas con el pulsador
 
 1. En Factory I/O vuelve desde DRIVER a la escena con la flecha de atrás y pon
    la escena en marcha con su botón de reproducción (▶).
@@ -70,14 +74,18 @@ Factory I/O para esta primera prueba.
    **Pausa**, ya has dado la orden de ejecutar.
 3. Acciona el **Pulsador marcha de la escena**, manteniéndolo aproximadamente un
    segundo. No basta con seleccionar su nombre en la lista de asignaciones DRIVER.
-4. Mientras el pulsador esté activo, **PM y Q deben indicar 1**, y «Cinta entrada»
-   debe moverse. Cuando el pulsador deje de estar activo, **PM y Q deben indicar 0**
-   y la cinta debe detenerse. Este ejemplo no memoriza la marcha.
+4. Al activar el pulsador, **PM debe indicar 1** y la etapa 1 debe quedar activa.
+   **Q00 y Q01 deben indicar 1**: «Cinta entrada» y «Cinta acumulación» deben moverse.
+   Al soltarlo, PM vuelve a 0, pero ambas cintas siguen en marcha porque el GRAFCET
+   permanece en la etapa 1.
 5. No hace falta generar cajas, activar el Emisor ni probar toda la instalación.
-   Si PP cambia cuando el Sensor emisor detecta algo, también debería verse en su tarjeta.
+   Para detener la planta simulada, usa su control de pausa en Factory I/O.
+   Pausa en GrafConnect conserva las salidas: no apaga las cintas. Para repetir
+   desde la etapa 0, pulsa Reiniciar en GrafConnect (desconecta), luego Conectar
+   (solicita cero) y Ejecutar; vuelve a accionar PM.
 
-Si PM cambia pero Q no lo hace, comprueba primero que GrafConnect está en Ejecutar.
-Si PM y Q cambian pero la cinta no, anota ese resultado: no es el mismo problema que
+Si PM cambia pero Q00 y Q01 no, comprueba primero que GrafConnect está en Ejecutar.
+Si PM y las salidas cambian pero las cintas no, anota ese resultado: no es el mismo problema que
 un fallo de conexión. Si PM no cambia, anota si el pulsador aparece activo en Factory I/O.
 
 ## Qué significan las palabras
@@ -102,8 +110,8 @@ un fallo de conexión. Si PM no cambia, anota si el pulsador aparece activo en F
 | Probar conexión confirma la comunicación | NO PROBADO | |
 | Conectar confirma conexión mantenida | NO PROBADO | |
 | PM cambia al accionar el Pulsador marcha | NO PROBADO | |
-| Q cambia junto con PM | NO PROBADO | |
-| La cinta de entrada se mueve y se detiene | NO PROBADO | |
+| Q00 y Q01 pasan a 1 al pulsar PM y se mantienen al soltar | NO PROBADO | |
+| Se mueven Cinta entrada y Cinta acumulación | NO PROBADO | |
 
 Si te atascas, indica **el número del apartado y del paso**, y copia el mensaje.
 Esta prueba real sigue pendiente; el proyecto preparado no se conecta automáticamente.

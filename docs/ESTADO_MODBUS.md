@@ -53,8 +53,20 @@ Esto verifica acceso y lectura real, no movimiento de actuadores desde la GUI.
 regenerada y paquete intacto. Portable reconstruido y arranque/captura OK;
 incluye prueba_factoryio_digital y la guía. Captura a 1020×850 revisada.
 
-Siguiente tarea exacta: el responsable abre el portable actualizado, E/S externas
-→ Abrir prueba guiada y sigue docs/PRIMERA_CONEXION_FACTORY_IO.md. Solo falta
-que confirme lectura al accionar Pulsador marcha y control de Cinta entrada;
-después ampliar validación a pausa, red y analógicas. Registrar los resultados.
+Actualización solicitada por el responsable: no ha probado la versión anterior.
+La prueba guiada ahora es un GRAFCET 0 inicial → PM → 1, con acciones continuas
+Q00/Q01 en etapa 1; marcha mantenida al soltar PM, sin transición de parada.
+Mapa: PM/Input 0 (I00), Q00/Coil 0 (Cinta entrada), Q01/Coil 1 (Cinta acumulación).
+Sin PP ni sensor emisor. SFIO18 actualizado: espera, arranque de ambas salidas
+y mantenimiento al soltar. No altera el motor ni escribe salidas a la planta real.
+Validación de esta actualización: 18 pruebas Modbus OK; captura del GRAFCET
+revisada; portable reconstruido con el ejemplo y prueba de arranque superada.
+No se repite la batería completa por este cambio de ejemplo, según trabajo por
+unidades solicitado. La evidencia general anterior sigue siendo 304 pruebas OK.
+
+Siguiente tarea exacta: abrir portable actualizado, E/S externas → Abrir prueba
+guiada; Probar conexión → Conectar → Ejecutar; poner en marcha Factory I/O y
+accionar Pulsador marcha. Confirmar que ambas cintas arrancan y siguen al soltar.
+Guía actualizada en docs/PRIMERA_CONEXION_FACTORY_IO.md; después validar pausa,
+red y analógicas. Para repetir: Reiniciar → Conectar → Ejecutar, y pulsar PM.
 Commits incrementales autorizados; consultar git log. Sin push ni subagentes.

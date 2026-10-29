@@ -14,16 +14,16 @@
       "escala": "1"
     },
     {
-      "variable": "PP",
-      "area": "discrete",
-      "direccion": 1,
+      "variable": "Q00",
+      "area": "coil",
+      "direccion": 0,
       "formato": "BOOL",
       "escala": "1"
     },
     {
-      "variable": "Q",
+      "variable": "Q01",
       "area": "coil",
-      "direccion": 0,
+      "direccion": 1,
       "formato": "BOOL",
       "escala": "1"
     }
