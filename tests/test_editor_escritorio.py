@@ -4043,7 +4043,7 @@ class Interfaz(unittest.TestCase):
     def test_SEDI105_programador_de_valor_de_una_accion_memorizada(self):
         """REQ-ACT-01, REQ-EDT-02: el valor de una memorizada se programa en el panel de la acción: una booleana elige entre las fichas
         «1» y «0»; una numérica arma el valor con un número, variables numéricas (cualquier papel) y los operadores +, −, ×,
-        ÷ anidados; las plantillas ponen el valor de un clic; el texto (de solo lectura, con «Escribir a mano») y los
+        ÷ anidados; el texto (de solo lectura, con «Escribir a mano») y los
         bloques van de la mano en los dos sentidos; un valor que no se analiza se rechaza con su motivo."""
         from escritorio import bloques
         from escritorio.bloques import arbol_a_texto, texto_a_arbol_valor
@@ -4053,25 +4053,19 @@ class Interfaz(unittest.TestCase):
         d = self.panel_accion(s1)
         self.assertTrue(d.caja_valor.isHidden(), "una continua no lleva valor")
         self.poner_tipo(d, "activacion")
-        # booleana: dos fichas y las plantillas «:= 1» y «:= 0»
+        # booleana: dos fichas
         d.poner_variable("M1")
         self.assertFalse(d.caja_valor.isHidden() or d.caja_fichas.isHidden())
         self.assertTrue(d.caja_numerica.isHidden())
-        self.assertEqual(list(d.plantillas), [":= 1", ":= 0"])
         d.fichas["1"].click()
         self.assertEqual((d.valor.text(), d.fichas["1"].isChecked(), d.fichas["0"].isChecked()), ("1", True, False))
         d.fichas["0"].click()
         self.assertEqual((d.valor.text(), d.fichas["0"].isChecked()), ("0", True))
-        d.plantillas[":= 1"].click()
-        self.assertEqual((d.valor.text(), d.fichas["1"].isChecked()), ("1", True))
-        # numérica: plantillas +1, −1 y := 0
+        # numérica: el valor se arma con bloques
         d.poner_variable("CT")
         self.assertTrue(d.caja_fichas.isHidden() and not d.caja_numerica.isHidden())
-        self.assertEqual(list(d.plantillas), ["+1", "−1", ":= 0"])
-        for plantilla, texto in (("+1", "CT + 1"), ("−1", "CT - 1"), (":= 0", "0")):
-            d.plantillas[plantilla].click()
-            self.assertEqual((d.valor.text(), d.prog.texto()), (texto, texto), plantilla)
-        d.plantillas["+1"].click()
+        d._poner_valor("CT + 1")
+        self.assertEqual((d.valor.text(), d.prog.texto()), ("CT + 1", "CT + 1"))
         arbol = d.prog.lienzo.arbol
         self.assertEqual((arbol["k"], arbol["op"], arbol["a"], arbol["b"]), ("ar", "+", {"k": "vnum", "n": "CT"}, {"k": "num", "v": "1"}))
         self.assertTrue(d.valor.isReadOnly())
@@ -4138,26 +4132,6 @@ class Interfaz(unittest.TestCase):
         d.prog.elegir_categoria("numero")
         d.prog.colocar(d.prog.paleta.bloques()[0])
         self.assertEqual(d.valor.text(), "1")
-
-    def test_SEDI110_plantillas_sin_acumularse(self):
-        """REQ-ACT-01, REQ-EDT-07: al cambiar de tipo o de variable hay una sola etiqueta «Plantillas» y los botones
-        correctos."""
-        from PySide6.QtWidgets import QLabel
-        w = self.w
-        e, ids, ts = self._dialogo_con_memorias()
-        d = self.panel_accion(ids["1"])
-        etiquetas = lambda: [x for x in d.caja_valor.findChildren(QLabel) if x.text() == "Plantillas"]  # noqa: E731
-        botones = lambda: [d.fila_plantillas.itemAt(i).widget().text() for i in range(d.fila_plantillas.count())
-                           if d.fila_plantillas.itemAt(i).widget()]  # noqa: E731
-        for tipo, var, esperadas in (("activacion", "M1", [":= 1", ":= 0"]), ("evento", "CT", ["+1", "−1", ":= 0"]),
-                                     ("desactivacion", "M1", [":= 1", ":= 0"]), ("activacion", "CT", ["+1", "−1", ":= 0"]),
-                                     ("evento", "M1", [":= 1", ":= 0"])):
-            self.poner_tipo(d, tipo)
-            d.poner_variable(var)
-            self.assertEqual(len(etiquetas()), 1, (tipo, var))
-            self.assertEqual(botones(), ["Plantillas", *esperadas])
-            self.assertEqual(list(d.plantillas), esperadas)
-            self.assertEqual(d.fila_plantillas.count(), len(esperadas) + 2, "etiqueta, botones y estiramiento")
 
     def test_SEDI106_frase_explicativa_y_condicion_con_bloques_al_lado(self):
         """REQ-ACT-01, REQ-EDT-02: arriba del panel de la acción, una frase la explica según su tipo; la condición (o el
@@ -4417,7 +4391,12 @@ class Interfaz(unittest.TestCase):
         p.s_acciones.setCurrentRow(0)
         p._editar(p._elegida())  # «Editar…»
         self.assertEqual(p.pagina, "accion")
-        p._volver_a_la_etapa()
+        self.assertEqual(p.accion.b_etapa.text(), "Etapa 1", "solo informa de la etapa: no es un botón")
+        from PySide6.QtWidgets import QPushButton
+        self.assertNotIsInstance(p.accion.b_etapa, QPushButton)
+        self.assertEqual(p.pagina, "accion")
+        e.seleccionar([ids["1"]])  # otra vez la etapa (la etiqueta no lleva a ella)
+        QApplication.processEvents()
         self.assertEqual(p.pagina, "etapa")
         n = len(e.ed.draft_actions())
         p._anadir()  # «Añadir…»: una acción nueva y sus opciones
@@ -5057,30 +5036,6 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(int(re.search(r"const ACT_CANAL\s*=\s*(\d+);", js).group(1)), ACT_CANAL)
         for texto in ('"matriz-2"', "ACT_CANAL", "filas", "canales"):
             self.assertIn(texto, js)
-
-    def test_SEDI125_plantillas_mas_uno_y_menos_uno_con_nombre_de_cifra_delante(self):
-        """REQ-EDT-07, REQ-EDT-09, REQ-ACT-01: las plantillas «+1» y «−1» de una acción sobre una variable entera cuyo nombre
-        empieza por cifra (`1CT`) escriben el nombre entre comillas invertidas, y el valor es válido: la acción queda
-        completa (no borrador) y el grafcet se puede simular; con un nombre normal siguen escribiendo «ct + 1»."""
-        w = self.w
-        e, ids, ts = self.secuencial()
-        e.nueva_variable("1CT", "internal", {"kind": "int"})
-        e.nueva_variable("ct", "internal", {"kind": "int"})
-        d = self.anadir_accion(ids["1"], "activacion", "1CT")
-        for texto, esperado in (("+1", "`1CT` + 1"), ("−1", "`1CT` - 1")):
-            self.assertIn(texto, d.plantillas)
-            d.plantillas[texto].click()
-            self.assertEqual(d.valor.text(), esperado)
-            self.assertEqual(d.msg.text(), "", "sin aviso: el valor se aplicó")
-            aid = e.acciones(ids["1"])[-1]["id"]
-            self.assertFalse(e._es_borrador(aid), "la acción quedó completa")
-            self.assertEqual(e.datos_accion(aid)["valor"], esperado)
-            self.assertTrue(e.ed.validate().can_simulate)
-        # un nombre normal sigue sin comillas
-        d.variable.setCurrentText("ct")
-        d.plantillas["+1"].click()
-        self.assertEqual(d.valor.text(), "ct + 1")
-        self.assertEqual(e.datos_accion(e.acciones(ids["1"])[-1]["id"])["valor"], "ct + 1")
 
     def _captura1(self):
         """El caso de la captura 1: una etapa (la «1», con t2 «paro» debajo) y otra a su derecha, a su altura. Devuelve el

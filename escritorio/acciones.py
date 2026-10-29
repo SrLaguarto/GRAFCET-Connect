@@ -26,7 +26,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
                                QPushButton, QVBoxLayout, QWidget)
 
-from .bloques import COLORES, Programador, _citar
+from .bloques import COLORES, Programador
 from .diagrama import COL
 from .edicion import CONTINUAS, DISPARADOR, Edicion, Parpadeo
 from .variables import nombre_tipo
@@ -56,7 +56,7 @@ class _ComboVariable(QComboBox):
 
 class PanelAccion(QWidget):
     """Las opciones de la acción mostrada: frase, tipo, variable y límite (esta columna) y, en `caja_valor` (que la ventana
-    del panel coloca a su lado), las plantillas y el programador del valor de una memorizada. Cada cambio se aplica en el
+    del panel coloca a su lado), las fichas y el programador del valor de una memorizada. Cada cambio se aplica en el
     acto con la edición; `mostrar(e, aid)` rellena los campos con lo que hay, sin tocar lo que se está escribiendo."""
 
     def __init__(self) -> None:
@@ -70,14 +70,12 @@ class PanelAccion(QWidget):
         self.clave_tipo = ""  # el tipo de la acción mostrada (continua, activacion…): se cambia con botón derecho sobre ella
         self._rechazado: tuple[str, str] | None = None  # (acción, aviso): lo último escrito que no se pudo guardar
         self._firma: tuple | None = None
-        self.al_volver: Callable[[], Any] | None = None  # la ventana vuelve a las opciones de la etapa
         self.parpadeo = Parpadeo(self)  # el campo que no vale parpadea en naranja
         self.parpadeo.cambia.connect(self._pintar)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        self.b_etapa = QPushButton()
-        self.b_etapa.setToolTip("Volver a las opciones de la etapa")
-        self.b_etapa.clicked.connect(lambda: self.al_volver and self.al_volver())
+        self.b_etapa = QLabel()  # solo informa de la etapa de la acción; no lleva a ninguna parte
+        self.b_etapa.setStyleSheet("color: gray")
         lay.addWidget(self.b_etapa, 0, Qt.AlignmentFlag.AlignLeft)
         self.frase = QLabel()
         self.frase.setWordWrap(True)
@@ -102,16 +100,10 @@ class PanelAccion(QWidget):
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
         lay.addStretch(1)
-        # El valor de una memorizada: plantillas, y fichas 1/0 (booleana) o programador de valor (numérica)
+        # El valor de una memorizada: fichas 1/0 (booleana) o programador de valor (numérica)
         self.caja_valor = QWidget()
         vl = QVBoxLayout(self.caja_valor)
         vl.setContentsMargins(0, 0, 0, 0)
-        self.fila_plantillas = QHBoxLayout()
-        self.fila_plantillas.setContentsMargins(0, 0, 0, 0)
-        self.plantillas: dict[str, QPushButton] = {}
-        self.fila_plantillas.addWidget(QLabel("Plantillas"))  # una vez; los botones se ponen entre ella y el estiramiento
-        self.fila_plantillas.addStretch(1)
-        vl.addLayout(self.fila_plantillas)
         self.caja_fichas = QWidget()
         fl = QHBoxLayout(self.caja_fichas)
         fl.setContentsMargins(0, 0, 0, 0)
@@ -183,7 +175,7 @@ class PanelAccion(QWidget):
         if otra:
             self._valor_cambiado(self.valor.text())
         self.b_etapa.setVisible(bool(self.sid))
-        self.b_etapa.setText(f"‹ Etapa {e.nombres.get(self.sid, self.sid)}" if self.sid else "")
+        self.b_etapa.setText(f"Etapa {e.nombres.get(self.sid, self.sid)}" if self.sid else "")
         self._ajustar()
         if self._rechazado is None:
             self.prog.poner(self.valor.text())
@@ -237,7 +229,7 @@ class PanelAccion(QWidget):
         return self._variables().get(self._elegida, ("", ""))[1]
 
     def _ajustar(self) -> None:
-        """Muestra solo lo que pide el tipo y el de la variable; pone al día la lista, las plantillas y la frase."""
+        """Muestra solo lo que pide el tipo y el de la variable; pone al día la lista y la frase."""
         clave = self.clave_tipo
         continua = clave in CONTINUAS
         for w in (self.l_limite, self.limite):
@@ -248,27 +240,7 @@ class PanelAccion(QWidget):
         self.caja_fichas.setVisible(not continua and booleana)
         self.caja_numerica.setVisible(not continua and not booleana)
         self.prog.refrescar()
-        self._plantillas(booleana)
         self._previsualizar()
-
-    def _plantillas(self, booleana: bool) -> None:
-        """Las plantillas de un clic: «:= 1» y «:= 0» (booleana); «+1», «−1» y «:= 0» (numérica: V + 1, V - 1, 0)."""
-        v = _citar(self._elegida) if self._elegida else "V"  # con comillas invertidas si el nombre las pide (`1CT`)
-        opciones = ((":= 1", "1"), (":= 0", "0")) if booleana else (("+1", f"{v} + 1"), ("−1", f"{v} - 1"), (":= 0", "0"))
-        if [(t, b.toolTip()) for t, b in self.plantillas.items()] == [(t, f"Valor: {val}") for t, val in opciones]:
-            return
-        for b in self.plantillas.values():
-            self.fila_plantillas.removeWidget(b)
-            b.hide()
-            b.setParent(None)
-            b.deleteLater()
-        self.plantillas = {}
-        for i, (texto, valor) in enumerate(opciones):
-            b = QPushButton(texto)
-            b.setToolTip(f"Valor: {valor}")
-            b.clicked.connect(lambda _=False, valor=valor: self._poner_valor(valor))
-            self.fila_plantillas.insertWidget(1 + i, b)
-            self.plantillas[texto] = b
 
     def frase_explicativa(self) -> str:
         """La acción en lenguaje claro, según su tipo."""
@@ -349,7 +321,7 @@ class PanelAccion(QWidget):
         self._aplicar("valor")
 
     def _valor_cambiado(self, texto: str) -> None:
-        """El texto del valor cambió (plantilla, ficha, bloques o a mano): las fichas siguen al texto y la frase también."""
+        """El texto del valor cambió (ficha, bloques o a mano): las fichas siguen al texto y la frase también."""
         t = texto.strip()
         for v, b in self.fichas.items():
             b.setChecked(t == v)

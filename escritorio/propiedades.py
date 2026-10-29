@@ -32,7 +32,7 @@ from grafcet.view import norm
 
 from .acciones import PanelAccion
 from .bloques import FlowLayout, Programador
-from .diagrama import COL, H, TB, _html, ficha_accion, icono_accion
+from .diagrama import COL, H, TB, _html, ficha_accion
 from .edicion import COLOCACIONES, CONTINUAS, Parpadeo
 
 NARANJA = COL["glow"]
@@ -50,10 +50,8 @@ COLOCABLES = tuple(NOMBRES)  # las fichas de la paleta: solo se colocan arrastr�
 
 
 def icono(h: str) -> QIcon:
-    """Dibujo del elemento, para reconocerlo en la paleta (con el trazo de la norma: etapa cuadrada, transición, barras);
-    una acción, como la dibuja el diagrama."""
-    if h.startswith("accion:"):
-        return icono_accion(h.partition(":")[2], 80, 64)
+    """Dibujo del elemento, para reconocerlo en la paleta (con el trazo de la norma: etapa cuadrada, transición, barras,
+    y la caja de una acción con su enlace a la izquierda, como la dibuja el diagrama)."""
     pm = QPixmap(64, 64)
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm)
@@ -67,6 +65,9 @@ def icono(h: str) -> QIcon:
         p.drawLine(32, 2, 32, 62)
         p.setPen(QPen(QColor(COL["text"]), 4))
         p.drawLine(20, 32, 44, 32)
+    elif h.startswith("accion:"):
+        p.drawLine(2, 32, 14, 32)
+        p.drawRect(QRectF(14, 14, 48, 36))
     else:
         p.drawLine(16, 2, 16, 26)
         p.drawLine(48, 2, 48, 26)
@@ -234,7 +235,6 @@ class PanelPropiedades(QWidget):
         self.izq.addWidget(self._etapa())  # 1
         self.izq.addWidget(self._transicion())  # 2
         self.accion = PanelAccion()  # 3
-        self.accion.al_volver = self._volver_a_la_etapa
         self.izq.addWidget(self.accion)
         cuerpo.addWidget(self.izq)
         self.der = QStackedWidget()
@@ -399,11 +399,6 @@ class PanelPropiedades(QWidget):
     def _editar(self, aid: str | None) -> None:
         if self.e is not None and self.ident and aid:
             self.e.pedir_accion(self.ident, aid)
-
-    def _volver_a_la_etapa(self) -> None:
-        if self.e is not None:
-            self.e.ver_accion = False
-            self.e.cambiado.emit()
 
     def _accion_señalada(self, it: Any, _: Any = None) -> None:
         """Elegir una acción en la lista la resalta en el dibujo."""

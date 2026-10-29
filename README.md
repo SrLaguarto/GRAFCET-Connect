@@ -142,7 +142,7 @@ En modo Editar, la pantalla tiene tres zonas:
 El panel de Opciones es uno solo, sin pestañas, y cambia según lo seleccionado:
 
 - **Transición:** a la izquierda, la etiqueta, «Mostrar etiqueta» y el comentario. A la derecha, la receptividad, con el programador de bloques (ver «Bloques» más abajo).
-- **Etapa:** etiqueta, tipo (normal o inicial), comentario y colocación de las acciones. Debajo, la lista de sus acciones con los botones «Añadir…», «Editar…», «Quitar», ◀ y ▶. Desde una acción, «‹ Etapa X» vuelve a la etapa.
+- **Etapa:** etiqueta, tipo (normal o inicial), comentario y colocación de las acciones. Debajo, la lista de sus acciones con los botones «Añadir…», «Editar…», «Quitar», ◀ y ▶. En el panel de una acción, «Etapa X» solo indica a qué etapa pertenece (no lleva a ella).
 - **Acción:** una frase que dice en lenguaje claro lo que hace (por ejemplo «Al activarse la etapa 2: CT := CT + 1.»), y debajo la variable, el valor (si es memorizada) y la condición o el evento con el programador de bloques (si es condicionada o por evento).
 - **Enlace, barra de simultaneidad, varios elementos o nada:** lo que ya mostraba antes el panel para cada caso.
 
@@ -189,8 +189,8 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
 - **Acción suelta:** una ficha soltada en el dibujo crea una acción sin etapa y sin variable, con «?». No abre ningún diálogo. Una acción soltada sin tocar nada es continua. Se une a una etapa arrastrando desde su punto de unión de la izquierda hasta la etapa, o desde el de la derecha de la etapa hasta la acción.
 - **Variable:** se elige en una lista con las que valen para esa acción. Una continua ofrece solo salidas y memorias booleanas. Una memorizada ofrece salidas y memorias de cualquier tipo. Las entradas nunca se ofrecen como destino. Las variables se crean solo en la tabla de variables (con «Nueva E», «Nueva S» o «Nueva M»); la lista de la acción no tiene «Nueva variable…». Sin variables, la lista dice «(sin variables: créelas en la tabla de variables)».
 - **Valor** (solo en memorizadas), que se arma con bloques:
-  - Si la variable es **booleana**, se elige la ficha «1» o la «0» (`:= 1` o `:= 0`). También se puede pulsar la plantilla «:= 1» o «:= 0».
-  - Si es **numérica**, el valor puede ser un número (por ejemplo `5`), una variable numérica, o una operación «+», «−», «×» o «÷» entre dos huecos. Las operaciones se pueden anidar: `CT * 2 - 1` es una resta cuyo primer operando es «CT × 2». Las plantillas «+1» y «−1» ponen `CT + 1` y `CT - 1` con la variable elegida, y «:= 0» pone `0`.
+  - Si la variable es **booleana**, se elige la ficha «1» o la «0» (`:= 1` o `:= 0`).
+  - Si es **numérica**, el valor puede ser un número (por ejemplo `5`), una variable numérica, o una operación «+», «−», «×» o «÷» entre dos huecos. Las operaciones se pueden anidar: `CT * 2 - 1` es una resta cuyo primer operando es «CT × 2».
   - Debajo se ve el texto del valor, de solo lectura. La casilla «Escribir a mano» lo deja editar; lo escrito pasa a bloques.
   - Un valor que el programa no entiende no se guarda, y el panel dice por qué.
 - **Condición o evento:** se programan con bloques en el mismo panel. Una condicionada sin condición válida es un borrador: no se simula y se dibuja con «?». Elegir «Continua» quita la condición.

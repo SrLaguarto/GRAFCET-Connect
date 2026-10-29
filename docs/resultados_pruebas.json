@@ -1,9 +1,9 @@
 {
- "date": "2026-10-29T10:37:55+01:00",
+ "date": "2026-10-29T11:23:36+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 288,
+ "total": 286,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -331,16 +331,6 @@
    "summary": "REQ-EDT-02, REQ-EDT-03: los clics del ratón sobre el dibujo llegan al editor; la selección y las marcas se"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI110_plantillas_sin_acumularse",
-   "case": "S-EDI110",
-   "outcome": "pasa",
-   "requirements": [
-    "REQ-ACT-01",
-    "REQ-EDT-07"
-   ],
-   "summary": "REQ-ACT-01, REQ-EDT-07: al cambiar de tipo o de variable hay una sola etiqueta «Plantillas» y los botones"
-  },
-  {
    "test": "test_editor_escritorio.Interfaz.test_SEDI111_paleta_de_bloques_una_ficha_por_elemento",
    "case": "S-EDI111",
    "outcome": "pasa",
@@ -486,17 +476,6 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-ACT-01, REQ-EDT-02, REQ-DAT-01: «En matriz de 2» (menú de la etapa y panel de opciones) coloca las acciones en"
-  },
-  {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI125_plantillas_mas_uno_y_menos_uno_con_nombre_de_cifra_delante",
-   "case": "S-EDI125",
-   "outcome": "pasa",
-   "requirements": [
-    "REQ-ACT-01",
-    "REQ-EDT-07",
-    "REQ-EDT-09"
-   ],
-   "summary": "REQ-EDT-07, REQ-EDT-09, REQ-ACT-01: las plantillas «+1» y «−1» de una acción sobre una variable entera cuyo nombre"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI126_ejemplos_paralelo_y_alternativas_con_una_accion_mas",
