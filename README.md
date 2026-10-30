@@ -29,13 +29,13 @@ El primer comando comprueba la parte automatizable de R-02: el paquete sigue sie
 ### Simulador de escritorio (P-IMP-29)
 
 Primera versión para Windows: simula los ejemplos y los modelos guardados con el dibujo de la norma. Tiene entradas
-con un clic. Al abrir un ejemplo o un modelo, el programa queda en **Pausa**, que es el modo de edición (en el resto de
+con un clic. Al abrir un ejemplo o un modelo, el programa queda en **Pausa**, sin estado (sin etapas activas ni temporizadores), que es el modo de edición (en el resto de
 este documento, «modo Editar»). **Play** (F5, «Ejecutar») compila lo editado y simula en tiempo real, como un autómata;
 los retardos se ven como temporizadores: sobre la duración de su receptividad (o de la condición o evento de una acción) aparece el tiempo transcurrido («0,5 s») mientras cuenta, y «3 s ✓» al vencer. **Pausa** detiene y vuelve a editar, y deja todo a 0 hasta el siguiente Play (sin etapas activas ni temporizadores; con E/S externas conectadas, pide el cero de las salidas asignadas). Cada Play empieza una sesión nueva desde la situación inicial. **Reiniciar** (Ctrl+R)
-en Play vuelve a la situación inicial (en Pausa no crea sesión). Hay traza, salidas, variables y todas las lecturas de interpretación
-(menú «Ajustes»). Los paneles derecho e inferior se pliegan, y el dibujo admite zoom: la rueda lo hace anclado al puntero, y «Centrar todo» (Ctrl+0; menú Ver; al simular, también doble clic) encaja y centra lo dibujado (P-IMP-30 y P-IMP-64). «Abrir modelo» admite
+en Play vuelve a la situación inicial sin cerrar la conexión y lee las entradas antes de escribir (en Pausa no crea sesión). Hay traza, salidas, variables y todas las lecturas de interpretación
+(menú «Ajustes»). Los paneles derecho e inferior se pliegan, y el dibujo admite zoom: la rueda lo hace anclado al puntero, y «Centrar todo» (Ctrl+0; menú Ver; al simular, también doble clic) encaja y centra lo dibujado (P-IMP-30 y P-IMP-64); «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar), y el botón central (la rueda) arrastra el dibujo, al editar y al simular (P-IMP-68). «Abrir modelo» admite
 un proyecto (su `manifest.json`) o un documento de modelo; «Guardar proyecto» guarda el modelo en curso con su
-dibujo. Con «Proyecto > Nuevo grafcet» se crea un modelo vacío; en Pausa, un ejemplo o un modelo abierto se edita con el editor de un secuencial: etapas, transiciones, enlaces, receptividades, deshacer, diagnósticos y recuperación (P-IMP-32). La paleta tiene ocho fichas, en dos columnas; pide cuatro filas y, en ventanas bajas, se encoge a tres con barra de desplazamiento: Etapa, Transición, Simultaneidad, Acción, Macroetapa, Encapsulante, **Grafcet parcial** (marco redondeado con «G»: se suelta en un hueco y crea un grafcet parcial vacío) y **Forzado**, que al soltarse sobre una etapa crea su orden `G{ }` (P-IMP-61, P-IMP-62, P-IMP-65 y P-IMP-66). Supr con una acción o una orden señalada borra solo esa acción u orden, no la etapa; «Equidistanciar» ordena las alturas de una cadena (P-IMP-65).
+dibujo. Con «Proyecto > Nuevo grafcet» se crea un modelo vacío; en Pausa, un ejemplo o un modelo abierto se edita con el editor de un secuencial: etapas, transiciones, enlaces, receptividades, deshacer, diagnósticos y recuperación (P-IMP-32). La paleta tiene ocho fichas, en dos columnas; pide cuatro filas y, en ventanas bajas, se encoge a tres con barra de desplazamiento: Etapa, Transición, Simultaneidad, Acción, Macroetapa, Encapsulante, **Grafcet parcial** (marco redondeado con «G»: se suelta en un hueco y crea un grafcet parcial vacío) y **Forzado**, que soltado en un hueco crea un borrador suelto (`G?{?}`, que no se simula) y que, unido a una etapa y completo, pasa a ser la orden `G{ }` (P-IMP-61, P-IMP-62, P-IMP-65, P-IMP-66 y P-IMP-68). Supr con una acción o una orden señalada borra solo esa acción u orden, no la etapa; «Equidistanciar» ordena las alturas de una cadena (P-IMP-65).
 
 - Desde el código: doble clic en «Abrir simulador.bat», o `python escritorio/simulador.py [modelo]`.
 - Versión portable: «Construir ejecutable.bat» (o `python tools/construir_ejecutable.py`) deja el programa en
@@ -80,13 +80,13 @@ La reconexión es manual y exige volver a pulsar Ejecutar. **Conectar** y **Prob
 Pausa. La conexión solo se cierra con **Desconectar**, al cerrar el programa o por un fallo real de red o del servidor:
 ni Play, ni Pausa, ni Reiniciar, ni editar, guardar o abrir otro proyecto la cierran. Si lo editado invalida el mapa de
 señales, Play no arranca, avisa y la conexión se mantiene. Al abrir otro proyecto con conexión viva, las salidas del
-modelo anterior pasan a cero y el mapa se sustituye por el del proyecto nuevo. **Desconectar** escribe el cero de las salidas asignadas antes de cerrar el TCP y deja «Desconectado · salidas a cero»; si la red falla, cierra igual y avisa «Salidas no garantizadas». Al cerrar la ventana también se intenta el cero, pero si la red falla se cierra sin aviso. **Probar conexión** no escribe nada.
+modelo anterior pasan a cero (también las del mapa nuevo, con un solo cero por canal) y el mapa se sustituye por el del proyecto nuevo. **Desconectar** escribe el cero de las salidas asignadas antes de cerrar el TCP y deja «Desconectado · salidas a cero»; si la red falla, cierra igual, deja el estado en «error» y avisa «Desconectado · salidas no garantizadas · no se pudo poner a cero la planta». Al cerrar la ventana también se intenta el cero, pero si la red falla se cierra sin aviso. **Probar conexión** no escribe nada.
 
 El periodo de servicio es configurable (50 ms iniciales). El intervalo efectivo
 incluye latencia y lecturas/escrituras por señal; pulsos breves pueden perderse.
 El panel muestra la última lectura y la última escritura confirmada mientras está
 conectado, no una confirmación física del actuador. La integración se prueba con
-servidores locales simulados: **pendiente validar una escena real con Factory I/O**.
+servidores locales simulados: **pendiente validar una escena real con Factory I/O**. Límites conocidos, sin decidir: si se abre otro proyecto mientras se prueba la conexión, el estado puede quedarse en «probando» hasta Desconectar (ya ocurría antes); cerrar la ventana con la red caída sigue sin avisar.
 
 ### Banco de pruebas y comparador de decisiones
 
@@ -258,7 +258,7 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
 El programador es de bloques, al estilo de Scratch: se arma una receptividad, una condición o un evento arrastrando piezas, en lugar de escribirlo.
 
 - **Dónde está:** en el panel de Opciones, a la derecha de los datos de la transición o de la acción. Al seleccionar una transición, o hacer doble clic en ella, el panel muestra su receptividad. Al seleccionar una acción condicionada o por evento, muestra su condición o su evento, con un título como «Condición de la acción Q01 (etapa 0)».
-- **Cómo se ve:** a la izquierda, una columna con siete carpetas, cada una con un círculo de su color y su nombre: Operadores, Entradas, Salidas, Etapas (X), Memorias, Comparaciones y Temporizadores. En el centro, las fichas de la carpeta elegida: **una ficha por cada elemento que existe**, en orden (las etapas por número, las variables por nombre). Si son muchas, la columna tiene desplazamiento vertical. Sin elementos, la carpeta muestra un bloque vacío. Cada ficha se arrastra al área con ese elemento ya elegido: por ejemplo, la ficha «X1» de Etapas (X) es la etapa 1. A la derecha, el área de trabajo, con la fórmula dibujada en una línea si cabe.
+- **Cómo se ve:** a la izquierda, una columna con ocho carpetas, cada una con un círculo de su color y su nombre: Operadores, Constantes, Entradas, Salidas, Etapas (X), Memorias, Comparaciones y Temporizadores. «Constantes» trae las fichas «1» (verdadero) y «0» (falso), que antes quedaban entre los operadores, fuera de la vista. En el centro, las fichas de la carpeta elegida: **una ficha por cada elemento que existe**, en orden (las etapas por número, las variables por nombre). Si son muchas, la columna tiene desplazamiento vertical. Sin elementos, la carpeta muestra un bloque vacío. Cada ficha se arrastra al área con ese elemento ya elegido: por ejemplo, la ficha «X1» de Etapas (X) es la etapa 1. A la derecha, el área de trabajo, con la fórmula dibujada en una línea si cabe.
 - **Debajo del área:** la fórmula en texto, «Escrito» (el texto que ha quedado guardado), «Se dibuja» (cómo se verá en el dibujo de la norma) y «Crear las que faltan» (declara como entradas booleanas las variables que se usan y no existen). En la última fila, el aviso, «⤢ Ampliar» (abre el programador en una ventana más grande, sincronizada) y la papelera.
 - **Bloques ya puestos:** cada bloque del área tiene su ▾ para cambiar de elemento (otra etapa, otra variable).
 - **Fórmula en texto:** es de solo lectura. La casilla «Escribir a mano» la deja editar; lo escrito pasa a bloques. Al desmarcarla vuelve a ser de solo lectura.
@@ -303,10 +303,12 @@ en el dibujo, no su parcial.
   «Renombrar…». El doble clic en la macroetapa encuadra la expansión.
 - **Encapsulante.** Se arrastra la ficha, o se convierte una etapa con el botón derecho, «Convertir en encapsulante».
   «Convertir en etapa ordinaria» la devuelve si no tiene recintos.
-- **Recintos.** Botón derecho en la encapsulante, «Añadir recinto…», y el nombre (R1, R2…). El marco vacío aparece a su
-  derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos. Con «Mostrar dependencias» (botón junto al zoom) se dibuja un trazo discontinuo de la encapsulante a su recinto.
+- **Recintos.** Botón derecho en la encapsulante, «Añadir recinto…», y el nombre (G1, G2…: el primero libre entre parciales y macroetapas). El marco vacío aparece a su
+  derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos. Con «Mostrar dependencias» (botón junto al zoom) se dibujan dos trazos discontinuos, desde las esquinas de la encapsulante más cercanas hasta las dos esquinas del lado del recinto que mira hacia ella (P-IMP-68).
 - **Grafcet parcial suelto.** Se arrastra la ficha «Grafcet parcial» (marco redondeado con «G») a un hueco del dibujo, o se usa «Nuevo grafcet parcial aquí» del botón derecho en el hueco. Crea un parcial vacío, con nombre automático (G1, G2…) y su marco en ese punto, en una sola operación de deshacer. Las etapas que se suelten dentro pasan a él. Se renombra con «Renombrar…» (botón derecho o doble clic en su borde); es destino de la ficha «Forzado»; Supr lo borra con aviso si hay órdenes que lo apuntan. Se guarda y se abre como cualquier otro parcial. Sin posición guardada no se dibuja, y su marco vacío solo se ve al editar, no al simular.
 - **Mostrar dependencias.** Botón junto a los controles de zoom, apagado por defecto y recordado entre sesiones. Con él se dibujan los trazos discontinuos que unen una macroetapa con su expansión y una encapsulante con su recinto; sin él no aparecen. No cambia la disposición, los marcos ni la selección.
+- **Marcos de los parciales (P-IMP-68).** El marco de un parcial rodea todo lo que se dibuja de él: etapas, transiciones con sus textos, acciones y órdenes, barras y recorridos de enlaces, también los de retorno. Deja 26 px a los lados y 22 arriba y abajo. No cuentan el estado del temporizador, las etiquetas de simulación ni los comentarios.
+- **Forzado desde la paleta (P-IMP-68).** La ficha «Forzado» (rectángulo doble «G{ }») se arrastra como una acción: soltada en un hueco crea una orden suelta, con «G?{?}», que no se simula; soltada sobre una etapa (o sobre una de sus acciones u órdenes, o a menos de 16 del borde derecho de su fila) queda unida a ella y abre sus opciones. Se une a mano a una etapa tirando de su punto de unión, como una acción. Solo pasa a ser orden del modelo unida y completa. Separarla o «Eliminar el enlace» la devuelve a suelta, también si ya estaba en el modelo; borrar su destino o sus etapas la deja sin completar; un ciclo de forzado se rechaza al unir. Se configura con doble clic, con el menú o con el panel.
 - **Enlace de activación.** Botón derecho en una etapa de un recinto, «Enlace de activación» (casilla). La etapa marcada
   lleva un «\*» y se activa cuando se activa la encapsulante (P-IMP-23).
 - **Forzar un parcial.** Botón derecho en una etapa, «Forzar un parcial…»: se elige el parcial destino y la forma. La
@@ -324,8 +326,10 @@ en el dibujo, no su parcial.
 
 **Límites de esta versión:**
 
-- El nombre de la encapsulante se revisará en la ronda siguiente: el responsable pide que vuelva a ir a caballo de la línea superior del marco de su recinto, como en la norma.
+- El nombre de la encapsulante va a caballo de la línea superior del marco de su recinto, como en la norma (resuelto en P-IMP-68).
 - Renombrar un parcial no reescribe los textos que lo nombran con nombre calificado (`G.x`).
 - No hay atajos de teclado para estas acciones.
 - El ir y volver entre niveles no está completo (REQ-EDT-08).
 - Los arrastres con ratón real no se han comprobado en pantalla: las pruebas usan gestos programáticos.
+- Los comentarios quedan fuera de los marcos de los parciales.
+- Lo cosmético queda para el rediseño: paleta por secciones, iconos y sitio de «Mostrar dependencias».

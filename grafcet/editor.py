@@ -403,11 +403,16 @@ class Editor:
     # Una acción del modelo exige etapa y variable. Una acción suelta (o unida a una etapa a la que aún le falta algo)
     # no puede serlo: se guarda en `presentation.draftActions`, no se simula y viaja con el proyecto. Cada una lleva
     # id, x, y (el punto medio de su lado izquierdo, donde se une), tipo (continua, condicionada, limitada, activacion,
-    # desactivacion, evento) y, si los tienen, variable (ID), condicion, valor, evento y limite (en la notación del
+    # desactivacion, evento, forzado) y, si los tienen, variable (ID), condicion, valor, evento y limite (en la notación del
     # usuario), etapa, y grupo y orden: varias acciones sueltas pegadas forman un grupo (mismo `grupo`, ordenadas por
-    # `orden`; comparten x, y y la colocación de `actionLayouts[grupo]`).
-    DRAFT_TIPOS = ("continua", "condicionada", "limitada", "activacion", "desactivacion", "evento")
-    DRAFT_CAMPOS = ("variable", "condicion", "valor", "evento", "limite", "etapa", "grupo", "orden")
+    # `orden`; comparten x, y y la colocación de `actionLayouts[grupo]`). Una orden de forzado sin completar (tipo «forzado»,
+    # P-IMP-68) lleva en su lugar `destino` (ID del parcial que se fuerza), `forma` (explicit, current, empty o initial) y
+    # `etapas` (ID de las etapas del destino que quedan activas, solo en la forma explícita); no se simula hasta que, unida
+    # a una etapa y completa, pasa al modelo con `add_force`.
+    DRAFT_TIPOS = ("continua", "condicionada", "limitada", "activacion", "desactivacion", "evento", "forzado")
+    DRAFT_CAMPOS = ("variable", "condicion", "valor", "evento", "limite", "etapa", "grupo", "orden", "destino", "forma",
+                    "etapas")
+    DRAFT_FORMAS = ("explicit", "current", "empty", "initial")  # las formas de una orden de forzado (`add_force`)
 
     def draft_actions(self) -> list[dict[str, Any]]:
         d = self.presentation.get("draftActions", [])
@@ -421,6 +426,16 @@ class Editor:
         if datos.get("variable") and not any(v["id"] == datos["variable"] for v in m["variables"]):
             raise DiagnosticError(Diagnostic("D-REF", f"variable inexistente: {datos['variable']}",
                                              element=datos["variable"]))
+        if datos.get("destino") and not any(q["id"] == datos["destino"] for q in m["partials"]):
+            raise DiagnosticError(Diagnostic("D-REF", f"parcial inexistente: {datos['destino']}", element=datos["destino"]))
+        if datos.get("forma") and datos["forma"] not in self.DRAFT_FORMAS:
+            raise DiagnosticError(Diagnostic("D-FORMATO", f"forma de forzado desconocida: {datos['forma']!r}"))
+        if datos.get("etapas") is not None:
+            if not isinstance(datos["etapas"], list) or not all(isinstance(i, str) for i in datos["etapas"]):
+                raise DiagnosticError(Diagnostic("D-FORMATO", "las etapas de una orden de forzado son una lista de ID"))
+            for i in datos["etapas"]:
+                if not any(s["id"] == i for s in m["steps"]):
+                    raise DiagnosticError(Diagnostic("D-REF", f"etapa inexistente: {i}", element=i))
         if datos.get("grupo") is not None and not isinstance(datos["grupo"], str):
             raise DiagnosticError(Diagnostic("D-FORMATO", "el grupo de una acción suelta es un texto"))
         if datos.get("orden") is not None and (not isinstance(datos["orden"], int) or isinstance(datos["orden"], bool)):
@@ -430,8 +445,10 @@ class Editor:
     def _poner_campos(d: dict[str, Any], datos: dict[str, Any]) -> None:
         for k in ("tipo",) + Editor.DRAFT_CAMPOS:
             if k in datos:
-                if datos[k] in (None, ""):
+                if datos[k] in (None, "") or datos[k] == []:
                     d.pop(k, None)
+                elif k == "etapas":
+                    d[k] = list(dict.fromkeys(datos[k]))
                 else:
                     d[k] = datos[k]
 
@@ -1369,6 +1386,16 @@ class Editor:
             for d in p.get("draftActions", []):  # una acción sin completar unida a una etapa borrada queda suelta
                 if d.get("etapa") in doomed:
                     huerfanas.setdefault(d.pop("etapa"), []).append(d)
+            for d in p.get("draftActions", []):  # una orden sin completar pierde el destino y las etapas que se borran
+                if d.get("destino") in doomed:
+                    d.pop("destino", None)
+                    d.pop("etapas", None)  # (eran etapas del destino que ya no está)
+                elif d.get("etapas"):
+                    quedan = [i for i in d["etapas"] if i not in doomed]
+                    if quedan:
+                        d["etapas"] = quedan
+                    else:
+                        d.pop("etapas")
             for sid, ds in huerfanas.items():  # las de una misma etapa quedan juntas, con la colocación que tenían
                 if len(ds) > 1:
                     gid = self.ids.new("grupo")

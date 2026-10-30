@@ -757,14 +757,18 @@ class PanelES(QWidget):
     @staticmethod
     def _depurar(doc, config, nombres):
         """Separa las asignaciones de `config` que siguen casando con las variables de `doc` de las que ya no: la variable
-        no existe, o su papel o tipo ya no casan con el área. Devuelve la configuración sin ellas (la misma, si no hay
-        ninguna) y un texto por cada una quitada. `nombres` {ID: nombre} de las variables que había antes."""
-        variables = {v["id"]: v for v in doc["variables"] if v["role"] in ("input", "output")}
+        no existe, ya no es de entrada ni de salida (pasó a interna), o su papel o tipo ya no casan con el área. Devuelve la
+        configuración sin ellas (la misma, si no hay ninguna) y un texto por cada una quitada. `nombres` {ID: nombre} de las
+        variables que había antes."""
+        todas = {v["id"]: v for v in doc["variables"]}
+        variables = {i: v for i, v in todas.items() if v["role"] in ("input", "output")}
         validas, quitadas = [], []
         for s in config.senales:
             v = variables.get(s.variable)
             canal = f"{ETIQUETA_CANAL.get(s.area, s.area)} {s.direccion}"
-            if v is None:
+            if v is None and s.variable in todas:  # existe, pero ya es interna: el mismo aviso que `Configuracion.quitar_obsoletas`
+                quitadas.append(f"«{todas[s.variable]['name']}» ya no es de entrada ni de salida")
+            elif v is None:
                 quitadas.append(f"«{nombres.get(s.variable, s.variable)}» ya no existe")
             elif v["type"]["kind"] not in ("bool", "int", "decimal") or s.area not in areas_variable(v):
                 quitadas.append(f"«{v['name']}» ya no encaja en {canal}")

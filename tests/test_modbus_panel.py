@@ -1,3 +1,4 @@
+import copy
 import os
 import unittest
 import time
@@ -268,10 +269,12 @@ class PanelTests(unittest.TestCase):
                 w.a_es.trigger()
                 self.assertEqual(w.paginas_es.currentIndex(), 1)
                 self.assertFalse(w.a_ejecutar.isChecked())
+                self.assertIsNone(w.v.s.z, "abrir la prueba deja Pausa sin estado: la sesión la arranca Play")
                 config = w.panel_es.obtener()
                 self.assertEqual(config.host, "192.168.1.133")
                 self.assertEqual([(s.variable, s.area, s.direccion) for s in config.senales],
                                  [("PM", "discrete", 0), ("Q00", "coil", 0), ("Q01", "coil", 1)])
+                w.a_ejecutar.setChecked(True)  # Play arranca la sesión desde la situación inicial
                 a = Adaptador(config, w.v.s)
                 self.assertEqual(w.v.s.z.situation, frozenset(["0"]))
                 self.assertEqual(a.valores_salida(), {"Q00": False, "Q01": False})
@@ -283,6 +286,7 @@ class PanelTests(unittest.TestCase):
                 a.aplicar({"PM": False})
                 self.assertEqual(w.v.s.z.situation, frozenset(["1"]))
                 self.assertEqual(a.valores_salida(), {"Q00": True, "Q01": True})
+                w.a_ejecutar.setChecked(False)
                 for fila in range(3):
                     w.panel_es.tabla.cellWidget(fila, 0).setChecked(False)
                 w._conectar_modbus()
@@ -551,7 +555,7 @@ class PanelTests(unittest.TestCase):
                 w.reiniciar()  # en Pausa: solo vuelve a pedir el cero
                 self.assertFalse(w.modbus.reiniciando)
                 w.a_ejecutar.setChecked(True)  # inmediato: sin dar tiempo a que termine el cero
-                self.assertTrue(w.modbus.reiniciando, "Play vincula una sesión nueva: primero sus salidas iniciales")
+                self.assertTrue(w.modbus.reiniciando, "Play vincula una sesión nueva: primero espera, y lee sus entradas")
                 self.assertTrue(w.a_ejecutar.isChecked())
                 esperar(lambda: not w.modbus.reiniciando and w.modbus.en_marcha)
                 for _ in range(15):  # varios tics más: Play no se desmarca solo
@@ -1263,8 +1267,9 @@ class PanelTests(unittest.TestCase):
     def test_SFIO47_pausa_pone_a_cero_coils_y_holding_y_play_arranca_de_la_situacion_inicial(self):
         """REQ-SIM-02, REQ-SIM-03 (P-IMP-60): Pausa deja todo a 0 hasta un nuevo Play: todas las coils y holding asignadas se
         escriben a 0, el GRAFCET no tiene etapas activas ni temporizadores y las tablas no enseñan la sesión anterior; la
-        conexión sigue y se siguen leyendo las entradas. Play arranca siempre una sesión nueva desde la situación inicial
-        y lee antes las entradas de la planta (aunque la sesión anterior hubiera evolucionado)."""
+        conexión sigue y se siguen leyendo las entradas. Play arranca siempre una sesión nueva desde la situación inicial,
+        lee las entradas de la planta y las aplica antes de escribir sus salidas (aunque la sesión anterior hubiera
+        evolucionado); el orden de las peticiones en el cable lo fija SFIO60."""
         from test_modbus import servidor
         app = QApplication.instance() or QApplication([])
         escrituras, sensor = [], [0]
@@ -1499,6 +1504,9 @@ class PanelTests(unittest.TestCase):
                 self.assertIsNone(cliente._socket, "se cierra igual")
                 self.assertIn("salidas no garantizadas", w.modbus.mensaje.lower())
                 self.assertIn("salidas no garantizadas", w.panel_es.estado.toolTip().lower(), "y el panel lo dice")
+                self.assertTrue(w.modbus.mensaje.startswith("Desconectado"), "dice que se ha desconectado…")
+                self.assertNotIn("Pulsa Conectar", w.modbus.mensaje, "…y no invita a reconectar justo después")
+                self.assertNotIn("Pulsa Conectar", w.panel_es.estado.toolTip())
                 self.assertFalse(w.a_ejecutar.isChecked())
             finally:
                 self._cerrar(app, w)
@@ -1577,5 +1585,199 @@ class PanelTests(unittest.TestCase):
                 self.assertTrue(w.abrir_ruta(corrupto / "manifest.json"))
                 self.assertIn("No se pudo cargar el mapa", w.panel_es.estado.text())
                 self.assertEqual(w.panel_es.config.senales, [])
+            finally:
+                self._cerrar(app, w)
+
+    # -- Play lee antes de escribir, un solo cero, abrir otro proyecto y avisos (D1) -----------------------------------
+    def test_SFIO60_play_lee_las_entradas_antes_de_escribir_y_la_primera_escritura_ya_las_lleva(self):
+        """REQ-SIM-02, REQ-SIM-03 (P-IMP-60): con la planta ya con el sensor a 1, Play no escribe antes de leer: la primera
+        petición tras Play es una lectura, no se escribe hasta aplicar esa lectura a la sesión nueva, y lo primero que recibe
+        la planta es lo que corresponde al sensor (luz, no el motor de la situación inicial). Reiniciar en Play, igual."""
+        from test_modbus import servidor
+        app = QApplication.instance() or QApplication([])
+        eventos, escrituras, sensor = [], [], [0]
+        planta = self._planta_mixta(escrituras, sensor)
+
+        def responder(p):
+            respuesta = planta(p)
+            eventos.append(("leer", respuesta[2]) if p[0] == 2 else ("escribir", *escrituras[-1]))
+            return respuesta
+        with tempfile.TemporaryDirectory() as tmp, servidor(responder) as sc:
+            m = self._modelo_pausa()
+            w = self._ventana_modelo(tmp, m.doc)
+            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            cero = {"motor": False, "luz": False, "vel": 0}
+            try:
+                w.panel_es.cargar(m.doc, self._mapa_pausa(m.doc, sc.puerto))
+                w._conectar_modbus()
+                esperar(lambda: w.modbus.estado == "conectado" and w.modbus.escritos == cero)
+                esperar(lambda: sum(e[0] == "leer" for e in eventos) >= 3)
+                sensor[0] = 1  # la planta ya tiene el sensor activo cuando se pulsa Play
+                esperar(lambda: w.panel_es.indicadores["sensor"][1].text() == "1")
+                n = len(eventos)
+                w.a_ejecutar.setChecked(True)
+                esperar(lambda: w.modbus.escritos == {"motor": False, "luz": True, "vel": 150})
+                nuevos = eventos[n:]
+                self.assertEqual(nuevos[0][0], "leer", "la primera petición tras Play es una lectura")
+                primera = next(i for i, e in enumerate(nuevos) if e[0] == "escribir")
+                self.assertGreaterEqual(primera, 1)
+                self.assertEqual({e[0] for e in nuevos[:primera]}, {"leer"}, "no se escribe nada antes de leer")
+                self.assertIn(("leer", 1), nuevos[:primera], "y lo que se aplica es lo que la planta tiene")
+                escribe = [e[1:] for e in nuevos if e[0] == "escribir"]
+                self.assertEqual(escribe[:3], [("coil", 0, 0), ("coil", 1, 1), ("holding", 0, 150)],
+                                 "la primera escritura ya lleva el sensor: motor a 0, luz a 1 y la consigna")
+                self.assertNotIn(("coil", 0, 1), escribe, "el motor de la situación inicial nunca llega a la planta")
+                self.assertEqual(w.v.state()["situation"], ["E1"])
+                # Reiniciar en Play: sesión nueva (E0) que, con el sensor a 1, evoluciona a E1 antes de escribir nada
+                n = len(eventos)
+                w.reiniciar()
+                esperar(lambda: not w.modbus.reiniciando and w.modbus.en_marcha)
+                fin = time.monotonic() + .1
+                esperar(lambda: time.monotonic() >= fin)
+                self.assertNotIn(("escribir", "coil", 0, 1), eventos[n:], "Reiniciar tampoco escribe antes de leer")
+                self.assertEqual(w.v.state()["situation"], ["E1"])
+                w.a_ejecutar.setChecked(False)
+                esperar(lambda: w.modbus.escritos == cero)
+            finally:
+                self._cerrar(app, w)
+
+    def test_SFIO62_un_modelo_inestable_en_play_deja_un_solo_cero_en_la_planta(self):
+        """REQ-SEM-07, REQ-ROB-01 (P-IMP-60): cuando el motor se detiene por inestabilidad (D-LIM-EVOL) con la planta
+        conectada, lo único que llega a la planta tras la lectura que lo provoca es un cero por salida asignada (antes eran
+        dos seguidos: el del coordinador y el de Pausa); la ventana acaba en Pausa/edición, conectada y a cero."""
+        from test_modbus import servidor
+        app = QApplication.instance() or QApplication([])
+        eventos, sensor = [], [0]
+        planta = self._planta_mixta([], sensor)
+
+        def responder(p):
+            respuesta = planta(p)
+            eventos.append(("leer", respuesta[2]) if p[0] == 2 else ("escribir", int.from_bytes(p[1:3], "big"), p[6] & 1))
+            return respuesta
+        with tempfile.TemporaryDirectory() as tmp, servidor(responder) as sc:
+            m = self._modelo_inestable()
+            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            try:
+                esperar(lambda: w.modbus.estado == "conectado")
+                with mock.patch.object(type(w), "_avisar_inestable", autospec=True) as aviso:
+                    w.a_ejecutar.setChecked(True)
+                    esperar(lambda: w.modbus.en_marcha)  # con el sensor a 0 es estable
+                    sensor[0] = 1  # ahora E0 y E1 se alternan sin fin
+                    esperar(lambda: aviso.call_count == 1)
+                    esperar(lambda: w.modbus.escritos == {"motor": False} and w.modbus.futuro is None and not w.a_ejecutar.isChecked())
+                    fin = time.monotonic() + .2
+                    esperar(lambda: time.monotonic() >= fin)  # varios tics más: no llega ningún cero repetido
+                self.assertEqual(aviso.call_count, 1)
+                tras = [e for e in eventos[eventos.index(("leer", 1)):] if e[0] == "escribir"]
+                self.assertEqual(tras, [("escribir", 0, 0)], f"un solo cero tras la lectura que lo provoca: {tras}")
+                self.assertEqual((w.modo, w.modbus.estado, w.modbus.adaptador.sesion), ("editar", "conectado", None))
+            finally:
+                self._cerrar(app, w)
+
+    def test_SFIO63_abrir_otro_proyecto_con_la_conexion_viva_pone_a_cero_tambien_las_salidas_del_mapa_nuevo(self):
+        """REQ-SIM-02, REQ-SIM-03 (P-IMP-60): al abrir otro proyecto con la conexión viva se pone a cero lo del mapa anterior y
+        también las salidas asignadas del mapa del proyecto nuevo (la planta podía tenerlas a 1 por su cuenta). Cada canal
+        recibe un solo cero aunque lo compartan los dos mapas, y dos variables del mismo ID (una booleana y otra de registro)
+        no se estorban; el panel enseña lo del mapa nuevo y la conexión no se cierra."""
+        from collections import Counter
+        from conexion.configuracion import ARCHIVO
+        from escritorio.edicion import Edicion
+        from test_modbus import servidor
+        app = QApplication.instance() or QApplication([])
+        escrituras = []
+        planta = self._planta_mixta(escrituras, [0])
+        propio = {("coil", 5): 1, ("holding", 3): 150}  # lo que la planta tenía en las salidas del proyecto nuevo
+        with tempfile.TemporaryDirectory() as tmp, servidor(planta) as sc:
+            a = M("a").var("sensor").var("motor", "output").var("bomba", "output").step("E0", True)
+            b = M("b").var("sensor").var("luz", "output").var("motor", "output", "decimal", scale=2).var("otra", "output").step("E0", True)
+            ruta = Path(tmp) / "b"
+            Edicion.desde(b.doc, {}, "B").guardar(ruta)
+            Configuracion(puerto=sc.puerto, periodo_ms=20, modelo="b", senales=[
+                Senal("sensor", "discrete", 0), Senal("luz", "coil", 0), Senal("motor", "holding", 3, "INT16"),
+                Senal("otra", "coil", 5)]).guardar(ruta / ARCHIVO, b.doc)
+            w = self._ventana_conectada(tmp, sc, a.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0),
+                                                         Senal("bomba", "coil", 2)])
+            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            try:
+                esperar(lambda: w.modbus.estado == "conectado" and w.modbus.escritos == {"motor": False, "bomba": False})
+                socket = w.modbus.cliente._socket
+                planta_antes = {**propio, **{(t, d): v for t, d, v in escrituras}}
+                self.assertEqual((planta_antes[("coil", 5)], planta_antes[("holding", 3)]), (1, 150), "aún sin tocar")
+                n = len(escrituras)
+                self.assertTrue(w.abrir_ruta(ruta / "manifest.json"))
+                esperar(lambda: w.modbus.escritos == {"luz": False, "motor": 0, "otra": False})
+                fin = time.monotonic() + .15
+                esperar(lambda: time.monotonic() >= fin)
+                nuevas = escrituras[n:]
+                self.assertEqual(Counter((t, d) for t, d, _ in nuevas),
+                                 Counter({("coil", 0): 1, ("coil", 2): 1, ("coil", 5): 1, ("holding", 3): 1}),
+                                 f"un cero por canal de los dos mapas: {nuevas}")
+                self.assertEqual({v for _, _, v in nuevas}, {0})
+                self.assertEqual((w.modbus.estado, w.modo, w.a_ejecutar.isChecked()), ("conectado", "editar", False))
+                self.assertIs(w.modbus.cliente._socket, socket, "la conexión sigue")
+                self.assertEqual(sorted(s.variable for s in w.panel_es.config.senales), ["luz", "motor", "otra", "sensor"])
+                w._desconectar_modbus()
+                esperar(lambda: not w.modbus.activo)
+            finally:
+                self._cerrar(app, w)
+
+    def test_SFIO66_abrir_un_modelo_deja_pausa_sin_estado_tambien_en_el_panel_de_es_y_play_lo_arranca(self):
+        """REQ-SIM-03 (P-IMP-60, P-IMP-67): abrir un ejemplo o un proyecto deja el programa en Pausa y sin estado, como tras
+        Play y Pausa: las tablas y el panel de E/S no enseñan los valores de la situación inicial (motor, consigna…); Play, que
+        arranca la sesión, sí."""
+        from escritorio.entradas_salidas import NIVEL_ACTIVO, NIVEL_ASIGNADO
+        app = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory() as tmp:
+            m = self._modelo_pausa()
+            w = self._ventana_modelo(tmp, m.doc)
+            p = w.panel_es
+            try:
+                p.cargar(m.doc, self._mapa_pausa(m.doc, 502))
+                w.refrescar()
+                self.assertEqual((w.modo, w.a_ejecutar.isChecked()), ("editar", False))
+                self.assertEqual(w.v.state().get("situation", []), [])
+                self.assertEqual((w.t_vars.rowCount(), w.t_temp.rowCount(), w.traza.count()), (0, 0, 0))
+                self.assertFalse(any(b.isEnabled() for b in w.botones.values()), "sin sesión, las entradas no responden")
+                self.assertEqual([p.indicadores[v][1].text() for v in ("sensor", "motor", "luz", "vel")], ["—"] * 4)
+                self.assertEqual({p.indicadores[v][0].nivel for v in ("motor", "luz", "vel")}, {NIVEL_ASIGNADO})
+                w.a_ejecutar.setChecked(True)  # Play: situación inicial (E0: motor y la consigna memorizada)
+                self.assertEqual(w.v.state()["situation"], ["E0"])
+                self.assertEqual(p.indicadores["motor"][0].nivel, NIVEL_ACTIVO)
+                self.assertEqual(p.indicadores["vel"][1].text(), str(w.v.state()["values"]["vel"]))
+                self.assertNotEqual(p.indicadores["vel"][1].text(), "—")
+                w.a_ejecutar.setChecked(False)
+                self.assertEqual(p.indicadores["vel"][1].text(), "—", "y Pausa vuelve a dejarlo sin estado")
+            finally:
+                self._cerrar(app, w)
+
+    def test_SFIO67_una_asignada_que_pasa_a_interna_se_quita_con_el_aviso_de_quitar_obsoletas(self):
+        """REQ-SIM-03, REQ-EDT-07 (P-IMP-67): si una variable asignada pasa a «interna», el panel avisa de que «ya no es de
+        entrada ni de salida», lo mismo que dice `Configuracion.quitar_obsoletas` al abrir un proyecto; «ya no existe» queda
+        para la variable que se ha borrado."""
+        app = QApplication.instance() or QApplication([])
+        with tempfile.TemporaryDirectory() as tmp:
+            w = self._ventana_nueva(tmp)
+            p = w.panel_es
+            try:
+                w.nuevo()
+                self.assertIsNone(w.edicion.nueva_variable("sensor"))
+                self.assertIsNone(w.edicion.nueva_variable("luz", "output"))
+                self._es(w, True)
+                self.assertTrue(p.asignar(self._vid(w, "sensor"), "discrete", 0))
+                self.assertTrue(p.asignar(self._vid(w, "luz"), "coil", 0))
+                config = copy.deepcopy(p.obtener())
+                self._es(w, False)
+                self.assertIsNone(w.edicion.cambiar_variable(self._vid(w, "sensor"), role="internal"))
+                self.assertIsNone(w.edicion.quitar_variable(self._vid(w, "luz")))
+                self._es(w, True)
+                texto = p.estado.text()
+                self.assertIn("«sensor» ya no es de entrada ni de salida", texto)
+                self.assertNotIn("«sensor» ya no existe", texto)
+                self.assertIn("«luz» ya no existe", texto)
+                self.assertEqual(self._mapa(w), {})
+                # el mismo texto que da el núcleo de conexión para la variable que pasó a interna
+                self.assertEqual(config.quitar_obsoletas(w.edicion.ed.model),
+                                 ["«sensor» ya no es de entrada ni de salida", "la variable de Coil 0 ya no existe"])
             finally:
                 self._cerrar(app, w)

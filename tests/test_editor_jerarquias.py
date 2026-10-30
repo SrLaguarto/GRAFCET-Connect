@@ -951,5 +951,109 @@ class EditorDeJerarquias(unittest.TestCase):
             self.assertEqual(vista.model["bars"], [], clave)
 
 
+class OrdenesDeForzadoSinCompletar(unittest.TestCase):
+    """P-IMP-68: una orden de forzado suelta, o unida a una etapa pero sin destino, es un borrador de la presentación (tipo
+    «forzado»), no una orden del modelo: no se simula, viaja con el proyecto y no cambia el formato."""
+
+    @staticmethod
+    def con_recinto():
+        ed = nuevo()
+        entradas(ed, "p")
+        h = ed.add_step("g", "H", True, at=(100, 60))
+        ed.set_step_kind(h, "enclosing")
+        rec = ed.new_enclosure(h, "R")
+        a = ed.add_step(rec.partial, "A", True, at=(400, 60))
+        b = ed.add_step(rec.partial, "B", at=(400, 220))
+        ed.add_transition(rec.partial, "p", pre=[a], post=[b], at=(400, 140), label="ta")
+        return ed, {"h": h, "r": rec.partial, "a": a, "b": b}
+
+    def test_SEDI300_un_borrador_de_forzado_guarda_destino_forma_y_etapas_y_se_valida(self):
+        """REQ-JER-02, REQ-EDT-01, REQ-EDT-05: `add_draft_action` y `update_draft_action` admiten el tipo «forzado» con su parcial
+        destino, su forma y sus etapas (una sola operación de deshacer, sin cambiar el modelo ni su revisión); rechazan un parcial o
+        una etapa que no existen, una forma desconocida y unas etapas que no son una lista de ID."""
+        ed, d = self.con_recinto()
+        rev, modelo = ed.revision, copy.deepcopy(ed.model)
+        n = len(ed.undo_stack)
+        did = ed.add_draft_action((300, 100), {"tipo": "forzado"})
+        self.assertEqual(ed.draft_actions(), [{"id": did, "x": "300", "y": "100", "tipo": "forzado"}])
+        ed.update_draft_action(did, etapa=d["h"], destino=d["r"], forma="explicit", etapas=[d["b"], d["b"]])
+        self.assertEqual(ed.draft_actions()[0], {"id": did, "x": "300", "y": "100", "tipo": "forzado", "etapa": d["h"],
+                                                 "destino": d["r"], "forma": "explicit", "etapas": [d["b"]]})
+        self.assertEqual((len(ed.undo_stack), ed.revision, ed.model), (n + 2, rev, modelo), "es presentación: el modelo no cambia")
+        ed.update_draft_action(did, forma="current", etapas=None)  # sin etapas (la lista vacía y None quitan el dato)
+        self.assertNotIn("etapas", ed.draft_actions()[0])
+        ed.update_draft_action(did, destino=None)
+        self.assertNotIn("destino", ed.draft_actions()[0])
+        ed.undo()
+        self.assertEqual(ed.draft_actions()[0]["destino"], d["r"])
+        antes = copy.deepcopy(ed.presentation)
+        for datos, codigo in (({"destino": "no-existe"}, "D-REF"), ({"etapas": ["no-existe"]}, "D-REF"), ({"forma": "mal"}, "D-FORMATO"),
+                              ({"etapas": "B"}, "D-FORMATO"), ({"etapas": [3]}, "D-FORMATO"), ({"tipo": "otro"}, "D-FORMATO"),
+                              ({"etapa": "no-existe"}, "D-REF")):
+            with self.assertRaises(DiagnosticError) as cm:
+                ed.update_draft_action(did, **datos)
+            self.assertEqual(cm.exception.diagnostics[0].code, codigo, datos)
+            self.assertEqual(ed.presentation, antes, "un rechazo no deja nada a medias")
+        self.assertEqual(ed.model["forces"], [], "ningún borrador es una orden del modelo")
+
+    def test_SEDI301_borrar_el_parcial_o_las_etapas_a_las_que_apunta_una_orden_sin_completar_le_quita_el_destino_y_se_deshace(self):
+        """REQ-JER-02, REQ-EDT-05: al borrar el parcial destino la orden sin completar pierde su destino y sus etapas; al borrar una
+        de sus etapas, solo esa; si era la única, pasa a no tener etapas; una orden unida a la etapa que se borra queda suelta.
+        Todo en la misma operación de borrado, que se deshace entera."""
+        ed, d = self.con_recinto()
+        c = ed.add_partial("C")
+        x1 = ed.add_step(c, "X1", True, at=(700, 60))
+        x2 = ed.add_step(c, "X2", at=(700, 200))
+        ed.add_transition(c, "p", pre=[x1], post=[x2], at=(700, 130), label="tc")
+        o1 = ed.add_draft_action((200, 60), {"tipo": "forzado", "etapa": d["h"], "destino": d["r"], "forma": "explicit",
+                                             "etapas": [d["a"], d["b"]]})
+        o2 = ed.add_draft_action((200, 300), {"tipo": "forzado", "destino": c, "forma": "explicit", "etapas": [x2]})
+        antes, n0 = copy.deepcopy((ed.model, ed.presentation)), len(ed.undo_stack)
+        ed.delete([d["b"]])
+        orden = {x["id"]: x for x in ed.draft_actions()}
+        self.assertEqual(orden[o1]["etapas"], [d["a"]], "solo pierde la etapa borrada")
+        ed.delete([d["a"]])
+        self.assertNotIn("etapas", {x["id"]: x for x in ed.draft_actions()}[o1], "si era la única, pasa a no tener ninguna")
+        n = len(ed.undo_stack)
+        ed.delete([c])  # el parcial destino de la segunda, con todo lo suyo
+        orden = {x["id"]: x for x in ed.draft_actions()}
+        self.assertEqual((len(ed.undo_stack), "destino" in orden[o2], "etapas" in orden[o2], orden[o2]["forma"]), (n + 1, False, False, "explicit"))
+        ed.undo()
+        self.assertEqual({x["id"]: x for x in ed.draft_actions()}[o2]["destino"], c)
+        ed.delete([d["h"]])  # la etapa a la que estaba unida la primera: queda suelta
+        self.assertNotIn("etapa", {x["id"]: x for x in ed.draft_actions()}[o1])
+        while len(ed.undo_stack) > n0:
+            ed.undo()
+        self.assertEqual((ed.model, ed.presentation), antes, "deshecho todo, queda como estaba")
+
+    def test_SEDI302_el_borrador_de_forzado_se_guarda_y_se_abre_sin_perder_nada_y_no_se_simula(self):
+        """REQ-DAT-01, REQ-DAT-02, REQ-JER-02: un proyecto con una orden de forzado suelta y otra unida a una etapa sin destino se
+        guarda y se abre tal cual (el formato no cambia: son borradores de la presentación), `validate` no ve ninguna orden y el
+        modelo simula igual que sin ellas."""
+        ed, d = self.con_recinto()
+        suelta = ed.add_draft_action((300, 400), {"tipo": "forzado", "destino": d["r"], "forma": "explicit", "etapas": [d["a"]]})
+        unida = ed.add_draft_action((200, 60), {"tipo": "forzado", "etapa": d["h"]})
+        sin_ellas = corrida(ed.model, [(1, {"p": True})])
+        self.assertEqual((ed.model["forces"], ed.validate().diagnostics), ([], []))
+        with tempfile.TemporaryDirectory() as tmp:
+            pj = new_project("proy", "Órdenes sin completar")
+            add_document(pj, ed.model)
+            add_document(pj, ed.presentation)
+            save_project(Path(tmp), pj)
+            op = open_model(Path(tmp))
+        self.assertEqual(op.doc, ed.model)
+        self.assertEqual(op.presentations[0], ed.presentation, "sin pérdida")
+        por_id = {x["id"]: x for x in op.presentations[0]["draftActions"]}
+        self.assertEqual((por_id[suelta]["tipo"], por_id[suelta]["destino"], por_id[suelta]["forma"], por_id[suelta]["etapas"]),
+                         ("forzado", d["r"], "explicit", [d["a"]]))
+        self.assertEqual((por_id[unida]["tipo"], por_id[unida]["etapa"], "destino" in por_id[unida]), ("forzado", d["h"], False))
+        self.assertEqual(corrida(op.doc, [(1, {"p": True})]), sin_ellas, "simula igual: las órdenes sin completar no cuentan")
+        # una orden sin completar no es una orden vigente en la vista de simulación
+        v = Vista("m", "t", "", lambda: (op.doc, layout_from_presentation(op.presentations[0])), normalize_options(None),
+                  presentation=op.presentations[0])
+        self.assertEqual(v.state()["forces"], [])
+        self.assertEqual([x for x in v.model["steps"] if x["actions"]], [])
+
+
 if __name__ == "__main__":
     unittest.main()

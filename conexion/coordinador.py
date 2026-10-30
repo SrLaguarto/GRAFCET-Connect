@@ -3,6 +3,7 @@
 No crea relojes ni ejecuta el motor desde el trabajador. La reconexión es manual.
 """
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 import re
 from time import monotonic
 
@@ -10,6 +11,7 @@ from .adaptador import Adaptador, MonitorEntradas, escribir_salidas, leer_entrad
 from .modbus import ClienteModbus
 
 WINERROR_CORTADA, WINERROR_RECHAZADA, WINERROR_TIEMPO = (10053, 10054), 10061, 10060
+CLAVE_ANTERIOR = "anterior"  # variable de una salida del mapa anterior en un cero unido: (CLAVE_ANTERIOR, n), nunca un ID
 
 
 def explicar_fallo(exc) -> str:
@@ -54,7 +56,9 @@ class Coordinador:
         self.reiniciando = False
         self._cerrado = False
         self._salidas_seguras = None
+        self._seguras_en_vuelo = None  # el cero de `_salidas_seguras` ya enviado y sin confirmar (si llega Play, no se repite)
         self._cero_al_cerrar = None  # (señales, valores) del cero que falta por escribir antes de cerrar el TCP
+        self._tcp_abierto = False  # lo pone el trabajador al conectar: si falla antes, nunca hubo conexión ni se escribió nada
         self._texto_cierre = "Desconectado"
 
     def solicitar_ejecucion(self, ejecutar):
@@ -85,23 +89,24 @@ class Coordinador:
         self.vincular(sesion)
 
     def vincular(self, sesion, config=None, documento=None):
-        """Vincula una ejecución a TCP existente; no vuelve a conectar."""
+        """Vincula una ejecución a TCP existente; no vuelve a conectar. No escribe nada: primero se leen las entradas de la
+        planta (`reiniciando` dura hasta que no queda nada en vuelo de la ejecución anterior), se aplican a la sesión nueva,
+        el motor calcula y solo entonces se escriben las salidas (leer, aplicar, calcular, escribir)."""
         if self.estado not in ("conectado", "diagnostico"):
             raise RuntimeError("Espera a que termine la conexión")
         config = config or self.adaptador.config
         if documento is not None:
             config.validar(documento)
         adaptador = Adaptador(config, sesion)
-        valores = adaptador.valores_salida()
+        adaptador.valores_salida()  # solo comprueba que las salidas iniciales caben en su formato; no se escribe nada todavía
         self._generacion += 1
         self.adaptador = adaptador
-        self._valores_reinicio = valores
         self.reiniciando = True
         self.en_marcha = self._ejecutar = self.fallo_motor = self.cero_pendiente = False
         self._descartar_lectura = False
         self.muestra = {}
         self.estado = "conectado"
-        self.mensaje = "Conectado · reiniciando GRAFCET y salidas iniciales…"
+        self.mensaje = "Conectado · reiniciando GRAFCET · leyendo sensores antes de ejecutar…"
 
     def pausar(self, diagnostico=False):
         """Pausa: conserva el transporte, deja de ejecutar y pide cero para todas las salidas asignadas (coils y holding):
@@ -112,8 +117,13 @@ class Coordinador:
             return
         anterior = self.adaptador
         salidas = salidas_asignadas(anterior)
-        self._salidas_seguras = (salidas, valores_cero(salidas))
+        # Si el motor ya se había detenido, `tick` pidió el cero por su cuenta: se aprovecha en vez de repetirlo (en vuelo se
+        # adopta como el de Pausa; ya confirmado no hay nada más que escribir; sin enviar, `_salidas_seguras` lo sustituye)
+        cero_del_diagnostico = self.fallo_motor and not self.cero_pendiente
+        self._salidas_seguras = None if cero_del_diagnostico else (salidas, valores_cero(salidas))
         self._generacion += 1
+        if cero_del_diagnostico and self.futuro is not None and self.fase == "cero":
+            self.fase, self._generacion_peticion = "seguras", self._generacion
         self.adaptador = MonitorEntradas.desde_adaptador(anterior)
         self.en_marcha = self._ejecutar = self.reiniciando = self.fallo_motor = self.cero_pendiente = False
         if self.estado == "diagnostico":
@@ -122,7 +132,9 @@ class Coordinador:
             self.mensaje = "Conectado · Pausa · salidas a cero · edición habilitada"
 
     def observar(self, config, documento):
-        """Cambia el mapa de lectura (otro modelo) con el GRAFCET parado, sin tocar TCP; descarta lo que estuviera en vuelo."""
+        """Cambia el mapa de lectura (otro modelo) con el GRAFCET parado, sin tocar TCP; descarta lo que estuviera en vuelo.
+        Con la conexión establecida (o en curso; la prueba no escribe nada) pide también el cero de las salidas asignadas del
+        mapa nuevo: se une al cero pendiente del mapa anterior, si lo hay, con un solo cero por canal."""
         if not self.activo:
             return
         monitor = MonitorEntradas(config, documento)
@@ -130,6 +142,23 @@ class Coordinador:
         self.adaptador = monitor
         self.muestra = {}
         self.en_marcha = self._ejecutar = self.reiniciando = self.fallo_motor = self.cero_pendiente = False
+        nuevas = salidas_asignadas(monitor)
+        if nuevas and self.estado in ("conectando", "conectado", "diagnostico"):
+            self._salidas_seguras = self._unir_ceros(self._salidas_seguras, nuevas)
+
+    @staticmethod
+    def _unir_ceros(previo, nuevas):
+        """El cero pendiente `previo` ((señales, valores) o None) junto con el de las salidas `nuevas`: un solo cero por canal.
+        Las señales nuevas conservan su variable (es la que se muestra); las de antes, que ya no son de este modelo y cuyos ID
+        podrían coincidir con los nuevos, van con una clave propia (`CLAVE_ANTERIOR`)."""
+        senales, valores = list(nuevas), valores_cero(nuevas)
+        canales = {(s.area, s.direccion) for s in nuevas}
+        for i, s in enumerate(previo[0] if previo else ()):
+            if (s.area, s.direccion) not in canales:
+                clave = (CLAVE_ANTERIOR, i)
+                senales.append(replace(s, variable=clave))
+                valores[clave] = False if s.formato == "BOOL" else 0
+        return senales, valores
 
     def iniciar(self, config, sesion, prueba=False, documento=None):
         """Conecta y, salvo en la prueba, deja a 0 todas las salidas asignadas (coils y holding) antes de leer las entradas:
@@ -143,13 +172,15 @@ class Coordinador:
         self.muestra, self.escritos = {}, {}
         self.fallo_motor = self.cero_pendiente = False
         self.reiniciando = False
-        self._salidas_seguras = self._cero_al_cerrar = None
+        self._salidas_seguras = self._cero_al_cerrar = self._seguras_en_vuelo = None
+        self._tcp_abierto = False
         self.en_marcha = self._ejecutar = self._descartar_lectura = False
         # Calcular valores del motor en el hilo propietario, antes de encolar red.
         cero = self.adaptador.valores_salida(cero=True)
         salidas = salidas_asignadas(self.adaptador)
         def conectar():
             self.cliente.conectar()
+            self._tcp_abierto = True
             try:
                 if not prueba:
                     escribir_salidas(self.cliente, salidas, cero)
@@ -194,6 +225,11 @@ class Coordinador:
                 if fase == "cero-cierre":
                     self.escritos = resultado
                     self._texto_cierre = "Desconectado · salidas a cero"
+                elif (fase == "seguras" and self.estado != "cerrando" and generacion != self._generacion
+                      and self._salidas_seguras is not None and self._salidas_seguras is self._seguras_en_vuelo):
+                    # Play (`vincular`) llegó con el cero de Pausa ya enviado: la respuesta es de la ejecución anterior pero
+                    # confirma ese mismo cero, que no se repite (si no llega, es el fallo de red de abajo: el cero no se da por hecho)
+                    self._salidas_seguras = self._seguras_en_vuelo = None
                 elif self.estado != "cerrando" and generacion == self._generacion:
                     if fase == "prueba":
                         self.estado, self.mensaje = "desconectado", "Conexión probada; no se han escrito actuadores"
@@ -221,19 +257,26 @@ class Coordinador:
                             self.mensaje = "Motor detenido · cero confirmado · desconecte y corrija el diagnóstico"
                     elif fase == "cerrar":
                         self.estado, self.mensaje = "desconectado", "Desconectado · salidas no garantizadas"
-                    elif fase == "reiniciar":
-                        self.escritos, self.muestra = resultado
-                        self.reiniciando = False
-                        self.mensaje = "Conectado · GRAFCET reiniciado · pulse Ejecutar"
                     elif fase == "seguras":
-                        self.escritos = resultado
-                        self._salidas_seguras = None
+                        # un cero unido (`observar`) también pone a cero lo del mapa anterior: eso ya no se muestra
+                        self.escritos = {k: v for k, v in resultado.items() if not isinstance(k, tuple)}
+                        self._salidas_seguras = self._seguras_en_vuelo = None
             except Exception as exc:
                 # También incluye conversión inválida: no seguir controlando con muestras malas.
                 frase = explicar_fallo(exc)  # solo cambia el texto: una frase legible y, detrás, el detalle técnico
-                self.estado, self.mensaje = "error", (
-                    f"{frase}. Salidas no garantizadas. Pulsa Conectar para reanudar. Detalle: {exc}" if frase else
-                    f"Conexión detenida: {exc}. Salidas no garantizadas.")
+                if self.estado == "cerrando":  # el usuario acaba de desconectar: se le dice eso, no que reconecte
+                    motivo = f"{frase or exc}." + (f" Detalle: {exc}" if frase else "")
+                    if fase in ("inicio", "prueba") and not self._tcp_abierto:  # nunca hubo conexión: no se intentó ningún cero
+                        texto = f"Desconectado · no se llegó a conectar: {motivo}"
+                    elif fase == "prueba":  # la prueba no escribe nada: no hay salidas que garantizar
+                        texto = f"Desconectado · la prueba de conexión se interrumpió: {motivo}"
+                    else:
+                        texto = f"Desconectado · salidas no garantizadas · no se pudo poner a cero la planta: {motivo}"
+                    self.estado, self.mensaje = "error", texto
+                else:
+                    self.estado, self.mensaje = "error", (
+                        f"{frase}. Salidas no garantizadas. Pulsa Conectar para reanudar. Detalle: {exc}" if frase else
+                        f"Conexión detenida: {exc}. Salidas no garantizadas.")
                 self.en_marcha = False
                 self.reiniciando = False
                 self._cero_al_cerrar = None
@@ -254,16 +297,16 @@ class Coordinador:
         if self._salidas_seguras is not None:
             if self.futuro is None:
                 senales, valores = self._salidas_seguras
+                self._seguras_en_vuelo = self._salidas_seguras
                 self._enviar("seguras", self._escribir, valores, senales)
             return
         if self.reiniciando:
+            # Sesión nueva: no se escribe nada hasta leer y aplicar las entradas. Mientras queda algo en vuelo de la ejecución
+            # anterior (su respuesta se descarta por la generación) se espera; después se sale de aquí SIN leer en este mismo
+            # tic: la lectura se pide con la ejecución ya solicitada (si no, `_descartar_lectura` la tiraría) y es la que se
+            # aplica, de modo que la primera escritura ya lleva las entradas de la planta.
             if self.futuro is None:
-                valores = self._valores_reinicio
-                salidas, entradas = list(self.adaptador.salidas), list(self.adaptador.entradas)
-                def reinicio_red():
-                    self._escribir(valores, salidas)
-                    return valores, leer_entradas(self.cliente, entradas)
-                self._enviar("reiniciar", reinicio_red)
+                self.reiniciando = False
             return
         if self.adaptador.sesion is not None and self.adaptador.sesion.status != "pausada-estable" and not self.fallo_motor:
             self.fallo_motor = self.cero_pendiente = True

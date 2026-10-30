@@ -9,7 +9,7 @@ Qué hace
   manifest.json) o un documento de modelo (model-….json).
 - Dibuja el grafcet con la notación de la norma y muestra la evolución: etapas activas e inestables,
   transiciones validadas y franqueables, acciones, salidas, variables, temporizadores y traza.
-- Entradas con un clic (las numéricas se escriben). Al abrir un ejemplo o un modelo, el programa queda en Pausa, que
+- Entradas con un clic (las numéricas se escriben). Al abrir un ejemplo o un modelo, el programa queda en Pausa, sin estado, que
   es el modo de edición. Play (Ejecutar, F5) compila lo editado y simula en tiempo real, como un autómata: cada
   retardo es un temporizador: sobre la duración de su receptividad (o de la condición o evento de una acción) se ve el tiempo transcurrido («0,5 s») mientras cuenta, y «3 s ✓» al vencer. Pausa (F5 de nuevo) detiene y
   vuelve a editar y deja todo a 0 hasta el siguiente Play (sin etapas activas ni temporizadores); cada Play empieza desde la situación inicial. Barra de herramientas: Ejecutar/Pausa
@@ -18,7 +18,7 @@ Qué hace
   detiene con su cuestión U en vez de aproximarse. Si se elige otra, la barra de estado lo avisa.
 - Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J). Al simular, el
   panel inferior muestra la traza.
-- Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), rueda del ratón (anclada al puntero), Ctrl+= y Ctrl+−; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
+- Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), rueda del ratón (anclada al puntero), Ctrl+= y Ctrl+−; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
 - Proyecto > Guardar proyecto: guarda el modelo en curso con su dibujo, para abrirlo después.
 - Editor de un grafcet secuencial (Proyecto > Nuevo grafcet, o editar en Pausa cualquier modelo abierto): paleta a la
   izquierda, con la etapa, la transición, la simultaneidad y la acción (las fichas se arrastran al dibujo; sin herramienta, el ratón
@@ -241,8 +241,8 @@ piezas, en lugar de escribirlo.
 - Dónde está: en el panel de Opciones, a la derecha de los datos de la transición o de la acción. Al seleccionar una
   transición, o hacer doble clic en ella, el panel muestra su receptividad. Al seleccionar una acción condicionada o
   por evento, muestra su condición o su evento, con un título como «Condición de la acción Q01 (etapa 0)».
-- Cómo se ve: a la izquierda, una columna con siete carpetas, cada una con un círculo de su color y su nombre:
-  Operadores, Entradas, Salidas, Etapas (X), Memorias, Comparaciones y Temporizadores. En el centro, las fichas de la
+- Cómo se ve: a la izquierda, una columna con ocho carpetas, cada una con un círculo de su color y su nombre:
+  Operadores, Constantes, Entradas, Salidas, Etapas (X), Memorias, Comparaciones y Temporizadores. «Constantes» trae las fichas «1» (verdadero) y «0» (falso), que antes quedaban fuera de la vista, entre los operadores. En el centro, las fichas de la
   carpeta elegida: una ficha por cada elemento que existe, en orden (las etapas por número, las variables por nombre).
   Si son muchas, la columna tiene desplazamiento vertical. Sin elementos, la carpeta muestra un bloque vacío. Cada
   ficha se arrastra al área con ese elemento ya elegido: por ejemplo, la ficha «X1» de Etapas (X) es la etapa 1. A la
@@ -324,10 +324,11 @@ dibujo.
   «Renombrar…». El doble clic en la macroetapa encuadra la expansión.
 - Encapsulante: se arrastra la ficha, o se convierte una etapa con el botón derecho, «Convertir en encapsulante».
   «Convertir en etapa ordinaria» la devuelve si no tiene recintos.
-- Recintos: botón derecho en la encapsulante, «Añadir recinto…», y el nombre (R1, R2…). El marco vacío aparece a su
-  derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos. Con «Mostrar dependencias» (botón junto al zoom) se dibuja un trazo discontinuo de la encapsulante a su recinto.
+- Recintos: botón derecho en la encapsulante, «Añadir recinto…», y el nombre (G1, G2…: el primero libre entre parciales y macroetapas). El marco vacío aparece a su
+  derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos. Con «Mostrar dependencias» (botón junto al zoom) se dibujan dos trazos discontinuos, desde las esquinas de la encapsulante más cercanas hasta las dos esquinas del lado del recinto que mira hacia ella (P-IMP-68).
 - Grafcet parcial suelto: se arrastra la ficha «Grafcet parcial» (marco redondeado con «G») a un hueco del dibujo, o se usa «Nuevo grafcet parcial aquí» del botón derecho en el hueco. Crea un parcial vacío, con nombre automático (G1, G2…) y su marco en ese punto, en una sola operación de deshacer. Las etapas que se suelten dentro pasan a él. Se renombra con «Renombrar…» (botón derecho o doble clic en su borde); es destino de la ficha «Forzado»; Supr lo borra con aviso si hay órdenes que lo apuntan. Se guarda y se abre como cualquier otro parcial. Sin posición guardada no se dibuja, y su marco vacío solo se ve al editar, no al simular.
 - Mostrar dependencias: botón junto a los controles de zoom, apagado por defecto y recordado entre sesiones. Con él se dibujan los trazos discontinuos que unen una macroetapa con su expansión y una encapsulante con su recinto; sin él no aparecen. No cambia la disposición, los marcos ni la selección.
+- Marcos de los parciales (P-IMP-68): el marco de un parcial rodea todo lo que se dibuja de él: etapas, transiciones con sus textos, acciones y órdenes, barras y recorridos de enlaces, también los de retorno. Deja 26 px a los lados y 22 arriba y abajo. No cuentan el estado del temporizador, las etiquetas de simulación ni los comentarios.
 - Enlace de activación: botón derecho en una etapa de un recinto, «Enlace de activación» (casilla). La etapa marcada
   lleva un «*» y se activa cuando se activa la encapsulante (P-IMP-23).
 - Forzar un parcial: botón derecho en una etapa, «Forzar un parcial…»: se elige el parcial destino y la forma. La orden
@@ -338,13 +339,13 @@ dibujo.
   · Vacía: el destino no tiene etapas activas mientras la orden está vigente.
   · Inicial: el destino mantiene su situación inicial.
   «Editar orden de forzado…» y «Quitar orden de forzado» están en el menú de la caja.
-- Forzado desde la paleta: la ficha «Forzado» (rectángulo doble «G{ }») se arrastra sobre una etapa, o sobre una de sus acciones u órdenes, o a menos de 16 del borde derecho de su fila. Se abre el diálogo y la orden queda asociada a esa etapa, en una sola operación de deshacer. Soltada fuera de una etapa no crea nada y avisa: «Una orden de forzado va asociada a una etapa: suéltela sobre una etapa». No hay órdenes sueltas. El doble clic sobre una orden la edita. Con esta ficha, la paleta pide cuatro filas; en una ventana baja se encoge a tres (ver P-IMP-65).
+- Forzado desde la paleta (P-IMP-68): la ficha «Forzado» (rectángulo doble «G{ }») se arrastra como una acción. Soltada en un hueco, crea una orden suelta, con «G?{?}», que no se simula; se mueve y se pega como una acción suelta. Soltada sobre una etapa (o sobre una de sus acciones u órdenes, o a menos de 16 del borde derecho de su fila), queda unida a ella y abre sus opciones, no el diálogo. Se une a mano a una etapa como una acción: desde su punto de unión izquierdo, desde el lado derecho de la etapa, o con el imán. Se configura con doble clic, con el menú o con el panel. Solo pasa a ser orden del modelo unida a una etapa y completa (parcial destino, forma y, si es explícita, etapas); suelta o sin destino no tiene efecto. Una explícita sin etapas queda sin completar. Separarla o «Eliminar el enlace» la devuelve a suelta, también si ya estaba en el modelo; borrar su destino o sus etapas la deja sin completar. Un ciclo de forzado se rechaza al unir. Con esta ficha, la paleta pide cuatro filas; en una ventana baja se encoge a tres (ver P-IMP-65).
 - Navegación: «Encuadrar la expansión» (y el doble clic en la macroetapa) encaja su expansión en la vista y la hace parpadear; no cambia el modelo ni el deshacer. «Encuadrar la macroetapa» (desde la entrada, la salida o la zona de la expansión), «Encuadrar la encapsulante» (desde una etapa del recinto o desde su marco) y «Encuadrar el recinto» o «los recintos» (desde la encapsulante) hacen lo mismo con su elemento: 24 px de margen y zoom máximo 1,6. Ayuda > Leyenda del dibujo explica los símbolos de la jerarquía.
 - Errores: un rechazo sale en rojo como aviso, y el elemento parpadea en naranja; la operación no deja nada a medias.
 
 Limitaciones de esta versión:
 
-- El nombre de la encapsulante se revisará en la ronda siguiente: el responsable pide que vuelva a ir a caballo de la línea superior del marco de su recinto, como en la norma.
+- El nombre de la encapsulante va a caballo de la línea superior del marco de su recinto, como en la norma (resuelto en P-IMP-68).
 - Renombrar un parcial no reescribe los textos que lo nombran como «G.x».
 - No hay atajos de teclado para estas acciones.
 - El ir y volver entre niveles no está completo.
@@ -375,9 +376,26 @@ Segunda ronda: Pausa a cero, conexión y panel de E/S (P-IMP-67)
 
 - Pausa deja todo a 0 hasta el siguiente Play: con la conexión activa pide el cero de las salidas asignadas (bobinas y holding), y el GRAFCET queda sin estado (sin etapas activas ni temporizadores). Play arranca siempre desde la situación inicial, leyendo antes las entradas. Reiniciar en Pausa no crea sesión.
 - Conectar, en Pausa, pone a cero las salidas asignadas antes de la primera lectura: «Conectado · Pausa · salidas a cero · observando las entradas». Probar conexión no escribe nada.
-- Desconectar escribe el cero antes de cerrar la conexión: «Desconectado · salidas a cero». Si la red falla, cierra igual y avisa «Salidas no garantizadas». Al cerrar la ventana también se intenta el cero, pero si la red falla se cierra sin aviso.
+- Desconectar escribe el cero antes de cerrar la conexión: «Desconectado · salidas a cero». Si la red falla, cierra igual, el estado pasa a «error» y avisa «Desconectado · salidas no garantizadas · no se pudo poner a cero la planta». Al cerrar la ventana también se intenta el cero, pero si la red falla se cierra sin aviso.
 - Play, Pausa y Reiniciar no cierran la conexión.
 - La primera vez, la IP propuesta es 192.168.1.133, puerto 502 y esclavo 1. Después se propone la última conexión que funcionó o la última prueba con éxito; el mapa guardado del proyecto manda sobre ella.
 - El panel de E/S refleja las variables actuales del modelo cada vez que se muestra y al editar. Quita, con aviso, las asignaciones de variables que ya no casan, y conserva las demás. Con la conexión activa no cambia: avisa de que hay variables nuevas y las muestra al desconectar. Si un área tiene cantidad 0 y hay variables compatibles, lo indica.
 - Un mapa guardado con variables borradas o incompatibles se carga sin ellas y con aviso; un archivo corrupto se sigue rechazando entero.
 - En la tabla de variables, Supr quita la variable seleccionada (en modo Editar y sin una celda abierta), igual que «Quitar»; si la variable está en uso, lo dice y no la quita. También vale el Supr del teclado numérico. La tabla admite una sola fila seleccionada.
+
+Ronda 4 (P-IMP-68 y P-IMP-69)
+
+- Play lee antes de escribir: al pulsar Play con la conexión viva (y al Reiniciar en Play), la primera petición es una lectura; las salidas se escriben después, con las entradas ya aplicadas y el motor calculado. Ni Play ni Reiniciar en Play escriben salidas antes de leer.
+- Abrir un ejemplo o un proyecto deja Pausa sin estado, como Play→Pausa.
+- Abrir otro proyecto con la conexión viva pone a cero también las salidas del mapa nuevo, con un solo cero por canal.
+- Un diagnóstico o un motor parado pide el cero una sola vez.
+- Mensajes: una variable asignada que pasa a interna dice «ya no es de entrada ni de salida». Desconectar con la red caída dice «Desconectado · salidas no garantizadas · no se pudo poner a cero la planta: …», sin invitar a pulsar Conectar, y la conexión queda en «error».
+- «Guardar el dibujo como imagen» respeta «Mostrar dependencias».
+- Marcos de los parciales: rodean todo lo dibujado del parcial, con 26 px a los lados y 22 arriba y abajo. El nombre de la encapsulante va a caballo de la línea superior de su recinto; los recintos nuevos se proponen G1, G2…
+- Dependencias: con «Mostrar dependencias», cada encapsulante tiene dos trazos discontinuos hacia el lado de su recinto que mira hacia ella; cambian si el marco cambia de lado.
+- Editor de bloques: la carpeta «Constantes» tiene las fichas «1» (verdadero) y «0» (falso).
+- Los avisos de la edición muestran nombres, no IDs internos; lo que ya no existe se llama «un elemento». El texto propio del programa no se toca aunque un ID corto coincida con una palabra.
+- Pulsar Desconectar mientras se conecta y la conexión falla dice «Desconectado · no se llegó a conectar: …».
+- Play pulsado con el cero de Pausa aún sin confirmar no repite ese cero.
+- Una orden de forzado suelta solo ofrece destinos posibles (sin ciclo); si no hay ninguno, avisa «No hay otro parcial al que forzar: cree un recinto, una macroetapa o un grafcet parcial».
+- Límites, sin decidir: si se abre otro proyecto mientras se prueba la conexión, el estado puede quedarse en «probando» hasta Desconectar (ya ocurría antes); cerrar la ventana con la red caída sigue sin avisar; los comentarios quedan fuera de los marcos; lo cosmético queda para el rediseño (paleta por secciones, iconos, sitio de «Mostrar dependencias»).

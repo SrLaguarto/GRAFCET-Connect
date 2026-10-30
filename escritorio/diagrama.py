@@ -46,7 +46,9 @@ ANCHO_COMENTARIO = 190  # ancho máximo de un comentario antes de pasar a otra l
 GROSOR_NEGADO = 2.0     # grosor de la barra de una variable negada (Qt no deja regular el del sobrerrayado del texto)
 TMR_TAM = 12            # tamaño del tiempo transcurrido de un temporizador, que se dibuja encima de su duración
 TMR_EXTRA = 12          # lo que sube por encima de la condición o el evento de una acción con temporizador
-ENCIMA_MARCO = 8        # lo que sube la línea base del nombre de la encapsulante por encima del trazo superior de su recinto
+MARGEN_MARCO_X = 26     # lo que se separa el marco de un parcial de todo lo que dibuja de él, a izquierda y derecha...
+MARGEN_MARCO_Y = 22     # ... y por arriba y por abajo (el mismo de siempre alrededor de sus etapas)
+_ANCHOS: dict[tuple[Any, ...], float] = {}  # lo que mide cada texto (`_Pintor.ancho`): los marcos lo piden a cada movimiento del ratón
 
 
 def _html(segs: list[dict[str, Any]] | None, sobrerrayado: bool = True) -> str:
@@ -159,14 +161,17 @@ class _Pintor:
         """Lo que ocupa un texto, sin dibujarlo."""
         if not segs:
             return 0.0
-        font = QFont(FONT)
-        font.setPixelSize(size)
-        font.setBold(bold)
-        item = QGraphicsTextItem()
-        item.document().setDocumentMargin(0)
-        item.setFont(font)
-        item.setHtml(_html(segs, False))
-        return item.boundingRect().width()
+        clave = (tuple((s["t"], bool(s.get("s"))) for s in segs), size, bold)
+        if clave not in _ANCHOS:
+            font = QFont(FONT)
+            font.setPixelSize(size)
+            font.setBold(bold)
+            item = QGraphicsTextItem()
+            item.document().setDocumentMargin(0)
+            item.setFont(font)
+            item.setHtml(_html(segs, False))
+            _ANCHOS[clave] = item.boundingRect().width()
+        return _ANCHOS[clave]
 
     @staticmethod
     def _limites(item: QGraphicsTextItem, segs: list[dict[str, Any]]) -> list[float]:
@@ -613,19 +618,84 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
 VACIO_W, VACIO_H = 180, 120  # tamaño del marco de un recinto sin etapas (el editor lo anota con `vacio`, ver `cajas_parciales`)
 
 
+def _contenido_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]]) -> dict[str, list[float]]:
+    """Por parcial, el rectángulo [x0, y0, x1, y1] (en el dibujo, sin márgenes) de todo lo que se dibuja de él: sus etapas y
+    macroetapas, sus transiciones (el trazo, su designación a la izquierda y su receptividad a la derecha, y los trazos de
+    una simultaneidad), las acciones y órdenes unidas a sus etapas (con las marcas que sobresalen y los trazos que las unen),
+    los recorridos de sus enlaces (también los de retorno, por fuera) y las barras que unen elementos suyos. No cuenta lo que
+    depende del estado de la simulación (el tiempo de un temporizador, las etiquetas «inestable»…) ni los comentarios: el marco
+    no cambia al simular. Igual que `drawFrames` de tools/dibujo.js."""
+    out: dict[str, list[float]] = {}
+    de: dict[str, str | None] = {}
+
+    def anotar(pid: str | None, x0: float, y0: float, x1: float, y1: float) -> None:
+        if not pid:
+            return
+        b = out.setdefault(pid, [x0, y0, x1, y1])
+        b[:] = [min(b[0], x0), min(b[1], y0), max(b[2], x1), max(b[3], y1)]
+    unidas = M.get("draftActions", [])
+    for s in M["steps"]:
+        x, y = pos[s["id"]]
+        de[s["id"]] = pid = s.get("partial")
+        anotar(pid, x - H, y - H, x + H, y + H)
+        acciones = s["actions"] + [d for d in unidas if d.get("etapa") == s["id"]]
+        if acciones and pid:
+            cajas, union = _geometria_acciones(x, y, acciones, s.get("actionLayout", "fila"))
+            for a, ax, cy, w in cajas:
+                arriba, abajo = _extra(a)
+                anotar(pid, ax, cy - H - arriba, ax + w, cy + H + abajo)
+            for tramo in union:
+                for px, py in tramo:
+                    anotar(pid, px, py, px, py)
+    for m in M.get("macros", []):
+        x, y = pos[m["id"]]
+        de[m["id"]] = pid = m.get("partial")
+        anotar(pid, x - H, y - H, x + H, y + H)
+    for t in M["transitions"]:
+        tx, ty = t["x"] + SX, t["y"]
+        de[t["id"]] = pid = t.get("partial")
+        pre = [pos[p] for p in t.get("preDib", t["pre"]) if p in pos]
+        post = [pos[p] for p in t.get("postDib", t["post"]) if p in pos]
+        anotar(pid, tx - TB, ty - (TALLO_T if not pre else 0), tx + TB, ty + (TALLO_T if not post else 0))
+        if t.get("showLabel", True):
+            w = _Pintor.ancho([{"t": f"({t.get('label', t['id'])})"}], 13)
+            anotar(pid, tx - TB - 6 - w, ty - 12, tx - TB - 6, ty + 9)
+        if t.get("cond"):
+            anotar(pid, tx + TB + 8, ty - 12, tx + TB + 8 + _Pintor.ancho(t["cond"], 14), ty + 9)
+        if len(pre) > 1 or t.get("simulPre"):  # el doble trazo de una divergencia o convergencia simultánea
+            xs = [p[0] for p in pre] + [tx]
+            anotar(pid, min(xs) - 8, ty - SIMUL - 4, max(xs) + 8, ty - SIMUL)
+        if t.get("simulPost"):
+            xs = [p[0] for p in post] + [tx]
+            anotar(pid, min(xs) - 8, ty + SIMUL, max(xs) + 8, ty + SIMUL + 4)
+    for e in M["links"] if "links" in M else enlaces(M):  # el enlace es del parcial de su transición (el de una barra, del de su elemento)
+        pid = de.get(e["sid"] if e["rol"] == "barra" else e["tid"])
+        for px, py in e["pts"]:
+            anotar(pid, px, py, px, py)
+    for b in M.get("bars", []):
+        bx, by, w, h = barra(b)
+        for ident in list(b["arriba"]) + list(b["abajo"]):
+            anotar(de.get(ident), bx, by, bx + w, by + h)
+    return out
+
+
 def cajas_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]] | None = None) -> dict[str, dict[str, float]]:
-    """El rectángulo (x0, y0, x1, y1, en el dibujo) de cada parcial con contenido: el de sus etapas y transiciones con el
-    margen de la norma, más el de sus parciales hijos. Es el marco que pinta `_marcos` (un recinto o un parcial) y, en una
-    expansión, la zona que ocupa aunque no se dibuje (el editor la usa para saber en qué parcial cae lo que se suelta).
-    Solo el editor anota un parcial con `vacio` (un recinto recién creado, sin etapas), con su esquina superior izquierda
-    en `x`, `y` (coordenadas del modelo): se dibuja como marco vacío de VACIO_W × VACIO_H. Un parcial sin contenido ni
-    `vacio` no tiene caja."""
+    """El rectángulo (x0, y0, x1, y1, en el dibujo) de cada parcial con contenido: el que rodea todo lo que se dibuja de él
+    (`_contenido_parciales`: etapas, transiciones con sus textos, acciones y órdenes unidas, barras y los recorridos de sus
+    enlaces, también los de retorno) con el margen de la norma (MARGEN_MARCO_X, MARGEN_MARCO_Y) y, como mínimo, el de siempre
+    alrededor de sus etapas y transiciones (por la derecha, más ancho, para sus acciones), más el de sus parciales hijos. Es
+    el marco que pinta `_marcos` (un recinto o un parcial) y, en una expansión, la zona que ocupa aunque no se dibuje (el
+    editor la usa para saber en qué parcial cae lo que se suelta). Solo el editor anota un parcial con `vacio` (un recinto
+    recién creado, sin etapas), con su esquina superior izquierda en `x`, `y` (coordenadas del modelo): se dibuja como marco
+    vacío de VACIO_W × VACIO_H. Un parcial sin contenido ni `vacio` no tiene caja."""
     pos = pos if pos is not None else posiciones(M)
     parts = M.get("partials") or []
     box: dict[str, dict[str, float] | None] = {}
+    dibujado = _contenido_parciales(M, pos)
 
     def own(pid: str) -> list[tuple[float, float]]:
         return ([pos[s["id"]] for s in M["steps"] if s.get("partial") == pid]
+                + [pos[m["id"]] for m in M.get("macros", []) if m.get("partial") == pid]
                 + [(t["x"] + SX, t["y"]) for t in M["transitions"] if t.get("partial") == pid])
 
     def frame(pid: str) -> dict[str, float] | None:
@@ -634,6 +704,11 @@ def cajas_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]] | Non
         pts = own(pid)
         b = ({"x0": min(p[0] for p in pts) - H - 26, "x1": max(p[0] for p in pts) + H + 70,
               "y0": min(p[1] for p in pts) - H - 22, "y1": max(p[1] for p in pts) + H + 22} if pts else None)
+        if pid in dibujado:  # todo lo que se dibuja de él queda dentro, con margen
+            x0, y0, x1, y1 = dibujado[pid]
+            e = {"x0": x0 - MARGEN_MARCO_X, "x1": x1 + MARGEN_MARCO_X, "y0": y0 - MARGEN_MARCO_Y, "y1": y1 + MARGEN_MARCO_Y}
+            b = e if b is None else {"x0": min(b["x0"], e["x0"]), "x1": max(b["x1"], e["x1"]),
+                                     "y0": min(b["y0"], e["y0"]), "y1": max(b["y1"], e["y1"])}
         if b is None:
             vacio = next((c for c in parts if c["id"] == pid and c.get("vacio")), None)
             if vacio is not None:
@@ -652,23 +727,33 @@ def cajas_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]] | Non
     return {c["id"]: b for c in parts if (b := frame(c["id"]))}
 
 
-def _punto_del_marco(b: dict[str, float], x: float, y: float) -> tuple[float, float]:
-    """El punto del borde del marco `b` más cercano a (x, y): si éste cae fuera, el del rectángulo más próximo; si cae dentro,
-    el del borde más cercano. Es adonde llega el trazo de dependencia de una encapsulante a su recinto (igual en
-    tools/dibujo.js)."""
-    px, py = min(max(x, b["x0"]), b["x1"]), min(max(y, b["y0"]), b["y1"])
-    if (px, py) != (x, y):
-        return px, py
-    d, lado = min((x - b["x0"], 0), (b["x1"] - x, 1), (y - b["y0"], 2), (b["y1"] - y, 3))
-    return ((b["x0"], y), (b["x1"], y), (x, b["y0"]), (x, b["y1"]))[lado]
+def _dependencias_recinto(b: dict[str, float], ox: float, oy: float, inicial: bool = False
+                          ) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Los dos trazos de dependencia de una encapsulante centrada en (ox, oy) a su recinto de marco `b`, como en la figura de la
+    norma: cada uno llega a una de las dos esquinas del lado del marco que mira hacia la encapsulante (el lado cuya normal
+    apunta a su centro, según el eje de mayor diferencia entre los centros; en empate, el vertical): con el recinto debajo, a sus
+    dos esquinas de arriba; a la derecha, a las dos de la izquierda; y así. Salen de la esquina de la encapsulante más cercana a
+    cada esquina de destino: en las esquinas cortadas de la etapa, el punto medio de su diagonal (en una inicial, la esquina
+    del cuadrado exterior). Se eligen al dibujar, según la posición de ahora: si el marco cambia de lado, cambian. Igual en
+    tools/dibujo.js."""
+    dx, dy = ox - (b["x0"] + b["x1"]) / 2, oy - (b["y0"] + b["y1"]) / 2
+    if abs(dy) >= abs(dx):
+        y = b["y0"] if dy <= 0 else b["y1"]
+        destinos = [(b["x0"], y), (b["x1"], y)]
+    else:
+        x = b["x0"] if dx < 0 else b["x1"]
+        destinos = [(x, b["y0"]), (x, b["y1"])]
+    c = H if inicial else H - round(0.22 * 2 * H) / 2
+    esquinas = [(ox + sx * c, oy + sy * c) for sy in (-1, 1) for sx in (-1, 1)]
+    return [(min(esquinas, key=lambda e: (e[0] - d[0]) ** 2 + (e[1] - d[1]) ** 2), d) for d in destinos]
 
 
 def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]], dependencias: bool = False) -> None:
-    """Parciales según las figuras de la norma: recinto (marco continuo, encapsulante arriba y nombre abajo),
-    parcial (marco redondeado con su nombre; un hijo dentro de su padre) y expansión (trazos discontinuos de la
-    macroetapa a su entrada y a su salida, sin marco). Esos trazos discontinuos son las dependencias: solo se dibujan con
-    `dependencias`, y con ellas también el que une una encapsulante con el marco de cada uno de sus recintos (desde el centro
-    de la etapa, que queda tapado por ella, hasta el punto más cercano del marco)."""
+    """Parciales según las figuras de la norma: recinto (marco continuo, con el nombre de la encapsulante arriba y el del
+    recinto abajo, a caballo del trazo, sobre un fondo del color del lienzo), parcial (marco redondeado con su nombre; un hijo
+    dentro de su padre) y expansión (trazos discontinuos de la macroetapa a su entrada y a su salida, sin marco). Esos trazos
+    discontinuos son las dependencias: solo se dibujan con `dependencias`, y con ellas también los dos que unen una
+    encapsulante con las esquinas del lado del marco de cada uno de sus recintos que mira hacia ella (`_dependencias_recinto`)."""
     parts = M.get("partials") or []
     cajas = cajas_parciales(M, pos)
 
@@ -688,12 +773,13 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]],
         if p["kind"] == "enclosure":
             if dependencias and p.get("ownerStep") in pos:
                 ox, oy = pos[p["ownerStep"]]
-                tx, ty = _punto_del_marco(b, ox, oy)
-                pt.line(ox, oy, tx, ty, pt.pen("muted", 1.2, (5, 4)), Z_FRAME)
+                dueno = next((s for s in M["steps"] if s["id"] == p["ownerStep"]), None)
+                for (x1, y1), (x2, y2) in _dependencias_recinto(b, ox, oy, bool(dueno and dueno["initial"])):
+                    pt.line(x1, y1, x2, y2, pt.pen("muted", 1.2, (5, 4)), Z_FRAME)
             pt.rect(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"], pt.pen("text"), Z_FRAME)
-            # el nombre de la encapsulante va centrado y entero por encima del marco (línea base ENCIMA_MARCO por encima del trazo):
-            # a caballo de la línea quedaba cortado por ella; igual en tools/dibujo.js
-            pt.text((b["x0"] + b["x1"]) / 2, b["y0"] - ENCIMA_MARCO, pt.seg(M.get("names", {}).get(p["ownerStep"], p["ownerStep"])), 14,
+            # el nombre de la encapsulante, centrado a caballo del trazo de arriba, y el del recinto, a la izquierda del de abajo,
+            # con un fondo del color del lienzo que corta el trazo y deja leerlos; igual en tools/dibujo.js
+            pt.text((b["x0"] + b["x1"]) / 2, b["y0"] + 5, pt.seg(M.get("names", {}).get(p["ownerStep"], p["ownerStep"])), 14,
                     "text", Z_FRAME, "middle", halo=True)
             pt.text(b["x0"] + 30, b["y1"] + 5, pt.seg(p["label"]), 14, "text", Z_FRAME, halo=True)
         else:
@@ -826,11 +912,12 @@ def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[st
     w = max(ancho, _ancho_accion(a))
     outer = (pt.pen("virt", 2.2) if force else pt.pen("ok", 2.6)) if on else pt.pen("text")
     pt.rect(ax, top, w, 2 * H, outer, Z_STEP - 0.02, "panel",
-            "Acción sin completar: no se simula" if borrador else None)
-    if cajas is not None and not force:
+            ("Orden de forzado sin completar: no se simula" if force else "Acción sin completar: no se simula") if borrador
+            else None)
+    if cajas is not None and (not force or borrador):  # (una orden sin completar se mueve y se une como una acción suelta)
         cajas.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H), "borrador": borrador, "suelta": suelta,
-                      "grupo": grupo, "cabeza": cabeza or a["id"]})
-    if ordenes is not None and force:  # una orden de forzado no es una acción, pero se selecciona y tiene su menú
+                      "grupo": grupo, "cabeza": cabeza or a["id"], "forzado": force})
+    if ordenes is not None and force and not borrador:  # una orden de forzado no es una acción, pero se selecciona y tiene su menú
         ordenes.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H)})
     if f"accion:{a.get('id')}" in marcadas:
         pt.rect(ax - 3, top - 3, w + 6, 2 * H + 6, pt.pen("accent", 1.6, (5, 3)), Z_EDIT)
@@ -936,9 +1023,12 @@ class VistaDiagrama(QGraphicsView):
     y desplazar en cualquier sentido sin que el dibujo llegue a salirse del todo de la vista. Las barras de desplazamiento
     solo se ven con zoom manual (al ajustar solo hay que ver el dibujo).
 
-    Junto a los controles del zoom hay un botón conmutable, «Mostrar dependencias» (`dependencias`, apagado por defecto): con
-    él se dibujan los trazos discontinuos que unen una macroetapa con su expansión y una encapsulante con sus recintos. Se
-    recuerda entre sesiones en los `QSettings` de la ventana que contiene la vista (o en `ajustes`, si se le da uno)."""
+    Junto a los controles del zoom hay «Centrar selección» (al editar: encuadra con `encuadrar` la caja de lo seleccionado, que
+    da el controlador con `caja_seleccion`; sin selección, o al simular, está desactivado) y un botón conmutable, «Mostrar
+    dependencias» (`dependencias`, apagado por defecto): con él se dibujan los trazos discontinuos que unen una macroetapa con
+    su expansión y una encapsulante con sus recintos. Se recuerda entre sesiones en los `QSettings` de la ventana que contiene
+    la vista (o en `ajustes`, si se le da uno). Con el botón central del ratón (la rueda) pulsado, arrastrar desplaza el dibujo
+    como si se agarrara ese punto, al editar y al simular, sin seleccionar ni editar nada: la vista queda en zoom manual."""
 
     zoomCambiado = Signal(float)
 
@@ -973,6 +1063,7 @@ class VistaDiagrama(QGraphicsView):
         self.cajas_ordenes: list[dict[str, Any]] = []  # el rectángulo de cada orden de forzado dibujada
         self._origen = False  # en edición, hasta que se usa el ratón, el dibujo se queda arriba a la izquierda
         self._pulsado = QPoint()  # dónde se pulsó el botón izquierdo: un arrastre de la vista empieza pasada la distancia de arrastre
+        self._pan: tuple[QPointF, int, int] | None = None  # el botón central pulsado: dónde, y las barras de desplazamiento entonces
         self._barras()
 
     def modo_edicion(self, on: bool, controlador: Any = None) -> None:
@@ -999,6 +1090,7 @@ class VistaDiagrama(QGraphicsView):
             self._barras()
         self.goma = None
         self.cuadro = None
+        self._actualizar_seleccion()
 
     def marcar_anclas(self, anclas_: list[dict[str, Any]], destacada: dict[str, Any] | None = None) -> None:
         """Puntos de unión del elemento bajo el puntero; el más cercano, resaltado (como el ajuste a puntos del CAD)."""
@@ -1084,13 +1176,39 @@ class VistaDiagrama(QGraphicsView):
             return False
         return bool(getattr(self.controlador, nombre)(self.mapToScene(event.position().toPoint()), event))
 
+    def _empezar_pan(self, event: Any) -> None:
+        """El botón central (la rueda) pulsado: empieza a desplazar el dibujo, agarrado por el punto pulsado. No llega al
+        controlador (no selecciona ni edita nada) y deja la vista en zoom manual, también al simular."""
+        self._origen = False
+        self._manual = True
+        self._barras()
+        self._pan = (event.position(), self.horizontalScrollBar().value(), self.verticalScrollBar().value())
+        self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
+        event.accept()
+
+    def _terminar_pan(self) -> None:
+        self._pan = None
+        self.viewport().setCursor(Qt.CursorShape.CrossCursor if self.controlador is not None else Qt.CursorShape.ArrowCursor)
+
     def mousePressEvent(self, event: Any) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._empezar_pan(event)
+            return
         self._origen = False
         self._pulsado = event.position().toPoint()
         if not self._evento("prensar", event):
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802
+        if self._pan is not None:
+            if event.buttons() & Qt.MouseButton.MiddleButton:  # el punto agarrado sigue bajo el puntero
+                origen, h, v = self._pan
+                self.horizontalScrollBar().setValue(h - round(event.position().x() - origen.x()))
+                self.verticalScrollBar().setValue(v - round(event.position().y() - origen.y()))
+                event.accept()
+            else:  # se soltó fuera de la vista
+                self._terminar_pan()
+            return
         if not self._evento("mover", event):
             if self.controlador is None and not self._manual and event.buttons() & Qt.MouseButton.LeftButton:
                 if (event.position().toPoint() - self._pulsado).manhattanLength() < QApplication.startDragDistance():
@@ -1100,6 +1218,10 @@ class VistaDiagrama(QGraphicsView):
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.MiddleButton and self._pan is not None:
+            self._terminar_pan()
+            event.accept()
+            return
         if not self._evento("soltar", event):
             super().mouseReleaseEvent(event)
 
@@ -1143,8 +1265,8 @@ class VistaDiagrama(QGraphicsView):
         return menu
 
     def _barra_zoom(self) -> None:
-        """Controles del zoom sobre el dibujo, arriba a la derecha: «−», porcentaje, «+» y «Centrar todo», y a su lado el botón
-        conmutable «Mostrar dependencias» (marcado = se ven los trazos discontinuos de las dependencias)."""
+        """Controles del zoom sobre el dibujo, arriba a la derecha: «−», porcentaje, «+», «Centrar todo» y «Centrar selección», y a
+        su lado el botón conmutable «Mostrar dependencias» (marcado = se ven los trazos discontinuos de las dependencias)."""
         self.barra = QFrame(self)
         self.barra.setStyleSheet("QFrame { background: rgba(255,255,255,215); border: 1px solid #c3c9d6; "
                                  "border-radius: 4px } QToolButton { border: none; padding: 2px 7px; font-size: 14px } "
@@ -1168,6 +1290,15 @@ class VistaDiagrama(QGraphicsView):
         self.b_ajustar.setStyleSheet("QToolButton { border: 1px solid #c3c9d6; border-radius: 3px; margin-left: 4px; "
                                      "background: #eef3fc } QToolButton:hover { background: #dbe8ff }")
         self.b_ajustar.clicked.connect(self.ajustar)
+        self.b_seleccion = QToolButton()
+        self.b_seleccion.setText("Centrar selección")
+        self.b_seleccion.setToolTip("Centrar selección: encaja y centra en la ventana lo que hay seleccionado (solo al editar). "
+                                    "Sin nada seleccionado, o al simular, no hace nada")
+        self.b_seleccion.setStyleSheet("QToolButton { border: 1px solid #c3c9d6; border-radius: 3px; margin-left: 4px; "
+                                       "background: #eef3fc } QToolButton:hover { background: #dbe8ff } "
+                                       "QToolButton:disabled { color: #9aa3b5; background: #f4f6fa }")
+        self.b_seleccion.setEnabled(False)
+        self.b_seleccion.clicked.connect(self.centrar_seleccion)
         self.b_dependencias = QToolButton()
         self.b_dependencias.setText("Mostrar dependencias")
         self.b_dependencias.setCheckable(True)
@@ -1178,7 +1309,7 @@ class VistaDiagrama(QGraphicsView):
                                           "QToolButton:checked { background: #1f6feb; color: #ffffff; border-color: #1f6feb } "
                                           "QToolButton:checked:hover { background: #3b82f0 }")
         self.b_dependencias.clicked.connect(self.mostrar_dependencias)
-        for w in (self.b_menos, self.l_zoom, self.b_mas, self.b_ajustar, self.b_dependencias):
+        for w in (self.b_menos, self.l_zoom, self.b_mas, self.b_ajustar, self.b_seleccion, self.b_dependencias):
             lay.addWidget(w)
         self.barra.adjustSize()
 
@@ -1302,6 +1433,7 @@ class VistaDiagrama(QGraphicsView):
                                       self.dependencias)
         r = self.scene().itemsBoundingRect()
         self._contenido = r if not r.isEmpty() else None
+        self._actualizar_seleccion()
         self._actualizar_escena()
         if not self._manual:
             self.ajustar()
@@ -1309,12 +1441,29 @@ class VistaDiagrama(QGraphicsView):
             self._al_origen()
 
     def ajustar(self) -> None:
-        """«Centrar todo»: encaja y centra lo dibujado (no el área mínima vacía de edición), con un margen. Al editar, el
-        zoom queda manual; al simular, vuelve a ajustarse solo con cada cambio de tamaño del dibujo."""
+        """«Centrar todo»: encaja y centra lo dibujado (no el área mínima vacía de edición), con un margen y, arriba, el alto
+        de los controles del zoom de más (para que no tapen el dibujo). Al editar, el zoom queda manual; al simular, vuelve a
+        ajustarse solo con cada cambio de tamaño del dibujo."""
         self._manual = self.controlador is not None  # al editar, el zoom no se recoloca solo
         self._origen = False
         self._barras()
-        self._encajar(self._base())
+        self._encajar(self._base(), reservar_barra=True)
+
+    def _caja_seleccion(self) -> QRectF | None:
+        """El rectángulo de la selección del controlador (`caja_seleccion`, con las cajas de lo seleccionado), o None si no hay
+        controlador (al simular) ni selección."""
+        caja = getattr(self.controlador, "caja_seleccion", None)
+        r = caja() if callable(caja) else None
+        return r if r is not None and not r.isEmpty() else None
+
+    def _actualizar_seleccion(self) -> None:
+        self.b_seleccion.setEnabled(self._caja_seleccion() is not None)
+
+    def centrar_seleccion(self) -> None:
+        """«Centrar selección»: encuadra (`encuadrar`) lo que hay seleccionado; sin selección, no hace nada."""
+        r = self._caja_seleccion()
+        if r is not None:
+            self.encuadrar(r)
 
     def encuadrar(self, r: QRectF) -> None:
         """«Encuadrar» (la expansión de una macroetapa, un recinto…): encaja y centra en la vista el rectángulo `r` de la escena,
@@ -1330,16 +1479,19 @@ class VistaDiagrama(QGraphicsView):
     def _terminar_encuadre(self) -> None:
         self._encuadrando = None
 
-    def _encajar(self, r: QRectF | None) -> None:
-        """Pone el zoom que hace caber `r` con `MARGEN_AJUSTE` alrededor (sin pasar de `ZOOM_AJUSTE_MAX`) y lo centra."""
+    def _encajar(self, r: QRectF | None, reservar_barra: bool = False) -> None:
+        """Pone el zoom que hace caber `r` con `MARGEN_AJUSTE` alrededor (sin pasar de `ZOOM_AJUSTE_MAX`) y lo centra. Con
+        `reservar_barra`, arriba se deja además el alto de los controles del zoom, que están encima del dibujo."""
         if r is None or r.width() <= 0 or r.height() <= 0:
             return
         vw, vh = self.viewport().width(), self.viewport().height()
-        k = min(max(vw - 2 * MARGEN_AJUSTE, 1) / r.width(), max(vh - 2 * MARGEN_AJUSTE, 1) / r.height(), ZOOM_AJUSTE_MAX)
+        arriba = MARGEN_AJUSTE + (self.barra.height() if reservar_barra else 0)
+        k = min(max(vw - 2 * MARGEN_AJUSTE, 1) / r.width(), max(vh - arriba - MARGEN_AJUSTE, 1) / r.height(), ZOOM_AJUSTE_MAX)
         self.resetTransform()
         self.scale(k, k)
         self._actualizar_escena()
-        self._situar(r.center(), QPointF(self.viewport().width() / 2, self.viewport().height() / 2))
+        self._situar(r.center(), QPointF(self.viewport().width() / 2,
+                                          (arriba + self.viewport().height() - MARGEN_AJUSTE) / 2))
         self._notificar()
 
     def zoom(self, factor: float, ancla: QPointF | None = None) -> None:

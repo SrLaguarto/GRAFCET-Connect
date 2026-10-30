@@ -679,8 +679,9 @@ class Ventana(QMainWindow):
             self.abrir_ruta(Path(ruta))
 
     def _cargar(self) -> None:
-        """Carga la fuente (ejemplo, modelo o lo que se edita) y deja el programa en Pausa: parado y editable. La
-        conexión Modbus, si la hay, no se cierra: se conserva el TCP y las salidas pasan a 0 (Pausa)."""
+        """Carga la fuente (ejemplo, modelo o lo que se edita) y deja el programa en Pausa: parado y editable, y sin estado
+        (como tras Play y Pausa: ni etapas activas ni valores en las tablas; Play arranca la sesión). La conexión Modbus, si
+        la hay, no se cierra: se conserva el TCP y las salidas pasan a 0 (Pausa)."""
         self.modbus.pausar()
         self._marcar_play(False)
         self._aviso_inestable_sesion = None
@@ -711,14 +712,16 @@ class Ventana(QMainWindow):
         self.modo = "editar"
         self._cargar_config_modbus()
         self._poner_modo()
+        self._sin_estado()  # la Vista nace con la sesión en la situación inicial: en Pausa no se enseña nada de ella
         self.refrescar()
         if not self.modbus.activo:
             self.rt.stop()
 
     def reiniciar(self) -> None:
         """En Play vuelve a la situación inicial y sigue en Play; con E/S externas la conexión se conserva: solo se vincula
-        una sesión nueva y se reescriben las salidas iniciales. En Pausa ya está todo a 0 y sin estado (Pausa es «todo a 0
-        hasta un nuevo Play»): no hay nada que reiniciar, solo se vuelve a pedir el cero a la planta si hay conexión."""
+        una sesión nueva, que escribe sus salidas solo tras leer y aplicar las entradas de la planta. En Pausa ya está todo a
+        0 y sin estado (Pausa es «todo a 0 hasta un nuevo Play»): no hay nada que reiniciar, solo se vuelve a pedir el cero
+        a la planta si hay conexión."""
         if not self.a_ejecutar.isChecked():
             self.modbus.pausar(diagnostico=True)
             self._sin_estado()
@@ -743,9 +746,9 @@ class Ventana(QMainWindow):
 
     def _preparar_sesion(self) -> bool:
         """Compila lo que se edita y deja en self.v una sesión nueva, estable y en la situación inicial (Play siempre
-        arranca de cero, y Reiniciar en Play también). Con Modbus vivo la vincula al TCP existente, sin reconectar: antes de
-        ejecutar se escriben las salidas iniciales y se leen las entradas de la conexión. Si no puede, avisa y devuelve
-        False sin tocar la conexión."""
+        arranca de cero, y Reiniciar en Play también). Con Modbus vivo la vincula al TCP existente, sin reconectar: no se
+        escribe nada hasta leer las entradas de la planta, aplicarlas a la sesión nueva y calcular (leer, aplicar, calcular,
+        escribir). Si no puede, avisa y devuelve False sin tocar la conexión."""
         if self.edicion is None:
             self._establecer_edicion(self._edicion_desde_fuente() if self.v else Edicion.nuevo())
         if self._variables_sin_nombre():
@@ -758,7 +761,7 @@ class Ventana(QMainWindow):
         nueva = Vista(e.ed.model["id"], e.titulo, ayuda, lambda: (copy.deepcopy(e.ed.model), e.layout()), self.options,
                       presentation=e.ed.presentation)
         if nueva.s is None:  # compila con las lecturas por defecto, pero no con las activas (diálogo «Lecturas»)
-            lineas = [f"• {d['code']}: {d['message']}" for d in map(nueva._diag, nueva.compile_diags)]
+            lineas = [f"• {d.code}: {e.sust(d.message)}" for d in nueva.compile_diags]  # (el texto del núcleo, con nombres y sin ID)
             QMessageBox.warning(self, TITULO, "El grafcet no compila con las lecturas de interpretación activas, no se puede "
                                 "simular todavía:\n\n" + "\n".join(lineas[:8]) + ("\n…" if len(lineas) > 8 else ""))
             return False
@@ -1374,7 +1377,8 @@ class Ventana(QMainWindow):
 
     def _cambiar_modelo_modbus(self, doc: dict[str, Any]) -> None:
         """Otro modelo con la conexión viva: TCP se conserva, pero lo que el modelo anterior hubiera escrito ya no lo controla
-        nadie (cero) y la lectura sigue con el mapa del modelo nuevo."""
+        nadie (cero) y la lectura sigue con el mapa del modelo nuevo, cuyas salidas asignadas también se ponen a cero (el
+        coordinador junta los dos ceros en uno)."""
         anterior = self.modbus.adaptador  # no depende de lo ya confirmado: una escritura en vuelo puede haber llegado a la planta
         if anterior is not None and (anterior.salidas or getattr(anterior, "salidas_control", [])):
             self.modbus.pausar(diagnostico=True)
@@ -1744,7 +1748,9 @@ class Ventana(QMainWindow):
         editando = self.modo == "editar" and self.edicion is not None
         ruta, _ = QFileDialog.getSaveFileName(self, "Guardar el dibujo", f"{self.edicion.titulo if editando else self.v.key}.png",
                                               "Imagen PNG (*.png)")
-        img = imagen(self.edicion.M, {}) if editando else imagen(self.v.model, self.v.state()) if ruta else None
+        dependencias = self.diagrama.dependencias  # lo que la vista dibuja ahora (el botón «Mostrar dependencias»)
+        img = (imagen(self.edicion.M, {}, dependencias=dependencias) if editando else
+               imagen(self.v.model, self.v.state(), dependencias=dependencias) if ruta else None)
         if ruta and not img.save(ruta):
             QMessageBox.warning(self, TITULO, f"No se pudo guardar {ruta}")
 

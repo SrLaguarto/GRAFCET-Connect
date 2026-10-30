@@ -1,10 +1,10 @@
 """Programador por bloques de receptividades y condiciones (P-IMP-38).
 
-La expresión se arma con bloques de colores que se arrastran desde una paleta (Operadores, Entradas, Salidas, Etapas,
-Memorias, Comparaciones, Temporizadores) y encajan unos dentro de otros. Las condiciones son bloques hexagonales: una
-variable booleana o una etapa (con un desplegable para elegir cuál), «y» y «o» con dos huecos, «no» y los flancos ↑ ↓
-que envuelven a otro bloque, las constantes 1 y 0, «temporizar» (t1 y t2 como en la norma: 3s/X1, X1/2s) y la
-comparación de una variable numérica con un valor.
+La expresión se arma con bloques de colores que se arrastran desde una paleta (Operadores, Constantes, Entradas, Salidas,
+Etapas, Memorias, Comparaciones, Temporizadores) y encajan unos dentro de otros. Las condiciones son bloques hexagonales:
+una variable booleana o una etapa (con un desplegable para elegir cuál), «y» y «o» con dos huecos, «no» y los flancos ↑ ↓
+que envuelven a otro bloque, las constantes 1 (verdadero) y 0 (falso), «temporizar» (t1 y t2 como en la norma: 3s/X1,
+X1/2s) y la comparación de una variable numérica con un valor.
 
 Los bloques solo escriben el texto en la notación del usuario (↑a, X1, 3s/X1, NOT, AND, OR, 1/0), que es lo que se
 guarda y lo que el núcleo analiza como siempre (grafcet/notation.py y grafcet/expressions.py no cambian). La primera
@@ -509,9 +509,10 @@ def arbol_a_texto(n: dict[str, Any] | None) -> str:
 # -- dibujo ------------------------------------------------------------------------------------------------
 COLORES = {"entrada": "#2F6FDE", "salida": "#2E9E57", "interna": "#E07B1A", "etapa": "#7C4DDB",
            "operador": "#4B5B73", "comparacion": "#159AAE", "tiempo": "#B07A12", "texto": "#6B7280", "error": "#C0392B",
-           "y": "#5F7F0B", "o": "#B83DBA"}  # «y» (oliva) y «o» (fucsia): operadores, pero cada uno con su color
-CATEGORIAS = (("operador", "Operadores"), ("entrada", "Entradas"), ("salida", "Salidas"), ("etapa", "Etapas (X)"),
-              ("interna", "Memorias"), ("comparacion", "Comparaciones"), ("tiempo", "Temporizadores"))
+           "y": "#5F7F0B", "o": "#B83DBA",  # «y» (oliva) y «o» (fucsia): operadores, pero cada uno con su color
+           "constante": "#8A5A44"}  # las fichas 1 (verdadero) y 0 (falso): su propia carpeta, no se pierden entre los operadores
+CATEGORIAS = (("operador", "Operadores"), ("constante", "Constantes"), ("entrada", "Entradas"), ("salida", "Salidas"),
+              ("etapa", "Etapas (X)"), ("interna", "Memorias"), ("comparacion", "Comparaciones"), ("tiempo", "Temporizadores"))
 CATEGORIAS_VALOR = (("numero", "Número"), ("vnum", "Variables"), ("aritm", "Operadores"))  # modo «valor»
 _PAPEL_CAT = {"input": "entrada", "output": "salida", "internal": "interna"}
 PADX, PADX_PILA, PADV, GAP, FILA = 10, 7, 3, 4, 3  # relleno lateral y vertical de un bloque, hueco entre piezas y entre filas
@@ -624,6 +625,8 @@ class Motor:
             return "operador"
         if k == "temp":
             return "tiempo"
+        if k == "const":
+            return "constante"
         if k == "texto":
             return "error" if _SIMPLE.fullmatch(n["s"]) else "texto"
         return k if k in ("y", "o") else "operador"
@@ -1239,8 +1242,9 @@ class PaletaBloques(_Superficie):
             por_numero = lambda x: (0, int(x[1:]), "") if re.fullmatch(r"X\d+", x) else (1, 0, x.lower())  # noqa: E731
             nodos = [nuevo("etapa", n=x) for x in sorted(etapas, key=por_numero)] or [nuevo("etapa", n=None)]
         elif clave == "operador":
-            nodos = [nuevo("y"), nuevo("o"), nuevo("no"), nuevo("par"), nuevo("sube"), nuevo("baja"),
-                     nuevo("const", v=1), nuevo("const", v=0)]
+            nodos = [nuevo("y"), nuevo("o"), nuevo("no"), nuevo("par"), nuevo("sube"), nuevo("baja")]
+        elif clave == "constante":  # «1» (verdadero, siempre) y «0» (falso, nunca): se guardan como true y false
+            nodos = [nuevo("const", v=1), nuevo("const", v=0)]
         elif clave == "comparacion":
             numericas = [nom for nom, (_, t) in v.items() if t != "bool"]
             c = previo.get("cmp") or nuevo("cmp")

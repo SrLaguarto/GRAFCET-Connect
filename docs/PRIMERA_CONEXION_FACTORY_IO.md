@@ -13,7 +13,7 @@ de Factory I/O, copia los nuevos valores en GrafConnect.
 3. El título debe indicar «Prueba Factory I O - PM y dos cintas». Este proyecto
    ya tiene etapa inicial, variables y acción. También está disponible en
    `prueba_factoryio_digital/manifest.json`, junto al ejecutable, por si quieres
-   abrirlo con **Proyecto → Abrir modelo…**.
+   abrirlo con **Proyecto → Abrir modelo…**. Al abrirlo, el programa queda en Pausa y sin estado: no hay etapas activas hasta que pulse Ejecutar.
 4. En **E/S externas** deben aparecer PM en I00, Q00 en Q00 y Q01 en Q01.
    El ejemplo ya está asignado. Para asignar otro modelo, arrastra sus variables
    desde la lista a los terminales. La **×** quita una asignación y también puedes
@@ -109,8 +109,8 @@ programa queda en Pausa; con la conexión viva, en Pausa se siguen observando la
    Para detener la planta simulada, usa su control de pausa en Factory I/O.
    Pausa en GrafConnect pone a cero las salidas: las cintas se paran, y sigue
    observando PM. Para repetir desde la etapa 0, pulsa Reiniciar (Ctrl+R) en
-   GrafConnect: mantiene Modbus conectado y publica las salidas iniciales. Si
-   estabas en Ejecutar, la simulación sigue en marcha; si estabas en Pausa, pulsa
+   GrafConnect: mantiene Modbus conectado y, en Ejecutar, vuelve a la etapa 0 leyendo antes las entradas (no escribe salidas iniciales a ciegas). Si
+   estabas en Ejecutar, la simulación sigue en marcha; si estabas en Pausa, Reiniciar no crea sesión (todo queda a 0) y tienes que pulsar
    después Ejecutar (cada Ejecutar empieza desde la etapa 0) y vuelve a accionar PM.
 
 Si PM cambia pero Q00 y Q01 no, comprueba primero que GrafConnect está en Play (el botón muestra «Pausa»).
@@ -153,9 +153,9 @@ la prueba del pulsador y del movimiento de la cinta desde la interfaz.
 ## Qué está listo y qué falta verificar
 
 - El responsable ya confirmó el arranque real de las dos cintas con PM.
-- Reiniciar mantiene TCP y vuelve al estado y salidas iniciales: en Play sigue en
-  Play y en Pausa no crea sesión (todo queda a 0). Falta confirmar esta nueva conducta en la escena real.
-- Desconectar escribe el cero antes de cerrar la conexión («Desconectado · salidas a cero»); si la red falla, avisa «Salidas no garantizadas». Cerrar la ventana también intenta el cero, pero si la red falla no avisa. Falta confirmar en la escena real.
+- Reiniciar mantiene TCP y vuelve a la etapa 0: en Play sigue en
+  Play y lee las entradas antes de escribir (P-IMP-69); en Pausa no crea sesión (todo queda a 0). Falta confirmar esta nueva conducta en la escena real.
+- Desconectar escribe el cero antes de cerrar la conexión («Desconectado · salidas a cero»); si la red falla, avisa «Desconectado · salidas no garantizadas · no se pudo poner a cero la planta». Cerrar la ventana también intenta el cero, pero si la red falla no avisa. Falta confirmar en la escena real.
 - Paso y Completar recorrido se han retirado: el único control de ejecución es
   Ejecutar (Play, F5), y Pausa vuelve a editar. Para depurar sin Modbus use Play y
   Pausa, y «Avanzar el tiempo…» (menú Simulación, solo en Play).

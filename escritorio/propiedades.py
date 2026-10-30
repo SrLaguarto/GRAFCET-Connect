@@ -3,8 +3,8 @@
 La paleta (izquierda) es una sola lista de fichas: etapa, transición, simultaneidad, «Acción» (la continua, con su
 dibujo; otro tipo se elige con botón derecho sobre la acción, «Tipo de acción») y, de la jerarquía, «Macroetapa»,
 «Encapsulante», «Grafcet parcial» (un parcial suelto, en un marco redondeado con «G», que se suelta en un hueco) y «Forzado»
-(la orden de forzado, rectángulo doble «G{ }», que se suelta sobre una etapa). Sus fichas solo se colocan arrastrándolas al
-dibujo, y un clic solo muestra su ayuda.
+(la orden de forzado, rectángulo doble «G{ }», que se suelta como una acción: suelta, sin efecto, hasta unirla a una etapa y
+configurarla). Sus fichas solo se colocan arrastrándolas al dibujo, y un clic solo muestra su ayuda.
 
 El panel de opciones (abajo, a todo el ancho, al editar) muestra y cambia la configuración de lo seleccionado, con dos
 zonas: a la izquierda una columna estrecha con los campos y a la derecha lo ancho.
@@ -14,9 +14,9 @@ zonas: a la izquierda una columna estrecha con los campos y a la derecha lo anch
 - Acción: frase, variable (y límite de una acción antigua) a la izquierda (`PanelAccion`; el tipo se cambia con botón
   derecho sobre la acción); a la derecha el
   programador del valor de una memorizada y, si es condicionada o por evento, el de su condición o su evento.
-- Macroetapa, recinto (su marco), expansión, grafcet parcial suelto y orden de forzado: una ficha compacta (`FichaJerarquia`)
-  con su descripción y los mismos botones que el botón derecho (Encuadrar la expansión, Renombrar…, Encuadrar la
-  encapsulante, Editar o Quitar la orden…; el doble clic en una orden la edita); una
+- Macroetapa, recinto (su marco), expansión, grafcet parcial suelto y orden de forzado (también la que aún no está completa): una
+  ficha compacta (`FichaJerarquia`) con su descripción y los mismos botones que el botón derecho (Encuadrar la expansión,
+  Renombrar…, Encuadrar la encapsulante, Configurar, Editar o Quitar la orden…; el doble clic en una orden la edita); una
   etapa lleva la suya sobre su lista de acciones (encapsulante, de un recinto, entrada o salida de una expansión, Forzar un
   parcial…).
 - Enlace, barra de simultaneidad, varios elementos o nada: lo suyo, o la invitación a elegir un elemento.
@@ -67,10 +67,13 @@ AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: a
                      "para rellenarlo; «Renombrar…» (botón derecho o doble clic en su marco) le cambia el nombre, y una orden "
                      "de forzado («Forzado») de una etapa de otro parcial puede forzarlo. No se pone encima de otro "
                      "elemento ni de otro marco",
-          "forzado": "Orden de forzado (rectángulo doble «G{ }»): arrástrela sobre una etapa, o junto a su fila de acciones, y elija "
-                     "el parcial al que fuerza, la forma (explícita, la situación actual, vacía o inicial) y, si es explícita, sus "
-                     "etapas; mientras esa etapa está activa, impone esa situación al parcial. Doble clic en la orden la edita y "
-                     "Supr la quita. Hace falta otro parcial (un grafcet parcial, un recinto o una macroetapa) al que forzar"}
+          "forzado": "Orden de forzado (rectángulo doble «G{ }»): arrástrela al dibujo como una acción; queda suelta («G?{?}») y "
+                     "no se simula. Doble clic en ella (o su panel de opciones) abre el diálogo para elegir el parcial al que "
+                     "fuerza, la forma (explícita, la situación actual, vacía o inicial) y, si es explícita, sus etapas. Se une "
+                     "a una etapa arrastrando desde su punto de unión de la izquierda hasta la etapa (o desde el lado derecho de "
+                     "la etapa hasta ella), soltándola sobre la etapa o pegándola a su fila de acciones; unida y completa, "
+                     "mientras esa etapa está activa impone esa situación al parcial. Supr la quita. Hace falta otro parcial "
+                     "(un grafcet parcial, un recinto o una macroetapa) al que forzar"}
 COLOCABLES = tuple(NOMBRES)  # las fichas de la paleta: solo se colocan arrastrándolas al dibujo
 
 
@@ -327,7 +330,7 @@ class FichaJerarquia(QWidget):
     la ficha entera se esconde."""
     ORDEN = ("Encuadrar la expansión", "Renombrar…", "Convertir en encapsulante", "Añadir recinto…", "Encuadrar el recinto",
              "Encuadrar los recintos", "Convertir en etapa ordinaria", "Enlace de activación", "Encuadrar la encapsulante",
-             "Encuadrar la macroetapa", "Forzar un parcial…", "Editar orden de forzado…",
+             "Encuadrar la macroetapa", "Forzar un parcial…", "Configurar orden de forzado…", "Editar orden de forzado…",
              "Quitar orden de forzado")  # el mismo orden que el botón derecho
     CASILLAS = ("Enlace de activación",)
 
@@ -526,7 +529,11 @@ class PanelPropiedades(QWidget):
                 "puede forzarlo.",
         "marco": "Parcial: sus etapas y transiciones son suyas; lo que se suelta dentro de su marco, también.",
         "orden": "Orden de forzado: mientras su etapa está activa, impone su situación al parcial. Doble clic (o «Editar orden "
-                 "de forzado…») la edita; Supr la quita (Ctrl+Z la devuelve)."}
+                 "de forzado…») la edita; Supr la quita (Ctrl+Z la devuelve).",
+        "orden_suelta": "Orden de forzado sin completar: no se simula. Doble clic (o «Configurar orden de forzado…») abre el "
+                        "diálogo para elegir el parcial al que fuerza, la forma y, si es explícita, sus etapas. Se une a una "
+                        "etapa arrastrando desde su punto de unión de la izquierda hasta la etapa; unida y completa, impone su "
+                        "situación al parcial mientras la etapa está activa. Supr la quita."}
 
     def _vacio(self) -> QWidget:
         self.l_vacio = QLabel(self.TEXTO_VACIO)
@@ -722,7 +729,7 @@ class PanelPropiedades(QWidget):
                 "etapa" if any(s["id"] == vivo for s in e.M["steps"]) else
                 "transicion" if any(t["id"] == vivo for t in e.M["transitions"]) else
                 "macro" if any(x["id"] == vivo for x in e.M.get("macros", [])) else
-                "orden" if any(f["id"] == vivo for f in e.ed.model["forces"]) else
+                "orden" if any(f["id"] == vivo for f in e.ed.model["forces"]) or e.es_orden_suelta(vivo) else
                 "marco" if any(q["id"] == vivo for q in e.M["partials"]) else None) if (vivo or aid) else None
         ident = aid if kind == "accion" else vivo if kind else None
         if (kind, ident) != (getattr(self, "_mostrado", None)):  # otro elemento: lo escrito sin confirmar se descarta
@@ -736,7 +743,8 @@ class PanelPropiedades(QWidget):
         etapa_a = e.nombres.get(e.etapa_accion(aid), "") if kind == "accion" else ""
         titulo = {"etapa": f"Etapa {e.nombres.get(vivo)}", "transicion": f"Transición {e.nombres.get(vivo)}",
                   "enlace": f"Enlace {e.nombre(vivo)}" if vivo else "", "barra": e.nombre(vivo) if vivo else "",
-                  "macro": f"Macroetapa {e.nombres.get(vivo)}", "orden": "Orden de forzado",
+                  "macro": f"Macroetapa {e.nombres.get(vivo)}",
+                  "orden": "Orden de forzado" + (" sin completar" if e.es_orden_suelta(vivo) else ""),
                   "marco": e.nombre(vivo) if vivo else "",
                   "accion": f"Acción {(e.datos_accion(aid)['variable'] or '?') if aid else ''}" + (f" · etapa {etapa_a}" if etapa_a else " · suelta"),
                   None: "" if len(sel) < 2 else f"{len(sel)} elementos seleccionados"}[kind] if e is not None else ""
@@ -830,7 +838,8 @@ class PanelPropiedades(QWidget):
             self.f_visible.setChecked(visible)
             self.der.setCurrentIndex(3)
         elif kind in ("macro", "orden", "marco"):
-            clave = kind if kind != "marco" else e.ed.partial_roles().get(vivo, {}).get("kind")
+            clave = ("orden_suelta" if e.es_orden_suelta(vivo) else kind) if kind != "marco" \
+                else e.ed.partial_roles().get(vivo, {}).get("kind")
             self.l_vacio.setText(self.AYUDA_JERARQUIA.get(clave, self.AYUDA_JERARQUIA["marco"]))
             self.der.setCurrentIndex(0)
         elif kind is None:
@@ -906,7 +915,7 @@ class PanelPropiedades(QWidget):
                 self.t_estado.setStyleSheet(f"color: {NARANJA if aviso else COL['ok']}")
                 self.t_dibujo.setText(_html(norm(e.significado(ident, texto), True, e.nombres)))
             else:
-                self.t_estado.setText(f"Error de sintaxis: {d.message}. {d.correction}")
+                self.t_estado.setText(f"Error de sintaxis: {e.sust(d.message)}. {e.sust(d.correction)}")
                 self.t_estado.setStyleSheet(f"color: {COL['err']}")
 
     def _aplicar(self) -> None:

@@ -420,6 +420,8 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(op.executable)
         self.assertEqual(layout_from_presentation(op.presentations[0])[ids["1"]], (240.0, 220.0))
         self.assertTrue(w.abrir_ruta(dest))
+        self.assertEqual(w.v.state().get("situation", []), [], "abrir deja Pausa sin estado")
+        self.assertTrue(w.cambiar_modo("simular"))  # Play arranca la sesión desde la situación inicial
         self.assertEqual(w.v.state()["situation"], [ids["0"]])
         nombre = {b.text().split(" ")[0]: v for v, b in w.botones.items()}
         w.botones[nombre["marcha"]].click()
@@ -1036,7 +1038,7 @@ class Interfaz(unittest.TestCase):
         """REQ-SIM-03: el ejemplo «alternativas» se simula, se dibuja con la flecha de union y se puede editar."""
         w = self.w
         w.cargar_ejemplo("alternativas")
-        w.a_ejecutar.setChecked(False)
+        w.a_ejecutar.setChecked(True)  # abrir deja Pausa sin estado: Play arranca la sesión
         nombre = {b.text().split(" ")[0]: v for v, b in w.botones.items()}
         w.botones[nombre["rapida"]].click()
         self.assertEqual(w.v.state()["situation"], ["E2"])
@@ -1196,7 +1198,7 @@ class Interfaz(unittest.TestCase):
         w = self.w
         def cargar(key):
             w.cargar_ejemplo(key)
-            w.a_ejecutar.setChecked(False)
+            w.a_ejecutar.setChecked(True)  # abrir deja Pausa sin estado: Play arranca la sesión
         def pulsar(nombre):
             next(b for b in w.botones.values() if b.text().split(' ')[0] == nombre).click()
         cargar('seleccion')
@@ -2145,11 +2147,11 @@ class Interfaz(unittest.TestCase):
         self.assertIn(("nueva_in", "nueva_in"), prog.opciones("entrada"))
 
     def test_SEDI67_carpetas_en_su_orden_y_temporizadores(self):
-        """REQ-EDT-02: las carpetas del programador van en este orden: Operadores, Entradas, Salidas, Etapas (X),
+        """REQ-EDT-02: las carpetas del programador van en este orden: Operadores, Constantes, Entradas, Salidas, Etapas (X),
         Memorias, Comparaciones, Temporizadores; la categoría «Tiempo» se llama «Temporizadores»."""
         from escritorio.bloques import CATEGORIAS, Programador
         e, ids, ts = self.secuencial()
-        textos = ["Operadores", "Entradas", "Salidas", "Etapas (X)", "Memorias", "Comparaciones", "Temporizadores"]
+        textos = ["Operadores", "Constantes", "Entradas", "Salidas", "Etapas (X)", "Memorias", "Comparaciones", "Temporizadores"]
         self.assertEqual([t for _, t in CATEGORIAS], textos)
         prog = self.w.props.prog
         self.assertEqual([b.text() for b in prog.categorias.values()], textos)
@@ -6210,7 +6212,7 @@ class Interfaz(unittest.TestCase):
         n = len(e.ed.undo_stack)
         antes = self.estado(e)
         r = e.anadir_recinto(h)
-        self.assertEqual(preguntas, [("Añadir recinto", "Nombre del recinto de la encapsulante 0:", "R1")])
+        self.assertEqual(preguntas, [("Añadir recinto", "Nombre del recinto de la encapsulante 0:", "G1")])
         self.assertEqual(len(e.ed.undo_stack), n + 1, "una sola operación de deshacer (recinto y posición del marco)")
         m = e.ed.model
         (rec,) = m["hierarchy"]["enclosures"]
@@ -6591,15 +6593,15 @@ class Interfaz(unittest.TestCase):
 
     def test_SEDI181_marcos_de_los_parciales_como_los_dibuja_el_banco(self):
         """REQ-JER-04, REQ-JER-07: el rectángulo de cada parcial que entrega el dibujo (y con el que el editor decide dónde cae lo
-        que se suelta) es el marco de siempre de las figuras de la norma: el recinto y el parcial de los ejemplos, y la zona de
-        la expansión; tools/dibujo.js usa la misma cuenta. Un recinto vacío solo lo anota el editor: Vista (banco, comparador,
-        simulador) no lo lleva, y dibujo.js no cambia."""
+        que se suelta) es el marco de las figuras de la norma, ampliado hasta rodear todo lo que se dibuja del parcial (retornos, textos
+        y acciones): el recinto y el parcial de los ejemplos, y la zona de la expansión; tools/dibujo.js usa la misma cuenta. Un
+        recinto vacío solo lo anota el editor: Vista (banco, comparador, simulador) no lo lleva, y dibujo.js no sabe de ellos."""
         from escritorio.diagrama import cajas_parciales, elemento_en
         from escritorio.edicion import Edicion
         from grafcet.examples import EJEMPLOS
         from grafcet.view import Vista
-        esperado = {"encapsulacion": {"R": (482.0, 772.0, 26.0, 274.0)}, "macroetapa": {"X": (482.0, 622.0, 56.0, 464.0)},
-                    "forzado": {"G": (532.0, 672.0, 16.0, 494.0)}}
+        esperado = {"encapsulacion": {"R": (469.0, 772.0, 26.0, 274.0)}, "macroetapa": {"X": (465.0, 684.0, 56.0, 464.0)},
+                    "forzado": {"G": (484.0, 672.0, 0.0, 496.0)}}
         for clave, cajas in esperado.items():
             titulo, _, construir = EJEMPLOS[clave]
             m, layout = construir()
@@ -6607,7 +6609,7 @@ class Interfaz(unittest.TestCase):
             self.assertEqual({p: (b["x0"], b["x1"], b["y0"], b["y1"]) for p, b in cajas_parciales(e.M).items()}, cajas, clave)
             self.assertFalse([p for p in e.M["partials"] if p.get("vacio")])
         # un parcial de los de siempre (marco redondeado) también se toca por su borde y recibe lo que se suelta dentro
-        self.assertEqual((elemento_en(e.M, QPointF(532, 200)), e.parcial_en(QPointF(600, 300)), e.parcial_en(QPointF(300, 300))),
+        self.assertEqual((elemento_en(e.M, QPointF(484, 200)), e.parcial_en(QPointF(600, 300)), e.parcial_en(QPointF(300, 300))),
                          ("G", "G", e.raiz))
         js = (ROOT / "tools" / "dibujo.js").read_text(encoding="utf-8")
         for cuenta in ("Math.min(...pts.map(p => p.x)) - H - 26", "Math.max(...pts.map(p => p.x)) + H + 70",
@@ -7122,7 +7124,7 @@ class Interfaz(unittest.TestCase):
             self.assertIsNone(e.renombrar(e.sel[0], "Z"))
             zs.append((e.sel[0], r))
         (z1, r1), (z2, r2) = zs
-        self.assertEqual((e.nombres[z1], e.nombres[z2]), ("R1.Z", "R2.Z"))
+        self.assertEqual((e.nombres[z1], e.nombres[z2]), ("G1.Z", "G2.Z"))
         self.assertEqual((e._texto_valido("XZ"), e._texto_valido("XZ", r1), e._texto_valido("XZ", r2)), (False, True, True))
         e.nueva_variable("Q", "output")
         datos = {"tipo": "condicionada", "variable": "Q", "condicion": "XZ"}
@@ -7516,6 +7518,149 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(e.borrar())
         self.assertTrue(e.ed.dirty)
 
+    # -- D1: guardar el dibujo con las dependencias y las fichas 1 y 0 del programador por bloques -----------------------
+    def test_SEDI297_guardar_el_dibujo_como_imagen_respeta_mostrar_dependencias(self):
+        """REQ-EDT-02, REQ-SIM-03 (P-IMP-66): «Guardar el dibujo como imagen» dibuja con el estado actual del botón «Mostrar
+        dependencias»: apagado, sin los trazos discontinuos macroetapa-expansión; encendido, con ellos; al editar y en Play."""
+        from PySide6.QtGui import QImage
+        from escritorio import ventana as modulo
+        from escritorio.diagrama import imagen
+        w, d = self.w, self.w.diagrama
+        w.cargar_ejemplo("macroetapa")
+        self.assertFalse(d.b_dependencias.isChecked())
+
+        def guardar(nombre):
+            ruta = str(Path(self.tmp.name) / nombre)
+            with mock.patch("escritorio.ventana.QFileDialog.getSaveFileName", return_value=(ruta, "")), \
+                    mock.patch.object(modulo, "imagen", wraps=imagen) as dibujo:
+                w.guardar_imagen()
+            self.assertEqual(dibujo.call_count, 1)
+            img = QImage(ruta)
+            self.assertFalse(img.isNull(), nombre)
+            return dibujo.call_args.kwargs["dependencias"], bytes(img.constBits())
+        sin, bytes_sin = guardar("sin.png")
+        d.b_dependencias.click()
+        con, bytes_con = guardar("con.png")
+        self.assertEqual((sin, con), (False, True), "el estado actual del botón")
+        self.assertNotEqual(bytes_sin, bytes_con, "con las dependencias se dibujan los trazos discontinuos")
+        d.b_dependencias.click()
+        self.assertEqual(guardar("otra-vez-sin.png"), (False, bytes_sin), "apagado vuelve a ser la misma imagen")
+        # en Play dibuja el estado de la simulación, con el mismo botón
+        w.a_ejecutar.setChecked(True)
+        self.assertEqual(guardar("play-sin.png")[0], False)
+        d.b_dependencias.click()
+        self.assertEqual(guardar("play-con.png")[0], True)
+        d.b_dependencias.click()
+
+    def esqueleto_sin_receptividad(self):
+        """E0 (inicial) → t1 → E1 hecho con los gestos del ratón, con la transición todavía sin receptividad (una
+        transición nueva queda pendiente). Devuelve la edición, los ID de las etapas por etiqueta y el de la transición."""
+        from escritorio.diagrama import anclas
+        w = self.w
+        w.nuevo()
+        e = w.edicion
+
+        def enlace(a, b):
+            pa = next(x for x in anclas(e.M, a) if x["lado"] == "abajo")["pos"]
+            pb = next(x for x in anclas(e.M, b) if x["lado"] == "arriba")["pos"]
+            e.herramienta = "seleccionar"
+            e.prensar(pa)
+            e.mover(pb)
+            e.soltar(pb)
+        e.colocar("etapa", QPointF(100, 60))
+        e.tipo_etapa(e.M["steps"][0]["id"], True)
+        e.colocar("transicion", QPointF(100, 140))
+        e.colocar("etapa", QPointF(100, 220))
+        ids = {s["label"]: s["id"] for s in e.M["steps"]}
+        t = e.M["transitions"][0]["id"]
+        enlace(ids["0"], t)
+        enlace(t, ids["1"])
+        return e, ids, t
+
+    def test_SEDI298_las_fichas_1_y_0_se_arrastran_a_una_receptividad_vacia(self):
+        """REQ-EDT-02, REQ-SIM-03: la carpeta «Constantes» del programador trae las fichas 1 (verdadero) y 0 (falso); soltada en
+        la receptividad vacía de una transición, «1» da la receptividad válida «1» (se guarda como true) que siempre franquea y
+        «0» la «0» (false) que nunca; la notación es la del usuario y la gramática no cambia."""
+        from escritorio import bloques
+        w = self.w
+        e, ids, t = self.esqueleto_sin_receptividad()
+        e.seleccionar([t])
+        prog = w.props.prog
+        a = prog.lienzo
+        self.assertEqual(prog.texto(), "")
+        self.assertFalse(e.ed.validate().can_simulate, "una transición nueva queda pendiente")
+        prog.elegir_categoria("constante")
+        self.assertEqual(prog.categorias["constante"].text(), "Constantes")
+        uno, cero = prog.paleta.bloques()
+        self.assertEqual([(b["k"], b["v"]) for b in (uno, cero)], [("const", 1), ("const", 0)])
+
+        def arrastrar(nodo, sobre_la_raiz=False):
+            """Lo que genera Qt al soltar una ficha de la paleta en el área de bloques: en el área vacía o sobre el bloque."""
+            m = QMimeData()
+            m.setData(bloques.MIME, json.dumps({"nodo": nodo, "grupo": prog.grupo, "origen": None}).encode())
+            a._calcular(max(a.width(), 300))
+            pos = next(x for x in a._bloques if x[1] == (0,))[0].center() if sobre_la_raiz else QPointF(20, 20)
+            a.dropEvent(QDropEvent(pos, Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+        arrastrar(uno)  # al área vacía: pasa a ser la receptividad
+        self.assertEqual((prog.texto(), w.props.t_texto.text(), e.texto_condicion(t)), ("1", "1", "true"))
+        self.assertTrue(e.ed.validate().can_simulate, [str(x) for x in e.ed.validate().diagnostics])
+        self.assertEqual(e.texto_usuario(t), "1")
+        self.assertTrue(w.cambiar_modo("simular"))
+        self.assertEqual(w.v.state()["situation"], [ids["1"]], "«1» franquea en cuanto la transición está validada")
+        self.assertTrue(w.cambiar_modo("editar"))
+        # «0» sobre el «1»: lo sustituye (una constante no envuelve)
+        e.seleccionar([t])
+        self.assertEqual(prog.texto(), "1", "al volver a editar, la receptividad vuelve como el bloque 1")
+        arrastrar(cero, sobre_la_raiz=True)
+        self.assertEqual((prog.texto(), e.texto_condicion(t)), ("0", "false"))
+        self.assertTrue(e.ed.validate().can_simulate)
+        self.assertTrue(w.cambiar_modo("simular"))
+        self.assertEqual(w.v.state()["situation"], [ids["0"]])
+        w._act("avanzar", us=10_000_000)
+        self.assertEqual(w.v.state()["situation"], [ids["0"]], "«0» no franquea nunca, por mucho tiempo que pase")
+        self.assertTrue(w.cambiar_modo("editar"))
+
+    def test_SEDI299_las_fichas_1_y_0_con_operadores_se_escriben_y_franquean_como_corresponde(self):
+        """REQ-EDT-02, REQ-SIM-03: «1» y «0» combinadas con «y», «o» y «no» se escriben con 1 y 0 en la notación del usuario, se
+        guardan como true y false, vuelven a bloques tal cual y franquean como corresponde con la entrada a 0 y a 1."""
+        from escritorio.bloques import arbol_a_texto, nuevo, texto_a_arbol, var
+        w = self.w
+        e, ids, t = self.esqueleto_sin_receptividad()
+        self.assertIsNone(e.nueva_variable("marcha"))
+        vid = next(v["id"] for v in e.ed.model["variables"] if v["name"] == "marcha")
+        e.seleccionar([t])
+        prog = w.props.prog
+        prog.elegir_categoria("constante")
+        uno, cero = prog.paleta.bloques()
+        m = var("marcha")
+        casos = [  # (gestos: dónde se suelta qué, texto, guardado, ¿franquea con marcha = 0?, ¿y con marcha = 1?)
+            ([((), nuevo("y")), (("a",), uno), (("b",), m)], "1 AND marcha", "true AND marcha", False, True),
+            ([((), nuevo("o")), (("a",), cero), (("b",), m)], "0 OR marcha", "false OR marcha", False, True),
+            ([((), nuevo("o")), (("a",), m), (("b",), uno)], "marcha OR 1", "marcha OR true", True, True),
+            ([((), nuevo("y")), (("a",), cero), (("b",), m)], "0 AND marcha", "false AND marcha", False, False),
+            ([((), nuevo("no")), (("a",), cero)], "NOT 0", "NOT false", True, True),
+            ([((), nuevo("no")), (("a",), uno)], "NOT 1", "NOT true", False, False),
+            ([((), nuevo("o")), (("a",), nuevo("no", a=uno)), (("b",), m)], "NOT 1 OR marcha", "NOT true OR marcha", False, True),
+            ([((), nuevo("y")), (("a",), nuevo("par", a=nuevo("o", a=cero, b=m))), (("b",), uno)], "(0 OR marcha) AND 1",
+             "(false OR marcha) AND true", False, True),
+        ]
+        for gestos, texto, guardado, con0, con1 in casos:
+            with self.subTest(texto):
+                prog.lienzo.quitar(())  # la receptividad vacía
+                for ruta, bloque in gestos:
+                    prog.lienzo.soltar(ruta, bloque)
+                self.assertEqual((prog.texto(), w.props.t_texto.text(), e.texto_condicion(t)), (texto, texto, guardado))
+                self.assertEqual(arbol_a_texto(texto_a_arbol(texto, {"marcha": ("input", "bool")}, [])), texto, "ida y vuelta")
+                self.assertTrue(e.ed.validate().can_simulate, [str(x) for x in e.ed.validate().diagnostics])
+                for pulsar, franquea in ((False, con0), (True, con1)):
+                    self.assertTrue(w.cambiar_modo("simular"))
+                    if pulsar:
+                        w.botones[vid].click()
+                    self.assertEqual(w.v.state()["situation"], [ids["1" if franquea else "0"]],
+                                     f"{texto} con marcha = {int(pulsar)}")
+                    self.assertTrue(w.cambiar_modo("editar"))
+                    e.seleccionar([t])
+
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
 class Bloques(unittest.TestCase):
@@ -7719,13 +7864,13 @@ class Bloques(unittest.TestCase):
         self.assertEqual(p.texto(), "CT + 1 > 3")
 
     def test_SEDI54_paleta_por_categorias(self):
-        """REQ-EDT-02, REQ-EDT-07: la paleta tiene siete categorías con su color; las memorias son las variables de papel
-        «internal»; sus desplegables se llenan con las variables y etapas del modelo."""
+        """REQ-EDT-02, REQ-EDT-07: la paleta tiene ocho categorías con su color (las constantes 1 y 0, en la suya); las memorias
+        son las variables de papel «internal»; sus desplegables se llenan con las variables y etapas del modelo."""
         from escritorio.bloques import CATEGORIAS, COLORES, PAPEL
         p = self.prog()
-        self.assertEqual([t for _, t in CATEGORIAS], ["Operadores", "Entradas", "Salidas", "Etapas (X)", "Memorias",
-                                                      "Comparaciones", "Temporizadores"])
-        self.assertEqual(len({COLORES[c] for c, _ in CATEGORIAS}), 7, "colores distintos")
+        self.assertEqual([t for _, t in CATEGORIAS], ["Operadores", "Constantes", "Entradas", "Salidas", "Etapas (X)",
+                                                      "Memorias", "Comparaciones", "Temporizadores"])
+        self.assertEqual(len({COLORES[c] for c, _ in CATEGORIAS}), 8, "colores distintos")
         self.assertEqual(PAPEL["interna"], "internal")
         self.assertEqual([b.toolTip() for b in p.categorias.values()], [t for _, t in CATEGORIAS])
         # una ficha por elemento (etapas por número, variables por nombre), ya elegido; las comparaciones, un bloque
@@ -7739,8 +7884,10 @@ class Bloques(unittest.TestCase):
             self.assertEqual([(b["k"], b["n"], b.get("papel")) for b in p.paleta.bloques()], fichas, clave)
             self.assertTrue(p.categorias[clave].isChecked())
         p.elegir_categoria("operador")
-        self.assertEqual([b["k"] if b["k"] != "const" else b["v"] for b in p.paleta.bloques()],
-                         ["y", "o", "no", "par", "sube", "baja", 1, 0], "con el bloque «( )» (P-IMP-46)")
+        self.assertEqual([b["k"] for b in p.paleta.bloques()], ["y", "o", "no", "par", "sube", "baja"],
+                         "con el bloque «( )» (P-IMP-46); las constantes ya no van entre los operadores")
+        p.elegir_categoria("constante")
+        self.assertEqual([(b["k"], b["v"]) for b in p.paleta.bloques()], [("const", 1), ("const", 0)])
         p.elegir_categoria("tiempo")
         self.assertEqual([(b["k"], b["t1"], b["t2"]) for b in p.paleta.bloques()], [("temp", "3s", "")])
         self.assertEqual(p.opciones("interna"), [("M1", "M1")], "las memorias booleanas")
@@ -7766,7 +7913,7 @@ class Bloques(unittest.TestCase):
         self.assertEqual([b["n"] for b in p.paleta.bloques()], ["M1", "M2"], "la paleta se llena otra vez")
 
     def test_SEDI64_disposicion_en_columnas(self):
-        """REQ-EDT-02: categorías como carpetas en una columna (las siete, con su color), a su derecha la columna de
+        """REQ-EDT-02: categorías como carpetas en una columna (las ocho, con su color), a su derecha la columna de
         bloques de la categoría elegida (uno debajo de otro) y, ocupando el resto, el área de trabajo con la papelera."""
         from PySide6.QtWidgets import QPushButton
         p = self.prog()
@@ -7774,7 +7921,7 @@ class Bloques(unittest.TestCase):
         p.show()
         QApplication.processEvents()
         bs = list(p.categorias.values())
-        self.assertEqual(len(bs), 7)
+        self.assertEqual(len(bs), 8)
         self.assertTrue(all(isinstance(b, QPushButton) and not b.icon().isNull() for b in bs))
         pos = [b.mapTo(p, b.rect().topLeft()) for b in bs]
         self.assertEqual(len({q.x() for q in pos}), 1, "todas en una columna")
@@ -7787,9 +7934,12 @@ class Bloques(unittest.TestCase):
         p.elegir_categoria("operador")
         QApplication.processEvents()
         cajas = sorted(p.paleta._cajas, key=lambda c: c[2])
-        self.assertEqual(len(cajas), 8, "y, o, no, ( ), flancos y las constantes 1 y 0")
+        self.assertEqual(len(cajas), 6, "y, o, no, ( ) y los flancos")
         self.assertEqual(len({x for _, x, _ in cajas}), 1, "los bloques, en una columna")
         self.assertEqual([c[2] for c in cajas], sorted({y for _, _, y in cajas}), "uno debajo de otro")
+        p.elegir_categoria("constante")
+        QApplication.processEvents()
+        self.assertEqual(len(p.paleta._cajas), 2, "las constantes 1 y 0, en su carpeta y a la vista sin desplazarse")
         p.elegir_categoria("comparacion")
         self.assertEqual([b["k"] for b in p.paleta.bloques()], ["cmp"], "elegir una carpeta muestra sus bloques")
         self.assertTrue(p.categorias["comparacion"].isChecked())

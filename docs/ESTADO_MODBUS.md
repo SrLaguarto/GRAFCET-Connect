@@ -5,9 +5,9 @@ sesión/reloj en hilo principal con QTimer existente. Motor grafcet/ intacto.
 Conexión opcional y manual. Mapa externo conexion-factoryio.json por ID de variable.
 
 Políticas actuales (segunda ronda, P-IMP-67): pausa pone a cero las coils y holding asignadas y deja el GRAFCET sin estado; Play arranca siempre una sesión nueva desde la situación inicial. Reiniciar conserva TCP,
-recrea sesión, descarta respuestas antiguas y publica salidas iniciales; queda en
+recrea sesión, descarta respuestas antiguas; en Play lee las entradas antes de escribir y ya no publica salidas iniciales (P-IMP-69; «publica salidas iniciales» de P-IMP-56 queda superado); queda en
 pausa (P-IMP-56) [superado en P-IMP-60: en Play sigue en Play]. Abrir otro modelo no desconecta: sus salidas pasan a cero (P-IMP-60). Diagnóstico solicita cero; pérdida
-pausa sin garantizar salidas; reconexión manual pone a cero las salidas asignadas antes de la primera lectura y exige Ejecutar. Desconectar pide el cero antes de cerrar el TCP («Desconectado · salidas a cero»); si la red falla, cierra igual y avisa «Salidas no garantizadas». Cerrar la ventana también intenta el cero, sin aviso si la red falla. Probar conexión no escribe.
+pausa sin garantizar salidas; reconexión manual pone a cero las salidas asignadas antes de la primera lectura y exige Ejecutar. Desconectar pide el cero antes de cerrar el TCP («Desconectado · salidas a cero»); si la red falla, cierra igual, pasa a «error» y avisa «Desconectado · salidas no garantizadas · no se pudo poner a cero la planta» (P-IMP-69). Cerrar la ventana también intenta el cero, sin aviso si la red falla. Probar conexión no escribe.
 
 Interfaz educativa: botón E/S en barra y Atrás; PLC central, listas laterales,
 LED y asignaciones. Paso/Completar retirados (P-IMP-60); para depurar sin Modbus, Play, Pausa y «Avanzar el tiempo…» (solo en Play).
@@ -70,4 +70,11 @@ Segunda ronda (P-IMP-66 y P-IMP-67; documentada el 30-10-2026, sin ejecutar las 
 - IP: primera vez 192.168.1.133, puerto 502, esclavo 1 (`CONEXION_INICIAL`); después, la última conexión o prueba con éxito, en QSettings `modbus/host`, `modbus/puerto` y `modbus/unidad` (SFIO43 a SFIO46). El mapa guardado del proyecto manda.
 - Panel E/S: se actualiza con el modelo; con la conexión viva avisa de variables nuevas hasta desconectar (SFIO37 a SFIO42).
 - Mapa tolerante: `Configuracion.cargar` descarta solo lo que ya no casa, con aviso; un JSON corrupto se rechaza entero (SFIO56, SFIO57). El formato no cambia.
+Ronda 4 (P-IMP-68 y P-IMP-69; documentada el 30-10-2026, sin ejecutar las pruebas):
+- Play lee antes de escribir: `vincular` ya no escribe nada. Tras Play, y tras Reiniciar en Play, la primera petición es una lectura; se aplican las entradas, se calcula y solo entonces se escribe (SFIO59, SFIO60).
+- Abrir un ejemplo o un proyecto deja Pausa sin estado, también en el panel de E/S (SFIO66; SAPP05 a SAPP07).
+- Abrir otro proyecto con la conexión viva pone a cero también las salidas del mapa nuevo, con un solo cero por canal (SFIO63, SFIO64).
+- Un solo cero tras un diagnóstico o un motor parado (SFIO61, SFIO62).
+- Mensajes: una variable asignada que pasa a interna dice «ya no es de entrada ni de salida» (SFIO67). Desconectar con la red caída dice «Desconectado · salidas no garantizadas · no se pudo poner a cero la planta», sin «Pulsa Conectar», y el estado queda en «error» (SFIO54, SFIO65).
+- Límite sin decidir: si se abre otro proyecto mientras se prueba la conexión, el estado puede quedarse en «probando» hasta Desconectar (ya ocurría antes). Cerrar la ventana con la red caída sigue sin avisar.
 - Pendiente: ejecutar `python tools/ejecutar_pruebas.py` y validar con la escena real.

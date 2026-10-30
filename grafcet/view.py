@@ -346,7 +346,8 @@ class Vista:
                        "actionLayout": self.action_layouts.get(s["id"], "fila"),
                        **({"comment": self.comments[s["id"]]} if s["id"] in self.comments else {})} for s in doc["steps"]],
             "macros": [{"id": x["id"], "x": layout[x["id"]][0], "y": layout[x["id"]][1], "expansion": e["partialRef"],
-                        "entry": e["entryRef"], "exit": e["exitRef"]}
+                        "entry": e["entryRef"], "exit": e["exitRef"],
+                        "partial": None if x["partialRef"] == "g" else x["partialRef"]}
                        for x in hier["macros"] for e in hier["expansions"] if e["id"] == x["expansionRef"]],
             "partials": [{"id": p["id"], "label": p["label"], "owner": p.get("ownerRef"),
                           **kinds.get(p["id"], {"kind": "partial"})}

@@ -198,15 +198,23 @@ class Ventana(unittest.TestCase):
         cls.tmp.cleanup()
 
     def test_SAPP05_ejemplos_en_la_ventana(self):
-        """REQ-SIM-03: cada ejemplo se carga y se dibuja; un clic en una entrada hace evolucionar el grafcet como en el banco."""
+        """REQ-SIM-03: cada ejemplo se carga y se dibuja; abrirlo deja Pausa sin estado y, con Play, un clic en una entrada hace
+        evolucionar el grafcet como en el banco."""
         from escritorio.diagrama import imagen
         for key in EJEMPLOS:
             self.w.cargar_ejemplo(key)
             self.assertEqual(self.w.v.key, key)
             self.assertGreater(len(self.w.diagrama.scene().items()), 4, key)
+            with mock.patch("escritorio.ventana.QMessageBox.warning"):  # los que no compilan (conflicto) avisan al hacer Play
+                self.w.a_ejecutar.setChecked(True)  # el dibujo de la simulación, con la sesión en marcha
             img = imagen(self.w.v.model, self.w.v.state(), 1.0)
             self.assertGreater(img.width() * img.height(), 10_000, key)
+            self.w.a_ejecutar.setChecked(False)
         self.w.cargar_ejemplo("contador-inestable")
+        self.assertEqual(self.w.v.state().get("situation", []), [], "abrir deja Pausa sin estado: lo arranca Play")
+        self.assertEqual((self.w.t_vars.rowCount(), self.w.t_temp.rowCount(), self.w.traza.count()), (0, 0, 0))
+        self.assertFalse(any(b.isEnabled() for b in self.w.botones.values()), "sin sesión, las entradas no responden")
+        self.w.a_ejecutar.setChecked(True)
         self.w.botones["I00"].click()
         self.assertEqual(self.w.v.state()["situation"], ["1"])
         self.assertEqual(self.w.botones["I00"].text(), "I00 = 1")
@@ -228,19 +236,30 @@ class Ventana(unittest.TestCase):
             self.assertTrue(self.w.abrir_ruta(dest))
             self.assertEqual(self.w.fuente["tipo"], "fichero")
             self.assertEqual((self.w.v.model["steps"], self.w.v.model["transitions"]), before)
+            self.assertEqual(self.w.v.state().get("situation", []), [], "abrir deja Pausa sin estado")
+            self.w.a_ejecutar.setChecked(True)  # Play: la sesión arranca desde la situación inicial
             self.w.botones["p"].click()
             self.assertEqual(self.w.v.state()["situation"], ["E1"])
+            self.w.a_ejecutar.setChecked(False)
 
     def test_SAPP07_lecturas_reinician(self):
-        """Cambiar una lectura reinicia la simulación y se señala como distinta de la decidida."""
+        """Cambiar una lectura reinicia la simulación (queda en Pausa, sin estado, hasta Play) y se señala como distinta de la
+        decidida."""
         self.w.cargar_ejemplo("bloqueo-u03")
-        self.w._opciones({**self.w.options, "U-03": "recorrido"})
-        self.assertEqual(self.w.v.options["U-03"], "recorrido")
-        self.assertIn("distintas de las decididas: U-03", self.w.l_lect.text(), "el aviso va en la barra de estado")
-        self.w.botones["p"].click()
-        self.assertEqual(self.w.v.state()["situation"], ["C"], "con «recorrido» la subida llega a C")
-        self.w._opciones(normalize_options(None))
-        self.assertEqual(self.w.l_lect.text(), "", "con las lecturas decididas no hay aviso")
+        try:
+            self.w._opciones({**self.w.options, "U-03": "recorrido"})
+            self.assertEqual(self.w.v.options["U-03"], "recorrido")
+            self.assertIn("distintas de las decididas: U-03", self.w.l_lect.text(), "el aviso va en la barra de estado")
+            self.assertEqual(self.w.v.state().get("situation", []), [], "cambiar la lectura deja Pausa sin estado")
+            self.w.a_ejecutar.setChecked(True)  # Play: ejecución nueva con la lectura elegida
+            self.w.botones["p"].click()
+            self.assertEqual(self.w.v.state()["situation"], ["C"], "con «recorrido» la subida llega a C")
+            self.w._opciones(normalize_options(None))  # en Play: se reinicia y sigue en Play, con las lecturas decididas
+            self.assertEqual(self.w.l_lect.text(), "", "con las lecturas decididas no hay aviso")
+            self.assertEqual((self.w.a_ejecutar.isChecked(), self.w.v.state()["situation"]), (True, ["A"]), "sigue en Play, de cero")
+        finally:
+            self.w.a_ejecutar.setChecked(False)
+            self.w._opciones(normalize_options(None))  # un fallo no deja las lecturas cambiadas a las pruebas siguientes
 
     def test_SAPP08_ajustes_y_lecturas(self):
         """REQ-SEM-09: «Ajustes» (entre Simulación y Ayuda) tiene las lecturas; el diálogo no ofrece «detener» y el

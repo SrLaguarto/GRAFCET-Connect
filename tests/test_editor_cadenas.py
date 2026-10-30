@@ -1122,7 +1122,6 @@ class EquidistanciarEnElDibujo(BaseQt):
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
 class FichaDeForzado(BaseQt):
-    AVISO = "Una orden de forzado va asociada a una etapa: suéltela sobre una etapa"
 
     def test_SEDI253_la_orden_de_forzado_es_una_ficha_de_la_paleta_como_las_demas(self):
         """REQ-EDT-02, REQ-JER-02: la paleta ofrece «Forzado» (la orden de forzado: rectángulo doble con «G{ }») tras las
@@ -1140,6 +1139,7 @@ class FichaDeForzado(BaseQt):
         self.assertEqual((propiedades.NOMBRES["forzado"], pa.item(7).toolTip()), ("Forzado", propiedades.AYUDAS["forzado"]))
         ayuda = propiedades.AYUDAS["forzado"]
         self.assertTrue("rectángulo doble" in ayuda and "etapa" in ayuda and "Doble clic" in ayuda and "Supr" in ayuda, ayuda)
+        self.assertTrue("como una acción" in ayuda and "G?{?}" in ayuda and "no se simula" in ayuda, "se suelta como una acción: " + ayuda)
         self.assertFalse(pa.item(7).icon().pixmap(80, 64).toImage().isNull())
         # la figura de arrastre lleva el rectángulo doble (dos contornos, uno más que la caja de una acción) y el punto bajo el
         # puntero es el centro de su lado izquierdo, como la ficha «Acción»
@@ -1184,20 +1184,22 @@ class FichaDeForzado(BaseQt):
         self.assertEqual([c.texto for c in capturados], ["forzado"])
         self.assertTrue(capturados[0].pm.rect().contains(capturados[0].punto))
 
-    def test_SEDI254_soltar_la_ficha_sobre_una_etapa_abre_el_dialogo_y_crea_la_orden_asociada_a_ella(self):
+    def test_SEDI254_soltar_la_ficha_sobre_una_etapa_la_une_a_ella_y_el_dialogo_la_completa_y_pasa_al_modelo(self):
         """REQ-EDT-02, REQ-JER-02, REQ-JER-03, REQ-EDT-05: arrastrar la ficha sobre una etapa la resalta como destino; soltarla
-        sobre la etapa (o sobre una acción suya, o junto a su fila de acciones) abre el diálogo de la orden (parcial destino,
-        forma y etapas, con nombres) y, al aceptar, crea la orden asociada a esa etapa en una sola operación de deshacer, la
-        deja seleccionada y la dibuja en su rectángulo doble; la orden se edita con doble clic."""
+        sobre la etapa (o sobre una acción suya, o junto a su fila de acciones) crea una orden sin completar unida a ella (una
+        operación de deshacer, sin abrir el diálogo, con sus opciones a la vista); el diálogo de la orden (parcial destino, forma y
+        etapas, con nombres) la completa y entonces pasa al modelo, en una sola operación, y se dibuja en su rectángulo doble;
+        la orden del modelo se edita con doble clic."""
         w, e, d = self.con_recinto()
         h, r, a, b = d["h"], d["r"], d["a"], d["b"]
-        e.pedir_accion = lambda sid, aid: None
+        abiertas = []
+        e.pedir_accion = lambda sid, aid: abiertas.append((sid, aid))
         e.nueva_variable("Q00", "output")
         self.assertIsNone(e.poner_accion(h, {"tipo": "continua", "variable": "Q00"}))
         w.resize(1360, 860)
         w.show()
         self.app.processEvents()
-        # sobrevolar: la etapa se recuadra como destino; en un hueco, no, pero se puede soltar (se avisa al soltar)
+        # sobrevolar: la etapa se recuadra como destino; en un hueco, no
         ch = centro(e.M, h)
         self.assertTrue(e.sobrevolar("forzado", ch))
         self.assertIsNotNone(w.diagrama.destino)
@@ -1212,34 +1214,48 @@ class FichaDeForzado(BaseQt):
         antes, n = self.estado(e), len(e.ed.undo_stack)
         self.soltar_ficha("forzado", ch)
         self.assertIsNone(w.diagrama.destino, "al soltar se quita el recuadro")
+        self.assertEqual(pedidas, [], "soltarla no abre el diálogo: se une a la etapa y se configura después")
+        (borrador,) = e.ed.draft_actions()
+        did = borrador["id"]
+        self.assertEqual((borrador["tipo"], borrador["etapa"], e.ed.model["forces"]), ("forzado", h, []))
+        self.assertEqual((len(e.ed.undo_stack), e.sel, e.mensaje_info, abiertas), (n + 1, [did], True, [(None, did)]))
+        (caja,) = [c for c in w.diagrama.cajas_acciones if c["id"] == did]
+        self.assertEqual((caja["etapa"], caja["forzado"], caja["borrador"], w.diagrama.cajas_ordenes != []), (h, True, True, False))
+        self.assertEqual(w.props.pagina, "orden")
+        # el diálogo de la orden: con nombres, y al aceptar pasa al modelo en una sola operación
+        n = len(e.ed.undo_stack)
+        fid = e.configurar_orden(did)
         datos = pedidas[0]
         self.assertEqual((datos["origen"], datos["destinos"], datos["actual"]), ("H", [(r, "recinto R")], None))
         self.assertEqual(datos["etapas"], {r: [(a, "A"), (b, "B")]})
         (f,) = e.ed.model["forces"]
+        self.assertEqual(fid, f["id"])
         self.assertEqual((f["sourceStepRef"], f["targetPartialRef"], f["targetKind"], f["targetSteps"]), (h, r, "explicit", [b]))
-        self.assertEqual((len(e.ed.undo_stack), e.sel, e.mensaje_info), (n + 1, [f["id"]], True))
+        self.assertEqual((e.ed.draft_actions(), len(e.ed.undo_stack), e.sel, e.mensaje_info), ([], n + 1, [f["id"]], True))
         self.assertEqual([(c["id"], c["etapa"]) for c in w.diagrama.cajas_ordenes], [(f["id"], h)])
         self.assertEqual(w.props.pagina, "orden")
         self.assertIn("Doble clic", w.props.l_vacio.text())
+        e.deshacer()  # completarla es una sola operación: vuelve a ser la orden sin completar unida a la etapa
+        self.assertEqual((e.ed.model["forces"], [x["id"] for x in e.ed.draft_actions()], w.diagrama.cajas_ordenes), ([], [did], []))
         e.deshacer()
         self.assertEqual((self.estado(e), w.diagrama.cajas_ordenes), (antes, []))
-        # sobre una acción de la etapa y junto a su fila de acciones (a menos de IMAN_ACCION de su borde derecho)
+        # sobre una acción de la etapa y junto a su fila de acciones (a menos de IMAN_ACCION de su borde derecho): también se une a ella
         (caja,) = [c for c in w.diagrama.cajas_acciones if c["etapa"] == h]
         x, y, ancho, alto = caja["rect"]
-        respuesta[0] = {"destino": r, "forma": "empty", "etapas": []}
         for punto in (QPointF(x + ancho / 2, y + alto / 2), QPointF(x + ancho + 10, y + alto / 2)):
             self.assertTrue(e.sobrevolar("forzado", punto))
             self.assertIsNotNone(w.diagrama.destino, punto)
             n = len(e.ed.undo_stack)
             self.soltar_ficha("forzado", punto)
-            self.assertEqual((len(e.ed.undo_stack), e.ed.model["forces"][-1]["sourceStepRef"]), (n + 1, h))
+            self.assertEqual((len(e.ed.undo_stack), e.ed.draft_actions()[-1]["etapa"], e.ed.model["forces"]), (n + 1, h, []))
             e.deshacer()
         lejos = QPointF(x + ancho + 40, y + alto / 2)
         self.assertTrue(e.sobrevolar("forzado", lejos))
-        self.assertIsNone(w.diagrama.destino, "a más de 16 del borde, ya no es de su fila")
-        # doble clic en la orden: se edita con el diálogo (valores actuales) y el cambio es una operación
+        self.assertIsNone(w.diagrama.destino, "a más de 16 del borde, ya no es de su fila: queda suelta, como una acción")
+        # doble clic en la orden del modelo: se edita con el diálogo (valores actuales) y el cambio es una operación
         respuesta[0] = {"destino": r, "forma": "explicit", "etapas": [a, b]}
         self.soltar_ficha("forzado", ch)
+        e.configurar_orden(e.ed.draft_actions()[0]["id"])
         fid = e.ed.model["forces"][0]["id"]
         respuesta[0] = {"destino": r, "forma": "current", "etapas": []}
         n = len(e.ed.undo_stack)
@@ -1250,48 +1266,57 @@ class FichaDeForzado(BaseQt):
         self.assertIn("Forzar un parcial…", dict(e.menu(ch)))
         self.assertEqual([t for t, _ in e.menu(centro_orden(w, fid))], ["Editar orden de forzado…", "Quitar orden de forzado"])
 
-    def test_SEDI255_soltar_la_ficha_donde_no_hay_etapa_cancelar_o_un_rechazo_no_cambian_nada(self):
-        """REQ-EDT-02, REQ-JER-02, REQ-EDT-09: soltar la ficha en un hueco o sobre algo que no es una etapa (una transición, una
-        macroetapa, una barra, un enlace, una acción suelta) no crea nada y avisa en rojo «Una orden de forzado va asociada a
-        una etapa…»; cancelar el diálogo, no haber otro parcial al que forzar o un ciclo de forzado (D-JERARQUIA-CICLO) tampoco
-        cambian nada, y avisan en rojo con el parpadeo de la etapa."""
+    def test_SEDI255_cancelar_el_dialogo_no_haber_otro_parcial_o_un_ciclo_no_cambian_nada_y_encima_de_otro_elemento_no_se_coloca(self):
+        """REQ-EDT-02, REQ-JER-02, REQ-EDT-09: soltar la ficha encima de una transición, una macroetapa, una barra o una acción
+        suelta no la coloca (como una acción) y avisa; cancelar el diálogo, no haber otro parcial al que forzar o un ciclo de
+        forzado (D-JERARQUIA-CICLO) no cambian nada, y los dos últimos avisan en rojo con el parpadeo de la orden."""
+        from escritorio.edicion import MSG_SOLAPE
         w, e, d = self.con_recinto()
         h, r, a, b = d["h"], d["r"], d["a"], d["b"]
+        e.pedir_accion = lambda sid, aid: None
         mid = e.poner_macro(QPointF(900, 300))
         barra = e.poner_barra(QPointF(900, 600), "Y")
         suelta = e.poner_accion_suelta(QPointF(700, 700))
-        e.pedir_forzado = lambda datos: {"destino": r, "forma": "empty", "etapas": []}
         ts = [t["id"] for t in e.M["transitions"]]
         antes, n = self.estado(e), len(e.ed.undo_stack)
-        puntos = {"hueco": QPointF(1100, 700), "transición": centro(e.M, ts[0]), "macroetapa": centro(e.M, mid),
-                  "barra": QPointF(900, 602), "acción suelta": centro_caja(w, suelta)}
+        puntos = {"transición": centro(e.M, ts[0]), "macroetapa": centro(e.M, mid), "barra": QPointF(900, 602),
+                  "acción suelta": centro_caja(w, suelta)}
         for nombre, p in puntos.items():
             e.mensaje = ""
             self.soltar_ficha("forzado", p)
             self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n), nombre)
-            self.assertEqual((e.mensaje, e.mensaje_info), (self.AVISO, False), nombre)
-        # cancelar el diálogo
+            self.assertEqual((e.mensaje, e.mensaje_info), (MSG_SOLAPE, True), nombre)
+        # cancelar el diálogo de una orden unida a una etapa
+        self.soltar_ficha("forzado", centro(e.M, h))
+        (did,) = [x["id"] for x in e.ed.draft_actions() if x["tipo"] == "forzado"]
+        antes, n = self.estado(e), len(e.ed.undo_stack)
         e.pedir_forzado = lambda datos: None
-        e.mensaje = ""
-        self.soltar_ficha("forzado", centro(e.M, h))
+        self.assertIsNone(e.configurar_orden(did))
         self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
-        # un ciclo: A, del recinto, fuerza al raíz, que H ya fuerza al recinto
+        # un ciclo: H fuerza al recinto, y A, que es del recinto, fuerza al raíz (que contiene a H)
         e.pedir_forzado = lambda datos: {"destino": r, "forma": "empty", "etapas": []}
-        self.soltar_ficha("forzado", centro(e.M, h))
+        e.configurar_orden(did)
+        self.assertEqual([f["sourceStepRef"] for f in e.ed.model["forces"]], [h])
+        self.soltar_ficha("forzado", centro(e.M, a))
+        (did2,) = [x["id"] for x in e.ed.draft_actions() if x["tipo"] == "forzado"]
         antes, n = self.estado(e), len(e.ed.undo_stack)
         e.pedir_forzado = lambda datos: {"destino": "g", "forma": "empty", "etapas": []}
         e.parpadeo.parar()
-        self.soltar_ficha("forzado", centro(e.M, a))
-        self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
+        self.assertIsNone(e.configurar_orden(did2))
+        self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n), "el rechazo no deja nada a medias")
         self.assertTrue(e.mensaje and not e.mensaje_info and "ciclo" in e.mensaje, e.mensaje)
-        self.assertEqual(e.parpadeo.ids, {a})
+        self.assertEqual(e.parpadeo.ids, {did2})
         e.parpadeo.parar()
         # sin otro parcial no hay a quién forzar
         w, e = self.vacio()
+        e.pedir_accion = lambda sid, aid: None
         e.colocar("etapa", QPointF(260, 60))
         solo = e.sel[0]
-        antes, n = self.estado(e), len(e.ed.undo_stack)
         self.soltar_ficha("forzado", centro(e.M, solo))
+        (did3,) = [x["id"] for x in e.ed.draft_actions()]
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        e.pedir_forzado = lambda datos: self.fail("no hay nada que elegir")
+        self.assertIsNone(e.configurar_orden(did3))
         self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
         self.assertTrue("otro parcial" in e.mensaje and not e.mensaje_info, e.mensaje)
         e.parpadeo.parar()
@@ -1749,10 +1774,12 @@ class GrafcetParcialSuelto(BaseQt):
         b = e.sel[0]
         self.assertIsNone(e.renombrar(b, "B"))
         g2 = e.poner_parcial(QPointF(700, 600))
-        # la ficha «Forzado» sobre H: el diálogo ofrece los dos parciales sueltos, con las etapas del primero
+        # la ficha «Forzado» sobre H y su diálogo: ofrece los dos parciales sueltos, con las etapas del primero
         pedidas = []
+        e.pedir_accion = lambda sid, aid: None
         e.pedir_forzado = lambda datos: pedidas.append(datos) or {"destino": g1, "forma": "explicit", "etapas": [b]}
         self.soltar_ficha("forzado", centro(e.M, h))
+        e.configurar_orden(e.ed.draft_actions()[0]["id"])
         self.assertEqual(pedidas[0]["destinos"], [(g1, "G1"), (g2, "G2")])
         self.assertEqual(pedidas[0]["etapas"], {g1: [(b, "B")], g2: []})
         (f1,) = e.ed.model["forces"]
@@ -1850,8 +1877,8 @@ class EncuadrarYDependencias(BaseQt):
         b = d.b_dependencias
         self.assertEqual((b.text(), b.isCheckable(), b.isChecked(), d.dependencias), ("Mostrar dependencias", True, False, False))
         lay = d.barra.layout()
-        self.assertEqual([lay.itemAt(i).widget() for i in range(lay.count())], [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, b],
-                         "en la barra del zoom")
+        self.assertEqual([lay.itemAt(i).widget() for i in range(lay.count())],
+                         [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion, b], "en la barra del zoom")
         self.assertIn("dependencias", b.toolTip())
         # en edición: una macroetapa con su expansión y una encapsulante con su recinto
         mid = e.poner_macro(QPointF(260, 220))
@@ -1865,13 +1892,16 @@ class EncuadrarYDependencias(BaseQt):
         contenido = d.scene().itemsBoundingRect()
         b.click()
         self.app.processEvents()
-        self.assertEqual((b.isChecked(), d.dependencias, len(self.rayas(w))), (True, True, 3), "dos de la macroetapa y uno de la encapsulante")
+        self.assertEqual((b.isChecked(), d.dependencias, len(self.rayas(w))), (True, True, 4), "dos de la macroetapa y dos de la encapsulante")
         self.assertEqual((cajas_parciales(e.M), d.escala(), e.sel, d.scene().itemsBoundingRect()), (marcos, escala, sel, contenido),
                          "ni la disposición, ni los marcos, ni la selección, ni la vista")
         self.assertTrue(w.ajustes.value(CLAVE_DEPENDENCIAS, False, type=bool))
-        # el trazo de la encapsulante va de ella a su recinto
-        un = next(it for it in self.rayas(w) if abs(it.line().x1() - centro(e.M, enc).x()) < 0.01 and abs(it.line().y1() - centro(e.M, enc).y()) < 0.01)
-        self.assertTrue(marcos[r]["x0"] <= un.line().x2() <= marcos[r]["x1"] and marcos[r]["y0"] <= un.line().y2() <= marcos[r]["y1"])
+        # los trazos de la encapsulante van de ella a las dos esquinas del lado de su recinto que la mira
+        c, cb = centro(e.M, enc), marcos[r]
+        dos = [it for it in self.rayas(w) if abs(it.line().x1() - c.x()) <= 22.01 and abs(it.line().y1() - c.y()) <= 22.01]
+        self.assertEqual(len(dos), 2)
+        self.assertEqual({(it.line().x2(), it.line().y2()) for it in dos},
+                         {(cb["x0"], cb["y0"]), (cb["x0"], cb["y1"])}, "el recinto queda a la derecha: sus dos esquinas de la izquierda")
         # al simular también hay botón y trazos, con el estado que se dejó
         e.ed.dirty = False
         w.cargar_ejemplo("macroetapa")
@@ -2073,6 +2103,609 @@ class EncuadrarYDependencias(BaseQt):
         fuente = inspect.getsource(ventana)
         for viejo in ("Abrir expansión", "Ir a la macroetapa", "Ir a la encapsulante", "Ir a la expansión"):
             self.assertNotIn(viejo, fuente)
+
+
+@unittest.skipUnless(QT, "PySide6 no está instalado")
+class OrdenDeForzadoSuelta(BaseQt):
+    """Encargo D2, punto 2 (P-IMP-68): la ficha «Forzado» se arrastra como una acción normal: suelta, sin efecto, y se une a mano a
+    una etapa; se configura (parcial destino, forma, etapas) en su panel o con doble clic y, unida y completa, pasa al modelo."""
+
+    def con_parcial(self):
+        """H (inicial) en el raíz y un grafcet parcial suelto G1 con una etapa B; sin acciones ni órdenes."""
+        from escritorio.diagrama import cajas_parciales
+        w, e = self.vacio()
+        self.abiertas = []
+        e.pedir_accion = lambda sid, aid: self.abiertas.append((sid, aid))
+        e.colocar("etapa", QPointF(260, 60))
+        h = e.sel[0]
+        e.tipo_etapa(h, True)
+        self.assertIsNone(e.renombrar(h, "H"))
+        g1 = e.poner_parcial(QPointF(700, 200))
+        c = cajas_parciales(e.M)[g1]
+        e.colocar("etapa", QPointF((c["x0"] + c["x1"]) / 2, (c["y0"] + c["y1"]) / 2))
+        b = e.sel[0]
+        self.assertIsNone(e.renombrar(b, "B"))
+        w.resize(1360, 860)
+        w.show()
+        self.app.processEvents()
+        e.ed.dirty = False
+        e.pedir_forzado = lambda datos: {"destino": g1, "forma": "explicit", "etapas": [b]}
+        return w, e, {"h": h, "g1": g1, "b": b}
+
+    @staticmethod
+    def situacion(e):
+        """La situación al arrancar el modelo que se edita, con nombres (la orden vigente la deja en {B, H})."""
+        return corrida(e.ed.model, [(1, {})])[0][0]
+
+    def suelta(self, w, e, p=QPointF(520, 520)):
+        """Suelta la ficha «Forzado» en un hueco (donde cae sola) y devuelve el ID de la orden."""
+        antes = {x["id"] for x in e.ed.draft_actions()}
+        self.soltar_ficha("forzado", p)
+        (did,) = [x["id"] for x in e.ed.draft_actions() if x["id"] not in antes]
+        return did
+
+    def test_SEDI303_soltar_la_ficha_en_un_hueco_crea_una_orden_suelta_con_su_rectangulo_doble_y_sin_efecto(self):
+        """REQ-EDT-02, REQ-JER-02, REQ-EDT-05: soltar la ficha «Forzado» en un hueco, como la de una acción, crea una orden suelta
+        (un borrador, una operación de deshacer, sin diálogo) que se dibuja con su rectángulo doble y «G?{?}», queda seleccionada
+        con sus opciones, avisa sin ser un error, y no tiene ningún efecto en la simulación: no está entre las órdenes del modelo."""
+        from PySide6.QtWidgets import QGraphicsTextItem, QGraphicsRectItem
+        w, e, d = self.con_parcial()
+        e.pedir_forzado = lambda datos: self.fail("soltarla no abre el diálogo")
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        self.assertEqual(self.situacion(e), ["H"])
+        did = self.suelta(w, e)
+        (borrador,) = e.ed.draft_actions()
+        self.assertEqual((borrador["tipo"], "etapa" in borrador, e.ed.model["forces"], len(e.ed.undo_stack)), ("forzado", False, [], n + 1))
+        self.assertEqual((e.sel, e.mensaje_info, "suelta" in e.mensaje), ([did], True, True))
+        (caja,) = [c for c in w.diagrama.cajas_acciones if c["id"] == did]
+        self.assertEqual((caja["forzado"], caja["suelta"], caja["borrador"], caja["etapa"]), (True, True, True, ""))
+        self.assertEqual(w.diagrama.cajas_ordenes, [], "no es una orden del modelo")
+        sc = w.diagrama.scene()
+        self.assertIn("G?{?}", [it.toPlainText() for it in sc.items() if isinstance(it, QGraphicsTextItem)])
+        x, y, ancho, alto = caja["rect"]
+        rects = {tuple(round(v, 1) for v in (it.rect().x(), it.rect().y(), it.rect().width(), it.rect().height()))
+                 for it in sc.items() if isinstance(it, QGraphicsRectItem)}
+        self.assertTrue({(round(x, 1), round(y, 1), round(ancho, 1), round(alto, 1)),
+                         (round(x + 3, 1), round(y + 3, 1), round(ancho - 6, 1), round(alto - 6, 1))} <= rects, "rectángulo doble")
+        self.assertEqual((w.props.pagina, w.props.titulo.text()), ("orden", "Opciones · Orden de forzado sin completar"))
+        self.assertTrue(w.props.ficha_izq.isVisibleTo(w.props.izq))
+        self.assertEqual(w.props.ficha_izq.textos_visibles(), ["Configurar orden de forzado…", "Quitar orden de forzado"])
+        avisos = [x for x in e.diagnosticos() if x["code"] == "AVISO"]
+        self.assertEqual([(x["message"], x["blocks"], x["target"]) for x in avisos],
+                         [("Orden de forzado sin etapa: no se simula", False, did)])
+        self.assertTrue(e.ed.validate().can_simulate)
+        self.assertEqual(self.situacion(e), ["H"], "ni la ve el motor")
+        e.deshacer()
+        self.assertEqual((self.estado(e), len(w.diagrama.cajas_acciones)), (antes, 0))
+
+    def test_SEDI304_se_mueve_como_una_accion_suelta_y_se_pega_al_lado_de_otra_en_un_grupo(self):
+        """REQ-EDT-02, REQ-ACT-01, REQ-EDT-05: la orden suelta se agarra por su caja y se mueve a la rejilla (una sola operación de
+        deshacer, la posición es presentación); acercada al lado derecho de otra acción suelta forma un grupo con ella, que se
+        mueve junto; un clic sin mover solo la selecciona."""
+        w, e, d = self.con_parcial()
+        did = self.suelta(w, e, QPointF(520, 520))
+        e.nueva_variable("Q00", "output")
+        otra = e.poner_accion_suelta(QPointF(900, 700))
+        x0, y0 = float(e.ed.draft_actions()[0]["x"]), float(e.ed.draft_actions()[0]["y"])
+        antes, n, rev = self.estado(e), len(e.ed.undo_stack), e.ed.revision
+        p = centro_caja(w, did)
+        e.prensar(p)
+        e.mover(p + QPointF(60, 40))
+        e.mover(p + QPointF(80, 61))
+        e.soltar(p + QPointF(80, 61))
+        orden = next(x for x in e.ed.draft_actions() if x["id"] == did)
+        self.assertEqual((float(orden["x"]), float(orden["y"])), (x0 + 80, y0 + 60), "a la rejilla")
+        self.assertEqual((len(e.ed.undo_stack), e.ed.revision, e.sel), (n + 1, rev, [did]))
+        e.deshacer()
+        self.assertEqual(self.estado(e), antes)
+        # un clic sin mover solo la selecciona
+        e.seleccionar([])
+        e.prensar(p)
+        e.soltar(p)
+        self.assertEqual((e.sel, len(e.ed.undo_stack)), ([did], n))
+        # pegada al lado derecho de la otra acción: forman un grupo, que se mueve junto
+        x, y, ancho, alto = next(c for c in w.diagrama.cajas_acciones if c["id"] == otra)["rect"]
+        mia = next(c for c in w.diagrama.cajas_acciones if c["id"] == did)["rect"]
+        destino = QPointF(x + ancho + mia[2] / 2, y + alto / 2)
+        e.prensar(p)
+        e.mover(destino)
+        e.soltar(destino)
+        por_id = {c["id"]: c for c in e.ed.draft_actions()}
+        self.assertTrue(por_id[did].get("grupo") and por_id[did]["grupo"] == por_id[otra]["grupo"], por_id)
+        self.assertEqual(sorted(e.sel), sorted([did, otra]))
+        ra, rb = (next(c for c in w.diagrama.cajas_acciones if c["id"] == i)["rect"] for i in (otra, did))
+        self.assertAlmostEqual(ra[0] + ra[2], rb[0], delta=0.5, msg="pegadas, una al lado de la otra")
+        # el grupo se mueve junto
+        e.prensar(centro_caja(w, did))
+        e.mover(centro_caja(w, did) + QPointF(0, 100))
+        e.soltar(centro_caja(w, did) + QPointF(0, 100))
+        por_id = {c["id"]: c for c in e.ed.draft_actions()}
+        self.assertEqual(por_id[did]["y"], por_id[otra]["y"])
+        self.assertEqual(e.ed.model["forces"], [])
+
+    def test_SEDI305_se_une_a_una_etapa_con_el_mismo_gesto_que_una_accion_y_sin_destino_no_tiene_efecto(self):
+        """REQ-EDT-02, REQ-ACT-01, REQ-JER-02: se une a una etapa arrastrando de su punto de unión izquierdo a la etapa, o del lado
+        derecho de la etapa a ella, o acercándola a la fila de acciones de la etapa (imán); queda unida como orden sin completar
+        (una operación de deshacer, con sus opciones a la vista) y, sin destino, no tiene ningún efecto en la simulación."""
+        w, e, d = self.con_parcial()
+        h = d["h"]
+        e.nueva_variable("Q00", "output")
+        self.assertIsNone(e.poner_accion(h, {"tipo": "continua", "variable": "Q00"}))
+        did = self.suelta(w, e, QPointF(520, 520))
+        # 1. del punto de unión izquierdo de la orden a la etapa
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        self.abiertas.clear()
+        self.unir(e, did, "izq", h, "arriba")
+        orden = next(x for x in e.ed.draft_actions() if x["id"] == did)
+        self.assertEqual((orden["etapa"], e.ed.model["forces"], len(e.ed.undo_stack), e.sel), (h, [], n + 1, [did]))
+        self.assertEqual(self.abiertas, [(None, did)], "se abren sus opciones: queda por elegir el destino")
+        self.assertEqual((w.props.pagina, self.situacion(e)), ("orden", ["H"]))
+        (caja,) = [c for c in w.diagrama.cajas_acciones if c["id"] == did]
+        self.assertEqual((caja["etapa"], caja["forzado"]), (h, True))
+        self.assertEqual([x["message"] for x in e.diagnosticos() if x["code"] == "AVISO"],
+                         ["Orden de forzado de la etapa H sin completar (parcial destino, forma): no se simula"])
+        e.deshacer()
+        self.assertEqual(self.estado(e), antes)
+        # 2. del lado derecho de la etapa a la orden
+        self.unir(e, h, "der", did, "izq")
+        self.assertEqual(next(x for x in e.ed.draft_actions() if x["id"] == did)["etapa"], h)
+        self.assertEqual((e.ed.model["forces"], len(e.ed.undo_stack)), ([], n + 1))
+        e.deshacer()
+        self.assertEqual(self.estado(e), antes)
+        # 3. acercándola a la fila de acciones de la etapa: se pega a ella (imán) y queda tras la acción
+        x, y, ancho, alto = next(c for c in w.diagrama.cajas_acciones if c["etapa"] == h)["rect"]
+        mia = next(c for c in w.diagrama.cajas_acciones if c["id"] == did)["rect"]
+        p = centro_caja(w, did)
+        destino = QPointF(x + ancho + mia[2] / 2, y + alto / 2)
+        e.prensar(p)
+        e.mover(destino)
+        self.assertIsNotNone(w.diagrama.iman, "se resalta el lado donde se pegaría")
+        e.soltar(destino)
+        self.assertEqual(next(x for x in e.ed.draft_actions() if x["id"] == did)["etapa"], h)
+        self.assertEqual((e.ed.model["forces"], len(e.ed.undo_stack), self.situacion(e)), ([], n + 1, ["H"]))
+        # la orden unida se ve en la fila de la etapa, detrás de la acción
+        ra, rb = (next(c for c in w.diagrama.cajas_acciones if c["id"] == i)["rect"] for i in (next(
+            a["id"] for a in e.ed.model["actions"]), did))
+        self.assertAlmostEqual(ra[0] + ra[2], rb[0], delta=0.5)
+
+    def test_SEDI306_al_configurar_el_destino_pasa_al_modelo_en_una_operacion_y_fuerza_al_simular(self):
+        """REQ-JER-02, REQ-JER-03, REQ-EDT-05, REQ-SIM-03: con el diálogo de la orden (doble clic o «Configurar orden de forzado…»)
+        se elige el parcial destino, la forma y las etapas: suelta, queda sin completar (con su texto, «G1{B}») y sin efecto; unida
+        a una etapa y completa, pasa al modelo con `add_force` en una sola operación de deshacer, y forzando de verdad el
+        parcial al simular. Una explícita sin etapas queda sin completar; cancelar no cambia nada."""
+        w, e, d = self.con_parcial()
+        h, g1, b = d["h"], d["g1"], d["b"]
+        from PySide6.QtWidgets import QGraphicsTextItem
+        textos = lambda: [it.toPlainText() for it in w.diagrama.scene().items() if isinstance(it, QGraphicsTextItem)]  # noqa: E731
+        did = self.suelta(w, e)
+        # suelta y configurada: el texto lo dice, pero sigue sin efecto
+        pedidas = []
+        e.pedir_forzado = lambda datos: pedidas.append(datos) or {"destino": g1, "forma": "explicit", "etapas": [b]}
+        n = len(e.ed.undo_stack)
+        self.assertEqual(e.configurar_orden(did), did)
+        self.assertEqual((pedidas[0]["origen"], pedidas[0]["actual"], [x[0] for x in pedidas[0]["destinos"]]),
+                         ("a la que se una", None, [e.raiz, g1]), "suelta: puede forzar cualquiera, aún no hay etapa")
+        orden = next(x for x in e.ed.draft_actions() if x["id"] == did)
+        self.assertEqual((orden["destino"], orden["forma"], orden["etapas"], len(e.ed.undo_stack)), (g1, "explicit", [b], n + 1))
+        self.assertIn("G1{B}", textos())
+        self.assertEqual((e.ed.model["forces"], self.situacion(e)), ([], ["H"]))
+        self.assertEqual([x["message"] for x in e.diagnosticos() if x["code"] == "AVISO"], ["Orden de forzado sin etapa: no se simula"])
+        # unirla a H la completa: pasa al modelo, una sola operación, y fuerza al simular
+        n = len(e.ed.undo_stack)
+        self.unir(e, did, "izq", d["h"], "arriba")
+        (fuerza,) = e.ed.model["forces"]
+        self.assertEqual((fuerza["sourceStepRef"], fuerza["targetPartialRef"], fuerza["targetKind"], fuerza["targetSteps"]), (h, g1, "explicit", [b]))
+        self.assertEqual((e.ed.draft_actions(), len(e.ed.undo_stack), e.sel), ([], n + 1, [fuerza["id"]]))
+        self.assertEqual([(c["id"], c["etapa"]) for c in w.diagrama.cajas_ordenes], [(fuerza["id"], h)])
+        self.assertEqual(self.situacion(e), ["B", "H"], "el parcial queda forzado a {B} mientras H está activa")
+        self.assertIn("G1{B}", textos())
+        e.deshacer()  # una sola operación: vuelve a ser la orden suelta ya configurada
+        (orden,) = e.ed.draft_actions()
+        self.assertEqual((orden["id"], orden["destino"], "etapa" in orden, e.ed.model["forces"]), (did, g1, False, []))
+        e.rehacer()
+        self.assertEqual((len(e.ed.model["forces"]), e.ed.draft_actions()), (1, []))
+        # el otro orden: unida primero (sin destino, sin efecto) y configurada después
+        e.deshacer()
+        e.quitar_orden(did)
+        self.assertEqual((e.ed.draft_actions(), e.ed.model["forces"]), ([], []))
+        e.pedir_forzado = lambda datos: pedidas.append(datos) or {"destino": g1, "forma": "explicit", "etapas": [b]}
+        otra = self.suelta(w, e)
+        self.unir(e, otra, "izq", h, "arriba")
+        self.assertEqual((e.ed.model["forces"], self.situacion(e)), ([], ["H"]), "unida y sin destino: no tiene efecto")
+        n = len(e.ed.undo_stack)
+        fid = e.configurar_orden(otra)
+        self.assertEqual((fid, e.ed.model["forces"][0]["id"], len(e.ed.undo_stack), e.ed.draft_actions(), self.situacion(e)),
+                         (fid, fid, n + 1, [], ["B", "H"]))
+        # el doble clic en la orden del modelo la edita con el mismo diálogo
+        e.pedir_forzado = lambda datos: pedidas.append(datos) or {"destino": g1, "forma": "empty", "etapas": []}
+        self.assertTrue(e.doble(centro_orden(w, fid)))
+        self.assertEqual(e.ed.model["forces"][0]["targetKind"], "empty")
+        # una explícita sin etapas queda sin completar (no se rechaza); cancelar el diálogo no cambia nada
+        otra2 = self.suelta(w, e, QPointF(520, 520))
+        e.pedir_forzado = lambda datos: {"destino": g1, "forma": "explicit", "etapas": []}
+        self.assertEqual(e.configurar_orden(otra2), otra2)
+        self.assertIn("G1{?}", textos())
+        self.unir(e, otra2, "izq", h, "arriba")
+        self.assertEqual(next(x for x in e.ed.draft_actions() if x["id"] == otra2)["etapa"], h, "unida, pero le faltan las etapas")
+        self.assertEqual(len(e.ed.model["forces"]), 1)
+        self.assertEqual([x["message"] for x in e.diagnosticos() if x["code"] == "AVISO"],
+                         ["Orden de forzado de la etapa H sin completar (etapas): no se simula"])
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        e.pedir_forzado = lambda datos: None
+        self.assertIsNone(e.configurar_orden(otra2))
+        self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
+
+    def test_SEDI307_separarla_de_su_etapa_la_devuelve_a_borrador_suelto_con_todos_sus_datos(self):
+        """REQ-EDT-02, REQ-JER-02, REQ-EDT-05: quitar el enlace de la etapa con sus acciones (o «Separar de la etapa») deja la orden
+        sin completar suelta, donde estaba; una orden ya en el modelo vuelve a ser una orden suelta con su parcial destino, su
+        forma y sus etapas, y deja de forzar. Una operación de deshacer."""
+        w, e, d = self.con_parcial()
+        h, g1, b = d["h"], d["g1"], d["b"]
+        e.nueva_variable("Q00", "output")
+        self.assertIsNone(e.poner_accion(h, {"tipo": "continua", "variable": "Q00"}))
+        # una orden unida sin destino: «Separar de la etapa» en su menú
+        did = self.suelta(w, e)
+        self.unir(e, did, "izq", h, "arriba")
+        sitio = next(c for c in w.diagrama.cajas_acciones if c["id"] == did)["rect"]
+        menu = e.menu(centro_caja(w, did))
+        self.assertEqual([t for t, _ in menu], ["Configurar orden de forzado…", "Separar de la etapa", "Quitar orden de forzado"])
+        n = len(e.ed.undo_stack)
+        dict(menu)["Separar de la etapa"]()
+        orden = next(x for x in e.ed.draft_actions() if x["id"] == did)
+        self.assertEqual(("etapa" in orden, len(e.ed.undo_stack), e.sel), (False, n + 1, [did]))
+        self.assertGreater(float(orden["x"]) + 100, sitio[0] + 30, "queda a la derecha de lo que dejó")
+        e.deshacer()
+        self.assertEqual(next(x for x in e.ed.draft_actions() if x["id"] == did)["etapa"], h)
+        # una orden del modelo: «Eliminar el enlace» de las acciones de la etapa separa también la orden
+        e.pedir_forzado = lambda datos: {"destino": g1, "forma": "explicit", "etapas": [b]}
+        e.configurar_orden(did)
+        (fuerza,) = e.ed.model["forces"]
+        self.assertEqual(self.situacion(e), ["B", "H"])
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        e.eliminar_enlace_acciones(h)
+        self.assertEqual((e.ed.model["forces"], len(e.ed.undo_stack)), ([], n + 1))
+        sueltas = e.ed.draft_actions()
+        self.assertEqual(sorted((x["tipo"], x.get("destino"), x.get("forma"), tuple(x.get("etapas", [])), "etapa" in x)
+                                for x in sueltas if x["tipo"] == "forzado"), [("forzado", g1, "explicit", (b,), False)])
+        self.assertEqual(self.situacion(e), ["H"], "suelta, ya no fuerza")
+        self.assertEqual([c["id"] for c in w.diagrama.cajas_ordenes], [])
+        self.assertEqual(sorted(e.sel), sorted(x["id"] for x in sueltas), "las separadas quedan seleccionadas")
+        e.deshacer()
+        self.assertEqual(self.estado(e), antes, "una sola operación de deshacer")
+        self.assertEqual(self.situacion(e), ["B", "H"])
+
+    def test_SEDI308_guardar_y_abrir_conserva_la_orden_suelta_y_la_unida_sin_destino(self):
+        """REQ-DAT-01, REQ-EDT-01, REQ-JER-02: una orden suelta (ya configurada) y otra unida a una etapa sin destino se guardan y se
+        abren (formato actual, sin cambios) con su sitio, su texto y su etapa; no se simulan, y tras abrir se pueden unir y completar."""
+        from escritorio.edicion import Edicion
+        from grafcet.persistence import open_model
+        w, e, d = self.con_parcial()
+        h, g1, b = d["h"], d["g1"], d["b"]
+        suelta = self.suelta(w, e, QPointF(520, 520))
+        e.configurar_orden(suelta)
+        unida = self.suelta(w, e, QPointF(520, 640))
+        e.pedir_forzado = lambda datos: None
+        self.unir(e, unida, "izq", h, "arriba")
+        with tempfile.TemporaryDirectory() as tmp:
+            e.guardar(Path(tmp) / "proyecto")
+            op = open_model(Path(tmp) / "proyecto")
+            otro = Edicion.desde(op.doc, layout_from_presentation(op.presentations[0]), op.title, presentacion=op.presentations[0])
+        borradores = {x["id"]: x for x in otro.ed.draft_actions()}
+        self.assertEqual(borradores, {x["id"]: x for x in e.ed.draft_actions()}, "sin pérdida")
+        self.assertEqual((borradores[suelta]["destino"], borradores[suelta]["etapas"], "etapa" in borradores[suelta]), (g1, [b], False))
+        self.assertEqual((borradores[unida]["etapa"], "destino" in borradores[unida]), (h, False))
+        self.assertEqual(otro.ignorados, 0)
+        self.assertEqual(sorted(c["id"] for c in otro.M["draftActions"]), sorted([suelta, unida]))
+        self.assertEqual(sorted("".join(s["t"] for s in x["text"]) for x in otro.M["draftActions"]), ["G1{B}", "G?{?}"])
+        self.assertEqual((otro.ed.model["forces"], otro.ed.validate().can_simulate), ([], True))
+        self.assertEqual(corrida(otro.ed.model, [(1, {})])[0][0], ["H"], "no se simulan")
+        # tras abrir: se une la suelta y pasa al modelo
+        otro.unir_accion(suelta, h)
+        self.assertEqual([f["targetPartialRef"] for f in otro.ed.model["forces"]], [g1])
+
+    def test_SEDI309_el_menu_el_doble_clic_el_panel_y_supr_de_la_orden_sin_completar(self):
+        """REQ-EDT-02, REQ-EDT-05, REQ-JER-02: el botón derecho en la orden sin completar ofrece configurarla y quitarla (y separarla
+        si está en un grupo); el doble clic y el botón de su panel abren el diálogo; Supr quita solo la orden, en una operación de
+        deshacer; las órdenes del modelo conservan «Editar orden…» y «Quitar orden»."""
+        w, e, d = self.con_parcial()
+        h, g1, b = d["h"], d["g1"], d["b"]
+        did = self.suelta(w, e)
+        self.assertEqual([t for t, _ in e.menu(centro_caja(w, did))], ["Configurar orden de forzado…", "Quitar orden de forzado"])
+        self.assertEqual((e.sel, e.accion), ([did], did))
+        pedidas = []
+        e.pedir_forzado = lambda datos: pedidas.append(datos) or None
+        self.assertTrue(e.doble(centro_caja(w, did)))
+        self.assertEqual(len(pedidas), 1, "el doble clic abre el diálogo de la orden")
+        e.seleccionar([did])
+        w.props.ficha_izq.botones["Configurar orden de forzado…"].click()
+        self.assertEqual(len(pedidas), 2, "y el botón de su panel")
+        # un grupo con otra acción suelta: el menú ofrece separarla del grupo
+        e.nueva_variable("Q00", "output")
+        otra = e.poner_accion_suelta(QPointF(900, 700))
+        x, y, ancho, alto = next(c for c in w.diagrama.cajas_acciones if c["id"] == otra)["rect"]
+        p = centro_caja(w, did)
+        destino = QPointF(x + ancho + 40, y + alto / 2)
+        e.prensar(p)
+        e.mover(destino)
+        e.soltar(destino)
+        self.assertEqual([t for t, _ in e.menu(centro_caja(w, did))],
+                         ["Configurar orden de forzado…", "Separar del grupo", "Colocación de las acciones", "Quitar orden de forzado"])
+        # Supr quita solo la orden seleccionada, en una operación
+        e.seleccionar([did])
+        antes_otra = [x for x in e.ed.draft_actions() if x["id"] == otra]
+        n = len(e.ed.undo_stack)
+        self.assertTrue(e.borrar())
+        self.assertEqual(([x["id"] for x in e.ed.draft_actions()], len(e.ed.undo_stack)), ([otra], n + 1))
+        self.assertEqual(w.props.pagina, "vacio")
+        e.deshacer()
+        self.assertEqual(sorted(x["id"] for x in e.ed.draft_actions()), sorted([did, otra]))
+        self.assertTrue(antes_otra)
+        # «Quitar orden de forzado» del menú, también
+        dict(e.menu(centro_caja(w, did)))["Quitar orden de forzado"]()
+        self.assertEqual([x["id"] for x in e.ed.draft_actions()], [otra])
+        # las órdenes del modelo conservan su menú
+        e.pedir_forzado = lambda datos: {"destino": g1, "forma": "empty", "etapas": []}
+        fid = e.forzar(h)
+        self.assertEqual([t for t, _ in e.menu(centro_orden(w, fid))], ["Editar orden de forzado…", "Quitar orden de forzado"])
+        self.assertEqual(w.props.ficha_izq.textos_visibles(), ["Editar orden de forzado…", "Quitar orden de forzado"])
+
+    def test_SEDI328_una_orden_suelta_no_ofrece_destinos_que_formarian_un_ciclo_con_la_etapa_de_cualquier_otro_parcial(self):
+        """REQ-JER-02, REQ-JER-03, REQ-EDT-05: el diálogo de una orden suelta (aún sin etapa) no ofrece el parcial que formaría un ciclo
+        de forzado con cualquier etapa candidata: con solo el parcial raíz no hay destino y avisa como «Forzar un parcial…»; con otro
+        parcial se ofrecen los dos; si el raíz ya fuerza a G1 deja de ofrecerse el raíz (y con la cadena raíz → G1 → G2, también);
+        una orden unida a una etapa conserva su lista: todos menos el parcial de la etapa."""
+        from escritorio.edicion import MSG_SIN_DESTINO
+        # solo el raíz: soltar la orden vale, pero configurarla no tiene a quién forzar
+        w, e = self.vacio()
+        w.resize(1360, 860)
+        w.show()
+        self.app.processEvents()
+        did = self.suelta(w, e)
+        e.pedir_forzado = lambda datos: self.fail("no hay nada que elegir")
+        antes, n = self.estado(e), len(e.ed.undo_stack)
+        self.assertEqual(e._destinos_forzado(None), [])
+        self.assertIsNone(e.configurar_orden(did))
+        self.assertEqual((self.estado(e), len(e.ed.undo_stack)), (antes, n))
+        self.assertEqual((e.mensaje, e.mensaje_info), (MSG_SIN_DESTINO, False))
+        self.assertIn("grafcet parcial", e.mensaje)
+        e.parpadeo.parar()
+        # un parcial más: desde cada uno se puede forzar al otro
+        w, e, d = self.con_parcial()
+        h, g1, b = d["h"], d["g1"], d["b"]
+        did = self.suelta(w, e)
+        vistos = []
+        e.pedir_forzado = lambda datos: vistos.append(datos["destinos"]) or None
+        e.configurar_orden(did)
+        self.assertEqual(vistos[-1], [(e.raiz, e.nombre(e.raiz)), (g1, "G1")])
+        # el raíz ya fuerza a G1 (con H): forzar al raíz desde G1 formaría un ciclo, y desde el raíz no tiene sentido; solo queda G1
+        e.pedir_forzado = lambda datos: {"destino": g1, "forma": "empty", "etapas": []}
+        self.assertIsNotNone(e.forzar(h))
+        e.pedir_forzado = lambda datos: vistos.append(datos["destinos"]) or None
+        e.configurar_orden(did)
+        self.assertEqual(vistos[-1], [(g1, "G1")], "el raíz forzaría a G1, que ya lo fuerza: ciclo con cualquier etapa")
+        # la cadena raíz → G1 → G2: el raíz sigue fuera; G1 y G2 se ofrecen
+        g2 = e.poner_parcial(QPointF(700, 600))
+        e.pedir_forzado = lambda datos: {"destino": g2, "forma": "empty", "etapas": []}
+        self.assertIsNotNone(e.forzar(b))
+        e.pedir_forzado = lambda datos: vistos.append(datos["destinos"]) or None
+        e.configurar_orden(did)
+        self.assertEqual(vistos[-1], [(g1, "G1"), (g2, "G2")])
+        # unida a una etapa, la lista de siempre: todos menos el parcial de la etapa (el núcleo rechaza los ciclos al unirla)
+        self.assertEqual(e._destinos_forzado(h), [(g1, "G1"), (g2, "G2")])
+        self.assertEqual(e._destinos_forzado(b), [(e.raiz, e.nombre(e.raiz)), (g2, "G2")])
+        e.parpadeo.parar()
+
+
+@unittest.skipUnless(QT, "PySide6 no está instalado")
+class AvisosConNombres(BaseQt):
+    """Encargo D2, punto 1: lo que la edición enseña (el cuadro «no compila», el panel de diagnósticos, los avisos en rojo) dice los
+    nombres de los elementos, nunca sus ID internos; y los recintos nuevos se llaman G1, G2… (punto 4b)."""
+
+    INTERNO = r"[a-z]-[0-9a-f]{8,}"
+
+    def barra_con_tres(self):
+        """El caso de la captura: una barra Y con dos etapas arriba («2» y «1») y una debajo («0»); sus enlaces directos entre
+        etapas son borradores que violan la alternancia."""
+        w, e = self.vacio()
+        ed = e.ed
+        a, b = ed.add_step("g", "2", at=(60, 200)), ed.add_step("g", "1", at=(260, 200))
+        c = ed.add_step("g", "0", at=(160, 420))
+        barra = ed.add_bar("Y", (0, 300), 300)
+        ed.bar_link(barra, "arriba", a)
+        ed.bar_link(barra, "arriba", b)
+        ed.bar_link(barra, "abajo", c)
+        e.cambia()
+        return w, e, {"a": a, "b": b, "c": c, "barra": barra}
+
+    def test_SEDI310_el_cuadro_de_no_compila_y_el_panel_dicen_los_nombres_aunque_los_nombres_esten_desfasados(self):
+        """REQ-EDT-09, REQ-EDT-02: con la barra Y de dos etapas arriba y una debajo, el resumen de lo que impide simular, el
+        cuadro «El grafcet no compila…» y el panel de diagnósticos dicen «2→0» y «1→0», sin ID internos; también si los nombres que
+        recuerda la edición están desfasados (le falta el de la etapa «0»), o si el ID ya no existe."""
+        from unittest import mock
+        w, e, d = self.barra_con_tres()
+        lineas = e.resumen(e.diagnosticos())
+        borradores = [x for x in lineas if x.startswith("D-ALTERNANCIA")]
+        self.assertEqual(borradores, ["D-ALTERNANCIA: enlace de borrador 2→0 viola la alternancia etapa/transición; no ejecutable",
+                                      "D-ALTERNANCIA: enlace de borrador 1→0 viola la alternancia etapa/transición; no ejecutable"])
+        for x in lineas:
+            self.assertNotRegex(x, self.INTERNO)
+        # el cuadro que sale al pulsar Play
+        with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
+            w._no_simulable()
+        texto = aviso.call_args[0][2]
+        self.assertIn("2→0", texto)
+        self.assertIn("1→0", texto)
+        self.assertNotRegex(texto, self.INTERNO)
+        # el panel de diagnósticos: texto y ayuda
+        w.refrescar_edicion()
+        self.assertGreaterEqual(w.lista_diag.count(), 2)
+        for i in range(w.lista_diag.count()):
+            item = w.lista_diag.item(i)
+            self.assertNotRegex(item.text(), self.INTERNO)
+            self.assertNotRegex(item.toolTip(), self.INTERNO)
+        # nombres desfasados: la edición recuerda los de antes de crear la etapa «0»; el texto sigue sin ID
+        e.nombres = {k: v for k, v in e.nombres.items() if k != d["c"]}
+        for x in e.resumen(e.diagnosticos()):
+            self.assertNotRegex(x, self.INTERNO)
+        self.assertIn("D-ALTERNANCIA: enlace de borrador 2→0 viola", " ".join(e.resumen(e.diagnosticos())))
+        with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
+            w._no_simulable()
+        self.assertIn("2→0", aviso.call_args[0][2])
+        self.assertNotRegex(aviso.call_args[0][2], self.INTERNO)
+        # y un ID que ya no existe en ninguna parte se llama «un elemento»
+        fantasma = "s-" + "0123456789abcdef" * 2
+        self.assertEqual(e.sust(f"falla {fantasma}→{d['c']}."), "falla un elemento→0.")
+        self.assertEqual(e.resumen([{"code": "D-X", "message": f"mal {fantasma}", "blocks": True, "target": None}]), ["D-X: mal un elemento"])
+
+    def test_SEDI311_los_rechazos_los_avisos_y_los_nombres_de_los_elementos_no_enseñan_ids(self):
+        """REQ-EDT-09, REQ-EDT-02: ningún mensaje de la edición (`mensaje`, `informar`, `rechazar`) deja un ID interno, que se cambia
+        por el nombre del elemento (sin tocar el resto del texto: SEDI326), también lo que sale al unir una barra con una etapa del
+        mismo tipo; el nombre de un enlace en borrador y de una orden de forzado es legible, y las correcciones de los diagnósticos
+        tampoco llevan ID."""
+        w, e, d = self.barra_con_tres()
+        enlace = e.ed.model["draftLinks"][0]["id"]
+        self.assertEqual(e.nombre(enlace), "enlace en borrador 2→0")
+        e.informar(f"aviso sobre {d['a']} y {d['c']}")
+        self.assertEqual((e.mensaje, e.mensaje_info), ("aviso sobre 2 y 0", True))
+        e.rechazar(f"no vale {d['b']}→{enlace}", d["b"])
+        self.assertEqual((e.mensaje, e.mensaje_info), ("no vale 1→enlace en borrador 2→0", False))
+        e.mensaje = f"y esto {d['barra']}"
+        self.assertNotRegex(e.mensaje, self.INTERNO)
+        e.parpadeo.parar()
+        # el gesto: una etapa con una barra que ya tiene otra del mismo tipo, con el aviso del borrador
+        w, e = self.vacio()
+        e.colocar("etapa", QPointF(300, 100))
+        a = e.sel[0]
+        e.colocar("etapa", QPointF(500, 400))
+        c = e.sel[0]
+        e.colocar("simultaneidad", QPointF(400, 260))
+        barra = e.sel[0]
+        for ident, n in ((a, "2"), (c, "0")):
+            self.assertIsNone(e.renombrar(ident, n))
+        self.unir(e, a, "abajo", barra, "arriba")
+        self.unir(e, barra, "abajo", c, "arriba")
+        self.assertTrue(e.mensaje.startswith("D-ALTERNANCIA: "), e.mensaje)
+        self.assertNotRegex(e.mensaje, self.INTERNO)
+        self.assertIn("0", e.mensaje)
+        for x in e.diagnosticos():
+            self.assertNotRegex(x["message"] + x["correction"], self.INTERNO)
+        # una orden de forzado sin completar y otra del modelo, por su nombre
+        self.assertEqual(e.nombre(e.ed.add_draft_action((100, 100), {"tipo": "forzado"})), "orden de forzado G?{?}")
+
+    def test_SEDI312_los_recintos_nuevos_se_llaman_g1_g2_con_el_mismo_contador_que_los_parciales_sueltos_y_las_macroetapas(self):
+        """REQ-JER-05, REQ-EDT-02: «Añadir recinto…» propone G1, G2… (antes R1, R2…): el primer nombre libre entre los parciales y
+        las macroetapas, el mismo contador que usa la ficha «Grafcet parcial»; un nombre que queda libre se reutiliza."""
+        w, e = self.vacio()
+        preguntas = []
+        e.pedir_texto = lambda titulo, etiqueta, actual: preguntas.append(actual) or actual
+        e.colocar("encapsulante", QPointF(260, 60))
+        enc = e.sel[0]
+        r1 = e.anadir_recinto(enc)
+        self.assertEqual((preguntas, e.nombres[r1]), (["G1"], "G1"))
+        g = e.poner_parcial(QPointF(900, 400))
+        self.assertEqual(e.nombres[g], "G2", "un parcial suelto sigue la misma cuenta")
+        r3 = e.anadir_recinto(enc)
+        self.assertEqual((preguntas[-1], e.nombres[r3]), ("G3", "G3"))
+        # una macroetapa que se llama G4 (su expansión también) ocupa el nombre
+        e.ed.add_macro("g", "G4", at=(700, 600))
+        e.cambia()
+        e.anadir_recinto(enc)
+        self.assertEqual(preguntas[-1], "G5")
+        # el nombre que queda libre se reutiliza
+        e.ed.rename(r1, "Lavado")
+        e.cambia()
+        e.anadir_recinto(enc)
+        self.assertEqual(preguntas[-1], "G1")
+        self.assertFalse([q for q in preguntas if q.startswith("R")])
+
+    def test_SEDI326_el_texto_propio_de_la_aplicacion_no_se_sustituye_aunque_el_id_de_una_variable_sea_una_palabra_corriente(self):
+        """REQ-EDT-09, REQ-EDT-02: con una variable de ID «a» y nombre «marcha» (los ID de un fichero externo admiten letras sueltas),
+        los textos fijos de la aplicación (avisos, rechazos y mensajes) quedan tal cual —«se une a una etapa» no pasa a «se une
+        marcha una etapa»— y los diagnósticos del núcleo siguen diciendo los nombres; lo que la aplicación interpola lo escribe ya con
+        nombres, y un ID interno que ya no existe se llama «un elemento»."""
+        from escritorio import edicion as modulo
+        from escritorio.edicion import Edicion
+        from helpers import M
+        w, _ = self.vacio()
+        m = M().var("a", "internal", init=True).var("motor", "output").step("E0", True)
+        next(v for v in m.doc["variables"] if v["id"] == "a")["name"] = "marcha"
+        e = Edicion.desde(m.doc, {"E0": (260, 60)}, "T")
+        e.ed.dirty = False
+        w._establecer_edicion(e)
+        self.assertEqual(e.nombres["a"], "marcha")
+        fantasma = "s-" + "0123456789abcdef" * 2
+        # los textos propios, tal cual lo escriba la aplicación o los pase quien los pase
+        propios = ["Una acción suelta se une a la etapa y se pega a la otra", modulo.MSG_ORDEN_SUELTA, modulo.MSG_SOLAPE,
+                   modulo.MSG_SIN_SITIO, modulo.MSG_SIN_DESTINO, "Una acción se une a una etapa: suelte el enlace sobre ella."]
+        for texto in propios:
+            e.informar(texto)
+            self.assertEqual((e.mensaje, e.mensaje_info), (texto, True))
+            e.rechazar(texto, "E0")
+            self.assertEqual((e.mensaje, e.mensaje_info), (texto, False))
+            e.mensaje = texto
+            self.assertEqual(e.mensaje, texto)
+        e.parpadeo.parar()
+        # un rechazo de verdad: una acción suelta que se suelta sobre una transición
+        did = e.ed.add_draft_action((100, 100), {"tipo": "forzado"})
+        e.unir({"id": did, "lado": "izq"}, {"id": "t1", "lado": "arriba"})
+        self.assertEqual((e.mensaje, e.mensaje_info),
+                         ("Una acción se une a una etapa, no a una transición, una barra ni otra acción.", False))
+        e.parpadeo.parar()
+        # un ID interno que se cuela en un texto propio sí se cambia por su nombre, o por «un elemento» si ya no existe
+        e.informar(f"mira {fantasma} y a")
+        self.assertEqual(e.mensaje, "mira un elemento y a")
+        self.assertEqual((e.nombre("a"), e.nombre(fantasma), e.nombre("zzz")), ("marcha", "un elemento", "zzz"))
+        # el texto de un diagnóstico del núcleo sí sustituye los ID por los nombres: el mensaje, la corrección y el resumen
+        diags = [d for d in e.diagnosticos() if "valor inicial" in d["message"]]
+        self.assertEqual(len(diags), 1)
+        self.assertTrue(diags[0]["message"].startswith("marcha declara valor inicial True,"), diags[0]["message"])
+        self.assertIn("D-FORMATO: marcha declara valor inicial", " ".join(e.resumen(e.diagnosticos())))
+        self.assertEqual(e.sust(f"{fantasma} y a"), "un elemento y marcha")
+        self.assertEqual(e.sust(""), "")
+
+    def test_SEDI327_el_cuadro_de_no_compila_con_las_lecturas_activas_dice_los_nombres_y_no_enseña_ids(self):
+        """REQ-EDT-09, REQ-SIM-03: el cuadro «El grafcet no compila con las lecturas de interpretación activas…» (7.7 = B con una
+        etapa inicial dentro de una expansión) dice el nombre de la etapa cuyo ID es «a», y un ID interno que se colara en el texto
+        de un diagnóstico saldría como «un elemento»."""
+        import json
+        from unittest import mock
+        import grafcet.view as vista
+        from grafcet.diagnostics import Diagnostic
+        from grafcet.examples import ej_macroetapa
+        w = self.w
+        m, layout = ej_macroetapa()
+        doc = json.loads(json.dumps(m.doc).replace('"K"', '"a"'))  # la etapa K de la expansión pasa a tener el ID «a»
+        paso = next(s for s in doc["steps"] if s["id"] == "a")
+        paso["label"], paso["initial"] = "marcha", True
+        w.fuente = {"tipo": "fichero", "ruta": Path(self.tmp.name) / "macro.json", "doc": doc,
+                    "layout": {("a" if k == "K" else k): v for k, v in layout.items()}, "titulo": "Macro", "ayuda": "", "raiz": None}
+        fantasma = "g-" + "0123456789abcdef" * 2
+        real = vista.validate_model
+
+        def con_un_id_interno(documento, opciones):
+            res = real(documento, opciones)
+            res.diagnostics.append(Diagnostic("D-FORMATO", f"el elemento {fantasma} no cuadra", element=fantasma))
+            return res
+        try:
+            w._cargar()
+            w._opciones({"7.7": "B"})
+            self.assertIsNone(w.v.s, "con 7.7 = B no compila")
+            with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
+                w.a_ejecutar.setChecked(True)
+            texto = aviso.call_args.args[2]
+            self.assertIn("lecturas de interpretación activas", texto)
+            self.assertIn("etapas iniciales ['marcha'] dentro de la expansión", texto)
+            self.assertNotIn("['a']", texto)
+            with mock.patch("grafcet.view.validate_model", side_effect=con_un_id_interno):
+                with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
+                    w.a_ejecutar.setChecked(True)
+            texto = aviso.call_args.args[2]
+            self.assertIn("• D-FORMATO: el elemento un elemento no cuadra", texto)
+            self.assertNotRegex(texto, self.INTERNO)
+            self.assertIn("['marcha']", texto)
+        finally:
+            w.a_ejecutar.setChecked(False)
+            w._opciones({})
 
 
 if __name__ == "__main__":
