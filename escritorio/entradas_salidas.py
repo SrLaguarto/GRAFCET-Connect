@@ -1,14 +1,22 @@
-"""Conexión de E/S: variables laterales y asignación sobre un módulo central."""
-from PySide6.QtCore import Signal, Qt, QMimeData, QSize
-from PySide6.QtGui import QDrag
+"""Conexión de E/S: vista «autómata» con las variables a los lados y los canales del servidor Modbus en el centro.
+
+A la izquierda, los sensores; a la derecha, los actuadores (listas de variables que se arrastran). En el centro, un marco
+de borde fino con la cabecera «(IP:puerto) Esclavo ID:n» y dos columnas de canales: Input e Input Reg a la izquierda, Coil y
+Holding Reg a la derecha. El nombre de la variable asignada se escribe fuera del marco, pegado a él. Estilo plano y compacto.
+Una barrita de color indica el tipo de la variable (Bool, Decimal, Entera, Cualquiera) y su viveza, si la señal está activa."""
+from dataclasses import replace
+import json
+from PySide6.QtCore import Signal, Qt, QMimeData, QSize, QRect, QEvent
+from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter
 from fractions import Fraction
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout,
-                               QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox,
+                               QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox, QSizePolicy,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
                                QDialog, QDialogButtonBox, QListWidget, QListWidgetItem,
-                               QAbstractItemView, QMenu, QApplication, QGridLayout)
+                               QAbstractItemView, QMenu, QApplication, QGridLayout, QStyle,
+                               QStyledItemDelegate)
 
-from conexion.configuracion import Configuracion, Senal
+from conexion.configuracion import ETIQUETA_CANAL, Configuracion, Senal
 
 AREAS = {"discrete": "Inputs (entradas digitales 0/1)",
          "coil": "Coils (señales digitales 0/1)",
@@ -18,14 +26,165 @@ FORMATOS = {"BOOL": "BOOL (apagado/encendido)", "INT16": "INT16 (entero con sign
             "UINT16": "UINT16 (entero sin signo)"}
 TIPOS = {"bool": "Booleana (0/1)", "int": "Entera", "decimal": "Decimal", "duration": "Duración"}
 MIME_VARIABLE = "application/x-grafconnect-variable"
+# Host, puerto y esclavo que propone el panel la primera vez, sin nada recordado ni mapa guardado: el servidor de Factory I/O.
+# Después la ventana propone la última conexión que funcionó (`PanelES.conexion_defecto`).
+CONEXION_INICIAL = ("192.168.1.133", 502, 1)
+
+# Aspecto. El color de la barrita es el del tipo; su viveza, el estado: tenue (canal sin asignar), tipo (asignado) y vivo
+# (la señal está activa). La leyenda de abajo explica los colores.
+FONDO = "#1c1d20"
+COLOR_TIPO = {"bool": "#8bc34a", "decimal": "#2fa8f0", "int": "#e8892b"}
+COLOR_CUALQUIERA = "#e6e6e6"
+LEYENDA = (("Bool", "bool"), ("Decimal", "decimal"), ("Entera", "int"), ("Cualquiera", None))
+NIVEL_TENUE, NIVEL_ASIGNADO, NIVEL_ACTIVO = .28, .62, 1.0
+ALTO_FILA = 20
+ANCHO_INTERIOR = 142  # la mitad del marco que cae dentro de él: indicador, nombre del canal y, en los registros, su valor
+ROL_COLOR, ROL_ASIGNADA, ROL_ACTIVO = (Qt.ItemDataRole.UserRole + n for n in (1, 2, 3))
+ESTILO_PANEL = """
+    QWidget#conexionES { background:#1c1d20; }
+    QFrame#cabeceraES { background:#1c1d20; border:0; border-bottom:1px solid #303238; }
+    QFrame#cabeceraES QPushButton { background:transparent; color:#a9c6e4; border:0; padding:4px 10px; border-radius:0; }
+    QFrame#cabeceraES QPushButton:hover { color:#ffffff; background:#2a2d33; }
+    QFrame#cabeceraES QPushButton:disabled { color:#5d636b; background:transparent; }
+    QLabel#tituloES { color:#eceff2; font-size:14px; font-weight:600; padding-left:4px; }
+    QWidget#cuerpoES, QFrame#pieES { background:transparent; }
+    QWidget#cuerpoES QLabel, QFrame#pieES QLabel { color:#cfd3d8; background:transparent; }
+    QLabel#seccionES { color:#e6e9ed; font-size:13px; padding-bottom:6px; }
+    QLabel#ayudaES, QLabel#resumenES { color:#7f8791; }
+    QFrame#moduloPLC { background:transparent; border:1px solid #c4c9cf; }
+    QListWidget#listaES { background:transparent; border:0; outline:0; }
+    QScrollArea#scrollES { background:transparent; border:0; }
+    QScrollArea#scrollES > QWidget > QWidget { background:transparent; }
+    QWidget#cuerpoES QScrollBar:vertical { background:transparent; width:8px; margin:0; }
+    QWidget#cuerpoES QScrollBar::handle:vertical { background:#3b3f46; border-radius:3px; min-height:24px; }
+    QWidget#cuerpoES QScrollBar::add-line:vertical, QWidget#cuerpoES QScrollBar::sub-line:vertical { height:0; }
+    QWidget#cuerpoES QScrollBar::add-page:vertical, QWidget#cuerpoES QScrollBar::sub-page:vertical { background:transparent; }
+    QPushButton#quitarES { background:transparent; color:#78818b; border:0; padding:0; font-size:14px; }
+    QPushButton#quitarES:hover { color:#ff8a80; }
+    QPushButton#quitarES:disabled { color:#4a4f56; }
+"""
+
+
+def mezclar(color, nivel):
+    """El color sobre el fondo: nivel 1 es el color entero; menos, más apagado."""
+    c, f = QColor(color).getRgb(), QColor(FONDO).getRgb()
+    return QColor(*(round(f[i] + (c[i] - f[i]) * nivel) for i in range(3)))
+
+
+def color_tipo(variable):
+    return COLOR_TIPO.get(variable["type"]["kind"], COLOR_CUALQUIERA)
+
+
+def encaja(variable, area):
+    """Si la variable puede asignarse (arrastrándola) a un canal de esa área: papel y tipo casan con ella."""
+    tipo = variable["type"]["kind"]
+    return variable["role"] == ("input" if area in ("discrete", "input-register") else "output") and (
+        tipo == "bool" if area in ("discrete", "coil") else tipo in ("int", "decimal"))
+
+
+def areas_variable(variable):
+    """Las áreas que ofrece la tabla para la variable (la primera es la propuesta)."""
+    digital = variable["type"]["kind"] == "bool"
+    if variable["role"] == "input":
+        return ["discrete", "coil"] if digital else ["input-register", "holding"]
+    return ["coil"] if digital else ["holding"]
+
+
+class IndicadorES(QWidget):
+    """Barrita (o cuadrito) de color: uno o dos colores y un nivel de viveza. No recibe el ratón."""
+
+    def __init__(self, ancho=4, alto=12):
+        super().__init__()
+        self.setFixedSize(ancho, alto)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.colores, self.nivel = (COLOR_CUALQUIERA,), NIVEL_TENUE
+
+    def fijar(self, colores, nivel):
+        colores = tuple(colores)
+        if (colores, nivel) != (self.colores, self.nivel):
+            self.colores, self.nivel = colores, nivel
+            self.update()
+
+    def fijar_nivel(self, nivel):
+        self.fijar(self.colores, nivel)
+
+    def color(self):
+        """El primer color tal como se ve (con su viveza)."""
+        return mezclar(self.colores[0], self.nivel)
+
+    def paintEvent(self, _evento):
+        p = QPainter(self)
+        n = len(self.colores)
+        for i, c in enumerate(self.colores):
+            y0, y1 = i * self.height() // n, (i + 1) * self.height() // n
+            p.fillRect(0, y0, self.width(), y1 - y0, mezclar(c, self.nivel))
+
+
+class EtiquetaElidida(QLabel):
+    """Etiqueta de una línea que, si no cabe, acaba en «…» (el texto completo sigue en text() y en el tooltip)."""
+
+    def __init__(self, texto="", alineacion=Qt.AlignmentFlag.AlignLeft):
+        super().__init__(texto)
+        self.setAlignment(alineacion | Qt.AlignmentFlag.AlignVCenter)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def paintEvent(self, _evento):
+        p = QPainter(self)
+        p.setPen(self.palette().windowText().color())
+        elidido = QFontMetrics(self.font()).elidedText(self.text(), Qt.TextElideMode.ElideRight, self.width())
+        p.drawText(self.rect(), int(self.alignment()), elidido)
+
+
+class DelegadoVariable(QStyledItemDelegate):
+    """Una fila de las listas laterales: el nombre y, en el borde, la barrita con el color del tipo. Los sensores llevan el
+    texto a la derecha con la barrita a su derecha; los actuadores, al revés."""
+
+    def __init__(self, padre, barra_a_la_derecha):
+        super().__init__(padre)
+        self.derecha = barra_a_la_derecha
+
+    def sizeHint(self, _opcion, _indice):  # noqa: N802
+        return QSize(0, ALTO_FILA)
+
+    def paint(self, p, opcion, indice):
+        p.save()
+        r = opcion.rect
+        if opcion.state & QStyle.StateFlag.State_Selected:
+            p.fillRect(r, QColor("#2b3a4a"))
+        elif opcion.state & QStyle.StateFlag.State_MouseOver:
+            p.fillRect(r, QColor("#25272c"))
+        nivel = NIVEL_ACTIVO if indice.data(ROL_ACTIVO) else NIVEL_ASIGNADO
+        alto = 12
+        if self.derecha:
+            barra = QRect(r.right() - 3, r.center().y() - alto // 2 + 1, 4, alto)
+            texto = QRect(r.left() + 4, r.top(), barra.left() - r.left() - 10, r.height())
+            alineacion = Qt.AlignmentFlag.AlignRight
+        else:
+            barra = QRect(r.left() + 1, r.center().y() - alto // 2 + 1, 4, alto)
+            texto = QRect(barra.right() + 7, r.top(), r.right() - barra.right() - 11, r.height())
+            alineacion = Qt.AlignmentFlag.AlignLeft
+        p.fillRect(barra, mezclar(indice.data(ROL_COLOR) or COLOR_CUALQUIERA, nivel))
+        p.setFont(opcion.font)
+        p.setPen(QColor("#8d96a0" if indice.data(ROL_ASIGNADA) else "#e4e7eb"))
+        elidido = QFontMetrics(opcion.font).elidedText(indice.data(Qt.ItemDataRole.DisplayRole) or "",
+                                                       Qt.TextElideMode.ElideRight, texto.width())
+        p.drawText(texto, int(alineacion | Qt.AlignmentFlag.AlignVCenter), elidido)
+        p.restore()
 
 
 class ListaVariables(QListWidget):
-    def __init__(self):
+    def __init__(self, lado="entrada"):
         super().__init__()
+        self.setObjectName("listaES")
+        self.setFrameShape(QFrame.Shape.NoFrame)
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
         self.setDefaultDropAction(Qt.DropAction.CopyAction)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setUniformItemSizes(True)
+        self.setSpacing(0)
+        self.setMouseTracking(True)
+        self.setItemDelegate(DelegadoVariable(self, lado == "entrada"))
 
     def mimeData(self, items):
         datos = QMimeData()
@@ -35,60 +194,74 @@ class ListaVariables(QListWidget):
 
 
 class TerminalES(QFrame):
+    """Un canal: la fila entera es la zona donde soltar una variable. Dentro del marco, el indicador y el nombre del canal
+    (y el valor, en los registros); fuera, a su lado, el nombre de la variable asignada y, al pasar el ratón, «×»."""
+
     def __init__(self, panel, area, direccion, variable=None):
         super().__init__()
         self.panel, self.area, self.direccion, self.variable = panel, area, direccion, variable
         self._inicio_arrastre = None
+        self._resaltado = False
         self.setAcceptDrops(not panel.bloqueado)
         self.setObjectName("senalPLC")
-        self.setMinimumWidth(205)
-        self.setFixedHeight(60)
-        l = QHBoxLayout(self)
-        l.setContentsMargins(7, 2, 7, 2)
-        l.setSpacing(7)
-        prefijo = {"discrete": "I", "coil": "Q", "input-register": "AI", "holding": "AQ"}[area]
-        canal = QLabel(f"{prefijo}{direccion:02}")
-        canal.setFixedWidth(44)
-        canal.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        canal.setStyleSheet("background:#293f50; color:#d5eaff; border:1px solid #4b687c; border-radius:5px; font-weight:600; font-size:13px")
-        señal = QFrame()
-        señal.setObjectName("asignacionES")
-        señal.setStyleSheet("QFrame#asignacionES { background:#304c60; border:1px solid #587b94; border-radius:5px; }" if variable else
-                            "QFrame#asignacionES { background:transparent; border:1px dashed #49687e; border-radius:5px; }")
-        sl = QHBoxLayout(señal)
-        sl.setContentsMargins(8, 4, 8, 4)
-        sl.setSpacing(5)
-        self.led = QLabel("●")
-        self.led.setStyleSheet("color:#718393; font-size:17px")
-        self.nombre = QLabel(variable["name"] if variable else "Sin asignar")
-        self.nombre.setWordWrap(True)
-        self.valor = QLabel("—" if variable else "")
-        for etiqueta in (canal, self.led, self.nombre, self.valor):
-            etiqueta.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.nombre.setStyleSheet(f"color:{'#e0ecf7' if variable else '#80a1b8'}; font-size:14px; font-weight:{'600' if variable else '400'}")
-        self.valor.setStyleSheet("color:#a7c3d7; font-size:11px")
+        self.setFixedHeight(ALTO_FILA)
+        entrada = area in ("discrete", "input-register")
+        analogica = area in ("input-register", "holding")
+        self.led = IndicadorES()
         if variable:
-            sl.addWidget(self.led)
-        sl.addWidget(self.nombre, 1)
-        if area in ("input-register", "holding"):
-            sl.addWidget(self.valor)
+            self.led.fijar((color_tipo(variable),), NIVEL_ASIGNADO)
+        else:  # sin asignar: tenue, con el color propio del área (los registros admiten Decimal y Entera)
+            self.led.fijar((COLOR_TIPO["decimal"], COLOR_TIPO["int"]) if analogica else (COLOR_TIPO["bool"],), NIVEL_TENUE)
+        self.canal = QLabel(f"{ETIQUETA_CANAL[area]} {direccion}")
+        self.canal.setStyleSheet("color:#d8dce1")
+        self.nombre = EtiquetaElidida(variable["name"] if variable else "",
+                                      Qt.AlignmentFlag.AlignRight if entrada else Qt.AlignmentFlag.AlignLeft)
+        self.nombre.setObjectName("asignacionES")  # lo que se agarra para mover la asignación a otro canal
+        self.nombre.setStyleSheet("color:#eef1f4")
+        self.valor = QLabel("—" if variable else "")
+        self.valor.setStyleSheet("color:#9fb4c6; font-size:10px")
+        self.valor.setVisible(analogica)
+        interior = QWidget()
+        interior.setFixedWidth(ANCHO_INTERIOR)
+        il = QHBoxLayout(interior)
+        il.setContentsMargins(3, 0, 3, 0)
+        il.setSpacing(6)
+        if entrada:
+            for w in (self.led, self.canal):
+                il.addWidget(w)
+            il.addStretch()
+            il.addWidget(self.valor)
         else:
-            self.valor.hide()
-        if area in ("coil", "holding"):
-            l.addWidget(señal, 1)
-            l.addWidget(canal)
-        else:
-            l.addWidget(canal)
-            l.addWidget(señal, 1)
+            il.addWidget(self.valor)
+            il.addStretch()
+            for w in (self.canal, self.led):
+                il.addWidget(w)
+        for w in (interior, self.canal, self.nombre, self.valor):
+            w.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.b_quitar = None
         if variable:
             self.b_quitar = QPushButton("×")
-            self.b_quitar.setFixedSize(22, 28)
-            self.b_quitar.setStyleSheet("padding:0; color:#9cb5c8; font-size:18px; background:transparent")
+            self.b_quitar.setObjectName("quitarES")
+            self.b_quitar.setFixedSize(18, ALTO_FILA - 2)
             self.b_quitar.setToolTip("Desconecta para desasignar" if panel.bloqueado else "Desasignar esta señal")
             self.b_quitar.setEnabled(not panel.bloqueado)
             self.b_quitar.clicked.connect(lambda: panel.quitar(variable["id"]))
-            l.addWidget(self.b_quitar)
+            self.b_quitar.hide()  # solo al pasar el ratón por la fila
+        l = QHBoxLayout(self)
+        l.setContentsMargins(0, 0, 0, 0)
+        l.setSpacing(0)
+        if entrada:
+            if self.b_quitar:
+                l.addWidget(self.b_quitar)
+            l.addWidget(self.nombre, 1)
+            l.addSpacing(8)
+            l.addWidget(interior)
+        else:
+            l.addWidget(interior)
+            l.addSpacing(8)
+            l.addWidget(self.nombre, 1)
+            if self.b_quitar:
+                l.addWidget(self.b_quitar)
         self.setToolTip(f"{AREAS[area]} · dirección {direccion}\nArrastra una variable. Botón derecho para quitar o configurar.")
 
     def mimeData(self):
@@ -96,6 +269,30 @@ class TerminalES(QFrame):
         if self.variable:
             datos.setData(MIME_VARIABLE, self.variable["id"].encode("utf-8"))
         return datos
+
+    def resaltado(self):
+        return self._resaltado
+
+    def _resaltar(self, on):
+        self._resaltado = on
+        self.update()
+
+    def paintEvent(self, evento):
+        if self._resaltado or self.underMouse():
+            QPainter(self).fillRect(self.rect(), QColor("#2e4a63" if self._resaltado else "#25272c"))
+        super().paintEvent(evento)
+
+    def enterEvent(self, evento):
+        if self.b_quitar is not None and self.b_quitar.isEnabled():
+            self.b_quitar.show()
+        self.update()
+        super().enterEvent(evento)
+
+    def leaveEvent(self, evento):
+        if self.b_quitar is not None:
+            self.b_quitar.hide()
+        self.update()
+        super().leaveEvent(evento)
 
     def mousePressEvent(self, evento):
         if evento.button() == Qt.MouseButton.LeftButton:
@@ -122,15 +319,15 @@ class TerminalES(QFrame):
 
     def dragEnterEvent(self, evento):
         if self._variable_evento(evento):
-            self.setStyleSheet("background:#3c5145; border-radius:4px")
+            self._resaltar(True)
             evento.acceptProposedAction()
 
     def dragLeaveEvent(self, evento):
-        self.setStyleSheet("")
+        self._resaltar(False)
         evento.accept()
 
     def dropEvent(self, evento):
-        self.setStyleSheet("")
+        self._resaltar(False)
         vid = self._variable_evento(evento)
         if vid and self.panel.asignar(vid, self.area, self.direccion):
             evento.acceptProposedAction()
@@ -148,9 +345,76 @@ class TerminalES(QFrame):
             self.panel.abrir_configuracion()
 
 
+class LienzoPLC(QWidget):
+    """El centro: la cabecera del servidor y las dos columnas de canales (las filas llevan fuera del marco el nombre de la
+    variable). El marco de borde fino es una capa transparente encima que no recibe el ratón: abarca la mitad interior de
+    cada fila, de modo que los nombres quedan fuera y se pegan a él."""
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("lienzoES")
+        rejilla = QGridLayout(self)
+        rejilla.setContentsMargins(0, 6, 0, 8)
+        rejilla.setSpacing(0)
+        self.destino = QLabel()
+        self.destino.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.destino.setFixedSize(2 * ANCHO_INTERIOR, 46)
+        self.izq, self.der = QWidget(), QWidget()
+        self.fila_izq, self.fila_der = QVBoxLayout(self.izq), QVBoxLayout(self.der)
+        for f in (self.fila_izq, self.fila_der):
+            f.setContentsMargins(0, 0, 0, 0)
+            f.setSpacing(0)
+        self.ayuda = QLabel("Arrastra las variables a las entradas y salidas.")
+        self.ayuda.setObjectName("ayudaES")
+        self.ayuda.setWordWrap(True)
+        self.ayuda.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.ayuda.setContentsMargins(0, 18, 0, 0)
+        rejilla.addWidget(self.destino, 0, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
+        rejilla.addWidget(self.izq, 1, 0, Qt.AlignmentFlag.AlignTop)
+        rejilla.addWidget(self.der, 1, 1, Qt.AlignmentFlag.AlignTop)
+        rejilla.addWidget(self.ayuda, 2, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        rejilla.setColumnStretch(0, 1)
+        rejilla.setColumnStretch(1, 1)
+        rejilla.setRowStretch(3, 1)
+        self.marco = QFrame(self)
+        self.marco.setObjectName("moduloPLC")
+        self.marco.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setMinimumWidth(2 * ANCHO_INTERIOR + 120)
+
+    def event(self, evento):  # noqa: N802
+        resultado = super().event(evento)
+        if evento.type() in (QEvent.Type.Resize, QEvent.Type.LayoutRequest, QEvent.Type.Show, QEvent.Type.Polish):
+            self._colocar_marco()
+        return resultado
+
+    def _colocar_marco(self):
+        g, d, c = self.izq.geometry(), self.der.geometry(), self.destino.geometry()
+        x0, x1 = g.right() + 1 - ANCHO_INTERIOR, d.left() + ANCHO_INTERIOR
+        y1 = max(g.bottom() if self.fila_izq.count() else 0, d.bottom() if self.fila_der.count() else 0, c.bottom()) + 5
+        self.marco.setGeometry(x0, c.top(), x1 - x0, y1 - c.top())
+        self.marco.raise_()
+
+
 class EstadoConexion(QLabel):
+    """El estado de la conexión: una frase corta si es de las conocidas y, si no, el mensaje entero. Hace salto de línea y
+    crece en alto (nunca se corta); el texto completo también va en el tooltip y se puede seleccionar para copiarlo. La nota
+    (asignaciones quitadas, variables nuevas pendientes…) va detrás de cualquier estado y sobrevive a que se reescriba."""
+
+    def __init__(self):
+        super().__init__()
+        self.nota, self._texto = "", ""
+        self.setWordWrap(True)
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+    def fijar_nota(self, nota):
+        if nota != self.nota:
+            self.nota = nota
+            self.setText(self._texto)
+
     def setText(self, texto):
-        self.setToolTip(texto)
+        self._texto = texto
+        self.setToolTip(texto + (f" · {self.nota}" if self.nota else ""))
         if texto.startswith("Conectado"):
             corto = "Conectado"
         elif texto.startswith(("Prueba preparada", "Mapa aplicado", "Configuración guardada", "Mapa cargado")):
@@ -161,7 +425,7 @@ class EstadoConexion(QLabel):
             corto = "Conexión probada"
         else:
             corto = texto
-        super().setText(corto)
+        super().setText(corto + (f" · {self.nota}" if self.nota else ""))
 
 
 class DialogoConfiguracion(QDialog):
@@ -187,26 +451,18 @@ class PanelES(QWidget):
         super().__init__(parent)
         self.setObjectName("conexionES")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet("""
-            QWidget#conexionES { background:#111c24; color:#dfedf8; }
-            QWidget#conexionES QLabel { color:#cfdfed; background:transparent; }
-            QFrame#cabeceraES { background:#111c24; border:0; border-bottom:1px solid #304655; }
-            QFrame#moduloPLC { background:#1e303e; border:1px solid #4b667b; border-radius:10px; }
-            QFrame#lateralES { background:#1a2a36; border:1px solid #344d60; border-radius:10px; }
-            QFrame#senalPLC { border:0; background:transparent; border-radius:4px; }
-            QFrame#senalPLC:hover { background:#294354; }
-            QListWidget { background:transparent; border:0; outline:0; color:#dadbe3; font-size:13px; }
-            QListWidget::item { padding:0; border-radius:6px; }
-            QListWidget::item:hover { background:#304c61; }
-            QListWidget::item:selected { background:#33566e; color:#e4f4ff; }
-            QPushButton { background:transparent; color:#c8cad4; border:0; padding:7px 12px; border-radius:4px; }
-            QPushButton:hover { background:#304c61; color:white; }
-            QPushButton:disabled { color:#747680; }
-            QScrollArea { background:transparent; border:0; }
-            QDialog { background:#303034; color:#e9e9ee; }
-        """)
+        fuente = QFont(self.font())
+        fuente.setPixelSize(11)  # letra pequeña: caben más canales
+        self.setFont(fuente)
+        self.setStyleSheet(ESTILO_PANEL)
         self.doc = None
         self.config = Configuracion()
+        self.variables = []
+        self.firma_modelo = ()
+        self.conexion_defecto = CONEXION_INICIAL  # (host, puerto, esclavo) que propone `cargar` si no hay mapa guardado
+        self.aviso = ""  # asignaciones quitadas al poner al día con el modelo; dura hasta la siguiente acción sobre el mapa
+        self.pista_canales = ""  # variables sin dónde asignarse porque su área tiene cantidad 0
+        self.pendiente = False  # con la conexión viva: hay variables nuevas que se verán al desconectar
         self.indicadores = {}
         self.indicadores_listas = {}
         self.terminales = {}
@@ -215,122 +471,104 @@ class PanelES(QWidget):
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
         raiz.setSpacing(0)
-        self.estado = EstadoConexion()
-        self.estado.setText("Desconectado")
-        self.estado.setWordWrap(True)
+        # Cabecera: volver y título arriba; debajo, el estado de la conexión, que hace salto de línea y nunca se corta.
+        # Los botones de Conectar y Configuración se añaden a la fila de arriba más abajo.
         banda = QFrame()
         banda.setObjectName("cabeceraES")
-        banda.setMinimumHeight(94)
-        cabecera = QHBoxLayout(banda)
-        cabecera.setContentsMargins(28, 12, 24, 12)
-        cabecera.setSpacing(16)
+        cabeza = QVBoxLayout(banda)
+        cabeza.setContentsMargins(0, 0, 0, 0)
+        cabeza.setSpacing(0)
+        fila_alta = QWidget()
+        fila_alta.setFixedHeight(38)
+        cabecera = QHBoxLayout(fila_alta)
+        cabecera.setContentsMargins(10, 0, 12, 0)
+        cabecera.setSpacing(4)
         self.b_volver = QPushButton("←")
-        self.b_volver.setFixedWidth(34)
+        self.b_volver.setFixedSize(30, 28)
         self.b_volver.setToolTip("Volver al GRAFCET")
-        self.b_volver.setStyleSheet("font-size:23px; padding:0")
+        self.b_volver.setStyleSheet("font-size:18px; padding:0")
         self.b_volver.clicked.connect(self.volver)
         cabecera.addWidget(self.b_volver)
-        textos = QVBoxLayout()
         titulo = QLabel("Asignación de E/S")
-        titulo.setStyleSheet("font-size:20px; color:#eff7ff; font-weight:600")
-        textos.addWidget(titulo)
-        subtitulo = QLabel("Arrastra las señales a los canales del PLC virtual")
-        subtitulo.setStyleSheet("color:#8fb9d9; font-size:12px")
-        textos.addWidget(subtitulo)
-        cabecera.addLayout(textos)
+        titulo.setObjectName("tituloES")
+        cabecera.addWidget(titulo)
         cabecera.addStretch()
+        fila_estado = QWidget()
+        fe = QHBoxLayout(fila_estado)
+        fe.setContentsMargins(16, 0, 16, 7)
+        fe.setSpacing(6)
         self.check = QLabel("●")
-        self.check.setStyleSheet("color:#87939c; font-size:22px")
-        self.badge = QFrame()
-        self.badge.setFixedHeight(40)
-        bl = QHBoxLayout(self.badge)
-        bl.setContentsMargins(12, 7, 12, 7)
-        bl.setSpacing(7)
-        bl.addWidget(self.check)
-        bl.addWidget(self.estado)
-        self.badge.setStyleSheet("background:#20313d; border-radius:7px")
-        cabecera.addWidget(self.badge)
+        self.check.setFixedSize(16, 16)
+        self.check.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.check.setStyleSheet("color:#7d848c; font-size:10px")
+        fe.addWidget(self.check, 0, Qt.AlignmentFlag.AlignTop)
+        self.estado = EstadoConexion()
+        self.estado.setText("Desconectado")
+        self.estado.setStyleSheet("color:#9aa3ad")
+        fe.addWidget(self.estado, 1)
+        cabeza.addWidget(fila_alta)
+        cabeza.addWidget(fila_estado)
         self.b_prueba_guiada = QPushButton("Abrir prueba guiada")
         self.b_prueba_guiada.clicked.connect(self.abrir_prueba)
         self.b_configuracion = QPushButton("Configuración")
+        self.b_configuracion.setToolTip("Servidor Modbus, cantidad de canales y asignaciones")
         self.b_configuracion.clicked.connect(self.abrir_configuracion)
         raiz.addWidget(banda)
-        self.modulo = QFrame()
-        self.modulo.setObjectName("moduloPLC")
-        cuerpo = QVBoxLayout(self.modulo)
-        cuerpo.setContentsMargins(14, 16, 14, 12)
-        cuerpo.setSpacing(12)
-        encabezado_plc = QHBoxLayout()
-        nombre_plc = QLabel("PLC VIRTUAL")
-        nombre_plc.setStyleSheet("color:#e9f4ff; font-weight:600; font-size:17px")
-        encabezado_plc.addWidget(nombre_plc)
-        self.b_canales = QPushButton("+ Canales")
-        self.b_canales.setToolTip("Configurar offset y cantidad de entradas y salidas")
-        self.b_canales.setStyleSheet("color:#91c9f0; background:#29485e; padding:5px 10px; border-radius:4px")
-        self.b_canales.clicked.connect(self.abrir_configuracion)
-        encabezado_plc.addWidget(self.b_canales)
-        self.online = QLabel("● OFFLINE")
-        self.online.setStyleSheet("color:#7991a4; font-weight:600; font-size:11px")
-        encabezado_plc.addWidget(self.online, 1, Qt.AlignmentFlag.AlignRight)
-        cuerpo.addLayout(encabezado_plc)
-        self.destino = QLabel()
-        self.destino.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.destino.setStyleSheet("color:#90bad7; font-size:11px; padding-bottom:8px")
-        cuerpo.addWidget(self.destino)
-        self.ayuda_vacio = QLabel("Arrastra las variables a las entradas y salidas.")
-        self.ayuda_vacio.setWordWrap(True)
-        self.ayuda_vacio.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.ayuda_vacio.setStyleSheet("color:#8f949f; font-size:11px")
-        puertos = QHBoxLayout()
-        puertos.setSpacing(22)
-        self.fila_entradas = QVBoxLayout()
-        self.fila_salidas = QVBoxLayout()
-        self.fila_entradas.setSpacing(2)
-        self.fila_salidas.setSpacing(2)
-        etiquetas = QHBoxLayout()
-        etiquetas.addWidget(QLabel("ENTRADAS"))
-        etiquetas.addWidget(QLabel("SALIDAS"), 1, Qt.AlignmentFlag.AlignRight)
-        cuerpo.addLayout(etiquetas)
-        puertos.addLayout(self.fila_entradas)
-        puertos.addLayout(self.fila_salidas)
-        cuerpo.addLayout(puertos)
-        cuerpo.addWidget(self.ayuda_vacio)
-        self.resumen = QLabel()
-        self.resumen.setStyleSheet("border-top:1px solid #3b5264; padding-top:12px; color:#8ab4d1; font-size:11px")
-        cuerpo.addWidget(self.resumen)
+        # Cuerpo: sensores | marco del servidor con sus canales | actuadores
+        cuerpo = QWidget()
+        cuerpo.setObjectName("cuerpoES")
+        zona = QHBoxLayout(cuerpo)
+        zona.setContentsMargins(22, 20, 22, 4)
+        zona.setSpacing(18)
+        self.lienzo = LienzoPLC()
+        self.modulo = self.lienzo.marco
+        self.destino = self.lienzo.destino
+        self.fila_entradas, self.fila_salidas = self.lienzo.fila_izq, self.lienzo.fila_der
+        self.ayuda_vacio = self.lienzo.ayuda
         scroll = QScrollArea()
-        centro = QWidget()
-        centro.setObjectName("zonaPLC")
-        centro.setStyleSheet("QWidget#zonaPLC { background:transparent; }")
-        central = QVBoxLayout(centro)
-        central.setContentsMargins(0, 0, 0, 0)
-        central.addWidget(self.modulo, 1)
+        scroll.setObjectName("scrollES")
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidgetResizable(True)
-        scroll.setWidget(centro)
-        zona = QHBoxLayout()
-        zona.setContentsMargins(24, 20, 24, 16)
-        zona.setSpacing(14)
+        scroll.setWidget(self.lienzo)
         self.cuentas = {}
-        self.lista_entradas, self.lista_salidas = ListaVariables(), ListaVariables()
-        for titulo, lista in (("Entradas", self.lista_entradas), ("Salidas", self.lista_salidas)):
-            lado = QFrame()
-            lado.setObjectName("lateralES")
-            listas = QVBoxLayout(lado)
-            listas.setSpacing(18)
-            listas.setContentsMargins(12, 18, 12, 14)
-            etiqueta = QLabel("SENSORES" if lista is self.lista_entradas else "ACTUADORES")
-            etiqueta.setStyleSheet("font-size:13px; font-weight:600; color:#d5e9fb")
-            listas.addWidget(etiqueta)
-            self.cuentas["input" if lista is self.lista_entradas else "output"] = etiqueta
-            lista.setMinimumWidth(165)
-            listas.addWidget(lista, 1)
-            if lista is self.lista_salidas:
-                zona.addWidget(scroll, 2)
-            zona.addWidget(lado, 1)
-        raiz.addLayout(zona, 1)
-        leyenda = QLabel('<span style="color:#4fe3a2">●</span> Señal activa　 <span style="color:#718393">●</span> Inactiva　 <span style="color:#52bdff">✓</span> Asignada　 ·　 I / Q = posición fija')
-        leyenda.setStyleSheet("color:#8fb9d9; padding:4px 26px 20px; font-size:12px")
-        raiz.addWidget(leyenda)
+        self.lista_entradas, self.lista_salidas = ListaVariables("entrada"), ListaVariables("salida")
+        columnas = []
+        for rol, lista in (("input", self.lista_entradas), ("output", self.lista_salidas)):
+            columna = QWidget()
+            columna.setMinimumWidth(170)
+            cl = QVBoxLayout(columna)
+            cl.setContentsMargins(0, 0, 0, 0)
+            cl.setSpacing(0)
+            etiqueta = QLabel("SENSORES" if rol == "input" else "ACTUADORES")
+            etiqueta.setObjectName("seccionES")
+            etiqueta.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            etiqueta.setTextFormat(Qt.TextFormat.RichText)
+            cl.addWidget(etiqueta)
+            cl.addWidget(lista, 1)
+            self.cuentas[rol] = etiqueta
+            columnas.append(columna)
+        zona.addWidget(columnas[0], 1)
+        zona.addWidget(scroll, 3)
+        zona.addWidget(columnas[1], 1)
+        raiz.addWidget(cuerpo, 1)
+        # Pie: leyenda de los colores de tipo y resumen de lo asignado
+        pie = QFrame()
+        pie.setObjectName("pieES")
+        pl = QHBoxLayout(pie)
+        pl.setContentsMargins(22, 2, 22, 10)
+        pl.setSpacing(6)
+        for texto, tipo in LEYENDA:
+            cuadro = IndicadorES(8, 8)
+            cuadro.fijar((COLOR_TIPO.get(tipo, COLOR_CUALQUIERA),), NIVEL_ACTIVO)
+            pl.addWidget(cuadro)
+            pl.addWidget(QLabel(texto))
+            pl.addSpacing(12)
+        pl.addStretch()
+        self.resumen = QLabel()
+        self.resumen.setObjectName("resumenES")
+        pl.addWidget(self.resumen)
+        raiz.addWidget(pie)
         self.dialogo_config = DialogoConfiguracion(self)
         self.dialogo_config.setWindowTitle("Configuración Modbus TCP")
         self.dialogo_config.resize(640, 380)
@@ -342,6 +580,7 @@ class PanelES(QWidget):
             QHeaderView::section { background:#28292f; color:#c9cbd5; padding:6px; border:0; }
             QPushButton { background:#454750; color:#e6e6ed; padding:7px 12px; border:0; border-radius:4px; }
             QPushButton:hover { background:#565965; }
+            QPushButton:disabled { color:#747680; }
         """)
         self.b_prueba_guiada.clicked.connect(self.dialogo_config.hide)
         ajustes = QVBoxLayout(self.dialogo_config)
@@ -473,21 +712,18 @@ class PanelES(QWidget):
     def mostrar_estado(self, estado, mensaje):
         self.estado.setText(mensaje)
         conectado = estado == "conectado"
-        self.check.setText("✓" if conectado else "✕" if estado in ("error", "diagnostico") else "●")
-        self.check.setStyleSheet(f"background:{'#8ac849' if conectado else 'transparent'}; color:{'#22301a' if conectado else '#ea7878' if estado in ('error','diagnostico') else '#979aa5'}; border-radius:11px; min-width:22px; min-height:22px; font-size:16px; font-weight:600")
-        self.check.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.estado.setVisible(not conectado)
+        fallo = estado in ("error", "diagnostico")
+        self.check.setText("✓" if conectado else "✕" if fallo else "●")
+        self.check.setStyleSheet(f"background:{'#7cb342' if conectado else 'transparent'}; "
+                                 f"color:{'#17240d' if conectado else '#ef6b6b' if fallo else '#7d848c'}; "
+                                 f"border-radius:8px; font-size:{'11px' if conectado or fallo else '10px'}; font-weight:600")
         self.check.setToolTip(mensaje)
+        self.estado.setStyleSheet(f"color:{'#9bd68f' if conectado else '#e89a9a' if fallo else '#9aa3ad'}")
         self.estado.setVisible(True)
-        self.estado.setStyleSheet(f"color:{'#59e5ae' if conectado else '#aec1d2'}; font-size:12px")
-        self.badge.setStyleSheet(f"background:{'#193e33' if conectado else '#20313d'}; border:1px solid {'#32634e' if conectado else '#385061'}; border-radius:7px")
-        self.online.setText("● ONLINE" if conectado else "● OFFLINE")
-        self.online.setStyleSheet(f"color:{'#59e5ae' if conectado else '#7991a4'}; font-weight:600; font-size:11px")
 
     def admite(self, vid, area):
         v = next((v for v in self.variables if v["id"] == vid), None)
-        return bool(v and not self.bloqueado and v["role"] == ("input" if area in ("discrete", "input-register") else "output")
-                    and (v["type"]["kind"] == "bool" if area in ("discrete", "coil") else v["type"]["kind"] in ("int", "decimal")))
+        return bool(v and not self.bloqueado and encaja(v, area))
 
     def asignar(self, vid, area, direccion):
         if not self.admite(vid, area):
@@ -512,14 +748,40 @@ class PanelES(QWidget):
                 self.tabla.cellWidget(fila, 0).setChecked(False)
         self._aplicar()
 
-    def agregar_terminal(self, area):
-        self.abrir_configuracion()
-        self.cantidades[area].setFocus()
-        self.cantidades[area].selectAll()
+    @staticmethod
+    def firma(doc):
+        """Lo del modelo que ve este panel: sus variables de entrada y salida (ID, nombre, papel y tipo)."""
+        return tuple((v["id"], v["name"], v["role"], json.dumps(v["type"], sort_keys=True))
+                     for v in doc["variables"] if v["role"] in ("input", "output"))
 
-    def cargar(self, doc, config=None):
+    @staticmethod
+    def _depurar(doc, config, nombres):
+        """Separa las asignaciones de `config` que siguen casando con las variables de `doc` de las que ya no: la variable
+        no existe, o su papel o tipo ya no casan con el área. Devuelve la configuración sin ellas (la misma, si no hay
+        ninguna) y un texto por cada una quitada. `nombres` {ID: nombre} de las variables que había antes."""
+        variables = {v["id"]: v for v in doc["variables"] if v["role"] in ("input", "output")}
+        validas, quitadas = [], []
+        for s in config.senales:
+            v = variables.get(s.variable)
+            canal = f"{ETIQUETA_CANAL.get(s.area, s.area)} {s.direccion}"
+            if v is None:
+                quitadas.append(f"«{nombres.get(s.variable, s.variable)}» ya no existe")
+            elif v["type"]["kind"] not in ("bool", "int", "decimal") or s.area not in areas_variable(v):
+                quitadas.append(f"«{v['name']}» ya no encaja en {canal}")
+            else:
+                validas.append(s)
+        return (replace(config, senales=validas) if quitadas else config), quitadas
+
+    def cargar(self, doc, config=None, avisos=()):
+        """Pone en el panel las variables de `doc` y el mapa `config` (por defecto, uno nuevo con la última conexión
+        propuesta). Las asignaciones que ya no casan con el modelo se quitan y se avisa en el estado. Devuelve esos avisos;
+        `avisos` son los de lo ya quitado al leer el mapa (`Configuracion.cargar`), que van delante."""
+        nombres = {v["id"]: v["name"] for v in self.variables}
+        host, puerto, unidad = self.conexion_defecto
+        config, quitadas = self._depurar(doc, config or Configuracion(host, puerto, unidad, modelo=doc["id"]), nombres)
+        quitadas = [*avisos, *quitadas]
         self.doc = doc
-        self.config = config or Configuracion(modelo=doc["id"])
+        self.config = config
         c = self.config
         c.fijar_escalas_factoryio()
         for area in AREAS:
@@ -534,7 +796,6 @@ class PanelES(QWidget):
             self.offsets[area].setValue(rango["offset"])
             self.cantidades[area].setValue(rango["cantidad"])
         self.canales_editados = False
-        self.destino.setText(f"{c.host}:{c.puerto}\nEsclavo ID: {c.unidad}")
         self.host.setText(c.host)
         for w, valor in ((self.puerto, c.puerto), (self.unidad, c.unidad), (self.periodo, c.periodo_ms), (self.timeout, c.timeout_ms)):
             w.setValue(valor)
@@ -555,9 +816,7 @@ class PanelES(QWidget):
                 item.setToolTip(v["id"])
                 self.tabla.setItem(fila, col, item)
             area = QComboBox()
-            claves = ((["discrete", "coil"] if digital else ["input-register", "holding"])
-                      if v["role"] == "input" else (["coil"] if digital else ["holding"]))
-            for clave in claves:
+            for clave in areas_variable(v):
                 area.addItem(AREAS[clave], clave)
             area.setCurrentIndex(area.findData(s.area) if s else 0)
             area.setToolTip("Normalmente: Inputs para sensores y Coils para actuadores. Copia la asignación de Factory I/O.")
@@ -580,7 +839,37 @@ class PanelES(QWidget):
             escala.setToolTip("Escala fija: 100 para señales numéricas de entrada y salida; 1 para digitales")
             self.tabla.setCellWidget(fila, 7, escala)
         self.tabla.resizeColumnsToContents()
+        self.firma_modelo = self.firma(doc)
+        self.pendiente = False
+        self.aviso = f"Asignaciones quitadas: {'; '.join(quitadas)}" if quitadas else ""
         self._dibujar()
+        return quitadas
+
+    def actualizar(self, doc):
+        """El modelo ha cambiado (variables nuevas, renombradas, de otro tipo o papel, o borradas): vuelve a poner listas,
+        canales y tabla con las variables actuales. Conserva la configuración (servidor, canales, lo escrito en
+        Configuración y aún sin aplicar) y las asignaciones que siguen casando; quita, con aviso, las que ya no. Si lo que
+        ve el panel no ha cambiado, no reconstruye nada. Devuelve los avisos de lo quitado."""
+        if self.doc is None:
+            return self.cargar(doc)
+        if self.firma(doc) == self.firma_modelo:
+            self.doc = doc  # lo demás del modelo (etapas, valores iniciales…) no cambia lo que se ve, pero sí lo que se valida
+            return []
+        try:
+            base = self.obtener()
+        except ValueError:  # lo escrito a medias no es válido: se parte del último mapa aplicado
+            base = self.config
+        return self.cargar(doc, base)
+
+    def marcar_pendiente(self, pendiente):
+        """Con la conexión viva el mapa en uso no cambia: se avisa de que hay variables nuevas o cambiadas por ver."""
+        if pendiente != self.pendiente:
+            self.pendiente = pendiente
+            self._pintar_nota()
+
+    def _pintar_nota(self):
+        partes = (self.aviso, self.pista_canales, "Hay variables nuevas o cambiadas: se verán al desconectar" if self.pendiente else "")
+        self.estado.fijar_nota(" · ".join(t for t in partes if t))
 
     def obtener(self):
         senales = []
@@ -606,6 +895,7 @@ class PanelES(QWidget):
             return False
         self.error_config.clear()
         self.config = c
+        self.aviso = ""  # el usuario ya ha actuado sobre el mapa
         self._dibujar()
         self.estado.setText("Mapa aplicado · desconectado. Pulsa «Probar conexión» y después «Conectar».")
         self.aplicar.emit(c)
@@ -614,55 +904,42 @@ class PanelES(QWidget):
     def _dibujar(self):
         self.indicadores.clear()
         self.terminales.clear()
-        self.ayuda_vacio.setVisible(not self.config.senales)
+        self.indicadores_listas.clear()
+        c = self.config
+        self.destino.setText(f"({c.host}:{c.puerto})\nEsclavo ID:{c.unidad}")
+        self.ayuda_vacio.setVisible(not c.senales)
         for fila in (self.fila_entradas, self.fila_salidas):
             while fila.count():
                 item = fila.takeAt(0)
                 if item.widget():
+                    item.widget().hide()
                     item.widget().deleteLater()
         variables = {v["id"]: v for v in self.variables}
         self.lista_entradas.clear()
         self.lista_salidas.clear()
-        self.indicadores_listas.clear()
-        asignadas = {s.variable for s in self.config.senales}
+        asignadas = {s.variable: f"{ETIQUETA_CANAL[s.area]} {s.direccion}" for s in c.senales}
         for rol, titulo in (("input", "SENSORES"), ("output", "ACTUADORES")):
-            self.cuentas[rol].setText(f"{titulo}     {sum(v['role'] == rol for v in self.variables)}")
+            self.cuentas[rol].setText(f"{titulo} <span style='color:#7f8791; font-size:10px'>{sum(v['role'] == rol for v in self.variables)}</span>")
         for v in self.variables:
             item = QListWidgetItem(v["name"])
-            item.setSizeHint(QSize(180, 54))
+            item.setSizeHint(QSize(0, ALTO_FILA))
             item.setData(Qt.ItemDataRole.UserRole, v["id"])
-            item.setToolTip(TIPOS[v["type"]["kind"]])
+            item.setData(ROL_COLOR, color_tipo(v))
+            item.setData(ROL_ASIGNADA, v["id"] in asignadas)
+            item.setData(ROL_ACTIVO, False)
+            item.setToolTip(f"{TIPOS[v['type']['kind']]} · " + (f"asignada a {asignadas[v['id']]}" if v["id"] in asignadas else "sin asignar"))
             if v["type"]["kind"] == "duration":
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
-            lista = self.lista_entradas if v["role"] == "input" else self.lista_salidas
-            lista.setSpacing(3)
-            lista.addItem(item)
-            tarjeta = QFrame()
-            tarjeta.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-            tarjeta.setStyleSheet("QFrame { background:#243b4b; border:1px solid #3c5c72; border-radius:6px; }")
-            fila_tarjeta = QHBoxLayout(tarjeta)
-            fila_tarjeta.setContentsMargins(9, 4, 9, 4)
-            asa = QLabel("⠿")
-            asa.setStyleSheet("color:#6488a1; font-size:16px; border:0; background:transparent")
-            nombre = QLabel(v["name"])
-            nombre.setStyleSheet("color:#dbeeff; font-weight:600; font-size:14px; border:0; background:transparent")
-            nombre.setWordWrap(True)
-            led = QLabel("●")
-            led.setStyleSheet("color:#718393; font-size:17px; border:0; background:transparent")
-            marca = QLabel("✓" if v["id"] in asignadas else "○")
-            marca.setStyleSheet("color:#52bdff; font-size:18px; border:0; background:transparent")
-            for w in (asa, nombre, led, marca):
-                fila_tarjeta.addWidget(w, 1 if w is nombre else 0)
-            lista.setItemWidget(item, tarjeta)
-            self.indicadores_listas[v["id"]] = led
-        mapa = {(s.area, s.direccion): s for s in self.config.senales}
+            (self.lista_entradas if v["role"] == "input" else self.lista_salidas).addItem(item)
+            self.indicadores_listas[v["id"]] = item
+        mapa = {(s.area, s.direccion): s for s in c.senales}
         for area in AREAS:
             numerica = area in ("input-register", "holding")
             entrada = area in ("discrete", "input-register")
-            if numerica and area not in self.config.canales and not any(v["type"]["kind"] in ("int", "decimal") and v["role"] == ("input" if entrada else "output") for v in self.variables):
+            if numerica and area not in c.canales and not any(v["type"]["kind"] in ("int", "decimal") and v["role"] == ("input" if entrada else "output") for v in self.variables):
                 continue
-            if area in self.config.canales:
-                rango = self.config.canales[area]
+            if area in c.canales:
+                rango = c.canales[area]
                 direcciones = range(rango["offset"], rango["offset"] + rango["cantidad"])
             else:
                 direcciones = set(range(2 if numerica or not entrada else 4)) | {d for a, d in mapa if a == area}
@@ -675,13 +952,16 @@ class PanelES(QWidget):
                 self.terminales[(area, direccion)] = terminal
                 if v:
                     self.indicadores[v["id"]] = (terminal.led, terminal.valor)
-        self.fila_entradas.addStretch()
-        self.fila_salidas.addStretch()
-        ni = sum(variables[s.variable]["role"] == "input" for s in self.config.senales if s.variable in variables)
-        nq = len(self.config.senales) - ni
+        ni = sum(variables[s.variable]["role"] == "input" for s in c.senales if s.variable in variables)
+        nq = len(c.senales) - ni
         ti = sum(a in ("discrete", "input-register") for a, _ in self.terminales)
         tq = len(self.terminales) - ti
-        self.resumen.setText(f"{ni}/{ti} entradas asignadas                 {nq}/{tq} salidas asignadas")
+        self.resumen.setText(f"{ni}/{ti} entradas asignadas  ·  {nq}/{tq} salidas asignadas")
+        # Con canales fijados a mano, un área en 0 no ofrece dónde soltar sus variables: se dice cuál para subirla
+        vacias = [ETIQUETA_CANAL[a] for a in AREAS if c.canales.get(a, {}).get("cantidad", 1) == 0
+                  and any(encaja(v, a) and v["id"] not in asignadas for v in self.variables)]
+        self.pista_canales = f"Sin canales en {', '.join(vacias)}: sube su cantidad en Configuración" if vacias else ""
+        self._pintar_nota()
 
     def mostrar_valores(self, valores):
         def activo(valor):
@@ -689,28 +969,30 @@ class PanelES(QWidget):
                 return bool(Fraction(valor)) if isinstance(valor, str) else bool(valor)
             except (ValueError, TypeError, ZeroDivisionError):
                 return False
-        for vid, led in self.indicadores_listas.items():
-            led.setStyleSheet(f"color:{'#4fe3a2' if activo(valores.get(vid)) else '#718393'}; font-size:17px; border:0; background:transparent")
+        for vid, item in self.indicadores_listas.items():
+            item.setData(ROL_ACTIVO, activo(valores.get(vid)))
         for vid, (led, etiqueta) in self.indicadores.items():
             valor = valores.get(vid)
             if valor is None:
                 etiqueta.setText("—")
-                color = "#87939c"
+                led.fijar_nivel(NIVEL_ASIGNADO)
             else:
                 etiqueta.setText(str(int(valor)) if type(valor) is bool else str(valor))
-                color = "#4fe3a2" if activo(valor) else "#718393"
-            led.setStyleSheet(f"color:{color}; font-size:17px")
+                led.fijar_nivel(NIVEL_ACTIVO if activo(valor) else NIVEL_ASIGNADO)
 
-    def mostrar_muestra(self, muestra, senales):
+    def mostrar_muestra(self, muestra, senales, escritos=None, salidas=()):
+        """Los valores leídos de la planta (entradas) y, en Pausa con la conexión viva, lo último escrito en las salidas
+        asignadas (cero tras pausar), con la escala de cada señal."""
         valores = {}
-        for s in senales:
-            if s.variable not in muestra:
-                continue
-            raw = muestra[s.variable]
-            if s.formato != "BOOL":
-                raw = raw - 65536 if s.formato == "INT16" and raw >= 32768 else raw
-                raw = Fraction(raw) / Fraction(s.escala)
-            valores[s.variable] = raw
+        for origen, lista in ((muestra, senales), (escritos or {}, salidas)):
+            for s in lista:
+                if s.variable not in origen:
+                    continue
+                raw = origen[s.variable]
+                if s.formato != "BOOL":
+                    raw = raw - 65536 if s.formato == "INT16" and raw >= 32768 else raw
+                    raw = Fraction(raw) / Fraction(s.escala)
+                valores[s.variable] = raw
         self.mostrar_valores(valores)
 
     def ocupado(self, on):
@@ -722,11 +1004,8 @@ class PanelES(QWidget):
             if terminal.b_quitar:
                 terminal.b_quitar.setEnabled(not on)
                 terminal.b_quitar.setToolTip("Pulsa «Desconectar / editar» para desasignar" if on else "Desasignar esta señal")
-        for fila in (self.fila_entradas, self.fila_salidas):
-            for i in range(fila.count()):
-                widget = fila.itemAt(i).widget()
-                if isinstance(widget, QPushButton):
-                    widget.setEnabled(not on)
+                if on:
+                    terminal.b_quitar.hide()
         self.b_conectar.setVisible(not on)
         self.b_desconectar.setVisible(on)
         self.b_prueba_guiada.setEnabled(not on)

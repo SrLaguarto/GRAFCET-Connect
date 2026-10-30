@@ -1,8 +1,10 @@
 """Paleta de elementos y panel de opciones del editor (P-IMP-32, P-IMP-43, P-IMP-44, P-IMP-47).
 
 La paleta (izquierda) es una sola lista de fichas: etapa, transición, simultaneidad, «Acción» (la continua, con su
-dibujo; otro tipo se elige con botón derecho sobre la acción, «Tipo de acción») y, de la jerarquía, «Macroetapa» y
-«Encapsulante». Sus fichas solo se colocan arrastrándolas al dibujo, y un clic solo muestra su ayuda.
+dibujo; otro tipo se elige con botón derecho sobre la acción, «Tipo de acción») y, de la jerarquía, «Macroetapa»,
+«Encapsulante», «Grafcet parcial» (un parcial suelto, en un marco redondeado con «G», que se suelta en un hueco) y «Forzado»
+(la orden de forzado, rectángulo doble «G{ }», que se suelta sobre una etapa). Sus fichas solo se colocan arrastrándolas al
+dibujo, y un clic solo muestra su ayuda.
 
 El panel de opciones (abajo, a todo el ancho, al editar) muestra y cambia la configuración de lo seleccionado, con dos
 zonas: a la izquierda una columna estrecha con los campos y a la derecha lo ancho.
@@ -12,8 +14,9 @@ zonas: a la izquierda una columna estrecha con los campos y a la derecha lo anch
 - Acción: frase, variable (y límite de una acción antigua) a la izquierda (`PanelAccion`; el tipo se cambia con botón
   derecho sobre la acción); a la derecha el
   programador del valor de una memorizada y, si es condicionada o por evento, el de su condición o su evento.
-- Macroetapa, recinto (su marco), expansión y orden de forzado: una ficha compacta (`FichaJerarquia`) con su descripción y los
-  mismos botones que el botón derecho (Abrir expansión, Renombrar…, Ir a la encapsulante, Editar o Quitar la orden…); una
+- Macroetapa, recinto (su marco), expansión, grafcet parcial suelto y orden de forzado: una ficha compacta (`FichaJerarquia`)
+  con su descripción y los mismos botones que el botón derecho (Encuadrar la expansión, Renombrar…, Encuadrar la
+  encapsulante, Editar o Quitar la orden…; el doble clic en una orden la edita); una
   etapa lleva la suya sobre su lista de acciones (encapsulante, de un recinto, entrada o salida de una expansión, Forzar un
   parcial…).
 - Enlace, barra de simultaneidad, varios elementos o nada: lo suyo, o la invitación a elegir un elemento.
@@ -26,9 +29,9 @@ import re
 from typing import Any, Callable
 
 from PySide6.QtCore import QMimeData, QPoint, QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QDrag, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QDrag, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QFormLayout, QGridLayout, QHBoxLayout, QLabel,
-                               QLineEdit, QListView, QListWidget, QListWidgetItem, QPushButton,
+                               QLineEdit, QListView, QListWidget, QListWidgetItem, QPushButton, QSizePolicy,
                                QStackedWidget, QVBoxLayout, QWidget)
 
 from grafcet.routing import TALLO_E, TALLO_T
@@ -36,13 +39,13 @@ from grafcet.view import norm
 
 from .acciones import PanelAccion
 from .bloques import FlowLayout, Programador
-from .diagrama import COL, H, MARK, TB, _html, ficha_accion
+from .diagrama import ACT_MIN, COL, H, MARK, TB, VACIO_H, VACIO_W, _html, ficha_accion
 from .edicion import COLOCACIONES, CONTINUAS, Parpadeo
 
 NARANJA = COL["glow"]
 ANCHO_COLUMNA = 230  # la columna estrecha de campos del panel de opciones
 NOMBRES = {"etapa": "Etapa", "transicion": "Transición", "simultaneidad": "Simultaneidad", "accion:continua": "Acción",
-           "macroetapa": "Macroetapa", "encapsulante": "Encapsulante"}
+           "macroetapa": "Macroetapa", "encapsulante": "Encapsulante", "parcial": "Grafcet parcial", "forzado": "Forzado"}
 AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: arrástrela al dibujo",
           "simultaneidad": "Barra de simultaneidad (doble trazo, Y): une varias etapas a una transición, o una transición "
                            "a varias etapas. Se ensancha estirando de sus extremos. Las alternativas (O) no son un elemento: "
@@ -52,12 +55,22 @@ AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: a
                              "lado de otra acción. Para otro tipo (condicionada, al activar, al desactivar, por evento), botón "
                              "derecho sobre la acción, «Tipo de acción»",
           "macroetapa": "Macroetapa (divisiones arriba y abajo): arrástrela al dibujo y crea la macroetapa con su expansión, "
-                        "con la etapa de entrada y la de salida a su derecha, unidas por trazos discontinuos. Suelte etapas y "
-                        "transiciones dentro de la expansión para rellenarla; botón derecho en la macroetapa, «Abrir expansión», "
-                        "para ir a ella",
+                        "con la etapa de entrada y la de salida a su derecha. Suelte etapas y transiciones dentro de la "
+                        "expansión para rellenarla; botón derecho en la macroetapa, «Encuadrar la expansión», para verla "
+                        "(«Mostrar dependencias», junto al zoom, dibuja los trazos que la unen a la macroetapa)",
           "encapsulante": "Etapa encapsulante (esquinas cortadas): arrástrela al dibujo, o convierta una etapa con el botón "
                           "derecho. Botón derecho en la encapsulante, «Añadir recinto…», crea un recinto; se rellena soltando "
-                          "etapas dentro de su marco, y «Enlace de activación» en una de ellas la marca (*)"}
+                          "etapas dentro de su marco, y «Enlace de activación» en una de ellas la marca (*); «Encuadrar el "
+                          "recinto» lo muestra",
+          "parcial": "Grafcet parcial (marco redondeado con «G»): arrástrelo a un hueco del dibujo y crea un grafcet parcial "
+                     "vacío, con nombre propio (G1, G2…) y un marco vacío. Suelte etapas y transiciones dentro de su marco "
+                     "para rellenarlo; «Renombrar…» (botón derecho o doble clic en su marco) le cambia el nombre, y una orden "
+                     "de forzado («Forzado») de una etapa de otro parcial puede forzarlo. No se pone encima de otro "
+                     "elemento ni de otro marco",
+          "forzado": "Orden de forzado (rectángulo doble «G{ }»): arrástrela sobre una etapa, o junto a su fila de acciones, y elija "
+                     "el parcial al que fuerza, la forma (explícita, la situación actual, vacía o inicial) y, si es explícita, sus "
+                     "etapas; mientras esa etapa está activa, impone esa situación al parcial. Doble clic en la orden la edita y "
+                     "Supr la quita. Hace falta otro parcial (un grafcet parcial, un recinto o una macroetapa) al que forzar"}
 COLOCABLES = tuple(NOMBRES)  # las fichas de la paleta: solo se colocan arrastrándolas al dibujo
 
 
@@ -69,7 +82,14 @@ def icono(h: str) -> QIcon:
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.setPen(QPen(QColor(COL["text"]), 2))
-    if h in ("etapa", "macroetapa", "encapsulante"):
+    if h == "parcial":  # un grafcet parcial: su marco redondeado, con la «G» dentro
+        p.drawRoundedRect(QRectF(5, 10, 54, 44), 9, 9)
+        fuente = QFont("Arial")
+        fuente.setPixelSize(26)
+        fuente.setBold(True)
+        p.setFont(fuente)
+        p.drawText(QRectF(5, 10, 54, 44), Qt.AlignmentFlag.AlignCenter, "G")
+    elif h in ("etapa", "macroetapa", "encapsulante"):
         p.drawLine(32, 2, 32, 14)
         p.drawRect(QRectF(16, 14, 32, 32))
         p.drawLine(32, 46, 32, 62)
@@ -89,6 +109,17 @@ def icono(h: str) -> QIcon:
     elif h.startswith("accion:"):
         p.drawLine(2, 32, 14, 32)
         p.drawRect(QRectF(14, 14, 48, 36))
+    elif h == "forzado":  # la orden de forzado: rectángulo doble, con su enlace a la izquierda, y «G{ }»
+        p.drawLine(2, 32, 14, 32)
+        p.drawRect(QRectF(14, 14, 48, 36))
+        p.setPen(QPen(QColor(COL["text"]), 1))
+        p.drawRect(QRectF(17.5, 17.5, 41, 29))
+        p.setPen(QPen(QColor(COL["text"]), 2))
+        fuente = QFont("Arial")
+        fuente.setPixelSize(13)
+        fuente.setBold(True)
+        p.setFont(fuente)
+        p.drawText(QRectF(14, 14, 48, 36), Qt.AlignmentFlag.AlignCenter, "G{ }")
     else:
         p.drawLine(16, 2, 16, 26)
         p.drawLine(48, 2, 48, 26)
@@ -107,6 +138,46 @@ def figura(h: str, escala: float = 1.0, dpr: float = 1.0) -> tuple[QPixmap, QPoi
     if h.startswith("accion:"):
         return ficha_accion(h.partition(":")[2], escala, dpr, 0.85)
     m = 4  # margen, en píxeles
+    if h == "parcial":  # el marco vacío que se creará (VACIO_W × VACIO_H), con una «G» abajo; bajo el puntero, su centro
+        w, alto = VACIO_W, VACIO_H
+        pm = QPixmap(round((w * escala + 2 * m) * dpr), round(((alto + 18) * escala + 2 * m) * dpr))
+        pm.setDevicePixelRatio(dpr)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        p.setOpacity(0.85)
+        p.translate(m, m)
+        p.scale(escala, escala)
+        p.setPen(QPen(QColor(COL["muted"]), 1.6))
+        p.drawRoundedRect(QRectF(0, 0, w, alto), 16, 16)
+        fuente = QFont("Arial")
+        fuente.setPixelSize(14)
+        p.setFont(fuente)
+        p.setPen(QPen(QColor(COL["text"]), 1))
+        p.drawText(QPointF(w - 40, alto + 15), "G")
+        p.end()
+        return pm, QPoint(round(w / 2 * escala + m), round(alto / 2 * escala + m))
+    if h == "forzado":  # el rectángulo doble de la orden, con la medida de una acción, y bajo el puntero el centro de su lado izquierdo
+        w, alto = ACT_MIN, 2 * H
+        pm = QPixmap(round((w * escala + 2 * m) * dpr), round((alto * escala + 2 * m) * dpr))
+        pm.setDevicePixelRatio(dpr)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        p.setOpacity(0.85)
+        p.translate(m, m)
+        p.scale(escala, escala)
+        p.fillRect(QRectF(0, 0, w, alto), QColor(COL["panel"]))
+        p.setPen(QPen(QColor(COL["text"]), 1.6))
+        p.drawRect(QRectF(0, 0, w, alto))
+        p.setPen(QPen(QColor(COL["text"]), 1.2))
+        p.drawRect(QRectF(3, 3, w - 6, alto - 6))
+        fuente = QFont("Arial")
+        fuente.setPixelSize(15)
+        p.setFont(fuente)
+        p.drawText(QPointF(12, alto / 2 + 5), "G{ }")
+        p.end()
+        return pm, QPoint(round(m), round(alto / 2 * escala + m))
     if h in ("etapa", "macroetapa", "encapsulante"):
         w, alto, cx, cy = 2 * H, 2 * H + 2 * TALLO_E, H, TALLO_E + H
     elif h == "transicion":
@@ -150,13 +221,15 @@ def figura(h: str, escala: float = 1.0, dpr: float = 1.0) -> tuple[QPixmap, QPoi
 
 
 class Paleta(QListWidget):
-    """La lista de fichas del grafcet (etapa, transición, simultaneidad, acción, macroetapa y encapsulante). Las fichas solo
-    se colocan arrastrándolas al dibujo; un clic en una ficha no hace nada salvo mostrar su ayuda (señal `ayuda`)."""
+    """La lista de fichas del grafcet (etapa, transición, simultaneidad, acción, macroetapa, encapsulante, grafcet parcial y
+    forzado). Las fichas solo se colocan arrastrándolas al dibujo; un clic en una ficha no hace nada salvo mostrar su ayuda
+    (señal `ayuda`)."""
 
     ayuda = Signal(str)
-    REJILLA = QSize(92, 84)  # ficha más baja (antes 96): tres filas ocupan lo que antes dos y a 1366×768 el panel no come al dibujo
+    REJILLA = QSize(92, 84)  # ficha más baja (antes 96)
     ICONO = QSize(80, 64)
-    FILAS = 3
+    FILAS = 4  # ocho fichas en dos columnas: el alto que pide la paleta, con todas a la vista
+    FILAS_MIN = 3  # hasta dónde se encoge en una ventana baja (con desplazamiento vertical): fija el mínimo de alto de la ventana
     CLAVES: tuple[str, ...] = COLOCABLES
 
     def __init__(self) -> None:
@@ -176,10 +249,11 @@ class Paleta(QListWidget):
             self.addItem(it)
         self.setCurrentRow(-1)
         self.itemClicked.connect(lambda it: self.ayuda.emit(self.texto_ayuda(it.data(Qt.ItemDataRole.UserRole))))
-        self.setFixedHeight(self.FILAS * self.REJILLA.height() + 2 * self.frameWidth() + 2)  # todas las filas a la vista
-        # Siempre dos columnas: sin barras de desplazamiento (la de la derecha se comería parte del ancho y las fichas
-        # pasarían a una sola columna)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Pide el alto de todas las filas (`sizeHint`) pero se encoge hasta `FILAS_MIN` si la ventana es baja; entonces sale la
+        # barra vertical. Siempre dos columnas: `ancho_minimo` ya cuenta con el ancho de esa barra, para que al salir no
+        # pase a una sola columna
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
     @staticmethod
@@ -191,9 +265,19 @@ class Paleta(QListWidget):
         return AYUDAS[h]
 
     def ancho_minimo(self) -> int:
-        """El ancho que piden las dos columnas de fichas: su rejilla, el marco y 2 de holgura (con menos, el modo de iconos
-        pasa a una sola columna)."""
-        return 2 * self.gridSize().width() + 2 * self.frameWidth() + 2
+        """El ancho que piden las dos columnas de fichas: su rejilla, el marco, la barra vertical (cuando hay más filas de las
+        que caben) y 2 de holgura (con menos, el modo de iconos pasa a una sola columna)."""
+        return 2 * self.gridSize().width() + 2 * self.frameWidth() + self.verticalScrollBar().sizeHint().width() + 2
+
+    def alto_filas(self, filas: int) -> int:
+        """El alto de `filas` filas de fichas, con el marco."""
+        return filas * self.gridSize().height() + 2 * self.frameWidth() + 2
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self.ancho_minimo(), self.alto_filas(self.FILAS))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self.ancho_minimo(), self.alto_filas(self.FILAS_MIN))
 
     escala = staticmethod(lambda: 1.0)  # zoom del dibujo; lo pone la ventana
 
@@ -241,9 +325,10 @@ class FichaJerarquia(QWidget):
     activación) marcadas o no. Los botones son siempre los mismos objetos, en un orden fijo: se enseñan o se esconden según el
     elemento, así que un clic puede cambiar la selección sin destruir el botón que lo emite. Sin nada que decir ni ofrecer,
     la ficha entera se esconde."""
-    ORDEN = ("Abrir expansión", "Renombrar…", "Convertir en encapsulante", "Añadir recinto…", "Convertir en etapa ordinaria",
-             "Enlace de activación", "Ir a la encapsulante", "Ir a la macroetapa", "Forzar un parcial…",
-             "Editar orden de forzado…", "Quitar orden de forzado")  # el mismo orden que el botón derecho
+    ORDEN = ("Encuadrar la expansión", "Renombrar…", "Convertir en encapsulante", "Añadir recinto…", "Encuadrar el recinto",
+             "Encuadrar los recintos", "Convertir en etapa ordinaria", "Enlace de activación", "Encuadrar la encapsulante",
+             "Encuadrar la macroetapa", "Forzar un parcial…", "Editar orden de forzado…",
+             "Quitar orden de forzado")  # el mismo orden que el botón derecho
     CASILLAS = ("Enlace de activación",)
 
     def __init__(self) -> None:
@@ -430,15 +515,18 @@ class PanelPropiedades(QWidget):
 
     TEXTO_VACIO = "Haga clic en un elemento del dibujo para ver y cambiar sus opciones."
     AYUDA_JERARQUIA = {
-        "macro": "Macroetapa: doble clic en ella (o «Abrir expansión») lleva a su expansión; suelte etapas y transiciones dentro "
-                 "de su zona para rellenarla.",
-        "expansion": "Expansión: sus etapas y transiciones son suyas; la entrada y la salida unen con la macroetapa. «Ir a la "
-                     "macroetapa» vuelve a ella.",
+        "macro": "Macroetapa: doble clic en ella (o «Encuadrar la expansión») encaja su expansión en la vista y la resalta; suelte "
+                 "etapas y transiciones dentro de su zona para rellenarla.",
+        "expansion": "Expansión: sus etapas y transiciones son suyas; la entrada y la salida unen con la macroetapa. «Encuadrar "
+                     "la macroetapa» la encaja en la vista.",
         "enclosure": "Recinto: suelte etapas dentro de su marco para rellenarlo; en una de ellas, «Enlace de activación» la marca. "
                      "Vacío, su borde se arrastra para moverlo.",
+        "root": "Grafcet parcial: sus etapas y transiciones son suyas; lo que se suelta dentro de su marco, también. Vacío, su "
+                "borde se arrastra para moverlo; «Renombrar…» (o doble clic) le cambia el nombre, y una orden de forzado "
+                "puede forzarlo.",
         "marco": "Parcial: sus etapas y transiciones son suyas; lo que se suelta dentro de su marco, también.",
-        "orden": "Orden de forzado: mientras su etapa está activa, impone su situación al parcial. Supr la quita (Ctrl+Z la "
-                 "devuelve)."}
+        "orden": "Orden de forzado: mientras su etapa está activa, impone su situación al parcial. Doble clic (o «Editar orden "
+                 "de forzado…») la edita; Supr la quita (Ctrl+Z la devuelve)."}
 
     def _vacio(self) -> QWidget:
         self.l_vacio = QLabel(self.TEXTO_VACIO)

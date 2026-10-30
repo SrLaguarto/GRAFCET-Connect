@@ -293,9 +293,15 @@ class Ventana(unittest.TestCase):
         self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("editar", "Ejecutar", False))
         self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (1, 1))
         self.assertFalse(w.dock.isHidden())
-        # Play otra vez, sin editar entre medias: sigue donde estaba
+        # Pausa = todo a 0 hasta un nuevo Play: sin etapas activas ni temporizadores, y las tablas no enseñan la sesión anterior
+        self.assertEqual(w.v.state().get("situation", []), [])
+        self.assertEqual(w.v.state().get("temporal", {}), {})
+        self.assertEqual((w.t_vars.rowCount(), w.t_temp.rowCount(), w.traza.count()), (0, 0, 0))
+        self.assertFalse(any(b.isEnabled() for b in w.botones.values()), "sin sesión, las entradas no responden")
+        # Play otra vez, sin editar entre medias: sesión nueva desde la situación inicial (ya no sigue donde estaba)
         w.a_ejecutar.setChecked(True)
-        self.assertEqual(w.v.state()["situation"], ["E2"])
+        self.assertEqual((w.v.state()["situation"], w.v.state()["time"]), (["E0"], "0 s"))
+        self.assertEqual(w.botones["marcha"].text(), "marcha = 0", "las entradas también vuelven a su valor inicial")
         w.a_ejecutar.setChecked(False)
         w.cargar_ejemplo("conflicto")  # no compila: Play avisa y sigue en Pausa
         with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
@@ -303,8 +309,8 @@ class Ventana(unittest.TestCase):
         self.assertEqual((aviso.call_count, w.a_ejecutar.isChecked(), w.modo), (1, False, "editar"))
 
     def test_SAPP17_reiniciar_en_play_y_en_pausa(self):
-        """REQ-SIM-03, REQ-SIM-04: Reiniciar vuelve a la situación inicial; en Play sigue en Play y en Pausa deja el
-        estado inicial (parado y editable)."""
+        """REQ-SIM-03, REQ-SIM-04: Reiniciar vuelve a la situación inicial y en Play sigue en Play; en Pausa, que ya está todo
+        a 0 y sin estado hasta un nuevo Play, no hay nada que reiniciar: sigue parado y editable, sin etapas activas."""
         w = self.w
         w.cargar_ejemplo("temporizada")
         w.a_ejecutar.setChecked(True)
@@ -317,9 +323,12 @@ class Ventana(unittest.TestCase):
         self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.rt.isActive()), (True, "simular", True), "sigue en Play")
         self.assertEqual(w.botones["marcha"].text(), "marcha = 0", "las entradas vuelven a su valor inicial")
         w.botones["marcha"].click()
+        self.assertEqual(w.v.state()["situation"], ["E1"])
         w.a_ejecutar.setChecked(False)
-        w.reiniciar()  # en Pausa
-        self.assertEqual(w.v.state()["situation"], ["E0"])
+        self.assertEqual(w.v.state().get("situation", []), [], "Pausa: sin etapas activas")
+        w.reiniciar()  # en Pausa: ya está todo a 0; no crea una sesión en marcha
+        self.assertEqual(w.v.state().get("situation", []), [])
+        self.assertEqual(w.v.s.status, "preparada", "sesión sin iniciar: ni situación ni valores")
         self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.rt.isActive()), (False, "editar", False), "sigue en Pausa")
         w.a_ejecutar.setChecked(True)
         self.assertEqual(w.v.state()["situation"], ["E0"], "Play arranca desde el estado inicial")
@@ -388,8 +397,8 @@ class Ventana(unittest.TestCase):
         w.a_ejecutar.setChecked(False)
 
     def test_SAPP10_temporizador_en_dibujo_y_tabla(self):
-        """REQ-SIM-03: «temporizada», con E1 activa y 1 s transcurrido, muestra «1 s / 3 s» junto a la receptividad y en
-        la tabla de temporizadores; al vencer, «3 s ✓»."""
+        """REQ-SIM-03: «temporizada», con E1 activa y 1 s transcurrido, muestra «1 s» (solo lo transcurrido) encima de la
+        duración de la receptividad y «1 s / 3 s» en la tabla de temporizadores; al vencer, «3 s ✓»."""
         self.w.cargar_ejemplo("temporizada")
         self.w.a_ejecutar.setChecked(True)  # el dibujo del simulador es el de Play
         self.assertFalse(self.w.c_temp.isHidden())
@@ -400,15 +409,16 @@ class Ventana(unittest.TestCase):
 
         def textos():
             return [it.toPlainText() for it in self.w.diagrama.scene().items() if hasattr(it, "toPlainText")]
-        self.assertIn("1 s / 3 s", textos())
+        self.assertIn("1 s", textos())
+        self.assertNotIn("1 s / 3 s", textos(), "ya no se escribe lo que falta: solo el tiempo transcurrido")
         fila = [self.w.t_temp.item(0, j).text() for j in range(4)]
         self.assertEqual(fila, ["transición t2", "contando", "1 s", "3 s"])
         self.w._act("avanzar", us=2_000_000)  # vence y t2 franquea: E2, y el temporizador vuelve a parado
         self.assertEqual(self.w.v.state()["situation"], ["E2"])
-        self.assertNotIn("1 s / 3 s", textos())
+        self.assertNotIn("1 s", textos())
         self.assertEqual(self.w.t_temp.item(0, 1).text(), "parado")
         self.w.a_ejecutar.setChecked(False)
-        # Un retardo en la condición de una acción: «2 s ✓» al vencer, junto a la condición de la acción
+        # Un retardo en la condición de una acción: «1,5 s» mientras cuenta y «2 s ✓» al vencer, encima de su duración
         from PySide6.QtWidgets import QGraphicsScene
         from escritorio.diagrama import dibujar
         m = M().var("p").var("y", "output").step("A", True).step("B")
@@ -417,7 +427,7 @@ class Ventana(unittest.TestCase):
         run(v, ("fijar", {"cambios": {"p": True}}), ("avanzar", {"us": 1_500_000}))
         sc = QGraphicsScene()
         dibujar(sc, v.model, v.state())
-        self.assertIn("1,5 s / 2 s", [it.toPlainText() for it in sc.items() if hasattr(it, "toPlainText")])
+        self.assertIn("1,5 s", [it.toPlainText() for it in sc.items() if hasattr(it, "toPlainText")])
         self.assertEqual([t["estado"] for t in v.state()["temporal"].values()], ["contando"])
         run(v, ("avanzar", {"us": 500_000}))
         dibujar(sc, v.model, v.state())

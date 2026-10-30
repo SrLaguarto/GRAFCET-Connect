@@ -7,6 +7,7 @@ from pathlib import Path
 import tempfile
 
 ARCHIVO = "conexion-factoryio.json"
+ETIQUETA_CANAL = {"discrete": "Input", "input-register": "Input Reg", "coil": "Coil", "holding": "Holding Reg"}
 
 
 @dataclass
@@ -87,6 +88,39 @@ class Configuracion:
                 raise ValueError("Dirección repetida en el mapa")
             destinos.add(destino)
 
+    def quitar_obsoletas(self, doc: dict) -> list[str]:
+        """Quita del mapa las asignaciones que ya no casan con el modelo: la variable ya no existe o no es de entrada/salida,
+        o su papel o su tipo ya no encajan con el área. Devuelve un texto por cada una quitada. Lo que es defecto del propio
+        mapa (área o formato desconocidos, formato que no casa con el área, direcciones o variables repetidas…) no se toca:
+        eso lo rechaza `validar`. De una variable que ya no existe solo queda su ID, que no se enseña: el aviso la nombra por su
+        canal."""
+        variables = {v["id"]: v for v in doc["variables"]}
+        validas, quitadas = [], []
+        for s in self.senales:
+            v = variables.get(s.variable)
+            canal = f"{ETIQUETA_CANAL.get(s.area, s.area)} {s.direccion}"
+            if v is None:
+                quitadas.append(f"la variable de {canal} ya no existe")
+            elif v["role"] not in ("input", "output"):
+                quitadas.append(f"«{v['name']}» ya no es de entrada ni de salida")
+            elif self._no_encaja(s, v):
+                quitadas.append(f"«{v['name']}» ya no encaja en {canal}")
+            else:
+                validas.append(s)
+        self.senales = validas
+        return quitadas
+
+    @staticmethod
+    def _no_encaja(s: Senal, v: dict) -> bool:
+        if s.area not in ETIQUETA_CANAL or s.formato not in ("BOOL", "INT16", "UINT16"):
+            return False
+        if s.area not in (("discrete", "coil", "input-register", "holding") if v["role"] == "input" else ("coil", "holding")):
+            return True
+        digital = s.formato == "BOOL"
+        if digital != (s.area in ("discrete", "coil")):
+            return False
+        return v["type"]["kind"] != "bool" if digital else v["type"]["kind"] not in ("int", "decimal")
+
     def guardar(self, ruta: Path, doc: dict):
         self.fijar_escalas_factoryio()
         self.validar(doc)
@@ -104,7 +138,10 @@ class Configuracion:
                 os.unlink(temporal)
 
     @classmethod
-    def cargar(cls, ruta: Path, doc: dict):
+    def cargar(cls, ruta: Path, doc: dict, avisos: list[str] | None = None):
+        """Lee el mapa guardado. Las asignaciones de variables que ya no existen (o cuyo papel o tipo ya no encajan) se
+        descartan y, si se pasa `avisos`, se añade a la lista un texto por cada una; el resto del mapa se conserva. Un JSON
+        corrupto o de formato inválido se rechaza con ValueError."""
         try:
             datos = json.loads(ruta.read_text(encoding="utf-8"))
             if datos.pop("version") != 1:
@@ -112,7 +149,10 @@ class Configuracion:
             datos["senales"] = [Senal(**s) for s in datos["senales"]]
             config = cls(**datos)
             config.fijar_escalas_factoryio()
+            quitadas = config.quitar_obsoletas(doc)
             config.validar(doc)
+            if avisos is not None:
+                avisos.extend(quitadas)
             return config
         except (KeyError, TypeError, AttributeError) as exc:
             raise ValueError("Configuración de conexión inválida") from exc

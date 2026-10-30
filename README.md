@@ -31,12 +31,11 @@ El primer comando comprueba la parte automatizable de R-02: el paquete sigue sie
 Primera versión para Windows: simula los ejemplos y los modelos guardados con el dibujo de la norma. Tiene entradas
 con un clic. Al abrir un ejemplo o un modelo, el programa queda en **Pausa**, que es el modo de edición (en el resto de
 este documento, «modo Editar»). **Play** (F5, «Ejecutar») compila lo editado y simula en tiempo real, como un autómata;
-los retardos se ven como temporizadores que cuentan («1,2 s / 3 s»). **Pausa** detiene y vuelve a editar: si no se ha
-editado entre medias, Play continúa donde estaba, y si se ha editado, empieza una sesión nueva. **Reiniciar** (Ctrl+R)
-vuelve a la situación inicial. Hay traza, salidas, variables y todas las lecturas de interpretación
-(menú «Ajustes»). Los paneles derecho e inferior se pliegan, y el dibujo admite zoom (P-IMP-30). «Abrir modelo» admite
+los retardos se ven como temporizadores: sobre la duración de su receptividad (o de la condición o evento de una acción) aparece el tiempo transcurrido («0,5 s») mientras cuenta, y «3 s ✓» al vencer. **Pausa** detiene y vuelve a editar, y deja todo a 0 hasta el siguiente Play (sin etapas activas ni temporizadores; con E/S externas conectadas, pide el cero de las salidas asignadas). Cada Play empieza una sesión nueva desde la situación inicial. **Reiniciar** (Ctrl+R)
+en Play vuelve a la situación inicial (en Pausa no crea sesión). Hay traza, salidas, variables y todas las lecturas de interpretación
+(menú «Ajustes»). Los paneles derecho e inferior se pliegan, y el dibujo admite zoom: la rueda lo hace anclado al puntero, y «Centrar todo» (Ctrl+0; menú Ver; al simular, también doble clic) encaja y centra lo dibujado (P-IMP-30 y P-IMP-64). «Abrir modelo» admite
 un proyecto (su `manifest.json`) o un documento de modelo; «Guardar proyecto» guarda el modelo en curso con su
-dibujo. Con «Proyecto > Nuevo grafcet» se crea un modelo vacío; en Pausa, un ejemplo o un modelo abierto se edita con el editor de un secuencial: etapas, transiciones, enlaces, receptividades, deshacer, diagnósticos y recuperación (P-IMP-32).
+dibujo. Con «Proyecto > Nuevo grafcet» se crea un modelo vacío; en Pausa, un ejemplo o un modelo abierto se edita con el editor de un secuencial: etapas, transiciones, enlaces, receptividades, deshacer, diagnósticos y recuperación (P-IMP-32). La paleta tiene ocho fichas, en dos columnas; pide cuatro filas y, en ventanas bajas, se encoge a tres con barra de desplazamiento: Etapa, Transición, Simultaneidad, Acción, Macroetapa, Encapsulante, **Grafcet parcial** (marco redondeado con «G»: se suelta en un hueco y crea un grafcet parcial vacío) y **Forzado**, que al soltarse sobre una etapa crea su orden `G{ }` (P-IMP-61, P-IMP-62, P-IMP-65 y P-IMP-66). Supr con una acción o una orden señalada borra solo esa acción u orden, no la etapa; «Equidistanciar» ordena las alturas de una cadena (P-IMP-65).
 
 - Desde el código: doble clic en «Abrir simulador.bat», o `python escritorio/simulador.py [modelo]`.
 - Versión portable: «Construir ejecutable.bat» (o `python tools/construir_ejecutable.py`) deja el programa en
@@ -48,39 +47,40 @@ dibujo. Con «Proyecto > Nuevo grafcet» se crea un modelo vacío; en Pausa, un 
 Para una primera prueba sin crear un modelo, pulse el botón **E/S externas → Configuración
 → Abrir prueba guiada** y siga [la guía paso a paso](docs/PRIMERA_CONEXION_FACTORY_IO.md). El
 ejemplo coincide con el mapa facilitado por el responsable; compruebe su IP actual.
+La primera vez, la IP propuesta es 192.168.1.133, puerto 502 y esclavo 1. Después se propone la última conexión que funcionó o la última prueba con éxito, que se recuerda entre sesiones. Si el proyecto trae su propio mapa guardado, manda el del proyecto.
 
 En Factory I/O seleccione **Modbus TCP/IP Server** y asigne sensores a entradas
 discretas/input registers y actuadores a coils/holding registers. Confirme IP,
 puerto, Slave ID y direcciones en su instalación; no se asignan automáticamente.
 
-En GrafConnect, simule el modelo y pulse **E/S externas** en la barra. La flecha
+En GrafConnect, simule el modelo y pulse **E/S externas** en la barra; ese botón pasa a **Vista GRAFCET** y vuelve al dibujo al pulsarlo. La flecha
 Atrás vuelve al GRAFCET sin desconectar. Arrastre las variables
-a los terminales I/Q (digitales) o AI/AQ (analógicos). En **Configuración** puede
+a los canales de su lado (Input o Input Reg a la izquierda; Coil o Holding Reg a la derecha). En **Configuración** puede
 ajustar área, dirección **base cero** y formato BOOL/INT16/UINT16. La escala numérica
 es fija en **100** en ambas direcciones; las digitales usan 1. En señales
 analógicas, `valor GRAFCET = registro / escala`; para 3,14 use escala 100 y registro
 314. INT16 admite −32768…32767 y UINT16 0…65535, antes del escalado. Valores no
 representables detienen la conexión; no hay redondeo ni saturación.
 
-**+ Canales** abre los campos de offset/cantidad de I/Q/AI/AQ; copie la configuración
+Los campos de offset y cantidad de I/Q/AI/AQ están en **Configuración**, en «Canales del servidor» (ya no hay botón «+ Canales»); copie la configuración
 de Factory I/O. Modbus no permite deducir sus cantidades reales por sondeo en este
-servidor. Use la **×** para desasignar o arrastre desde el propio slot para mover;
+servidor. Use la **×**, que aparece al pasar el ratón por la asignación, para desasignar, o arrastre desde el propio slot para mover;
 si está conectado, pulse **Desconectar / editar** primero. Con solo entradas se
-admite observación sin motor compilado, también en Pausa, sin escribir salidas.
+admite observación sin motor compilado, también en Pausa. Sin salidas asignadas no se escribe nada; con salidas asignadas, Conectar les pone antes el cero.
 
 La asignación por arrastre se aplica al soltar y se guarda si el proyecto tiene
 carpeta. **Configuración** reúne los ajustes, **Guardar configuración…** y
 **Probar conexión** (sin escribir). El mapa se guarda aparte en
 `conexion-factoryio.json` dentro del proyecto; también
 puede cargarlo desde otro archivo. El **check verde** confirma conexión mantenida.
-**Conectar** solicita cero y lee sensores; pulse
-**Ejecutar** (Play) para comenzar. Pausa conserva estado y salidas, y sigue observando las entradas. Un diagnóstico del
+**Conectar** pone a cero las salidas asignadas (bobinas y registros holding) antes de la primera lectura, y lee sensores; pulse
+**Ejecutar** (Play) para comenzar. **Pausa** pide el cero de todas las salidas asignadas y deja el GRAFCET sin estado: sigue observando las entradas, y todo queda a 0 hasta el siguiente Ejecutar, que empieza siempre desde la situación inicial. Un diagnóstico del
 motor solicita cero; pérdida de red pausa sin garantizar el estado de los actuadores.
 La reconexión es manual y exige volver a pulsar Ejecutar. **Conectar** y **Probar conexión** con Play activo pasan a
 Pausa. La conexión solo se cierra con **Desconectar**, al cerrar el programa o por un fallo real de red o del servidor:
 ni Play, ni Pausa, ni Reiniciar, ni editar, guardar o abrir otro proyecto la cierran. Si lo editado invalida el mapa de
 señales, Play no arranca, avisa y la conexión se mantiene. Al abrir otro proyecto con conexión viva, las salidas del
-modelo anterior pasan a cero y el mapa se sustituye por el del proyecto nuevo.
+modelo anterior pasan a cero y el mapa se sustituye por el del proyecto nuevo. **Desconectar** escribe el cero de las salidas asignadas antes de cerrar el TCP y deja «Desconectado · salidas a cero»; si la red falla, cierra igual y avisa «Salidas no garantizadas». Al cerrar la ventana también se intenta el cero, pero si la red falla se cierra sin aviso. **Probar conexión** no escribe nada.
 
 El periodo de servicio es configurable (50 ms iniciales). El intervalo efectivo
 incluye latencia y lecturas/escrituras por señal; pulsos breves pueden perderse.
@@ -290,21 +290,23 @@ En modo Editar, el panel de Opciones de una **etapa** y el de una **transición*
 - Las acciones no llevan comentario.
 - Limitaciones: un comentario largo con elementos muy juntos puede pisar a un vecino (no se mueve nada solo); si el texto ya lleva comillas, salen dobles. Copiar y pegar elementos aún no existe. Más adelante se añadirá un elemento de texto de comentario que se pueda arrastrar.
 
-## Jerarquías: macroetapas, encapsulantes y forzado (P-IMP-61, P-IMP-62)
+## Jerarquías: macroetapas, encapsulantes, grafcets parciales sueltos y forzado (P-IMP-61, P-IMP-62, P-IMP-66)
 
-En modo Editar, la paleta tiene las fichas **Macroetapa** y **Encapsulante**, que se arrastran al dibujo como las demás.
+En modo Editar, la paleta tiene las fichas **Macroetapa**, **Encapsulante** y **Grafcet parcial**, que se arrastran al dibujo como las demás.
 Cada operación se deshace con Ctrl+Z. Lo que se suelta dentro del marco de un recinto o de la zona de una expansión
 pertenece a ese parcial (con un margen de una etapa a la derecha y abajo); moverlo a otro marco solo cambia su posición
 en el dibujo, no su parcial.
 
 - **Macroetapa.** Al soltar la ficha se crea la macroetapa (M1, M2…) con su expansión a la derecha: un parcial con una
-  etapa de entrada (E1, E2…) y una de salida (S1, S2…), unidas a la macroetapa por trazos discontinuos. La expansión no
-  lleva ruta interior: se rellena soltando etapas y transiciones dentro de su zona. Botón derecho: «Abrir expansión» y
-  «Renombrar…». El doble clic también abre la expansión.
+  etapa de entrada (E1, E2…) y una de salida (S1, S2…), unidas a la macroetapa (con «Mostrar dependencias» activado, por trazos discontinuos). La expansión no
+  lleva ruta interior: se rellena soltando etapas y transiciones dentro de su zona. Botón derecho: «Encuadrar la expansión» y
+  «Renombrar…». El doble clic en la macroetapa encuadra la expansión.
 - **Encapsulante.** Se arrastra la ficha, o se convierte una etapa con el botón derecho, «Convertir en encapsulante».
   «Convertir en etapa ordinaria» la devuelve si no tiene recintos.
 - **Recintos.** Botón derecho en la encapsulante, «Añadir recinto…», y el nombre (R1, R2…). El marco vacío aparece a su
-  derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos.
+  derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos. Con «Mostrar dependencias» (botón junto al zoom) se dibuja un trazo discontinuo de la encapsulante a su recinto.
+- **Grafcet parcial suelto.** Se arrastra la ficha «Grafcet parcial» (marco redondeado con «G») a un hueco del dibujo, o se usa «Nuevo grafcet parcial aquí» del botón derecho en el hueco. Crea un parcial vacío, con nombre automático (G1, G2…) y su marco en ese punto, en una sola operación de deshacer. Las etapas que se suelten dentro pasan a él. Se renombra con «Renombrar…» (botón derecho o doble clic en su borde); es destino de la ficha «Forzado»; Supr lo borra con aviso si hay órdenes que lo apuntan. Se guarda y se abre como cualquier otro parcial. Sin posición guardada no se dibuja, y su marco vacío solo se ve al editar, no al simular.
+- **Mostrar dependencias.** Botón junto a los controles de zoom, apagado por defecto y recordado entre sesiones. Con él se dibujan los trazos discontinuos que unen una macroetapa con su expansión y una encapsulante con su recinto; sin él no aparecen. No cambia la disposición, los marcos ni la selección.
 - **Enlace de activación.** Botón derecho en una etapa de un recinto, «Enlace de activación» (casilla). La etapa marcada
   lleva un «\*» y se activa cuando se activa la encapsulante (P-IMP-23).
 - **Forzar un parcial.** Botón derecho en una etapa, «Forzar un parcial…»: se elige el parcial destino y la forma. La
@@ -317,15 +319,12 @@ en el dibujo, no su parcial.
   - **Inicial:** el destino mantiene su situación inicial.
 
   «Editar orden de forzado…» y «Quitar orden de forzado» están en el menú de la caja.
-- **Navegación.** «Abrir expansión» y el doble clic en la macroetapa llevan la vista a su expansión y la recuadran; no
-  cambian el modelo ni el historial de deshacer. «Ir a la macroetapa» (desde la entrada o la salida de una expansión) e
-  «Ir a la encapsulante» (desde una etapa de un recinto o desde su marco) seleccionan ese elemento y llevan la vista a
-  él. La leyenda (Ayuda > Leyenda del dibujo) explica los símbolos de la jerarquía.
+- **Navegación.** «Encuadrar la expansión» (y el doble clic en la macroetapa) encaja su expansión en la vista y la hace parpadear; no cambia el modelo ni el historial de deshacer. «Encuadrar la macroetapa» (desde la entrada, la salida o la zona de la expansión), «Encuadrar la encapsulante» (desde una etapa del recinto o desde su marco) y «Encuadrar el recinto» o «los recintos» (desde la encapsulante) hacen lo mismo con su elemento: 24 px de margen y zoom máximo 1,6. La leyenda (Ayuda > Leyenda del dibujo) explica los símbolos de la jerarquía.
 - **Errores.** Un rechazo sale como aviso en rojo y el elemento parpadea en naranja; la operación no deja nada a medias.
 
 **Límites de esta versión:**
 
-- No se puede crear todavía un parcial suelto (que no sea recinto ni expansión) con gestos del editor.
+- El nombre de la encapsulante se revisará en la ronda siguiente: el responsable pide que vuelva a ir a caballo de la línea superior del marco de su recinto, como en la norma.
 - Renombrar un parcial no reescribe los textos que lo nombran con nombre calificado (`G.x`).
 - No hay atajos de teclado para estas acciones.
 - El ir y volver entre niveles no está completo (REQ-EDT-08).

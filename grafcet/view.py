@@ -155,6 +155,16 @@ def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = Non
     return side(a) + [_seg(sym)] + side(b)
 
 
+def _tiene_retardo(m: dict[str, Any]) -> bool:
+    return m["operator"] == "delay" or any(_tiene_retardo(o) for o in m.get("operands", []))
+
+
+def _con_retardo(e: dict[str, Any] | None) -> dict[str, bool]:
+    """{"tmr": True} si la expresión de una condición o un evento lleva un retardo t1/condición/t2; el dibujo reserva
+    sitio encima para el tiempo transcurrido del temporizador (no depende del estado: la disposición no cambia al simular)."""
+    return {"tmr": True} if e is not None and e["mode"] == "executable" and _tiene_retardo(e["meaning"]) else {}
+
+
 def t_s(us: str | int) -> str:
     return format_duration(int(us), "s", "es-ES")
 
@@ -281,7 +291,7 @@ class Vista:
                 acts.setdefault(a["stepRef"], []).append({"kind": "continuous", "id": a["id"], "target": a["targetRef"],
                                                           "text": [_seg(names.get(a["targetRef"], a["targetRef"]))],
                                                           "cond": self._cond_limitada(a, plain, disp),
-                                                          "condRef": a["conditionRef"]})
+                                                          "condRef": a["conditionRef"], **_con_retardo(cond)})
                 self.where.setdefault(a["conditionRef"], f"acción {names.get(a['targetRef'], a['targetRef'])} "
                                                          f"({names.get(a['stepRef'], a['stepRef'])})")
             else:
@@ -289,7 +299,8 @@ class Vista:
                 acts.setdefault(a["stepRef"], []).append({
                     "kind": "stored", "id": a["id"], "target": a["targetRef"], "trigger": trig["kind"],
                     "text": [_seg(f"{names.get(a['targetRef'], a['targetRef'])} := ")] + disp(a["valueRef"]),
-                    "event": disp(trig.get("expressionRef")), "condRef": trig.get("expressionRef")})
+                    "event": disp(trig.get("expressionRef")), "condRef": trig.get("expressionRef"),
+                    **_con_retardo(exprs.get(trig.get("expressionRef")))})
                 if trig.get("expressionRef"):
                     self.where.setdefault(trig["expressionRef"], f"evento de {names.get(a['targetRef'], a['targetRef'])} "
                                                                  f"({names.get(a['stepRef'], a['stepRef'])})")
@@ -396,7 +407,8 @@ class Vista:
             "unstable": last_stable.get("virtualSteps", []) if last_stable and closed == "estable" else [],
             "transitions": obs["transitions"], "outputs": obs["outputs"],
             "values": {k: v for k, v in obs["values"].items()},
-            "temporal": {k: self._temporizador(k, v, obs["timeUs"]) for k, v in obs["temporal"].items()},
+            "temporal": self._ocurrencias({k: self._temporizador(k, v, obs["timeUs"])
+                                           for k, v in obs["temporal"].items()}),
             "lastCleared": evo[-1]["cleared"] if evo and closed == "estable" else [],  # un contexto fallido no franquea
             "trace": [x for x in (describe(r, self.texts, self.names) for r in s.trace.records[-60:]) if x],
             "nextEvent": self._next(), "nextEventUs": self._next_us(),
@@ -425,9 +437,31 @@ class Vista:
         return {"reached": rec["situationCandidate"], "proposed": rec.get("proposedSet", []),
                 "element": d.get("element"), "question": d.get("question"), "lastStable": sorted(self.s.z.situation)}
 
+    def _ocurrencias(self, temporal: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        """Añade a cada temporizador `nth`: cuál de las apariciones de su `token` (la duración como se escribe en la
+        receptividad, «3s») en el texto de su expresión es la suya, para que el dibujo ponga el tiempo transcurrido
+        encima de esa duración. Los retardos de una expresión se escriben en el orden de su árbol y cada uno escribe su
+        t1 y su t2, salvo los que valen 0 s."""
+        por_expr: dict[str, list[str]] = {}
+        for k, t in temporal.items():
+            por_expr.setdefault(t["expr"], []).append(k)
+        for claves in por_expr.values():
+            vistos: dict[str, int] = {}  # cuántas veces se ha escrito ya cada duración en esta expresión
+            for k in sorted(claves, key=lambda c: [int(n) for n in c.split(".")[1:]]):
+                spec, t = self.s.cm.temporals[k], temporal[k]
+                escritas = []
+                for d in (spec.d1, spec.d2):
+                    if d:
+                        escritas.append(vistos.get(_dur(d), 0))
+                        vistos[_dur(d)] = vistos.get(_dur(d), 0) + 1
+                t["nth"] = escritas[-1 if t["off"] else 0] if escritas else 0
+        return temporal
+
     def _temporizador(self, key: str, v: dict[str, Any], now: int) -> dict[str, Any]:
         """Un retardo t1/condición/t2 como temporizador: dónde está, en qué estado, cuánto lleva y su preset (el de
-        conexión mientras cuenta o ya venció; el de desconexión mientras se mantiene tras desaparecer la base)."""
+        conexión mientras cuenta o ya venció; el de desconexión mientras se mantiene tras desaparecer la base). `shown` es
+        lo que se dibuja encima de la duración: solo el tiempo transcurrido mientras cuenta, «3 s ✓» al vencer y nada
+        antes de empezar."""
         spec = self.s.cm.temporals[key]
         expr = key.split(".")[0]
         phase = v["phase"]
@@ -439,13 +473,13 @@ class Vista:
         estado = "contando" if counting else "vencido" if done else "parado"
         shown = ""
         if counting:
-            shown = f"{t_trunc(lleva)} / {t_s(preset)}"
+            shown = t_trunc(lleva)
         elif done and spec.d1:
             shown = f"{t_s(spec.d1)} ✓"
         return {**v, "label": self.texts.get(expr, key), "expr": expr, "where": self.where.get(expr, expr),
                 "deadlineS": None if v["deadline"] == "inactive" else t_s(v["deadline"]),
                 "estado": estado, "lleva": "—" if lleva is None else t_trunc(lleva), "preset": t_s(preset),
-                "shown": shown, "off": off}
+                "shown": shown, "off": off, "token": _dur(preset), "nth": 0}
 
     def _next_us(self) -> int | None:
         if self.s.status != "pausada-estable":

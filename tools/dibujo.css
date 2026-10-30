@@ -41,7 +41,9 @@ svg.grafcet{width:100%;height:auto;display:block;font-family:Arial,"Helvetica Ne
 .tr.cleared .bar{stroke:var(--glow);stroke-width:3}.tr.question .bar{stroke:var(--err);stroke-width:3}
 .comentario{fill:var(--muted);font-size:12px;font-style:italic}.tdes{fill:var(--muted);font-size:13px}.tcond{fill:var(--text);font-size:14px}
 .act rect{fill:var(--panel);stroke:var(--text);stroke-width:1.6}.act.on rect{stroke:var(--ok);stroke-width:2.6}
-.timer{font-size:12px;font-weight:700}.timer.run{fill:var(--accent)}.timer.done{fill:var(--ok)}
+text.timer{font-size:12px;font-weight:700;paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round}
+.timer.run{fill:var(--accent)}.timer.done{fill:var(--ok)}
+.neg{stroke:var(--text);stroke-width:2;fill:none}
 .atext{fill:var(--text);font-size:15px}.acond{fill:var(--text);font-size:13px}
 .amark{stroke:var(--text);stroke-width:1.6}.ahead{fill:var(--text)}
 /* Jerarquía (documento 03): divisiones de macroetapa, marcas de encapsulante, forzado en rectángulo doble */

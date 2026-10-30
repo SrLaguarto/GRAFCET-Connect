@@ -26,7 +26,8 @@ class MonitorEntradas:
         return monitor
 
     def valores_salida(self, cero=False):
-        return {}
+        """Un monitor no controla nada: solo conoce el cero de las salidas asignadas (el que piden Pausa y Conectar)."""
+        return valores_cero(self.salidas_control) if cero else {}
 
 
 class Adaptador:
@@ -77,6 +78,17 @@ class Adaptador:
                     raise ValueError(f"Salida {vid} no representable como {senal.formato}")
                 resultado[vid] = int(numero) & 0xffff
         return resultado
+
+
+def salidas_asignadas(adaptador):
+    """Las salidas del mapa (coils y holding), haya programa en marcha o solo observación: el monitor no las controla, pero
+    sabe cuáles son."""
+    return list(adaptador.salidas or getattr(adaptador, "salidas_control", []))
+
+
+def valores_cero(senales):
+    """El cero de cada señal: False en las digitales y 0 en los registros."""
+    return {s.variable: False if s.formato == "BOOL" else 0 for s in senales}
 
 
 def leer_entradas(cliente, senales):

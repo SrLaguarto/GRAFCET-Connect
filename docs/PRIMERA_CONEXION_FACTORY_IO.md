@@ -9,7 +9,7 @@ de Factory I/O, copia los nuevos valores en GrafConnect.
 1. Cierra la versión anterior de GrafConnect. Abre **dist/GRAFCET/GRAFCET.exe**
    desde la carpeta `implementacion` de este proyecto.
 2. Pulsa el botón **E/S externas** de la barra superior, junto a Reiniciar;
-   después **Configuración → Abrir prueba guiada**. La flecha Atrás vuelve al GRAFCET.
+   después **Configuración → Abrir prueba guiada**. La flecha Atrás vuelve al GRAFCET, y el botón de la barra, que en esa vista se llama **Vista GRAFCET**, también.
 3. El título debe indicar «Prueba Factory I O - PM y dos cintas». Este proyecto
    ya tiene etapa inicial, variables y acción. También está disponible en
    `prueba_factoryio_digital/manifest.json`, junto al ejecutable, por si quieres
@@ -18,7 +18,7 @@ de Factory I/O, copia los nuevos valores en GrafConnect.
    El ejemplo ya está asignado. Para asignar otro modelo, arrastra sus variables
    desde la lista a los terminales. La **×** quita una asignación y también puedes
    arrastrar una señal desde su slot a otro. Si estás conectado, pulsa primero
-   **Desconectar / editar**.
+   **Desconectar / editar**. El panel refleja las variables actuales del proyecto cada vez que lo abres y al editar; si estás conectado no cambia y avisa de que hay variables nuevas, que aparecen al desconectar.
 
 ## 2. Comprueba estos valores, sin cambiar tu escena
 
@@ -50,7 +50,7 @@ En GrafConnect abre **Configuración** para comprobar los campos de conexión:
 
 Una captura anterior muestra 127.0.0.1. Usa la dirección que esté mostrando
 **ahora** Factory I/O en CONFIGURACIÓN y en el centro del DRIVER. El proyecto
-preparado tiene 192.168.1.133, según tus últimas dos capturas.
+preparado tiene 192.168.1.133, según tus últimas dos capturas. La primera vez que usas el programa, la IP propuesta es 192.168.1.133, puerto 502 y esclavo 1; después propone la última conexión que funcionó o la última prueba con éxito. Si el proyecto trae su propio mapa guardado, manda el del proyecto.
 
 Las tres señales son digitales: formato **BOOL (apagado/encendido)** y escala **1**.
 La escala **100** que se ve en Factory I/O sirve para las señales numéricas y no
@@ -62,7 +62,6 @@ Factory I/O para esta primera prueba.
 En **Configuración → Canales del servidor** copia el offset y la cantidad de
 Factory I/O. En tu última captura: offset 0 en las cuatro filas; cantidades
 **I=16, Q=16, AI=4, AQ=4**. El ejemplo guiado ya contiene esos valores.
-También puedes abrir esta sección desde **+ Canales**, en la cabecera del PLC.
 Estos cambios solo ajustan GrafConnect: no crean canales en Factory I/O.
 No se pueden deducir por Modbus: tu servidor responde incluso en dirección 65535.
 Si reduces un rango y una señal quedaría fuera, quítala o muévela primero.
@@ -71,7 +70,7 @@ Con muchos canales, desplaza verticalmente la zona central para ver los demás.
 ### Solo observar sensores
 
 Puedes conectar con únicamente entradas asignadas, desde Pausa (edición) y sin un
-GRAFCET compilable. Se activa observación de solo lectura: no escribe ninguna
+GRAFCET compilable. Se activa observación de solo lectura: sin salidas asignadas no escribe ninguna
 salida ni ejecuta el motor. Para controlar actuadores sí necesitas un GRAFCET
 válido y pulsar Ejecutar (Play). El estado de conexión muestra el detalle al pasar el ratón.
 
@@ -85,7 +84,7 @@ válido y pulsar Ejecutar (Play). El estado de conexión muestra el detalle al p
    el ratón sobre el estado.
    Si aparece otra cosa, copia el mensaje exacto abajo y detente en este punto.
 4. Cierra Configuración y pulsa **Conectar** en el panel. Debe aparecer un
-   **check verde y «Conectado»**. Sigue pendiente pulsar Ejecutar para mover las cintas.
+   **check verde y «Conectado · Pausa · salidas a cero · observando las entradas»**. Conectar pone antes a cero las salidas asignadas. Sigue pendiente pulsar Ejecutar para mover las cintas.
    Conectar y Probar conexión son dos operaciones distintas: Probar termina su
    comprobación y cierra la conexión; Conectar la mantiene abierta. Si Ejecutar
    está activo, Conectar o Probar conexión lo pasan a Pausa.
@@ -93,14 +92,13 @@ válido y pulsar Ejecutar (Play). El estado de conexión muestra el detalle al p
 ## 4. Arranca las dos cintas con el pulsador
 
 Hay un solo control de ejecución: **Ejecutar** (Play) simula y **Pausa** vuelve a editar. Al abrir el ejemplo, el
-programa queda en Pausa; con la conexión viva, en Pausa se siguen observando las entradas (PM) y las salidas se
-conservan.
+programa queda en Pausa; con la conexión viva, en Pausa se siguen observando las entradas (PM) y las salidas asignadas quedan a cero.
 
 1. En Factory I/O vuelve desde DRIVER a la escena con la flecha de atrás y pon
    la escena en marcha con su botón de reproducción (▶).
 2. En GrafConnect pulsa **Ejecutar** (Play, F5) en la barra superior. El botón pasa
    a decir **Pausa** mientras la simulación corre; Pausa detiene y vuelve a editar,
-   sin cerrar la conexión.
+   sin cerrar la conexión, y deja las salidas a cero hasta el siguiente Ejecutar.
 3. Acciona el **Pulsador marcha de la escena**, manteniéndolo aproximadamente un
    segundo. No basta con seleccionar su nombre en la lista de asignaciones DRIVER.
 4. Al activar el pulsador, **PM debe indicar 1** y la etapa 1 debe quedar activa.
@@ -109,11 +107,11 @@ conservan.
    permanece en la etapa 1.
 5. No hace falta generar cajas, activar el Emisor ni probar toda la instalación.
    Para detener la planta simulada, usa su control de pausa en Factory I/O.
-   Pausa en GrafConnect conserva las salidas: no apaga las cintas, y sigue
+   Pausa en GrafConnect pone a cero las salidas: las cintas se paran, y sigue
    observando PM. Para repetir desde la etapa 0, pulsa Reiniciar (Ctrl+R) en
    GrafConnect: mantiene Modbus conectado y publica las salidas iniciales. Si
    estabas en Ejecutar, la simulación sigue en marcha; si estabas en Pausa, pulsa
-   después Ejecutar y vuelve a accionar PM.
+   después Ejecutar (cada Ejecutar empieza desde la etapa 0) y vuelve a accionar PM.
 
 Si PM cambia pero Q00 y Q01 no, comprueba primero que GrafConnect está en Play (el botón muestra «Pausa»).
 Si PM y las salidas cambian pero las cintas no, anota ese resultado: no es el mismo problema que
@@ -156,7 +154,8 @@ la prueba del pulsador y del movimiento de la cinta desde la interfaz.
 
 - El responsable ya confirmó el arranque real de las dos cintas con PM.
 - Reiniciar mantiene TCP y vuelve al estado y salidas iniciales: en Play sigue en
-  Play y en Pausa queda en pausa. Falta confirmar esta nueva conducta en la escena real.
+  Play y en Pausa no crea sesión (todo queda a 0). Falta confirmar esta nueva conducta en la escena real.
+- Desconectar escribe el cero antes de cerrar la conexión («Desconectado · salidas a cero»); si la red falla, avisa «Salidas no garantizadas». Cerrar la ventana también intenta el cero, pero si la red falla no avisa. Falta confirmar en la escena real.
 - Paso y Completar recorrido se han retirado: el único control de ejecución es
   Ejecutar (Play, F5), y Pausa vuelve a editar. Para depurar sin Modbus use Play y
   Pausa, y «Avanzar el tiempo…» (menú Simulación, solo en Play).

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QEvent, QTimer, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHeaderView, QLabel, QPushButton,
                                QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
@@ -82,6 +82,32 @@ class _DelegadoCombo(QStyledItemDelegate):
             super().setModelData(editor, model, index)
 
 
+class _Tabla(QTableWidget):
+    """La tabla de variables. Supr, con la tabla enfocada y sin una celda en edición, pide quitar las filas seleccionadas;
+    con el editor de una celda abierto, Supr es del editor (borra texto)."""
+
+    suprimir = Signal()
+
+    def _es_supr(self, ev: Any) -> bool:
+        solo = (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.KeypadModifier)  # el Supr del teclado numérico lleva el segundo
+        return (ev.key() == Qt.Key.Key_Delete and ev.modifiers() in solo
+                and self.state() != QAbstractItemView.State.EditingState)
+
+    def event(self, ev: Any) -> bool:  # noqa: N802
+        # Supr es también el atajo «Borrar la selección» de la ventana (el dibujo): con el foco aquí es de la tabla
+        if ev.type() == QEvent.Type.ShortcutOverride and self._es_supr(ev):
+            ev.accept()
+            return True
+        return super().event(ev)
+
+    def keyPressEvent(self, ev: Any) -> None:  # noqa: N802
+        if self._es_supr(ev):
+            ev.accept()
+            self.suprimir.emit()
+            return
+        super().keyPressEvent(ev)
+
+
 def _igual(a: Any, b: Any) -> bool:
     if isinstance(a, dict) and isinstance(b, dict):
         return _clave_tipo(a) == _clave_tipo(b)
@@ -102,7 +128,8 @@ class PanelVariables(QWidget):
         self.parpadeo.cambia.connect(self._pintar)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        self.tabla = QTableWidget(0, len(COLUMNAS))
+        self.tabla = _Tabla(0, len(COLUMNAS))
+        self.tabla.suprimir.connect(self.quitar_seleccion)
         self.tabla.setStyleSheet("QHeaderView::section { padding: 2px 3px; }")
         self.fuente = QFont(self.tabla.font())  # letra pequeña: el panel es estrecho
         self.fuente.setPixelSize(11)
@@ -328,16 +355,40 @@ class PanelVariables(QWidget):
             self.tabla.editItem(self.tabla.item(self.tabla.rowCount() - 1, 0))
 
     def quitar(self) -> None:
+        """El botón «Quitar»: la variable de la fila actual."""
         r = self.tabla.currentRow()
-        if not 0 <= r < len(self._filas):
+        if 0 <= r < len(self._filas):
+            self._quitar_filas([self._filas[r]])
+
+    def quitar_seleccion(self) -> None:
+        """Supr: las variables de las filas seleccionadas, como si se pulsara «Quitar» en cada una (mismas comprobaciones,
+        mismos avisos). Solo al editar: sin edición o con el panel desactivado no hace nada."""
+        if self.e is None or not self.isEnabled():
             return
-        f = self._filas[r]
-        if f["id"] is None:  # sin nombre: no está en el modelo, solo se quita la fila
-            self._pend.remove(f)
+        filas = sorted({i.row() for i in self.tabla.selectionModel().selectedRows()})
+        self._quitar_filas([self._filas[r] for r in filas if 0 <= r < len(self._filas)])
+
+    def _quitar_filas(self, filas: list[dict[str, Any]]) -> None:
+        """Quita cada fila: una sin nombre solo sale de la interfaz; una variable pasa por el núcleo, que rechaza la que está
+        en uso (se muestra su motivo y la fila parpadea; si son varias las rechazadas, el motivo es el de la primera)."""
+        rechazadas: list[tuple[dict[str, Any], str]] = []
+        sin_nombre = False
+        for f in filas:
+            if f["id"] is None:  # sin nombre: no está en el modelo, solo se quita la fila
+                self._pend.remove(f)
+                sin_nombre = True
+            else:
+                motivo = self.e.quitar_variable(f["id"])
+                if motivo:
+                    rechazadas.append((f, motivo))
+        if rechazadas:
+            self._resultado(rechazadas[0][1], rechazadas[0][0])
+            if len(rechazadas) > 1:
+                self.parpadear(*(f for f, _ in rechazadas))
+        else:
             self._resultado(None)
+        if sin_nombre:
             self._reconstruir()
-            return
-        self._resultado(self.e.quitar_variable(f["id"]), f)
 
     def sin_nombre(self) -> int:
         """Cuántas filas siguen sin nombre."""

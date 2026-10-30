@@ -645,9 +645,10 @@ class Interfaz(unittest.TestCase):
         e, d = w.edicion, w.diagrama
         self.assertFalse(w.dock.isHidden())
         self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())],
-                         ["Etapa", "Transición", "Simultaneidad", "Acción", "Macroetapa", "Encapsulante"],
+                         ["Etapa", "Transición", "Simultaneidad", "Acción", "Macroetapa", "Encapsulante", "Grafcet parcial",
+                          "Forzado"],
                          "Seleccionar no es un elemento y la etapa inicial es una etapa con otro tipo; una sola lista, con la acción "
-                         "continua y, al final, las dos de la jerarquía")
+                         "continua y, al final, las de la jerarquía (macroetapa, encapsulante, grafcet parcial y la orden de forzado)")
         pedidas = []
         e.pedir_condicion = pedidas.append
         self.assertEqual(w.paleta.mimeData([w.paleta.item(1)]).text(), "transicion")
@@ -1633,9 +1634,12 @@ class Interfaz(unittest.TestCase):
         w = self.w
         e, ids, ts = self.secuencial()
         c = centro(e.M, ids["1"])
-        self.assertEqual(e.menu(QPointF(c.x() + 400, c.y())), [], "en un hueco, nada")
+        self.assertEqual([t for t, _ in e.menu(QPointF(c.x() + 400, c.y()))],
+                         ["Nuevo grafcet parcial aquí", "-", "Equidistanciar todo el lienzo"],
+                         "en un hueco, un grafcet parcial nuevo y equidistanciar el lienzo (hay una cadena)")
         opciones = dict(e.menu(c))
-        self.assertEqual(list(opciones), ["Añadir acción…", "Colocación de las acciones", "-", "Convertir en encapsulante"])
+        self.assertEqual(list(opciones), ["Añadir acción…", "Colocación de las acciones", "-", "Convertir en encapsulante",
+                                          "Equidistanciar alturas de la cadena"])
         pedidas = []
         e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
         opciones["Añadir acción…"]()  # crea la acción continua unida a la etapa (borrador, sin variable) y abre Editar
@@ -2543,7 +2547,8 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.ed.draft_actions(), [])
         # el menú de la etapa conserva «Añadir acción…»
         self.assertEqual(list(dict(e.menu(centro(e.M, ids["1"])))),
-                         ["Añadir acción…", "Colocación de las acciones", "-", "Convertir en encapsulante"])
+                         ["Añadir acción…", "Colocación de las acciones", "-", "Convertir en encapsulante",
+                          "Equidistanciar alturas de la cadena"])
 
     def test_SEDI73_guardar_abrir_con_borradores_avisos_y_deshacer(self):
         """REQ-DAT-01, REQ-EDT-09, REQ-EDT-14: los borradores de acción se guardan en la presentación
@@ -2770,13 +2775,17 @@ class Interfaz(unittest.TestCase):
         w.split.moveSplitter(w.split.width() - 400, 1)  # intentar estirarlo no cambia nada
         self.app.processEvents()
         self.assertEqual((w.dock.width(), w.derecho.width()), (minimo, minimo))
-        # al ancho mínimo, las fichas siguen en dos columnas y tres filas, sin barras
+        # al ancho mínimo, las fichas siguen en dos columnas, con barra vertical o sin ella: ocho fichas, cuatro filas (con
+        # «Forzado» pasó de tres; con «Grafcet parcial» la cuarta fila se llena y no hay una quinta)
         r = [pal.visualItemRect(pal.item(i)) for i in range(pal.count())]
         self.assertEqual((r[0].y(), r[1].y(), r[2].y()), (r[1].y(), r[0].y(), r[0].y() + pal.gridSize().height()))
         self.assertTrue(r[1].x() > r[0].x(), "dos columnas")
-        self.assertEqual(len({x.y() for x in r}), 3)
+        self.assertEqual((pal.count(), pal.FILAS, len({x.y() for x in r})), (8, 4, 4))
         self.assertEqual((pal.verticalScrollBarPolicy(), pal.horizontalScrollBarPolicy()),
-                         (Qt.ScrollBarPolicy.ScrollBarAlwaysOff,) * 2)
+                         (Qt.ScrollBarPolicy.ScrollBarAsNeeded, Qt.ScrollBarPolicy.ScrollBarAlwaysOff))  # sale solo si no caben
+        self.assertGreaterEqual(pal.viewport().width(), 2 * pal.gridSize().width(), "con barra o sin ella, caben las dos columnas")
+        self.assertGreaterEqual(pal.ancho_minimo(), 2 * pal.gridSize().width() + pal.verticalScrollBar().sizeHint().width(),
+                                "el ancho mínimo cuenta con la barra vertical")
         # con cada tipo de selección, las opciones caben en el ancho del panel de abajo (no se cortan) y el panel derecho también
         b = e.poner_barra(QPointF(500, 400), "Y")
         for sel in ([ids["1"]], [ts["t1"]], [f"{ts['t1']}|{ids['0']}|pre"], [b]):
@@ -3251,11 +3260,13 @@ class Interfaz(unittest.TestCase):
         self.assertIs(w.paleta.parent(), w.dock)
         pa = w.paleta
         self.assertEqual([pa.item(i).text() for i in range(pa.count())],
-                         ["Etapa", "Transición", "Simultaneidad", "Acción", "Macroetapa", "Encapsulante"])
+                         ["Etapa", "Transición", "Simultaneidad", "Acción", "Macroetapa", "Encapsulante", "Grafcet parcial",
+                          "Forzado"])
         self.assertEqual([pa.mimeData([pa.item(i)]).text() for i in range(pa.count())],
-                         ["etapa", "transicion", "simultaneidad", "accion:continua", "macroetapa", "encapsulante"])
+                         ["etapa", "transicion", "simultaneidad", "accion:continua", "macroetapa", "encapsulante", "parcial",
+                          "forzado"])
         self.assertEqual(propiedades.COLOCABLES, ("etapa", "transicion", "simultaneidad", "accion:continua", "macroetapa",
-                                                  "encapsulante"))
+                                                  "encapsulante", "parcial", "forzado"))
         self.assertFalse(pa.item(3).icon().pixmap(80, 64).toImage().isNull())
         self.assertIn("Tipo de acción", propiedades.AYUDAS["accion:continua"], "la ayuda dice cómo cambiar el tipo")
         self.assertNotIn("carpeta", w.ayuda.text())
@@ -3989,6 +4000,332 @@ class Interfaz(unittest.TestCase):
         e.nueva_variable("I02", "input", {"kind": "bool"})
         return e, ids, ts
 
+    def _variables_en_la_tabla(self, *nombres, papel="input"):
+        """Un grafcet nuevo con las variables dadas (creadas por el núcleo) y la tabla de variables al día."""
+        w = self.w
+        w.nuevo()
+        for n in nombres:
+            self.assertIsNone(w.edicion.nueva_variable(n, papel))
+        w.show()
+        self.app.processEvents()
+        return w.edicion, w.variables
+
+    def test_SEDI260_supr_quita_la_variable_seleccionada_como_el_boton(self):
+        """REQ-EDT-07: Supr con una fila seleccionada en la tabla de variables la quita directamente, por el mismo camino que
+        «Quitar» (una operación de deshacer); sin diálogos nuevos."""
+        e, pv = self._variables_en_la_tabla("a", "b", "c")
+        with mock.patch("escritorio.ventana.QMessageBox.question") as pregunta, mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
+            pv.tabla.selectRow(1)
+            pv.tabla.setFocus()
+            n = len(e.ed.undo_stack)
+            QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
+            self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["a", "c"])
+            self.assertEqual((len(e.ed.undo_stack), pv.tabla.rowCount(), pv.msg.text()), (n + 1, 2, ""))
+            pregunta.assert_not_called()
+            aviso.assert_not_called()
+            # sin ninguna fila seleccionada no quita nada
+            pv.tabla.clearSelection()
+            QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
+            self.assertEqual(len(e.ed.model["variables"]), 2)
+            # el botón «Quitar» y Supr dan lo mismo
+            pv.tabla.selectRow(0)
+            pv.quitar()
+            self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["c"])
+        e.deshacer()
+        e.deshacer()
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["a", "b", "c"])
+
+    def test_SEDI261_supr_de_una_variable_en_uso_se_rechaza_igual_que_quitar(self):
+        """REQ-EDT-07, REQ-EDT-09: si el núcleo no deja quitar la variable (se usa), Supr enseña el mismo motivo que el
+        botón «Quitar», la fila parpadea y no se borra nada."""
+        w = self.w
+        e, ids, ts = self.secuencial()
+        pv = w.variables
+        nombres = [v["name"] for v in e.ed.model["variables"]]
+        self.assertEqual(nombres[:2], ["marcha", "paro"])
+        pv.tabla.selectRow(0)
+        QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
+        con_supr = pv.msg.text()
+        self.assertIn("se usa", con_supr)
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], nombres)
+        self.assertEqual(len(pv.parpadeo.ids), 1)
+        pv.msg.setText("")
+        pv.tabla.selectRow(0)
+        pv.quitar()
+        self.assertEqual(pv.msg.text(), con_supr, "el mismo aviso que con el botón")
+
+    def test_SEDI262_supr_con_la_celda_en_edicion_es_del_editor_y_no_borra_el_dibujo(self):
+        """REQ-EDT-07: con el editor de una celda abierto Supr borra texto, no la fila; con la tabla enfocada Supr es de la
+        tabla y no el atajo «Borrar la selección» del dibujo (que conserva su selección)."""
+        from PySide6.QtGui import QKeyEvent
+        from PySide6.QtWidgets import QAbstractItemView, QLineEdit
+        w = self.w
+        e, pv = self._variables_en_la_tabla("abc", "otra")
+        pv.tabla.selectRow(0)
+        pv.tabla.editItem(pv.tabla.item(0, 0))
+        self.assertEqual(pv.tabla.state(), QAbstractItemView.State.EditingState)
+        editor = pv.tabla.findChild(QLineEdit)
+        QTest.keyClick(editor, Qt.Key.Key_Home)
+        QTest.keyClick(editor, Qt.Key.Key_Delete)
+        self.assertEqual(editor.text(), "bc", "Supr borra texto en el editor")
+        self.assertEqual(len(e.ed.model["variables"]), 2)
+        for destino in (editor, pv.tabla):  # ni siquiera dirigido a la tabla mientras se edita
+            QTest.keyClick(destino, Qt.Key.Key_Delete)
+            self.assertEqual(len(e.ed.model["variables"]), 2)
+        sobre = QKeyEvent(QEvent.Type.ShortcutOverride, Qt.Key.Key_Delete, Qt.KeyboardModifier.NoModifier)
+        self.app.sendEvent(pv.tabla, sobre)
+        self.assertFalse(sobre.isAccepted(), "editando, el atajo no se reserva")
+        QTest.keyClick(editor, Qt.Key.Key_Escape)
+        self.assertNotEqual(pv.tabla.state(), QAbstractItemView.State.EditingState)
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["abc", "otra"])
+        # sin edición: la tabla se reserva Supr frente al atajo de la ventana y el dibujo conserva su selección
+        e.colocar("etapa", QPointF(100, 60))
+        self.assertTrue(e.sel)
+        w.activateWindow()
+        pv.tabla.selectRow(1)
+        pv.tabla.setFocus()
+        sobre = QKeyEvent(QEvent.Type.ShortcutOverride, Qt.Key.Key_Delete, Qt.KeyboardModifier.NoModifier)
+        self.app.sendEvent(pv.tabla, sobre)
+        self.assertTrue(sobre.isAccepted(), "Supr con el foco en la tabla no es «Borrar la selección»")
+        pasos = len(e.ed.model["steps"])
+        QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["abc"])
+        self.assertEqual(len(e.ed.model["steps"]), pasos, "la etapa seleccionada en el dibujo sigue ahí")
+
+    def test_SEDI263_supr_con_varias_filas_y_filas_sin_nombre(self):
+        """REQ-EDT-07: con varias filas seleccionadas Supr las quita todas (una operación de deshacer por variable); si el
+        núcleo rechaza alguna, las demás se quitan y el aviso es el del rechazo; una fila sin nombre sale sin tocar el modelo."""
+        from PySide6.QtCore import QItemSelectionModel
+        from PySide6.QtWidgets import QAbstractItemView
+        w = self.w
+        e, ids, ts = self.secuencial()
+        pv = w.variables
+        for n in ("libre1", "libre2"):
+            self.assertIsNone(e.nueva_variable(n, "input"))
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["marcha", "paro", "libre1", "libre2"])
+        pv.tabla.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)  # la tabla es de una fila; el gesto admite varias
+        pv.tabla.setFocus()
+        pv.tabla.selectRow(2)
+        pv.tabla.selectionModel().select(pv.tabla.model().index(3, 0),
+                                         QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
+        n = len(e.ed.undo_stack)
+        QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["marcha", "paro"])
+        self.assertEqual(len(e.ed.undo_stack), n + 2)
+        # una en uso entre las seleccionadas: las libres salen, la usada se queda con su aviso
+        self.assertIsNone(e.nueva_variable("libre3", "input"))
+        pv.tabla.selectAll()
+        QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["marcha", "paro"])
+        self.assertIn("se usa", pv.msg.text())
+        self.assertEqual(len(pv.parpadeo.ids), 2)
+        # una fila sin nombre: solo se quita de la interfaz
+        n = len(e.ed.undo_stack)
+        pv.nueva()
+        self.assertEqual(pv.sin_nombre(), 1)
+        pv.tabla.setFocus()
+        pv.tabla.selectRow(pv.tabla.rowCount() - 1)
+        QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
+        self.assertEqual((pv.sin_nombre(), pv.tabla.rowCount(), len(e.ed.undo_stack)), (0, 2, n))
+        self.assertEqual(pv.msg.text(), "")
+
+    def test_SEDI264_supr_solo_actua_al_editar(self):
+        """REQ-EDT-07: fuera del modo edición (en Play) la tabla de variables no responde a Supr; al volver a Pausa, sí."""
+        w = self.w
+        e, ids, ts = self.secuencial()
+        pv = w.variables
+        self.assertIsNone(e.nueva_variable("libre", "input"))
+        self.assertTrue(pv.isEnabled())
+        self.assertTrue(w.cambiar_modo("simular"))
+        self.assertFalse(pv.isEnabled(), "en Play la tabla de variables no es editable")
+        nombres = [v["name"] for v in e.ed.model["variables"]]
+        pv.tabla.selectRow(len(nombres) - 1)
+        QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
+        pv.quitar_seleccion()
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], nombres)
+        self.assertTrue(w.cambiar_modo("editar"))
+        self.assertTrue(pv.isEnabled())
+        pv.tabla.selectRow(len(nombres) - 1)
+        QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], nombres[:-1])
+
+    def test_SEDI268_supr_del_teclado_numerico_tambien_quita_la_variable(self):
+        """REQ-EDT-07: el Supr del teclado numérico (con el modificador de teclado numérico) actúa igual que el Supr normal en la
+        tabla de variables: quita la fila seleccionada, la tabla se reserva el atajo frente al «Borrar la selección» de la
+        ventana y el dibujo conserva su selección; con Mayús o Ctrl no es de la tabla."""
+        from PySide6.QtGui import QKeyEvent
+        w = self.w
+        e, pv = self._variables_en_la_tabla("a", "b", "c")
+        e.colocar("etapa", QPointF(100, 60))
+        self.assertTrue(e.sel)
+        seleccion, pasos = list(e.sel), len(e.ed.model["steps"])
+        w.activateWindow()
+        pv.tabla.selectRow(1)
+        pv.tabla.setFocus()
+        for mod, reservado in ((Qt.KeyboardModifier.NoModifier, True), (Qt.KeyboardModifier.KeypadModifier, True),
+                               (Qt.KeyboardModifier.ShiftModifier, False), (Qt.KeyboardModifier.ControlModifier, False)):
+            sobre = QKeyEvent(QEvent.Type.ShortcutOverride, Qt.Key.Key_Delete, mod)
+            self.app.sendEvent(pv.tabla, sobre)
+            self.assertEqual(sobre.isAccepted(), reservado, f"el atajo de la tabla con {mod}")
+        n = len(e.ed.undo_stack)
+        QTest.keyClick(pv.tabla, Qt.Key.Key_Delete, Qt.KeyboardModifier.KeypadModifier)
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["a", "c"])
+        self.assertEqual((len(e.ed.undo_stack), len(e.ed.model["steps"]), e.sel), (n + 1, pasos, seleccion),
+                         "una sola operación y el dibujo sigue como estaba")
+        # con el editor de una celda abierto sigue siendo del editor, también con el modificador del teclado numérico
+        pv.tabla.selectRow(0)
+        pv.tabla.editItem(pv.tabla.item(0, 0))
+        QTest.keyClick(pv.tabla, Qt.Key.Key_Delete, Qt.KeyboardModifier.KeypadModifier)
+        self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["a", "c"])
+
+    def test_SEDI265_boton_conmutador_entre_es_externas_y_vista_grafcet(self):
+        """REQ-SIM-03: un solo botón conmuta entre el dibujo GRAFCET y las E/S externas: «E/S externas» y su icono en el
+        dibujo; «Vista GRAFCET», otro icono, tooltip «Volver al dibujo GRAFCET» y pulsado en la vista de E/S. La flecha ←, la
+        prueba guiada, los cambios de modo y cargar otro ejemplo lo dejan coherente con la página visible."""
+        from grafcet.examples import EJEMPLOS
+        w = self.w
+        w.show()
+        self.app.processEvents()
+        a = w.a_es
+        boton = w.tb_conexion.widgetForAction(a)
+
+        def estado():
+            return (w.paginas_es.currentIndex(), a.text(), a.isChecked())
+        grafcet = (0, "E/S externas", False)
+        es = (1, "Vista GRAFCET", True)
+        self.assertEqual(estado(), grafcet)
+        self.assertTrue(a.isCheckable())
+        icono_es, tip_grafcet = a.icon().cacheKey(), a.toolTip()
+        self.assertIn("Conectar", tip_grafcet)
+        boton.click()
+        self.assertEqual(estado(), es)
+        self.assertEqual(a.toolTip(), "Volver al dibujo GRAFCET")
+        self.assertNotEqual(a.icon().cacheKey(), icono_es, "otro icono")
+        self.assertTrue(boton.isChecked(), "el botón de la barra se ve pulsado")
+        boton.click()  # el mismo botón vuelve al dibujo y recupera su aspecto original
+        self.assertEqual(estado(), grafcet)
+        self.assertEqual((a.icon().cacheKey(), a.toolTip()), (icono_es, tip_grafcet))
+        self.assertFalse(boton.isChecked())
+        a.trigger()
+        self.assertEqual(estado(), es)
+        # la flecha ← del panel lo deja coherente
+        w.panel_es.b_volver.click()
+        self.assertEqual(estado(), grafcet)
+        self.assertEqual((a.icon().cacheKey(), a.toolTip()), (icono_es, tip_grafcet))
+        # y a partir de ahí el botón vuelve a abrir la vista de E/S
+        a.trigger()
+        self.assertEqual(estado(), es)
+        w.panel_es.b_volver.click()
+        # la prueba guiada abre la vista de E/S: el botón queda como «Vista GRAFCET»
+        w.panel_es.b_prueba_guiada.click()
+        self.assertEqual(estado(), es)
+        self.assertEqual(a.toolTip(), "Volver al dibujo GRAFCET")
+        # cambiar de modo o cargar otro ejemplo no cambia de página: el botón sigue siendo coherente con la que se ve
+        w.cambiar_modo("simular")
+        self.assertEqual(w.paginas_es.currentIndex(), 1)
+        self.assertEqual(estado(), es)
+        w.cambiar_modo("editar")
+        self.assertEqual(estado(), es)
+        w.edicion.ed.dirty = False
+        w.cargar_ejemplo(next(iter(EJEMPLOS)))
+        self.assertEqual((w.paginas_es.currentIndex() == 1, a.isChecked(), a.text()),
+                         (True, True, "Vista GRAFCET"))
+        a.trigger()
+        self.assertEqual(estado(), grafcet)
+        # Play y Pausa no mueven la página ni el botón
+        w.cambiar_modo("simular")
+        w.cambiar_modo("editar")
+        self.assertEqual(estado(), grafcet)
+
+    def test_SEDI270_el_boton_conmutador_mide_lo_mismo_en_las_dos_vistas_y_no_mueve_la_barra(self):
+        """REQ-SIM-03: el botón «E/S externas» / «Vista GRAFCET» tiene un ancho fijo, el del más ancho de sus dos estados (texto e
+        icono): al alternar entre ellos, el botón y todo lo que va a su derecha en la barra (los iconos de edición) se quedan
+        donde estaban."""
+        w = self.w
+        w.resize(1366, 768)
+        w.show()
+        self.app.processEvents()
+        a = w.a_es
+        boton = w.tb_conexion.widgetForAction(a)
+
+        def medida():
+            self.app.processEvents()
+            return (boton.width(), boton.mapTo(w, QPoint(0, 0)).x(), w.tb_conexion.width(),
+                    w.tb_edit.widgetForAction(w.a_debajo).mapTo(w, QPoint(0, 0)).x())
+        natural = {}
+        en_grafcet = medida()
+        natural["E/S externas"] = boton.sizeHint().width()
+        a.trigger()
+        en_es = medida()
+        natural["Vista GRAFCET"] = boton.sizeHint().width()
+        self.assertEqual(a.text(), "Vista GRAFCET")
+        self.assertNotEqual(natural["E/S externas"], natural["Vista GRAFCET"], "los dos textos no miden lo mismo")
+        self.assertEqual(boton.width(), max(natural.values()), "el ancho del más ancho de los dos estados")
+        self.assertEqual(en_es, en_grafcet, "al alternar no se mueve nada de la barra")
+        for _ in range(2):  # y por cualquier vía: el botón, la flecha ← del panel, Play y Pausa
+            a.trigger()
+            self.assertEqual(medida(), en_grafcet)
+            a.trigger()
+            self.assertEqual(medida(), en_es)
+            w.panel_es.b_volver.click()
+            self.assertEqual(medida(), en_grafcet)
+        w.cambiar_modo("simular")
+        w.cambiar_modo("editar")
+        self.assertEqual(medida(), en_grafcet)
+        self.assertEqual((boton.minimumWidth(), boton.maximumWidth()), (boton.width(),) * 2, "ancho fijo")
+
+    def test_SEDI266_el_estado_de_conexion_hace_salto_de_linea_y_no_se_corta(self):
+        """REQ-SIM-03: el estado de la conexión del panel de E/S ocupa su propia fila bajo el título, hace salto de línea y
+        crece en alto: un mensaje de error largo (WinError 10053) se ve entero, a cualquier ancho, y va en el tooltip."""
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QFontMetrics
+        from PySide6.QtWidgets import QFrame
+        from escritorio.entradas_salidas import PanelES
+        largo = ("Factory I/O cerró o anuló la conexión (WinError 10053). Salidas no garantizadas. Pulsa Conectar para "
+                 "reanudar. Detalle: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host")
+        p = PanelES()
+        try:
+            p.cargar(*self._doc_y_config_es())
+            p.resize(1000, 600)
+            p.show()
+            self.app.processEvents()
+            banda = p.findChild(QFrame, "cabeceraES")
+            corto = banda.height()
+            p.mostrar_estado("error", largo)
+            self.assertEqual(p.check.text(), "✕")
+            self.assertTrue(p.estado.wordWrap())
+            self.assertEqual((p.estado.text(), p.estado.toolTip(), p.check.toolTip()), (largo, largo, largo))
+            for ancho in (1280, 1000, 760, 560):
+                p.resize(ancho, 600)
+                for _ in range(3):
+                    self.app.processEvents()
+                est = p.estado
+                necesaria = QFontMetrics(est.font()).boundingRect(QRect(0, 0, est.width(), 0), Qt.TextFlag.TextWordWrap, largo).height()
+                self.assertGreaterEqual(est.height(), necesaria, f"ancho {ancho}: el texto cabe entero en la etiqueta")
+                self.assertGreaterEqual(est.heightForWidth(est.width()), necesaria)
+                self.assertLessEqual(est.mapTo(banda, est.rect().bottomLeft()).y(), banda.height(), "y la etiqueta cabe en la cabecera")
+                self.assertLessEqual(banda.geometry().bottom(), p.lienzo.mapTo(p, p.lienzo.rect().topLeft()).y(), "sin pisar el cuerpo")
+            p.resize(1000, 600)
+            for _ in range(3):
+                self.app.processEvents()
+            self.assertGreater(p.estado.height(), QFontMetrics(p.estado.font()).height() * 1.5, "son varias líneas")
+            self.assertGreater(banda.height(), corto, "la cabecera crece con el mensaje")
+            p.mostrar_estado("conectado", "Conectado · Ejecutando")
+            for _ in range(3):
+                self.app.processEvents()
+            self.assertEqual((p.estado.text(), p.check.text(), banda.height()), ("Conectado", "✓", corto))
+        finally:
+            p.close()
+            p.deleteLater()
+            self.app.processEvents()
+
+    @staticmethod
+    def _doc_y_config_es():
+        from conexion.configuracion import Configuracion, Senal
+        from grafcet.builder import M
+        doc = M().var("sensor").var("motor", "output").step("0", True).doc
+        return doc, Configuracion(modelo=doc["id"], senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+
     def test_SEDI104_panel_de_acciones_lista_de_variables_sin_crear_desde_aqui(self):
         """REQ-ACT-01, REQ-EDT-07: la variable se elige en una lista ordenada por papel (Salidas, Memorias) con su tipo; nunca
         ofrece entradas; una continua o condicionada solo booleanas; una memorizada, de cualquier tipo. La lista ya no ofrece
@@ -4464,7 +4801,8 @@ class Interfaz(unittest.TestCase):
             w.flechas["derecho"].click()
             QApplication.processEvents()
             self.assertTrue(w.dock.isHidden() and w.derecho.isHidden())
-            self.assertEqual((w.inferior.geometry(), w.vsplit.sizes()), antes, "plegar los laterales no toca el inferior")
+            plegado = (w.inferior.geometry(), w.vsplit.sizes())
+            self.assertEqual(plegado, antes, "plegar los laterales no toca el inferior")
             w.flechas["izquierdo"].click()
             w.flechas["derecho"].click()
             QApplication.processEvents()
@@ -5678,7 +6016,9 @@ class Interfaz(unittest.TestCase):
         pa = w.paleta
         self.assertEqual([(pa.item(i).text(), pa.mimeData([pa.item(i)]).text()) for i in (4, 5)],
                          [("Macroetapa", "macroetapa"), ("Encapsulante", "encapsulante")])
-        self.assertEqual(pa.maximumHeight(), pa.minimumHeight(), "las tres filas caben, sin desplazar")
+        filas = -(-pa.count() // 2)  # dos fichas por fila
+        self.assertEqual((pa.FILAS, pa.sizeHint().height()), (filas, filas * pa.gridSize().height() + 2 * pa.frameWidth() + 2),
+                         "pide el alto justo de todas las filas: con él caben, sin desplazar")
 
         def imagen(h):
             return propiedades.icono(h).pixmap(64, 64).toImage()
@@ -5709,7 +6049,8 @@ class Interfaz(unittest.TestCase):
             self.assertEqual((e.mensaje, e.mensaje_info, w.ayuda.text()),
                              (propiedades.AYUDAS[clave], True, propiedades.AYUDAS[clave]))
         self.assertEqual(len(e.ed.undo_stack), n)
-        self.assertIn("Abrir expansión", propiedades.AYUDAS["macroetapa"])
+        self.assertIn("Encuadrar la expansión", propiedades.AYUDAS["macroetapa"])
+        self.assertNotIn("Abrir expansión", propiedades.AYUDAS["macroetapa"])
         self.assertIn("Añadir recinto", propiedades.AYUDAS["encapsulante"])
 
     def test_SEDI171_soltar_la_ficha_macroetapa_crea_la_macroetapa_con_su_expansion(self):
@@ -5897,7 +6238,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.sel, [r])
         self.assertTrue(self.recuadros(w), "el recinto seleccionado se remarca")
         e.seleccionar([])
-        self.assertEqual(([t for t, _ in e.menu(QPointF(caja["x0"], caja["y0"] + 50))], e.sel), (["Ir a la encapsulante"], [r]),
+        self.assertEqual(([t for t, _ in e.menu(QPointF(caja["x0"], caja["y0"] + 50))], e.sel), (["Encuadrar la encapsulante"], [r]),
                          "el botón derecho lo selecciona")
         # se rellena soltando etapas dentro de su marco: son del recinto, y el marco pasa a ser el de sus etapas
         self.assertEqual(e.parcial_en(centro_marco), r)
@@ -5964,7 +6305,8 @@ class Interfaz(unittest.TestCase):
         self.assertEqual([t for t, _ in opciones][2:], ["-", "Añadir recinto…", "Convertir en etapa ordinaria"])
         # con un recinto ya no se ofrece volver a ordinaria; si se fuerza, el núcleo lo rechaza y no cambia nada
         e.anadir_recinto(s)
-        self.assertEqual([t for t, _ in e.menu(centro(e.M, s))][2:], ["-", "Añadir recinto…", "Forzar un parcial…"])
+        self.assertEqual([t for t, _ in e.menu(centro(e.M, s))][2:],
+                         ["-", "Añadir recinto…", "Encuadrar el recinto", "Forzar un parcial…"])
         antes, n = self.estado(e), len(e.ed.undo_stack)
         e.parpadeo.parar()
         e.tipo_encapsulante(s, False)
@@ -5985,7 +6327,7 @@ class Interfaz(unittest.TestCase):
         mid = e.poner_macro(QPointF(260, 400))
         x = e.ed.macro_info(mid)
         self.assertEqual([t for t, _ in e.menu(centro(e.M, x.entry))],
-                         ["Añadir acción…", "Colocación de las acciones", "-", "Ir a la macroetapa", "Forzar un parcial…"])
+                         ["Añadir acción…", "Colocación de las acciones", "-", "Encuadrar la macroetapa", "Forzar un parcial…"])
         antes = self.estado(e)
         e.tipo_encapsulante(x.exit, True)
         self.assertEqual(self.estado(e), antes)
@@ -6043,25 +6385,28 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(e.mensaje and not e.mensaje_info and self.sin_ids(e.mensaje) and e.parpadeo.ids == {h}, e.mensaje)
         e.parpadeo.parar()
 
-    def test_SEDI177_abrir_expansion_lleva_la_vista_y_la_resalta_sin_tocar_el_modelo(self):
-        """REQ-EDT-08, REQ-JER-07: «Abrir expansión» en una macroetapa lleva la vista a la zona de su expansión y la resalta
-        (selecciona su parcial: recuadro discontinuo) sin tocar el modelo, la presentación ni el historial; «Renombrar…» cambia
-        el nombre de la macroetapa y el de su expansión en una sola operación de deshacer."""
+    def test_SEDI177_encuadrar_la_expansion_lleva_la_vista_y_la_resalta_sin_tocar_el_modelo(self):
+        """REQ-EDT-08, REQ-JER-07: «Encuadrar la expansión» en una macroetapa encaja en la vista la zona de su expansión y la
+        resalta (selecciona su parcial: recuadro discontinuo) sin tocar el modelo, la presentación ni el historial; «Renombrar…»
+        cambia el nombre de la macroetapa y el de su expansión en una sola operación de deshacer."""
         from escritorio.diagrama import cajas_parciales
         w, e = self.vacio()
         mid = e.poner_macro(QPointF(260, 220))
         x = e.ed.macro_info(mid)
         opciones = e.menu(centro(e.M, mid))
-        self.assertEqual([t for t, _ in opciones], ["Abrir expansión", "Renombrar…"])
+        self.assertEqual([t for t, _ in opciones], ["Encuadrar la expansión", "Renombrar…"])
         self.assertEqual(e.sel, [mid])
-        centrados = []
-        w.diagrama.centrar_en = lambda p: centrados.append((p.x(), p.y()))
+        encuadrados = []
+        w.diagrama.encuadrar = lambda r: encuadrados.append(r)
         antes, n, rev = self.estado(e), len(e.ed.undo_stack), e.ed.revision
-        dict(opciones)["Abrir expansión"]()
+        dict(opciones)["Encuadrar la expansión"]()
         b = cajas_parciales(e.M)[x.partial]
-        self.assertEqual(centrados, [((b["x0"] + b["x1"]) / 2, (b["y0"] + b["y1"]) / 2)])
+        (r,) = encuadrados
+        self.assertTrue(r.contains(QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"])), "toda la zona de la expansión")
         self.assertEqual((e.sel, e.nombre(x.partial), len(e.ed.undo_stack), e.ed.revision, self.estado(e)),
                          ([x.partial], "expansión de M1", n, rev, antes))
+        self.assertEqual(e.parpadeo.ids, {x.partial}, "parpadea para aparecer en primer plano")
+        e.parpadeo.parar()
         self.assertTrue(e.mensaje_info and "M1" in e.mensaje and self.sin_ids(e.mensaje))
         self.assertIn("Selección: expansión de M1", w.l_sel.text())
         self.assertTrue([it for it in self.recuadros(w) if hasattr(it, "rect") and abs(it.rect().x() - (b["x0"] - 6)) < 1],
@@ -6540,16 +6885,16 @@ class Interfaz(unittest.TestCase):
             for t in ficha.textos_visibles():  # todos los botones caben en el panel
                 bt = ficha.botones[t]
                 self.assertTrue(raiz.contains(QRectF(bt.mapTo(w.props, QPoint(0, 0)), bt.size())), (ident, t))
-        ver(mid, "macro", izq, "Macroetapa M1 · expansión M1 · entrada E1 · salida S1", ["Abrir expansión", "Renombrar…"])
+        ver(mid, "macro", izq, "Macroetapa M1 · expansión M1 · entrada E1 · salida S1", ["Encuadrar la expansión", "Renombrar…"])
         self.assertIn("Macroetapa M1", w.props.titulo.text())
-        ver(r, "marco", izq, "Recinto R de E0 · activación: ninguna", ["Ir a la encapsulante"])
+        ver(r, "marco", izq, "Recinto R de E0 · activación: ninguna", ["Encuadrar la encapsulante"])
         ver(fid, "orden", izq, "Orden: H fuerza R a {B}", ["Editar orden de forzado…", "Quitar orden de forzado"])
-        ver(e0, "etapa", der, "Encapsulante E0 · recintos: R", ["Añadir recinto…", "Forzar un parcial…"])
-        ver(x.entry, "etapa", der, "Entrada de la expansión de la macroetapa M1", ["Ir a la macroetapa", "Forzar un parcial…"])
+        ver(e0, "etapa", der, "Encapsulante E0 · recintos: R", ["Añadir recinto…", "Encuadrar el recinto", "Forzar un parcial…"])
+        ver(x.entry, "etapa", der, "Entrada de la expansión de la macroetapa M1", ["Encuadrar la macroetapa", "Forzar un parcial…"])
         ver(a, "etapa", der, "Del recinto R de E0 · sin enlace de activación",
-            ["Convertir en encapsulante", "Enlace de activación", "Ir a la encapsulante", "Forzar un parcial…"])
-        ver(x.partial, "marco", izq, "Expansión de la macroetapa M1 · entrada E1 · salida S1", ["Ir a la macroetapa"])
-        # los botones hacen lo que el menú: la casilla del enlace de activación, abrir, renombrar, ir a, editar y quitar
+            ["Convertir en encapsulante", "Enlace de activación", "Encuadrar la encapsulante", "Forzar un parcial…"])
+        ver(x.partial, "marco", izq, "Expansión de la macroetapa M1 · entrada E1 · salida S1", ["Encuadrar la macroetapa"])
+        # los botones hacen lo que el menú: la casilla del enlace de activación, encuadrar, renombrar, editar y quitar
         e.seleccionar([a])
         casilla = der.botones["Enlace de activación"]
         self.assertEqual((casilla.isCheckable(), casilla.isChecked()), (True, False))
@@ -6558,14 +6903,15 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((e.ed.model["hierarchy"]["enclosures"][0]["activationRefs"], len(e.ed.undo_stack)), ([a], n + 1))
         self.assertEqual((der.botones["Enlace de activación"].isChecked(), der.texto.text()),
                          (True, "Del recinto R de E0 · con enlace de activación"), "la casilla y el texto siguen al modelo")
-        ver(r, "marco", izq, "Recinto R de E0 · activación: A", ["Ir a la encapsulante"])
-        izq.botones["Ir a la encapsulante"].click()
+        ver(r, "marco", izq, "Recinto R de E0 · activación: A", ["Encuadrar la encapsulante"])
+        izq.botones["Encuadrar la encapsulante"].click()
         self.assertEqual(e.sel, [e0])
-        centrados = []
-        w.diagrama.centrar_en = lambda p: centrados.append(p)
+        encuadrados = []
+        w.diagrama.encuadrar = lambda caja: encuadrados.append(caja)
         e.seleccionar([mid])
-        izq.botones["Abrir expansión"].click()
-        self.assertEqual((e.sel, len(centrados)), ([x.partial], 1))
+        izq.botones["Encuadrar la expansión"].click()
+        self.assertEqual((e.sel, len(encuadrados)), ([x.partial], 1))
+        e.parpadeo.parar()
         e.seleccionar([mid])
         e.pedir_texto = lambda *args: "Lavado"
         izq.botones["Renombrar…"].click()
@@ -6586,51 +6932,60 @@ class Interfaz(unittest.TestCase):
         e2.seleccionar([])
         self.assertEqual((w2.props.pagina, w2.props.ficha_etapa.isHidden(), w2.props.ficha_izq.isHidden()), ("vacio", True, True))
 
-    def test_SEDI186_ir_a_la_macroetapa_o_a_la_encapsulante_y_doble_clic_son_solo_navegacion(self):
-        """REQ-EDT-08, REQ-JER-07: «Ir a la macroetapa» en la entrada y la salida de una expansión (y en su zona), «Ir a la
-        encapsulante» en las etapas de un recinto y en su marco, y doble clic en una macroetapa («Abrir expansión») seleccionan
-        y llevan la vista al elemento sin tocar el modelo, el historial ni la marca de cambios."""
+    def test_SEDI186_encuadrar_la_macroetapa_o_la_encapsulante_y_doble_clic_son_solo_navegacion(self):
+        """REQ-EDT-08, REQ-JER-07: «Encuadrar la macroetapa» en la entrada y la salida de una expansión (y en su zona),
+        «Encuadrar la encapsulante» en las etapas de un recinto y en su marco, y doble clic en una macroetapa («Encuadrar la
+        expansión») seleccionan, encajan en la vista y resaltan el elemento sin tocar el modelo, el historial ni la marca de
+        cambios."""
         from escritorio.diagrama import cajas_parciales
         w, e, d = self.con_recinto()
         e0, r, a = d["e0"], d["r"], d["a"]
         mid = e.poner_macro(QPointF(260, 600))
         x = e.ed.macro_info(mid)
         e.ed.dirty = False
-        centrados = []
-        w.diagrama.centrar_en = lambda p: centrados.append((p.x(), p.y()))
+        encuadrados = []
+        w.diagrama.encuadrar = lambda caja: encuadrados.append(caja)
         antes, n = self.estado(e), len(e.ed.undo_stack)
 
-        # la entrada y la salida: «Ir a la macroetapa»
+        def esta_en_la_ultima(ident):
+            """Lo último que se encuadró contiene el elemento (por su centro)."""
+            return encuadrados[-1].contains(e.centro(ident))
+
+        # la entrada y la salida: «Encuadrar la macroetapa»
         for sid in (x.entry, x.exit):
             e.seleccionar([])
             opciones = e.menu(centro(e.M, sid))
-            self.assertIn("Ir a la macroetapa", dict(opciones))
-            self.assertEqual(dict(opciones)["Ir a la macroetapa"](), True)
+            self.assertIn("Encuadrar la macroetapa", dict(opciones))
+            self.assertNotIn("Ir a la macroetapa", dict(opciones))
+            self.assertEqual(dict(opciones)["Encuadrar la macroetapa"](), True)
             self.assertEqual(e.sel, [mid])
-            self.assertEqual(centrados[-1], (centro(e.M, mid).x(), centro(e.M, mid).y()))
+            self.assertTrue(esta_en_la_ultima(mid))
+            self.assertEqual(e.parpadeo.ids, {mid})
             self.assertTrue(e.mensaje_info and self.sin_ids(e.mensaje) and "M1" in e.mensaje)
-        # una etapa del recinto, y su marco: «Ir a la encapsulante»
+        # una etapa del recinto, y su marco: «Encuadrar la encapsulante»
         e.seleccionar([])
-        dict(e.menu(centro(e.M, a)))["Ir a la encapsulante"]()
-        self.assertEqual((e.sel, centrados[-1]), ([e0], (centro(e.M, e0).x(), centro(e.M, e0).y())))
+        dict(e.menu(centro(e.M, a)))["Encuadrar la encapsulante"]()
+        self.assertEqual((e.sel, esta_en_la_ultima(e0), e.parpadeo.ids), ([e0], True, {e0}))
         c = cajas_parciales(e.M)[r]
         e.seleccionar([])
         opciones = e.menu(QPointF(c["x0"], c["y0"] + 10))
-        self.assertEqual([t for t, _ in opciones], ["Ir a la encapsulante"])
+        self.assertEqual([t for t, _ in opciones], ["Encuadrar la encapsulante"])
         self.assertEqual(e.sel, [r])
-        dict(opciones)["Ir a la encapsulante"]()
+        dict(opciones)["Encuadrar la encapsulante"]()
         self.assertEqual(e.sel, [e0])
         # la zona de la expansión (su parcial seleccionado) vuelve a la macroetapa
         e.seleccionar([x.partial])
-        self.assertEqual([t for t, _, _ in e.ficha_jerarquia(x.partial)["botones"]], ["Ir a la macroetapa"])
+        self.assertEqual([t for t, _, _ in e.ficha_jerarquia(x.partial)["botones"]], ["Encuadrar la macroetapa"])
         e.ficha_jerarquia(x.partial)["botones"][0][1]()
         self.assertEqual(e.sel, [mid])
-        # doble clic en una macroetapa: abre su expansión; en una etapa, sigue pidiendo su etiqueta
-        centrados.clear()
+        # doble clic en una macroetapa: encuadra su expansión; en una etapa, sigue pidiendo su etiqueta
+        encuadrados.clear()
         e.seleccionar([])
         self.assertTrue(e.doble(centro(e.M, mid)))
         b = cajas_parciales(e.M)[x.partial]
-        self.assertEqual((e.sel, centrados), ([x.partial], [((b["x0"] + b["x1"]) / 2, (b["y0"] + b["y1"]) / 2)]))
+        self.assertEqual((e.sel, len(encuadrados), e.parpadeo.ids), ([x.partial], 1, {x.partial}))
+        self.assertTrue(encuadrados[0].contains(QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"])))
+        e.parpadeo.parar()
         pedidas = []
         e.pedir_etiqueta = pedidas.append
         e.doble(centro(e.M, a))

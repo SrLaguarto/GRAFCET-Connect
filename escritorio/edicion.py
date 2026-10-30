@@ -52,6 +52,7 @@ COLOCACIONES = (("fila", "En fila, pegadas"), ("fila-separada", "En fila, separa
 PARPADEO_MS, PARPADEO_PASOS = 250, 6  # tres parpadeos en 1,5 s: encendido al empezar y en los pasos 2 y 4
 MARGEN_SOLAPE = 8  # un elemento no se coloca a menos de esto de la caja de otro (en unidades del dibujo)
 MSG_SOLAPE = "No se puede poner encima de otro elemento"
+MSG_SOLAPE_PARCIAL = "Un grafcet parcial nuevo no se pone encima de otro elemento ni de otro marco: suéltelo en un hueco"
 MSG_ENCIMA = "Las acciones quedan encima de otro elemento: apártelo"  # aviso (no error): no se pudo abrir hueco
 DESPLAZA_MAX = 600  # lo más que se desplaza a la derecha lo que estorba a las acciones de una etapa (P-IMP-48)
 BARRA_ALTO_MIN = 4  # alto con el que una barra cuenta como obstáculo aunque se dibuje sin grosor (la «O»)
@@ -63,9 +64,12 @@ EXP_PASO = 160  # si la columna no está libre, cuánto se corre a la derecha pa
 EXP_INTENTOS = 40
 RECINTO_DX = 140  # del centro de la encapsulante al borde izquierdo del marco de su recinto vacío
 RECINTO_PASO = 40  # hueco entre dos marcos vacíos seguidos
+ENCUADRE = 3 * H  # semilado del cuadrado que se encuadra alrededor de una etapa o macroetapa (la encapsulante, la macroetapa)
 FORMAS_FORZADO = (("explicit", "Explícita"), ("current", "La situación actual"), ("empty", "Vacía"), ("initial", "Inicial"))
 MARGEN_SUELTA = 2 * H  # lo que se agranda, a la derecha y debajo, la zona de suelta de un parcial no raíz: una etapa de ancho y de alto
 MSG_SIN_SITIO = "No hay sitio libre a la derecha para la expansión: suelte la macroetapa en un hueco más despejado"
+MSG_FORZADO_SIN_ETAPA = "Una orden de forzado va asociada a una etapa: suéltela sobre una etapa"
+MSG_EQUIDISTANCIA = "No se puede equidistanciar: algo quedaría encima de otro elemento; apártelo antes"
 
 
 class Parpadeo(QObject):
@@ -216,8 +220,12 @@ class Edicion(QObject):
     # -- lo que se dibuja --------------------------------------------------------------------------
     def layout(self) -> dict[str, tuple[float, float]]:
         lay = layout_from_presentation(self.ed.presentation)
-        if self.arrastre and self.arrastre.get("tipo") in (None, "marco"):  # una etapa o macroetapa, o el marco de un recinto vacío
-            lay[self.arrastre["id"]] = (self.arrastre["x"], self.arrastre["y"])
+        a = self.arrastre
+        if a and a.get("tipo") in (None, "marco"):  # una etapa o macroetapa, o el marco de un recinto vacío
+            lay[a["id"]] = (a["x"], a["y"])
+        elif a and a.get("tipo") == "grupo":  # varios seleccionados que se mueven juntos: cada uno, con el mismo desplazamiento
+            dx, dy = a["x"] - a["x0"], a["y"] - a["y0"]
+            lay.update({i: (x + dx, y + dy) for i, (x, y) in a["inicio"].items() if a["tipos"][i] in ("nodo", "marco")})
         return lay
 
     def _barras(self) -> list[dict[str, Any]]:
@@ -229,6 +237,9 @@ class Edicion(QObject):
                 b["x"], b["ancho"] = str(a["x"]), str(a["ancho"])
             elif a and a["id"] == b["id"] and a.get("tipo") == "barra":
                 b["x"], b["y"] = str(a["x"]), str(a["y"])
+            elif a and a.get("tipo") == "grupo" and a["tipos"].get(b["id"]) == "barra":
+                x0, y0 = a["inicio"][b["id"]]
+                b["x"], b["y"] = str(x0 + a["x"] - a["x0"]), str(y0 + a["y"] - a["y0"])
         return out
 
     def reconstruir(self) -> None:
@@ -255,10 +266,21 @@ class Edicion(QObject):
         """Un recinto sin etapas (el que acaba de crear «Añadir recinto…») no lo dibuja Vista, que solo lleva los parciales con
         etapas: aquí se anota en `M["partials"]` con `vacio`, para que el dibujo le ponga un marco vacío que se vea, se
         seleccione y reciba lo que se suelte dentro. Su esquina superior izquierda es la que se guardó en la presentación al
-        crearlo (la posición del ID del parcial); sin ella, queda a la derecha de su encapsulante. Solo lo hace el editor: el
-        banco y el simulador no dibujan un recinto sin etapas."""
+        crearlo (la posición del ID del parcial); sin ella, queda a la derecha de su encapsulante. Lo mismo para un grafcet
+        parcial suelto sin etapas (el que crea la ficha «Grafcet parcial»), que no es recinto ni expansión: su marco es el
+        redondeado de los parciales, en la posición guardada (sin ella, no se dibuja). Solo lo hace el editor: el banco y el
+        simulador no dibujan un parcial sin etapas."""
         m, pos, lay = self.ed.model, posiciones(self.M), self.layout()
         puestos = {p["id"] for p in self.M.get("partials", [])}
+        jerarquicos = ({e["partialRef"] for e in m["hierarchy"]["enclosures"]}
+                       | {x["partialRef"] for x in m["hierarchy"]["expansions"]})
+        for parte in m["partials"]:  # un parcial suelto sin etapas, ni transiciones, ni recinto o expansión: su marco redondeado
+            pid = parte["id"]
+            if pid != self.raiz and pid not in puestos and pid not in jerarquicos and pid in lay \
+                    and not parte["stepRefs"] and not parte["transitionRefs"]:
+                x, y = lay[pid]
+                self.M.setdefault("partials", []).append({"id": pid, "label": parte["label"], "owner": parte.get("ownerRef"),
+                                                          "kind": "partial", "vacio": True, "x": x, "y": y})
         huecos: dict[str, int] = {}
         for e in m["hierarchy"]["enclosures"]:
             pid, dueno = e["partialRef"], e["ownerStepRef"]
@@ -332,7 +354,10 @@ class Edicion(QObject):
 
     # -- selección ---------------------------------------------------------------------------------
     def seleccionar(self, ids: list[str]) -> None:
+        """Selecciona exactamente estos elementos (el panel de diagnósticos, «Ir a…»): ya no hay una acción señalada, así que
+        Supr borra lo seleccionado y no una acción de antes."""
         self.sel = list(ids)
+        self.accion = None
         self.ver_accion = False
         self.cambiado.emit()
 
@@ -403,16 +428,23 @@ class Edicion(QObject):
         return ajustar(p.x() - SX), ajustar(p.y())
 
     def colocar(self, tipo: str, p: QPointF) -> None:
-        """Un elemento de la paleta soltado en el dibujo: «etapa», «encapsulante», «macroetapa», «transicion»,
-        «simultaneidad» o «accion:<tipo>» (continua, condicionada, activacion, desactivacion, evento; «accion» a secas es una
-        continua). Si su caja quedaría encima de la de otro elemento (con un margen pequeño), no se coloca; una acción que
-        toca a otra se pega a ella. Una etapa, una encapsulante, una macroetapa o una transición pertenece al parcial en cuyo
-        marco se suelta (`parcial_en`): una expansión, un recinto; fuera de todo marco, al raíz."""
+        """Un elemento de la paleta soltado en el dibujo: «etapa», «encapsulante», «macroetapa», «parcial», «transicion»,
+        «simultaneidad», «forzado» o «accion:<tipo>» (continua, condicionada, activacion, desactivacion, evento; «accion» a secas
+        es una continua). Si su caja quedaría encima de la de otro elemento (con un margen pequeño), no se coloca (un grafcet
+        parcial tampoco, encima de otro marco); una acción que toca a otra se pega a ella. Una etapa, una encapsulante, una
+        macroetapa o una transición pertenece al parcial en cuyo marco se suelta (`parcial_en`): una expansión, un recinto; fuera
+        de todo marco, al raíz. Un «parcial» crea un grafcet parcial nuevo y vacío, con su marco (`poner_parcial`). Una orden de
+        forzado no ocupa sitio propio: se asocia a la etapa sobre la que se suelta (`poner_orden_ficha`)."""
+        if tipo == "forzado":
+            self.poner_orden_ficha(p)
+            return
         if self._huella_ficha(tipo, p):
-            self.informar(MSG_SOLAPE)
+            self.informar(MSG_SOLAPE_PARCIAL if tipo == "parcial" else MSG_SOLAPE)
             self.cambiado.emit()
             return
-        if tipo == "etapa":
+        if tipo == "parcial":
+            self.poner_parcial(p)
+        elif tipo == "etapa":
             self.poner_etapa(p)
         elif tipo == "encapsulante":
             self.poner_etapa(p, tipo="enclosing")
@@ -486,13 +518,22 @@ class Edicion(QObject):
             return True
         caja = self.accion_en(p) if ident is None else None
         if caja:
-            if caja.get("suelta"):  # una acción suelta se selecciona y se mueve, con las que lleva pegadas
+            if caja.get("suelta") and not amplia and caja["id"] in self.sel and set(self.sel) - set(self._ids_grupo(caja["id"])):
+                # una de las seleccionadas junto a otras cosas: no se deshace la selección, se mueven todas juntas
+                self.accion = None
+                ids = self._ids_grupo(caja["id"])
+                self.arrastre = self._arrastre_grupo(ids[0], p, (ids, caja["id"], False))
+            elif caja.get("suelta"):  # una acción suelta se selecciona y se mueve, con las que lleva pegadas
                 ids = self._ids_grupo(caja["id"])
                 self.sel, self.accion = ids, caja["id"]
                 cab = self._borrador(ids[0])
                 hx, hy = float(Fraction(str(cab["x"]))), float(Fraction(str(cab["y"])))
                 self.arrastre = {"id": ids[0], "ids": ids, "tipo": "borrador", "dx": p.x() - (hx + SX), "dy": p.y() - hy,
                                  "x": hx, "y": hy, "movido": False}
+            elif not amplia and len(self.sel) > 1 and caja["etapa"] in self.sel:
+                # la acción de una etapa de una selección múltiple: se mueven todas juntas, con la etapa
+                self.accion = None
+                self.arrastre = self._arrastre_grupo(caja["etapa"], p, ([caja["etapa"]], caja["id"], True))
             else:  # clic en una acción: se selecciona su etapa y se señala la acción (sus opciones, en el panel inferior)
                 self.sel, self.accion, self.ver_accion = [caja["etapa"]], caja["id"], True
             self.cambiado.emit()
@@ -545,6 +586,13 @@ class Edicion(QObject):
             self.sel = [i for i in self.sel if i != ident] if ident in self.sel else self.sel + [ident]
             self.cambiado.emit()
             return True
+        if ident and not amplia and ident in self.sel and len(self.sel) > 1:
+            # uno de varios seleccionados: no se deshace la selección; arrastrar los mueve a todos juntos (un clic sin mover
+            # lo deja en solo ese, al soltar)
+            self.arrastre = self._arrastre_grupo(ident, p, ([ident], None, False))
+            if self.arrastre is not None:
+                self.cambiado.emit()
+                return True
         previa = list(self.sel) if amplia else []
         self.sel = [ident] if ident else previa
         if ident is None:  # un hueco: arrastrar dibuja el rectángulo de selección (el lazo)
@@ -590,9 +638,10 @@ class Edicion(QObject):
                 out.append(c["id"])
         return out
 
-    def _iman(self, ident: str, x: float) -> float:
+    def _iman(self, ident: str, x: float, moviendo: set[str] | frozenset[str] = frozenset()) -> float:
         """Al mover una etapa o una transición cerca de la vertical de un elemento enlazado con ella (a IMAN o menos), se
-        alinea con él: el enlace queda recto, sin la S de un desplazamiento de un par de puntos de rejilla."""
+        alinea con él: el enlace queda recto, sin la S de un desplazamiento de un par de puntos de rejilla. Con varios
+        elementos que se mueven juntos (`moviendo`), solo cuentan los enlazados que se quedan donde están."""
         pos = posiciones(self.M)
         enlazados = set()
         for t in self.M["transitions"]:
@@ -601,7 +650,7 @@ class Edicion(QObject):
                 enlazados |= pasos
             elif ident in pasos:
                 enlazados.add(t["id"])
-        xs = [pos[o][0] - SX for o in enlazados if o in pos]
+        xs = [pos[o][0] - SX for o in enlazados if o in pos and o not in moviendo]
         cerca = min(xs, key=lambda v: abs(v - x), default=None)
         return cerca if cerca is not None and 0 < abs(cerca - x) <= IMAN else x
 
@@ -651,6 +700,18 @@ class Edicion(QObject):
                 a.update(x=x0, ancho=x1 - x0, movido=True)
                 self.reconstruir()
                 self.redibujar.emit()
+            return True
+        if a and a.get("tipo") == "grupo":  # varios seleccionados que se mueven juntos
+            if not a["movido"] and (p - a["start"]).manhattanLength() < 4:
+                return True  # (sin mover todavía: aún puede ser un clic)
+            x, y = self._modelo(QPointF(p.x() - a["dx"], p.y() - a["dy"]))
+            x = self._iman(a["id"], x, set(a["ids"]))
+            if (x, y) != (a["x"], a["y"]):
+                a.update(x=x, y=y, movido=True)
+                self.reconstruir()
+                self.redibujar.emit()
+            if a["movido"]:
+                self._marcar_solape(a)
             return True
         if a:
             x, y = self._modelo(QPointF(p.x() - a["dx"], p.y() - a["dy"]))
@@ -711,6 +772,8 @@ class Edicion(QObject):
             return True
         if self.arrastre:
             a, self.arrastre = self.arrastre, None
+            if a.get("tipo") == "grupo":
+                return self._soltar_grupo(a)
             if a.get("tipo") == "borrador" and self.diagrama is not None:
                 self.diagrama.marcar_iman(None)
             if a["movido"] and a.get("tipo") == "borrador":
@@ -980,6 +1043,9 @@ class Edicion(QObject):
             return [QRectF(*c["rect"]) for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["id"] in a["ids"]]
         if a.get("tipo") == "marco":  # el marco vacío, con su nombre debajo
             return [QRectF(a["x"] + SX, a["y"], VACIO_W, VACIO_H + 20)]
+        if a.get("tipo") == "grupo":  # todo lo que se mueve: los elementos con sus acciones, las barras, las sueltas y los marcos
+            moviendo = set(a["ids"])
+            return [r for i, r, etapa in self._elementos() if i in moviendo or etapa in moviendo] + self._marcos_grupo(a)
         mio = [(i, r) for i, r, _ in self._elementos() if i == a["id"]]
         acciones = [QRectF(*c["rect"]) for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["etapa"] == a["id"]]
         return [r for _, r in mio] + acciones
@@ -987,17 +1053,95 @@ class Edicion(QObject):
     def _malas_arrastre(self, a: dict[str, Any]) -> list[QRectF]:
         """Las cajas de lo que se arrastra que quedan encima de otro elemento (el marco de un recinto vacío, además, no se
         pone encima del marco de otro parcial)."""
-        propios = set(a["ids"]) if a.get("tipo") == "borrador" else {a["id"]}
+        propios = set(a["ids"]) if a.get("tipo") in ("borrador", "grupo") else {a["id"]}
         huella = self._huella_arrastre(a)
         malas = self._solapa(huella, propios)
         if a.get("tipo") == "marco" and not malas:
             otros = [QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"])
                      for pid, b in cajas_parciales(self.M).items() if pid != a["id"]]
             malas = [h for h in huella if any(self._toca(h, o) for o in otros)]
+        if a.get("tipo") == "grupo" and not malas:  # los marcos vacíos que se mueven tampoco van encima del marco de otro parcial
+            otros = [QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"])
+                     for pid, b in cajas_parciales(self.M).items() if pid not in propios]
+            malas = [h for h in self._marcos_grupo(a) if any(self._toca(h, o) for o in otros)]
         return malas
 
     def _hay_solape(self, a: dict[str, Any]) -> bool:
         return bool(self._malas_arrastre(a))
+
+    # -- mover varios elementos seleccionados a la vez ----------------------------------------------------------------
+    def _arrastre_grupo(self, ident: str, p: QPointF, pendiente: tuple[list[str], str | None, bool]) -> dict[str, Any] | None:
+        """El arrastre de lo seleccionado que se puede mover, agarrado por `ident` (uno de ellos): etapas, macroetapas,
+        transiciones, barras, marcos de recintos vacíos y acciones sueltas (cada grupo suelto entero). Las acciones unidas a
+        una etapa y las órdenes de forzado van con su etapa, y el marco de un parcial con etapas es el de ellas: no se
+        mueven por separado. `pendiente` es la selección en que queda (selección, acción señalada, si se muestra) si se suelta
+        sin haberse movido (un clic). None si `ident` no es de lo que se mueve."""
+        pos = posiciones(self.M)
+        inicio: dict[str, tuple[float, float]] = {}
+        tipos: dict[str, str] = {}
+        for i in self.sel:
+            if i in pos:
+                inicio[i], tipos[i] = (pos[i][0] - SX, pos[i][1]), "nodo"
+            elif (b := self._barra(i)) is not None:
+                inicio[i], tipos[i] = (b["x"], b["y"]), "barra"
+            elif (q := next((q for q in self.M["partials"] if q["id"] == i and q.get("vacio")), None)) is not None:
+                inicio[i], tipos[i] = (q["x"], q["y"]), "marco"
+            elif self._es_borrador(i) and not self._borrador(i).get("etapa"):
+                grupo = self._ids_grupo(i)
+                for j in grupo:
+                    inicio[j], tipos[j] = self._pos_borrador(self._borrador(grupo[0])), "suelta"
+        if ident not in inicio:
+            return None
+        x0, y0 = inicio[ident]
+        return {"id": ident, "tipo": "grupo", "ids": list(inicio), "inicio": inicio, "tipos": tipos, "start": p,
+                "dx": p.x() - (x0 + SX), "dy": p.y() - y0, "x": x0, "y": y0, "x0": x0, "y0": y0, "movido": False,
+                "pendiente": pendiente}
+
+    def _marcos_grupo(self, a: dict[str, Any]) -> list[QRectF]:
+        """Dónde quedan, en el dibujo, los marcos vacíos que se mueven con el grupo (con su nombre debajo)."""
+        dx, dy = a["x"] - a["x0"], a["y"] - a["y0"]
+        return [QRectF(x + dx + SX, y + dy, VACIO_W, VACIO_H + 20) for i, (x, y) in a["inicio"].items() if a["tipos"][i] == "marco"]
+
+    @staticmethod
+    def _sumar(valor: Any, d: float) -> Any:
+        """Un valor de coordenada del estilo de un enlace (un texto) con `d` más; sin cambio si no es un número."""
+        try:
+            v = float(valor) + d
+        except (TypeError, ValueError):
+            return valor
+        return str(int(v)) if v == int(v) else str(v)
+
+    def _rutas_con_grupo(self, ids: set[str], dx: float, dy: float) -> dict[str, dict[str, Any]]:
+        """El estilo nuevo de los enlaces con sus dos extremos en `ids` (lo que se mueve): su recorrido manual, en coordenadas
+        absolutas (laneX, exitY, entryY, middleY), se desplaza con ellos. Los de un solo extremo movido se quedan como están,
+        igual que al mover un elemento con `Editor.move`."""
+        out: dict[str, dict[str, Any]] = {}
+        for lid, estilo in self.ed.link_styles().items():
+            extremos = lid.split("|")[:2]
+            ruta = estilo.get("route") if isinstance(estilo, dict) else None
+            if isinstance(ruta, dict) and len(extremos) == 2 and all(e in ids for e in extremos):
+                nuevo = copy.deepcopy(estilo)
+                for clave, d in (("laneX", dx), ("exitY", dy), ("entryY", dy), ("middleY", dy)):
+                    if clave in nuevo["route"]:
+                        nuevo["route"][clave] = self._sumar(nuevo["route"][clave], d)
+                out[lid] = nuevo
+        return out
+
+    def _soltar_grupo(self, a: dict[str, Any]) -> bool:
+        """Termina el arrastre de varios seleccionados: sin haberse movido (un clic), la selección se queda en el elemento
+        pulsado; encima de algo que no se mueve, vuelven a su sitio; si no, se mueven todos con una sola operación de
+        deshacer, con las rutas de los enlaces entre ellos."""
+        self._marcar_solape(None)
+        if not a["movido"]:
+            self.sel, self.accion, self.ver_accion = a["pendiente"]
+        elif (a["x"], a["y"]) != (a["x0"], a["y0"]):
+            if self._hay_solape(a):
+                return self._devolver()
+            dx, dy = a["x"] - a["x0"], a["y"] - a["y0"]
+            self.ed.move_many({i: (x + dx, y + dy) for i, (x, y) in a["inicio"].items()},
+                              self._rutas_con_grupo(set(a["ids"]), dx, dy))
+        self.cambia()
+        return True
 
     def _marcar_solape(self, a: dict[str, Any] | None) -> None:
         """Mientras se arrastra `a`: en rojo (y con el cursor de prohibido) lo que no se puede colocar donde está; sin
@@ -1024,6 +1168,12 @@ class Edicion(QObject):
             caja = QRectF(x + SX - TB, y - 2, 2 * TB, 4)
         elif tipo == "simultaneidad":
             caja = QRectF(ajustar(x - 60) + SX, y, 120, 4)
+        elif tipo == "parcial":  # su marco vacío con el nombre debajo: ni encima de un elemento ni (con un margen) de otro marco
+            x0, y0 = self._esquina_parcial(p)
+            caja = QRectF(x0 + SX, y0, VACIO_W, VACIO_H + 20)
+            m = MARGEN_SOLAPE
+            otros = [QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"]) for b in cajas_parciales(self.M).values()]
+            return self._solapa([caja], set()) or ([caja] if any(self._toca(caja.adjusted(-m, -m, m, m), o) for o in otros) else [])
         elif tipo == "accion" or tipo.startswith("accion:"):
             if self._buscar_iman([], x, y, ACT_MIN):
                 return []
@@ -1142,6 +1292,10 @@ class Edicion(QObject):
         if caja:  # doble clic en una acción: se edita
             self.pedir_accion(caja["etapa"] or None, caja["id"])
             return True
+        orden = self.orden_en(p)
+        if orden:  # doble clic en una orden de forzado: se edita (el mismo diálogo que «Editar orden de forzado…»)
+            self.editar_orden(orden["id"])
+            return True
         ident = elemento_en(self.M, p)
         if not ident:
             return False
@@ -1149,8 +1303,10 @@ class Edicion(QObject):
             self.pedir_condicion(ident)
         elif any(s["id"] == ident for s in self.M["steps"]):
             self.pedir_etiqueta(ident)
-        elif any(x["id"] == ident for x in self.M.get("macros", [])):  # doble clic en una macroetapa: abre su expansión
-            self.abrir_expansion(ident)
+        elif any(x["id"] == ident for x in self.M.get("macros", [])):  # doble clic en una macroetapa: encuadra su expansión
+            self.encuadrar_expansion(ident)
+        elif ident in cajas_parciales(self.M) and self._es_parcial_suelto(ident):  # en el marco de un parcial suelto: lo renombra
+            self.renombrar_parcial(ident)
         return True
 
     # -- acciones (P-IMP-38, P-IMP-41, P-IMP-43) ---------------------------------------------------------------
@@ -1283,6 +1439,8 @@ class Edicion(QObject):
             nombres = {}
         a = self.arrastre
         movidos = set(a["ids"]) if a and a.get("tipo") == "borrador" else set()
+        en_grupo = {i: (x + a["x"] - a["x0"], y + a["y"] - a["y0"]) for i, (x, y) in a["inicio"].items()
+                    if a["tipos"][i] == "suelta"} if a and a.get("tipo") == "grupo" else {}
         ordenados = self._borradores_ordenados()
         primeras: dict[str, dict[str, Any]] = {}
         for b in ordenados:
@@ -1296,6 +1454,8 @@ class Edicion(QObject):
             x, y = self._pos_borrador(primera)
             if b["id"] in movidos:
                 x, y = a["x"], a["y"]
+            elif b["id"] in en_grupo:
+                x, y = en_grupo[b["id"]]
             var = d["variable"] or "?"
             item: dict[str, Any] = {"id": b["id"], "x": x, "y": y, "etapa": b.get("etapa"), "borrador": True,
                                     "grupo": b.get("grupo"), "cabeza": suelta and primera["id"] == b["id"],
@@ -1356,13 +1516,23 @@ class Edicion(QObject):
         se pegaría al soltarla; si quedaría encima de otro elemento se ve en rojo y no se puede soltar (devuelve False)."""
         if self.diagrama is None:
             return True
+        if ficha == "forzado":  # una orden de forzado: se resalta la etapa a la que se asociaría; en otro sitio se avisa al soltar
+            sid = self._etapa_para_orden(p)
+            if hasattr(self.diagrama, "marcar_destino"):
+                x, y = posiciones(self.M)[sid] if sid else (0, 0)
+                self.diagrama.marcar_destino({"x0": x - H, "y0": y - H, "x1": x + H, "y1": y + H} if sid else None)
+            self.diagrama.marcar_iman(None)
+            if hasattr(self.diagrama, "marcar_prohibido"):
+                self.diagrama.marcar_prohibido(None)
+            return True
         iman = None
         if ficha == "accion" or ficha.startswith("accion:"):
             x, y = self._modelo(p)
             iman = self._buscar_iman([], x, y, ACT_MIN)
         malas = self._huella_ficha(ficha, p)
-        if malas and self.mensaje != MSG_SOLAPE:
-            self.informar(MSG_SOLAPE)
+        aviso = MSG_SOLAPE_PARCIAL if ficha == "parcial" else MSG_SOLAPE
+        if malas and self.mensaje != aviso:
+            self.informar(aviso)
             self.cambiado.emit()  # (vuelve a dibujar: las marcas se ponen después)
         if hasattr(self.diagrama, "marcar_destino"):  # lo que tiene parcial se recuadra en el marco donde caería (no en el raíz)
             cae = ficha in ("etapa", "encapsulante", "macroetapa", "transicion") and not malas
@@ -1542,10 +1712,14 @@ class Edicion(QObject):
         «Quitar»; en el enlace de una etapa con sus acciones, «Eliminar el enlace». Jerarquía (P-IMP-23..27; las mismas
         opciones son los botones del panel de opciones, `acciones_jerarquia`): una etapa ordinaria ofrece «Convertir en
         encapsulante»; una encapsulante, «Añadir recinto…» y, si no tiene recintos, «Convertir en etapa ordinaria»; una
-        etapa de un recinto, «Enlace de activación» (casilla marcada o no) e «Ir a la encapsulante»; la entrada y la salida de
-        una expansión, «Ir a la macroetapa»; cualquier etapa, «Forzar un parcial…» si hay otro parcial; una macroetapa,
-        «Abrir expansión» y «Renombrar…»; el marco de un recinto, «Ir a la encapsulante»; una orden de forzado, «Editar orden
-        de forzado…» y «Quitar orden de forzado». Ninguna de estas opciones tiene atajo de teclado, como tampoco «Añadir
+        etapa de un recinto, «Enlace de activación» (casilla marcada o no) y «Encuadrar la encapsulante»; la entrada y la salida
+        de una expansión, «Encuadrar la macroetapa»; cualquier etapa, «Forzar un parcial…» si hay otro parcial; una encapsulante
+        con recintos, «Encuadrar el recinto» (o «los recintos»); una macroetapa, «Encuadrar la expansión» y «Renombrar…»; el
+        marco de un recinto, «Encuadrar la encapsulante»; el de un grafcet parcial suelto, «Renombrar…»; una orden de forzado,
+        «Editar orden de forzado…» y «Quitar orden de forzado». Una etapa, una macroetapa, una transición, un enlace o una barra
+        de una cadena de elementos enlazados ofrecen, al final, «Equidistanciar alturas de la cadena» (y, si están entre varios
+        seleccionados, «Equidistanciar la selección»); el hueco, «Nuevo grafcet parcial aquí», «Equidistanciar todo el lienzo» (y
+        «…la selección» si hay varios seleccionados). Ninguna de estas opciones tiene atajo de teclado, como tampoco «Añadir
         acción…» (la paleta y el botón derecho son del ratón)."""
         self.menu_marcadas, self.menu_desmarcadas = set(), set()
         caja = self.accion_en(p)
@@ -1563,19 +1737,56 @@ class Edicion(QObject):
                 self.sel, self.accion = [union], None
                 self.cambiado.emit()
                 return [("Eliminar el enlace", lambda: self.eliminar_enlace_acciones(union.split(":", 1)[1]))]
-        if ident is not None and (ident in {x["id"] for x in self.M.get("macros", [])} or ident in cajas_parciales(self.M)):
-            self.sel, self.accion = [ident], None  # una macroetapa o el marco de un parcial: se selecciona
+            return self._menu_lienzo(p)
+        en_varios = ident in self.sel and len(self.sel) > 1  # el botón derecho en uno de varios seleccionados no los deshace
+        if ident in {x["id"] for x in self.M.get("macros", [])} or ident in cajas_parciales(self.M):
+            if not (en_varios and ident not in cajas_parciales(self.M)):
+                self.sel, self.accion = [ident], None  # una macroetapa o el marco de un parcial: se selecciona
             self.cambiado.emit()
-            return self._menu_desde(ident)
-        if ident is None or not any(s["id"] == ident for s in self.M["steps"]):
-            return []
-        self.sel, self.accion = [ident], None
+            equi = [] if ident in cajas_parciales(self.M) else self._menu_equidistancia(ident, en_varios)
+            return self._menu_desde(ident) + ([("-", None)] + equi if equi else [])
+        equi = self._menu_equidistancia(ident, en_varios)
+        if not any(s["id"] == ident for s in self.M["steps"]):  # una transición, un enlace, una barra
+            if equi:
+                if not en_varios:
+                    self.sel, self.accion = [ident], None
+                self.cambiado.emit()
+            return equi
+        if not en_varios:
+            self.sel, self.accion = [ident], None
         self.cambiado.emit()
         self.menu_marcadas = {dict(COLOCACIONES)[self.colocacion(ident)]}
         opciones = self._menu_desde(ident)
         return [("Añadir acción…", lambda: self.anadir_accion(ident)),
                 ("Colocación de las acciones", [(texto, lambda v=v: self.colocar_acciones(ident, v))
-                                                for v, texto in COLOCACIONES])] + ([("-", None)] + opciones if opciones else [])
+                                                for v, texto in COLOCACIONES])] \
+            + ([("-", None)] + opciones if opciones else []) + ([("-", None)] + equi if equi else [])
+
+    def _menu_equidistancia(self, ident: str, en_varios: bool = False) -> list[tuple[str, Any]]:
+        """«Equidistanciar alturas de la cadena» si `ident` está en una (etapas, macroetapas, transiciones y barras enlazados)
+        y «Equidistanciar la selección» si es uno de varios seleccionados cuyas cadenas hay."""
+        pos = self._posiciones_modelo()
+        out: list[tuple[str, Any]] = []
+        if self.ed.chains([ident], pos):
+            out.append(("Equidistanciar alturas de la cadena", lambda: self.equidistanciar([ident])))
+        if en_varios and self.ed.chains(self.sel, pos):
+            seleccion = list(self.sel)
+            out.append(("Equidistanciar la selección", lambda: self.equidistanciar(seleccion)))
+        return out
+
+    def _menu_lienzo(self, p: QPointF) -> list[tuple[str, Any]]:
+        """Lo que ofrece el botón derecho en un hueco: «Nuevo grafcet parcial aquí» (un grafcet parcial vacío centrado en el
+        punto, como la ficha de la paleta; si no cabe ahí, avisa), «Equidistanciar la selección» (con varios elementos
+        seleccionados) y «Equidistanciar todo el lienzo» (todas las cadenas de todos los parciales), si hay cadenas."""
+        pos = self._posiciones_modelo()
+        out: list[tuple[str, Any]] = [("Nuevo grafcet parcial aquí", lambda: self.poner_parcial(p))]
+        equi: list[tuple[str, Any]] = []
+        if len(self.sel) > 1 and self.ed.chains(self.sel, pos):
+            seleccion = list(self.sel)
+            equi.append(("Equidistanciar la selección", lambda: self.equidistanciar(seleccion)))
+        if self.ed.chains(None, pos):
+            equi.append(("Equidistanciar todo el lienzo", lambda: self.equidistanciar(None)))
+        return out + ([("-", None)] + equi if equi else [])
 
     def _menu_desde(self, ident: str) -> list[tuple[str, Any]]:
         """Las acciones de jerarquía de un elemento como opciones de menú (las casillas, con su marca en `menu_marcadas` o
@@ -1677,8 +1888,10 @@ class Edicion(QObject):
         return out + [dict(self._datos_borrador(b), id=b["id"], borrador=True)
                       for b in self._borradores_ordenados() if b.get("etapa") == sid]
 
-    def _atomico(self, etiqueta: str, fn: Callable[[], Any]) -> str | None:
-        """Varias operaciones como una sola de deshacer; si una falla, no queda ninguna y se devuelve el motivo."""
+    def _atomico(self, etiqueta: str, fn: Callable[[], Any], hueco: bool = True) -> str | None:
+        """Varias operaciones como una sola de deshacer; si una falla, no queda ninguna y se devuelve el motivo. Con `hueco`
+        (lo normal), lo que ensanchó o añadió acciones aparta lo que estorba; sin él, la operación ya cuida de dónde pone
+        las cosas."""
         n, rehacer = len(self.ed.undo_stack), list(self.ed.redo_stack)
         self._encima = []
         try:
@@ -1686,7 +1899,7 @@ class Edicion(QObject):
                 self.reconstruir()
                 antes = self._firmas()
                 fn()
-                self._encima = self._asegurar_hueco(antes)  # lo que ensanchó o añadió acciones aparta lo que estorba
+                self._encima = self._asegurar_hueco(antes) if hueco else []  # lo que ensanchó o añadió acciones aparta lo que estorba
         except DiagnosticError as exc:
             self._encima = []
             while len(self.ed.undo_stack) > n:
@@ -2285,9 +2498,68 @@ class Edicion(QObject):
         self.sel, self.accion = [ids.macro], None
         self.informar(f"Macroetapa {etiqueta} con su expansión a la derecha: de la entrada {self.nombres.get(ids.entry, '?')} "
                       f"a la salida {self.nombres.get(ids.exit, '?')}. Suelte etapas y transiciones dentro de ella para "
-                      "rellenarla (botón derecho en la macroetapa, «Abrir expansión», para ir a ella).")
+                      "rellenarla (botón derecho en la macroetapa, «Encuadrar la expansión», para verla).")
         self.cambiado.emit()
         return ids.macro
+
+    def _esquina_parcial(self, p: QPointF) -> tuple[int, int]:
+        """La esquina superior izquierda (x, y del modelo, en la rejilla) del marco de un grafcet parcial nuevo soltado en p: el
+        marco queda centrado en el punto, como una etapa."""
+        return ajustar(p.x() - SX - VACIO_W / 2), ajustar(p.y() - VACIO_H / 2)
+
+    def poner_parcial(self, p: QPointF) -> str | None:
+        """La ficha «Grafcet parcial» soltada en un hueco del dibujo (o «Nuevo grafcet parcial aquí» del botón derecho): un
+        grafcet parcial nuevo y vacío (`add_partial`, fuera de toda jerarquía), con el primer nombre libre G1, G2… y su marco vacío
+        centrado en el punto (su posición se guarda en la presentación, como la de un recinto vacío); se rellena soltando etapas
+        y transiciones dentro de él. Encima de un elemento o de otro marco no crea nada y avisa. Una sola operación de deshacer.
+        Devuelve el ID del parcial, o None."""
+        if self._huella_ficha("parcial", p):
+            self.informar(MSG_SOLAPE_PARCIAL)
+            self.cambiado.emit()
+            return None
+        x, y = self._esquina_parcial(p)
+        m = self.ed.model
+        nombre = self._etiqueta_libre("G", {label_key(a["label"]) for a in m["hierarchy"]["macros"] + m["partials"]})
+        hecho: list[str] = []
+
+        def hacer() -> None:
+            pid = self.ed.add_partial(nombre)
+            self.ed.move(pid, x, y)
+            hecho.append(pid)
+        motivo = self._atomico("colocar grafcet parcial", hacer, hueco=False)
+        if motivo:
+            self.rechazar(motivo)
+            self.cambiado.emit()
+            return None
+        self.sel, self.accion = [hecho[0]], None
+        self.informar(f"Grafcet parcial {nombre}: suelte etapas y transiciones dentro de su marco para rellenarlo; una orden de "
+                      "forzado de otra etapa puede forzarlo («Forzado» en la paleta).")
+        self.cambiado.emit()
+        return hecho[0]
+
+    def renombrar_parcial(self, pid: str) -> str | None:
+        """«Renombrar…» en un grafcet parcial suelto (también el doble clic en su marco): pide el nombre, con el actual de
+        propuesta, y lo cambia (`rename`: único entre los parciales; el texto de las fórmulas que lo nombran se actualiza).
+        Una sola operación de deshacer. Devuelve el nombre nuevo, o None (cancelado, igual o rechazado)."""
+        parte = next((q for q in self.ed.model["partials"] if q["id"] == pid), None)
+        if parte is None or pid == self.raiz:
+            return None
+        actual = parte["label"]
+        nuevo = self.pedir_texto("Renombrar el grafcet parcial", f"Nuevo nombre del grafcet parcial {actual}:", actual)
+        if nuevo is None or nuevo.strip() == actual:
+            return None
+        nuevo = nuevo.strip()
+        motivo = self._atomico("renombrar el grafcet parcial", lambda: self.ed.rename(pid, nuevo), hueco=False)
+        if motivo:
+            self.rechazar(motivo, pid)
+            self.cambiado.emit()
+            return None
+        self.cambiado.emit()
+        return nuevo
+
+    def _es_parcial_suelto(self, ident: str) -> bool:
+        """Si el ID es el de un parcial que no es el raíz, ni un recinto, ni una expansión: un grafcet parcial suelto."""
+        return ident != self.raiz and self.ed.partial_roles().get(ident, {}).get("kind") == "root"
 
     def tipo_encapsulante(self, sid: str, encapsulante: bool = True) -> None:
         """«Convertir en encapsulante» (esquinas cortadas en el dibujo) o «Convertir en etapa ordinaria» (si no tiene
@@ -2355,24 +2627,66 @@ class Edicion(QObject):
             self.rechazar(motivo, sid)
         self.cambiado.emit()
 
-    def abrir_expansion(self, mid: str) -> bool:
-        """«Abrir expansión» (REQ-EDT-08, REQ-JER-07): lleva la vista a la expansión de la macroetapa y la resalta
-        (selecciona su parcial: un recuadro discontinuo en su zona). Es solo navegación: no toca el modelo ni el historial.
-        Devuelve si la macroetapa tiene expansión."""
+    # -- encuadrar: llevar a la vista lo que está al otro lado de una dependencia (REQ-EDT-08, REQ-JER-07) ----------------
+    def _caja_encuadre(self, ident: str) -> QRectF | None:
+        """La caja del dibujo que se encuadra para mostrar un elemento: el marco de un parcial (un recinto, un grafcet parcial o
+        la zona de una expansión, con su nombre debajo) o un cuadrado de ENCUADRE de semilado alrededor de una etapa o una
+        macroetapa; None si no está dibujado."""
+        b = cajas_parciales(self.M).get(ident)
+        if b is not None:
+            return QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"]).adjusted(-10, -10, 10, 18)
+        p = posiciones(self.M).get(ident)
+        return QRectF(p[0] - ENCUADRE, p[1] - ENCUADRE, 2 * ENCUADRE, 2 * ENCUADRE) if p is not None else None
+
+    def encuadrar(self, destino: list[str], texto: str = "") -> bool:
+        """Encuadra `destino` (los ID de lo que se quiere ver: la expansión, la macroetapa, el recinto o la encapsulante): lo
+        selecciona, encaja y centra en la vista su caja, o la de todos juntos (`VistaDiagrama.encuadrar`: el zoom que los hace
+        caber con margen, sin pasar del tope de «Centrar todo»), lo resalta con el parpadeo naranja de la edición para que
+        aparezca en primer plano y avisa con `texto`. Es solo navegación: no toca el modelo, el historial ni la marca de
+        cambios. Devuelve si había algo dibujado que encuadrar."""
+        cajas = [c for c in (self._caja_encuadre(i) for i in destino) if c is not None]
+        if not cajas:
+            return False
+        r = cajas[0]
+        for c in cajas[1:]:
+            r = r.united(c)
+        self.sel, self.accion = list(destino), None
+        if texto:
+            self.informar(texto)
+        self.cambiado.emit()
+        if hasattr(self.diagrama, "encuadrar"):
+            self.diagrama.encuadrar(r)
+        self.parpadear(destino, centrar=False)  # (la vista ya está encuadrada)
+        return True
+
+    def encuadrar_expansion(self, mid: str) -> bool:
+        """«Encuadrar la expansión» (REQ-EDT-08, REQ-JER-07), también el doble clic en una macroetapa: encuadra la zona de su
+        expansión (`encuadrar`) y deja su parcial seleccionado. Devuelve si la macroetapa tiene expansión."""
         try:
             info = self.ed.macro_info(mid)
         except DiagnosticError as exc:
             self.rechazar("; ".join(substitute(d.message, self.nombres) for d in exc.diagnostics), mid)
             self.cambiado.emit()
             return False
-        self.sel, self.accion = [info.partial], None
-        self.informar(f"Expansión de la macroetapa {self.nombres.get(mid, mid)}: de la entrada {self.nombres.get(info.entry, '?')} "
-                      f"a la salida {self.nombres.get(info.exit, '?')}.")
-        self.cambiado.emit()
-        c = self.centro(info.partial)
-        if c is not None and hasattr(self.diagrama, "centrar_en"):
-            self.diagrama.centrar_en(c)
-        return True
+        return self.encuadrar([info.partial], f"Expansión de la macroetapa {self.nombres.get(mid, mid)}: de la entrada "
+                              f"{self.nombres.get(info.entry, '?')} a la salida {self.nombres.get(info.exit, '?')}.")
+
+    def encuadrar_macroetapa(self, mid: str) -> bool:
+        """«Encuadrar la macroetapa»: al revés que «Encuadrar la expansión», desde la entrada o la salida de una expansión o
+        desde su zona."""
+        return self.encuadrar([mid], self.descripcion_jerarquia(mid) or self.nombre(mid))
+
+    def encuadrar_encapsulante(self, sid: str) -> bool:
+        """«Encuadrar la encapsulante», desde una etapa de un recinto o desde su marco."""
+        return self.encuadrar([sid], self.descripcion_jerarquia(sid) or self.nombre(sid))
+
+    def encuadrar_recintos(self, sid: str) -> bool:
+        """«Encuadrar el recinto» (o «los recintos», si la encapsulante tiene varios), desde la encapsulante: encuadra el marco
+        de cada uno, juntos, y los deja seleccionados."""
+        recintos = [r["partialRef"] for r in self.ed.model["hierarchy"]["enclosures"] if r["ownerStepRef"] == sid]
+        nom = self.descripcion_jerarquia(recintos[0]) if len(recintos) == 1 else \
+            f"Recintos de la encapsulante {self.nombres.get(sid, sid)}: {', '.join(self.nombres.get(r, r) for r in recintos)}"
+        return bool(recintos) and self.encuadrar(recintos, nom)
 
     def renombrar_macro(self, mid: str) -> str | None:
         """«Renombrar…» en una macroetapa: pide el nombre y cambia el de la macroetapa y, si se llamaba igual que ella (lo que
@@ -2406,22 +2720,24 @@ class Edicion(QObject):
         """Las acciones de jerarquía de una macroetapa, una etapa, un parcial con marco o una orden de forzado, como
         [(texto, función, estado)]: `estado` es None si es un botón, y True o False si es una casilla (marcada o no). Son las
         opciones del botón derecho (`menu`) y los botones de la ficha del panel de opciones (`ficha_jerarquia`): ninguna
-        toca el modelo si no lo dice (ir a, abrir) y las demás son una operación de deshacer."""
+        toca el modelo si no lo dice (encuadrar) y las demás son una operación de deshacer. Encuadrar lleva la vista al otro
+        lado de una dependencia: de la macroetapa a su expansión y al revés, de la encapsulante a su(s) recinto(s) y al
+        revés."""
         m = self.ed.model
         if any(x["id"] == ident for x in m["hierarchy"]["macros"]):
-            return [("Abrir expansión", lambda: self.abrir_expansion(ident), None),
+            return [("Encuadrar la expansión", lambda: self.encuadrar_expansion(ident), None),
                     ("Renombrar…", lambda: self.renombrar_macro(ident), None)]
         if any(f["id"] == ident for f in m["forces"]):
             return [("Editar orden de forzado…", lambda: self.editar_orden(ident), None),
                     ("Quitar orden de forzado", lambda: self.quitar_orden(ident), None)]
         roles = self.ed.partial_roles()
-        if ident in roles:  # un parcial con marco: a la encapsulante o a la macroetapa que lo contiene
+        if ident in roles:  # un parcial con marco: a la encapsulante o a la macroetapa que lo contiene; un parcial suelto se renombra
             rol = roles[ident]
             if rol["kind"] == "enclosure":
-                return [("Ir a la encapsulante", lambda: self.ir_a(rol["ownerStep"]), None)]
+                return [("Encuadrar la encapsulante", lambda: self.encuadrar_encapsulante(rol["ownerStep"]), None)]
             if rol["kind"] == "expansion":
-                return [("Ir a la macroetapa", lambda: self.ir_a(rol["macro"]), None)]
-            return []
+                return [("Encuadrar la macroetapa", lambda: self.encuadrar_macroetapa(rol["macro"]), None)]
+            return [("Renombrar…", lambda: self.renombrar_parcial(ident), None)] if self._es_parcial_suelto(ident) else []
         st = next((s for s in m["steps"] if s["id"] == ident), None)
         if st is None:
             return []
@@ -2430,15 +2746,19 @@ class Edicion(QObject):
             out.append(("Convertir en encapsulante", lambda: self.tipo_encapsulante(ident, True), None))
         elif st["kind"] == "enclosing":
             out.append(("Añadir recinto…", lambda: self.anadir_recinto(ident), None))
-            if not any(r["ownerStepRef"] == ident for r in m["hierarchy"]["enclosures"]):
+            recintos = [r for r in m["hierarchy"]["enclosures"] if r["ownerStepRef"] == ident]
+            if recintos:
+                out.append(("Encuadrar el recinto" if len(recintos) == 1 else "Encuadrar los recintos",
+                            lambda: self.encuadrar_recintos(ident), None))
+            else:
                 out.append(("Convertir en etapa ordinaria", lambda: self.tipo_encapsulante(ident, False), None))
         rol = roles.get(st["partialRef"])
         if rol and rol["kind"] == "enclosure":  # una etapa de un recinto: su enlace de activación (casilla) y su encapsulante
             out.append(("Enlace de activación", lambda: self.enlace_activacion(ident), ident in rol["activation"]))
-            out.append(("Ir a la encapsulante", lambda: self.ir_a(rol["ownerStep"]), None))
+            out.append(("Encuadrar la encapsulante", lambda: self.encuadrar_encapsulante(rol["ownerStep"]), None))
         macro = next((x["ownerMacroRef"] for x in m["hierarchy"]["expansions"] if ident in (x["entryRef"], x["exitRef"])), None)
         if st["kind"] in ("entry", "exit") and macro is not None:  # la entrada y la salida de una expansión: a su macroetapa
-            out.append(("Ir a la macroetapa", lambda: self.ir_a(macro), None))
+            out.append(("Encuadrar la macroetapa", lambda: self.encuadrar_macroetapa(macro), None))
         if self._destinos_forzado(ident):
             out.append(("Forzar un parcial…", lambda: self.forzar(ident), None))
         return out
@@ -2466,6 +2786,9 @@ class Edicion(QObject):
             return f"Recinto {nom(ident)} de {nom(rol['ownerStep'])} · activación: {marcas}"
         if rol and rol["kind"] == "expansion":
             return f"Expansión de la macroetapa {nom(rol['macro'])} · entrada {nom(rol['entry'])} · salida {nom(rol['exit'])}"
+        if rol and self._es_parcial_suelto(ident):  # un grafcet parcial suelto, y quién lo fuerza
+            desde = [nom(f["sourceStepRef"]) for f in m["forces"] if f["targetPartialRef"] == ident]
+            return f"Grafcet parcial {nom(ident)}" + (f" · forzado desde {', '.join(dict.fromkeys(desde))}" if desde else "")
         st = next((s for s in m["steps"] if s["id"] == ident), None)
         if st is None:
             return ""
@@ -2488,19 +2811,6 @@ class Edicion(QObject):
         (`acciones_jerarquia`)}; None si no hay ni una cosa ni la otra (una etapa ordinaria sin otro parcial al que forzar)."""
         texto, botones = self.descripcion_jerarquia(ident), self.acciones_jerarquia(ident)
         return {"texto": texto, "botones": botones} if texto or botones else None
-
-    def ir_a(self, ident: str) -> bool:
-        """«Ir a la macroetapa», «Ir a la encapsulante» (REQ-EDT-08, REQ-JER-07): selecciona el elemento y lleva la vista a
-        él. Solo navegación: no toca el modelo, el historial ni la marca de cambios."""
-        if self.centro(ident) is None:
-            return False
-        self.sel, self.accion = [ident], None
-        self.informar(self.descripcion_jerarquia(ident) or self.nombre(ident))
-        self.cambiado.emit()
-        c = self.centro(ident)
-        if c is not None and hasattr(self.diagrama, "centrar_en"):
-            self.diagrama.centrar_en(c)
-        return True
 
     # -- órdenes de forzado (LOC tabla 9; P-IMP-23, P-IMP-26): «Forzar un parcial…», editarla y quitarla ----------------
     def _destinos_forzado(self, sid: str) -> list[tuple[str, str]]:
@@ -2580,6 +2890,108 @@ class Edicion(QObject):
         self.cambiado.emit()
         return motivo is None
 
+    def _etapa_para_orden(self, p: QPointF) -> str | None:
+        """La etapa a la que se asociaría una orden de forzado soltada en p (la ficha «Forzado»): la etapa bajo el puntero, la
+        de la acción o la orden bajo el puntero y la de una fila de acciones a cuyo lado derecho se suelta (a menos de
+        IMAN_ACCION, el mismo criterio con que la ficha «Acción» se pega a otra). None si no hay: sobre un hueco, una
+        transición, una macroetapa, una barra, un enlace o una acción suelta."""
+        ident = elemento_en(self.M, p)
+        if ident is not None:
+            return ident if any(s["id"] == ident for s in self.M["steps"]) else None
+        cajas = [*(getattr(self.diagrama, "cajas_acciones", None) or []), *(getattr(self.diagrama, "cajas_ordenes", None) or [])]
+        for c in cajas:
+            x, y, w, h = c["rect"]
+            if c["etapa"] and (x <= p.x() <= x + w and y <= p.y() <= y + h
+                               or abs(p.x() - (x + w)) <= IMAN_ACCION and abs(p.y() - (y + h / 2)) <= H):
+                return c["etapa"]
+        return None
+
+    def poner_orden_ficha(self, p: QPointF) -> str | None:
+        """La ficha «Forzado» soltada en p: abre el diálogo de la orden (parcial destino, forma y etapas, `forzar`) para la
+        etapa de `_etapa_para_orden` y, al aceptar, crea la orden asociada a ella y la deja seleccionada. Sin etapa, no crea
+        nada y avisa en rojo. Cancelado o rechazado por el núcleo (un ciclo de forzado, no hay otro parcial), tampoco cambia
+        nada. Devuelve el ID de la orden, o None."""
+        sid = self._etapa_para_orden(p)
+        if sid is None:
+            self.mensaje = MSG_FORZADO_SIN_ETAPA
+            self.cambiado.emit()
+            return None
+        return self.forzar(sid)
+
+    # -- equidistanciar alturas: la distancia estándar entre niveles, mayor donde las acciones lo piden -----------------
+    def _posiciones_modelo(self) -> dict[str, tuple[float, float]]:
+        """La posición (x, y) del modelo de cada etapa, macroetapa y transición, tal como se dibuja (también las que no
+        tienen posición guardada)."""
+        return {i: (x - SX, y) for i, (x, y) in posiciones(self.M).items()}
+
+    def _extensiones(self) -> dict[str, tuple[float, float]]:
+        """Cuánto sobresale, por encima y por debajo de su centro, lo que acompaña a una etapa (sus acciones y órdenes de
+        forzado con sus marcas) y a una transición (su texto): lo que pide `Editor.equidistribute` para que no se solapen
+        con el nivel siguiente. La etapa sin acciones no figura: cabe en la distancia estándar."""
+        pos = posiciones(self.M)
+        out: dict[str, tuple[float, float]] = {t["id"]: (12.0, 12.0) for t in self.M["transitions"]}
+        for c in self._colocadas():
+            if c["etapa"]:
+                y, (_, ry, _, rh), extra = pos[c["etapa"]][1], c["rect"], c["extra"]
+                arriba, abajo = y - (ry - extra[0]), (ry + rh + extra[1]) - y
+                previo = out.get(c["etapa"], (float(H), float(H)))
+                out[c["etapa"]] = (max(previo[0], arriba), max(previo[1], abajo))
+        return out
+
+    def _pares_solape(self, propios: set[str]) -> set[tuple[str, str]]:
+        """Las parejas de elementos, con al menos uno de `propios`, cuyas cajas quedan a menos de MARGEN_SOLAPE (etapas,
+        macroetapas, transiciones y sus textos, barras, y las acciones y órdenes, que cuentan como de su etapa), según el
+        modelo y sin esperar a que se dibuje."""
+        M, m = self.M, MARGEN_SOLAPE
+        trans = {t["id"] for t in M["transitions"]}
+        cajas: list[tuple[str, QRectF]] = [
+            (i, QRectF(x - TB, y - 2, 2 * TB, 4) if i in trans else QRectF(x - H, y - H, 2 * H, 2 * H))
+            for i, (x, y) in posiciones(M).items()]
+        for b in M.get("bars", []):
+            bx, by, bw, bh = barra(b)
+            cajas.append((b["id"], QRectF(bx, by - (BARRA_ALTO_MIN - bh) / 2, bw, BARRA_ALTO_MIN) if bh < BARRA_ALTO_MIN
+                          else QRectF(bx, by, bw, bh)))
+        cajas += [(c["etapa"] or c["grupo"], QRectF(*c["rect"])) for c in self._colocadas()]
+        cajas += [(tid, r) for r, tid in self._textos_transiciones()]
+        out: set[tuple[str, str]] = set()
+        for n, (i, r) in enumerate(cajas):
+            for j, s in cajas[n + 1:]:
+                if i != j and (i in propios or j in propios) and r.adjusted(-m, -m, m, m).intersects(s):
+                    out.add((min(i, j), max(i, j)))
+        return out
+
+    def equidistanciar(self, ids: list[str] | None = None) -> list[str] | None:
+        """«Equidistanciar alturas de la cadena», «…de la selección» o «…de todo el lienzo» (con `ids` None):
+        `Editor.equidistribute` con la distancia estándar DY entre etapas y transiciones, que aumenta donde las acciones de
+        una etapa lo piden (`_extensiones`). Una sola operación de deshacer, solo presentación: el modelo no cambia. Si con
+        ello algo quedara encima de otro elemento que antes no tocaba, no cambia nada y se avisa. Devuelve los ID de lo que
+        se movió (vacío si ya estaba así, o no hay cadenas), o None si se rechazó."""
+        self.reconstruir()
+        pos = self._posiciones_modelo()
+        cadenas = self.ed.chains(ids, pos)
+        if not cadenas:
+            self.informar("No hay una cadena de elementos enlazados que equidistanciar")
+            self.cambiado.emit()
+            return []
+        propios = {i for c in cadenas for i in c}
+        antes, sucio = self._pares_solape(propios), self.ed.dirty
+        movidos: list[str] = []
+
+        def hacer() -> None:
+            movidos.extend(self.ed.equidistribute(ids, DY, self._extensiones(), MARGEN_SOLAPE, REJILLA, pos))
+            self.reconstruir()
+            if self._pares_solape(propios) - antes:
+                raise DiagnosticError(Diagnostic("D-FORMATO", MSG_EQUIDISTANCIA))
+        motivo = self._atomico("equidistanciar alturas", hacer, hueco=False)
+        if motivo:
+            self.ed.dirty = sucio  # lo que se deshizo no cuenta como un cambio sin guardar
+            self.mensaje = motivo
+            self.cambiado.emit()
+            return None
+        self.informar("Alturas equidistanciadas" if movidos else "Las alturas ya estaban equidistanciadas")
+        self.cambiado.emit()
+        return movidos
+
     def _separar_ramas(self, origen: str, destino: str) -> None:
         """Una etapa con dos transiciones (o dos transiciones hacia una etapa) es una alternativa: si la transición que se
         acaba de enlazar quedó justo encima de una hermana, se aparta a un lado para que se vea la rama."""
@@ -2646,10 +3058,25 @@ class Edicion(QObject):
         self.cambiado.emit()
         return None
 
+    def _accion_para_quitar(self) -> str | None:
+        """La acción que Supr quita en vez de su etapa: la señalada (un clic en su caja, «Añadir…», una acción recién pegada)
+        si su etapa es lo único seleccionado. None si no hay: se borra la selección. Para borrar la etapa hay que
+        seleccionarla (un clic en ella deja de señalar la acción)."""
+        etapa = next((a["stepRef"] for a in self.ed.model["actions"] if a["id"] == self.accion), None) \
+            or next((b.get("etapa") for b in self.ed.draft_actions() if b["id"] == self.accion), None)
+        return self.accion if etapa and self.sel == [etapa] else None
+
     def borrar(self) -> bool:
-        """Borra la selección (una sola operación de deshacer); si arrastra otros elementos, antes lo consulta (REQ-EDT-05)."""
+        """Borra la selección (una sola operación de deshacer); si arrastra otros elementos, antes lo consulta (REQ-EDT-05).
+        Si hay una acción señalada de una etapa (clic en su caja) o una orden de forzado seleccionada, quita solo eso."""
         if not self.sel:
             return False
+        aid = self._accion_para_quitar()
+        if aid:  # una acción señalada de su etapa: se quita ella sola, no la etapa
+            self.quitar_accion(aid)
+            return True
+        if len(self.sel) == 1 and any(f["id"] == self.sel[0] for f in self.ed.model["forces"]):  # una orden: solo ella
+            return self.quitar_orden(self.sel[0])
         sel = list(self.sel)
         barras = [i for i in sel if self._barra(i)]
         uniones = [i for i in sel if "|" in i]  # un enlace: se quita el enlace, no los elementos

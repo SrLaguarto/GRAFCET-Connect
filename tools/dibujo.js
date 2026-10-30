@@ -16,18 +16,39 @@ const ACT_BUS = 28;   // de la línea común de una fila separada, por debajo de
 const ACT_COL = 12;   // separación mínima entre cajas de una columna (crece lo que piden sus marcas)
 const ACT_CANAL = 7;  // de la derivación a la segunda columna de una matriz, por debajo de su fila
 const MARK = 7;       // marcas internas de la encapsulante y divisiones de la macroetapa
+const GROSOR_NEGADO = 2;  // grosor de la barra de una variable negada (el sobrerrayado del texto no se puede engrosar)
+const TMR_EXTRA = 12;     // lo que sube por encima de la condición o el evento de una acción con temporizador
+const ENCIMA_MARCO = 8;   // lo que sube la línea base del nombre de la encapsulante por encima del trazo superior de su recinto
 
 function el(tag, attrs={}, parent) { const e = document.createElementNS(NS, tag);
   for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; }
 function txt(parent, x, y, s, attrs={}) { const t = el("text", {x, y, ...attrs}, parent); t.textContent = s; return t; }
-// Texto con segmentos {t, o: sobrerrayado (negación), s: subíndice}
+// Lo que sube un texto de ese tamaño por encima de su línea base (Arial: igual que en escritorio/diagrama.py)
+function ascenso(size) { return Math.round(0.905 * size); }
+
+// Principio o final (x) de un tramo de texto
+function extremo(ts, fin) {
+  try { const n = ts.getNumberOfChars(); if (n) return fin ? ts.getEndPositionOfChar(n - 1).x : ts.getStartPositionOfChar(0).x; } catch (e) { /* sin caracteres */ }
+  const b = ts.getBBox();
+  return fin ? b.x + b.width : b.x;
+}
+
+// Texto con segmentos {t, o: sobrerrayado (negación), s: subíndice}. La negación es una barra propia de GROSOR_NEGADO
+// (class "neg"), arriba del texto, sobre cada tramo de segmentos negados seguidos
 function segText(parent, x, y, segs, cls, anchor="start") {
   const t = el("text", {x, y, class: cls, "text-anchor": anchor}, parent);
   (segs || []).forEach(s => {
     const sp = el("tspan", {}, t); sp.textContent = s.t;
-    if (s.o) sp.setAttribute("text-decoration", "overline");
     if (s.s) { sp.setAttribute("baseline-shift", "sub"); sp.setAttribute("font-size", "75%"); }
   });
+  const ts = [...t.children], yb = y - ascenso(parseFloat(getComputedStyle(t).fontSize));
+  for (let i = 0; i < ts.length; i++) {
+    if (!segs[i].o) continue;
+    let j = i;
+    while (j + 1 < ts.length && segs[j + 1].o) j++;
+    el("line", {x1:extremo(ts[i], false), x2:extremo(ts[j], true), y1:yb, y2:yb, class:"neg"}, parent);
+    i = j;
+  }
   return t;
 }
 
@@ -52,16 +73,31 @@ function comentario(g, x, yc, texto) {
 
 function nameOf(M, id) { return ((M && M.names) || {})[id] ?? id; }
 
-// Estado de los temporizadores de una expresión: «1,2 s / 3 s» mientras cuenta y «3 s ✓» al vencer (Vista.state().temporal)
-function timerText(parent, x, y, ref, S) {
+// Estado de los temporizadores de una expresión (Vista.state().temporal): el tiempo transcurrido «0,5 s» mientras cuenta
+// y «3 s ✓» al vencer, centrado justo encima de la duración del temporizador (la nth-ésima aparición de su «token» en
+// el texto `tx`, escrito con los segmentos `segs`; si no se encuentra, encima de todo el texto) y por encima de su barra
+// si está negada. `y` es la línea base del texto. Devuelve hasta dónde llega por la derecha (0 si no dibuja nada).
+function timerText(parent, tx, segs, y, ref, S) {
+  const size = parseFloat(getComputedStyle(tx).fontSize);
+  let derecha = 0;
   Object.values(S.temporal || {}).filter(t => t.expr === ref && t.shown).forEach(t => {
-    const e = txt(parent, x, y, t.shown, {class: `timer ${t.estado === "contando" ? "run" : "done"}`});
-    x += e.getComputedTextLength() + 8;
+    const sitios = (segs || []).map((s, i) => s.t === t.token ? i : -1).filter(i => i >= 0);
+    const i = sitios[t.nth || 0];
+    const caja = i === undefined ? tx.getBBox() : tx.children[i].getBBox();
+    const negado = i === undefined ? (segs || []).some(s => s.o) : !!segs[i].o;
+    const e = txt(parent, caja.x + caja.width / 2, y - ascenso(size) - (negado ? 3 : 1), t.shown,
+                  {"text-anchor": "middle", class: `timer ${t.estado === "contando" ? "run" : "done"}`});
+    const b = e.getBBox();
+    derecha = Math.max(derecha, b.x + b.width);
   });
+  return derecha;
 }
 
-// M: modelo de la vista (etapas, macroetapas, transiciones, acciones, parciales); S: estado observado del motor
-function drawDiagram(svg, M, S) {
+// M: modelo de la vista (etapas, macroetapas, transiciones, acciones, parciales); S: estado observado del motor;
+// opciones.dependencias (apagada por defecto, como `dependencias` de escritorio/diagrama.py): dibuja los trazos discontinuos
+// que unen una macroetapa con su expansión y una encapsulante con sus recintos. No cambia nada más del dibujo.
+function drawDiagram(svg, M, S, opciones = {}) {
+  const dependencias = !!opciones.dependencias;
   svg.innerHTML = "";
   svg.setAttribute("viewBox", "0 0 640 600");
   const pos = {};
@@ -72,7 +108,7 @@ function drawDiagram(svg, M, S) {
   const cleared = new Set(S.lastCleared || []);
   const blk = S.blocked, reached = new Set(blk ? blk.reached : []);
   const frames = el("g", {}, svg), links = el("g", {}, svg), bars = el("g", {}, svg), steps = el("g", {}, svg);
-  drawFrames(frames, M, pos);
+  drawFrames(frames, M, pos, dependencias);
   M.transitions.forEach(t => {
     const tx = t.x + SX, ty = t.y, ob = (S.transitions||{})[t.id] || {};
     const pre = (t.preDib || t.pre).map(p => pos[p]), post = (t.postDib || t.post).map(p => pos[p]);
@@ -96,10 +132,9 @@ function drawDiagram(svg, M, S) {
     el("line", {x1:tx-TB, x2:tx+TB, y1:ty, y2:ty, class:"bar"}, g);
     if (t.showLabel !== false) txt(g, tx-TB-6, ty+5, `(${t.label})`, {"text-anchor":"end", class:"tdes"});
     const tc = segText(g, tx+TB+8, ty+5, t.cond, "tcond");
-    timerText(g, tx+TB+8 + tc.getComputedTextLength() + (t.cond ? 10 : 0), ty+5, t.conditionRef, S);
-    if (t.comment) {
-      const prev = g.querySelectorAll(".timer, .tmr");
-      const fin = Math.max(tx+TB+8 + tc.getComputedTextLength() + (t.cond ? 14 : 0), ...[...prev].map(n => n.getBBox().x + n.getBBox().width + 8));
+    const derecha = timerText(g, tc, t.cond, ty+5, t.conditionRef, S);
+    if (t.comment) {  // a la derecha de la receptividad y del estado de su temporizador
+      const fin = Math.max(tx+TB+8 + tc.getComputedTextLength() + (t.cond ? 14 : 0), derecha ? derecha + 8 : 0);
       comentario(g, fin, ty, t.comment);
     }
   });
@@ -157,7 +192,17 @@ function drawDiagram(svg, M, S) {
 // - recinto (P43-02): marco de trazo continuo; arriba, la etapa encapsulante; abajo, el nombre del parcial;
 // - parcial (P40-02): marco redondeado con su nombre abajo; un parcial hijo se dibuja dentro de su padre;
 // - expansión de macroetapa (P47-03): sin marco; trazos discontinuos de la macroetapa a su entrada y a su salida.
-function drawFrames(g, M, pos) {
+// Esos trazos son las dependencias: solo se dibujan con `dependencias`, y con ellas también el que une una encapsulante con
+// el marco de cada uno de sus recintos (desde el centro de la etapa, que queda tapado por ella, hasta el punto más cercano
+// del marco: el mismo cálculo que `_punto_del_marco` de escritorio/diagrama.py).
+function puntoDelMarco(b, x, y) {
+  const px = Math.min(Math.max(x, b.x0), b.x1), py = Math.min(Math.max(y, b.y0), b.y1);
+  if (px !== x || py !== y) return [px, py];
+  const d = [x - b.x0, b.x1 - x, y - b.y0, b.y1 - y];
+  return [[b.x0, y], [b.x1, y], [x, b.y0], [x, b.y1]][d.indexOf(Math.min(...d))];
+}
+
+function drawFrames(g, M, pos, dependencias) {
   const parts = M.partials || [];
   const box = {};
   const own = pid => M.steps.filter(s => s.partial === pid).map(s => pos[s.id])
@@ -178,7 +223,7 @@ function drawFrames(g, M, pos) {
   parts.forEach(pt => {
     if (pt.kind === "expansion") {
       const m = (M.macros || []).find(x => x.id === pt.macro);
-      if (!m || !pos[m.entry] || !pos[m.exit]) return;
+      if (!dependencias || !m || !pos[m.entry] || !pos[m.exit]) return;
       const mp = pos[m.id], ep = pos[m.entry], sp = pos[m.exit];
       el("path", {d:`M${mp.x+H},${mp.y-H} L${ep.x-H},${ep.y-H} M${mp.x+H},${mp.y+H} L${sp.x-H},${sp.y+H}`, class:"expline"}, g);
       return;
@@ -186,8 +231,14 @@ function drawFrames(g, M, pos) {
     const b = frame(pt.id);
     if (!b) return;
     if (pt.kind === "enclosure") {
+      if (dependencias && pos[pt.ownerStep]) {
+        const o = pos[pt.ownerStep], [tx, ty] = puntoDelMarco(b, o.x, o.y);
+        el("path", {d:`M${o.x},${o.y} L${tx},${ty}`, class:"expline"}, g);
+      }
       el("rect", {x:b.x0, y:b.y0, width:b.x1-b.x0, height:b.y1-b.y0, class:"frame enclosure"}, g);
-      txt(g, (b.x0 + b.x1) / 2, b.y0 + 5, nameOf(M, pt.ownerStep), {"text-anchor":"middle", class:"framelabel"});
+      // el nombre de la encapsulante va centrado y entero por encima del marco (línea base ENCIMA_MARCO por encima del trazo): a
+      // caballo de la línea quedaba cortado por ella; igual en escritorio/diagrama.py
+      txt(g, (b.x0 + b.x1) / 2, b.y0 - ENCIMA_MARCO, nameOf(M, pt.ownerStep), {"text-anchor":"middle", class:"framelabel"});
       txt(g, b.x0 + 30, b.y1 + 5, pt.label, {class:"framelabel"});
     } else {
       el("rect", {x:b.x0, y:b.y0, width:b.x1-b.x0, height:b.y1-b.y0, rx:16, class:"frame"}, g);
@@ -196,10 +247,12 @@ function drawFrames(g, M, pos) {
   });
 }
 
-// Lo que sobresale la marca de una acción por encima y por debajo de su caja (condición, flecha, banderita)
+// Lo que sobresale la marca de una acción por encima y por debajo de su caja (condición, flecha, banderita) y el tiempo
+// transcurrido de su temporizador, que va encima de la condición o del evento (a.tmr)
 function actionExtra(a) {
-  if (a.kind === "continuous" && a.cond) return [20, 0];
-  return {event:[24, 0], activation:[20, 0], deactivation:[0, 20]}[a.trigger] || [0, 0];
+  if (a.kind === "continuous" && a.cond) return [20 + (a.tmr ? TMR_EXTRA : 0), 0];
+  const [arriba, abajo] = {event:[24, 0], activation:[20, 0], deactivation:[0, 20]}[a.trigger] || [0, 0];
+  return [arriba + (a.tmr && a.trigger === "event" ? TMR_EXTRA : 0), abajo];
 }
 
 // Una acción con su caja (a la derecha de ax, centrada en cy) y sus marcas. El ancho es el de su texto y, si lleva
@@ -218,7 +271,7 @@ function drawAction(g, ax, cy, a, S) {
     el("line", {x1:mx, x2:mx, y1:top, y2:top-14, class:"amark"}, ga);
     const ac = segText(ga, mx+5, top-4, a.cond, "acond");
     w = Math.max(w, 12 + 5 + ac.getComputedTextLength() + 8);
-    timerText(ga, mx+5 + ac.getComputedTextLength() + 8, top-4, a.condRef, S);
+    timerText(ga, ac, a.cond, top-4, a.condRef, S);
   } else if (a.trigger === "activation") {            // memorizada al activar: flecha hacia arriba
     el("line", {x1:mx, x2:mx, y1:top, y2:top-11, class:"amark"}, ga);
     el("path", {d:`M${mx-5},${top-10} L${mx},${top-19} L${mx+5},${top-10} Z`, class:"ahead"}, ga);
@@ -230,7 +283,7 @@ function drawAction(g, ax, cy, a, S) {
     el("path", {d:`M${mx},${top-20} L${mx-9},${top-15} L${mx},${top-10} Z`, class:"ahead"}, ga);
     const ev = segText(ga, mx+5, top-11, a.event, "acond");
     w = Math.max(w, 12 + 5 + ev.getComputedTextLength() + 8);
-    timerText(ga, mx+5 + ev.getComputedTextLength() + 8, top-11, a.condRef, S);
+    timerText(ga, ev, a.event, top-11, a.condRef, S);
   }
   const ajustar = ancho => { rect.setAttribute("width", ancho); if (inner) inner.setAttribute("width", ancho - 6); };
   ajustar(w);

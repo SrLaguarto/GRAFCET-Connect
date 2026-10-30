@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer, QSize
-from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
                                QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QRadioButton,
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
                                QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle)
 
 from grafcet.diagnostics import DiagnosticError
+from grafcet.engine import Session
 from grafcet.examples import EJEMPLOS
 from grafcet.persistence import Recovery, add_document, new_project, open_model, save_project
 from grafcet.profile import APP_VERSION, SEMANTIC_OPTIONS, normalize_options
@@ -35,7 +36,7 @@ from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion
 from .propiedades import PanelPropiedades, Paleta
 from .variables import PanelVariables
-from .entradas_salidas import PanelES
+from .entradas_salidas import CONEXION_INICIAL, PanelES
 from conexion.configuracion import ARCHIVO, Configuracion
 from conexion.coordinador import Coordinador
 
@@ -64,13 +65,15 @@ LEYENDA = (
     "recién franqueada.<br><b>Tras un bloqueo</b>: gris punteado = último estado estable conservado (no es el "
     "resultado); naranja discontinuo = alcanzada antes del punto en cuestión, sin confirmar; trazo rojo = transición "
     "en cuestión.<br><b>Acciones</b>: ↑ al activar, ↓ al desactivar, banderita = por evento, trazo con texto = "
-    "condición; marco verde = salida a 1.<br><b>Jerarquía</b>: macroetapa = divisiones horizontales arriba y abajo, "
-    "unida a su expansión (de E a S) por trazos discontinuos; encapsulante = esquinas cortadas; recinto = marco con "
-    "la encapsulante arriba y su nombre abajo; * = enlace de activación; G{…} en rectángulo doble = orden de forzado "
+    "condición; marco verde = salida a 1.<br><b>Jerarquía</b>: macroetapa = divisiones horizontales arriba y abajo; "
+    "encapsulante = esquinas cortadas; recinto = marco con la encapsulante arriba y su nombre abajo; los trazos discontinuos "
+    "que unen la macroetapa con su expansión (de E a S) y la encapsulante con su recinto solo se ven con «Mostrar "
+    "dependencias» (junto al zoom); * = enlace de activación; G{…} en rectángulo doble = orden de forzado "
     "(morada si está vigente; {*} situación actual, {INIT} inicial, { } vacía); marco redondeado = parcial.<br>"
-    "<br><b>Temporizadores</b>: junto a la receptividad o la acción con retardo, «1,2 s / 3 s» mientras cuenta (lo "
-    "que lleva / su preset) y «3 s ✓» cuando ha vencido.<br>"
-    "Pase el ratón por una etapa o transición para ver su estado. La rueda acerca o aleja; doble clic ajusta.")
+    "<br><b>Temporizadores</b>: encima de la duración de la receptividad o de la acción con retardo, el tiempo que "
+    "lleva («0,5 s») mientras cuenta y «3 s ✓» cuando ha vencido.<br>"
+    "Pase el ratón por una etapa o transición para ver su estado. La rueda acerca o aleja alrededor del puntero; "
+    "«Centrar todo» (Ctrl+0) encaja el dibujo.")
 
 
 def _q_key(q: str) -> list[Any]:
@@ -205,6 +208,22 @@ class Lecturas(QDialog):
         return {**self.fijas, **{q: cb.currentData() for q, cb in self.combos.items()}}
 
 
+def _icono_grafcet() -> QIcon:
+    """Esquema de etapa, transición y etapa (el dibujo GRAFCET), para el botón que vuelve desde la vista de E/S."""
+    pm = QPixmap(40, 40)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(QPen(QColor("#2f5b88"), 3))
+    p.drawRect(10, 3, 20, 12)  # etapa
+    p.drawLine(20, 15, 20, 20)
+    p.drawLine(12, 20, 28, 20)  # transición: la barra que corta el enlace
+    p.drawLine(20, 20, 20, 25)
+    p.drawRect(10, 25, 20, 12)  # etapa
+    p.end()
+    return QIcon(pm)
+
+
 class Ventana(QMainWindow):
     def __init__(self, ajustes: QSettings | None = None, recuperacion: Path | None = None) -> None:
         super().__init__()
@@ -244,12 +263,14 @@ class Ventana(QMainWindow):
         self._menus()
         self._interfaz()
         self.panel_es = PanelES()
+        self._conexion_recordada = self._leer_conexion_recordada()
+        self.panel_es.conexion_defecto = self._conexion_recordada
         central = self.takeCentralWidget()
         self.paginas_es = QStackedWidget()
         self.paginas_es.addWidget(central)
         self.paginas_es.addWidget(self.panel_es)
         self.setCentralWidget(self.paginas_es)
-        self.panel_es.volver.connect(lambda: self.paginas_es.setCurrentIndex(0))
+        self.panel_es.volver.connect(lambda: self._mostrar_pagina(False))
         self.panel_es.conectar.connect(self._conectar_modbus)
         self.panel_es.probar.connect(lambda: self._conectar_modbus(prueba=True))
         self.panel_es.desconectar.connect(self._desconectar_modbus)
@@ -309,7 +330,7 @@ class Ventana(QMainWindow):
         ver.addSeparator()
         ver.addAction(self._accion("&Acercar", lambda: self.diagrama.acercar(), ["Ctrl+=", "Ctrl++"]))
         ver.addAction(self._accion("A&lejar", lambda: self.diagrama.alejar(), "Ctrl+-"))
-        ver.addAction(self._accion("A&justar el dibujo", lambda: self.diagrama.ajustar(), "Ctrl+0"))
+        ver.addAction(self._accion("&Centrar todo el dibujo", lambda: self.diagrama.ajustar(), "Ctrl+0"))
         # Edición
         self.a_herr: dict[str, QAction] = {}
         self.g_herr = QActionGroup(self)
@@ -543,11 +564,15 @@ class Ventana(QMainWindow):
         self.tb_conexion = QToolBar("Conexión")
         self.tb_conexion.setMovable(False)
         self.tb_conexion.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.a_es = self._accion("E/S externas", self.mostrar_es)
-        self.a_es.setToolTip("Conectar sensores y actuadores · volver con la flecha Atrás")
-        self.a_es.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DriveNetIcon))
+        # Un solo botón conmuta entre el dibujo GRAFCET y la vista de E/S externas: pulsado (marcado) mientras se ve ésta,
+        # con otro texto, tooltip e icono; _sincronizar_boton_es lo deja coherente con la página visible, sea cual sea la vía
+        self.a_es = self._accion("E/S externas", self._alternar_es, marcable=True)
+        self._iconos_es = (self.style().standardIcon(QStyle.StandardPixmap.SP_DriveNetIcon), _icono_grafcet())
         self.tb_conexion.addAction(self.a_es)
+        self._sincronizar_boton_es()
+        self.paginas_es.currentChanged.connect(self._sincronizar_boton_es)
         self.addToolBar(self.tb_conexion)
+        self._fijar_ancho_boton_es()  # con la barra ya en la ventana: el botón lleva su hoja de estilo
         self.tb_edit = QToolBar("Edición")
         self.tb_edit.setMovable(False)
         for a in (self.a_debajo, self.a_deshacer, self.a_rehacer, self.a_borrar):
@@ -655,7 +680,7 @@ class Ventana(QMainWindow):
 
     def _cargar(self) -> None:
         """Carga la fuente (ejemplo, modelo o lo que se edita) y deja el programa en Pausa: parado y editable. La
-        conexión Modbus, si la hay, no se toca: solo se para el GRAFCET (se conservan TCP y salidas)."""
+        conexión Modbus, si la hay, no se cierra: se conserva el TCP y las salidas pasan a 0 (Pausa)."""
         self.modbus.pausar()
         self._marcar_play(False)
         self._aviso_inestable_sesion = None
@@ -691,23 +716,36 @@ class Ventana(QMainWindow):
             self.rt.stop()
 
     def reiniciar(self) -> None:
-        """Vuelve a la situación inicial: en Play sigue en Play y en Pausa deja el estado inicial. Con E/S externas la
-        conexión se conserva: solo se vincula una sesión nueva y se reescriben las salidas iniciales."""
-        play = self.a_ejecutar.isChecked()
-        if not self._preparar_sesion(reiniciar=True, observar_despues=not play):
-            if play:
-                self.a_ejecutar.setChecked(False)  # no se ha podido: Pausa
-            return
-        if play:
-            self.reloj.restart()
+        """En Play vuelve a la situación inicial y sigue en Play; con E/S externas la conexión se conserva: solo se vincula
+        una sesión nueva y se reescriben las salidas iniciales. En Pausa ya está todo a 0 y sin estado (Pausa es «todo a 0
+        hasta un nuevo Play»): no hay nada que reiniciar, solo se vuelve a pedir el cero a la planta si hay conexión."""
+        if not self.a_ejecutar.isChecked():
+            self.modbus.pausar(diagnostico=True)
+            self._sin_estado()
             self.refrescar()
-        else:
             self.refrescar_edicion()
+            return
+        if not self._preparar_sesion():
+            self.a_ejecutar.setChecked(False)  # no se ha podido: Pausa
+            return
+        self.reloj.restart()
+        self.refrescar()
 
-    def _preparar_sesion(self, reiniciar: bool = False, observar_despues: bool = False) -> bool:
-        """Compila lo que se edita y deja en self.v una sesión estable: la que había (si es la misma y no se pide reinicio) o
-        una nueva desde la situación inicial. Con Modbus vivo la vincula al TCP existente, sin reconectar. Si no puede,
-        avisa y devuelve False sin tocar la conexión."""
+    def _sin_estado(self) -> None:
+        """Pausa = todo a 0 hasta un nuevo Play: el GRAFCET no tiene ninguna etapa activa ni temporizador en curso, y las
+        tablas de estado no enseñan lo de la sesión anterior. La sesión que había se sustituye por otra sin iniciar (estado
+        «preparada» del motor: ni situación ni valores); Play siempre crea una nueva desde la situación inicial. No se
+        toca el motor: solo se deja de apuntar a la sesión en marcha."""
+        s = self.v.s if self.v else None
+        if s is not None:
+            self.v.s = Session(s.cm, s.scenario, s.ctl.budget, options=s.options)
+            self.v.start_diags = []
+
+    def _preparar_sesion(self) -> bool:
+        """Compila lo que se edita y deja en self.v una sesión nueva, estable y en la situación inicial (Play siempre
+        arranca de cero, y Reiniciar en Play también). Con Modbus vivo la vincula al TCP existente, sin reconectar: antes de
+        ejecutar se escriben las salidas iniciales y se leen las entradas de la conexión. Si no puede, avisa y devuelve
+        False sin tocar la conexión."""
         if self.edicion is None:
             self._establecer_edicion(self._edicion_desde_fuente() if self.v else Edicion.nuevo())
         if self._variables_sin_nombre():
@@ -719,11 +757,6 @@ class Ventana(QMainWindow):
         ayuda = self._ayuda if self._ayuda and not e.ed.undo_stack else "Simulación del grafcet."
         nueva = Vista(e.ed.model["id"], e.titulo, ayuda, lambda: (copy.deepcopy(e.ed.model), e.layout()), self.options,
                       presentation=e.ed.presentation)
-        anterior = self.v.s if self.v else None
-        if (not reiniciar and nueva.s is not None and anterior is not None and anterior.status == "pausada-estable"
-                and anterior.cm.revision == nueva.s.cm.revision and anterior.options == self.options):
-            nueva.s = anterior  # Pausa y Play sin editar entre medias: sigue donde estaba (Reiniciar vuelve al principio)
-            nueva.start_diags = []
         if nueva.s is None:  # compila con las lecturas por defecto, pero no con las activas (diálogo «Lecturas»)
             lineas = [f"• {d['code']}: {d['message']}" for d in map(nueva._diag, nueva.compile_diags)]
             QMessageBox.warning(self, TITULO, "El grafcet no compila con las lecturas de interpretación activas, no se puede "
@@ -736,8 +769,7 @@ class Ventana(QMainWindow):
             try:
                 config = self.panel_es.obtener()
                 config.validar(e.ed.model)  # lo editado puede haber dejado el mapa sin variable o de otro tipo
-                if reiniciar or self.modbus.adaptador.sesion is not nueva.s:
-                    self.modbus.vincular(nueva.s, config, e.ed.model, observar_despues)
+                self.modbus.vincular(nueva.s, config, e.ed.model)
             except ERRORES as exc:
                 texto = f"No se puede ejecutar con la conexión y las asignaciones actuales: {exc}. Revise la asignación; la conexión se conserva."
                 self.modbus.mensaje = texto
@@ -790,6 +822,8 @@ class Ventana(QMainWindow):
         self._empezar_edicion(Edicion.nuevo())
         if self.modbus.activo:  # la conexión sigue; el modelo nuevo trae su propio mapa (vacío)
             self._cargar_config_modbus(self.edicion.ed.model)
+        elif self.paginas_es.currentIndex() == 1:  # el panel de E/S está a la vista: que muestre el proyecto nuevo, no el anterior
+            self._sincronizar_es(mostrando=True)
 
     def _edicion_desde_fuente(self) -> Edicion:
         """Copia editable de lo que se está simulando (un ejemplo o un modelo abierto)."""
@@ -835,6 +869,7 @@ class Ventana(QMainWindow):
         """Ajusta la interfaz al modo: herramientas, panel derecho, dibujo y acciones."""
         editar = self.modo == "editar" and self.edicion is not None
         self.tb_edit.setVisible(editar)
+        self.variables.setEnabled(editar)  # fuera de edición la tabla no responde a Supr (ni a nada)
         self.dock.setVisible(editar and self.a_izquierdo.isChecked())
         self.flechas["izquierdo"].setVisible(editar)
         self._acciones_edicion(editar)
@@ -864,13 +899,17 @@ class Ventana(QMainWindow):
 
     def _alto_inferior(self, editar: bool) -> None:
         """Al cambiar de modo, el panel inferior recupera la altura que tenía en ese modo (la inicial, o la que dejó el
-        divisor): el dibujo y el panel se reparten el alto."""
+        divisor): el dibujo y el panel se reparten el alto. Al editar, mientras el divisor no se haya movido, el panel cede lo
+        que haga falta (sin bajar de su mínimo) para que la paleta se vea entera; en una ventana más baja, la paleta se
+        encoge y se desplaza."""
         if self.isVisible() and self.inferior.isVisible():
             self._alturas["simular" if editar else "editar"] = self.vsplit.sizes()[1]
         if self.inferior.isHidden() and self.isVisible():
             return  # plegado: al desplegarlo vuelve a su altura
         alto = self._alturas["editar" if editar else "simular"]
         total = max(sum(self.vsplit.sizes()), alto + 200)
+        if editar and alto == ALTO_INFERIOR["editar"] and not self.dock.isHidden():  # (a 1366×768: el inferior pasa de 380 a 328)
+            alto = max(min(alto, total - self.paleta.sizeHint().height()), self.inferior.minimumSizeHint().height())
         self.vsplit.setSizes([total - alto, alto])
 
     def showEvent(self, event: Any) -> None:  # noqa: N802
@@ -954,6 +993,8 @@ class Ventana(QMainWindow):
             item.setForeground(QColor(COL["err"]))
             self.lista_diag.addItem(item)
         self._titulo_ventana()
+        if hasattr(self, "panel_es"):  # las variables pueden haber cambiado: el panel de E/S las sigue (o avisa, si hay conexión)
+            self._sincronizar_es()
 
     def _redibujar_edicion(self) -> None:
         e = self.edicion
@@ -1171,13 +1212,15 @@ class Ventana(QMainWindow):
             QStyle.StandardPixmap.SP_MediaPause if on else QStyle.StandardPixmap.SP_MediaPlay))
 
     def _ejecutar(self, on: bool) -> None:
-        """Play (on) o Pausa: el único control de ejecución. Play compila lo editado, arranca y pasa a simular; Pausa
-        detiene la evolución y vuelve a editar. La conexión Modbus no se toca: Pausa conserva TCP y salidas y Play vincula
-        la sesión al TCP existente."""
+        """Play (on) o Pausa: el único control de ejecución. Play compila lo editado y arranca siempre una sesión nueva desde
+        la situación inicial; Pausa detiene la evolución, vuelve a editar y deja todo a 0 hasta el siguiente Play: sin etapas
+        activas ni temporizadores y, con E/S externas, todas las salidas asignadas a 0. La conexión Modbus no se cierra:
+        Pausa conserva TCP y sigue observando las entradas, y Play vincula la sesión nueva al TCP existente."""
         if self._transicion_ui:
             return
         self._transicion_ui = True
         try:
+            venia_de_play = self.modo == "simular"
             if on and not self._preparar_sesion():
                 on = False  # no arranca (no compila, inestable, mapa de E/S inválido…): sigue en Pausa
             self.modo = "simular" if on else "editar"
@@ -1187,6 +1230,9 @@ class Ventana(QMainWindow):
                 if self.edicion is None:
                     self._establecer_edicion(self._edicion_desde_fuente() if self.v else Edicion.nuevo())
             self._poner_modo()
+            if not on and venia_de_play:
+                self._sin_estado()
+                self.refrescar()  # las tablas dejan de enseñar la sesión anterior y las entradas se deshabilitan
             if on:
                 self.refrescar()
             if self.modbus.activo:
@@ -1248,9 +1294,13 @@ class Ventana(QMainWindow):
         if self.modbus.activo:
             if self.modbus.adaptador.sesion is None:  # Pausa con la conexión viva: solo se observan las entradas
                 self.modbus.tick(False)
+                self._recordar_conexion()
+                if not self.modbus.activo:  # acaba de cerrarse (desconexión, fallo o prueba): ya pueden verse las variables nuevas
+                    self._sincronizar_es()
                 self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
                 self.panel_es.ocupado(self.modbus.activo)
-                self.panel_es.mostrar_muestra(self.modbus.muestra, self.modbus.adaptador.entradas)
+                self.panel_es.mostrar_muestra(self.modbus.muestra, self.modbus.adaptador.entradas, self.modbus.escritos,
+                                              getattr(self.modbus.adaptador, "salidas_control", []))
                 if self.a_ejecutar.isChecked():
                     self.a_ejecutar.setChecked(False)
                 if not self.modbus.activo:
@@ -1261,11 +1311,14 @@ class Ventana(QMainWindow):
             if ejecutar and self.modbus.en_marcha and self.v and self.v.s and self.v.s.status == "pausada-estable":
                 self.v.s.advance_to(self.v.s.z.time + us)
             self.modbus.tick(ejecutar)
+            self._recordar_conexion()
             if self.a_ejecutar.isChecked() and self._vigilar_motor():
                 self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
                 return
             if self.modbus.estado in ("error", "desconectado", "diagnostico"):
                 self.a_ejecutar.setChecked(False)
+            if not self.modbus.activo:
+                self._sincronizar_es()
             self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
             self.panel_es.ocupado(self.modbus.activo)
             if self.modo == "simular":
@@ -1300,7 +1353,7 @@ class Ventana(QMainWindow):
     def _cargar_config_modbus(self, doc: dict[str, Any] | None = None) -> None:
         doc = doc or self.v.doc
         raiz = self._raiz_modbus()
-        config = None
+        config, avisos = None, []
         # Recargar el mismo proyecto conserva el mapa en memoria; cambiar de proyecto exige un mapa propio.
         anterior = self.panel_es.config
         cambio = self._proyecto != self._proyecto_modbus
@@ -1309,13 +1362,13 @@ class Ventana(QMainWindow):
             config = anterior
         elif raiz and (raiz / ARCHIVO).exists():
             try:
-                config = Configuracion.cargar(raiz / ARCHIVO, doc)
+                config = Configuracion.cargar(raiz / ARCHIVO, doc, avisos)  # lo que ya no casa se descarta; el resto se conserva
             except (ValueError, OSError) as exc:
                 self.panel_es.estado.setText(f"No se pudo cargar el mapa: {exc}")
         if self.modbus.activo:
             config = copy.deepcopy(config or Configuracion(modelo=doc["id"]))
             config.host, config.puerto, config.unidad = self.modbus.cliente.host, self.modbus.cliente.puerto, self.modbus.cliente.unidad
-        self.panel_es.cargar(doc, config)
+        self.panel_es.cargar(doc, config, avisos)
         if self.modbus.activo and cambio:
             self._cambiar_modelo_modbus(doc)
 
@@ -1351,20 +1404,105 @@ class Ventana(QMainWindow):
         nombre, _ = QFileDialog.getOpenFileName(self, "Cargar configuración Modbus", "", "JSON (*.json)")
         if nombre:
             try:
-                config = Configuracion.cargar(Path(nombre), self.panel_es.doc)
-                self.panel_es.cargar(self.panel_es.doc, config)
+                avisos = []
+                config = Configuracion.cargar(Path(nombre), self.panel_es.doc, avisos)
+                self.panel_es.cargar(self.panel_es.doc, config, avisos)
                 self.panel_es.estado.setText("Mapa cargado · desconectado")
             except (ValueError, OSError) as exc:
                 self.panel_es.estado.setText(f"No se pudo cargar: {exc}")
 
+    def _leer_conexion_recordada(self) -> tuple[str, int, int]:
+        """El último (host, puerto, esclavo) con el que se conectó o se probó con éxito; la primera vez, el de Factory I/O."""
+        a = self.ajustes
+        host = str(a.value("modbus/host", CONEXION_INICIAL[0]) or "").strip()
+        puerto, unidad = a.value("modbus/puerto", CONEXION_INICIAL[1], type=int), a.value("modbus/unidad", CONEXION_INICIAL[2], type=int)
+        if not host or not 1 <= puerto <= 65535 or not 0 <= unidad <= 255:  # un valor roto no debe dejar sin conexión propuesta
+            return CONEXION_INICIAL
+        return host, puerto, unidad
+
+    def _recordar_conexion(self) -> None:
+        """Tras conectar o probar la conexión con éxito, recuerda el servidor para proponerlo en los proyectos que no traigan
+        mapa propio (el mapa guardado de un proyecto manda sobre esto). No cambia nada de la conexión."""
+        m = self.modbus
+        if m.cliente is None or not (m.estado == "conectado" or (m.estado == "desconectado" and m.mensaje.startswith("Conexión probada"))):
+            return
+        datos = (m.cliente.host, m.cliente.puerto, m.cliente.unidad)
+        if datos != self._conexion_recordada:
+            self._conexion_recordada = datos
+            self.panel_es.conexion_defecto = datos
+            for clave, valor in zip(("host", "puerto", "unidad"), datos):
+                self.ajustes.setValue(f"modbus/{clave}", valor)
+            self.ajustes.sync()
+
+    def _doc_es(self) -> dict[str, Any] | None:
+        """El modelo cuyas variables enseña el panel de E/S: el que se edita; al simular, el que se está ejecutando."""
+        if self.modo == "editar" and self.edicion:
+            return self.edicion.ed.model
+        return self.v.doc if self.v else None
+
+    def _sincronizar_es(self, mostrando: bool = False) -> None:
+        """Deja las listas y los canales del panel de E/S con las variables actuales del modelo, conservando el mapa y la
+        configuración (la IP incluida); lo que ya no casa se quita con aviso. Con la conexión viva no se toca: el mapa en
+        uso no cambia a mitad de sesión y solo se marca que hay variables nuevas pendientes de ver al desconectar. Al
+        mostrar el panel (`mostrando`) también se cambia de mapa si el proyecto es otro; en cualquier otro momento, solo
+        si el panel se ve y sigue siendo el mismo proyecto (cambiar de proyecto lo hace `_cargar_config_modbus`)."""
+        doc, p = self._doc_es(), self.panel_es
+        if doc is None:
+            return
+        if self.modbus.activo:
+            p.marcar_pendiente(p.doc is not None and p.firma(doc) != p.firma_modelo)
+            return
+        mismo = self._proyecto == self._proyecto_modbus and p.config.modelo == doc["id"]
+        if not mostrando and not (mismo and self.paginas_es.currentIndex() == 1):
+            return
+        if mismo:
+            p.actualizar(doc)
+        else:
+            self._proyecto_modbus = self._proyecto
+            p.cargar(doc)
+
     def mostrar_es(self):
-        if not self.modbus.activo:
-            doc = self.edicion.ed.model if self.modo == "editar" and self.edicion else self.v.doc if self.v else None
-            if doc is not None and doc != self.panel_es.doc:
-                mismo = self._proyecto == self._proyecto_modbus and self.panel_es.config.modelo == doc["id"]
-                self._proyecto_modbus = self._proyecto
-                self.panel_es.cargar(doc, self.panel_es.config if mismo else None)
-        self.paginas_es.setCurrentIndex(1)
+        self._sincronizar_es(mostrando=True)
+        self._mostrar_pagina(True)
+
+    def _mostrar_pagina(self, es: bool) -> None:
+        """Único sitio que cambia de página: el dibujo GRAFCET (es=False) o la vista de E/S externas (es=True)."""
+        self.paginas_es.setCurrentIndex(1 if es else 0)
+        self._sincronizar_boton_es()
+
+    def _alternar_es(self, on: bool) -> None:
+        """El botón conmutador: marcado abre la vista de E/S; desmarcado vuelve al dibujo GRAFCET."""
+        if on:
+            self.mostrar_es()
+        else:
+            self._mostrar_pagina(False)
+
+    def _sincronizar_boton_es(self, _indice: int = 0) -> None:
+        """Deja el botón con el aspecto de la página que se ve (también si la página la cambió otra vía: la flecha ← del
+        panel, la prueba guiada…): «E/S externas» en el dibujo GRAFCET; «Vista GRAFCET», pulsado, en la vista de E/S."""
+        es = self.paginas_es.currentIndex() == 1
+        self.a_es.blockSignals(True)
+        self.a_es.setChecked(es)
+        self.a_es.blockSignals(False)
+        self._aspecto_boton_es(es)
+
+    def _aspecto_boton_es(self, es: bool) -> None:
+        """Texto, tooltip e icono del botón conmutador en cada una de sus dos vistas."""
+        self.a_es.setText("Vista GRAFCET" if es else "E/S externas")
+        self.a_es.setToolTip("Volver al dibujo GRAFCET" if es else
+                             "Conectar sensores y actuadores · se vuelve con este mismo botón o con la flecha ← del panel")
+        self.a_es.setIcon(self._iconos_es[1 if es else 0])
+
+    def _fijar_ancho_boton_es(self) -> None:
+        """El botón mide siempre lo del más ancho de sus dos estados (texto e icono): al alternar entre «E/S externas» y «Vista
+        GRAFCET» no se mueve nada más de la barra."""
+        boton = self.tb_conexion.widgetForAction(self.a_es)
+        anchos = []
+        for es in (False, True):
+            self._aspecto_boton_es(es)
+            anchos.append(boton.sizeHint().width())
+        self._aspecto_boton_es(self.paginas_es.currentIndex() == 1)
+        boton.setFixedWidth(max(anchos))
 
     def _conectar_modbus(self, prueba=False):
         try:
@@ -1396,7 +1534,7 @@ class Ventana(QMainWindow):
                 Path(__file__).resolve().parents[1] / "pruebas_manuales" / "factoryio_digital")
         if self.abrir_ruta(raiz / "manifest.json"):
             self.a_ejecutar.setChecked(False)
-            self.paginas_es.setCurrentIndex(1)
+            self._mostrar_pagina(True)
             self.panel_es.estado.setText("Prueba preparada · desconectado. Comprueba la IP de Factory I/O y pulsa «Probar conexión».")
 
     def _desconectar_modbus(self):
@@ -1454,7 +1592,7 @@ class Ventana(QMainWindow):
                             raw = raw - 65536 if senal.formato == "INT16" and raw >= 32768 else raw
                             raw = Fraction(raw) / Fraction(senal.escala)
                         valores[senal.variable] = raw
-                for senal in a.salidas:
+                for senal in (*a.salidas, *getattr(a, "salidas_control", [])):  # en Pausa, las asignadas siguen mostrando su último valor escrito
                     if senal.variable in self.modbus.escritos:
                         raw = self.modbus.escritos[senal.variable]
                         if senal.formato != "BOOL":

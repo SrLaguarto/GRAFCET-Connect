@@ -1,9 +1,9 @@
 {
- "date": "2026-10-29T20:13:06+01:00",
+ "date": "2026-10-30T15:57:37+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 371,
+ "total": 486,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -80,6 +80,810 @@
     "REQ-EVT-03"
    ],
    "summary": "REQ-EVT-01, REQ-ACT-02, REQ-EVT-03: ejemplo del responsable; una cuenta por cada subida de I02 con 1 activa, ninguna en 0."
+  },
+  {
+   "test": "test_dibujo_vista.Dependencias.test_SEDI286_por_defecto_no_hay_trazos_de_dependencia_y_con_la_opcion_aparecen_los_de_macroetapa_y_encapsulante",
+   "case": "S-EDI286",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-04, REQ-JER-05, REQ-EDT-02: sin la opción (por defecto) no se dibuja ningún trazo discontinuo de dependencia;"
+  },
+  {
+   "test": "test_dibujo_vista.Dependencias.test_SEDI287_mostrar_u_ocultar_las_dependencias_no_cambia_la_disposicion_los_marcos_ni_la_seleccion",
+   "case": "S-EDI287",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-04, REQ-JER-05: lo único que cambia al mostrar las dependencias son sus trazos: el resto de lo"
+  },
+  {
+   "test": "test_dibujo_vista.Dependencias.test_SEDI288_el_boton_mostrar_dependencias_de_la_vista_conmuta_repinta_y_se_recuerda",
+   "case": "S-EDI288",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-SIM-03: la vista tiene el botón conmutable «Mostrar dependencias» tras los controles del zoom, apagado"
+  },
+  {
+   "test": "test_dibujo_vista.Dependencias.test_SEDI296_dibujo_js_acepta_la_misma_opcion_apagada_por_defecto_y_calcula_igual_el_punto_del_marco",
+   "case": "S-EDI296",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-04, REQ-JER-05: tools/dibujo.js y escritorio/diagrama.py tienen la misma opción, `dependencias`,"
+  },
+  {
+   "test": "test_dibujo_vista.DibujoTemporizador.test_SEDI207_el_tiempo_transcurrido_va_centrado_encima_de_la_duracion",
+   "case": "S-EDI207",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03",
+    "REQ-TMP-01"
+   ],
+   "summary": "REQ-SIM-03, REQ-TMP-01: en la receptividad «ok·3s/XB» el «1 s» se centra encima del «3s» (no a la derecha), justo"
+  },
+  {
+   "test": "test_dibujo_vista.DibujoTemporizador.test_SEDI208_si_no_se_localiza_la_duracion_se_centra_sobre_toda_la_receptividad",
+   "case": "S-EDI208",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: un temporizador cuya duración no está en el texto (token desconocido) se centra encima de toda la"
+  },
+  {
+   "test": "test_dibujo_vista.DibujoTemporizador.test_SEDI209_el_tiempo_transcurrido_no_pisa_la_barra_de_la_transicion_ni_el_texto",
+   "case": "S-EDI209",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: el tiempo transcurrido de una receptividad no toca el trazo de la transición, ni su designación, ni el"
+  },
+  {
+   "test": "test_dibujo_vista.DibujoTemporizador.test_SEDI210_condicion_y_evento_de_una_accion_llevan_su_tiempo_encima_de_su_duracion",
+   "case": "S-EDI210",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03",
+    "REQ-TMP-01"
+   ],
+   "summary": "REQ-SIM-03, REQ-TMP-01: en una acción con condición temporizada, y en una memorizada con un evento con retardo,"
+  },
+  {
+   "test": "test_dibujo_vista.DibujoTemporizador.test_SEDI211_el_tiempo_de_una_accion_con_retardo_no_pisa_la_caja_de_arriba",
+   "case": "S-EDI211",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: en una columna de acciones, el tiempo transcurrido de la segunda cabe en el hueco que la disposición le"
+  },
+  {
+   "test": "test_dibujo_vista.DibujoTemporizador.test_SEDI212_dibujo_js_coloca_el_tiempo_encima_de_la_duracion_igual_que_qt",
+   "case": "S-EDI212",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: el banco web escribe solo lo transcurrido encima de la duración (token y aparición, o todo el texto), con"
+  },
+  {
+   "test": "test_dibujo_vista.Negado.test_SEDI200_la_barra_del_negado_es_una_linea_de_2_px_sobre_la_palabra",
+   "case": "S-EDI200",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la barra de una variable negada es una línea propia de 2 px (el sobrerrayado del texto es de 1 px y"
+  },
+  {
+   "test": "test_dibujo_vista.Negado.test_SEDI201_la_barra_cubre_cada_tramo_negado_en_receptividades_condiciones_y_eventos",
+   "case": "S-EDI201",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un tramo de segmentos negados seguidos (NOT (p AND q), NOT X(A) con su subíndice) lleva una sola"
+  },
+  {
+   "test": "test_dibujo_vista.Negado.test_SEDI202_la_barra_no_cambia_anchos_ni_disposicion",
+   "case": "S-EDI202",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la barra no cambia lo que mide un texto ni dónde caen las cajas de las acciones (la disposición no"
+  },
+  {
+   "test": "test_dibujo_vista.Negado.test_SEDI203_dibujo_js_y_css_pintan_la_misma_barra",
+   "case": "S-EDI203",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el banco web (tools/dibujo.js y dibujo.css) pinta la barra del negado como una línea propia de 2 px,"
+  },
+  {
+   "test": "test_dibujo_vista.NombreDeLaEncapsulante.test_SEDI274_el_nombre_de_la_encapsulante_va_entero_por_encima_del_trazo_superior_de_su_recinto",
+   "case": "S-EDI274",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-05, REQ-EDT-02: el nombre de la encapsulante se escribe centrado sobre el marco de su recinto, con su línea"
+  },
+  {
+   "test": "test_dibujo_vista.NombreDeLaEncapsulante.test_SEDI275_dibujo_js_coloca_el_nombre_de_la_encapsulante_igual_que_escritorio",
+   "case": "S-EDI275",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-05, REQ-EDT-02: tools/dibujo.js sube la línea base del nombre de la encapsulante el mismo ENCIMA_MARCO que"
+  },
+  {
+   "test": "test_dibujo_vista.NombreDeLaEncapsulante.test_SEDI276_centrar_todo_deja_a_la_vista_el_nombre_y_el_marco_no_depende_de_el",
+   "case": "S-EDI276",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el nombre sobresale del marco, así que la caja del dibujo lo incluye y «Centrar todo» lo deja a la vista;"
+  },
+  {
+   "test": "test_dibujo_vista.Temporizador.test_SEDI204_el_estado_del_temporizador_es_solo_lo_transcurrido",
+   "case": "S-EDI204",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03",
+    "REQ-TMP-01"
+   ],
+   "summary": "REQ-SIM-03, REQ-TMP-01: antes de empezar no hay nada que mostrar; mientras cuenta, solo el tiempo transcurrido"
+  },
+  {
+   "test": "test_dibujo_vista.Temporizador.test_SEDI205_dos_temporizadores_de_la_misma_duracion_se_distinguen_por_su_orden",
+   "case": "S-EDI205",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-TMP-01"
+   ],
+   "summary": "REQ-TMP-01: «3s/p OR 3s/q/2s»: cada temporizador apunta a su propia aparición de «3s» en el texto; el de"
+  },
+  {
+   "test": "test_dibujo_vista.Temporizador.test_SEDI206_las_acciones_con_retardo_se_marcan_en_el_modelo_sin_depender_del_estado",
+   "case": "S-EDI206",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-TMP-01"
+   ],
+   "summary": "REQ-TMP-01: la acción con un retardo en su condición o su evento lleva `tmr` (para reservarle sitio arriba); la"
+  },
+  {
+   "test": "test_dibujo_vista.Zoom.test_SEDI213_la_rueda_hace_zoom_anclada_al_puntero",
+   "case": "S-EDI213",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-EDT-02: con la rueda, el punto del dibujo que está bajo el cursor se queda bajo el cursor (a menos"
+  },
+  {
+   "test": "test_dibujo_vista.Zoom.test_SEDI214_la_rueda_ancla_tambien_con_mucho_zoom_y_cerca_del_borde_de_la_escena",
+   "case": "S-EDI214",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: tras acercar al máximo y desplazarse hasta el borde, la rueda sigue anclada (la escena tiene margen"
+  },
+  {
+   "test": "test_dibujo_vista.Zoom.test_SEDI215_centrar_todo_deja_todo_lo_dibujado_dentro_y_centrado",
+   "case": "S-EDI215",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-EDT-02: «Centrar todo» (el botón, `ajustar` y Ctrl+0 del menú) encaja y centra todo el dibujo con"
+  },
+  {
+   "test": "test_dibujo_vista.Zoom.test_SEDI216_centrar_todo_al_editar_encaja_lo_dibujado_y_no_el_area_minima",
+   "case": "S-EDI216",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: al editar, «Centrar todo» encaja y centra los elementos dibujados (un dibujo pequeño se amplía), no el"
+  },
+  {
+   "test": "test_dibujo_vista.Zoom.test_SEDI217_alejar_no_deja_el_dibujo_fuera_de_la_vista",
+   "case": "S-EDI217",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: a cualquier zoom, hasta el mínimo y desplazándose hasta cualquier extremo, queda a la vista al menos"
+  },
+  {
+   "test": "test_dibujo_vista.Zoom.test_SEDI218_zoom_manual_fijo_hasta_centrar_y_doble_clic_al_simular",
+   "case": "S-EDI218",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: tras hacer zoom con la rueda la vista no se reajusta sola (ni al refrescar ni al cambiar de tamaño)"
+  },
+  {
+   "test": "test_dibujo_vista.Zoom.test_SEDI219_arrastrar_el_dibujo_con_la_mano_deja_la_vista_manual_y_los_botones_zoomean_al_centro",
+   "case": "S-EDI219",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: al simular, arrastrar el dibujo lo deja donde se suelta (no se reencaja con el siguiente refresco); «+» y"
+  },
+  {
+   "test": "test_dibujo_vista.Zoom.test_SEDI269_un_clic_con_temblor_no_deja_la_vista_manual_y_el_arrastre_empieza_pasada_la_distancia",
+   "case": "S-EDI269",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: al simular, un clic en el que el ratón se mueve menos que la distancia de arrastre del sistema (el temblor"
+  },
+  {
+   "test": "test_dibujo_vista.Zoom.test_SEDI271_centrar_todo_dice_su_atajo_y_el_doble_clic_de_la_simulacion",
+   "case": "S-EDI271",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-EDT-02: la ayuda del botón «Centrar todo» cita Ctrl+0 y, al simular, el doble clic (que también"
+  },
+  {
+   "test": "test_dibujo_vista.Zoom.test_SEDI289_encuadrar_encaja_y_centra_un_rectangulo_con_margen_y_el_tope_de_centrar_todo",
+   "case": "S-EDI289",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-08",
+    "REQ-JER-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-08, REQ-JER-07, REQ-SIM-03: `encuadrar(r)` encaja y centra en la vista el rectángulo de escena `r` con el mismo"
+  },
+  {
+   "test": "test_editor_cadenas.BarrasConElRaton.test_SEDI258_una_transicion_unida_con_el_raton_a_una_barra_activa_todo_lo_de_debajo_en_cualquier_parcial",
+   "case": "S-EDI258",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-JER-05",
+    "REQ-MOD-03",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02, REQ-JER-04, REQ-JER-05, REQ-SIM-03: con los gestos del editor (arrastrar de punto de unión a"
+  },
+  {
+   "test": "test_editor_cadenas.BarrasConElRaton.test_SEDI259_la_barra_con_una_etapa_y_una_transicion_por_encima_no_pierde_los_enlaces_de_la_transicion",
+   "case": "S-EDI259",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: con una etapa y una transición por encima de la misma barra (y varias etapas debajo), unidas"
+  },
+  {
+   "test": "test_editor_cadenas.BarrasEnElNucleo.test_SEDI228_bar_link_enlaza_todas_las_parejas_aunque_alguna_sea_un_borrador",
+   "case": "S-EDI228",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-14",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-14: unir un elemento a una barra enlaza en el modelo CADA pareja (arriba, abajo), también si"
+  },
+  {
+   "test": "test_editor_cadenas.BarrasEnElNucleo.test_SEDI229_una_transicion_sobre_una_barra_activa_todo_lo_que_cuelga_de_ella",
+   "case": "S-EDI229",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-04",
+    "REQ-JER-05",
+    "REQ-MOD-03",
+    "REQ-MOD-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-MOD-07, REQ-JER-04, REQ-JER-05, REQ-SIM-03: una transición con una barra Y debajo y de ella una"
+  },
+  {
+   "test": "test_editor_cadenas.BarrasEnElNucleo.test_SEDI230_una_barra_sobre_una_transicion_exige_todas_las_etapas_de_arriba",
+   "case": "S-EDI230",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-03",
+    "REQ-SEM-02"
+   ],
+   "summary": "REQ-MOD-03, REQ-SEM-02: varias etapas por encima de una barra Y y una transición debajo: la transición solo se"
+  },
+  {
+   "test": "test_editor_cadenas.BarrasEnElNucleo.test_SEDI231_dos_transiciones_sobre_una_barra_son_dos_enlaces_independientes",
+   "case": "S-EDI231",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03: lo que `bar_link` crea con transiciones por encima de una barra y una etapa por debajo son los enlaces"
+  },
+  {
+   "test": "test_editor_cadenas.BarrasEnElNucleo.test_SEDI232_dos_etapas_a_cada_lado_de_una_barra_no_ejecutan_y_se_diagnostican",
+   "case": "S-EDI232",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-09: una barra entre etapas sin transición (o entre transiciones) deja borradores no ejecutables"
+  },
+  {
+   "test": "test_editor_cadenas.BarrasEnElNucleo.test_SEDI233_desunir_y_borrar_la_barra_quitan_solo_sus_enlaces",
+   "case": "S-EDI233",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-05: quitar un elemento de la barra quita sus enlaces con los del otro lado (y solo esos), borrar"
+  },
+  {
+   "test": "test_editor_cadenas.EncuadrarYDependencias.test_SEDI273_la_leyenda_dice_que_los_trazos_de_dependencia_solo_se_ven_con_el_boton_y_no_habla_de_la_navegacion_antigua",
+   "case": "S-EDI273",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-04, REQ-JER-05: la leyenda de la ventana ya no dice que la macroetapa va unida a su expansión por"
+  },
+  {
+   "test": "test_editor_cadenas.EncuadrarYDependencias.test_SEDI290_el_boton_mostrar_dependencias_esta_junto_al_zoom_en_edicion_y_en_simulacion_y_se_recuerda",
+   "case": "S-EDI290",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-JER-05",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-04, REQ-JER-05, REQ-SIM-03: «Mostrar dependencias» es un botón conmutable junto a los controles del"
+  },
+  {
+   "test": "test_editor_cadenas.EncuadrarYDependencias.test_SEDI291_encuadrar_la_expansion_encaja_su_zona_con_margen_y_la_resalta",
+   "case": "S-EDI291",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-08",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-EDT-08, REQ-JER-07: «Encuadrar la expansión» (botón derecho y doble clic en la macroetapa, y su botón del panel)"
+  },
+  {
+   "test": "test_editor_cadenas.EncuadrarYDependencias.test_SEDI292_encuadrar_la_macroetapa_desde_su_expansion_y_el_tope_de_zoom",
+   "case": "S-EDI292",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-08",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-EDT-08, REQ-JER-07: al revés, «Encuadrar la macroetapa» (en la zona de la expansión seleccionada y en su entrada"
+  },
+  {
+   "test": "test_editor_cadenas.EncuadrarYDependencias.test_SEDI293_encuadrar_el_recinto_y_la_encapsulante_en_los_dos_sentidos",
+   "case": "S-EDI293",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-08",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-EDT-08, REQ-JER-07: desde una encapsulante, «Encuadrar el recinto» (o «los recintos», con varios, todos juntos)"
+  },
+  {
+   "test": "test_editor_cadenas.EncuadrarYDependencias.test_SEDI294_las_ayudas_y_las_fichas_hablan_de_encuadrar_y_no_de_la_navegacion_antigua",
+   "case": "S-EDI294",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-08",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-EDT-08, REQ-JER-07, REQ-EDT-02: la ayuda de las fichas de la paleta y del panel de opciones, y los botones de la"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElDibujo.test_SEDI247_el_menu_ofrece_equidistanciar_en_cada_elemento_de_la_cadena_y_en_el_hueco",
+   "case": "S-EDI247",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-03: el botón derecho en una etapa, una transición o un enlace de una cadena ofrece «Equidistanciar"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElDibujo.test_SEDI248_la_seleccion_y_todo_el_lienzo_equidistancian_las_cadenas_que_tocan",
+   "case": "S-EDI248",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-03: con varios elementos seleccionados, el botón derecho en un hueco o en uno de ellos ofrece"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElDibujo.test_SEDI249_las_acciones_de_una_etapa_piden_mas_altura_y_no_se_solapan_con_el_nivel_siguiente",
+   "case": "S-EDI249",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: una etapa con tres acciones en columna (que llegan hasta 134 por debajo de su centro) separa"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElDibujo.test_SEDI250_si_algo_quedaria_encima_de_otro_elemento_no_se_equidistancia_y_se_avisa",
+   "case": "S-EDI250",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-05: si al equidistanciar un elemento de la cadena quedara encima de otro que no es de ella, no"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElDibujo.test_SEDI251_con_una_barra_de_simultaneidad_cada_barra_va_a_mitad_y_se_guarda_y_se_abre",
+   "case": "S-EDI251",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-01",
+    "REQ-EDT-02",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-03, REQ-DAT-01: una barra enlazada con el ratón entre una transición y dos etapas se alcanza"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElDibujo.test_SEDI252_lo_equidistanciado_no_cambia_lo_que_se_simula",
+   "case": "S-EDI252",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-14",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-14, REQ-SIM-03: equidistanciar es solo presentación: el grafcet se simula igual antes y después, con los"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElNucleo.test_SEDI222_cadena_lineal_con_distancias_irregulares_queda_a_la_distancia_estandar",
+   "case": "S-EDI222",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-EDT-14"
+   ],
+   "summary": "REQ-EDT-03, REQ-EDT-14: una cadena de etapas y transiciones con distancias irregulares queda con la misma"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElNucleo.test_SEDI223_la_cadena_se_alcanza_desde_cualquier_elemento_enlace_o_parcial_y_las_aisladas_no_cuentan",
+   "case": "S-EDI223",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-EDT-14"
+   ],
+   "summary": "REQ-EDT-03, REQ-EDT-14: la cadena de un elemento es la componente conexa de etapas, macroetapas y transiciones"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElNucleo.test_SEDI224_una_etapa_con_muchas_acciones_aumenta_la_distancia_con_el_nivel_siguiente",
+   "case": "S-EDI224",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-03, REQ-ACT-01: lo que sobresale por debajo de una etapa (`extent`, el alto de sus acciones en columna) pide"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElNucleo.test_SEDI225_alternativas_y_simultaneidad_con_barras_a_mitad_de_la_distancia",
+   "case": "S-EDI225",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-EDT-03, REQ-MOD-03: las ramas de una alternativa quedan al mismo nivel; en una simultaneidad, las etapas de una"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElNucleo.test_SEDI226_el_enlace_de_realimentacion_y_las_rutas_manuales",
+   "case": "S-EDI226",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-EDT-14"
+   ],
+   "summary": "REQ-EDT-03, REQ-EDT-14: el enlace que vuelve hacia arriba no cuenta para los niveles (una repetición de secuencia no"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElNucleo.test_SEDI227_una_cadena_sin_enlaces_con_otras_partes_y_los_parciales_no_se_mezclan",
+   "case": "S-EDI227",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-JER-04"
+   ],
+   "summary": "REQ-EDT-03, REQ-JER-04: un enlace entre elementos de parciales distintos no los une en una cadena (cada una se reparte"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElNucleo.test_SEDI234_un_enlace_dibujado_hacia_arriba_que_no_cierra_ningun_ciclo_cuenta_como_descendente",
+   "case": "S-EDI234",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-EDT-14"
+   ],
+   "summary": "REQ-EDT-03, REQ-EDT-14: solo es de realimentación el enlace que vuelve hacia arriba Y cierra un ciclo; si una transición"
+  },
+  {
+   "test": "test_editor_cadenas.EquidistanciarEnElNucleo.test_SEDI235_equidistanciar_cualquier_grafo_deja_la_x_en_la_rejilla_sin_tocar_el_modelo_y_es_idempotente",
+   "case": "S-EDI235",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-EDT-14"
+   ],
+   "summary": "REQ-EDT-03, REQ-EDT-14: con cientos de grafos al azar (varias etapas, transiciones con varias etapas antes y después,"
+  },
+  {
+   "test": "test_editor_cadenas.FichaDeForzado.test_SEDI253_la_orden_de_forzado_es_una_ficha_de_la_paleta_como_las_demas",
+   "case": "S-EDI253",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-02: la paleta ofrece «Forzado» (la orden de forzado: rectángulo doble con «G{ }») tras las"
+  },
+  {
+   "test": "test_editor_cadenas.FichaDeForzado.test_SEDI254_soltar_la_ficha_sobre_una_etapa_abre_el_dialogo_y_crea_la_orden_asociada_a_ella",
+   "case": "S-EDI254",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05",
+    "REQ-JER-02",
+    "REQ-JER-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-02, REQ-JER-03, REQ-EDT-05: arrastrar la ficha sobre una etapa la resalta como destino; soltarla"
+  },
+  {
+   "test": "test_editor_cadenas.FichaDeForzado.test_SEDI255_soltar_la_ficha_donde_no_hay_etapa_cancelar_o_un_rechazo_no_cambian_nada",
+   "case": "S-EDI255",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-02, REQ-EDT-09: soltar la ficha en un hueco o sobre algo que no es una etapa (una transición, una"
+  },
+  {
+   "test": "test_editor_cadenas.FichaDeForzado.test_SEDI256_la_accion_de_una_etapa_de_la_seleccion_mueve_el_grupo_y_un_clic_la_senala",
+   "case": "S-EDI256",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-ACT-01: con la etapa y sus acciones seleccionadas (lazo), pulsar la caja de una acción no deshace la"
+  },
+  {
+   "test": "test_editor_cadenas.FichaDeForzado.test_SEDI257_las_ocho_fichas_se_ven_enteras_en_cuatro_filas_a_1366x768",
+   "case": "S-EDI257",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: con la ficha «Forzado» la paleta pasó de tres a cuatro filas de 84 de alto (340 en total, sin"
+  },
+  {
+   "test": "test_editor_cadenas.FichaDeForzado.test_SEDI267_la_paleta_se_encoge_en_ventanas_bajas_sin_subir_el_minimo_de_alto_de_la_ventana",
+   "case": "S-EDI267",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: la paleta de cuatro filas pide su alto (340) pero se encoge hasta tres filas, con barra"
+  },
+  {
+   "test": "test_editor_cadenas.FichaDeForzado.test_SEDI272_el_divisor_movido_a_mano_se_respeta_aunque_la_paleta_no_quepa_entera",
+   "case": "S-EDI272",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09, REQ-EDT-02: la paleta solo gana su alto completo mientras el divisor entre el dibujo y el panel inferior"
+  },
+  {
+   "test": "test_editor_cadenas.GrafcetParcialSuelto.test_SEDI280_la_ficha_grafcet_parcial_es_una_ficha_mas_de_la_paleta",
+   "case": "S-EDI280",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-02: la paleta ofrece «Grafcet parcial» (marco redondeado con «G») antes de «Forzado», con su"
+  },
+  {
+   "test": "test_editor_cadenas.GrafcetParcialSuelto.test_SEDI281_soltar_la_ficha_en_un_hueco_crea_un_parcial_vacio_con_nombre_unico_y_su_marco",
+   "case": "S-EDI281",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-02, REQ-EDT-05: soltar «Grafcet parcial» en un hueco crea, en una sola operación de deshacer, un"
+  },
+  {
+   "test": "test_editor_cadenas.GrafcetParcialSuelto.test_SEDI282_el_marco_vacio_se_selecciona_se_mueve_se_rellena_y_se_renombra",
+   "case": "S-EDI282",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-02, REQ-EDT-05: el marco vacío de un parcial suelto se agarra por su borde (dentro no hay nada que"
+  },
+  {
+   "test": "test_editor_cadenas.GrafcetParcialSuelto.test_SEDI283_un_parcial_suelto_sin_etapas_sobrevive_a_guardar_y_abrir_con_su_marco_en_su_sitio",
+   "case": "S-EDI283",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-01",
+    "REQ-EDT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-01, REQ-EDT-02, REQ-DAT-01: dos parciales sueltos sin etapas se guardan y se abren (formato actual, sin"
+  },
+  {
+   "test": "test_editor_cadenas.GrafcetParcialSuelto.test_SEDI284_un_parcial_suelto_es_destino_de_la_ficha_forzado_y_se_borra_con_aviso_y_un_deshacer",
+   "case": "S-EDI284",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-JER-02",
+    "REQ-JER-03",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-JER-02, REQ-JER-03, REQ-EDT-05, REQ-SIM-03: un parcial suelto sale en el diálogo de la ficha «Forzado» (con sus"
+  },
+  {
+   "test": "test_editor_cadenas.GrafcetParcialSuelto.test_SEDI285_el_menu_del_hueco_ofrece_un_grafcet_parcial_nuevo_aqui",
+   "case": "S-EDI285",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-02: el botón derecho en un hueco ofrece «Nuevo grafcet parcial aquí» (lo mismo que soltar la"
+  },
+  {
+   "test": "test_editor_cadenas.MoverVarios.test_SEDI243_varios_seleccionados_se_mueven_juntos_desde_el_primer_clic",
+   "case": "S-EDI243",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-05: tras seleccionar con el lazo varios elementos (etapas, transiciones, una barra, acciones"
+  },
+  {
+   "test": "test_editor_cadenas.MoverVarios.test_SEDI244_un_clic_sin_mover_deja_solo_ese_elemento_y_mayus_sigue_sumando_y_quitando",
+   "case": "S-EDI244",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: soltar sin haberse movido (un clic simple) sobre un miembro de la selección múltiple deja seleccionado solo"
+  },
+  {
+   "test": "test_editor_cadenas.MoverVarios.test_SEDI245_si_lo_que_se_mueve_queda_encima_de_algo_que_no_se_mueve_vuelve_a_su_sitio",
+   "case": "S-EDI245",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-05: el mismo aviso de solape que al mover un elemento: si el resultado de mover varios deja algo"
+  },
+  {
+   "test": "test_editor_cadenas.MoverVarios.test_SEDI246_las_rutas_de_los_enlaces_con_los_dos_extremos_movidos_se_desplazan_con_ellos",
+   "case": "S-EDI246",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-14"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-14: al mover un grupo, las rutas manuales (coordenadas absolutas laneX, exitY, entryY, middleY) de"
+  },
+  {
+   "test": "test_editor_cadenas.MoverVariosEnElNucleo.test_SEDI220_mover_varios_en_una_sola_operacion_y_deshacerla_entera",
+   "case": "S-EDI220",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-EDT-05",
+    "REQ-EDT-14"
+   ],
+   "summary": "REQ-EDT-03, REQ-EDT-05, REQ-EDT-14: `move_many` mueve etapas, transiciones, barras y acciones sueltas a la vez, con"
+  },
+  {
+   "test": "test_editor_cadenas.MoverVariosEnElNucleo.test_SEDI221_mover_varios_crea_la_posicion_que_falta_y_quita_estilos",
+   "case": "S-EDI221",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-EDT-14"
+   ],
+   "summary": "REQ-EDT-03, REQ-EDT-14: un elemento sin posición guardada (por ejemplo un recinto vacío) la recibe al moverse; un"
+  },
+  {
+   "test": "test_editor_cadenas.SuprSobreUnaAccion.test_SEDI240_supr_sobre_la_caja_de_una_accion_quita_solo_la_accion",
+   "case": "S-EDI240",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-05, REQ-ACT-01: tras un clic en la caja de la acción de una etapa (la etapa queda seleccionada y la acción"
+  },
+  {
+   "test": "test_editor_cadenas.SuprSobreUnaAccion.test_SEDI241_supr_con_la_etapa_seleccionada_o_varias_cosas_borra_lo_seleccionado",
+   "case": "S-EDI241",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-05: para borrar la etapa hay que seleccionarla (un clic en la etapa deja de señalar la acción; también"
+  },
+  {
+   "test": "test_editor_cadenas.SuprSobreUnaAccion.test_SEDI242_supr_sobre_una_orden_de_forzado_quita_solo_la_orden",
+   "case": "S-EDI242",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-JER-02, REQ-EDT-05: un clic en la caja de una orden de forzado la selecciona (la etapa no) y Supr quita solo la"
   },
   {
    "test": "test_editor_escritorio.Bloques.test_SEDI42_ida_y_vuelta_texto_arbol_texto",
@@ -721,14 +1525,14 @@
    "summary": "REQ-JER-05: el botón derecho en una etapa de un recinto ofrece «Enlace de activación» como casilla (marcada si lo"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI177_abrir_expansion_lleva_la_vista_y_la_resalta_sin_tocar_el_modelo",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI177_encuadrar_la_expansion_lleva_la_vista_y_la_resalta_sin_tocar_el_modelo",
    "case": "S-EDI177",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-08",
     "REQ-JER-07"
    ],
-   "summary": "REQ-EDT-08, REQ-JER-07: «Abrir expansión» en una macroetapa lleva la vista a la zona de su expansión y la resalta"
+   "summary": "REQ-EDT-08, REQ-JER-07: «Encuadrar la expansión» en una macroetapa encaja en la vista la zona de su expansión y la"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI178_borrar_solo_la_entrada_o_la_salida_avisa_y_no_cambia_nada",
@@ -828,14 +1632,14 @@
    "summary": "REQ-EDT-08, REQ-JER-07, REQ-EDT-09: al seleccionar una macroetapa, una encapsulante, una etapa de un recinto, la"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI186_ir_a_la_macroetapa_o_a_la_encapsulante_y_doble_clic_son_solo_navegacion",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI186_encuadrar_la_macroetapa_o_la_encapsulante_y_doble_clic_son_solo_navegacion",
    "case": "S-EDI186",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-08",
     "REQ-JER-07"
    ],
-   "summary": "REQ-EDT-08, REQ-JER-07: «Ir a la macroetapa» en la entrada y la salida de una expansión (y en su zona), «Ir a la"
+   "summary": "REQ-EDT-08, REQ-JER-07: «Encuadrar la macroetapa» en la entrada y la salida de una expansión (y en su zona),"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI187_la_zona_de_suelta_de_un_parcial_incluye_un_margen_a_la_derecha_y_debajo",
@@ -1018,6 +1822,79 @@
    "summary": "REQ-EDT-02: clic selecciona un enlace; arrastre desde él abre otra rama en una transacción."
   },
   {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI260_supr_quita_la_variable_seleccionada_como_el_boton",
+   "case": "S-EDI260",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: Supr con una fila seleccionada en la tabla de variables la quita directamente, por el mismo camino que"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI261_supr_de_una_variable_en_uso_se_rechaza_igual_que_quitar",
+   "case": "S-EDI261",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-07, REQ-EDT-09: si el núcleo no deja quitar la variable (se usa), Supr enseña el mismo motivo que el"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI262_supr_con_la_celda_en_edicion_es_del_editor_y_no_borra_el_dibujo",
+   "case": "S-EDI262",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: con el editor de una celda abierto Supr borra texto, no la fila; con la tabla enfocada Supr es de la"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI263_supr_con_varias_filas_y_filas_sin_nombre",
+   "case": "S-EDI263",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: con varias filas seleccionadas Supr las quita todas (una operación de deshacer por variable); si el"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI264_supr_solo_actua_al_editar",
+   "case": "S-EDI264",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: fuera del modo edición (en Play) la tabla de variables no responde a Supr; al volver a Pausa, sí."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI265_boton_conmutador_entre_es_externas_y_vista_grafcet",
+   "case": "S-EDI265",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: un solo botón conmuta entre el dibujo GRAFCET y las E/S externas: «E/S externas» y su icono en el"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI266_el_estado_de_conexion_hace_salto_de_linea_y_no_se_corta",
+   "case": "S-EDI266",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: el estado de la conexión del panel de E/S ocupa su propia fila bajo el título, hace salto de línea y"
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI268_supr_del_teclado_numerico_tambien_quita_la_variable",
+   "case": "S-EDI268",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: el Supr del teclado numérico (con el modificador de teclado numérico) actúa igual que el Supr normal en la"
+  },
+  {
    "test": "test_editor_escritorio.Interfaz.test_SEDI26_geometria_comun_retorno_y_movimiento",
    "case": "S-EDI26",
    "outcome": "pasa",
@@ -1025,6 +1902,15 @@
     "REQ-MOD-03"
    ],
    "summary": "REQ-MOD-03: uniones comunes, retorno fuera de la etapa, flecha automática y recorridos iguales en Qt/web."
+  },
+  {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI270_el_boton_conmutador_mide_lo_mismo_en_las_dos_vistas_y_no_mueve_la_barra",
+   "case": "S-EDI270",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: el botón «E/S externas» / «Vista GRAFCET» tiene un ancho fijo, el del más ancho de sus dos estados (texto e"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI27_ejemplos_seleccion_salto_repeticion",
@@ -2014,7 +2900,46 @@
     "REQ-SIM-02",
     "REQ-SIM-04"
    ],
-   "summary": "REQ-SIM-02, REQ-SIM-04: Pausa conserva TCP y salidas; Play vincula una sesión al TCP existente; un diagnóstico"
+   "summary": "REQ-SIM-02, REQ-SIM-04: Pausa conserva TCP, sigue leyendo las entradas y pone a cero todas las salidas asignadas;"
+  },
+  {
+   "test": "test_modbus_ciclo.CicloTests.test_SFIO36_errores_de_red_habituales_con_frase_legible",
+   "case": "S-FIO36",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-ROB-01, REQ-SIM-03: los fallos de socket habituales (WinError 10053, 10054, 10061, reinicio, tubería rota,"
+  },
+  {
+   "test": "test_modbus_ciclo.CicloTests.test_SFIO51_conectar_sin_sesion_pone_a_cero_las_asignadas_una_vez_antes_de_leer_y_probar_no_escribe",
+   "case": "S-FIO51",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-02, REQ-SIM-03 (P-IMP-60): Conectar sin sesión (Pausa) escribe exactamente un cero a cada coil y holding"
+  },
+  {
+   "test": "test_modbus_ciclo.CicloTests.test_SFIO52_desconectar_escribe_el_cero_antes_de_cerrar_el_tcp_y_si_la_red_falla_cierra_igual_con_aviso",
+   "case": "S-FIO52",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01",
+    "REQ-SIM-02"
+   ],
+   "summary": "REQ-SIM-02, REQ-ROB-01: Desconectar con la conexión establecida escribe el cero de todas las salidas asignadas (coils"
+  },
+  {
+   "test": "test_modbus_ciclo.CicloTests.test_SFIO58_vincular_ya_no_tiene_el_parametro_observar_despues",
+   "case": "S-FIO58",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-04"
+   ],
+   "summary": "REQ-SIM-04: limpieza: Reiniciar en Pausa ya no tiene una variante «observar después» (Pausa = sin sesión y todo a 0 lo"
   },
   {
    "test": "test_modbus_configuracion.ConfigTests.test_SFIO04_persistencia_separada",
@@ -2053,6 +2978,16 @@
    "summary": "REQ-DAT-02: entradas/salidas numéricas usan 100 incluso en mapas anteriores."
   },
   {
+   "test": "test_modbus_configuracion.ConfigTests.test_SFIO56_cargar_descarta_solo_las_asignaciones_que_ya_no_casan_y_rechaza_lo_corrupto",
+   "case": "S-FIO56",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-DAT-02, REQ-ROB-01: un mapa guardado con una variable que ya no existe (o de tipo o papel que ya no casan con el"
+  },
+  {
    "test": "test_modbus_panel.PanelTests.test_SFIO08_panel_y_mapa",
    "case": "S-FIO08",
    "outcome": "pasa",
@@ -2069,7 +3004,7 @@
     "REQ-SIM-02",
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-02, REQ-SIM-03: controles Qt y descarte al reiniciar sesión."
+   "summary": "REQ-SIM-02, REQ-SIM-03: controles Qt; Pausa deja todo a 0 (sin sesión en marcha y con la salida a cero en la"
   },
   {
    "test": "test_modbus_panel.PanelTests.test_SFIO17_etiquetas_y_direcciones_independientes",
@@ -2114,7 +3049,7 @@
    "requirements": [
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03: conexión de observación sin programa compilado ni salidas."
+   "summary": "REQ-SIM-03 (P-IMP-60): conexión de observación sin programa compilado: las entradas solo se leen; Conectar (en Pausa)"
   },
   {
    "test": "test_modbus_panel.PanelTests.test_SFIO24_canales_offset_mover_desasignar_y_persistir",
@@ -2172,7 +3107,7 @@
     "REQ-SIM-02",
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-02, REQ-SIM-03: Reiniciar en Pausa y Play inmediato (antes de que termine el reinicio) deja la ejecución"
+   "summary": "REQ-SIM-02, REQ-SIM-03: Pausa, Reiniciar en Pausa (que solo vuelve a pedir el cero) y Play inmediato, antes de que"
   },
   {
    "test": "test_modbus_panel.PanelTests.test_SFIO31_abrir_otro_proyecto_pone_a_cero_aunque_la_escritura_siguiera_en_vuelo",
@@ -2192,6 +3127,210 @@
     "REQ-SIM-03"
    ],
    "summary": "REQ-SIM-03: cerrar la ventana con la conexión viva cierra el TCP (no queda el socket abierto contra la planta)."
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO33_marco_con_canales_y_nombres_fuera",
+   "case": "S-FIO33",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: la vista autómata tiene la cabecera «(IP:puerto) Esclavo ID:n», Input e Input Reg a la izquierda,"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO34_color_de_tipo_y_viveza_del_indicador",
+   "case": "S-FIO34",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: la barrita de cada canal es tenue si no está asignado, del color del tipo (Bool verde, Decimal azul,"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO35_arrastre_resalta_la_fila_entera_y_la_x_aparece_al_pasar_el_raton",
+   "case": "S-FIO35",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: al arrastrar una variable sobre un canal se resalta la fila entera (nombre incluido); soltar asigna;"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO37_variables_nuevas_del_editor_aparecen_en_es_y_se_pueden_asignar",
+   "case": "S-FIO37",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-EDT-07: cada vez que se muestra E/S externas, sus listas y canales reflejan las variables actuales"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO38_cambiar_tipo_o_papel_de_una_asignada_la_quita_con_aviso_sin_romper_el_panel",
+   "case": "S-FIO38",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-EDT-07: si una variable asignada cambia de tipo o de papel y ya no casa con su área, se quita del"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO39_con_el_panel_a_la_vista_las_variables_nuevas_llegan_sin_salir_y_se_conserva_lo_escrito",
+   "case": "S-FIO39",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: con la vista de E/S abierta (la tabla de variables sigue accesible) una variable nueva aparece al"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO40_con_la_conexion_activa_el_panel_no_cambia_y_avisa_hasta_desconectar",
+   "case": "S-FIO40",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-02, REQ-SIM-03: con Modbus activo el mapa en uso no cambia a mitad de sesión: las variables nuevas no se"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO41_canales_fijados_a_mano_se_conservan_y_se_avisa_si_un_area_se_queda_sin_canales",
+   "case": "S-FIO41",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-DAT-02: con las cantidades de canal escritas a mano no se inventan canales; si una variable"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO42_camino_de_simulacion_el_panel_sigue_a_las_variables_del_modelo_en_ejecucion",
+   "case": "S-FIO42",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-EDT-07: en Play, E/S externas enseña las variables del modelo que se ejecuta; al volver a Pausa y"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO43_la_primera_vez_el_servidor_propuesto_es_el_de_factory_io",
+   "case": "S-FIO43",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: sin nada recordado ni mapa guardado, el panel propone 192.168.1.133, puerto 502 y esclavo 1; no se"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO44_recuerda_el_ultimo_servidor_que_conecto_y_lo_propone_en_proyectos_nuevos_y_al_reiniciar",
+   "case": "S-FIO44",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: tras conectar con éxito, host, puerto y esclavo se recuerdan en los ajustes de la aplicación y se"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO45_la_prueba_de_conexion_con_exito_tambien_recuerda_y_un_fallo_no",
+   "case": "S-FIO45",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: «Probar conexión» con éxito recuerda el servidor; una conexión que falla no lo cambia."
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO46_el_mapa_guardado_del_proyecto_manda_sobre_el_servidor_recordado",
+   "case": "S-FIO46",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-DAT-02: un proyecto con su configuración Modbus guardada abre con la suya, aunque haya un servidor"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO47_pausa_pone_a_cero_coils_y_holding_y_play_arranca_de_la_situacion_inicial",
+   "case": "S-FIO47",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-02, REQ-SIM-03 (P-IMP-60): Pausa deja todo a 0 hasta un nuevo Play: todas las coils y holding asignadas se"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO48_pausa_sin_conexion_deja_el_grafcet_sin_estado_y_cada_play_empieza_de_cero",
+   "case": "S-FIO48",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03 (P-IMP-60): sin E/S externas, Pausa también deja el GRAFCET sin etapas activas, sin temporizadores y con"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO49_conectar_o_probar_con_play_activo_pasa_a_pausa_y_un_diagnostico_acaba_con_todo_a_cero",
+   "case": "S-FIO49",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-02, REQ-SIM-03 (P-IMP-60): «Probar conexión» y «Conectar» con Play activo pasan a Pausa (sin etapas activas);"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO50_con_la_red_caida_en_play_acaba_en_pausa_sin_estado_y_no_se_garantiza_el_cero",
+   "case": "S-FIO50",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01",
+    "REQ-SIM-02"
+   ],
+   "summary": "REQ-ROB-01, REQ-SIM-02: si la red cae en Play, el programa acaba en Pausa sin etapas activas y el estado de la conexión"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO53_desconectar_en_play_pone_a_cero_coils_y_holding_antes_de_cerrar_el_tcp",
+   "case": "S-FIO53",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01",
+    "REQ-SIM-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-02, REQ-SIM-03, REQ-ROB-01: «Desconectar» en Play escribe el cero de todas las coils y holding asignadas ANTES"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO54_desconectar_con_la_red_caida_cierra_igual_y_avisa_de_salidas_no_garantizadas",
+   "case": "S-FIO54",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-ROB-01, REQ-SIM-03: si la planta ha dejado de responder, «Desconectar» no puede escribir el cero: la conexión se"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO55_cerrar_la_ventana_con_la_conexion_viva_escribe_el_cero_antes_de_cerrar_el_tcp",
+   "case": "S-FIO55",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-ROB-01: cerrar la ventana en Play escribe el cero de las coils y holding asignadas antes de cerrar el"
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO57_un_mapa_guardado_con_variables_que_ya_no_existen_se_carga_sin_ellas_y_con_aviso",
+   "case": "S-FIO57",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-ROB-01",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-DAT-02, REQ-ROB-01: al abrir un proyecto cuyo mapa guardado tiene asignaciones de una variable"
   },
   {
    "test": "test_simulador_escritorio.Nucleo.test_SAPP01_abrir_lo_guardado",
@@ -2298,7 +3437,7 @@
    "requirements": [
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03: «temporizada», con E1 activa y 1 s transcurrido, muestra «1 s / 3 s» junto a la receptividad y en"
+   "summary": "REQ-SIM-03: «temporizada», con E1 activa y 1 s transcurrido, muestra «1 s» (solo lo transcurrido) encima de la"
   },
   {
    "test": "test_simulador_escritorio.Ventana.test_SAPP11_paneles_plegables",
@@ -2345,7 +3484,7 @@
     "REQ-SIM-03",
     "REQ-SIM-04"
    ],
-   "summary": "REQ-SIM-03, REQ-SIM-04: Reiniciar vuelve a la situación inicial; en Play sigue en Play y en Pausa deja el"
+   "summary": "REQ-SIM-03, REQ-SIM-04: Reiniciar vuelve a la situación inicial y en Play sigue en Play; en Pausa, que ya está todo"
   },
   {
    "test": "test_simulador_escritorio.Ventana.test_SAPP18_abrir_ejemplo_o_modelo_deja_pausa_y_edicion",

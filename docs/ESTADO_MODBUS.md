@@ -4,15 +4,15 @@ Arquitectura: conexion/ sin Qt ni dependencias nuevas; trabajador de red único;
 sesión/reloj en hilo principal con QTimer existente. Motor grafcet/ intacto.
 Conexión opcional y manual. Mapa externo conexion-factoryio.json por ID de variable.
 
-Políticas actuales: pausa conserva estado/salidas. Reiniciar conserva TCP,
+Políticas actuales (segunda ronda, P-IMP-67): pausa pone a cero las coils y holding asignadas y deja el GRAFCET sin estado; Play arranca siempre una sesión nueva desde la situación inicial. Reiniciar conserva TCP,
 recrea sesión, descarta respuestas antiguas y publica salidas iniciales; queda en
-pausa (P-IMP-56). Cambiar modelo desconecta. Diagnóstico solicita cero; pérdida
-pausa sin garantizar salidas; reconexión manual solicita cero y exige Ejecutar.
+pausa (P-IMP-56) [superado en P-IMP-60: en Play sigue en Play]. Abrir otro modelo no desconecta: sus salidas pasan a cero (P-IMP-60). Diagnóstico solicita cero; pérdida
+pausa sin garantizar salidas; reconexión manual pone a cero las salidas asignadas antes de la primera lectura y exige Ejecutar. Desconectar pide el cero antes de cerrar el TCP («Desconectado · salidas a cero»); si la red falla, cierra igual y avisa «Salidas no garantizadas». Cerrar la ventana también intenta el cero, sin aviso si la red falla. Probar conexión no escribe.
 
 Interfaz educativa: botón E/S en barra y Atrás; PLC central, listas laterales,
-LED y asignaciones. Paso/Completar solo en menú Simulación para depurar sin Modbus.
+LED y asignaciones. Paso/Completar retirados (P-IMP-60); para depurar sin Modbus, Play, Pausa y «Avanzar el tiempo…» (solo en Play).
 P-IMP-57: solo entradas puede conectar desde Editar o sin modelo compilable;
-MonitorEntradas no tiene motor ni salidas y no envía escrituras. Mapa se guarda
+MonitorEntradas no tiene motor ni salidas; Conectar en Pausa escribe solo el cero de las salidas asignadas (P-IMP-67). Mapa se guarda
 contra el documento del panel, no contra un modelo de simulación anterior.
 
 P-IMP-58: Configuración muestra offset/cantidad para I/Q/AI/AQ. Campo opcional
@@ -20,7 +20,8 @@ canales en JSON de conexión, sin cambiar formato de modelo. Fuera del rango no
 se permite asignar; reducirlo con asignaciones fuera se rechaza sin borrarlas.
 Sin campo canales se conserva compatibilidad de la vista anterior.
 Botón + Canales visible en cabecera PLC; × para quitar y drag desde la propia
-tarjeta para mover. Editar desconectado: botón Desconectar / editar y tooltip.
+tarjeta para mover. [P-IMP-63: sin «+ Canales» (los canales se ajustan en
+Configuración) y la × aparece al pasar el ratón por el canal.] Editar desconectado: botón Desconectar / editar y tooltip.
 El ejemplo guiado tiene 16/16/4/4 con offsets 0, copiados de la captura del usuario;
 no son una detección. Direcciones y formato/escalado se revisan en Configuración.
 
@@ -62,3 +63,11 @@ Siguiente tarea exacta: validar recepción fraccionaria con escala 100 en la esc
 El responsable prueba también desasignar/mover y configurar
 cantidades con el portable actualizado. Después validar
 reinicio real, lectura de sensores numéricos, escalado y pérdida/reconexión.
+
+Segunda ronda (P-IMP-66 y P-IMP-67; documentada el 30-10-2026, sin ejecutar las pruebas):
+- Pausa = todo a 0 hasta nuevo Play (decisión del responsable): pide el cero de las coils y holding asignadas y deja el GRAFCET sin estado. Play siempre arranca desde la situación inicial, leyendo antes las entradas. Reiniciar en Pausa no crea sesión. Pruebas SFIO47, SFIO48, SAPP09 y SAPP17.
+- Conectar (sin sesión) escribe el cero de las salidas asignadas antes de la primera lectura («Conectado · Pausa · salidas a cero · observando las entradas»); Probar conexión no escribe (SFIO51). Desconectar escribe el cero antes de cerrar el TCP (SFIO52, SFIO53); con la red caída cierra igual y avisa (SFIO54). Cerrar la ventana: SFIO55 comprueba el cero y el cierre del TCP, no el aviso.
+- IP: primera vez 192.168.1.133, puerto 502, esclavo 1 (`CONEXION_INICIAL`); después, la última conexión o prueba con éxito, en QSettings `modbus/host`, `modbus/puerto` y `modbus/unidad` (SFIO43 a SFIO46). El mapa guardado del proyecto manda.
+- Panel E/S: se actualiza con el modelo; con la conexión viva avisa de variables nuevas hasta desconectar (SFIO37 a SFIO42).
+- Mapa tolerante: `Configuracion.cargar` descarta solo lo que ya no casa, con aviso; un JSON corrupto se rechaza entero (SFIO56, SFIO57). El formato no cambia.
+- Pendiente: ejecutar `python tools/ejecutar_pruebas.py` y validar con la escena real.

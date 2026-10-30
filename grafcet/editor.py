@@ -14,7 +14,7 @@ import copy
 from contextlib import contextmanager
 from fractions import Fraction
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator, NamedTuple
+from typing import Any, Callable, Iterable, Iterator, NamedTuple
 
 from . import expressions as ex
 from .diagnostics import Diagnostic, DiagnosticError
@@ -581,6 +581,47 @@ class Editor:
                 lay["x"], lay["y"] = _coord(x), _coord(y)
         self._txn("mover", fn, view_only=True)
 
+    def _place(self, m: dict[str, Any], p: dict[str, Any], moves: dict[str, tuple[Any, Any]]) -> None:
+        """Pone cada elemento de `moves` en su posición nueva (dentro de una operación de vista): una barra, una acción suelta
+        o cualquier elemento con posición en `elementLayouts` (etapa, macroetapa, transición, marco de un recinto vacío)."""
+        barras = {b["id"]: b for b in p.get("barras", [])}
+        sueltas = {d["id"]: d for d in p.get("draftActions", []) if isinstance(d, dict) and "id" in d}
+        conocidos = self._index(m)
+        for ident, (x, y) in moves.items():
+            if ident in barras:
+                barras[ident]["x"], barras[ident]["y"] = _coord(x), _coord(y)
+            elif ident in sueltas:
+                sueltas[ident]["x"], sueltas[ident]["y"] = _coord(x), _coord(y)
+            elif ident in conocidos:
+                lay = next((l for l in p["elementLayouts"] if l["elementRef"] == ident), None)
+                if lay is None:
+                    self._layout(p, ident, (x, y))
+                else:
+                    lay["x"], lay["y"] = _coord(x), _coord(y)
+            else:
+                raise DiagnosticError(Diagnostic("D-REF", f"no se puede mover {ident}: no existe", element=ident))
+
+    @staticmethod
+    def _set_styles(p: dict[str, Any], routes: dict[str, dict[str, Any] | None]) -> None:
+        styles = p.setdefault("linkStyles", {}) if routes else {}
+        for lid, style in routes.items():
+            if style:
+                styles[lid] = copy.deepcopy(style)
+            else:
+                styles.pop(lid, None)
+
+    def move_many(self, moves: dict[str, tuple[Any, Any]], routes: dict[str, dict[str, Any] | None] | None = None) -> None:
+        """Mueve varios elementos de presentación a la vez, en una sola operación de deshacer. `moves` da la posición
+        nueva (x, y) de cada uno: etapas, macroetapas, transiciones, marcos de recintos vacíos (su posición en
+        `elementLayouts`), barras (x, y) y acciones sueltas (x, y; todas las de un grupo). `routes` cambia, en la misma
+        operación, el estilo de enlaces (ID de enlace -> estilo nuevo, o None para quitarlo): por ejemplo, las rutas con
+        coordenadas absolutas de los enlaces cuyos dos extremos se mueven. Un ID que no existe rechaza la operación
+        entera (D-REF). Solo presentación: el modelo y su revisión no cambian."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            self._place(m, p, moves)
+            self._set_styles(p, routes or {})
+        self._txn("mover varios", fn, view_only=True)
+
     def set_initial(self, step: str, initial: bool) -> None:
         """Tipo de etapa: inicial o normal."""
         def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
@@ -663,7 +704,8 @@ class Editor:
             diag = None
             for other in b["abajo" if side == "arriba" else "arriba"]:
                 a, z = (ident, other) if side == "arriba" else (other, ident)
-                diag = diag or self._link_in(m, a, z, quiet=True)
+                aviso = self._link_in(m, a, z, quiet=True)  # (cada pareja se enlaza aunque otra ya haya dejado un borrador)
+                diag = diag or aviso
             return diag
         return self._txn("unir a la barra", fn)
 
@@ -775,6 +817,166 @@ class Editor:
             for i, l in enumerate(lays):
                 l[axis] = _coord(base + i * gap)
         self._txn("distribuir", fn, view_only=True)
+
+    # Equidistanciar alturas (solo presentación): cada cadena (los elementos enlazados entre sí, etapas, macroetapas,
+    # transiciones y las barras que los unen, dentro de un mismo parcial) se reparte en niveles que alternan etapas y
+    # transiciones, con la misma distancia entre niveles consecutivos; la x de cada elemento no cambia.
+    @staticmethod
+    def _positions(p: dict[str, Any]) -> dict[str, tuple[Fraction, Fraction]]:
+        """Posición (x, y) de cada elemento con posición en la primera vista de la presentación."""
+        vistas = [v["id"] for v in p.get("views", [])]
+        vista = vistas[0] if vistas else None
+        out: dict[str, tuple[Fraction, Fraction]] = {}
+        for lay in p.get("elementLayouts", []):
+            if vista is None or lay.get("viewRef") == vista:
+                try:
+                    out[lay["elementRef"]] = (Fraction(lay["x"]), Fraction(lay["y"]))
+                except (KeyError, TypeError, ValueError, ZeroDivisionError):
+                    continue
+        return out
+
+    def _chains(self, scope: Iterable[str] | None, pos: dict[str, tuple[Fraction, Fraction]]) -> tuple[
+            dict[str, str], set[tuple[str, str]], dict[str, tuple[list[str], list[str]]], list[tuple[list[str], list[str]]]]:
+        """Las cadenas de `scope` (los de `equidistribute`) entre los elementos con posición en `pos`: los elementos
+        (ID -> parcial), los enlaces dirigidos de arriba abajo, las barras (ID -> (los de arriba, los de abajo) de su
+        parcial) y las cadenas elegidas, cada una con sus elementos y sus barras, de dos elementos o más."""
+        m, p = self.model, self.presentation
+        nodos = {s["id"]: s["partialRef"] for s in m["steps"]}
+        nodos.update({x["id"]: x["partialRef"] for x in m["hierarchy"]["macros"]})
+        nodos.update({t["id"]: t["partialRef"] for t in m["transitions"]})
+        nodos = {i: parcial for i, parcial in nodos.items() if i in pos}
+        aristas: set[tuple[str, str]] = set()
+        for t in m["transitions"]:
+            aristas |= {(s, t["id"]) for s in t["preRefs"]} | {(t["id"], s) for s in t["postRefs"]}
+        barras: dict[str, tuple[list[str], list[str]]] = {}
+        for b in p.get("barras", []):
+            arriba = [i for i in b.get("arriba", []) if i in nodos]
+            abajo = [i for i in b.get("abajo", []) if i in nodos]
+            if arriba or abajo:
+                parcial = nodos[(arriba + abajo)[0]]
+                barras[b["id"]] = ([i for i in arriba if nodos[i] == parcial], [i for i in abajo if nodos[i] == parcial])
+                aristas |= {(a, z) for a in barras[b["id"]][0] for z in barras[b["id"]][1]}
+        aristas = {(a, z) for a, z in aristas if a != z and a in nodos and z in nodos and nodos[a] == nodos[z]}
+        raiz = {i: i for i in [*nodos, *barras]}
+
+        def buscar(i: str) -> str:
+            while raiz[i] != i:
+                raiz[i] = raiz[raiz[i]]
+                i = raiz[i]
+            return i
+        for a, z in aristas:
+            raiz[buscar(a)] = buscar(z)
+        for bid, (arriba, abajo) in barras.items():
+            for i in arriba + abajo:
+                raiz[buscar(bid)] = buscar(i)
+        elegidas: set[str] | None = None
+        if scope is not None:
+            semillas: set[str] = set()
+            for ident in scope:
+                if ident in raiz:
+                    semillas.add(ident)
+                elif "|" in ident:  # un enlace: la cadena de cualquiera de sus extremos
+                    semillas |= {i for i in ident.split("|")[:2] if i in raiz}
+                else:  # un parcial: todas sus cadenas
+                    semillas |= {i for i, parcial in nodos.items() if parcial == ident}
+            elegidas = {buscar(i) for i in semillas}
+        cadenas: dict[str, list[str]] = {}
+        for i in raiz:
+            cadenas.setdefault(buscar(i), []).append(i)
+        out = []
+        for r, miembros in sorted(cadenas.items()):
+            ns, bs = sorted(i for i in miembros if i in nodos), sorted(i for i in miembros if i in barras)
+            if len(ns) >= 2 and (elegidas is None or r in elegidas):
+                out.append((ns, bs))
+        return nodos, aristas, barras, out
+
+    def chains(self, scope: Iterable[str] | None = None,
+               positions: dict[str, tuple[Any, Any]] | None = None) -> list[list[str]]:
+        """Las cadenas de `scope` (ver `equidistribute`; None, todas): para cada una, los ID de sus elementos y, al final, de
+        sus barras. Solo cuentan los elementos con posición (en la presentación o en `positions`)."""
+        pos = self._positions(self.presentation)
+        for ident, (x, y) in (positions or {}).items():
+            pos.setdefault(ident, (Fraction(str(x)), Fraction(str(y))))
+        return [ns + bs for ns, bs in self._chains(scope, pos)[3]]
+
+    def equidistribute(self, scope: Iterable[str] | None, step: Any, extent: dict[str, tuple[Any, Any]] | None = None,
+                       margin: Any = 8, grid: Any = 20, positions: dict[str, tuple[Any, Any]] | None = None) -> list[str]:
+        """Equidistancia las alturas de las cadenas de `scope`: los ID de elementos (cada uno lleva su cadena entera), de
+        enlaces (`transición|etapa|pre` o `post`; la de cualquiera de sus extremos), de barras o de parciales (todas sus
+        cadenas); None, todas las cadenas de todos los parciales. Una cadena es la componente conexa de etapas,
+        macroetapas y transiciones enlazados dentro de un parcial, más las barras que unen a esos elementos (una barra con
+        elementos de varios parciales se une solo a los del primero); una sola etapa o transición sin enlaces no es una
+        cadena.
+
+        Cada elemento recibe un nivel: el camino más largo desde los que no reciben ningún enlace, sin contar los enlaces
+        de realimentación (los que vuelven hacia arriba en el dibujo; si aun así queda un ciclo, el que lo cierra en una
+        búsqueda en profundidad). Los niveles consecutivos distan `step` (la distancia estándar del editor) o más, en
+        múltiplos de la rejilla `grid`: lo que pide `extent` ({ID: (arriba, abajo)}: cuánto sobresale por encima y por debajo
+        de su centro lo que acompaña al elemento, las acciones de una etapa; lo que no figure cuenta 0), más `margin` entre
+        lo que sobresale del nivel de arriba y del de abajo, de modo que no se solapen. Cada barra va a mitad de la
+        distancia que le toca, justo debajo del más bajo de sus elementos de arriba (o encima del más alto de los de abajo,
+        si no tiene ninguno arriba); su hueco es un múltiplo de 2·grid para que quede en la rejilla. El primer nivel se
+        queda donde está el elemento más alto de la cadena (en la rejilla). `positions` da (x, y) de elementos que aún no
+        tienen posición guardada.
+
+        Una sola operación de deshacer, solo presentación (el modelo y su revisión no cambian). Descarta, en los enlaces con
+        un extremo que se mueve, la parte de su ruta manual en coordenadas absolutas de altura (exitY, entryY, middleY). Si
+        no hay nada que cambiar (ya está equidistanciado) no hace nada. Devuelve los ID de lo que se movió (elementos y
+        barras)."""
+        m, p = self.model, self.presentation
+        paso, margen, rejilla = (Fraction(str(v)) for v in (step, margin, grid))
+        ext = {i: (Fraction(str(a)), Fraction(str(b))) for i, (a, b) in (extent or {}).items()}
+        pos = self._positions(p)
+        for ident, (x, y) in (positions or {}).items():
+            pos.setdefault(ident, (Fraction(str(x)), Fraction(str(y))))
+        nodos, aristas, barras, cadenas = self._chains(scope, pos)
+        iniciales = {s["id"] for s in m["steps"] if s["initial"] is True}
+        movidos: dict[str, tuple[Fraction, Fraction]] = {}
+        bpos = {b["id"]: (Fraction(b["x"]), Fraction(b["y"])) for b in p.get("barras", [])}
+        for ns, bs in cadenas:
+            propios = set(ns)
+            nivel = _niveles(ns, [(a, z) for a, z in aristas if a in propios], {i: pos[i][1] for i in ns},
+                             {i: pos[i][0] for i in ns}, iniciales)
+            ultimo = max(nivel.values())
+            por_nivel: list[list[str]] = [[] for _ in range(ultimo + 1)]
+            for n in ns:
+                por_nivel[nivel[n]].append(n)
+            frontera = {}  # frontera k (entre los niveles k y k+1) en que va cada barra; -1, encima del primero
+            for bid in bs:
+                arriba, abajo = barras[bid]
+                frontera[bid] = max(nivel[i] for i in arriba) if arriba else min(nivel[i] for i in abajo) - 1
+            hueco = []
+            for k in range(ultimo):
+                pide = margen + max((ext.get(n, (0, 0))[1] for n in por_nivel[k]), default=0) \
+                    + max((ext.get(n, (0, 0))[0] for n in por_nivel[k + 1]), default=0)
+                hueco.append(_techo(max(paso, pide), 2 * rejilla if k in frontera.values() else rejilla))
+            alturas = [_a_rejilla(min(pos[n][1] for n in ns), rejilla)]
+            for g in hueco:
+                alturas.append(alturas[-1] + g)
+            for n in ns:
+                if pos[n][1] != alturas[nivel[n]]:
+                    movidos[n] = (pos[n][0], alturas[nivel[n]])
+            medio = _techo(paso / 2, rejilla)
+            for bid, k in frontera.items():
+                y = alturas[0] - medio if k < 0 else alturas[k] + (hueco[k] / 2 if k < ultimo else medio)
+                if bpos[bid][1] != y:
+                    movidos[bid] = (bpos[bid][0], y)
+        rutas: dict[str, dict[str, Any] | None] = {}
+        for lid, estilo in p.get("linkStyles", {}).items():  # las alturas absolutas de una ruta manual ya no valen
+            ruta = estilo.get("route") if isinstance(estilo, dict) else None
+            if isinstance(ruta, dict) and any(i in movidos for i in lid.split("|")[:2]):
+                resto = {k: v for k, v in ruta.items() if k not in ("exitY", "entryY", "middleY")}
+                if len(resto) != len(ruta):
+                    nuevo = {k: v for k, v in estilo.items() if k != "route"}
+                    rutas[lid] = {**nuevo, **({"route": resto} if resto else {})} or None
+        if not movidos and not rutas:
+            return []
+
+        def fn(m2: dict[str, Any], p2: dict[str, Any]) -> None:
+            self._place(m2, p2, movidos)
+            self._set_styles(p2, rutas)
+        self._txn("equidistanciar alturas", fn, view_only=True)
+        return list(movidos)
 
     # -- renombrado sin cambio de identidad (REQ-EDT-06, REQ-MOD-06)
     def _render_names(self, m: dict[str, Any]) -> Callable[[str], str]:
@@ -1272,6 +1474,86 @@ class Editor:
                 p["elementLayouts"].append(nl)
             return {k: v for k, v in mapping.items() if k not in decisions or decisions[k] == "pending"}
         return self._txn("pegar", fn)
+
+
+def _techo(valor: Fraction, q: Fraction) -> Fraction:
+    """El múltiplo de `q` igual o inmediatamente superior a `valor`."""
+    return -((-valor) // q) * q
+
+
+def _a_rejilla(valor: Fraction, q: Fraction) -> Fraction:
+    """El múltiplo de `q` más cercano a `valor`."""
+    return ((valor / q + Fraction(1, 2)) // 1) * q
+
+
+def _niveles(nodos: list[str], aristas: list[tuple[str, str]], y: dict[str, Fraction], x: dict[str, Fraction],
+             iniciales: set[str]) -> dict[str, int]:
+    """Nivel (0, 1, 2…) de cada nodo de una cadena: el camino más largo desde los nodos que no reciben ningún enlace, sin
+    contar los enlaces de realimentación. Es de realimentación el enlace que vuelve hacia arriba en el dibujo actual (como
+    las flechas de retorno de `routing.enlaces`) y cierra un ciclo con los demás; un enlace que sube pero no cierra ninguno es
+    un enlace mal dibujado y cuenta como descendente. Si entre los demás quedan ciclos (nodos a la misma altura), cierra
+    cada uno el enlace que los vuelve a recorrer en una búsqueda en profundidad (se parte de los que no reciben nada,
+    después de las etapas iniciales y de los más altos). Tras repartir por niveles todo enlace va hacia abajo salvo los de
+    realimentación, que van hacia arriba: volver a repartir da lo mismo."""
+    suben = {a for a in aristas if y[a[1]] < y[a[0]]}
+    base = set(aristas) - suben
+    suc: dict[str, list[str]] = {n: [] for n in nodos}
+    recibe: dict[str, int] = {n: 0 for n in nodos}
+    for a, b in sorted(base):
+        suc[a].append(b)
+        recibe[b] += 1
+    estado: dict[str, int] = {}  # 1: en la pila de la búsqueda; 2: terminado
+    cierran: set[tuple[str, str]] = set()
+    for raiz in sorted(nodos, key=lambda n: (recibe[n] > 0, n not in iniciales, y[n], x[n], n)):
+        if raiz in estado:
+            continue
+        estado[raiz] = 1
+        pila = [(raiz, iter(suc[raiz]))]
+        while pila:
+            n, it = pila[-1]
+            for hijo in it:
+                if estado.get(hijo) == 1:
+                    cierran.add((n, hijo))
+                elif hijo not in estado:
+                    estado[hijo] = 1
+                    pila.append((hijo, iter(suc[hijo])))
+                    break
+            else:
+                estado[n] = 2
+                pila.pop()
+    dag = base - cierran
+    suc = {n: [] for n in nodos}
+    for a, b in dag:
+        suc[a].append(b)
+
+    def alcanza(origen: str, destino: str) -> bool:
+        vistos, pendientes = {origen}, [origen]
+        while pendientes:
+            n = pendientes.pop()
+            if n == destino:
+                return True
+            for hijo in suc[n]:
+                if hijo not in vistos:
+                    vistos.add(hijo)
+                    pendientes.append(hijo)
+        return False
+    for a, b in sorted(suben):
+        if not alcanza(b, a):  # no cierra ningún ciclo: no es de realimentación
+            dag.add((a, b))
+            suc[a].append(b)
+    nivel = {n: 0 for n in nodos}
+    faltan = {n: 0 for n in nodos}
+    for a, b in dag:
+        faltan[b] += 1
+    listos = sorted(n for n in nodos if not faltan[n])
+    while listos:
+        n = listos.pop()
+        for b in suc[n]:
+            nivel[b] = max(nivel[b], nivel[n] + 1)
+            faltan[b] -= 1
+            if not faltan[b]:
+                listos.append(b)
+    return nivel
 
 
 def _remap_meaning(m: dict[str, Any], mp: Callable[[str], str]) -> dict[str, Any]:

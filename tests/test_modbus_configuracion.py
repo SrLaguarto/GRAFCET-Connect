@@ -69,3 +69,58 @@ class ConfigTests(unittest.TestCase):
         self.config.senales *= 2
         with self.assertRaises(ValueError):
             self.config.validar(self.doc)
+
+    def test_SFIO56_cargar_descarta_solo_las_asignaciones_que_ya_no_casan_y_rechaza_lo_corrupto(self):
+        """REQ-DAT-02, REQ-ROB-01: un mapa guardado con una variable que ya no existe (o de tipo o papel que ya no casan con el
+        área) se carga sin esas asignaciones, con un aviso por cada una, y conserva el resto (servidor, canales y las demás
+        asignaciones); un JSON corrupto o de formato inválido se sigue rechazando entero."""
+        import json
+        from grafcet.builder import M
+        doc = M().var("a").var("b").var("c", "output").var("d", "output", "decimal", scale=2).step("0", True).doc
+        canales = {"discrete": {"offset": 0, "cantidad": 4}, "coil": {"offset": 0, "cantidad": 4},
+                   "holding": {"offset": 0, "cantidad": 2}}
+        original = Configuracion(host="10.0.0.5", puerto=1502, unidad=4, periodo_ms=40, timeout_ms=700, canales=canales,
+                                 senales=[Senal("a", "discrete", 0), Senal("b", "discrete", 1), Senal("c", "coil", 0),
+                                          Senal("d", "holding", 0, "INT16")])
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = Path(tmp) / "conexion.json"
+            original.guardar(ruta, doc)
+            # el modelo cambia: «b» se borra, «a» pasa a salida (ya no puede ser un Input) y «d» a booleana (ya no es un registro)
+            nuevo = copy.deepcopy(doc)
+            nuevo["variables"] = [v for v in nuevo["variables"] if v["id"] != "b"]
+            for v in nuevo["variables"]:
+                if v["id"] == "a":
+                    v["role"] = "output"
+                if v["id"] == "d":
+                    v["type"] = {"kind": "bool"}
+            avisos = []
+            c = Configuracion.cargar(ruta, nuevo, avisos)
+            self.assertEqual([s.variable for s in c.senales], ["c"], "solo se descartan las que ya no casan")
+            self.assertEqual(avisos, ["«a» ya no encaja en Input 0", "la variable de Input 1 ya no existe", "«d» ya no encaja en Holding Reg 0"])
+            self.assertEqual((c.host, c.puerto, c.unidad, c.periodo_ms, c.timeout_ms, c.canales, c.modelo),
+                             ("10.0.0.5", 1502, 4, 40, 700, canales, doc["id"]), "lo demás del mapa se conserva")
+            self.assertEqual(Configuracion.cargar(ruta, nuevo).senales, c.senales, "`avisos` es opcional")
+            self.assertEqual(Configuracion.cargar(ruta, doc).senales, original.senales, "con el modelo de siempre, nada se quita")
+            # lo corrupto o de formato inválido se rechaza entero, aunque haya también asignaciones obsoletas
+            datos = json.loads(ruta.read_text(encoding="utf-8"))
+            casos = {
+                "versión": lambda d: d.update(version=2),
+                "sin señales": lambda d: d.pop("senales"),
+                "señales no es una lista": lambda d: d.update(senales=5),
+                "otro modelo": lambda d: d.update(modelo="otro"),
+                "mismo canal dos veces": lambda d: d["senales"].append(dict(d["senales"][2], variable="a")),
+                "área desconocida": lambda d: d["senales"][2].update(area="banana"),
+                "formato desconocido": lambda d: d["senales"][2].update(formato="FLOAT"),
+                "formato que no casa con el área": lambda d: d["senales"][2].update(formato="INT16"),
+                "fuera de los canales": lambda d: d["senales"][2].update(direccion=9),
+                "variable repetida": lambda d: d["senales"].append(dict(d["senales"][2], direccion=1)),
+            }
+            for nombre, cambiar in casos.items():
+                dañado = copy.deepcopy(datos)
+                cambiar(dañado)
+                ruta.write_text(json.dumps(dañado), encoding="utf-8")
+                with self.subTest(nombre), self.assertRaises(ValueError):
+                    Configuracion.cargar(ruta, nuevo)
+            ruta.write_text("{ esto no es json", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                Configuracion.cargar(ruta, nuevo)

@@ -3,10 +3,34 @@
 No crea relojes ni ejecuta el motor desde el trabajador. La reconexión es manual.
 """
 from concurrent.futures import ThreadPoolExecutor
+import re
 from time import monotonic
 
-from .adaptador import Adaptador, MonitorEntradas, escribir_salidas, leer_entradas
+from .adaptador import Adaptador, MonitorEntradas, escribir_salidas, leer_entradas, salidas_asignadas, valores_cero
 from .modbus import ClienteModbus
+
+WINERROR_CORTADA, WINERROR_RECHAZADA, WINERROR_TIEMPO = (10053, 10054), 10061, 10060
+
+
+def explicar_fallo(exc) -> str:
+    """Una primera frase corta y legible para los fallos de red habituales (conexión anulada o reiniciada por Factory I/O,
+    rechazada, tiempo agotado), con su código si lo hay; cadena vacía si no se reconoce (el mensaje sigue siendo el técnico).
+    Solo explica: no decide nada del estado ni del comportamiento."""
+    causa = exc.__cause__ if isinstance(exc.__cause__, OSError) else exc
+    texto = str(exc)
+    codigo = getattr(causa, "winerror", None)
+    if codigo is None and (m := re.search(r"WinError (\d+)", texto)):
+        codigo = int(m.group(1))
+    sufijo = f" (WinError {codigo})" if codigo else ""
+    if codigo in WINERROR_CORTADA or isinstance(causa, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+        return f"Factory I/O cerró o anuló la conexión{sufijo}"
+    if codigo == WINERROR_RECHAZADA or isinstance(causa, ConnectionRefusedError):
+        return f"Factory I/O rechazó la conexión{sufijo}: comprueba que su servidor Modbus está activo y la IP"
+    if codigo == WINERROR_TIEMPO or isinstance(causa, TimeoutError) or "Tiempo de espera Modbus agotado" in texto:
+        return f"Factory I/O no ha respondido a tiempo{sufijo}"
+    if "El servidor cerró la conexión" in texto:
+        return "Factory I/O cerró la conexión"
+    return ""
 
 
 class Coordinador:
@@ -29,17 +53,16 @@ class Coordinador:
         self._generacion = 0
         self.reiniciando = False
         self._cerrado = False
-        self._observar_despues = False
         self._salidas_seguras = None
+        self._cero_al_cerrar = None  # (señales, valores) del cero que falta por escribir antes de cerrar el TCP
+        self._texto_cierre = "Desconectado"
 
     def solicitar_ejecucion(self, ejecutar):
-        if ejecutar:
-            self._observar_despues = False  # la intención más reciente (Play) manda sobre un Reiniciar en Pausa
         if ejecutar != self._ejecutar:
             self.en_marcha = False
             if self.estado == "conectado":
                 self.mensaje = ("Conectado · leyendo sensores antes de ejecutar…" if ejecutar else
-                                "Conectado · Pausa · estado y salidas conservados")
+                                "Conectado · Pausa · salidas a cero")
             # Una lectura enviada antes de Ejecutar no sirve para reanudar.
             self._descartar_lectura = ejecutar and self.futuro is not None and self.fase == "leer"
             self._ejecutar = ejecutar
@@ -61,7 +84,7 @@ class Coordinador:
             raise RuntimeError("El reinicio requiere conexión estable y el mismo modelo")
         self.vincular(sesion)
 
-    def vincular(self, sesion, config=None, documento=None, observar_despues=False):
+    def vincular(self, sesion, config=None, documento=None):
         """Vincula una ejecución a TCP existente; no vuelve a conectar."""
         if self.estado not in ("conectado", "diagnostico"):
             raise RuntimeError("Espera a que termine la conexión")
@@ -74,7 +97,6 @@ class Coordinador:
         self.adaptador = adaptador
         self._valores_reinicio = valores
         self.reiniciando = True
-        self._observar_despues = observar_despues
         self.en_marcha = self._ejecutar = self.fallo_motor = self.cero_pendiente = False
         self._descartar_lectura = False
         self.muestra = {}
@@ -82,20 +104,22 @@ class Coordinador:
         self.mensaje = "Conectado · reiniciando GRAFCET y salidas iniciales…"
 
     def pausar(self, diagnostico=False):
-        """Conserva transporte y salidas; un diagnóstico solicita cero."""
+        """Pausa: conserva el transporte, deja de ejecutar y pide cero para todas las salidas asignadas (coils y holding):
+        Pausa es «todo a 0 hasta un nuevo Play». Ya en observación (sin sesión) solo vuelve a pedir el cero si se pide
+        expresamente (`diagnostico`: un diagnóstico del motor o el cambio de modelo). Con la red caída el cero no se
+        garantiza: es el estado «error» del tick."""
         if not self.activo or self.adaptador is None or (self.adaptador.sesion is None and not diagnostico):
             return
         anterior = self.adaptador
-        if diagnostico:
-            salidas = list(anterior.salidas or getattr(anterior, "salidas_control", []))
-            self._salidas_seguras = (salidas, {s.variable: False if s.formato == "BOOL" else 0 for s in salidas})
+        salidas = salidas_asignadas(anterior)
+        self._salidas_seguras = (salidas, valores_cero(salidas))
         self._generacion += 1
         self.adaptador = MonitorEntradas.desde_adaptador(anterior)
         self.en_marcha = self._ejecutar = self.reiniciando = self.fallo_motor = self.cero_pendiente = False
         if self.estado == "diagnostico":
             self.estado = "conectado"
         if self.estado == "conectado":
-            self.mensaje = "Conectado · GRAFCET parado · edición habilitada"
+            self.mensaje = "Conectado · Pausa · salidas a cero · edición habilitada"
 
     def observar(self, config, documento):
         """Cambia el mapa de lectura (otro modelo) con el GRAFCET parado, sin tocar TCP; descarta lo que estuviera en vuelo."""
@@ -108,6 +132,8 @@ class Coordinador:
         self.en_marcha = self._ejecutar = self.reiniciando = self.fallo_motor = self.cero_pendiente = False
 
     def iniciar(self, config, sesion, prueba=False, documento=None):
+        """Conecta y, salvo en la prueba, deja a 0 todas las salidas asignadas (coils y holding) antes de leer las entradas:
+        también sin sesión (Pausa), porque en Pausa todo está a 0. La prueba no escribe nada."""
         if self.activo or self.futuro is not None:
             raise RuntimeError("Desconecte antes de cambiar la conexión")
         self.adaptador = Adaptador(config, sesion) if sesion is not None else MonitorEntradas(config, documento)
@@ -117,28 +143,42 @@ class Coordinador:
         self.muestra, self.escritos = {}, {}
         self.fallo_motor = self.cero_pendiente = False
         self.reiniciando = False
-        self._observar_despues = False
-        self._salidas_seguras = None
+        self._salidas_seguras = self._cero_al_cerrar = None
         self.en_marcha = self._ejecutar = self._descartar_lectura = False
         # Calcular valores del motor en el hilo propietario, antes de encolar red.
         cero = self.adaptador.valores_salida(cero=True)
+        salidas = salidas_asignadas(self.adaptador)
         def conectar():
             self.cliente.conectar()
             try:
                 if not prueba:
-                    escribir_salidas(self.cliente, self.adaptador.salidas, cero)
+                    escribir_salidas(self.cliente, salidas, cero)
                 return leer_entradas(self.cliente, self.adaptador.entradas)
             finally:
                 if prueba:
                     self.cliente.cerrar()
         self._enviar("prueba" if prueba else "inicio", conectar)
 
+    def _cero_de_cierre(self):
+        """El cero que se intenta escribir antes de cerrar el TCP: (señales, valores) de todas las salidas asignadas, o None si
+        la conexión aún no está establecida (conectando, probando) o no hay salidas asignadas."""
+        if self.estado not in ("conectado", "diagnostico") or self.adaptador is None:
+            return None
+        salidas = salidas_asignadas(self.adaptador)
+        return (salidas, valores_cero(salidas)) if salidas else None
+
     def desconectar(self):
-        if not self.activo:
+        """Con la conexión establecida, escribe el cero de todas las salidas asignadas ANTES de cerrar el TCP (mejor esfuerzo:
+        si la red falla, se cierra igual y el estado pasa a «error» con el aviso de salidas no garantizadas)."""
+        if not self.activo or self.estado == "cerrando":
             return
+        self._cero_al_cerrar = self._cero_de_cierre()
+        self._salidas_seguras = None  # el cero del cierre lo sustituye
+        self._texto_cierre = ("Desconectado · salidas no garantizadas" if self.adaptador is not None
+                              and salidas_asignadas(self.adaptador) else "Desconectado")
         self.estado = "cerrando"
-        self.mensaje = "Desconectando; la planta puede conservar sus salidas"
-        # La respuesta pendiente se descarta; el mismo trabajador cerrará el socket.
+        self.mensaje = "Desconectando · salidas a cero…" if self._cero_al_cerrar else "Desconectando…"
+        # La respuesta pendiente se descarta; el mismo trabajador escribirá el cero y cerrará el socket.
 
     def tick(self, ejecutar=False):
         """Recoger red y aplicar muestras; llamar exclusivamente desde el hilo de sesión."""
@@ -151,15 +191,19 @@ class Coordinador:
             self.futuro = None
             try:
                 resultado = futuro.result()
-                if self.estado != "cerrando" and generacion == self._generacion:
+                if fase == "cero-cierre":
+                    self.escritos = resultado
+                    self._texto_cierre = "Desconectado · salidas a cero"
+                elif self.estado != "cerrando" and generacion == self._generacion:
                     if fase == "prueba":
                         self.estado, self.mensaje = "desconectado", "Conexión probada; no se han escrito actuadores"
                     elif fase == "inicio":
                         self.muestra = resultado
                         self.estado, self.mensaje = "conectado", "Conectado · actuadores a cero · pulse Ejecutar"
                         self.escritos = self.adaptador.valores_salida(cero=True)
-                        if self.adaptador.sesion is None:
-                            self.mensaje = "Conectado · observación de entradas · sin escritura de salidas"
+                        if self.adaptador.sesion is None:  # Pausa: lo asignado ya está a 0 y solo se observan las entradas
+                            self.mensaje = ("Conectado · Pausa · salidas a cero · observando las entradas" if self.escritos else
+                                            "Conectado · observación de entradas · sin salidas asignadas")
                     elif fase == "leer":
                         self.muestra = resultado
                         descartar = self._descartar_lectura
@@ -181,21 +225,27 @@ class Coordinador:
                         self.escritos, self.muestra = resultado
                         self.reiniciando = False
                         self.mensaje = "Conectado · GRAFCET reiniciado · pulse Ejecutar"
-                        if self._observar_despues:
-                            self.adaptador = MonitorEntradas.desde_adaptador(self.adaptador)
                     elif fase == "seguras":
                         self.escritos = resultado
                         self._salidas_seguras = None
             except Exception as exc:
                 # También incluye conversión inválida: no seguir controlando con muestras malas.
-                self.estado, self.mensaje = "error", f"Conexión detenida: {exc}. Salidas no garantizadas."
+                frase = explicar_fallo(exc)  # solo cambia el texto: una frase legible y, detrás, el detalle técnico
+                self.estado, self.mensaje = "error", (
+                    f"{frase}. Salidas no garantizadas. Pulsa Conectar para reanudar. Detalle: {exc}" if frase else
+                    f"Conexión detenida: {exc}. Salidas no garantizadas.")
                 self.en_marcha = False
                 self.reiniciando = False
+                self._cero_al_cerrar = None
                 self.cliente.cerrar()  # la petición ya ha terminado
         if self.estado == "cerrando":
             if self.futuro is None:
                 if self.fase == "cerrar":
-                    self.estado, self.mensaje = "desconectado", "Desconectado · salidas no garantizadas"
+                    self.estado, self.mensaje = "desconectado", self._texto_cierre
+                elif self._cero_al_cerrar is not None:
+                    senales, valores = self._cero_al_cerrar
+                    self._cero_al_cerrar = None
+                    self._enviar("cero-cierre", self._escribir, valores, senales)
                 else:
                     self._enviar("cerrar", self.cliente.cerrar)
             return
@@ -237,7 +287,20 @@ class Coordinador:
         if self._cerrado:
             return
         self._cerrado = True
+        cero = self._cero_al_cerrar or self._cero_de_cierre()  # el cero va antes de cerrar el TCP (mejor esfuerzo)
+        self._cero_al_cerrar = None
         self.estado = "desconectado"
         if self.cliente is not None:
-            self.executor.submit(self.cliente.cerrar)
+            self.executor.submit(self._cerrar_tras_cero, cero)
         self.executor.shutdown(wait=False, cancel_futures=False)
+
+    def _cerrar_tras_cero(self, cero):
+        """En el trabajador, tras lo pendiente: el cero, si lo hay, y el cierre del TCP pase lo que pase (si la red falla, se
+        cierra igual)."""
+        try:
+            if cero is not None:
+                escribir_salidas(self.cliente, *cero)
+        except Exception:  # noqa: BLE001 - mejor esfuerzo: ya no hay a quién avisar
+            pass
+        finally:
+            self.cliente.cerrar()
