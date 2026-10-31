@@ -520,15 +520,15 @@ class Edicion(QObject):
             return
         if tipo == "parcial":
             self.poner_parcial(p)
-        elif tipo == "etapa":
-            self.poner_etapa(p)
+        elif tipo in ("etapa", "etapa_inicial"):
+            self.poner_etapa(p, inicial=tipo == "etapa_inicial")
         elif tipo == "encapsulante":
             self.poner_etapa(p, tipo="enclosing")
         elif tipo == "macroetapa":
             self.poner_macro(p)
         elif tipo == "transicion":
             self.poner_transicion(p)
-        elif tipo == "simultaneidad":
+        elif tipo in ("simultaneidad", "simultaneidad:apertura", "simultaneidad:cierre"):
             self.poner_barra(p, "Y")
         elif tipo == "accion" or tipo.startswith("accion:"):
             self.poner_accion_suelta(p, tipo.partition(":")[2] or "continua")
@@ -1242,11 +1242,11 @@ class Edicion(QObject):
         """Las cajas, ya solapadas con otro elemento, de lo que se colocaría al soltar una ficha de la paleta en p (vacío si
         cabe: una acción que se pega a otra no cuenta)."""
         x, y = self._modelo(p)
-        if tipo in ("etapa", "encapsulante", "macroetapa"):
+        if tipo in ("etapa", "etapa_inicial", "encapsulante", "macroetapa"):
             caja = QRectF(x + SX - H, y - H, 2 * H, 2 * H)
         elif tipo == "transicion":
             caja = QRectF(x + SX - TB, y - 2, 2 * TB, 4)
-        elif tipo == "simultaneidad":
+        elif tipo in ("simultaneidad", "simultaneidad:apertura", "simultaneidad:cierre"):
             caja = QRectF(ajustar(x - 60) + SX, y, 120, 4)
         elif tipo == "parcial":  # su marco vacío con el nombre debajo: ni encima de un elemento ni (con un margen) de otro marco
             x0, y0 = self._esquina_parcial(p)
@@ -1817,7 +1817,7 @@ class Edicion(QObject):
 
     # -- menús
     def menu(self, p: QPointF) -> list[tuple[str, Any]]:
-        """Opciones del botón derecho sobre lo que hay debajo: en una etapa, «Añadir acción…» y la colocación de sus
+        """Opciones del botón derecho sobre lo que hay debajo: en una etapa, la colocación de sus
         acciones; en una acción (suelta o unida), su tipo (submenú con iconos, marcado el actual), «Editar…», separarla y
         «Quitar»; en el enlace de una etapa con sus acciones, «Eliminar el enlace». Jerarquía (P-IMP-23..27; las mismas
         opciones son los botones del panel de opciones, `acciones_jerarquia`): una etapa ordinaria ofrece «Convertir en
@@ -1868,8 +1868,7 @@ class Edicion(QObject):
         self.cambiado.emit()
         self.menu_marcadas = {dict(COLOCACIONES)[self.colocacion(ident)]}
         opciones = self._menu_desde(ident)
-        return [("Añadir acción…", lambda: self.anadir_accion(ident)),
-                ("Colocación de las acciones", [(texto, lambda v=v: self.colocar_acciones(ident, v))
+        return [("Colocación de las acciones", [(texto, lambda v=v: self.colocar_acciones(ident, v))
                                                 for v, texto in COLOCACIONES])] \
             + ([("-", None)] + opciones if opciones else []) + ([("-", None)] + equi if equi else [])
 
@@ -1886,18 +1885,15 @@ class Edicion(QObject):
         return out
 
     def _menu_lienzo(self, p: QPointF) -> list[tuple[str, Any]]:
-        """Lo que ofrece el botón derecho en un hueco: «Nuevo grafcet parcial aquí» (un grafcet parcial vacío centrado en el
-        punto, como la ficha de la paleta; si no cabe ahí, avisa), «Equidistanciar la selección» (con varios elementos
-        seleccionados) y «Equidistanciar todo el lienzo» (todas las cadenas de todos los parciales), si hay cadenas."""
+        """Equidistanciar la selección o todo el lienzo si hay cadenas. Los parciales se crean desde la paleta."""
         pos = self._posiciones_modelo()
-        out: list[tuple[str, Any]] = [("Nuevo grafcet parcial aquí", lambda: self.poner_parcial(p))]
         equi: list[tuple[str, Any]] = []
         if len(self.sel) > 1 and self.ed.chains(self.sel, pos):
             seleccion = list(self.sel)
             equi.append(("Equidistanciar la selección", lambda: self.equidistanciar(seleccion)))
         if self.ed.chains(None, pos):
             equi.append(("Equidistanciar todo el lienzo", lambda: self.equidistanciar(None)))
-        return out + ([("-", None)] + equi if equi else [])
+        return equi
 
     def _menu_desde(self, ident: str) -> list[tuple[str, Any]]:
         """Las acciones de jerarquía de un elemento como opciones de menú (las casillas, con su marca en `menu_marcadas` o

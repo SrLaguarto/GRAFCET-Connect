@@ -1,10 +1,7 @@
 """Paleta de elementos y panel de opciones del editor (P-IMP-32, P-IMP-43, P-IMP-44, P-IMP-47).
 
-La paleta (izquierda) es una sola lista de fichas: etapa, transición, simultaneidad, «Acción» (la continua, con su
-dibujo; otro tipo se elige con botón derecho sobre la acción, «Tipo de acción») y, de la jerarquía, «Macroetapa»,
-«Encapsulante», «Grafcet parcial» (un parcial suelto, en un marco redondeado con «G», que se suelta en un hueco) y «Forzado»
-(la orden de forzado, rectángulo doble «G{ }», que se suelta como una acción: suelta, sin efecto, hasta unirla a una etapa y
-configurarla). Sus fichas solo se colocan arrastrándolas al dibujo, y un clic solo muestra su ayuda.
+La paleta agrupa fichas arrastrables en Etapas, Transiciones, Acciones y Jerarquías.
+Los encabezados solo organizan la lista; un clic en una ficha muestra su ayuda.
 
 El panel de opciones (abajo, a todo el ancho, al editar) muestra y cambia la configuración de lo seleccionado, con dos
 zonas: a la izquierda una columna estrecha con los campos y a la derecha lo ancho.
@@ -32,7 +29,7 @@ from PySide6.QtCore import QMimeData, QPoint, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QDrag, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QFormLayout, QGridLayout, QHBoxLayout, QLabel,
                                QLineEdit, QListView, QListWidget, QListWidgetItem, QPushButton, QSizePolicy,
-                               QStackedWidget, QVBoxLayout, QWidget)
+                               QStackedWidget, QStyledItemDelegate, QStyle, QVBoxLayout, QWidget)
 
 from grafcet.routing import TALLO_E, TALLO_T
 from grafcet.view import norm
@@ -57,7 +54,7 @@ AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: a
           "macroetapa": "Macroetapa (divisiones arriba y abajo): arrástrela al dibujo y crea la macroetapa con su expansión, "
                         "con la etapa de entrada y la de salida a su derecha. Suelte etapas y transiciones dentro de la "
                         "expansión para rellenarla; botón derecho en la macroetapa, «Encuadrar la expansión», para verla "
-                        "(«Mostrar dependencias», junto al zoom, dibuja los trazos que la unen a la macroetapa)",
+                        "(«Mostrar dependencias», en la barra de herramientas, dibuja los trazos que la unen a la macroetapa)",
           "encapsulante": "Etapa encapsulante (esquinas cortadas): arrástrela al dibujo, o convierta una etapa con el botón "
                           "derecho. Botón derecho en la encapsulante, «Añadir recinto…», crea un recinto; se rellena soltando "
                           "etapas dentro de su marco, y «Enlace de activación» en una de ellas la marca (*); «Encuadrar el "
@@ -74,7 +71,24 @@ AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: a
                      "la etapa hasta ella), soltándola sobre la etapa o pegándola a su fila de acciones; unida y completa, "
                      "mientras esa etapa está activa impone esa situación al parcial. Supr la quita. Hace falta otro parcial "
                      "(un grafcet parcial, un recinto o una macroetapa) al que forzar"}
-COLOCABLES = tuple(NOMBRES)  # las fichas de la paleta: solo se colocan arrastrándolas al dibujo
+SECCIONES = (
+    ("Etapas", ("etapa", "etapa_inicial")),
+    ("Transiciones", ("transicion", "simultaneidad:apertura", "simultaneidad:cierre")),
+    ("Acciones", tuple("accion:" + t for t in ("continua", "condicionada", "activacion", "desactivacion", "evento"))),
+    ("Jerarquías", ("encapsulante", "macroetapa", "forzado", "parcial")),
+)
+NOMBRES.update({"etapa_inicial": "Etapa inicial", "simultaneidad:apertura": "Apertura de simultaneidad",
+                "simultaneidad:cierre": "Cierre de simultaneidad", "accion:continua": "Continua",
+                "accion:condicionada": "Condicionada", "accion:activacion": "Al activar",
+                "accion:desactivacion": "Al desactivar", "accion:evento": "Por evento"})
+AYUDAS["etapa_inicial"] = "Etapa inicial: arrástrela al dibujo. Se crea con el doble cuadrado de etapa inicial."
+for t in ("apertura", "cierre"):
+    AYUDAS["simultaneidad:" + t] = ("Apertura: una transición hacia varias etapas. " if t == "apertura" else
+                                    "Cierre: varias etapas hacia una transición. ") + AYUDAS["simultaneidad"]
+for t in ("continua", "condicionada", "activacion", "desactivacion", "evento"):
+    AYUDAS["accion:" + t] = ("Acción " + NOMBRES["accion:" + t].lower() + ": arrástrela al dibujo; "
+                            "únala a una etapa desde su punto de unión y configúrela con doble clic o en Propiedades.")
+COLOCABLES = tuple(h for _, claves in SECCIONES for h in claves)
 
 
 def icono(h: str) -> QIcon:
@@ -85,19 +99,21 @@ def icono(h: str) -> QIcon:
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.setPen(QPen(QColor(COL["text"]), 2))
-    if h == "parcial":  # un grafcet parcial: su marco redondeado, con la «G» dentro
+    if h == "parcial":  # un grafcet parcial: marco redondeado y «G» en la esquina inferior
         p.drawRoundedRect(QRectF(5, 10, 54, 44), 9, 9)
         fuente = QFont("Arial")
-        fuente.setPixelSize(26)
+        fuente.setPixelSize(19)
         fuente.setBold(True)
         p.setFont(fuente)
-        p.drawText(QRectF(5, 10, 54, 44), Qt.AlignmentFlag.AlignCenter, "G")
-    elif h in ("etapa", "macroetapa", "encapsulante"):
+        p.drawText(QRectF(36, 34, 22, 22), Qt.AlignmentFlag.AlignCenter, "G")
+    elif h in ("etapa", "etapa_inicial", "macroetapa", "encapsulante"):
         p.drawLine(32, 2, 32, 14)
         p.drawRect(QRectF(16, 14, 32, 32))
         p.drawLine(32, 46, 32, 62)
         k = 32 / (2 * H)  # el lado de la etapa del dibujo (2·H) pasa a 32: las marcas de la macroetapa y de la encapsulante, a escala
-        if h == "macroetapa":  # dos divisiones horizontales, arriba y abajo
+        if h == "etapa_inicial":
+            p.drawRect(QRectF(20, 18, 24, 24))
+        elif h == "macroetapa":  # dos divisiones horizontales, arriba y abajo
             p.drawLine(QPointF(16, 14 + MARK * k), QPointF(48, 14 + MARK * k))
             p.drawLine(QPointF(16, 46 - MARK * k), QPointF(48, 46 - MARK * k))
         elif h == "encapsulante":  # las cuatro esquinas cortadas en diagonal
@@ -110,8 +126,9 @@ def icono(h: str) -> QIcon:
         p.setPen(QPen(QColor(COL["text"]), 4))
         p.drawLine(20, 32, 44, 32)
     elif h.startswith("accion:"):
-        p.drawLine(2, 32, 14, 32)
-        p.drawRect(QRectF(14, 14, 48, 36))
+        p.end()
+        from .diagrama import icono_accion
+        return icono_accion(h.partition(":")[2])
     elif h == "forzado":  # la orden de forzado: rectángulo doble, con su enlace a la izquierda, y «G{ }»
         p.drawLine(2, 32, 14, 32)
         p.drawRect(QRectF(14, 14, 48, 36))
@@ -124,12 +141,15 @@ def icono(h: str) -> QIcon:
         p.setFont(fuente)
         p.drawText(QRectF(14, 14, 48, 36), Qt.AlignmentFlag.AlignCenter, "G{ }")
     else:
+        if h == "simultaneidad:apertura":
+            p.translate(0, 64)
+            p.scale(1, -1)
         p.drawLine(16, 2, 16, 26)
         p.drawLine(48, 2, 48, 26)
         p.drawLine(4, 28, 60, 28)
-        if h == "simultaneidad":
+        if h.startswith("simultaneidad"):
             p.drawLine(4, 34, 60, 34)
-        p.drawLine(32, 36 if h == "simultaneidad" else 30, 32, 62)
+        p.drawLine(32, 36 if h.startswith("simultaneidad") else 30, 32, 62)
     p.end()
     return QIcon(pm)
 
@@ -181,7 +201,7 @@ def figura(h: str, escala: float = 1.0, dpr: float = 1.0) -> tuple[QPixmap, QPoi
         p.drawText(QPointF(12, alto / 2 + 5), "G{ }")
         p.end()
         return pm, QPoint(round(m), round(alto / 2 * escala + m))
-    if h in ("etapa", "macroetapa", "encapsulante"):
+    if h in ("etapa", "etapa_inicial", "macroetapa", "encapsulante"):
         w, alto, cx, cy = 2 * H, 2 * H + 2 * TALLO_E, H, TALLO_E + H
     elif h == "transicion":
         w, alto, cx, cy = 2 * TB, 2 * TALLO_T, TB, TALLO_T
@@ -196,12 +216,14 @@ def figura(h: str, escala: float = 1.0, dpr: float = 1.0) -> tuple[QPixmap, QPoi
     p.translate(m, m)
     p.scale(escala, escala)
     p.setPen(QPen(QColor(COL["text"]), 1.6))
-    if h in ("etapa", "macroetapa", "encapsulante"):
+    if h in ("etapa", "etapa_inicial", "macroetapa", "encapsulante"):
         p.fillRect(QRectF(0, TALLO_E, 2 * H, 2 * H), QColor(COL["accent_soft"]))
         p.drawRect(QRectF(0, TALLO_E, 2 * H, 2 * H))
         p.drawLine(QPointF(H, 0), QPointF(H, TALLO_E))
         p.drawLine(QPointF(H, TALLO_E + 2 * H), QPointF(H, alto))
-        if h == "macroetapa":  # las divisiones de la macroetapa, como las dibuja el diagrama
+        if h == "etapa_inicial":
+            p.drawRect(QRectF(4, TALLO_E + 4, 2 * H - 8, 2 * H - 8))
+        elif h == "macroetapa":  # las divisiones de la macroetapa, como las dibuja el diagrama
             for y in (TALLO_E + MARK, TALLO_E + 2 * H - MARK):
                 p.drawLine(QPointF(0, y), QPointF(2 * H, y))
         elif h == "encapsulante":  # y las esquinas cortadas de la encapsulante
@@ -214,6 +236,10 @@ def figura(h: str, escala: float = 1.0, dpr: float = 1.0) -> tuple[QPixmap, QPoi
         p.setPen(QPen(QColor(COL["muted"]), 2.4))
         p.drawLine(QPointF(0, TALLO_T), QPointF(2 * TB, TALLO_T))
     else:
+        if h == "simultaneidad:apertura":
+            p.translate(0, alto)
+            p.scale(1, -1)
+            cy = alto - cy
         for x in (30, 90):
             p.drawLine(QPointF(x, 0), QPointF(x, TALLO_E))
         p.drawLine(QPointF(0, TALLO_E), QPointF(120, TALLO_E))
@@ -223,38 +249,77 @@ def figura(h: str, escala: float = 1.0, dpr: float = 1.0) -> tuple[QPixmap, QPoi
     return pm, QPoint(round(cx * escala + m), round(cy * escala + m))
 
 
+class _DelegadoPaleta(QStyledItemDelegate):
+    """Filas limpias y cabeceras de sección; el icono conserva el símbolo existente."""
+    def paint(self, p: QPainter, opcion: Any, indice: Any) -> None:
+        p.save()
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        r = opcion.rect.adjusted(5, 1, -5, -1)
+        clave = indice.data(Qt.ItemDataRole.UserRole)
+        fuente = opcion.font
+        if not clave:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor("#eaf6f5"))
+            p.drawRoundedRect(QRectF(r), 4, 4)
+            fuente.setBold(True)
+            p.setFont(fuente)
+            p.setPen(QColor("#167e80"))
+            p.drawText(r.adjusted(8, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, indice.data())
+        else:
+            if opcion.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver):
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(QColor("#edf7f6"))
+                p.drawRoundedRect(QRectF(r), 4, 4)
+            icono = indice.data(Qt.ItemDataRole.DecorationRole)
+            icono.paint(p, r.left() + 6, r.center().y() - 14, 28, 28)
+            p.setFont(fuente)
+            p.setPen(QColor("#172e4d"))
+            p.drawText(r.adjusted(43, 0, -4, 0), Qt.AlignmentFlag.AlignVCenter, indice.data())
+        p.restore()
+
+
 class Paleta(QListWidget):
     """La lista de fichas del grafcet (etapa, transición, simultaneidad, acción, macroetapa, encapsulante, grafcet parcial y
     forzado). Las fichas solo se colocan arrastrándolas al dibujo; un clic en una ficha no hace nada salvo mostrar su ayuda
     (señal `ayuda`)."""
 
     ayuda = Signal(str)
-    REJILLA = QSize(92, 84)  # ficha más baja (antes 96)
-    ICONO = QSize(80, 64)
-    FILAS = 4  # ocho fichas en dos columnas: el alto que pide la paleta, con todas a la vista
+    REJILLA = QSize(188, 34)  # fila compacta: icono a la izquierda y nombre a la derecha
+    ICONO = QSize(28, 28)
+    FILAS = 9  # filas visibles solicitadas; el resto queda accesible con desplazamiento
     FILAS_MIN = 3  # hasta dónde se encoge en una ventana baja (con desplazamiento vertical): fija el mínimo de alto de la ventana
     CLAVES: tuple[str, ...] = COLOCABLES
 
     def __init__(self) -> None:
         super().__init__()
-        self.setViewMode(QListView.ViewMode.IconMode)  # iconos grandes con su nombre: se ven y se arrastran
+        self.setViewMode(QListView.ViewMode.ListMode)  # iconos grandes con su nombre: se ven y se arrastran
         self.setIconSize(self.ICONO)
-        self.setGridSize(self.REJILLA)
         self.setMovement(QListView.Movement.Static)  # Static desactiva el arrastre: se activa después
         self.setResizeMode(QListView.ResizeMode.Adjust)
         self.setDragEnabled(True)
         self.setDragDropMode(QListWidget.DragDropMode.DragOnly)
-        for h in self.CLAVES:
-            it = QListWidgetItem(icono(h), self.nombre(h))
-            it.setData(Qt.ItemDataRole.UserRole, h)
-            it.setToolTip(self.texto_ayuda(h))
-            it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
-            self.addItem(it)
+        self.setObjectName("paletaElementos")
+        self.setItemDelegate(_DelegadoPaleta(self))
+        self.setMouseTracking(True)
+        for titulo, claves in SECCIONES:
+            cabecera = QListWidgetItem(titulo)
+            cabecera.setFlags(Qt.ItemFlag.NoItemFlags)
+            cabecera.setSizeHint(QSize(188, 28))
+            cabecera.setBackground(QColor("#e8f6f5"))
+            cabecera.setForeground(QColor("#137e80"))
+            f = cabecera.font()
+            f.setBold(True)
+            cabecera.setFont(f)
+            self.addItem(cabecera)
+            for h in claves:
+                it = QListWidgetItem(icono(h), self.nombre(h))
+                it.setData(Qt.ItemDataRole.UserRole, h)
+                it.setToolTip(self.texto_ayuda(h))
+                it.setSizeHint(self.REJILLA)
+                self.addItem(it)
         self.setCurrentRow(-1)
-        self.itemClicked.connect(lambda it: self.ayuda.emit(self.texto_ayuda(it.data(Qt.ItemDataRole.UserRole))))
-        # Pide el alto de todas las filas (`sizeHint`) pero se encoge hasta `FILAS_MIN` si la ventana es baja; entonces sale la
-        # barra vertical. Siempre dos columnas: `ancho_minimo` ya cuenta con el ancho de esa barra, para que al salir no
-        # pase a una sola columna
+        self.itemClicked.connect(lambda it: self.ayuda.emit(self.texto_ayuda(it.data(Qt.ItemDataRole.UserRole)) if it.data(Qt.ItemDataRole.UserRole) else ""))
+        # Altura flexible; el desplazamiento conserva todas las secciones accesibles.
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -268,13 +333,12 @@ class Paleta(QListWidget):
         return AYUDAS[h]
 
     def ancho_minimo(self) -> int:
-        """El ancho que piden las dos columnas de fichas: su rejilla, el marco, la barra vertical (cuando hay más filas de las
-        que caben) y 2 de holgura (con menos, el modo de iconos pasa a una sola columna)."""
-        return 2 * self.gridSize().width() + 2 * self.frameWidth() + self.verticalScrollBar().sizeHint().width() + 2
+        """Ancho para icono, nombre y barra vertical, sin desplazamiento horizontal."""
+        return 218
 
     def alto_filas(self, filas: int) -> int:
         """El alto de `filas` filas de fichas, con el marco."""
-        return filas * self.gridSize().height() + 2 * self.frameWidth() + 2
+        return filas * self.REJILLA.height() + 2 * self.frameWidth() + 2
 
     def sizeHint(self) -> QSize:  # noqa: N802
         return QSize(self.ancho_minimo(), self.alto_filas(self.FILAS))
@@ -287,7 +351,7 @@ class Paleta(QListWidget):
     def startDrag(self, actions: Any) -> None:  # noqa: N802
         """Se arrastra el elemento mismo, al tamaño con que se verá en el dibujo, no el icono de la lista."""
         it = self.currentItem()
-        if it is None:
+        if it is None or not it.data(Qt.ItemDataRole.UserRole):
             return
         drag = QDrag(self)
         drag.setMimeData(self.mimeData([it]))
@@ -298,7 +362,8 @@ class Paleta(QListWidget):
 
     def mimeData(self, items: list[QListWidgetItem]) -> QMimeData:  # noqa: N802
         m = QMimeData()
-        m.setText(items[0].data(Qt.ItemDataRole.UserRole))
+        if items and items[0].data(Qt.ItemDataRole.UserRole):
+            m.setText(items[0].data(Qt.ItemDataRole.UserRole))
         return m
 
 
@@ -396,6 +461,7 @@ class PanelPropiedades(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.e: Any = None
         self.ident: str | None = None
         self._llenando = False
@@ -405,14 +471,19 @@ class PanelPropiedades(QWidget):
         self.parpadeo_crear = Parpadeo(self)  # «Crear las que faltan» parpadea si un nombre no vale
         self.parpadeo_crear.cambia.connect(self._pintar_crear)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(6, 4, 6, 4)
+        lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(3)
         self.titulo = QLabel()
-        self.titulo.setStyleSheet("font-weight: 600")
+        self.titulo.setObjectName("tituloPropiedades")
         lay.addWidget(self.titulo)
-        cuerpo = QHBoxLayout()
-        cuerpo.setSpacing(10)
-        lay.addLayout(cuerpo, 1)
+        self.vacio = QLabel(self.TEXTO_VACIO)
+        self.vacio.setObjectName("ayudaPropiedades")
+        lay.addWidget(self.vacio)
+        self.cuerpo = QWidget()
+        cuerpo = QHBoxLayout(self.cuerpo)
+        cuerpo.setContentsMargins(0, 0, 0, 0)
+        cuerpo.setSpacing(14)
+        lay.addWidget(self.cuerpo, 1)
         # Izquierda, la columna estrecha de campos; derecha, lo ancho (lista de acciones, programadores, enlace, barra)
         self.izq = QStackedWidget()
         self.izq.setFixedWidth(ANCHO_COLUMNA)
@@ -491,12 +562,15 @@ class PanelPropiedades(QWidget):
         g.addWidget(QLabel("Fórmula"), 0, 0)
         g.addWidget(self.t_texto, 0, 1)
         g.addWidget(self.t_manual, 0, 2)
-        g.addWidget(QLabel("Escrito"), 1, 0)
-        g.addWidget(self.t_vista, 1, 1, 1, 2)
-        g.addWidget(QLabel("Se dibuja"), 2, 0)
-        g.addWidget(self.t_dibujo, 2, 1, 1, 2)
-        g.addWidget(self.t_estado, 3, 0, 1, 2)
-        g.addWidget(self.t_crear, 3, 2)
+        resumen = QHBoxLayout()
+        resumen.setSpacing(8)
+        resumen.addWidget(QLabel("Escrito"))
+        resumen.addWidget(self.t_vista, 1)
+        resumen.addWidget(QLabel("Se dibuja"))
+        resumen.addWidget(self.t_dibujo, 1)
+        g.addLayout(resumen, 1, 0, 1, 3)
+        g.addWidget(self.t_estado, 2, 0, 1, 2)
+        g.addWidget(self.t_crear, 2, 2)
         g.setColumnStretch(1, 1)
         lay.addWidget(self.caja_formula)
         self._ver_bloques(None)
@@ -739,6 +813,8 @@ class PanelPropiedades(QWidget):
                 campo.blockSignals(False)
         self._mostrado = (kind, ident)
         self.ident = ident
+        self.cuerpo.setVisible(kind is not None)
+        self.vacio.setVisible(kind is None)
         self.pagina = kind or "vacio"  # qué opciones se muestran: etapa, transicion, accion, enlace, barra o vacio
         etapa_a = e.nombres.get(e.etapa_accion(aid), "") if kind == "accion" else ""
         titulo = {"etapa": f"Etapa {e.nombres.get(vivo)}", "transicion": f"Transición {e.nombres.get(vivo)}",
@@ -748,7 +824,7 @@ class PanelPropiedades(QWidget):
                   "marco": e.nombre(vivo) if vivo else "",
                   "accion": f"Acción {(e.datos_accion(aid)['variable'] or '?') if aid else ''}" + (f" · etapa {etapa_a}" if etapa_a else " · suelta"),
                   None: "" if len(sel) < 2 else f"{len(sel)} elementos seleccionados"}[kind] if e is not None else ""
-        self.titulo.setText(f"Opciones · {titulo}" if titulo else "Opciones")
+        self.titulo.setText(f"Propiedades · {titulo}" if titulo else "Propiedades")
         self.izq.setCurrentIndex({None: 0, "etapa": 1, "transicion": 2, "accion": 3, "enlace": 0, "barra": 0, "macro": 4,
                                   "orden": 4, "marco": 4}[kind])
         self.izq.setVisible(kind in ("etapa", "transicion", "accion", "macro", "orden", "marco"))
@@ -757,6 +833,7 @@ class PanelPropiedades(QWidget):
         self.l_vacio.setText("Enlace de la etapa con sus acciones: Supr (o botón derecho, «Eliminar el enlace») las separa de la "
                              "etapa; quedan sueltas e independientes, cada una donde estaba."
                              if len(sel) == 1 and sel[0].startswith("enlaceacc:") else self.TEXTO_VACIO)
+        self.vacio.setText(self.l_vacio.text())
         acc = e.accion_programable() if e is not None else None
         self._objetivo = (("transicion", vivo) if kind == "transicion" else ("accion", *acc) if acc and kind == "accion" else None)
         self._ver_bloques(None if self._objetivo is None else
@@ -845,6 +922,7 @@ class PanelPropiedades(QWidget):
         elif kind is None:
             self.der.setCurrentIndex(0)
         self.msg.setText("")
+        self.msg.hide()
 
     @staticmethod
     def _poner(campo: QLineEdit, texto: str) -> None:
@@ -881,6 +959,7 @@ class PanelPropiedades(QWidget):
         motivo = self.e.renombrar(self.ident, campo.text().strip())
         if motivo:
             self.msg.setText(motivo)
+            self.msg.show()
             self.msg.setStyleSheet(f"color: {COL['err']}")
             campo.setText(self.e.nombres.get(self.ident, ""))
 

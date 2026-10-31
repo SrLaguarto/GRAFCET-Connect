@@ -1024,7 +1024,7 @@ class VistaDiagrama(QGraphicsView):
     solo se ven con zoom manual (al ajustar solo hay que ver el dibujo).
 
     Junto a los controles del zoom hay «Centrar selección» (al editar: encuadra con `encuadrar` la caja de lo seleccionado, que
-    da el controlador con `caja_seleccion`; sin selección, o al simular, está desactivado) y un botón conmutable, «Mostrar
+    da el controlador con `caja_seleccion`; sin selección, o al simular, está desactivado). En la barra de herramientas está el botón conmutable «Mostrar
     dependencias» (`dependencias`, apagado por defecto): con él se dibujan los trazos discontinuos que unen una macroetapa con
     su expansión y una encapsulante con sus recintos. Se recuerda entre sesiones en los `QSettings` de la ventana que contiene
     la vista (o en `ajustes`, si se le da uno). Con el botón central del ratón (la rueda) pulsado, arrastrar desplaza el dibujo
@@ -1265,12 +1265,12 @@ class VistaDiagrama(QGraphicsView):
         return menu
 
     def _barra_zoom(self) -> None:
-        """Controles del zoom sobre el dibujo, arriba a la derecha: «−», porcentaje, «+», «Centrar todo» y «Centrar selección», y a
-        su lado el botón conmutable «Mostrar dependencias» (marcado = se ven los trazos discontinuos de las dependencias)."""
+        """Controles del zoom sobre el dibujo, arriba a la derecha: «−», porcentaje, «+», «Centrar todo» y «Centrar selección».
+        La ventana aloja «Mostrar dependencias» en su barra de herramientas."""
         self.barra = QFrame(self)
-        self.barra.setStyleSheet("QFrame { background: rgba(255,255,255,215); border: 1px solid #c3c9d6; "
+        self.barra.setStyleSheet("QFrame { background: rgba(255,255,255,215); border: 1px solid #c7dfd9; "
                                  "border-radius: 4px } QToolButton { border: none; padding: 2px 7px; font-size: 14px } "
-                                 "QToolButton:hover { background: #dbe8ff } QLabel { border: none; min-width: 42px }")
+                                 "QToolButton:hover { background: #ddefe8 } QLabel { border: none; min-width: 42px }")
         lay = QHBoxLayout(self.barra)
         lay.setContentsMargins(3, 2, 3, 2)
         lay.setSpacing(0)
@@ -1287,15 +1287,15 @@ class VistaDiagrama(QGraphicsView):
         self.b_ajustar = QToolButton()
         self.b_ajustar.setText("Centrar todo")
         self.b_ajustar.setToolTip("Centrar todo el dibujo en la ventana (Ctrl+0; en simulación, también doble clic)")
-        self.b_ajustar.setStyleSheet("QToolButton { border: 1px solid #c3c9d6; border-radius: 3px; margin-left: 4px; "
-                                     "background: #eef3fc } QToolButton:hover { background: #dbe8ff }")
+        self.b_ajustar.setStyleSheet("QToolButton { border: 1px solid #c7dfd9; border-radius: 3px; margin-left: 4px; "
+                                     "background: #eef8f4 } QToolButton:hover { background: #ddefe8 }")
         self.b_ajustar.clicked.connect(self.ajustar)
         self.b_seleccion = QToolButton()
         self.b_seleccion.setText("Centrar selección")
         self.b_seleccion.setToolTip("Centrar selección: encaja y centra en la ventana lo que hay seleccionado (solo al editar). "
                                     "Sin nada seleccionado, o al simular, no hace nada")
-        self.b_seleccion.setStyleSheet("QToolButton { border: 1px solid #c3c9d6; border-radius: 3px; margin-left: 4px; "
-                                       "background: #eef3fc } QToolButton:hover { background: #dbe8ff } "
+        self.b_seleccion.setStyleSheet("QToolButton { border: 1px solid #c7dfd9; border-radius: 3px; margin-left: 4px; "
+                                       "background: #eef8f4 } QToolButton:hover { background: #ddefe8 } "
                                        "QToolButton:disabled { color: #9aa3b5; background: #f4f6fa }")
         self.b_seleccion.setEnabled(False)
         self.b_seleccion.clicked.connect(self.centrar_seleccion)
@@ -1304,13 +1304,15 @@ class VistaDiagrama(QGraphicsView):
         self.b_dependencias.setCheckable(True)
         self.b_dependencias.setToolTip("Mostrar dependencias: dibuja los trazos discontinuos que unen una macroetapa con su "
                                        "expansión y una encapsulante con sus recintos. Apagado por defecto; se recuerda")
-        self.b_dependencias.setStyleSheet("QToolButton { border: 1px solid #c3c9d6; border-radius: 3px; margin-left: 4px; "
-                                          "background: #eef3fc } QToolButton:hover { background: #dbe8ff } "
-                                          "QToolButton:checked { background: #1f6feb; color: #ffffff; border-color: #1f6feb } "
-                                          "QToolButton:checked:hover { background: #3b82f0 }")
+        self.b_dependencias.setStyleSheet("QToolButton { border: 1px solid #c7dfd9; border-radius: 3px; margin-left: 4px; "
+                                          "background: #eef8f4 } QToolButton:hover { background: #ddefe8 } "
+                                          "QToolButton:checked { background: #167d79; color: #ffffff; border-color: #167d79 } "
+                                          "QToolButton:checked:hover { background: #218c81 }")
         self.b_dependencias.clicked.connect(self.mostrar_dependencias)
-        for w in (self.b_menos, self.l_zoom, self.b_mas, self.b_ajustar, self.b_seleccion, self.b_dependencias):
+        for w in (self.b_menos, self.l_zoom, self.b_mas, self.b_ajustar, self.b_seleccion):
             lay.addWidget(w)
+        self.b_dependencias.setParent(self)
+        self.b_dependencias.hide()  # la ventana la aloja en la barra de herramientas
         self.barra.adjustSize()
 
     def _ajustes(self) -> QSettings | None:

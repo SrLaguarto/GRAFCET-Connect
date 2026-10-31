@@ -32,36 +32,40 @@ CONEXION_INICIAL = ("192.168.1.133", 502, 1)
 
 # Aspecto. El color de la barrita es el del tipo; su viveza, el estado: tenue (canal sin asignar), tipo (asignado) y vivo
 # (la señal está activa). La leyenda de abajo explica los colores.
-FONDO = "#1c1d20"
+FONDO = "#f4fbf9"
 COLOR_TIPO = {"bool": "#8bc34a", "decimal": "#2fa8f0", "int": "#e8892b"}
-COLOR_CUALQUIERA = "#e6e6e6"
+COLOR_CUALQUIERA = "#6d837b"
 LEYENDA = (("Bool", "bool"), ("Decimal", "decimal"), ("Entera", "int"), ("Cualquiera", None))
 NIVEL_TENUE, NIVEL_ASIGNADO, NIVEL_ACTIVO = .28, .62, 1.0
-ALTO_FILA = 20
-ANCHO_INTERIOR = 142  # la mitad del marco que cae dentro de él: indicador, nombre del canal y, en los registros, su valor
+ALTO_FILA = 18
+ALTO_VARIABLE = 34
+ANCHO_INTERIOR = 128  # la mitad del marco que cae dentro de él: indicador, nombre del canal y, en los registros, su valor
 ROL_COLOR, ROL_ASIGNADA, ROL_ACTIVO = (Qt.ItemDataRole.UserRole + n for n in (1, 2, 3))
 ESTILO_PANEL = """
-    QWidget#conexionES { background:#1c1d20; }
-    QFrame#cabeceraES { background:#1c1d20; border:0; border-bottom:1px solid #303238; }
-    QFrame#cabeceraES QPushButton { background:transparent; color:#a9c6e4; border:0; padding:4px 10px; border-radius:0; }
-    QFrame#cabeceraES QPushButton:hover { color:#ffffff; background:#2a2d33; }
-    QFrame#cabeceraES QPushButton:disabled { color:#5d636b; background:transparent; }
-    QLabel#tituloES { color:#eceff2; font-size:14px; font-weight:600; padding-left:4px; }
+    QWidget#conexionES { background:#eef7f7; }
+    QWidget#tarjetaES { background:white; border:1px solid #d4e7e8; border-radius:7px; }
+    QWidget#tarjetaES QLabel { border:0; }
+    QLabel#tituloPLC { color:#147f80; font-size:15px; font-weight:600; padding:8px; }
+    QFrame#cabeceraES { background:#f4fbf9; border:0; border-bottom:1px solid #d1e6df; }
+    QFrame#cabeceraES QPushButton { background:transparent; color:#167d79; border:0; padding:4px 10px; border-radius:0; }
+    QFrame#cabeceraES QPushButton:hover { color:#164f48; background:#e1f2eb; }
+    QFrame#cabeceraES QPushButton:disabled { color:#81958f; background:transparent; }
+    QLabel#tituloES { color:#203b45; font-size:13px; font-weight:600; padding-left:4px; }
     QWidget#cuerpoES, QFrame#pieES { background:transparent; }
-    QWidget#cuerpoES QLabel, QFrame#pieES QLabel { color:#cfd3d8; background:transparent; }
-    QLabel#seccionES { color:#e6e9ed; font-size:13px; padding-bottom:6px; }
-    QLabel#ayudaES, QLabel#resumenES { color:#7f8791; }
-    QFrame#moduloPLC { background:transparent; border:1px solid #c4c9cf; }
+    QWidget#cuerpoES QLabel, QFrame#pieES QLabel { color:#365b55; background:transparent; }
+    QLabel#seccionES { color:#122849; font-size:14px; font-weight:600; padding:10px 6px; }
+    QLabel#ayudaES, QLabel#resumenES { color:#657e77; }
+    QFrame#moduloPLC { background:transparent; border:1px solid #b5d9cf; }
     QListWidget#listaES { background:transparent; border:0; outline:0; }
-    QScrollArea#scrollES { background:transparent; border:0; }
-    QScrollArea#scrollES > QWidget > QWidget { background:transparent; }
+    QScrollArea#scrollES { background:white; border:1px solid #d4e7e8; border-radius:7px; }
+    QScrollArea#scrollES > QWidget > QWidget { background:white; }
     QWidget#cuerpoES QScrollBar:vertical { background:transparent; width:8px; margin:0; }
-    QWidget#cuerpoES QScrollBar::handle:vertical { background:#3b3f46; border-radius:3px; min-height:24px; }
+    QWidget#cuerpoES QScrollBar::handle:vertical { background:#aacfc3; border-radius:3px; min-height:24px; }
     QWidget#cuerpoES QScrollBar::add-line:vertical, QWidget#cuerpoES QScrollBar::sub-line:vertical { height:0; }
     QWidget#cuerpoES QScrollBar::add-page:vertical, QWidget#cuerpoES QScrollBar::sub-page:vertical { background:transparent; }
-    QPushButton#quitarES { background:transparent; color:#78818b; border:0; padding:0; font-size:14px; }
-    QPushButton#quitarES:hover { color:#ff8a80; }
-    QPushButton#quitarES:disabled { color:#4a4f56; }
+    QPushButton#quitarES { background:transparent; color:#637d75; border:0; padding:0; font-size:14px; }
+    QPushButton#quitarES:hover { color:#b13d3d; }
+    QPushButton#quitarES:disabled { color:#8a9c95; }
 """
 
 
@@ -144,31 +148,28 @@ class DelegadoVariable(QStyledItemDelegate):
         self.derecha = barra_a_la_derecha
 
     def sizeHint(self, _opcion, _indice):  # noqa: N802
-        return QSize(0, ALTO_FILA)
+        return QSize(0, ALTO_VARIABLE)
 
     def paint(self, p, opcion, indice):
         p.save()
-        r = opcion.rect
-        if opcion.state & QStyle.StateFlag.State_Selected:
-            p.fillRect(r, QColor("#2b3a4a"))
-        elif opcion.state & QStyle.StateFlag.State_MouseOver:
-            p.fillRect(r, QColor("#25272c"))
-        nivel = NIVEL_ACTIVO if indice.data(ROL_ACTIVO) else NIVEL_ASIGNADO
-        alto = 12
-        if self.derecha:
-            barra = QRect(r.right() - 3, r.center().y() - alto // 2 + 1, 4, alto)
-            texto = QRect(r.left() + 4, r.top(), barra.left() - r.left() - 10, r.height())
-            alineacion = Qt.AlignmentFlag.AlignRight
-        else:
-            barra = QRect(r.left() + 1, r.center().y() - alto // 2 + 1, 4, alto)
-            texto = QRect(barra.right() + 7, r.top(), r.right() - barra.right() - 11, r.height())
-            alineacion = Qt.AlignmentFlag.AlignLeft
-        p.fillRect(barra, mezclar(indice.data(ROL_COLOR) or COLOR_CUALQUIERA, nivel))
-        p.setFont(opcion.font)
-        p.setPen(QColor("#8d96a0" if indice.data(ROL_ASIGNADA) else "#e4e7eb"))
-        elidido = QFontMetrics(opcion.font).elidedText(indice.data(Qt.ItemDataRole.DisplayRole) or "",
-                                                       Qt.TextElideMode.ElideRight, texto.width())
-        p.drawText(texto, int(alineacion | Qt.AlignmentFlag.AlignVCenter), elidido)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        r = opcion.rect.adjusted(7, 2, -7, -2)
+        elegido = bool(opcion.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver))
+        p.setPen(QColor("#b7dcd8" if elegido else "#e0ecee"))
+        p.setBrush(QColor("#eaf6f3" if elegido else "#ffffff"))
+        p.drawRoundedRect(r, 4, 4)
+        color = mezclar(indice.data(ROL_COLOR) or COLOR_CUALQUIERA,
+                        NIVEL_ACTIVO if indice.data(ROL_ACTIVO) else NIVEL_ASIGNADO)
+        p.setBrush(color)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(r.left() + 9, r.center().y() - 4, 8, 8)
+        fuente = opcion.font
+        fuente.setPixelSize(13)
+        p.setFont(fuente)
+        p.setPen(QColor("#132b46"))
+        texto = r.adjusted(26, 0, -6, 0)
+        elidido = QFontMetrics(fuente).elidedText(indice.data() or "", Qt.TextElideMode.ElideRight, texto.width())
+        p.drawText(texto, Qt.AlignmentFlag.AlignVCenter, elidido)
         p.restore()
 
 
@@ -213,13 +214,13 @@ class TerminalES(QFrame):
         else:  # sin asignar: tenue, con el color propio del área (los registros admiten Decimal y Entera)
             self.led.fijar((COLOR_TIPO["decimal"], COLOR_TIPO["int"]) if analogica else (COLOR_TIPO["bool"],), NIVEL_TENUE)
         self.canal = QLabel(f"{ETIQUETA_CANAL[area]} {direccion}")
-        self.canal.setStyleSheet("color:#d8dce1")
+        self.canal.setStyleSheet("color:#365b55")
         self.nombre = EtiquetaElidida(variable["name"] if variable else "",
                                       Qt.AlignmentFlag.AlignRight if entrada else Qt.AlignmentFlag.AlignLeft)
         self.nombre.setObjectName("asignacionES")  # lo que se agarra para mover la asignación a otro canal
-        self.nombre.setStyleSheet("color:#eef1f4")
+        self.nombre.setStyleSheet("color:#203b45")
         self.valor = QLabel("—" if variable else "")
-        self.valor.setStyleSheet("color:#9fb4c6; font-size:10px")
+        self.valor.setStyleSheet("color:#526e66; font-size:10px")
         self.valor.setVisible(analogica)
         interior = QWidget()
         interior.setFixedWidth(ANCHO_INTERIOR)
@@ -279,7 +280,7 @@ class TerminalES(QFrame):
 
     def paintEvent(self, evento):
         if self._resaltado or self.underMouse():
-            QPainter(self).fillRect(self.rect(), QColor("#2e4a63" if self._resaltado else "#25272c"))
+            QPainter(self).fillRect(self.rect(), QColor("#c1e8dc" if self._resaltado else "#e8f5ef"))
         super().paintEvent(evento)
 
     def enterEvent(self, evento):
@@ -356,6 +357,9 @@ class LienzoPLC(QWidget):
         rejilla = QGridLayout(self)
         rejilla.setContentsMargins(0, 6, 0, 8)
         rejilla.setSpacing(0)
+        titulo = QLabel("PLC · Modbus TCP")
+        titulo.setObjectName("tituloPLC")
+        rejilla.addWidget(titulo, 0, 0, 1, 2)
         self.destino = QLabel()
         self.destino.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.destino.setFixedSize(2 * ANCHO_INTERIOR, 46)
@@ -368,14 +372,15 @@ class LienzoPLC(QWidget):
         self.ayuda.setObjectName("ayudaES")
         self.ayuda.setWordWrap(True)
         self.ayuda.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.ayuda.setContentsMargins(0, 18, 0, 0)
-        rejilla.addWidget(self.destino, 0, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
-        rejilla.addWidget(self.izq, 1, 0, Qt.AlignmentFlag.AlignTop)
-        rejilla.addWidget(self.der, 1, 1, Qt.AlignmentFlag.AlignTop)
-        rejilla.addWidget(self.ayuda, 2, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        self.ayuda.setContentsMargins(0, 8, 0, 0)
+        self.ayuda.setMinimumHeight(40)
+        rejilla.addWidget(self.destino, 1, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
+        rejilla.addWidget(self.izq, 2, 0, Qt.AlignmentFlag.AlignTop)
+        rejilla.addWidget(self.der, 2, 1, Qt.AlignmentFlag.AlignTop)
+        rejilla.addWidget(self.ayuda, 3, 0, 1, 2, Qt.AlignmentFlag.AlignTop)
         rejilla.setColumnStretch(0, 1)
         rejilla.setColumnStretch(1, 1)
-        rejilla.setRowStretch(3, 1)
+        rejilla.setRowStretch(4, 1)
         self.marco = QFrame(self)
         self.marco.setObjectName("moduloPLC")
         self.marco.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -479,7 +484,7 @@ class PanelES(QWidget):
         cabeza.setContentsMargins(0, 0, 0, 0)
         cabeza.setSpacing(0)
         fila_alta = QWidget()
-        fila_alta.setFixedHeight(38)
+        fila_alta.setFixedHeight(32)
         cabecera = QHBoxLayout(fila_alta)
         cabecera.setContentsMargins(10, 0, 12, 0)
         cabecera.setSpacing(4)
@@ -504,7 +509,7 @@ class PanelES(QWidget):
         fe.addWidget(self.check, 0, Qt.AlignmentFlag.AlignTop)
         self.estado = EstadoConexion()
         self.estado.setText("Desconectado")
-        self.estado.setStyleSheet("color:#9aa3ad")
+        self.estado.setStyleSheet("color:#657e77")
         fe.addWidget(self.estado, 1)
         cabeza.addWidget(fila_alta)
         cabeza.addWidget(fila_estado)
@@ -518,8 +523,8 @@ class PanelES(QWidget):
         cuerpo = QWidget()
         cuerpo.setObjectName("cuerpoES")
         zona = QHBoxLayout(cuerpo)
-        zona.setContentsMargins(22, 20, 22, 4)
-        zona.setSpacing(18)
+        zona.setContentsMargins(12, 10, 12, 4)
+        zona.setSpacing(10)
         self.lienzo = LienzoPLC()
         self.modulo = self.lienzo.marco
         self.destino = self.lienzo.destino
@@ -536,13 +541,14 @@ class PanelES(QWidget):
         columnas = []
         for rol, lista in (("input", self.lista_entradas), ("output", self.lista_salidas)):
             columna = QWidget()
-            columna.setMinimumWidth(170)
+            columna.setObjectName("tarjetaES")
+            columna.setMinimumWidth(144)
             cl = QVBoxLayout(columna)
             cl.setContentsMargins(0, 0, 0, 0)
             cl.setSpacing(0)
             etiqueta = QLabel("SENSORES" if rol == "input" else "ACTUADORES")
             etiqueta.setObjectName("seccionES")
-            etiqueta.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            etiqueta.setAlignment(Qt.AlignmentFlag.AlignLeft)
             etiqueta.setTextFormat(Qt.TextFormat.RichText)
             cl.addWidget(etiqueta)
             cl.addWidget(lista, 1)
@@ -556,7 +562,7 @@ class PanelES(QWidget):
         pie = QFrame()
         pie.setObjectName("pieES")
         pl = QHBoxLayout(pie)
-        pl.setContentsMargins(22, 2, 22, 10)
+        pl.setContentsMargins(12, 2, 12, 6)
         pl.setSpacing(6)
         for texto, tipo in LEYENDA:
             cuadro = IndicadorES(8, 8)
@@ -566,6 +572,7 @@ class PanelES(QWidget):
             pl.addSpacing(12)
         pl.addStretch()
         self.resumen = QLabel()
+        self.resumen.setWordWrap(True)
         self.resumen.setObjectName("resumenES")
         pl.addWidget(self.resumen)
         raiz.addWidget(pie)
@@ -573,24 +580,24 @@ class PanelES(QWidget):
         self.dialogo_config.setWindowTitle("Configuración Modbus TCP")
         self.dialogo_config.resize(640, 380)
         self.dialogo_config.setStyleSheet("""
-            QDialog { background:#303034; color:#e6e6ed; }
-            QLabel, QCheckBox { color:#d5d5df; }
-            QLineEdit, QSpinBox, QComboBox { background:#3a3b43; color:#eeeeF4; border:1px solid #666873; border-radius:3px; padding:5px; }
-            QTableWidget { background:#33343a; color:#e6e6ed; gridline-color:#4c4d56; }
-            QHeaderView::section { background:#28292f; color:#c9cbd5; padding:6px; border:0; }
-            QPushButton { background:#454750; color:#e6e6ed; padding:7px 12px; border:0; border-radius:4px; }
-            QPushButton:hover { background:#565965; }
-            QPushButton:disabled { color:#747680; }
+            QDialog { background:#f4fbf9; color:#203b45; }
+            QLabel, QCheckBox { color:#365b55; }
+            QLineEdit, QSpinBox, QComboBox { background:#ffffff; color:#203b45; border:1px solid #c7dfd9; border-radius:3px; padding:5px; }
+            QTableWidget { background:#ffffff; color:#203b45; gridline-color:#d1e6df; }
+            QHeaderView::section { background:#e8f5ef; color:#365b55; padding:6px; border:0; }
+            QPushButton { background:#e8f5ef; color:#203b45; padding:4px 8px; border:0; border-radius:4px; }
+            QPushButton:hover { background:#d5eee5; }
+            QPushButton:disabled { color:#81958f; }
         """)
         self.b_prueba_guiada.clicked.connect(self.dialogo_config.hide)
         ajustes = QVBoxLayout(self.dialogo_config)
         self.config_widget = QWidget()
         configuracion = QVBoxLayout(self.config_widget)
         endpoint = QFormLayout()
-        endpoint.setVerticalSpacing(14)
+        endpoint.setVerticalSpacing(8)
         endpoint.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint)
         servidor = QLabel("Servidor")
-        servidor.setStyleSheet("font-size:18px; color:#c4dfae; padding:8px 0")
+        servidor.setStyleSheet("font-size:15px; color:#167d79; padding:8px 0")
         configuracion.addWidget(servidor)
         self.host = QLineEdit()
         self.puerto = QSpinBox()
@@ -612,7 +619,7 @@ class PanelES(QWidget):
             endpoint.addRow(texto, widget)
         configuracion.addLayout(endpoint)
         titulo_canales = QLabel("Canales del servidor")
-        titulo_canales.setStyleSheet("font-size:17px; color:#c4dfae; padding-top:10px")
+        titulo_canales.setStyleSheet("font-size:14px; color:#167d79; padding-top:10px")
         configuracion.addWidget(titulo_canales)
         rejilla_canales = QGridLayout()
         rejilla_canales.addWidget(QLabel("Offset (desde)"), 0, 1)
@@ -635,10 +642,10 @@ class PanelES(QWidget):
         configuracion.addLayout(rejilla_canales)
         ayuda_canales = QLabel("Copia offset y cantidad de Factory I/O. Estos ajustes no modifican el servidor.")
         ayuda_canales.setWordWrap(True)
-        ayuda_canales.setStyleSheet("color:#98adbd; font-size:11px")
+        ayuda_canales.setStyleSheet("color:#526e66; font-size:11px")
         configuracion.addWidget(ayuda_canales)
         self.b_avanzado = QPushButton("Asignaciones y ajustes avanzados  ›")
-        self.b_avanzado.setStyleSheet("text-align:left; margin-top:12px; background:transparent; color:#b9beca")
+        self.b_avanzado.setStyleSheet("text-align:left; margin-top:12px; background:transparent; color:#526e66")
         self.b_avanzado.clicked.connect(self._alternar_avanzado)
         configuracion.addWidget(self.b_avanzado)
         self.avanzado = QWidget()
@@ -690,6 +697,7 @@ class PanelES(QWidget):
         self.error_config.setStyleSheet("color:#b13d3d")
         ajustes.addWidget(self.error_config)
         cerrar = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        cerrar.button(QDialogButtonBox.StandardButton.Close).setText("Cerrar")
         cerrar.rejected.connect(self._cerrar_configuracion)
         ajustes.addWidget(cerrar)
 
@@ -718,7 +726,7 @@ class PanelES(QWidget):
                                  f"color:{'#17240d' if conectado else '#ef6b6b' if fallo else '#7d848c'}; "
                                  f"border-radius:8px; font-size:{'11px' if conectado or fallo else '10px'}; font-weight:600")
         self.check.setToolTip(mensaje)
-        self.estado.setStyleSheet(f"color:{'#9bd68f' if conectado else '#e89a9a' if fallo else '#9aa3ad'}")
+        self.estado.setStyleSheet(f"color:{'#9bd68f' if conectado else '#e89a9a' if fallo else '#657e77'}")
         self.estado.setVisible(True)
 
     def admite(self, vid, area):
@@ -923,10 +931,10 @@ class PanelES(QWidget):
         self.lista_salidas.clear()
         asignadas = {s.variable: f"{ETIQUETA_CANAL[s.area]} {s.direccion}" for s in c.senales}
         for rol, titulo in (("input", "SENSORES"), ("output", "ACTUADORES")):
-            self.cuentas[rol].setText(f"{titulo} <span style='color:#7f8791; font-size:10px'>{sum(v['role'] == rol for v in self.variables)}</span>")
+            self.cuentas[rol].setText(f"{titulo} <span style='color:#657e77; font-size:10px'>{sum(v['role'] == rol for v in self.variables)}</span>")
         for v in self.variables:
             item = QListWidgetItem(v["name"])
-            item.setSizeHint(QSize(0, ALTO_FILA))
+            item.setSizeHint(QSize(0, ALTO_VARIABLE))
             item.setData(Qt.ItemDataRole.UserRole, v["id"])
             item.setData(ROL_COLOR, color_tipo(v))
             item.setData(ROL_ASIGNADA, v["id"] in asignadas)

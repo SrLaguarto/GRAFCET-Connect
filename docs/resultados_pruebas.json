@@ -1,9 +1,9 @@
 {
- "date": "2026-10-30T21:25:04+01:00",
+ "date": "2026-10-31T09:56:20+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 529,
+ "total": 534,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -647,7 +647,7 @@
    "summary": "REQ-EDT-02, REQ-JER-04, REQ-JER-05: la leyenda de la ventana ya no dice que la macroetapa va unida a su expansión por"
   },
   {
-   "test": "test_editor_cadenas.EncuadrarYDependencias.test_SEDI290_el_boton_mostrar_dependencias_esta_junto_al_zoom_en_edicion_y_en_simulacion_y_se_recuerda",
+   "test": "test_editor_cadenas.EncuadrarYDependencias.test_SEDI290_dependencias_en_barra_en_edicion_y_simulacion_y_se_recuerda",
    "case": "S-EDI290",
    "outcome": "pasa",
    "requirements": [
@@ -884,14 +884,14 @@
    "summary": "REQ-EDT-02, REQ-ACT-01: con la etapa y sus acciones seleccionadas (lazo), pulsar la caja de una acción no deshace la"
   },
   {
-   "test": "test_editor_cadenas.FichaDeForzado.test_SEDI257_las_ocho_fichas_se_ven_enteras_en_cuatro_filas_a_1366x768",
+   "test": "test_editor_cadenas.FichaDeForzado.test_SEDI257_secciones_y_fichas_accesibles_a_1366x768",
    "case": "S-EDI257",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-02",
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-09: con la ficha «Forzado» la paleta pasó de tres a cuatro filas de 84 de alto (340 en total, sin"
+   "summary": "REQ-EDT-02, REQ-EDT-09: secciones legibles; todas las fichas accesibles con desplazamiento a 1366×768."
   },
   {
    "test": "test_editor_cadenas.FichaDeForzado.test_SEDI267_la_paleta_se_encoge_en_ventanas_bajas_sin_subir_el_minimo_de_alto_de_la_ventana",
@@ -901,7 +901,7 @@
     "REQ-EDT-02",
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-09: la paleta de cuatro filas pide su alto (340) pero se encoge hasta tres filas, con barra"
+   "summary": "REQ-EDT-02, REQ-EDT-09: en ambos tamaños las fichas se alcanzan con scroll, sin aumentar el mínimo de ventana."
   },
   {
    "test": "test_editor_cadenas.FichaDeForzado.test_SEDI272_el_divisor_movido_a_mano_se_respeta_aunque_la_paleta_no_quepa_entera",
@@ -969,7 +969,7 @@
    "summary": "REQ-JER-02, REQ-JER-03, REQ-EDT-05, REQ-SIM-03: un parcial suelto sale en el diálogo de la ficha «Forzado» (con sus"
   },
   {
-   "test": "test_editor_cadenas.GrafcetParcialSuelto.test_SEDI285_el_menu_del_hueco_ofrece_un_grafcet_parcial_nuevo_aqui",
+   "test": "test_editor_cadenas.GrafcetParcialSuelto.test_SEDI285_el_menu_del_hueco_omite_creacion_redundante_con_paleta",
    "case": "S-EDI285",
    "outcome": "pasa",
    "requirements": [
@@ -1212,13 +1212,13 @@
    "summary": "REQ-EDT-02: un clic en un desplegable abre su menú y en un campo, su editor (Intro aplica, Esc descarta);"
   },
   {
-   "test": "test_editor_escritorio.Bloques.test_SEDI64_disposicion_en_columnas",
+   "test": "test_editor_escritorio.Bloques.test_SEDI64_categorias_horizontales_y_bloques_en_columna",
    "case": "S-EDI64",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: categorías como carpetas en una columna (las ocho, con su color), a su derecha la columna de"
+   "summary": "REQ-EDT-02: categorías en una franja horizontal (las ocho, con su color), debajo la columna de"
   },
   {
    "test": "test_editor_escritorio.Bloques.test_SEDI97_y_y_o_de_varias_entradas",
@@ -2689,7 +2689,7 @@
    "summary": "REQ-EDT-02: no hay modo herramienta para colocar: un clic en una ficha solo muestra su ayuda, un clic en el"
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI88_paleta_con_una_sola_ficha_de_accion",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI88_paleta_por_secciones_y_cinco_fichas_de_accion",
    "case": "S-EDI88",
    "outcome": "pasa",
    "requirements": [
@@ -3774,6 +3774,55 @@
     "REQ-SIM-03"
    ],
    "summary": "REQ-SIM-03, REQ-EDT-07 (P-IMP-67): si una variable asignada pasa a «interna», el panel avisa de que «ya no es de"
+  },
+  {
+   "test": "test_rediseno_visual.RedisenoVisual.test_SVIS01_inicial_solape_y_deshacer",
+   "case": "S-VIS01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: etapa inicial desde la paleta, sin permitir solapes y con deshacer."
+  },
+  {
+   "test": "test_rediseno_visual.RedisenoVisual.test_SVIS02_apertura_y_cierre_son_barras_Y",
+   "case": "S-VIS02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-MOD-03: ambos accesos crean barras Y sin semántica nueva."
+  },
+  {
+   "test": "test_rediseno_visual.RedisenoVisual.test_SVIS03_cinco_acciones_desde_paleta",
+   "case": "S-VIS03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-01",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-ACT-01, REQ-EDT-02: cada ficha crea el borrador de acción de su tipo."
+  },
+  {
+   "test": "test_rediseno_visual.RedisenoVisual.test_SVIS04_encabezados_y_dependencias",
+   "case": "S-VIS04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-SIM-03: encabezados sin arrastre; dependencias accesible al editar y simular."
+  },
+  {
+   "test": "test_rediseno_visual.RedisenoVisual.test_SVIS05_propiedades_compactas_y_divisor_manual_respetado",
+   "case": "S-VIS05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: sin selección se libera el lienzo; el reparto manual se conserva."
   },
   {
    "test": "test_simulador_escritorio.Nucleo.test_SAPP01_abrir_lo_guardado",

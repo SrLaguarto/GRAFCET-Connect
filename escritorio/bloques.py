@@ -507,8 +507,8 @@ def arbol_a_texto(n: dict[str, Any] | None) -> str:
 
 
 # -- dibujo ------------------------------------------------------------------------------------------------
-COLORES = {"entrada": "#2F6FDE", "salida": "#2E9E57", "interna": "#E07B1A", "etapa": "#7C4DDB",
-           "operador": "#4B5B73", "comparacion": "#159AAE", "tiempo": "#B07A12", "texto": "#6B7280", "error": "#C0392B",
+COLORES = {"entrada": "#278B87", "salida": "#43845E", "interna": "#B27A39", "etapa": "#7773AA",
+           "operador": "#486078", "comparacion": "#398C9E", "tiempo": "#A38636", "texto": "#6B7280", "error": "#C0392B",
            "y": "#5F7F0B", "o": "#B83DBA",  # «y» (oliva) y «o» (fucsia): operadores, pero cada uno con su color
            "constante": "#8A5A44"}  # las fichas 1 (verdadero) y 0 (falso): su propia carpeta, no se pierden entre los operadores
 CATEGORIAS = (("operador", "Operadores"), ("constante", "Constantes"), ("entrada", "Entradas"), ("salida", "Salidas"),
@@ -832,7 +832,7 @@ class Motor:
         r = QRectF(ox, oy, c.w, c.h)
         if c.nodo is None:  # un hueco: hexágono hundido y punteado
             fondo = QColor(padre).darker(165) if padre else QColor("#EEF0F4")
-            borde = QColor(padre).lighter(185) if padre else QColor("#9AA3B5")
+            borde = QColor(padre).lighter(185) if padre else QColor("#8BBCAF")
             p.setPen(QPen(borde, 1.2, Qt.PenStyle.DashLine))
             p.setBrush(fondo)
             p.drawPolygon(self.hexagono(r.adjusted(0.5, 0.5, -0.5, -0.5)))
@@ -1621,8 +1621,8 @@ def _desplazable(w: QWidget, ancho: int | None = None) -> QScrollArea:
 
 
 class Programador(QWidget):
-    """Programador por bloques, a la manera de Scratch: a la izquierda las categorías como carpetas (círculo de color y
-    nombre), a su derecha los bloques de la categoría elegida, uno debajo de otro y que se arrastran, y en el resto el
+    """Programador por bloques: categorías en una franja horizontal desplazable; debajo, los bloques de la categoría elegida
+    en una columna arrastrable y, a su derecha, el
     área de trabajo con la fórmula (en línea si cabe) con el aviso, «⤢ Ampliar» y la papelera. `fuente()` devuelve las
     variables {nombre: (papel, tipo)} y las etapas (en notación X) del modelo en curso. `cambiado(texto)` se emite en
     cada cambio hecho con bloques (no al llamar a `poner`). Con `historial`, Ctrl+Z y Ctrl+Mayús+Z deshacen y rehacen
@@ -1644,33 +1644,43 @@ class Programador(QWidget):
         self._rehecho: list[Any] = []
         self._espejo: Programador | None = None
         self._ventana: QWidget | None = None
-        lay = QHBoxLayout(self)
+        raiz = QVBoxLayout(self)
+        raiz.setContentsMargins(0, 0, 0, 0)
+        raiz.setSpacing(5)
+        lay = QHBoxLayout()
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
-        # columna 1: las categorías, como carpetas
+        # Franja superior: categorías, con desplazamiento horizontal en paneles estrechos.
         carpetas = QWidget()
-        cl = QVBoxLayout(carpetas)
+        cl = QHBoxLayout(carpetas)
         cl.setContentsMargins(0, 0, 2, 0)
-        cl.setSpacing(1)
+        cl.setSpacing(2)
         self.categorias: dict[str, QPushButton] = {}
         for clave, titulo in self.lista_categorias:
             b = QPushButton(titulo)
             b.setCheckable(True)
             b.setAutoExclusive(True)
             b.setIcon(_circulo(COLORES[{"numero": "comparacion", "vnum": "interna", "aritm": "operador"}.get(clave, clave)]))
-            b.setIconSize(QSize(14, 14))
+            b.setIconSize(QSize(10, 10))
             b.setToolTip(titulo)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setStyleSheet("QPushButton { text-align: left; padding: 2px 6px; border: 1px solid transparent; "
+            b.setStyleSheet("QPushButton { text-align: left; padding: 4px 7px; border: 1px solid transparent; "
                             "border-radius: 5px; background: transparent; }"
-                            "QPushButton:hover { background: #F0F2F7; }"
-                            "QPushButton:checked { background: #E3E8F3; border: 1px solid #9AA3B5; font-weight: 600; }")
+                            "QPushButton:hover { background: #EDF7F3; }"
+                            "QPushButton:checked { color: #147e7c; background: #e7f5f3; border: 1px solid #b8ded8; font-weight: 600; }")
             b.clicked.connect(lambda _=False, c=clave: self.elegir_categoria(c))
             cl.addWidget(b)
             self.categorias[clave] = b
         cl.addStretch(1)
-        self._sc_carpetas = _desplazable(carpetas, max(b.sizeHint().width() for b in self.categorias.values()) + 10)
-        lay.addWidget(self._sc_carpetas)
+        self._sc_carpetas = _desplazable(carpetas)
+        self._sc_carpetas.setObjectName("categoriasBloques")
+        self._sc_carpetas.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: white; }")
+        self._sc_carpetas.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._sc_carpetas.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._sc_carpetas.setFixedHeight(43)
+        raiz.addWidget(self._sc_carpetas)
+        raiz.addLayout(lay, 1)
         # columna 2: los bloques de la categoría elegida
         self.paleta = PaletaBloques(fuente, self.grupo, columna=True, valor=valor)
         self._sc_paleta = _desplazable(self.paleta)
@@ -1700,7 +1710,7 @@ class Programador(QWidget):
         pie.addWidget(self.papelera)
         derecha.addLayout(pie)
         lay.addLayout(derecha, 1)
-        self.setMinimumHeight(140)
+        self.setMinimumHeight(112)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         if historial:
             for atajo, f in (("Ctrl+Z", self.deshacer), ("Ctrl+Shift+Z", self.rehacer), ("Ctrl+Y", self.rehacer)):
@@ -1710,7 +1720,7 @@ class Programador(QWidget):
         self.elegir_categoria("numero" if valor else "entrada")
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        return QSize(self._sc_carpetas.width() + self._sc_paleta.width() + 180, 140)
+        return QSize(self._sc_paleta.width() + 180, 112)
 
     # -- paleta
     def _cargar_paleta(self, clave: str) -> None:

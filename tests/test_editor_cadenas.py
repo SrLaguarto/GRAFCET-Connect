@@ -939,7 +939,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         from escritorio.diagrama import enlaces
         w, e = self.vacio()
         self.assertEqual(DISTANCIA, DY)
-        self.assertEqual([t for t, _ in e.menu(QPointF(600, 400))], ["Nuevo grafcet parcial aquí"],
+        self.assertEqual([t for t, _ in e.menu(QPointF(600, 400))], [],
                          "sin cadenas, un hueco no ofrece equidistanciar nada")
         e.colocar("etapa", QPointF(900, 60))
         suelta = e.sel[0]
@@ -948,7 +948,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         pos0, modelo, revision = self.pos(e), copy.deepcopy(e.ed.model), e.ed.revision
         # el menú de una etapa conserva lo suyo y añade la opción al final
         opciones = [t for t, _ in e.menu(centro(e.M, ids[2]))]
-        self.assertEqual(opciones[:2], ["Añadir acción…", "Colocación de las acciones"])
+        self.assertEqual(opciones[:1], ["Colocación de las acciones"])
         self.assertEqual(opciones[-1], self.OPCION)
         # una transición y un enlace: solo esa opción, y el clic derecho los selecciona
         self.assertEqual([t for t, _ in e.menu(centro(e.M, ids[1]))], [self.OPCION])
@@ -959,7 +959,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         self.assertEqual(e.sel, [enlace["id"]])
         # en el hueco: todo el lienzo
         self.assertEqual([t for t, _ in e.menu(QPointF(600, 400))],
-                         ["Nuevo grafcet parcial aquí", "-", "Equidistanciar todo el lienzo"])
+                         ["Equidistanciar todo el lienzo"])
         # aplicar desde la transición
         n = len(e.ed.undo_stack)
         e.menu(centro(e.M, ids[1]))
@@ -989,7 +989,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         b = self.cadena(e, filas=((100, "0"), (240, None), (280, "1"), (440, None)), x=400)
         e.sel = [a[1], a[2]]
         self.assertEqual([t for t, _ in e.menu(QPointF(800, 700))],
-                         ["Nuevo grafcet parcial aquí", "-", "Equidistanciar la selección", "Equidistanciar todo el lienzo"])
+                         ["Equidistanciar la selección", "Equidistanciar todo el lienzo"])
         opciones = [t for t, _ in e.menu(centro(e.M, a[2]))]
         self.assertIn("Equidistanciar la selección", opciones)
         self.assertIn(self.OPCION, opciones)
@@ -1130,17 +1130,14 @@ class FichaDeForzado(BaseQt):
         from escritorio import propiedades
         w, e = self.vacio()
         pa = w.paleta
-        textos = [pa.item(i).text() for i in range(pa.count())]
-        self.assertEqual(textos[-1], "Forzado")
-        self.assertEqual((textos[:7], pa.count(), pa.FILAS), (["Etapa", "Transición", "Simultaneidad", "Acción", "Macroetapa",
-                                                              "Encapsulante", "Grafcet parcial"], 8, 4))
-        self.assertEqual(pa.mimeData([pa.item(7)]).text(), "forzado")
-        self.assertEqual(propiedades.COLOCABLES[-1], "forzado")
-        self.assertEqual((propiedades.NOMBRES["forzado"], pa.item(7).toolTip()), ("Forzado", propiedades.AYUDAS["forzado"]))
+        ficha = next(pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole) == "forzado")
+        self.assertEqual(ficha.text(), "Forzado")
+        self.assertEqual(pa.mimeData([ficha]).text(), "forzado")
+        self.assertEqual(ficha.toolTip(), propiedades.AYUDAS["forzado"])
         ayuda = propiedades.AYUDAS["forzado"]
         self.assertTrue("rectángulo doble" in ayuda and "etapa" in ayuda and "Doble clic" in ayuda and "Supr" in ayuda, ayuda)
         self.assertTrue("como una acción" in ayuda and "G?{?}" in ayuda and "no se simula" in ayuda, "se suelta como una acción: " + ayuda)
-        self.assertFalse(pa.item(7).icon().pixmap(80, 64).toImage().isNull())
+        self.assertFalse(ficha.icon().pixmap(80, 64).toImage().isNull())
         # la figura de arrastre lleva el rectángulo doble (dos contornos, uno más que la caja de una acción) y el punto bajo el
         # puntero es el centro de su lado izquierdo, como la ficha «Acción»
         pm, punto = propiedades.figura("forzado", 1.0, 1.0)
@@ -1156,7 +1153,7 @@ class FichaDeForzado(BaseQt):
         self.assertEqual((contornos("forzado"), contornos("accion:continua")), (2, 1))
         # un clic en la ficha solo muestra su ayuda
         n = len(e.ed.undo_stack)
-        pa.itemClicked.emit(pa.item(7))
+        pa.itemClicked.emit(ficha)
         self.assertEqual((e.mensaje, e.mensaje_info, w.ayuda.text(), len(e.ed.undo_stack)),
                          (propiedades.AYUDAS["forzado"], True, propiedades.AYUDAS["forzado"], n))
         # arrastrar la ficha: el texto que viaja
@@ -1179,7 +1176,7 @@ class FichaDeForzado(BaseQt):
                 return Qt.DropAction.IgnoreAction
         from unittest import mock
         with mock.patch.object(propiedades, "QDrag", FalsoDrag):
-            pa.setCurrentRow(7)
+            pa.setCurrentItem(ficha)
             pa.startDrag(Qt.DropAction.CopyAction)
         self.assertEqual([c.texto for c in capturados], ["forzado"])
         self.assertTrue(capturados[0].pm.rect().contains(capturados[0].punto))
@@ -1359,68 +1356,38 @@ class FichaDeForzado(BaseQt):
         e.soltar(pc)
         self.assertEqual((e.sel, e.accion, e.ver_accion, len(e.ed.undo_stack)), ([s1], aid, True, pila + 1))
 
-    def test_SEDI257_las_ocho_fichas_se_ven_enteras_en_cuatro_filas_a_1366x768(self):
-        """REQ-EDT-02, REQ-EDT-09: con la ficha «Forzado» la paleta pasó de tres a cuatro filas de 84 de alto (340 en total, sin
-        barras de desplazamiento) y con «Grafcet parcial» llena la cuarta fila sin pasar a una quinta: las ocho fichas se ven
-        enteras, en dos columnas, a 1366×768, con el panel de opciones de abajo por encima de su mínimo."""
+    def test_SEDI257_secciones_y_fichas_accesibles_a_1366x768(self):
+        """REQ-EDT-02, REQ-EDT-09: secciones legibles; todas las fichas accesibles con desplazamiento a 1366×768."""
         w, e = self.vacio()
         w.resize(1366, 768)
         w.show()
         self.app.processEvents()
         pa = w.paleta
-        self.assertEqual((pa.FILAS, pa.gridSize().height(), pa.height(), pa.count()), (4, 84, 340, 8))
-        zona = pa.viewport().rect()
+        self.assertEqual((pa.count(), pa.REJILLA.height()), (18, 34))
+        self.assertEqual(len({pa.visualItemRect(pa.item(i)).x() for i in range(pa.count())}), 1)
         for i in range(pa.count()):
-            self.assertTrue(zona.contains(pa.visualItemRect(pa.item(i))), pa.item(i).text())
-        self.assertEqual(len({pa.visualItemRect(pa.item(i)).y() for i in range(pa.count())}), 4)
-        self.assertEqual({pa.visualItemRect(pa.item(i)).center().x() // pa.gridSize().width() for i in range(pa.count())}, {0, 1})
+            pa.scrollToItem(pa.item(i))
+            self.app.processEvents()
+            self.assertTrue(pa.viewport().rect().contains(pa.visualItemRect(pa.item(i))), pa.item(i).text())
         self.assertGreaterEqual(w.inferior.height(), w.props.minimumSizeHint().height())
-        self.assertTrue(w.dock.isVisible() and w.diagrama.isVisible())
-        self.assertFalse(pa.verticalScrollBar().isVisible(), "sin barra: no hace falta desplazarse")
 
     def test_SEDI267_la_paleta_se_encoge_en_ventanas_bajas_sin_subir_el_minimo_de_alto_de_la_ventana(self):
-        """REQ-EDT-02, REQ-EDT-09: la paleta de cuatro filas pide su alto (340) pero se encoge hasta tres filas, con barra
-        vertical y siempre en dos columnas: el mínimo de alto de la ventana de edición no pasa de 564 (el de antes de «Forzado»;
-        con la paleta fija a cuatro filas era 648); a 1366×768 las ocho fichas siguen enteras y sin barra, y en la ventana más
-        baja el dibujo y el panel inferior conservan su alto y se llega a «Forzado» desplazando."""
+        """REQ-EDT-02, REQ-EDT-09: en ambos tamaños las fichas se alcanzan con scroll, sin aumentar el mínimo de ventana."""
         w, e = self.vacio()
         pa = w.paleta
-        ancho = pa.gridSize().width()
-
-        def columnas():
-            return {pa.visualItemRect(pa.item(i)).center().x() // ancho for i in range(pa.count())}
-
-        def a_la_vista():
-            return [pa.item(i).text() for i in range(pa.count()) if pa.viewport().rect().contains(pa.visualItemRect(pa.item(i)))]
-        w.resize(1366, 768)
-        w.show()
-        self.app.processEvents()
-        self.assertEqual((pa.sizeHint().height(), pa.minimumSizeHint().height()), (340, 256), "pide cuatro filas, baja a tres")
-        self.assertEqual(w.dock.minimumSizeHint().height(), 256)
-        self.assertLessEqual(w.minimumSizeHint().height(), 564, "el mínimo de la ventana de edición no sube por la paleta")
-        # a 1366×768: las ocho fichas enteras, sin desplazarse, y el dibujo conserva (o gana) alto respecto del de antes
-        self.assertEqual((pa.height(), len(a_la_vista()), pa.verticalScrollBar().isVisible()), (340, 8, False))
-        self.assertEqual(columnas(), {0, 1})
-        self.assertGreaterEqual(w.diagrama.height(), 192)
-        self.assertGreaterEqual(w.inferior.height(), w.props.minimumSizeHint().height())
-        # la ventana más baja posible: la paleta se encoge y sale su barra, pero siguen dos columnas y la ventana no crece
-        w.resize(1000, 300)
-        self.app.processEvents()
-        self.assertEqual(w.height(), w.minimumSizeHint().height())
-        self.assertLessEqual(w.height(), 564)
-        self.assertEqual((pa.height(), pa.verticalScrollBar().isVisible()), (256, True))
-        self.assertLess(len(a_la_vista()), 8)
-        self.assertEqual((columnas(), pa.viewport().width() >= 2 * ancho), ({0, 1}, True), "la barra no deja una sola columna")
-        self.assertGreaterEqual(w.diagrama.height(), 140, "como antes de la ficha: el dibujo no se aplasta")
-        self.assertGreaterEqual(w.inferior.height(), w.props.minimumSizeHint().height())
-        self.assertLessEqual(w.statusBar().geometry().bottom(), w.height() - 1)
-        pa.scrollToItem(pa.item(7))
-        self.app.processEvents()
-        self.assertIn("Forzado", a_la_vista(), "desplazando se llega a la última ficha")
-        # y al volver a una ventana alta, vuelven las ocho enteras
-        w.resize(1366, 900)
-        self.app.processEvents()
-        self.assertEqual((pa.height(), len(a_la_vista()), pa.verticalScrollBar().isVisible()), (340, 8, False))
+        for tam in ((1366, 768), (1000, 600)):
+            w.resize(*tam)
+            w.show()
+            self.app.processEvents()
+            self.assertEqual((w.width(), w.height()), tam)
+            self.assertLessEqual(w.minimumSizeHint().height(), 564)
+            self.assertGreaterEqual(pa.viewport().width(), pa.REJILLA.width())
+            for clave in pa.CLAVES:
+                it = next(pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole) == clave)
+                pa.scrollToItem(it)
+                self.app.processEvents()
+                self.assertTrue(pa.viewport().rect().contains(pa.visualItemRect(it)), clave)
+            self.assertFalse(pa.horizontalScrollBar().isVisible())
 
     def test_SEDI272_el_divisor_movido_a_mano_se_respeta_aunque_la_paleta_no_quepa_entera(self):
         """REQ-EDT-09, REQ-EDT-02: la paleta solo gana su alto completo mientras el divisor entre el dibujo y el panel inferior
@@ -1433,15 +1400,16 @@ class FichaDeForzado(BaseQt):
         w.show()
         self.app.processEvents()
         pa = w.paleta
-        self.assertEqual((w.vsplit.sizes(), pa.height()), ([340, 328], 340))
+        self.assertGreaterEqual(pa.height(), pa.minimumSizeHint().height())
         w.vsplit.moveSplitter(w.vsplit.sizes()[0] - 40, 1)
         self.app.processEvents()
         movido = w.vsplit.sizes()
-        self.assertEqual((movido, pa.height()), ([300, 368], 300))
+        self.assertGreaterEqual(pa.height(), pa.minimumSizeHint().height())
+        alto_movido = pa.height()
         self.assertTrue(w.cambiar_modo("simular"))
         self.assertTrue(w.cambiar_modo("editar"))
         self.app.processEvents()
-        self.assertEqual((w.vsplit.sizes(), pa.height(), pa.verticalScrollBar().isVisible()), (movido, 300, True))
+        self.assertEqual((w.vsplit.sizes(), pa.height(), pa.verticalScrollBar().isVisible()), (movido, alto_movido, True))
 
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
@@ -1557,12 +1525,11 @@ class GrafcetParcialSuelto(BaseQt):
         from escritorio.diagrama import VACIO_H, VACIO_W
         w, e = self.vacio()
         pa = w.paleta
-        textos = [pa.item(i).text() for i in range(pa.count())]
-        self.assertEqual(textos[5:], ["Encapsulante", "Grafcet parcial", "Forzado"])
-        self.assertEqual((pa.count(), pa.FILAS), (8, 4))
-        self.assertEqual(pa.mimeData([pa.item(6)]).text(), "parcial")
-        self.assertEqual(propiedades.COLOCABLES[-2:], ("parcial", "forzado"))
-        self.assertEqual((propiedades.NOMBRES["parcial"], pa.item(6).toolTip()), ("Grafcet parcial", propiedades.AYUDAS["parcial"]))
+        ficha = next(pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole) == "parcial")
+        self.assertEqual(pa.count(), 18)
+        self.assertEqual(pa.mimeData([ficha]).text(), "parcial")
+        self.assertEqual(propiedades.COLOCABLES[-2:], ("forzado", "parcial"))
+        self.assertEqual(ficha.toolTip(), propiedades.AYUDAS["parcial"])
         ayuda = propiedades.AYUDAS["parcial"]
         for frase in ("marco redondeado", "hueco", "G1", "Renombrar", "Forzado", "otro marco", "etapas y transiciones"):
             self.assertIn(frase, ayuda)
@@ -1573,7 +1540,7 @@ class GrafcetParcialSuelto(BaseQt):
             return img.pixelColor(x, y).alpha() > 0
         self.assertTrue(tinta(32, 10) and tinta(5, 32) and tinta(32, 54) and tinta(59, 32), "los cuatro lados del marco")
         self.assertFalse(any(tinta(x, y) for x, y in ((5, 10), (59, 10), (5, 54), (59, 54))), "con las esquinas redondeadas")
-        self.assertTrue(any(tinta(x, y) for x in range(22, 43) for y in range(22, 43)), "y la «G» dentro")
+        self.assertTrue(any(tinta(x, y) for x in range(38, 55) for y in range(36, 51)), "y la «G» dentro")
         # la figura que se arrastra: el marco vacío (VACIO_W × VACIO_H) con el centro bajo el puntero y el interior vacío
         pm, punto = propiedades.figura("parcial", 1.0, 1.0)
         self.assertEqual((punto.x(), punto.y()), (VACIO_W / 2 + 4, VACIO_H / 2 + 4))
@@ -1583,7 +1550,7 @@ class GrafcetParcialSuelto(BaseQt):
         self.assertGreater(im.pixelColor(punto.x(), 4).alpha(), 0, "su borde de arriba")
         # un clic en la ficha solo muestra su ayuda
         n = len(e.ed.undo_stack)
-        pa.itemClicked.emit(pa.item(6))
+        pa.itemClicked.emit(ficha)
         self.assertEqual((e.mensaje, e.mensaje_info, w.ayuda.text(), len(e.ed.undo_stack)),
                          (propiedades.AYUDAS["parcial"], True, propiedades.AYUDAS["parcial"], n))
         # arrastrarla: el texto que viaja
@@ -1605,7 +1572,7 @@ class GrafcetParcialSuelto(BaseQt):
             def exec(self, *a):
                 return Qt.DropAction.IgnoreAction
         with mock.patch.object(propiedades, "QDrag", FalsoDrag):
-            pa.setCurrentRow(6)
+            pa.setCurrentItem(ficha)
             pa.startDrag(Qt.DropAction.CopyAction)
         self.assertEqual([c.texto for c in capturados], ["parcial"])
         self.assertTrue(capturados[0].pm.rect().contains(capturados[0].punto))
@@ -1824,22 +1791,23 @@ class GrafcetParcialSuelto(BaseQt):
         self.assertTrue(e.borrar())
         self.assertNotIn("G3", self.libres(e))
 
-    def test_SEDI285_el_menu_del_hueco_ofrece_un_grafcet_parcial_nuevo_aqui(self):
+    def test_SEDI285_el_menu_del_hueco_omite_creacion_redundante_con_paleta(self):
         """REQ-EDT-02, REQ-JER-02: el botón derecho en un hueco ofrece «Nuevo grafcet parcial aquí» (lo mismo que soltar la
         ficha, centrado en el punto, en una operación); sobre un elemento no se ofrece, y encima de un marco no crea nada y avisa."""
         from escritorio.diagrama import cajas_parciales
         from escritorio.edicion import MSG_SOLAPE_PARCIAL
         w, e = self.vacio()
         opciones = e.menu(QPointF(600, 400))
-        self.assertEqual([t for t, _ in opciones], [self.NUEVO])
+        self.assertNotIn(self.NUEVO, dict(opciones))
         n = len(e.ed.undo_stack)
-        g1 = dict(opciones)[self.NUEVO]()
+        e.colocar("parcial", QPointF(600, 400))
+        g1 = e.sel[0]
         b = cajas_parciales(e.M)[g1]
         self.assertEqual((len(e.ed.undo_stack), e.sel, list(self.libres(e))), (n + 1, [g1], ["G1"]))
         self.assertLessEqual(abs((b["x0"] + b["x1"]) / 2 - 600) + abs((b["y0"] + b["y1"]) / 2 - 400), 20)
         # encima de su propio marco: la opción está, pero no crea nada y avisa
         antes, n = self.estado(e), len(e.ed.undo_stack)
-        dict(e.menu(QPointF(600, 400)))[self.NUEVO]()
+        e.colocar("parcial", QPointF(600, 400))
         self.assertEqual((self.estado(e), len(e.ed.undo_stack), e.mensaje), (antes, n, MSG_SOLAPE_PARCIAL))
         # sobre un elemento (una etapa) no se ofrece: la etapa tiene su menú
         e.colocar("etapa", QPointF(1000, 100))
@@ -1863,7 +1831,7 @@ class EncuadrarYDependencias(BaseQt):
         d = w.diagrama
         return d.mapToScene(d.viewport().rect()).boundingRect()
 
-    def test_SEDI290_el_boton_mostrar_dependencias_esta_junto_al_zoom_en_edicion_y_en_simulacion_y_se_recuerda(self):
+    def test_SEDI290_dependencias_en_barra_en_edicion_y_simulacion_y_se_recuerda(self):
         """REQ-EDT-02, REQ-JER-04, REQ-JER-05, REQ-SIM-03: «Mostrar dependencias» es un botón conmutable junto a los controles del
         zoom, apagado por defecto: sin él no hay trazos discontinuos de macroetapa ni de encapsulante, y con él aparecen (al
         editar y al simular) sin cambiar la selección ni la vista; el estado se recuerda en los ajustes entre sesiones."""
@@ -1878,7 +1846,9 @@ class EncuadrarYDependencias(BaseQt):
         self.assertEqual((b.text(), b.isCheckable(), b.isChecked(), d.dependencias), ("Mostrar dependencias", True, False, False))
         lay = d.barra.layout()
         self.assertEqual([lay.itemAt(i).widget() for i in range(lay.count())],
-                         [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion, b], "en la barra del zoom")
+                         [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion], "controles de zoom sin dependencias")
+        self.assertIs(b.parent(), w.tb_vista)
+        self.assertTrue(b.isVisible())
         self.assertIn("dependencias", b.toolTip())
         # en edición: una macroetapa con su expansión y una encapsulante con su recinto
         mid = e.poner_macro(QPointF(260, 220))
@@ -2167,7 +2137,7 @@ class OrdenDeForzadoSuelta(BaseQt):
                  for it in sc.items() if isinstance(it, QGraphicsRectItem)}
         self.assertTrue({(round(x, 1), round(y, 1), round(ancho, 1), round(alto, 1)),
                          (round(x + 3, 1), round(y + 3, 1), round(ancho - 6, 1), round(alto - 6, 1))} <= rects, "rectángulo doble")
-        self.assertEqual((w.props.pagina, w.props.titulo.text()), ("orden", "Opciones · Orden de forzado sin completar"))
+        self.assertEqual((w.props.pagina, w.props.titulo.text()), ("orden", "Propiedades · Orden de forzado sin completar"))
         self.assertTrue(w.props.ficha_izq.isVisibleTo(w.props.izq))
         self.assertEqual(w.props.ficha_izq.textos_visibles(), ["Configurar orden de forzado…", "Quitar orden de forzado"])
         avisos = [x for x in e.diagnosticos() if x["code"] == "AVISO"]

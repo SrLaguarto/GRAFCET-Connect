@@ -646,14 +646,12 @@ class Interfaz(unittest.TestCase):
         w.nuevo()
         e, d = w.edicion, w.diagrama
         self.assertFalse(w.dock.isHidden())
+        from escritorio.propiedades import NOMBRES, SECCIONES
         self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())],
-                         ["Etapa", "Transición", "Simultaneidad", "Acción", "Macroetapa", "Encapsulante", "Grafcet parcial",
-                          "Forzado"],
-                         "Seleccionar no es un elemento y la etapa inicial es una etapa con otro tipo; una sola lista, con la acción "
-                         "continua y, al final, las de la jerarquía (macroetapa, encapsulante, grafcet parcial y la orden de forzado)")
+                         [texto for titulo, claves in SECCIONES for texto in (titulo, *(NOMBRES[h] for h in claves))])
         pedidas = []
         e.pedir_condicion = pedidas.append
-        self.assertEqual(w.paleta.mimeData([w.paleta.item(1)]).text(), "transicion")
+        self.assertEqual(w.paleta.mimeData([w.paleta.item(4)]).text(), "transicion")
         for tipo, p in (("etapa", QPointF(300, 61)), ("transicion", QPointF(300, 137)), ("etapa", QPointF(300, 222))):
             m = QMimeData()
             m.setText(tipo)
@@ -1637,14 +1635,14 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         c = centro(e.M, ids["1"])
         self.assertEqual([t for t, _ in e.menu(QPointF(c.x() + 400, c.y()))],
-                         ["Nuevo grafcet parcial aquí", "-", "Equidistanciar todo el lienzo"],
+                         ["Equidistanciar todo el lienzo"],
                          "en un hueco, un grafcet parcial nuevo y equidistanciar el lienzo (hay una cadena)")
         opciones = dict(e.menu(c))
-        self.assertEqual(list(opciones), ["Añadir acción…", "Colocación de las acciones", "-", "Convertir en encapsulante",
+        self.assertEqual(list(opciones), ["Colocación de las acciones", "-", "Convertir en encapsulante",
                                           "Equidistanciar alturas de la cadena"])
         pedidas = []
         e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
-        opciones["Añadir acción…"]()  # crea la acción continua unida a la etapa (borrador, sin variable) y abre Editar
+        e.anadir_accion(ids["1"])  # crea la acción continua unida a la etapa (borrador, sin variable) y abre Editar
         (borrador,) = e.ed.draft_actions()
         self.assertEqual((pedidas, borrador["etapa"], borrador["tipo"]), ([(ids["1"], borrador["id"])], ids["1"], "continua"))
         e.deshacer()
@@ -1895,7 +1893,7 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(w.props.isAncestorOf(w.props.prog) and not w.dock.isAncestorOf(w.props.prog))
         e.seleccionar([])
         QApplication.processEvents()
-        self.assertEqual(w.props.titulo.text(), "Opciones")
+        self.assertEqual(w.props.titulo.text(), "Propiedades")
         self.assertTrue(not w.props.prog.isVisible() and w.props.pagina == "vacio")
         self.assertEqual(w.props.l_vacio.text(), "Haga clic en un elemento del dibujo para ver y cambiar sus opciones.")
         e.seleccionar([ts["t2"]])
@@ -1973,7 +1971,7 @@ class Interfaz(unittest.TestCase):
         w.resize(1360, 860)
         w.show()
         textos = [w.paleta.item(k).text() for k in range(w.paleta.count())]
-        self.assertEqual(textos[3], "Acción")
+        self.assertEqual(textos[8], "Continua")
         pm, punto = figura("accion:continua", 1.0, 1.0)
         self.assertGreater(pm.width(), pm.height(), "un rectángulo de acción, más ancho que alto")
         self.assertTrue(pm.rect().contains(punto))
@@ -2046,7 +2044,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(pal.movement(), QListView.Movement.Static)
         llamadas = []
         with mock.patch.object(propiedades.Paleta, "startDrag", lambda self, a: llamadas.append(a)):  # el gesto real
-            r = pal.visualItemRect(pal.item(0))
+            r = pal.visualItemRect(pal.item(1))
             vp = pal.viewport()
             QTest.mousePress(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, r.center())
             QTest.mouseMove(vp, r.center() + QPoint(40, 40))
@@ -2549,7 +2547,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.ed.draft_actions(), [])
         # el menú de la etapa conserva «Añadir acción…»
         self.assertEqual(list(dict(e.menu(centro(e.M, ids["1"])))),
-                         ["Añadir acción…", "Colocación de las acciones", "-", "Convertir en encapsulante",
+                         ["Colocación de las acciones", "-", "Convertir en encapsulante",
                           "Equidistanciar alturas de la cadena"])
 
     def test_SEDI73_guardar_abrir_con_borradores_avisos_y_deshacer(self):
@@ -2636,7 +2634,7 @@ class Interfaz(unittest.TestCase):
         e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
         did = e.poner_accion_suelta(QPointF(500, 220))
         d = self.panel_accion(None, did)
-        self.assertEqual(w.props.titulo.text(), "Opciones · Acción ? · suelta")
+        self.assertEqual(w.props.titulo.text(), "Propiedades · Acción ? · suelta")
         self.assertTrue(d.limite.isHidden())
         self.assertFalse(hasattr(d, "tipo"), "el panel no lleva lista de tipos: se cambia con botón derecho (P-IMP-46)")
         self.assertFalse(hasattr(d, "cond"), "sin programador dentro")
@@ -2777,17 +2775,11 @@ class Interfaz(unittest.TestCase):
         w.split.moveSplitter(w.split.width() - 400, 1)  # intentar estirarlo no cambia nada
         self.app.processEvents()
         self.assertEqual((w.dock.width(), w.derecho.width()), (minimo, minimo))
-        # al ancho mínimo, las fichas siguen en dos columnas, con barra vertical o sin ella: ocho fichas, cuatro filas (con
-        # «Forzado» pasó de tres; con «Grafcet parcial» la cuarta fila se llena y no hay una quinta)
         r = [pal.visualItemRect(pal.item(i)) for i in range(pal.count())]
-        self.assertEqual((r[0].y(), r[1].y(), r[2].y()), (r[1].y(), r[0].y(), r[0].y() + pal.gridSize().height()))
-        self.assertTrue(r[1].x() > r[0].x(), "dos columnas")
-        self.assertEqual((pal.count(), pal.FILAS, len({x.y() for x in r})), (8, 4, 4))
-        self.assertEqual((pal.verticalScrollBarPolicy(), pal.horizontalScrollBarPolicy()),
-                         (Qt.ScrollBarPolicy.ScrollBarAsNeeded, Qt.ScrollBarPolicy.ScrollBarAlwaysOff))  # sale solo si no caben
-        self.assertGreaterEqual(pal.viewport().width(), 2 * pal.gridSize().width(), "con barra o sin ella, caben las dos columnas")
-        self.assertGreaterEqual(pal.ancho_minimo(), 2 * pal.gridSize().width() + pal.verticalScrollBar().sizeHint().width(),
-                                "el ancho mínimo cuenta con la barra vertical")
+        self.assertEqual((pal.count(), len({x.y() for x in r})), (18, 18))
+        self.assertEqual(len({x.x() for x in r}), 1, "lista por secciones")
+        self.assertEqual(pal.horizontalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.assertGreaterEqual(pal.viewport().width(), pal.REJILLA.width())
         # con cada tipo de selección, las opciones caben en el ancho del panel de abajo (no se cortan) y el panel derecho también
         b = e.poner_barra(QPointF(500, 400), "Y")
         for sel in ([ids["1"]], [ts["t1"]], [f"{ts['t1']}|{ids['0']}|pre"], [b]):
@@ -3234,19 +3226,19 @@ class Interfaz(unittest.TestCase):
         self.assertFalse(hasattr(w.paleta, "elegida") or hasattr(w.paleta, "elegir"), "la paleta ya no elige herramienta")
         n = len(e.ed.undo_stack)
         w.paleta.setCurrentRow(0)
-        w.paleta.itemClicked.emit(w.paleta.item(0))  # un clic en la ficha «Etapa»
+        w.paleta.itemClicked.emit(w.paleta.item(1))  # un clic en la ficha «Etapa»
         self.assertEqual((e.herramienta, e.mensaje, e.mensaje_info), ("seleccionar", AYUDAS["etapa"], True))
         e.prensar(QPointF(500, 60))  # y un clic en el dibujo no coloca nada
         e.soltar(QPointF(500, 60))
         self.assertEqual((e.M["steps"], len(e.ed.undo_stack)), ([], n))
-        w.paleta.itemClicked.emit(w.paleta.item(3))  # la ficha «Acción»
+        w.paleta.itemClicked.emit(w.paleta.item(8))  # la ficha «Acción»
         self.assertEqual(e.mensaje, AYUDAS["accion:continua"])
         self.assertEqual(w.ayuda.text(), AYUDAS["accion:continua"])
         self.soltar_ficha("etapa", QPointF(300, 60))  # arrastrada, sí
         self.assertEqual(len(e.M["steps"]), 1)
         self.assertEqual(w.l_herr.text().count("Seleccionar"), 1)
 
-    def test_SEDI88_paleta_con_una_sola_ficha_de_accion(self):
+    def test_SEDI88_paleta_por_secciones_y_cinco_fichas_de_accion(self):
         """REQ-ACT-01, REQ-EDT-02: la paleta es una sola lista, sin carpetas, con etapa, transición, simultaneidad, una
         ficha «Acción» (la continua, dibujada con la misma función que el diagrama) y las de jerarquía (macroetapa y
         encapsulante, S-EDI170); arrastrar la de acción crea una acción continua
@@ -3261,16 +3253,12 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(w.dock.findChildren(QTabWidget), [], "sin pestañas: la lista, directamente")
         self.assertIs(w.paleta.parent(), w.dock)
         pa = w.paleta
-        self.assertEqual([pa.item(i).text() for i in range(pa.count())],
-                         ["Etapa", "Transición", "Simultaneidad", "Acción", "Macroetapa", "Encapsulante", "Grafcet parcial",
-                          "Forzado"])
-        self.assertEqual([pa.mimeData([pa.item(i)]).text() for i in range(pa.count())],
-                         ["etapa", "transicion", "simultaneidad", "accion:continua", "macroetapa", "encapsulante", "parcial",
-                          "forzado"])
-        self.assertEqual(propiedades.COLOCABLES, ("etapa", "transicion", "simultaneidad", "accion:continua", "macroetapa",
-                                                  "encapsulante", "parcial", "forzado"))
-        self.assertFalse(pa.item(3).icon().pixmap(80, 64).toImage().isNull())
-        self.assertIn("Tipo de acción", propiedades.AYUDAS["accion:continua"], "la ayuda dice cómo cambiar el tipo")
+        fichas = [pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole)]
+        self.assertEqual([pa.mimeData([it]).text() for it in fichas], list(propiedades.COLOCABLES))
+        self.assertEqual([pa.item(i).text() for i in range(pa.count()) if not pa.item(i).data(Qt.ItemDataRole.UserRole)],
+                         ["Etapas", "Transiciones", "Acciones", "Jerarquías"])
+        self.assertEqual(len(fichas), 14)
+        self.assertTrue(all(not it.icon().isNull() and it.toolTip() for it in fichas))
         self.assertNotIn("carpeta", w.ayuda.text())
         self.assertIn("paleta", w.ayuda.text())
         # la figura es lo que `_caja_accion` dibuja, y el icono de cada tipo sigue existiendo para el menú de tipo
@@ -3300,7 +3288,7 @@ class Interfaz(unittest.TestCase):
             def exec(self, *a):
                 return Qt.DropAction.IgnoreAction
         with mock.patch.object(propiedades, "QDrag", FalsoDrag):
-            pa.setCurrentRow(3)
+            pa.setCurrentRow(8)
             pa.startDrag(Qt.DropAction.CopyAction)
         self.assertEqual([c.datos["texto"] for c in capturados], ["accion:continua"])
         self.assertTrue(all(c.datos["pm"].rect().contains(c.datos["punto"]) for c in capturados))
@@ -4754,7 +4742,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(p.pagina, "transicion")
         self.assertTrue(p.prog.isVisible() and p.t_etiqueta.isVisible() and p.t_comentario.isVisible())
         # altura y ancho suficientes a 1360×860, y el divisor se mueve
-        self.assertGreaterEqual(w.inferior.height(), 330)
+        self.assertGreaterEqual(w.inferior.height(), w.props.minimumSizeHint().height())
         self.assertLessEqual(p.minimumSizeHint().width(), w.inferior.width())
         self.assertLessEqual(p.minimumSizeHint().height(), w.inferior.height())
         antes = w.vsplit.sizes()
@@ -4840,6 +4828,15 @@ class Interfaz(unittest.TestCase):
             botones = [b for b in p.findChildren(QAbstractButton) if b.isVisibleTo(p)]
             self.assertGreater(len(botones), 3, sel)
             for b in botones:
+                ancestro = b.parentWidget()
+                while ancestro is not None and ancestro is not p:
+                    if ancestro.objectName() == "categoriasBloques":
+                        ancestro.ensureWidgetVisible(b, 0, 0)
+                        QApplication.processEvents()
+                        self.assertTrue(QRectF(ancestro.viewport().rect()).contains(
+                            QRectF(b.mapTo(ancestro.viewport(), QPoint(0, 0)), b.size())), b.text())
+                        break
+                    ancestro = ancestro.parentWidget()
                 r = QRectF(b.mapTo(p, QPoint(0, 0)), b.size())
                 self.assertTrue(raiz.contains(r), f"{tam} {sel}: «{b.text() or b.toolTip()}» fuera del panel {r} {raiz}")
                 g = QRectF(b.mapTo(w, QPoint(0, 0)), b.size())
@@ -6016,11 +6013,11 @@ class Interfaz(unittest.TestCase):
         from escritorio import diagrama, propiedades
         w, e = self.vacio()
         pa = w.paleta
-        self.assertEqual([(pa.item(i).text(), pa.mimeData([pa.item(i)]).text()) for i in (4, 5)],
-                         [("Macroetapa", "macroetapa"), ("Encapsulante", "encapsulante")])
-        filas = -(-pa.count() // 2)  # dos fichas por fila
-        self.assertEqual((pa.FILAS, pa.sizeHint().height()), (filas, filas * pa.gridSize().height() + 2 * pa.frameWidth() + 2),
-                         "pide el alto justo de todas las filas: con él caben, sin desplazar")
+        fichas = {pa.item(i).data(Qt.ItemDataRole.UserRole): pa.item(i) for i in range(pa.count())}
+        for clave in ("macroetapa", "encapsulante"):
+            self.assertEqual(pa.mimeData([fichas[clave]]).text(), clave)
+            self.assertEqual(fichas[clave].text(), propiedades.NOMBRES[clave])
+        self.assertEqual(pa.sizeHint().height(), pa.alto_filas(pa.FILAS))
 
         def imagen(h):
             return propiedades.icono(h).pixmap(64, 64).toImage()
@@ -6046,7 +6043,7 @@ class Interfaz(unittest.TestCase):
             self.assertEqual(punto, figuras["etapa"][1])
         # un clic en la ficha solo muestra su ayuda
         n = len(e.ed.undo_stack)
-        for fila, clave in ((4, "macroetapa"), (5, "encapsulante")):
+        for fila, clave in ((15, "macroetapa"), (14, "encapsulante")):
             pa.itemClicked.emit(pa.item(fila))
             self.assertEqual((e.mensaje, e.mensaje_info, w.ayuda.text()),
                              (propiedades.AYUDAS[clave], True, propiedades.AYUDAS[clave]))
@@ -6297,17 +6294,17 @@ class Interfaz(unittest.TestCase):
         def tipo():
             return next(x for x in e.ed.model["steps"] if x["id"] == s)["kind"]
         opciones = e.menu(centro(e.M, s))
-        self.assertEqual([t for t, _ in opciones], ["Añadir acción…", "Colocación de las acciones", "-", "Convertir en encapsulante"])
+        self.assertEqual([t for t, _ in opciones], ["Colocación de las acciones", "-", "Convertir en encapsulante"])
         n = len(e.ed.undo_stack)
         dict(opciones)["Convertir en encapsulante"]()
         self.assertEqual((tipo(), len(e.ed.undo_stack)), ("enclosing", n + 1))
         self.assertTrue(e.mensaje_info and self.sin_ids(e.mensaje))
         self.assertEqual([x["kind"] for x in e.M["steps"]], ["enclosing"], "el dibujo recibe el tipo")
         opciones = e.menu(centro(e.M, s))
-        self.assertEqual([t for t, _ in opciones][2:], ["-", "Añadir recinto…", "Convertir en etapa ordinaria"])
+        self.assertEqual([t for t, _ in opciones][1:], ["-", "Añadir recinto…", "Convertir en etapa ordinaria"])
         # con un recinto ya no se ofrece volver a ordinaria; si se fuerza, el núcleo lo rechaza y no cambia nada
         e.anadir_recinto(s)
-        self.assertEqual([t for t, _ in e.menu(centro(e.M, s))][2:],
+        self.assertEqual([t for t, _ in e.menu(centro(e.M, s))][1:],
                          ["-", "Añadir recinto…", "Encuadrar el recinto", "Forzar un parcial…"])
         antes, n = self.estado(e), len(e.ed.undo_stack)
         e.parpadeo.parar()
@@ -6329,7 +6326,7 @@ class Interfaz(unittest.TestCase):
         mid = e.poner_macro(QPointF(260, 400))
         x = e.ed.macro_info(mid)
         self.assertEqual([t for t, _ in e.menu(centro(e.M, x.entry))],
-                         ["Añadir acción…", "Colocación de las acciones", "-", "Encuadrar la macroetapa", "Forzar un parcial…"])
+                         ["Colocación de las acciones", "-", "Encuadrar la macroetapa", "Forzar un parcial…"])
         antes = self.estado(e)
         e.tipo_encapsulante(x.exit, True)
         self.assertEqual(self.estado(e), antes)
@@ -6736,7 +6733,7 @@ class Interfaz(unittest.TestCase):
         pedidas, respuesta = [], [None]
         e.pedir_forzado = lambda datos: pedidas.append(datos) or respuesta[0]
         opciones = e.menu(centro(e.M, h))
-        self.assertEqual([t for t, _ in opciones][2:], ["-", "Convertir en encapsulante", "Forzar un parcial…"])
+        self.assertEqual([t for t, _ in opciones][1:], ["-", "Convertir en encapsulante", "Forzar un parcial…"])
         # lo que se le enseña al diálogo: nombres (los ID solo para devolver la elección); cancelar no cambia nada
         antes, n = self.estado(e), len(e.ed.undo_stack)
         self.assertIsNone(dict(opciones)["Forzar un parcial…"]())
@@ -7912,8 +7909,8 @@ class Bloques(unittest.TestCase):
         self.assertEqual(p.opciones("interna"), [("M1", "M1"), ("M2", "M2")])
         self.assertEqual([b["n"] for b in p.paleta.bloques()], ["M1", "M2"], "la paleta se llena otra vez")
 
-    def test_SEDI64_disposicion_en_columnas(self):
-        """REQ-EDT-02: categorías como carpetas en una columna (las ocho, con su color), a su derecha la columna de
+    def test_SEDI64_categorias_horizontales_y_bloques_en_columna(self):
+        """REQ-EDT-02: categorías en una franja horizontal (las ocho, con su color), debajo la columna de
         bloques de la categoría elegida (uno debajo de otro) y, ocupando el resto, el área de trabajo con la papelera."""
         from PySide6.QtWidgets import QPushButton
         p = self.prog()
@@ -7924,10 +7921,10 @@ class Bloques(unittest.TestCase):
         self.assertEqual(len(bs), 8)
         self.assertTrue(all(isinstance(b, QPushButton) and not b.icon().isNull() for b in bs))
         pos = [b.mapTo(p, b.rect().topLeft()) for b in bs]
-        self.assertEqual(len({q.x() for q in pos}), 1, "todas en una columna")
-        self.assertEqual(sorted(q.y() for q in pos), [q.y() for q in pos], "una debajo de otra")
-        self.assertGreater(p.paleta.mapTo(p, p.paleta.rect().topLeft()).x(), pos[0].x() + bs[0].width() - 4,
-                           "la paleta, a la derecha de las categorías")
+        self.assertEqual(len({q.y() for q in pos}), 1, "categorías en una franja horizontal")
+        self.assertEqual(sorted(q.x() for q in pos), [q.x() for q in pos], "orden de izquierda a derecha")
+        self.assertGreater(p.paleta.mapTo(p, p.paleta.rect().topLeft()).y(), pos[0].y() + bs[0].height(),
+                           "las fichas, debajo de las categorías")
         self.assertGreater(p.lienzo.mapTo(p, p.lienzo.rect().topLeft()).x(),
                            p.paleta.mapTo(p, p.paleta.rect().topLeft()).x(), "y el área, a la derecha de la paleta")
         self.assertGreater(p.lienzo.width(), 300, "el área ocupa el resto")

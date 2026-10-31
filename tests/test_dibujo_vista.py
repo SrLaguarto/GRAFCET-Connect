@@ -679,7 +679,7 @@ class Zoom(unittest.TestCase):
         d = self.d
         lay = d.barra.layout()
         self.assertEqual([lay.itemAt(i).widget() for i in range(lay.count())],
-                         [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion, d.b_dependencias])
+                         [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion])
         self.assertIsInstance(d.b_seleccion, QToolButton)
         self.assertEqual(d.b_seleccion.text(), "Centrar selección")
         self.assertIn("seleccionado", d.b_seleccion.toolTip())
@@ -863,7 +863,7 @@ class Dependencias(unittest.TestCase):
                              ("Mostrar dependencias", True, False, False, []))
             lay = d.barra.layout()
             self.assertEqual([lay.itemAt(i).widget() for i in range(lay.count())],
-                             [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion, b])
+                             [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion])
             self.assertFalse(d.ajustes.value(dg.CLAVE_DEPENDENCIAS, False, type=bool))
             b.click()
             self.assertEqual((b.isChecked(), d.dependencias, len(rayas(d.scene()))), (True, True, 2), "al simular")
