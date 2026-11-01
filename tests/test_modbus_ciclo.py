@@ -31,7 +31,7 @@ class CicloTests(unittest.TestCase):
         with servidor(responder) as sc:
             m = M().var("sensor").var("motor", "output").step("E0", True)
             m.cont("E0", "motor", "sensor")
-            cfg = Configuracion(puerto=sc.puerto, periodo_ms=20, timeout_ms=2000,
+            cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, timeout_ms=2000,
                                 senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
             c = Coordinador()
             try:
@@ -62,7 +62,7 @@ class CicloTests(unittest.TestCase):
             m = M().var("sensor").var("motor", "output").step("E0", True)
             m.cont("E0", "motor", "delay(1s, sensor, 0s)")
             s = session(m.compile())
-            cfg = Configuracion(puerto=sc.puerto, periodo_ms=20,
+            cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20,
                                 senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
             c = Coordinador()
             try:
@@ -87,7 +87,7 @@ class CicloTests(unittest.TestCase):
             m = M().var("sensor").var("motor", "output").step("E0", True)
             m.cont("E0", "motor", "sensor")
             s = session(m.compile())
-            cfg = Configuracion(puerto=servidor_cliente.puerto, periodo_ms=20,
+            cfg = Configuracion(host="127.0.0.1", puerto=servidor_cliente.puerto, periodo_ms=20,
                                 senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
             c = Coordinador()
             try:
@@ -124,7 +124,7 @@ class CicloTests(unittest.TestCase):
             m = M().var("sensor").var("motor", "output").step("E0", True)
             m.cont("E0", "motor", "sensor")
             cm = m.compile()
-            cfg = Configuracion(puerto=sc.puerto, periodo_ms=20,
+            cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20,
                                 senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
             c = Coordinador()
             try:
@@ -152,7 +152,7 @@ class CicloTests(unittest.TestCase):
                 c.pausar(diagnostico=True)  # estado seguro por un diagnóstico: cero, sin cerrar
                 esperar(c, lambda: c.escritos == {"motor": False} and escrituras[-1] == (0, 0))
                 self.assertEqual(c.estado, "conectado")
-                c.observar(Configuracion(puerto=sc.puerto, periodo_ms=20, senales=[]), m.doc)  # otro modelo: mapa vacío
+                c.observar(Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=[]), m.doc)  # otro modelo: mapa vacío
                 self.assertEqual((c.adaptador.entradas, c.muestra), ([], {}))
                 for _ in range(20):
                     c.tick(False)
@@ -171,7 +171,7 @@ class CicloTests(unittest.TestCase):
         with servidor(responder) as sc:
             m = M().var("sensor").step("E0", True)
             s = session(m.compile())
-            cfg = Configuracion(puerto=sc.puerto, senales=[Senal("sensor", "discrete", 0)])
+            cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, senales=[Senal("sensor", "discrete", 0)])
             c = Coordinador()
             try:
                 c.iniciar(cfg, s)
@@ -205,18 +205,18 @@ class CicloTests(unittest.TestCase):
                 return exc
         casos = [
             (ConnectionAbortedError(10053, "Se ha anulado una conexión establecida por el software en su equipo host", None, 10053),
-             "Factory I/O cerró o anuló la conexión (WinError 10053)"),
+             "El servidor Modbus cerró o anuló la conexión (WinError 10053)"),
             (ConnectionResetError(10054, "Se ha forzado la interrupción de una conexión existente por el host remoto", None, 10054),
-             "Factory I/O cerró o anuló la conexión (WinError 10054)"),
-            (ConnectionRefusedError(10061, "No se puede establecer una conexión", None, 10061), "Factory I/O rechazó la conexión (WinError 10061)"),
-            (ConnectionResetError(104, "Connection reset by peer"), "Factory I/O cerró o anuló la conexión"),
-            (BrokenPipeError(32, "Broken pipe"), "Factory I/O cerró o anuló la conexión"),
-            (socket.timeout("timed out"), "Factory I/O no ha respondido a tiempo"),
+             "El servidor Modbus cerró o anuló la conexión (WinError 10054)"),
+            (ConnectionRefusedError(10061, "No se puede establecer una conexión", None, 10061), "El servidor Modbus rechazó la conexión (WinError 10061)"),
+            (ConnectionResetError(104, "Connection reset by peer"), "El servidor Modbus cerró o anuló la conexión"),
+            (BrokenPipeError(32, "Broken pipe"), "El servidor Modbus cerró o anuló la conexión"),
+            (socket.timeout("timed out"), "El servidor Modbus no ha respondido a tiempo"),
         ]
         for causa, frase in casos:
             self.assertTrue(explicar_fallo(fallo(causa)).startswith(frase), (causa, explicar_fallo(fallo(causa))))
-        self.assertEqual(explicar_fallo(ErrorModbus("Tiempo de espera Modbus agotado")), "Factory I/O no ha respondido a tiempo")
-        self.assertEqual(explicar_fallo(ErrorModbus("El servidor cerró la conexión")), "Factory I/O cerró la conexión")
+        self.assertEqual(explicar_fallo(ErrorModbus("Tiempo de espera Modbus agotado")), "El servidor Modbus no ha respondido a tiempo")
+        self.assertEqual(explicar_fallo(ErrorModbus("El servidor cerró la conexión")), "El servidor Modbus cerró la conexión")
         self.assertEqual(explicar_fallo(ErrorModbus("Cabecera MBAP inválida")), "", "lo desconocido sigue con el mensaje técnico")
         # de punta a punta: el servidor corta la conexión y el coordinador la declara en error con el texto legible
         responde = [True]
@@ -226,14 +226,14 @@ class CicloTests(unittest.TestCase):
         with servidor(responder) as sc:
             m = M().var("sensor").step("E0", True)
             s = session(m.compile())
-            cfg = Configuracion(puerto=sc.puerto, senales=[Senal("sensor", "discrete", 0)])
+            cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, senales=[Senal("sensor", "discrete", 0)])
             c = Coordinador()
             try:
                 c.iniciar(cfg, s)
                 esperar(c, lambda: c.estado == "conectado")
                 responde[0] = False
                 esperar(c, lambda: c.estado == "error")
-                self.assertTrue(c.mensaje.startswith("Factory I/O "), c.mensaje)
+                self.assertTrue(c.mensaje.startswith("El servidor Modbus "), c.mensaje)
                 self.assertIn(". Salidas no garantizadas. Pulsa Conectar para reanudar. Detalle: ", c.mensaje)
                 self.assertFalse(c.activo)
             finally:
@@ -249,7 +249,7 @@ class CicloTests(unittest.TestCase):
             return b"\x02\x01\x01" if p[0] == 2 else p[:5]
         with servidor(responder) as sc:
             m = M().var("sensor").var("motor", "output").var("vel", "output", "decimal", scale=2).step("E0", True)
-            cfg = Configuracion(puerto=sc.puerto, periodo_ms=20, senales=[
+            cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=[
                 Senal("sensor", "discrete", 0), Senal("motor", "coil", 2), Senal("vel", "holding", 4, "INT16")])
             c = Coordinador()
             try:
@@ -292,7 +292,7 @@ class CicloTests(unittest.TestCase):
             m.stored("E0", "vel", "activation", "1.5")
             cm = m.compile()
             senales = [Senal("sensor", "discrete", 0), Senal("motor", "coil", 2), Senal("vel", "holding", 4, "INT16")]
-            cfg = Configuracion(puerto=sc.puerto, periodo_ms=20, senales=senales)
+            cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=senales)
             # desde Play, sin pasar antes por Pausa: la planta acaba a cero y el TCP, cerrado
             c = Coordinador()
             try:
@@ -328,7 +328,7 @@ class CicloTests(unittest.TestCase):
             antes = dict(planta)
             c = Coordinador()
             try:
-                c.iniciar(Configuracion(puerto=sc.puerto, periodo_ms=20, senales=[Senal("sensor", "discrete", 0)]), None,
+                c.iniciar(Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=[Senal("sensor", "discrete", 0)]), None,
                           documento=m.doc)
                 esperar(c, lambda: c.estado == "conectado")
                 c.desconectar()
@@ -364,7 +364,7 @@ class CicloTests(unittest.TestCase):
             m = M().var("sensor").var("motor", "output").var("luz", "output").step("E0", True).step("E1")
             m.trans("t1", ["E0"], ["E1"], "sensor").cont("E0", "motor").cont("E1", "luz")
             cm = m.compile()
-            cfg = Configuracion(puerto=sc.puerto, periodo_ms=20, senales=[
+            cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=[
                 Senal("sensor", "discrete", 0), Senal("motor", "coil", 0), Senal("luz", "coil", 1)])
             c = Coordinador()
             try:
@@ -425,7 +425,7 @@ class CicloTests(unittest.TestCase):
                     m = M().var("sensor").var("motor", "output").step("E0", True)
                     m.cont("E0", "motor", "sensor")
                     s = session(m.compile())
-                    cfg = Configuracion(puerto=sc.puerto, periodo_ms=20, timeout_ms=3000,
+                    cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, timeout_ms=3000,
                                         senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
                     c = Coordinador()
                     try:
@@ -476,12 +476,12 @@ class CicloTests(unittest.TestCase):
         with servidor(responder) as sc:
             a = M("a").var("sensor").var("motor", "output").var("bomba", "output").step("E0", True)
             b = M("b").var("sensor").var("luz", "output").var("motor", "output", "decimal", scale=2).var("otra", "output").step("E0", True)
-            mapa_a = Configuracion(puerto=sc.puerto, periodo_ms=20, modelo="a", senales=[
+            mapa_a = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, modelo="a", senales=[
                 Senal("sensor", "discrete", 0), Senal("motor", "coil", 0), Senal("bomba", "coil", 2)])
-            mapa_b = Configuracion(puerto=sc.puerto, periodo_ms=20, modelo="b", senales=[
+            mapa_b = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, modelo="b", senales=[
                 Senal("sensor", "discrete", 0), Senal("luz", "coil", 0), Senal("motor", "holding", 3, "INT16"),
                 Senal("otra", "coil", 5)])
-            vacio = Configuracion(puerto=sc.puerto, periodo_ms=20, modelo="a", senales=[Senal("sensor", "discrete", 0)])
+            vacio = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, modelo="a", senales=[Senal("sensor", "discrete", 0)])
             c = Coordinador()
             try:
                 c.iniciar(mapa_a, None, documento=a.doc)
@@ -523,7 +523,7 @@ class CicloTests(unittest.TestCase):
             return b"\x02\x01\x01" if p[0] == 2 else p[:5]
         with servidor(responder) as sc:
             m = M().var("sensor").var("motor", "output").step("E0", True)
-            cfg = Configuracion(puerto=sc.puerto, periodo_ms=20, senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
             for estado_previo in ("en Pausa", "en Play"):
                 vivo[0] = True
                 c = Coordinador()
@@ -569,7 +569,7 @@ class CicloTests(unittest.TestCase):
         with socket.socket() as libre:
             libre.bind(("127.0.0.1", 0))
             puerto = libre.getsockname()[1]
-        cfg = Configuracion(puerto=puerto, periodo_ms=20, timeout_ms=300, senales=senales)
+        cfg = Configuracion(host="127.0.0.1", puerto=puerto, periodo_ms=20, timeout_ms=300, senales=senales)
         for nombre, sesion, prueba in (("en Pausa", None, False), ("en Play", session(m.compile()), False), ("probando", None, True)):
             estado, mensaje, sock = desconectar_conectando(cfg, sesion, prueba)
             self.assertEqual(estado, "error", nombre)
@@ -585,12 +585,12 @@ class CicloTests(unittest.TestCase):
         with mock.patch.object(ClienteModbus, "conectar", side_effect=rechazo):
             estado, mensaje, _ = desconectar_conectando(cfg, None, False)
         self.assertEqual(estado, "error")
-        self.assertTrue(mensaje.startswith("Desconectado · no se llegó a conectar: Factory I/O rechazó la conexión (WinError 10061)"),
+        self.assertTrue(mensaje.startswith("Desconectado · no se llegó a conectar: El servidor Modbus rechazó la conexión (WinError 10061)"),
                         mensaje)
         self.assertIn("Detalle: ", mensaje)
         # el TCP se abre y luego el servidor corta (la escritura del cero falla): sí hubo conexión, y las salidas no se garantizan
         with servidor(lambda p: None) as sc:
-            cfg2 = Configuracion(puerto=sc.puerto, periodo_ms=20, timeout_ms=500, senales=senales)
+            cfg2 = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, timeout_ms=500, senales=senales)
             estado, mensaje, _ = desconectar_conectando(cfg2, None, False)
             self.assertEqual(estado, "error")
             self.assertTrue(mensaje.startswith("Desconectado · salidas no garantizadas · no se pudo poner a cero la planta: "), mensaje)
@@ -626,7 +626,7 @@ class CicloTests(unittest.TestCase):
                     m = M().var("sensor").var("motor", "output").step("E0", True)
                     m.cont("E0", "motor", "sensor")
                     cm = m.compile()
-                    cfg = Configuracion(puerto=sc.puerto, periodo_ms=20, timeout_ms=250 if caso == "no llega la respuesta" else 3000,
+                    cfg = Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, timeout_ms=250 if caso == "no llega la respuesta" else 3000,
                                         senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
                     c = Coordinador()
                     try:

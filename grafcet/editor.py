@@ -11,6 +11,7 @@ operaciones de la sección «jerarquías».
 from __future__ import annotations
 
 import copy
+import re
 from contextlib import contextmanager
 from fractions import Fraction
 from dataclasses import dataclass, field
@@ -61,6 +62,9 @@ class Fragment:
     entities: dict[str, list[dict[str, Any]]]
     layouts: list[dict[str, Any]]
     external_refs: dict[str, str] = field(default_factory=dict)  # id externo -> clase
+    presentation: dict[str, Any] = field(default_factory=dict)
+    references: dict[str, tuple[str, dict[str, Any]]] = field(default_factory=dict)
+    selected: list[str] = field(default_factory=list)
 
 
 class MacroIds(NamedTuple):
@@ -86,7 +90,18 @@ class Editor:
         self.ids = ids or IdGenerator()
         self.undo_stack: list[tuple[str, Any, Any]] = []
         self.redo_stack: list[tuple[str, Any, Any]] = []
-        self.dirty = False
+        # Reparación al abrir: un borrador sin alguno de sus extremos ya no se puede editar.
+        # No se hace al validar ni al deshacer, para conservar intacto el historial de cada operación.
+        endpoints = {x["id"] for coll in ("steps", "transitions") for x in model.get(coll, [])}
+        endpoints |= {x["id"] for x in model.get("hierarchy", {}).get("macros", [])}
+        self.cleaned_draft_link_ids: tuple[str, ...] = tuple(
+            d["id"] for d in model.get("draftLinks", [])
+            if d["fromRef"] not in endpoints or d["toRef"] not in endpoints)
+        if self.cleaned_draft_link_ids:
+            self.model = copy.deepcopy(model)
+            self.model["draftLinks"] = [d for d in self.model["draftLinks"]
+                                        if d["fromRef"] in endpoints and d["toRef"] in endpoints]
+        self.dirty = bool(self.cleaned_draft_link_ids)
         self.model["revisionId"] = compute_revision(self.model)
 
     # -- infraestructura de transacciones
@@ -165,7 +180,10 @@ class Editor:
         return list(dict.fromkeys(missing))
 
     def validate(self) -> ValidationResult:
-        return validate_model(self.model)
+        resultado = validate_model(self.model)
+        from .routing import validar_barras
+        resultado.diagnostics.extend(validar_barras(self.model, self.bars()))
+        return resultado
 
     # -- búsquedas
     @staticmethod
@@ -288,6 +306,8 @@ class Editor:
             m["transitions"].append(item)
             next(x for x in m["partials"] if x["id"] == partial)["transitionRefs"].append(tid)
             self._layout(p, tid, at)
+            if at is not None:
+                p["elementLayouts"][-1]["labelVisible"] = False
             return tid, diag
         return self._txn("crear transición", fn)
 
@@ -590,6 +610,8 @@ class Editor:
         self._txn("colocación de las acciones", fn, view_only=True)
 
     def move(self, ident: str, x: Any, y: Any) -> None:
+        if any(n["id"] == ident for n in self.annotations()):
+            self.move_many({ident:(x,y)});return
         def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
             lay = next((l for l in p["elementLayouts"] if l["elementRef"] == ident), None)
             if lay is None:
@@ -604,11 +626,14 @@ class Editor:
         barras = {b["id"]: b for b in p.get("barras", [])}
         sueltas = {d["id"]: d for d in p.get("draftActions", []) if isinstance(d, dict) and "id" in d}
         conocidos = self._index(m)
+        notas = {n["id"]:n for n in p.get("notes",[]) if n.get("kind") in ("text","image")}
         for ident, (x, y) in moves.items():
             if ident in barras:
                 barras[ident]["x"], barras[ident]["y"] = _coord(x), _coord(y)
             elif ident in sueltas:
                 sueltas[ident]["x"], sueltas[ident]["y"] = _coord(x), _coord(y)
+            elif ident in notas:
+                notas[ident]["x"],notas[ident]["y"] = _coord(x),_coord(y)
             elif ident in conocidos:
                 lay = next((l for l in p["elementLayouts"] if l["elementRef"] == ident), None)
                 if lay is None:
@@ -796,6 +821,34 @@ class Editor:
             else:
                 lay["labelVisible"] = False
         self._txn("mostrar la etiqueta" if visible else "ocultar la etiqueta", fn, view_only=True)
+
+    def annotations(self):
+        from .annotations import visual_notes
+        return visual_notes(self.presentation)
+
+    def add_annotation(self, kind, at, **properties):
+        from .annotations import visual_notes
+        def fn(m,p):
+            note = {"id": self.ids.new("visual"), "kind": kind, "x": _coord(at[0]), "y": _coord(at[1]),
+                    "width": "200", "height": "100", **copy.deepcopy(properties)}
+            for k in ("x","y","width","height","size"):
+                if k in note:note[k]=_coord(note[k])
+            if not visual_notes({"notes":[note]}):
+                raise DiagnosticError(Diagnostic("D-FORMATO", "texto o imagen no válidos"))
+            p.setdefault("notes",[]).append(note)
+            return note["id"]
+        return self._txn("añadir texto" if kind == "text" else "añadir imagen",fn,view_only=True)
+
+    def update_annotation(self, ident, **properties):
+        from .annotations import visual_notes
+        def fn(m,p):
+            n=next((n for n in p.get("notes",[]) if n.get("id")==ident and n.get("kind") in ("text","image")),None)
+            if n is None:raise DiagnosticError(Diagnostic("D-REF","no existe el texto o la imagen",element=ident))
+            n.update({k:copy.deepcopy(v) for k,v in properties.items() if k not in ("id","kind","elementRef")})
+            for k in ("x","y","width","height","size"):
+                if k in n:n[k]=_coord(n[k])
+            if not visual_notes({"notes":[n]}):raise DiagnosticError(Diagnostic("D-FORMATO","texto o imagen no válidos",element=ident))
+        self._txn("editar texto o imagen",fn,view_only=True)
 
     # Comentarios de etapas y transiciones (presentación, `presentation.notes` con `kind: "comment"`): texto asociado
     # por ID que nunca es fuente de significado (documento 03, tabla 7 [30]; documento 09). No cambia la revisión.
@@ -1299,7 +1352,8 @@ class Editor:
     def plan_delete(self, ids: list[str]) -> dict[str, list[str]]:
         """Todo lo que se llevaría borrar `ids`. Una macroetapa se va con su expansión (y al revés: sin expansión no hay
         macroetapa) y un recinto con su encapsulante, con todo lo que contienen; un parcial, con lo que tiene dentro. Una
-        orden de forzado se va con su etapa de origen o con su parcial destino. `affectedHierarchy` son los recintos y las
+        orden de forzado se va con su etapa de origen o con su parcial destino; los enlaces en borrador, con cualquiera
+        de sus extremos. `affectedHierarchy` son los recintos y las
         órdenes que se quedan y pierden una etapa de su enlace de activación o de su conjunto explícito."""
         m = self.model
         doomed = set(ids)
@@ -1332,6 +1386,8 @@ class Editor:
             if s["id"] in doomed:
                 doomed |= set(s["actionRefs"])
         doomed |= {f["id"] for f in m["forces"] if f["sourceStepRef"] in doomed or f["targetPartialRef"] in doomed}
+        doomed |= {d["id"] for d in m.get("draftLinks", []) if d["fromRef"] in doomed or d["toRef"] in doomed}
+        doomed |= {n["id"] for n in self.annotations() if n.get("partialRef") in doomed}
         links = [t["id"] for t in m["transitions"] if t["id"] not in doomed and (set(t["preRefs"]) | set(t["postRefs"])) & doomed]
         marks = [x["id"] for x in m["hierarchy"]["enclosures"] if x["id"] not in doomed and set(x["activationRefs"]) & doomed]
         marks += [f["id"] for f in m["forces"] if f["id"] not in doomed and set(f.get("targetSteps", [])) & doomed]
@@ -1340,11 +1396,17 @@ class Editor:
                                                                                     for u in e.get("bindings", {}).values()})}
 
     def delete(self, ids: list[str], keep_dangling: bool = False) -> dict[str, list[str]]:
-        unknown = set(ids) - set(self._index(self.model))
+        visuales = {n["id"] for n in self.annotations()}
+        unknown = set(ids) - set(self._index(self.model)) - visuales
         if unknown:
             raise DiagnosticError(Diagnostic("D-REF", f"no existen {sorted(unknown)}; no se borra nada"))
         plan = self.plan_delete(ids)
         doomed = set(plan["elements"])
+        if doomed <= visuales:
+            def quitar(m,p):
+                p["notes"]=[n for n in p.get("notes",[]) if n.get("id") not in doomed]
+                return plan
+            return self._txn("borrar textos o imágenes",quitar,view_only=True)
         for x in self.model["hierarchy"]["expansions"]:  # la entrada y la salida de una expansión no se borran solas
             sueltas = sorted({x["entryRef"], x["exitRef"]} & doomed)
             if x["id"] not in doomed and sueltas:
@@ -1378,7 +1440,7 @@ class Editor:
             m["expressions"] = [e for e in m["expressions"] if e["id"] in used]
             p["elementLayouts"] = [l for l in p["elementLayouts"] if l["elementRef"] not in doomed]
             if "notes" in p:  # el comentario se va con su elemento
-                p["notes"] = [n for n in p["notes"] if not (isinstance(n, dict) and n.get("elementRef") in doomed)]
+                p["notes"] = [n for n in p["notes"] if not (isinstance(n, dict) and (n.get("elementRef") in doomed or n.get("id") in doomed))]
             for b in p.get("barras", []):
                 b["arriba"] = [x for x in b["arriba"] if x not in doomed]
                 b["abajo"] = [x for x in b["abajo"] if x not in doomed]
@@ -1414,93 +1476,290 @@ class Editor:
 
     # -- copiar y pegar sin referencias accidentales (REQ-EDT-04)
     def copy(self, ids: list[str]) -> Fragment:
-        """Copia etapas, transiciones y acciones (con sus expresiones). Las macroetapas, los recintos y las órdenes de
-        forzado no se copian: se ignoran aunque estén en `ids`, y una transición que enlaza con una macroetapa la trata
-        como referencia externa. Al pegar, una etapa encapsulante, de entrada o de salida pasa a ser ordinaria."""
-        m = self.model
-        jerarquia = {x["id"] for c in ("macros", "expansions", "enclosures") for x in m["hierarchy"][c]}
-        chosen = set(ids) - jerarquia - {f["id"] for f in m["forces"]}
-        for s in m["steps"]:
-            if s["id"] in chosen:
-                chosen |= set(s["actionRefs"])
-        ents: dict[str, list[dict[str, Any]]] = {"steps": [], "transitions": [], "actions": [], "expressions": []}
-        for coll in ("steps", "transitions", "actions"):
-            ents[coll] = [copy.deepcopy(x) for x in m[coll] if x["id"] in chosen]
-        expr_ids = {t["conditionRef"] for t in ents["transitions"]}
-        for a in ents["actions"]:
-            expr_ids |= {a.get("conditionRef"), a.get("valueRef"), (a.get("trigger") or {}).get("expressionRef")}
-        ents["expressions"] = [copy.deepcopy(e) for e in m["expressions"] if e["id"] in expr_ids]
-        internal = chosen | expr_ids
-        external: dict[str, str] = {}
-        idx = self._index(m)
-        for t in ents["transitions"]:
-            for r in t["preRefs"] + t["postRefs"]:
-                if r not in internal:
-                    external[r] = idx[r][0]
-        for a in ents["actions"]:
-            if a["targetRef"] not in internal:
-                external[a["targetRef"]] = idx[a["targetRef"]][0]
-        for e in ents["expressions"]:
-            for r in e.get("bindings", {}).values():
-                if r not in internal:
-                    external[r] = idx[r][0]
-        lays = [copy.deepcopy(l) for l in self.presentation["elementLayouts"] if l["elementRef"] in chosen]
-        return Fragment(ents, lays, external)
+        """Instantánea de la selección y su contenido propio; los enlaces de frontera se descartan."""
+        m, p = self.model, self.presentation
+        chosen = set(ids)
+        while True:
+            before = set(chosen)
+            for coll in ("steps", "transitions"):
+                chosen.update(x["id"] for x in m[coll] if x["partialRef"] in chosen)
+            for x in m["hierarchy"]["macros"]:
+                if x["partialRef"] in chosen:
+                    chosen.add(x["id"])
+                if x["id"] in chosen:
+                    chosen.add(x["expansionRef"])
+            for x in m["hierarchy"]["expansions"]:
+                if x["id"] in chosen:
+                    chosen.add(x["partialRef"])
+            for x in m["hierarchy"]["enclosures"]:
+                if x["ownerStepRef"] in chosen:
+                    chosen.update((x["id"], x["partialRef"]))
+                elif x["id"] in chosen:
+                    chosen.add(x["partialRef"])
+            chosen.update(n["id"] for n in self.annotations() if n.get("partialRef") in chosen)
+            if chosen == before:
+                break
+        for st in m["steps"]:
+            if st["id"] in chosen:
+                chosen.update(st["actionRefs"])
+        full_nodes = {x["id"] for c in ("steps", "transitions") for x in m[c] if x["partialRef"] in chosen}
+        full_nodes.update(x["id"] for x in m["hierarchy"]["macros"] if x["partialRef"] in chosen)
+        chosen.update(b["id"] for b in self.bars() if b["arriba"] + b["abajo"]
+                      and set(b["arriba"] + b["abajo"]) <= full_nodes)
+        chosen.update(f["id"] for f in m["forces"] if f["sourceStepRef"] in chosen)
+        chosen.update(d["id"] for d in self.draft_actions() if d.get("etapa") in chosen)
+        entities = {c: [copy.deepcopy(x) for x in m.get(c, []) if x["id"] in chosen]
+                    for c in ("partials", "steps", "transitions", "actions", "forces")}
+        for c in ("macros", "expansions", "enclosures"):
+            entities[c] = [copy.deepcopy(x) for x in m["hierarchy"][c] if x["id"] in chosen]
+        # Un marco copiado sin su dueño pasa a ser un parcial independiente.
+        entities["expansions"] = [x for x in entities["expansions"] if x["ownerMacroRef"] in chosen]
+        entities["enclosures"] = [x for x in entities["enclosures"] if x["ownerStepRef"] in chosen]
+        owned_partials = {x["partialRef"] for c in ("expansions", "enclosures") for x in entities[c]}
+        for pt in entities["partials"]:
+            for k in ("stepRefs", "transitionRefs"):
+                pt[k] = [i for i in pt[k] if i in chosen]
+            if pt.get("ownerRef") not in chosen and pt["id"] not in owned_partials:
+                pt.pop("ownerRef", None)
+        for t in entities["transitions"]:
+            for k in ("preRefs", "postRefs"):
+                t[k] = [i for i in t[k] if i in chosen]
+        owned_special = {x[k] for x in entities["expansions"] for k in ("entryRef", "exitRef")}
+        for st in entities["steps"]:
+            if st["kind"] in ("entry", "exit") and st["id"] not in owned_special:
+                st["kind"] = "ordinary"
+        expr_ids = {t["conditionRef"] for t in entities["transitions"]}
+        for act in entities["actions"]:
+            expr_ids.update((act.get("conditionRef"), act.get("valueRef"), (act.get("trigger") or {}).get("expressionRef")))
+        entities["expressions"] = [copy.deepcopy(x) for x in m["expressions"] if x["id"] in expr_ids]
+        entities["draftLinks"] = [copy.deepcopy(d) for d in m.get("draftLinks", [])
+                                  if d["fromRef"] in chosen and d["toRef"] in chosen]
+        chosen.update(x["id"] for x in entities["expressions"] + entities["draftLinks"])
+        draft_meanings = {}
+        view = {"barras": [copy.deepcopy(b) for b in self.bars() if b["id"] in chosen],
+                "draftActions": [copy.deepcopy(d) for d in self.draft_actions() if d["id"] in chosen]}
+        for b in view["barras"]:
+            for k in ("arriba", "abajo"):
+                b[k] = [i for i in b[k] if i in chosen]
+        def text(eid: str | None) -> str:
+            return next((x["text"] for x in m["expressions"] if x["id"] == eid), "")
+        # Una acción u orden copiada sola queda suelta en el destino, con sus datos intactos.
+        for act in list(entities["actions"]):
+            if act["stepRef"] not in chosen:
+                trigger = act.get("trigger", {})
+                condition = text(act.get("conditionRef"))
+                tipo = "condicionada" if condition and condition not in ("true", "1") else "continua"
+                if act["mode"] != "continuous":
+                    tipo = {"activation": "activacion", "deactivation": "desactivacion", "event": "evento"}[trigger["kind"]]
+                draft = {"id": act["id"], "x": "0", "y": "0", "tipo": tipo, "variable": act["targetRef"],
+                         "condicion": condition, "valor": text(act.get("valueRef")),
+                         "evento": text(trigger.get("expressionRef"))}
+                if "limitUs" in act:
+                    draft.update(tipo="limitada", limite=f"{act['limitUs']}us")
+                view["draftActions"].append(draft)
+                entities["actions"].remove(act)
+        for f in list(entities["forces"]):
+            if f["sourceStepRef"] not in chosen:
+                view["draftActions"].append({"id": f["id"], "x": "0", "y": "0", "tipo": "forzado",
+                    "destino": f["targetPartialRef"], "forma": f["targetKind"], "etapas": f.get("targetSteps", [])})
+                entities["forces"].remove(f)
+        for d in view["draftActions"]:
+            if d.get("etapa") not in chosen:
+                d.pop("etapa", None)
+        view["actionLayouts"] = {k: v for k, v in self.action_layouts().items()
+                                 if k in chosen or any(d.get("grupo") == k for d in view["draftActions"])}
+        view["notes"] = [copy.deepcopy(n) for n in p.get("notes", []) if n.get("elementRef") in chosen or n.get("id") in chosen]
+        view["linkStyles"] = {k: copy.deepcopy(v) for k, v in self.link_styles().items()
+                              if all(i in chosen for i in k.split("|")[:2])}
+        layouts = [copy.deepcopy(l) for l in p["elementLayouts"] if l["elementRef"] in chosen]
+        refs = set()
+        for e in entities["expressions"]:
+            refs.update(e.get("bindings", {}).values())
+        for act in entities["actions"]:
+            refs.add(act["targetRef"])
+        for f in entities["forces"]:
+            refs.add(f["targetPartialRef"])
+            refs.update(f.get("targetSteps", []))
+        for d in view["draftActions"]:
+            refs.update(i for i in (d.get("variable"), d.get("destino")) if i)
+            refs.update(d.get("etapas", []))
+            # Los textos de un borrador pueden usar otras variables además de la asignada.
+            from .notation import a_nucleo
+            resolve, found = ex.recording_resolver(self._lookup(m, next((st["partialRef"] for st in m["steps"]
+                                                                       if st["id"] == d.get("etapa")), None)))
+            for k in ("condicion", "valor", "evento"):
+                try:
+                    draft_meanings.setdefault(d["id"], {})[k] = ex.parse(a_nucleo(d.get(k, "")), resolve)
+                except (ex.ParseError, ex.Unresolved):
+                    pass
+            refs.update(found.values())
+        view["draftMeanings"] = draft_meanings
+        index = self._index(m)
+        external = {i: index[i][0] for i in refs - chosen if i in index}
+        return Fragment(entities, layouts, external, view, {i: copy.deepcopy(index[i]) for i in external}, list(ids))
 
     def plan_paste(self, frag: Fragment) -> dict[str, str]:
         """Referencias externas que requieren decisión explícita antes de confirmar."""
         return dict(sorted(frag.external_refs.items()))
 
-    def paste(self, frag: Fragment, partial: str, decisions: dict[str, str]) -> dict[str, str]:
-        missing = set(frag.external_refs) - set(decisions)
-        if missing:
-            raise DiagnosticError(Diagnostic("D-REF", f"falta decidir las referencias externas {sorted(missing)}"))
+    @staticmethod
+    def _paste_label(label: str, used: set[str]) -> str:
+        if label_key(label) not in used:
+            used.add(label_key(label))
+            return label
+        match = re.fullmatch(r"(.*?)([0-9]+)", label)
+        prefix = match[1] if match else label
+        n = max((int(x) for x in used if x.isdecimal()), default=-1) + 1 if label.isdecimal() else 1
+        while label_key(f"{prefix}{n}") in used:
+            n += 1
+        result = f"{prefix}{n}"
+        used.add(label_key(result))
+        return result
+
+    def paste(self, frag: Fragment, partial: str, decisions: dict[str, str] | None = None,
+              at: tuple[Any, Any] | None = None) -> dict[str, str]:
+        """Pega con identidades nuevas en una transacción. Sin decisiones, enlaza referencias por nombre."""
+        self._find(self.model["partials"], partial, "el parcial")
+        external_map: dict[str, str] = {}
+        if decisions is None:
+            index = self._index(self.model)
+            missing = []
+            for ident, coll in frag.external_refs.items():
+                original = frag.references.get(ident, (coll, {}))[1]
+                key = "name" if coll == "variables" else "label"
+                name = original.get(key, ident)
+                candidates = [(i, x) for i, (c, x) in index.items() if c == coll and x.get(key) == name]
+                local = [(i, x) for i, x in candidates if x.get("scopeRef", x.get("partialRef")) in (partial, self.model["id"])]
+                candidates = local or candidates
+                if ident in index and index[ident][0] == coll and index[ident][1].get(key) == name:
+                    candidates = [(ident, index[ident][1])]
+                if len(candidates) != 1:
+                    missing.append(name)
+                else:
+                    external_map[ident] = candidates[0][0]
+                    if coll == "variables" and any(candidates[0][1].get(k) != original.get(k) for k in ("role", "type")):
+                        raise DiagnosticError(Diagnostic("D-REF", f"variable incompatible: {name}"))
+            if missing:
+                raise DiagnosticError(Diagnostic("D-REF", "Faltan referencias o variables en el proyecto: " + ", ".join(sorted(set(missing)))))
+        else:
+            missing = set(frag.external_refs) - set(decisions)
+            if missing:
+                raise DiagnosticError(Diagnostic("D-REF", f"falta decidir las referencias externas {sorted(missing)}"))
+            for ident, choice in decisions.items():
+                if choice not in ("keep", "pending"):
+                    raise DiagnosticError(Diagnostic("D-FORMATO", f"decisión desconocida {choice!r}"))
+                external_map[ident] = f"pendiente.{ident}" if choice == "pending" else ident
 
         def fn(m: dict[str, Any], p: dict[str, Any]) -> dict[str, str]:
-            mapping: dict[str, str] = {}
+            before = self._estructurales(m) if decisions is None else []
+            existing = set(self._index(m)) | {b["id"] for b in p.get("barras", [])} | {d["id"] for d in p.get("draftActions", [])}
+            existing.update(n["id"] for n in p.get("notes", []) if "id" in n)
+            mapping = {}
+            groups = {d["grupo"] for d in frag.presentation.get("draftActions", []) if d.get("grupo")}
+            copied_ids = {x["id"] for items in frag.entities.values() for x in items}
+            copied_ids |= {x["id"] for k in ("barras", "draftActions", "notes") for x in frag.presentation.get(k, []) if "id" in x} | groups
+            for ident in sorted(copied_ids):
+                new = self.ids.new("c")
+                while new in existing:
+                    new = self.ids.new("c")
+                mapping[ident] = new
+                existing.add(new)
+            def mp(ident: str) -> str:
+                return mapping.get(ident, external_map.get(ident, ident))
+            positions = [(Fraction(str(x["x"])), Fraction(str(x["y"]))) for x in frag.layouts]
+            positions += [(Fraction(str(x["x"])), Fraction(str(x["y"])))
+                          for k in ("barras", "draftActions") for x in frag.presentation.get(k, []) if not x.get("etapa")]
+            positions += [(Fraction(str(n["x"])),Fraction(str(n["y"]))) for n in frag.presentation.get("notes",[]) if n.get("kind") in ("text","image")]
+            dx = Fraction(str(at[0])) - min(x for x, y in positions) if at is not None and positions else Fraction(0)
+            dy = Fraction(str(at[1])) - min(y for x, y in positions) if at is not None and positions else Fraction(0)
+            refkeys = {"ownerRef", "partialRef", "stepRef", "targetRef", "conditionRef", "valueRef", "expansionRef",
+                       "ownerMacroRef", "entryRef", "exitRef", "ownerStepRef", "sourceStepRef", "targetPartialRef",
+                       "fromRef", "toRef", "elementRef", "variable", "etapa", "grupo", "destino"}
+            listkeys = {"stepRefs", "transitionRefs", "actionRefs", "preRefs", "postRefs", "activationRefs", "targetSteps",
+                        "arriba", "abajo", "etapas"}
+            used = {coll: {label_key(x["label"]) for x in (m[coll] if coll in m else m["hierarchy"][coll]) if x.get("label")}
+                    for coll in ("steps", "transitions", "partials", "macros")}
+            added: dict[str, list[dict[str, Any]]] = {}
+            def remap(item: dict[str, Any]) -> dict[str, Any]:
+                new = copy.deepcopy(item)
+                if "id" in new:
+                    new["id"] = mp(new["id"])
+                for k in refkeys & new.keys():
+                    new[k] = mp(new[k])
+                for k in listkeys & new.keys():
+                    new[k] = [mp(i) for i in new[k]]
+                return new
             for coll, items in frag.entities.items():
-                for it in items:
-                    mapping[it["id"]] = self.ids.new(coll[0])
-            for ext_id, choice in decisions.items():
-                if choice == "pending":
-                    mapping[ext_id] = f"pendiente.{ext_id}"  # D-REF al validar: bloquea el inicio
-                elif choice != "keep":
-                    raise DiagnosticError(Diagnostic("D-FORMATO", f"decisión desconocida {choice!r}"))
-
-            def mp(i: str) -> str:
-                return mapping.get(i, i)
-            for coll, items in frag.entities.items():
-                for it in items:
-                    new = copy.deepcopy(it)
-                    new["id"] = mp(it["id"])
-                    for k in ("partialRef",):
-                        if k in new:
-                            new[k] = partial
-                    for k in ("stepRef", "targetRef", "conditionRef", "valueRef"):
-                        if k in new:
-                            new[k] = mp(new[k])
-                    for k in ("preRefs", "postRefs", "actionRefs"):
-                        if k in new:
-                            new[k] = [mp(x) for x in new[k]]
+                added[coll] = []
+                for item in items:
+                    new = remap(item)
+                    if coll in ("steps", "transitions", "macros") and item.get("partialRef") not in mapping:
+                        new["partialRef"] = partial
+                    if coll == "partials" and item.get("ownerRef") not in mapping:
+                        owned = any(x["partialRef"] == item["id"] for c in ("expansions", "enclosures") for x in frag.entities.get(c, []))
+                        if owned:
+                            new["ownerRef"] = partial
+                        else:
+                            new.pop("ownerRef", None)
+                    if coll in used and new.get("label"):
+                        new["label"] = self._paste_label(new["label"], used[coll])
                     if "trigger" in new and "expressionRef" in new["trigger"]:
                         new["trigger"]["expressionRef"] = mp(new["trigger"]["expressionRef"])
                     if coll == "expressions" and new["mode"] == "executable":
-                        new["bindings"] = {k: mp(v) for k, v in new["bindings"].items()}
+                        new["bindings"] = {k: mp(i) for k, i in new["bindings"].items()}
                         new["meaning"] = _remap_meaning(new["meaning"], mp)
-                    if coll == "steps" and any(s["partialRef"] == partial and s["label"] == new["label"] for s in m["steps"]):
-                        new["label"] = f"{new['label']} (copia)"
-                    if coll == "steps":
-                        new["kind"] = "ordinary"  # sin la estructura de la copia (recinto, expansión): una etapa ordinaria
-                    m[coll].append(new)
-                    if coll in ("steps", "transitions"):
-                        tgt = next(x for x in m["partials"] if x["id"] == partial)
-                        tgt["stepRefs" if coll == "steps" else "transitionRefs"].append(new["id"])
-            for lay in frag.layouts:
-                nl = copy.deepcopy(lay)
-                nl["elementRef"] = mp(lay["elementRef"])
-                p["elementLayouts"].append(nl)
-            return {k: v for k, v in mapping.items() if k not in decisions or decisions[k] == "pending"}
-        return self._txn("pegar", fn)
+                    (m[coll] if coll in m else m["hierarchy"][coll]).append(new)
+                    added[coll].append(new)
+            for coll, fieldname in (("steps", "stepRefs"), ("transitions", "transitionRefs")):
+                for item in added.get(coll, []):
+                    pt = next(x for x in m["partials"] if x["id"] == item["partialRef"])
+                    if item["id"] not in pt[fieldname]:
+                        pt[fieldname].append(item["id"])
+            for act in added.get("actions", []):
+                step = next(x for x in m["steps"] if x["id"] == act["stepRef"])
+                if act["id"] not in step["actionRefs"]:
+                    step["actionRefs"].append(act["id"])
+            names = self._render_names(m)
+            for expr in added.get("expressions", []):
+                if expr["mode"] == "executable" and all(i in self._index(m) for i in expr["bindings"].values()):
+                    found = {}
+                    def record(i: str) -> str:
+                        name = names(i)
+                        found[name] = i
+                        return name
+                    expr["text"] = ex.render(expr["meaning"], record)
+                    expr["bindings"] = found
+            for item in frag.layouts:
+                new = remap(item)
+                new["x"], new["y"] = _coord(Fraction(str(new["x"])) + dx), _coord(Fraction(str(new["y"])) + dy)
+                new["viewRef"] = p["views"][0]["id"]
+                p["elementLayouts"].append(new)
+            for k in ("barras", "draftActions", "notes"):
+                for item in frag.presentation.get(k, []):
+                    new = remap(item)
+                    if k in ("barras", "draftActions") or k == "notes" and new.get("kind") in ("text","image"):
+                        new["x"], new["y"] = _coord(Fraction(str(new["x"])) + dx), _coord(Fraction(str(new["y"])) + dy)
+                    if k == "notes" and new.get("kind") in ("text","image") and item.get("partialRef") not in mapping:
+                        new["partialRef"] = partial
+                    if k == "draftActions":
+                        for fieldname, meaning in frag.presentation.get("draftMeanings", {}).get(item["id"], {}).items():
+                            new[fieldname] = ex.render(_remap_meaning(meaning, mp), names)
+                    p.setdefault(k, []).append(new)
+            for k in ("actionLayouts", "linkStyles"):
+                for ident, value in frag.presentation.get(k, {}).items():
+                    key = "|".join(mp(i) for i in ident.split("|")) if k == "linkStyles" else mp(ident)
+                    value = copy.deepcopy(value)
+                    if k == "linkStyles" and isinstance(value, dict):
+                        route = value.get("route", {})
+                        for f, delta in (("laneX", dx), ("middleY", dy), ("entryY", dy), ("exitY", dy)):
+                            if f in route:
+                                route[f] = _coord(Fraction(str(route[f])) + delta)
+                    p.setdefault(k, {})[key] = value
+            if decisions is None:
+                self._sin_nuevos(m, before)
+            return mapping
+        return self._txn("pegar", fn, view_only=not any(frag.entities.values()))
+
 
 
 def _techo(valor: Fraction, q: Fraction) -> Fraction:

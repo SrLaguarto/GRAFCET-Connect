@@ -73,6 +73,7 @@ class PanelTests(unittest.TestCase):
             app.processEvents()
             self.assertTrue(p.asignar("a", "discrete", 5))
             mime = p.terminales[("discrete",5)].mimeData()
+            app.processEvents()
             destino = p.terminales[("discrete",6)]
             app.sendEvent(destino, QDragEnterEvent(QPoint(5,5), Qt.DropAction.MoveAction, mime,
                           Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
@@ -127,7 +128,7 @@ class PanelTests(unittest.TestCase):
                 vid, luz, consigna = (v["id"] for v in w.edicion.ed.model["variables"])
                 w.a_es.trigger()
                 self.assertEqual(w.panel_es.doc, w.edicion.ed.model)
-                w.panel_es.cargar(w.panel_es.doc, Configuracion(puerto=sc.puerto, periodo_ms=20,
+                w.panel_es.cargar(w.panel_es.doc, Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20,
                                         senales=[Senal(vid, "discrete", 0), Senal(luz, "coil", 3),
                                                  Senal(consigna, "holding", 5, "INT16")]))
                 ruta = Path(tmp) / "proyecto"
@@ -141,7 +142,10 @@ class PanelTests(unittest.TestCase):
                 self.assertIsNone(w.modbus.adaptador.sesion)
                 self.assertEqual(w.modbus.adaptador.salidas, [], "sin programa compilado, el monitor no controla nada")
                 self.assertEqual([s.variable for s in w.modbus.adaptador.salidas_control], [luz, consigna])
+                self.assertFalse(w.a_ejecutar.isEnabled(), "Play no se usa desde E/S")
+                w._mostrar_pagina(False)
                 self.assertTrue(w.a_ejecutar.isEnabled())
+                w._mostrar_pagina(True)
                 esperar_ui(lambda: sum(p[0] == 2 for p in peticiones) >= 3)  # varias lecturas después de conectar
                 self.assertEqual(escrituras, [("coil", 3, 0), ("holding", 5, 0)], "exactamente un cero a cada salida asignada")
                 self.assertEqual([p[0] for p in peticiones[:2]], [15, 16], "el cero va antes de la primera lectura")
@@ -166,12 +170,13 @@ class PanelTests(unittest.TestCase):
             p.show()
             app.processEvents()
             def soltar(lista, indice, area, direccion):
+                app.processEvents()
                 mime = lista.mimeData([lista.item(indice)])
                 terminal = p.terminales[(area, direccion)]
-                entrar = QDragEnterEvent(QPoint(5, 5), Qt.DropAction.CopyAction, mime,
+                entrar = QDragEnterEvent(terminal.zona_asignacion().center(), Qt.DropAction.CopyAction, mime,
                                          Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
                 app.sendEvent(terminal, entrar)
-                drop = QDropEvent(QPointF(5, 5), Qt.DropAction.CopyAction, mime,
+                drop = QDropEvent(QPointF(terminal.zona_asignacion().center()), Qt.DropAction.CopyAction, mime,
                                   Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
                 app.sendEvent(terminal, drop)
                 return drop.isAccepted()
@@ -201,6 +206,7 @@ class PanelTests(unittest.TestCase):
         p = PanelES()
         try:
             p.cargar(M().var("sensor").step("0", True).doc)
+            p.resize(1000, 600)
             p.show()
             app.processEvents()
             self.assertFalse(p.tabla.isVisible())
@@ -261,7 +267,20 @@ class PanelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             w = Ventana(ajustes_de_prueba(tmp), Path(tmp) / "recup")
             try:
-                w.panel_es.b_prueba_guiada.click()
+                # El ensayo edita el mapa: usar una copia aislada, nunca el ejemplo del repositorio.
+                import json
+                import shutil
+                origen = Path(__file__).resolve().parents[1] / "pruebas_manuales" / "factoryio_digital"
+                copia = Path(tmp) / "prueba"
+                shutil.copytree(origen, copia)
+                ruta_mapa = copia / "conexion-factoryio.json"
+                datos = json.loads(ruta_mapa.read_text(encoding="utf-8"))
+                datos["senales"] = [{"variable": v, "area": a, "direccion": d, "formato": "BOOL", "escala": "1"}
+                                     for v, a, d in [("PM", "discrete", 0), ("Q00", "coil", 0), ("Q01", "coil", 1)]]
+                ruta_mapa.write_text(json.dumps(datos), encoding="utf-8")
+                abrir = w.abrir_ruta
+                with mock.patch.object(w, "abrir_ruta", side_effect=lambda _: abrir(copia / "manifest.json")):
+                    w._abrir_prueba_modbus()  # código conservado, sin acceso desde la interfaz
                 self.assertIn("PM y dos cintas", w.windowTitle())
                 self.assertEqual(w.paginas_es.currentIndex(), 1)
                 w.panel_es.b_volver.click()
@@ -321,7 +340,7 @@ class PanelTests(unittest.TestCase):
                 w.fuente = {"tipo": "fichero", "ruta": Path(tmp) / "modelo.json", "doc": m.doc,
                             "layout": {}, "titulo": "Prueba", "ayuda": "", "raiz": None}
                 w._cargar()
-                w.panel_es.cargar(m.doc, Configuracion(puerto=sc.puerto, periodo_ms=20,
+                w.panel_es.cargar(m.doc, Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20,
                     senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)]))
                 w._conectar_modbus()
                 esperar_ui(lambda: w.modbus.estado == "conectado")
@@ -356,7 +375,7 @@ class PanelTests(unittest.TestCase):
         w.fuente = {"tipo": "fichero", "ruta": Path(tmp) / "modelo.json", "doc": doc,
                     "layout": {}, "titulo": "Prueba", "ayuda": "", "raiz": None}
         w._cargar()
-        w.panel_es.cargar(doc, Configuracion(puerto=sc.puerto, periodo_ms=20, senales=senales))
+        w.panel_es.cargar(doc, Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=senales))
         w._conectar_modbus()
         return w
 
@@ -677,8 +696,8 @@ class PanelTests(unittest.TestCase):
         return p
 
     def test_SFIO33_marco_con_canales_y_nombres_fuera(self):
-        """REQ-SIM-03: la vista autómata tiene la cabecera «(IP:puerto) Esclavo ID:n», Input e Input Reg a la izquierda,
-        Coil y Holding Reg a la derecha, el nombre de la variable fuera del marco y pegado a él; 8 + 8 + 2 + 2 canales caben
+        """REQ-SIM-03: la vista autómata tiene la cabecera «(IP:puerto) Esclavo ID:n», Entrada e Entrada numérica a la izquierda,
+        Salida y Salida numérica a la derecha, el nombre de la variable fuera del marco y pegado a él; 8 + 8 + 2 + 2 canales caben
         sin desplazarse en 1280×720 y en 1000×600, y con más canales aparece el desplazamiento vertical."""
         from PySide6.QtCore import QPoint
         from PySide6.QtWidgets import QScrollArea
@@ -692,8 +711,8 @@ class PanelTests(unittest.TestCase):
                        if k[0] in ("discrete", "input-register")]
                 der = [p.terminales[k].canal.text() for k in sorted(p.terminales, key=lambda k: (k[0] != "coil", k[1]))
                        if k[0] in ("coil", "holding")]
-                self.assertEqual(izq, [f"Input {n}" for n in range(8)] + ["Input Reg 0", "Input Reg 1"])
-                self.assertEqual(der, [f"Coil {n}" for n in range(8)] + ["Holding Reg 0", "Holding Reg 1"])
+                self.assertEqual(izq, [f"Entrada {n}" for n in range(8)] + ["Entrada numérica 0", "Entrada numérica 1"])
+                self.assertEqual(der, [f"Salida {n}" for n in range(8)] + ["Salida numérica 0", "Salida numérica 1"])
                 self.assertEqual(len(p.terminales), 20)
                 self.assertTrue(all(t.height() == ALTO_FILA for t in p.terminales.values()), "filas compactas")
                 x0 = p.modulo.mapTo(p, QPoint()).x()
@@ -703,12 +722,13 @@ class PanelTests(unittest.TestCase):
                     caja_izq = t.nombre.mapTo(p, QPoint()).x()
                     caja_der = caja_izq + t.nombre.width()
                     self.assertTrue(t.nombre.text(), k)
+                    self.assertFalse(t.barrita_nombre.isVisibleTo(t), "sin barrita junto al nombre")
                     if lado == "izq":
-                        self.assertLessEqual(caja_der, marco_izq + 1, "el nombre queda a la izquierda del marco")
-                        self.assertGreater(caja_der, marco_izq - 12, "y pegado a él")
+                        self.assertLessEqual(caja_der, marco_izq, "el nombre queda fuera del PLC")
+                        self.assertGreater(caja_der, marco_izq - 12, "pegado al marco")
                     else:
-                        self.assertGreaterEqual(caja_izq, marco_der - 1, "el nombre queda a la derecha del marco")
-                        self.assertLess(caja_izq, marco_der + 12)
+                        self.assertGreaterEqual(caja_izq, marco_der, "el nombre queda fuera del PLC")
+                        self.assertLess(caja_izq, marco_der + 12, "pegado al marco")
                 self.assertEqual(p.terminales[("discrete", 1)].nombre.text(), "", "sin asignar no hay texto fuera")
                 scroll = p.findChild(QScrollArea, "scrollES")
                 self.assertFalse(scroll.verticalScrollBar().isVisible(), f"{ancho}x{alto}: sin desplazamiento")
@@ -769,7 +789,7 @@ class PanelTests(unittest.TestCase):
             self.assertEqual([fila(p.lista_entradas, n).data(ROL_ASIGNADA) for n in ("a", "b")], [True, False])
             self.assertTrue(fila(p.lista_entradas, "a").data(ROL_ACTIVO))
             self.assertFalse(fila(p.lista_entradas, "v").data(ROL_ACTIVO))
-            self.assertIn("asignada a Input 0", fila(p.lista_entradas, "a").toolTip())
+            self.assertIn("asignada a Entrada 0", fila(p.lista_entradas, "a").toolTip())
             self.assertIn("sin asignar", fila(p.lista_entradas, "b").toolTip())
             self.assertFalse(fila(p.lista_entradas, "t").flags() & Qt.ItemFlag.ItemIsDragEnabled, "una duración no se arrastra")
             self.assertTrue(fila(p.lista_entradas, "b").flags() & Qt.ItemFlag.ItemIsDragEnabled)
@@ -778,8 +798,8 @@ class PanelTests(unittest.TestCase):
             p.deleteLater()
             app.processEvents()
 
-    def test_SFIO35_arrastre_resalta_la_fila_entera_y_la_x_aparece_al_pasar_el_raton(self):
-        """REQ-SIM-03: al arrastrar una variable sobre un canal se resalta la fila entera (nombre incluido); soltar asigna;
+    def test_SFIO35_arrastre_resalta_solo_lateral_y_la_x_aparece_al_pasar_el_raton(self):
+        """REQ-SIM-03: al arrastrar una variable sobre un canal se resalta el lateral exterior al PLC (nombre incluido); soltar asigna;
         no se resalta si no cabe o si hay conexión; «×» solo aparece al pasar el ratón y se desactiva al conectar."""
         from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
         from PySide6.QtGui import QDragEnterEvent, QDragLeaveEvent, QDropEvent, QEnterEvent
@@ -1042,6 +1062,8 @@ class PanelTests(unittest.TestCase):
                 w.nuevo()
                 self.assertIsNone(w.edicion.nueva_variable("s1"))
                 self._es(w, True)
+                p.cantidades["input-register"].setValue(0)
+                p.cantidades["holding"].setValue(0)
                 p.cantidades["discrete"].setValue(6)
                 self.assertTrue(p._aplicar())
                 self.assertEqual(p.config.canales["input-register"]["cantidad"], 0)
@@ -1052,7 +1074,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(self._nombres(p.lista_entradas), ["s1", "nivel"])
                 self.assertEqual(len([1 for a, _ in p.terminales if a == "discrete"]), 6, "los canales fijados se respetan")
                 self.assertFalse([1 for a, _ in p.terminales if a in ("input-register", "holding")])
-                self.assertIn("Sin canales en Input Reg, Holding Reg", p.estado.text())
+                self.assertIn("Sin canales en Entrada numérica, Salida numérica", p.estado.text())
                 p.cantidades["input-register"].setValue(2)
                 p.cantidades["holding"].setValue(1)
                 self.assertTrue(p._aplicar())
@@ -1103,9 +1125,9 @@ class PanelTests(unittest.TestCase):
 
     def test_SFIO43_la_primera_vez_el_servidor_propuesto_es_el_de_factory_io(self):
         """REQ-SIM-03: sin nada recordado ni mapa guardado, el panel propone 192.168.1.133, puerto 502 y esclavo 1; no se
-        toca el valor por defecto del núcleo de conexión."""
+        comparte el mismo valor inicial con la configuración de conexión."""
         app = QApplication.instance() or QApplication([])
-        self.assertEqual(Configuracion().host, "127.0.0.1", "el núcleo de conexión no cambia")
+        self.assertEqual(Configuracion().host, "192.168.1.133", "valor inicial unificado con Factory I/O")
         p = PanelES()
         try:
             p.cargar(M().var("a").step("0", True).doc)
@@ -1174,12 +1196,12 @@ class PanelTests(unittest.TestCase):
             m = M().var("sensor").step("E0", True)
             w = self._ventana_modelo(tmp, m.doc)
             try:
-                w.panel_es.cargar(m.doc, Configuracion(puerto=puerto_cerrado, periodo_ms=20, timeout_ms=200,
+                w.panel_es.cargar(m.doc, Configuracion(host="127.0.0.1", puerto=puerto_cerrado, periodo_ms=20, timeout_ms=200,
                                                        senales=[Senal("sensor", "discrete", 0)]))
                 w._conectar_modbus()
                 self._esperar(app, w, lambda: w.modbus.estado == "error")
                 self.assertEqual(w.ajustes.value("modbus/host", "nada"), "nada", "un fallo no se recuerda")
-                w.panel_es.cargar(m.doc, Configuracion(puerto=sc.puerto, unidad=3, periodo_ms=20,
+                w.panel_es.cargar(m.doc, Configuracion(host="127.0.0.1", puerto=sc.puerto, unidad=3, periodo_ms=20,
                                                        senales=[Senal("sensor", "discrete", 0)]))
                 w._conectar_modbus(prueba=True)
                 self._esperar(app, w, lambda: w.modbus.mensaje.startswith("Conexión probada"))
@@ -1261,7 +1283,7 @@ class PanelTests(unittest.TestCase):
                    ("vel", "holding", 0, "INT16"))
 
     def _mapa_pausa(self, doc, puerto):
-        return Configuracion(puerto=puerto, periodo_ms=20, modelo=doc["id"],
+        return Configuracion(host="127.0.0.1", puerto=puerto, periodo_ms=20, modelo=doc["id"],
                              senales=[Senal(v, a, d, f) for v, a, d, f in self._MAPA_PAUSA])
 
     def test_SFIO47_pausa_pone_a_cero_coils_y_holding_y_play_arranca_de_la_situacion_inicial(self):
@@ -1402,7 +1424,7 @@ class PanelTests(unittest.TestCase):
                 w.fuente = {"tipo": "fichero", "ruta": Path(tmp) / "inestable.json", "doc": inestable.doc,
                             "layout": {}, "titulo": "Inestable", "ayuda": "", "raiz": None}
                 w._cargar()
-                w.panel_es.cargar(inestable.doc, Configuracion(puerto=sc.puerto, periodo_ms=20, modelo=inestable.doc["id"],
+                w.panel_es.cargar(inestable.doc, Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, modelo=inestable.doc["id"],
                                                                senales=[Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)]))
                 w._conectar_modbus()
                 esperar(lambda: w.modbus.estado == "conectado")
@@ -1572,7 +1594,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual((p.host.text(), p.puerto.value(), p.unidad.value(), p.periodo.value()), ("10.20.30.40", 1502, 3, 40))
                 self.assertEqual(self._mapa(w), {"sensor": ("discrete", 0), "motor": ("coil", 0)}, "se conserva el resto")
                 self.assertIn("Asignaciones quitadas", p.estado.text())
-                self.assertIn("la variable de Input 5 ya no existe", p.estado.text(), "sin enseñar el ID de la variable borrada")
+                self.assertIn("la variable de Entrada 5 ya no existe", p.estado.text(), "sin enseñar el ID de la variable borrada")
                 self.assertNotIn("borrada", p.estado.text())
                 self.assertIn("«marcha» ya no encaja", p.estado.text())
                 self._es(w, True)
@@ -1693,7 +1715,7 @@ class PanelTests(unittest.TestCase):
             b = M("b").var("sensor").var("luz", "output").var("motor", "output", "decimal", scale=2).var("otra", "output").step("E0", True)
             ruta = Path(tmp) / "b"
             Edicion.desde(b.doc, {}, "B").guardar(ruta)
-            Configuracion(puerto=sc.puerto, periodo_ms=20, modelo="b", senales=[
+            Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, modelo="b", senales=[
                 Senal("sensor", "discrete", 0), Senal("luz", "coil", 0), Senal("motor", "holding", 3, "INT16"),
                 Senal("otra", "coil", 5)]).guardar(ruta / ARCHIVO, b.doc)
             w = self._ventana_conectada(tmp, sc, a.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0),
@@ -1778,6 +1800,6 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(self._mapa(w), {})
                 # el mismo texto que da el núcleo de conexión para la variable que pasó a interna
                 self.assertEqual(config.quitar_obsoletas(w.edicion.ed.model),
-                                 ["«sensor» ya no es de entrada ni de salida", "la variable de Coil 0 ya no existe"])
+                                 ["«sensor» ya no es de entrada ni de salida", "la variable de Salida 0 ya no existe"])
             finally:
                 self._cerrar(app, w)

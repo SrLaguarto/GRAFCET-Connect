@@ -1,7 +1,7 @@
 """Recorridos de enlaces compartidos por Qt, selección con ratón y banco web. Sin dependencias Qt."""
 from typing import Any
 
-SX, H, SIMUL, BARRA_GROSOR = 100, 22, 14, 4
+SX, H, SIMUL, BARRA_GROSOR = 100, 22, 14, 8
 TALLO_E = 16  # tramo vertical mínimo de un enlace al salir de una etapa o al llegar a ella
 TALLO_T = 24  # ... y a cada lado de una transición: el trazo nunca llega de lado
 TALLO_CORTO = 8  # si no caben los tramos enteros, se acortan hasta aquí antes de dar un rodeo
@@ -86,6 +86,60 @@ def _flechas_de_lazo(out: list[dict[str, Any]]) -> set[str]:
     return con
 
 
+def _separar_lazos(M, out, pos):
+    """Preferir carriles sin cruces con enlaces y cajas, conservando las rutas fijadas a mano."""
+    lazos = [e for e in out if len(e["pts"]) == 6 and e["rol"] in ("pre", "post")
+             and any(b[1] < a[1] for a, b in zip(e["pts"], e["pts"][1:]))
+             and not M.get("linkStyles", {}).get(e["id"], {}).get("route")]
+    ids = {e["id"] for e in lazos}
+    fijos = [e for e in out if e["id"] not in ids]
+    cajas = [(n["id"], pos[n["id"]][0]-H, pos[n["id"]][1]-H,
+              pos[n["id"]][0]+H, pos[n["id"]][1]+H)
+             for coll in ("steps", "macros") for n in M.get(coll, [])]
+    cajas += [(t["id"], pos[t["id"]][0]-8, pos[t["id"]][1]-3,
+               pos[t["id"]][0]+8, pos[t["id"]][1]+3) for t in M["transitions"]]
+    izquierda = min((p[0] for p in pos.values()), default=SX)-70
+    derecha = max((p[0] for p in pos.values()), default=SX)+70
+
+    def cortes(pts, e):
+        encontrados = set()
+        for otro in fijos:
+            extremos = {e["tid"], e["sid"]} & {otro["tid"], otro["sid"]}
+            for a, b in zip(pts, pts[1:]):
+                if a == b: continue
+                for c, d in zip(otro["pts"], otro["pts"][1:]):
+                    if c == d: continue
+                    vertical, otra_vertical = a[0] == b[0], c[0] == d[0]
+                    if vertical != otra_vertical:
+                        v, w, h, j = (a,b,c,d) if vertical else (c,d,a,b)
+                        punto = (v[0],h[1])
+                        if min(v[1],w[1]) <= punto[1] <= max(v[1],w[1]) and min(h[0],j[0]) <= punto[0] <= max(h[0],j[0]):
+                            # Una unión compartida en un extremo no es un cruce.
+                            if extremos and punto in pts and punto in otro["pts"]: continue
+                            encontrados.add(punto)
+                    elif not extremos:
+                        eje, otro_eje = (1,0) if vertical else (0,1)
+                        if a[otro_eje] == c[otro_eje] and max(min(a[eje],b[eje]),min(c[eje],d[eje])) < min(max(a[eje],b[eje]),max(c[eje],d[eje])):
+                            encontrados.add(((a[0]+b[0])/2,(a[1]+b[1])/2))
+        return len(encontrados)
+
+    # Los retornos interiores se colocan primero; los exteriores pueden rodearlos.
+    for e in sorted(lazos, key=lambda e: (max(p[1] for p in e["pts"])-min(p[1] for p in e["pts"]),e["id"])):
+        original = e["pts"]
+        x0 = original[2][0]
+        preferida = x0 < min(original[0][0],original[-1][0])
+        candidatos = [x0] + [x for n in range(len(lazos)+2) for x in (izquierda-26*n,derecha+26*n)]
+        def puntuar(x):
+            pts = [original[0],original[1],(x,original[2][1]),(x,original[3][1]),original[4],original[5]]
+            choques = sum(1 for ident,l,t,r,b in cajas if ident not in (e["tid"],e["sid"])
+                          for a,z in zip(pts,pts[1:]) if
+                          (a[0] == z[0] and l < a[0] < r and max(min(a[1],z[1]),t) < min(max(a[1],z[1]),b)) or
+                          (a[1] == z[1] and t < a[1] < b and max(min(a[0],z[0]),l) < min(max(a[0],z[0]),r)))
+            return (choques, cortes(pts,e), (x < min(original[0][0],original[-1][0])) != preferida, abs(x-x0)), pts
+        _, e["pts"] = min((puntuar(x) for x in candidatos), key=lambda v:v[0])
+        fijos.append(e)
+
+
 def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
     """Cada enlace entre una transición y una etapa, con su recorrido en el dibujo y su rol («pre»: la etapa es anterior)."""
     pos = posiciones(M)
@@ -108,13 +162,15 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
             if sid not in pos:
                 continue
             px, py = pos[sid]
-            if t.get("simulPre"):
-                pts = [(px, py + H), (px, ty - SIMUL - 4)]
-            elif py > ty:  # la etapa queda debajo: el enlace sube y entra en la transición por arriba, con flecha
-                alto = ty - 30
+            if py > ty:  # retorno: salir por debajo de la etapa y entrar por encima de la transición o su barra
+                fin = ty - SIMUL - BARRA_GROSOR if t.get("simulPre") else ty
+                alto = fin - 30
                 lx = _carril(lanes, left, min_x, t, tx, px)
                 bajo = salidas.get(sid, py + H + TALLO_E)
-                pts = [(px, py + H), (px, bajo), (lx, bajo), (lx, alto), (tx, alto), (tx, ty)]
+                destino_x = px if t.get("simulPre") else tx
+                pts = [(px, py + H), (px, bajo), (lx, bajo), (lx, alto), (destino_x, alto), (destino_x, fin)]
+            elif t.get("simulPre"):
+                pts = [(px, py + H), (px, ty - SIMUL - BARRA_GROSOR)]
             else:
                 pts = _bajada((px, py + H), (tx, ty), TALLO_E, TALLO_T, salidas.get(sid), True)
             out.append({"id": f"{t['id']}|{sid}|pre", "tid": t["id"], "sid": sid, "rol": "pre", "pts": pts,
@@ -131,7 +187,7 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
                             "tallos": (TALLO_T, TALLO_E), "simul": False})
                 continue
             if t.get("simulPost"):
-                pts = [(px, ty + SIMUL + 4), (px, py - H)]
+                pts = [(px, ty + SIMUL + BARRA_GROSOR), (px, py - H)]
             else:
                 pts = _bajada((tx, ty), (px, py - H), TALLO_T, TALLO_E, entradas.get(sid), False)
             out.append({"id": f"{t['id']}|{sid}|post", "tid": t["id"], "sid": sid, "rol": "post", "pts": pts,
@@ -178,12 +234,36 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
             y = min(max(y, bajo), alto) if bajo <= alto else y
             pts = [pts[0], (pts[0][0], y), (pts[-1][0], y), pts[-1]]
         e["pts"] = pts
+    _separar_lazos(M, out, pos)
+    for e in out:
+        pts = e["pts"]
+        if e["rol"] == "post" and len(pts) == 6 and pts[-3][0] > pts[-1][0] + H + 8:
+            # Retorno desde la derecha: pasar por encima de las marcas de las acciones,
+            # conservando la unión final entre la transición anterior y la etapa.
+            destino = next((s for s in M["steps"] if s["id"] == e["sid"]), {})
+            extras = []
+            for a in destino.get("actions", []):
+                extra = 20 if a["kind"] == "continuous" and a.get("cond") else {"event": 24, "activation": 20}.get(a.get("trigger"), 0)
+                extras.append(extra + (16 if extra and a.get("tmr") else 0))
+            if max(extras, default=0):
+                px, py = pos[e["sid"]]
+                seguro = min(pts[-2][1], py - H - max(extras) - 8)
+                if seguro < pts[-2][1]:
+                    e["routePts"] = pts
+                    lx = pts[-3][0]
+                    pts = pts[:2] + [(lx, pts[1][1]), (lx, seguro), (px + H + 8, seguro),
+                                    (px + H + 8, pts[-2][1]), pts[-2], pts[-1]]
+        e["pts"] = pts
         # Sube (y por tanto lleva flecha según la norma) si algún tramo va hacia arriba, ya recolocado
-        e["arriba"] = e["rol"] != "barra" and not e["simul"] and any(b[1] < a[1] for a, b in zip(pts, pts[1:]))
+        e["arriba"] = e["rol"] != "barra" and any(b[1] < a[1] for a, b in zip(pts, pts[1:]))
         e["handles"] = [{"segment": i, "pos": (a[0]+0.35*(b[0]-a[0]), a[1]+0.35*(b[1]-a[1])),
                           "axis": "x" if a[0] == b[0] else "y"}
                          for i, (a, b) in enumerate(zip(pts, pts[1:]))
                          if 0 < i < len(pts)-2 and a != b]
+        if "routePts" in e:
+            # Los dos codos protectores son automáticos; conservar los tres tiradores de la ruta original.
+            e["handles"] = [dict(h, routeSegment={1: 1, 2: 2, 5: 3}[h["segment"]])
+                            for h in e["handles"] if h["segment"] in (1, 2, 5)]
     auto = _flechas_de_lazo(out)
     for e in out:
         style = M.get("linkStyles", {}).get(e["id"], {})
@@ -232,3 +312,24 @@ def project_on_link(pts, point):
     return (best[1], best[2]) if best else (0, 0.5)
 
 
+
+
+def validar_barras(modelo, barras):
+    """La barra Y representa los precedentes o siguientes de una sola transición (REQ-MOD-03)."""
+    from .diagnostics import Diagnostic
+    diagnosticos = []
+    pasos = {s["id"] for s in modelo.get("steps", [])} | {m["id"] for m in modelo.get("hierarchy", {}).get("macros", [])}
+    transiciones = {t["id"] for t in modelo.get("transitions", [])}
+    for b in barras:
+        a, z = set(b["arriba"]), set(b["abajo"])
+        if b["kind"] != "Y" or not a or not z:
+            continue  # una barra aún sin conectar se conserva como elemento de edición
+        if (a | z) <= pasos or (a | z) <= transiciones:
+            continue  # la alternancia ya diagnostica estas parejas sin transición o sin etapa
+        divergencia = len(a) == 1 and a <= transiciones and z <= pasos
+        convergencia = a <= pasos and len(z) == 1 and z <= transiciones
+        if not (divergencia or convergencia):
+            diagnosticos.append(Diagnostic("D-SIMULTANEIDAD",
+                "La barra de simultaneidad debe agrupar las etapas de una única transición, no varias transiciones alternativas.",
+                element=b["id"]))
+    return diagnosticos

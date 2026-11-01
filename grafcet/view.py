@@ -22,7 +22,8 @@ from typing import Any, Callable
 from .builder import M, scenario
 from .diagnostics import Diagnostic, DiagnosticError
 from .editor import _coord, new_presentation
-from .engine import Session
+from .engine import Session, _Env
+from . import expressions as ex
 from .model import validate_model
 from .timeutil import format_duration
 from .values import format_value, parse_value
@@ -98,6 +99,12 @@ def display_names(doc: dict[str, Any]) -> dict[str, str]:
     for a in doc["actions"]:  # una acción del editor se nombra por su etapa (columna «Contribuyen»)
         if _INTERNO.fullmatch(a["id"]) and a["stepRef"] in out:
             out[a["id"]] = out[a["stepRef"]]
+    # Una referencia eliminada sigue siendo inválida, pero conserva el nombre escrito en sus bindings.
+    # No se vuelve a enlazar por nombre: el diagnóstico debe seguir señalando la referencia ausente.
+    for expression in doc.get("expressions", []):
+        for alias, ident in expression.get("bindings", {}).items():
+            if isinstance(alias, str) and isinstance(ident, str):
+                out.setdefault(ident, alias)
     return out
 
 
@@ -110,49 +117,56 @@ def substitute(text: str, names: dict[str, str]) -> str:
     return rx.sub(lambda mo: pairs[mo.group(1)], text)
 
 
-def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = None) -> list[dict[str, Any]]:
+def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = None,
+         key: str | None = None) -> list[dict[str, Any]]:
+    """Notación estática; con `key`, añade referencias de lectura para el color de cada subexpresión."""
     names = names or {}
     op = m["operator"]
+    def hijo(i: int) -> list[dict[str, Any]]:
+        return norm(m["operands"][i], False, names, None if key is None else f"{key}.{i}")
+    def lado(i: int) -> list[dict[str, Any]]:
+        x = m["operands"][i]
+        segs = hijo(i)
+        return _paren(segs) if _PREC.get(x["operator"], 9) < _PREC[op] else segs
     if op == "lit":
         lit = m["literal"]
         if lit["type"] == "bool":
-            return [_seg("= 1" if top and lit["value"] else ("1" if lit["value"] else "0"))]
-        if lit["type"] == "duration":
-            return [_seg(_dur(int(lit["value"])))]
-        return [_seg(lit["value"].replace(".", ","))]
-    if op == "ref":
-        return [_seg(names.get(m["reference"], m["reference"]))]
-    if op in ("active", "activePartial", "activeMacro"):
+            out = [_seg("= 1" if top and lit["value"] else "1" if lit["value"] else "0")]
+        elif lit["type"] == "duration":
+            out = [_seg(_dur(int(lit["value"])))]
+        else:
+            out = [_seg(lit["value"].replace(".", ","))]
+    elif op == "ref":
+        out = [_seg(names.get(m["reference"], m["reference"]))]
+    elif op in ("active", "activePartial", "activeMacro"):
         nombre = names.get(m["reference"], m["reference"])
-        num = re.fullmatch(r"E(\d+)", nombre) if op == "active" else None  # la etapa E1 es X1 en la notación de la norma
-        return [_seg("X"), _seg(num.group(1) if num else nombre, s=True)]
-    if op in ("rise", "fall"):
-        inner = m["operands"][0]
-        body = norm(inner, False, names)
-        if inner["operator"] not in ("ref", "active", "lit"):
-            body = _paren(body)
-        return [_seg("↑" if op == "rise" else "↓")] + body
-    if op == "not":
-        return [dict(s, o=True) for s in norm(m["operands"][0], False, names)]
-    if op == "delay":  # t1/condición/t2 de la norma; un tiempo de 0 s no se escribe (respuesta 4.4 revisada)
+        num = re.fullmatch(r"E(\d+)", nombre) if op == "active" else None
+        out = [_seg("X"), _seg(num.group(1) if num else nombre, s=True)]
+    elif op in ("rise", "fall"):
+        cuerpo = hijo(0)
+        if m["operands"][0]["operator"] not in ("ref", "active", "lit"):
+            cuerpo = _paren(cuerpo)
+        out = [_seg("↑" if op == "rise" else "↓")] + cuerpo
+    elif op == "not":
+        # La barra representa toda la negación: su color usa ese valor, no el del operando.
+        out = [dict(s, o=True, eval=[key]) if key is not None else dict(s, o=True) for s in hijo(0)]
+    elif op == "delay":
         d1, base, d2 = m["operands"]
-        out = norm(base, False, names)
+        out = hijo(1)
         if int(d1["literal"]["value"]):
-            out = norm(d1, False, names) + [_seg("/")] + out
+            out = hijo(0) + [_seg("/")] + out
         if int(d2["literal"]["value"]):
-            out += [_seg("/")] + norm(d2, False, names)
-        return out
-    if op == "neg":
-        return [_seg("−")] + norm(m["operands"][0], False, names)
-    a, b = m["operands"]
-
-    def side(x: dict[str, Any]) -> list[dict[str, Any]]:
-        segs = norm(x, False, names)
-        return _paren(segs) if _PREC.get(x["operator"], 9) < _PREC[op] else segs
-    if op in _CMP:
-        return [_seg("[")] + side(a) + [_seg(f" {_CMP[op]} ")] + side(b) + [_seg("]")]
-    sym = {"and": "·", "or": " + ", **_ARITH}[op]
-    return side(a) + [_seg(sym)] + side(b)
+            out += [_seg("/")] + hijo(2)
+    elif op == "neg":
+        out = [_seg("−")] + hijo(0)
+    elif op in _CMP:
+        out = [_seg("[")] + lado(0) + [_seg(f" {_CMP[op]} ")] + lado(1) + [_seg("]")]
+    else:
+        out = lado(0) + [_seg({"and": "·", "or": " + ", **_ARITH}[op])] + lado(1)
+    if key is not None and (op in (*_CMP, "delay", "ref", "active", "activePartial", "activeMacro", "rise", "fall")
+                            or op == "lit" and m["literal"]["type"] == "bool"):
+        out = [dict(s, eval=[*s.get("eval", []), key]) for s in out]
+    return out
 
 
 def _tiene_retardo(m: dict[str, Any]) -> bool:
@@ -247,6 +261,8 @@ class Vista:
         except (KeyError, TypeError, AttributeError):
             self.names = {}  # documento dañado: se muestran los ID tal cual
         res = validate_model(doc, options)
+        from .routing import validar_barras
+        res.diagnostics.extend(validar_barras(doc, self.bars))
         self.compile_diags = [d for d in res.diagnostics if d.blocks_start]
         self.s: Session | None = None
         self.start_diags: list = []
@@ -259,6 +275,8 @@ class Vista:
             self.start_diags = self.s.start()
         try:
             self.model = self._structure(key, title, help_text, doc, res.can_simulate, layout)
+            from .annotations import visual_notes
+            self.model["annotations"] = visual_notes(presentation or {})
             self.model["linkStyles"] = styles
             self.model["draftActions"] = self.draft_actions
             self.model["actionLayouts"] = self.action_layouts  # colocación de las acciones de cada etapa o grupo suelto
@@ -278,11 +296,11 @@ class Vista:
         names = self.names
         self.where = {t["conditionRef"]: f"transición {names[t['id']]}" for t in doc["transitions"]}
 
-        def disp(eid: str | None, top: bool = False) -> list[dict[str, Any]] | None:
+        def disp(eid: str | None, top: bool = False, color: bool = True) -> list[dict[str, Any]] | None:
             if eid is None:
                 return None
             e = exprs[eid]
-            return norm(e["meaning"], top, names) if e["mode"] == "executable" else [_seg(e["text"])]
+            return norm(e["meaning"], top, names, eid if color else None) if e["mode"] == "executable" else [_seg(e["text"])]
         acts: dict[str, list[dict[str, Any]]] = {}
         for a in doc["actions"]:
             if a["mode"] == "continuous":
@@ -298,7 +316,7 @@ class Vista:
                 trig = a["trigger"]
                 acts.setdefault(a["stepRef"], []).append({
                     "kind": "stored", "id": a["id"], "target": a["targetRef"], "trigger": trig["kind"],
-                    "text": [_seg(f"{names.get(a['targetRef'], a['targetRef'])} := ")] + disp(a["valueRef"]),
+                    "text": [_seg(f"{names.get(a['targetRef'], a['targetRef'])} := ")] + disp(a["valueRef"], color=False),
                     "event": disp(trig.get("expressionRef")), "condRef": trig.get("expressionRef"),
                     **_con_retardo(exprs.get(trig.get("expressionRef")))})
                 if trig.get("expressionRef"):
@@ -359,7 +377,7 @@ class Vista:
                              "simulPost": len([s for s in t["postRefs"] if (t["id"], s, "post") not in cubiertos]) > 1,
                              "pre": t["preRefs"], "post": t["postRefs"],
                              "partial": t["partialRef"], "cond": disp(t["conditionRef"], top=True),
-                             "conditionRef": t["conditionRef"],
+                             "conditionRef": t["conditionRef"], **_con_retardo(exprs.get(t["conditionRef"])),
                              "x": layout[t["id"]][0], "y": layout[t["id"]][1],
                              **({"comment": self.comments[t["id"]]} if t["id"] in self.comments else {})}
                             for t in doc["transitions"]],
@@ -380,15 +398,47 @@ class Vista:
         m = {"operator": "not", "operands": [{"operator": "delay", "operands": [
             lit(int(a["limitUs"])), {"operator": "active", "reference": a["stepRef"]}, lit(0)]}]}
         c = next((e for e in self.doc["expressions"] if e["id"] == a["conditionRef"]), None)
-        if base is not None and c is not None and c["mode"] == "executable":
-            m = {"operator": "and", "operands": [c["meaning"], m]}  # con la precedencia (paréntesis) de la notación
-            return norm(m, False, self.names)
-        limite = norm(m, False, self.names)
+        limite = norm(m, False, self.names, f"@limit:{a['id']}")
+        if base is not None and c is not None and c["mode"] == "executable" and c["meaning"]["operator"] == "or":
+            base = _paren(base)
         return limite if base is None else base + [_seg("·")] + limite
+
+    def _verdades(self, eventos: dict[str, bool] | None = None) -> dict[str, bool]:
+        """Lectura pura de los nodos con el mismo entorno efectivo que Session.observe()."""
+        if self.s is None or self.s.z is None:
+            return {}
+        env = _Env(self.s.cm, self.s.z, eventos, self.s.options)
+        valores = {}
+        for expresion in self.s.cm.exprs.values():
+            pendientes = [expresion.node]
+            while pendientes:
+                nodo = pendientes.pop()
+                pendientes.extend(nodo.kids)
+                if nodo.op not in (*_CMP, "delay", "ref", "active", "activePartial", "activeMacro", "lit", "rise", "fall", "not", "and", "or"):
+                    continue
+                try:
+                    valor = ex.evaluate(nodo, env)
+                except (DiagnosticError, KeyError, ArithmeticError):
+                    continue  # un cálculo no definido no se presenta como verdadero
+                if type(valor) is bool:
+                    valores[nodo.key] = valor
+        # El límite de una acción se presenta como NOT d/X, aunque no sea un nodo compilado.
+        w = self.s.z
+        for a in self.doc["actions"]:
+            if "limitUs" not in a:
+                continue
+            key = f"@limit:{a['id']}.0"
+            sid = a["stepRef"]
+            activa = env.active(sid)
+            now = w.frozen.get(self.s.cm.steps[sid].partial, w.time)
+            valores[key] = activa and now - w.since.get(sid, now) >= int(a["limitUs"])
+            valores[key + ".1"] = activa
+            valores[f"@limit:{a['id']}"] = not valores[key]
+        return valores
 
     def state(self) -> dict[str, Any]:
         s = self.s
-        out: dict[str, Any] = {}
+        out: dict[str, Any] = {"truth": {}}
         if s is None:  # no compila: se dibuja la estructura y se listan los errores
             out.update({"status": "no-compilable", "diagnostics": [self._diag(d) for d in self.compile_diags],
                         "time": "—", "situation": [], "transitions": {}, "outputs": {}, "values": {}, "temporal": {},
@@ -401,13 +451,29 @@ class Vista:
         evo = [r for r in s.trace.records if r["kind"] == "evolucion"]
         closed = next((r["kind"] for r in reversed(s.trace.records) if r["kind"] in ("estable", "fallo", "limite")), None)
         last_stable = next((r for r in reversed(s.trace.records) if r["kind"] == "estable" and "reason" not in r), None)
+        contexto = next((r for r in reversed(s.trace.records) if r["kind"] == "contexto"), None)
+        mismo_instante = contexto is not None and int(contexto["timeUs"]) == int(obs["timeUs"])
+        recientes = []
+        if mismo_instante:
+            for r in reversed(s.trace.records):
+                if r["kind"] == "contexto":
+                    break
+                recientes.extend(a for asignacion in r.get("assignments", []) for a in asignacion.get("authors", []))
+        acciones = {a for o in obs["outputs"].values() for a in o.get("contributors", [])}
+        if closed == "estable":
+            acciones.update(recientes)
+        acciones.update(f["order"] for f in obs.get("forces", []))
         out.update({
+            "activeActions": sorted(acciones),
+            "truth": self._verdades({k: True for k in contexto.get("events", [])} if mismo_instante and closed == "estable" else None),
             "time": t_s(obs["timeUs"]), "timeUs": obs["timeUs"], "situation": obs["situation"],
             "macros": obs.get("macros", {}), "forces": obs.get("forces", []),
             "virtual": obs.get("recorrido", {}).get("virtualSituation"),
             "unstable": last_stable.get("virtualSteps", []) if last_stable and closed == "estable" else [],
             "transitions": obs["transitions"], "outputs": obs["outputs"],
             "values": {k: v for k, v in obs["values"].items()},
+            "variableReadouts": {k: ("1" if v else "0") if isinstance(v, bool) else str(v).replace(".", ",")
+                                 for k, v in obs["values"].items()},
             "temporal": self._ocurrencias({k: self._temporizador(k, v, obs["timeUs"])
                                            for k, v in obs["temporal"].items()}),
             "lastCleared": evo[-1]["cleared"] if evo and closed == "estable" else [],  # un contexto fallido no franquea
@@ -461,7 +527,7 @@ class Vista:
     def _temporizador(self, key: str, v: dict[str, Any], now: int) -> dict[str, Any]:
         """Un retardo t1/condición/t2 como temporizador: dónde está, en qué estado, cuánto lleva y su preset (el de
         conexión mientras cuenta o ya venció; el de desconexión mientras se mantiene tras desaparecer la base). `shown` es
-        lo que se dibuja encima de la duración: solo el tiempo transcurrido mientras cuenta, «3 s ✓» al vencer y nada
+        lo que se dibuja encima de la duración: solo el tiempo transcurrido mientras cuenta, «3,00 s ✓» al vencer y nada
         antes de empezar."""
         spec = self.s.cm.temporals[key]
         expr = key.split(".")[0]
@@ -474,9 +540,9 @@ class Vista:
         estado = "contando" if counting else "vencido" if done else "parado"
         shown = ""
         if counting:
-            shown = t_trunc(lleva)
+            shown = f"{lleva // 1000000},{(lleva % 1000000) // 10000:02d} s"
         elif done and spec.d1:
-            shown = f"{t_s(spec.d1)} ✓"
+            shown = f"{spec.d1 // 1000000},{(spec.d1 % 1000000) // 10000:02d} s ✓"
         return {**v, "label": self.texts.get(expr, key), "expr": expr, "where": self.where.get(expr, expr),
                 "deadlineS": None if v["deadline"] == "inactive" else t_s(v["deadline"]),
                 "estado": estado, "lleva": "—" if lleva is None else t_trunc(lleva), "preset": t_s(preset),
@@ -538,7 +604,7 @@ def input_value(t: Any, text: str) -> Any:
 
 # --- Posiciones ------------------------------------------------------------------------------
 
-STEP_DY = 160     # entre una etapa y la siguiente; la transición queda a media altura (como en los ejemplos)
+STEP_DY = 120     # entre etapas: la transición queda a 60 (tres pasos de rejilla)
 BRANCH_DX = 150   # entre ramas
 PARTIAL_GAP = 260  # entre parciales, para que quepan las acciones
 

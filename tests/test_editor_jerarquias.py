@@ -877,10 +877,8 @@ class EditorDeJerarquias(unittest.TestCase):
         self.assertFalse([i for i in (rec.enclosure, rec.partial, "r-doble") if i in diag["message"]], diag["message"])
         self.assertIn(diag["element"], ("r-doble", rec.enclosure))
 
-    def test_SEDI158_pegar_ignora_la_jerarquia_y_pega_las_etapas_como_ordinarias(self):
-        """REQ-EDT-04, REQ-MOD-07: `copy` ignora las macroetapas, los recintos y las órdenes (aunque estén en la selección) y
-        trata el enlace con una macroetapa como referencia externa; `paste` pega una etapa encapsulante, de entrada o de
-        salida como ordinaria, sin estructura asociada, y el resultado no da D-FORMATO ni otro diagnóstico."""
+    def test_SEDI158_pegar_conserva_jerarquia_y_destino_externo(self):
+        """REQ-EDT-04, REQ-MOD-07: copiar macroetapa y encapsulante incluye sus contenidos y conserva el destino externo."""
         ed = nuevo()
         var = entradas(ed, "p")
         a = ed.add_step("g", "A", True)
@@ -894,23 +892,15 @@ class EditorDeJerarquias(unittest.TestCase):
         ed.add_step(g, "C", True)
         f = ed.add_force(h, g, "empty")
         self.assertEqual(ed.validate().diagnostics, [])
-        hier = copy.deepcopy((ed.model["hierarchy"], ed.model["forces"]))
-        frag = ed.copy([a, h, mac.entry, mac.exit, tp, mac.macro, mac.expansion, rec.enclosure, f])
-        self.assertEqual(sorted(x["id"] for x in frag.entities["steps"]), sorted([a, h, mac.entry, mac.exit]))
-        self.assertEqual([x["id"] for x in frag.entities["transitions"]], [tp])
-        self.assertEqual(ed.plan_paste(frag), {mac.macro: "macros", var["p"]: "variables"},
-                         "el enlace con la macroetapa es una referencia externa, como el de la variable")
-        mapping = ed.paste(frag, "g", {mac.macro: "keep", var["p"]: "keep"})
-        pegadas = [s for s in ed.model["steps"] if s["id"] in mapping.values()]
-        self.assertEqual(sorted(s["label"] for s in pegadas), ["A (copia)", "E1", "H (copia)", "S1"])  # E1 y S1 no chocan en g
-        self.assertEqual({s["kind"] for s in pegadas}, {"ordinary"})
-        self.assertEqual((ed.model["hierarchy"], ed.model["forces"]), hier, "no se crea ninguna macroetapa, recinto ni orden")
-        self.assertEqual(ed.get(h)["kind"], "enclosing", "el original no cambia")
-        self.assertEqual(ed.get(mac.entry)["kind"], "entry")
+        frag = ed.copy([a, h, mac.macro, tp, f])
+        self.assertEqual(ed.plan_paste(frag), {var["p"]: "variables", g: "partials"})
+        mapping = ed.paste(frag, "g", {var["p"]: "keep", g: "keep"})
+        self.assertEqual(ed.get(mapping[h])["kind"], "enclosing")
+        self.assertEqual(ed.get(mapping[mac.entry])["kind"], "entry")
+        self.assertEqual(ed.get(mapping[f])["targetPartialRef"], g)
+        self.assertEqual(ed.get(mapping[tp])["postRefs"], [mapping[mac.macro]])
+        self.assertEqual(ed.get(h)["kind"], "enclosing")
         self.assertEqual(ed.validate().diagnostics, [])
-        # solo jerarquía en la selección: no hay nada que copiar ni que pegar
-        vacio = ed.copy([mac.macro, mac.expansion, rec.enclosure, f])
-        self.assertEqual((vacio.entities["steps"], vacio.entities["transitions"], vacio.external_refs), ([], [], {}))
 
     def test_SEDI193_una_macroetapa_unida_a_una_barra_se_ve_unida_en_la_vista(self):
         """REQ-JER-04, REQ-MOD-03, REQ-MOD-07: una etapa y una macroetapa por encima de una barra de simultaneidad Y y la barra

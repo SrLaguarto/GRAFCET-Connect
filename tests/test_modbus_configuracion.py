@@ -9,8 +9,8 @@ from grafcet.persistence import add_document, new_project, save_project
 
 
 class ConfigTests(unittest.TestCase):
-    def test_SFIO26_escala_factoryio_100_y_migracion(self):
-        """REQ-DAT-02: entradas/salidas numéricas usan 100 incluso en mapas anteriores."""
+    def test_SFIO26_escala_factoryio_100_por_defecto_y_personalizable(self):
+        """REQ-DAT-02: entradas/salidas numéricas usan 100 por defecto y respetan las escalas guardadas."""
         import json
         from grafcet.builder import M
         doc=M().var("sensor",kind="decimal",scale=2).var("consigna","output","int").step("0",True).doc
@@ -25,7 +25,7 @@ class ConfigTests(unittest.TestCase):
                 s["escala"]="1"
             ruta.write_text(json.dumps(datos),encoding="utf-8")
             cargada=Configuracion.cargar(ruta,doc)
-            self.assertEqual([s.escala for s in cargada.senales],["100","100"])
+            self.assertEqual([s.escala for s in cargada.senales],["1","1"])
 
     def test_SFIO23_limites_de_canales_configurados(self):
         """REQ-DAT-02: rangos explícitos, asignaciones fuera y compatibilidad sin rangos."""
@@ -96,7 +96,7 @@ class ConfigTests(unittest.TestCase):
             avisos = []
             c = Configuracion.cargar(ruta, nuevo, avisos)
             self.assertEqual([s.variable for s in c.senales], ["c"], "solo se descartan las que ya no casan")
-            self.assertEqual(avisos, ["«a» ya no encaja en Input 0", "la variable de Input 1 ya no existe", "«d» ya no encaja en Holding Reg 0"])
+            self.assertEqual(avisos, ["«a» ya no encaja en Entrada 0", "la variable de Entrada 1 ya no existe", "«d» ya no encaja en Salida numérica 0"])
             self.assertEqual((c.host, c.puerto, c.unidad, c.periodo_ms, c.timeout_ms, c.canales, c.modelo),
                              ("10.0.0.5", 1502, 4, 40, 700, canales, doc["id"]), "lo demás del mapa se conserva")
             self.assertEqual(Configuracion.cargar(ruta, nuevo).senales, c.senales, "`avisos` es opcional")

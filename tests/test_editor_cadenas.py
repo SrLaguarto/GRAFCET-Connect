@@ -38,7 +38,7 @@ try:
 except ImportError:
     QT = False
 
-DY = 80  # la distancia estándar entre una etapa y su transición (escritorio.edicion.DY)
+DY = 80  # paso explícito de las pruebas del algoritmo del núcleo; el editor usa 60
 
 
 # ------------------------------------------------------------------------------------------------------ ayudas del núcleo
@@ -938,7 +938,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         from escritorio.edicion import DY as DISTANCIA
         from escritorio.diagrama import enlaces
         w, e = self.vacio()
-        self.assertEqual(DISTANCIA, DY)
+        self.assertEqual(DISTANCIA, 60)
         self.assertEqual([t for t, _ in e.menu(QPointF(600, 400))], [],
                          "sin cadenas, un hueco no ofrece equidistanciar nada")
         e.colocar("etapa", QPointF(900, 60))
@@ -965,7 +965,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         e.menu(centro(e.M, ids[1]))
         movidos = dict(e.menu(centro(e.M, ids[1])))[self.OPCION]()
         pos = self.pos(e)
-        self.assertEqual([pos[i][1] for i in ids], [60.0, 140.0, 220.0, 300.0])
+        self.assertEqual([pos[i][1] for i in ids], [60.0, 120.0, 180.0, 240.0])
         self.assertEqual({pos[i][0] for i in ids}, {0.0}, "la x no cambia")
         self.assertEqual(sorted(movidos), sorted(ids[1:]))
         self.assertEqual((len(e.ed.undo_stack), e.mensaje_info, e.mensaje), (n + 1, True, "Alturas equidistanciadas"))
@@ -978,7 +978,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         e.deshacer()
         self.assertEqual((self.pos(e), len(e.ed.undo_stack)), (pos0, n))
         e.rehacer()
-        self.assertEqual([self.pos(e)[i][1] for i in ids], [60.0, 140.0, 220.0, 300.0])
+        self.assertEqual([self.pos(e)[i][1] for i in ids], [60.0, 120.0, 180.0, 240.0])
 
     def test_SEDI248_la_seleccion_y_todo_el_lienzo_equidistancian_las_cadenas_que_tocan(self):
         """REQ-EDT-02, REQ-EDT-03: con varios elementos seleccionados, el botón derecho en un hueco o en uno de ellos ofrece
@@ -998,13 +998,13 @@ class EquidistanciarEnElDibujo(BaseQt):
         antes_b = {i: self.pos(e)[i] for i in b}
         dict(e.menu(QPointF(800, 700)))["Equidistanciar la selección"]()
         self.assertEqual(len(e.ed.undo_stack), n + 1)
-        self.assertEqual([self.pos(e)[i][1] for i in a], [60.0, 140.0, 220.0, 300.0])
+        self.assertEqual([self.pos(e)[i][1] for i in a], [60.0, 120.0, 180.0, 240.0])
         self.assertEqual({i: self.pos(e)[i] for i in b}, antes_b, "la otra cadena no se toca")
         self.assertEqual(e.sel, [a[1], a[2]])
         e.sel = []
         dict(e.menu(QPointF(800, 700)))["Equidistanciar todo el lienzo"]()
         self.assertEqual(len(e.ed.undo_stack), n + 2)
-        self.assertEqual([self.pos(e)[i][1] for i in b], [100.0, 180.0, 260.0, 340.0], "cada cadena conserva su primer nivel")
+        self.assertEqual([self.pos(e)[i][1] for i in b], [100.0, 160.0, 220.0, 280.0], "cada cadena conserva su primer nivel")
         e.deshacer()
         self.assertEqual({i: self.pos(e)[i] for i in b}, antes_b)
 
@@ -1033,7 +1033,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         n = len(e.ed.undo_stack)
         e.equidistanciar([ids[0]])
         pos = self.pos(e)
-        self.assertEqual([pos[i][1] for i in ids], [60.0, 140.0, 220.0, 380.0], "de la etapa 1 a t2: 134 + 12 + 8, a 160")
+        self.assertEqual([pos[i][1] for i in ids], [60.0, 120.0, 180.0, 340.0], "de la etapa 1 a t2: 134 + 12 + 8, a 160")
         self.assertEqual(len(e.ed.undo_stack), n + 1)
         self.app.processEvents()
         self.assertFalse([p for p in e._pares_solape(set(ids)) if ids[2] in p and ids[3] in p], "ya no se tocan")
@@ -1049,7 +1049,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         e.colocar_acciones(ids[2], "fila")
         n = len(e.ed.undo_stack)
         e.equidistanciar([ids[0]])
-        self.assertEqual([self.pos(e)[i][1] for i in ids], [60.0, 140.0, 220.0, 300.0])
+        self.assertEqual([self.pos(e)[i][1] for i in ids], [60.0, 120.0, 180.0, 240.0])
 
     def test_SEDI250_si_algo_quedaria_encima_de_otro_elemento_no_se_equidistancia_y_se_avisa(self):
         """REQ-EDT-02, REQ-EDT-05: si al equidistanciar un elemento de la cadena quedara encima de otro que no es de ella, no
@@ -1057,7 +1057,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         from escritorio.edicion import MSG_EQUIDISTANCIA
         w, e = self.vacio()
         ids = self.cadena(e, filas=((60, "0"), (100, None), (140, "1"), (180, None)))
-        e.colocar("etapa", QPointF(SX, 300))  # una etapa suelta justo donde caería la etapa 1 (y = 220) / t2 (y = 300)
+        e.colocar("etapa", QPointF(SX, 240))  # una etapa suelta donde caería t2 con el nuevo paso de 60
         suelta = e.sel[0]
         e.ed.dirty = False
         antes, n = self.estado(e), len(e.ed.undo_stack)
@@ -1068,7 +1068,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         e.ed.move(suelta, 600, 300)
         e.cambia()
         self.assertEqual(sorted(e.equidistanciar([ids[0]])), sorted(ids[1:]))
-        self.assertEqual([self.pos(e)[i][1] for i in ids], [60.0, 140.0, 220.0, 300.0])
+        self.assertEqual([self.pos(e)[i][1] for i in ids], [60.0, 120.0, 180.0, 240.0])
 
     def test_SEDI251_con_una_barra_de_simultaneidad_cada_barra_va_a_mitad_y_se_guarda_y_se_abre(self):
         """REQ-EDT-02, REQ-EDT-03, REQ-DAT-01: una barra enlazada con el ratón entre una transición y dos etapas se alcanza
@@ -1092,9 +1092,9 @@ class EquidistanciarEnElDibujo(BaseQt):
         self.assertEqual(e.sel, [barra])
         dict(e.menu(sobre))[self.OPCION]()
         pos = self.pos(e)
-        self.assertEqual([pos[i][1] for i in (*ids, a, b)], [60.0, 140.0, 220.0, 300.0, 380.0, 380.0], "a y b al mismo nivel")
+        self.assertEqual([pos[i][1] for i in (*ids, a, b)], [60.0, 120.0, 180.0, 240.0, 320.0, 320.0], "a y b al mismo nivel")
         barra_y = float(next(x for x in e.ed.bars() if x["id"] == barra)["y"])
-        self.assertEqual(barra_y, 340.0, "la barra, justo a mitad de t2 (300) y de las etapas (380)")
+        self.assertEqual(barra_y, 280.0, "la barra, justo a mitad de t2 (240) y de las etapas (320)")
         self.assertEqual(e.ed.model, modelo)
         destino = Path(self.tmp.name) / "equidistanciado"
         e.guardar(destino)
@@ -1117,7 +1117,7 @@ class EquidistanciarEnElDibujo(BaseQt):
         e.equidistanciar(None)
         self.assertEqual(corrida(e.ed.model, guion, {"marcha": False, "paro": False}), antes)
         self.assertEqual(([str(d) for d in e.ed.validate().diagnostics], e.ed.revision), (diag, revision))
-        self.assertEqual([self.pos(e)[i][1] for i in ids], [60.0, 140.0, 220.0, 300.0], "con el retorno a la etapa 0")
+        self.assertEqual([self.pos(e)[i][1] for i in ids], [60.0, 120.0, 180.0, 240.0], "con el retorno a la etapa 0")
 
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
@@ -1143,12 +1143,12 @@ class FichaDeForzado(BaseQt):
         pm, punto = propiedades.figura("forzado", 1.0, 1.0)
         self.assertTrue(pm.rect().contains(punto))
         self.assertGreater(pm.width(), pm.height(), "como la caja de una acción")
-        self.assertLess(punto.x(), 8)
+        self.assertEqual(punto.x(), 8)
 
         def contornos(clave):
             """Cuántos trazos oscuros cruza, de arriba abajo, una vertical por el borde superior de la figura (a doble tamaño)."""
             img = propiedades.figura(clave, 2.0, 1.0)[0].toImage()
-            oscuro = [img.pixelColor(100, y).alpha() > 100 and img.pixelColor(100, y).red() < 140 for y in range(26)]
+            oscuro = [img.pixelColor(100, y).alpha() > 100 and img.pixelColor(100, y).red() < 140 for y in range(64)]
             return sum(1 for k, v in enumerate(oscuro) if v and (k == 0 or not oscuro[k - 1]))
         self.assertEqual((contornos("forzado"), contornos("accion:continua")), (2, 1))
         # un clic en la ficha solo muestra su ayuda
@@ -1363,8 +1363,8 @@ class FichaDeForzado(BaseQt):
         w.show()
         self.app.processEvents()
         pa = w.paleta
-        self.assertEqual((pa.count(), pa.REJILLA.height()), (18, 34))
-        self.assertEqual(len({pa.visualItemRect(pa.item(i)).x() for i in range(pa.count())}), 1)
+        self.assertEqual((pa.count(), pa.REJILLA.height()), (20, 98))
+        self.assertEqual(len({pa.visualItemRect(pa.item(i)).x() for i in range(pa.count())}), 2)
         for i in range(pa.count()):
             pa.scrollToItem(pa.item(i))
             self.app.processEvents()
@@ -1519,35 +1519,35 @@ class GrafcetParcialSuelto(BaseQt):
     def test_SEDI280_la_ficha_grafcet_parcial_es_una_ficha_mas_de_la_paleta(self):
         """REQ-EDT-02, REQ-JER-02: la paleta ofrece «Grafcet parcial» (marco redondeado con «G») antes de «Forzado», con su
         nombre, su ayuda, su icono y la figura que se arrastra (el marco vacío, con su centro bajo el puntero); un clic solo
-        muestra su ayuda y arrastrarla lleva su clave («parcial»); con ocho fichas la paleta sigue en cuatro filas de dos."""
+        muestra su ayuda y arrastrarla lleva su clave («parcial»); Otros añade Texto e Imagen sin alterar las jerarquías."""
         from unittest import mock
         from escritorio import propiedades
         from escritorio.diagrama import VACIO_H, VACIO_W
         w, e = self.vacio()
         pa = w.paleta
         ficha = next(pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole) == "parcial")
-        self.assertEqual(pa.count(), 18)
+        self.assertEqual(pa.count(), 20)
         self.assertEqual(pa.mimeData([ficha]).text(), "parcial")
-        self.assertEqual(propiedades.COLOCABLES[-2:], ("forzado", "parcial"))
+        self.assertEqual(propiedades.COLOCABLES[-4:], ("forzado", "parcial", "texto", "imagen"))
         self.assertEqual(ficha.toolTip(), propiedades.AYUDAS["parcial"])
         ayuda = propiedades.AYUDAS["parcial"]
         for frase in ("marco redondeado", "hueco", "G1", "Renombrar", "Forzado", "otro marco", "etapas y transiciones"):
             self.assertIn(frase, ayuda)
-        # el icono: un marco redondeado (lados con tinta, esquinas sin ella) con la «G» dentro
-        img = propiedades.icono("parcial").pixmap(64, 64).toImage()
+        # el icono: un marco redondeado (lados con tinta, esquinas sin ella) con la «G» cortando la línea inferior
+        img = propiedades.figura("parcial")[0].toImage()
 
         def tinta(x, y):
             return img.pixelColor(x, y).alpha() > 0
-        self.assertTrue(tinta(32, 10) and tinta(5, 32) and tinta(32, 54) and tinta(59, 32), "los cuatro lados del marco")
-        self.assertFalse(any(tinta(x, y) for x, y in ((5, 10), (59, 10), (5, 54), (59, 54))), "con las esquinas redondeadas")
-        self.assertTrue(any(tinta(x, y) for x in range(38, 55) for y in range(36, 51)), "y la «G» dentro")
+        self.assertTrue(tinta(32, 10) and tinta(4, 70) and tinta(32, 130) and tinta(184, 70), "los cuatro lados del marco")
+        self.assertFalse(any(tinta(x, y) for x, y in ((4, 10), (184, 10), (4, 130), (184, 130))), "con las esquinas redondeadas")
+        self.assertTrue(any(tinta(x, y) for x in range(140, 158) for y in range(123, 139)), "y la «G» sobre el borde inferior")
         # la figura que se arrastra: el marco vacío (VACIO_W × VACIO_H) con el centro bajo el puntero y el interior vacío
         pm, punto = propiedades.figura("parcial", 1.0, 1.0)
-        self.assertEqual((punto.x(), punto.y()), (VACIO_W / 2 + 4, VACIO_H / 2 + 4))
+        self.assertEqual((punto.x(), punto.y()), (VACIO_W / 2 + 4, VACIO_H / 2 + 10))
         self.assertTrue(pm.rect().contains(punto))
         im = pm.toImage()
         self.assertEqual(im.pixelColor(punto.x(), punto.y()).alpha(), 0, "el interior del marco, vacío")
-        self.assertGreater(im.pixelColor(punto.x(), 4).alpha(), 0, "su borde de arriba")
+        self.assertGreater(im.pixelColor(punto.x(), 10).alpha(), 0, "su borde de arriba")
         # un clic en la ficha solo muestra su ayuda
         n = len(e.ed.undo_stack)
         pa.itemClicked.emit(ficha)
@@ -2117,7 +2117,7 @@ class OrdenDeForzadoSuelta(BaseQt):
     def test_SEDI303_soltar_la_ficha_en_un_hueco_crea_una_orden_suelta_con_su_rectangulo_doble_y_sin_efecto(self):
         """REQ-EDT-02, REQ-JER-02, REQ-EDT-05: soltar la ficha «Forzado» en un hueco, como la de una acción, crea una orden suelta
         (un borrador, una operación de deshacer, sin diálogo) que se dibuja con su rectángulo doble y «G?{?}», queda seleccionada
-        con sus opciones, avisa sin ser un error, y no tiene ningún efecto en la simulación: no está entre las órdenes del modelo."""
+        con sus opciones, bloquea Play mientras está en borrador y no está entre las órdenes del modelo."""
         from PySide6.QtWidgets import QGraphicsTextItem, QGraphicsRectItem
         w, e, d = self.con_parcial()
         e.pedir_forzado = lambda datos: self.fail("soltarla no abre el diálogo")
@@ -2140,9 +2140,9 @@ class OrdenDeForzadoSuelta(BaseQt):
         self.assertEqual((w.props.pagina, w.props.titulo.text()), ("orden", "Propiedades · Orden de forzado sin completar"))
         self.assertTrue(w.props.ficha_izq.isVisibleTo(w.props.izq))
         self.assertEqual(w.props.ficha_izq.textos_visibles(), ["Configurar orden de forzado…", "Quitar orden de forzado"])
-        avisos = [x for x in e.diagnosticos() if x["code"] == "AVISO"]
+        avisos = [x for x in e.diagnosticos() if x["code"] == "D-FORZADO-PENDIENTE"]
         self.assertEqual([(x["message"], x["blocks"], x["target"]) for x in avisos],
-                         [("Orden de forzado sin etapa: no se simula", False, did)])
+                         [("Orden de forzado sin configurar suelta", True, did)])
         self.assertTrue(e.ed.validate().can_simulate)
         self.assertEqual(self.situacion(e), ["H"], "ni la ve el motor")
         e.deshacer()
@@ -2212,8 +2212,8 @@ class OrdenDeForzadoSuelta(BaseQt):
         self.assertEqual((w.props.pagina, self.situacion(e)), ("orden", ["H"]))
         (caja,) = [c for c in w.diagrama.cajas_acciones if c["id"] == did]
         self.assertEqual((caja["etapa"], caja["forzado"]), (h, True))
-        self.assertEqual([x["message"] for x in e.diagnosticos() if x["code"] == "AVISO"],
-                         ["Orden de forzado de la etapa H sin completar (parcial destino, forma): no se simula"])
+        self.assertEqual([x["message"] for x in e.diagnosticos() if x["code"] == "D-FORZADO-PENDIENTE"],
+                         ["Orden de forzado sin configurar en la etapa H (parcial destino, forma)"])
         e.deshacer()
         self.assertEqual(self.estado(e), antes)
         # 2. del lado derecho de la etapa a la orden
@@ -2259,7 +2259,7 @@ class OrdenDeForzadoSuelta(BaseQt):
         self.assertEqual((orden["destino"], orden["forma"], orden["etapas"], len(e.ed.undo_stack)), (g1, "explicit", [b], n + 1))
         self.assertIn("G1{B}", textos())
         self.assertEqual((e.ed.model["forces"], self.situacion(e)), ([], ["H"]))
-        self.assertEqual([x["message"] for x in e.diagnosticos() if x["code"] == "AVISO"], ["Orden de forzado sin etapa: no se simula"])
+        self.assertEqual([x["message"] for x in e.diagnosticos() if x["code"] == "D-FORZADO-PENDIENTE"], ["Orden de forzado sin configurar suelta"])
         # unirla a H la completa: pasa al modelo, una sola operación, y fuerza al simular
         n = len(e.ed.undo_stack)
         self.unir(e, did, "izq", d["h"], "arriba")
@@ -2298,8 +2298,8 @@ class OrdenDeForzadoSuelta(BaseQt):
         self.unir(e, otra2, "izq", h, "arriba")
         self.assertEqual(next(x for x in e.ed.draft_actions() if x["id"] == otra2)["etapa"], h, "unida, pero le faltan las etapas")
         self.assertEqual(len(e.ed.model["forces"]), 1)
-        self.assertEqual([x["message"] for x in e.diagnosticos() if x["code"] == "AVISO"],
-                         ["Orden de forzado de la etapa H sin completar (etapas): no se simula"])
+        self.assertEqual([x["message"] for x in e.diagnosticos() if x["code"] == "D-FORZADO-PENDIENTE"],
+                         ["Orden de forzado sin configurar en la etapa H (etapas)"])
         antes, n = self.estado(e), len(e.ed.undo_stack)
         e.pedir_forzado = lambda datos: None
         self.assertIsNone(e.configurar_orden(otra2))

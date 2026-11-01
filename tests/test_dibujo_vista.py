@@ -93,14 +93,29 @@ def barras_negado(sc):
     return [it for it in sc.items() if isinstance(it, QGraphicsLineItem) and abs(it.pen().widthF() - dg.GROSOR_NEGADO) < 1e-6]
 
 
+def trazos_macro(pos, m):
+    x, y = pos[m["id"]]
+    lado = (pos[m["entry"]][0] + pos[m["exit"]][0]) / 2 - x
+    out = []
+    for k, vertical in (("entry", -dg.H), ("exit", dg.H)):
+        u, v = pos[m[k]]
+        if lado:
+            horizontal = dg.H if lado > 0 else -dg.H
+            out.append((x+horizontal, y+vertical, u-horizontal, v+vertical))
+        else:
+            t = dg.H / max(abs(u-x), abs(v-y))
+            out.append((x+(u-x)*t, y+(v-y)*t, u-(u-x)*t, v-(v-y)*t))
+    return sorted(out)
+
+
 @unittest.skipUnless(QT, "requiere PySide6")
 class Negado(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_SEDI200_la_barra_del_negado_es_una_linea_de_2_px_sobre_la_palabra(self):
-        """REQ-EDT-02: la barra de una variable negada es una línea propia de 2 px (el sobrerrayado del texto es de 1 px y
+    def test_SEDI200_la_barra_del_negado_es_una_linea_de_1_25_px_sobre_la_palabra(self):
+        """REQ-EDT-02: la barra de una variable negada es una línea propia de 1,25 px (el sobrerrayado del texto es de 1 px y
         Qt no deja regularlo) que cubre exactamente la palabra, pegada a su borde de arriba; el texto ya no lleva
         sobrerrayado."""
         m, lay = modelo_negado()
@@ -112,8 +127,8 @@ class Negado(unittest.TestCase):
                      and b.line().x2() > t.pos().x() + t.boundingRect().width() - 1.5)
         self.assertAlmostEqual(barra.line().x2() - barra.line().x1(), ancho_paro, delta=1.0)
         self.assertAlmostEqual(barra.line().x2(), t.pos().x() + t.boundingRect().width(), delta=1.5)
-        self.assertEqual(barra.pen().widthF(), 2.0)
-        self.assertEqual(barra.pen().color().rgb(), t.defaultTextColor().rgb(), "del color del texto")
+        self.assertEqual(barra.pen().widthF(), 1.25)
+        self.assertEqual(barra.pen().color().name(), dg.COL["true_text"], "NOT paro es verdadero: texto y barra resaltados")
         self.assertNotIn("overline", t.toHtml(), "la negación ya no es el sobrerrayado del texto")
         # La etiqueta de la interfaz (panel de propiedades) sigue con el sobrerrayado, que es lo único que puede dibujar
         self.assertIn("overline", dg._html([{"t": "paro", "o": True}]))
@@ -152,21 +167,21 @@ class Negado(unittest.TestCase):
                              [c[1:] for c in dg._geometria_acciones(0, 0, [normal, normal], disp)[0]])
 
     def test_SEDI203_dibujo_js_y_css_pintan_la_misma_barra(self):
-        """REQ-EDT-02: el banco web (tools/dibujo.js y dibujo.css) pinta la barra del negado como una línea propia de 2 px,
+        """REQ-EDT-02: el banco web (tools/dibujo.js y dibujo.css) pinta la barra del negado como una línea propia de 1,25 px,
         igual que Qt, y no usa el sobrerrayado del texto."""
         js = (ROOT / "tools" / "dibujo.js").read_text(encoding="utf-8")
         css = (ROOT / "tools" / "dibujo.css").read_text(encoding="utf-8")
         self.assertEqual(int(re.search(r"const GROSOR_NEGADO = (\d+)", js).group(1)), int(dg.GROSOR_NEGADO))
         self.assertNotIn("text-decoration", js)
-        self.assertIn('class:"neg"', js)
-        self.assertRegex(css, r"\.neg\{[^}]*stroke-width:2[;}]")
+        self.assertIn('class:verde ? "neg verdadero" : "neg"', js)
+        self.assertRegex(css, r"\.neg\{[^}]*stroke-width:1\.25[;}]")
         self.assertEqual(int(re.search(r"const TMR_EXTRA = (\d+)", js).group(1)), dg.TMR_EXTRA)
 
 
 class Temporizador(unittest.TestCase):
     def test_SEDI204_el_estado_del_temporizador_es_solo_lo_transcurrido(self):
         """REQ-SIM-03, REQ-TMP-01: antes de empezar no hay nada que mostrar; mientras cuenta, solo el tiempo transcurrido
-        («1 s», sin el preset); al vencer, «3 s ✓». Cada temporizador dice qué duración del texto es la suya (`token`,
+        («1 s», sin el preset); al vencer, «3,00 s ✓». Cada temporizador dice qué duración del texto es la suya (`token`,
         `nth`); la tabla de temporizadores conserva «lleva» y «preset»."""
         m, lay = modelo_temporizado()
         v = vista(m, lay)
@@ -175,12 +190,12 @@ class Temporizador(unittest.TestCase):
         por_token = {t["token"]: t for t in v.state()["temporal"].values()}
         t2, z = por_token["3s"], por_token["2s"]
         self.assertEqual((t2["estado"], t2["shown"], t2["lleva"], t2["preset"], t2["nth"]),
-                         ("contando", "1 s", "1 s", "3 s", 0))
-        self.assertEqual((z["estado"], z["shown"], z["lleva"], z["preset"]), ("contando", "0,5 s", "0,5 s", "2 s"))
+                         ("contando", "1,00 s", "1 s", "3 s", 0))
+        self.assertEqual((z["estado"], z["shown"], z["lleva"], z["preset"]), ("contando", "0,50 s", "0,5 s", "2 s"))
         v.act("avanzar", {"us": 2_000_000})  # t2 vence a los 3 s (ok es 0: no franquea); z, a los 2,5 s de q
         por_token = {t["token"]: t for t in v.state()["temporal"].values()}
         self.assertEqual([(t["estado"], t["shown"]) for t in (por_token["3s"], por_token["2s"])],
-                         [("vencido", "3 s ✓"), ("vencido", "2 s ✓")])
+                         [("vencido", "3,00 s ✓"), ("vencido", "2,00 s ✓")])
 
     def test_SEDI205_dos_temporizadores_de_la_misma_duracion_se_distinguen_por_su_orden(self):
         """REQ-TMP-01: «3s/p OR 3s/q/2s»: cada temporizador apunta a su propia aparición de «3s» en el texto; el de
@@ -217,47 +232,46 @@ class DibujoTemporizador(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_SEDI207_el_tiempo_transcurrido_va_centrado_encima_de_la_duracion(self):
-        """REQ-SIM-03, REQ-TMP-01: en la receptividad «ok·3s/XB» el «1 s» se centra encima del «3s» (no a la derecha), justo
-        sobre la línea de arriba del texto; al vencer, «3 s ✓» en el mismo sitio y en otro color; antes de empezar, nada."""
+    def test_SEDI207_el_tiempo_transcurrido_va_alineado_encima_de_la_duracion(self):
+        """REQ-SIM-03, REQ-TMP-01: en la receptividad «ok·3s/XB» el «1,00 s» se alinea con el inicio del «3s», justo
+        sobre la línea de arriba del texto; al vencer, «3,00 s ✓» en el mismo sitio y en otro color; antes de empezar, nada."""
         m, lay = modelo_temporizado()
         v = corriendo(m, lay)
         sc, _ = dibujo(v)
         cond = texto(sc, "ok·3s/XB")
-        etiqueta = texto(sc, "1 s")
+        etiqueta = texto(sc, "1,00 s")
         segs = v.model["transitions"][1]["cond"]
         lim = dg._Pintor.limites(segs, 14)
         i = [s["t"] for s in segs].index("3s")
-        centro = cond.pos().x() + (lim[i] + lim[i + 1]) / 2
+        inicio = cond.pos().x() + lim[i]
         r = etiqueta.sceneBoundingRect()
-        self.assertAlmostEqual((r.left() + r.right()) / 2, centro, delta=1.0)
-        base = etiqueta.pos().y() + dg._Pintor.ascenso(dg.TMR_TAM, True)  # línea base de la etiqueta
-        self.assertTrue(0 < cond.pos().y() - base <= 4, f"encima y pegada al texto: {cond.pos().y() - base}")
-        self.assertGreater(centro, cond.pos().x() + 10, "no está al principio del texto: se localiza midiendo")
-        self.assertLess(r.right(), cond.pos().x() + cond.boundingRect().width() + 2, "no se va a la derecha del texto")
-        self.assertEqual(etiqueta.defaultTextColor().name(), dg.COL["accent"])
-        # Antes de empezar no hay nada; al vencer, «3 s ✓» en el mismo sitio y de otro color
+        self.assertAlmostEqual(r.left(), inicio, delta=.01)
+        base = r.top() + dg._Pintor.ascenso(dg.TMR_TAM)
+        self.assertTrue(0 < cond.pos().y() - base <= 4)
+        self.assertGreater(inicio, cond.pos().x() + 10, "se localiza midiendo el token")
+        self.assertEqual(etiqueta.font().pixelSize(), 10)
+        self.assertEqual(etiqueta.defaultTextColor().name(), dg.COL["readout"])
+        # Antes de empezar no hay nada; al vencer, «3,00 s ✓» en el mismo sitio y de otro color
         sc0, _ = dibujo(vista(m, lay))
-        colores = {dg.COL["accent"], dg.COL["ok"]}
-        self.assertEqual([it.toPlainText() for it in textos(sc0) if it.defaultTextColor().name() in colores], [])
+        colores = {dg.COL["accent"], dg.COL["true_text"]}
+        self.assertEqual([it.toPlainText() for it in textos(sc0) if re.fullmatch(r"\d+,\d{2} s(?: ✓)?", it.toPlainText())], [])
         v.act("avanzar", {"us": 2_000_000})
         sc1, _ = dibujo(v)
-        hecho = texto(sc1, "3 s ✓")
-        self.assertEqual(hecho.defaultTextColor().name(), dg.COL["ok"])
-        self.assertAlmostEqual(hecho.sceneBoundingRect().center().x(), centro, delta=1.0)
+        hecho = texto(sc1, "3,00 s ✓")
+        self.assertEqual(hecho.defaultTextColor().name(), dg.COL["readout"])
+        self.assertAlmostEqual(hecho.pos().x(), inicio, delta=1.0)
 
-    def test_SEDI208_si_no_se_localiza_la_duracion_se_centra_sobre_toda_la_receptividad(self):
-        """REQ-SIM-03: un temporizador cuya duración no está en el texto (token desconocido) se centra encima de toda la
-        receptividad, no a la derecha."""
+    def test_SEDI208_si_no_se_localiza_la_duracion_se_alinea_con_toda_la_receptividad(self):
+        """REQ-SIM-03: un temporizador cuya duración no está en el texto (token desconocido) se alinea al inicio de toda la
+        receptividad como alternativa de presentación."""
         m, lay = modelo_temporizado()
         v = corriendo(m, lay)
         S = v.state()
         for t in S["temporal"].values():
             t["token"] = "9s"
         sc, _ = dibujo(v, S)
-        cond, etiqueta = texto(sc, "ok·3s/XB"), texto(sc, "1 s")
-        r = etiqueta.sceneBoundingRect()
-        self.assertAlmostEqual((r.left() + r.right()) / 2, cond.pos().x() + cond.boundingRect().width() / 2, delta=1.0)
+        cond, etiqueta = texto(sc, "ok·3s/XB"), texto(sc, "1,00 s")
+        self.assertAlmostEqual(etiqueta.pos().x(), cond.pos().x(), delta=.01)
 
     def test_SEDI209_el_tiempo_transcurrido_no_pisa_la_barra_de_la_transicion_ni_el_texto(self):
         """REQ-SIM-03: el tiempo transcurrido de una receptividad no toca el trazo de la transición, ni su designación, ni el
@@ -265,7 +279,7 @@ class DibujoTemporizador(unittest.TestCase):
         m, lay = modelo_temporizado()
         v = corriendo(m, lay, comments={"t2": "se espera"})
         sc, _ = dibujo(v)
-        r = texto(sc, "1 s").sceneBoundingRect()
+        r = texto(sc, "1,00 s").sceneBoundingRect()
         tx, ty = 220 + dg.SX, 300
         self.assertFalse(r.intersects(QRectF(tx - dg.TB, ty - 1.5, 2 * dg.TB, 3)), "no toca el trazo de la transición")
         self.assertFalse(r.intersects(QRectF(tx - 1, ty - 40, 2, 80)), "ni el enlace vertical que la cruza")
@@ -277,7 +291,7 @@ class DibujoTemporizador(unittest.TestCase):
 
     def test_SEDI210_condicion_y_evento_de_una_accion_llevan_su_tiempo_encima_de_su_duracion(self):
         """REQ-SIM-03, REQ-TMP-01: en una acción con condición temporizada, y en una memorizada con un evento con retardo,
-        el tiempo transcurrido va centrado encima de la duración del texto, por encima de la marca."""
+        el tiempo transcurrido va alineado al inicio de la duración del texto, por encima de la marca."""
         m = (M().var("go").var("q").var("r").var("y", "output").var("n", "internal", "int").step("A", True).step("B"))
         m.trans("t", ["A"], ["B"], "go")
         m.cont("B", "y", "delay(2 s, q, 0 s)")
@@ -291,10 +305,10 @@ class DibujoTemporizador(unittest.TestCase):
             cond = texto(sc, plano)
             lim = dg._Pintor.limites(segs, 13)
             i = [s["t"] for s in segs].index(dur)
-            centro = cond.pos().x() + (lim[i] + lim[i + 1]) / 2
-            etiqueta = next(it for it in textos(sc) if it.toPlainText() == "0,5 s"
-                            and abs(it.sceneBoundingRect().center().x() - centro) < 1.5)
-            base = etiqueta.pos().y() + dg._Pintor.ascenso(dg.TMR_TAM, True)
+            inicio = cond.pos().x() + lim[i]
+            etiqueta = next(it for it in textos(sc) if it.toPlainText() == "0,50 s"
+                            and abs(it.pos().x() - inicio) < .01)
+            base = etiqueta.pos().y() + dg._Pintor.ascenso(dg.TMR_TAM)
             self.assertTrue(0 < cond.pos().y() - base <= 4, (plano, cond.pos().y() - base))
 
     def test_SEDI211_el_tiempo_de_una_accion_con_retardo_no_pisa_la_caja_de_arriba(self):
@@ -306,7 +320,7 @@ class DibujoTemporizador(unittest.TestCase):
         a1, a2 = sorted(cajas, key=lambda c: c["rect"][1])
         self.assertTrue(all(c["etapa"] == "B" for c in cajas))
         hueco = a2["rect"][1] - (a1["rect"][1] + a1["rect"][3])
-        r = texto(sc, "0,5 s").sceneBoundingRect()
+        r = texto(sc, "0,50 s").sceneBoundingRect()
         self.assertGreaterEqual(r.top() - 1, a1["rect"][1] + a1["rect"][3],
                                 "el cuadro de la etiqueta queda debajo de la caja de arriba")
         self.assertEqual(hueco, 20 + dg.TMR_EXTRA + 4)
@@ -770,7 +784,7 @@ def ejemplo(clave):
 def rayas(sc):
     """Los trazos discontinuos grises (las dependencias) que hay en la escena."""
     return [it for it in sc.items() if isinstance(it, QGraphicsLineItem) and it.pen().style() == Qt.PenStyle.CustomDashLine
-            and it.pen().color().name() == dg.COL["muted"]]
+            and it.pen().color().name() in (dg.COL["muted"], dg.COL["active"])]
 
 
 def dibujo_con(v, dependencias, sel=None):
@@ -801,8 +815,7 @@ class Dependencias(unittest.TestCase):
         sc, _ = dibujo_con(v, True)
         pos = dg.posiciones(v.model)
         (m,) = v.model["macros"]
-        esperado = sorted([(pos[m["id"]][0] + dg.H, pos[m["id"]][1] - dg.H, pos[m["entry"]][0] - dg.H, pos[m["entry"]][1] - dg.H),
-                           (pos[m["id"]][0] + dg.H, pos[m["id"]][1] + dg.H, pos[m["exit"]][0] - dg.H, pos[m["exit"]][1] + dg.H)])
+        esperado = trazos_macro(pos, m)
         self.assertEqual(sorted((r.line().x1(), r.line().y1(), r.line().x2(), r.line().y2()) for r in rayas(sc)), esperado,
                          "de la macroetapa a su entrada y a su salida")
         v = ejemplo("encapsulacion")
@@ -896,11 +909,11 @@ class Dependencias(unittest.TestCase):
         js = (ROOT / "tools" / "dibujo.js").read_text(encoding="utf-8")
         self.assertIn("function drawDiagram(svg, M, S, opciones = {})", js)
         self.assertIn("const dependencias = !!opciones.dependencias;", js)
-        self.assertIn("drawFrames(frames, M, pos, dependencias, geo);", js)
-        self.assertIn("function drawFrames(g, M, pos, dependencias, geo)", js)
+        self.assertIn("drawFrames(frames, M, pos, dependencias, geo, roles);", js)
+        self.assertIn("function drawFrames(g, M, pos, dependencias, geo, roles={})", js)
         self.assertIn("if (!dependencias || !m || !pos[m.entry] || !pos[m.exit]) return;", js, "los trazos de la expansión")
         self.assertIn("if (dependencias && pos[pt.ownerStep])", js, "los de la encapsulante")
-        self.assertEqual(js.count("class:\"expline\""), 2, "todos son el mismo trazo discontinuo gris")
+        self.assertEqual(js.count('class:"expline "'), 2, "todos son trazos de dependencia, con color según actividad")
         for html_ in ("banco_de_pruebas.html", "comparador.html"):
             self.assertNotIn("dependencias", (ROOT / "tools" / html_).read_text(encoding="utf-8"), "sin botón: se ven apagadas")
         param = inspect.signature(dg.dibujar).parameters["dependencias"]
@@ -931,9 +944,9 @@ class NombreDeLaEncapsulante(unittest.TestCase):
         """El texto con el nombre de la encapsulante del recinto «R» de «encapsulacion» (el centrado sobre su marco) y su marco."""
         marco = dg.cajas_parciales(v.model)["R"]
         enc = next(p["ownerStep"] for p in v.model["partials"] if p["id"] == "R")
-        nombre, cx = v.model["names"][enc], (marco["x0"] + marco["x1"]) / 2
+        nombre, cx = v.model["names"][enc], marco["x0"] + 30
         return [it for it in sc.items() if isinstance(it, QGraphicsTextItem) and it.toPlainText() == nombre
-                and abs(it.sceneBoundingRect().center().x() - cx) < 1], marco
+                and abs(it.sceneBoundingRect().left() - cx) < 1], marco
 
     @staticmethod
     def fondos(sc, texto_):
@@ -944,7 +957,7 @@ class NombreDeLaEncapsulante(unittest.TestCase):
                 and it.brush().color() == QColor(dg.COL["panel"]) and it.sceneBoundingRect().contains(r)]
 
     def test_SEDI274_el_nombre_de_la_encapsulante_va_a_caballo_del_trazo_superior_de_su_recinto_sobre_su_fondo(self):
-        """REQ-JER-05, REQ-EDT-02: el nombre de la encapsulante se escribe centrado sobre el marco de su recinto, con su línea
+        """REQ-JER-05, REQ-EDT-02: el nombre de la encapsulante se escribe a la izquierda sobre el marco de su recinto, con su línea
         base 5 por debajo del trazo de arriba (a caballo de él, como el nombre del recinto abajo) y un fondo del color del lienzo,
         por encima del trazo, que lo corta: se ve el trazo a los lados y no entre las letras."""
         from PySide6.QtGui import QColor, QFontMetricsF, QImage, QPainter
@@ -955,13 +968,14 @@ class NombreDeLaEncapsulante(unittest.TestCase):
         r, y0 = nombre.sceneBoundingRect(), marco["y0"]
         self.assertAlmostEqual(r.top() + QFontMetricsF(nombre.font()).ascent(), y0 + 5, places=1, msg="línea base, como el de abajo")
         self.assertTrue(r.top() < y0 < r.bottom(), "a caballo del trazo")
-        self.assertAlmostEqual((r.left() + r.right()) / 2, (marco["x0"] + marco["x1"]) / 2, delta=1.0, msg="centrado")
+        self.assertAlmostEqual(r.left(), marco["x0"] + 30, delta=.01)
         (fondo,) = self.fondos(sc, nombre)
         marco_item = next(it for it in sc.items() if it.zValue() == dg.Z_FRAME and hasattr(it, "rect") and it.rect().width() > 100
                           and abs(it.rect().top() - y0) < 0.1)
         self.assertGreater(fondo.zValue(), marco_item.zValue(), "el fondo va por encima del trazo")
         self.assertGreater(nombre.zValue(), fondo.zValue(), "y el texto, por encima del fondo")
         rb = texto(sc, "R").sceneBoundingRect()
+        self.assertAlmostEqual(rb.left(), r.left(), delta=.01)
         self.assertTrue(rb.top() < marco["y1"] < rb.bottom(), "el nombre del recinto sigue sobre el trazo de abajo")
         self.assertEqual(len(self.fondos(sc, texto(sc, "R"))), 1)
         # al pintarlo: el trazo se ve a unos pocos píxeles a cada lado del nombre y se corta junto a él
@@ -982,13 +996,13 @@ class NombreDeLaEncapsulante(unittest.TestCase):
 
     def test_SEDI275_dibujo_js_coloca_el_nombre_de_la_encapsulante_igual_que_escritorio(self):
         """REQ-JER-05, REQ-EDT-02: tools/dibujo.js escribe el nombre de la encapsulante a caballo del trazo de arriba (línea base 5
-        por debajo, centrado) y el del recinto a caballo del de abajo, los dos con el fondo del color del lienzo de `framelabel`,
+        por debajo, a la izquierda) y el del recinto a caballo del de abajo, los dos con el fondo del color del lienzo de `framelabel`,
         como escritorio/diagrama.py; ya no sube por encima del marco."""
         import inspect
         js = (ROOT / "tools" / "dibujo.js").read_text(encoding="utf-8")
         css = (ROOT / "tools" / "dibujo.css").read_text(encoding="utf-8")
         self.assertNotIn("ENCIMA_MARCO", js)
-        self.assertIn("txt(g, (b.x0 + b.x1) / 2, b.y0 + 5, nameOf(M, pt.ownerStep)", js)
+        self.assertIn("txt(g, b.x0 + 30, b.y0 + 5, nameOf(M, pt.ownerStep)", js)
         self.assertIn("txt(g, b.x0 + 30, b.y1 + 5, pt.label", js)
         self.assertRegex(css, r"\.framelabel\{[^}]*paint-order:stroke;stroke:var\(--panel\)", "el fondo del color del lienzo")
         marcos = inspect.getsource(dg._marcos)
@@ -1254,14 +1268,13 @@ class DependenciasAlLadoDelRecinto(unittest.TestCase):
 
     def test_SEDI320_las_dependencias_no_cambian_la_disposicion_y_el_trazo_de_la_macroetapa_sigue_igual(self):
         """REQ-JER-04, REQ-JER-05: mostrar las dependencias solo añade sus trazos (dos por recinto); la macroetapa sigue unida a su
-        expansión por los mismos dos trazos de siempre."""
+        expansión por las rectas entre centros recortadas en las cajas."""
         v = ejemplo("macroetapa")
         pos = dg.posiciones(v.model)
         (mac,) = v.model["macros"]
         sc, _ = dibujo_con(v, True)
         lineas = sorted((r.line().x1(), r.line().y1(), r.line().x2(), r.line().y2()) for r in rayas(sc))
-        self.assertEqual(lineas, sorted([(pos[mac["id"]][0] + dg.H, pos[mac["id"]][1] - dg.H, pos[mac["entry"]][0] - dg.H, pos[mac["entry"]][1] - dg.H),
-                                         (pos[mac["id"]][0] + dg.H, pos[mac["id"]][1] + dg.H, pos[mac["exit"]][0] - dg.H, pos[mac["exit"]][1] + dg.H)]))
+        self.assertEqual(lineas, trazos_macro(pos, mac))
         m, lay = modelo_con_recinto_en("abajo")
         v = vista(m, lay)
         sin, con = dibujo_con(v, False)[0], dibujo_con(v, True)[0]
@@ -1271,7 +1284,7 @@ class DependenciasAlLadoDelRecinto(unittest.TestCase):
 MOCK_DOM = """
 function MockEl(tag) { this.tag = tag; this.attrs = {}; this.children = []; this._text = ""; }
 MockEl.prototype.setAttribute = function(k, v) { this.attrs[k] = v; };
-MockEl.prototype.appendChild = function(c) { this.children.push(c); return c; };
+MockEl.prototype.appendChild = function(c) { var i=this.children.indexOf(c); if(i>=0) this.children.splice(i,1); this.children.push(c); return c; };
 Object.defineProperty(MockEl.prototype, "textContent", {
   get: function() { return this.children.length ? this.children.map(function(c) { return c.textContent; }).join("") : this._text; },
   set: function(v) { this._text = String(v); this.children = []; }});

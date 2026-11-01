@@ -22,9 +22,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRect, QRectF
+from PySide6.QtGui import QColor, QPen, QFont
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QPushButton, QVBoxLayout, QWidget)
+                               QPushButton, QVBoxLayout, QWidget, QStylePainter, QStyleOptionComboBox, QStyle)
 
 from .bloques import COLORES, Programador
 from .diagrama import COL
@@ -44,6 +45,21 @@ class _ComboVariable(QComboBox):
     def __init__(self) -> None:
         super().__init__()
         self.al_poner: Callable[[str], None] | None = None
+
+    def paintEvent(self, _evento):
+        p = QStylePainter(self)
+        p.setRenderHint(p.RenderHint.Antialiasing)
+        caja = QRectF(26, 7, max(40,self.width()-28), self.height()-14)
+        p.setPen(QPen(QColor(COL["text"]),1.6))
+        p.setBrush(QColor(COL["glow"] if self.property("parpadeando") else COL["panel"]))
+        p.drawLine(0,self.height()//2,26,self.height()//2)
+        p.drawRect(caja)
+        opcion = QStyleOptionComboBox();self.initStyleOption(opcion)
+        opcion.rect = QRect(32,11,max(20,self.width()-40),self.height()-22)
+        opcion.frame = False
+        opcion.currentText = self.currentData() or "?"
+        p.drawComplexControl(QStyle.ComplexControl.CC_ComboBox,opcion)
+        p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel,opcion)
 
     def currentText(self) -> str:  # noqa: N802
         d = self.currentData()
@@ -86,6 +102,8 @@ class PanelAccion(QWidget):
         f.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         lay.addLayout(f)
         self.variable = _ComboVariable()
+        self.variable.setMinimumHeight(62)
+        self.variable.setAccessibleName("Variable de la acción")
         self.variable.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.variable.setMinimumContentsLength(8)
         self.variable.al_poner = self.poner_variable
@@ -205,6 +223,7 @@ class PanelAccion(QWidget):
         if firma == self._firma:
             return
         self._firma = firma
+        self.variable.setToolTip(SIN_VARIABLES if not ofrecidas else "Seleccione la salida o memoria de la acción")
         c = self.variable
         c.blockSignals(True)
         c.clear()
@@ -354,4 +373,6 @@ class PanelAccion(QWidget):
         """Colorea de naranja el campo que parpadea mientras dura la fase encendida."""
         activos = self.parpadeo.activos()
         for clave, w in (("variable", self.variable), ("valor", self.valor), ("limite", self.limite)):
+            w.setProperty("parpadeando", clave in activos)
             w.setStyleSheet(f"background: {COL['glow']}" if clave in activos else "")
+            w.update()

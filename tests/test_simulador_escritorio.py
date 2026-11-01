@@ -142,7 +142,11 @@ class Nucleo(unittest.TestCase):
         self.assertEqual(M["names"][motor], "motor")
         self.assertEqual(M["inputs"], [marcha])
         self.assertEqual(sorted(t["label"] for t in M["transitions"]), ["t1", "t2"], "sin etiqueta, t1, t2… y no el ID")
-        con = {t["label"]: t["cond"] for t in M["transitions"]}
+        con = {t["label"]: [{k: v for k, v in s.items() if k != "eval"} for s in t["cond"]] for t in M["transitions"]}
+        for t in M["transitions"]:
+            raiz = t["conditionRef"]
+            esperadas = [[raiz]] if t["label"] == "t1" else [[raiz], [raiz], [raiz + ".1", raiz], [raiz + ".1", raiz]]
+            self.assertEqual([s["eval"] for s in t["cond"]], esperadas)
         self.assertEqual(sorted(con.values(), key=lambda c: c[0]["t"]),
                          [[{"t": "2s"}, {"t": "/"}, {"t": "X"}, {"t": "1", "s": True}], [{"t": "marcha"}]])  # la etapa E1 es X1
         acc = next(a for s in M["steps"] for a in s["actions"])
@@ -215,10 +219,13 @@ class Ventana(unittest.TestCase):
         self.assertEqual((self.w.t_vars.rowCount(), self.w.t_temp.rowCount(), self.w.traza.count()), (0, 0, 0))
         self.assertFalse(any(b.isEnabled() for b in self.w.botones.values()), "sin sesión, las entradas no responden")
         self.w.a_ejecutar.setChecked(True)
+        self.w._cambiar_tipo_entrada("I00", True)  # esta prueba mantiene la entrada
         self.w.botones["I00"].click()
         self.assertEqual(self.w.v.state()["situation"], ["1"])
         self.assertEqual(self.w.botones["I00"].text(), "I00 = 1")
+        self.w._cambiar_tipo_entrada("I02", True)  # esta prueba mantiene la entrada
         self.w.botones["I02"].click()
+        self.w._cambiar_tipo_entrada("I02", True)  # esta prueba mantiene la entrada
         self.w.botones["I02"].click()
         self.assertEqual(self.w.v.state()["values"]["CT"], "1")
         self.assertTrue(any("CT" in self.w.t_vars.item(i, 0).text() for i in range(self.w.t_vars.rowCount())))
@@ -238,6 +245,7 @@ class Ventana(unittest.TestCase):
             self.assertEqual((self.w.v.model["steps"], self.w.v.model["transitions"]), before)
             self.assertEqual(self.w.v.state().get("situation", []), [], "abrir deja Pausa sin estado")
             self.w.a_ejecutar.setChecked(True)  # Play: la sesión arranca desde la situación inicial
+            self.w._cambiar_tipo_entrada("p", True)  # esta prueba mantiene la entrada
             self.w.botones["p"].click()
             self.assertEqual(self.w.v.state()["situation"], ["E1"])
             self.w.a_ejecutar.setChecked(False)
@@ -252,6 +260,7 @@ class Ventana(unittest.TestCase):
             self.assertIn("distintas de las decididas: U-03", self.w.l_lect.text(), "el aviso va en la barra de estado")
             self.assertEqual(self.w.v.state().get("situation", []), [], "cambiar la lectura deja Pausa sin estado")
             self.w.a_ejecutar.setChecked(True)  # Play: ejecución nueva con la lectura elegida
+            self.w._cambiar_tipo_entrada("p", True)  # esta prueba mantiene la entrada
             self.w.botones["p"].click()
             self.assertEqual(self.w.v.state()["situation"], ["C"], "con «recorrido» la subida llega a C")
             self.w._opciones(normalize_options(None))  # en Play: se reinicia y sigue en Play, con las lecturas decididas
@@ -285,7 +294,7 @@ class Ventana(unittest.TestCase):
         w = self.w
         w.cargar_ejemplo("temporizada")
         self.assertEqual((w.modo, w.a_ejecutar.isChecked(), w.rt.isActive()), ("editar", False, False), "abrir deja Pausa")
-        self.assertEqual(w.a_ejecutar.text(), "Ejecutar")
+        self.assertEqual(w.a_ejecutar.text(), "Play")
         self.assertIsNotNone(w.edicion)
         self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (1, 1), "paleta, propiedades y opciones")
         self.assertFalse(w.dock.isHidden())
@@ -298,10 +307,11 @@ class Ventana(unittest.TestCase):
         self.assertIn("F5", atajos)
         # Play: simula, el tiempo real corre
         w.a_ejecutar.setChecked(True)
-        self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("simular", "Pausa", True))
+        self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("simular", "Stop", True))
         self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (0, 0), "entradas y traza")
         self.assertTrue(w.dock.isHidden() and w.flechas["izquierdo"].isHidden(), "sin paleta")
         self.assertFalse(hasattr(self.w, "b_tiempo"), "ya no hay botones de tiempo lógico")
+        w._cambiar_tipo_entrada("marcha", True)  # esta prueba mantiene la entrada
         w.botones["marcha"].click()
         self.assertEqual((w.v.state()["situation"], w.v.state()["nextEvent"]), (["E1"], "3 s"))
         w._act("avanzar", us=3_000_000)  # lo que hace el tiempo real hasta el vencimiento exacto de 3 s
@@ -309,7 +319,7 @@ class Ventana(unittest.TestCase):
         self.assertIn("τ = 3 s", w.l_reloj.text())
         # Pausa: detiene y vuelve a editar
         w.a_ejecutar.setChecked(False)
-        self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("editar", "Ejecutar", False))
+        self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("editar", "Play", False))
         self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (1, 1))
         self.assertFalse(w.dock.isHidden())
         # Pausa = todo a 0 hasta un nuevo Play: sin etapas activas ni temporizadores, y las tablas no enseñan la sesión anterior
@@ -333,6 +343,7 @@ class Ventana(unittest.TestCase):
         w = self.w
         w.cargar_ejemplo("temporizada")
         w.a_ejecutar.setChecked(True)
+        w._cambiar_tipo_entrada("marcha", True)  # esta prueba mantiene la entrada
         w.botones["marcha"].click()
         self.assertEqual(w.v.state()["situation"], ["E1"])
         anterior = w.v.s
@@ -341,6 +352,7 @@ class Ventana(unittest.TestCase):
         self.assertEqual((w.v.state()["situation"], w.v.state()["time"]), (["E0"], "0 s"))
         self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.rt.isActive()), (True, "simular", True), "sigue en Play")
         self.assertEqual(w.botones["marcha"].text(), "marcha = 0", "las entradas vuelven a su valor inicial")
+        w._cambiar_tipo_entrada("marcha", True)  # esta prueba mantiene la entrada
         w.botones["marcha"].click()
         self.assertEqual(w.v.state()["situation"], ["E1"])
         w.a_ejecutar.setChecked(False)
@@ -362,7 +374,7 @@ class Ventana(unittest.TestCase):
         self.assertTrue(w.rt.isActive())
         w.cargar_ejemplo("macroetapa")  # desde Play
         self.assertEqual((w.a_ejecutar.isChecked(), w.a_ejecutar.text(), w.modo, w.rt.isActive()),
-                         (False, "Ejecutar", "editar", False))
+                         (False, "Play", "editar", False))
         self.assertEqual(w.edicion.titulo, w.v.model["title"])
         with tempfile.TemporaryDirectory() as tmp:
             w.guardar_en(Path(tmp) / "macro")
@@ -383,19 +395,24 @@ class Ventana(unittest.TestCase):
         w.cargar_ejemplo("contador-inestable")  # la etapa 2 es inestable en cada bajada de I02 y no es un error
         w.a_ejecutar.setChecked(True)
         with mock.patch.object(type(w), "_avisar_inestable", autospec=True) as aviso:
+            w._cambiar_tipo_entrada("I00", True)  # esta prueba mantiene la entrada
             w.botones["I00"].click()
+            w._cambiar_tipo_entrada("I02", True)  # esta prueba mantiene la entrada
             w.botones["I02"].click()
+            w._cambiar_tipo_entrada("I02", True)  # esta prueba mantiene la entrada
             w.botones["I02"].click()
             self.assertEqual((aviso.call_count, w.a_ejecutar.isChecked()), (0, True), "etapa inestable normal: sin aviso")
         w.a_ejecutar.setChecked(False)
         w.cargar_ejemplo("temporizada")
         w.a_ejecutar.setChecked(True)
+        w._cambiar_tipo_entrada("marcha", True)  # esta prueba mantiene la entrada
         w.botones["marcha"].click()
+        w._cambiar_tipo_entrada("fin", True)  # esta prueba mantiene la entrada
         w.botones["fin"].click()  # con marcha y fin, al vencer 3 s el ciclo no termina nunca
         w._act("avanzar", us=3_000_000)
         cuadro = w._popup_inestable
         self.assertIsNotNone(cuadro)
-        self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Ejecutar"))
+        self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Play"))
         self.assertEqual(cuadro.text(), "El GRAFCET es inestable: no alcanza una situación estable. Revise las transiciones.")
         self.assertEqual([b.text() for b in cuadro.buttons()], ["Aceptar"])
         self.assertTrue(cuadro.isModal())
@@ -416,25 +433,26 @@ class Ventana(unittest.TestCase):
         w.a_ejecutar.setChecked(False)
 
     def test_SAPP10_temporizador_en_dibujo_y_tabla(self):
-        """REQ-SIM-03: «temporizada», con E1 activa y 1 s transcurrido, muestra «1 s» (solo lo transcurrido) encima de la
-        duración de la receptividad y «1 s / 3 s» en la tabla de temporizadores; al vencer, «3 s ✓»."""
+        """REQ-SIM-03: «temporizada», con E1 activa y 1 s transcurrido, muestra «1,00 s» (solo lo transcurrido) encima de la
+        duración de la receptividad y «1 s / 3 s» en la tabla de temporizadores; al vencer, «3,00 s ✓»."""
         self.w.cargar_ejemplo("temporizada")
         self.w.a_ejecutar.setChecked(True)  # el dibujo del simulador es el de Play
         self.assertFalse(self.w.c_temp.isHidden())
         self.assertEqual(self.w.t_temp.rowCount(), 1)
         self.assertEqual(self.w.t_temp.item(0, 1).text(), "parado")
+        self.w._cambiar_tipo_entrada("marcha", True)  # esta prueba mantiene la entrada
         self.w.botones["marcha"].click()
         self.w._act("avanzar", us=1_000_000)
 
         def textos():
             return [it.toPlainText() for it in self.w.diagrama.scene().items() if hasattr(it, "toPlainText")]
-        self.assertIn("1 s", textos())
+        self.assertIn("1,00 s", textos())
         self.assertNotIn("1 s / 3 s", textos(), "ya no se escribe lo que falta: solo el tiempo transcurrido")
         fila = [self.w.t_temp.item(0, j).text() for j in range(4)]
         self.assertEqual(fila, ["transición t2", "contando", "1 s", "3 s"])
         self.w._act("avanzar", us=2_000_000)  # vence y t2 franquea: E2, y el temporizador vuelve a parado
         self.assertEqual(self.w.v.state()["situation"], ["E2"])
-        self.assertNotIn("1 s", textos())
+        self.assertNotIn("1,00 s", textos())
         self.assertEqual(self.w.t_temp.item(0, 1).text(), "parado")
         self.w.a_ejecutar.setChecked(False)
         # Un retardo en la condición de una acción: «1,5 s» mientras cuenta y «2 s ✓» al vencer, encima de su duración
@@ -446,11 +464,11 @@ class Ventana(unittest.TestCase):
         run(v, ("fijar", {"cambios": {"p": True}}), ("avanzar", {"us": 1_500_000}))
         sc = QGraphicsScene()
         dibujar(sc, v.model, v.state())
-        self.assertIn("1,5 s", [it.toPlainText() for it in sc.items() if hasattr(it, "toPlainText")])
+        self.assertIn("1,50 s", [it.toPlainText() for it in sc.items() if hasattr(it, "toPlainText")])
         self.assertEqual([t["estado"] for t in v.state()["temporal"].values()], ["contando"])
         run(v, ("avanzar", {"us": 500_000}))
         dibujar(sc, v.model, v.state())
-        self.assertIn("2 s ✓", [it.toPlainText() for it in sc.items() if hasattr(it, "toPlainText")])
+        self.assertIn("2,00 s ✓", [it.toPlainText() for it in sc.items() if hasattr(it, "toPlainText")])
         self.assertEqual(([t["estado"] for t in v.state()["temporal"].values()], v.state()["outputs"]["y"]["value"]),
                          (["vencido"], True))
 
@@ -494,6 +512,7 @@ class Ventana(unittest.TestCase):
         k = d.escala()
         self.assertGreater(k, base * 1.3)
         self.assertEqual(d.l_zoom.text(), f"{round(k * 100)} %")
+        w._cambiar_tipo_entrada("I00", True)  # esta prueba mantiene la entrada
         w.botones["I00"].click()  # refresca el dibujo
         w.refrescar()
         self.assertAlmostEqual(d.escala(), k, places=6, msg="el zoom elegido se mantiene al refrescar")
@@ -530,6 +549,7 @@ class Ventana(unittest.TestCase):
         w.a_ejecutar.setChecked(True)
         self.assertEqual(list(w.botones), [marcha])
         self.assertEqual(w.botones[marcha].text(), "marcha = 0")
+        w._cambiar_tipo_entrada(marcha, True)  # esta prueba mantiene la entrada
         w.botones[marcha].click()
         self.assertEqual(w.botones[marcha].text(), "marcha = 1")
         filas = [[w.t_vars.item(i, j).text() for j in range(2)] for i in range(w.t_vars.rowCount())]
@@ -561,7 +581,7 @@ class Ventana(unittest.TestCase):
             self.assertEqual(aviso.call_count, 1)
             self.assertIn("lecturas", aviso.call_args.args[2])
             self.assertIn("7.7", aviso.call_args.args[2])
-            self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Ejecutar"))
+            self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Play"))
             w._opciones({})  # lecturas por defecto: se puede ejecutar
             w.a_ejecutar.setChecked(True)
             self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (True, "simular"))
@@ -574,6 +594,7 @@ class Ventana(unittest.TestCase):
         w = self.w
         w.cargar_ejemplo("temporizada")
         w.a_ejecutar.setChecked(True)
+        w._cambiar_tipo_entrada("marcha", True)  # esta prueba mantiene la entrada
         w.botones["marcha"].click()
         w._act("avanzar", us=1_239_999)
         self.assertEqual(w.v.state()["time"], "1,239999 s", "el estado exacto no se toca")
@@ -582,10 +603,10 @@ class Ventana(unittest.TestCase):
         w._act("avanzar", us=1)
         self.assertEqual((w.t_temp.item(0, 2).text(), w.l_reloj.text().split(" · ")[0]), ("1,24 s", "τ = 1,24 s"))
         self.assertEqual(w.t_temp.item(0, 3).text(), "3 s")
-        self.assertEqual(w.a_ejecutar.text(), "Pausa")
+        self.assertEqual(w.a_ejecutar.text(), "Stop")
         self.assertFalse(w.a_ejecutar.icon().isNull(), "el símbolo se muestra ahora como icono de la barra")
         w.a_ejecutar.setChecked(False)
-        self.assertEqual(w.a_ejecutar.text(), "Ejecutar")
+        self.assertEqual(w.a_ejecutar.text(), "Play")
         self.assertFalse(w.a_ejecutar.icon().isNull())
 
 

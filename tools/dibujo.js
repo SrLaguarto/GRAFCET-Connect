@@ -8,7 +8,8 @@ const NS = "http://www.w3.org/2000/svg";
 // Unidad: lado de la etapa = 2·H
 const SX = 100;       // margen izquierdo del dibujo
 const H = 22;         // semilado de la etapa cuadrada
-const TB = 14;        // semilongitud del trazo de transición (≈0,65 del lado)
+const TB = 8;         // trazo de 16 px frente al lado de etapa de 44 px
+const BARRA_GROSOR = 8;
 const ACT_LINK = 26;  // enlace etapa–acción (≈0,6 del lado)
 const ACT_MIN = 80;   // anchura mínima de una acción
 const ACT_GAP = 36;   // entre cajas de acción de una fila separada
@@ -16,7 +17,7 @@ const ACT_BUS = 28;   // de la línea común de una fila separada, por debajo de
 const ACT_COL = 12;   // separación mínima entre cajas de una columna (crece lo que piden sus marcas)
 const ACT_CANAL = 7;  // de la derivación a la segunda columna de una matriz, por debajo de su fila
 const MARK = 7;       // marcas internas de la encapsulante y divisiones de la macroetapa
-const GROSOR_NEGADO = 2;  // grosor de la barra de una variable negada (el sobrerrayado del texto no se puede engrosar)
+const GROSOR_NEGADO = 1.25;  // grosor de la barra de una variable negada (el sobrerrayado del texto no se puede engrosar)
 const TMR_EXTRA = 12;     // lo que sube por encima de la condición o el evento de una acción con temporizador
 const MARGEN_MARCO_X = 26;  // lo que se separa el marco de un parcial de todo lo que dibuja de él, a izquierda y derecha...
 const MARGEN_MARCO_Y = 22;  // ... y por arriba y por abajo (el mismo de siempre alrededor de sus etapas)
@@ -38,18 +39,20 @@ function extremo(ts, fin) {
 
 // Texto con segmentos {t, o: sobrerrayado (negación), s: subíndice}. La negación es una barra propia de GROSOR_NEGADO
 // (class "neg"), arriba del texto, sobre cada tramo de segmentos negados seguidos
-function segText(parent, x, y, segs, cls, anchor="start") {
+function segText(parent, x, y, segs, cls, anchor="start", truth={}) {
   const t = el("text", {x, y, class: cls, "text-anchor": anchor}, parent);
   (segs || []).forEach(s => {
     const sp = el("tspan", {}, t); sp.textContent = s.t;
+    if ((s.eval || []).some(k => truth[k] === true)) sp.setAttribute("class", "verdadero");
     if (s.s) { sp.setAttribute("baseline-shift", "sub"); sp.setAttribute("font-size", "75%"); }
   });
   const ts = [...t.children], yb = y - ascenso(parseFloat(getComputedStyle(t).fontSize));
   for (let i = 0; i < ts.length; i++) {
     if (!segs[i].o) continue;
     let j = i;
-    while (j + 1 < ts.length && segs[j + 1].o) j++;
-    el("line", {x1:extremo(ts[i], false), x2:extremo(ts[j], true), y1:yb, y2:yb, class:"neg"}, parent);
+    const verde = (segs[i].eval || []).some(k => truth[k] === true);
+    while (j + 1 < ts.length && segs[j + 1].o && (segs[j + 1].eval || []).some(k => truth[k] === true) === verde) j++;
+    el("line", {x1:extremo(ts[i], false), x2:extremo(ts[j], true), y1:yb, y2:yb, class:verde ? "neg verdadero" : "neg"}, parent);
     i = j;
   }
   return t;
@@ -76,8 +79,8 @@ function comentario(g, x, yc, texto) {
 
 function nameOf(M, id) { return ((M && M.names) || {})[id] ?? id; }
 
-// Estado de los temporizadores de una expresión (Vista.state().temporal): el tiempo transcurrido «0,5 s» mientras cuenta
-// y «3 s ✓» al vencer, centrado justo encima de la duración del temporizador (la nth-ésima aparición de su «token» en
+// Estado de los temporizadores de una expresión (Vista.state().temporal): el tiempo transcurrido «0,50 s» mientras cuenta
+// y «3,00 s ✓» al vencer, alineado al extremo de la duración del temporizador (la nth-ésima aparición de su «token» en
 // el texto `tx`, escrito con los segmentos `segs`; si no se encuentra, encima de todo el texto) y por encima de su barra
 // si está negada. `y` es la línea base del texto. Devuelve hasta dónde llega por la derecha (0 si no dibuja nada).
 function timerText(parent, tx, segs, y, ref, S) {
@@ -88,10 +91,11 @@ function timerText(parent, tx, segs, y, ref, S) {
     const i = sitios[t.nth || 0];
     const caja = i === undefined ? tx.getBBox() : tx.children[i].getBBox();
     const negado = i === undefined ? (segs || []).some(s => s.o) : !!segs[i].o;
-    const e = txt(parent, caja.x + caja.width / 2, y - ascenso(size) - (negado ? 3 : 1), t.shown,
-                  {"text-anchor": "middle", class: `timer ${t.estado === "contando" ? "run" : "done"}`});
-    const b = e.getBBox();
-    derecha = Math.max(derecha, b.x + b.width);
+    const base = y - ascenso(size) - (negado ? 3 : 1), off = !!t.off;
+    const x = caja.x + (off ? caja.width : 0);
+    const grupo = el("g", {class: `timer-state ${t.estado === "contando" ? "run" : "done"}`}, parent);
+    const texto = txt(grupo, x, base - 1, t.shown, {"text-anchor": off ? "end" : "start", class: "timer"});
+    derecha = Math.max(derecha, off ? x : x + texto.getComputedTextLength());
   });
   return derecha;
 }
@@ -99,6 +103,33 @@ function timerText(parent, tx, segs, y, ref, S) {
 // M: modelo de la vista (etapas, macroetapas, transiciones, acciones, parciales); S: estado observado del motor;
 // opciones.dependencias (apagada por defecto, como `dependencias` de escritorio/diagrama.py): dibuja los trazos discontinuos
 // que unen una macroetapa con su expansión y una encapsulante con sus recintos. No cambia nada más del dibujo.
+function coloresElementos(M,S) {
+  const activos = new Set(S.blocked ? [] : S.situation || []), roles={};
+  Object.entries(S.macros || {}).forEach(([k,v])=>{if(v) activos.add(k);});
+  activos.forEach(k=>roles[k]="active");
+  M.transitions.forEach(t=>{const ob=(S.transitions||{})[t.id]||{};if(ob.fireable||(ob.validated&&(ob.receptivity||(S.truth||{})[t.conditionRef]===true)))roles[t.id]="active";});
+  (S.lastCleared||[]).forEach(k=>roles[k]="history");
+  const tids=new Set(M.transitions.map(t=>t.id));
+  (M.bars||[]).forEach(b=>{
+    const vecinos=[...b.arriba,...b.abajo], ts=vecinos.filter(k=>tids.has(k));
+    const colores=(ts.length ? ts : vecinos).map(k=>roles[k]);
+    if(colores.includes("active")||colores.includes("history")) roles[b.id]=colores.includes("active")?"active":"history";
+  });
+  (M.partials||[]).forEach(p=>{
+    if(activos.has(p.ownerStep)||[...M.steps,...M.macros||[]].some(e=>e.partial===p.id&&activos.has(e.id)))roles[p.id]="active";
+  });
+  return roles;
+}
+
+function colorEnlace(M, roles, e) {
+  if(e.rol==="pre") return roles[e.tid] || roles[e.sid] || "";
+  if(e.rol==="barra") {
+    const b=M.bars.find(b=>b.id===e.tid);
+    return (b.arriba.includes(e.sid) ? roles[e.sid] : roles[e.tid]) || "";
+  }
+  return roles[e.tid] || "";
+}
+
 function drawDiagram(svg, M, S, opciones = {}) {
   const dependencias = !!opciones.dependencias;
   svg.innerHTML = "";
@@ -110,31 +141,45 @@ function drawDiagram(svg, M, S, opciones = {}) {
   const unstable = new Set(S.unstable || []);
   const cleared = new Set(S.lastCleared || []);
   const blk = S.blocked, reached = new Set(blk ? blk.reached : []);
-  const frames = el("g", {}, svg), links = el("g", {}, svg), bars = el("g", {}, svg), steps = el("g", {}, svg);
+  const frames = el("g", {}, svg), annotations = el("g", {}, svg), links = el("g", {}, svg), bars = el("g", {}, svg), steps = el("g", {}, svg);
+  (M.annotations || []).forEach(n => {
+    const x=n.x+SX, y=n.y, w=n.width, h=n.height;
+    if(n.kind === "image") {
+      el("image",{x,y,width:w,height:h,href:n.data,preserveAspectRatio:"xMidYMid meet"},annotations);
+    } else if(n.kind === "text") {
+      const box=el("foreignObject",{x,y,width:w,height:h},annotations);
+      const text=document.createElementNS("http://www.w3.org/1999/xhtml","div");
+      text.setAttribute("style",`white-space:pre-wrap;overflow-wrap:anywhere;overflow:hidden;box-sizing:border-box;padding:4px;width:100%;height:100%;font-family:${n.font||"Arial"};font-size:${n.size||18}px;color:${n.color||"#172e4d"}`);
+      text.textContent=n.text||"";box.appendChild(text);
+    }
+  });
+  const roles = coloresElementos(M,S);
   const geo = {trans: {}, acc: {}};  // lo que ocupa cada transición (con sus textos) y las acciones de cada etapa: lo piden los marcos
   M.transitions.forEach(t => {
-    const tx = t.x + SX, ty = t.y, ob = (S.transitions||{})[t.id] || {};
+    const tx = t.x + SX, ty = t.y, ob = (S.transitions||{})[t.id] || {}, rol = roles[t.id] || "";
     const pre = (t.preDib || t.pre).map(p => pos[p]), post = (t.postDib || t.post).map(p => pos[p]);
     if (t.simulPre) {
       const xs = [...pre.map(p=>p.x), tx], yy = ty - 14;
-      [yy, yy-4].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl"}, links));
-      el("path", {d:`M${tx},${yy} V${ty}`, class:"link"}, links);
+      el("rect", {x:Math.min(...xs)-8,y:yy-BARRA_GROSOR+1,width:Math.max(...xs)-Math.min(...xs)+16,height:BARRA_GROSOR-2,class:"sync-gap"}, bars);
+      [yy, yy-BARRA_GROSOR].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl " + rol}, bars));
+      el("path", {d:`M${tx},${yy} V${ty}`, class:"link " + rol}, links);
     }
     if (t.simulPost) {
       const xs = [...post.map(p=>p.x), tx], yy = ty + 14;
-      [yy, yy+4].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl"}, links));
-      el("path", {d:`M${tx},${ty} V${yy}`, class:"link"}, links);
+      el("rect", {x:Math.min(...xs)-8,y:yy+1,width:Math.max(...xs)-Math.min(...xs)+16,height:BARRA_GROSOR-2,class:"sync-gap"}, bars);
+      [yy, yy+BARRA_GROSOR].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl " + rol}, bars));
+      el("path", {d:`M${tx},${ty} V${yy}`, class:"link " + rol}, links);
     }
-    if (!pre.length) el("path", {d:`M${tx},${ty-24} V${ty}`, class:"link"}, links);    // transición fuente
-    if (!post.length) el("path", {d:`M${tx},${ty} V${ty+24}`, class:"link"}, links);   // transición sumidero
-    const cls = ["tr", ob.validated?"validated":"", ob.fireable?"fireable":"", cleared.has(t.id)?"cleared":"",
+    if (!pre.length) el("path", {d:`M${tx},${ty-24} V${ty}`, class:"link " + rol}, links);    // transición fuente
+    if (!post.length) el("path", {d:`M${tx},${ty} V${ty+24}`, class:"link " + rol}, links);   // transición sumidero
+    const cls = ["tr", roles[t.id] || "", ob.validated?"validated":"", ob.fireable?"fireable":"", cleared.has(t.id)?"cleared":"",
                  blk && blk.element === t.id ? "question" : ""].join(" ");
     const g = el("g", {class:cls}, bars);
     el("title", {}, g).textContent = `Transición ${t.label}: validada ${ob.validated?"sí":"no"}, receptividad ${ob.receptivity?"verdadera":"falsa"}` +
       (ob.forced ? "; su parcial está forzado y no evoluciona" : "");
     el("line", {x1:tx-TB, x2:tx+TB, y1:ty, y2:ty, class:"bar"}, g);
     const tl = t.showLabel !== false ? txt(g, tx-TB-6, ty+5, `(${t.label})`, {"text-anchor":"end", class:"tdes"}) : null;
-    const tc = segText(g, tx+TB+8, ty+5, t.cond, "tcond");
+    const tc = segText(g, tx+TB+8, ty+5, t.cond, "tcond", "start", S.truth || {});
     geo.trans[t.id] = cajaTransicion(t, tx, ty, pre.filter(q => q), post.filter(q => q), tl ? tl.getComputedTextLength() : null,
                                      t.cond && t.cond.length ? tc.getComputedTextLength() : null);
     const derecha = timerText(g, tc, t.cond, ty+5, t.conditionRef, S);
@@ -145,12 +190,14 @@ function drawDiagram(svg, M, S, opciones = {}) {
   });
   // Exactamente los mismos recorridos que Qt y la detección del ratón.
   (M.links || []).forEach(e => {
-    el("path", {d:e.pts.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" "), class:"link"}, links);
-    (e.arrows || []).forEach(a => el("path", {d:a.pts.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" ")+" Z", class:"arrow"}, links));
+    const rol = colorEnlace(M, roles, e);
+    el("path", {d:e.pts.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" "), class:"link " + rol}, links);
+    (e.arrows || []).forEach(a => el("path", {d:a.pts.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" ")+" Z", class:"arrow " + rol}, links));
   });
   (M.bars || []).forEach(b => {
-    const x = b.x + SX;
-    [0, ...(b.kind === "Y" ? [4] : [])].forEach(dy => el("line", {x1:x, x2:x+b.ancho, y1:b.y+dy, y2:b.y+dy, class:"dbl"}, links));
+    const x = b.x + SX, rol = roles[b.id] || "";
+    if(b.kind === "Y") el("rect", {x,y:b.y+1,width:b.ancho,height:BARRA_GROSOR-2,class:"sync-gap"}, bars);
+    [0, ...(b.kind === "Y" ? [BARRA_GROSOR] : [])].forEach(dy => el("line", {x1:x, x2:x+b.ancho, y1:b.y+dy, y2:b.y+dy, class:"dbl " + rol}, bars));
   });
   M.steps.forEach(s => {
     const p = pos[s.id], stale = !!blk && situation.has(s.id), act = !blk && situation.has(s.id);
@@ -177,7 +224,7 @@ function drawDiagram(svg, M, S, opciones = {}) {
     if (uns) txt(g, p.x, p.y+H+13, "fue inestable", {"text-anchor":"middle", class:"tag vtag"});
     if (stale) txt(g, p.x, p.y+H+13, "último estable", {"text-anchor":"middle", class:"tag stag"});
     if (cand) txt(g, p.x, p.y+H+13, "alcanzada, sin confirmar", {"text-anchor":"middle", class:"tag ctag"});
-    const xr = drawActions(g, p, s.actions, S, s.actionLayout, geo.acc[s.id] = []);
+    const xr = drawActions(g, Object.assign({id:s.id},p), s.actions, S, s.actionLayout, geo.acc[s.id] = []);
     if (s.comment) comentario(g, (xr ?? p.x + H) + 10, p.y, s.comment);  // a la derecha de la etapa o de su última acción
   });
   (M.macros || []).forEach(m => {  // macroetapa: divisiones horizontales superior e inferior
@@ -189,7 +236,7 @@ function drawDiagram(svg, M, S, opciones = {}) {
     el("line", {x1:p.x-H, x2:p.x+H, y1:p.y+H-MARK, y2:p.y+H-MARK, class:"hmark"}, g);
     txt(g, p.x, p.y+5, nameOf(M, m.id), {"text-anchor":"middle"});
   });
-  drawFrames(frames, M, pos, dependencias, geo);  // (al final, con todo medido; el grupo de los marcos va el primero: queda debajo)
+  drawFrames(frames, M, pos, dependencias, geo, roles);  // (al final, con todo medido; el grupo de los marcos va el primero: queda debajo)
   const b = svg.getBBox();
   svg.setAttribute("viewBox", `${b.x-14} ${b.y-14} ${b.width+28} ${b.height+28}`);
 }
@@ -201,8 +248,8 @@ function cajaTransicion(t, tx, ty, pre, post, wl, wc) {
   const unir = (x0, y0, x1, y1) => { r = [Math.min(r[0], x0), Math.min(r[1], y0), Math.max(r[2], x1), Math.max(r[3], y1)]; };
   if (wl !== null) unir(tx - TB - 6 - wl, ty - 12, tx - TB - 6, ty + 9);
   if (wc !== null) unir(tx + TB + 8, ty - 12, tx + TB + 8 + wc, ty + 9);
-  if (t.simulPre) { const xs = [...pre.map(q => q.x), tx]; unir(Math.min(...xs) - 8, ty - SIMUL - 4, Math.max(...xs) + 8, ty - SIMUL); }
-  if (t.simulPost) { const xs = [...post.map(q => q.x), tx]; unir(Math.min(...xs) - 8, ty + SIMUL, Math.max(...xs) + 8, ty + SIMUL + 4); }
+  if (t.simulPre) { const xs = [...pre.map(q => q.x), tx]; unir(Math.min(...xs) - 8, ty - SIMUL - BARRA_GROSOR, Math.max(...xs) + 8, ty - SIMUL); }
+  if (t.simulPost) { const xs = [...post.map(q => q.x), tx]; unir(Math.min(...xs) - 8, ty + SIMUL, Math.max(...xs) + 8, ty + SIMUL + BARRA_GROSOR); }
   return r;
 }
 
@@ -256,13 +303,23 @@ function contenidoParciales(M, pos, geo) {
     e.pts.forEach(q => anotar(pid, q[0], q[1], q[0], q[1]));
   });
   (M.bars || []).forEach(b => {
-    const x = b.x + SX, h = b.kind === "Y" ? 4 : 0;
+    const x = b.x + SX, h = b.kind === "Y" ? BARRA_GROSOR : 0;
     [...b.arriba, ...b.abajo].forEach(i => anotar(de[i], x, b.y, x + b.ancho, b.y + h));
   });
   return out;
 }
 
-function drawFrames(g, M, pos, dependencias, geo) {
+function dependenciaCajas(a, b, superior=true, lado=b.x-a.x) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  if (lado === 0) {
+    const k = dx || dy ? Math.min(.5, H / Math.max(Math.abs(dx), Math.abs(dy))) : 0;
+    return [{x:a.x+dx*k,y:a.y+dy*k},{x:b.x-dx*k,y:b.y-dy*k}];
+  }
+  const hx = lado > 0 ? H : -H, hy = superior ? -H : H;
+  return [{x:a.x+hx,y:a.y+hy},{x:b.x-hx,y:b.y+hy}];
+}
+
+function drawFrames(g, M, pos, dependencias, geo, roles={}) {
   const parts = M.partials || [];
   const box = {};
   const dibujado = contenidoParciales(M, pos, geo);
@@ -292,7 +349,10 @@ function drawFrames(g, M, pos, dependencias, geo) {
       const m = (M.macros || []).find(x => x.id === pt.macro);
       if (!dependencias || !m || !pos[m.entry] || !pos[m.exit]) return;
       const mp = pos[m.id], ep = pos[m.entry], sp = pos[m.exit];
-      el("path", {d:`M${mp.x+H},${mp.y-H} L${ep.x-H},${ep.y-H} M${mp.x+H},${mp.y+H} L${sp.x-H},${sp.y+H}`, class:"expline"}, g);
+      [ep, sp].forEach((p, i) => {
+        const [a, b] = dependenciaCajas(mp, p, i === 0, (ep.x + sp.x) / 2 - mp.x);
+        el("path", {d: `M${a.x},${a.y} L${b.x},${b.y}`, class:"expline " + (roles[m.id] || "")}, g);
+      });
       return;
     }
     const b = frame(pt.id);
@@ -301,16 +361,16 @@ function drawFrames(g, M, pos, dependencias, geo) {
       if (dependencias && pos[pt.ownerStep]) {
         const o = pos[pt.ownerStep], dueno = M.steps.find(s => s.id === pt.ownerStep);
         dependenciasRecinto(b, o.x, o.y, !!(dueno && dueno.initial)).forEach(([desde, hasta]) =>
-          el("path", {d:`M${desde[0]},${desde[1]} L${hasta[0]},${hasta[1]}`, class:"expline"}, g));
+          el("path", {d:`M${desde[0]},${desde[1]} L${hasta[0]},${hasta[1]}`, class:"expline " + (roles[pt.id] || "")}, g));
       }
-      el("rect", {x:b.x0, y:b.y0, width:b.x1-b.x0, height:b.y1-b.y0, class:"frame enclosure"}, g);
-      // el nombre de la encapsulante, centrado a caballo del trazo de arriba, y el del recinto, a la izquierda del de abajo: el fondo
+      el("rect", {x:b.x0, y:b.y0, width:b.x1-b.x0, height:b.y1-b.y0, class:"frame enclosure " + (roles[pt.id] || "")}, g);
+      // el nombre de la encapsulante, a la izquierda a caballo del trazo de arriba, y el del recinto, a la izquierda del de abajo: el fondo
       // del color del lienzo de `framelabel` corta el trazo y deja leerlos; igual en escritorio/diagrama.py
-      txt(g, (b.x0 + b.x1) / 2, b.y0 + 5, nameOf(M, pt.ownerStep), {"text-anchor":"middle", class:"framelabel"});
-      txt(g, b.x0 + 30, b.y1 + 5, pt.label, {class:"framelabel"});
+      txt(g, b.x0 + 30, b.y0 + 5, nameOf(M, pt.ownerStep), {class:"framelabel " + (roles[pt.id] || "")});
+      txt(g, b.x0 + 30, b.y1 + 5, pt.label, {class:"framelabel " + (roles[pt.id] || "")});
     } else {
-      el("rect", {x:b.x0, y:b.y0, width:b.x1-b.x0, height:b.y1-b.y0, rx:16, class:"frame"}, g);
-      txt(g, b.x1 - 30, b.y1 + 5, pt.label, {"text-anchor":"end", class:"framelabel"});
+      el("rect", {x:b.x0, y:b.y0, width:b.x1-b.x0, height:b.y1-b.y0, rx:16, class:"frame " + (roles[pt.id] || "")}, g);
+      txt(g, b.x0 + 30, b.y1 + 5, pt.label, {class:"framelabel " + (roles[pt.id] || "")});
     }
   });
 }
@@ -327,17 +387,24 @@ function actionExtra(a) {
 // condición o evento encima, el que éstos necesitan para no invadir a la caja vecina; las cajas de una columna miden
 // lo mismo (el mayor), por eso se devuelven los rectángulos para ajustarlos al final.
 function drawAction(g, ax, cy, a, S) {
-  const on = a.kind === "continuous" ? !!(S.outputs && S.outputs[a.target] && S.outputs[a.target].value)
+  const on = "activeActions" in S ? S.activeActions.includes(a.id) && !a.borrador : a.kind === "continuous" ? !!(S.outputs && S.outputs[a.target] && S.outputs[a.target].value)
     : a.kind === "force" ? (S.forces || []).some(f => f.order === a.id) : false;
   const ga = el("g", {class:`act ${on?"on":""} ${a.kind === "force" ? "force" : ""}`}, g);
   const rect = el("rect", {x:ax, y:cy-H, height:2*H, width:ACT_MIN}, ga);
   const inner = a.kind === "force" ? el("rect", {x:ax+3, y:cy-H+3, height:2*H-6, width:ACT_MIN-6, class:"inner"}, ga) : null;
   const label = segText(ga, ax + 12, cy + 5, a.text, "atext");
+  const valor = (S.variableReadouts || {})[a.target];
+  if(a.kind === "stored" && valor !== undefined) {
+    const nombre = a.text[0].t.split(":=")[0].replace(/\s+$/, "");
+    const ancho = label.getSubStringLength ? label.getSubStringLength(0,nombre.length)
+      : label.children[0].getBBox().width * nombre.length / a.text[0].t.length;
+    el("text", {x:ax+12+ancho/2, y:cy-10, class:"variable-value", "text-anchor":"middle"}, ga).textContent = valor;
+  }
   let w = Math.max(ACT_MIN, label.getComputedTextLength() + 24);
   const mx = ax + 12, top = cy - H, bottom = cy + H;
   if (a.kind === "continuous" && a.cond) {             // acción condicionada: trazo y condición
     el("line", {x1:mx, x2:mx, y1:top, y2:top-14, class:"amark"}, ga);
-    const ac = segText(ga, mx+5, top-4, a.cond, "acond");
+    const ac = segText(ga, mx+5, top-4, a.cond, "acond", "start", S.truth || {});
     w = Math.max(w, 12 + 5 + ac.getComputedTextLength() + 8);
     timerText(ga, ac, a.cond, top-4, a.condRef, S);
   } else if (a.trigger === "activation") {            // memorizada al activar: flecha hacia arriba
@@ -349,12 +416,19 @@ function drawAction(g, ax, cy, a, S) {
   } else if (a.trigger === "event") {                 // memorizada por evento: banderita y evento
     el("line", {x1:mx, x2:mx, y1:top, y2:top-20, class:"amark"}, ga);
     el("path", {d:`M${mx},${top-20} L${mx-9},${top-15} L${mx},${top-10} Z`, class:"ahead"}, ga);
-    const ev = segText(ga, mx+5, top-11, a.event, "acond");
+    const ev = segText(ga, mx+5, top-11, a.event, "acond", "start", S.truth || {});
     w = Math.max(w, 12 + 5 + ev.getComputedTextLength() + 8);
     timerText(ga, ev, a.event, top-11, a.condRef, S);
   }
   const ajustar = ancho => { rect.setAttribute("width", ancho); if (inner) inner.setAttribute("width", ancho - 6); };
   ajustar(w);
+  if (g._contornosActivos) g.appendChild(g._contornosActivos);
+  if (on) {
+    const capa = g._contornosActivos || (g._contornosActivos = el("g", {class:"active-outlines"}, g));
+    const borde = el("rect", {x:ax, y:cy-H, height:2*H, width:w}, capa);
+    const original = ajustar;
+    return {w, ajustar: ancho => { original(ancho); borde.setAttribute("width", ancho); }};
+  }
   return {w, ajustar};
 }
 
@@ -369,12 +443,12 @@ function drawActions(g, p, actions, S, layout = "fila", rects = []) {
   let ax = p.x + H + ACT_LINK;
   const punto = (x, y) => rects.push([x, y, x, y]);
   const caja = (x, cy, w, a) => { const [arriba, abajo] = actionExtra(a); rects.push([x, cy - H - arriba, x + w, cy + H + abajo]); };
-  el("line", {x1:p.x+H, x2:ax, y1:p.y, y2:p.y, class:"link"}, g);
+  el("line", {x1:p.x+H, x2:ax, y1:p.y, y2:p.y, class:"link " + ((S.situation||[]).includes(p.id) && !S.blocked ? "active" : "")}, g);
   punto(p.x + H, p.y);
   punto(ax, p.y);
   const linea = pts => {
     pts.forEach(q => punto(q[0], q[1]));
-    el("path", {d:pts.map((q, i) => `${i ? "L" : "M"}${q[0]},${q[1]}`).join(" "), class:"link", fill:"none"}, g);
+    el("path", {d:pts.map((q, i) => `${i ? "L" : "M"}${q[0]},${q[1]}`).join(" "), class:"link " + ((S.situation||[]).includes(p.id) && !S.blocked ? "active" : ""), fill:"none"}, g);
   };
   if (layout === "columna") {
     const ys = [p.y];

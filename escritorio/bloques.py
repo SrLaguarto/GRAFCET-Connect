@@ -511,8 +511,8 @@ COLORES = {"entrada": "#278B87", "salida": "#43845E", "interna": "#B27A39", "eta
            "operador": "#486078", "comparacion": "#398C9E", "tiempo": "#A38636", "texto": "#6B7280", "error": "#C0392B",
            "y": "#5F7F0B", "o": "#B83DBA",  # «y» (oliva) y «o» (fucsia): operadores, pero cada uno con su color
            "constante": "#8A5A44"}  # las fichas 1 (verdadero) y 0 (falso): su propia carpeta, no se pierden entre los operadores
-CATEGORIAS = (("operador", "Operadores"), ("constante", "Constantes"), ("entrada", "Entradas"), ("salida", "Salidas"),
-              ("etapa", "Etapas (X)"), ("interna", "Memorias"), ("comparacion", "Comparaciones"), ("tiempo", "Temporizadores"))
+CATEGORIAS = (("entrada", "Entradas"), ("etapa", "Etapas (X)"), ("interna", "Memorias"), ("operador", "Operadores"),
+              ("tiempo", "Temporizadores"), ("comparacion", "Comparaciones"), ("salida", "Salidas"), ("constante", "Constantes"))
 CATEGORIAS_VALOR = (("numero", "Número"), ("vnum", "Variables"), ("aritm", "Operadores"))  # modo «valor»
 _PAPEL_CAT = {"input": "entrada", "output": "salida", "internal": "interna"}
 PADX, PADX_PILA, PADV, GAP, FILA = 10, 7, 3, 4, 3  # relleno lateral y vertical de un bloque, hueco entre piezas y entre filas
@@ -1633,9 +1633,10 @@ class Programador(QWidget):
     PALETA_MIN, PALETA_MAX = 110, 240  # la columna de bloques mide lo justo para el más ancho, entre estos límites
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], historial: bool = False,
-                 ampliable: bool = True, grupo: str | None = None, valor: bool = False) -> None:
+                 ampliable: bool = True, grupo: str | None = None, valor: bool = False, compacto: bool = False) -> None:
         super().__init__()
         self.fuente, self.historial, self.valor = fuente, historial, valor
+        self.compacto = compacto
         self.lista_categorias = CATEGORIAS_VALOR if valor else CATEGORIAS
         self.grupo = grupo or f"programador-{id(self)}"
         self.al_deshacer: Callable[[], Any] | None = None
@@ -1693,6 +1694,7 @@ class Programador(QWidget):
         self.lienzo.avisa.connect(self._avisar)
         derecha.addWidget(_desplazable(self.lienzo), 1)  # el área es la que crece
         pie = QHBoxLayout()
+        self.pie = pie
         pie.setContentsMargins(0, 0, 0, 0)
         self.aviso = QLabel()
         self.aviso.setWordWrap(True)
@@ -1710,7 +1712,7 @@ class Programador(QWidget):
         pie.addWidget(self.papelera)
         derecha.addLayout(pie)
         lay.addLayout(derecha, 1)
-        self.setMinimumHeight(112)
+        self.setMinimumHeight(116 if compacto else 112)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         if historial:
             for atajo, f in (("Ctrl+Z", self.deshacer), ("Ctrl+Shift+Z", self.rehacer), ("Ctrl+Y", self.rehacer)):
@@ -1720,7 +1722,7 @@ class Programador(QWidget):
         self.elegir_categoria("numero" if valor else "entrada")
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        return QSize(self._sc_paleta.width() + 180, 112)
+        return QSize(self._sc_paleta.width() + 180, 116 if self.compacto else 112)
 
     # -- paleta
     def _cargar_paleta(self, clave: str) -> None:
@@ -1744,6 +1746,16 @@ class Programador(QWidget):
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
         self._cargar_paleta(self.paleta.clave)
+
+    def resizeEvent(self, event: Any) -> None:
+        super().resizeEvent(event)
+        if self.compacto:
+            carpetas = self._sc_carpetas.widget()
+            ancho = carpetas.minimumSizeHint().width()
+            alto = carpetas.sizeHint().height()+2
+            if ancho > self._sc_carpetas.viewport().width():
+                alto += self._sc_carpetas.horizontalScrollBar().sizeHint().height()
+            self._sc_carpetas.setFixedHeight(max(30, alto))
 
     def refrescar(self) -> None:
         """Las variables o las etapas del modelo cambiaron (se creó, renombró, quitó o cambió de papel o tipo una

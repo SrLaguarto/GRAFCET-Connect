@@ -7,23 +7,9 @@
   "modelo": "prueba-factoryio-digital",
   "senales": [
     {
-      "variable": "PM",
-      "area": "discrete",
-      "direccion": 0,
-      "formato": "BOOL",
-      "escala": "1"
-    },
-    {
       "variable": "Q00",
       "area": "coil",
       "direccion": 0,
-      "formato": "BOOL",
-      "escala": "1"
-    },
-    {
-      "variable": "Q01",
-      "area": "coil",
-      "direccion": 1,
       "formato": "BOOL",
       "escala": "1"
     }

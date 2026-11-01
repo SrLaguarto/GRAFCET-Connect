@@ -10,19 +10,20 @@ from __future__ import annotations
 
 import copy
 import html
+import json
 import re
 import shutil
 import time
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer, QSize
-from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtCore import QObject, QEvent, QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer, QSize, QRectF, QPointF
+from PySide6.QtGui import QCursor, QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
                                QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QRadioButton,
                                QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
-                               QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle)
+                               QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle, QMenu, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
 
 from grafcet.diagnostics import DiagnosticError
 from grafcet.engine import Session
@@ -35,9 +36,10 @@ from grafcet.view import Vista, auto_layout, layout_from_presentation, presentat
 from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion
 from .propiedades import PanelPropiedades, Paleta
+from .paneles import PanelPlegable, DivisorPlegable, PilaActual
 from .variables import PanelVariables
 from .entradas_salidas import CONEXION_INICIAL, PanelES
-from conexion.configuracion import ARCHIVO, Configuracion
+from conexion.configuracion import ARCHIVO, CANALES_INICIALES, Configuracion
 from conexion.coordinador import Coordinador
 
 TITULO = "Simulador GRAFCET"
@@ -224,6 +226,20 @@ def _icono_grafcet() -> QIcon:
     return QIcon(pm)
 
 
+def _trazos_reinicio() -> tuple[QPainterPath, QPainterPath]:
+    """Arco abierto arriba y punta angular, según la referencia del responsable."""
+    arco = QPainterPath()
+    arco.arcMoveTo(QRectF(4, 4, 16, 16), 90)
+    arco.arcTo(QRectF(4, 4, 16, 16), 90, -315)
+    extremo = arco.currentPosition()
+    t = QPointF(2 ** -.5, -2 ** -.5)
+    vertice = extremo + t * 3
+    punta = QPainterPath(vertice - QPointF(5, 0))
+    punta.lineTo(vertice)
+    punta.lineTo(vertice + QPointF(0, 5))
+    return arco, punta
+
+
 def _icono_barra(tipo: str, color: str = "#147f80") -> QIcon:
     """Iconos de línea propios para los controles de la aplicación (no son notación GRAFCET)."""
     pm = QPixmap(48, 48)
@@ -242,7 +258,6 @@ def _icono_barra(tipo: str, color: str = "#147f80") -> QIcon:
         "deshacer": [[(8, 4), (3, 9), (8, 14)], [(3, 9), (13, 9), (18, 11), (20, 15), (18, 20)]],
         "rehacer": [[(16, 4), (21, 9), (16, 14)], [(21, 9), (11, 9), (6, 11), (4, 15), (6, 20)]],
         "debajo": [[(6, 4), (18, 4)], [(12, 8), (12, 21)], [(7, 16), (12, 21), (17, 16)]],
-        "reiniciar": [[(19, 9), (19, 3), (14, 7)], [(19, 6), (14, 4), (8, 5), (4, 10), (5, 16), (10, 20), (16, 19), (19, 15)]],
         "pausa": [[(8, 5), (8, 19)], [(16, 5), (16, 19)]],
         "conexion": [[(3, 5), (10, 5), (10, 11), (3, 11), (3, 5)], [(14, 13), (21, 13), (21, 20), (14, 20), (14, 13)],
                      [(6, 11), (6, 17), (14, 17)], [(17, 13), (17, 8), (10, 8)]],
@@ -254,6 +269,18 @@ def _icono_barra(tipo: str, color: str = "#147f80") -> QIcon:
         path.lineTo(7, 20)
         path.closeSubpath()
         p.fillPath(path, QColor(color))
+    elif tipo == "stop":
+        p.fillRect(QRectF(6, 6, 12, 12), QColor(color))
+    elif tipo == "dependencias":
+        p.drawRect(QRectF(2, 9, 6, 6))
+        p.drawRoundedRect(QRectF(15, 3, 8, 18), 1, 1)
+        pen = p.pen();pen.setStyle(Qt.PenStyle.DashLine);pen.setWidthF(1.2);p.setPen(pen)
+        p.drawLine(QPointF(8, 9), QPointF(15, 3))
+        p.drawLine(QPointF(8, 15), QPointF(15, 21))
+    elif tipo == "reiniciar":
+        arco, punta = _trazos_reinicio()
+        p.drawPath(arco)
+        p.drawPath(punta)
     for trazo in trazos.get(tipo, []):
         path = QPainterPath()
         path.moveTo(*trazo[0])
@@ -262,6 +289,61 @@ def _icono_barra(tipo: str, color: str = "#147f80") -> QIcon:
         p.drawPath(path)
     p.end()
     return QIcon(pm)
+
+
+class _BotonEntrada(QPushButton):
+    """El estado marcado sigue el valor de la entrada, no el automatismo checkable de Qt."""
+    def __init__(self) -> None:
+        super().__init__()
+        self.setCheckable(True)
+        self.control = self.enclavado = self.liberar = self.interruptor = False
+
+    def mousePressEvent(self, event: Any) -> None:  # noqa: N802
+        self.control = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+        super().mousePressEvent(event)
+
+    def indicar(self, on: bool) -> None:
+        estado = (self.interruptor, self.enclavado, on)
+        if estado == getattr(self, "_indicador", None):
+            return
+        self._indicador = estado
+        pm = QPixmap(20, 16)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        color = QColor("#147f80" if on else "#718a85")
+        p.setPen(QPen(color, 1.4))
+        if self.interruptor:
+            p.drawRoundedRect(QRectF(1, 4, 17, 8), 4, 4)
+            p.setBrush(color)
+            p.drawEllipse(QPointF(14 if on else 5, 8), 2.2, 2.2)
+        elif self.enclavado:
+            p.drawArc(QRectF(6, 1, 6, 10), 0, 180 * 16)
+            p.setBrush(QColor("#d5eee5"))
+            p.drawRoundedRect(QRectF(4, 7, 10, 7), 1.5, 1.5)
+            p.drawLine(9, 10, 9, 12)
+        else:
+            p.setBrush(color if on else Qt.BrushStyle.NoBrush)
+            p.drawEllipse(QPointF(9, 8), 4, 4)
+        p.end()
+        self.setIconSize(QSize(20, 16))
+        self.setIcon(QIcon(pm))
+
+    def nextCheckState(self) -> None:  # noqa: N802
+        pass  # refrescar() pone el valor confirmado por la simulación
+
+
+class _ControlPulsadores(QObject):
+    """Un filtro por aplicación; la liberación se dirige a la ventana que recibe la tecla."""
+    def eventFilter(self, objeto: Any, evento: Any) -> bool:  # noqa: N802
+        if (evento.type() == QEvent.Type.KeyRelease and evento.key() == Qt.Key.Key_Control
+                and not evento.isAutoRepeat()):
+            while objeto is not None:
+                if isinstance(objeto, Ventana):
+                    objeto._soltar_enclavados()
+                    break
+                objeto = objeto.parent()
+        return False
 
 
 class Ventana(QMainWindow):
@@ -300,11 +382,21 @@ class Ventana(QMainWindow):
         self.t_auto.setInterval(30_000)
         self.t_auto.timeout.connect(self.autoguardar)
         self.t_auto.start()
+        self._tipos_entrada: dict[tuple[Any, str], bool] = {}
+        self._portapapeles = None
         self._menus()
         self._interfaz()
+        self.diagrama.menu_portapapeles = self._menu_portapapeles
+        QApplication.instance().focusChanged.connect(self._actualizar_portapapeles)
+        app = QApplication.instance()
+        if not hasattr(app, "_control_pulsadores"):
+            app._control_pulsadores = _ControlPulsadores(app)
+            app.installEventFilter(app._control_pulsadores)
         self.panel_es = PanelES()
-        self._conexion_recordada = self._leer_conexion_recordada()
+        self._parametros_recordados = self._leer_parametros_recordados()
+        self._conexion_recordada = tuple(self._parametros_recordados[k] for k in ("host", "puerto", "unidad"))
         self.panel_es.conexion_defecto = self._conexion_recordada
+        self.panel_es.parametros_defecto = copy.deepcopy(self._parametros_recordados)
         central = self.takeCentralWidget()
         self.paginas_es = QStackedWidget()
         self.paginas_es.addWidget(central)
@@ -353,8 +445,8 @@ class Ventana(QMainWindow):
             self.grupo.addAction(act)
             self.acciones_ej[key] = act
         # Un solo control de ejecución: Play simula (traza abajo, sin paleta) y Pausa detiene y vuelve a editar
-        self.a_ejecutar = self._accion("Ejecutar", self._ejecutar, "F5", marcable=True)
-        self.a_ejecutar.setToolTip("Play: simular · Pausa: detener y editar (F5)")
+        self.a_ejecutar = self._accion("Play", self._ejecutar, "F5", marcable=True)
+        self.a_ejecutar.setToolTip("Play: iniciar una simulación nueva · Stop: detener y dejar todo a 0 (F5)")
         self.a_reiniciar = self._accion("Reiniciar", self.reiniciar, "Ctrl+R")
         self.a_reiniciar.setToolTip("Volver a la situación inicial; en Play sigue en Play (Ctrl+R)")
         self.a_avanzar = self._accion("&Avanzar el tiempo…", self.avanzar_tiempo)
@@ -388,7 +480,13 @@ class Ventana(QMainWindow):
         self.a_borrar = self._accion("&Borrar la selección", lambda: self.edicion and self.edicion.borrar(), "Del")
         self.a_debajo = self._accion("&Añadir debajo", lambda: self.edicion and self.edicion.anadir_debajo(), "Ctrl+Return")
         self.a_debajo.setToolTip("Con una etapa seleccionada: transición y etapa enlazadas debajo (Ctrl+Intro)")
+        self.a_cortar = self._accion("Cortar", lambda: self._portapapeles_accion("cortar"), "Ctrl+X")
+        self.a_copiar = self._accion("Copiar", lambda: self._portapapeles_accion("copiar"), "Ctrl+C")
+        self.a_pegar = self._accion("Pegar", lambda: self._portapapeles_accion("pegar"), "Ctrl+V")
         edicion = bar.addMenu("&Edición")
+        for a in (self.a_cortar, self.a_copiar, self.a_pegar):
+            edicion.addAction(a)
+        edicion.addSeparator()
         for a in (self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo):
             edicion.addAction(a)
         edicion.addSeparator()
@@ -440,7 +538,7 @@ class Ventana(QMainWindow):
         QVBoxLayout(caja_traza).addWidget(self.traza)
         self.props = PanelPropiedades()
         self.props.setObjectName("panelPropiedades")
-        self.inferior = QStackedWidget()
+        self.inferior = PilaActual()
         self.inferior.addWidget(caja_traza)
         self.inferior.addWidget(self.props)
         self._leyenda: QDialog | None = None
@@ -496,25 +594,13 @@ class Ventana(QMainWindow):
         cv.setContentsMargins(1, 1, 1, 1)
         cv.addWidget(self.variables)
         self.variables.setMinimumHeight(140)
-        caja = QGroupBox("Diagnósticos")
-        cl = QVBoxLayout(caja)
-        cl.setContentsMargins(1, 1, 1, 1)
-        self.l_resumen = QLabel()  # una línea; el detalle va solo en la lista
-        self.l_resumen.setWordWrap(True)
-        cl.addWidget(self.l_resumen)
-        self.lista_diag = QListWidget()
-        self.lista_diag.setWordWrap(True)
+        self.l_resumen = QLabel()  # resumen accesible para la validación, sin bloque lateral
+        self.l_resumen.hide()
+        self.lista_diag = self.diagrama.lista_diagnosticos
         self.lista_diag.itemClicked.connect(self._ir_a_diagnostico)
-        self.lista_diag.setMinimumHeight(60)
-        self.lista_diag.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # el texto se ajusta al ancho
-        cl.addWidget(self.lista_diag)
-        self.caja_diagnosticos = caja
-        reparto = QSplitter(Qt.Orientation.Vertical)  # variables arriba, diagnósticos abajo
-        reparto.addWidget(caja_vars)
-        reparto.addWidget(caja)
-        reparto.setSizes([360, 140])
-        pl.addWidget(reparto, 1)
-        self.derecho = QStackedWidget()
+        pl.addWidget(caja_vars)
+        pl.addStretch(1)
+        self.derecho = PilaActual()
         self.derecho.addWidget(self.scroll)
         pag_scroll = QScrollArea()  # si no cabe en alto, se desplaza (el ancho es el del panel, sin barra horizontal)
         pag_scroll.setWidgetResizable(True)
@@ -539,26 +625,38 @@ class Ventana(QMainWindow):
         vl.addWidget(self.paleta, 1)
         # Ancho de los paneles laterales al editar: único y fijo (lo que piden las dos columnas de la paleta y, como mínimo,
         # lo que hace falta para que la tabla de variables deje ver los nombres), el mismo en el panel izquierdo y en el
-        # derecho; no se pueden estirar, solo plegar
+        # izquierdo fijo; el derecho puede ampliarse y ambos se pueden plegar
         self.ancho_lateral = max(self.dock.minimumSizeHint().width(), ANCHO_LATERAL)
         self.dock.setFixedWidth(self.ancho_lateral)
         self.dock.hide()
         # Arriba, el panel izquierdo (solo al editar), el dibujo y el panel derecho; abajo, a todo el ancho de la ventana, el
         # panel inferior (traza, opciones): así una fórmula larga o dos programadores por bloques caben sin apretarse.
-        self.split = QSplitter(Qt.Orientation.Horizontal)
+        self._plegables = {n: PanelPlegable(c, titulo, n, lambda n=n: self._minimo_panel(n))
+                          for n, c, titulo in (("izquierdo", self.dock, "Elementos"),
+                                               ("derecho", self.derecho, "Variables"),
+                                               ("inferior", self.inferior, "Propiedades"))}
+        self._tamanos_paneles = {"izquierdo": self.ancho_lateral, "derecho": self.ancho_lateral, "inferior": ALTO_INFERIOR["editar"]}
+        self.split = DivisorPlegable(Qt.Orientation.Horizontal)
         self.split.addWidget(izq)
-        self.split.addWidget(self.derecho)
+        self.split.addWidget(self._plegables["derecho"])
+        self.split.configurar(1, "derecho", 1, self._plegables["derecho"])
+        self.split.setStretchFactor(0, 1)
+        self.split.setStretchFactor(1, 0)
         self.split.setHandleWidth(8)
         self.split.setSizes([880, 460])
-        arriba = QWidget()
-        al = QHBoxLayout(arriba)
-        al.setContentsMargins(0, 0, 0, 0)
-        al.setSpacing(8)
-        al.addWidget(self.dock)
-        al.addWidget(self.split, 1)
-        self.vsplit = QSplitter(Qt.Orientation.Vertical)
-        self.vsplit.addWidget(arriba)
-        self.vsplit.addWidget(self.inferior)
+        self.split_izquierdo = DivisorPlegable(Qt.Orientation.Horizontal)
+        self.split_izquierdo.addWidget(self._plegables["izquierdo"])
+        self.split_izquierdo.addWidget(self.split)
+        self.split_izquierdo.setStretchFactor(0, 0)
+        self.split_izquierdo.setStretchFactor(1, 1)
+        self.split_izquierdo.configurar(1, "izquierdo", 0, self._plegables["izquierdo"])
+        self.vsplit = DivisorPlegable(Qt.Orientation.Vertical)
+        self.vsplit.addWidget(self.split_izquierdo)
+        self.vsplit.addWidget(self._plegables["inferior"])
+        self.vsplit.configurar(1, "inferior", 1, self._plegables["inferior"])
+        for divisor in (self.split_izquierdo, self.split, self.vsplit):
+            divisor.plegar.connect(self._plegar_desde_divisor)
+            divisor.abrir.connect(self._abrir_desde_tiron)
         self.vsplit.setCollapsible(0, False)
         self.vsplit.setCollapsible(1, False)  # el panel inferior se pliega con su flecha, no arrastrando: nunca por debajo de lo que pide
         self.vsplit.setHandleWidth(8)
@@ -568,6 +666,7 @@ class Ventana(QMainWindow):
         self.vsplit.setStretchFactor(1, 0)
         self.vsplit.setSizes([520, ALTO_INFERIOR["simular"]])
         self.setCentralWidget(self.vsplit)
+        self.props.t_previa.toggled.connect(lambda _: self._dimensionar_opciones())
         # Barra de estado: aviso de conformidad, lecturas distintas de las decididas, instante lógico
         sb = self.statusBar()
         self.l_aviso = QLabel(AVISO)
@@ -666,23 +765,13 @@ class Ventana(QMainWindow):
         self.paginas_es.currentChanged.connect(self._sincronizar_boton_es)
         self.addToolBar(self.tb_conexion)
         self._fijar_ancho_boton_es()  # con la barra ya en la ventana: el botón lleva su hoja de estilo
+        self._fijar_ancho_boton_play()
         self.tb_edit = QToolBar("Edición")
         self.tb_edit.setMovable(False)
         for a in (self.a_debajo, self.a_deshacer, self.a_rehacer, self.a_borrar):
             self.tb_edit.addAction(a)
-        pm = QPixmap(24, 24)
-        pm.fill(Qt.GlobalColor.transparent)
-        pintor = QPainter(pm)
-        pintor.setPen(QPen(QColor("#167d79"), 1.5))
-        pintor.drawLine(12, 7, 12, 12)
-        pintor.drawLine(5, 12, 19, 12)
-        for x, y in ((9, 1), (2, 16), (16, 16)):
-            pintor.drawRect(x, y, 6, 6)
-        pintor.drawLine(5, 12, 5, 16)
-        pintor.drawLine(19, 12, 19, 16)
-        pintor.end()
         boton = self.diagrama.b_dependencias
-        boton.setIcon(QIcon(pm))
+        boton.setIcon(_icono_barra("dependencias"))
         boton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         boton.setAccessibleName("Mostrar dependencias")
         boton.setStyleSheet("")  # hereda el estilo común de la barra
@@ -698,14 +787,13 @@ class Ventana(QMainWindow):
         self._acciones_edicion(False)
 
     def _paneles(self) -> None:
-        """Flechas en el borde del dibujo para plegar del todo los paneles (el izquierdo, el de la paleta y las
+        """Controles de cabecera y pestañas en los bordes para plegar y recuperar los paneles (el izquierdo, el de la paleta y las
         propiedades, solo existe al editar), y el estado guardado."""
-        self.flechas = {}
-        for nombre, lugar in (("izquierdo", "izquierda"), ("derecho", "derecha"), ("inferior", "abajo")):
-            b = QToolButton()
-            b.clicked.connect(lambda _=False, n=nombre: self._mostrar_panel(n, not self._accion_panel(n).isChecked()))
-            self.diagrama.borde(b, lugar)
-            self.flechas[nombre] = b
+        self.flechas = {n: p.cerrar for n, p in self._plegables.items()}
+        self.pestanas = {n: p.pestana for n, p in self._plegables.items()}
+        for nombre, panel in self._plegables.items():
+            panel.alternar.connect(lambda n=nombre: self._mostrar_panel(n, not self._accion_panel(n).isChecked()))
+            panel.desplegar.connect(lambda tamano,n=nombre:self._abrir_desde_tiron(n,tamano))
         self.flechas["izquierdo"].hide()
         for nombre in ("izquierdo", "derecho", "inferior"):
             accion = self._accion_panel(nombre)
@@ -727,7 +815,24 @@ class Ventana(QMainWindow):
 
     def _mostrar_panel(self, nombre: str, visible: bool, guardar: bool = True) -> None:
         editar = self.modo == "editar" and self.edicion is not None
-        self._panel(nombre).setVisible(visible and (editar or nombre != "izquierdo"))
+        panel = self._plegables[nombre]
+        anterior = panel.abierto
+        if anterior and not visible:
+            actual = panel.height() if nombre == "inferior" else panel.width()
+            self._tamanos_paneles[nombre] = getattr(panel, "tamano_recordado", None) or actual
+            panel.tamano_recordado = None
+        panel.mostrar(visible)
+        panel.setVisible(editar or nombre != "izquierdo")
+        self.pestanas[nombre].setText({"izquierdo": "Elementos", "derecho": "Variables" if editar else "Simulación",
+                                      "inferior": "Propiedades" if editar else "Traza"}[nombre])
+        if visible != anterior:
+            tamano = max(self._minimo_panel(nombre), self._tamanos_paneles[nombre]) if visible else panel.GROSOR_PESTANA
+            if nombre == "derecho":
+                total = sum(self.split.sizes());self.split.setSizes([max(100,total-tamano),tamano])
+            elif nombre == "inferior":
+                total = sum(self.vsplit.sizes());self.vsplit.setSizes([max(100,total-tamano),tamano])
+            elif editar:
+                total = sum(self.split_izquierdo.sizes());self.split_izquierdo.setSizes([tamano,max(100,total-tamano)])
         accion = self._accion_panel(nombre)
         if accion.isChecked() != visible:
             accion.blockSignals(True)
@@ -739,6 +844,28 @@ class Ventana(QMainWindow):
         self.flechas[nombre].setToolTip(f"{'Plegar' if visible else 'Desplegar'} el panel {nombre}")
         if guardar:
             self.ajustes.setValue(f"paneles/{nombre}", visible)
+
+    def _minimo_panel(self, nombre):
+        if nombre != "inferior":
+            return self.ancho_lateral
+        if self.modo == "editar":
+            return max(76 if self.props.pagina == "vacio" else 160, self.props.minimumSizeHint().height())
+        return max(120, self.traza.minimumSizeHint().height()+30)
+
+    def _abrir_desde_tiron(self, nombre, tamano):
+        tamano = self.ancho_lateral if nombre == "izquierdo" else max(self._minimo_panel(nombre),tamano)
+        self._tamanos_paneles[nombre] = tamano
+        if nombre == "inferior":self._opciones_automaticas = False
+        self._mostrar_panel(nombre, True)
+        if nombre == "derecho":
+            total=sum(self.split.sizes());self.split.setSizes([max(100,total-tamano),tamano])
+        elif nombre == "inferior":
+            total=sum(self.vsplit.sizes());self.vsplit.setSizes([max(100,total-tamano),tamano])
+
+    def _plegar_desde_divisor(self, nombre):
+        if nombre == "inferior":
+            self._opciones_automaticas = False
+        self._mostrar_panel(nombre, False)
 
     @staticmethod
     def _tabla(cols: list[str]) -> QTableWidget:
@@ -798,6 +925,7 @@ class Ventana(QMainWindow):
         """Carga la fuente (ejemplo, modelo o lo que se edita) y deja el programa en Pausa: parado y editable, y sin estado
         (como tras Play y Pausa: ni etapas activas ni valores en las tablas; Play arranca la sesión). La conexión Modbus, si
         la hay, no se cierra: se conserva el TCP y las salidas pasan a 0 (Pausa)."""
+        self._generacion_encuadre = getattr(self, "_generacion_encuadre", 0) + 1
         self.modbus.pausar()
         self._marcar_play(False)
         self._aviso_inestable_sesion = None
@@ -838,6 +966,7 @@ class Ventana(QMainWindow):
         una sesión nueva, que escribe sus salidas solo tras leer y aplicar las entradas de la planta. En Pausa ya está todo a
         0 y sin estado (Pausa es «todo a 0 hasta un nuevo Play»): no hay nada que reiniciar, solo se vuelve a pedir el cero
         a la planta si hay conexión."""
+        self._mostrar_pagina(False)
         if not self.a_ejecutar.isChecked():
             self.modbus.pausar(diagnostico=True)
             self._sin_estado()
@@ -870,7 +999,7 @@ class Ventana(QMainWindow):
         if self._variables_sin_nombre():
             return False
         e = self.edicion
-        if not e.ed.validate().can_simulate:
+        if any(d["blocks"] for d in e.diagnosticos()):
             self._no_simulable()
             return False
         ayuda = self._ayuda if self._ayuda and not e.ed.undo_stack else "Simulación del grafcet."
@@ -902,9 +1031,57 @@ class Ventana(QMainWindow):
         return True
 
     # -- edición: modos, herramientas y diálogos ---------------------------------------------------
+    def _foco_portapapeles(self) -> bool:
+        foco = QApplication.focusWidget()
+        while foco is not None and foco is not self:
+            if isinstance(foco, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)) or foco is getattr(self, "variables", None):
+                return True
+            foco = foco.parentWidget()
+        return False
+
+    def _actualizar_portapapeles(self, *args: Any) -> None:
+        e = self.edicion
+        disponible = e is not None and self.modo == "editar" and not self._foco_portapapeles()
+        self.a_copiar.setEnabled(disponible and bool(e.sel))
+        self.a_cortar.setEnabled(disponible and bool(e.sel))
+        self.a_pegar.setEnabled(disponible and self._portapapeles is not None)
+
+    def _portapapeles_accion(self, operacion: str, punto: Any = None) -> bool:
+        e = self.edicion
+        if e is None or self.modo != "editar" or self._foco_portapapeles():
+            return False
+        if operacion == "pegar":
+            if self._portapapeles is None:
+                return False
+            if punto is None:
+                viewport = self.diagrama.viewport()
+                local = viewport.mapFromGlobal(QCursor.pos())
+                local = local if viewport.rect().contains(local) else viewport.rect().center()
+                punto = self.diagrama.mapToScene(local)
+            return e.pegar_fragmento(self._portapapeles, punto)
+        if not e.sel:
+            return False
+        fragmento = e.copiar_fragmento()
+        if not any(fragmento.entities.values()) and not any(fragmento.presentation.get(k) for k in ("barras", "draftActions", "notes")):
+            return False
+        if operacion == "cortar" and not e.borrar():
+            return False
+        self._portapapeles = fragmento
+        e.informar("Selección cortada" if operacion == "cortar" else "Selección copiada")
+        e.cambiado.emit()
+        self._actualizar_portapapeles()
+        return True
+
+    def _menu_portapapeles(self, punto: Any, sobre_elemento: bool) -> list[tuple[str, Any]]:
+        if sobre_elemento:
+            return [("Cortar", lambda: self._portapapeles_accion("cortar")),
+                    ("Copiar", lambda: self._portapapeles_accion("copiar"))]
+        return [("Pegar", (lambda: self._portapapeles_accion("pegar", punto)) if self._portapapeles is not None else None)]
+
     def _acciones_edicion(self, on: bool) -> None:
         for a in (*self.a_herr.values(), self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo):
             a.setEnabled(on)
+        self._actualizar_portapapeles()
 
     def _titulo_ventana(self) -> None:
         e = self.edicion
@@ -973,6 +1150,12 @@ class Ventana(QMainWindow):
         e.confirmar_borrado = self._confirmar_borrado
         e.pedir_texto = lambda titulo, etiqueta, actual: self._pedir_texto(titulo, etiqueta, actual)
         e.pedir_forzado = lambda datos: self._pedir_forzado(datos)
+        if e.enlaces_quitados:
+            cantidad, e.enlaces_quitados = e.enlaces_quitados, 0
+            aviso = ("Se quitó un enlace en borrador que apuntaba a elementos que ya no existen" if cantidad == 1 else
+                     f"Se quitaron {cantidad} enlaces en borrador que apuntaban a elementos que ya no existen")
+            e.informar(aviso)
+            QMessageBox.information(self, TITULO, aviso)
 
     def cambiar_modo(self, modo: str) -> bool:
         """Los modos solo se alternan con Play (simular) y Pausa (editar); esto es el mismo control por dentro. Devuelve si
@@ -985,43 +1168,70 @@ class Ventana(QMainWindow):
         return self.modo == modo
 
     def _poner_modo(self) -> None:
-        """Ajusta la interfaz al modo: herramientas, panel derecho, dibujo y acciones."""
+        """Alterna las herramientas sin perder tamaños de edición ni el encuadre manual."""
         editar = self.modo == "editar" and self.edicion is not None
+        ancho = self.derecho.width() if getattr(self, "_anchos_puestos", False) else self.ancho_lateral
+        guardado = getattr(self, "_paneles_edicion", None)
+        if not editar and guardado is None:
+            self._paneles_edicion = {"izquierdo": self.a_izquierdo.isChecked(), "inferior": self.a_inferior.isChecked(),
+                                    "tamanos": self.vsplit.sizes() if self.isVisible() else None}
         self.tb_edit.setVisible(editar)
-        self.variables.setEnabled(editar)  # fuera de edición la tabla no responde a Supr (ni a nada)
-        self.dock.setVisible(editar and self.a_izquierdo.isChecked())
-        self.flechas["izquierdo"].setVisible(editar)
+        self.variables.setEnabled(editar)
         self._acciones_edicion(editar)
-        self.a_avanzar.setEnabled(not editar)  # la depuración del tiempo solo tiene sentido en Play
+        self.a_avanzar.setEnabled(not editar)
         self.derecho.setCurrentIndex(1 if editar else 0)
-        self.inferior.setCurrentIndex(1 if editar else 0)  # la traza al simular; las opciones al editar
-        self._anchos_laterales()
-        self._alto_inferior(editar)
-        self.diagrama.modo_edicion(editar, self.edicion if editar else None)
+        self.inferior.setCurrentIndex(1 if editar else 0)
+        self._anchos_laterales(ancho)
+        if not editar:
+            self.diagrama.actualizar_diagnosticos(False)
+            self._mostrar_panel("izquierdo", False, guardar=False)
+            self._mostrar_panel("inferior", False, guardar=False)
+        elif guardado is not None:
+            self._restauracion_paneles = guardado
+            self._mostrar_panel("izquierdo", guardado["izquierdo"], guardar=False)
+            self._mostrar_panel("inferior", guardado["inferior"], guardar=False)
+            self._paneles_edicion = None
+            def restaurar():
+                if getattr(self, "_restauracion_paneles", None) is guardado:
+                    if self.modo == "editar" and guardado["tamanos"] is not None:
+                        self.vsplit.setSizes(guardado["tamanos"])
+                    def terminar():
+                        if getattr(self, "_restauracion_paneles", None) is guardado:
+                            self._restauracion_paneles = None
+                    QTimer.singleShot(0, self, terminar)
+            if guardado["tamanos"] is not None:
+                self.vsplit.setSizes(guardado["tamanos"])
+            QTimer.singleShot(0, self, restaurar)
+        else:
+            self._mostrar_panel("izquierdo", self.a_izquierdo.isChecked(), guardar=False)
+            self._alto_inferior(True)
+        self.flechas["izquierdo"].setVisible(editar)
+        for n in ("derecho", "inferior"):
+            self._mostrar_panel(n, self._accion_panel(n).isChecked(), guardar=False)
+        self.diagrama.modo_edicion(editar, self.edicion if editar else None,
+                                   conservar=getattr(self, "_encuadre_modo", None) is not None)
         if editar:
             self.refrescar_edicion()
-        else:
-            if self.v is not None:
-                self.setWindowTitle(f"{self.v.model['title']} — {TITULO}")
-            self.diagrama.ajustar()
+        elif self.v is not None:
+            self.setWindowTitle(f"{self.v.model['title']} — {TITULO}")
 
-    def _anchos_laterales(self) -> None:
-        """Al editar, el panel derecho mide lo mismo que el izquierdo, fijo y sin divisor que lo mueva; al simular, el de
-        siempre (se puede estirar)."""
+    def _anchos_laterales(self, ancho: int | None = None) -> None:
         editar = self.modo == "editar" and self.edicion is not None
-        ancho = self.ancho_lateral
-        self.derecho.setMinimumWidth(ancho if editar else 300)
-        self.derecho.setMaximumWidth(ancho if editar else 16777215)
-        self.split.handle(1).setEnabled(not editar)
-        total = max(self.split.width(), 1000)
-        self.split.setSizes([total - ancho, ancho] if editar else [880, 460])
+        ancho = max(self.ancho_lateral, self.derecho.width() if ancho is None else ancho)
+        self.derecho.setMinimumWidth(self.ancho_lateral)
+        self.derecho.setMaximumWidth(16777215)
+        self.split.handle(1).setEnabled(True)
+        total = self.split.width() - self.split.handleWidth()
+        self.split.setSizes([max(total - ancho, 100), ancho])
 
     def _dimensionar_opciones(self) -> None:
         """Reparto visual inicial: propiedades compactas, sin sobreescribir el divisor movido a mano."""
-        if not self._opciones_automaticas or self.modo != "editar" or self.inferior.isHidden():
+        self._plegables["inferior"].mostrar(self._plegables["inferior"].abierto)
+        if (not self._opciones_automaticas or self.modo != "editar" or self.inferior.isHidden()
+                or getattr(self, "_restauracion_paneles", None) is not None):
             return
         self.props.layout().activate()
-        alto = max(76, self.props.minimumSizeHint().height()) if self.props.pagina == "vacio" else max(224, self.props.minimumSizeHint().height())
+        alto = self._minimo_panel("inferior")
         total = sum(self.vsplit.sizes())
         self.vsplit.setSizes([max(total - alto, 120), alto])
 
@@ -1040,7 +1250,7 @@ class Ventana(QMainWindow):
             alto = max(min(alto, total - self.paleta.sizeHint().height()), self.inferior.minimumSizeHint().height())
         self.vsplit.setSizes([total - alto, alto])
         if editar and self._opciones_automaticas:
-            QTimer.singleShot(0, self._dimensionar_opciones)
+            QTimer.singleShot(0, self, self._dimensionar_opciones)
 
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
@@ -1105,11 +1315,12 @@ class Ventana(QMainWindow):
         pagina = (self.props.pagina, self.props.minimumSizeHint().height())
         if self._opciones_automaticas and pagina != getattr(self, "_pagina_opciones", None):
             self._pagina_opciones = pagina
-            QTimer.singleShot(0, self._dimensionar_opciones)
+            QTimer.singleShot(0, self, self._dimensionar_opciones)
         self.variables.mostrar(e)
         self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
         self.a_rehacer.setEnabled(bool(e.ed.redo_stack))
         self.a_borrar.setEnabled(bool(e.sel))
+        self._actualizar_portapapeles()
         self.a_debajo.setEnabled(len(e.sel) == 1)
         bloq = [d for d in diags if d["blocks"]]
         self.l_resumen.setText("El grafcet se puede simular." if not bloq else
@@ -1118,7 +1329,10 @@ class Ventana(QMainWindow):
         self.lista_diag.clear()
         for d in diags:
             q = f" · {d['question']}" if d["question"] else ""
-            item = QListWidgetItem(f"{d['code']}{q}: {d['message']}")
+            nombre = f"{e.nombre(d['target'])} · " if d["target"] else ""
+            if d["code"] == "D-TIPO-EVENTO" and d["message"].startswith("Acción por evento"):
+                nombre = ""
+            item = QListWidgetItem(f"{nombre}{d['code']}{q}: {d['message']}")
             item.setData(Qt.ItemDataRole.UserRole, d["target"])
             item.setToolTip(d["correction"])
             item.setForeground(QColor(COL["err"] if d["blocks"] else COL["muted"]))
@@ -1128,8 +1342,7 @@ class Ventana(QMainWindow):
             item.setForeground(QColor(COL["err"]))
             self.lista_diag.addItem(item)
         hay_detalle = self.lista_diag.count() > 0
-        self.lista_diag.setVisible(hay_detalle)
-        self.caja_diagnosticos.setMaximumHeight(16777215 if hay_detalle else self.caja_diagnosticos.minimumSizeHint().height())
+        self.diagrama.actualizar_diagnosticos(hay_detalle)
         self._titulo_ventana()
         if hasattr(self, "panel_es"):  # las variables pueden haber cambiado: el panel de E/S las sigue (o avisa, si hay conexión)
             self._sincronizar_es()
@@ -1273,7 +1486,7 @@ class Ventana(QMainWindow):
     # -- acciones de simulación -------------------------------------------------------------------
     def _act(self, op: str, **body: Any) -> None:
         if self.modbus.activo:
-            self.aviso.setText("Con E/S externas use Ejecutar/Pausa; desconecte para depurar manualmente")
+            self.aviso.setText("Con E/S externas use Play/Stop; desconecte para depurar manualmente")
             return
         if self.v is None:
             return
@@ -1291,16 +1504,17 @@ class Ventana(QMainWindow):
                 w.deleteLater()
         self.botones, self.campos = {}, {}
         numeric = self.v.model.get("numericInputs", {})
-        fila = col = 0
+        fila = 0
         for var in self.v.model["inputs"]:
             if var in numeric:
-                if col:
-                    fila, col = fila + 1, 0
-                self.rejilla.addWidget(QLabel(f"<b>{html.escape(self.nombre(var))}</b> ="), fila, 0)
+                etiqueta = QLabel(f"<b>{html.escape(self.nombre(var))}</b> =")
+                etiqueta.setWordWrap(True)
+                self.rejilla.addWidget(etiqueta, fila, 0, 1, 4)
+                fila += 1
                 campo = QLineEdit()
                 campo.setPlaceholderText("valor" + (" entero" if numeric[var] == "int" else ""))
                 campo.returnPressed.connect(lambda v=var: self._valor(v))
-                self.rejilla.addWidget(campo, fila, 1, 1, 2)
+                self.rejilla.addWidget(campo, fila, 0, 1, 3)
                 b = QPushButton("Aplicar")
                 b.clicked.connect(lambda _=False, v=var: self._valor(v))
                 self.rejilla.addWidget(b, fila, 3)
@@ -1308,16 +1522,71 @@ class Ventana(QMainWindow):
                 self.botones[var] = b
                 fila += 1
                 continue
-            b = QPushButton()
-            b.setCheckable(True)
-            b.clicked.connect(lambda _=False, v=var: self._act("entrada", var=v))
-            self.rejilla.addWidget(b, fila, col)
+            b = _BotonEntrada()
+            b.interruptor = self._tipos_entrada.get((self._proyecto, var), False)
+            self._ayuda_entrada(b)
+            b.pressed.connect(lambda v=var, b=b: self._entrada_presionada(v, b))
+            b.released.connect(lambda v=var, b=b: self._entrada_soltada(v, b))
+            b.clicked.connect(lambda _=False, v=var, b=b: b.interruptor and self._act("entrada", var=v))
+            b.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            b.customContextMenuRequested.connect(lambda p, v=var, b=b: self._menu_entrada(v, b, p))
+            self.rejilla.addWidget(b, fila, 0, 1, 4)
             self.botones[var] = b
-            col += 1
-            if col == 4:
-                fila, col = fila + 1, 0
+            fila += 1
         if not self.v.model["inputs"]:
             self.rejilla.addWidget(QLabel("Sin entradas"), 0, 0)
+
+    @staticmethod
+    def _ayuda_entrada(b: _BotonEntrada) -> None:
+        b.setToolTip("Interruptor: clic para conmutar · Botón derecho: cambiar tipo" if b.interruptor else
+                     "Pulsador momentáneo: presionar = 1, soltar = 0 · Ctrl+clic: enclavar mientras se mantiene Ctrl (otro clic libera) · Botón derecho: cambiar tipo")
+
+    def _cambiar_tipo_entrada(self, var: str, interruptor: bool) -> None:
+        self._tipos_entrada[self._proyecto, var] = interruptor
+        b = self.botones[var]
+        b.interruptor, b.enclavado, b.liberar = interruptor, False, False
+        self._ayuda_entrada(b)
+        b.indicar(b.isChecked())
+
+    def _menu_entrada(self, var: str, b: _BotonEntrada, punto: Any) -> None:
+        if self.modbus.activo:
+            return
+        menu = QMenu(b)
+        for tipo, texto in ((True, "Convertir en interruptor"), (False, "Convertir en pulsador")):
+            a = menu.addAction(texto, lambda _=False, tipo=tipo: self._cambiar_tipo_entrada(var, tipo))
+            a.setEnabled(tipo != b.interruptor)
+        menu.exec(b.mapToGlobal(punto))
+
+    def _fijar_entrada(self, var: str, valor: bool) -> None:
+        if self.modo == "simular" and not self.modbus.activo and self.v is not None:
+            if self.v.state().get("values", {}).get(var) is not valor:
+                self._act("entrada", var=var)
+
+    def _entrada_presionada(self, var: str, b: _BotonEntrada) -> None:
+        if self.modbus.activo:
+            self._act("entrada", var=var)
+            return
+        if b.interruptor:
+            return  # como antes, el interruptor conmuta con clicked, al completar el clic
+        elif b.enclavado:
+            b.enclavado, b.liberar = False, False
+            self._fijar_entrada(var, False)
+        else:
+            b.enclavado, b.liberar = b.control, not b.control
+            self._fijar_entrada(var, True)
+
+    def _soltar_enclavados(self) -> None:
+        for var, b in list(self.botones.items()):
+            if isinstance(b, _BotonEntrada) and b.enclavado and not b.interruptor:
+                b.enclavado, b.liberar = False, False
+                self._fijar_entrada(var, False)
+
+    def _entrada_soltada(self, var: str, b: _BotonEntrada) -> None:
+        if b.liberar:
+            b.liberar = False
+            self._fijar_entrada(var, False)
+        b.control = False
+        self.refrescar()
 
     def nombre(self, ident: str) -> str:
         """Nombre visible de una variable, etapa, parcial o transición (los ID internos no se muestran)."""
@@ -1345,8 +1614,8 @@ class Ventana(QMainWindow):
         self.a_ejecutar.blockSignals(True)
         self.a_ejecutar.setChecked(on)
         self.a_ejecutar.blockSignals(False)
-        self.a_ejecutar.setText("Pausa" if on else "Ejecutar")
-        self.a_ejecutar.setIcon(_icono_barra("pausa" if on else "play"))
+        self.a_ejecutar.setText("Stop" if on else "Play")
+        self.a_ejecutar.setIcon(_icono_barra("stop" if on else "play"))
 
     def _ejecutar(self, on: bool) -> None:
         """Play (on) o Pausa: el único control de ejecución. Play compila lo editado y arranca siempre una sesión nueva desde
@@ -1355,6 +1624,9 @@ class Ventana(QMainWindow):
         Pausa conserva TCP y sigue observando las entradas, y Play vincula la sesión nueva al TCP existente."""
         if self._transicion_ui:
             return
+        self._encuadre_modo = self.diagrama.guardar_encuadre()
+        self._generacion_encuadre = getattr(self, "_generacion_encuadre", 0) + 1
+        generacion = self._generacion_encuadre
         self._transicion_ui = True
         try:
             venia_de_play = self.modo == "simular"
@@ -1362,6 +1634,7 @@ class Ventana(QMainWindow):
                 on = False  # no arranca (no compila, inestable, mapa de E/S inválido…): sigue en Pausa
             self.modo = "simular" if on else "editar"
             self._marcar_play(on)
+            self._mostrar_pagina(False)
             if not on:
                 self.modbus.pausar()
                 if self.edicion is None:
@@ -1380,6 +1653,13 @@ class Ventana(QMainWindow):
             else:
                 self.rt.stop()
         finally:
+            estado = self._encuadre_modo
+            self._encuadre_modo = None
+            self.diagrama.restaurar_encuadre(estado)
+            def restaurar():
+                if self._generacion_encuadre == generacion:
+                    self.diagrama.restaurar_encuadre(estado)
+            QTimer.singleShot(0, self.diagrama, restaurar)
             self._transicion_ui = False
 
     def _vigilar_motor(self) -> bool:
@@ -1491,21 +1771,28 @@ class Ventana(QMainWindow):
         doc = doc or self.v.doc
         raiz = self._raiz_modbus()
         config, avisos = None, []
+        origen = "Última configuración utilizada" if self.ajustes.contains("modbus/configuracion") or self.ajustes.contains("modbus/host") else "Configuración inicial del servidor"
+        fallo = None
         # Recargar el mismo proyecto conserva el mapa en memoria; cambiar de proyecto exige un mapa propio.
         anterior = self.panel_es.config
         cambio = self._proyecto != self._proyecto_modbus
         self._proyecto_modbus = self._proyecto
         if not cambio and anterior.modelo == doc["id"]:
             config = anterior
+            origen = "Configuración de este proyecto en memoria"
         elif raiz and (raiz / ARCHIVO).exists():
             try:
+                origen = "Configuración guardada en el proyecto"
                 config = Configuracion.cargar(raiz / ARCHIVO, doc, avisos)  # lo que ya no casa se descarta; el resto se conserva
             except (ValueError, OSError) as exc:
-                self.panel_es.estado.setText(f"No se pudo cargar el mapa: {exc}")
+                fallo = f"No se pudo cargar el mapa: {exc}"
         if self.modbus.activo:
-            config = copy.deepcopy(config or Configuracion(modelo=doc["id"]))
+            config = copy.deepcopy(config or Configuracion(modelo=doc["id"], canales=copy.deepcopy(self._parametros_recordados["canales"])))
             config.host, config.puerto, config.unidad = self.modbus.cliente.host, self.modbus.cliente.puerto, self.modbus.cliente.unidad
         self.panel_es.cargar(doc, config, avisos)
+        self.panel_es.host.setToolTip(f"{origen}. Copia la dirección que muestra el software del servidor Modbus.")
+        if fallo:
+            self.panel_es.mostrar_estado("error", fallo)
         if self.modbus.activo and cambio:
             self._cambiar_modelo_modbus(doc)
 
@@ -1550,7 +1837,7 @@ class Ventana(QMainWindow):
                 self.panel_es.estado.setText(f"No se pudo cargar: {exc}")
 
     def _leer_conexion_recordada(self) -> tuple[str, int, int]:
-        """El último (host, puerto, esclavo) con el que se conectó o se probó con éxito; la primera vez, el de Factory I/O."""
+        """El último (host, puerto, esclavo) con el que se conectó o se probó con éxito; la primera vez, la configuración inicial."""
         a = self.ajustes
         host = str(a.value("modbus/host", CONEXION_INICIAL[0]) or "").strip()
         puerto, unidad = a.value("modbus/puerto", CONEXION_INICIAL[1], type=int), a.value("modbus/unidad", CONEXION_INICIAL[2], type=int)
@@ -1558,19 +1845,72 @@ class Ventana(QMainWindow):
             return CONEXION_INICIAL
         return host, puerto, unidad
 
+    def _leer_parametros_recordados(self) -> dict[str, Any]:
+        host, puerto, unidad = self._leer_conexion_recordada()
+        base = {"host": host, "puerto": puerto, "unidad": unidad, "periodo_ms": 50, "timeout_ms": 500,
+                "canales": copy.deepcopy(CANALES_INICIALES), "escalas": {}}
+        try:
+            texto = self.ajustes.value("modbus/configuracion", "")
+            if texto:
+                datos = json.loads(str(texto))
+                if not isinstance(datos, dict):
+                    raise ValueError("preferencias inválidas")
+                propuesta = {**base, **{k: datos[k] for k in base if k in datos}}
+                c = Configuracion(**{k: v for k, v in propuesta.items() if k != "escalas"})
+                c.validar({"id": "", "variables": []})
+                if not isinstance(propuesta["escalas"], dict):
+                    raise ValueError("escalas inválidas")
+                from fractions import Fraction
+                for clave, escala in propuesta["escalas"].items():
+                    area, numero = clave.split(":")
+                    if area not in CANALES_INICIALES or not 0 <= int(numero) <= 65535 or Fraction(str(escala)) <= 0:
+                        raise ValueError("escala inválida")
+                return propuesta
+        except (ValueError, TypeError, ZeroDivisionError, AttributeError):
+            pass
+        return base
+
+    def _recordar_parametros(self, config: Configuracion) -> None:
+        datos = {k: getattr(config, k) for k in ("host", "puerto", "unidad", "periodo_ms", "timeout_ms")}
+        datos["canales"] = copy.deepcopy(config.canales or CANALES_INICIALES)
+        datos["escalas"] = dict(self.panel_es.escalas_base)
+        datos["escalas"].update({f"{s.area}:{s.direccion}": s.escala for s in config.senales})
+        texto = json.dumps(datos, ensure_ascii=False, sort_keys=True)
+        if self.ajustes.value("modbus/configuracion", "") != texto:
+            self.ajustes.setValue("modbus/configuracion", texto)
+            for clave in ("host", "puerto", "unidad"):
+                self.ajustes.setValue(f"modbus/{clave}", datos[clave])
+            self.ajustes.sync()
+        self._parametros_recordados = datos
+        self._conexion_recordada = tuple(datos[k] for k in ("host", "puerto", "unidad"))
+        self.panel_es.conexion_defecto = self._conexion_recordada
+        self.panel_es.parametros_defecto = copy.deepcopy(datos)
+
     def _recordar_conexion(self) -> None:
-        """Tras conectar o probar la conexión con éxito, recuerda el servidor para proponerlo en los proyectos que no traigan
-        mapa propio (el mapa guardado de un proyecto manda sobre esto). No cambia nada de la conexión."""
+        """Recuerda parámetros completos tras una conexión o prueba con éxito, nunca las asignaciones de otro proyecto."""
         m = self.modbus
         if m.cliente is None or not (m.estado == "conectado" or (m.estado == "desconectado" and m.mensaje.startswith("Conexión probada"))):
             return
-        datos = (m.cliente.host, m.cliente.puerto, m.cliente.unidad)
-        if datos != self._conexion_recordada:
-            self._conexion_recordada = datos
-            self.panel_es.conexion_defecto = datos
-            for clave, valor in zip(("host", "puerto", "unidad"), datos):
-                self.ajustes.setValue(f"modbus/{clave}", valor)
-            self.ajustes.sync()
+        config = copy.deepcopy(self.panel_es.config)
+        config.host, config.puerto, config.unidad = m.cliente.host, m.cliente.puerto, m.cliente.unidad
+        self._recordar_parametros(config)
+
+    def _configuracion_para_guardar(self, doc: dict[str, Any]) -> Configuracion:
+        if not self.panel_es.bloqueado:
+            self.panel_es.actualizar(doc)
+            config = self.panel_es.obtener()
+        else:
+            # Guardar no cambia el mapa ni la lectura que están en uso por una conexión viva.
+            config = copy.deepcopy(self.panel_es.config)
+            config.quitar_obsoletas(doc)
+            config.modelo = doc["id"]
+            config.validar(doc)
+        return config
+
+    def _guardar_mapa_en(self, destino: Path, doc: dict[str, Any]) -> None:
+        config = self._configuracion_para_guardar(doc)
+        config.guardar(destino / ARCHIVO, doc)
+        self._recordar_parametros(config)
 
     def _doc_es(self) -> dict[str, Any] | None:
         """El modelo cuyas variables enseña el panel de E/S: el que se edita; al simular, el que se está ejecutando."""
@@ -1623,6 +1963,8 @@ class Ventana(QMainWindow):
         self.a_es.setChecked(es)
         self.a_es.blockSignals(False)
         self._aspecto_boton_es(es)
+        self.a_ejecutar.setEnabled(not es)
+        self.a_reiniciar.setEnabled(not es)
 
     def _aspecto_boton_es(self, es: bool) -> None:
         """Texto, tooltip e icono del botón conmutador en cada una de sus dos vistas."""
@@ -1630,6 +1972,16 @@ class Ventana(QMainWindow):
         self.a_es.setToolTip("Volver al dibujo GRAFCET" if es else
                              "Conectar sensores y actuadores · se vuelve con este mismo botón o con la flecha ← del panel")
         self.a_es.setIcon(self._iconos_es[1 if es else 0])
+
+    def _fijar_ancho_boton_play(self) -> None:
+        boton = self.tb_sim.widgetForAction(self.a_ejecutar)
+        inicial = self.a_ejecutar.isChecked()
+        anchos = []
+        for on in (False, True):
+            self._marcar_play(on)
+            anchos.append(boton.sizeHint().width())
+        self._marcar_play(inicial)
+        boton.setFixedWidth(max(anchos))
 
     def _fijar_ancho_boton_es(self) -> None:
         """El botón mide siempre lo del más ancho de sus dos estados (texto e icono): al alternar entre «E/S externas» y «Vista
@@ -1673,7 +2025,7 @@ class Ventana(QMainWindow):
         if self.abrir_ruta(raiz / "manifest.json"):
             self.a_ejecutar.setChecked(False)
             self._mostrar_pagina(True)
-            self.panel_es.estado.setText("Prueba preparada · desconectado. Comprueba la IP de Factory I/O y pulsa «Probar conexión».")
+            self.panel_es.estado.setText("Prueba preparada · desconectado. Comprueba la IP del servidor Modbus y pulsa «Conectar».")
 
     def _desconectar_modbus(self):
         self.a_ejecutar.setChecked(False)
@@ -1708,6 +2060,9 @@ class Ventana(QMainWindow):
                 continue
             on = values.get(var) is True
             b.setChecked(on)
+            if not on:
+                b.enclavado = False
+            b.indicar(on)
             b.setText(f"{self.nombre(var)} = {1 if on else 0}")
             b.setStyleSheet(f"background: {COL['accent_soft']}; border: 1px solid {COL['accent']}; color: #1d2330; "
                             "padding: 5px 10px" if on else "padding: 5px 10px")
@@ -1853,8 +2208,10 @@ class Ventana(QMainWindow):
                 if r != QMessageBox.StandardButton.Yes:
                     return False
         try:
+            self._configuracion_para_guardar(e.ed.model)
             e.guardar(destino)
-        except (DiagnosticError, OSError) as exc:
+            self._guardar_mapa_en(destino, e.ed.model)
+        except (DiagnosticError, OSError, ValueError) as exc:
             QMessageBox.warning(self, TITULO, f"No se pudo guardar:\n\n{exc}")
             return False
         shutil.rmtree(self.recup.dir, ignore_errors=True)  # lo guardado ya no necesita su copia de recuperación
@@ -1877,6 +2234,7 @@ class Ventana(QMainWindow):
         pres = self.edicion.ed.presentation if f["tipo"] == "editor" else f.get("presentacion")
         add_document(project, copy.deepcopy(pres) if pres else presentation_for(doc, layout))
         save_project(destino, project)
+        self._guardar_mapa_en(destino, doc)
 
     def guardar_imagen(self) -> None:
         editando = self.modo == "editar" and self.edicion is not None

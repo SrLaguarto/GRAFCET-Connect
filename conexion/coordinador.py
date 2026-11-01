@@ -15,7 +15,7 @@ CLAVE_ANTERIOR = "anterior"  # variable de una salida del mapa anterior en un ce
 
 
 def explicar_fallo(exc) -> str:
-    """Una primera frase corta y legible para los fallos de red habituales (conexión anulada o reiniciada por Factory I/O,
+    """Una primera frase corta y legible para los fallos de red habituales (conexión anulada o reiniciada por el servidor Modbus,
     rechazada, tiempo agotado), con su código si lo hay; cadena vacía si no se reconoce (el mensaje sigue siendo el técnico).
     Solo explica: no decide nada del estado ni del comportamiento."""
     causa = exc.__cause__ if isinstance(exc.__cause__, OSError) else exc
@@ -25,13 +25,13 @@ def explicar_fallo(exc) -> str:
         codigo = int(m.group(1))
     sufijo = f" (WinError {codigo})" if codigo else ""
     if codigo in WINERROR_CORTADA or isinstance(causa, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
-        return f"Factory I/O cerró o anuló la conexión{sufijo}"
+        return f"El servidor Modbus cerró o anuló la conexión{sufijo}"
     if codigo == WINERROR_RECHAZADA or isinstance(causa, ConnectionRefusedError):
-        return f"Factory I/O rechazó la conexión{sufijo}: comprueba que su servidor Modbus está activo y la IP"
+        return f"El servidor Modbus rechazó la conexión{sufijo}: comprueba que está activo y la IP"
     if codigo == WINERROR_TIEMPO or isinstance(causa, TimeoutError) or "Tiempo de espera Modbus agotado" in texto:
-        return f"Factory I/O no ha respondido a tiempo{sufijo}"
+        return f"El servidor Modbus no ha respondido a tiempo{sufijo}"
     if "El servidor cerró la conexión" in texto:
-        return "Factory I/O cerró la conexión"
+        return "El servidor Modbus cerró la conexión"
     return ""
 
 
@@ -66,7 +66,7 @@ class Coordinador:
             self.en_marcha = False
             if self.estado == "conectado":
                 self.mensaje = ("Conectado · leyendo sensores antes de ejecutar…" if ejecutar else
-                                "Conectado · Pausa · salidas a cero")
+                                "Conectado · Stop · salidas a cero")
             # Una lectura enviada antes de Ejecutar no sirve para reanudar.
             self._descartar_lectura = ejecutar and self.futuro is not None and self.fase == "leer"
             self._ejecutar = ejecutar
@@ -129,7 +129,7 @@ class Coordinador:
         if self.estado == "diagnostico":
             self.estado = "conectado"
         if self.estado == "conectado":
-            self.mensaje = "Conectado · Pausa · salidas a cero · edición habilitada"
+            self.mensaje = "Conectado · Stop · salidas a cero · edición habilitada"
 
     def observar(self, config, documento):
         """Cambia el mapa de lectura (otro modelo) con el GRAFCET parado, sin tocar TCP; descarta lo que estuviera en vuelo.
@@ -235,10 +235,10 @@ class Coordinador:
                         self.estado, self.mensaje = "desconectado", "Conexión probada; no se han escrito actuadores"
                     elif fase == "inicio":
                         self.muestra = resultado
-                        self.estado, self.mensaje = "conectado", "Conectado · actuadores a cero · pulse Ejecutar"
+                        self.estado, self.mensaje = "conectado", "Conectado · actuadores a cero · pulse Play"
                         self.escritos = self.adaptador.valores_salida(cero=True)
                         if self.adaptador.sesion is None:  # Pausa: lo asignado ya está a 0 y solo se observan las entradas
-                            self.mensaje = ("Conectado · Pausa · salidas a cero · observando las entradas" if self.escritos else
+                            self.mensaje = ("Conectado · Stop · salidas a cero · observando las entradas" if self.escritos else
                                             "Conectado · observación de entradas · sin salidas asignadas")
                     elif fase == "leer":
                         self.muestra = resultado

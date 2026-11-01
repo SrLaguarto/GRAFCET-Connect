@@ -6,7 +6,7 @@ editan aquí; los usos de la variable no se listan, solo impiden quitarla (con s
 (rename, change_variable, add_variable, delete_variable del núcleo) y se deshace con Ctrl+Z; si no se puede, el motivo
 sale debajo, la fila parpadea en naranja y la tabla vuelve a lo que hay.
 
-«Nueva E», «Nueva S» y «Nueva M» (entrada, salida, memoria) añaden una fila **sin nombre**, solo de la interfaz: una variable no puede estar en el modelo sin
+«+ Entrada», «+ Salida» y «+ Memoria» (entrada, salida, memoria) añaden una fila **sin nombre**, solo de la interfaz: una variable no puede estar en el modelo sin
 nombre. Al escribir un nombre válido se crea en el modelo (una operación de deshacer); si no es válido o está repetido,
 se rechaza y la fila sigue en blanco. Con filas sin nombre, la ventana no deja simular ni guardar.
 """
@@ -14,12 +14,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QEvent, QTimer, Qt, Signal
+from PySide6.QtCore import QEvent, QTimer, Qt, Signal, QSize
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHeaderView, QLabel, QPushButton,
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QSizePolicy,
                                QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
-from .bloques import FlowLayout
 from .diagrama import COL
 from .edicion import Parpadeo
 
@@ -83,6 +82,10 @@ class _DelegadoCombo(QStyledItemDelegate):
 
 
 class _Tabla(QTableWidget):
+    def sizeHint(self):  # noqa: N802
+        tam = super().sizeHint()
+        return QSize(tam.width(), getattr(self, "alto_filas", tam.height()))
+
     """La tabla de variables. Supr, con la tabla enfocada y sin una celda en edición, pide quitar las filas seleccionadas;
     con el editor de una celda abierto, Supr es del editor (borra texto)."""
 
@@ -151,31 +154,38 @@ class PanelVariables(QWidget):
         self.tabla.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.tabla.setItemDelegate(_DelegadoCombo(self))
         self.tabla.clicked.connect(self._clic)
-        self.tabla.setMinimumHeight(90)
+        self.tabla.setMinimumHeight(24)
         self.tabla.itemChanged.connect(self._editado)
-        lay.addWidget(self.tabla, 1)
+        self.tabla.horizontalHeader().geometriesChanged.connect(self._ajustar_tabla)
+        lay.addWidget(self.tabla)
         cont = QWidget()
-        fila = FlowLayout(cont, 3)  # en una fila si caben; si no, en dos
+        fila = QGridLayout(cont)
+        fila.setContentsMargins(0, 0, 0, 0)
+        fila.setSpacing(3)
+        fila.setColumnStretch(0, 1)
+        fila.setColumnStretch(1, 1)
         fm = QFontMetrics(self.fuente)
         self.b_nuevas: dict[str, QPushButton] = {}
-        for papel, texto, tip in (("input", "Nueva E", "Nueva entrada"), ("output", "Nueva S", "Nueva salida"),
-                                  ("internal", "Nueva M", "Nueva memoria")):
+        for papel, texto, tip in (("input", "+ Entrada", "Nueva entrada"), ("output", "+ Salida", "Nueva salida"),
+                                  ("internal", "+ Memoria", "Nueva memoria")):
             b = QPushButton(texto)
             b.setToolTip(tip)
             b.clicked.connect(lambda _=False, p=papel: self.nueva(p))
             self.b_nuevas[papel] = b
-        self.b_quitar = QPushButton("Quitar")
+        self.b_quitar = QPushButton("Eliminar")
         self.b_quitar.setToolTip("Solo si no se usa en ninguna receptividad ni acción")
         self.b_quitar.clicked.connect(self.quitar)
-        for b in (*self.b_nuevas.values(), self.b_quitar):  # botones a lo que mide su texto (el mínimo del estilo es de 75)
+        for i, b in enumerate((*self.b_nuevas.values(), self.b_quitar)):
             b.setFont(self.fuente)
             b.setMinimumWidth(fm.horizontalAdvance(b.text()) + 16)
-            b.setFixedSize(b.minimumWidth(), b.sizeHint().height())
-            fila.addWidget(b)
+            b.setStyleSheet("QPushButton { padding: 4px 6px; min-width: 0px; }")
+            b.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
+            fila.addWidget(b, i // 2, i % 2)
         lay.addWidget(cont)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
+        lay.addStretch(1)
 
     # -- la tabla ---------------------------------------------------------------------------------
     @staticmethod
@@ -211,7 +221,17 @@ class PanelVariables(QWidget):
         self._llenando = False
         if actual is not None and actual in [f["id"] for f in self._filas]:
             self.tabla.selectRow([f["id"] for f in self._filas].index(actual))
+        self._ajustar_tabla()
         self._pintar()
+
+    def _ajustar_tabla(self):
+        alto = min(320, self.tabla.horizontalHeader().height()
+                   + sum(self.tabla.rowHeight(r) for r in range(self.tabla.rowCount()))
+                   + 2 * self.tabla.frameWidth())
+        if alto != getattr(self.tabla, "alto_filas", None):
+            self.tabla.alto_filas = alto
+            self.tabla.setMaximumHeight(alto)
+            self.tabla.updateGeometry()
 
     def texto(self, r: int, c: int) -> str:
         """Lo que se ve en la celda de la fila r: el papel o el tipo en palabras."""

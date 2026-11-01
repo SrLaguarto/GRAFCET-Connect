@@ -7,7 +7,10 @@ from pathlib import Path
 import tempfile
 
 ARCHIVO = "conexion-factoryio.json"
-ETIQUETA_CANAL = {"discrete": "Input", "input-register": "Input Reg", "coil": "Coil", "holding": "Holding Reg"}
+CONEXION_INICIAL = ("192.168.1.133", 502, 1)
+CANALES_INICIALES = {a: {"offset": 0, "cantidad": 16 if a in ("discrete", "coil") else 8}
+                     for a in ("discrete", "coil", "input-register", "holding")}
+ETIQUETA_CANAL = {"discrete": "Entrada", "input-register": "Entrada numérica", "coil": "Salida", "holding": "Salida numérica"}
 
 
 @dataclass
@@ -25,7 +28,7 @@ class Senal:
 
 @dataclass
 class Configuracion:
-    host: str = "127.0.0.1"
+    host: str = CONEXION_INICIAL[0]
     puerto: int = 502
     unidad: int = 1
     periodo_ms: int = 50
@@ -122,7 +125,6 @@ class Configuracion:
         return v["type"]["kind"] != "bool" if digital else v["type"]["kind"] not in ("int", "decimal")
 
     def guardar(self, ruta: Path, doc: dict):
-        self.fijar_escalas_factoryio()
         self.validar(doc)
         datos = {**asdict(self), "modelo": doc["id"], "version": 1}
         ruta.parent.mkdir(parents=True, exist_ok=True)
@@ -148,7 +150,6 @@ class Configuracion:
                 raise ValueError("Versión de conexión desconocida")
             datos["senales"] = [Senal(**s) for s in datos["senales"]]
             config = cls(**datos)
-            config.fijar_escalas_factoryio()
             quitadas = config.quitar_obsoletas(doc)
             config.validar(doc)
             if avisos is not None:

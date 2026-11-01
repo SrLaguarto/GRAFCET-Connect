@@ -399,3 +399,12 @@ Ronda 4 (P-IMP-68 y P-IMP-69)
 - Play pulsado con el cero de Pausa aún sin confirmar no repite ese cero.
 - Una orden de forzado suelta solo ofrece destinos posibles (sin ciclo); si no hay ninguno, avisa «No hay otro parcial al que forzar: cree un recinto, una macroetapa o un grafcet parcial».
 - Límites, sin decidir: si se abre otro proyecto mientras se prueba la conexión, el estado puede quedarse en «probando» hasta Desconectar (ya ocurría antes); cerrar la ventana con la red caída sigue sin avisar; los comentarios quedan fuera de los marcos; lo cosmético queda para el rediseño (paleta por secciones, iconos, sitio de «Mostrar dependencias»).
+
+Rondas 5 y 6 (P-IMP-71 a P-IMP-79)
+
+- Cortar, copiar y pegar (Ctrl+X, Ctrl+C, Ctrl+V y clic derecho), con su jerarquía; se pega bajo el ratón o en el hueco libre más cercano.
+- Al simular, las entradas son pulsadores (Ctrl enclava; clic derecho: interruptor). Play/Stop con «Stop» en lugar de «Pausa». Play oculta la paleta y el panel inferior y no mueve el dibujo.
+- Lo activo en verde lima y lo verdadero coloreado; temporizador sin cápsula; dependencias por esquinas; barras Y no válidas bloquean Play.
+- Panel E/S en castellano, más compacto, con los valores de Factory I/O por defecto (192.168.1.133:502, esclavo 1, 16+16, 8+8, escala 100) y sin bloque inferior de configuración.
+- Paleta con dos columnas y nombres debajo; paneles plegables; diagnósticos junto al zoom; notas de texto e imágenes.
+- Borradores huérfanos que se limpian al abrir; órdenes y acciones sin configurar bloquean Play; el lazo selecciona marcos.

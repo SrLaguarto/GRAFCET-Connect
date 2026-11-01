@@ -9,6 +9,7 @@ así que se puede probar sin pantalla.
 from __future__ import annotations
 
 import copy
+import heapq
 import math
 import re
 import uuid
@@ -21,7 +22,7 @@ from PySide6.QtCore import QObject, QPointF, QRectF, Qt, QTimer, Signal
 from grafcet.diagnostics import Diagnostic, DiagnosticError
 from grafcet.expressions import FUNCS_EXPR, FUNCS_REF, KEYWORDS
 from grafcet.notation import a_nucleo, a_usuario, etapas_ambiguas, x_etapa
-from grafcet.editor import Editor, new_grafcet_document
+from grafcet.editor import Editor, Fragment, new_grafcet_document
 from grafcet.ids import MAX_LABEL, label_key, valid_label
 from grafcet.persistence import Project, add_document, new_project, save_project
 from grafcet.profile import normalize_options
@@ -31,12 +32,13 @@ from grafcet.view import (Vista, display_names, force_situation, norm, layout_fr
                          substitute)
 
 from .bloques import _dur_usuario, normalizar_duracion
+from .anotaciones import en as anotacion_en, rect as rect_anotacion, importar_imagen, editar_texto
 from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, REJILLA, SX, TB, VACIO_H, VACIO_W, _distancia, _extra,
                        _geometria_acciones, _Pintor, ancla_en, anclas, barra, cajas_parciales, elemento_en, enlaces,
                        icono_accion, posiciones)
 
 HERRAMIENTAS = ("seleccionar",)  # el ratón selecciona, mueve y enlaza; los elementos nuevos solo se colocan arrastrándolos
-DY = 80  # distancia vertical entre una etapa y su transición (la de los ejemplos)
+DY = 60  # distancia vertical estándar: tres pasos de rejilla entre etapa y transición
 IMAN = 40  # a qué distancia horizontal (dos pasos de rejilla) un elemento movido se alinea con uno enlazado
 IMAN_ACCION = 16  # a qué distancia de otra acción se pega una acción suelta (lado derecho, o inferior en columna)
 TIPOS_ACCION = FICHAS_ACCION  # continua, condicionada, al activar, al desactivar, por evento (+ «limitada» de ficheros antiguos)
@@ -59,7 +61,7 @@ BARRA_ALTO_MIN = 4  # alto con el que una barra cuenta como obstáculo aunque se
 DESPLAZA_PASADAS = 4  # veces que se recalcula el hueco tras desplazar, por si sigue habiendo algo que estorba
 # Jerarquías (P-IMP-23..27, REQ-EDT-08, REQ-JER-04, 05, 07): dónde se colocan la expansión de una macroetapa y el marco de un recinto
 EXP_DX = 280   # de la macroetapa a la columna de su expansión (a la derecha, como en el ejemplo «macroetapa»)
-EXP_DY = 4 * DY  # de la etapa de entrada a la de salida: caben una transición, una etapa y otra transición entre las dos
+EXP_DY = 320  # espacio inicial de edición de la expansión; independiente del paso entre elementos
 EXP_PASO = 160  # si la columna no está libre, cuánto se corre a la derecha para probar otra
 EXP_INTENTOS = 40
 RECINTO_DX = 140  # del centro de la encapsulante al borde izquierdo del marco de su recinto vacío
@@ -130,6 +132,7 @@ class Edicion(QObject):
         super().__init__()
         self.ed, self.titulo, self.ruta = ed, titulo, ruta
         self.ignorados = self._sanear_borradores()
+        self.enlaces_quitados = len(ed.cleaned_draft_link_ids)
         parciales = [p["id"] for p in ed.model["partials"]]
         self.raiz = "g" if "g" in parciales else parciales[0]
         self.herramienta = "seleccionar"
@@ -315,9 +318,19 @@ class Edicion(QObject):
                            draft_actions=self._borradores(), action_layouts=ed.action_layouts(),
                            comments=ed.comments())
         self.M = self.vista.model
+        self.M["annotations"] = self.ed.annotations()
+        if self.arrastre:
+            a = self.arrastre
+            for n in self.M["annotations"]:
+                if a.get("tipo") in ("anotacion","tamano_anotacion") and a["id"] == n["id"]:
+                    n.update({k:a[k] for k in ("x","y","width","height") if k in a})
+                elif a.get("tipo") == "grupo" and n["id"] in a["inicio"]:
+                    x,y=a["inicio"][n["id"]];n.update(x=x+a["x"]-a["x0"],y=y+a["y"]-a["y0"])
         self.nombres = self.M.get("names", {})
         self._marcos_vacios()
         vivos = set(posiciones(self.M)) | {d["id"] for d in self.M.get("drafts", [])} | {e["id"] for e in enlaces(self.M)} | {b["id"] for b in self.M.get("bars", [])}
+        vivos |= {n["id"] for n in self.M.get("annotations",[])}
+        self.nombres.update({n["id"]:("Texto" if n["kind"] == "text" else n.get("name","Imagen")) for n in self.M.get("annotations",[])})
         vivos |= set(cajas_parciales(self.M))  # los parciales con marco (un recinto, una expansión) también se seleccionan
         vivos |= {f["id"] for f in ed.model["forces"]}  # y las órdenes de forzado
         vivos |= {a["id"] for a in ed.model["actions"]} | {d["id"] for d in ed.draft_actions()}
@@ -367,31 +380,39 @@ class Edicion(QObject):
         """Los diagnósticos del modelo para el panel (REQ-EDT-09): código, texto con nombres, corrección y elemento."""
         out = []
         for d in self.ed.validate().diagnostics:
-            out.append({"code": d.code, "message": self.sust(d.message), "correction": self.sust(d.correction),
+            mensaje, correccion = self.sust(d.message), self.sust(d.correction)
+            evento = next((a for a in self.ed.model["actions"] if a.get("trigger", {}).get("kind") == "event" and d.element in (a["id"],a["trigger"].get("expressionRef"))), None)
+            if d.code == "D-TIPO-EVENTO" and evento:
+                texto = self.texto_accion(evento["id"], "evento")
+                mensaje = (f"Acción por evento de {self._nom(evento['targetRef'])} en la etapa {self._nom(evento['stepRef'])}: "
+                           f"el disparador «{texto}» debe ser un evento, no solo una condición booleana.")
+                correccion = "Elija el evento que deba disparar la acción: flanco de subida (↑) o de bajada (↓) de la variable."
+                mensaje += " Use un flanco de subida (↑) o de bajada (↓), según lo que necesite."
+            out.append({"code": d.code, "message": mensaje, "correction": correccion,
                         "severity": d.severity, "blocks": d.blocks_start, "question": d.question,
-                        "element": d.element, "target": self.dibujable(d.element)})
+                        "element": d.element, "target": evento["id"] if d.code == "D-TIPO-EVENTO" and evento else self.dibujable(d.element)})
         if self.ignorados:
             out.append({"code": "AVISO", "severity": "advertencia", "blocks": False, "question": None, "element": None,
                         "target": None, "correction": "Se descartó al abrir; vuelva a colocar la acción si hacía falta",
                         "message": "Se ignoró un borrador de acción dañado" if self.ignorados == 1
                         else f"Se ignoraron {self.ignorados} borradores de acción dañados"})
-        for b in self.ed.draft_actions():  # avisos de la edición (no son diagnósticos del núcleo): no impiden simular
+        for b in self.ed.draft_actions():  # diagnósticos de la edición: los borradores no están en el modelo ejecutable
             suelta = not b.get("etapa")
             if b["tipo"] == "forzado":
                 falta = self._faltan_orden(b)
-                out.append({"code": "AVISO", "severity": "advertencia", "blocks": False, "question": None, "element": b["id"],
+                out.append({"code": "D-FORZADO-PENDIENTE", "severity": "bloqueo", "blocks": True, "question": None, "element": b["id"],
                             "target": b["id"],
-                            "message": "Orden de forzado sin etapa: no se simula" if suelta else
-                            f"Orden de forzado de la etapa {self.nombre(b['etapa'])} sin completar ({', '.join(falta)}): no se simula",
+                            "message": "Orden de forzado sin configurar suelta" if suelta else
+                            f"Orden de forzado sin configurar en la etapa {self.nombre(b['etapa'])} ({', '.join(falta)})",
                             "correction": "Una la orden a una etapa con un enlace desde su punto de unión izquierdo"
                             if suelta else "Elija su parcial destino y su forma con «Configurar orden de forzado…» (botón derecho "
                             "en ella, o doble clic)"})
                 continue
-            out.append({"code": "AVISO", "severity": "advertencia", "blocks": False, "question": None, "element": b["id"],
-                        "target": b["id"],
-                        "message": "Acción sin etapa: no se simula" if suelta else
-                        f"Acción de la etapa {self.nombre(b['etapa'])} sin completar "
-                        f"({', '.join(self.faltan(self._datos_borrador(b), self._parcial_borrador(b)))}): no se simula",
+            out.append({"code": "D-ACCION-PENDIENTE", "severity": "bloqueo",
+                        "blocks": True, "question": None, "element": b["id"], "target": b["id"],
+                        "message": "Acción sin configurar suelta" if suelta else
+                        f"Acción sin configurar en la etapa {self.nombre(b['etapa'])} "
+                        f"({', '.join(self.faltan(self._datos_borrador(b), self._parcial_borrador(b)))})",
                         "correction": "Una la acción a una etapa con un enlace desde su punto de unión izquierdo"
                         if suelta else "Complete la acción con «Editar…» (botón derecho en ella)"})
         return out
@@ -408,6 +429,8 @@ class Edicion(QObject):
             if t["conditionRef"] == elemento:
                 return t["id"]
         for a in m["actions"]:
+            if a.get("trigger", {}).get("expressionRef") == elemento:
+                return a["id"]
             if a["id"] == elemento or elemento in (a.get("conditionRef"), a.get("valueRef")):
                 return a["stepRef"]
         for r in m["hierarchy"]["enclosures"]:  # un recinto: su encapsulante; una expansión: su macroetapa
@@ -418,7 +441,7 @@ class Edicion(QObject):
                 return x["ownerMacroRef"]
         if any(f["id"] == elemento for f in m["forces"]):  # una orden de forzado: su caja, en la fila de su etapa
             return elemento
-        return elemento if elemento in cajas_parciales(self.M) else None  # un parcial con marco
+        return elemento if elemento in cajas_parciales(self.M) or any(b["id"] == elemento for b in self.M.get("bars", [])) else None
 
     def marcados(self) -> set[str]:
         return {d["target"] for d in self.diagnosticos() if d["blocks"] and d["target"]}
@@ -462,7 +485,8 @@ class Edicion(QObject):
         self.cambia()
 
     def centro(self, ident: str) -> QPointF | None:
-        p = posiciones(self.M).get(ident)
+        n=self.anotacion(ident)
+        p = rect_anotacion(n).center().toTuple() if n else posiciones(self.M).get(ident)
         caja = next((c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["id"] == ident), None)
         if p is None and caja:  # una acción (sus cajas están dibujadas)
             x, y, w, h = caja["rect"]
@@ -502,6 +526,25 @@ class Edicion(QObject):
     def _modelo(self, p: QPointF) -> tuple[int, int]:
         return ajustar(p.x() - SX), ajustar(p.y())
 
+    def anotacion(self, ident):
+        return next((n for n in self.M.get("annotations",[]) if n["id"] == ident),None)
+
+    def poner_anotacion(self, tipo, p):
+        datos={"text":"Texto","font":"Arial","size":18,"color":"#172e4d"}
+        if tipo == "imagen":
+            try:datos=importar_imagen(self.diagrama.window() if self.diagrama else None)
+            except (OSError,ValueError) as exc:self.informar(str(exc));return None
+            if datos is None:return None
+        ident=self.ed.add_annotation("text" if tipo == "texto" else "image",self._modelo(p),partialRef=self.parcial_en(p),**datos)
+        self.sel,self.accion=[ident],None;self.cambia();return ident
+
+    def editar_anotacion(self, ident):
+        n=self.anotacion(ident)
+        if not n:return
+        try:datos=editar_texto(n,self.diagrama.window() if self.diagrama else None) if n["kind"] == "text" else importar_imagen(self.diagrama.window() if self.diagrama else None)
+        except (OSError,ValueError) as exc:self.informar(str(exc));return
+        if datos is not None:self.ed.update_annotation(ident,**datos);self.cambia()
+
     def colocar(self, tipo: str, p: QPointF) -> None:
         """Un elemento de la paleta soltado en el dibujo: «etapa», «encapsulante», «macroetapa», «parcial», «transicion»,
         «simultaneidad», «forzado» o «accion:<tipo>» (continua, condicionada, activacion, desactivacion, evento; «accion» a secas
@@ -511,6 +554,8 @@ class Edicion(QObject):
         de todo marco, al raíz. Un «parcial» crea un grafcet parcial nuevo y vacío, con su marco (`poner_parcial`). Una orden de
         forzado se suelta como una acción (`poner_orden_ficha`): suelta, sin efecto en la simulación hasta que se configura y se
         une a una etapa; soltada sobre una etapa, se une a ella."""
+        if tipo in ("texto","imagen"):
+            self.poner_anotacion(tipo,p);return
         if tipo == "forzado":
             self.poner_orden_ficha(p)
             return
@@ -586,6 +631,19 @@ class Edicion(QObject):
 
     def prensar(self, p: QPointF, event: Any = None) -> bool:
         ident = elemento_en(self.M, p)
+        n = self.anotacion(ident)
+        if n:
+            if self._mayus(event):
+                self.sel = [i for i in self.sel if i != ident] if ident in self.sel else self.sel+[ident]
+                self.accion=None;self.cambiado.emit();return True
+            if ident in self.sel and len(self.sel)>1:
+                self.arrastre=self._arrastre_grupo(ident,p,([ident],None,False))
+            else:
+                r=rect_anotacion(n);tamano=ident in self.sel and (p-r.bottomRight()).manhattanLength()<=12
+                self.sel,self.accion=[ident],None
+                self.arrastre={"tipo":"tamano_anotacion" if tamano else "anotacion","id":ident,"original":dict(n),
+                               "dx":p.x()-r.left(),"dy":p.y()-r.top(),"x":n["x"],"y":n["y"],"movido":False}
+            self.cambiado.emit();return True
         punto = self._punto(p, ident)
         amplia = self._mayus(event)
         if punto and punto["lado"] == "izq":  # el punto de unión de una acción suelta (o de su grupo)
@@ -644,7 +702,7 @@ class Edicion(QObject):
                 continue
             for handle in r["handles"]:
                 if (p-QPointF(*handle["pos"])).manhattanLength() <= 12:
-                    self.arrastre = {"id": r["id"], "tipo": "tramo", "pts": r["pts"], "handle": handle,
+                    self.arrastre = {"id": r["id"], "tipo": "tramo", "pts": r.get("routePts", r["pts"]), "handle": handle,
                                      "movido": False, "start": p,
                                      "style": copy.deepcopy(self.ed.link_styles().get(r["id"], {}))}
                     return True
@@ -688,6 +746,9 @@ class Edicion(QObject):
         elif b:
             self.arrastre = {"id": ident, "tipo": "barra", "dx": p.x() - (b["x"] + SX), "dy": p.y() - b["y"],
                              "x": b["x"], "y": b["y"], "movido": False}
+        elif ident in cajas_parciales(self.M) and (not next((q for q in self.M["partials"] if q["id"] == ident), {}).get("vacio")
+                                                  or any(n.get("partialRef") == ident for n in self.M.get("annotations",[]))):
+            self.arrastre = self._arrastre_grupo(ident, p, ([ident], None, False))
         elif vacio := next((q for q in self.M["partials"] if q["id"] == ident and q.get("vacio")), None):
             # el marco de un recinto sin etapas se mueve (su posición es lo único que lo define); el de un parcial con
             # etapas es el de ellas, y solo se selecciona
@@ -701,7 +762,7 @@ class Edicion(QObject):
         return event is not None and bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
 
     def dentro(self, a: QPointF, b: QPointF) -> list[str]:
-        """Lo que queda entero dentro del rectángulo (a, b): etapas, macroetapas, transiciones, barras y acciones."""
+        """Lo que queda entero dentro del rectángulo (a, b): etapas, macroetapas, transiciones, barras, acciones y marcos."""
         r = QRectF(a, b).normalized()
         out = []
         for ident, (x, y) in posiciones(self.M).items():
@@ -716,6 +777,10 @@ class Edicion(QObject):
         for c in getattr(self.diagrama, "cajas_acciones", None) or []:
             if r.contains(QRectF(*c["rect"])):
                 out.append(c["id"])
+        for ident, caja in cajas_parciales(self.M).items():
+            if r.contains(QRectF(caja["x0"], caja["y0"], caja["x1"] - caja["x0"], caja["y1"] - caja["y0"])):
+                out.append(ident)
+        out += [n["id"] for n in self.M.get("annotations",[]) if r.contains(rect_anotacion(n))]
         return out
 
     def _iman(self, ident: str, x: float, moviendo: set[str] | frozenset[str] = frozenset()) -> float:
@@ -738,6 +803,15 @@ class Edicion(QObject):
         if self.inicio_rama and (p - self.inicio_rama["pos"]).manhattanLength() > 8:
             self.enlace, self.inicio_rama = self.inicio_rama, None
         a = self.arrastre
+        if a and a.get("tipo") in ("anotacion","tamano_anotacion"):
+            if a["tipo"] == "anotacion":
+                a["x"],a["y"]=self._modelo(QPointF(p.x()-a["dx"],p.y()-a["dy"]))
+            else:
+                n=a["original"];w=max(20,p.x()-SX-n["x"]);h=max(20,p.y()-n["y"])
+                if n["kind"] == "image":
+                    k=max(w/n["width"],h/n["height"]);w,h=n["width"]*k,n["height"]*k
+                a.update(width=w,height=h)
+            a["movido"]=True;self.reconstruir();self.redibujar.emit();return True
         if a and a.get("tipo") in ("flecha", "tramo"):
             if (p-a["start"]).manhattanLength() < 3 and not a["movido"]:
                 return True
@@ -749,7 +823,7 @@ class Edicion(QObject):
                 if len(pts) == 6:
                     route = a["style"].setdefault("route", {"laneX": str(pts[2][0]-SX),
                                                             "exitY": str(pts[1][1]), "entryY": str(pts[3][1])})
-                    key = {1: "exitY", 2: "laneX", 3: "entryY"}[handle["segment"]]
+                    key = {1: "exitY", 2: "laneX", 3: "entryY"}[handle.get("routeSegment", handle["segment"])]
                     route[key] = str(ajustar(p.x()-SX if key == "laneX" else p.y()))
                 elif len(pts) == 4:
                     a["style"]["route"] = {"middleY": str(ajustar(p.y()))}
@@ -852,6 +926,10 @@ class Edicion(QObject):
             return True
         if self.arrastre:
             a, self.arrastre = self.arrastre, None
+            if a.get("tipo") in ("anotacion","tamano_anotacion"):
+                if a["movido"]:
+                    self.ed.update_annotation(a["id"],**{k:a[k] for k in ("x","y","width","height") if k in a})
+                self.cambia();return True
             if a.get("tipo") == "grupo":
                 return self._soltar_grupo(a)
             if a.get("tipo") == "borrador" and self.diagrama is not None:
@@ -1142,7 +1220,7 @@ class Edicion(QObject):
             malas = [h for h in huella if any(self._toca(h, o) for o in otros)]
         if a.get("tipo") == "grupo" and not malas:  # los marcos vacíos que se mueven tampoco van encima del marco de otro parcial
             otros = [QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"])
-                     for pid, b in cajas_parciales(self.M).items() if pid not in propios]
+                     for pid, b in cajas_parciales(self.M).items() if pid not in propios and pid not in a.get("marcos", [])]
             malas = [h for h in self._marcos_grupo(a) if any(self._toca(h, o) for o in otros)]
         return malas
 
@@ -1159,8 +1237,39 @@ class Edicion(QObject):
         pos = posiciones(self.M)
         inicio: dict[str, tuple[float, float]] = {}
         tipos: dict[str, str] = {}
-        for i in self.sel:
-            if i in pos:
+        ids = set(self.sel)
+        modelo = self.ed.model
+        marcos = ids & {q["id"] for q in self.M["partials"]}
+        if marcos:
+            # Clausura de pertenencia: también los hijos, expansiones y recintos contenidos.
+            while True:
+                antes = set(ids)
+                for coll in ("steps", "transitions"):
+                    ids.update(x["id"] for x in modelo[coll] if x["partialRef"] in ids)
+                for x in modelo["hierarchy"]["macros"]:
+                    if x["partialRef"] in ids:
+                        ids.add(x["id"])
+                for x in modelo["hierarchy"]["expansions"]:
+                    if x["ownerMacroRef"] in ids:
+                        ids.add(x["partialRef"])
+                for x in modelo["hierarchy"]["enclosures"]:
+                    if x["ownerStepRef"] in ids:
+                        ids.add(x["partialRef"])
+                ids.update(q["id"] for q in modelo["partials"] if q.get("ownerRef") in ids)
+                ids.update(n["id"] for n in self.M.get("annotations",[]) if n.get("partialRef") in ids)
+                if ids == antes:
+                    break
+            cajas = cajas_parciales(self.M)
+            zonas = [QRectF(cajas[i]["x0"], cajas[i]["y0"], cajas[i]["x1"] - cajas[i]["x0"],
+                            cajas[i]["y1"] - cajas[i]["y0"]) for i in marcos if i in cajas]
+            for bid, r, etapa in self._elementos():
+                if any(z.contains(r) for z in zonas):
+                    if self._barra(bid) or (self._es_borrador(bid) and not self._borrador(bid).get("etapa")):
+                        ids.add(bid)
+        for i in sorted(ids):
+            if n := self.anotacion(i):
+                inicio[i],tipos[i]=(n["x"],n["y"]),"anotacion"
+            elif i in pos:
                 inicio[i], tipos[i] = (pos[i][0] - SX, pos[i][1]), "nodo"
             elif (b := self._barra(i)) is not None:
                 inicio[i], tipos[i] = (b["x"], b["y"]), "barra"
@@ -1170,12 +1279,17 @@ class Edicion(QObject):
                 grupo = self._ids_grupo(i)
                 for j in grupo:
                     inicio[j], tipos[j] = self._pos_borrador(self._borrador(grupo[0])), "suelta"
-        if ident not in inicio:
+        if ident in inicio:
+            x0, y0 = inicio[ident]
+        elif inicio and (caja := cajas_parciales(self.M).get(ident)) is not None:
+            # El lazo selecciona también el marco con contenido. Agarrarlo mueve sus elementos una sola vez;
+            # el marco deriva de ellos y no lleva una segunda posición independiente.
+            x0, y0 = next(iter(inicio.values()))
+        else:
             return None
-        x0, y0 = inicio[ident]
         return {"id": ident, "tipo": "grupo", "ids": list(inicio), "inicio": inicio, "tipos": tipos, "start": p,
                 "dx": p.x() - (x0 + SX), "dy": p.y() - y0, "x": x0, "y": y0, "x0": x0, "y0": y0, "movido": False,
-                "pendiente": pendiente}
+                "pendiente": pendiente, "marcos": list(ids & {q["id"] for q in self.M["partials"]})}
 
     def _marcos_grupo(self, a: dict[str, Any]) -> list[QRectF]:
         """Dónde quedan, en el dibujo, los marcos vacíos que se mueven con el grupo (con su nombre debajo)."""
@@ -1242,6 +1356,7 @@ class Edicion(QObject):
         """Las cajas, ya solapadas con otro elemento, de lo que se colocaría al soltar una ficha de la paleta en p (vacío si
         cabe: una acción que se pega a otra no cuenta)."""
         x, y = self._modelo(p)
+        if tipo in ("texto","imagen"):return []
         if tipo in ("etapa", "etapa_inicial", "encapsulante", "macroetapa"):
             caja = QRectF(x + SX - H, y - H, 2 * H, 2 * H)
         elif tipo == "transicion":
@@ -1367,6 +1482,8 @@ class Edicion(QObject):
             self.conectar(destino["id"], origen["id"])
 
     def doble(self, p: QPointF, event: Any = None) -> bool:
+        if n := self.anotacion(elemento_en(self.M,p)):
+            self.editar_anotacion(n["id"]);return True
         caja = self.accion_en(p)
         if caja:  # doble clic en una acción: se edita (una orden sin completar, con el diálogo de la orden)
             if caja.get("forzado"):
@@ -1849,6 +1966,11 @@ class Edicion(QObject):
                 self.cambiado.emit()
                 return [("Eliminar el enlace", lambda: self.eliminar_enlace_acciones(union.split(":", 1)[1]))]
             return self._menu_lienzo(p)
+        if self.anotacion(ident):
+            if ident not in self.sel:self.sel=[ident]
+            self.accion=None;self.cambiado.emit()
+            return [("Editar texto…" if self.anotacion(ident)["kind"]=="text" else "Cambiar imagen…",lambda:self.editar_anotacion(ident)),
+                    ("Eliminar",self.borrar)]
         en_varios = ident in self.sel and len(self.sel) > 1  # el botón derecho en uno de varios seleccionados no los deshace
         if ident in {x["id"] for x in self.M.get("macros", [])} or ident in cajas_parciales(self.M):
             if not (en_varios and ident not in cajas_parciales(self.M)):
@@ -3212,7 +3334,9 @@ class Edicion(QObject):
         textos = self._textos_transiciones() if any(i in trans for i in self.sel) else []
         puntos: list[QRectF] = []
         for ident in self.sel:
-            if ident in pos:
+            if n := self.anotacion(ident):
+                puntos.append(rect_anotacion(n))
+            elif ident in pos:
                 x, y = pos[ident]
                 puntos.append(QRectF(x - TB, y - 2, 2 * TB, 4) if ident in trans else QRectF(x - H, y - H, 2 * H, 2 * H))
                 puntos += [QRectF(*c["rect"]) for c in (*acciones.values(), *ordenes.values()) if c["etapa"] == ident]
@@ -3383,6 +3507,80 @@ class Edicion(QObject):
             or next((b.get("etapa") for b in self.ed.draft_actions() if b["id"] == self.accion), None)
         return self.accion if etapa and self.sel == [etapa] else None
 
+    def copiar_fragmento(self) -> Fragment:
+        """Copia la selección efectiva, incluida una acción señalada, con sus coordenadas visibles."""
+        aid = self._accion_para_quitar()
+        ids = [aid] if aid else list(self.sel)
+        frag = self.ed.copy(ids)
+        # Las acciones sueltas y las barras vacías no tienen propietario semántico: se toma su contención gráfica.
+        cajas = cajas_parciales(self.M)
+        extra = set()
+        for parcial in frag.entities.get("partials", []):
+            caja = cajas.get(parcial["id"])
+            if caja is None:
+                continue
+            rect = QRectF(caja["x0"], caja["y0"], caja["x1"] - caja["x0"], caja["y1"] - caja["y0"])
+            extra.update(c["id"] for c in self._colocadas() if not c["etapa"] and rect.contains(QRectF(*c["rect"])))
+            extra.update(bar["id"] for bar in self.M.get("bars", []) if rect.contains(QRectF(*barra(bar))))
+        if extra:
+            frag = self.ed.copy(list(dict.fromkeys(ids + sorted(extra))))
+            frag.selected = ids
+        chosen = {x["id"] for items in frag.entities.values() for x in items}
+        layouts = {x["elementRef"] for x in frag.layouts}
+        pos = posiciones(self.M)
+        for ident in chosen - layouts:
+            if ident in pos:
+                x, y = pos[ident]
+                frag.layouts.append({"elementRef": ident, "viewRef": self.ed.presentation["views"][0]["id"],
+                                     "x": str(x - SX), "y": str(y)})
+        cajas = {c["id"]: c for c in [*self._colocadas(), *(getattr(self.diagrama, "cajas_ordenes", None) or [])]}
+        for d in frag.presentation.get("draftActions", []):
+            if not d.get("etapa") and d["id"] in cajas and not self._es_borrador(d["id"]):
+                x, y, w, h = cajas[d["id"]]["rect"]
+                d["x"], d["y"] = str(x - SX), str(y + h / 2)
+        return frag
+
+    def pegar_fragmento(self, frag: Fragment, punto: QPointF) -> bool:
+        """Pega en la posición libre de rejilla más cercana al puntero, en una sola operación de deshacer."""
+        previo = (list(self.sel), self.accion, self.ver_accion, self.ed.dirty)
+        nuevos: dict[str, str] = {}
+        def pegar() -> None:
+            nuevos.update(self.ed.paste(frag, self.parcial_en(punto), at=(ajustar(punto.x() - SX), ajustar(punto.y()))))
+            self.reconstruir()
+            propios = set(nuevos.values())
+            base = {i: xy for i, xy in layout_from_presentation(self.ed.presentation).items() if i in propios}
+            base.update({b["id"]: (float(b["x"]), float(b["y"])) for b in self.ed.bars() if b["id"] in propios})
+            base.update({d["id"]: (float(d["x"]), float(d["y"])) for d in self.ed.draft_actions()
+                         if d["id"] in propios and not d.get("etapa")})
+            base.update({n["id"]:(n["x"],n["y"]) for n in self.ed.annotations() if n["id"] in propios})
+            origen = (ajustar(punto.x() - SX), ajustar(punto.y()))
+            cola, vistos, anterior = [(0, 0, 0)], {(0, 0)}, (0, 0)
+            while any(not ({a, b} <= propios) for a, b in self._pares_solape(propios)):
+                _, ix, iy = heapq.heappop(cola)
+                for nx, ny in ((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)):
+                    if (nx, ny) not in vistos:
+                        vistos.add((nx, ny))
+                        distancia = ((origen[0] + nx * REJILLA - (punto.x() - SX)) ** 2
+                                     + (origen[1] + ny * REJILLA - punto.y()) ** 2)
+                        heapq.heappush(cola, (distancia, nx, ny))
+                dx, dy = ix * REJILLA, iy * REJILLA
+                if (dx, dy) != anterior:
+                    rutas = self._rutas_con_grupo(propios, dx - anterior[0], dy - anterior[1])
+                    self.ed.move_many({i: (float(x) + dx, float(y) + dy) for i, (x, y) in base.items()}, rutas)
+                    anterior = dx, dy
+                    self.reconstruir()
+            self.sel = [nuevos[i] for i in frag.selected if i in nuevos]
+            self.accion, self.ver_accion = None, False
+        motivo = self._atomico("pegar", pegar, hueco=False)
+        if motivo:
+            self.sel, self.accion, self.ver_accion, self.ed.dirty = previo
+            self.rechazar(motivo)
+            self.cambiado.emit()
+            return False
+        self.informar("Copia pegada")
+        self.cambiado.emit()
+        return True
+
     def borrar(self) -> bool:
         """Borra la selección (una sola operación de deshacer); si arrastra otros elementos, antes lo consulta (REQ-EDT-05).
         Si hay una acción señalada de una etapa (clic en su caja) o una orden de forzado seleccionada, quita solo eso."""
@@ -3402,7 +3600,10 @@ class Edicion(QObject):
         resto = [i for i in sel if i not in barras and i not in uniones and i not in sueltas and i not in enlaces_acc]
         if resto:
             plan = self.ed.plan_delete(resto)
-            necesita = set(plan["elements"]) > set(resto) or plan["affectedTransitions"] or plan["affectedHierarchy"]
+            parciales = {p["id"] for p in self.ed.model["partials"]}
+            # El alcance jerárquico se confirma también cuando el lazo ya incluye todo su contenido.
+            necesita = (set(plan["elements"]) > set(resto) or plan["affectedTransitions"] or plan["affectedHierarchy"]
+                        or any(len(self.ed.plan_delete([i])["elements"]) > 1 for i in resto if i in parciales))
             if necesita and not self.confirmar_borrado(plan):
                 return False
         # los borradores unidos a una etapa que se borra se van con ella
