@@ -103,6 +103,8 @@ class PanelAccion(QWidget):
         lay.addLayout(f)
         self.variable = _ComboVariable()
         self.variable.setMinimumHeight(62)
+        self.variable.setObjectName("selectorVariableAccion")
+        self.variable.setStyleSheet("QComboBox#selectorVariableAccion { min-height:62px; padding:0; }")
         self.variable.setAccessibleName("Variable de la acción")
         self.variable.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.variable.setMinimumContentsLength(8)

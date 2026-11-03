@@ -1345,6 +1345,7 @@ class VistaDiagrama(QGraphicsView):
         self.setFocus(Qt.FocusReason.MouseFocusReason)
         punto = self.mapToScene(event.pos())
         controlador = self.controlador
+        if getattr(controlador,"solo_seleccion",False):return
         seleccion = list(controlador.sel) if controlador is not None else []
         caja = (controlador.accion_en(punto) or controlador.orden_en(punto)) if controlador is not None else None
         ident = (caja["id"] if caja else elemento_en(controlador.M, punto)) if controlador is not None else None
@@ -1355,7 +1356,10 @@ class VistaDiagrama(QGraphicsView):
         elif controlador is not None and ident is not None and caja is None and "|" not in ident and ident not in controlador.sel:
             controlador.seleccionar([ident])
         if controlador is not None and hasattr(self, "menu_portapapeles"):
-            opciones = self.menu_portapapeles(punto, ident is not None) + ([("-", None)] + opciones if opciones else [])
+            extras=self.menu_portapapeles(punto, ident is not None)
+            finales=[x for x in extras if x[0]=='Enviar a plano…'];extras=[x for x in extras if x[0]!='Enviar a plano…']
+            opciones=extras+([('-',None)]+opciones if opciones else [])
+            if finales:opciones+=[('-',None)]+finales
         if not opciones:
             super().contextMenuEvent(event)
             return

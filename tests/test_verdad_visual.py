@@ -138,9 +138,11 @@ class VerdadVisual(unittest.TestCase):
             self.assertEqual(cs[plano.index("XB")],dg.COL["true_text"])
             self.assertEqual(colores(texto(sc,"p"))==[dg.COL["true_text"]],not valor)
             evento=next(it for it in textos(sc) if it.toPlainText()=="↑(p)")
-            self.assertEqual(colores(evento)[2]==dg.COL["true_text"],not valor)
+            segmentos = next(a["event"] for a in v.model["steps"][0]["actions"] if a.get("trigger") == "event")
+            flanco = st["truth"].get(segmentos[0]["eval"][0], False)
+            self.assertEqual(colores(evento)[2]==dg.COL["true_text"],flanco)
             verdes=[it for it in barras_negado(sc) if it.pen().color().name()==dg.COL["true_text"]]
-            self.assertEqual(len(verdes),1 if valor else 4)
+            self.assertEqual(len(verdes),(1 if valor else 4) - int(not valor and not flanco))
             # El estado sigue exponiendo el valor propio de cada nodo, sin invertir las variables.
             self.assertEqual(st["values"]["p"],valor)
 

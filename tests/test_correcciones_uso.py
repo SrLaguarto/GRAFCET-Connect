@@ -1,4 +1,5 @@
 """Regresiones de uso: ventanas transitorias, configuración y carga íntegra."""
+from helpers_grafnet import fixture_grafnet
 import copy
 from pathlib import Path
 import unittest
@@ -93,7 +94,7 @@ class CorreccionesUso(BaseQt):
         ruta=Path(__file__).parent/"fixtures"/"salto_de_etapas";antes={p.name:p.read_bytes() for p in ruta.iterdir() if p.is_file()}
         original=open_model(ruta).doc;w=self.w
         with mock.patch("escritorio.ventana.QMessageBox.information") as aviso, mock.patch("escritorio.ventana.QMessageBox.warning") as fallo:
-            self.assertTrue(w.abrir_ruta(ruta));e=w.edicion
+            self.assertTrue(w.abrir_ruta(fixture_grafnet(ruta)));e=w.edicion
             for coll in ("steps","transitions","actions","forces","variables","partials"):
                 self.assertEqual(e.ed.model[coll],original[coll],coll)
             for coll in ("macros","expansions","enclosures"):

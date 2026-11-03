@@ -5,7 +5,7 @@ No crea relojes ni ejecuta el motor desde el trabajador. La reconexión es manua
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 import re
-from time import monotonic
+from time import perf_counter
 
 from .adaptador import Adaptador, MonitorEntradas, escribir_salidas, leer_entradas, salidas_asignadas, valores_cero
 from .modbus import ClienteModbus
@@ -36,8 +36,11 @@ def explicar_fallo(exc) -> str:
 
 
 class Coordinador:
-    def __init__(self):
+    def __init__(self, notificar=None):
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="modbus")
+        self.notificar = notificar
+        self.medidas = {}
+        self._ultima_lectura = None
         self.futuro = None
         self.estado = "desconectado"
         self.mensaje = "Desconectado"
@@ -80,7 +83,17 @@ class Coordinador:
             raise RuntimeError("Ya hay una petición Modbus pendiente")
         self.fase = fase
         self._generacion_peticion = self._generacion
-        self.futuro = self.executor.submit(funcion, *args)
+        marcas = {}
+        self._marcas_peticion = marcas
+        def trabajo():
+            marcas["inicio"] = perf_counter()
+            try:
+                return funcion(*args)
+            finally:
+                marcas["fin"] = perf_counter()
+        self.futuro = self.executor.submit(trabajo)
+        if self.notificar is not None:
+            self.futuro.add_done_callback(lambda _: self.notificar())
 
     def reiniciar(self, sesion):
         """Cambia sesión sin cerrar TCP; descarta respuestas de la ejecución anterior."""
@@ -102,6 +115,7 @@ class Coordinador:
         self._generacion += 1
         self.adaptador = adaptador
         self.reiniciando = True
+        self.proxima = 0  # Tras descartar lo antiguo, leer inmediatamente antes de ejecutar.
         self.en_marcha = self._ejecutar = self.fallo_motor = self.cero_pendiente = False
         self._descartar_lectura = False
         self.muestra = {}
@@ -170,6 +184,8 @@ class Coordinador:
         self.estado = "probando" if prueba else "conectando"
         self.mensaje = "Probando conexión…" if prueba else "Conectando; actuadores a cero…"
         self.muestra, self.escritos = {}, {}
+        self.medidas = {}
+        self._ultima_lectura = None
         self.fallo_motor = self.cero_pendiente = False
         self.reiniciando = False
         self._salidas_seguras = self._cero_al_cerrar = self._seguras_en_vuelo = None
@@ -219,6 +235,11 @@ class Coordinador:
         if self.futuro is not None and self.futuro.done():
             futuro, fase = self.futuro, self.fase
             generacion = self._generacion_peticion
+            marcas = self._marcas_peticion
+            ahora = perf_counter()
+            if generacion == self._generacion:
+                self.medidas[f"{fase}_red_ms"] = (marcas["fin"] - marcas["inicio"]) * 1000
+                self.medidas[f"{fase}_espera_ms"] = (ahora - marcas["fin"]) * 1000
             self.futuro = None
             try:
                 resultado = futuro.result()
@@ -241,11 +262,19 @@ class Coordinador:
                             self.mensaje = ("Conectado · Stop · salidas a cero · observando las entradas" if self.escritos else
                                             "Conectado · observación de entradas · sin salidas asignadas")
                     elif fase == "leer":
+                        anterior = self._ultima_lectura
+                        if anterior is not None and anterior[0] == generacion:
+                            self.medidas["sondeo_ms"] = (marcas["inicio"] - anterior[1]) * 1000
+                            self.medidas["sondeo_max_ms"] = max(self.medidas.get("sondeo_max_ms", 0), self.medidas["sondeo_ms"])
+                        self._ultima_lectura = (generacion, marcas["inicio"])
                         self.muestra = resultado
                         descartar = self._descartar_lectura
                         self._descartar_lectura = False
                         if self.adaptador.sesion is not None and ejecutar and not descartar and not self.fallo_motor and self.adaptador.sesion.status == "pausada-estable":
+                            self._inicio_ciclo = marcas["inicio"]
+                            inicio_evolucion = perf_counter()
                             self.adaptador.aplicar(resultado)
+                            self.medidas["evolucion_ms"] = (perf_counter() - inicio_evolucion) * 1000
                             if self.adaptador.sesion.status == "pausada-estable":
                                 self.en_marcha = True
                                 self.mensaje = "Conectado · Ejecutando · intercambio de sensores y actuadores activo"
@@ -253,6 +282,9 @@ class Coordinador:
                                 self._enviar("escribir", self._escribir, valores, list(self.adaptador.salidas))
                     elif fase in ("escribir", "cero"):
                         self.escritos = resultado
+                        if fase == "escribir":
+                            self.medidas["ciclo_ms"] = (marcas["fin"] - self._inicio_ciclo) * 1000
+                            self.medidas["ciclo_max_ms"] = max(self.medidas.get("ciclo_max_ms", 0), self.medidas["ciclo_ms"])
                         if fase == "cero":
                             self.mensaje = "Motor detenido · cero confirmado · desconecte y corrija el diagnóstico"
                     elif fase == "cerrar":
@@ -317,8 +349,8 @@ class Coordinador:
         if self.cero_pendiente:
             self.cero_pendiente = False
             self._enviar("cero", self._escribir, self.adaptador.valores_salida(cero=True), list(self.adaptador.salidas))
-        elif not self.fallo_motor and monotonic() >= self.proxima:
-            self.proxima = monotonic() + self.adaptador.config.periodo_ms / 1000
+        elif not self.fallo_motor and perf_counter() >= self.proxima:
+            self.proxima = perf_counter() + self.adaptador.config.periodo_ms / 1000
             self._enviar("leer", leer_entradas, self.cliente, self.adaptador.entradas)
 
     def _escribir(self, valores, senales=None):

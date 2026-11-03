@@ -1,3 +1,4 @@
+from helpers_grafnet import fixture_grafnet
 import copy
 import os
 import unittest
@@ -119,7 +120,7 @@ class PanelTests(unittest.TestCase):
                     self.fail(w.modbus.mensaje)
                 time.sleep(.002)
         with tempfile.TemporaryDirectory() as tmp, servidor(responder) as sc:
-            w = Ventana(ajustes_de_prueba(tmp), Path(tmp) / "recup")
+            w = Ventana(ajustes_de_prueba(tmp))
             try:
                 w.nuevo()
                 self.assertIsNone(w.edicion.nueva_variable("sensor"))
@@ -155,6 +156,7 @@ class PanelTests(unittest.TestCase):
                 esperar_ui(lambda: not w.modbus.activo)
             finally:
                 w.edicion = None  # descarta solo el documento de esta prueba
+                if w.edicion is not None:w.edicion.ed.dirty=False
                 w.close()
                 w.deleteLater()
                 app.processEvents()
@@ -265,7 +267,7 @@ class PanelTests(unittest.TestCase):
         from conexion.adaptador import Adaptador
         app = QApplication.instance() or QApplication([])
         with tempfile.TemporaryDirectory() as tmp:
-            w = Ventana(ajustes_de_prueba(tmp), Path(tmp) / "recup")
+            w = Ventana(ajustes_de_prueba(tmp))
             try:
                 # El ensayo edita el mapa: usar una copia aislada, nunca el ejemplo del repositorio.
                 import json
@@ -278,10 +280,10 @@ class PanelTests(unittest.TestCase):
                 datos["senales"] = [{"variable": v, "area": a, "direccion": d, "formato": "BOOL", "escala": "1"}
                                      for v, a, d in [("PM", "discrete", 0), ("Q00", "coil", 0), ("Q01", "coil", 1)]]
                 ruta_mapa.write_text(json.dumps(datos), encoding="utf-8")
-                abrir = w.abrir_ruta
-                with mock.patch.object(w, "abrir_ruta", side_effect=lambda _: abrir(copia / "manifest.json")):
-                    w._abrir_prueba_modbus()  # código conservado, sin acceso desde la interfaz
-                self.assertIn("PM y dos cintas", w.windowTitle())
+                self.assertTrue(w.abrir_ruta(fixture_grafnet(copia)))
+                w._mostrar_pagina(True)
+                self.assertIn("PM y dos cintas", w.edicion.titulo)
+                self.assertIn(w.edicion.archivo.name,w.windowTitle())
                 self.assertEqual(w.paginas_es.currentIndex(), 1)
                 w.panel_es.b_volver.click()
                 self.assertEqual(w.paginas_es.currentIndex(), 0)
@@ -315,6 +317,7 @@ class PanelTests(unittest.TestCase):
                 w.panel_es.tabla.cellWidget(1, 0).setChecked(True)
                 self.assertTrue(w.a_ejecutar.isEnabled())
             finally:
+                if w.edicion is not None:w.edicion.ed.dirty=False
                 w.close()
                 w.deleteLater()
                 app.processEvents()
@@ -333,7 +336,7 @@ class PanelTests(unittest.TestCase):
                     self.fail(w.modbus.mensaje)
                 time.sleep(.002)
         with tempfile.TemporaryDirectory() as tmp, servidor(lambda p: b"\x02\x01\x01" if p[0] == 2 else p[:5]) as sc:
-            w = Ventana(ajustes_de_prueba(tmp), Path(tmp) / "recup")
+            w = Ventana(ajustes_de_prueba(tmp))
             try:
                 m = M().var("sensor").var("motor", "output").step("E0", True)
                 m.cont("E0", "motor", "sensor")
@@ -364,6 +367,7 @@ class PanelTests(unittest.TestCase):
                 self.assertIsNone(w.v.s.z)
                 self.assertEqual(w.modbus.escritos, {"motor": False})
             finally:
+                if w.edicion is not None:w.edicion.ed.dirty=False
                 w.close()
                 w.deleteLater()
                 app.processEvents()
@@ -371,7 +375,7 @@ class PanelTests(unittest.TestCase):
     def _ventana_conectada(self, tmp, sc, doc, senales):
         """Una ventana con el modelo dado, mapa asignado y conexión establecida (en Pausa: salidas a 0 y observando las entradas)."""
         from escritorio.ventana import Ventana
-        w = Ventana(ajustes_de_prueba(tmp), Path(tmp) / "recup")
+        w = Ventana(ajustes_de_prueba(tmp))
         w.fuente = {"tipo": "fichero", "ruta": Path(tmp) / "modelo.json", "doc": doc,
                     "layout": {}, "titulo": "Prueba", "ayuda": "", "raiz": None}
         w._cargar()
@@ -471,6 +475,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(w.modbus.estado, "desconectado")
             finally:
                 w.edicion.ed.dirty = False  # el cierre no pregunta
+                if w.edicion is not None:w.edicion.ed.dirty=False
                 w.close()
                 w.deleteLater()
                 app.processEvents()
@@ -512,6 +517,7 @@ class PanelTests(unittest.TestCase):
                 self.assertIs(w.modbus.cliente._socket, socket)
             finally:
                 w.edicion.ed.dirty = False
+                if w.edicion is not None:w.edicion.ed.dirty=False
                 w.close()
                 w.deleteLater()
                 app.processEvents()
@@ -548,6 +554,7 @@ class PanelTests(unittest.TestCase):
                 esperar(lambda: not w.modbus.activo)
             finally:
                 w.edicion.ed.dirty = False
+                if w.edicion is not None:w.edicion.ed.dirty=False
                 w.close()
                 w.deleteLater()
                 app.processEvents()
@@ -588,6 +595,7 @@ class PanelTests(unittest.TestCase):
                 self.assertIs(w.modbus.escritos.get("motor"), True)
             finally:
                 w.edicion.ed.dirty = False
+                if w.edicion is not None:w.edicion.ed.dirty=False
                 w.close()
                 w.deleteLater()
                 app.processEvents()
@@ -632,6 +640,7 @@ class PanelTests(unittest.TestCase):
             finally:
                 puerta.set()
                 w.edicion.ed.dirty = False
+                if w.edicion is not None:w.edicion.ed.dirty=False
                 w.close()
                 w.deleteLater()
                 app.processEvents()
@@ -854,7 +863,7 @@ class PanelTests(unittest.TestCase):
     @staticmethod
     def _ventana_nueva(tmp, ajustes=None):
         from escritorio.ventana import Ventana
-        return Ventana(ajustes or ajustes_de_prueba(tmp), Path(tmp) / "recup")
+        return Ventana(ajustes or ajustes_de_prueba(tmp))
 
     def _ventana_modelo(self, tmp, doc, ajustes=None):
         """Una ventana con el modelo dado abierto como si viniera de un fichero, sin conexión."""
@@ -867,6 +876,7 @@ class PanelTests(unittest.TestCase):
     @staticmethod
     def _cerrar(app, w):
         w.edicion.ed.dirty = False  # el cierre no pregunta
+        if w.edicion is not None:w.edicion.ed.dirty=False
         w.close()
         w.deleteLater()
         app.processEvents()
@@ -1234,7 +1244,7 @@ class PanelTests(unittest.TestCase):
                               senales=[Senal("sensor", "discrete", 2)]).guardar(ruta / ARCHIVO, m.doc)
                 sin_mapa = Path(tmp) / "sin_mapa"
                 w.edicion.guardar(sin_mapa)
-                self.assertTrue(w.abrir_ruta(ruta / "manifest.json"))
+                self.assertTrue(w.abrir_ruta(fixture_grafnet(ruta / "manifest.json")))
                 self.assertEqual((w.panel_es.host.text(), w.panel_es.puerto.value(), w.panel_es.unidad.value()),
                                  ("10.20.30.40", 1502, 3))
                 self._es(w, True)
@@ -1242,7 +1252,7 @@ class PanelTests(unittest.TestCase):
                                  ("10.20.30.40", 1502, 3), "mostrar el panel no lo cambia")
                 self.assertEqual(self._mapa(w), {"sensor": ("discrete", 2)})
                 self._es(w, False)
-                self.assertTrue(w.abrir_ruta(sin_mapa / "manifest.json"))
+                self.assertTrue(w.abrir_ruta(fixture_grafnet(sin_mapa / "manifest.json")))
                 self.assertEqual((w.panel_es.host.text(), w.panel_es.puerto.value(), w.panel_es.unidad.value()),
                                  ("172.16.0.9", 1234, 7))
                 self.assertEqual(w.panel_es.config.senales, [])
@@ -1258,7 +1268,8 @@ class PanelTests(unittest.TestCase):
             if vivo is not None and not vivo[0]:
                 return None
             if p[0] == 15:
-                escrituras.append(("coil", int.from_bytes(p[1:3], "big"), p[6] & 1))
+                escrituras.extend(("coil", int.from_bytes(p[1:3], "big") + i, (p[6 + i // 8] >> (i % 8)) & 1)
+                                  for i in range(int.from_bytes(p[3:5], "big")))
             elif p[0] == 16:
                 escrituras.append(("holding", int.from_bytes(p[1:3], "big"), int.from_bytes(p[6:8], "big")))
             return bytes([2, 1, sensor[0]]) if p[0] == 2 else p[:5]
@@ -1589,7 +1600,7 @@ class PanelTests(unittest.TestCase):
                         s.update(area="holding", direccion=2, formato="INT16", escala="100")
                 datos["senales"].append({"variable": "borrada", "area": "discrete", "direccion": 5, "formato": "BOOL", "escala": "1"})
                 (bueno / ARCHIVO).write_text(json.dumps(datos), encoding="utf-8")
-                self.assertTrue(w.abrir_ruta(bueno / "manifest.json"))
+                self.assertTrue(w.abrir_ruta(fixture_grafnet(bueno / "manifest.json")))
                 p = w.panel_es
                 self.assertEqual((p.host.text(), p.puerto.value(), p.unidad.value(), p.periodo.value()), ("10.20.30.40", 1502, 3, 40))
                 self.assertEqual(self._mapa(w), {"sensor": ("discrete", 0), "motor": ("coil", 0)}, "se conserva el resto")
@@ -1604,7 +1615,10 @@ class PanelTests(unittest.TestCase):
                 # un fichero corrupto se sigue rechazando entero
                 self._es(w, False)
                 (corrupto / ARCHIVO).write_text("{ esto no es json", encoding="utf-8")
-                self.assertTrue(w.abrir_ruta(corrupto / "manifest.json"))
+                from PySide6.QtWidgets import QMessageBox
+                with mock.patch("escritorio.ventana.QMessageBox.question",return_value=QMessageBox.StandardButton.Discard) as pregunta:
+                    self.assertTrue(w.abrir_ruta(fixture_grafnet(corrupto / "manifest.json")))
+                    pregunta.assert_called_once()  # el mapa editado está pendiente de guardar en el archivo
                 self.assertIn("No se pudo cargar el mapa", w.panel_es.estado.text())
                 self.assertEqual(w.panel_es.config.senales, [])
             finally:
@@ -1621,8 +1635,12 @@ class PanelTests(unittest.TestCase):
         planta = self._planta_mixta(escrituras, sensor)
 
         def responder(p):
+            n = len(escrituras)
             respuesta = planta(p)
-            eventos.append(("leer", respuesta[2]) if p[0] == 2 else ("escribir", *escrituras[-1]))
+            if p[0] == 2:
+                eventos.append(("leer", respuesta[2]))
+            else:
+                eventos.extend(("escribir", *e) for e in escrituras[n:])
             return respuesta
         with tempfile.TemporaryDirectory() as tmp, servidor(responder) as sc:
             m = self._modelo_pausa()
@@ -1727,7 +1745,7 @@ class PanelTests(unittest.TestCase):
                 planta_antes = {**propio, **{(t, d): v for t, d, v in escrituras}}
                 self.assertEqual((planta_antes[("coil", 5)], planta_antes[("holding", 3)]), (1, 150), "aún sin tocar")
                 n = len(escrituras)
-                self.assertTrue(w.abrir_ruta(ruta / "manifest.json"))
+                self.assertTrue(w.abrir_ruta(fixture_grafnet(ruta / "manifest.json")))
                 esperar(lambda: w.modbus.escritos == {"luz": False, "motor": 0, "otra": False})
                 fin = time.monotonic() + .15
                 esperar(lambda: time.monotonic() >= fin)

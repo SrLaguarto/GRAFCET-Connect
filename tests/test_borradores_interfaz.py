@@ -1,4 +1,5 @@
 """Diagnósticos de borradores y reparación al abrir desde la interfaz."""
+from helpers_grafnet import fixture_grafnet
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -98,7 +99,7 @@ class BorradoresInterfaz(BaseQt):
         accion = e.poner_accion_suelta(QPointF(850, 500))
         destino = Path(self.tmp.name) / "borradores"
         e.guardar(destino)
-        self.assertTrue(w.abrir_ruta(destino))
+        self.assertTrue(w.abrir_ruta(fixture_grafnet(destino)))
         e = w.edicion
         self.assertEqual({d["id"] for d in e.ed.draft_actions()}, {forzado, accion})
         self.comprobar_play_bloqueado(w, e, forzado, "Orden de forzado sin configurar suelta")
@@ -109,7 +110,7 @@ class BorradoresInterfaz(BaseQt):
         w, e = self.vacio()
         ruta = Path(__file__).parent / "fixtures" / "salto_de_etapas"
         with mock.patch("escritorio.ventana.QMessageBox.information") as aviso:
-            self.assertTrue(w.abrir_ruta(ruta))
+            self.assertTrue(w.abrir_ruta(fixture_grafnet(ruta)))
             e = w.edicion
             self.assertFalse(e.ed.model["draftLinks"])
             self.assertTrue(e.ed.dirty)
@@ -124,6 +125,6 @@ class BorradoresInterfaz(BaseQt):
         destino = Path(self.tmp.name) / "saneado"
         e.guardar(destino)
         with mock.patch("escritorio.ventana.QMessageBox.information") as aviso:
-            self.assertTrue(w.abrir_ruta(destino))
+            self.assertTrue(w.abrir_ruta(fixture_grafnet(destino)))
             aviso.assert_not_called()
         self.assertFalse(w.edicion.ed.cleaned_draft_link_ids)

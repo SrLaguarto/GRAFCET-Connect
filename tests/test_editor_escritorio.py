@@ -6,6 +6,7 @@ instalado y usan la plataforma «offscreen»: no abren ventanas ni diálogos (lo
 Ninguna es oráculo del documento 11: comprueban que el editor usa las operaciones de grafcet/editor.py y que lo
 que se dibuja y se simula es lo que decide el núcleo.
 """
+from helpers_grafnet import fixture_grafnet
 import copy
 import json
 import os
@@ -295,8 +296,7 @@ class Interfaz(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         from escritorio.ventana import Ventana
-        self.w = Ventana(QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat),
-                         Path(self.tmp.name) / "recup")
+        self.w = Ventana(QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat))
 
     def tearDown(self):
         self.w.a_ejecutar.setChecked(False)
@@ -416,15 +416,16 @@ class Interfaz(unittest.TestCase):
         e.ed.move(ids["1"], 240, 220)
         e.cambia()
         dest = Path(self.tmp.name) / "mi-grafcet"
-        with mock.patch("escritorio.ventana.QFileDialog.getExistingDirectory", return_value=str(dest.parent)):
+        with mock.patch("escritorio.ventana.QFileDialog.getSaveFileName", return_value=(str(dest)+".grafnet","")):
             self.assertTrue(w.guardar())
         self.assertFalse(e.ed.dirty)
-        dest = e.ruta
-        self.assertTrue((dest / "manifest.json").exists())
-        op = open_model(dest)
+        dest = e.archivo
+        self.assertTrue(dest.is_file())
+        self.assertTrue((e.ruta / "manifest.json").exists())
+        op = open_model(e.ruta)
         self.assertTrue(op.executable)
         self.assertEqual(layout_from_presentation(op.presentations[0])[ids["1"]], (240.0, 220.0))
-        self.assertTrue(w.abrir_ruta(dest))
+        self.assertTrue(w.abrir_ruta(fixture_grafnet(dest)))
         self.assertEqual(w.v.state().get("situation", []), [], "abrir deja Pausa sin estado")
         self.assertTrue(w.cambiar_modo("simular"))  # Play arranca la sesión desde la situación inicial
         self.assertEqual(w.v.state()["situation"], [ids["0"]])
@@ -434,7 +435,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(w.v.state()["situation"], [ids["1"]])
         # Editar el modelo abierto: copia con sus posiciones y, al guardar, en su misma carpeta
         self.assertTrue(w.cambiar_modo("editar"))
-        self.assertEqual(w.edicion.ruta, dest)
+        self.assertEqual(w.edicion.archivo, dest)
         self.assertEqual(w.edicion.layout()[ids["1"]], (240.0, 220.0))
 
     def test_SEDI05_deshacer_rehacer_mover_y_borrar(self):
@@ -556,27 +557,6 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((w.modo, w.v.key, w.a_ejecutar.isChecked()), ("editar", "temporizada", False), "al abrir: Pausa")
         del pregunta
 
-    def test_SEDI09_recuperacion_automatica(self):
-        """REQ-EDT-10: con cambios sin guardar se copia la edición cada 30 s y se ofrece recuperarla; guardar la borra."""
-        from PySide6.QtWidgets import QMessageBox
-        w = self.w
-        self.assertFalse(w.autoguardar(100), "sin edición no hay nada que copiar")
-        e, ids, ts = self.secuencial()
-        self.assertTrue(w.autoguardar(100.0))
-        self.assertFalse(w.autoguardar(110.0), "antes de 30 s no repite")
-        self.assertTrue(w.autoguardar(131.0))
-        self.assertEqual(w.recup.available()["revision"], e.ed.revision)
-        e.edicion = None
-        with mock.patch("escritorio.ventana.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
-            w.edicion = None
-            self.assertTrue(w.ofrecer_recuperacion())
-        r = w.edicion
-        self.assertEqual(sorted(s["label"] for s in r.M["steps"]), ["0", "1"])
-        self.assertTrue(r.ed.dirty)
-        self.assertTrue(r.ed.validate().can_simulate)
-        with mock.patch("escritorio.ventana.QFileDialog.getExistingDirectory", return_value=self.tmp.name):
-            self.assertTrue(w.guardar())
-        self.assertIsNone(w.recup.available())
 
     def test_SEDI10_el_ratón_real_y_el_dibujo(self):
         """REQ-EDT-02, REQ-EDT-03: los clics del ratón sobre el dibujo llegan al editor; la selección y las marcas se
@@ -762,9 +742,9 @@ class Interfaz(unittest.TestCase):
         p.t_mostrar.click()  # desmarca
         self.assertNotIn("(t2)", textos())
         self.assertNotIn("(t1)", textos())
-        with mock.patch("escritorio.ventana.QFileDialog.getExistingDirectory", return_value=self.tmp.name):
+        with mock.patch("escritorio.ventana.QFileDialog.getSaveFileName", return_value=(str(Path(self.tmp.name)/"guardado.grafnet"),"")):
             self.assertTrue(w.guardar())
-        self.assertTrue(w.abrir_ruta(e.ruta))
+        self.assertTrue(w.abrir_ruta(fixture_grafnet(getattr(e,"archivo",None) or e.ruta)))
         self.assertTrue(w.cambiar_modo("editar"))
         self.assertEqual(w.edicion.ed.hidden_labels(), set(ts.values()))
 
@@ -831,9 +811,9 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.M["bars"][0]["y"], 220.0)
         e.deshacer()
         # Guardar, abrir y simular: marcha activa E1 y E2 a la vez
-        with mock.patch("escritorio.ventana.QFileDialog.getExistingDirectory", return_value=self.tmp.name):
+        with mock.patch("escritorio.ventana.QFileDialog.getSaveFileName", return_value=(str(Path(self.tmp.name)/"guardado.grafnet"),"")):
             self.assertTrue(w.guardar())
-        self.assertTrue(w.abrir_ruta(e.ruta))
+        self.assertTrue(w.abrir_ruta(fixture_grafnet(getattr(e,"archivo",None) or e.ruta)))
         self.assertTrue(w.cambiar_modo("editar"))
         self.assertEqual(len(w.edicion.M["bars"]), 1)
         self.assertTrue(w.cambiar_modo("simular"))
@@ -1347,14 +1327,14 @@ class Interfaz(unittest.TestCase):
         expected = enlaces(e.M)
         self.assertTrue(self.w.cambiar_modo('simular'))
         self.assertEqual(enlaces(self.w.v.model), expected)
-        dest = Path(self.tmp.name) / 'manual'
+        dest = Path(self.tmp.name) / 'manual.grafnet'
         self.w.guardar_en(dest)
         e.ed.dirty = False  # la copia ya está guardada; evitar el diálogo al abrirla en esta prueba
-        self.assertTrue(self.w.abrir_ruta(dest))
+        self.assertTrue(self.w.abrir_ruta(fixture_grafnet(dest)))
         self.assertEqual(enlaces(self.w.v.model), expected)
-        otra = Path(self.tmp.name) / 'copia-manual'
+        otra = Path(self.tmp.name) / 'copia-manual.grafnet'
         self.w.guardar_en(otra)
-        self.assertEqual(open_model(otra).presentations[0]['linkStyles']['retorno|2|post'], style)
+        self.assertEqual(open_model(self.w.edicion.ruta).presentations[0]['linkStyles']['retorno|2|post'], style)
         self.assertTrue(self.w.cambiar_modo('editar'))
         self.assertEqual(enlaces(self.w.edicion.M), expected)
 
@@ -2906,12 +2886,12 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((len(e.ed.model["variables"]), pv.tabla.item(1, 0).text(), pv.sin_nombre()), (1, "", 1))
         self.assertIn("ya existe", pv.msg.text())
         # con una fila sin nombre no se simula ni se guarda
-        with mock.patch("escritorio.ventana.QFileDialog.getExistingDirectory") as carpeta, \
+        with mock.patch("escritorio.ventana.QFileDialog.getSaveFileName") as archivo, \
                 mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
             self.assertFalse(w.cambiar_modo("simular"))
             self.assertEqual(w.modo, "editar")
             self.assertFalse(w.guardar())
-            carpeta.assert_not_called()
+            archivo.assert_not_called()
             aviso.assert_not_called()
         self.assertEqual(e.mensaje, "Hay una variable sin nombre: escríbale un nombre o quítela")
         self.assertEqual(pv.msg.text(), e.mensaje)
@@ -3364,13 +3344,14 @@ class Interfaz(unittest.TestCase):
         d3 = e.poner_accion_suelta(QPointF(700, 600))
         self._enlazar_accion(e, d3, self._der(e, ids["0"]))
         self.assertEqual(e.ed.draft_actions()[2]["etapa"], ids["0"])
-        # de la etapa a un hueco, o a algo que no es una acción: se rechaza
+        # de la etapa a un hueco nace una continua; a una transición se sigue rechazando
         n = len(e.ed.undo_stack)
         e.prensar(self._der(e, ids["0"]))
         e.soltar(QPointF(900, 700))
-        self.assertTrue(e.mensaje.startswith("De una etapa sale el enlace a una acción suelta"), e.mensaje)
-        self.assertFalse(e.mensaje_info)
-        self.assertTrue(e.parpadeo.ids)
+        self.assertEqual(len(e.ed.undo_stack), n + 1)
+        self.assertEqual(e._datos_borrador(e._borrador(e.accion))["tipo"], "continua")
+        e.deshacer()
+        self.assertEqual(len(e.ed.undo_stack), n)
         e.prensar(self._der(e, ids["0"]))
         e.soltar(centro(e.M, ts["t1"]))
         self.assertIn("Una acción se une a una etapa", e.mensaje)
@@ -4190,103 +4171,27 @@ class Interfaz(unittest.TestCase):
         QTest.keyClick(pv.tabla, Qt.Key.Key_Delete, Qt.KeyboardModifier.KeypadModifier)
         self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["a", "c"])
 
-    def test_SEDI265_boton_conmutador_entre_es_externas_y_vista_grafcet(self):
-        """REQ-SIM-03: un solo botón conmuta entre el dibujo GRAFCET y las E/S externas: «E/S externas» y su icono en el
-        dibujo; «Vista GRAFCET», otro icono, tooltip «Volver al dibujo GRAFCET» y pulsado en la vista de E/S. La flecha ←, la
-        prueba guiada, los cambios de modo y cargar otro ejemplo lo dejan coherente con la página visible."""
-        from grafcet.examples import EJEMPLOS
-        w = self.w
-        w.show()
-        self.app.processEvents()
-        a = w.a_es
-        boton = w.tb_conexion.widgetForAction(a)
+    def test_SEDI265_pestanas_entre_grafcet_planos_y_es_externas(self):
+        """REQ-SIM-03, REQ-EDT-11: las tres pestañas identifican la página y se sincronizan por cualquier vía."""
+        w=self.w;w.show();self.app.processEvents();tabs=w.pestanas_vistas
+        self.assertEqual([tabs.tabText(i) for i in range(tabs.count())],['GRAFCET','PLANOS','E/S externas'])
+        for pesta,indice in ((2,1),(1,2),(0,0),(2,1)):
+            QTest.mouseClick(tabs,Qt.MouseButton.LeftButton,pos=tabs.tabRect(pesta).center())
+            self.assertEqual(w.paginas_es.currentIndex(),indice);self.assertEqual(tabs.currentIndex(),pesta)
+        w.panel_es.b_volver.click();self.assertEqual((w.paginas_es.currentIndex(),tabs.currentIndex()),(0,0))
+        w.mostrar_es();self.assertEqual(tabs.currentIndex(),2)
+        w.cambiar_modo('simular');self.assertEqual((w.paginas_es.currentIndex(),tabs.currentIndex()),(0,0))
+        w.cambiar_modo('editar');self.assertEqual(tabs.currentIndex(),0)
+        self.assertFalse(w.tb_conexion.isVisible(),'los antiguos conmutadores no se duplican en la barra')
 
-        def estado():
-            return (w.paginas_es.currentIndex(), a.text(), a.isChecked())
-        grafcet = (0, "E/S externas", False)
-        es = (1, "Vista GRAFCET", True)
-        self.assertEqual(estado(), grafcet)
-        self.assertTrue(a.isCheckable())
-        icono_es, tip_grafcet = a.icon().cacheKey(), a.toolTip()
-        self.assertIn("Conectar", tip_grafcet)
-        boton.click()
-        self.assertEqual(estado(), es)
-        self.assertEqual(a.toolTip(), "Volver al dibujo GRAFCET")
-        self.assertNotEqual(a.icon().cacheKey(), icono_es, "otro icono")
-        self.assertTrue(boton.isChecked(), "el botón de la barra se ve pulsado")
-        boton.click()  # el mismo botón vuelve al dibujo y recupera su aspecto original
-        self.assertEqual(estado(), grafcet)
-        self.assertEqual((a.icon().cacheKey(), a.toolTip()), (icono_es, tip_grafcet))
-        self.assertFalse(boton.isChecked())
-        a.trigger()
-        self.assertEqual(estado(), es)
-        # la flecha ← del panel lo deja coherente
-        w.panel_es.b_volver.click()
-        self.assertEqual(estado(), grafcet)
-        self.assertEqual((a.icon().cacheKey(), a.toolTip()), (icono_es, tip_grafcet))
-        # y a partir de ahí el botón vuelve a abrir la vista de E/S
-        a.trigger()
-        self.assertEqual(estado(), es)
-        w.panel_es.b_volver.click()
-        # la prueba guiada abre la vista de E/S: el botón queda como «Vista GRAFCET»
-        w._abrir_prueba_modbus()  # código conservado; la interfaz ya no ofrece la prueba guiada
-        self.assertEqual(estado(), es)
-        self.assertEqual(a.toolTip(), "Volver al dibujo GRAFCET")
-        # Play y Stop vuelven al GRAFCET con el botón coherente.
-        w.cambiar_modo("simular")
-        self.assertEqual(w.paginas_es.currentIndex(), 0)
-        self.assertEqual(estado(), grafcet)
-        w.cambiar_modo("editar")
-        self.assertEqual(estado(), grafcet)
-        a.trigger()  # cargar otro ejemplo sigue conservando la página elegida
-        self.assertEqual(estado(), es)
-        w.edicion.ed.dirty = False
-        w.cargar_ejemplo(next(iter(EJEMPLOS)))
-        self.assertEqual((w.paginas_es.currentIndex() == 1, a.isChecked(), a.text()),
-                         (True, True, "Vista GRAFCET"))
-        a.trigger()
-        self.assertEqual(estado(), grafcet)
-        # En el GRAFCET, Play y Stop mantienen la página y el botón coherentes.
-        w.cambiar_modo("simular")
-        w.cambiar_modo("editar")
-        self.assertEqual(estado(), grafcet)
-
-    def test_SEDI270_el_boton_conmutador_mide_lo_mismo_en_las_dos_vistas_y_no_mueve_la_barra(self):
-        """REQ-SIM-03: el botón «E/S externas» / «Vista GRAFCET» tiene un ancho fijo, el del más ancho de sus dos estados (texto e
-        icono): al alternar entre ellos, el botón y todo lo que va a su derecha en la barra (los iconos de edición) se quedan
-        donde estaban."""
-        w = self.w
-        w.resize(1366, 768)
-        w.show()
-        self.app.processEvents()
-        a = w.a_es
-        boton = w.tb_conexion.widgetForAction(a)
-
-        def medida():
-            self.app.processEvents()
-            return (boton.width(), boton.mapTo(w, QPoint(0, 0)).x(), w.tb_conexion.width(),
-                    w.tb_edit.widgetForAction(w.a_debajo).mapTo(w, QPoint(0, 0)).x())
-        natural = {}
-        en_grafcet = medida()
-        natural["E/S externas"] = boton.sizeHint().width()
-        a.trigger()
-        en_es = medida()
-        natural["Vista GRAFCET"] = boton.sizeHint().width()
-        self.assertEqual(a.text(), "Vista GRAFCET")
-        self.assertNotEqual(natural["E/S externas"], natural["Vista GRAFCET"], "los dos textos no miden lo mismo")
-        self.assertEqual(boton.width(), max(natural.values()), "el ancho del más ancho de los dos estados")
-        self.assertEqual(en_es, en_grafcet, "al alternar no se mueve nada de la barra")
-        for _ in range(2):  # y por cualquier vía: el botón, la flecha ← del panel, Play y Pausa
-            a.trigger()
-            self.assertEqual(medida(), en_grafcet)
-            a.trigger()
-            self.assertEqual(medida(), en_es)
-            w.panel_es.b_volver.click()
-            self.assertEqual(medida(), en_grafcet)
-        w.cambiar_modo("simular")
-        w.cambiar_modo("editar")
-        self.assertEqual(medida(), en_grafcet)
-        self.assertEqual((boton.minimumWidth(), boton.maximumWidth()), (boton.width(),) * 2, "ancho fijo")
+    def test_SEDI270_las_pestanas_no_se_mueven_al_cambiar_de_vista(self):
+        """REQ-SIM-03: las pestañas tienen textos y geometría estables al cambiar entre los tres espacios."""
+        w=self.w;w.resize(1366,768);w.show();self.app.processEvents();tabs=w.pestanas_vistas
+        medidas=[tabs.tabRect(i) for i in range(3)];pos=tabs.mapTo(w,QPoint(0,0))
+        for i in (2,1,0,1,2,0):
+            QTest.mouseClick(tabs,Qt.MouseButton.LeftButton,pos=tabs.tabRect(i).center());self.app.processEvents()
+            self.assertEqual([tabs.tabRect(j) for j in range(3)],medidas);self.assertEqual(tabs.mapTo(w,QPoint(0,0)),pos)
+            self.assertEqual(tabs.currentIndex(),i)
 
     def test_SEDI266_el_estado_de_conexion_hace_salto_de_linea_y_no_se_corta(self):
         """REQ-SIM-03: el estado de la conexión del panel de E/S ocupa su propia fila bajo el título, hace salto de línea y

@@ -582,8 +582,7 @@ class BaseQt(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         from escritorio.ventana import Ventana
-        self.w = Ventana(QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat),
-                         Path(self.tmp.name) / "recup")
+        self.w = Ventana(QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat))
 
     def tearDown(self):
         self.w.a_ejecutar.setChecked(False)
@@ -1885,7 +1884,7 @@ class EncuadrarYDependencias(BaseQt):
         # se recuerda entre sesiones: otra ventana con los mismos ajustes arranca con él encendido
         w.a_ejecutar.setChecked(False)
         ini = Path(self.tmp.name) / "a.ini"
-        w2 = Ventana(QSettings(str(ini), QSettings.Format.IniFormat), Path(self.tmp.name) / "recup2")
+        w2 = Ventana(QSettings(str(ini), QSettings.Format.IniFormat))
         try:
             w2.resize(1360, 860)
             w2.show()

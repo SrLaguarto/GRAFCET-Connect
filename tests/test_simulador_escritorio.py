@@ -5,6 +5,7 @@ Las pruebas del núcleo (S-APP01..04) no necesitan Qt. Las de la ventana (S-APP0
 está instalado; usan la plataforma «offscreen» de Qt, sin abrir ventanas. Ninguna es oráculo del documento 11:
 comprueban que el simulador muestra lo que decide el motor, sin cambiar la semántica.
 """
+from helpers_grafnet import fixture_grafnet
 import os
 import sys
 import tempfile
@@ -238,9 +239,9 @@ class Ventana(unittest.TestCase):
         self.w.cargar_ejemplo("macroetapa")
         before = (self.w.v.model["steps"], self.w.v.model["transitions"])
         with tempfile.TemporaryDirectory() as tmp:
-            dest = Path(tmp) / "macro"
+            dest = Path(tmp) / "macro.grafnet"
             self.w.guardar_en(dest)
-            self.assertTrue(self.w.abrir_ruta(dest))
+            self.assertTrue(self.w.abrir_ruta(fixture_grafnet(dest)))
             self.assertEqual(self.w.fuente["tipo"], "fichero")
             self.assertEqual((self.w.v.model["steps"], self.w.v.model["transitions"]), before)
             self.assertEqual(self.w.v.state().get("situation", []), [], "abrir deja Pausa sin estado")
@@ -377,9 +378,9 @@ class Ventana(unittest.TestCase):
                          (False, "Play", "editar", False))
         self.assertEqual(w.edicion.titulo, w.v.model["title"])
         with tempfile.TemporaryDirectory() as tmp:
-            w.guardar_en(Path(tmp) / "macro")
+            w.guardar_en(Path(tmp) / "macro.grafnet")
             w.a_ejecutar.setChecked(True)
-            self.assertTrue(w.abrir_ruta(Path(tmp) / "macro"))
+            self.assertTrue(w.abrir_ruta(fixture_grafnet(Path(tmp) / "macro.grafnet")))
             self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (False, "editar"))
             self.assertTrue(w.edicion.ed.validate().can_simulate)
             w.a_ejecutar.setChecked(True)
@@ -544,7 +545,7 @@ class Ventana(unittest.TestCase):
             add_document(project, m)
             add_document(project, presentation_for(m, {e0: (100, 60), e1: (100, 220)}))
             save_project(Path(tmp) / "p", project)
-            self.assertTrue(self.w.abrir_ruta(Path(tmp) / "p"))
+            self.assertTrue(self.w.abrir_ruta(fixture_grafnet(Path(tmp) / "p")))
         w = self.w
         w.a_ejecutar.setChecked(True)
         self.assertEqual(list(w.botones), [marcha])

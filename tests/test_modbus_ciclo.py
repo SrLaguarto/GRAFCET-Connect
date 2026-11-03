@@ -357,7 +357,8 @@ class CicloTests(unittest.TestCase):
             if p[0] == 2:
                 eventos.append(("leer", sensor[0]))
                 return bytes([2, 1, sensor[0]])
-            eventos.append(("escribir", int.from_bytes(p[1:3], "big"), p[6] & 1))
+            eventos.extend(("escribir", int.from_bytes(p[1:3], "big") + i, (p[6 + i // 8] >> (i % 8)) & 1)
+                           for i in range(int.from_bytes(p[3:5], "big")))
             return p[:5]
         with servidor(responder) as sc:
             # E0 (inicial): motor; con el sensor, E1: luz. Con el sensor ya a 1, la situación inicial no llega a escribirse

@@ -98,8 +98,23 @@ def _separar_lazos(M, out, pos):
              for coll in ("steps", "macros") for n in M.get(coll, [])]
     cajas += [(t["id"], pos[t["id"]][0]-8, pos[t["id"]][1]-3,
                pos[t["id"]][0]+8, pos[t["id"]][1]+3) for t in M["transitions"]]
+    # Reservar también las filas de acciones: un carril junto a la etapa puede atravesarlas.
+    # Cota conservadora independiente de la fuente del visor; el dibujo no cambia de tamaño.
+    for paso in M.get("steps", []):
+        acciones = paso.get("actions", [])
+        if not acciones:
+            continue
+        x, y = pos[paso["id"]]
+        anchos = [max(80, 24 + 15 * max(len("".join(t.get("t", "") for t in (a.get(k) or [])))
+                                            for k in ("text", "cond", "event"))) for a in acciones]
+        disposicion = paso.get("actionLayout", "fila")
+        columnas = 1 if disposicion == "columna" else 2 if disposicion == "matriz-2" else len(acciones)
+        filas = (len(acciones) + columnas - 1) // columnas
+        ancho = sum(sorted(anchos, reverse=True)[:columnas]) + 36 * (columnas - 1)
+        cajas.append((paso["id"], x + H, y - H - 40, x + H + 26 + ancho,
+                      y + H + (filas - 1) * 96 + 24))
     izquierda = min((p[0] for p in pos.values()), default=SX)-70
-    derecha = max((p[0] for p in pos.values()), default=SX)+70
+    derecha = max([p[0] for p in pos.values()] + [c[3] for c in cajas] + [SX])+70
 
     def cortes(pts, e):
         encontrados = set()

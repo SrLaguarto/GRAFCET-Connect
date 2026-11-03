@@ -1,4 +1,5 @@
 """Distancia estándar compacta y nombres de referencias a etapas borradas."""
+from helpers_grafnet import fixture_grafnet
 import copy
 import unittest
 from pathlib import Path
@@ -64,6 +65,6 @@ class DistanciasReferenciasInterfaz(BaseQt):
         self.assertIn('D-REF',{d['code'] for d in e.diagnosticos()})
         dom=dibujar_con_js(e.M,{})
         self.assertNotIn(b,str(dom))
-        p=Path(self.tmp.name)/'referencias';e.guardar(p);e.ed.dirty=False;self.assertTrue(w.abrir_ruta(p))
+        p=Path(self.tmp.name)/'referencias';e.guardar(p);e.ed.dirty=False;self.assertTrue(w.abrir_ruta(fixture_grafnet(p)))
         segmentos=w.edicion.M['transitions'][0]['cond'];self.assertEqual([s['t'] for s in segmentos if s.get('s')],['1','1'])
         self.assertIsNone(w.edicion.vista.s)

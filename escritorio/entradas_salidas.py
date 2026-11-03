@@ -394,14 +394,14 @@ class LienzoPLC(QWidget):
         super().__init__()
         self.setObjectName("lienzoES")
         rejilla = QGridLayout(self)
-        rejilla.setContentsMargins(0, 6, 0, 4)
+        rejilla.setContentsMargins(0, 2, 0, 2)
         rejilla.setSpacing(0)
         titulo = QLabel("PLC · Modbus TCP")
         titulo.setObjectName("tituloPLC")
         rejilla.addWidget(titulo, 0, 0, 1, 2)
         self.destino = QLabel()
         self.destino.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.destino.setFixedSize(2 * ANCHO_INTERIOR, 46)
+        self.destino.setFixedSize(2 * ANCHO_INTERIOR, 36)
         self.izq, self.der = QWidget(), QWidget()
         self.fila_izq, self.fila_der = QVBoxLayout(self.izq), QVBoxLayout(self.der)
         for f in (self.fila_izq, self.fila_der):
@@ -411,8 +411,8 @@ class LienzoPLC(QWidget):
         self.ayuda.setObjectName("ayudaES")
         self.ayuda.setWordWrap(True)
         self.ayuda.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.ayuda.setContentsMargins(0, 8, 0, 0)
-        self.ayuda.setMinimumHeight(40)
+        self.ayuda.setContentsMargins(0, 0, 0, 0)
+        self.ayuda.setMinimumHeight(20)
         rejilla.addWidget(self.destino, 1, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
         rejilla.addWidget(self.izq, 2, 0, Qt.AlignmentFlag.AlignTop)
         rejilla.addWidget(self.der, 2, 1, Qt.AlignmentFlag.AlignTop)
@@ -569,6 +569,10 @@ class PanelES(QWidget):
         self.estado.setText("Desconectado")
         self.estado.setStyleSheet("color:#657e77")
         fe.addWidget(self.estado, 1)
+        self.tiempos = QLabel()
+        self.tiempos.setTextFormat(Qt.TextFormat.PlainText)
+        self.tiempos.hide()
+        fe.addWidget(self.tiempos)
         cabeza.addWidget(fila_alta)
         cabeza.addWidget(fila_estado)
         self.b_configuracion = QPushButton("Configuración")
@@ -660,7 +664,7 @@ class PanelES(QWidget):
         self.unidad = _SpinConfiguracion()
         self.unidad.setRange(0, 255)
         self.periodo = _SpinConfiguracion()
-        self.periodo.setRange(20, 10000)
+        self.periodo.setRange(5, 10000)
         self.periodo.setSuffix(" ms")
         self.timeout = _SpinConfiguracion()
         self.timeout.setRange(10, 10000)
@@ -760,6 +764,31 @@ class PanelES(QWidget):
     def _cerrar_configuracion(self):
         self.dialogo_config.close()
 
+    def mostrar_tiempos(self, medidas):
+        """Cadencia observada y duración del intercambio, sin confundirlas con la parada física."""
+        def ms(clave):
+            return f"{medidas[clave]:.1f}".replace(".", ",") + " ms"
+        if "ciclo_ms" not in medidas:
+            self.tiempos.clear()
+            self.tiempos.hide()
+            return
+        prefijo = "Sondeo " + ms("sondeo_ms") + " · " if "sondeo_ms" in medidas else ""
+        self.tiempos.setText(prefijo + "Ciclo " + ms("ciclo_ms") + " · máx. " + ms("ciclo_max_ms"))
+        lineas = ["Medidas desde la última conexión."]
+        for clave, nombre in (("sondeo_ms", "Intervalo real entre lecturas"),
+                              ("sondeo_max_ms", "Máximo intervalo entre lecturas"),
+                              ("leer_red_ms", "Lectura por red"),
+                              ("leer_espera_ms", "Espera antes de aplicar la lectura"),
+                              ("evolucion_ms", "Evolución del GRAFCET"),
+                              ("escribir_red_ms", "Escritura por red"),
+                              ("ciclo_ms", "Lectura hasta salida confirmada"),
+                              ("ciclo_max_ms", "Máximo del ciclo")):
+            if clave in medidas:
+                lineas.append(nombre + ": " + ms(clave))
+        lineas.append("El ciclo no incluye la espera hasta el siguiente sondeo ni el movimiento después de desactivar la salida.")
+        self.tiempos.setToolTip("\n".join(lineas))
+        self.tiempos.show()
+
     def mostrar_estado(self, estado, mensaje):
         self.estado.setText(mensaje)
         conectado = estado == "conectado"
@@ -850,7 +879,7 @@ class PanelES(QWidget):
         host, puerto, unidad = self.conexion_defecto
         prefs = self.parametros_defecto
         if config is None:
-            config = Configuracion(host, puerto, unidad, prefs.get("periodo_ms", 50), prefs.get("timeout_ms", 500),
+            config = Configuracion(host, puerto, unidad, prefs.get("periodo_ms", 20), prefs.get("timeout_ms", 500),
                                    modelo=doc["id"], canales=copy.deepcopy(prefs.get("canales", CANALES_INICIALES)))
             self.escalas_base = dict(prefs.get("escalas", {}))
         else:

@@ -31,7 +31,7 @@ class Configuracion:
     host: str = CONEXION_INICIAL[0]
     puerto: int = 502
     unidad: int = 1
-    periodo_ms: int = 50
+    periodo_ms: int = 20
     timeout_ms: int = 500
     modelo: str = ""
     senales: list[Senal] = field(default_factory=list)
@@ -45,7 +45,7 @@ class Configuracion:
         if not isinstance(self.host, str) or not self.host.strip():
             raise ValueError("Falta la dirección del servidor")
         for valor, minimo, maximo in ((self.puerto, 1, 65535), (self.unidad, 0, 255),
-                                      (self.periodo_ms, 20, 10000), (self.timeout_ms, 10, 10000)):
+                                      (self.periodo_ms, 5, 10000), (self.timeout_ms, 10, 10000)):
             if type(valor) is not int or not minimo <= valor <= maximo:
                 raise ValueError("Puerto, unidad, periodo o timeout fuera de rango")
         if self.modelo and self.modelo != doc["id"]:

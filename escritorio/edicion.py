@@ -672,7 +672,10 @@ class Edicion(QObject):
                 self.arrastre = self._arrastre_grupo(caja["etapa"], p, ([caja["etapa"]], caja["id"], True))
             elif caja.get("forzado"):  # una orden sin completar unida a una etapa: se selecciona ella, como una orden del modelo
                 self.sel, self.accion = [caja["id"]], None
-            else:  # clic en una acción: se selecciona su etapa y se señala la acción (sus opciones, en el panel inferior)
+            elif amplia:  # Mayús incluye la etapa con sus acciones; copiar conserva el conjunto.
+                self.sel = list(dict.fromkeys(self.sel + [caja["etapa"]]))
+                self.accion, self.ver_accion = None, False
+            else:  # La etapa es el contexto de propiedades; solo se resalta la acción.
                 self.sel, self.accion, self.ver_accion = [caja["etapa"]], caja["id"], True
             self.cambiado.emit()
             return True
@@ -969,10 +972,12 @@ class Edicion(QObject):
             ident = self._elemento_sin_marco(p)
             if ident and "|" in ident and destino and (p - destino["pos"]).manhattanLength() > 5:
                 destino = None  # sobre el trazo manda el enlace, no el halo de un tirador vecino
-            if origen["lado"] == "der" and destino is None:  # del lado derecho de una etapa, solo a una acción suelta
-                self.rechazar("De una etapa sale el enlace a una acción suelta: suelte el enlace sobre ella."
-                              if ident is None else
-                              "Una acción se une a una etapa, no a una transición, una barra ni otra acción.", origen["id"])
+            if origen["lado"] == "der" and destino is None:
+                if ident is None:
+                    if (p - origen["pos"]).manhattanLength() > 8:
+                        self.anadir_accion(origen["id"])
+                    return True
+                self.rechazar("Una acción se une a una etapa, no a una transición, una barra ni otra acción.", origen["id"])
                 self.cambiado.emit()
                 return True
             if origen["lado"] == "izq" and destino is None:  # de una acción suelta, solo a una etapa
@@ -1583,7 +1588,10 @@ class Edicion(QObject):
         etapa.update({b["id"]: b.get("etapa") for b in self.ed.draft_actions()})
         etapa.update({f["id"]: f["sourceStepRef"] for f in self.ed.model["forces"]})  # una orden seleccionada se resalta en su caja
         señalada = {self.accion} if self.accion in etapa and etapa[self.accion] in self.sel else set()
-        return set(self.sel) | {f"accion:{i}" for i in (señalada | (set(self.sel) & set(etapa)))}
+        seleccion = set(self.sel)
+        if señalada and self._accion_para_quitar():
+            seleccion.discard(etapa[self.accion])
+        return seleccion | {f"accion:{i}" for i in (señalada | (set(self.sel) & set(etapa)))}
 
     def _parcial_borrador(self, b: dict[str, Any]) -> str:
         """El parcial en cuyo ámbito se leen los textos de un borrador: el de su etapa (el raíz, si está suelto)."""
@@ -3507,10 +3515,10 @@ class Edicion(QObject):
             or next((b.get("etapa") for b in self.ed.draft_actions() if b["id"] == self.accion), None)
         return self.accion if etapa and self.sel == [etapa] else None
 
-    def copiar_fragmento(self) -> Fragment:
+    def copiar_fragmento(self, seleccion=None) -> Fragment:
         """Copia la selección efectiva, incluida una acción señalada, con sus coordenadas visibles."""
-        aid = self._accion_para_quitar()
-        ids = [aid] if aid else list(self.sel)
+        aid = self._accion_para_quitar() if seleccion is None else None
+        ids = ([aid] if aid else list(self.sel)) if seleccion is None else list(seleccion)
         frag = self.ed.copy(ids)
         # Las acciones sueltas y las barras vacías no tienen propietario semántico: se toma su contención gráfica.
         cajas = cajas_parciales(self.M)
@@ -3800,7 +3808,7 @@ class Edicion(QObject):
 
     # -- guardar -----------------------------------------------------------------------------------
     def proyecto(self) -> Project:
-        project = new_project(self.ed.model["id"], self.titulo)
+        project = copy.deepcopy(self.proyecto_base) if getattr(self,"proyecto_base",None) else new_project(self.ed.model["id"], self.titulo)
         add_document(project, self.ed.model)
         add_document(project, self.ed.presentation)
         return project

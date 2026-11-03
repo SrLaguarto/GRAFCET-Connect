@@ -12,26 +12,27 @@ import copy
 import html
 import json
 import re
-import shutil
-import time
+from time import perf_counter
+from math import ceil
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, QEvent, QElapsedTimer, QSettings, QStandardPaths, Qt, QTimer, QSize, QRectF, QPointF
+from PySide6.QtCore import QObject, Signal, QEvent, QElapsedTimer, QSettings, Qt, QTimer, QSize, QRectF, QPointF
 from PySide6.QtGui import QCursor, QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
                                QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QRadioButton,
-                               QScrollArea, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
+                               QScrollArea, QSplitter, QStackedWidget, QTabBar, QTableWidget, QTableWidgetItem,
                                QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle, QMenu, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
 
+from . import recursos_ui  # Registra los iconos vectoriales incorporados.
 from grafcet.diagnostics import DiagnosticError
 from grafcet.engine import Session
 from grafcet.examples import EJEMPLOS
-from grafcet.persistence import Recovery, add_document, new_project, open_model, save_project
+from grafcet.persistence import open_model
 from grafcet.profile import APP_VERSION, SEMANTIC_OPTIONS, normalize_options
 from grafcet.timeutil import parse_duration
-from grafcet.view import Vista, auto_layout, layout_from_presentation, presentation_for, t_trunc
+from grafcet.view import Vista, auto_layout, layout_from_presentation, t_trunc
 
 from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion
@@ -240,14 +241,14 @@ def _trazos_reinicio() -> tuple[QPainterPath, QPainterPath]:
     return arco, punta
 
 
-def _icono_barra(tipo: str, color: str = "#147f80") -> QIcon:
+def _icono_barra(tipo: str, color: str = "#43545e") -> QIcon:
     """Iconos de línea propios para los controles de la aplicación (no son notación GRAFCET)."""
     pm = QPixmap(48, 48)
     pm.setDevicePixelRatio(2)
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(QPen(QColor(color), 1.7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    p.setPen(QPen(QColor(color), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
     trazos = {
         "nuevo": [[(7, 3), (14, 3), (19, 8), (19, 21), (5, 21), (5, 3), (7, 3)], [(14, 3), (14, 9), (19, 9)]],
         "abrir": [[(3, 8), (3, 5), (9, 5), (12, 8), (21, 8), (19, 20), (3, 20), (3, 8), (21, 8)]],
@@ -264,9 +265,9 @@ def _icono_barra(tipo: str, color: str = "#147f80") -> QIcon:
     }
     if tipo == "play":
         path = QPainterPath()
-        path.moveTo(7, 4)
-        path.lineTo(20, 12)
-        path.lineTo(7, 20)
+        path.moveTo(8, 6)
+        path.lineTo(18, 12)
+        path.lineTo(8, 18)
         path.closeSubpath()
         p.fillPath(path, QColor(color))
     elif tipo == "stop":
@@ -274,7 +275,7 @@ def _icono_barra(tipo: str, color: str = "#147f80") -> QIcon:
     elif tipo == "dependencias":
         p.drawRect(QRectF(2, 9, 6, 6))
         p.drawRoundedRect(QRectF(15, 3, 8, 18), 1, 1)
-        pen = p.pen();pen.setStyle(Qt.PenStyle.DashLine);pen.setWidthF(1.2);p.setPen(pen)
+        pen = p.pen();pen.setStyle(Qt.PenStyle.DotLine);pen.setWidthF(1.2);p.setPen(pen)
         p.drawLine(QPointF(8, 9), QPointF(15, 3))
         p.drawLine(QPointF(8, 15), QPointF(15, 21))
     elif tipo == "reiniciar":
@@ -346,8 +347,22 @@ class _ControlPulsadores(QObject):
         return False
 
 
-class Ventana(QMainWindow):
-    def __init__(self, ajustes: QSettings | None = None, recuperacion: Path | None = None) -> None:
+from .archivos import ArchivosProyecto
+from . import sello
+
+class _RespuestaModbus(QObject):
+    lista = Signal()
+
+    def notificar(self):
+        # El trabajador solo despierta al propietario; nunca toca Qt ni la sesión.
+        try:
+            self.lista.emit()
+        except RuntimeError:
+            pass  # La ventana puede haberse destruido mientras terminaba la red.
+
+
+class Ventana(ArchivosProyecto, QMainWindow):
+    def __init__(self, ajustes: QSettings | None = None) -> None:
         super().__init__()
         self.setWindowTitle(TITULO)
         self.resize(1360, 860)
@@ -360,13 +375,23 @@ class Ventana(QMainWindow):
         self.botones: dict[str, QPushButton] = {}
         self.campos: dict[str, QLineEdit] = {}
         self.rt = QTimer(self)
+        self.rt.setTimerType(Qt.TimerType.PreciseTimer)
         self.rt.setInterval(TICK_MS)
         self.rt.timeout.connect(self._tick)
         self.reloj = QElapsedTimer()
         self.edicion: Edicion | None = None
         self._alturas = dict(ALTO_INFERIOR)
         self.modo = "editar"  # solo cambia con Play (simular) y Pausa (editar)
-        self.modbus = Coordinador()
+        self._respuesta_modbus = _RespuestaModbus(self)
+        self._respuesta_modbus.lista.connect(self._tick, Qt.ConnectionType.QueuedConnection)
+        self.modbus = Coordinador(self._respuesta_modbus.notificar)
+        self._proxima_lectura = QTimer(self)
+        self._proxima_lectura.setSingleShot(True)
+        self._proxima_lectura.setTimerType(Qt.TimerType.PreciseTimer)
+        self._proxima_lectura.timeout.connect(self._tick)
+        self._ultimo_refresco_modbus = 0.0
+        self._marca_reloj_ns = 0
+        self._resto_reloj_ns = 0
         self._transicion_ui = False  # Play/Pausa en curso: los cambios que él mismo provoca no lo repiten
         self._aviso_inestable_sesion = None  # sesión de la que ya se avisó (un solo aviso por episodio)
         self._popup_inestable = None
@@ -375,13 +400,6 @@ class Ventana(QMainWindow):
         self._proyecto: Any = None  # qué proyecto hay abierto (los ID de modelo no lo distinguen: todos los ejemplos son «m»)
         self._proyecto_modbus: Any = None  # de qué proyecto es el mapa que tiene cargado el panel de E/S
         self._n_nuevos = 0
-        # Recuperación automática cada 30 s mientras hay cambios sin guardar (REQ-EDT-10)
-        self.recup = Recovery(recuperacion or Path(QStandardPaths.writableLocation(
-            QStandardPaths.StandardLocation.AppLocalDataLocation)))
-        self.t_auto = QTimer(self)
-        self.t_auto.setInterval(30_000)
-        self.t_auto.timeout.connect(self.autoguardar)
-        self.t_auto.start()
         self._tipos_entrada: dict[tuple[Any, str], bool] = {}
         self._portapapeles = None
         self._menus()
@@ -401,14 +419,26 @@ class Ventana(QMainWindow):
         self.paginas_es = QStackedWidget()
         self.paginas_es.addWidget(central)
         self.paginas_es.addWidget(self.panel_es)
-        self.setCentralWidget(self.paginas_es)
+        from .planos import PaginaPlanos
+        self.panel_planos=PaginaPlanos(self)
+        self.paginas_es.addWidget(self.panel_planos)
+        contenedor=QWidget();disposicion=QVBoxLayout(contenedor);disposicion.setContentsMargins(0,0,0,0);disposicion.setSpacing(0)
+        self.pestanas_vistas=QTabBar();self.pestanas_vistas.setExpanding(False);self.pestanas_vistas.setDrawBase(True)
+        for texto in ('GRAFCET','PLANOS','E/S externas'):self.pestanas_vistas.addTab(texto)
+        self.pestanas_vistas.setStyleSheet("QTabBar {background:#e4eae9; border:0;} QTabBar::tab {min-width:100px; padding:8px 20px; margin:5px 3px 0 0; background:transparent; color:#536169; border:0; border-top-left-radius:9px; border-top-right-radius:9px;} QTabBar::tab:selected {background:white; color:#20343b;} QTabBar::tab:hover:!selected {background:#d7e1df;}")
+        disposicion.addWidget(self.pestanas_vistas)
+        self.aviso_traer=QWidget();self.aviso_traer.setObjectName('avisoSeleccionPlanos');self.aviso_traer.setStyleSheet('QWidget#avisoSeleccionPlanos {background:#f3e9cd; color:#574922; border-radius:3px;} QWidget#avisoSeleccionPlanos QLabel {background:transparent;} QWidget#avisoSeleccionPlanos QPushButton {background:white; color:#3b403b; border:1px solid #9b8959; padding:6px 12px; border-radius:3px;} QWidget#avisoSeleccionPlanos QPushButton:hover {background:#fffaf0; border-color:#665526;} QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja {background:#27665c; color:white; border-color:#1d5048;} QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja:hover {background:#1b5149;}');fila=QHBoxLayout(self.aviso_traer);fila.setContentsMargins(12,7,12,7);fila.addWidget(QLabel('PLANOS · Selecciona el GRAFCET para la hoja'))
+        self.b_confirmar_traer=QPushButton('Añadir selección a la hoja');self.b_confirmar_traer.setObjectName('confirmarSeleccionHoja');fila.addWidget(self.b_confirmar_traer);cancelar=QPushButton('Cancelar');fila.addWidget(cancelar);fila.addStretch(1)
+        self.b_confirmar_traer.clicked.connect(self.confirmar_traer);cancelar.clicked.connect(self.cancelar_traer)
+        self.destino_traer=None;self.aviso_traer.hide();disposicion.addWidget(self.paginas_es,1);disposicion.addWidget(self.aviso_traer)
+        self.setCentralWidget(contenedor)
+        self.pestanas_vistas.currentChanged.connect(lambda i:self.mostrar_es() if i==2 else self._mostrar_pagina('planos' if i==1 else False))
         self.panel_es.volver.connect(lambda: self._mostrar_pagina(False))
         self.panel_es.conectar.connect(self._conectar_modbus)
         self.panel_es.probar.connect(lambda: self._conectar_modbus(prueba=True))
         self.panel_es.desconectar.connect(self._desconectar_modbus)
         self.panel_es.guardar.connect(self._guardar_config_modbus)
         self.panel_es.cargar_archivo.connect(self._abrir_config_modbus)
-        self.panel_es.abrir_prueba.connect(self._abrir_prueba_modbus)
         self.panel_es.aplicar.connect(self._persistir_mapa_modbus)
         self._barra_herramientas()
         self._paneles()
@@ -426,12 +456,19 @@ class Ventana(QMainWindow):
     def _menus(self) -> None:
         bar = self.menuBar()
         archivo = bar.addMenu("&Proyecto")
-        self.a_nuevo = self._accion("&Nuevo grafcet", self.nuevo, "Ctrl+N")
+        self.a_nuevo = self._accion("&Nuevo proyecto", self.nuevo, "Ctrl+N")
         archivo.addAction(self.a_nuevo)
-        a = self.a_abrir = archivo.addAction("&Abrir modelo…", self.abrir)
+        a = self.a_abrir = archivo.addAction("&Abrir…", self.abrir)
         a.setShortcut(QKeySequence.StandardKey.Open)
-        self.a_guardar = archivo.addAction("&Guardar proyecto…", self.guardar)
+        self.a_guardar = archivo.addAction("&Guardar", self.guardar)
         self.a_guardar.setShortcut(QKeySequence.StandardKey.Save)
+        self.a_guardar_como = self._accion("Guardar &como…", self.guardar_como, "Ctrl+Shift+S")
+        archivo.addAction(self.a_guardar_como)
+        archivo.addAction("&Planos…", self.abrir_laminas)
+        archivo.addAction("Hojas del proyecto…", self.abrir_hojas)
+        self.a_exportar = archivo.addAction("&Exportar…", lambda:self.abrir_laminas("exportar"))
+        self.a_imprimir = self._accion("&Imprimir…", lambda:self.abrir_laminas("imprimir"), "Ctrl+P")
+        archivo.addAction(self.a_imprimir)
         archivo.addAction("Guardar el &dibujo como imagen…", self.guardar_imagen)
         archivo.addSeparator()
         archivo.addAction("&Salir", self.close).setShortcut(QKeySequence.StandardKey.Quit)
@@ -475,8 +512,8 @@ class Ventana(QMainWindow):
         self.a_herr["seleccionar"].blockSignals(True)
         self.a_herr["seleccionar"].setChecked(True)
         self.a_herr["seleccionar"].blockSignals(False)
-        self.a_deshacer = self._accion("&Deshacer", lambda: self.edicion and self.edicion.deshacer(), "Ctrl+Z")
-        self.a_rehacer = self._accion("&Rehacer", lambda: self.edicion and self.edicion.rehacer(), ["Ctrl+Y", "Ctrl+Shift+Z"])
+        self.a_deshacer = self._accion("&Deshacer", lambda: self.historial_plano(False), "Ctrl+Z")
+        self.a_rehacer = self._accion("&Rehacer", lambda: self.historial_plano(True), ["Ctrl+Y", "Ctrl+Shift+Z"])
         self.a_borrar = self._accion("&Borrar la selección", lambda: self.edicion and self.edicion.borrar(), "Del")
         self.a_debajo = self._accion("&Añadir debajo", lambda: self.edicion and self.edicion.anadir_debajo(), "Ctrl+Return")
         self.a_debajo.setToolTip("Con una etapa seleccionada: transición y etapa enlazadas debajo (Ctrl+Intro)")
@@ -486,6 +523,8 @@ class Ventana(QMainWindow):
         edicion = bar.addMenu("&Edición")
         for a in (self.a_cortar, self.a_copiar, self.a_pegar):
             edicion.addAction(a)
+        self.a_enviar_lamina=self._accion("Enviar a plano…",self.enviar_seleccion_lamina)
+        edicion.addAction(self.a_enviar_lamina)
         edicion.addSeparator()
         for a in (self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo):
             edicion.addAction(a)
@@ -712,14 +751,19 @@ class Ventana(QMainWindow):
             QMenu { background: white; border: 1px solid #cde2e3; padding: 4px; }
             QMenu::item { padding: 6px 22px; }
             QToolBar { background: white; border: 0; border-bottom: 1px solid #dcebec; spacing: 5px; padding: 6px 3px; }
-            QToolBar QToolButton { padding: 6px 7px; border: 1px solid transparent; border-radius: 5px; }
+            QToolBar QToolButton { padding: 5px 7px; border: 1px solid transparent; border-radius: 2px; }
+            QToolButton#bibliotecaPlanos { padding-right:28px; }
+            QToolButton#bibliotecaPlanos::menu-indicator { image:url(:/grafconnect/desplegar.svg); subcontrol-origin:padding; subcontrol-position:center right; right:8px; width:12px; height:8px; }
             QToolBar QToolButton:hover { background: #edf8f6; border-color: #c7e5e1; }
-            QToolBar QToolButton:checked { background: #d8efec; border-color: #97cbc5; }
-            QToolBar#barraSimulacion QToolButton { color: #167d80; background: #e9f6f4; padding: 6px 12px; }
+            QToolBar QToolButton:checked { background: #d5e6e2; border-color: #82aaa2; color:#23483f; }
+            QToolBar#barraSimulacion QToolButton { color: #334b50; background: transparent; padding: 5px 10px; }
             QToolBar#barraSimulacion QToolButton:hover { background: #d9efeb; }
             QToolBar#barraConexion QToolButton { border: 1px solid #a2d2cd; background: white; color: #167d80; }
             QLineEdit, QComboBox, QSpinBox { background: white; border: 1px solid #ccdfe5; border-radius: 4px;
                 padding: 4px 6px; selection-background-color: #258d88; }
+            QComboBox { padding-right:28px; min-height:18px; }
+            QComboBox::drop-down { subcontrol-origin:padding; subcontrol-position:top right; width:24px; border:0; background:transparent; }
+            QComboBox::down-arrow { image:url(:/grafconnect/desplegar.svg); width:12px; height:8px; }
             QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border-color: #258d88; }
             QPushButton { background: white; border: 1px solid #cbdfe4; border-radius: 4px; padding: 4px 8px; }
             QPushButton:hover { background: #edf8f6; border-color: #8fbfb8; }
@@ -760,15 +804,19 @@ class Ventana(QMainWindow):
         # con otro texto, tooltip e icono; _sincronizar_boton_es lo deja coherente con la página visible, sea cual sea la vía
         self.a_es = self._accion("E/S externas", self._alternar_es, marcable=True)
         self._iconos_es = (_icono_barra("conexion"), _icono_grafcet())
+        from .planos import icono_planos
+        self.a_planos=self._accion("Planos",self._alternar_planos,marcable=True)
+        self.a_planos.setIcon(icono_planos());self.tb_conexion.addAction(self.a_planos)
         self.tb_conexion.addAction(self.a_es)
         self._sincronizar_boton_es()
         self.paginas_es.currentChanged.connect(self._sincronizar_boton_es)
         self.addToolBar(self.tb_conexion)
+        self.tb_conexion.hide()
         self._fijar_ancho_boton_es()  # con la barra ya en la ventana: el botón lleva su hoja de estilo
         self._fijar_ancho_boton_play()
         self.tb_edit = QToolBar("Edición")
         self.tb_edit.setMovable(False)
-        for a in (self.a_debajo, self.a_deshacer, self.a_rehacer, self.a_borrar):
+        for a in (self.a_debajo,):
             self.tb_edit.addAction(a)
         boton = self.diagrama.b_dependencias
         boton.setIcon(_icono_barra("dependencias"))
@@ -783,6 +831,13 @@ class Ventana(QMainWindow):
         self.a_dependencias.setEnabled(True)
         boton.show()
         self.addToolBar(self.tb_vista)
+        self.tb_proyecto.hide()
+        self.herramientas_grafcet=QWidget()
+        fila=QHBoxLayout(self.herramientas_grafcet);fila.setContentsMargins(0,0,0,0)
+        for barra in (self.tb_sim,self.tb_edit,self.tb_vista):
+            self.removeToolBar(barra);fila.addWidget(barra);barra.show()
+        fila.addStretch(1)
+        self.centralWidget().layout().insertWidget(1,self.herramientas_grafcet)
         self.tb_edit.hide()
         self._acciones_edicion(False)
 
@@ -849,7 +904,11 @@ class Ventana(QMainWindow):
         if nombre != "inferior":
             return self.ancho_lateral
         if self.modo == "editar":
-            return max(76 if self.props.pagina == "vacio" else 160, self.props.minimumSizeHint().height())
+            minimo = max(76 if self.props.pagina == "vacio" else 160, self.props.minimumSizeHint().height())
+            if self.props.pagina == "accion":
+                # La frase se parte según el ancho de su columna: minimumSizeHint no cuenta esas líneas.
+                minimo = max(minimo, self.props.layout().totalHeightForWidth(self.props.width()))
+            return minimo
         return max(120, self.traza.minimumSizeHint().height()+30)
 
     def _abrir_desde_tiron(self, nombre, tamano):
@@ -889,25 +948,34 @@ class Ventana(QMainWindow):
         self._cargar()
 
     def abrir_ruta(self, ruta: Path) -> bool:
-        if not self._salir_de_edicion():
-            return False
+        contenedor = None
         try:
-            op = open_model(ruta)
-        except (DiagnosticError, OSError) as exc:
+            ruta=Path(ruta)
+            if ruta.suffix.lower()!='.grafnet':
+                raise ValueError('Abre un proyecto .grafnet con sello válido. No se admiten carpetas ni archivos JSON sueltos.')
+            contenedor=self._leer_grafnet_gui(ruta)
+            op=open_model(contenedor.raiz)
+        except (DiagnosticError, OSError, ValueError) as exc:
+            if contenedor is not None:contenedor.cerrar()
             QMessageBox.warning(self, TITULO, f"No se pudo abrir {ruta}:\n\n{exc}")
             return False
         if not op.executable:
+            if contenedor is not None:contenedor.cerrar()
             QMessageBox.warning(self, TITULO, "El modelo no se puede simular:\n\n"
                                 + "\n".join(str(d) for d in op.diagnostics))
+            return False
+        if not self._salir_de_edicion():
+            if contenedor is not None:contenedor.cerrar()
             return False
         layout = layout_from_presentation(op.presentations[0]) if op.presentations else {}
         avisos = [str(d) for d in op.diagnostics]
         ayuda = (f"Modelo abierto de {ruta}. "
                  + ("Posiciones de su presentación." if layout else "Sin presentación: colocado automáticamente.")
                  + (" Avisos: " + "; ".join(avisos) if avisos else ""))
-        proyecto = ruta if ruta.is_dir() else ruta.parent if ruta.name == "manifest.json" else None
+        proyecto = contenedor.raiz
         self.fuente = {"tipo": "fichero", "ruta": ruta, "doc": op.doc, "layout": layout, "titulo": op.title,
                        "ayuda": ayuda, "raiz": proyecto, "presentacion": op.presentations[0] if op.presentations else None}
+        self.fuente["contenedor"] = contenedor
         checked = self.grupo.checkedAction()
         if checked:
             self.grupo.setExclusive(False)
@@ -917,7 +985,10 @@ class Ventana(QMainWindow):
         return True
 
     def abrir(self) -> None:
-        ruta, _ = QFileDialog.getOpenFileName(self, "Abrir modelo", "", "Modelo o proyecto GRAFCET (*.json)")
+        from .carpetas import asegurar_carpetas
+        try:inicial=str(asegurar_carpetas()['grafcet'])
+        except OSError as exc:QMessageBox.warning(self,"Abrir proyecto",str(exc));return
+        ruta, _ = QFileDialog.getOpenFileName(self, "Abrir proyecto", inicial, "Proyecto GrafConnect (*.grafnet)")
         if ruta:
             self.abrir_ruta(Path(ruta))
 
@@ -976,7 +1047,7 @@ class Ventana(QMainWindow):
         if not self._preparar_sesion():
             self.a_ejecutar.setChecked(False)  # no se ha podido: Pausa
             return
-        self.reloj.restart()
+        self._iniciar_reloj()
         self.refrescar()
 
     def _sin_estado(self) -> None:
@@ -1041,14 +1112,15 @@ class Ventana(QMainWindow):
 
     def _actualizar_portapapeles(self, *args: Any) -> None:
         e = self.edicion
-        disponible = e is not None and self.modo == "editar" and not self._foco_portapapeles()
+        disponible = e is not None and self.modo == "editar" and not self.destino_traer and not self._foco_portapapeles() and (not hasattr(self,"paginas_es") or self.paginas_es.currentIndex()!=2)
         self.a_copiar.setEnabled(disponible and bool(e.sel))
         self.a_cortar.setEnabled(disponible and bool(e.sel))
         self.a_pegar.setEnabled(disponible and self._portapapeles is not None)
+        if hasattr(self,"a_enviar_lamina"):self.a_enviar_lamina.setEnabled(disponible and bool(e.sel))
 
     def _portapapeles_accion(self, operacion: str, punto: Any = None) -> bool:
         e = self.edicion
-        if e is None or self.modo != "editar" or self._foco_portapapeles():
+        if e is None or self.modo != "editar" or self._foco_portapapeles() or self.destino_traer:
             return False
         if operacion == "pegar":
             if self._portapapeles is None:
@@ -1075,7 +1147,8 @@ class Ventana(QMainWindow):
     def _menu_portapapeles(self, punto: Any, sobre_elemento: bool) -> list[tuple[str, Any]]:
         if sobre_elemento:
             return [("Cortar", lambda: self._portapapeles_accion("cortar")),
-                    ("Copiar", lambda: self._portapapeles_accion("copiar"))]
+                    ("Copiar", lambda: self._portapapeles_accion("copiar")),
+                    ("Enviar a plano…",self.enviar_seleccion_lamina)]
         return [("Pegar", (lambda: self._portapapeles_accion("pegar", punto)) if self._portapapeles is not None else None)]
 
     def _acciones_edicion(self, on: bool) -> None:
@@ -1085,11 +1158,17 @@ class Ventana(QMainWindow):
 
     def _titulo_ventana(self) -> None:
         e = self.edicion
-        if self.modo == "editar" and e is not None:
-            self.setWindowTitle(f"{e.titulo}{' *' if e.ed.dirty else ''} (editando) — {TITULO}")
+        if hasattr(self,"panel_planos"):
+            if self.paginas_es.currentIndex()==2 and self.panel_planos.origen is not e and not self.panel_planos.cargando:self.panel_planos.mostrar()
+            else:self.panel_planos.actualizar_titulo()
+        if e is not None:
+            nombre = getattr(e,"archivo",None)
+            nombre = nombre.name if nombre else e.titulo
+            self.setWindowTitle(f"{nombre}{' *' if e.ed.dirty else ''}{' (editando)' if self.modo == 'editar' else ''} — {TITULO}")
 
     def _salir_de_edicion(self) -> bool:
         """Antes de cargar otro modelo: si hay cambios sin guardar, pregunta. Quien carga sustituye la edición en curso."""
+        if hasattr(self,"panel_planos"):self.panel_planos.aplicar()
         e = self.edicion
         if e is not None and e.ed.dirty:
             r = QMessageBox.question(self, TITULO, f"«{e.titulo}» tiene cambios sin guardar. ¿Guardarlos?",
@@ -1097,15 +1176,12 @@ class Ventana(QMainWindow):
                                      | QMessageBox.StandardButton.Cancel)
             if r == QMessageBox.StandardButton.Cancel or (r == QMessageBox.StandardButton.Save and not self.guardar()):
                 return False
-        if e is not None:
-            shutil.rmtree(self.recup.dir, ignore_errors=True)
         return True
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802
         if self._salir_de_edicion():
             self._transicion_ui = True
             self.a_ejecutar.setChecked(False)
-            self.t_auto.stop()
             self.rt.stop()
             self.modbus.cerrar()
             event.accept()
@@ -1130,7 +1206,9 @@ class Ventana(QMainWindow):
             title, _, build = EJEMPLOS[f["clave"]]
             m, layout = build()
             return Edicion.desde(m.doc, layout, title)
-        return Edicion.desde(f["doc"], f["layout"], f["titulo"], f.get("raiz"), f.get("presentacion"))
+        e=Edicion.desde(f["doc"], f["layout"], f["titulo"], f.get("raiz"), f.get("presentacion"))
+        if f.get("contenedor") is not None:self._adoptar_archivo(e,f["contenedor"])
+        return e
 
     def _empezar_edicion(self, e: Edicion) -> None:
         self._ayuda = ""
@@ -1140,6 +1218,7 @@ class Ventana(QMainWindow):
         self.cambiar_modo("editar")
 
     def _establecer_edicion(self, e: Edicion) -> None:
+        self.destino_traer=None;self.aviso_traer.hide()
         self.edicion = e
         e.diagrama = self.diagrama
         e.cambiado.connect(self.refrescar_edicion)
@@ -1158,6 +1237,7 @@ class Ventana(QMainWindow):
             QMessageBox.information(self, TITULO, aviso)
 
     def cambiar_modo(self, modo: str) -> bool:
+        if self.destino_traer:return False
         """Los modos solo se alternan con Play (simular) y Pausa (editar); esto es el mismo control por dentro. Devuelve si
         el programa ha quedado en el modo pedido (Play puede negarse: no compila, inestable…)."""
         on = modo == "simular"
@@ -1213,7 +1293,7 @@ class Ventana(QMainWindow):
         if editar:
             self.refrescar_edicion()
         elif self.v is not None:
-            self.setWindowTitle(f"{self.v.model['title']} — {TITULO}")
+            self._titulo_ventana()
 
     def _anchos_laterales(self, ancho: int | None = None) -> None:
         editar = self.modo == "editar" and self.edicion is not None
@@ -1226,6 +1306,8 @@ class Ventana(QMainWindow):
 
     def _dimensionar_opciones(self) -> None:
         """Reparto visual inicial: propiedades compactas, sin sobreescribir el divisor movido a mano."""
+        if getattr(self,"_seleccionando_hoja",False):return
+        self.props.layout().activate();self.props.updateGeometry()
         self._plegables["inferior"].mostrar(self._plegables["inferior"].abierto)
         if (not self._opciones_automaticas or self.modo != "editar" or self.inferior.isHidden()
                 or getattr(self, "_restauracion_paneles", None) is not None):
@@ -1313,13 +1395,14 @@ class Ventana(QMainWindow):
         self.a_herr[e.herramienta].setChecked(True)
         self.props.mostrar(e)
         pagina = (self.props.pagina, self.props.minimumSizeHint().height())
-        if self._opciones_automaticas and pagina != getattr(self, "_pagina_opciones", None):
+        if pagina != getattr(self, "_pagina_opciones", None):
             self._pagina_opciones = pagina
             QTimer.singleShot(0, self, self._dimensionar_opciones)
         self.variables.mostrar(e)
+        planos=hasattr(self,"paginas_es") and self.paginas_es.currentIndex()==2
         self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
         self.a_rehacer.setEnabled(bool(e.ed.redo_stack))
-        self.a_borrar.setEnabled(bool(e.sel))
+        self.a_borrar.setEnabled(bool(e.sel) and not planos)
         self._actualizar_portapapeles()
         self.a_debajo.setEnabled(len(e.sel) == 1)
         bloq = [d for d in diags if d["blocks"]]
@@ -1344,6 +1427,7 @@ class Ventana(QMainWindow):
         hay_detalle = self.lista_diag.count() > 0
         self.diagrama.actualizar_diagnosticos(hay_detalle)
         self._titulo_ventana()
+        if self.destino_traer:self._sincronizar_boton_es()
         if hasattr(self, "panel_es"):  # las variables pueden haber cambiado: el panel de E/S las sigue (o avisa, si hay conexión)
             self._sincronizar_es()
 
@@ -1437,34 +1521,6 @@ class Ventana(QMainWindow):
             texto += "\n\nTambién cambia la jerarquía:\n" + "\n".join(f"• {a[0].upper()}{a[1:]}." for a in avisos)
         return QMessageBox.question(self, TITULO, texto + "\n\nSe puede deshacer con Ctrl+Z. ¿Continuar?") \
             == QMessageBox.StandardButton.Yes
-
-    # -- recuperación automática (REQ-EDT-10) -----------------------------------------------------------
-    def autoguardar(self, ahora: float | None = None) -> bool:
-        e = self.edicion
-        if e is None or not e.ed.dirty:
-            return False
-        try:
-            return self.recup.maybe_autosave(time.time() if ahora is None else ahora, True, e.proyecto(), e.ed.revision)
-        except (DiagnosticError, OSError):
-            return False
-
-    def ofrecer_recuperacion(self) -> bool:
-        """Al arrancar: si quedó una copia de recuperación de una edición sin guardar, se ofrece abrirla."""
-        try:
-            info = self.recup.available()
-            if not info:
-                return False
-            op = open_model(self.recup.dir)
-        except (DiagnosticError, OSError):
-            return False
-        if QMessageBox.question(self, TITULO, "Quedó una edición sin guardar (copia de recuperación). ¿Abrirla?") \
-                != QMessageBox.StandardButton.Yes:
-            shutil.rmtree(self.recup.dir, ignore_errors=True)
-            return False
-        e = Edicion.desde(op.doc, {}, op.title, None, op.presentations[0] if op.presentations else None)
-        e.ed.dirty = True
-        self._empezar_edicion(e)
-        return True
 
     def avanzar_tiempo(self) -> None:
         """Depuración (solo en Play): avanza el tiempo lógico una duración dada (por ejemplo «0,5», «2 s» o «350 ms»)."""
@@ -1634,7 +1690,8 @@ class Ventana(QMainWindow):
                 on = False  # no arranca (no compila, inestable, mapa de E/S inválido…): sigue en Pausa
             self.modo = "simular" if on else "editar"
             self._marcar_play(on)
-            self._mostrar_pagina(False)
+            if not getattr(self, "_conservar_vista_al_parar", False):
+                self._mostrar_pagina(False)
             if not on:
                 self.modbus.pausar()
                 if self.edicion is None:
@@ -1647,8 +1704,9 @@ class Ventana(QMainWindow):
                 self.refrescar()
             if self.modbus.activo:
                 self.modbus.solicitar_ejecucion(on)
+                self._proxima_lectura.start(1)  # Play/Stop no esperan al sondeo configurado.
             if on or self.modbus.activo:  # con la conexión viva el temporizador sigue en Pausa: observa las entradas
-                self.reloj.start()
+                self._iniciar_reloj()
                 self.rt.start()
             else:
                 self.rt.stop()
@@ -1706,40 +1764,47 @@ class Ventana(QMainWindow):
         self._popup_inestable = cuadro
         cuadro.open()
 
+    def _iniciar_reloj(self):
+        self.reloj.start()
+        self._marca_reloj_ns = self._resto_reloj_ns = 0
+
+    def _refrescar_modbus(self):
+        ahora = perf_counter()
+        if self.modbus.activo and ahora - self._ultimo_refresco_modbus < TICK_MS / 1000:
+            return
+        self._ultimo_refresco_modbus = ahora
+        self._recordar_conexion()
+        if not self.modbus.activo:
+            self._sincronizar_es()
+        self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
+        self.panel_es.mostrar_tiempos(self.modbus.medidas)
+        self.panel_es.ocupado(self.modbus.activo)
+        if self.modo == "simular":
+            self.refrescar()
+        else:
+            self.panel_es.mostrar_muestra(self.modbus.muestra, self.modbus.adaptador.entradas,
+                self.modbus.escritos, getattr(self.modbus.adaptador, "salidas_control", []))
+
     def _tick(self) -> None:
-        us = self.reloj.restart() * 1000
+        marca = self.reloj.nsecsElapsed() if self.reloj.isValid() else 0
+        us, self._resto_reloj_ns = divmod(max(0, marca - self._marca_reloj_ns) + self._resto_reloj_ns, 1000)
+        self._marca_reloj_ns = marca
         if self.modbus.activo:
-            if self.modbus.adaptador.sesion is None:  # Pausa con la conexión viva: solo se observan las entradas
-                self.modbus.tick(False)
-                self._recordar_conexion()
-                if not self.modbus.activo:  # acaba de cerrarse (desconexión, fallo o prueba): ya pueden verse las variables nuevas
-                    self._sincronizar_es()
-                self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
-                self.panel_es.ocupado(self.modbus.activo)
-                self.panel_es.mostrar_muestra(self.modbus.muestra, self.modbus.adaptador.entradas, self.modbus.escritos,
-                                              getattr(self.modbus.adaptador, "salidas_control", []))
-                if self.a_ejecutar.isChecked():
-                    self.a_ejecutar.setChecked(False)
-                if not self.modbus.activo:
-                    self.rt.stop()
-                    self.rt.setInterval(TICK_MS)
-                return
-            ejecutar = self.a_ejecutar.isChecked() and self.modbus.estado == "conectado" and not self.modbus.reiniciando
+            ejecutar = (self.a_ejecutar.isChecked() and self.modbus.estado == "conectado"
+                        and not self.modbus.reiniciando and self.modbus.adaptador.sesion is not None)
             if ejecutar and self.modbus.en_marcha and self.v and self.v.s and self.v.s.status == "pausada-estable":
                 self.v.s.advance_to(self.v.s.z.time + us)
             self.modbus.tick(ejecutar)
-            self._recordar_conexion()
-            if self.a_ejecutar.isChecked() and self._vigilar_motor():
-                self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
-                return
-            if self.modbus.estado in ("error", "desconectado", "diagnostico"):
-                self.a_ejecutar.setChecked(False)
-            if not self.modbus.activo:
-                self._sincronizar_es()
-            self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
-            self.panel_es.ocupado(self.modbus.activo)
-            if self.modo == "simular":
-                self.refrescar()
+            if self.a_ejecutar.isChecked():
+                self._vigilar_motor()
+                if self.modbus.estado in ("error", "desconectado", "diagnostico") or self.modbus.adaptador.sesion is None:
+                    self.a_ejecutar.setChecked(False)
+            self._proxima_lectura.stop()
+            if (self.modbus.estado == "conectado" and not self.modbus.fallo_motor
+                    and self.modbus.futuro is None):
+                espera = max(1, ceil((self.modbus.proxima - perf_counter()) * 1000))
+                self._proxima_lectura.start(espera)
+            self._refrescar_modbus()
             if not self.modbus.activo:
                 self.rt.setInterval(TICK_MS)
                 self.rt.stop()
@@ -1764,6 +1829,8 @@ class Ventana(QMainWindow):
         if raiz and self.panel_es.doc:
             try:
                 config.guardar(raiz / ARCHIVO, self.panel_es.doc)
+                if self.edicion and getattr(self.edicion,"contenedor",None):
+                    self.edicion.ed.dirty=True;self._titulo_ventana()
             except (OSError, ValueError) as exc:
                 self.panel_es.estado.setText(f"No se pudo guardar el mapa: {exc}")
 
@@ -1847,7 +1914,7 @@ class Ventana(QMainWindow):
 
     def _leer_parametros_recordados(self) -> dict[str, Any]:
         host, puerto, unidad = self._leer_conexion_recordada()
-        base = {"host": host, "puerto": puerto, "unidad": unidad, "periodo_ms": 50, "timeout_ms": 500,
+        base = {"host": host, "puerto": puerto, "unidad": unidad, "periodo_ms": 20, "timeout_ms": 500,
                 "canales": copy.deepcopy(CANALES_INICIALES), "escalas": {}}
         try:
             texto = self.ajustes.value("modbus/configuracion", "")
@@ -1907,11 +1974,6 @@ class Ventana(QMainWindow):
             config.validar(doc)
         return config
 
-    def _guardar_mapa_en(self, destino: Path, doc: dict[str, Any]) -> None:
-        config = self._configuracion_para_guardar(doc)
-        config.guardar(destino / ARCHIVO, doc)
-        self._recordar_parametros(config)
-
     def _doc_es(self) -> dict[str, Any] | None:
         """El modelo cuyas variables enseña el panel de E/S: el que se edita; al simular, el que se está ejecutando."""
         if self.modo == "editar" and self.edicion:
@@ -1943,10 +2005,16 @@ class Ventana(QMainWindow):
         self._sincronizar_es(mostrando=True)
         self._mostrar_pagina(True)
 
-    def _mostrar_pagina(self, es: bool) -> None:
-        """Único sitio que cambia de página: el dibujo GRAFCET (es=False) o la vista de E/S externas (es=True)."""
-        self.paginas_es.setCurrentIndex(1 if es else 0)
+    def _mostrar_pagina(self, es: bool | str, refrescar_planos=True) -> None:
+        """Cambio centralizado entre GRAFCET (0), E/S (1) y Planos (2)."""
+        destino=2 if es=="planos" else (1 if es else 0)
+        if self.paginas_es.currentIndex()==2 and destino!=2:self.panel_planos.aplicar()
+        if destino==2 and refrescar_planos:self.panel_planos.mostrar()
+        self.paginas_es.setCurrentIndex(destino)
         self._sincronizar_boton_es()
+
+    def _alternar_planos(self,on):
+        self._mostrar_pagina("planos" if on else False)
 
     def _alternar_es(self, on: bool) -> None:
         """El botón conmutador: marcado abre la vista de E/S; desmarcado vuelve al dibujo GRAFCET."""
@@ -1963,8 +2031,24 @@ class Ventana(QMainWindow):
         self.a_es.setChecked(es)
         self.a_es.blockSignals(False)
         self._aspecto_boton_es(es)
-        self.a_ejecutar.setEnabled(not es)
-        self.a_reiniciar.setEnabled(not es)
+        indice=self.paginas_es.currentIndex()
+        if hasattr(self,'pestanas_vistas'):
+            self.pestanas_vistas.blockSignals(True);self.pestanas_vistas.setCurrentIndex({0:0,1:2,2:1}[indice]);self.pestanas_vistas.blockSignals(False)
+            pendiente=self.destino_traer is not None and self.destino_traer[0] is self.edicion
+            self.aviso_traer.setVisible(indice==0 and pendiente)
+        if hasattr(self,'tb_edit'):self.tb_edit.setVisible(indice==0 and self.modo=='editar')
+        if hasattr(self,"herramientas_grafcet"):self.herramientas_grafcet.setVisible(indice==0 and not pendiente)
+        planos=self.paginas_es.currentIndex()==2
+        self.a_planos.blockSignals(True);self.a_planos.setChecked(planos);self.a_planos.blockSignals(False)
+        self.a_planos.setToolTip("Volver al GRAFCET" if planos else "Editar planos, plantillas y cajetín")
+        self.a_ejecutar.setEnabled(not(es or planos or pendiente));self.a_reiniciar.setEnabled(not(es or planos or pendiente))
+        editar=self.modo=="editar" and not planos and not pendiente
+        for a in (*self.a_herr.values(),self.a_debajo):a.setEnabled(editar)
+        e=self.edicion
+        self.a_deshacer.setEnabled(not pendiente and (editar or planos) and e is not None and bool(e.ed.undo_stack));self.a_rehacer.setEnabled(not pendiente and (editar or planos) and e is not None and bool(e.ed.redo_stack));self.a_borrar.setEnabled(editar and e is not None and bool(e.sel))
+        self.a_dependencias.setEnabled(not planos) if hasattr(self,"a_dependencias") else None
+        self._actualizar_portapapeles()
+        self._seleccion_para_hoja(indice==0 and pendiente)
 
     def _aspecto_boton_es(self, es: bool) -> None:
         """Texto, tooltip e icono del botón conmutador en cada una de sus dos vistas."""
@@ -2013,22 +2097,19 @@ class Ventana(QMainWindow):
             self.panel_es.ocupado(True)
             self.panel_es.estado.setText(self.modbus.mensaje)
             self.rt.setInterval(config.periodo_ms)
-            self.reloj.start()
+            self._iniciar_reloj()
             self.rt.start()
         except (ValueError, RuntimeError) as exc:
             self.panel_es.estado.setText(f"No se pudo conectar: {exc}")
 
-    def _abrir_prueba_modbus(self):
-        import sys
-        raiz = (Path(sys.executable).parent / "prueba_factoryio_digital" if getattr(sys, "frozen", False) else
-                Path(__file__).resolve().parents[1] / "pruebas_manuales" / "factoryio_digital")
-        if self.abrir_ruta(raiz / "manifest.json"):
-            self.a_ejecutar.setChecked(False)
-            self._mostrar_pagina(True)
-            self.panel_es.estado.setText("Prueba preparada · desconectado. Comprueba la IP del servidor Modbus y pulsa «Conectar».")
-
     def _desconectar_modbus(self):
-        self.a_ejecutar.setChecked(False)
+        anterior = getattr(self, "_conservar_vista_al_parar", False)
+        self._conservar_vista_al_parar = True
+        try:
+            self.a_ejecutar.setChecked(False)
+        finally:
+            self._conservar_vista_al_parar = anterior
+            self._sincronizar_boton_es()
         self.modbus.desconectar()
         self.panel_es.estado.setText(self.modbus.mensaje)
         self.rt.start()
@@ -2171,70 +2252,100 @@ class Ventana(QMainWindow):
 
     # -- guardar ------------------------------------------------------------------------------
     def guardar(self) -> bool:
-        """Guarda el modelo en curso, con sus posiciones, como proyecto (documento 09) que luego puede abrirse.
-        Si se está editando, guarda lo editado en su carpeta (la primera vez pregunta cuál)."""
-        if self.edicion is not None:
-            return self._guardar_edicion()
-        f = self.fuente
-        base = QFileDialog.getExistingDirectory(self, "Carpeta donde crear el proyecto")
-        if not base:
-            return False
-        name = f["clave"] if f["tipo"] == "ejemplo" else f["ruta"].stem
-        destino = Path(base) / re.sub(r"[^A-Za-z0-9._-]", "-", name)
-        if destino.exists() and any(destino.iterdir()):
-            r = QMessageBox.question(self, TITULO, f"{destino} ya existe y no está vacía. ¿Sobrescribir el proyecto?")
-            if r != QMessageBox.StandardButton.Yes:
-                return False
-        try:
-            self.guardar_en(destino)
-        except (DiagnosticError, OSError) as exc:
-            QMessageBox.warning(self, TITULO, f"No se pudo guardar:\n\n{exc}")
-            return False
-        self.statusBar().showMessage(f"Proyecto guardado en {destino}", 8000)
-        return True
-
-    def _guardar_edicion(self) -> bool:
-        e = self.edicion
-        if self._variables_sin_nombre():
-            return False
-        destino = e.ruta
-        if destino is None:
-            base = QFileDialog.getExistingDirectory(self, "Carpeta donde crear el proyecto")
-            if not base:
-                return False
-            destino = Path(base) / (re.sub(r"[^A-Za-z0-9._-]", "-", e.titulo).strip("-") or "grafcet")
-            if destino.exists() and any(destino.iterdir()):
-                r = QMessageBox.question(self, TITULO, f"{destino} ya existe y no está vacía. ¿Sobrescribir el proyecto?")
-                if r != QMessageBox.StandardButton.Yes:
-                    return False
-        try:
-            self._configuracion_para_guardar(e.ed.model)
-            e.guardar(destino)
-            self._guardar_mapa_en(destino, e.ed.model)
-        except (DiagnosticError, OSError, ValueError) as exc:
-            QMessageBox.warning(self, TITULO, f"No se pudo guardar:\n\n{exc}")
-            return False
-        shutil.rmtree(self.recup.dir, ignore_errors=True)  # lo guardado ya no necesita su copia de recuperación
-        self.recup.last_save_s = None
-        self.statusBar().showMessage(f"Proyecto guardado en {destino}", 8000)
-        self._titulo_ventana()
-        return True
+        return self.guardar_proyecto()
 
     def guardar_en(self, destino: Path) -> None:
-        f, doc = self.fuente, self.v.doc
-        if f["tipo"] == "editor":
-            layout = {**auto_layout(doc), **self.edicion.layout()}
-        elif f["tipo"] == "ejemplo":
-            layout = EJEMPLOS[f["clave"]][2]()[1]
+        if Path(destino).suffix.lower()!='.grafnet':
+            raise ValueError('El proyecto debe guardarse como archivo .grafnet')
+        if not self._guardar_archivo(destino):raise ValueError('No se guardó el proyecto')
+
+    def _seleccion_para_hoja(self,activo):
+        if activo:
+            self.estado.setText('seleccionando para Planos');self.ayuda.setText('Selecciona elementos o arrastra un lazo. El GRAFCET no se modifica.')
+        if activo==getattr(self,'_seleccionando_hoja',False):return
+        self._seleccionando_hoja=activo
+        if activo:
+            from .hojas import SeleccionParaHoja
+            self._paneles_traer={n:p.abierto for n,p in self._plegables.items()}
+            self._tamanos_traer=(self.split_izquierdo.sizes(),self.split.sizes(),self.vsplit.sizes())
+            for n in self._paneles_traer:
+                self._plegables[n].hide();self.flechas[n].hide();self.pestanas[n].hide()
+            self.diagrama.controlador=SeleccionParaHoja(self.edicion);self.diagrama.setAcceptDrops(False)
+            self._estilo_traer=self.diagrama.styleSheet();self.diagrama.setStyleSheet(self._estilo_traer+' QGraphicsView {border:2px solid #aa914c; background:#fffaf0;}')
+            self.estado.setText('seleccionando para Planos');self.ayuda.setText('Selecciona elementos o arrastra un lazo. El GRAFCET no se modifica.')
         else:
-            layout = {**auto_layout(doc), **f["layout"]}
-        ident = re.sub(r"[^A-Za-z0-9._-]", "-", destino.name)[:120] or "proyecto"
-        project = new_project(ident, self.v.model["title"])
-        add_document(project, doc)
-        pres = self.edicion.ed.presentation if f["tipo"] == "editor" else f.get("presentacion")
-        add_document(project, copy.deepcopy(pres) if pres else presentation_for(doc, layout))
-        save_project(destino, project)
-        self._guardar_mapa_en(destino, doc)
+            self.diagrama.controlador=self.edicion if self.modo=='editar' else None;self.diagrama.setAcceptDrops(self.modo=='editar');self.diagrama.setStyleSheet(getattr(self,'_estilo_traer',''))
+            for n,visible in getattr(self,'_paneles_traer',{}).items():
+                self._mostrar_panel(n,visible,guardar=False);self.flechas[n].setVisible(visible)
+            sizes=getattr(self,'_tamanos_traer',(None,None,None))
+            if sizes[0] is not None:self.split_izquierdo.setSizes(sizes[0])
+            if sizes[1] is not None:self.split.setSizes(sizes[1])
+            if sizes[2] is not None:self.vsplit.setSizes(sizes[2])
+            if self.modo=='editar':self.refrescar_edicion()
+
+    def preparar_traer(self,ident):
+        if not ident or not self.edicion:return
+        self.panel_planos.aplicar();self.destino_traer=(self.edicion,ident);self._mostrar_pagina(False)
+        self.diagrama.setFocus()
+
+    def cancelar_traer(self):
+        self.destino_traer=None;self.aviso_traer.hide();self._mostrar_pagina('planos')
+
+    def confirmar_traer(self):
+        if not self.destino_traer or self.destino_traer[0] is not self.edicion:
+            self.destino_traer=None;self.aviso_traer.hide();return
+        e,ident=self.destino_traer
+        if not e.sel:
+            QMessageBox.information(self,'Traer GRAFCET','Selecciona los elementos que quieres añadir.');return
+        try:
+            self.panel_planos.mostrar(ident);self.panel_planos.insertar(e.copiar_fragmento().selected)
+        except (ValueError,RuntimeError) as exc:QMessageBox.warning(self,'Traer GRAFCET',str(exc));return
+        self.destino_traer=None;self.aviso_traer.hide();self.mostrar_hoja(ident)
+
+    def historial_plano(self,rehacer=False):
+        e=self.edicion
+        if e is None:return
+        plano=self.paginas_es.currentIndex()==2
+        if plano:
+            p=self.panel_planos;p.aplicar()
+            p.liberar_editor()
+        (e.rehacer if rehacer else e.deshacer)()
+        if plano:self.panel_planos.mostrar()
+
+    def enviar_seleccion_lamina(self):
+        e=self.edicion
+        if e is None or self.modo!='editar' or not e.sel:return
+        self.panel_planos.aplicar()
+        from .hojas import CrearHoja
+        d=CrearHoja(e,self)
+        try:
+            if not d.exec():return
+            ident=d.destino.currentData()
+            if ident is None:
+                from .hojas import dibujo_vinculado
+                from .laminas import DocumentoLaminas
+                cfg=d.configuracion or d.valores();prueba=DocumentoLaminas(dibujo_vinculado(e,e.copiar_fragmento().selected),{},cfg)
+                if prueba.total!=1:raise ValueError('La selección no cabe al 100 %. Elige una hoja mayor o selecciona menos elementos.')
+                ident=e.ed.add_plan_page(None,d.configuracion or d.valores(),d.nombre.text().strip() or None)
+            e.cambia();self.panel_planos.mostrar(ident);self.panel_planos.insertar(e.copiar_fragmento().selected);self.mostrar_hoja(ident)
+        except (OSError,ValueError,RuntimeError) as exc:QMessageBox.warning(self,'Enviar a plano',str(exc))
+        finally:d.deleteLater()
+
+    def abrir_hojas(self):
+        self._mostrar_pagina("planos")
+        self.panel_planos.lista.setFocus()
+
+    def mostrar_hoja(self,ident):
+        self.panel_planos.mostrar(ident)
+        self._mostrar_pagina("planos",False)
+
+    def abrir_laminas(self, accion="previa") -> None:
+        if accion in ("exportar","imprimir") and self.paginas_es.currentIndex()==2 and self.panel_planos.editor:
+            self.panel_planos.aplicar()
+        else:
+            self.panel_planos.mostrar();self._mostrar_pagina("planos",False)
+        editor=self.panel_planos.editor
+        if editor and accion in ("exportar","imprimir"):getattr(editor,accion)()
 
     def guardar_imagen(self) -> None:
         editando = self.modo == "editar" and self.edicion is not None
@@ -2248,7 +2359,7 @@ class Ventana(QMainWindow):
 
     def acerca(self) -> None:
         QMessageBox.about(self, f"Acerca de {TITULO}", (
-            f"<b>{TITULO}</b> {APP_VERSION}<br><br>Simulador del núcleo GRAFCET con el <b>perfil provisional</b>: no "
+            f"<b>{TITULO}</b> {APP_VERSION}{' · versión de desarrollo' if sello.DESARROLLO else ''}<br><br>Simulador del núcleo GRAFCET con el <b>perfil provisional</b>: no "
             "declara conformidad con IEC 60848 / UNE-EN 60848. Las lecturas por defecto son las decisiones del "
             "responsable; lo que sigue abierto se detiene con su cuestión U.<br><br>Interfaz con Qt for Python "
             "(PySide6), bajo licencia LGPL v3: las bibliotecas de Qt van como ficheros separados en la carpeta del "
@@ -2259,15 +2370,21 @@ def main(argv: list[str] | None = None) -> int:
     import argparse
     import sys
     ap = argparse.ArgumentParser(prog="GRAFCET", description=TITULO)
-    ap.add_argument("modelo", nargs="?", help="proyecto (carpeta o manifest.json) o documento de modelo que abrir")
+    ap.add_argument("modelo", nargs="?", help="archivo .grafnet")
     ap.add_argument("--ejemplo", choices=list(EJEMPLOS), help="ejemplo con el que empezar")
     ap.add_argument("--captura", metavar="PNG", help="guardar una captura de la ventana y salir (comprobación)")
+    ap.add_argument("--prueba-contenedor",action="store_true",help=argparse.SUPPRESS)
     args = ap.parse_args(argv if argv is not None else sys.argv[1:])
+    if args.prueba_contenedor:
+        from .proyecto_archivo import comprobar_contenedor
+        comprobar_contenedor()
+        return 0
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName(TITULO)
+    from .carpetas import asegurar_carpetas
+    try:asegurar_carpetas()
+    except OSError as exc:QMessageBox.warning(None,"Carpetas de GrafConnect",str(exc))
     w = Ventana()
-    if not args.captura:
-        w.ofrecer_recuperacion()
     if args.ejemplo:
         w.cargar_ejemplo(args.ejemplo)
     if args.modelo and not w.abrir_ruta(Path(args.modelo)):

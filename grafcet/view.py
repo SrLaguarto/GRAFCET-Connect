@@ -147,6 +147,8 @@ def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = Non
         if m["operands"][0]["operator"] not in ("ref", "active", "lit"):
             cuerpo = _paren(cuerpo)
         out = [_seg("↑" if op == "rise" else "↓")] + cuerpo
+        if key is not None:
+            out = [dict(s, eval=[]) for s in out]
     elif op == "not":
         # La barra representa toda la negación: su color usa ese valor, no el del operando.
         out = [dict(s, o=True, eval=[key]) if key is not None else dict(s, o=True) for s in hijo(0)]

@@ -91,17 +91,40 @@ def valores_cero(senales):
     return {s.variable: False if s.formato == "BOOL" else 0 for s in senales}
 
 
+def _bloques(senales, bits, registros):
+    """Solo direcciones contiguas de la misma área: nunca escribir huecos no asignados."""
+    grupo = []
+    for senal in sorted(senales, key=lambda s: (s.area, s.direccion)):
+        limite = bits if senal.formato == "BOOL" else registros
+        if grupo and (senal.area != grupo[-1].area or senal.direccion != grupo[-1].direccion + 1
+                      or len(grupo) >= limite):
+            yield grupo
+            grupo = []
+        grupo.append(senal)
+    if grupo:
+        yield grupo
+
+
 def leer_entradas(cliente, senales):
-    """No publica muestras parciales si falla una de las lecturas."""
-    return {s.variable: (cliente.leer_bits(s.direccion, entradas=s.area == "discrete")[0]
-                         if s.formato == "BOOL" else
-                         cliente.leer_registros(s.direccion, entradas=s.area == "input-register")[0])
-            for s in senales}
+    """Muestra completa; cada bloque contiguo se lee en una única petición."""
+    muestra = {}
+    for grupo in _bloques(senales, 2000, 125):
+        s = grupo[0]
+        valores = (cliente.leer_bits(s.direccion, len(grupo), entradas=s.area == "discrete")
+                   if s.formato == "BOOL" else
+                   cliente.leer_registros(s.direccion, len(grupo), entradas=s.area == "input-register"))
+        if len(valores) != len(grupo):
+            raise ValueError("Muestra Modbus incompleta")
+        muestra.update((senal.variable, valor) for senal, valor in zip(grupo, valores))
+    return muestra
 
 
 def escribir_salidas(cliente, senales, valores):
-    for s in senales:
+    """Publica juntas las salidas contiguas, evitando estados parciales entre actuadores."""
+    for grupo in _bloques(senales, 1968, 123):
+        s = grupo[0]
+        lote = [valores[senal.variable] for senal in grupo]
         if s.formato == "BOOL":
-            cliente.escribir_coils(s.direccion, [valores[s.variable]])
+            cliente.escribir_coils(s.direccion, lote)
         else:
-            cliente.escribir_registros(s.direccion, [valores[s.variable]])
+            cliente.escribir_registros(s.direccion, lote)

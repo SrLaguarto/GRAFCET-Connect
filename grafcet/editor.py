@@ -822,6 +822,104 @@ class Editor:
                 lay["labelVisible"] = False
         self._txn("mostrar la etiqueta" if visible else "ocultar la etiqueta", fn, view_only=True)
 
+    def sheet_settings(self):
+        from .laminas import ajustes_lamina
+        return ajustes_lamina(self.presentation.get("laminas"))
+
+    def set_sheet_settings(self, settings):
+        from .laminas import ajustes_lamina
+        settings=ajustes_lamina(settings)
+        from .plantillas import serializable
+        settings=serializable(settings)
+        if settings==self.presentation.get("laminas"):return
+        def cambiar(m,p):p["laminas"]=copy.deepcopy(settings)
+        self._txn("configurar láminas",cambiar,view_only=True)
+
+    def sheet_links(self):
+        hojas=copy.deepcopy(self.presentation.get("hojas",[]))
+        for h in hojas:
+            for g in h.get("grafcets",[]):
+                g["porcentaje"]=float(g["porcentaje"]);g["offset_mm"]=[float(x) for x in g["offset_mm"]]
+        return hojas
+
+    def add_sheet_link(self, refs, settings, name=None):
+        from .laminas import ajustes_lamina
+        from .plantillas import serializable
+        if not refs or any(not isinstance(i,str) for i in refs):raise ValueError("Selecciona elementos del dibujo")
+        settings=serializable(ajustes_lamina(settings));ident=self.ids.new("hoja")
+        def cambiar(m,p):
+            hojas=p.setdefault("hojas",[])
+            hojas.append({"id":ident,"nombre":name or f"Hoja {len(hojas)+1}","refs":list(dict.fromkeys(refs)),"ajustes":settings})
+        self._txn("crear hoja vinculada",cambiar,view_only=True)
+        return ident
+
+    def set_sheet_link(self, ident, settings):
+        from .laminas import ajustes_lamina
+        from .plantillas import serializable
+        settings=serializable(ajustes_lamina(settings))
+        hoja=next((h for h in self.presentation.get("hojas",[]) if h["id"]==ident),None)
+        if hoja is None:raise ValueError("La hoja ya no existe")
+        if hoja["ajustes"]==settings:return
+        def cambiar(m,p):next(h for h in p["hojas"] if h["id"]==ident)["ajustes"]=settings
+        self._txn("colocar GRAFCET en hoja",cambiar,view_only=True)
+
+    def delete_sheet(self, ident):
+        if not any(h['id']==ident for h in self.presentation.get('hojas',[])):raise ValueError('La hoja ya no existe')
+        def cambiar(m,p):p['hojas']=[h for h in p['hojas'] if h['id']!=ident]
+        self._txn('eliminar hoja',cambiar,view_only=True)
+
+    def move_sheet(self, ident, delta):
+        if delta not in (-1,1):raise ValueError('Desplazamiento de hoja no válido')
+        hojas=self.presentation.get('hojas',[]);indice=next((i for i,h in enumerate(hojas) if h['id']==ident),None)
+        if indice is None:raise ValueError('La hoja ya no existe')
+        destino=indice+delta
+        if not 0<=destino<len(hojas):return False
+        def cambiar(m,p):p['hojas'].insert(destino,p['hojas'].pop(indice))
+        self._txn('mover hoja',cambiar,view_only=True)
+        return True
+
+    def sheet_plans(self):
+        planes=copy.deepcopy(self.presentation.get("planos",[]))
+        if any(not h.get("plano") for h in self.sheet_links()):
+            planes.append({"id":"anteriores","nombre":"Planos anteriores"})
+        return planes
+
+    def add_sheet_plan(self, name):
+        ident=self.ids.new("plano")
+        self._txn("crear plano",lambda m,p:p.setdefault("planos",[]).append({"id":ident,"nombre":name}),view_only=True)
+        return ident
+
+    def add_plan_page(self, plan, settings, name=None):
+        from .laminas import ajustes_lamina
+        from .plantillas import serializable
+        if plan is not None and plan not in {x["id"] for x in self.sheet_plans()}:raise ValueError("El plano ya no existe")
+        ident=self.ids.new("hoja");settings=serializable(ajustes_lamina(settings))
+        def cambiar(m,p):
+            hojas=p.setdefault("hojas",[])
+            hojas.append({"id":ident,"plano":plan,"nombre":name or f"Hoja {len(hojas)+1}","refs":[],"grafcets":[],"ajustes":settings})
+        self._txn("añadir hoja al plano",cambiar,view_only=True)
+        return ident
+
+    def set_page_graphics(self, ident, graphics):
+        from .plantillas import serializable
+        from .plantillas import numero
+        graphics=copy.deepcopy(graphics)
+        for g in graphics:
+            g["porcentaje"]=numero(g.get("porcentaje",100))
+            offset=g.get("offset_mm",[0,0])
+            if not isinstance(offset,(list,tuple)) or len(offset)!=2:raise ValueError("Posición del GRAFCET no válida")
+            g["offset_mm"]=[numero(x) for x in offset]
+        if any(not isinstance(g.get("refs"),list) or not g["refs"] or not all(isinstance(r,str) for r in g["refs"]) or not 50<=g.get("porcentaje",100)<=200 for g in graphics):
+            raise ValueError("Selección o tamaño del GRAFCET no válido")
+        graphics=serializable(graphics)
+        hoja=next((h for h in self.presentation.get("hojas",[]) if h["id"]==ident),None)
+        if hoja is None:raise ValueError("La hoja ya no existe")
+        if hoja.get("grafcets")==graphics:return
+        def cambiar(m,p):
+            h=next(h for h in p["hojas"] if h["id"]==ident)
+            h["grafcets"]=copy.deepcopy(graphics);h["refs"]=list(dict.fromkeys(r for g in graphics for r in g["refs"]))
+        self._txn("colocar GRAFCET en hoja",cambiar,view_only=True)
+
     def annotations(self):
         from .annotations import visual_notes
         return visual_notes(self.presentation)
@@ -1552,7 +1650,7 @@ class Editor:
                 if act["mode"] != "continuous":
                     tipo = {"activation": "activacion", "deactivation": "desactivacion", "event": "evento"}[trigger["kind"]]
                 draft = {"id": act["id"], "x": "0", "y": "0", "tipo": tipo, "variable": act["targetRef"],
-                         "condicion": condition, "valor": text(act.get("valueRef")),
+                         "condicion": "" if tipo == "continua" else condition, "valor": text(act.get("valueRef")),
                          "evento": text(trigger.get("expressionRef"))}
                 if "limitUs" in act:
                     draft.update(tipo="limitada", limite=f"{act['limitUs']}us")

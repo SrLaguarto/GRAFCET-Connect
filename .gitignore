@@ -9,3 +9,5 @@ commit.json.tmp
 !.claude/settings.json
 build/
 dist/
+
+escritorio/_clave_sello.py

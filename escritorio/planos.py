@@ -1,0 +1,360 @@
+"""Página de Planos integrada en la ventana: hojas, lienzo y propiedades."""
+from PySide6.QtCore import Qt,QSize,QTimer,QEvent,QPointF,QRect
+from PySide6.QtGui import QAction,QIcon,QPixmap,QPainter,QPen,QColor
+from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QToolBar,QToolButton,
+    QSplitter,QListView,QListWidget,QListWidgetItem,QComboBox,QMenu,QMessageBox,QInputDialog,QDoubleSpinBox,QScrollArea,QFormLayout,QPushButton,QStyledItemDelegate,QStyle)
+from .laminas import DialogoLaminas
+
+_ACTUAL=object()
+
+
+def icono_planos():
+    pix=QPixmap(32,32);pix.fill(Qt.GlobalColor.transparent);p=QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing);p.setPen(QPen(QColor('#147f80'),1.7))
+    p.drawRect(6,3,21,26);p.drawRect(9,6,15,20);p.drawRect(14,21,10,5);p.drawLine(19,21,19,26);p.end()
+    return QIcon(pix)
+
+
+class MiniaturaHoja(QStyledItemDelegate):
+    """Tarjeta medida y pintada con la misma fuente, independiente del estilo nativo."""
+    def sizeHint(self,opcion,indice):
+        ancho=max(128,self.parent().viewport().width())
+        texto=opcion.fontMetrics.boundingRect(QRect(0,0,ancho-16,10000),Qt.TextFlag.TextWordWrap,indice.data() or '')
+        return QSize(ancho,8+82+6+texto.height()+8)
+
+    def paint(self,p,opcion,indice):
+        p.save();r=opcion.rect
+        if opcion.state & QStyle.StateFlag.State_Selected:p.fillRect(r.adjusted(2,2,-2,-2),QColor('#e6f1ee'))
+        icono=indice.data(Qt.ItemDataRole.DecorationRole)
+        if icono:icono.paint(p,QRect(r.center().x()-58,r.top()+8,116,82),Qt.AlignmentFlag.AlignCenter)
+        p.setFont(opcion.font);p.setPen(opcion.palette.text().color())
+        texto=QRect(r.left()+8,r.top()+96,r.width()-16,r.height()-104)
+        p.drawText(texto,Qt.AlignmentFlag.AlignHCenter|Qt.AlignmentFlag.AlignTop|Qt.TextFlag.TextWordWrap,indice.data() or '')
+        p.restore()
+
+
+class PaginaPlanos(QWidget):
+    def __init__(self,ventana):
+        super().__init__();self.ventana=ventana;self.editor=None;self.origen=None;self.hoja_id=None
+        self.aplicando=False;self.cargando=False;self.automatico=True;self.factor_zoom=1.;self.graficos=[];self.pan=None;self.grafico_actual=0
+        self.lista_timer=QTimer(self);self.lista_timer.setSingleShot(True);self.lista_timer.setInterval(0);self.lista_timer.timeout.connect(self.ajustar_lista)
+        self.dimension_timer=QTimer(self);self.dimension_timer.setSingleShot(True);self.dimension_timer.setInterval(0);self.dimension_timer.timeout.connect(self.dimensionar)
+        self.guardar_timer=QTimer(self);self.guardar_timer.setSingleShot(True);self.guardar_timer.setInterval(400);self.guardar_timer.timeout.connect(self.aplicar)
+        raiz=QVBoxLayout(self);raiz.setContentsMargins(8,8,8,8);raiz.setSpacing(5)
+        self.barra=QToolBar('Planos');self.barra.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon);raiz.addWidget(self.barra)
+        self.a_hoja=self.barra.addAction('+ Añadir hoja',self.nueva_hoja)
+        self.a_nueva=self.barra.addAction('Traer GRAFCET',self.traer)
+        self.barra.addSeparator();self.a_centrar=self.barra.addAction('Centrar GRAFCET',lambda:self.editor and self.editor.centrar())
+        self.barra_hoja=self.barra;self.barra=QToolBar('Vista de la hoja');raiz.addWidget(self.barra)
+        self.barra.addWidget(QLabel('Zoom de pantalla '))
+        self.barra.addAction('−',lambda:self.zoom(1/1.15));self.zoom_combo=QComboBox();self.zoom_combo.setMinimumWidth(130)
+        self.zoom_combo.addItem('Ajustar hoja',None)
+        for n in (50,75,100,125,150,200):self.zoom_combo.addItem(str(n)+' %',n/100)
+        self.barra.addWidget(self.zoom_combo);self.barra.addAction('+',lambda:self.zoom(1.15));self.zoom_combo.currentIndexChanged.connect(self.elegir_zoom)
+        self.propiedades_grafico=QWidget(self);self.propiedades_grafico.hide();form=QFormLayout(self.propiedades_grafico)
+        form.addRow(QLabel('GRAFCET seleccionado'))
+        self.tamano=QDoubleSpinBox();self.tamano.setRange(50,200);self.tamano.setSingleStep(10);self.tamano.setDecimals(0);self.tamano.setSuffix(' %');self.tamano.setValue(100);self.tamano.setToolTip('Tamaño impreso (50–200 %), independiente del zoom');self.tamano.valueChanged.connect(self.cambiar_tamano);form.addRow('Tamaño',self.tamano)
+        self.b_eliminar_grafico=QPushButton('Eliminar del plano');self.b_eliminar_grafico.clicked.connect(self.eliminar_grafico);form.addRow(self.b_eliminar_grafico)
+        self.b_plantilla=QToolButton();self.b_plantilla.setText('Biblioteca y opciones');self.b_plantilla.setObjectName('bibliotecaPlanos');self.b_plantilla.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);self.barra.addWidget(self.b_plantilla)
+        self.a_exportar=self.barra_hoja.addAction('Exportar…',lambda:self.editor and self.editor.exportar())
+        self.a_imprimir=self.barra_hoja.addAction('Imprimir…',lambda:self.editor and self.editor.imprimir())
+        self.barra_plantilla=QToolBar('Plantilla y textos');raiz.addWidget(self.barra_plantilla)
+        cab=QHBoxLayout();self.estado=QLabel('editando plano');self.estado.setStyleSheet('color:#326dcb; border:1px solid #326dcb; border-radius:8px; padding:1px 8px')
+        self.titulo=QLabel('Planos');self.titulo.setStyleSheet('color:#147f80;font-weight:600');cab.addWidget(self.estado);cab.addWidget(self.titulo,1);raiz.addLayout(cab)
+        self.divisor=QSplitter(Qt.Orientation.Horizontal);raiz.addWidget(self.divisor,1)
+        lateral=QWidget();l=QVBoxLayout(lateral);l.setContentsMargins(0,0,3,0);l.addWidget(QLabel('Hojas'))
+        b_hoja=QToolButton();b_hoja.setDefaultAction(self.a_hoja);self.b_hoja=b_hoja
+        self.barra_hoja.removeAction(self.a_hoja)
+        self.lista=QListWidget();self.lista.setViewMode(QListView.ViewMode.ListMode);self.lista.setItemDelegate(MiniaturaHoja(self.lista));self.lista.installEventFilter(self);self.lista.setFlow(QListView.Flow.TopToBottom);self.lista.setWrapping(False);self.lista.setMovement(QListView.Movement.Static);self.lista.setResizeMode(QListView.ResizeMode.Adjust);self.lista.setSpacing(0);self.lista.setIconSize(QSize(116,82));self.lista.setWordWrap(True);self.lista.setMinimumWidth(140);self.lista.setMaximumWidth(205);self.lista.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.lista.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);l.addWidget(self.lista);l.addWidget(b_hoja);l.addStretch(1)
+        self.scroll_hojas=QScrollArea();self.scroll_hojas.setWidgetResizable(True);self.scroll_hojas.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.scroll_hojas.setMinimumWidth(150);self.scroll_hojas.setMaximumWidth(215);self.scroll_hojas.setWidget(lateral);self.divisor.addWidget(self.scroll_hojas);self.cuerpo=QWidget();self.layout_editor=QVBoxLayout(self.cuerpo);self.layout_editor.setContentsMargins(0,0,0,0)
+        self.vacio=QLabel('Todavía no hay hojas. Pulsa «+ Añadir hoja».');self.vacio.setAlignment(Qt.AlignmentFlag.AlignCenter);self.layout_editor.addWidget(self.vacio)
+        self.divisor.addWidget(self.cuerpo);self.divisor.setStretchFactor(0,0);self.divisor.setStretchFactor(1,1);self.divisor.setSizes([160,1100])
+        self.lista.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.lista.customContextMenuRequested.connect(self.menu_hoja)
+        self.lista.currentRowChanged.connect(self.elegir);self.actualizar_acciones()
+
+    def liberar_editor(self):
+        if self.editor:
+            self.editor.propiedades.removeWidget(self.propiedades_grafico);self.propiedades_grafico.setParent(self);self.propiedades_grafico.hide()
+            self.editor.modificado.disconnect(self.cambiado);self.layout_editor.removeWidget(self.editor);self.editor.deleteLater();self.editor=None
+
+    def ajustar_lista(self):
+        lista=self.lista;lista.doItemsLayout();n=lista.count();lista.setVisible(bool(n))
+        alto=sum(lista.sizeHintForRow(i) for i in range(n))+2*lista.frameWidth()+4 if n else 0
+        if lista.height()!=alto:lista.setFixedHeight(alto)
+
+    def menu_hoja(self,punto):
+        item=self.lista.itemAt(punto)
+        if item is None:return
+        self.lista.setCurrentItem(item);menu=self.crear_menu_hoja()
+        menu.exec(self.lista.viewport().mapToGlobal(punto))
+
+    def crear_menu_hoja(self):
+        menu=QMenu(self.lista);fila=self.lista.currentRow()
+        a=menu.addAction('Eliminar hoja',self.eliminar_hoja);a.setEnabled(fila>=0)
+        menu.addSeparator()
+        a=menu.addAction('Subir una hoja',lambda:self.mover_hoja(-1));a.setEnabled(fila>0)
+        a=menu.addAction('Bajar una hoja',lambda:self.mover_hoja(1));a.setEnabled(0<=fila<self.lista.count()-1)
+        return menu
+
+    def eliminar_hoja(self):
+        item=self.lista.currentItem()
+        if item is None or self.origen is not self.ventana.edicion:return
+        ident=item.data(Qt.ItemDataRole.UserRole);fila=self.lista.currentRow();e=self.origen
+        self.aplicar();self.liberar_editor()
+        if self.ventana.destino_traer==(e,ident):self.ventana.destino_traer=None;self.ventana.aviso_traer.hide()
+        e.ed.delete_sheet(ident);e.cambia()
+        hojas=e.ed.sheet_links();destino=hojas[min(fila,len(hojas)-1)]['id'] if hojas else None
+        self.mostrar(destino);self.lista.setFocus()
+
+    def mover_hoja(self,delta):
+        item=self.lista.currentItem()
+        if item is None or self.origen is not self.ventana.edicion:return
+        ident=item.data(Qt.ItemDataRole.UserRole);e=self.origen;self.aplicar()
+        if e.ed.move_sheet(ident,delta):e.cambia();self.mostrar(ident);self.lista.setFocus()
+
+    def eliminar_grafico(self):
+        if not self.editor or not self.editor.vista.seleccionado or not self.graficos:return
+        i=self.editor.vista.capa
+        if not 0<=i<len(self.graficos):return
+        self.aplicar();del self.graficos[i]
+        e=self.ventana.edicion;e.ed.set_page_graphics(self.hoja_id,self.graficos);e.cambia();self.mostrar(self.hoja_id)
+
+    def mostrar(self,ident=_ACTUAL):
+        if self.cargando:return
+        e=self.ventana.edicion
+        if ident is _ACTUAL:ident=self.hoja_id if self.origen is e else None
+        if self.origen is not e:
+            self.guardar_timer.stop();self.liberar_editor();self.hoja_id=None;self.graficos=[];self.pan=None
+        self.aplicar();self.cargando=True
+        try:
+            self.origen=e;self.lista.blockSignals(True);self.lista.clear()
+            hojas=e.ed.sheet_links() if e else []
+            for h in hojas:
+                item=QListWidgetItem(icono_planos(),h['nombre']);item.setData(Qt.ItemDataRole.UserRole,h['id']);self.lista.addItem(item)
+            if not any(h['id']==ident for h in hojas):ident=hojas[0]['id'] if hojas else None
+            fila=next((i for i in range(self.lista.count()) if self.lista.item(i).data(Qt.ItemDataRole.UserRole)==ident),-1)
+            self.ajustar_lista();self.lista.setCurrentRow(fila);self.lista.blockSignals(False);self.cargar(ident)
+        finally:self.cargando=False
+
+    def elegir(self,fila):
+        if fila>=0 and not self.cargando:self.cargar(self.lista.item(fila).data(Qt.ItemDataRole.UserRole))
+
+    def cargar(self,ident):
+        self.aplicar();self.cargando=True
+        try:
+            self.liberar_editor()
+            e=self.ventana.edicion;self.origen=e;self.hoja_id=ident
+            v=self.ventana.v
+            if e is None and v is None:self.vacio.show();return
+            if ident is None:
+                self.graficos=[];self.titulo.setText('Planos');self.vacio.setText('Todavía no hay hojas. Pulsa «+ Añadir hoja».');self.vacio.show();self.actualizar_acciones();return
+            from .hojas import dibujo_vinculado
+            hoja=next(h for h in e.ed.sheet_links() if h['id']==ident);cfg=hoja['ajustes'];nombre=hoja['nombre']
+            self.graficos=self.graficos_hoja(hoja)
+            modelo=self.modelo_hoja()
+            estado={} if self.ventana.modo=='editar' else v.state()
+            def guardar(valores):
+                if e is not None and self.ventana.edicion is e:
+                    e.ed.set_sheet_link(ident,valores)
+                    e.ed.set_page_graphics(ident,self.graficos)
+                    e.cambia();self.ventana._titulo_ventana()
+            self.editor=DialogoLaminas(modelo,estado,cfg,guardar,self.cuerpo,self.ventana.diagrama.dependencias,integrado=True)
+            self.editor.centrar=self.centrar_grafico;self.editor.vista.colocar=self.colocar;self.editor.vista.elegir_capa=self.elegir_grafico;self.editor.vista.eliminar_grafico=self.eliminar_grafico
+            self.editor.propiedades.addWidget(self.propiedades_grafico)
+            self.editor.nombre_plano=nombre;self.layout_editor.addWidget(self.editor);self.vacio.hide()
+            self.editor.anterior.clicked.disconnect();self.editor.siguiente.clicked.disconnect();self.editor.anterior.clicked.connect(lambda:self.pasar_hoja(-1));self.editor.siguiente.clicked.connect(lambda:self.pasar_hoja(1))
+            self.editor.modificado.connect(self.cambiado);self.editor.area.viewport().installEventFilter(self);self.editor.vista.installEventFilter(self)
+            for w in (self.editor.modo,self.editor.escala,self.editor.unidad):
+                w.hide();w.parentWidget().layout().labelForField(w).hide()
+            self.elegir_grafico(0)
+            self.barra_plantilla.clear()
+            for accion in (self.editor.a_importar,self.editor.a_estandar,self.editor.a_editar_plantilla,self.editor.a_quitar_plantilla):self.barra_plantilla.addAction(accion)
+            self.a_texto=self.barra_plantilla.addAction('Añadir texto',self.editor.anadir_texto)
+            biblioteca=QMenu(self.b_plantilla)
+            for a in self.editor.menu_plantilla.actions()[4:]:biblioteca.addAction(a)
+            self.b_plantilla.setMenu(biblioteca);self.navegacion();self.actualizar_titulo();self.actualizar_acciones();self.miniatura(True)
+            self.dimension_timer.start()
+        except (ValueError,OSError,RuntimeError,StopIteration) as exc:
+            self.vacio.setText(str(exc));self.vacio.show();self.actualizar_acciones()
+        finally:self.cargando=False
+
+    def cambiado(self):
+        if self.cargando:return
+        self.navegacion();self.actualizar_acciones();self.actualizar_titulo();self.dimensionar();self.guardar_timer.start()
+
+    def aplicar(self):
+        self.guardar_timer.stop()
+        if self.editor is None or self.aplicando or self.origen is not self.ventana.edicion:return
+        self.aplicando=True
+        try:
+            self.editor.aplicar()
+            e=self.ventana.edicion
+            if e is self.origen and self.hoja_id and any(h['id']==self.hoja_id for h in e.ed.sheet_links()):
+                antes=e.ed.dirty;e.ed.set_page_graphics(self.hoja_id,self.graficos)
+                if e.ed.dirty or antes:e.cambia();self.ventana._titulo_ventana()
+        finally:self.aplicando=False
+        self.actualizar_titulo();self.miniatura()
+
+    def actualizar_titulo(self):
+        if self.editor:
+            e=self.ventana.edicion;pendiente=e and e.ed.dirty
+            self.titulo.setText(self.editor.nombre_plano+(' *' if pendiente else ''))
+
+    def actualizar_acciones(self):
+        e=self.ventana.edicion;ed=self.editor
+        self.a_hoja.setEnabled(e is not None);self.barra_plantilla.setVisible(ed is not None)
+        self.a_nueva.setEnabled(ed is not None and self.ventana.modo=='editar');self.tamano.setEnabled(ed is not None and bool(self.graficos))
+        for a,b in ((self.a_exportar,'b_exportar'),(self.a_imprimir,'b_imprimir'),(self.a_centrar,'b_centrar')):a.setEnabled(ed is not None and getattr(ed,b).isEnabled())
+        self.b_plantilla.setEnabled(ed is not None)
+
+    def miniatura(self,todas=False):
+        if not self.editor or not self.editor.documento or self.origen is not self.ventana.edicion:return
+        from .laminas import DocumentoHoja
+        hojas={h['id']:h for h in self.ventana.edicion.ed.sheet_links()}
+        for i in range(self.lista.count()):
+            item=self.lista.item(i);ident=item.data(Qt.ItemDataRole.UserRole)
+            if not todas and ident!=self.hoja_id:continue
+            try:
+                h=hojas.get(ident)
+                if h is None:continue
+                d=self.editor.documento if ident==self.hoja_id else DocumentoHoja(self.modelo_hoja(h),self.editor.estado,h['ajustes'],self.ventana.diagrama.dependencias)
+                pix=QPixmap(116,82);pix.fill(QColor('#e5e0d8'));p=QPainter(pix)
+                try:
+                    escala=min(112/d.ancho,78/d.alto);p.translate((116-d.ancho*escala)/2,(82-d.alto*escala)/2);p.scale(escala,escala);d.pintar(p,0)
+                finally:p.end()
+                item.setIcon(QIcon(pix))
+            except (ValueError,RuntimeError):item.setIcon(icono_planos())
+
+    def elegir_zoom(self,indice):
+        valor=self.zoom_combo.itemData(indice);self.automatico=valor is None
+        if valor is not None:self.factor_zoom=valor
+        self.dimensionar()
+
+    def zoom(self,factor):
+        if self.editor and self.editor.documento:
+            if self.automatico:
+                d=self.editor.documento;v=self.editor.area.viewport();self.factor_zoom=min((v.width()-24)/d.ancho,(v.height()-24)/d.alto)/(96/25.4)
+            self.automatico=False;self.factor_zoom=max(.1,min(8,self.factor_zoom*factor));self.zoom_combo.blockSignals(True);self.zoom_combo.setCurrentIndex(-1);self.zoom_combo.setPlaceholderText(f'{self.factor_zoom*100:.0f} %');self.zoom_combo.blockSignals(False);self.dimensionar()
+
+    def dimensionar(self):
+        if not self.editor or not self.editor.documento:return
+        d=self.editor.documento;v=self.editor.vista
+        if self.automatico:v.resize(self.editor.area.viewport().size())
+        else:v.resize(round(d.ancho*96/25.4*self.factor_zoom)+24,round(d.alto*96/25.4*self.factor_zoom)+24)
+        v.update()
+
+    def eventFilter(self,obj,event):
+        if obj is self.lista:
+            if event.type() in (QEvent.Type.Resize,QEvent.Type.FontChange,QEvent.Type.StyleChange,QEvent.Type.Show):self.lista_timer.start()
+            if event.type()==QEvent.Type.KeyPress and event.key()==Qt.Key.Key_Delete:self.eliminar_hoja();return True
+            return super().eventFilter(obj,event)
+        if not self.editor:return super().eventFilter(obj,event)
+        if obj is self.editor.area.viewport() and event.type()==QEvent.Type.Resize:self.dimension_timer.start()
+        if event.type()==QEvent.Type.Wheel:
+            if not event.angleDelta().y():return True
+            from .diagrama import ZOOM_PASO
+            area=self.editor.area;vista=self.editor.vista;local=event.position()
+            if obj is area.viewport():local=local-vista.pos()
+            punto=vista.punto_hoja(local);pantalla=local+vista.pos()
+            self.zoom(ZOOM_PASO if event.angleDelta().y()>0 else 1/ZOOM_PASO)
+            d=self.editor.documento;k=min((vista.width()-24)/d.ancho,(vista.height()-24)/d.alto)
+            nuevo=QPointF((vista.width()-d.ancho*k)/2+punto.x()*k,(vista.height()-d.alto*k)/2+punto.y()*k)
+            h,v=area.horizontalScrollBar(),area.verticalScrollBar();delta=nuevo+vista.pos()-pantalla
+            h.setValue(round(h.value()+delta.x()));v.setValue(round(v.value()+delta.y()));return True
+        if event.type()==QEvent.Type.MouseButtonPress and event.button()==Qt.MouseButton.LeftButton and obj is self.editor.vista:
+            vista=self.editor.vista;t=vista.textos
+            if t and (vista.nuevo_texto or (vista.zona and t.b_zona.isChecked()) or any(i.contains(i.mapFromScene(vista.punto_hoja(event.position()))) for i in t.items)):return False
+        if event.type()==QEvent.Type.MouseButtonPress and (event.button()==Qt.MouseButton.MiddleButton or (event.button()==Qt.MouseButton.LeftButton and (not self.editor.documento or not any(c.destino(0).contains(self.editor.vista.punto_hoja(event.position())) for c in self.editor.documento.capas)))):
+            if event.button()==Qt.MouseButton.LeftButton and self.editor.vista.textos:self.editor.vista.textos.elegir(-1);self.editor.vista.seleccionado=False;self.editor.vista.update()
+            a=self.editor.area;self.pan=(event.globalPosition(),a.horizontalScrollBar().value(),a.verticalScrollBar().value());self.editor.vista.setCursor(Qt.CursorShape.ClosedHandCursor);return True
+        if self.pan and event.type()==QEvent.Type.MouseMove:
+            p,h,v=self.pan;delta=event.globalPosition()-p;a=self.editor.area;a.horizontalScrollBar().setValue(round(h-delta.x()));a.verticalScrollBar().setValue(round(v-delta.y()));return True
+        if self.pan and event.type()==QEvent.Type.MouseButtonRelease:
+            self.pan=None;self.editor.vista.unsetCursor();return True
+        return super().eventFilter(obj,event)
+
+    @staticmethod
+    def graficos_hoja(hoja):
+        import copy
+        if 'grafcets' in hoja:return copy.deepcopy(hoja['grafcets'])
+        return [{'refs':hoja['refs'],'porcentaje':max(50,min(200,100/float(hoja['ajustes']['escala']))),'offset_mm':[float(x) for x in hoja['ajustes']['offset_mm']]}] if hoja['refs'] else []
+
+    def modelo_hoja(self,hoja=None):
+        from .hojas import dibujo_vinculado
+        graficos=self.graficos if hoja is None else self.graficos_hoja(hoja)
+        refs=list(dict.fromkeys(r for g in graficos for r in g['refs']))
+        modelo=dibujo_vinculado(self.ventana.edicion,refs)
+        hojas=self.ventana.edicion.ed.sheet_links()
+        modelo['_numero_hoja']=next((i+1 for i,h in enumerate(hojas) if h['id']==(self.hoja_id if hoja is None else hoja['id'])),1);modelo['_total_hojas']=len(hojas)
+        modelo['_graficos']=[dict(g,modelo=dibujo_vinculado(self.ventana.edicion,g['refs'])) for g in graficos]
+        return modelo
+
+    def navegacion(self):
+        if not self.editor:return
+        n=self.lista.count();i=self.lista.currentRow()
+        self.editor.pagina.setText(f'Hoja {i+1} de {n}');self.editor.anterior.setEnabled(i>0);self.editor.siguiente.setEnabled(i<n-1)
+
+    def pasar_hoja(self,delta):
+        i=self.lista.currentRow()+delta
+        if 0<=i<self.lista.count():self.lista.setCurrentRow(i)
+
+    def nueva_hoja(self):
+        from .hojas import CrearHoja
+        e=self.ventana.edicion;d=CrearHoja(e,self);d.setWindowTitle('Añadir hoja al plano')
+        try:
+            if not d.exec():return
+            self.aplicar();cfg=d.configuracion or d.valores();cfg.update(modo='escala',escala=1.,offset_mm=[0.,0.])
+            ident=e.ed.add_plan_page(None,cfg,d.nombre.text().strip() or None);e.cambia();self.mostrar(ident);QTimer.singleShot(0,self,lambda:self.scroll_hojas.ensureWidgetVisible(self.b_hoja))
+        finally:d.deleteLater()
+
+    def traer(self):
+        self.ventana.preparar_traer(self.hoja_id)
+
+    def elegir_grafico(self,indice):
+        if not self.editor or not self.graficos:return
+        indice=max(0,min(indice,len(self.graficos)-1));self.editor.vista.capa=indice
+        self.grafico_actual=indice
+        if self.editor.vista.seleccionado:self.editor.propiedades.setCurrentWidget(self.propiedades_grafico)
+        self.tamano.blockSignals(True);self.tamano.setValue(self.graficos[indice]['porcentaje']);self.tamano.blockSignals(False);self.editor.vista.update()
+
+    def actualizar_grafico(self):
+        self.editor.modelo=self.modelo_hoja();self.editor.actualizar()
+
+    def cambiar_tamano(self,valor):
+        if not self.editor or not self.graficos:return
+        i=max(0,self.grafico_actual);anterior=self.graficos[i]['porcentaje'];self.graficos[i]['porcentaje']=valor
+        self.actualizar_grafico()
+        if self.editor.documento is None:
+            self.graficos[i]['porcentaje']=anterior;self.actualizar_grafico();self.elegir_grafico(i)
+            QMessageBox.warning(self,'Tamaño del GRAFCET','Ese tamaño no cabe en la zona de dibujo. Mueve el GRAFCET o elige una hoja mayor.');return
+        self.aplicar()
+
+    def centrar_grafico(self):
+        if not self.editor or not self.editor.documento or not self.graficos:return
+        i=max(0,self.grafico_actual);d=self.editor.documento.capas[i]
+        actual=d.destino(0);centrado=d.ajustar_posicion(actual.translated(d.contenido.center()-actual.center()),actual);delta=centrado.topLeft()-actual.topLeft();offset=self.graficos[i]['offset_mm']
+        self.colocar([float(offset[0])+delta.x(),float(offset[1])+delta.y()])
+
+    def colocar(self,offset):
+        if not self.graficos:return
+        self.graficos[max(0,self.editor.vista.capa)]['offset_mm']=offset;self.actualizar_grafico();self.aplicar()
+
+    def insertar(self,refs):
+        import copy
+        from .laminas import DocumentoHoja
+        if not refs:raise ValueError('Selecciona elementos del GRAFCET')
+        anterior=copy.deepcopy(self.graficos);e=self.ventana.edicion
+        nuevo={'refs':list(dict.fromkeys(refs)),'porcentaje':100.,'offset_mm':[0.,0.]}
+        self.graficos.append(nuevo)
+        try:
+            # Buscar un hueco sin cambiar el tamaño físico ni las selecciones existentes.
+            cfg=self.editor.valores();d=DocumentoHoja(self.modelo_hoja(),{},cfg);r=d.capas[-1].destino(0);existentes=[c.destino(0).adjusted(-2,-2,2,2) for c in d.capas[:-1]]
+            sitio=None
+            for y in range(0,max(1,int(d.contenido.height()-r.height())+1),5):
+                for x in range(0,max(1,int(d.contenido.width()-r.width())+1),5):
+                    candidato=r.translated(x,y)
+                    if d.posicion_valida(candidato) and not any(c.intersects(candidato) for c in existentes):sitio=[float(x),float(y)];break
+                if sitio is not None:break
+            if sitio is None:raise ValueError('No hay sitio libre para esta selección al 100 %. Añade otra hoja o mueve los GRAFCET existentes.')
+            nuevo['offset_mm']=sitio;e.ed.set_page_graphics(self.hoja_id,self.graficos);e.cambia();self.mostrar(self.hoja_id);self.elegir_grafico(len(self.graficos)-1)
+        except (ValueError,RuntimeError):self.graficos=anterior;raise

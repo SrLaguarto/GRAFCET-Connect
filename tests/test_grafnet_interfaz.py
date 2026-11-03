@@ -1,0 +1,108 @@
+"""Flujo de archivo único: atajos, recursos, E/S e integridad."""
+import copy
+from pathlib import Path
+import unittest
+from unittest.mock import patch
+from test_editor_cadenas import BaseQt,QT
+from escritorio import sello
+from escritorio.proyecto_archivo import abrir_grafnet,guardar_grafnet
+from grafcet.persistence import open_project
+if QT:
+    from PySide6.QtCore import Qt,QEvent
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication,QMessageBox
+    from conexion.configuracion import Configuracion,ARCHIVO
+
+
+@unittest.skipUnless(QT,'requiere PySide6')
+class GrafnetInterfaz(BaseQt):
+    def tearDown(self):
+        self.w.hide();super().tearDown();QApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    def preparar(self):
+        w,e=self.vacio();s=e.ed.add_step('g','1',True);e.ed.add_annotation('text',(300,120),text='Nota de proyecto')
+        e.cambia();w.resize(1366,768);w.show();QApplication.processEvents();return w,e
+    def guardar(self,nombre='proyecto.grafnet'):
+        w=self.w;destino=Path(self.tmp.name)/nombre
+        with patch('escritorio.archivos.QFileDialog.getSaveFileName',return_value=(str(destino),'')):
+            self.assertTrue(w.guardar_como())
+        return destino
+    def test_SGFN08_ctrl_s_guardar_como_y_nombre_con_asterisco(self):
+        """REQ-EDT-01, REQ-EDT-05: Ctrl+S crea un archivo, Ctrl+Mayús+S guarda otra copia y el título sigue nombre y cambios."""
+        w,e=self.preparar();destino=Path(self.tmp.name)/'atajo.grafnet';w.diagrama.setFocus()
+        with patch('escritorio.archivos.QFileDialog.getSaveFileName',return_value=(str(destino),'')):
+            QTest.keyClick(w.diagrama,Qt.Key.Key_S,Qt.KeyboardModifier.ControlModifier)
+        self.assertTrue(destino.is_file());self.assertIn(destino.name,w.windowTitle());self.assertNotIn(' *',w.windowTitle());self.assertNotIn(' *',w.titulo.text())
+        e.ed.update_annotation(e.ed.annotations()[0]['id'],text='Cambiado');e.cambia();self.assertIn(' *',w.windowTitle())
+        copia=Path(self.tmp.name)/'otra.grafnet'
+        with patch('escritorio.archivos.QFileDialog.getSaveFileName',return_value=(str(copia),'')):
+            QTest.keyClick(w.diagrama,Qt.Key.Key_S,Qt.KeyboardModifier.ControlModifier|Qt.KeyboardModifier.ShiftModifier)
+        self.assertTrue(copia.exists());self.assertEqual(e.archivo,copia)
+        self.assertTrue(w.abrir_ruta(destino));self.assertEqual(w.edicion.ed.annotations()[0]['text'],'Nota de proyecto')
+    def test_SGFN10_archivo_manipulado_conserva_edicion_actual(self):
+        """REQ-EDT-05, REQ-DAT-02: rechazar un archivo manipulado no descarta ni sustituye la edición actual."""
+        w,e=self.preparar();destino=self.guardar();e.ed.add_step('g','2');e.cambia();antes=copy.deepcopy(e.ed.model)
+        destino.write_bytes(b'archivo manipulado')
+        with patch('escritorio.ventana.QMessageBox.warning') as aviso,patch.object(w,'_salir_de_edicion') as salir:
+            self.assertFalse(w.abrir_ruta(destino));aviso.assert_called_once();salir.assert_not_called()
+        self.assertIs(w.edicion,e);self.assertEqual(e.ed.model,antes);self.assertTrue(e.ed.dirty)
+    def test_SGFN11_archivo_conserva_mapa_y_recursos(self):
+        """REQ-DAT-01, REQ-DAT-02: el archivo conserva E/S y recursos sin exponer carpetas como formato de proyecto."""
+        w,e=self.preparar();destino=self.guardar()
+        (e.ruta/'recursos').mkdir();(e.ruta/'recursos'/'imagen.png').write_bytes(b'recurso conservado')
+        w.panel_es.host.setText('10.20.30.40');w.panel_es.host.editingFinished.emit()
+        self.assertTrue(w.guardar());self.assertTrue(w.abrir_ruta(destino))
+        self.assertEqual(w.panel_es.obtener().host,'10.20.30.40')
+        self.assertEqual((w.edicion.ruta/'recursos'/'imagen.png').read_bytes(),b'recurso conservado')
+    def test_SGFN12_rechaza_carpetas_json_y_otro_sello(self):
+        """REQ-DAT-02: una versión repartible solo admite archivos .grafnet firmados con su propia clave."""
+        w,e=self.preparar();carpeta=Path(self.tmp.name)/'antiguo';e.guardar(carpeta);destino=self.guardar()
+        with patch('escritorio.ventana.QMessageBox.warning'):
+            self.assertFalse(w.abrir_ruta(carpeta));self.assertFalse(w.abrir_ruta(next(carpeta.glob('model-*.json'))))
+        with patch.object(sello,'CLAVE',b'otra clave de distribucion'.ljust(32,b'x')),patch('escritorio.ventana.QMessageBox.warning'):
+            self.assertFalse(w.abrir_ruta(destino))
+    def test_SGFN14_fallo_al_guardar_no_cambia_destino_ni_dirty(self):
+        """REQ-DAT-01, REQ-EDT-05: fallar Guardar como conserva el archivo, el estado anteriores."""
+        w,e=self.preparar();destino=self.guardar();anterior=destino.read_bytes();e.ed.add_step('g','2');e.cambia()
+        with patch('grafcet.contenedor.os.replace',side_effect=OSError('fallo simulado')),patch('escritorio.archivos.QMessageBox.warning'):
+            self.assertFalse(w._guardar_archivo(destino))
+        self.assertEqual(destino.read_bytes(),anterior);self.assertTrue(e.ed.dirty);self.assertEqual(e.archivo,destino)
+
+    def test_SGFN19_acerca_distingue_desarrollo_sin_mostrar_clave(self):
+        """REQ-DAT-02: Acerca de identifica desarrollo sin revelar la clave y la marca no aparece en una versión repartible."""
+        w,e=self.preparar()
+        for desarrollo in (True,False):
+            with patch.object(sello,'DESARROLLO',desarrollo),patch('escritorio.ventana.QMessageBox.about') as acerca:
+                w.acerca();texto=acerca.call_args.args[2]
+                self.assertEqual('versión de desarrollo' in texto,desarrollo)
+                self.assertNotIn(sello.CLAVE.hex(),texto)
+
+    def test_SGFN20_extension_y_cancelacion_no_sobrescriben_ni_modifican(self):
+        """REQ-EDT-05, REQ-DAT-01: añadir .grafnet respeta un archivo existente y cancelar Guardar como conserva la edición."""
+        w,e=self.preparar();destino=Path(self.tmp.name)/'nombre.grafnet';destino.write_bytes(b'anterior')
+        antes=copy.deepcopy(e.ed.model)
+        with patch('escritorio.archivos.QFileDialog.getSaveFileName',return_value=(str(destino.with_suffix('')),'')),patch('escritorio.archivos.QMessageBox.question',return_value=QMessageBox.StandardButton.No):
+            self.assertFalse(w.guardar_como())
+        self.assertEqual(destino.read_bytes(),b'anterior');self.assertEqual(e.ed.model,antes);self.assertTrue(e.ed.dirty)
+        with patch('escritorio.archivos.QFileDialog.getSaveFileName',return_value=('','')):
+            self.assertFalse(w.guardar_como())
+        self.assertFalse(hasattr(e,'archivo'))
+
+
+    def test_SGFN23_aplicacion_sin_recuperacion_ni_opciones_de_password(self):
+        """REQ-EDT-09: la aplicación no inicia autoguardado ni conserva controles o diálogos de contraseña y recuperación."""
+        w,e=self.preparar()
+        for nombre in ('recup','t_auto','autoguardar','ofrecer_recuperacion','_opciones_password','_pedir_password_archivo'):
+            self.assertFalse(hasattr(w,nombre),nombre)
+        self.assertFalse(hasattr(e,'password'))
+    def test_SGFN24_guardar_como_no_abre_dialogos_adicionales(self):
+        """REQ-EDT-01, REQ-EDT-09: elegir el nombre es suficiente para guardar el proyecto, sin un diálogo de protección."""
+        from PySide6.QtWidgets import QDialog
+        w,e=self.preparar();ruta=Path(self.tmp.name)/'directo.grafnet'
+        with patch('escritorio.archivos.QFileDialog.getSaveFileName',return_value=(str(ruta),'')) as elegir,patch.object(QDialog,'exec') as dialogo:
+            self.assertTrue(w.guardar_como());elegir.assert_called_once();dialogo.assert_not_called()
+        self.assertTrue(ruta.is_file());self.assertTrue(w.abrir_ruta(ruta))
+    def test_SGFN25_no_se_guarda_un_proyecto_como_carpeta(self):
+        """REQ-DAT-02, REQ-EDT-01: la interfaz solo escribe proyectos .grafnet y nunca crea la carpeta del formato anterior."""
+        w,e=self.preparar();ruta=Path(self.tmp.name)/'carpeta'
+        with self.assertRaises(ValueError):w.guardar_en(ruta)
+        self.assertFalse(ruta.exists());self.assertTrue(e.ed.dirty)

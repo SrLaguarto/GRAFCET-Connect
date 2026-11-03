@@ -1,4 +1,5 @@
 """Panel compacto de E/S y configuración portable con prioridades explícitas."""
+from helpers_grafnet import fixture_grafnet
 import copy
 import json
 from pathlib import Path
@@ -11,7 +12,7 @@ from conexion.configuracion import ARCHIVO, CONEXION_INICIAL, CANALES_INICIALES,
 if QT:
     from PySide6.QtCore import QPoint, Qt
     from PySide6.QtTest import QSignalSpy
-    from PySide6.QtWidgets import QApplication, QPushButton, QLabel
+    from PySide6.QtWidgets import QApplication, QPushButton, QLabel, QMessageBox
     from PySide6.QtGui import QAction
     from escritorio.entradas_salidas import PanelES, ALTO_FILA, ALTO_VARIABLE, NIVEL_ACTIVO, NIVEL_ASIGNADO
 
@@ -70,7 +71,7 @@ class PulidoES(BaseQt):
         canales = copy.deepcopy(CANALES_INICIALES); canales["coil"]["cantidad"] = 21
         Configuracion(host="10.0.0.9", puerto=2502, unidad=4, modelo=p.doc["id"], canales=canales,
                       senales=[Senal("nivel", "input-register", 0, "INT16", "50")]).guardar(raiz / ARCHIVO, p.doc)
-        self.assertTrue(w.abrir_ruta(raiz))
+        self.assertTrue(w.abrir_ruta(fixture_grafnet(raiz)))
         c = p.obtener()
         self.assertEqual((c.host, c.puerto, c.unidad), ("10.0.0.9", 2502, 4))
         self.assertEqual(c.canales["coil"]["cantidad"], 21)
@@ -86,11 +87,14 @@ class PulidoES(BaseQt):
         raiz = Path(self.tmp.name) / "nuevo"
         self.assertFalse((raiz / ARCHIVO).exists())
         w.edicion.ruta = raiz
-        self.assertTrue(w.guardar())
+        from unittest.mock import patch
+        with patch("escritorio.archivos.QFileDialog.getSaveFileName",return_value=(str(raiz)+".grafnet","")):
+            self.assertTrue(w.guardar())
+        raiz=w.edicion.ruta
         guardada = Configuracion.cargar(raiz / ARCHIVO, p.doc)
         self.assertEqual((guardada.host, guardada.senales[0].escala), ("10.10.10.10", "40"))
         copia = Path(self.tmp.name) / "transportado"; shutil.copytree(raiz, copia)
-        self.assertTrue(w.abrir_ruta(copia))
+        self.assertTrue(w.abrir_ruta(fixture_grafnet(copia)))
         self.assertEqual((p.obtener().host, p.obtener().senales[0].escala), ("10.10.10.10", "40"))
 
     def test_SESP05_preferencias_anteriores_validas_no_se_sustituyen_silenciosamente(self):
@@ -167,7 +171,7 @@ class PulidoES(BaseQt):
         w, p = self.modelo(); raiz = Path(self.tmp.name) / "invalido"; w.edicion.guardar(raiz)
         ruta = raiz / ARCHIVO; ruta.write_text('{"version": 999}', encoding="utf-8")
         before = ruta.read_bytes()
-        self.assertTrue(w.abrir_ruta(raiz))
+        self.assertTrue(w.abrir_ruta(fixture_grafnet(raiz)))
         self.assertIn("No se pudo cargar", p.estado.text())
         self.assertEqual(p.cabecera.property("estadoVisual"), "neutro")
         self.assertEqual(ruta.read_bytes(), before)

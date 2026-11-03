@@ -114,7 +114,7 @@ class Paneles(BaseQt):
         """REQ-EDT-09: las preferencias de visibilidad se recuerdan y siempre existe una pestaña para recuperar cada panel."""
         w,e=self.preparar()
         for n in w.flechas:w.flechas[n].click()
-        w2=Ventana(w.ajustes,Path(self.tmp.name)/"otra-recuperacion")
+        w2=Ventana(w.ajustes)
         try:
             w2.nuevo();w2.resize(1366,768);w2.show();QApplication.processEvents()
             for n in w2.pestanas:
@@ -134,3 +134,14 @@ class Paneles(BaseQt):
         self.assertTrue(w.dock.isVisible());self.assertTrue(w.derecho.isHidden());self.assertTrue(w.inferior.isVisible())
         self.assertEqual(w.pestanas["derecho"].text(),"Variables")
         self.assertEqual(w.vsplit.sizes(),antes)
+
+    def test_SPAN09_minimo_inferior_se_actualiza_tras_arrastre_y_cambio_de_elemento(self):
+        """REQ-EDT-02, REQ-EDT-09: pasar de etapa a transición aumenta el mínimo útil aunque el alto se haya elegido a mano."""
+        w,e=self.preparar();e.seleccionar(['1']);QApplication.processEvents();QApplication.processEvents()
+        self.arrastrar(w.vsplit,QPoint(0,20))
+        if w.inferior.isHidden():QTest.mouseClick(w.pestanas['inferior'],Qt.MouseButton.LeftButton);QApplication.processEvents()
+        self.assertFalse(w._opciones_automaticas);total=sum(w.vsplit.sizes());menor=w._minimo_panel('inferior');w.vsplit.setSizes([total-menor,menor]);QApplication.processEvents()
+        e.seleccionar(['t']);QApplication.processEvents();QApplication.processEvents();mayor=w._minimo_panel('inferior')
+        self.assertGreater(mayor,menor);self.assertGreaterEqual(w._plegables['inferior'].minimumHeight(),mayor);self.assertGreaterEqual(w._plegables['inferior'].height(),mayor);self.assertFalse(w._opciones_automaticas)
+        self.assertGreaterEqual(w.props.prog.height(),w.props.prog.minimumSizeHint().height());self.assertTrue(w.props.t_texto.isVisible())
+        e.seleccionar(['1']);QApplication.processEvents();QApplication.processEvents();self.assertLess(w._plegables['inferior'].minimumHeight(),mayor)
