@@ -37,8 +37,8 @@ Las pruebas siguientes se hacen con la planta simulada de Factory I/O.
 
 | Nº | Qué hacer | Qué debería ocurrir | Resultado | Comentarios |
 |---|---|---|---|---|
-| 1 | Abrir E/S externas y revisar el mapa. | Módulo horizontal legible, entradas arriba y salidas abajo; nombre, tipo, dirección e indicador visibles. | NO PROBADO | |
-| 2 | Pulsar Probar conexión. | Confirma la conexión sin escribir actuadores ni ejecutar el grafcet. Si falla, copia el mensaje. | NO PROBADO | |
+| 1 | Abrir E/S externas y revisar el mapa. | Módulo horizontal legible, entradas arriba y salidas abajo; nombre, tipo, dirección e indicador visibles. | Abierto | |
+| 2 | Pulsar Probar conexión. | Confirma la conexión sin escribir actuadores ni ejecutar el grafcet. Si falla, copia el mensaje. | L            | |
 | 3 | Pulsar Conectar sin pulsar Ejecutar. | Conecta, solicita cero en las salidas asignadas y muestra los sensores. El motor GRAFCET espera a Ejecutar. | NO PROBADO | |
 | 4 | Pulsar Ejecutar y activar/desactivar el sensor en la escena, manteniendo cada estado al menos un segundo. | Cambian la entrada, la salida motor y el actuador de la escena de forma coherente. | NO PROBADO | |
 | 5 | Con el actuador activo, pulsar Pausa y cambiar el sensor. | El estado GRAFCET y la salida se conservan. El indicador del sensor externo puede actualizarse aunque el motor esté pausado. | NO PROBADO | |
