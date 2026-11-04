@@ -1326,6 +1326,13 @@ class Edicion(QObject):
                 out[lid] = nuevo
         return out
 
+    def mover_teclado(self, dx, dy):
+        if not self.sel: return False
+        a = self._arrastre_grupo(self.sel[0], QPointF(), (list(self.sel), self.accion, self.ver_accion))
+        if a is None: return False
+        a.update(x=a['x0']+dx, y=a['y0']+dy, movido=True)
+        return self._soltar_grupo(a)
+
     def _soltar_grupo(self, a: dict[str, Any]) -> bool:
         """Termina el arrastre de varios seleccionados: sin haberse movido (un clic), la selección se queda en el elemento
         pulsado; encima de algo que no se mueve, vuelven a su sitio; si no, se mueven todos con una sola operación de

@@ -152,7 +152,7 @@ class ControlesES(BaseQt):
 
     def test_SAFI07_play_stop_reiniciar_inactivos_en_es_incluidos_atajos(self):
         """REQ-SIM-03, REQ-SIM-04: E/S deshabilita los controles y sus atajos; volver al dibujo los recupera sin parar la simulación."""
-        w,e=self.vacio();e.ed.add_step("g","1",True,at=(100,100));e.cambia()
+        w,e=self.vacio();e.ed.add_step("g","1",True,at=(100,100));e.cambia();w._preparar_sesion();w._sin_estado()
         w.resize(1366,768);w.show();QTest.qWait(20)
         for corriendo in (False,True):
             w.a_ejecutar.setChecked(corriendo);w.rt.stop();w._mostrar_pagina(True)

@@ -64,6 +64,7 @@ class RedisenoVisual(BaseQt):
         """REQ-EDT-02, REQ-EDT-09: sin selección se libera el lienzo; el reparto manual se conserva."""
         w, e = self.vacio()
         w.resize(1366, 768)
+        w._abrir_opciones()
         w.show()
         for _ in range(5):
             self.app.processEvents()

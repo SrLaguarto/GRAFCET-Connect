@@ -85,6 +85,7 @@ class _Pintor:
     def __init__(self, scene: QGraphicsScene) -> None:
         self.sc = scene
         self.verdaderos: set[str] = set()
+        self.parcial = None
 
     @staticmethod
     def pen(color: str, width: float = 1.6, dash: tuple[float, float] | None = None) -> QPen:
@@ -95,8 +96,8 @@ class _Pintor:
             p.setDashPattern([d / width for d in dash])  # Qt mide el discontinuo en anchos de trazo
         return p
 
-    @staticmethod
-    def _put(item: Any, z: float, tip: str | None) -> Any:
+    def _put(self, item: Any, z: float, tip: str | None) -> Any:
+        item.setData(42, self.parcial)
         item.setZValue(z)
         if tip:
             item.setToolTip(tip)
@@ -432,11 +433,25 @@ def elemento_en(M: dict[str, Any], p: QPointF) -> str | None:
     return n["id"] if n else marco_en(M, p)
 
 
+def parciales_dibujo(M):
+    """Pertenencia visual: las barras heredan el parcial de sus extremos, sin cambiar el modelo."""
+    partes = {x["id"]: x.get("partial") or "g" for k in ("steps", "transitions", "macros") for x in M.get(k, [])}
+    for b in M.get("bars", []):
+        extremos = {partes[i] for i in b.get("arriba", []) + b.get("abajo", []) if i in partes}
+        partes[b["id"]] = next(iter(extremos)) if len(extremos) == 1 else (None if extremos else "g")
+    return partes
+
+
 def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], naranja: set[str] = frozenset()) -> None:
     """Edición: enlaces en borrador, elementos en cuestión (rojo discontinuo), selección con sus tiradores y, mientras
     parpadean tras un error, los elementos afectados en naranja (las acciones, en su caja)."""
     pos = posiciones(M)
+    pertenencia = parciales_dibujo(M)
+    pertenencia.update({q["id"]: q["id"] for q in M.get("partials", [])})
+    pertenencia.update({a["id"]: s.get("partial") or "g" for s in M.get("steps", []) for a in s.get("actions", [])})
+    for e in enlaces(M): pertenencia[e["id"]] = pertenencia.get(e.get("tid") or e.get("sid"))
     for d in M.get("drafts", []):
+        pt.parcial = pertenencia.get(d.get("from"))
         seg = _segmento(M, pos, d)
         if seg:
             (x1, y1), (x2, y2) = seg
@@ -447,6 +462,7 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
     barras = {b["id"]: b for b in M.get("bars", [])}
     marcos = cajas_parciales(M, pos)  # un parcial (recinto, expansión) seleccionado o en cuestión se remarca en su marco
     for ident, color, width in [(i, "err", 1.8) for i in marcados] + [(i, "accent", 1.6) for i in sel]:
+        pt.parcial = pertenencia.get(ident)
         if ident in marcos:
             b = marcos[ident]
             pt.rect(b["x0"] - 6, b["y0"] - 6, b["x1"] - b["x0"] + 12, b["y1"] - b["y0"] + 12, pt.pen(color, width, (5, 3)), Z_EDIT)
@@ -476,6 +492,7 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
             for cx, cy in ((x - hx, y - hy), (x + hx, y - hy), (x - hx, y + hy), (x + hx, y + hy)):
                 pt.rect(cx - 3, cy - 3, 6, 6, pt.pen("accent", 1), Z_EDIT + 0.1, "panel")
     for ident in sorted(naranja):  # parpadeo naranja de un error
+        pt.parcial = pertenencia.get(ident)
         if ident in marcos:
             b = marcos[ident]
             pt.rect(b["x0"] - 8, b["y0"] - 8, b["x1"] - b["x0"] + 16, b["y1"] - b["y0"] + 16, pt.pen("glow", 3.5), Z_EDIT + 0.5)
@@ -541,6 +558,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     dibujar_anotaciones(scene,M,sel or set())
     pt = _Pintor(scene)
     pt.verdaderos = {k for k, v in S.get("truth", {}).items() if v is True}
+    pertenencia = parciales_dibujo(M)
     nombre = M.get("names", {}).get  # los ID internos nunca se muestran: etapas, parciales y macroetapas, por su nombre
     pos = {s["id"]: (s["x"] + SX, s["y"]) for s in M["steps"]}
     pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
@@ -557,6 +575,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     marcadas = {i for i in (sel or set()) if i.startswith("accion:")} | {f"parpadeo:{i}" for i in (naranja or ())}
     link = pt.pen("text")
     for t in M["transitions"]:
+        pt.parcial = t.get("partial") or "g"
         tx, ty = t["x"] + SX, t["y"]
         ob = (S.get("transitions") or {}).get(t["id"], {})
         trazo = pt.pen(roles.get(t["id"], "text"))
@@ -601,6 +620,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         if t.get("comment"):  # a la derecha de la receptividad (o de la transición, si no tiene)
             pt.comentario(max(fin + (14 if w else 0), derecha + 8), ty, t["comment"], Z_BAR)
     for b in M.get("bars", []):  # barras de simultaneidad (doble trazo) y de alternativa (trazo simple), con sus conectores
+        pt.parcial = pertenencia[b["id"]]
         bx, by, w, h = barra(b)
         trazo = pt.pen(roles.get(b["id"], "text"))
         tipo = "Simultaneidad" if b["kind"] == "Y" else "Alternativa"
@@ -609,11 +629,13 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
             pt.rect(bx, by+1, w, h-2, None, Z_LINK+0.25, "panel")
             pt.line(bx, by + h, bx + w, by + h, trazo, Z_LINK + 0.5, tipo)
     for e in enlaces(M):
+        pt.parcial = pertenencia.get(e.get("tid") or e.get("sid"))
         color_enlace = _color_enlace(M, roles, e)
         pt.poly([(float(x), float(y)) for x, y in e["pts"]], pt.pen(color_enlace), Z_LINK)
         for flecha in e["arrows"]:
             pt.poly(flecha["pts"], None, Z_LINK + 0.1, fill=color_enlace)
     for s in M["steps"]:
+        pt.parcial = s.get("partial") or "g"
         x, y = pos[s["id"]]
         sid = s["id"]
         stale, act = bool(blk) and sid in situation, not blk and sid in situation
@@ -663,6 +685,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
             cajas_ = _geometria_acciones(x, y, s["actions"] + unidas, s.get("actionLayout", "fila"))[0]
             pt.comentario(max([ax + w for _, ax, _, w in cajas_] + [x + H]) + 10, y, s["comment"], Z_STEP)
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
+        pt.parcial = m.get("partial") or "g"
         x, y = pos[m["id"]]
         act = bool((S.get("macros") or {}).get(m["id"]))
         tip = (f"Macroetapa {nombre(m['id'], m['id'])} (expansión {nombre(m['expansion'], m['expansion'])}): "
@@ -677,8 +700,10 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         if not d.get("etapa"):
             grupos.setdefault(d.get("grupo") or d["id"], []).append(d)
     for g, miembros in grupos.items():
+        pt.parcial = miembros[0].get("partial") or "g"
         _acciones(pt, miembros[0]["x"] + SX, miembros[0]["y"], miembros, S, tmp, cajas, "", marcadas,
                   (M.get("actionLayouts") or {}).get(g, "fila"), suelto=True, grupo=g)
+    pt.parcial = None
     if sel or marcados or naranja or M.get("drafts"):
         _realces(pt, M, set(sel or ()), set(marcados or ()), set(naranja or ()))
     return cajas
@@ -839,6 +864,7 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]],
     cajas = cajas_parciales(M, pos)
 
     for p in parts:
+        pt.parcial = p["id"]
         if p["kind"] == "expansion":
             m = next((x for x in M.get("macros", []) if x["id"] == p.get("macro")), None)
             if not dependencias or not m or m["entry"] not in pos or m["exit"] not in pos:
@@ -1177,6 +1203,43 @@ class VistaDiagrama(QGraphicsView):
         self._pulsado = QPoint()  # dónde se pulsó el botón izquierdo: un arrastre de la vista empieza pasada la distancia de arrastre
         self._pan: tuple[QPointF, int, int] | None = None  # el botón central pulsado: dónde, y las barras de desplazamiento entonces
         self._barras()
+        self.navegacion = None; self.filtro_parcial = None; self.seleccion_navegacion = set()
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName("Dibujo del GRAFCET")
+        self.setAccessibleDescription("Tab y Mayús+Tab recorren elementos; flechas mueven; Intro edita; Esc deselecciona. Ctrl+Tab sale hacia los controles.")
+
+    def focusNextPrevChild(self, siguiente):
+        if self.hasFocus() and self.navegacion and not QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier:
+            if self.navegacion.recorrer(siguiente): return True
+        return super().focusNextPrevChild(siguiente)
+
+    def keyPressEvent(self, e):
+        c = self.controlador
+        if e.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab) and e.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            super().focusNextPrevChild(e.key() == Qt.Key.Key_Tab); e.accept(); return
+        delta = {Qt.Key.Key_Left:(-REJILLA,0), Qt.Key.Key_Right:(REJILLA,0), Qt.Key.Key_Up:(0,-REJILLA), Qt.Key.Key_Down:(0,REJILLA)}.get(e.key())
+        if c and delta and not e.modifiers():
+            c.mover_teclado(*delta); e.accept(); return
+        if c and e.key() == Qt.Key.Key_Escape:
+            c.seleccionar([]); e.accept(); return
+        if c and e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and not e.modifiers():
+            self.editar_propiedades_teclado(); e.accept(); return
+        super().keyPressEvent(e)
+
+    def editar_propiedades_teclado(self):
+        c = self.controlador
+        if not c or not c.sel or getattr(c,"solo_seleccion",False): return
+        ident = c.sel[-1]
+        if any(t['id'] == ident for t in c.M['transitions']):
+            c.pedir_condicion(ident)
+            if hasattr(self.window(), 'props'): self.window().props.t_manual.setFocus()
+        elif any(s['id'] == ident for s in c.M['steps']): c.pedir_etiqueta(ident)
+        elif any(a['id'] == ident for a in c.ed.model['actions']) or c._es_borrador(ident):
+            sid = next((s["id"] for s in c.M["steps"] if any(a["id"] == ident for a in s.get("actions", []))), None)
+            c.pedir_accion(sid, ident)
+            if hasattr(self.window(), "props"): self.window().props.accion.variable.setFocus()
+        else:
+            c.seleccionar([ident]); c.diagrama.window()._abrir_opciones()
 
     def modo_edicion(self, on: bool, controlador: Any = None, conservar: bool = False) -> None:
         """Al editar: sin arrastre de mano, rejilla, el zoom manual y un dibujo que no se recoloca al añadir elementos (la
@@ -1309,6 +1372,11 @@ class VistaDiagrama(QGraphicsView):
         if event.button() == Qt.MouseButton.MiddleButton:
             self._empezar_pan(event)
             return
+        if self.filtro_parcial and self.controlador and self.navegacion:
+            ident = elemento_en(self.controlador.M, self.mapToScene(event.position().toPoint()))
+            d = next((d for d in self.navegacion.datos if d['id'] == ident), None)
+            if d and d['parcial'] != self.filtro_parcial: event.accept(); return
+        self.setFocus()
         self._origen = False
         self._pulsado = event.position().toPoint()
         if not self._evento("prensar", event):
@@ -1349,6 +1417,9 @@ class VistaDiagrama(QGraphicsView):
         seleccion = list(controlador.sel) if controlador is not None else []
         caja = (controlador.accion_en(punto) or controlador.orden_en(punto)) if controlador is not None else None
         ident = (caja["id"] if caja else elemento_en(controlador.M, punto)) if controlador is not None else None
+        if self.filtro_parcial and self.navegacion:
+            d = next((d for d in self.navegacion.datos if d["id"] == ident), None)
+            if d and d["parcial"] != self.filtro_parcial: event.accept(); return
         opciones = controlador.menu(punto) if controlador is not None else []
         if controlador is not None and ident in seleccion and len(seleccion) > 1:
             controlador.sel, controlador.accion = seleccion, None
@@ -1587,6 +1658,7 @@ class VistaDiagrama(QGraphicsView):
     def mostrar(self, M: dict[str, Any], S: dict[str, Any], sel: set[str] | None = None,
                 marcados: set[str] | None = None, naranja: set[str] | None = None) -> None:
         self._leer_dependencias()
+        if self.controlador is None and sel is None: sel = self.seleccion_navegacion
         self._ultimo = (M, S, sel, marcados, naranja)
         self.goma = None
         self.cuadro = None
@@ -1598,6 +1670,7 @@ class VistaDiagrama(QGraphicsView):
         self.prohibidos = []
         self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados, naranja, self.uniones_acciones, self.cajas_ordenes,
                                       self.dependencias)
+        if self.navegacion: self.navegacion.actualizar(M, S)
         r = self.scene().itemsBoundingRect()
         self._contenido = r if not r.isEmpty() else None
         self._actualizar_seleccion()

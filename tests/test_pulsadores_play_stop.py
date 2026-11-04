@@ -39,7 +39,7 @@ class PulsadoresYControl(BaseQt):
         QTimer.singleShot(0, elegir)
         centro = boton.rect().center()
         QApplication.sendEvent(boton, QContextMenuEvent(QContextMenuEvent.Reason.Mouse, centro, boton.mapToGlobal(centro)))
-        self.assertEqual(visto, ["Convertir en interruptor", "Convertir en pulsador"])
+        self.assertEqual(visto, ["Convertir en interruptor", "Convertir en pulsador", "", "Normalmente abierto (NA)", "Normalmente cerrado (NC)"])
 
     def test_SPUL01_presionar_y_soltar_producen_dos_cambios_y_evoluciones(self):
         """REQ-SIM-02, REQ-SIM-03: el pulsador da 1 al presionar y 0 al soltar, procesando ambas evoluciones."""

@@ -8,7 +8,7 @@ import tempfile
 
 ARCHIVO = "conexion-factoryio.json"
 CONEXION_INICIAL = ("192.168.1.133", 502, 1)
-CANALES_INICIALES = {a: {"offset": 0, "cantidad": 16 if a in ("discrete", "coil") else 8}
+CANALES_INICIALES = {a: {"offset": 0, "cantidad": 32 if a in ("discrete", "coil") else 12}
                      for a in ("discrete", "coil", "input-register", "holding")}
 ETIQUETA_CANAL = {"discrete": "Entrada", "input-register": "Entrada numérica", "coil": "Salida", "holding": "Salida numérica"}
 
@@ -148,6 +148,8 @@ class Configuracion:
             datos = json.loads(ruta.read_text(encoding="utf-8"))
             if datos.pop("version") != 1:
                 raise ValueError("Versión de conexión desconocida")
+            datos.pop("modo", None)  # restos del modo servidor, ya retirado
+            datos.pop("escucha", None)
             datos["senales"] = [Senal(**s) for s in datos["senales"]]
             config = cls(**datos)
             quitadas = config.quitar_obsoletas(doc)

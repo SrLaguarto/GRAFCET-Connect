@@ -289,6 +289,14 @@ def posiciones_modelo(e):
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
 class Interfaz(unittest.TestCase):
+    def proyecto_fixture(self,clave):
+        """Proyecto editable construido por la prueba; los ejemplos del menú no se editan."""
+        from grafcet.examples import EJEMPLOS
+        from escritorio.edicion import Edicion
+        titulo,_,crear=EJEMPLOS[clave];m,layout=crear()
+        self.w._establecer_edicion(Edicion.desde(m.doc,layout,titulo))
+        self.w.fuente={'tipo':'editor'};self.w._cargar()
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
@@ -552,7 +560,7 @@ class Interfaz(unittest.TestCase):
             self.assertFalse(w._salir_de_edicion())
         with mock.patch("escritorio.ventana.QMessageBox.question", return_value=QMessageBox.StandardButton.Discard):
             w.cargar_ejemplo("temporizada")
-        self.assertIsNot(w.edicion, e, "descartar sustituye lo editado por una copia editable de lo que se abre")
+        self.assertIsNot(w.edicion, e, "descartar abre el ejemplo de consulta")
         self.assertFalse(w.edicion.ed.dirty)
         self.assertEqual((w.modo, w.v.key, w.a_ejecutar.isChecked()), ("editar", "temporizada", False), "al abrir: Pausa")
         del pregunta
@@ -1028,9 +1036,9 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(w.v.state()["situation"], [e2], "el salto lleva de E0 a E2")
 
     def test_SEDI22_ejemplo_alternativas(self):
-        """REQ-SIM-03: el ejemplo «alternativas» se simula, se dibuja con la flecha de union y se puede editar."""
+        """REQ-SIM-03: un proyecto de prueba de alternativas se simula y se edita conservando las flechas de unión."""
         w = self.w
-        w.cargar_ejemplo("alternativas")
+        self.proyecto_fixture("alternativas")
         w.a_ejecutar.setChecked(True)  # abrir deja Pausa sin estado: Play arranca la sesión
         nombre = {b.text().split(" ")[0]: v for v, b in w.botones.items()}
         w._cambiar_tipo_entrada(nombre["rapida"], True)  # esta prueba mantiene la entrada
@@ -1119,7 +1127,7 @@ class Interfaz(unittest.TestCase):
     def test_SEDI25_arrastrar_desde_linea_de_seleccion(self):
         """REQ-EDT-02: clic selecciona un enlace; arrastre desde él abre otra rama en una transacción."""
         from escritorio.diagrama import enlaces
-        self.w.cargar_ejemplo('seleccion')
+        self.proyecto_fixture('seleccion')
         self.w.cambiar_modo('editar')
         e, d = self.w.edicion, self.w.diagrama
         ruta = next(x for x in enlaces(e.M) if x['tid'] == 't2' and x['rol'] == 'pre')
@@ -1142,7 +1150,7 @@ class Interfaz(unittest.TestCase):
     def test_SEDI26_geometria_comun_retorno_y_movimiento(self):
         """REQ-MOD-03: uniones comunes, retorno fuera de la etapa, flecha automática y recorridos iguales en Qt/web."""
         from escritorio.diagrama import enlaces, H, SX
-        self.w.cargar_ejemplo('repeticion')
+        self.proyecto_fixture('repeticion')
         self.w.cambiar_modo('editar')
         e = self.w.edicion
         rutas = enlaces(e.M)
@@ -1169,7 +1177,7 @@ class Interfaz(unittest.TestCase):
         """REQ-EDT-01, REQ-EDT-02: arrastrar la entrada de una etapa a una salida crea el salto; persiste y se deshace entero."""
         from escritorio.diagrama import anclas, enlaces
         from escritorio.edicion import Edicion
-        self.w.cargar_ejemplo('salto')
+        self.proyecto_fixture('salto')
         self.w.cambiar_modo('editar')
         e = self.w.edicion
         n = len(e.ed.undo_stack)
@@ -1215,7 +1223,7 @@ class Interfaz(unittest.TestCase):
 
 
     def retorno_editable(self):
-        self.w.cargar_ejemplo('repeticion')
+        self.proyecto_fixture('repeticion')
         self.w.cambiar_modo('editar')
         e = self.w.edicion
         e.seleccionar(['retorno|2|post'])
@@ -1362,7 +1370,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual([len(ida['arrows']), len(vuelta['arrows'])], [0, 1], 'una sola flecha, en el retorno largo')
         # Dos lazos que comparten etapas: cada retorno lleva la suya
         e.ed.dirty = False  # sin el diálogo de cambios sin guardar
-        self.w.cargar_ejemplo('alternativas')
+        self.proyecto_fixture('alternativas')
         self.w.cambiar_modo('editar')
         e = self.w.edicion
         con = [r for r in enlaces(e.M) if r['arrows']]
@@ -1420,6 +1428,8 @@ class Interfaz(unittest.TestCase):
         from escritorio.propiedades import figura
         from grafcet.routing import TALLO_E
         w = self.w
+        self.secuencial()  # la prueba construye su GRAFCET: el arranque del programa es vacío
+        w.edicion.ed.dirty=False
         self.assertFalse(w.flechas['izquierdo'].isHidden(), 'al abrir está en Pausa/edición: hay panel izquierdo')
         self.assertTrue(w.cambiar_modo('simular'))
         self.assertTrue(w.flechas['izquierdo'].isHidden(), 'en Play no hay panel izquierdo')
@@ -1880,6 +1890,7 @@ class Interfaz(unittest.TestCase):
         w = self.w
         e, ids, ts = self.secuencial()
         w.resize(1360, 860)
+        w._abrir_opciones()
         w.show()
         QApplication.processEvents()
         self.assertFalse(hasattr(w, "i_bloques"))
@@ -4173,7 +4184,7 @@ class Interfaz(unittest.TestCase):
 
     def test_SEDI265_pestanas_entre_grafcet_planos_y_es_externas(self):
         """REQ-SIM-03, REQ-EDT-11: las tres pestañas identifican la página y se sincronizan por cualquier vía."""
-        w=self.w;w.show();self.app.processEvents();tabs=w.pestanas_vistas
+        w=self.w;w.edicion.ed.add_step("g","0",True);w.edicion.cambia();w.show();self.app.processEvents();tabs=w.pestanas_vistas
         self.assertEqual([tabs.tabText(i) for i in range(tabs.count())],['GRAFCET','PLANOS','E/S externas'])
         for pesta,indice in ((2,1),(1,2),(0,0),(2,1)):
             QTest.mouseClick(tabs,Qt.MouseButton.LeftButton,pos=tabs.tabRect(pesta).center())
@@ -4588,6 +4599,7 @@ class Interfaz(unittest.TestCase):
             e.nueva_variable(n, papel)
         w.resize(1360, 860)
         w.show()
+        w._abrir_opciones()
         e.seleccionar([ts["t1"]])
         prog = w.props.prog
         prog.elegir_categoria("etapa")
@@ -4642,6 +4654,7 @@ class Interfaz(unittest.TestCase):
         self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "continua", "variable": "Q00"}))
         w.resize(1360, 860)
         w.show()
+        w._abrir_opciones()
         QApplication.processEvents()
         p = w.props
         self.assertFalse(w.dock.isAncestorOf(p))
@@ -5392,7 +5405,7 @@ class Interfaz(unittest.TestCase):
         valida igual. Lo mismo en «alternativas»: una acción en la E1 aparta la transición t5 y lo que hay a su derecha."""
         from escritorio.diagrama import ACT_LINK, H
         w = self.w
-        w.cargar_ejemplo("paralelo")
+        self.proyecto_fixture("paralelo")
         w.a_ejecutar.setChecked(False)
         self.assertTrue(w.cambiar_modo("editar"))
         e = w.edicion
@@ -5425,7 +5438,7 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(e.ed.validate().can_simulate)
         e.ed.dirty = False  # (sin preguntar por lo no guardado)
         # «alternativas»: la E1 ya tiene una acción; con otra, t5 (a 180 de ella) se aparta con t6, que está debajo a su derecha
-        w.cargar_ejemplo("alternativas")
+        self.proyecto_fixture("alternativas")
         w.a_ejecutar.setChecked(False)
         self.assertTrue(w.cambiar_modo("editar"))
         e = w.edicion
@@ -6798,6 +6811,7 @@ class Interfaz(unittest.TestCase):
         from PySide6.QtCore import QPoint
         w, e, d = self.con_recinto()
         h, e0, r, a, b = d["h"], d["e0"], d["r"], d["a"], d["b"]
+        w._abrir_opciones()
         w.resize(1366, 768)
         w.show()
         QApplication.processEvents()
@@ -7190,7 +7204,7 @@ class Interfaz(unittest.TestCase):
         from grafcet.examples import EJEMPLOS
         from grafcet.view import Vista
         w = self.w
-        w.cargar_ejemplo("forzado")
+        self.proyecto_fixture("forzado")
         e = w.edicion
         e.ed.dirty = False
         original = Vista("o", "t", "", lambda: EJEMPLOS["forzado"][2](), e.opciones)

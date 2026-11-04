@@ -6,7 +6,7 @@ Implementación de la **segunda IA** a partir de los doce documentos de `../Defi
 
 ## Uso
 
-El núcleo requiere Python ≥ 3.12, sin dependencias externas. Solo el simulador de escritorio usa PySide6-Essentials (Qt 6, LGPL v3), y construir su `.exe` usa pyinstaller.
+El núcleo requiere Python ≥ 3.12, sin dependencias externas. Solo el simulador de escritorio usa PySide6-Essentials (Qt 6, LGPL v3) y, opcionalmente, ezdxf y pypdfium2 para importar plantillas de lámina; construir su `.exe` usa Nuitka por defecto (PyInstaller con `--motor pyinstaller`).
 
 ```bash
 python tools/comprobar_paquete.py
@@ -33,9 +33,9 @@ con un clic. Al abrir un ejemplo o un modelo, el programa queda en **Pausa**, si
 este documento, «modo Editar»). **Play** (F5, «Ejecutar») compila lo editado y simula en tiempo real, como un autómata;
 los retardos se ven como temporizadores: sobre la duración de su receptividad (o de la condición o evento de una acción) aparece el tiempo transcurrido («0,5 s») mientras cuenta, y «3 s ✓» al vencer. **Pausa** detiene y vuelve a editar, y deja todo a 0 hasta el siguiente Play (sin etapas activas ni temporizadores; con E/S externas conectadas, pide el cero de las salidas asignadas). Cada Play empieza una sesión nueva desde la situación inicial. **Reiniciar** (Ctrl+R)
 en Play vuelve a la situación inicial sin cerrar la conexión y lee las entradas antes de escribir (en Pausa no crea sesión). Hay traza, salidas, variables y todas las lecturas de interpretación
-(menú «Ajustes»). Los paneles derecho e inferior se pliegan, y el dibujo admite zoom: la rueda lo hace anclado al puntero, y «Centrar todo» (Ctrl+0; menú Ver; al simular, también doble clic) encaja y centra lo dibujado (P-IMP-30 y P-IMP-64); «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar), y el botón central (la rueda) arrastra el dibujo, al editar y al simular (P-IMP-68). «Abrir modelo» admite
-un proyecto (su `manifest.json`) o un documento de modelo; «Guardar proyecto» guarda el modelo en curso con su
-dibujo. Con «Proyecto > Nuevo grafcet» se crea un modelo vacío; en Pausa, un ejemplo o un modelo abierto se edita con el editor de un secuencial: etapas, transiciones, enlaces, receptividades, deshacer, diagnósticos y recuperación (P-IMP-32). La paleta tiene ocho fichas, en dos columnas; pide cuatro filas y, en ventanas bajas, se encoge a tres con barra de desplazamiento: Etapa, Transición, Simultaneidad, Acción, Macroetapa, Encapsulante, **Grafcet parcial** (marco redondeado con «G»: se suelta en un hueco y crea un grafcet parcial vacío) y **Forzado**, que soltado en un hueco crea un borrador suelto (`G?{?}`) y, unido a una etapa, se configura como la orden `G{ }`; un borrador suelto o incompleto bloquea Play hasta completarlo (P-IMP-61, P-IMP-62, P-IMP-65, P-IMP-66, P-IMP-68 y P-IMP-72). Supr con una acción o una orden señalada borra solo esa acción u orden, no la etapa; «Equidistanciar» ordena las alturas de una cadena (P-IMP-65).
+(menú «Ajustes»). Los paneles derecho e inferior se pliegan, y el dibujo admite zoom: la rueda lo hace anclado al puntero, y «Centrar todo» (Ctrl+0; menú Ver; al simular, también doble clic) encaja y centra lo dibujado (P-IMP-30 y P-IMP-64); «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar), y el botón central (la rueda) arrastra el dibujo, al editar y al simular (P-IMP-68). «Proyecto > Abrir…» abre un proyecto `.grafnet`
+(archivo único con sello; no admite carpetas ni JSON sueltos); «Guardar» y «Guardar como…» guardan el modelo en curso con su
+dibujo en ese archivo. Con «Proyecto > Nuevo proyecto» se crea un modelo vacío; en Pausa, un ejemplo o un modelo abierto se edita con el editor de un secuencial: etapas, transiciones, enlaces, receptividades, deshacer, diagnósticos y recuperación (P-IMP-32). La paleta tiene ocho fichas, en dos columnas; pide cuatro filas y, en ventanas bajas, se encoge a tres con barra de desplazamiento: Etapa, Transición, Simultaneidad, Acción, Macroetapa, Encapsulante, **Grafcet parcial** (marco redondeado con «G»: se suelta en un hueco y crea un grafcet parcial vacío) y **Forzado**, que soltado en un hueco crea un borrador suelto (`G?{?}`) y, unido a una etapa, se configura como la orden `G{ }`; un borrador suelto o incompleto bloquea Play hasta completarlo (P-IMP-61, P-IMP-62, P-IMP-65, P-IMP-66, P-IMP-68 y P-IMP-72). Supr con una acción o una orden señalada borra solo esa acción u orden, no la etapa; «Equidistanciar» ordena las alturas de una cadena (P-IMP-65).
 
 - Desde el código: doble clic en «Abrir simulador.bat», o `python escritorio/simulador.py [modelo]`.
 - Versión portable: «Construir ejecutable.bat» (o `python tools/construir_ejecutable.py`) deja el programa en
@@ -68,10 +68,9 @@ servidor. Use la **×**, que aparece al pasar el ratón por la asignación, para
 si está conectado, pulse **Desconectar / editar** primero. Con solo entradas se
 admite observación sin motor compilado, también en Pausa. Sin salidas asignadas no se escribe nada; con salidas asignadas, Conectar les pone antes el cero.
 
-La asignación por arrastre se aplica al soltar y se guarda si el proyecto tiene
-carpeta. **Configuración** reúne los ajustes, **Guardar configuración…** y
-**Probar conexión** (sin escribir). El mapa se guarda aparte en
-`conexion-factoryio.json` dentro del proyecto; también
+La asignación por arrastre se aplica al soltar y se guarda con el proyecto al guardarlo. **Configuración** reúne los ajustes, **Guardar configuración…** y
+**Probar conexión** (sin escribir). El mapa va dentro del proyecto `.grafnet`, como
+`conexion-factoryio.json`; también
 puede cargarlo desde otro archivo. El **check verde** confirma conexión mantenida.
 **Conectar** pone a cero las salidas asignadas (bobinas y registros holding) antes de la primera lectura, y lee sensores; pulse
 **Ejecutar** (Play) para comenzar. **Pausa** pide el cero de todas las salidas asignadas y deja el GRAFCET sin estado: sigue observando las entradas, y todo queda a 0 hasta el siguiente Ejecutar, que empieza siempre desde la situación inicial. Un diagnóstico del
@@ -82,7 +81,7 @@ ni Play, ni Pausa, ni Reiniciar, ni editar, guardar o abrir otro proyecto la cie
 señales, Play no arranca, avisa y la conexión se mantiene. Al abrir otro proyecto con conexión viva, las salidas del
 modelo anterior pasan a cero (también las del mapa nuevo, con un solo cero por canal) y el mapa se sustituye por el del proyecto nuevo. **Desconectar** escribe el cero de las salidas asignadas antes de cerrar el TCP y deja «Desconectado · salidas a cero»; si la red falla, cierra igual, deja el estado en «error» y avisa «Desconectado · salidas no garantizadas · no se pudo poner a cero la planta». Al cerrar la ventana también se intenta el cero, pero si la red falla se cierra sin aviso. **Probar conexión** no escribe nada.
 
-El periodo de servicio es configurable (50 ms iniciales). El intervalo efectivo
+El periodo de servicio es configurable (20 ms iniciales, desde 5 ms). El intervalo efectivo
 incluye latencia y lecturas/escrituras por señal; pulsos breves pueden perderse.
 El panel muestra la última lectura y la última escritura confirmada mientras está
 conectado, no una confirmación física del actuador. La integración se prueba con

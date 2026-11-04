@@ -12,6 +12,7 @@ class ArchivosProyecto:
         return abrir_grafnet(ruta,sello.CLAVE,sello.POLITICA_SELLO)
 
     def guardar_como(self):
+        if getattr(self,"solo_lectura",False):return False
         e=self.edicion
         if e is None or self._variables_sin_nombre():return False
         actual=getattr(e,'archivo',None)
@@ -27,11 +28,13 @@ class ArchivosProyecto:
         return self._guardar_archivo(destino)
 
     def guardar_proyecto(self):
+        if getattr(self,"solo_lectura",False):return False
         e=self.edicion
         archivo=getattr(e,'archivo',None)
         return self._guardar_archivo(archivo) if archivo else self.guardar_como()
 
     def _guardar_archivo(self,destino):
+        if getattr(self,"solo_lectura",False):return False
         if hasattr(self,"panel_planos"):self.panel_planos.aplicar()
         e=self.edicion
         if e is None or self._variables_sin_nombre():return False

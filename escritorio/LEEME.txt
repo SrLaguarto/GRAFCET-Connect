@@ -5,8 +5,7 @@ Abrir: doble clic en GRAFCET.exe. No necesita instalación ni conexión a la red
 programa: puede copiarse a otro sitio o a un USB, pero GRAFCET.exe no funciona separado de ella.
 
 Qué hace
-- Simula los ejemplos (menú Ejemplos) y los modelos guardados (Proyecto > Abrir modelo): un proyecto (su
-  manifest.json) o un documento de modelo (model-….json).
+- Simula los ejemplos (menú Ejemplos) y los proyectos guardados (Proyecto > Abrir…): un archivo .grafnet.
 - Dibuja el grafcet con la notación de la norma y muestra la evolución: etapas activas e inestables,
   transiciones validadas y franqueables, acciones, salidas, variables, temporizadores y traza.
 - Entradas con un clic (las numéricas se escriben). Al abrir un ejemplo o un modelo, el programa queda en Pausa, sin estado, que
@@ -19,8 +18,8 @@ Qué hace
 - Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J). Al simular, el
   panel inferior muestra la traza.
 - Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), rueda del ratón (anclada al puntero), Ctrl+= y Ctrl+−; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
-- Proyecto > Guardar proyecto: guarda el modelo en curso con su dibujo, para abrirlo después.
-- Editor de un grafcet secuencial (Proyecto > Nuevo grafcet, o editar en Pausa cualquier modelo abierto): paleta a la
+- Proyecto > Guardar (Ctrl+S) o Guardar como… (Ctrl+Mayús+S): guarda el proyecto con su dibujo en un archivo .grafnet, para abrirlo después.
+- Editor de un grafcet secuencial (Proyecto > Nuevo proyecto, o editar en Pausa cualquier modelo abierto): paleta a la
   izquierda, con la etapa, la transición, la simultaneidad y la acción (las fichas se arrastran al dibujo; sin herramienta, el ratón
   selecciona, mueve y enlaza). Puntos de unión arriba y abajo (al acercar el puntero se marcan y de ellos sale el
   enlace). Panel de Opciones abajo, con la configuración de lo seleccionado (ver más abajo). Mover con rejilla,

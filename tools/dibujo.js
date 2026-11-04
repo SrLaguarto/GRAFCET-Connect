@@ -24,7 +24,9 @@ const MARGEN_MARCO_Y = 22;  // ... y por arriba y por abajo (el mismo de siempre
 const TALLO_T = 24;       // tramo recto de una transición sin etapa anterior o siguiente (grafcet/routing.py)
 const SIMUL = 14;         // de la transición al doble trazo de una simultaneidad
 
+let parcialDeDibujo = null;
 function el(tag, attrs={}, parent) { const e = document.createElementNS(NS, tag);
+  if (parcialDeDibujo && ["path","line","rect","circle","ellipse","text"].includes(tag)) e.setAttribute("data-parcial", parcialDeDibujo);
   for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; }
 function txt(parent, x, y, s, attrs={}) { const t = el("text", {x, y, ...attrs}, parent); t.textContent = s; return t; }
 // Lo que sube un texto de ese tamaño por encima de su línea base (Arial: igual que en escritorio/diagrama.py)
@@ -131,6 +133,13 @@ function colorEnlace(M, roles, e) {
 }
 
 function drawDiagram(svg, M, S, opciones = {}) {
+  parcialDeDibujo = null;
+  const pertenencia = {};
+  [...(M.steps||[]),...(M.transitions||[]),...(M.macros||[])].forEach(x=>{pertenencia[x.id]=x.partial || "g";});
+  (M.bars||[]).forEach(b=>{
+    const partes=[...new Set([...(b.arriba||[]),...(b.abajo||[])].map(i=>pertenencia[i]).filter(Boolean))];
+    pertenencia[b.id]=partes.length===1 ? partes[0] : (partes.length ? null : "g");
+  });
   const dependencias = !!opciones.dependencias;
   svg.innerHTML = "";
   svg.setAttribute("viewBox", "0 0 640 600");
@@ -156,6 +165,7 @@ function drawDiagram(svg, M, S, opciones = {}) {
   const roles = coloresElementos(M,S);
   const geo = {trans: {}, acc: {}};  // lo que ocupa cada transición (con sus textos) y las acciones de cada etapa: lo piden los marcos
   M.transitions.forEach(t => {
+    parcialDeDibujo = t.partial;
     const tx = t.x + SX, ty = t.y, ob = (S.transitions||{})[t.id] || {}, rol = roles[t.id] || "";
     const pre = (t.preDib || t.pre).map(p => pos[p]), post = (t.postDib || t.post).map(p => pos[p]);
     if (t.simulPre) {
@@ -190,16 +200,19 @@ function drawDiagram(svg, M, S, opciones = {}) {
   });
   // Exactamente los mismos recorridos que Qt y la detección del ratón.
   (M.links || []).forEach(e => {
+    parcialDeDibujo = pertenencia[e.tid || e.sid];
     const rol = colorEnlace(M, roles, e);
     el("path", {d:e.pts.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" "), class:"link " + rol}, links);
     (e.arrows || []).forEach(a => el("path", {d:a.pts.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" ")+" Z", class:"arrow " + rol}, links));
   });
   (M.bars || []).forEach(b => {
+    parcialDeDibujo = pertenencia[b.id];
     const x = b.x + SX, rol = roles[b.id] || "";
     if(b.kind === "Y") el("rect", {x,y:b.y+1,width:b.ancho,height:BARRA_GROSOR-2,class:"sync-gap"}, bars);
     [0, ...(b.kind === "Y" ? [BARRA_GROSOR] : [])].forEach(dy => el("line", {x1:x, x2:x+b.ancho, y1:b.y+dy, y2:b.y+dy, class:"dbl " + rol}, bars));
   });
   M.steps.forEach(s => {
+    parcialDeDibujo = s.partial || "g";
     const p = pos[s.id], stale = !!blk && situation.has(s.id), act = !blk && situation.has(s.id);
     const cand = !!blk && reached.has(s.id) && !stale, vir = virtual.has(s.id) && !act;
     const uns = !vir && !act && !stale && !cand && unstable.has(s.id);
@@ -228,6 +241,7 @@ function drawDiagram(svg, M, S, opciones = {}) {
     if (s.comment) comentario(g, (xr ?? p.x + H) + 10, p.y, s.comment);  // a la derecha de la etapa o de su última acción
   });
   (M.macros || []).forEach(m => {  // macroetapa: divisiones horizontales superior e inferior
+    parcialDeDibujo = m.partial || "g";
     const p = pos[m.id], act = !!(S.macros || {})[m.id];
     const g = el("g", {class:`step macro ${act?"active":""}`}, steps);
     el("title", {}, g).textContent = `Macroetapa ${nameOf(M, m.id)} (expansión ${nameOf(M, m.expansion)}): ${act ? "activa (alguna etapa de su expansión)" : "inactiva"}`;
@@ -237,6 +251,18 @@ function drawDiagram(svg, M, S, opciones = {}) {
     txt(g, p.x, p.y+5, nameOf(M, m.id), {"text-anchor":"middle"});
   });
   drawFrames(frames, M, pos, dependencias, geo, roles);  // (al final, con todo medido; el grupo de los marcos va el primero: queda debajo)
+  parcialDeDibujo = null;
+  if (opciones.parcial) {
+    let fuera = 0;
+    svg.querySelectorAll('[data-parcial]').forEach(e => {
+      if (e.getAttribute('data-parcial') !== opciones.parcial) {
+        if (opciones.filtro === 'ocultar') e.style.display = 'none'; else e.style.opacity = '0.18';
+        fuera++;
+      }
+    });
+    const r = svg.getBBox();
+    txt(svg,r.x,r.y-10,`Filtro de parcial: ${nameOf(M,opciones.parcial)} · ${opciones.filtro === 'ocultar' ? 'otros elementos ocultos' : 'resto atenuado'} · se simula todo el GRAFCET`,{class:'aviso-filtro'});
+  }
   const b = svg.getBBox();
   svg.setAttribute("viewBox", `${b.x-14} ${b.y-14} ${b.width+28} ${b.height+28}`);
 }
@@ -345,6 +371,7 @@ function drawFrames(g, M, pos, dependencias, geo, roles={}) {
     return (box[pid] = b);
   }
   parts.forEach(pt => {
+    parcialDeDibujo = pt.id;
     if (pt.kind === "expansion") {
       const m = (M.macros || []).find(x => x.id === pt.macro);
       if (!dependencias || !m || !pos[m.entry] || !pos[m.exit]) return;

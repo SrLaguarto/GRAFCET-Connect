@@ -194,8 +194,10 @@ class PulidoES(BaseQt):
         self.assertEqual((p.doc, p.config), before)
 
     def test_SESP14_capacidad_a_1366_y_panel_usable_a_1000(self):
-        """REQ-SIM-03, REQ-EDT-09: los 16+8 canales por lado caben sin scroll a 1366×768 y la vista pequeña conserva acceso."""
-        w, p = self.modelo(); w._mostrar_pagina(True); w.show()
+        """REQ-SIM-03, REQ-EDT-09: los 20+10 canales por lado caben sin scroll a 1366×768 y la vista pequeña conserva acceso."""
+        w, p = self.modelo()
+        for area,campo in p.cantidades.items():campo.setValue(20 if area in ('discrete','coil') else 10)
+        w._mostrar_pagina(True); w.show()
         for ancho, alto in ((1366, 768), (1000, 600)):
             w.resize(ancho, alto)
             for _ in range(6): QApplication.processEvents()

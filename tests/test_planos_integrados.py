@@ -415,7 +415,10 @@ class PlanosIntegrados(BaseQt):
         w,e,s=self.preparar();self.crear_hoja(e,[s]);p=self.pulsar_planos();errores=[]
         with patch('sys.excepthook',side_effect=lambda *args:errores.append(args)),patch('escritorio.ventana.QMessageBox.question',return_value=QMessageBox.StandardButton.Discard):
             for clave in ('encapsulacion','macroetapa','alternativas'):
-                w._mostrar_pagina(False);w.acciones_ej[clave].trigger();QApplication.processEvents();e=w.edicion;antes=copy.deepcopy(e.ed.presentation)
+                from grafcet.examples import EJEMPLOS
+                from escritorio.edicion import Edicion
+                titulo,_,crear=EJEMPLOS[clave];m,layout=crear()
+                w._mostrar_pagina(False);w._establecer_edicion(Edicion.desde(m.doc,layout,titulo));w.fuente={'tipo':'editor'};w._cargar();QApplication.processEvents();e=w.edicion;antes=copy.deepcopy(e.ed.presentation)
                 p=self.pulsar_planos();self.assertEqual(w.paginas_es.currentIndex(),2);self.assertIs(p.origen,e);self.assertIsNone(p.editor);self.assertEqual(p.lista.count(),0);self.assertEqual(e.ed.presentation,antes)
                 self.crear_hoja(e);p.mostrar();self.assertIsNotNone(p.editor)
             ruta=Path(self.tmp.name)/'mismos-ids.grafnet';self.assertTrue(w._guardar_archivo(ruta));guardadas=copy.deepcopy(e.ed.sheet_links());p.editor.campos['titulo'].setText('Cambio que se descarta')
@@ -468,5 +471,24 @@ class PlanosIntegrados(BaseQt):
                 p.scroll_hojas.ensureWidgetVisible(p.b_hoja);QApplication.processEvents();punto=p.b_hoja.mapTo(p.scroll_hojas.viewport(),QPoint(0,0));self.assertGreaterEqual(punto.y(),0);self.assertLessEqual(punto.y()+p.b_hoja.height(),p.scroll_hojas.viewport().height())
         self.assertEqual([h['id'] for h in e.ed.sheet_links()],ids)
 
+
+    def test_SPAG42_traer_cadena_ctrl_quita_y_shift_suma_sin_hijas(self):
+        """REQ-EDT-11, REQ-JER-05: clic elige cadena propia, Ctrl ajusta elementos y Mayús suma la hija solo expresamente."""
+        from grafcet.builder import M
+        from escritorio.edicion import Edicion
+        m=M().var('a').step('1',True).step('2').trans('t',['1'],['2'],'a')
+        e=Edicion.desde(m.doc,{'1':(100,80),'t':(100,180),'2':(100,280)},'Cadenas')
+        hija=e.ed.add_partial('Hija',owner='g'); sid=e.ed.add_step(hija,'3',True,at=(700,80)); fin=e.ed.add_step(hija,'4',at=(700,280))
+        tid,_=e.ed.add_transition(hija,'a',[sid],[fin],at=(700,180)); e.cambia()
+        w=self.w;w._establecer_edicion(e);w._poner_modo();w.refrescar_edicion();w.show()
+        ident=self.crear_hoja(e);self.pulsar_planos().a_nueva.trigger();QApplication.processEvents()
+        v=w.diagrama;v.ajustar();QApplication.processEvents();antes=copy.deepcopy((e.ed.model,e.ed.presentation))
+        def clic(i,mod=Qt.KeyboardModifier.NoModifier):
+            p=v.mapFromScene(QPointF(*posiciones(e.M)[i]));QTest.mouseClick(v.viewport(),Qt.MouseButton.LeftButton,mod,pos=p);QApplication.processEvents()
+        clic('1');self.assertEqual(set(e.sel),{'1','t','2'});self.assertNotIn(sid,e.sel)
+        clic('2',Qt.KeyboardModifier.ControlModifier);self.assertEqual(set(e.sel),{'1','t'})
+        clic(sid,Qt.KeyboardModifier.ShiftModifier);self.assertEqual(set(e.sel),{'1','t',sid,tid,fin})
+        QTest.keyClick(v,Qt.Key.Key_Right);self.assertEqual((e.ed.model,e.ed.presentation),antes)
+        w.cancelar_traer()
 
 if __name__=='__main__':unittest.main()

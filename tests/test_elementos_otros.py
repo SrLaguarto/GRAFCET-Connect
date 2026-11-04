@@ -126,7 +126,7 @@ class OtrosInterfaz(BaseQt):
 
     def test_SOTR08_etapa_interior_arrastra_y_borde_enlaza(self):
         """REQ-EDT-03: el interior cerca de los conectores mueve la etapa; el borde conserva el enlace."""
-        w,e=self.preparar();s=e.ed.add_step('g','1',True,at=(200,140));e.cambia()
+        w,e=self.preparar();w._abrir_opciones();s=e.ed.add_step('g','1',True,at=(200,140));e.cambia()
         p=QPointF(300,140+H-5);self.assertIsNone(ancla_en(e.M,p))
         self.assertEqual(ancla_en(e.M,QPointF(300,140+H))['id'],s)
         self.gesto(p,p+QPointF(60,40));self.assertEqual(self.pos(e)[s],(260,180));self.assertIsNone(e.enlace)
@@ -136,7 +136,7 @@ class OtrosInterfaz(BaseQt):
 
     def test_SOTR09_accion_por_evento_reserva_mas_espacio_al_evento(self):
         """REQ-EDT-09: en una acción por evento el editor del evento es claramente mayor que el del valor."""
-        w,e=self.preparar();n=e.ed.add_draft_action((200,140),{'tipo':'evento'});e.sel=[n];e.cambia();QApplication.processEvents()
+        w,e=self.preparar();w._abrir_opciones();n=e.ed.add_draft_action((200,140),{'tipo':'evento'});e.sel=[n];e.cambia();QApplication.processEvents()
         p=w.props;self.assertTrue(p.accion.caja_valor.isVisible());self.assertTrue(p.pagina_bloques.isVisible())
         self.assertGreater(p.pagina_bloques.width(),2*p.accion.caja_valor.width())
 

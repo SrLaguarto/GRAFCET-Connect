@@ -18,7 +18,7 @@ class VistaSimulacion(BaseQt):
         m=M().var("marcha").var("fin").var("sensor").step("A",True).step("B").trans("t",["A"],["B"],"marcha")
         w.fuente={"tipo":"fichero","ruta":Path(self.tmp.name)/"m.json","doc":m.doc,
                   "layout":{"A":(220,80),"t":(220,180),"B":(220,280)},"titulo":"Vista","ayuda":"","raiz":None}
-        w._cargar();w.resize(1366,768);w.show();self.procesar();w.rt.stop()
+        w._cargar();w._abrir_opciones();w.resize(1366,768);w.show();self.procesar();w.rt.stop()
         return w,w.diagrama
 
     def procesar(self):
@@ -146,8 +146,10 @@ class VistaSimulacion(BaseQt):
         from unittest import mock
         w,d=self.preparar();d.zoom(1.45)
         w.a_ejecutar.setChecked(True);w.rt.stop();w.a_ejecutar.setChecked(False)
-        w.edicion.ed.dirty=False;w.cargar_ejemplo("temporizada");escala=d.escala()
+        w.edicion.ed.dirty=False
         with mock.patch.object(d,"restaurar_encuadre",wraps=d.restaurar_encuadre) as restaurar:
+            w.cargar_ejemplo("temporizada");self.procesar();escala=d.escala()
+            # El ejemplo pliega los paneles: su encuadre inicial usa esa geometría ya asentada.
             self.procesar();restaurar.assert_not_called()
         self.assertAlmostEqual(d.escala(),escala)
 

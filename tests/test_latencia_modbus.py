@@ -75,6 +75,25 @@ class ComunicacionTests(unittest.TestCase):
             c.adaptador=None
             c.cerrar()
 
+    def test_SRED16_parada_por_ambos_haces_con_marcha_por_pulso(self):
+        """REQ-SIM-03: el ensayo de dos etapas se para al recibirse ambos haces, con Marcha ya liberada."""
+        from conexion.adaptador import Adaptador
+        from grafcet.profile import normalize_options
+        m=M().var("marcha").var("automatico").var("bajo").var("pale").var("cinta","output")
+        m.step("0",True).step("1")
+        m.trans("arranque",["0"],["1"],"automatico OR NOT automatico AND marcha")
+        m.trans("parada",["1"],["0"],"bajo AND pale").cont("1","cinta")
+        cfg=Configuracion(periodo_ms=5,senales=[Senal(n,"discrete",i) for i,n in enumerate(("marcha","automatico","bajo","pale"))]+[Senal("cinta","coil",0)])
+        a=Adaptador(cfg,session(m.compile(),options=normalize_options(None)))
+        muestra=dict.fromkeys(("marcha","automatico","bajo","pale"),False)
+        muestra["marcha"]=True;a.aplicar(muestra);self.assertTrue(a.valores_salida()["cinta"])
+        muestra["marcha"]=False;a.aplicar(muestra)
+        muestra["bajo"]=True;a.aplicar(muestra);self.assertTrue(a.valores_salida()["cinta"])
+        muestra["pale"]=True;a.aplicar(muestra)
+        self.assertFalse(a.valores_salida()["cinta"])
+        self.assertEqual(a.sesion.status,"pausada-estable")
+        self.assertEqual(a.sesion.z.situation,frozenset(["0"]))
+
 
 @unittest.skipUnless(QT, "Falta PySide6")
 class LatenciaQtTests(unittest.TestCase):
@@ -171,6 +190,7 @@ class LatenciaQtTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.w = w = Ventana(QSettings(str(Path(tmp) / "ajustes.ini"), QSettings.Format.IniFormat))
             try:
+                w.edicion.ed.add_step("g","0",True);w.edicion.cambia();w._preparar_sesion()
                 w._iniciar_reloj()
                 class Reloj:
                     marca = 0
@@ -272,4 +292,91 @@ class LatenciaQtTests(unittest.TestCase):
                 self.assertIn("Espera antes de aplicar la lectura",w.panel_es.tiempos.toolTip())
                 w.panel_es.mostrar_tiempos({})
                 self.assertTrue(w.panel_es.tiempos.isHidden())
+            finally:self.cerrar()
+
+    def test_SRED12_es_no_reconstruye_el_dibujo_oculto(self):
+        """REQ-SIM-03: la vista E/S actualiza valores sin reconstruir el GRAFCET oculto."""
+        sensor=[True]
+        with tempfile.TemporaryDirectory() as tmp, servidor(lambda p:bytes([2,1,int(sensor[0])]) if p[0]==2 else p[:5]) as sc:
+            w=self.abrir(tmp,sc,5)
+            try:
+                w.a_ejecutar.setChecked(True);self.esperar(lambda:w.modbus.escritos.get("motor") is True)
+                w.refrescar();w._mostrar_pagina(True)
+                with patch.object(w.diagrama,"mostrar",wraps=w.diagrama.mostrar) as dibujar,patch.object(w,"_variables",wraps=w._variables) as tablas,patch.object(w.panel_es,"mostrar_muestra",wraps=w.panel_es.mostrar_muestra) as muestra:
+                    w._ultimo_refresco_modbus=0;w._refrescar_modbus()
+                    dibujar.assert_not_called();tablas.assert_not_called();self.assertTrue(muestra.called)
+                    sensor[0]=False;self.esperar(lambda:w.modbus.escritos.get("motor") is False)
+                    w._ultimo_refresco_modbus=0;w._refrescar_modbus()
+                    dibujar.assert_not_called();self.assertFalse(muestra.call_args.args[0]["sensor"])
+                    w._mostrar_pagina(False)
+                    self.assertTrue(dibujar.called);self.assertTrue(tablas.called)
+                    self.assertFalse(w.diagrama._ultimo[1]["values"]["sensor"])
+            finally:self.cerrar()
+
+    def test_SRED13_reloj_solo_no_reconstruye_pero_un_cambio_si(self):
+        """REQ-SIM-03: el reloj avanza sin recrear el dibujo idéntico; una entrada sí lo actualiza."""
+        with tempfile.TemporaryDirectory() as tmp, servidor(lambda p:b"\x02\x01\x01" if p[0]==2 else p[:5]) as sc:
+            w=self.abrir(tmp,sc,5)
+            try:
+                w.a_ejecutar.setChecked(True);self.esperar(lambda:w.modbus.escritos.get("motor") is True)
+                w.rt.stop();w._proxima_lectura.stop()
+                w.v.s.advance_to(w.v.s.z.time+1000);w.refrescar()
+                with patch.object(w.diagrama,"mostrar",wraps=w.diagrama.mostrar) as dibujar:
+                    w.v.s.advance_to(w.v.s.z.time+1000);w.refrescar()
+                    dibujar.assert_not_called()
+                    w.modbus.adaptador.aplicar({"sensor":False});w.refrescar()
+                    self.assertEqual(dibujar.call_count,1)
+                    self.assertFalse(w.diagrama._ultimo[1]["values"]["sensor"])
+            finally:self.cerrar()
+
+    def test_SRED14_temporizador_sigue_redibujando(self):
+        """REQ-TMP-02, REQ-SIM-03: los cambios del tiempo mostrado invalidan la reutilización del dibujo."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self.w=w=Ventana(QSettings(str(Path(tmp)/"a.ini"),QSettings.Format.IniFormat))
+            try:
+                m=M().var("sensor").var("motor","output").step("0",True)
+                m.cont("0","motor","delay(1s, sensor, 0s)")
+                w.fuente={"tipo":"fichero","ruta":Path(tmp)/"m.json","doc":m.doc,"layout":{},"titulo":"Temporizador","ayuda":"","raiz":None}
+                w._cargar();w.a_ejecutar.setChecked(True);w.rt.stop()
+                w.v.act("fijar",{"cambios":{"sensor":True}});w.refrescar()
+                with patch.object(w.diagrama,"mostrar",wraps=w.diagrama.mostrar) as dibujar:
+                    w.v.s.advance_to(w.v.s.z.time+100000);w.refrescar()
+                    self.assertEqual(dibujar.call_count,1)
+                    self.assertTrue(w.diagrama._ultimo[1]["temporal"])
+            finally:self.cerrar()
+
+    def test_SRED15_tablas_reutilizan_celdas_y_actualizan_valor_y_color(self):
+        """REQ-SIM-03: actualizar valores conserva las celdas y cambia texto y color cuando corresponde."""
+        from PySide6.QtWidgets import QTableWidget
+        from escritorio.diagrama import COL
+        tabla=QTableWidget(0,4)
+        try:
+            Ventana._filas(tabla,[("motor","salida continua","ON","etapa 1","ok")])
+            celdas=[tabla.item(0,i) for i in range(4)]
+            Ventana._filas(tabla,[("motor","salida continua","ON","etapa 1","ok")])
+            for i,item in enumerate(celdas):self.assertIs(tabla.item(0,i),item)
+            Ventana._filas(tabla,[("motor","salida continua","OFF","","muted")])
+            self.assertIs(tabla.item(0,2),celdas[2]);self.assertEqual(celdas[2].text(),"OFF")
+            self.assertEqual(celdas[2].foreground().color().name(),COL["muted"])
+        finally:tabla.deleteLater();self.app.processEvents()
+
+    def test_SRED17_ultima_parada_conserva_entradas_y_tiempos_de_ese_instante(self):
+        """REQ-SIM-03: el diagnóstico conserva la entrada previa a la salida a cero, no una muestra posterior."""
+        sensor=[True]
+        with tempfile.TemporaryDirectory() as tmp, servidor(lambda p:bytes([2,1,int(sensor[0])]) if p[0]==2 else p[:5]) as sc:
+            w=self.abrir(tmp,sc,5)
+            try:
+                self.assertIsNone(w.modbus.ultima_parada)
+                w.a_ejecutar.setChecked(True);self.esperar(lambda:w.modbus.escritos.get("motor") is True)
+                sensor[0]=False;self.esperar(lambda:w.modbus.ultima_parada is not None)
+                parada=w.modbus.ultima_parada
+                self.assertEqual(parada["salidas"],["motor"])
+                self.assertEqual(parada["entradas"][-1]["valores"],{"sensor":False})
+                self.assertGreaterEqual(parada["entradas"][-1]["antes_ms"],0)
+                sensor[0]=True;self.esperar(lambda:w.modbus.escritos.get("motor") is True)
+                self.assertIs(w.modbus.ultima_parada,parada)
+                self.assertEqual(parada["entradas"][-1]["valores"],{"sensor":False})
+                w._ultimo_refresco_modbus=0;w._refrescar_modbus()
+                self.assertIn("Última salida desactivada por el GRAFCET: motor",w.panel_es.tiempos.toolTip())
+                self.assertIn("sensor = 0",w.panel_es.tiempos.toolTip())
             finally:self.cerrar()

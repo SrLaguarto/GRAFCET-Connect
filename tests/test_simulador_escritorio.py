@@ -196,6 +196,13 @@ class Ventana(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()  # las preferencias de las pruebas no tocan las del usuario
         cls.w = V(QSettings(str(Path(cls.tmp.name) / "ajustes.ini"), QSettings.Format.IniFormat))
 
+    def proyecto_de_prueba(self,clave):
+        """Fixture editable independiente; los ejemplos del menú son de consulta."""
+        from escritorio.edicion import Edicion
+        titulo,_,crear=EJEMPLOS[clave];m,layout=crear()
+        self.w._establecer_edicion(Edicion.desde(m.doc,layout,titulo))
+        self.w.fuente={'tipo':'editor'};self.w._cargar()
+
     @classmethod
     def tearDownClass(cls):
         cls.w.a_ejecutar.setChecked(False)
@@ -236,7 +243,7 @@ class Ventana(unittest.TestCase):
 
     def test_SAPP06_guardar_y_abrir_en_la_ventana(self):
         """REQ-EDT-01, REQ-DAT-02: «Guardar como proyecto» y «Abrir modelo» conservan el modelo y su dibujo."""
-        self.w.cargar_ejemplo("macroetapa")
+        self.proyecto_de_prueba("macroetapa")
         before = (self.w.v.model["steps"], self.w.v.model["transitions"])
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / "macro.grafnet"
@@ -293,7 +300,7 @@ class Ventana(unittest.TestCase):
         «al cargar, el tiempo real corre» (P-IMP-60): al abrir, el programa queda en Pausa."""
         from PySide6.QtGui import QAction
         w = self.w
-        w.cargar_ejemplo("temporizada")
+        self.proyecto_de_prueba("temporizada")
         self.assertEqual((w.modo, w.a_ejecutar.isChecked(), w.rt.isActive()), ("editar", False, False), "abrir deja Pausa")
         self.assertEqual(w.a_ejecutar.text(), "Play")
         self.assertIsNotNone(w.edicion)
@@ -367,7 +374,7 @@ class Ventana(unittest.TestCase):
         w.a_ejecutar.setChecked(False)
 
     def test_SAPP18_abrir_ejemplo_o_modelo_deja_pausa_y_edicion(self):
-        """REQ-SIM-03, REQ-EDT-01: al abrir un ejemplo o un modelo guardado, el programa queda parado y editable aunque
+        """REQ-SIM-03, REQ-EDT-01: al abrir un ejemplo o un modelo guardado, el ejemplo queda de consulta y el proyecto editable, ambos parados aunque
         estuviera en Play; Play arranca."""
         w = self.w
         w.cargar_ejemplo("temporizada")
@@ -378,6 +385,8 @@ class Ventana(unittest.TestCase):
                          (False, "Play", "editar", False))
         self.assertEqual(w.edicion.titulo, w.v.model["title"])
         with tempfile.TemporaryDirectory() as tmp:
+            self.assertTrue(w.solo_lectura);self.assertFalse(w.guardar())
+            self.proyecto_de_prueba("macroetapa")
             w.guardar_en(Path(tmp) / "macro.grafnet")
             w.a_ejecutar.setChecked(True)
             self.assertTrue(w.abrir_ruta(fixture_grafnet(Path(tmp) / "macro.grafnet")))
@@ -478,6 +487,7 @@ class Ventana(unittest.TestCase):
         from PySide6.QtCore import QSettings
         from escritorio.ventana import Ventana as V
         w = self.w
+        w.nuevo();w._mostrar_panel("derecho",True);w._mostrar_panel("inferior",True)
         self.assertFalse(w.derecho.isHidden() or w.inferior.isHidden())
         w.flechas["derecho"].click()
         self.assertTrue(w.derecho.isHidden() and not w.a_derecho.isChecked())
@@ -491,11 +501,11 @@ class Ventana(unittest.TestCase):
         self.assertFalse(w.derecho.isHidden() or w.inferior.isHidden())
         self.assertTrue(w.ajustes.value("paneles/inferior", False, type=bool))
         self.assertEqual(w.flechas["derecho"].text(), "▸")
-        w.a_derecho.setChecked(False)  # un arranque posterior lo recuerda
+        w.a_derecho.setChecked(False)  # se registra la preferencia; el arranque abre los laterales y pliega el inferior
         w.ajustes.sync()
         otra = V(QSettings(w.ajustes.fileName(), QSettings.Format.IniFormat))
         try:
-            self.assertTrue(otra.derecho.isHidden() and not otra.a_derecho.isChecked())
+            self.assertFalse(otra.derecho.isHidden());self.assertTrue(otra.a_derecho.isChecked());self.assertTrue(otra.inferior.isHidden())
         finally:
             otra.a_ejecutar.setChecked(False)
             otra.deleteLater()

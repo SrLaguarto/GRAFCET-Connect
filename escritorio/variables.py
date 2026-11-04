@@ -230,7 +230,7 @@ class PanelVariables(QWidget):
                    + 2 * self.tabla.frameWidth())
         if alto != getattr(self.tabla, "alto_filas", None):
             self.tabla.alto_filas = alto
-            self.tabla.setMaximumHeight(alto)
+            self.tabla.setFixedHeight(alto)
             self.tabla.updateGeometry()
 
     def texto(self, r: int, c: int) -> str:

@@ -37,6 +37,7 @@ from grafcet.view import Vista, auto_layout, layout_from_presentation, t_trunc
 from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion
 from .propiedades import PanelPropiedades, Paleta
+from .navegacion import Navegacion
 from .paneles import PanelPlegable, DivisorPlegable, PilaActual
 from .variables import PanelVariables
 from .entradas_salidas import CONEXION_INICIAL, PanelES
@@ -297,7 +298,7 @@ class _BotonEntrada(QPushButton):
     def __init__(self) -> None:
         super().__init__()
         self.setCheckable(True)
-        self.control = self.enclavado = self.liberar = self.interruptor = False
+        self.control = self.enclavado = self.liberar = self.interruptor = self.nc = False
 
     def mousePressEvent(self, event: Any) -> None:  # noqa: N802
         self.control = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
@@ -401,6 +402,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._proyecto_modbus: Any = None  # de qué proyecto es el mapa que tiene cargado el panel de E/S
         self._n_nuevos = 0
         self._tipos_entrada: dict[tuple[Any, str], bool] = {}
+        self._entradas_nc = {}
         self._portapapeles = None
         self._menus()
         self._interfaz()
@@ -442,7 +444,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.panel_es.aplicar.connect(self._persistir_mapa_modbus)
         self._barra_herramientas()
         self._paneles()
-        self.cargar_ejemplo(next(iter(EJEMPLOS)))
+        self.nuevo()
+        self._cargar_config_modbus(self.edicion.ed.model)
+        for nombre in ("izquierdo","derecho","inferior"):
+            self._mostrar_panel(nombre,nombre!="inferior",guardar=False)
+        self._accesibilidad()
 
     # -- construcción ---------------------------------------------------------------------------
     def _accion(self, texto: str, slot: Any, atajo: str | list[str] | None = None, marcable: bool = False) -> QAction:
@@ -452,6 +458,39 @@ class Ventana(ArchivosProyecto, QMainWindow):
             a.setShortcuts([QKeySequence(x) for x in ([atajo] if isinstance(atajo, str) else atajo)])
         (a.toggled if marcable else a.triggered).connect(slot)
         return a
+
+    def _seleccionar_teclado(self, h):
+        self.herramienta(h)
+        if self.edicion and self.diagrama.hasFocus(): self.edicion.seleccionar([])
+
+    def buscar_elemento(self):
+        self._mostrar_pagina(False); self.navegacion.abrir()
+
+    def insertar_teclado(self, tipo):
+        if self.modo != 'editar' or self.edicion is None or getattr(self,"solo_lectura",False): return
+        p = self.diagrama.mapToScene(self.diagrama.viewport().rect().center())
+        if tipo == 'transicion': self.edicion.poner_transicion(p)
+        else: self.edicion.poner_etapa(p, tipo == 'inicial')
+        self.diagrama.setFocus()
+
+    def conectar_teclado(self):
+        e = self.edicion
+        if self.modo != 'editar' or not e or len(e.sel) != 1 or getattr(self,'solo_lectura',False): return
+        origen = e.sel[0]
+        destinos = [d for d in self.navegacion.datos if d['id'] != origen and d['tipo'] in ('Etapa', 'Transición', 'Macroetapa', 'Barra')]
+        nombres = [d['texto'] for d in destinos]
+        elegido, ok = QInputDialog.getItem(self, 'Conectar elementos', 'Destino del enlace', nombres, 0, False)
+        if ok and elegido in nombres: e.conectar(origen, destinos[nombres.index(elegido)]['id'])
+        self.activateWindow(); self.diagrama.setFocus()
+
+    def _accesibilidad(self):
+        from PySide6.QtWidgets import QAbstractButton
+        for boton in self.findChildren(QAbstractButton):
+            if not boton.accessibleName(): boton.setAccessibleName((boton.text() or boton.toolTip()).replace('&',''))
+            if not boton.accessibleDescription(): boton.setAccessibleDescription(boton.toolTip() or boton.accessibleName())
+        for nombre in ('izquierdo', 'derecho', 'inferior'):
+            self._plegables[nombre].setAccessibleName({'izquierdo':'Elementos','derecho':'Variables y simulación','inferior':'Propiedades y traza'}[nombre])
+            self._plegables[nombre].setAccessibleDescription('Panel plegable. Use su cabecera para ocultarlo o su pestaña para recuperarlo.')
 
     def _menus(self) -> None:
         bar = self.menuBar()
@@ -474,13 +513,17 @@ class Ventana(ArchivosProyecto, QMainWindow):
         archivo.addAction("&Salir", self.close).setShortcut(QKeySequence.StandardKey.Quit)
         ejemplos = bar.addMenu("&Ejemplos")
         self.grupo = QActionGroup(self)
+        from grafcet.ejemplos_aula import DIDACTICOS
+        avanzados=ejemplos.addMenu("Más ejemplos y casos de estudio")
         self.acciones_ej: dict[str, QAction] = {}
-        for key, (title, _, _) in EJEMPLOS.items():
-            act = ejemplos.addAction(title)
+        for key in (*DIDACTICOS,*(k for k in EJEMPLOS if k not in DIDACTICOS)):
+            title,_,_=EJEMPLOS[key]
+            act = (ejemplos if key in DIDACTICOS else avanzados).addAction(title)
             act.setCheckable(True)
             act.triggered.connect(lambda _=False, k=key: self.cargar_ejemplo(k))
             self.grupo.addAction(act)
             self.acciones_ej[key] = act
+        ejemplos.removeAction(avanzados.menuAction());ejemplos.addSeparator();ejemplos.addAction(avanzados.menuAction())
         # Un solo control de ejecución: Play simula (traza abajo, sin paleta) y Pausa detiene y vuelve a editar
         self.a_ejecutar = self._accion("Play", self._ejecutar, "F5", marcable=True)
         self.a_ejecutar.setToolTip("Play: iniciar una simulación nueva · Stop: detener y dejar todo a 0 (F5)")
@@ -505,7 +548,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.g_herr = QActionGroup(self)
         for h in HERRAMIENTAS:  # solo las que no colocan elementos: los elementos y las acciones se arrastran desde la paleta
             atajo = "Esc"
-            a = self._accion("Seleccionar (Esc)", lambda on, h=h: on and self.herramienta(h), atajo, True)
+            a = self._accion("Seleccionar", lambda on, h=h: on and self.herramienta(h), atajo, True)
+            a.triggered.connect(lambda on=False, h=h: self._seleccionar_teclado(h))
             a.setToolTip(f"{NOMBRE_HERRAMIENTA[h]} ({atajo}): {AYUDA_EDICION[h]}")
             self.g_herr.addAction(a)
             self.a_herr[h] = a
@@ -514,8 +558,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_herr["seleccionar"].blockSignals(False)
         self.a_deshacer = self._accion("&Deshacer", lambda: self.historial_plano(False), "Ctrl+Z")
         self.a_rehacer = self._accion("&Rehacer", lambda: self.historial_plano(True), ["Ctrl+Y", "Ctrl+Shift+Z"])
-        self.a_borrar = self._accion("&Borrar la selección", lambda: self.edicion and self.edicion.borrar(), "Del")
-        self.a_debajo = self._accion("&Añadir debajo", lambda: self.edicion and self.edicion.anadir_debajo(), "Ctrl+Return")
+        self.a_borrar = self._accion("&Borrar la selección\tSupr", lambda: self.edicion and self.edicion.borrar(), "Del")
+        self.a_debajo = self._accion("&Añadir debajo\tCtrl+Enter", lambda: self.edicion and self.edicion.anadir_debajo(), "Ctrl+Return")
         self.a_debajo.setToolTip("Con una etapa seleccionada: transición y etapa enlazadas debajo (Ctrl+Intro)")
         self.a_cortar = self._accion("Cortar", lambda: self._portapapeles_accion("cortar"), "Ctrl+X")
         self.a_copiar = self._accion("Copiar", lambda: self._portapapeles_accion("copiar"), "Ctrl+C")
@@ -523,6 +567,13 @@ class Ventana(ArchivosProyecto, QMainWindow):
         edicion = bar.addMenu("&Edición")
         for a in (self.a_cortar, self.a_copiar, self.a_pegar):
             edicion.addAction(a)
+        edicion.addSeparator()
+        self.a_buscar = self._accion("Buscar elemento…", self.buscar_elemento, "Ctrl+F")
+        edicion.addAction(self.a_buscar)
+        insertar = edicion.addMenu("Añadir &elemento")
+        for texto, tipo in (("&Etapa", "etapa"), ("Etapa &inicial", "inicial"), ("&Transición", "transicion")):
+            insertar.addAction(texto, lambda _=False, tipo=tipo: self.insertar_teclado(tipo))
+        edicion.addAction("&Conectar con…", self.conectar_teclado)
         self.a_enviar_lamina=self._accion("Enviar a plano…",self.enviar_seleccion_lamina)
         edicion.addAction(self.a_enviar_lamina)
         edicion.addSeparator()
@@ -530,7 +581,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             edicion.addAction(a)
         edicion.addSeparator()
         for a in self.a_herr.values():
-            edicion.addAction(a)
+            self.addAction(a)  # Esc deselecciona sin presentar «Seleccionar» como un atajo de clic
         sim = bar.addMenu("&Simulación")
         for a in (self.a_ejecutar, self.a_reiniciar):
             sim.addAction(a)
@@ -562,13 +613,21 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.titulo = QLabel()
         self.titulo.setStyleSheet("font-size: 15px; font-weight: 600; color: #147f80")
         cab.addWidget(self.estado)
-        cab.addWidget(self.titulo, 1)
+        cab.addWidget(self.titulo)
         il.addLayout(cab)
         self.ayuda = QLabel()
-        self.ayuda.setWordWrap(True)
+        self.ayuda.setWordWrap(False)
+        self.ayuda.setMinimumWidth(0)
+        from PySide6.QtWidgets import QSizePolicy
+        self.ayuda.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
         self.ayuda.setStyleSheet(f"color: {COL['muted']}")
-        il.addWidget(self.ayuda)
+        cab.addWidget(self.ayuda,1)
         self.diagrama = VistaDiagrama()
+        self.navegacion = Navegacion(self.diagrama)
+        cab.addWidget(self.navegacion)
+        self.estado.setMinimumHeight(self.navegacion.buscador.sizeHint().height()+8)
+        ver_navegacion = self._accion("Navegación y filtros…", self.navegacion.abrir_opciones)
+        next(a.menu() for a in self.menuBar().actions() if a.text()=="&Ver").addAction(ver_navegacion)
         il.addWidget(self.diagrama, 1)
         # Panel inferior: al simular, la traza; al editar, las opciones de lo seleccionado
         self.traza = QListWidget()
@@ -764,7 +823,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
             QComboBox { padding-right:28px; min-height:18px; }
             QComboBox::drop-down { subcontrol-origin:padding; subcontrol-position:top right; width:24px; border:0; background:transparent; }
             QComboBox::down-arrow { image:url(:/grafconnect/desplegar.svg); width:12px; height:8px; }
-            QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border-color: #258d88; }
+            QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPushButton:focus,
+            QToolButton:focus, QToolBar QToolButton:focus, QListWidget:focus, QGraphicsView:focus {
+                border: 1px dashed #132b46; }
             QPushButton { background: white; border: 1px solid #cbdfe4; border-radius: 4px; padding: 4px 8px; }
             QPushButton:hover { background: #edf8f6; border-color: #8fbfb8; }
             QPushButton:disabled, QToolButton:disabled { color: #97a8b5; }
@@ -869,7 +930,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         return {"izquierdo": self.a_izquierdo, "derecho": self.a_derecho, "inferior": self.a_inferior}[nombre]
 
     def _mostrar_panel(self, nombre: str, visible: bool, guardar: bool = True) -> None:
-        editar = self.modo == "editar" and self.edicion is not None
+        editar = self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False)
         panel = self._plegables[nombre]
         anterior = panel.abierto
         if anterior and not visible:
@@ -1024,6 +1085,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._entradas()
         if self.edicion is None or f["tipo"] != "editor":  # siempre se abre editable: Play simula una copia compilada
             self._establecer_edicion(self._edicion_desde_fuente())
+        self.solo_lectura = f["tipo"]=="ejemplo" or (f["tipo"]=="editor" and getattr(self,"solo_lectura",False))
         self.modo = "editar"
         self._cargar_config_modbus()
         self._poner_modo()
@@ -1081,6 +1143,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
             QMessageBox.warning(self, TITULO, "El grafcet no compila con las lecturas de interpretación activas, no se puede "
                                 "simular todavía:\n\n" + "\n".join(lineas[:8]) + ("\n…" if len(lineas) > 8 else ""))
             return False
+        if not self.modbus.activo:
+            contactos={vid:True for (proyecto,vid),nc in self._entradas_nc.items() if proyecto==self._proyecto and nc and vid in nueva.s.cm.variables}
+            if contactos:nueva.act("fijar",{"cambios":contactos})
         if nueva.s.status != "pausada-estable":
             self._avisar_motor(nueva, al_arrancar=True)
             return False
@@ -1112,7 +1177,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _actualizar_portapapeles(self, *args: Any) -> None:
         e = self.edicion
-        disponible = e is not None and self.modo == "editar" and not self.destino_traer and not self._foco_portapapeles() and (not hasattr(self,"paginas_es") or self.paginas_es.currentIndex()!=2)
+        disponible = e is not None and not getattr(self,"solo_lectura",False) and self.modo == "editar" and not self.destino_traer and not self._foco_portapapeles() and (not hasattr(self,"paginas_es") or self.paginas_es.currentIndex()!=2)
         self.a_copiar.setEnabled(disponible and bool(e.sel))
         self.a_cortar.setEnabled(disponible and bool(e.sel))
         self.a_pegar.setEnabled(disponible and self._portapapeles is not None)
@@ -1164,7 +1229,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if e is not None:
             nombre = getattr(e,"archivo",None)
             nombre = nombre.name if nombre else e.titulo
-            self.setWindowTitle(f"{nombre}{' *' if e.ed.dirty else ''}{' (editando)' if self.modo == 'editar' else ''} — {TITULO}")
+            self.setWindowTitle(f"{nombre}{' *' if e.ed.dirty else ''}{' (ejemplo · solo lectura)' if getattr(self,'solo_lectura',False) else ' (editando)' if self.modo == 'editar' else ''} — {TITULO}")
 
     def _salir_de_edicion(self) -> bool:
         """Antes de cargar otro modelo: si hay cambios sin guardar, pregunta. Quien carga sustituye la edición en curso."""
@@ -1218,7 +1283,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.cambiar_modo("editar")
 
     def _establecer_edicion(self, e: Edicion) -> None:
+        self.solo_lectura = False
+        self._variables_es_vistas = {v["id"] for v in e.ed.model["variables"]}
+        self._auto_es_pendientes = set()
         self.destino_traer=None;self.aviso_traer.hide()
+        self.navegacion.buscar.clear(); self.navegacion.parcial.setCurrentIndex(0); self.navegacion.actual = None
+        self.diagrama.seleccion_navegacion.clear()
         self.edicion = e
         e.diagrama = self.diagrama
         e.cambiado.connect(self.refrescar_edicion)
@@ -1249,14 +1319,19 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _poner_modo(self) -> None:
         """Alterna las herramientas sin perder tamaños de edición ni el encuadre manual."""
-        editar = self.modo == "editar" and self.edicion is not None
-        ancho = self.derecho.width() if getattr(self, "_anchos_puestos", False) else self.ancho_lateral
+        self._dibujo_simulado = None
+        editar = self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False)
+        lateral = self._plegables["derecho"]
+        ancho = (lateral.width() if lateral.abierto else self._tamanos_paneles["derecho"]) if getattr(self, "_anchos_puestos", False) else self.ancho_lateral
         guardado = getattr(self, "_paneles_edicion", None)
         if not editar and guardado is None:
             self._paneles_edicion = {"izquierdo": self.a_izquierdo.isChecked(), "inferior": self.a_inferior.isChecked(),
                                     "tamanos": self.vsplit.sizes() if self.isVisible() else None}
         self.tb_edit.setVisible(editar)
         self.variables.setEnabled(editar)
+        self.props.setEnabled(editar); self.paleta.setEnabled(editar)
+        for accion in (self.a_guardar,self.a_guardar_como,self.a_enviar_lamina,self.a_exportar): accion.setEnabled(not getattr(self,"solo_lectura",False))
+        self.pestanas_vistas.setTabEnabled(1,not getattr(self,"solo_lectura",False))
         self._acciones_edicion(editar)
         self.a_avanzar.setEnabled(not editar)
         self.derecho.setCurrentIndex(1 if editar else 0)
@@ -1294,10 +1369,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.refrescar_edicion()
         elif self.v is not None:
             self._titulo_ventana()
+            if getattr(self,"solo_lectura",False): self.refrescar_edicion()
 
     def _anchos_laterales(self, ancho: int | None = None) -> None:
-        editar = self.modo == "editar" and self.edicion is not None
-        ancho = max(self.ancho_lateral, self.derecho.width() if ancho is None else ancho)
+        panel = self._plegables["derecho"]
+        ancho = max(self.ancho_lateral, panel.width() if ancho is None else ancho) if panel.abierto else panel.GROSOR_PESTANA
         self.derecho.setMinimumWidth(self.ancho_lateral)
         self.derecho.setMaximumWidth(16777215)
         self.split.handle(1).setEnabled(True)
@@ -1336,9 +1412,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
-        if self.modo == "editar" and self.edicion is not None and not getattr(self, "_anchos_puestos", False):
+        if self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False) and not getattr(self, "_anchos_puestos", False):
             self._anchos_puestos = True  # con la ventana ya dimensionada, los dos paneles laterales con el mismo ancho
-            self._anchos_laterales()
+            self._anchos_laterales(self.ancho_lateral)
             self._alto_inferior(True)
 
     def _no_simulable(self) -> None:
@@ -1378,12 +1454,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         diags = e.diagnosticos()
         marcados = {d["target"] for d in diags if d["blocks"] and d["target"]}
         self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), marcados, e.parpadeo.activos())
-        self.estado.setText("editando")
+        self.estado.setText("ejemplo · solo lectura" if getattr(self,"solo_lectura",False) else "editando")
         self.estado.setStyleSheet(f"color: {COL['accent']}; border: 1px solid {COL['accent']}; border-radius: 9px; "
                                   "padding: 1px 9px")
         self.titulo.setText(f"{e.titulo}{' *' if e.ed.dirty else ''}")
-        self.ayuda.setToolTip(AYUDA_EDICION[e.herramienta])
-        self.ayuda.setText(e.mensaje or "Arrastre fichas desde la paleta; seleccione un elemento para ver sus propiedades.")
+        self.ayuda.setToolTip(self._ayuda if getattr(self,"solo_lectura",False) else AYUDA_EDICION[e.herramienta])
+        self.ayuda.setText(self._ayuda if getattr(self,"solo_lectura",False) else e.mensaje or "Arrastre fichas desde la paleta; seleccione un elemento para ver sus propiedades.")
         error = bool(e.mensaje) and not e.mensaje_info  # un aviso informativo no va en rojo
         self.ayuda.setStyleSheet(f"color: {COL['err'] if error else COL['muted']}; font-weight: {600 if error else 400}")
         if e.mensaje:
@@ -1402,9 +1478,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         planos=hasattr(self,"paginas_es") and self.paginas_es.currentIndex()==2
         self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
         self.a_rehacer.setEnabled(bool(e.ed.redo_stack))
-        self.a_borrar.setEnabled(bool(e.sel) and not planos)
+        self.a_borrar.setEnabled(bool(e.sel) and not planos and not getattr(self,"solo_lectura",False))
         self._actualizar_portapapeles()
-        self.a_debajo.setEnabled(len(e.sel) == 1)
+        self.a_debajo.setEnabled(len(e.sel) == 1 and not getattr(self,"solo_lectura",False))
         bloq = [d for d in diags if d["blocks"]]
         self.l_resumen.setText("El grafcet se puede simular." if not bloq else
                                f"No se puede simular: {len(bloq)} error{'es' if len(bloq) != 1 else ''}")
@@ -1430,6 +1506,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if self.destino_traer:self._sincronizar_boton_es()
         if hasattr(self, "panel_es"):  # las variables pueden haber cambiado: el panel de E/S las sigue (o avisa, si hay conexión)
             self._sincronizar_es()
+            self._autoasignar_nuevas_es()
 
     def _redibujar_edicion(self) -> None:
         e = self.edicion
@@ -1580,6 +1657,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 continue
             b = _BotonEntrada()
             b.interruptor = self._tipos_entrada.get((self._proyecto, var), False)
+            b.nc = self._entradas_nc.get((self._proyecto,var),False)
             self._ayuda_entrada(b)
             b.pressed.connect(lambda v=var, b=b: self._entrada_presionada(v, b))
             b.released.connect(lambda v=var, b=b: self._entrada_soltada(v, b))
@@ -1594,8 +1672,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     @staticmethod
     def _ayuda_entrada(b: _BotonEntrada) -> None:
-        b.setToolTip("Interruptor: clic para conmutar · Botón derecho: cambiar tipo" if b.interruptor else
-                     "Pulsador momentáneo: presionar = 1, soltar = 0 · Ctrl+clic: enclavar mientras se mantiene Ctrl (otro clic libera) · Botón derecho: cambiar tipo")
+        b.setToolTip(("NC: reposo 1, accionado 0 · " if b.nc else "NA: reposo 0, accionado 1 · ") + ("Interruptor: clic para conmutar · Botón derecho: cambiar tipo" if b.interruptor else
+                     "Pulsador momentáneo: presionar invierte el reposo, soltar lo restaura · Ctrl+clic: enclavar mientras se mantiene Ctrl (otro clic libera) · Botón derecho: cambiar tipo"))
 
     def _cambiar_tipo_entrada(self, var: str, interruptor: bool) -> None:
         self._tipos_entrada[self._proyecto, var] = interruptor
@@ -1611,7 +1689,16 @@ class Ventana(ArchivosProyecto, QMainWindow):
         for tipo, texto in ((True, "Convertir en interruptor"), (False, "Convertir en pulsador")):
             a = menu.addAction(texto, lambda _=False, tipo=tipo: self._cambiar_tipo_entrada(var, tipo))
             a.setEnabled(tipo != b.interruptor)
+        menu.addSeparator()
+        for nc,texto in ((False,"Normalmente abierto (NA)"),(True,"Normalmente cerrado (NC)")):
+            a=menu.addAction(texto,lambda _=False,nc=nc:self._cambiar_contacto(var,nc))
+            a.setCheckable(True);a.setChecked(b.nc==nc)
         menu.exec(b.mapToGlobal(punto))
+
+    def _cambiar_contacto(self,var,nc):
+        self._entradas_nc[self._proyecto,var]=nc
+        b=self.botones[var];b.nc=nc;b.enclavado=b.liberar=False
+        self._ayuda_entrada(b);self._fijar_entrada(var,nc)
 
     def _fijar_entrada(self, var: str, valor: bool) -> None:
         if self.modo == "simular" and not self.modbus.activo and self.v is not None:
@@ -1626,21 +1713,21 @@ class Ventana(ArchivosProyecto, QMainWindow):
             return  # como antes, el interruptor conmuta con clicked, al completar el clic
         elif b.enclavado:
             b.enclavado, b.liberar = False, False
-            self._fijar_entrada(var, False)
+            self._fijar_entrada(var, b.nc)
         else:
             b.enclavado, b.liberar = b.control, not b.control
-            self._fijar_entrada(var, True)
+            self._fijar_entrada(var, not b.nc)
 
     def _soltar_enclavados(self) -> None:
         for var, b in list(self.botones.items()):
             if isinstance(b, _BotonEntrada) and b.enclavado and not b.interruptor:
                 b.enclavado, b.liberar = False, False
-                self._fijar_entrada(var, False)
+                self._fijar_entrada(var, b.nc)
 
     def _entrada_soltada(self, var: str, b: _BotonEntrada) -> None:
         if b.liberar:
             b.liberar = False
-            self._fijar_entrada(var, False)
+            self._fijar_entrada(var, b.nc)
         b.control = False
         self.refrescar()
 
@@ -1777,9 +1864,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if not self.modbus.activo:
             self._sincronizar_es()
         self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
-        self.panel_es.mostrar_tiempos(self.modbus.medidas)
+        self.panel_es.mostrar_tiempos(self.modbus.medidas, self.modbus.ultima_parada)
         self.panel_es.ocupado(self.modbus.activo)
-        if self.modo == "simular":
+        if self.modo == "simular" and self.paginas_es.currentIndex() == 0:
             self.refrescar()
         else:
             self.panel_es.mostrar_muestra(self.modbus.muestra, self.modbus.adaptador.entradas,
@@ -1798,7 +1885,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             if self.a_ejecutar.isChecked():
                 self._vigilar_motor()
                 if self.modbus.estado in ("error", "desconectado", "diagnostico") or self.modbus.adaptador.sesion is None:
-                    self.a_ejecutar.setChecked(False)
+                    self._parar_sin_cambiar_vista()
             self._proxima_lectura.stop()
             if (self.modbus.estado == "conectado" and not self.modbus.fallo_motor
                     and self.modbus.futuro is None):
@@ -1825,6 +1912,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         return self.fuente.get("raiz")
 
     def _persistir_mapa_modbus(self, config):
+        if self.modbus.activo:
+            self.modbus.reasignar(config,self.panel_es.doc)
         raiz = self._raiz_modbus()
         if raiz and self.panel_es.doc:
             try:
@@ -1963,7 +2052,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._recordar_parametros(config)
 
     def _configuracion_para_guardar(self, doc: dict[str, Any]) -> Configuracion:
-        if not self.panel_es.bloqueado:
+        if not getattr(self.panel_es,"conectado",False):
             self.panel_es.actualizar(doc)
             config = self.panel_es.obtener()
         else:
@@ -1980,6 +2069,20 @@ class Ventana(ArchivosProyecto, QMainWindow):
             return self.edicion.ed.model
         return self.v.doc if self.v else None
 
+    def _autoasignar_nuevas_es(self):
+        e=self.edicion
+        if e is None or getattr(self,'solo_lectura',False):return
+        doc=e.ed.model; actuales={v['id'] for v in doc['variables']}
+        previos=getattr(self,'_variables_es_vistas',actuales)
+        self._auto_es_pendientes.update(actuales-previos);self._variables_es_vistas=actuales
+        self._auto_es_pendientes.intersection_update(actuales)
+        if not self._auto_es_pendientes:return
+        if self._proyecto_modbus!=self._proyecto:self._cargar_config_modbus(doc)
+        else:self.panel_es.actualizar(doc)
+        faltan=self.panel_es.autoasignar(self._auto_es_pendientes)
+        self._auto_es_pendientes.clear()
+        if faltan:self.statusBar().showMessage('Sin canal Modbus libre: '+', '.join(faltan),12000)
+
     def _sincronizar_es(self, mostrando: bool = False) -> None:
         """Deja las listas y los canales del panel de E/S con las variables actuales del modelo, conservando el mapa y la
         configuración (la IP incluida); lo que ya no casa se quita con aviso. Con la conexión viva no se toca: el mapa en
@@ -1989,17 +2092,17 @@ class Ventana(ArchivosProyecto, QMainWindow):
         doc, p = self._doc_es(), self.panel_es
         if doc is None:
             return
-        if self.modbus.activo:
-            p.marcar_pendiente(p.doc is not None and p.firma(doc) != p.firma_modelo)
-            return
         mismo = self._proyecto == self._proyecto_modbus and p.config.modelo == doc["id"]
-        if not mostrando and not (mismo and self.paginas_es.currentIndex() == 1):
+        if not mostrando and not mismo:
             return
         if mismo:
+            cambio=p.firma(doc)!=p.firma_modelo
             p.actualizar(doc)
+            if cambio and self.modbus.activo:self.modbus.reasignar(p.config,doc)
         else:
             self._proyecto_modbus = self._proyecto
             p.cargar(doc)
+        self._autoasignar_nuevas_es()
 
     def mostrar_es(self):
         self._sincronizar_es(mostrando=True)
@@ -2008,10 +2111,20 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _mostrar_pagina(self, es: bool | str, refrescar_planos=True) -> None:
         """Cambio centralizado entre GRAFCET (0), E/S (1) y Planos (2)."""
         destino=2 if es=="planos" else (1 if es else 0)
+        if destino==2 and getattr(self,"solo_lectura",False): return
+        anterior = self.paginas_es.currentIndex()
+        if anterior == 0 and destino != 0 and self._plegables["derecho"].abierto:
+            self._tamanos_paneles["derecho"] = self._plegables["derecho"].width()
         if self.paginas_es.currentIndex()==2 and destino!=2:self.panel_planos.aplicar()
         if destino==2 and refrescar_planos:self.panel_planos.mostrar()
         self.paginas_es.setCurrentIndex(destino)
+        if destino == 0 and anterior != 0:
+            # El contenido oculto conserva geometrías viejas al cambiar de pantalla.
+            # Restaurar el ancho del panel, o solo su pestaña si está plegado.
+            self._anchos_laterales(self._tamanos_paneles["derecho"])
         self._sincronizar_boton_es()
+        if destino == 0 and anterior != 0 and self.modo == "simular" and self.v is not None:
+            self.refrescar()  # El dibujo se actualiza al volver, antes del siguiente sondeo.
 
     def _alternar_planos(self,on):
         self._mostrar_pagina("planos" if on else False)
@@ -2036,13 +2149,13 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.pestanas_vistas.blockSignals(True);self.pestanas_vistas.setCurrentIndex({0:0,1:2,2:1}[indice]);self.pestanas_vistas.blockSignals(False)
             pendiente=self.destino_traer is not None and self.destino_traer[0] is self.edicion
             self.aviso_traer.setVisible(indice==0 and pendiente)
-        if hasattr(self,'tb_edit'):self.tb_edit.setVisible(indice==0 and self.modo=='editar')
+        if hasattr(self,'tb_edit'):self.tb_edit.setVisible(indice==0 and self.modo=='editar' and not getattr(self,'solo_lectura',False))
         if hasattr(self,"herramientas_grafcet"):self.herramientas_grafcet.setVisible(indice==0 and not pendiente)
         planos=self.paginas_es.currentIndex()==2
         self.a_planos.blockSignals(True);self.a_planos.setChecked(planos);self.a_planos.blockSignals(False)
         self.a_planos.setToolTip("Volver al GRAFCET" if planos else "Editar planos, plantillas y cajetín")
         self.a_ejecutar.setEnabled(not(es or planos or pendiente));self.a_reiniciar.setEnabled(not(es or planos or pendiente))
-        editar=self.modo=="editar" and not planos and not pendiente
+        editar=self.modo=="editar" and not planos and not pendiente and not getattr(self,"solo_lectura",False)
         for a in (*self.a_herr.values(),self.a_debajo):a.setEnabled(editar)
         e=self.edicion
         self.a_deshacer.setEnabled(not pendiente and (editar or planos) and e is not None and bool(e.ed.undo_stack));self.a_rehacer.setEnabled(not pendiente and (editar or planos) and e is not None and bool(e.ed.redo_stack));self.a_borrar.setEnabled(editar and e is not None and bool(e.sel))
@@ -2081,8 +2194,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _conectar_modbus(self, prueba=False):
         try:
             config = self.panel_es.obtener()
-            if not config.senales:
-                raise ValueError("Marca al menos una casilla «Usar» en la tabla de variables")
         except (ValueError, RuntimeError) as exc:
             self.panel_es.estado.setText(f"No se pudo conectar: {exc}")
             return
@@ -2090,7 +2201,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _iniciar_conexion_modbus(self, config, sesion, prueba):
         try:
-            self.a_ejecutar.setChecked(False)
+            self._parar_sin_cambiar_vista()
             self.modbus.iniciar(config, sesion, prueba, documento=self.panel_es.doc)
             self.panel_es.config = config
             self.panel_es._dibujar()
@@ -2101,6 +2212,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.rt.start()
         except (ValueError, RuntimeError) as exc:
             self.panel_es.estado.setText(f"No se pudo conectar: {exc}")
+
+    def _parar_sin_cambiar_vista(self):
+        anterior=getattr(self,"_conservar_vista_al_parar",False)
+        self._conservar_vista_al_parar=True
+        try:self.a_ejecutar.setChecked(False)
+        finally:self._conservar_vista_al_parar=anterior
 
     def _desconectar_modbus(self):
         anterior = getattr(self, "_conservar_vista_al_parar", False)
@@ -2126,11 +2243,19 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.estado.setStyleSheet(f"color: {COL[color]}; border: 1px solid {COL[color]}; border-radius: 9px; "
                                       "padding: 1px 9px")
             self.titulo.setText(M["title"])
-            self.ayuda.setText(M["help"])
+            self.ayuda.setText(M["help"]);self.ayuda.setToolTip(M["help"])
         stable, rec = S["status"] == "pausada-estable", S["status"] == "pausada-recorrido"
         self._diagnostico(S, rec)
         if simulando:
-            self.diagrama.mostrar(M, S if "time" in S else {})
+            estado_dibujo = S if "time" in S else {}
+            # El reloj y la traza se muestran fuera del dibujo. Los temporizadores,
+            # valores, colores e historial gráfico siguen formando parte de la huella.
+            huella = {k: v for k, v in estado_dibujo.items()
+                      if k not in ("time", "timeUs", "trace", "nextEvent", "nextEventUs")}
+            previo = getattr(self, "_dibujo_simulado", None)
+            if previo is None or previo[0] is not M or previo[1] != huella:
+                self.diagrama.mostrar(M, estado_dibujo)
+                self._dibujo_simulado = (M, copy.deepcopy(huella))
         values = S.get("values", {})
         for var, b in self.botones.items():
             b.setEnabled(stable)
@@ -2141,7 +2266,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 continue
             on = values.get(var) is True
             b.setChecked(on)
-            if not on:
+            if on == b.nc:
                 b.enclavado = False
             b.indicar(on)
             b.setText(f"{self.nombre(var)} = {1 if on else 0}")
@@ -2236,10 +2361,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
         t.setRowCount(len(rows))
         for i, (*cells, color) in enumerate(rows):
             for j, c in enumerate(cells):
-                item = QTableWidgetItem(c)
-                if j == col_color:
+                item = t.item(i, j)
+                if item is None:
+                    item = QTableWidgetItem(c)
+                    t.setItem(i, j, item)
+                elif item.text() != c:
+                    item.setText(c)
+                if j == col_color and item.foreground().color() != QColor(COL[color]):
                     item.setForeground(QColor(COL[color]))
-                t.setItem(i, j, item)
 
     def _traza(self, S: dict[str, Any]) -> None:
         self.traza.clear()
@@ -2261,7 +2390,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _seleccion_para_hoja(self,activo):
         if activo:
-            self.estado.setText('seleccionando para Planos');self.ayuda.setText('Selecciona elementos o arrastra un lazo. El GRAFCET no se modifica.')
+            self.estado.setText('seleccionando para Planos');self.ayuda.setText('Clic: cadena completa · Mayús+clic: añadir otra cadena · Ctrl+clic: añadir o quitar un elemento. Sin jerarquías inferiores automáticas.')
         if activo==getattr(self,'_seleccionando_hoja',False):return
         self._seleccionando_hoja=activo
         if activo:
@@ -2272,9 +2401,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 self._plegables[n].hide();self.flechas[n].hide();self.pestanas[n].hide()
             self.diagrama.controlador=SeleccionParaHoja(self.edicion);self.diagrama.setAcceptDrops(False)
             self._estilo_traer=self.diagrama.styleSheet();self.diagrama.setStyleSheet(self._estilo_traer+' QGraphicsView {border:2px solid #aa914c; background:#fffaf0;}')
-            self.estado.setText('seleccionando para Planos');self.ayuda.setText('Selecciona elementos o arrastra un lazo. El GRAFCET no se modifica.')
+            self.estado.setText('seleccionando para Planos');self.ayuda.setText('Clic: cadena completa · Mayús+clic: añadir otra cadena · Ctrl+clic: añadir o quitar un elemento. Sin jerarquías inferiores automáticas.')
         else:
-            self.diagrama.controlador=self.edicion if self.modo=='editar' else None;self.diagrama.setAcceptDrops(self.modo=='editar');self.diagrama.setStyleSheet(getattr(self,'_estilo_traer',''))
+            self.diagrama.controlador=self.edicion if self.modo=='editar' else None;self.diagrama.setAcceptDrops(self.modo=='editar' and not getattr(self,'solo_lectura',False));self.diagrama.setStyleSheet(getattr(self,'_estilo_traer',''))
             for n,visible in getattr(self,'_paneles_traer',{}).items():
                 self._mostrar_panel(n,visible,guardar=False);self.flechas[n].setVisible(visible)
             sizes=getattr(self,'_tamanos_traer',(None,None,None))
@@ -2340,6 +2469,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._mostrar_pagina("planos",False)
 
     def abrir_laminas(self, accion="previa") -> None:
+        if getattr(self,"solo_lectura",False):
+            if accion=="imprimir":
+                from .laminas import DocumentoLaminas
+                doc=DocumentoLaminas(self.edicion.M,self.v.state() if self.modo=="simular" else {},self.edicion.ed.sheet_settings(),self.diagrama.dependencias)
+                doc.imprimir(self)
+            return
         if accion in ("exportar","imprimir") and self.paginas_es.currentIndex()==2 and self.panel_planos.editor:
             self.panel_planos.aplicar()
         else:
@@ -2348,7 +2483,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if editor and accion in ("exportar","imprimir"):getattr(editor,accion)()
 
     def guardar_imagen(self) -> None:
-        editando = self.modo == "editar" and self.edicion is not None
+        editando = self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False)
         ruta, _ = QFileDialog.getSaveFileName(self, "Guardar el dibujo", f"{self.edicion.titulo if editando else self.v.key}.png",
                                               "Imagen PNG (*.png)")
         dependencias = self.diagrama.dependencias  # lo que la vista dibuja ahora (el botón «Mostrar dependencias»)

@@ -190,10 +190,10 @@ class PanelTests(unittest.TestCase):
             self.assertFalse(soltar(p.lista_salidas, 0, "discrete", 0))
             self.assertTrue(soltar(p.lista_salidas, 0, "coil", 0))
             p.ocupado(True)
-            self.assertFalse(p.admite("a", "discrete"))
-            self.assertFalse(p.terminales[("coil", 0)].acceptDrops())
+            self.assertTrue(p.admite("a", "discrete"))
+            self.assertTrue(p.terminales[("coil", 0)].acceptDrops())
             p.quitar("q")
-            self.assertEqual(len(p.obtener().senales), 2)
+            self.assertEqual(len(p.obtener().senales), 1)
             p.ocupado(False)
             p.quitar("q")
             self.assertEqual([s.variable for s in p.obtener().senales], ["b"])
@@ -254,7 +254,7 @@ class PanelTests(unittest.TestCase):
             self.assertEqual([(s.area, s.direccion, s.formato) for s in config.senales],
                              [("discrete", 0, "BOOL"), ("discrete", 1, "BOOL"), ("coil", 0, "BOOL")])
             p._aplicar()
-            self.assertFalse(p.ayuda_vacio.isVisibleTo(p))
+            self.assertTrue(p.ayuda_vacio.isVisibleTo(p))
             self.assertEqual(set(p.indicadores), {"PM", "PP", "Q"})
         finally:
             p.close()
@@ -310,8 +310,9 @@ class PanelTests(unittest.TestCase):
                 w.a_ejecutar.setChecked(False)
                 for fila in range(3):
                     w.panel_es.tabla.cellWidget(fila, 0).setChecked(False)
-                w._conectar_modbus()
-                self.assertIn("Usar", w.panel_es.estado.text())
+                with mock.patch.object(w.modbus,"iniciar") as iniciar:
+                    w._conectar_modbus()
+                self.assertFalse(iniciar.call_args.args[0].senales)
                 self.assertFalse(w.modbus.activo)
                 w.v.s = None
                 w.panel_es.tabla.cellWidget(1, 0).setChecked(True)
@@ -480,47 +481,26 @@ class PanelTests(unittest.TestCase):
                 w.deleteLater()
                 app.processEvents()
 
-    def test_SFIO28_mapa_invalido_tras_editar_avisa_y_no_arranca(self):
-        """REQ-SIM-03: si lo editado deja el mapa sin su variable, Play no arranca el control externo, avisa en el panel
-        de E/S y la conexión se conserva; al revisar la asignación (aquí, deshacer) se puede ejecutar."""
+    def test_SFIO28_borrar_variable_asignada_depura_mapa_sin_impedir_play(self):
+        """REQ-SIM-03: borrar una salida asignada solicita su cero, conserva TCP y permite Play con el mapa depurado."""
         from test_modbus import servidor
-        app = QApplication.instance() or QApplication([])
-        escrituras = []
+        app=QApplication.instance() or QApplication([]);escrituras=[]
         with tempfile.TemporaryDirectory() as tmp, servidor(self._servidor_planta(escrituras)) as sc:
-            m = M().var("sensor").var("motor", "output").var("luz", "output").step("E0", True)
-            m.cont("E0", "motor", "sensor")
-            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0),
-                                                         Senal("luz", "coil", 1)])
-            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            m=M().var("sensor").var("motor","output").var("luz","output").step("E0",True)
+            m.cont("E0","motor","sensor")
+            w=self._ventana_conectada(tmp,sc,m.doc,[Senal("sensor","discrete",0),Senal("motor","coil",0),Senal("luz","coil",1)])
             try:
-                esperar(lambda: w.modbus.estado == "conectado")
-                socket = w.modbus.cliente._socket
-                luz = next(v["id"] for v in w.edicion.ed.model["variables"] if v["name"] == "luz")
-                self.assertIsNone(w.edicion.quitar_variable(luz))
-                with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
-                    w.a_ejecutar.setChecked(True)
-                self.assertEqual(aviso.call_count, 1)
-                self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (False, "editar"))
-                self.assertIn("asignaci", w.panel_es.estado.text())
-                self.assertIn("conexión se conserva", w.panel_es.estado.text())
-                for _ in range(10):  # los tics siguientes no borran el aviso
-                    app.processEvents()
-                    time.sleep(.01)
-                self.assertIn("asignaci", w.panel_es.estado.text())
-                self.assertTrue(w.modbus.activo and w.modbus.estado == "conectado")
-                self.assertIs(w.modbus.cliente._socket, socket)
-                self.assertFalse([e for e in escrituras if e[0] == 0 and e[1]], "no se controla la planta")
-                w.edicion.deshacer()  # la asignación vuelve a ser válida
-                w.a_ejecutar.setChecked(True)
-                self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (True, "simular"))
-                esperar(lambda: w.modbus.escritos.get("motor") is True)
-                self.assertIs(w.modbus.cliente._socket, socket)
-            finally:
-                w.edicion.ed.dirty = False
-                if w.edicion is not None:w.edicion.ed.dirty=False
-                w.close()
-                w.deleteLater()
-                app.processEvents()
+                self._esperar(app,w,lambda:w.modbus.estado=="conectado")
+                socket=w.modbus.cliente._socket
+                self.assertIsNone(w.edicion.quitar_variable("luz"))
+                self._esperar(app,w,lambda:w.modbus._mapa_pendiente is None and w.modbus.fase!="mapa")
+                self.assertNotIn("luz",{s.variable for s in w.modbus.adaptador.config.senales})
+                self.assertIn((1,False),escrituras)
+                with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:w.a_ejecutar.setChecked(True)
+                aviso.assert_not_called();self.assertEqual(w.modo,"simular")
+                self._esperar(app,w,lambda:w.modbus.escritos.get("motor") is True)
+                self.assertIs(w.modbus.cliente._socket,socket)
+            finally:self._cerrar(app,w)
 
     def test_SFIO29_inestable_con_modbus_avisa_pausa_y_pone_salidas_a_cero(self):
         """REQ-SEM-07, REQ-SIM-02: un GRAFCET inestable con la planta conectada se detiene (Pausa/edición), avisa una sola
@@ -809,15 +789,15 @@ class PanelTests(unittest.TestCase):
 
     def test_SFIO35_arrastre_resalta_solo_lateral_y_la_x_aparece_al_pasar_el_raton(self):
         """REQ-SIM-03: al arrastrar una variable sobre un canal se resalta el lateral exterior al PLC (nombre incluido); soltar asigna;
-        no se resalta si no cabe o si hay conexión; «×» solo aparece al pasar el ratón y se desactiva al conectar."""
+        no se resalta si no cabe; conectado se conserva el arrastre y «×» solo aparece al pasar el ratón."""
         from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
         from PySide6.QtGui import QDragEnterEvent, QDragLeaveEvent, QDropEvent, QEnterEvent
         app = QApplication.instance() or QApplication([])
         p = self._panel_vista(app)
         try:
-            def entrar(terminal, lista, indice):
+            def entrar(terminal, lista, indice, punto=QPoint(5,5)):
                 mime = lista.mimeData([lista.item(indice)])
-                app.sendEvent(terminal, QDragEnterEvent(QPoint(5, 5), Qt.DropAction.CopyAction, mime,
+                app.sendEvent(terminal, QDragEnterEvent(punto, Qt.DropAction.CopyAction, mime,
                                                         Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
                 return mime
             vacio = p.terminales[("discrete", 3)]
@@ -846,11 +826,11 @@ class PanelTests(unittest.TestCase):
             app.sendEvent(t, QEvent(QEvent.Type.Leave))
             self.assertFalse(t.b_quitar.isVisibleTo(t))
             p.ocupado(True)
-            self.assertFalse(t.b_quitar.isEnabled())
+            self.assertTrue(t.b_quitar.isEnabled())
             app.sendEvent(t, QEnterEvent(QPointF(5, 5), QPointF(5, 5), QPointF(5, 5)))
-            self.assertFalse(t.b_quitar.isVisibleTo(t))
-            entrar(p.terminales[("coil", 4)], p.lista_salidas, 0)
-            self.assertFalse(p.terminales[("coil", 4)].resaltado(), "con conexión no se asigna")
+            self.assertTrue(t.b_quitar.isVisibleTo(t))
+            entrar(p.terminales[("coil", 4)], p.lista_salidas, 0, p.terminales[("coil",4)].zona_asignacion().center())
+            self.assertTrue(p.terminales[("coil", 4)].resaltado(), "con conexión también se asigna")
             app.sendEvent(t, QEvent(QEvent.Type.Leave))
             p.ocupado(False)
             self.assertTrue(t.b_quitar.isEnabled())
@@ -926,7 +906,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(self._nombres(p.lista_salidas), ["valvula"])
                 self.assertIn(("input-register", 0), p.terminales)
                 self.assertIn(("holding", 0), p.terminales)
-                self.assertEqual(self._mapa(w), {"sensor1": ("discrete", 1)}, "la asignación previa se conserva")
+                self.assertEqual(self._mapa(w), {"sensor1": ("discrete", 1), "sensor2": ("discrete", 0), "nivel": ("input-register", 0), "valvula": ("holding", 0)}, "se conserva la asignación previa y se asignan automáticamente las nuevas")
                 self.assertTrue(p.asignar(self._vid(w, "sensor2"), "discrete", 0))
                 self.assertTrue(p.asignar(self._vid(w, "nivel"), "input-register", 0))
                 self.assertTrue(p.asignar(self._vid(w, "valvula"), "holding", 0))
@@ -1011,7 +991,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(len([1 for a, _ in p.terminales if a == "discrete"]), 6)
                 self.assertTrue(p.asignar(self._vid(w, "dos"), "discrete", 5))
                 self.assertIsNone(w.edicion.nueva_variable("tres"))
-                self.assertEqual(self._mapa(w), {"dos": ("discrete", 5)})
+                self.assertEqual(self._mapa(w), {"uno": ("discrete", 0), "dos": ("discrete", 5), "tres": ("discrete", 1)})
                 self.assertEqual(p.obtener().host, "10.1.2.3")
                 # deshacer también lo sigue: la variable desaparece de las listas
                 w.edicion.deshacer()
@@ -1019,46 +999,28 @@ class PanelTests(unittest.TestCase):
             finally:
                 self._cerrar(app, w)
 
-    def test_SFIO40_con_la_conexion_activa_el_panel_no_cambia_y_avisa_hasta_desconectar(self):
-        """REQ-SIM-02, REQ-SIM-03: con Modbus activo el mapa en uso no cambia a mitad de sesión: las variables nuevas no se
-        cargan y el estado avisa (también tras varios tics); al desconectar aparecen, con el mapa y el servidor intactos."""
+    def test_SFIO40_conexion_activa_actualiza_variables_y_mapa_sin_reconectar(self):
+        """REQ-SIM-02, REQ-SIM-03: altas y asignaciones se publican entre ciclos conservando TCP y canales existentes."""
         from test_modbus import servidor
         app = QApplication.instance() or QApplication([])
         with tempfile.TemporaryDirectory() as tmp, servidor(self._servidor_planta([])) as sc:
-            m = M().var("sensor").var("motor", "output").step("E0", True)
-            m.cont("E0", "motor", "sensor")
-            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
-            p = w.panel_es
-            esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
+            m=M().var("sensor").var("motor","output").step("E0",True);m.cont("E0","motor","sensor")
+            w=self._ventana_conectada(tmp,sc,m.doc,[Senal("sensor","discrete",0),Senal("motor","coil",0)])
+            p=w.panel_es
             try:
-                esperar(lambda: w.modbus.estado == "conectado")
-                self._es(w, True)
-                self.assertFalse(p.pendiente)
+                self._esperar(app,w,lambda:w.modbus.estado=="conectado")
+                cliente=w.modbus.cliente
+                self._es(w,True)
                 self.assertIsNone(w.edicion.nueva_variable("extra"))
-                self.assertIsNone(w.edicion.nueva_variable("nivel", "input", {"kind": "decimal", "scale": 2}))
-                self.assertNotIn("extra", self._nombres(p.lista_entradas), "no se recarga con la conexión viva")
-                self.assertTrue(p.pendiente)
-                self.assertIn("variables nuevas", p.estado.text())
-                self._es(w, False)
-                self._es(w, True)
-                self.assertNotIn("extra", self._nombres(p.lista_entradas))
-                for _ in range(6):  # los tics reescriben el estado, pero el aviso sigue
-                    app.processEvents()
-                    time.sleep(.02)
-                self.assertIn("variables nuevas", p.estado.text())
-                self.assertTrue(w.modbus.activo and p.bloqueado)
-                w._desconectar_modbus()
-                esperar(lambda: not w.modbus.activo)
-                esperar(lambda: "extra" in self._nombres(p.lista_entradas))
-                self.assertEqual(self._nombres(p.lista_entradas), ["sensor", "extra", "nivel"])
-                self.assertFalse(p.pendiente)
-                self.assertNotIn("variables nuevas", p.estado.text())
-                self.assertEqual(self._mapa(w), {"sensor": ("discrete", 0), "motor": ("coil", 0)})
-                self.assertEqual(p.puerto.value(), sc.puerto, "el servidor configurado se conserva")
-                self.assertFalse(p.bloqueado)
-                self.assertTrue(p.asignar(self._vid(w, "nivel"), "input-register", 0))
-            finally:
-                self._cerrar(app, w)
+                self.assertIsNone(w.edicion.nueva_variable("nivel","input",{"kind":"decimal","scale":2}))
+                self.assertEqual(self._nombres(p.lista_entradas),["sensor","extra","nivel"])
+                self._esperar(app,w,lambda:w.modbus._mapa_pendiente is None and w.modbus.fase!="mapa")
+                self.assertEqual(self._mapa(w),{"sensor":("discrete",0),"motor":("coil",0),"extra":("discrete",1),"nivel":("input-register",0)})
+                self.assertIs(w.modbus.cliente,cliente);self.assertTrue(w.modbus.activo)
+                self.assertFalse(p.pendiente);self.assertFalse(p.bloqueado)
+                self.assertEqual(p.puerto.value(),sc.puerto)
+                self.assertTrue(p.asignar(self._vid(w,"nivel"),"input-register",2))
+            finally:self._cerrar(app,w)
 
     def test_SFIO41_canales_fijados_a_mano_se_conservan_y_se_avisa_si_un_area_se_queda_sin_canales(self):
         """REQ-SIM-03, REQ-DAT-02: con las cantidades de canal escritas a mano no se inventan canales; si una variable

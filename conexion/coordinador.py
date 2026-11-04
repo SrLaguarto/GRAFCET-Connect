@@ -4,6 +4,8 @@ No crea relojes ni ejecuta el motor desde el trabajador. La reconexión es manua
 """
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from copy import deepcopy
+from collections import deque
 import re
 from time import perf_counter
 
@@ -41,6 +43,8 @@ class Coordinador:
         self.notificar = notificar
         self.medidas = {}
         self._ultima_lectura = None
+        self._cambios_entradas = deque(maxlen=4)
+        self.ultima_parada = None
         self.futuro = None
         self.estado = "desconectado"
         self.mensaje = "Desconectado"
@@ -63,6 +67,8 @@ class Coordinador:
         self._cero_al_cerrar = None  # (señales, valores) del cero que falta por escribir antes de cerrar el TCP
         self._tcp_abierto = False  # lo pone el trabajador al conectar: si falla antes, nunca hubo conexión ni se escribió nada
         self._texto_cierre = "Desconectado"
+        self._mapa_pendiente = None
+        self._documento = None
 
     def solicitar_ejecucion(self, ejecutar):
         if ejecutar != self._ejecutar:
@@ -107,12 +113,15 @@ class Coordinador:
         el motor calcula y solo entonces se escriben las salidas (leer, aplicar, calcular, escribir)."""
         if self.estado not in ("conectado", "diagnostico"):
             raise RuntimeError("Espera a que termine la conexión")
+        self._mapa_pendiente=None
+        self._documento=deepcopy(documento or self._documento)
         config = config or self.adaptador.config
         if documento is not None:
             config.validar(documento)
         adaptador = Adaptador(config, sesion)
         adaptador.valores_salida()  # solo comprueba que las salidas iniciales caben en su formato; no se escribe nada todavía
         self._generacion += 1
+        self._cambios_entradas.clear()
         self.adaptador = adaptador
         self.reiniciando = True
         self.proxima = 0  # Tras descartar lo antiguo, leer inmediatamente antes de ejecutar.
@@ -145,14 +154,29 @@ class Coordinador:
         if self.estado == "conectado":
             self.mensaje = "Conectado · Stop · salidas a cero · edición habilitada"
 
+    def reasignar(self, config, documento):
+        """Publica un mapa completo entre peticiones; el TCP y la sesión se conservan."""
+        config,documento=deepcopy(config),deepcopy(documento)
+        config.validar(documento)
+        actual=self.adaptador.config
+        if (config.host,config.puerto,config.unidad)!=(actual.host,actual.puerto,actual.unidad):
+            raise ValueError("Desconecta para cambiar la conexión; las asignaciones sí se pueden cambiar conectado")
+        self._mapa_pendiente=(config,documento)
+
+    def _cambiar_mapa(self, nuevo, documento, retiradas):
+        escribir_salidas(self.cliente,retiradas,valores_cero(retiradas))
+        return nuevo,documento
+
     def observar(self, config, documento):
         """Cambia el mapa de lectura (otro modelo) con el GRAFCET parado, sin tocar TCP; descarta lo que estuviera en vuelo.
         Con la conexión establecida (o en curso; la prueba no escribe nada) pide también el cero de las salidas asignadas del
         mapa nuevo: se une al cero pendiente del mapa anterior, si lo hay, con un solo cero por canal."""
         if not self.activo:
             return
+        self._documento=deepcopy(documento)
         monitor = MonitorEntradas(config, documento)
         self._generacion += 1
+        self._mapa_pendiente=None
         self.adaptador = monitor
         self.muestra = {}
         self.en_marcha = self._ejecutar = self.reiniciando = self.fallo_motor = self.cero_pendiente = False
@@ -179,6 +203,8 @@ class Coordinador:
         también sin sesión (Pausa), porque en Pausa todo está a 0. La prueba no escribe nada."""
         if self.activo or self.futuro is not None:
             raise RuntimeError("Desconecte antes de cambiar la conexión")
+        self._mapa_pendiente=None
+        self._documento=deepcopy(documento)
         self.adaptador = Adaptador(config, sesion) if sesion is not None else MonitorEntradas(config, documento)
         self.cliente = ClienteModbus(config.host, config.puerto, config.unidad, config.timeout_ms / 1000)
         self.estado = "probando" if prueba else "conectando"
@@ -186,6 +212,8 @@ class Coordinador:
         self.muestra, self.escritos = {}, {}
         self.medidas = {}
         self._ultima_lectura = None
+        self._cambios_entradas = deque(maxlen=4)
+        self.ultima_parada = None
         self.fallo_motor = self.cero_pendiente = False
         self.reiniciando = False
         self._salidas_seguras = self._cero_al_cerrar = self._seguras_en_vuelo = None
@@ -219,6 +247,7 @@ class Coordinador:
         si la red falla, se cierra igual y el estado pasa a «error» con el aviso de salidas no garantizadas)."""
         if not self.activo or self.estado == "cerrando":
             return
+        self._mapa_pendiente=None
         self._cero_al_cerrar = self._cero_de_cierre()
         self._salidas_seguras = None  # el cero del cierre lo sustituye
         self._texto_cierre = ("Desconectado · salidas no garantizadas" if self.adaptador is not None
@@ -243,7 +272,15 @@ class Coordinador:
             self.futuro = None
             try:
                 resultado = futuro.result()
-                if fase == "cero-cierre":
+                if fase == "mapa" and self.estado != "cerrando" and generacion == self._generacion:
+                    nuevo,documento=resultado
+                    if not self._ejecutar and nuevo.sesion is not None:
+                        nuevo=MonitorEntradas(nuevo.config,documento)
+                    self.adaptador=nuevo
+                    self.muestra={};self.escritos={};self.proxima=0
+                    self._documento=documento
+                    self._generacion+=1
+                elif fase == "cero-cierre":
                     self.escritos = resultado
                     self._texto_cierre = "Desconectado · salidas a cero"
                 elif (fase == "seguras" and self.estado != "cerrando" and generacion != self._generacion
@@ -262,6 +299,9 @@ class Coordinador:
                             self.mensaje = ("Conectado · Stop · salidas a cero · observando las entradas" if self.escritos else
                                             "Conectado · observación de entradas · sin salidas asignadas")
                     elif fase == "leer":
+                        cambios = {k: v for k, v in resultado.items() if k in self.muestra and self.muestra[k] != v}
+                        if cambios:
+                            self._cambios_entradas.append((marcas["fin"], cambios))
                         anterior = self._ultima_lectura
                         if anterior is not None and anterior[0] == generacion:
                             self.medidas["sondeo_ms"] = (marcas["inicio"] - anterior[1]) * 1000
@@ -281,6 +321,15 @@ class Coordinador:
                                 valores = self.adaptador.valores_salida()
                                 self._enviar("escribir", self._escribir, valores, list(self.adaptador.salidas))
                     elif fase in ("escribir", "cero"):
+                        apagadas = [k for k, v in resultado.items() if v is False and self.escritos.get(k) is True]
+                        if fase == "escribir" and apagadas:
+                            variables = self.adaptador.sesion.cm.variables
+                            self.ultima_parada = {
+                                "salidas": [variables[k].name for k in apagadas],
+                                "entradas": [{"antes_ms": (marcas["fin"] - cuando) * 1000,
+                                              "valores": {variables[k].name: v for k, v in cambios.items()}}
+                                             for cuando, cambios in self._cambios_entradas],
+                            }
                         self.escritos = resultado
                         if fase == "escribir":
                             self.medidas["ciclo_ms"] = (marcas["fin"] - self._inicio_ciclo) * 1000
@@ -325,6 +374,18 @@ class Coordinador:
                     self._enviar("cerrar", self.cliente.cerrar)
             return
         if self.estado not in ("conectado", "diagnostico"):
+            return
+        if self._mapa_pendiente is not None and self.futuro is None:
+            config,documento=self._mapa_pendiente
+            self._mapa_pendiente=None
+            sesion=self.adaptador.sesion
+            nuevo=Adaptador(config,sesion) if sesion is not None else MonitorEntradas(config,documento)
+            destinos={(s.variable,s.area,s.direccion,s.formato) for s in salidas_asignadas(nuevo)}
+            retiradas=[s for s in salidas_asignadas(self.adaptador) if (s.variable,s.area,s.direccion,s.formato) not in destinos]
+            if sesion is None:
+                previos={(s.area,s.direccion) for s in salidas_asignadas(self.adaptador)}
+                retiradas += [s for s in salidas_asignadas(nuevo) if (s.area,s.direccion) not in previos]
+            self._enviar("mapa",self._cambiar_mapa,nuevo,documento,retiradas)
             return
         if self._salidas_seguras is not None:
             if self.futuro is None:

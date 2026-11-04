@@ -107,6 +107,20 @@ class Hallazgos(unittest.TestCase):
         for reading in ("A", "B"):
             self.assertTrue(session(m.compile({"8.1": reading}), options={"8.1": reading}).z.outputs["y"], reading)
 
+    def test_SH08c_etapa_inactiva_de_otro_parcial_no_fuerza_la_salida_a_cero(self):
+        """REQ-ACT-02, REQ-JER-01: decisión del responsable (4-nov-2026), manda la etapa activa."""
+        m = M().partial("G2").var("p").var("q").var("S", "output")
+        m.step("X1", True).step("X2")
+        m.step("Y0", True, partial="G2").step("Y1", partial="G2")
+        m.trans("t1", ["X1"], ["X2"], "p").trans("t2", ["Y0"], ["Y1"], "q")
+        m.cont("X1", "S", "true").cont("Y1", "S", "true")
+        s = session(m.compile(), batches=[(1 * S, 0, {"p": True}), (2 * S, 0, {"q": True})])
+        self.assertEqual((s.z.situation, s.z.outputs["S"]), ({"X1", "Y0"}, True), "X1 activa, Y1 inactiva")
+        s.advance_to(1 * S)
+        self.assertEqual((s.z.situation, s.z.outputs["S"]), ({"X2", "Y0"}, False), "ninguna etapa con S activa")
+        s.advance_to(2 * S)
+        self.assertEqual((s.z.situation, s.z.outputs["S"]), ({"X2", "Y1"}, True), "Y1 activa")
+
     def test_SH09_reentrada_en_el_mismo_instante_conserva_la_duracion(self):
         """REQ-TMP-02, REQ-SEM-06: P-IMP-18 (cierra H-09); la salida y reentrada sin tiempo no reinicia el retardo."""
         m = M().var("q").var("y", "output").step("A", True).step("B")

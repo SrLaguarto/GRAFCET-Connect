@@ -1271,6 +1271,7 @@ class AreaBloques(_Superficie):
         self.valor = valor  # el área de un valor numérico: su texto se lee con las reglas de los valores
         self._raices = [None]
         self.previo: dict[str, Any] | None = None
+        self._bloque_sel: tuple | None = None
         self._hueco_sel: tuple | None = None  # el hueco vacío seleccionado (se quita con Supr)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.setAcceptDrops(True)
@@ -1281,6 +1282,7 @@ class AreaBloques(_Superficie):
 
     def poner_arbol(self, arbol: dict[str, Any] | None) -> None:
         self._raices = [copy.deepcopy(arbol)]
+        self._bloque_sel = None
         self.invalidar()
 
     def texto(self) -> str:
@@ -1365,6 +1367,7 @@ class AreaBloques(_Superficie):
 
     def _fijar(self, i: int, nueva: dict[str, Any] | None) -> None:
         self._hueco_sel = None
+        self._bloque_sel = None
         self.previo = self._raices[i]
         super()._fijar(i, nueva)
         self.modificado.emit()
@@ -1374,6 +1377,8 @@ class AreaBloques(_Superficie):
         if event.button() != Qt.MouseButton.LeftButton:
             return
         self._hueco_sel = None
+        self._bloque_sel = self._bloque_en(event.position())
+        if self._bloque_sel is not None: self.setFocus()
         if self._pieza_en(event.position()) is None:  # un clic en un hueco vacío lo selecciona
             ruta = self.ruta_en(event.position())
             if ruta is not None and self.hueco_quitable(ruta):
@@ -1387,10 +1392,13 @@ class AreaBloques(_Superficie):
             self.quitar_hueco_en(ruta)
             self.update()
             return
+        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace) and self._bloque_sel is not None:
+            ruta, self._bloque_sel = self._bloque_sel, None
+            self.quitar(ruta); event.accept(); return
         super().keyPressEvent(event)
 
     def event(self, ev: Any) -> bool:
-        if ev.type() == QEvent.Type.ShortcutOverride and self._hueco_sel is not None \
+        if ev.type() == QEvent.Type.ShortcutOverride and (self._hueco_sel is not None or self._bloque_sel is not None) \
                 and ev.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
             ev.accept()  # Supr con un hueco seleccionado es para el hueco, no para el atajo «Borrar» de la ventana
             return True
@@ -1471,8 +1479,9 @@ class AreaBloques(_Superficie):
         self.update()
 
     def _extra(self, p: QPainter) -> None:
-        if self._hueco_sel is not None:  # el hueco seleccionado
-            r = next((r for r, ruta, n in self._bloques if ruta == self._hueco_sel), None)
+        if self._hueco_sel is not None or self._bloque_sel is not None:
+            seleccion = self._hueco_sel if self._hueco_sel is not None else self._bloque_sel
+            r = next((r for r, ruta, n in self._bloques if ruta == seleccion), None)
             if r is not None:
                 p.setPen(QPen(QColor("#FFD43B"), 2.2))
                 p.setBrush(Qt.BrushStyle.NoBrush)

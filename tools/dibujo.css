@@ -73,3 +73,5 @@ text.timer{font-size:10px;font-weight:400;font-family:ui-monospace,Consolas,mono
 .arrow.history,.tr.history .tdes,.tr.cleared .tdes{fill:var(--history)}
 
 .tr.question .tdes{fill:var(--err)}
+
+.aviso-filtro { fill: #132b46; font-size: 12px; }

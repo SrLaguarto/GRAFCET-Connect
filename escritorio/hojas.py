@@ -97,13 +97,26 @@ class SeleccionParaHoja:
     def accion(self,valor):self.edicion.accion=valor
     @property
     def caja_seleccion(self):return self.edicion.caja_seleccion
+    def seleccionar(self,ids):self.edicion.seleccionar(ids)
+    def mover_teclado(self,*args):return False
+    def _cadena(self,ident):
+        e=self.edicion
+        posiciones={x['id']:(x['x'],x['y']) for k in ('steps','transitions','macros') for x in e.M.get(k,[])}
+        cadenas=e.ed.chains([ident],posiciones)
+        ids=list(dict.fromkeys(i for cadena in cadenas for i in cadena)) or [ident]
+        ids += [a['id'] for etapa in e.M['steps'] if etapa['id'] in ids for a in etapa.get('actions',[])]
+        ids += [a['id'] for a in e.M.get('draftActions',[]) if a.get('etapa') in ids]
+        return list(dict.fromkeys(ids))
     def prensar(self,p,event=None):
         from .diagrama import elemento_en
         from PySide6.QtCore import Qt
         e=self.edicion;caja=e.accion_en(p) or e.orden_en(p);ident=caja['id'] if caja else elemento_en(e.M,p)
         amplia=bool(event and event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        individual=bool(event and event.modifiers() & Qt.KeyboardModifier.ControlModifier)
         if ident:
-            ids=([i for i in e.sel if i!=ident] if ident in e.sel else e.sel+[ident]) if amplia else [ident]
+            grupo=self._cadena(ident) if caja is None else [ident]
+            if individual: ids=[i for i in e.sel if i!=ident] if ident in e.sel else e.sel+[ident]
+            else: ids=list(dict.fromkeys(e.sel+grupo)) if amplia else grupo
             e.seleccionar(ids)
         else:
             self.inicio=p;self.previos=list(e.sel) if amplia else [];e.seleccionar(self.previos)

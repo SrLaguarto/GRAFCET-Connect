@@ -37,7 +37,7 @@ COLOR_TIPO = {"bool": "#22a342", "decimal": "#008add", "int": "#e57912"}
 COLOR_CUALQUIERA = "#6d837b"
 LEYENDA = (("Bool", "bool"), ("Decimal", "decimal"), ("Entera", "int"), ("Cualquiera", None))
 NIVEL_TENUE, NIVEL_ASIGNADO, NIVEL_ACTIVO = .28, .62, 1.0
-ALTO_FILA = 18
+ALTO_FILA = 16
 ALTO_VARIABLE = ALTO_FILA
 ANCHO_INTERIOR = 200  # la mitad del marco que cae dentro de él: indicador, nombre del canal y, en los registros, su valor
 ROL_COLOR, ROL_ASIGNADA, ROL_ACTIVO = (Qt.ItemDataRole.UserRole + n for n in (1, 2, 3))
@@ -407,7 +407,7 @@ class LienzoPLC(QWidget):
         for f in (self.fila_izq, self.fila_der):
             f.setContentsMargins(0, 0, 0, 0)
             f.setSpacing(0)
-        self.ayuda = QLabel("Arrastra las variables a las entradas y salidas.")
+        self.ayuda = QLabel("Arrastra las variables a las entradas y salidas.", self)
         self.ayuda.setObjectName("ayudaES")
         self.ayuda.setWordWrap(True)
         self.ayuda.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -416,7 +416,7 @@ class LienzoPLC(QWidget):
         rejilla.addWidget(self.destino, 1, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
         rejilla.addWidget(self.izq, 2, 0, Qt.AlignmentFlag.AlignTop)
         rejilla.addWidget(self.der, 2, 1, Qt.AlignmentFlag.AlignTop)
-        rejilla.addWidget(self.ayuda, 3, 0, 1, 2, Qt.AlignmentFlag.AlignTop)
+        self.ayuda.hide()  # las instrucciones siguen en los tooltips de los canales
         rejilla.setColumnStretch(0, 1)
         rejilla.setColumnStretch(1, 1)
         rejilla.setRowStretch(4, 1)
@@ -622,7 +622,7 @@ class PanelES(QWidget):
         pie = QFrame()
         pie.setObjectName("pieES")
         pl = QHBoxLayout(pie)
-        pl.setContentsMargins(12, 2, 12, 6)
+        pl.setContentsMargins(12, 0, 12, 2)
         pl.setSpacing(6)
         for texto, tipo in LEYENDA:
             cuadro = IndicadorES(8, 8)
@@ -630,7 +630,11 @@ class PanelES(QWidget):
             pl.addWidget(cuadro)
             pl.addWidget(QLabel(texto))
             pl.addSpacing(12)
-        pl.addStretch()
+        self.ayuda_vacio.setParent(pie)
+        self.ayuda_vacio.setWordWrap(False)
+        self.ayuda_vacio.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pl.addWidget(self.ayuda_vacio, 1)
+        self.ayuda_vacio.show()
         self.resumen = QLabel()
         self.resumen.setWordWrap(True)
         self.resumen.setObjectName("resumenES")
@@ -655,7 +659,7 @@ class PanelES(QWidget):
         endpoint = QFormLayout()
         endpoint.setVerticalSpacing(8)
         endpoint.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint)
-        servidor = QLabel("Servidor")
+        servidor = QLabel("Conexión Modbus")
         servidor.setStyleSheet("font-size:15px; color:#167d79; padding:8px 0")
         configuracion.addWidget(servidor)
         self.host = QLineEdit()
@@ -699,10 +703,13 @@ class PanelES(QWidget):
             rejilla_canales.addWidget(offset, fila, 1)
             rejilla_canales.addWidget(cantidad, fila, 2)
         configuracion.addLayout(rejilla_canales)
-        ayuda_canales = QLabel("Copia el desplazamiento y la cantidad del software del servidor. Estos ajustes no modifican el servidor.")
-        ayuda_canales.setWordWrap(True)
-        ayuda_canales.setStyleSheet("color:#526e66; font-size:11px")
-        configuracion.addWidget(ayuda_canales)
+        self.b_restaurar_canales = QPushButton("Restablecer canales: 32 digitales y 12 numéricos")
+        self.b_restaurar_canales.clicked.connect(self.restablecer_canales)
+        configuracion.addWidget(self.b_restaurar_canales)
+        self.ayuda_canales = QLabel("Copia el desplazamiento y la cantidad del software del servidor. Estos ajustes no modifican el servidor.")
+        self.ayuda_canales.setWordWrap(True)
+        self.ayuda_canales.setStyleSheet("color:#526e66; font-size:11px")
+        configuracion.addWidget(self.ayuda_canales)
         self.b_avanzado = QPushButton("Asignaciones y ajustes avanzados  ›")
         self.b_avanzado.setStyleSheet("text-align:left; margin-top:12px; background:transparent; color:#526e66")
         self.b_avanzado.clicked.connect(self._alternar_avanzado)
@@ -734,11 +741,19 @@ class PanelES(QWidget):
         self.error_config.setWordWrap(True)
         self.error_config.setStyleSheet("color:#b13d3d")
         ajustes.addWidget(self.error_config)
-        for widget in (self.host,):
-            widget.editingFinished.connect(self._config_editada)
+        self.host.editingFinished.connect(self._config_editada)
         for widget in (self.puerto, self.unidad, self.periodo, self.timeout):
             widget.valueChanged.connect(self._config_editada)
         self._cargando = False
+
+    def restablecer_canales(self):
+        self._cargando=True
+        for area,rango in CANALES_INICIALES.items():
+            ocupadas=[s.direccion for s in self.config.senales if s.area==area]
+            inicio=self.offsets[area].value()
+            self.cantidades[area].setValue(max(rango["cantidad"],max(ocupadas,default=inicio-1)-inicio+1))
+        self._cargando=False
+        self._aplicar()
 
     def _config_editada(self, *args):
         if not self._cargando and not self.bloqueado and self.doc is not None:
@@ -764,7 +779,7 @@ class PanelES(QWidget):
     def _cerrar_configuracion(self):
         self.dialogo_config.close()
 
-    def mostrar_tiempos(self, medidas):
+    def mostrar_tiempos(self, medidas, ultima_parada=None):
         """Cadencia observada y duración del intercambio, sin confundirlas con la parada física."""
         def ms(clave):
             return f"{medidas[clave]:.1f}".replace(".", ",") + " ms"
@@ -785,6 +800,15 @@ class PanelES(QWidget):
                               ("ciclo_max_ms", "Máximo del ciclo")):
             if clave in medidas:
                 lineas.append(nombre + ": " + ms(clave))
+        if ultima_parada:
+            lineas.append("")
+            lineas.append("Última salida desactivada por el GRAFCET: " + ", ".join(ultima_parada["salidas"]))
+            lineas.append("Entradas leídas antes de confirmar esa desactivación:")
+            for entrada in ultima_parada["entradas"]:
+                valores = ", ".join(k + " = " + (str(int(v)) if isinstance(v, bool) else str(v))
+                                    for k, v in entrada["valores"].items())
+                antes = f"{entrada['antes_ms']:.1f}".replace(".", ",")
+                lineas.append(antes + " ms antes: " + valores)
         lineas.append("El ciclo no incluye la espera hasta el siguiente sondeo ni el movimiento después de desactivar la salida.")
         self.tiempos.setToolTip("\n".join(lineas))
         self.tiempos.show()
@@ -810,6 +834,22 @@ class PanelES(QWidget):
     def admite(self, vid, area):
         v = next((v for v in self.variables if v["id"] == vid), None)
         return bool(v and not self.bloqueado and encaja(v, area))
+
+    def autoasignar(self, nuevas):
+        """Solo variables recién creadas; nunca desplaza una asignación existente."""
+        if self.bloqueado:return []
+        sin_canal=[]
+        for v in self.variables:
+            if v['id'] not in nuevas or any(s.variable==v['id'] for s in self.config.senales):continue
+            digital=v['type']['kind']=='bool'
+            if v['type']['kind'] not in ('bool','int','decimal'):continue
+            area=('discrete' if digital else 'input-register') if v['role']=='input' else ('coil' if digital else 'holding')
+            rango=self.config.canales.get(area,CANALES_INICIALES[area])
+            ocupadas={s.direccion for s in self.config.senales if s.area==area}
+            libre=next((i for i in range(rango['offset'],rango['offset']+rango['cantidad']) if i not in ocupadas),None)
+            if libre is None:sin_canal.append(v['name'])
+            else:self.asignar(v['id'],area,libre)
+        return sin_canal
 
     def asignar(self, vid, area, direccion):
         if not self.admite(vid, area):
@@ -875,12 +915,14 @@ class PanelES(QWidget):
         propuesta). Las asignaciones que ya no casan con el modelo se quitan y se avisa en el estado. Devuelve esos avisos;
         `avisos` son los de lo ya quitado al leer el mapa (`Configuracion.cargar`), que van delante."""
         self._cargando = True
+        aviso_previo=self.aviso if self.doc is not None and self.doc["id"]==doc["id"] else ""
         nombres = {v["id"]: v["name"] for v in self.variables}
         host, puerto, unidad = self.conexion_defecto
         prefs = self.parametros_defecto
         if config is None:
             config = Configuracion(host, puerto, unidad, prefs.get("periodo_ms", 20), prefs.get("timeout_ms", 500),
-                                   modelo=doc["id"], canales=copy.deepcopy(prefs.get("canales", CANALES_INICIALES)))
+                                   modelo=doc["id"], canales=copy.deepcopy(prefs.get("canales", CANALES_INICIALES)),
+                                   )
             self.escalas_base = dict(prefs.get("escalas", {}))
         else:
             self.escalas_base = {f"{s.area}:{s.direccion}": s.escala for s in config.senales}
@@ -951,7 +993,8 @@ class PanelES(QWidget):
         self.tabla.resizeColumnsToContents()
         self.firma_modelo = self.firma(doc)
         self.pendiente = False
-        self.aviso = f"Asignaciones quitadas: {'; '.join(quitadas)}" if quitadas else ""
+        aviso_nuevo=f"Asignaciones quitadas: {'; '.join(quitadas)}" if quitadas else ""
+        self.aviso=" · ".join(x for x in (aviso_previo,aviso_nuevo) if x)
         self._dibujar()
         self._cargando = False
         return quitadas
@@ -1008,7 +1051,8 @@ class PanelES(QWidget):
         self.escalas_base.update({f"{s.area}:{s.direccion}": s.escala for s in c.senales})
         self.aviso = ""  # el usuario ya ha actuado sobre el mapa
         self._dibujar()
-        self.estado.setText("Configuración actualizada · desconectado. Pulsa «Conectar».")
+        if not getattr(self,"conectado",False):
+            self.estado.setText("Configuración actualizada · desconectado. Pulsa «Conectar».")
         self.aplicar.emit(c)
         return True
 
@@ -1018,7 +1062,7 @@ class PanelES(QWidget):
         self.indicadores_listas.clear()
         c = self.config
         self.destino.setText(f"({c.host}:{c.puerto})\nEsclavo ID:{c.unidad}")
-        self.ayuda_vacio.setVisible(not c.senales)
+        self.ayuda_vacio.show()
         for fila in (self.fila_entradas, self.fila_salidas):
             while fila.count():
                 item = fila.takeAt(0)
@@ -1111,16 +1155,16 @@ class PanelES(QWidget):
         self.mostrar_valores(valores)
 
     def ocupado(self, on):
-        self.bloqueado = on
-        self.lista_entradas.setDragEnabled(not on)
-        self.lista_salidas.setDragEnabled(not on)
+        self.conectado = on
+        self.bloqueado = False
+        self.lista_entradas.setDragEnabled(True)
+        self.lista_salidas.setDragEnabled(True)
         for terminal in self.terminales.values():
-            terminal.setAcceptDrops(not on)
+            terminal.setAcceptDrops(True)
             if terminal.b_quitar:
-                terminal.b_quitar.setEnabled(not on)
-                terminal.b_quitar.setToolTip("Pulsa «Desconectar / editar» para desasignar" if on else "Desasignar esta señal")
-                if on:
-                    terminal.b_quitar.hide()
+                terminal.b_quitar.setEnabled(True)
+                terminal.b_quitar.setToolTip("Desasignar esta señal")
+
         self.b_conectar.setVisible(not on)
         self.b_desconectar.setVisible(on)
         self.config_widget.setEnabled(not on)

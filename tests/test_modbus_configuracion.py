@@ -124,3 +124,21 @@ class ConfigTests(unittest.TestCase):
             ruta.write_text("{ esto no es json", encoding="utf-8")
             with self.assertRaises(ValueError):
                 Configuracion.cargar(ruta, nuevo)
+
+    def test_SFIO57_cargar_ignora_modo_y_escucha_del_modo_servidor_retirado(self):
+        """REQ-DAT-02: un mapa guardado con `modo` y `escucha` (modo servidor ya retirado) se carga como cliente."""
+        import json
+        from grafcet.builder import M
+        doc = M().var("motor", "output").step("0", True).doc
+        c = Configuracion(senales=[Senal("motor", "coil", 0)])
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = Path(tmp) / "conexion.json"
+            c.guardar(ruta, doc)
+            datos = json.loads(ruta.read_text(encoding="utf-8"))
+            datos["modo"] = "servidor"
+            datos["escucha"] = "0.0.0.0"
+            ruta.write_text(json.dumps(datos), encoding="utf-8")
+            cargada = Configuracion.cargar(ruta, doc)
+            self.assertEqual(cargada.host, c.host)
+            self.assertFalse(hasattr(cargada, "modo"))
+            self.assertEqual([s.variable for s in cargada.senales], ["motor"])

@@ -111,14 +111,15 @@ class Paneles(BaseQt):
         self.assertEqual(p.prog._sc_carpetas.horizontalScrollBarPolicy(),Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
     def test_SPAN07_preferencias_de_plegado_se_recuperan_en_otra_ventana(self):
-        """REQ-EDT-09: las preferencias de visibilidad se recuerdan y siempre existe una pestaña para recuperar cada panel."""
+        """REQ-EDT-09: se registra el plegado; una ventana nueva abre los laterales y mantiene propiedades plegadas."""
         w,e=self.preparar()
         for n in w.flechas:w.flechas[n].click()
         w2=Ventana(w.ajustes)
         try:
             w2.nuevo();w2.resize(1366,768);w2.show();QApplication.processEvents()
             for n in w2.pestanas:
-                self.assertTrue(w2._panel(n).isHidden(),n);self.assertTrue(w2.pestanas[n].isVisible(),n)
+                plegado=n=="inferior"
+                self.assertEqual(w2._panel(n).isHidden(),plegado,n);self.assertEqual(w2.pestanas[n].isVisible(),plegado,n)
         finally:
             w2.hide();w2.edicion=None;w2.deleteLater();QApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 
@@ -145,3 +146,31 @@ class Paneles(BaseQt):
         self.assertGreater(mayor,menor);self.assertGreaterEqual(w._plegables['inferior'].minimumHeight(),mayor);self.assertGreaterEqual(w._plegables['inferior'].height(),mayor);self.assertFalse(w._opciones_automaticas)
         self.assertGreaterEqual(w.props.prog.height(),w.props.prog.minimumSizeHint().height());self.assertTrue(w.props.t_texto.isVisible())
         e.seleccionar(['1']);QApplication.processEvents();QApplication.processEvents();self.assertLess(w._plegables['inferior'].minimumHeight(),mayor)
+
+    def test_SPAN10_pestanas_plegadas_sin_hueco_al_volver_de_es(self):
+        """REQ-EDT-09: cambiar de pantalla en E/S no reserva el ancho del contenido plegado."""
+        w,e=self.preparar(2500,1400)
+        for n in ('izquierdo','derecho'):w._mostrar_panel(n,False)
+        QApplication.processEvents()
+        for ancho in (1000,1900,1100):
+            QTest.mouseClick(w.pestanas_vistas,Qt.MouseButton.LeftButton,pos=w.pestanas_vistas.tabRect(2).center())
+            w.resize(ancho,1000);QApplication.processEvents();w._poner_modo();QApplication.processEvents()
+            QTest.mouseClick(w.pestanas_vistas,Qt.MouseButton.LeftButton,pos=w.pestanas_vistas.tabRect(0).center())
+            QApplication.processEvents()
+            self.assertEqual(w.paginas_es.currentIndex(),0)
+            self.assertFalse(w._plegables['derecho'].abierto)
+            self.assertEqual(w.split.sizes()[1],w._plegables['derecho'].GROSOR_PESTANA)
+            self.assertEqual(w.split.sizes()[0]+w.split.sizes()[1]+w.split.handleWidth(),w.split.width())
+            self.assertGreater(w.split.sizes()[0],w.width()-100)
+
+    def test_SPAN11_ancho_elegido_se_conserva_tras_es_y_redimensionar(self):
+        """REQ-EDT-09: el lateral abierto conserva el ancho elegido sin absorber el dibujo al volver de E/S."""
+        w,e=self.preparar(2500,1400)
+        self.arrastrar(w.split,QPoint(-100,0));ancho=w._plegables['derecho'].width()
+        QTest.mouseClick(w.pestanas_vistas,Qt.MouseButton.LeftButton,pos=w.pestanas_vistas.tabRect(2).center())
+        w.resize(1100,1000);QApplication.processEvents();w._poner_modo();QApplication.processEvents()
+        QTest.mouseClick(w.pestanas_vistas,Qt.MouseButton.LeftButton,pos=w.pestanas_vistas.tabRect(0).center())
+        QApplication.processEvents()
+        self.assertTrue(w._plegables['derecho'].abierto)
+        self.assertAlmostEqual(w._plegables['derecho'].width(),ancho,delta=2)
+        self.assertGreater(w.split.sizes()[0],300)

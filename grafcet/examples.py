@@ -217,3 +217,6 @@ EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
                             "al subir p se activan B y D a la vez y escriben valores distintos en z. Solo se sabe al "
                             "ejecutar: D-ESCRITURA-CONFLICTO, sin elegir valor.", ej_conflicto_ejecucion),
 }
+
+from .ejemplos_aula import DIDACTICOS
+EJEMPLOS.update(DIDACTICOS)
