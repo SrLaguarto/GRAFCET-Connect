@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-11-05T12:41:56+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 922 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-11-05T13:14:16+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 938 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 820 casos, 825 pruebas, 825 pasan.
+Pruebas suplementarias S-xx: 836 casos, 841 pruebas, 841 pasan.
 
 ## Requisitos
 
@@ -38,7 +38,7 @@ Pruebas suplementarias S-xx: 820 casos, 825 pruebas, 825 pasan.
 | REQ-ALC-02 | P/crítica | 01 | DOC | tools/comprobar_paquete.py | R-02 (documental), S-PKG ✔ | Parte automatizable de R-02: el paquete conserva exactamente los doce Markdown con sus huellas |
 | REQ-ALC-03 | P/alta | 01 | IMPL-P | profile, declaration | R-01 (documental), S-DECL ✔ | Cada capacidad marcada provisional / no soportada con su motivo |
 | REQ-NOR-01 | P/crítica | 01 | IMPL-P | profile, persistence, declaration | T-22e ✔, S-DECL ✔ | Base normativa declarada en el manifiesto; ejes de versión separados; no se sustituye silenciosamente |
-| REQ-NOR-02 | P/crítica | 01 | IMPL-P | declaration | R-01 (documental), S-AJU05 ✔, S-AJU10 ✔, S-AJU11 ✔, S-CMP01 ✔, S-CMP04 ✔, S-CMP05 ✔, S-OPT03a ✔, S-DECL ✔ | La declaración excluye toda materia con U crítica y nunca afirma conformidad; R-01 sigue siendo documental |
+| REQ-NOR-02 | P/crítica | 01 | IMPL-P | declaration | R-01 (documental), S-AJU05 ✔, S-AJU10 ✔, S-AJU11 ✔, S-CMP01 ✔, S-CMP04 ✔, S-CMP05 ✔, S-PRP07 ✔, S-OPT03a ✔, S-DECL ✔ | La declaración excluye toda materia con U crítica y nunca afirma conformidad; R-01 sigue siendo documental |
 | REQ-CR-01 | P/crítica | 02 | DOC | tools/paquete.py | R-01 (documental) | Las fuentes y localizadores se conservan en el paquete; la matriz enlaza cada requisito con su documento |
 | REQ-CR-02 | P/crítica | 02 | DOC | — | R-02 (documental), S-PKG ✔ | Esta implementación se ha hecho solo con el paquete; ver declaración de procedencia en README |
 | REQ-CR-03 | P/crítica | 02 | DOC | — | R-02 (documental) | No se ha detectado contaminación; procedimiento descrito en README |
@@ -102,7 +102,7 @@ Pruebas suplementarias S-xx: 820 casos, 825 pruebas, 825 pasan.
 | REQ-SIM-07 | P/crítica | 08 | IMPL-P | engine | T-23e ✔ | Intervención E en pausa estable, rama auditable |
 | REQ-SIM-08 | P/alta | 08 | IMPL-P | diagnostics, engine | T-08a ✔, T-08b ✔, T-16a ✔, S-AVI01 ✔, S-AVI02 ✔, S-08a ✔ | Evidencia y corrección recomendada en cada diagnóstico |
 | REQ-DAT-01 | P/crítica | 09 | IMPL-P | model, persistence, ids | T-22b ✔, T-21e ✔, S-DBR08 ✔, S-FBR05 ✔, S-GFN01 ✔, S-GFN02 ✔, S-GFN03 ✔, S-EDI251 ✔, S-EDI283 ✔, S-EDI308 ✔, S-EDI107 ✔, S-EDI118 ✔, S-EDI124 ✔, S-EDI179 ✔, S-EDI73 ✔, S-EDI77 ✔, S-EDI82 ✔, S-EDI91 ✔, S-EDI98 ✔, S-EDI302 ✔, S-GFN11 ✔, S-GFN14 ✔, S-GFN20 ✔, S-LAM09 ✔, S-MTP23 ✔, S-CLI05 ✔, S-PUL03 ✔, S-H12 ✔ | Identidades, referencias y propiedad; nombres hexadecimales (H-12) |
-| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-AJU02 ✔, S-AJU03 ✔, S-DBR11 ✔, S-DBR12 ✔, S-CMP04 ✔, S-GFN01 ✔, S-GFN03 ✔, S-GFN04 ✔, S-GFN07 ✔, S-GFN16 ✔, S-GFN17 ✔, S-GFN18 ✔, S-USO03 ✔, S-USO05 ✔, S-DRF04 ✔, S-EDI04 ✔, S-EDI154 ✔, S-EDI302 ✔, S-OTR06 ✔, S-OTR10 ✔, S-OTR13 ✔, S-ETI03 ✔, S-GFN10 ✔, S-GFN11 ✔, S-GFN12 ✔, S-GFN19 ✔, S-GFN25 ✔, S-LAM01 ✔, S-LAM02 ✔, S-LAM12 ✔, S-RED06 ✔, S-FIO04 ✔, S-FIO23 ✔, S-FIO26 ✔, S-FIO56 ✔, S-FIO57 ✔, S-FIO24 ✔, S-FIO41 ✔, S-FIO46 ✔, S-PAG03 ✔, S-PAG08 ✔, S-PAG11 ✔, S-PAG18 ✔, S-PAG19 ✔, S-PAG23 ✔, S-PAG28 ✔, S-PAG33 ✔, S-PAG37 ✔, S-PAG39 ✔, S-PLT01 ✔, S-PLT05 ✔, S-PLT11 ✔, S-PLT12 ✔, S-TEC11 ✔, S-TEC02 ✔, S-TEC03 ✔, S-TEC07 ✔, S-ESP02 ✔, S-ESP03 ✔, S-ESP04 ✔, S-ESP10 ✔, S-ESP11 ✔, S-ESP13 ✔, S-REM04 ✔, S-APP01 ✔, S-APP06 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
+| REQ-DAT-02 | P/crítica | 09 | IMPL-P | persistence | T-22a ✔, S-AJU02 ✔, S-AJU03 ✔, S-DBR11 ✔, S-DBR12 ✔, S-CMP04 ✔, S-GFN01 ✔, S-GFN03 ✔, S-GFN04 ✔, S-GFN07 ✔, S-GFN16 ✔, S-GFN17 ✔, S-GFN18 ✔, S-USO03 ✔, S-USO05 ✔, S-DRF04 ✔, S-EDI04 ✔, S-EDI154 ✔, S-EDI302 ✔, S-OTR06 ✔, S-OTR10 ✔, S-OTR13 ✔, S-ETI03 ✔, S-GFN10 ✔, S-GFN11 ✔, S-GFN12 ✔, S-GFN19 ✔, S-GFN25 ✔, S-LAM01 ✔, S-LAM02 ✔, S-LAM12 ✔, S-RED06 ✔, S-FIO04 ✔, S-FIO23 ✔, S-FIO26 ✔, S-FIO56 ✔, S-FIO57 ✔, S-FIO24 ✔, S-FIO41 ✔, S-FIO46 ✔, S-PAG03 ✔, S-PAG08 ✔, S-PAG11 ✔, S-PAG18 ✔, S-PAG19 ✔, S-PAG23 ✔, S-PAG28 ✔, S-PAG33 ✔, S-PAG37 ✔, S-PAG39 ✔, S-PLT01 ✔, S-PLT05 ✔, S-PLT11 ✔, S-PLT12 ✔, S-TEC11 ✔, S-TEC02 ✔, S-TEC03 ✔, S-TEC07 ✔, S-PRP20 ✔, S-PRP21 ✔, S-PRP22 ✔, S-PRP23 ✔, S-PRP01 ✔, S-PRP02 ✔, S-PRP03 ✔, S-PRP04 ✔, S-PRP05 ✔, S-PRP06 ✔, S-RSL01 ✔, S-RSL02 ✔, S-RSL03 ✔, S-RSL04 ✔, S-RSL05 ✔, S-ESP02 ✔, S-ESP03 ✔, S-ESP04 ✔, S-ESP10 ✔, S-ESP11 ✔, S-ESP13 ✔, S-REM04 ✔, S-APP01 ✔, S-APP06 ✔ | Ida y vuelta conserva significado, notas y vista (formato 0.1 provisional, U-11) |
 | REQ-DAT-03 | P/crítica | 09 | IMPL-P | persistence | T-22c ✔, T-22e ✔, S-APP02 ✔ | Versión mayor/menor, desconocidos y migración con copia e informe |
 | REQ-DAT-04 | P/crítica | 09 | IMPL-P | engine | T-22f ✔, T-23c ✔, T-23f ✔, S-OPT03d ✔ | Instantánea íntegra y compatibilidad exacta; campos U no aplicables declarados |
 | REQ-DAT-05 | P/crítica | 09 | IMPL-P | canonical, timeutil | T-24a ◐, T-24b ✔, S-CAN ✔ | Representación canónica y SHA-256 independientes de región |
@@ -966,6 +966,17 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-PLT15 | REQ-EDT-11 | pasa | `test_SPLT15_zona_automatica_usa_marco_interior_y_no_cuadricula` | con doble marco, la zona útil empieza dentro del marco interior, fuera de la cuadrícula. |
 | S-PLT16 | REQ-EDT-11 | pasa | `test_SPLT16_escala_fija_por_defecto_etapas_de_1164_mm` | decisión del responsable, etapa de 44 unidades a unos 11,64 mm por defecto, sin ajuste automático. |
 | S-PLT17 | REQ-EDT-11 | pasa | `test_SPLT17_textos_fit_aligned_respetan_anclas_y_altura` | TEXT FIT y ALIGNED conservan el ancho entre anclas; ALIGNED escala también la altura. |
+| S-PRP01 | REQ-DAT-02 | pasa | `test_SPRP01_info_sellada_con_autor_fechas_y_versiones` | cada guardado escribe `_grafnet/info.json` sellado con los cinco campos. |
+| S-PRP02 | REQ-DAT-02 | pasa | `test_SPRP02_creado_se_conserva_y_modificado_cambia` | entre guardados, creado y version_creacion se conservan; modificado y version_guardado se actualizan. |
+| S-PRP03 | REQ-DAT-02 | pasa | `test_SPRP03_archivo_anterior_sin_info_abre_y_no_inventa_creacion` | un archivo sin info.json abre igual; al guardarlo no se inventan creado ni version_creacion. |
+| S-PRP04 | REQ-DAT-02 | pasa | `test_SPRP04_info_manipulado_sin_resellar_se_rechaza` | info.json está cubierto por el sello: cambiarlo sin resellar rechaza el archivo. |
+| S-PRP05 | REQ-DAT-02 | pasa | `test_SPRP05_info_mal_formado_con_sello_valido_se_ignora` | un info.json con tipos o tamaño incorrectos no rechaza el archivo: datos desconocidos. |
+| S-PRP06 | REQ-DAT-02 | pasa | `test_SPRP06_huella_cambia_con_el_contenido_y_no_con_la_clave` | la huella (sin clave) identifica el contenido sellado. |
+| S-PRP07 | REQ-NOR-02 | pasa | `test_SPRP07_version_del_programa_y_manifiesto_no_divergen` | escritorio.VERSION, APP_VERSION y appVersion del manifiesto son la misma, 1.0.0. |
+| S-PRP20 | REQ-DAT-02 | pasa | `test_SPRP20_proyecto_nuevo_se_sellara_al_guardar_y_toma_el_usuario_como_autor` | sin guardar no hay sello ni fechas; el autor por defecto es el usuario del sistema. |
+| S-PRP21 | REQ-DAT-02 | pasa | `test_SPRP21_cambiar_el_autor_marca_modificado_lo_guarda_y_lo_recuerda` | el autor cambia en el diálogo, marca el asterisco y viaja en info.json. |
+| S-PRP22 | REQ-DAT-02 | pasa | `test_SPRP22_proyecto_guardado_muestra_sello_algoritmo_huella_y_programa` | el diálogo informa del sello vigente, la huella agrupada y el programa, sin clave. |
+| S-PRP23 | REQ-DAT-02 | pasa | `test_SPRP23_archivo_anterior_muestra_desconocida` | un archivo sin info.json abre y el diálogo dice «desconocida (archivo anterior a la 1.0)». |
 | S-PUL01 | REQ-SIM-02, REQ-SIM-03 | pasa | `test_SPUL01_presionar_y_soltar_producen_dos_cambios_y_evoluciones` | el pulsador da 1 al presionar y 0 al soltar, procesando ambas evoluciones. |
 | S-PUL02 | REQ-SIM-02 | pasa | `test_SPUL02_ctrl_enclava_y_otro_clic_libera_sin_perder_otras_entradas` | Ctrl+clic mantiene varias entradas y permite pulsar otras; el siguiente clic libera. |
 | S-PUL03 | REQ-DAT-01, REQ-SIM-02 | pasa | `test_SPUL03_menu_cambia_tipo_y_lo_recuerda_sin_guardarlo` | el tipo de entrada se cambia en menú y dura la sesión sin entrar en los documentos. |
@@ -999,6 +1010,11 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-REM07 | REQ-EDT-09 | pasa | `test_SREM07_reiniciar_sigue_referencia_angular_y_tangente` | brazos horizontal y vertical iguales y simétricos respecto a la tangente de la referencia gráfica. |
 | S-REM08 | REQ-EDT-02, REQ-SIM-03 | pasa | `test_SREM08_borde_activo_por_encima_en_qt_y_svg_ambos_ordenes_y_forzado` | borde compartido activo prioritario, también con forzado, sin cambiar anchos ni posiciones. |
 | S-REM09 | REQ-EDT-02, REQ-SIM-03 | pasa | `test_SREM09_lima_actividad_texto_con_contraste_y_seleccion_azul` | lima en actividad y texto verdadero; la marca histórica conserva el verde oscuro legible. |
+| S-RSL01 | REQ-DAT-02 | pasa | `test_SRSL01_resella_sin_cambiar_el_contenido_salvo_el_sello` | un archivo sellado con la clave de desarrollo se copia a sellados_1.0 con la clave real. |
+| S-RSL02 | REQ-DAT-02 | pasa | `test_SRSL02_ya_sellado_para_la_distribucion_no_hace_nada` | con la clave real ya válida, se informa y no se escribe nada. |
+| S-RSL03 | REQ-DAT-02 | pasa | `test_SRSL03_sello_no_valido_no_se_toca` | un sello válido con otra clave, o roto, no se resella ni se copia. |
+| S-RSL04 | REQ-DAT-02 | pasa | `test_SRSL04_carpeta_no_recursiva_y_destino_existente_se_sustituye` | una carpeta aporta sus .grafnet directos; repetir sustituye la copia anterior. |
+| S-RSL05 | REQ-DAT-02 | pasa | `test_SRSL05_clave_corta_se_rechaza_y_nunca_se_imprime` | la clave debe tener 32 bytes como mínimo y no aparece en la salida. |
 | S-SAL01 | REQ-MOD-03, REQ-SIM-03 | pasa | `test_SSAL01_destino_activo_y_receptividad_no_colorean_retornos_no_validados` | no se propaga actividad desde la etapa destino; paridad real Qt/JS en tres ejemplos. |
 | S-SAL02 | REQ-MOD-03, REQ-SIM-03 | pasa | `test_SSAL02_alternativas_no_invierten_el_sentido_de_los_enlaces` | rápida y marcha no llevan de E2 a E1; repetir sí, y E0 no salta a E3. |
 | S-SAL03 | REQ-ACT-02, REQ-SIM-03 | pasa | `test_SSAL03_valor_actual_sobre_destino_asignacion_centrado_y_solo_lectura` | valor observado sobre la variable destino, centrado y tabular en Qt/JS, ausente en edición. |

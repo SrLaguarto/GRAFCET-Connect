@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
                                QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle, QMenu, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
 
 from . import recursos_ui  # Registra los iconos vectoriales incorporados.
+from . import propiedades_archivo
 from grafcet.diagnostics import DiagnosticError
 from grafcet.engine import Session
 from grafcet.examples import EJEMPLOS
@@ -555,6 +556,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_imprimir = self._accion("&Imprimir…", lambda:self.abrir_laminas("imprimir"), "Ctrl+P")
         archivo.addAction(self.a_imprimir)
         archivo.addAction("Guardar el &dibujo como imagen…", self.guardar_imagen)
+        archivo.addAction("Propiedades del archi&vo…", lambda: propiedades_archivo.abrir(self))
         archivo.addSeparator()
         archivo.addAction("&Salir", self.close).setShortcut(QKeySequence.StandardKey.Quit)
         ejemplos = bar.addMenu("&Ejemplos")

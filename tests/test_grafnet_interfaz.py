@@ -87,7 +87,7 @@ class GrafnetInterfaz(BaseQt):
         self.assertEqual(destino.read_bytes(),b'anterior');self.assertEqual(e.ed.model,antes);self.assertTrue(e.ed.dirty)
         with patch('escritorio.archivos.QFileDialog.getSaveFileName',return_value=('','')):
             self.assertFalse(w.guardar_como())
-        self.assertFalse(hasattr(e,'archivo'))
+        self.assertIsNone(e.archivo)
 
 
     def test_SGFN23_aplicacion_sin_recuperacion_ni_opciones_de_password(self):

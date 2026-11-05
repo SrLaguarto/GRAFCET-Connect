@@ -1,11 +1,13 @@
 """Lectura y guardado de un proyecto completo .grafnet con recursos."""
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import shutil
 import tempfile
-from grafcet.contenedor import empaquetar,extraer,guardar_atomico,MAX_BYTES,ErrorContenedor
+from grafcet.contenedor import (empaquetar,extraer_completo,guardar_atomico,inspeccionar,construir_info,
+                                serializar_info,MAX_BYTES,ErrorContenedor)
 from grafcet.persistence import open_project,save_project
+from grafcet.profile import APP_VERSION
 
 
 class EspacioTemporal:
@@ -26,6 +28,8 @@ class ProyectoArchivo:
     temporal: EspacioTemporal
     proyecto: object
     sello_valido: bool
+    info: dict = field(default_factory=dict)  # `_grafnet/info.json` validado; {} si no lo tenía
+    huella: str = ''  # SHA-256 (hex) de las entradas selladas
 
     @property
     def raiz(self):return Path(self.temporal.name)
@@ -42,16 +46,17 @@ def abrir_grafnet(archivo,clave,politica):
     datos=archivo.read_bytes()
     temporal=EspacioTemporal(prefix='grafconnect-proyecto-')
     try:
-        valido=extraer(datos,Path(temporal.name),clave,politica)
+        extraccion=extraer_completo(datos,Path(temporal.name),clave,politica)
         proyecto=open_project(Path(temporal.name))
         if not proyecto.models():raise ErrorContenedor('El proyecto no contiene ningún modelo')
-        return ProyectoArchivo(archivo,temporal,proyecto,valido)
+        return ProyectoArchivo(archivo,temporal,proyecto,extraccion.valido,extraccion.info,extraccion.huella)
     except BaseException:
         temporal.cleanup();raise
 
 
-def guardar_grafnet(archivo,proyecto,clave,origen=None,preparar=None):
-    """Solo sustituye el destino después de preparar y sellar el proyecto entero."""
+def guardar_grafnet(archivo,proyecto,clave,origen=None,preparar=None,info_previa=None,autor=''):
+    """Solo sustituye el destino después de preparar y sellar el proyecto entero. `info_previa` son los metadatos del
+    archivo abierto (None en un proyecto nuevo): se conservan creado y version_creacion y se actualiza el resto."""
     temporal=EspacioTemporal(prefix='grafconnect-guardar-')
     try:
         raiz=Path(temporal.name)
@@ -67,10 +72,11 @@ def guardar_grafnet(archivo,proyecto,clave,origen=None,preparar=None):
         proyecto=copy.deepcopy(proyecto)
         save_project(raiz,proyecto)
         if preparar is not None:preparar(raiz)
-        datos=empaquetar(raiz,clave)
+        info=construir_info(info_previa,autor,APP_VERSION)
+        datos=empaquetar(raiz,clave,serializar_info(info))
         if len(datos)>MAX_BYTES:raise ErrorContenedor("El archivo supera el tamaño permitido")
         guardar_atomico(Path(archivo),datos)
-        return ProyectoArchivo(Path(archivo),temporal,proyecto,True)
+        return ProyectoArchivo(Path(archivo),temporal,proyecto,True,info,inspeccionar(datos)[1])
     except BaseException:
         temporal.cleanup();raise
 

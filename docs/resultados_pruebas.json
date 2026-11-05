@@ -1,9 +1,9 @@
 {
- "date": "2026-11-05T12:41:56+01:00",
+ "date": "2026-11-05T13:14:16+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 922,
+ "total": 938,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -6779,6 +6779,150 @@
     "REQ-JER-05"
    ],
    "summary": "REQ-EDT-04, REQ-JER-05: una encapsulante todavía sin recintos no se transforma en ordinaria al copiar."
+  },
+  {
+   "test": "test_propiedades_resellar.DialogoPropiedades.test_SPRP20_proyecto_nuevo_se_sellara_al_guardar_y_toma_el_usuario_como_autor",
+   "case": "S-PRP20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: sin guardar no hay sello ni fechas; el autor por defecto es el usuario del sistema."
+  },
+  {
+   "test": "test_propiedades_resellar.DialogoPropiedades.test_SPRP21_cambiar_el_autor_marca_modificado_lo_guarda_y_lo_recuerda",
+   "case": "S-PRP21",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: el autor cambia en el diálogo, marca el asterisco y viaja en info.json."
+  },
+  {
+   "test": "test_propiedades_resellar.DialogoPropiedades.test_SPRP22_proyecto_guardado_muestra_sello_algoritmo_huella_y_programa",
+   "case": "S-PRP22",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: el diálogo informa del sello vigente, la huella agrupada y el programa, sin clave."
+  },
+  {
+   "test": "test_propiedades_resellar.DialogoPropiedades.test_SPRP23_archivo_anterior_muestra_desconocida",
+   "case": "S-PRP23",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un archivo sin info.json abre y el diálogo dice «desconocida (archivo anterior a la 1.0)»."
+  },
+  {
+   "test": "test_propiedades_resellar.Metadatos.test_SPRP01_info_sellada_con_autor_fechas_y_versiones",
+   "case": "S-PRP01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: cada guardado escribe `_grafnet/info.json` sellado con los cinco campos."
+  },
+  {
+   "test": "test_propiedades_resellar.Metadatos.test_SPRP02_creado_se_conserva_y_modificado_cambia",
+   "case": "S-PRP02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: entre guardados, creado y version_creacion se conservan; modificado y version_guardado se actualizan."
+  },
+  {
+   "test": "test_propiedades_resellar.Metadatos.test_SPRP03_archivo_anterior_sin_info_abre_y_no_inventa_creacion",
+   "case": "S-PRP03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un archivo sin info.json abre igual; al guardarlo no se inventan creado ni version_creacion."
+  },
+  {
+   "test": "test_propiedades_resellar.Metadatos.test_SPRP04_info_manipulado_sin_resellar_se_rechaza",
+   "case": "S-PRP04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: info.json está cubierto por el sello: cambiarlo sin resellar rechaza el archivo."
+  },
+  {
+   "test": "test_propiedades_resellar.Metadatos.test_SPRP05_info_mal_formado_con_sello_valido_se_ignora",
+   "case": "S-PRP05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un info.json con tipos o tamaño incorrectos no rechaza el archivo: datos desconocidos."
+  },
+  {
+   "test": "test_propiedades_resellar.Metadatos.test_SPRP06_huella_cambia_con_el_contenido_y_no_con_la_clave",
+   "case": "S-PRP06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: la huella (sin clave) identifica el contenido sellado."
+  },
+  {
+   "test": "test_propiedades_resellar.Metadatos.test_SPRP07_version_del_programa_y_manifiesto_no_divergen",
+   "case": "S-PRP07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-NOR-02"
+   ],
+   "summary": "REQ-NOR-02: escritorio.VERSION, APP_VERSION y appVersion del manifiesto son la misma, 1.0.0."
+  },
+  {
+   "test": "test_propiedades_resellar.Resellado.test_SRSL01_resella_sin_cambiar_el_contenido_salvo_el_sello",
+   "case": "S-RSL01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un archivo sellado con la clave de desarrollo se copia a sellados_1.0 con la clave real."
+  },
+  {
+   "test": "test_propiedades_resellar.Resellado.test_SRSL02_ya_sellado_para_la_distribucion_no_hace_nada",
+   "case": "S-RSL02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: con la clave real ya válida, se informa y no se escribe nada."
+  },
+  {
+   "test": "test_propiedades_resellar.Resellado.test_SRSL03_sello_no_valido_no_se_toca",
+   "case": "S-RSL03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un sello válido con otra clave, o roto, no se resella ni se copia."
+  },
+  {
+   "test": "test_propiedades_resellar.Resellado.test_SRSL04_carpeta_no_recursiva_y_destino_existente_se_sustituye",
+   "case": "S-RSL04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: una carpeta aporta sus .grafnet directos; repetir sustituye la copia anterior."
+  },
+  {
+   "test": "test_propiedades_resellar.Resellado.test_SRSL05_clave_corta_se_rechaza_y_nunca_se_imprime",
+   "case": "S-RSL05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: la clave debe tener 32 bytes como mínimo y no aparece en la salida."
   },
   {
    "test": "test_pulido_es.PulidoES.test_SESP01_sin_proyecto_ni_preferencias_usa_factory_io",

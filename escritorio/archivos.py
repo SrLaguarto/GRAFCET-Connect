@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QFileDialog,QMessageBox
 from conexion.configuracion import ARCHIVO
 from grafcet.diagnostics import DiagnosticError
 from . import sello
+from .propiedades_archivo import autor_para_guardar
 from .proyecto_archivo import abrir_grafnet,guardar_grafnet
 
 
@@ -41,7 +42,8 @@ class ArchivosProyecto:
         try:
             config=self._configuracion_para_guardar(e.ed.model)
             archivo=guardar_grafnet(destino,e.proyecto(),sello.CLAVE,e.ruta,
-                                    lambda raiz:config.guardar(raiz/ARCHIVO,e.ed.model))
+                                    lambda raiz:config.guardar(raiz/ARCHIVO,e.ed.model),
+                                    e.info_archivo,autor_para_guardar(e))
         except (OSError,ValueError,DiagnosticError) as exc:
             QMessageBox.warning(self,'Guardar proyecto',f'No se pudo guardar:\n\n{exc}');return False
         self._adoptar_archivo(e,archivo)
@@ -53,5 +55,5 @@ class ArchivosProyecto:
 
     @staticmethod
     def _adoptar_archivo(e,archivo):
-        e.contenedor=archivo;e.archivo=archivo.archivo
+        e.contenedor=archivo;e.archivo=archivo.archivo;e.info_archivo=dict(archivo.info);e.autor_archivo=None
         e.ruta=archivo.raiz;e.proyecto_base=archivo.proyecto

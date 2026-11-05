@@ -150,6 +150,10 @@ class Edicion(QObject):
     def __init__(self, ed: Editor, titulo: str, ruta: Path | None = None) -> None:
         super().__init__()
         self.ed, self.titulo, self.ruta = ed, titulo, ruta
+        self.archivo: Path | None = None  # el .grafnet de donde viene o donde se guardó
+        self.contenedor: Any = None  # su ProyectoArchivo (área temporal, sello y huella)
+        self.info_archivo: dict | None = None  # metadatos de ese archivo ({} si es anterior a la 1.0); None: sin guardar
+        self.autor_archivo: str | None = None  # autor puesto a mano; None: el del archivo o el recordado en preferencias
         self.ignorados = self._sanear_borradores()
         self.enlaces_quitados = len(ed.cleaned_draft_link_ids)
         parciales = [p["id"] for p in ed.model["partials"]]

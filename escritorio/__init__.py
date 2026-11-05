@@ -1,3 +1,5 @@
 """GRAFCET Connect: editor y simulador GRAFCET de escritorio (P-IMP-29)."""
+from grafcet.profile import APP_VERSION
 
-VERSION = "1.0.0"  # la única: la leen el diálogo «Acerca de» y tools/construir_ejecutable.py
+# La única: la leen el diálogo «Acerca de», el manifiesto (appVersion) y tools/construir_ejecutable.py.
+VERSION = APP_VERSION
