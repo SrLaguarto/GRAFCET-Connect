@@ -30,7 +30,7 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 
 ### Documentación y planos
 
-- Pestaña **PLANOS** (**Proyecto > Planos…**): hojas con cajetín, con **+ Añadir hoja**, **Traer GRAFCET** (copia a una hoja los elementos seleccionados) y **Añadir texto**.
+- Pestaña **PLANOS**: hojas con cajetín, con **+ Añadir hoja**, **Traer GRAFCET** (copia a una hoja los elementos seleccionados) y **Añadir texto**.
 - **Importar plantillas de lámina** desde **Lámina > Importar plantilla…**. Se admiten:
   - **DXF**: el cajetín y sus campos pasan a ser editables.
   - **PDF**: se elige la página; los textos extraíbles son editables y el resto queda como fondo.
@@ -59,7 +59,7 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 
 ## Descargar e instalar
 
-Descargue el instalador `GRAFCET-Connect-1.0.0-setup.exe` desde la sección [Releases](https://github.com/SrLaguarto/GRAFCET-Connect/releases) del repositorio.
+Descargue el instalador `GRAFCET-Connect-1.0.1-setup.exe` desde la sección [Releases](https://github.com/SrLaguarto/GRAFCET-Connect/releases) del repositorio.
 
 - **Requisitos:** Windows 10 o Windows 11 de 64 bits. No necesita conexión a internet para funcionar.
 - **Instalación:** por defecto se instala en Archivos de programa, lo que pide permisos de administrador. Si no los tiene, el instalador ofrece instalarlo solo para su usuario. Crea el acceso en el menú Inicio, ofrece un acceso en el escritorio (desmarcado por defecto) y asocia los archivos `.grafnet` (marcado por defecto).
@@ -83,6 +83,7 @@ Descargue el instalador `GRAFCET-Connect-1.0.0-setup.exe` desde la sección [Rel
 | Borrar la selección | Supr |
 | Añadir debajo | Ctrl+Intro |
 | Buscar elemento | Ctrl+F |
+| Conectar el elemento seleccionado con otro, sin ratón | Ctrl+K |
 | Centrar todo el dibujo | Ctrl+0 |
 | Acercar / alejar | Ctrl+= / Ctrl+- |
 | Mostrar u ocultar paneles izquierdo, derecho e inferior | Ctrl+L, Ctrl+B, Ctrl+J |

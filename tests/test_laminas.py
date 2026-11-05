@@ -204,4 +204,4 @@ class FlujoLaminas(BaseQt):
         self.assertTrue(w.abrir_ruta(ruta))
         self.assertEqual(w.edicion.ed.sheet_links()[0]['ajustes']['campos']['titulo'],'Proyecto probado')
         proyecto=w.menuBar().actions()[0].menu();rotulos=[a.text().replace('&','') for a in proyecto.actions()]
-        for texto in ('Planos…','Exportar…','Imprimir…'):self.assertIn(texto,rotulos)
+        for texto in ('Exportar…','Imprimir…'):self.assertIn(texto,rotulos)

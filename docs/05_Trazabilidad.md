@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-11-05T16:01:49+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 946 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-11-05T18:21:37+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 948 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 844 casos, 849 pruebas, 849 pasan.
+Pruebas suplementarias S-xx: 846 casos, 851 pruebas, 851 pasan.
 
 ## Requisitos
 
@@ -237,7 +237,7 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-ACC03 | REQ-EDT-13 | pasa | `test_SACC03_supr_borra_y_respeta_el_campo_de_texto` | Supr en el dibujo borra; dentro de una etiqueta solo edita el texto. |
 | S-ACC04 | REQ-EDT-13 | pasa | `test_SACC04_lista_textual_estados_relaciones_y_foco` | estados y relaciones se leen sin depender del color; botones y paneles tienen nombre. |
 | S-ACC05 | REQ-EDT-13 | pasa | `test_SACC05_crear_editar_simular_y_guardar_sin_raton` | creación enlazada, propiedades, validación al Play, Stop y guardar mediante teclado. |
-| S-ACC06 | REQ-EDT-13 | pasa | `test_SACC06_conectar_desde_menu_con_destino_por_teclado` | el menú permite enlazar elementos existentes sin gesto de ratón. |
+| S-ACC06 | REQ-EDT-13 | pasa | `test_SACC06_conectar_desde_menu_con_destino_por_teclado` | Ctrl+K permite enlazar elementos existentes sin gesto de ratón. |
 | S-ACC07 | REQ-EDT-13 | pasa | `test_SACC07_movimiento_multiple_y_vista_vacia_sin_trampa` | las flechas desplazan toda la selección en una operación; Tab sale de un dibujo vacío. |
 | S-AFI01 | REQ-EDT-02 | pasa | `test_SAFI01_transicion_corta_con_proporcion_igual_en_qt_y_js` | trazo de transición de 16 px frente a caja de etapa de 44 px, igual en los dos renderizadores. |
 | S-AFI02 | REQ-EDT-02, REQ-EDT-14 | pasa | `test_SAFI02_doble_barra_separa_lados_y_tapa_trazos_en_su_hueco` | doble barra con 8 px de hueco y conectores detenidos arriba/abajo; nada la atraviesa visualmente. |
@@ -956,6 +956,8 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-PAN09 | REQ-EDT-02, REQ-EDT-09 | pasa | `test_SPAN09_minimo_inferior_se_actualiza_tras_arrastre_y_cambio_de_elemento` | pasar de etapa a transición aumenta el mínimo útil aunque el alto se haya elegido a mano. |
 | S-PAN10 | REQ-EDT-09 | pasa | `test_SPAN10_pestanas_plegadas_sin_hueco_al_volver_de_es` | cambiar de pantalla en E/S no reserva el ancho del contenido plegado. |
 | S-PAN11 | REQ-EDT-09 | pasa | `test_SPAN11_ancho_elegido_se_conserva_tras_es_y_redimensionar` | el lateral abierto conserva el ancho elegido sin absorber el dibujo al volver de E/S. |
+| S-PEX01 |  | pasa | `test_SPEX01_fecha_de_instalacion_con_sys_executable_inexistente` | la fecha sale del ejecutable real (sys.argv[0]) y no falla. |
+| S-PEX02 |  | pasa | `test_SPEX02_sin_ningun_ejecutable_localizable_no_falla` |  |
 | S-PKG | REQ-ALC-02, REQ-CR-02 | pasa | `test_SPKG_paquete_de_transferencia_intacto` | parte automatizable de R-02 (doce Markdown, huellas de la versión implementada). |
 | S-PLT01 | REQ-DAT-02, REQ-EDT-11 | pasa | `test_SPLT01_dxf_entidades_bloques_unidades_textos_y_campos` | DXF en mm/pulgadas conserva geometría, atributos, tildes, alineación y transformaciones. |
 | S-PLT02 | REQ-EDT-11 | pasa | `test_SPLT02_sugerencias_no_enlazan_sin_aceptacion` | HOJA se propone y permanece fija hasta aceptar expresamente el enlace. |
@@ -980,7 +982,7 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-PRP04 | REQ-DAT-02 | pasa | `test_SPRP04_info_manipulado_sin_resellar_abre_sin_firma` | info.json está cubierto por el sello: cambiarlo sin resellar no rechaza el archivo, que abre sin firma. |
 | S-PRP05 | REQ-DAT-02 | pasa | `test_SPRP05_info_mal_formado_con_sello_valido_se_ignora` | un info.json con tipos o tamaño incorrectos no rechaza el archivo: datos desconocidos. |
 | S-PRP06 | REQ-DAT-02 | pasa | `test_SPRP06_huella_cambia_con_el_contenido_y_no_con_la_clave` | la huella (sin clave) identifica el contenido sellado. |
-| S-PRP07 | REQ-NOR-02 | pasa | `test_SPRP07_version_del_programa_y_manifiesto_no_divergen` | escritorio.VERSION, APP_VERSION y appVersion del manifiesto son la misma, 1.0.0. |
+| S-PRP07 | REQ-NOR-02 | pasa | `test_SPRP07_version_del_programa_y_manifiesto_no_divergen` | escritorio.VERSION, APP_VERSION y appVersion del manifiesto son la misma. |
 | S-PRP20 | REQ-DAT-02 | pasa | `test_SPRP20_proyecto_nuevo_se_sellara_al_guardar_y_toma_el_usuario_como_autor` | sin guardar no hay sello ni fechas; el autor por defecto es el usuario del sistema. |
 | S-PRP21 | REQ-DAT-02 | pasa | `test_SPRP21_cambiar_el_autor_marca_modificado_lo_guarda_y_lo_recuerda` | el autor cambia en el diálogo, marca el asterisco y viaja en info.json. |
 | S-PRP22 | REQ-DAT-02 | pasa | `test_SPRP22_proyecto_guardado_muestra_sello_algoritmo_huella_y_programa` | el diálogo informa del sello vigente, la huella agrupada y el programa, sin clave. |

@@ -190,7 +190,7 @@ class NavegacionTeclado(BaseQt):
         self.assertTrue(destino.is_file()); self.assertFalse(e.ed.dirty)
 
     def test_SACC06_conectar_desde_menu_con_destino_por_teclado(self):
-        """REQ-EDT-13: el menú permite enlazar elementos existentes sin gesto de ratón."""
+        """REQ-EDT-13: Ctrl+K permite enlazar elementos existentes sin gesto de ratón."""
         from PySide6.QtCore import QTimer
         from PySide6.QtWidgets import QComboBox
         w,e=self.preparar()
@@ -200,9 +200,8 @@ class NavegacionTeclado(BaseQt):
             combo=dialogo.findChild(QComboBox)
             QTest.keyClick(combo,Qt.Key.Key_End)
             QTest.keyClick(dialogo,Qt.Key.Key_Return)
-        self.tecla(w,Qt.Key.Key_E,Qt.KeyboardModifier.AltModifier)
         QTimer.singleShot(20,elegir)
-        self.tecla(QApplication.activePopupWidget(),Qt.Key.Key_C)
+        self.tecla(w,Qt.Key.Key_K,Qt.KeyboardModifier.ControlModifier)  # Ctrl+K (P-IMP-104)
         self.assertIn(sid,e.M['transitions'][0]['post'])
         self.assertIs(QApplication.focusWidget(),w.diagrama)
 

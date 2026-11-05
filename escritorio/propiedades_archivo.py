@@ -92,8 +92,13 @@ def descripcion_programa() -> tuple[str, str]:
     texto = f"GRAFCET Connect {VERSION} ({tipo})"
     if not EMPAQUETADO:
         return texto, "versión de desarrollo, sin instalar"
-    modificado = datetime.fromtimestamp(Path(sys.executable).stat().st_mtime)
-    return texto, modificado.strftime("%d/%m/%Y %H:%M")
+    # Con Nuitka, sys.executable apunta a un «python.exe» que no existe; el ejecutable real es sys.argv[0].
+    for candidato in (sys.argv[0] if sys.argv else "", sys.executable):
+        ruta = Path(candidato) if candidato else None
+        if ruta is not None and ruta.is_file():
+            modificado = datetime.fromtimestamp(ruta.stat().st_mtime)
+            return texto, modificado.strftime("%d/%m/%Y %H:%M")
+    return texto, "desconocida"
 
 
 def recopilar(e, editable: bool = True) -> Propiedades:

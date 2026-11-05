@@ -7,7 +7,7 @@ Documento generado por `tools/generar_trazabilidad.py` a partir de `grafcet/prof
 | Eje de versión | Valor |
 |---|---|
 | format | 0.1 |
-| application | 1.0.0 |
+| application | 1.0.1 |
 | profile | grafcet-impl-provisional@0.1.0 |
 | standard | IEC 60848:2013 ed. 3.0 |
 

@@ -559,13 +559,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_guardar.setShortcut(QKeySequence.StandardKey.Save)
         self.a_guardar_como = self._accion("Guardar &como…", self.guardar_como, "Ctrl+Shift+S")
         archivo.addAction(self.a_guardar_como)
-        archivo.addAction("&Planos…", self.abrir_laminas)
-        archivo.addAction("Hojas del proyecto…", self.abrir_hojas)
         self.a_exportar = archivo.addAction("&Exportar…", lambda:self.abrir_laminas("exportar"))
         self.a_imprimir = self._accion("&Imprimir…", lambda:self.abrir_laminas("imprimir"), "Ctrl+P")
         archivo.addAction(self.a_imprimir)
         archivo.addAction("Guardar el &dibujo como imagen…", self.guardar_imagen)
-        archivo.addAction("Propiedades del archi&vo…", lambda: propiedades_archivo.abrir(self))
+        archivo.addAction("Propiedades del archi&vo…", lambda *_: propiedades_archivo.abrir(self))
         archivo.addSeparator()
         archivo.addAction("&Salir", self.close).setShortcut(QKeySequence.StandardKey.Quit)
         ejemplos = bar.addMenu("&Ejemplos")
@@ -628,7 +626,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         insertar = edicion.addMenu("Añadir &elemento")
         for texto, tipo in (("&Etapa", "etapa"), ("Etapa &inicial", "inicial"), ("&Transición", "transicion")):
             insertar.addAction(texto, lambda _=False, tipo=tipo: self.insertar_teclado(tipo))
-        edicion.addAction("&Conectar con…", self.conectar_teclado)
         self.a_enviar_lamina=self._accion("Enviar a plano…",self.enviar_seleccion_lamina)
         edicion.addAction(self.a_enviar_lamina)
         edicion.addSeparator()
@@ -637,6 +634,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         edicion.addSeparator()
         for a in self.a_herr.values():
             self.addAction(a)  # Esc deselecciona sin presentar «Seleccionar» como un atajo de clic
+        # Enlazar sin ratón (REQ-EDT-13): sin entrada en el menú (P-IMP-104), solo con el atajo Ctrl+K.
+        self.a_conectar = self._accion("Conectar con…", self.conectar_teclado, "Ctrl+K")
+        self.addAction(self.a_conectar)
         sim = bar.addMenu("&Simulación")
         for a in (self.a_ejecutar, self.a_reiniciar):
             sim.addAction(a)
@@ -2562,6 +2562,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--captura", metavar="PNG", help="guardar una captura de la ventana y salir (comprobación)")
     ap.add_argument("--prueba-contenedor",action="store_true",help=argparse.SUPPRESS)
     ap.add_argument("--prueba-distribucion", metavar="GRAFNET", help=argparse.SUPPRESS)
+    ap.add_argument("--prueba-propiedades", metavar="TXT", help=argparse.SUPPRESS)
     args = ap.parse_args(argv if argv is not None else sys.argv[1:])
     if args.prueba_contenedor:
         from .proyecto_archivo import comprobar_contenedor
@@ -2575,10 +2576,22 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName(TITULO)
     app.setWindowIcon(QIcon(str(ICONO_PROGRAMA)))
+    from .errores import instalar as instalar_avisos_de_error
+    instalar_avisos_de_error()
     from .carpetas import asegurar_carpetas
     try:asegurar_carpetas()
     except OSError as exc:QMessageBox.warning(None,"Carpetas de GRAFCET Connect",str(exc))
     w = Ventana()
+    if args.prueba_propiedades:
+        # Comprobación de construcción: el diálogo Propiedades del archivo se monta en el ejecutable.
+        import traceback
+        try:
+            propiedades_archivo.PropiedadesArchivo(propiedades_archivo.recopilar(w.edicion, True), w)
+            Path(args.prueba_propiedades).write_text("ok", encoding="utf-8")
+            return 0
+        except Exception:
+            Path(args.prueba_propiedades).write_text(traceback.format_exc(), encoding="utf-8")
+            return 4
     if args.ejemplo:
         w.cargar_ejemplo(args.ejemplo)
     if args.modelo and not w.abrir_ruta(Path(args.modelo)):

@@ -4,7 +4,7 @@ GRAFCET Connect (versión portable 1.0.0)
 Abrir: doble clic en «GRAFCET Connect.exe». No necesita instalación ni conexión a la red. La carpeta entera es el
 programa: puede copiarse a otro sitio o a un USB, pero «GRAFCET Connect.exe» no funciona separado de ella.
 
-Instalador (alternativa): «GRAFCET-Connect-1.0.0-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
+Instalador (alternativa): «GRAFCET-Connect-1.0.1-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
 acceso en el menú Inicio (y en el escritorio, si lo marca), asocia los .grafnet si lo deja marcado y se desinstala desde
 Configuración > Aplicaciones. Contiene la misma carpeta que la versión portable (P-IMP-103).
 

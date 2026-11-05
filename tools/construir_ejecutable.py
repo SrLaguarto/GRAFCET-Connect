@@ -143,6 +143,14 @@ def _construir(fuentes, clave, motor) -> int:
                 print("ERROR: el ejecutable no lleva la clave de distribución.", flush=True)
                 return 1
             print("Clave de distribución comprobada en el ejecutable.", flush=True)
+        informe = Path(tmp) / "propiedades.txt"
+        subprocess.run([str(dist / (NOMBRE + ".exe")), "--prueba-propiedades", str(informe)], cwd=dist, env=prueba_env,
+                       timeout=30)
+        resultado = informe.read_text(encoding="utf-8") if informe.is_file() else "sin informe"
+        if resultado != "ok":
+            print("ERROR: el diálogo Propiedades del archivo falla en el ejecutable:\n" + resultado, flush=True)
+            return 1
+        print("Propiedades del archivo comprobadas en el ejecutable.", flush=True)
     size = sum(f.stat().st_size for f in dist.rglob("*") if f.is_file())
     print(f"\nListo: {dist / (NOMBRE + '.exe')}  ({size / 1e6:.0f} MB en la carpeta)")
     if repartible:

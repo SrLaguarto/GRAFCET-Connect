@@ -150,10 +150,10 @@ class Metadatos(unittest.TestCase):
         self.assertEqual(len(huella(entradas_de(a))), 64)
 
     def test_SPRP07_version_del_programa_y_manifiesto_no_divergen(self):
-        """REQ-NOR-02: escritorio.VERSION, APP_VERSION y appVersion del manifiesto son la misma, 1.0.0."""
+        """REQ-NOR-02: escritorio.VERSION, APP_VERSION y appVersion del manifiesto son la misma."""
         self.assertEqual(VERSION, APP_VERSION)
-        self.assertEqual(APP_VERSION, '1.0.0')
-        self.assertEqual(self.proyecto.manifest['appVersion'], '1.0.0')
+        self.assertRegex(APP_VERSION, r'^\d+\.\d+\.\d+$')
+        self.assertEqual(self.proyecto.manifest['appVersion'], APP_VERSION)
 
 
 class Resellado(unittest.TestCase):
