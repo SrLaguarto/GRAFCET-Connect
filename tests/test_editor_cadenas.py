@@ -2058,17 +2058,17 @@ class EncuadrarYDependencias(BaseQt):
         trazos discontinuos sin más: explica que esos trazos (macroetapa-expansión y encapsulante-recinto) solo se ven con el
         botón «Mostrar dependencias» de la vista; ningún texto de la ventana habla de «Abrir expansión» ni de «Ir a la…»."""
         import inspect
-        from escritorio import ventana
+        from escritorio import leyenda as modulo_leyenda, ventana
         from escritorio.diagrama import VistaDiagrama
         d = VistaDiagrama()
         boton = d.b_dependencias.text()
         d.deleteLater()
         self.assertEqual(boton, "Mostrar dependencias")
-        leyenda = ventana.LEYENDA
+        leyenda = " ".join(modulo_leyenda.textos())
         self.assertIn(f"«{boton}»", leyenda, "nombra el botón de la vista")
         self.assertIn("solo se ven con", leyenda)
-        self.assertIn("macroetapa con su expansión", leyenda)
-        self.assertIn("encapsulante con su recinto", leyenda)
+        self.assertIn("macroetapa y expansión", leyenda)
+        self.assertIn("encapsulante y recinto", leyenda)
         self.assertNotIn("unida a su expansión", leyenda, "ya no se dibuja siempre")
         fuente = inspect.getsource(ventana)
         for viejo in ("Abrir expansión", "Ir a la macroetapa", "Ir a la encapsulante", "Ir a la expansión"):
@@ -2500,8 +2500,8 @@ class AvisosConNombres(BaseQt):
         w, e, d = self.barra_con_tres()
         lineas = e.resumen(e.diagnosticos())
         borradores = [x for x in lineas if "alternancia" in x]
-        self.assertEqual(borradores, ["Enlace de borrador 2→0 viola la alternancia etapa/transición; no ejecutable",
-                                      "Enlace de borrador 1→0 viola la alternancia etapa/transición; no ejecutable"])
+        self.assertEqual(borradores, ["Enlace de borrador 2→0 no respeta la alternancia etapa-transición y no se simula.",
+                                      "Enlace de borrador 1→0 no respeta la alternancia etapa-transición y no se simula."])
         for x in lineas:
             self.assertNotRegex(x, self.INTERNO)
         # el cuadro que sale al pulsar Play
@@ -2522,7 +2522,7 @@ class AvisosConNombres(BaseQt):
         e.nombres = {k: v for k, v in e.nombres.items() if k != d["c"]}
         for x in e.resumen(e.diagnosticos()):
             self.assertNotRegex(x, self.INTERNO)
-        self.assertIn("Enlace de borrador 2→0 viola", " ".join(e.resumen(e.diagnosticos())))
+        self.assertIn("Enlace de borrador 2→0 no respeta", " ".join(e.resumen(e.diagnosticos())))
         with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
             w._no_simulable()
         self.assertIn("2→0", aviso.call_args[0][2])
@@ -2670,15 +2670,15 @@ class AvisosConNombres(BaseQt):
                 w.a_ejecutar.setChecked(True)
             texto = aviso.call_args.args[2]
             self.assertIn("lecturas de interpretación activas", texto)
-            self.assertIn("etapas iniciales ['marcha'] dentro de la expansión", texto)
+            self.assertIn("etapas iniciales (marcha) dentro de la expansión", texto)
             self.assertNotIn("['a']", texto)
             with mock.patch("grafcet.view.validate_model", side_effect=con_un_id_interno):
                 with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
                     w.a_ejecutar.setChecked(True)
             texto = aviso.call_args.args[2]
-            self.assertIn("• D-FORMATO: el elemento un elemento no cuadra", texto)
+            self.assertIn("• el elemento un elemento no cuadra", texto)
             self.assertNotRegex(texto, self.INTERNO)
-            self.assertIn("['marcha']", texto)
+            self.assertNotIn("['marcha']", texto)
         finally:
             w.a_ejecutar.setChecked(False)
             w._opciones({})

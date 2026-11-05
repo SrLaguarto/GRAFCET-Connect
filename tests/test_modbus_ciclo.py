@@ -205,19 +205,19 @@ class CicloTests(unittest.TestCase):
                 return exc
         casos = [
             (ConnectionAbortedError(10053, "Se ha anulado una conexión establecida por el software en su equipo host", None, 10053),
-             "El servidor Modbus cerró o anuló la conexión (WinError 10053)"),
+             "Factory I/O cerró la conexión"),
             (ConnectionResetError(10054, "Se ha forzado la interrupción de una conexión existente por el host remoto", None, 10054),
-             "El servidor Modbus cerró o anuló la conexión (WinError 10054)"),
-            (ConnectionRefusedError(10061, "No se puede establecer una conexión", None, 10061), "El servidor Modbus rechazó la conexión (WinError 10061)"),
-            (ConnectionResetError(104, "Connection reset by peer"), "El servidor Modbus cerró o anuló la conexión"),
-            (BrokenPipeError(32, "Broken pipe"), "El servidor Modbus cerró o anuló la conexión"),
-            (socket.timeout("timed out"), "El servidor Modbus no ha respondido a tiempo"),
+             "Factory I/O cerró la conexión"),
+            (ConnectionRefusedError(10061, "No se puede establecer una conexión", None, 10061), "Factory I/O no acepta la conexión"),
+            (ConnectionResetError(104, "Connection reset by peer"), "Factory I/O cerró la conexión"),
+            (BrokenPipeError(32, "Broken pipe"), "Factory I/O cerró la conexión"),
+            (socket.timeout("timed out"), "Factory I/O no ha respondido a tiempo"),
         ]
         for causa, frase in casos:
             self.assertTrue(explicar_fallo(fallo(causa)).startswith(frase), (causa, explicar_fallo(fallo(causa))))
-        self.assertEqual(explicar_fallo(ErrorModbus("Tiempo de espera Modbus agotado")), "El servidor Modbus no ha respondido a tiempo")
-        self.assertEqual(explicar_fallo(ErrorModbus("El servidor cerró la conexión")), "El servidor Modbus cerró la conexión")
-        self.assertEqual(explicar_fallo(ErrorModbus("Cabecera MBAP inválida")), "", "lo desconocido sigue con el mensaje técnico")
+        self.assertEqual(explicar_fallo(ErrorModbus("Tiempo de espera Modbus agotado")), "Factory I/O no ha respondido a tiempo")
+        self.assertEqual(explicar_fallo(ErrorModbus("El servidor cerró la conexión")), "Factory I/O cerró la conexión")
+        self.assertEqual(explicar_fallo(ErrorModbus("La respuesta de Factory I/O no es válida")), "", "lo desconocido sigue con el mensaje técnico")
         # de punta a punta: el servidor corta la conexión y el coordinador la declara en error con el texto legible
         responde = [True]
 
@@ -233,7 +233,7 @@ class CicloTests(unittest.TestCase):
                 esperar(c, lambda: c.estado == "conectado")
                 responde[0] = False
                 esperar(c, lambda: c.estado == "error")
-                self.assertTrue(c.mensaje.startswith("El servidor Modbus "), c.mensaje)
+                self.assertTrue(c.mensaje.startswith("Factory I/O cerró la conexión"), c.mensaje)
                 self.assertIn(". Salidas no garantizadas. Pulsa Conectar para reanudar. Detalle: ", c.mensaje)
                 self.assertFalse(c.activo)
             finally:
@@ -586,7 +586,7 @@ class CicloTests(unittest.TestCase):
         with mock.patch.object(ClienteModbus, "conectar", side_effect=rechazo):
             estado, mensaje, _ = desconectar_conectando(cfg, None, False)
         self.assertEqual(estado, "error")
-        self.assertTrue(mensaje.startswith("Desconectado · no se llegó a conectar: El servidor Modbus rechazó la conexión (WinError 10061)"),
+        self.assertTrue(mensaje.startswith("Desconectado · no se llegó a conectar: Factory I/O no acepta la conexión"),
                         mensaje)
         self.assertIn("Detalle: ", mensaje)
         # el TCP se abre y luego el servidor corta (la escritura del cero falla): sí hubo conexión, y las salidas no se garantizan

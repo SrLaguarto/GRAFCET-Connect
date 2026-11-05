@@ -90,6 +90,20 @@ def encaja(variable, area):
         tipo == "bool" if area in ("discrete", "coil") else tipo in ("int", "decimal"))
 
 
+def aviso_escala(variable, senal):
+    """Aviso (ámbar) si una variable Entera va a un registro con escala distinta de 1, como la de Factory I/O (100):
+    la planta manda valores con decimales y una Entera no los admite. Cadena vacía si no hay nada que avisar."""
+    if variable is None or senal is None or variable["type"]["kind"] != "int" or senal.formato == "BOOL":
+        return ""
+    try:
+        escala = Fraction(senal.escala)
+    except (ValueError, ZeroDivisionError, TypeError):
+        return ""
+    if escala == 1:
+        return ""
+    return "Factory I/O manda este valor con decimales: ponga la variable como Decimal (2 decimales)"
+
+
 def areas_variable(variable):
     """Las áreas que ofrece la tabla para la variable (la primera es la propuesta)."""
     digital = variable["type"]["kind"] == "bool"
@@ -216,9 +230,10 @@ class TerminalES(QFrame):
     """Un canal: el lateral exterior al PLC es la zona donde soltar una variable. Dentro del marco, el indicador y el nombre del canal
     (y el valor, en los registros); fuera, a su lado, el nombre de la variable asignada y, al pasar el ratón, «×»."""
 
-    def __init__(self, panel, area, direccion, variable=None):
+    def __init__(self, panel, area, direccion, variable=None, aviso=""):
         super().__init__(panel)
         self.panel, self.area, self.direccion, self.variable = panel, area, direccion, variable
+        self.aviso = aviso
         self._inicio_arrastre = None
         self._resaltado = False
         self.setAcceptDrops(not panel.bloqueado)
@@ -236,7 +251,13 @@ class TerminalES(QFrame):
         self.nombre = EtiquetaElidida(variable["name"] if variable else "",
                                       Qt.AlignmentFlag.AlignRight if entrada else Qt.AlignmentFlag.AlignLeft)
         self.nombre.setObjectName("asignacionES")  # lo que se agarra para mover la asignación a otro canal
-        self.nombre.setStyleSheet("color:#203b45")
+        self.nombre.setStyleSheet("color:#9a5b00" if aviso else "color:#203b45")
+        self.marca = None
+        if aviso:  # señal ámbar junto a la fila: no impide nada, solo avisa
+            self.marca = QLabel("⚠")
+            self.marca.setStyleSheet("color:#c77700; font-size:11px")
+            self.marca.setToolTip(aviso)
+            self.nombre.setToolTip(aviso)
         self.valor = QLabel("—" if variable else "", self)
         self.valor.setStyleSheet("color:#526e66; font-size:10px")
         self.valor.setVisible(analogica)
@@ -275,6 +296,8 @@ class TerminalES(QFrame):
         if entrada:
             if self.b_quitar:
                 l.addWidget(self.b_quitar)
+            if self.marca:  # por el lado exterior: el nombre sigue pegado al marco del PLC
+                l.addWidget(self.marca)
             l.addWidget(self.nombre, 1)
             l.addWidget(self.barrita_nombre)
             l.addSpacing(8)
@@ -284,6 +307,8 @@ class TerminalES(QFrame):
             l.addSpacing(8)
             l.addWidget(self.barrita_nombre)
             l.addWidget(self.nombre, 1)
+            if self.marca:
+                l.addWidget(self.marca)
             if self.b_quitar:
                 l.addWidget(self.b_quitar)
         self.setToolTip(f"{AREAS[area]} · dirección {direccion}\nArrastra una variable. Botón derecho para quitar o configurar.")
@@ -524,6 +549,7 @@ class PanelES(QWidget):
         self.conexion_defecto = CONEXION_INICIAL  # (host, puerto, esclavo) que propone `cargar` si no hay mapa guardado
         self.aviso = ""  # asignaciones quitadas al poner al día con el modelo; dura hasta la siguiente acción sobre el mapa
         self.pista_canales = ""  # variables sin dónde asignarse porque su área tiene cantidad 0
+        self.avisos_escala = ""  # variables Enteras con escala distinta de 1 (ámbar, junto a su fila y en la nota)
         self.pendiente = False  # con la conexión viva: hay variables nuevas que se verán al desconectar
         self.indicadores = {}
         self.indicadores_listas = {}
@@ -780,7 +806,8 @@ class PanelES(QWidget):
         self.dialogo_config.close()
 
     def mostrar_tiempos(self, medidas, ultima_parada=None):
-        """Cadencia observada y duración del intercambio, sin confundirlas con la parada física."""
+        """Cadencia observada y duración del intercambio, sin confundirlas con la parada física. Se guarda en `tiempos`
+        (texto y tooltip), que permanece oculto."""
         def ms(clave):
             return f"{medidas[clave]:.1f}".replace(".", ",") + " ms"
         if "ciclo_ms" not in medidas:
@@ -811,7 +838,7 @@ class PanelES(QWidget):
                 lineas.append(antes + " ms antes: " + valores)
         lineas.append("El ciclo no incluye la espera hasta el siguiente sondeo ni el movimiento después de desactivar la salida.")
         self.tiempos.setToolTip("\n".join(lineas))
-        self.tiempos.show()
+        # La línea queda oculta: la medida se conserva (texto y detalle), pero no se enseña al alumno.
 
     def mostrar_estado(self, estado, mensaje):
         self.estado.setText(mensaje)
@@ -1013,7 +1040,31 @@ class PanelES(QWidget):
             base = self.obtener()
         except ValueError:  # lo escrito a medias no es válido: se parte del último mapa aplicado
             base = self.config
-        return self.cargar(doc, base)
+        recolocar = set()
+        if not self.bloqueado:  # con la conexión viva el mapa no se mueve
+            base, recolocar = self._separar_por_cambio_de_tipo(doc, base)
+        quitadas = self.cargar(doc, base)
+        sin_canal = self.autoasignar(recolocar)
+        if sin_canal:
+            self.aviso = " · ".join(t for t in (self.aviso, "Sin canal Modbus libre: " + ", ".join(sin_canal)) if t)
+            self._pintar_nota()
+        return quitadas
+
+    @staticmethod
+    def _separar_por_cambio_de_tipo(doc, config):
+        """Las asignaciones de variables que han pasado de booleana a numérica (Entera o Decimal, igual) no se pueden
+        conservar en su canal digital, pero tampoco se avisa de que se quitan: se vuelven a colocar solas en un registro,
+        como una variable nueva. Devuelve la configuración sin ellas y el conjunto de IDs que hay que recolocar."""
+        variables = {v["id"]: v for v in doc["variables"] if v["role"] in ("input", "output")}
+        recolocar, conservadas = set(), []
+        for s in config.senales:
+            v = variables.get(s.variable)
+            ahora_numerica = v is not None and v["type"]["kind"] in ("int", "decimal")
+            if ahora_numerica and s.area in ("discrete", "coil"):
+                recolocar.add(s.variable)
+            else:
+                conservadas.append(s)
+        return (replace(config, senales=conservadas) if recolocar else config), recolocar
 
     def marcar_pendiente(self, pendiente):
         """Con la conexión viva el mapa en uso no cambia: se avisa de que hay variables nuevas o cambiadas por ver."""
@@ -1022,7 +1073,7 @@ class PanelES(QWidget):
             self._pintar_nota()
 
     def _pintar_nota(self):
-        partes = (self.aviso, self.pista_canales, "Hay variables nuevas o cambiadas: se verán al desconectar" if self.pendiente else "")
+        partes = (self.aviso, self.avisos_escala, self.pista_canales, "Hay variables nuevas o cambiadas: se verán al desconectar" if self.pendiente else "")
         self.estado.fijar_nota(" · ".join(t for t in partes if t))
 
     def obtener(self):
@@ -1106,7 +1157,7 @@ class PanelES(QWidget):
             for direccion in sorted(direcciones):
                 s = mapa.get((area, direccion))
                 v = variables.get(s.variable) if s else None
-                terminal = TerminalES(self, area, direccion, v)
+                terminal = TerminalES(self, area, direccion, v, aviso_escala(v, s))
                 fila.addWidget(terminal)
                 self.terminales[(area, direccion)] = terminal
                 if v:
@@ -1119,6 +1170,12 @@ class PanelES(QWidget):
         # Con canales fijados a mano, un área en 0 no ofrece dónde soltar sus variables: se dice cuál para subirla
         vacias = [ETIQUETA_CANAL[a] for a in AREAS if c.canales.get(a, {}).get("cantidad", 1) == 0
                   and any(encaja(v, a) and v["id"] not in asignadas for v in self.variables)]
+        avisos = []
+        for s in c.senales:
+            texto = aviso_escala(variables.get(s.variable), s)
+            if texto:
+                avisos.append(f"«{variables[s.variable]['name']}»: {texto}")
+        self.avisos_escala = "; ".join(avisos)
         self.pista_canales = f"Sin canales en {', '.join(vacias)}: sube su cantidad en Configuración" if vacias else ""
         self._pintar_nota()
 

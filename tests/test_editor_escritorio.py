@@ -548,7 +548,7 @@ class Interfaz(unittest.TestCase):
         guardar, abrir otro modelo o cerrar pregunta."""
         w = self.w
         e, ids, ts = self.secuencial()
-        self.assertIn("ya existe", e.renombrar(ids["1"], "0"))
+        self.assertIn("ya existe", e.renombrar(ids["1"], "0").lower())
         self.assertIsNone(e.renombrar(ids["1"], "Marcha"))
         self.assertEqual({s["id"]: s["label"] for s in e.M["steps"]}[ids["1"]], "Marcha")
         self.assertTrue(e.ed.dirty)
@@ -674,7 +674,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.nombres[ids["1"]], "Marcha")
         p.s_etiqueta.setText("0")  # ya existe
         p.s_etiqueta.editingFinished.emit()
-        self.assertIn("ya existe", p.msg.text())
+        self.assertIn("ya existe", p.msg.text().lower())
         self.assertEqual(p.s_etiqueta.text(), "Marcha")
         p.s_tipo.setCurrentIndex(1)
         p.s_tipo.activated.emit(1)
@@ -2897,7 +2897,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(pv.tabla.rowCount(), 2)
         pv.tabla.item(1, 0).setText("Cuenta")
         self.assertEqual((len(e.ed.model["variables"]), pv.tabla.item(1, 0).text(), pv.sin_nombre()), (1, "", 1))
-        self.assertIn("ya existe", pv.msg.text())
+        self.assertIn("ya existe", pv.msg.text().lower())
         # con una fila sin nombre no se simula ni se guarda
         with mock.patch("escritorio.ventana.QFileDialog.getSaveFileName") as archivo, \
                 mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
@@ -4823,7 +4823,7 @@ class Interfaz(unittest.TestCase):
         accion = next(a for a in ayuda.actions() if "Leyenda" in a.text())
         accion.trigger()
         self.assertTrue(w._leyenda.isVisible() and not w._leyenda.isModal())
-        self.assertIn("Etapa activa", w._leyenda.findChild(QLabel).text())
+        self.assertTrue(any("Etapa activa" in x.text() for x in w._leyenda.findChildren(QLabel)))
         w._leyenda.close()
         w.flechas["inferior"].click()
         self.assertFalse(w.inferior.isHidden())

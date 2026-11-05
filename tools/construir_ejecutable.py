@@ -101,6 +101,7 @@ def _construir(fuentes, clave, motor) -> int:
     from escritorio.sello import CLAVE as CLAVE_DESARROLLO
     guardar_atomico(dist/"Prueba-Modbus.grafnet",empaquetar(ROOT/"pruebas_manuales"/"factoryio_digital",clave if clave is not None else CLAVE_DESARROLLO))
     shutil.copy(ROOT / "docs" / "PRIMERA_CONEXION_FACTORY_IO.md", dist / "PRIMERA_CONEXION_FACTORY_IO.md")
+    _copiar_licencias(dist / "licencias")
     # Un build correcto no basta: comprobar la carga de Qt y el dibujo en el EXE.
     with tempfile.TemporaryDirectory(prefix="grafcet-arranque-") as tmp:
         captura = Path(tmp) / "arranque.png"
@@ -126,6 +127,37 @@ def _construir(fuentes, clave, motor) -> int:
     print(f"\nListo: {dist / (NOMBRE + '.exe')}  ({size / 1e6:.0f} MB en la carpeta)")
     return 0
 
+
+# Distribuciones que van dentro del ejecutable y cuya licencia exige acompañar su texto.
+TERCEROS = ("PySide6_Essentials", "shiboken6", "pypdfium2", "ezdxf", "numpy", "fonttools", "pyparsing",
+            "typing_extensions")
+
+
+def _copiar_licencias(destino: Path) -> None:
+    """Licencia propia, avisos de terceros y textos de licencia de cada biblioteca incluida."""
+    import importlib.metadata as metadata
+    if destino.exists():
+        shutil.rmtree(destino)
+    destino.mkdir(parents=True)
+    shutil.copy(ROOT / "LICENSE", destino / "GRAFCET-Connect-GPL-3.0.txt")
+    for fichero in (ROOT / "licencias").iterdir():
+        shutil.copy(fichero, destino / fichero.name)
+    licencia_python = Path(sys.base_prefix) / "LICENSE.txt"
+    if licencia_python.is_file():
+        (destino / "Python").mkdir()
+        shutil.copy(licencia_python, destino / "Python" / "LICENSE.txt")
+    for nombre in TERCEROS:
+        distribucion = metadata.distribution(nombre)
+        for archivo in distribucion.files or []:
+            ruta = str(archivo).replace("\\", "/")
+            es_licencia = "/licenses/" in ruta or any(k in ruta.upper() for k in ("LICEN", "COPYING", "NOTICE"))
+            if not es_licencia or "Qt-Commercial" in ruta:  # Qt va con la LGPL, no con la licencia comercial
+                continue
+            origen = Path(distribucion.locate_file(archivo))
+            relativa = ruta.split("/licenses/", 1)[1] if "/licenses/" in ruta else Path(ruta).name
+            final = destino / nombre / relativa
+            final.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(origen, final)
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -31,6 +31,7 @@ from grafcet.timeutil import parse_duration
 from grafcet.view import (Vista, display_names, force_situation, norm, layout_from_presentation, presentation_for,
                          substitute)
 
+from .mensajes import amable, correccion_amable
 from .bloques import _dur_usuario, normalizar_duracion
 from .anotaciones import en as anotacion_en, rect as rect_anotacion, importar_imagen, editar_texto
 from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, REJILLA, SX, TB, VACIO_H, VACIO_W, _distancia, _extra,
@@ -259,7 +260,7 @@ class Edicion(QObject):
         (`_nom`)."""
         if not texto:
             return texto
-        return sin_codigos(self.sin_internos(substitute(texto, getattr(self, "nombres", {}))))
+        return amable(sin_codigos(self.sin_internos(substitute(texto, getattr(self, "nombres", {})))))
 
     def sin_internos(self, texto: str) -> str:
         """Lo último que se hace con un mensaje antes de enseñarlo: cada ID interno que haya quedado en él (el que crea el
@@ -399,7 +400,7 @@ class Edicion(QObject):
         """Los diagnósticos del modelo para el panel (REQ-EDT-09): código, texto con nombres, corrección y elemento."""
         out = []
         for d in self.ed.validate().diagnostics:
-            mensaje, correccion = self.sust(d.message), self.sust(d.correction)
+            mensaje, correccion = self.sust(d.message), self.sust(correccion_amable(d.code, d.correction))
             evento = next((a for a in self.ed.model["actions"] if a.get("trigger", {}).get("kind") == "event" and d.element in (a["id"],a["trigger"].get("expressionRef"))), None)
             if d.code == "D-TIPO-EVENTO" and evento:
                 texto = self.texto_accion(evento["id"], "evento")
@@ -3876,7 +3877,7 @@ class Edicion(QObject):
             self.ed.rename(ident, nuevo)
         except DiagnosticError as exc:
             self.parpadear([ident])
-            return "; ".join(self.sust(f"{d.message}. {d.correction}") for d in exc.diagnostics)
+            return "; ".join(f"{self.sust(d.message).rstrip('.')}. {self.sust(d.correction)}" for d in exc.diagnostics)
         self.cambia()
         return None
 

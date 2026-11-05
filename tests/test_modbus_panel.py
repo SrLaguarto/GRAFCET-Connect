@@ -529,7 +529,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(w.modbus.estado, "conectado")
                 self.assertIs(w.modbus.cliente._socket, socket)
                 self.assertIsNone(w.modbus.adaptador.sesion)
-                self.assertTrue(any("presupuesto de" in w.lista_diag.item(i).text() for i in range(w.lista_diag.count())))
+                self.assertTrue(any("no alcanza una situación estable" in w.lista_diag.item(i).text() for i in range(w.lista_diag.count())))
                 w._desconectar_modbus()
                 esperar(lambda: not w.modbus.activo)
             finally:
@@ -938,7 +938,8 @@ class PanelTests(unittest.TestCase):
     def test_SFIO38_cambiar_tipo_o_papel_de_una_asignada_la_quita_con_aviso_sin_romper_el_panel(self):
         """REQ-SIM-03, REQ-EDT-07: si una variable asignada cambia de tipo o de papel y ya no casa con su área, se quita del
         mapa con un aviso y el panel queda consistente (antes: error al cargar y listas obsoletas para siempre); con otro
-        tipo compatible, la asignación se conserva."""
+        tipo compatible, la asignación se conserva. Una booleana que pasa a numérica (Entera o Decimal) no se avisa: se
+        recoloca sola en el primer registro libre."""
         app = QApplication.instance() or QApplication([])
         decimal = {"kind": "decimal", "scale": 2}
         with tempfile.TemporaryDirectory() as tmp:
@@ -959,9 +960,9 @@ class PanelTests(unittest.TestCase):
                 self._es(w, True)
                 self.assertEqual(self._nombres(p.lista_entradas), ["a", "c"])
                 self.assertEqual(self._nombres(p.lista_salidas), ["b"])
-                self.assertEqual(self._mapa(w), {"c": ("input-register", 1)})
-                for nombre in ("a", "b"):
-                    self.assertIn(f"«{nombre}»", p.estado.text())
+                self.assertEqual(self._mapa(w), {"a": ("input-register", 2), "c": ("input-register", 1)})
+                self.assertIn("«b»", p.estado.text())
+                self.assertNotIn("«a»", p.estado.text(), "recolocada sola, sin aviso de quitada")
                 self.assertIn("Asignaciones quitadas", p.estado.toolTip())
                 self.assertEqual(p.config.senales, p.obtener().senales, "config y tabla coinciden")
                 # las dos pueden asignarse ahora a lo que les corresponde
@@ -1332,20 +1333,17 @@ class PanelTests(unittest.TestCase):
     def test_SFIO48_pausa_sin_conexion_deja_el_grafcet_sin_estado_y_cada_play_empieza_de_cero(self):
         """REQ-SIM-03 (P-IMP-60): sin E/S externas, Pausa también deja el GRAFCET sin etapas activas, sin temporizadores y con
         las tablas vacías; Play arranca de la situación inicial aunque no se haya editado nada; Reiniciar en Pausa no
-        crea estado; «Avanzar el tiempo» solo está disponible en Play."""
+        crea estado."""
         app = QApplication.instance() or QApplication([])
         with tempfile.TemporaryDirectory() as tmp:
             m = self._modelo_pausa()
             w = self._ventana_modelo(tmp, m.doc)
             try:
-                self.assertFalse(w.a_avanzar.isEnabled(), "Avanzar el tiempo no está en Pausa")
                 w.a_ejecutar.setChecked(True)
-                self.assertTrue(w.a_avanzar.isEnabled(), "Avanzar el tiempo está en Play")
                 w.botones["sensor"].click()
                 self.assertEqual(w.v.state()["situation"], ["E1"])
                 self.assertEqual({k: x["value"] for k, x in w.v.state()["outputs"].items()}, {"motor": False, "luz": True})
                 w.a_ejecutar.setChecked(False)
-                self.assertFalse(w.a_avanzar.isEnabled())
                 self.assertEqual((w.v.state().get("situation", []), w.v.state().get("outputs", {}), w.v.state().get("values", {})),
                                  ([], {}, {}), "sin etapas, sin salidas y sin valores")
                 self.assertEqual((w.t_vars.rowCount(), w.t_temp.rowCount(), w.traza.count()), (0, 0, 0))

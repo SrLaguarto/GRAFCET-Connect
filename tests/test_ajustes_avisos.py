@@ -255,7 +255,7 @@ class AjustesYAvisos(BaseQt):
                 d = AcercaDe.ultimo
                 textos = " ".join(x.text() for x in d.findChildren(QLabel))
                 for esperado in ("GRAFCET Connect", f"Versión {VERSION}", "Basado en IEC 60848", "GPL-3.0", URL_CODIGO,
-                                 "sin ninguna garantía", "LICENSE"):
+                                 "sin ninguna garantía", "licencias", "Real Games"):
                     self.assertIn(esperado, textos)
                 d.l_licencia.linkActivated.emit(URL_CODIGO)
                 d.b_fallo.click()

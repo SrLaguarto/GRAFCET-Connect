@@ -421,12 +421,14 @@ class Ventana(unittest.TestCase):
         cuadro = w._popup_inestable
         self.assertIsNotNone(cuadro)
         self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Play"))
-        self.assertEqual(cuadro.text(), "El GRAFCET es inestable: no alcanza una situación estable. Revise las transiciones.")
+        self.assertIn("el grafcet no alcanza una situación estable", cuadro.text())
+        self.assertIn("t3", cuadro.text())
         self.assertEqual([b.text() for b in cuadro.buttons()], ["Aceptar"])
         self.assertTrue(cuadro.isModal())
         textos = [w.lista_diag.item(i).text() for i in range(w.lista_diag.count())]
-        self.assertTrue(any("presupuesto de" in t and "D-LIM-EVOL" not in t for t in textos), textos)
-        self.assertTrue(any("franquea" in t and "t3" in t for t in textos), "qué transiciones")
+        self.assertTrue(any("no alcanza una situación estable" in t and "D-LIM-EVOL" not in t for t in textos), textos)
+        self.assertTrue(any("se franquea" in t and "t3" in t for t in textos), "qué transiciones")
+        self.assertFalse(any("presupuesto" in t or "τ" in t or "Evolución" in t for t in textos), textos)
         # No se repite por tic: más refrescos y tics del mismo episodio no abren otra ventana
         with mock.patch.object(type(w), "_avisar_inestable", autospec=True) as otro:
             w.refrescar_edicion()
@@ -589,7 +591,7 @@ class Ventana(unittest.TestCase):
                 w.a_ejecutar.setChecked(True)
             self.assertEqual(aviso.call_count, 1)
             self.assertIn("lecturas", aviso.call_args.args[2])
-            self.assertIn("7.7", aviso.call_args.args[2])
+            self.assertIn("dentro de la expansión", aviso.call_args.args[2])
             self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Play"))
             w._opciones({})  # lecturas por defecto: se puede ejecutar
             w.a_ejecutar.setChecked(True)

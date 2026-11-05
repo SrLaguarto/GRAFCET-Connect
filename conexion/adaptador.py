@@ -1,7 +1,50 @@
 """Traducción de E/S. La sesión solo se toca desde su hilo propietario."""
+from decimal import Decimal
 from fractions import Fraction
 
+from grafcet.diagnostics import DiagnosticError
 from grafcet.values import check_fits, in_domain
+
+
+class ErrorConversion(ValueError):
+    """Un valor leído o por escribir que no cabe en su variable o en su registro. El texto ya está escrito para el
+    usuario (nombra la variable y el valor, sin códigos): se enseña tal cual."""
+
+
+def texto_numero(valor) -> str:
+    """Un número con coma decimal española y sin ceros de más: 1,3; 2,345; 40."""
+    f = Fraction(valor)
+    if f.denominator == 1:
+        return str(f.numerator)
+    texto = format(Decimal(f.numerator) / Decimal(f.denominator), "f")
+    if "." in texto:
+        texto = texto.rstrip("0").rstrip(".")
+    return texto.replace(".", ",")
+
+
+def _tipo_legible(tipo) -> str:
+    if tipo.kind == "int":
+        return "Entera"
+    if tipo.kind == "decimal":
+        return f"Decimal ({tipo.scale} decimales)"
+    return "de otro tipo"
+
+
+def _decimales_de_escala(escala):
+    """Los decimales que admite un registro con esa escala (100 → 2); None si no es una potencia de 10."""
+    texto = str(escala)
+    return len(texto) - 1 if texto.isdigit() and texto[0] == "1" and set(texto[1:]) <= {"0"} else None
+
+
+def _entrada_no_cabe(variable, numero) -> ErrorConversion:
+    """El texto cuando un valor que manda la planta no es representable en el tipo de la variable de entrada."""
+    cabecera = (f"La entrada «{variable.name}» es {_tipo_legible(variable.type)}, "
+                f"pero Factory I/O ha enviado {texto_numero(numero)}.")
+    if variable.type.kind == "int" and Fraction(numero).denominator != 1:
+        return ErrorConversion(cabecera + " Cámbiela a Decimal (2 decimales) en Variables.")
+    if variable.type.kind == "decimal":
+        return ErrorConversion(cabecera + " Aumente los decimales de la variable en Variables.")
+    return ErrorConversion(cabecera + " Ese valor no cabe en la variable.")
 
 
 class MonitorEntradas:
@@ -41,7 +84,7 @@ class Adaptador:
         if s.status != "pausada-estable":
             raise RuntimeError("El motor no está estable")
         if set(muestra) != {x.variable for x in self.entradas}:
-            raise ValueError("Muestra de entradas incompleta")
+            raise ErrorConversion("Factory I/O no ha enviado todas las entradas asignadas")
         cambios = {}
         for senal in self.entradas:
             raw = muestra[senal.variable]
@@ -49,17 +92,44 @@ class Adaptador:
             if senal.formato == "BOOL":
                 valor = check_fits(v.type, raw)
             else:
-                if type(raw) is not int or not 0 <= raw <= 65535:
-                    raise ValueError("Registro de entrada inválido")
-                numero = raw - 65536 if senal.formato == "INT16" and raw >= 32768 else raw
-                valor = check_fits(v.type, Fraction(numero) / Fraction(senal.escala))
+                valor = self._registro_a_valor(senal, v, raw)
             if not in_domain(v.type, v.domain, valor):
-                raise ValueError(f"Entrada {v.name} fuera de dominio")
+                raise ErrorConversion(f"La entrada «{v.name}» ha recibido {texto_numero(valor)}, que está fuera de los "
+                                      "valores que permite su dominio.")
             if s.z.values[senal.variable] != valor:
                 cambios[senal.variable] = valor
         if cambios:
             s.manual_input(cambios)
             s.step_external()
+
+    @staticmethod
+    def _registro_a_valor(senal, v, raw):
+        """El valor del motor que representa un registro leído (con signo si es INT16, dividido por la escala)."""
+        if type(raw) is not int or not 0 <= raw <= 65535:
+            raise ErrorConversion(f"Factory I/O ha enviado un registro no válido para la entrada «{v.name}»")
+        numero = raw - 65536 if senal.formato == "INT16" and raw >= 32768 else raw
+        leido = Fraction(numero) / Fraction(senal.escala)
+        try:
+            return check_fits(v.type, leido)
+        except DiagnosticError:
+            raise _entrada_no_cabe(v, leido) from None
+
+    @staticmethod
+    def _valor_a_registro(senal, nombre, valor):
+        """El registro (16 bits) que lleva una salida del motor; si no cabe, un error que dice por qué."""
+        escala = Fraction(senal.escala)
+        numero = Fraction(valor) * escala
+        if numero.denominator != 1:
+            decimales = _decimales_de_escala(escala)
+            motivo = (f"el registro de Factory I/O solo admite {decimales} decimales" if decimales is not None else
+                      f"no se puede escribir en el registro con la escala {texto_numero(escala)}")
+            raise ErrorConversion(f"La salida «{nombre}» vale {texto_numero(valor)} y {motivo}. "
+                                  "Reduzca los decimales de la variable en Variables.")
+        minimo, maximo = (-32768, 32767) if senal.formato == "INT16" else (0, 65535)
+        if not minimo <= numero <= maximo:
+            raise ErrorConversion(f"La salida «{nombre}» vale {texto_numero(valor)} y se sale del rango del registro "
+                                  f"(de {texto_numero(minimo / escala)} a {texto_numero(maximo / escala)}).")
+        return int(numero) & 0xffff
 
     def valores_salida(self, cero=False) -> dict:
         s = self.sesion
@@ -69,14 +139,11 @@ class Adaptador:
             valor = s.z.outputs[vid] if vid in s.cm.continuous_by_target else s.z.values[vid]
             if senal.formato == "BOOL":
                 if type(valor) is not bool:
-                    raise ValueError("Salida digital no booleana")
+                    nombre = s.cm.variables[vid].name
+                    raise ErrorConversion(f"La salida «{nombre}» debería ser verdadera o falsa, pero vale {texto_numero(valor)}")
                 resultado[vid] = False if cero else valor
             else:
-                numero = Fraction(0 if cero else valor) * Fraction(senal.escala)
-                minimo, maximo = (-32768, 32767) if senal.formato == "INT16" else (0, 65535)
-                if numero.denominator != 1 or not minimo <= numero <= maximo:
-                    raise ValueError(f"Salida {vid} no representable como {senal.formato}")
-                resultado[vid] = int(numero) & 0xffff
+                resultado[vid] = self._valor_a_registro(senal, s.cm.variables[vid].name, 0 if cero else valor)
         return resultado
 
 

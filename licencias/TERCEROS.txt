@@ -1,0 +1,23 @@
+GRAFCET Connect: licencias
+==========================
+
+GRAFCET Connect es software libre bajo la licencia GNU GPL versión 3 (archivo
+GRAFCET-Connect-GPL-3.0.txt). Se ofrece sin ninguna garantía.
+Código fuente: https://github.com/SrLaguarto/GrafConnect
+
+El programa incluye bibliotecas de terceros, cada una con su propia licencia.
+Sus textos están en las subcarpetas de esta carpeta:
+
+- Qt for Python (PySide6 y shiboken6), de The Qt Company: GNU LGPL versión 3
+  (LGPL-3.0.txt, que remite a la GPL versión 3). Las bibliotecas de Qt van como
+  archivos separados en la carpeta del programa y pueden sustituirse por otra
+  versión compatible. Qt incluye a su vez componentes de terceros; su lista y
+  sus licencias: https://doc.qt.io/qt-6/licenses-used-in-qt.html
+- pypdfium2 y PDFium: BSD-3-Clause y Apache-2.0, más las licencias de las
+  dependencias de PDFium (carpeta pypdfium2).
+- ezdxf: MIT. Sus dependencias numpy (BSD-3-Clause y otras), fonttools (MIT),
+  pyparsing (MIT) y typing_extensions (PSF-2.0).
+- Python, de la Python Software Foundation: licencia PSF (carpeta Python).
+
+Factory I/O es una marca de Real Games. GRAFCET Connect se comunica con él por
+Modbus TCP, pero no está afiliado a Real Games ni cuenta con su respaldo.

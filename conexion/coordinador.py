@@ -9,7 +9,7 @@ from collections import deque
 import re
 from time import perf_counter
 
-from .adaptador import Adaptador, MonitorEntradas, escribir_salidas, leer_entradas, salidas_asignadas, valores_cero
+from .adaptador import Adaptador, ErrorConversion, MonitorEntradas, escribir_salidas, leer_entradas, salidas_asignadas, valores_cero
 from .modbus import ClienteModbus
 
 WINERROR_CORTADA, WINERROR_RECHAZADA, WINERROR_TIEMPO = (10053, 10054), 10061, 10060
@@ -17,27 +17,36 @@ CLAVE_ANTERIOR = "anterior"  # variable de una salida del mapa anterior en un ce
 
 
 def explicar_fallo(exc) -> str:
-    """Una primera frase corta y legible para los fallos de red habituales (conexión anulada o reiniciada por el servidor Modbus,
-    rechazada, tiempo agotado), con su código si lo hay; cadena vacía si no se reconoce (el mensaje sigue siendo el técnico).
+    """Una primera frase corta y legible, sin códigos, para los fallos de red habituales (conexión anulada o reiniciada
+    por Factory I/O, rechazada, tiempo agotado); cadena vacía si no se reconoce (el mensaje sigue siendo el técnico).
     Solo explica: no decide nada del estado ni del comportamiento."""
     causa = exc.__cause__ if isinstance(exc.__cause__, OSError) else exc
     texto = str(exc)
     codigo = getattr(causa, "winerror", None)
     if codigo is None and (m := re.search(r"WinError (\d+)", texto)):
         codigo = int(m.group(1))
-    sufijo = f" (WinError {codigo})" if codigo else ""
     if codigo in WINERROR_CORTADA or isinstance(causa, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
-        return f"El servidor Modbus cerró o anuló la conexión{sufijo}"
+        return "Factory I/O cerró la conexión"
     if codigo == WINERROR_RECHAZADA or isinstance(causa, ConnectionRefusedError):
-        return f"El servidor Modbus rechazó la conexión{sufijo}: comprueba que está activo y la IP"
+        return ("Factory I/O no acepta la conexión: compruebe que la simulación está en marcha, "
+                "el servidor Modbus activo y la IP")
     if codigo == WINERROR_TIEMPO or isinstance(causa, TimeoutError) or "Tiempo de espera Modbus agotado" in texto:
-        return f"El servidor Modbus no ha respondido a tiempo{sufijo}"
+        return "Factory I/O no ha respondido a tiempo"
     if "El servidor cerró la conexión" in texto:
-        return "El servidor Modbus cerró la conexión"
+        return "Factory I/O cerró la conexión"
     return ""
 
 
 class Coordinador:
+    @staticmethod
+    def _mensaje_de_error(exc, frase) -> str:
+        """El texto de la conexión detenida: la frase legible, el aviso de salidas y, si es un fallo de red, el detalle."""
+        if isinstance(exc, ErrorConversion):
+            return f"{frase}. Salidas no garantizadas. Pulse Conectar para reanudar."
+        if frase:
+            return f"{frase}. Salidas no garantizadas. Pulsa Conectar para reanudar. Detalle: {exc}"
+        return f"Conexión detenida: {exc}. Salidas no garantizadas."
+
     def __init__(self, notificar=None):
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="modbus")
         self.notificar = notificar
@@ -345,8 +354,11 @@ class Coordinador:
             except Exception as exc:
                 # También incluye conversión inválida: no seguir controlando con muestras malas.
                 frase = explicar_fallo(exc)  # solo cambia el texto: una frase legible y, detrás, el detalle técnico
+                if isinstance(exc, ErrorConversion):  # ya viene redactado para el usuario: sin detalle técnico detrás
+                    frase = str(exc).rstrip(".")
                 if self.estado == "cerrando":  # el usuario acaba de desconectar: se le dice eso, no que reconecte
-                    motivo = f"{frase or exc}." + (f" Detalle: {exc}" if frase else "")
+                    detalle = f" Detalle: {exc}" if frase and not isinstance(exc, ErrorConversion) else ""
+                    motivo = f"{frase or exc}.{detalle}"
                     if fase in ("inicio", "prueba") and not self._tcp_abierto:  # nunca hubo conexión: no se intentó ningún cero
                         texto = f"Desconectado · no se llegó a conectar: {motivo}"
                     elif fase == "prueba":  # la prueba no escribe nada: no hay salidas que garantizar
@@ -355,9 +367,7 @@ class Coordinador:
                         texto = f"Desconectado · salidas no garantizadas · no se pudo poner a cero la planta: {motivo}"
                     self.estado, self.mensaje = "error", texto
                 else:
-                    self.estado, self.mensaje = "error", (
-                        f"{frase}. Salidas no garantizadas. Pulsa Conectar para reanudar. Detalle: {exc}" if frase else
-                        f"Conexión detenida: {exc}. Salidas no garantizadas.")
+                    self.estado, self.mensaje = "error", self._mensaje_de_error(exc, frase)
                 self.en_marcha = False
                 self.reiniciando = False
                 self._cero_al_cerrar = None

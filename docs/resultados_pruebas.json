@@ -1,9 +1,9 @@
 {
- "date": "2026-11-05T10:58:44+01:00",
+ "date": "2026-11-05T12:41:56+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 904,
+ "total": 922,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -246,6 +246,90 @@
     "REQ-MOD-03"
    ],
    "summary": "REQ-MOD-03, REQ-EDT-02, REQ-EDT-14: un retorno exterior rodea al interior; no se altera una ruta manual ni el modelo."
+  },
+  {
+   "test": "test_avisos_leyenda.Interfaz.test_SALT01_panel_de_transicion_enseña_todos_los_operadores_sin_barra",
+   "case": "S-ALT01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: al seleccionar una transición el panel inferior mide al menos lo justo para ver la paleta de"
+  },
+  {
+   "test": "test_avisos_leyenda.Interfaz.test_SALT02_un_panel_mayor_que_el_minimo_se_respeta",
+   "case": "S-ALT02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: si el usuario hace el panel más grande que el mínimo, seleccionar una transición no lo cambia."
+  },
+  {
+   "test": "test_avisos_leyenda.Interfaz.test_SLEY01_leyenda_tiene_secciones_y_miniaturas_dibujadas_con_el_diagrama",
+   "case": "S-LEY01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: cada entrada con imagen lleva una miniatura dibujada con diagrama.dibujar; hay seis secciones y la"
+  },
+  {
+   "test": "test_avisos_leyenda.Interfaz.test_SLEY02_la_leyenda_nombra_el_boton_de_dependencias_y_no_habla_de_la_navegacion_antigua",
+   "case": "S-LEY02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-04",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-EDT-02, REQ-JER-04, REQ-JER-05: explica que los trazos macroetapa-expansión y encapsulante-recinto solo se"
+  },
+  {
+   "test": "test_avisos_leyenda.Interfaz.test_SRCT01_cambiar_el_tamaño_de_la_ventana_recentra_tras_el_retardo",
+   "case": "S-RCT01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: al redimensionar la ventana, un temporizador de disparo único llama a «Centrar todo»; plegar un"
+  },
+  {
+   "test": "test_avisos_leyenda.Mensajes.test_SAVI01_parada_por_bucle_se_traduce_sin_jerga",
+   "case": "S-AVI01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-SIM-08"
+   ],
+   "summary": "REQ-EDT-09, REQ-SIM-08: el presupuesto agotado se cuenta como «no se queda quieto», sin τ ni presupuesto."
+  },
+  {
+   "test": "test_avisos_leyenda.Mensajes.test_SAVI02_bucle_nombra_las_transiciones_y_etapas_que_se_repiten",
+   "case": "S-AVI02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-08"
+   ],
+   "summary": "REQ-SIM-08: el motivo de parada nombra con sus nombres visibles las transiciones del bucle y deja el detalle"
+  },
+  {
+   "test": "test_avisos_leyenda.Mensajes.test_SAVI03_motivos_frecuentes_en_lenguaje_llano",
+   "case": "S-AVI03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: los diagnósticos más frecuentes se muestran sin referencias internas ni jerga."
+  },
+  {
+   "test": "test_avisos_leyenda.Mensajes.test_SAVI04_aviso_largo_se_parte_en_frase_corta_y_ayuda",
+   "case": "S-AVI04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un aviso largo deja una frase corta en la lista y el texto completo para la ayuda emergente."
   },
   {
    "test": "test_borradores_huerfanos.BorradoDeBorradores.test_SDBR01_borrar_las_dos_transiciones_de_la_barra_incluye_el_borrador",
@@ -4784,6 +4868,90 @@
     "REQ-EXP-01"
    ],
    "summary": "REQ-EXP-01: una entrada no representable no entra en el motor."
+  },
+  {
+   "test": "test_modbus_avisos.MensajesConversion.test_SFIO70_texto_numero_con_coma_espanola",
+   "case": "S-FIO70",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01: los números de los mensajes llevan coma decimal y sin ceros de más."
+  },
+  {
+   "test": "test_modbus_avisos.MensajesConversion.test_SFIO71_entrada_entera_con_decimales_dice_que_variable_y_que_hacer",
+   "case": "S-FIO71",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EXP-01",
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01, REQ-EXP-01: una Entera que recibe 1,3 (130 con escala 100) no entra en el motor y el error nombra la"
+  },
+  {
+   "test": "test_modbus_avisos.MensajesConversion.test_SFIO72_entrada_decimal_con_mas_decimales_de_los_declarados",
+   "case": "S-FIO72",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EXP-01"
+   ],
+   "summary": "REQ-EXP-01: un Decimal de 2 decimales que recibe 1,234 lo dice con el nombre de la variable."
+  },
+  {
+   "test": "test_modbus_avisos.MensajesConversion.test_SFIO73_salida_no_representable_nombra_la_variable",
+   "case": "S-FIO73",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EXP-01"
+   ],
+   "summary": "REQ-EXP-01: una salida con más decimales que el registro, o fuera de su rango, lo dice con el nombre."
+  },
+  {
+   "test": "test_modbus_avisos.MensajesConversion.test_SFIO74_muestra_incompleta_y_mensajes_de_red_sin_codigos",
+   "case": "S-FIO74",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01: la muestra incompleta y los fallos de red se explican sin códigos ni jerga."
+  },
+  {
+   "test": "test_modbus_avisos.MensajesConversion.test_SFIO75_el_error_de_conversion_llega_al_estado_del_coordinador",
+   "case": "S-FIO75",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01: lo que sube hasta el estado es el texto del alumno, no uno genérico ni con «Detalle»."
+  },
+  {
+   "test": "test_modbus_avisos.PanelAvisos.test_SFIO76_decimal_se_coloca_solo_igual_que_entera",
+   "case": "S-FIO76",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-07, REQ-SIM-03: Entera y Decimal, entrada o salida, van al primer registro libre; una booleana que pasa a"
+  },
+  {
+   "test": "test_modbus_avisos.PanelAvisos.test_SFIO77_aviso_ambar_de_entera_con_escala_distinta_de_uno",
+   "case": "S-FIO77",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-ROB-01: una Entera en un registro con escala 100 lleva un aviso junto a su fila y en la nota; una"
+  },
+  {
+   "test": "test_modbus_avisos.PanelAvisos.test_SFIO78_la_linea_de_sondeo_y_ciclo_no_se_ve",
+   "case": "S-FIO78",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: la medida de sondeo y ciclo se conserva (texto y tooltip) pero la línea queda oculta."
   },
   {
    "test": "test_modbus_ciclo.CicloTests.test_SFIO09_ciclo_pausa_diagnostico",

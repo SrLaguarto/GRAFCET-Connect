@@ -39,6 +39,10 @@ from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion, sin_codigos
 from .propiedades import PanelPropiedades, Paleta
 from .navegacion import Navegacion
+from .leyenda import Leyenda
+from .recentrado import Recentrado
+from .mensajes import amable, motivo_parada, partir
+from .alto_opciones import agrandar_para_transicion
 from .paneles import PanelPlegable, DivisorPlegable, PilaActual
 from .variables import PanelVariables
 from .entradas_salidas import CONEXION_INICIAL, PanelES
@@ -66,22 +70,6 @@ ESTADOS = {"pausada-estable": ("estable", "ok"), "pausada-recorrido": ("en recor
            "finalizada": ("finalizada", "ok"), "preparada": ("preparada", "muted"), "ejecutando": ("ejecutando", "muted")}
 TRAZA = {"fallo": "err", "evolucion": "accent", "contexto": "muted"}
 ERRORES = (DiagnosticError, RuntimeError, ValueError, KeyError)
-LEYENDA = (
-    "<b>Etapa activa</b>: marca ● y fondo azul. <b>Etapa inestable</b> (activa durante un tiempo nulo: sus acciones "
-    "memorizadas se ejecutan, las continuas no producen salida): borde morado discontinuo; «fue inestable» marca las "
-    "del último instante.<br><b>Transición</b>: gris = no validada, negra = validada, azul = franqueable, naranja = "
-    "recién franqueada.<br><b>Tras un bloqueo</b>: gris punteado = último estado estable conservado (no es el "
-    "resultado); naranja discontinuo = alcanzada antes del punto en cuestión, sin confirmar; trazo rojo = transición "
-    "en cuestión.<br><b>Acciones</b>: ↑ al activar, ↓ al desactivar, banderita = por evento, trazo con texto = "
-    "condición; marco verde = salida a 1.<br><b>Jerarquía</b>: macroetapa = divisiones horizontales arriba y abajo; "
-    "encapsulante = esquinas cortadas; recinto = marco con la encapsulante arriba y su nombre abajo; los trazos discontinuos "
-    "que unen la macroetapa con su expansión (de E a S) y la encapsulante con su recinto solo se ven con «Mostrar "
-    "dependencias» (barra de herramientas); * = enlace de activación; G{…} en rectángulo doble = orden de forzado "
-    "(morada si está vigente; {*} situación actual, {INIT} inicial, { } vacía); marco redondeado = parcial.<br>"
-    "<br><b>Temporizadores</b>: encima de la duración de la receptividad o de la acción con retardo, el tiempo que "
-    "lleva («0,5 s») mientras cuenta y «3 s ✓» cuando ha vencido.<br>"
-    "Pase el ratón por una etapa o transición para ver su estado. La rueda acerca o aleja alrededor del puntero; "
-    "«Centrar todo» (Ctrl+0) encaja el dibujo.")
 
 
 def _q_key(q: str) -> list[Any]:
@@ -254,8 +242,10 @@ class AcercaDe(QDialog):
         fila.addWidget(self.b_fallo)
         fila.addStretch(1)
         lay.addLayout(fila)
-        garantia = QLabel("Este programa se ofrece sin ninguna garantía. Consulta la licencia completa en el archivo "
-                          "LICENSE. Interfaz con Qt for Python (PySide6), bajo licencia LGPL v3.")
+        garantia = QLabel("Este programa se ofrece sin ninguna garantía. Las licencias, la propia y las de las "
+                          "bibliotecas incluidas, están en la carpeta «licencias». Interfaz con Qt for Python "
+                          "(PySide6), bajo licencia LGPL v3. Factory I/O es una marca de Real Games; GRAFCET "
+                          "Connect no está afiliado a Real Games.")
         garantia.setWordWrap(True)
         garantia.setStyleSheet("color: #6b7385; font-size: 11px")
         lay.addWidget(garantia)
@@ -452,7 +442,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._transicion_ui = False  # Play/Pausa en curso: los cambios que él mismo provoca no lo repiten
         self._aviso_inestable_sesion = None  # sesión de la que ya se avisó (un solo aviso por episodio)
         self._popup_inestable = None
-        self._avisos_ejecucion: list[str] = []  # por qué se paró el motor: se muestra entre los diagnósticos al editar
+        self._avisos_ejecucion: list[tuple[str, str]] = []  # por qué se paró el motor (texto, ayuda): entre los avisos al editar
         self._ayuda = ""  # ayuda del ejemplo o modelo abierto, para mostrarla al simular lo que aún no se ha editado
         self._proyecto: Any = None  # qué proyecto hay abierto (los ID de modelo no lo distinguen: todos los ejemplos son «m»)
         self._proyecto_modbus: Any = None  # de qué proyecto es el mapa que tiene cargado el panel de E/S
@@ -585,8 +575,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_ejecutar.setToolTip("Play: iniciar una simulación nueva · Stop: detener y dejar todo a 0 (F5)")
         self.a_reiniciar = self._accion("Reiniciar", self.reiniciar, "Ctrl+R")
         self.a_reiniciar.setToolTip("Volver a la situación inicial; en Play sigue en Play (Ctrl+R)")
-        self.a_avanzar = self._accion("&Avanzar el tiempo…", self.avanzar_tiempo)
-        self.a_avanzar.setToolTip("Herramienta de depuración: solo en Play y sin E/S externas")
         ver = bar.addMenu("&Ver")
         self.a_izquierdo = self._accion("Panel i&zquierdo (al editar)", lambda on: self._mostrar_panel("izquierdo", on),
                                         "Ctrl+L", True)
@@ -641,8 +629,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         sim = bar.addMenu("&Simulación")
         for a in (self.a_ejecutar, self.a_reiniciar):
             sim.addAction(a)
-        sim.addSeparator()
-        sim.addAction(self.a_avanzar)
         m_ajustes = bar.addMenu("A&justes")
         m_ajustes.addAction("&Ajustes de simulación…", self.lecturas)
         ayuda = bar.addMenu("A&yuda")
@@ -679,6 +665,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.ayuda.setStyleSheet(f"color: {COL['muted']}")
         cab.addWidget(self.ayuda,1)
         self.diagrama = VistaDiagrama()
+        self.recentrado = Recentrado(lambda: self.diagrama.ajustar(), self)
         self.navegacion = Navegacion(self.diagrama)
         cab.addWidget(self.navegacion)
         self.estado.setMinimumHeight(self.navegacion.buscador.sizeHint().height()+8)
@@ -815,6 +802,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.vsplit.setCollapsible(1, False)  # el panel inferior se pliega con su flecha, no arrastrando: nunca por debajo de lo que pide
         self.vsplit.setHandleWidth(8)
         self._opciones_automaticas = True
+        self._seleccion_alto: tuple[str, tuple[str, ...]] | None = None  # qué selección comprobó ya el alto del panel
         self.vsplit.splitterMoved.connect(lambda *_: setattr(self, "_opciones_automaticas", False))
         self.vsplit.setStretchFactor(0, 1)  # al agrandar la ventana crece el dibujo; el panel inferior conserva su altura
         self.vsplit.setStretchFactor(1, 0)
@@ -981,6 +969,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _abrir_opciones(self) -> None:
         """Despliega el panel inferior (las opciones de lo seleccionado), si estaba plegado."""
         self._mostrar_panel("inferior", True)
+        agrandar_para_transicion(self)
 
     def _accion_panel(self, nombre: str) -> QAction:
         return {"izquierdo": self.a_izquierdo, "derecho": self.a_derecho, "inferior": self.a_inferior}[nombre]
@@ -1079,7 +1068,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if not op.executable:
             if contenedor is not None:contenedor.cerrar()
             QMessageBox.warning(self, TITULO, "El modelo no se puede simular:\n\n"
-                                + "\n".join(str(d) for d in op.diagnostics))
+                                + "\n".join(amable(d.message, d.code) for d in op.diagnostics))
             return False
         if not self._salir_de_edicion():
             if contenedor is not None:contenedor.cerrar()
@@ -1195,7 +1184,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         nueva = Vista(e.ed.model["id"], e.titulo, ayuda, lambda: (copy.deepcopy(e.ed.model), e.layout()), self.options,
                       presentation=e.ed.presentation)
         if nueva.s is None:  # compila con las lecturas por defecto, pero no con las activas (diálogo «Lecturas»)
-            lineas = [f"• {d.code}: {e.sust(d.message)}" for d in nueva.compile_diags]  # (el texto del núcleo, con nombres y sin ID)
+            lineas = [f"• {e.sust(d.message)}" for d in nueva.compile_diags]  # (el texto del núcleo, con nombres y sin ID)
             QMessageBox.warning(self, TITULO, "El grafcet no compila con las lecturas de interpretación activas, no se puede "
                                 "simular todavía:\n\n" + "\n".join(lineas[:8]) + ("\n…" if len(lineas) > 8 else ""))
             return False
@@ -1389,7 +1378,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         for accion in (self.a_guardar,self.a_guardar_como,self.a_enviar_lamina,self.a_exportar): accion.setEnabled(not getattr(self,"solo_lectura",False))
         self.pestanas_vistas.setTabEnabled(1,not getattr(self,"solo_lectura",False))
         self._acciones_edicion(editar)
-        self.a_avanzar.setEnabled(not editar)
         self.derecho.setCurrentIndex(1 if editar else 0)
         self.inferior.setCurrentIndex(1 if editar else 0)
         self._anchos_laterales(ancho)
@@ -1448,6 +1436,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         alto = self._minimo_panel("inferior")
         total = sum(self.vsplit.sizes())
         self.vsplit.setSizes([max(total - alto, 120), alto])
+        agrandar_para_transicion(self)
 
     def _alto_inferior(self, editar: bool) -> None:
         """Al cambiar de modo, el panel inferior recupera la altura que tenía en ese modo (la inicial, o la que dejó el
@@ -1465,6 +1454,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.vsplit.setSizes([total - alto, alto])
         if editar and self._opciones_automaticas:
             QTimer.singleShot(0, self, self._dimensionar_opciones)
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if self.isVisible():
+            self.recentrado.solicitar()
 
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
@@ -1530,6 +1524,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if pagina != getattr(self, "_pagina_opciones", None):
             self._pagina_opciones = pagina
             QTimer.singleShot(0, self, self._dimensionar_opciones)
+        seleccion = (self.props.pagina, tuple(e.sel))
+        if seleccion != self._seleccion_alto:
+            self._seleccion_alto = seleccion
+            QTimer.singleShot(0, self, lambda: agrandar_para_transicion(self))
         self.variables.mostrar(e)
         planos=hasattr(self,"paginas_es") and self.paginas_es.currentIndex()==2
         self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
@@ -1547,15 +1545,18 @@ class Ventana(ArchivosProyecto, QMainWindow):
             if d["code"] == "D-TIPO-EVENTO" and d["message"].startswith("Acción por evento"):
                 nombre = ""
             mensaje = d["message"] if nombre else d["message"][:1].upper() + d["message"][1:]
-            item = QListWidgetItem(f"{nombre}{mensaje}")
+            principal, completo = partir(f"{nombre}{mensaje}")
+            item = QListWidgetItem(principal)
             item.setData(Qt.ItemDataRole.UserRole, d["target"])
             # El código no va en el texto (P-IMP-89), pero sigue a la vista en la ayuda emergente (REQ-EDT-09).
             referencia = f"Referencia: {d['code']}"
-            item.setToolTip(f"{d['correction']}\n{referencia}" if d["correction"] else referencia)
+            ayuda = [x for x in (completo, d["correction"], referencia) if x]
+            item.setToolTip("\n".join(ayuda))
             item.setForeground(QColor(COL["text"]))  # el rojo queda para lo que impide simular (el resumen)
             self.lista_diag.addItem(item)
-        for texto in self._avisos_ejecucion:  # por qué paró el motor la última vez que se simuló
-            item = QListWidgetItem(f"Simulación detenida · {texto}")
+        for texto, detalle in self._avisos_ejecucion:  # por qué paró el motor la última vez que se simuló
+            item = QListWidgetItem(texto)
+            item.setToolTip(detalle)
             item.setForeground(QColor(COL["text"]))
             self.lista_diag.addItem(item)
         hay_detalle = self.lista_diag.count() > 0
@@ -1612,19 +1613,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def leyenda(self) -> None:
         """«Ayuda > Leyenda del dibujo»: una ventana propia (no modal) con lo que significa cada trazo y color."""
         if self._leyenda is None:
-            d = QDialog(self)
-            d.setWindowTitle("Leyenda del dibujo")
-            d.resize(640, 420)
-            lay = QVBoxLayout(d)
-            texto = QLabel(LEYENDA)
-            texto.setWordWrap(True)
-            texto.setAlignment(Qt.AlignmentFlag.AlignTop)
-            texto.setMargin(8)
-            sc = QScrollArea()
-            sc.setWidgetResizable(True)
-            sc.setWidget(texto)
-            lay.addWidget(sc)
-            self._leyenda = d
+            self._leyenda = Leyenda(self)
         self._leyenda.show()
         self._leyenda.raise_()
         self._leyenda.activateWindow()
@@ -1656,23 +1645,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
             texto += "\n\nTambién cambia la jerarquía:\n" + "\n".join(f"• {a[0].upper()}{a[1:]}." for a in avisos)
         return QMessageBox.question(self, TITULO, texto + "\n\nSe puede deshacer con Ctrl+Z. ¿Continuar?") \
             == QMessageBox.StandardButton.Yes
-
-    def avanzar_tiempo(self) -> None:
-        """Depuración (solo en Play): avanza el tiempo lógico una duración dada (por ejemplo «0,5», «2 s» o «350 ms»)."""
-        if self.v is None or self.v.s is None or self.v.s.status != "pausada-estable":
-            QMessageBox.information(self, TITULO, "El tiempo solo puede avanzarse con la situación estable.")
-            return
-        texto, ok = QInputDialog.getText(self, "Avanzar el tiempo", "Duración (segundos, o con unidad: «350 ms»):",
-                                         text="1 s")
-        if not ok:
-            return
-        raw = texto.strip().replace(",", ".")
-        try:
-            us = parse_duration(raw if re.search(r"[a-zµ]", raw) else f"{raw} s")
-        except DiagnosticError as exc:
-            QMessageBox.warning(self, TITULO, f"No es una duración válida: {exc}")
-            return
-        self._act("avanzar", us=us)
 
     # -- acciones de simulación -------------------------------------------------------------------
     def _act(self, op: str, **body: Any) -> None:
@@ -1885,25 +1857,25 @@ class Ventana(ArchivosProyecto, QMainWindow):
         m = self.modbus
         if m.activo and (inestable or not al_arrancar) and (m.adaptador.sesion is not None or m.escritos):
             m.pausar(diagnostico=True)
-        evoluciones = [r["text"] for r in vista.state().get("trace", []) if r["kind"] == "evolucion"][-4:]
-        self._avisos_ejecucion = ([sin_codigos(d["message"])] if d else []) \
-            + ([f"Últimas evoluciones: {' · '.join(evoluciones)}"] if inestable and evoluciones else [])
+        evoluciones = [r for r in vista.s.trace.records if r["kind"] == "evolucion"]
+        motivos = motivo_parada(d["code"], d["message"], evoluciones, vista.names) if d else []
+        self._avisos_ejecucion = motivos
         if inestable:
             if self._aviso_inestable_sesion is not vista.s:
                 self._aviso_inestable_sesion = vista.s
-                self._avisar_inestable()
+                self._avisar_inestable(motivos[-1][0] if motivos else "")
         elif al_arrancar:
-            QMessageBox.warning(self, TITULO, "No se puede ejecutar: revise los diagnósticos del GRAFCET."
-                                + (f"\n\n{sin_codigos(d['message'])}" if d else ""))
+            QMessageBox.warning(self, TITULO, "No se puede ejecutar: revise los diagnósticos del grafcet."
+                                + (f"\n\n{amable(d['message'], d['code'])}" if d else ""))
         else:
-            self.statusBar().showMessage(
-                "El motor se ha detenido por un diagnóstico: véalo en el panel de diagnósticos.", 12000)
+            texto = motivos[0][0] if motivos else "Simulación detenida."
+            self.statusBar().showMessage(f"{texto} Vea el motivo en la lista de diagnósticos.", 12000)
 
-    def _avisar_inestable(self) -> None:
-        """Ventana modal con un solo botón; no abre un bucle de eventos propio (se llama desde el temporizador)."""
-        cuadro = QMessageBox(QMessageBox.Icon.Warning, TITULO,
-                             "El GRAFCET es inestable: no alcanza una situación estable. Revise las transiciones.",
-                             QMessageBox.StandardButton.Ok, self)
+    def _avisar_inestable(self, causa: str = "") -> None:
+        """Ventana modal con un solo botón; no abre un bucle de eventos propio (se llama desde el temporizador). `causa` es
+        la frase que nombra las transiciones que se repiten."""
+        texto = "Simulación detenida: el grafcet no alcanza una situación estable." + (f"\n\n{causa}" if causa else "")
+        cuadro = QMessageBox(QMessageBox.Icon.Warning, TITULO, texto, QMessageBox.StandardButton.Ok, self)
         cuadro.button(QMessageBox.StandardButton.Ok).setText("Aceptar")
         cuadro.finished.connect(lambda _=0: setattr(self, "_popup_inestable", None))
         self._popup_inestable = cuadro
@@ -2370,7 +2342,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _diagnostico(self, S: dict[str, Any], rec: bool) -> None:
         e = html.escape
         if S["status"] == "no-compilable":
-            items = "".join(f"<li>{e(sin_codigos(d['message']))}<br><i>{e(d.get('correction', ''))}</i></li>"
+            items = "".join(f"<li>{e(amable(sin_codigos(d['message']), d['code']))}<br><i>{e(d.get('correction', ''))}</i></li>"
                             for d in S.get("diagnostics", []))
             self.diag.setText(f"<b>El programa no puede compilarse</b><ul>{items}</ul>Corrija el modelo; no se ejecuta "
                               "nada hasta entonces.")
@@ -2381,18 +2353,18 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.diag.hide()
             return
         d, blk = ds[0], S.get("blocked")
-        text = (f"<p>{e(sin_codigos(d['message']))}</p>"
+        text = (f"<p>{e(amable(sin_codigos(d['message']), d['code']))}</p>"
                 f"<p><i>{e(d.get('correction', ''))}</i></p>")
         if blk:
-            text += (f"<p>Recorrido determinado hasta S = {{{e(', '.join(self.nombre(i) for i in blk['reached']))}}}"
-                     + (f"; en cuestión: <b>{e(self.nombre(blk['element']))}</b>" if blk.get("element") else "")
-                     + ". Lo que pase después depende de la cuestión abierta, así que el lote se rechaza entero.</p>")
+            text += (f"<p>El recorrido está determinado hasta las etapas {{{e(', '.join(self.nombre(i) for i in blk['reached']))}}}"
+                     + (f"; el elemento en cuestión es <b>{e(self.nombre(blk['element']))}</b>" if blk.get("element") else "")
+                     + ". Lo que ocurra después depende de una cuestión abierta, así que el lote se rechaza entero.</p>")
         if S["status"] == "error":
-            text += ("<p>El motor no aproxima: conserva el último estado estable"
+            text += ("<p>El motor no aproxima: conserva la última situación estable"
                      + (f" {{{e(', '.join(self.nombre(i) for i in blk['lastStable']))}}}, que <b>no</b> es el resultado del lote" if blk else "")
                      + ". Pulse «Reiniciar» (Ctrl+R) para seguir.</p>")
         else:
-            text += "<p>Contexto pendiente: puede completarse evolución a evolución.</p>"
+            text += "<p>Queda un contexto pendiente: puede completarse evolución a evolución.</p>"
         self.diag.setText(text)
         self.diag.show()
 

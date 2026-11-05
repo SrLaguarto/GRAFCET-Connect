@@ -285,7 +285,7 @@ class LatenciaQtTests(unittest.TestCase):
                 self.assertGreaterEqual(w.modbus.medidas["sondeo_max_ms"],w.modbus.medidas["sondeo_ms"])
                 self.assertGreaterEqual(w.modbus.medidas["ciclo_max_ms"],w.modbus.medidas["ciclo_ms"])
                 w._ultimo_refresco_modbus=0;w._refrescar_modbus()
-                self.assertFalse(w.panel_es.tiempos.isHidden())
+                self.assertTrue(w.panel_es.tiempos.isHidden())  # medida conservada, línea oculta
                 self.assertIn("Ciclo",w.panel_es.tiempos.text())
                 self.assertIn("máx.",w.panel_es.tiempos.text())
                 self.assertIn("Intervalo real entre lecturas",w.panel_es.tiempos.toolTip())
