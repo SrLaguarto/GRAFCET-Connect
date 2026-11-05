@@ -43,6 +43,10 @@ IMAN = 40  # a qué distancia horizontal (dos pasos de rejilla) un elemento movi
 IMAN_ACCION = 16  # a qué distancia de otra acción se pega una acción suelta (lado derecho, o inferior en columna)
 TIPOS_ACCION = FICHAS_ACCION  # continua, condicionada, al activar, al desactivar, por evento (+ «limitada» de ficheros antiguos)
 TEXTO_LIMITADA = "Condicionada (con límite de tiempo)"
+TEXTO_ORDEN = "Orden de forzado"  # sexto tipo del submenú «Tipo de acción»: la acción pasa a ser una orden de forzado
+TIPOS_ETAPA = (("ordinary", "Etapa", "etapa"), ("enclosing", "Encapsulante", "encapsulante"),
+               ("macro", "Macroetapa", "macroetapa"))  # (tipo de `set_step_kind`, texto del menú, ficha de la paleta)
+TEXTO_INICIAL = "Etapa inicial"  # la casilla (independiente de los tipos) del submenú «Tipo de etapa»
 CONTINUAS = ("continua", "condicionada", "limitada")  # los tipos de una acción continua
 CON_CONDICION = ("condicionada", "limitada")  # las continuas con condición: se programa en el panel de opciones
 DISPARADOR = {"activacion": "activation", "desactivacion": "deactivation", "evento": "event"}
@@ -71,6 +75,20 @@ FORMAS_FORZADO = (("explicit", "Explícita"), ("current", "La situación actual"
 MARGEN_SUELTA = 2 * H  # lo que se agranda, a la derecha y debajo, la zona de suelta de un parcial no raíz: una etapa de ancho y de alto
 MSG_SIN_SITIO = "No hay sitio libre a la derecha para la expansión: suelte la macroetapa en un hueco más despejado"
 INTERNO = re.compile(r"(?<![\w-])[a-z]-[0-9a-f]{32}(?![\w-])")  # el ID que crea grafcet.ids.IdGenerator: no es para mostrar
+_CODIGO = r"(?:[DUH]-[A-Z0-9][A-Z0-9-]*|REQ-[A-Z]+-[0-9]+|P-IMP-[0-9]+)"
+CODIGOS = re.compile(rf"\s*\({_CODIGO}(?:\s*[,;]\s*{_CODIGO})*\)|\b{_CODIGO}\s*:\s*|\s*\b{_CODIGO}\b"
+                     r"|\s*\[[a-z]+(?:[.-][a-z0-9]+)+\]")  # códigos internos y etiquetas de capacidad
+
+
+def sin_codigos(texto: str) -> str:
+    """El texto sin códigos internos (D-…, U-…, H-…, REQ-…, P-IMP-…) ni etiquetas de capacidad entre corchetes:
+    «D-REF: no existe X» es «no existe X»; el código sigue en el objeto diagnóstico, no en lo que se enseña."""
+    if not texto:
+        return texto
+    return re.sub(r"\s{2,}", " ", CODIGOS.sub("", texto)).strip()
+
+
+MSG_ORDEN_SIN_ETAPAS = "Una orden explícita necesita al menos una etapa del parcial: elíjala, o use la forma «Vacía»."
 MSG_SIN_DESTINO = "No hay otro parcial al que forzar: cree un recinto, una macroetapa o un grafcet parcial."
 MSG_EQUIDISTANCIA = "No se puede equidistanciar: algo quedaría encima de otro elemento; apártelo antes"
 MSG_ORDEN_SUELTA = ("Orden de forzado suelta: no se simula. Elija su parcial destino con doble clic (o en el panel de opciones) y "
@@ -215,11 +233,12 @@ class Edicion(QObject):
 
     @mensaje.setter
     def mensaje(self, texto: str) -> None:
-        self._mensaje, self.mensaje_info = self.sin_internos(texto), False  # por defecto, un error o un rechazo
+        # por defecto, un error o un rechazo
+        self._mensaje, self.mensaje_info = sin_codigos(self.sin_internos(texto)), False
 
     def informar(self, texto: str) -> None:
         """Un aviso informativo (no un error): se muestra sin el rojo de los rechazos."""
-        self._mensaje, self.mensaje_info = self.sin_internos(texto), True
+        self._mensaje, self.mensaje_info = sin_codigos(self.sin_internos(texto)), True
 
     def _nombres_vivos(self) -> dict[str, str]:
         """El nombre visible de cada elemento del modelo tal como está ahora (no como se dibujó por última vez), con el de los
@@ -240,7 +259,7 @@ class Edicion(QObject):
         (`_nom`)."""
         if not texto:
             return texto
-        return self.sin_internos(substitute(texto, getattr(self, "nombres", {})))
+        return sin_codigos(self.sin_internos(substitute(texto, getattr(self, "nombres", {}))))
 
     def sin_internos(self, texto: str) -> str:
         """Lo último que se hace con un mensaje antes de enseñarlo: cada ID interno que haya quedado en él (el que crea el
@@ -388,6 +407,9 @@ class Edicion(QObject):
                            f"el disparador «{texto}» debe ser un evento, no solo una condición booleana.")
                 correccion = "Elija el evento que deba disparar la acción: flanco de subida (↑) o de bajada (↓) de la variable."
                 mensaje += " Use un flanco de subida (↑) o de bajada (↓), según lo que necesite."
+            if d.code == "D-EXP-PENDIENTE":
+                mensaje = self._texto_expresion_pendiente(mensaje, self.dibujable(d.element))
+            mensaje = sin_codigos(mensaje)
             out.append({"code": d.code, "message": mensaje, "correction": correccion,
                         "severity": d.severity, "blocks": d.blocks_start, "question": d.question,
                         "element": d.element, "target": evento["id"] if d.code == "D-TIPO-EVENTO" and evento else self.dibujable(d.element)})
@@ -416,6 +438,16 @@ class Edicion(QObject):
                         "correction": "Una la acción a una etapa con un enlace desde su punto de unión izquierdo"
                         if suelta else "Complete la acción con «Editar…» (botón derecho en ella)"})
         return out
+
+    def _texto_expresion_pendiente(self, mensaje: str, objetivo: str | None) -> str:
+        """D-EXP-PENDIENTE en palabras normales: «la receptividad está vacía» o «no es válida: «texto»» (de una
+        transición; de una acción, «la condición o el valor»)."""
+        es_transicion = any(t["id"] == objetivo for t in self.ed.model["transitions"])
+        que = "la receptividad" if es_transicion else "la condición o el valor"
+        texto = re.search(r"«(.*)»", mensaje)
+        if "sin significado" in mensaje and (texto is None or not texto.group(1).strip()):
+            return f"{que} está vacía"
+        return f"{que} no es válida" + (f": «{texto.group(1)}»" if texto and texto.group(1).strip() else "")
 
     def dibujable(self, elemento: str | None) -> str | None:
         """El elemento del dibujo al que se refiere un diagnóstico (una receptividad, la transición que la usa)."""
@@ -1952,12 +1984,15 @@ class Edicion(QObject):
         """Opciones del botón derecho sobre lo que hay debajo: en una etapa, la colocación de sus
         acciones; en una acción (suelta o unida), su tipo (submenú con iconos, marcado el actual), «Editar…», separarla y
         «Quitar»; en el enlace de una etapa con sus acciones, «Eliminar el enlace». Jerarquía (P-IMP-23..27; las mismas
-        opciones son los botones del panel de opciones, `acciones_jerarquia`): una etapa ordinaria ofrece «Convertir en
-        encapsulante»; una encapsulante, «Añadir recinto…» y, si no tiene recintos, «Convertir en etapa ordinaria»; una
-        etapa de un recinto, «Enlace de activación» (casilla marcada o no) y «Encuadrar la encapsulante»; la entrada y la salida
+        opciones son los botones del panel de opciones, `acciones_jerarquia`): una etapa o una macroetapa ofrece el
+        submenú «Tipo de etapa» (con icono: «Etapa», «Encapsulante» y «Macroetapa», excluyentes y con el actual marcado,
+        y la casilla «Etapa inicial», que no vale para una macroetapa; no sale en la entrada ni en la salida de una
+        expansión); una encapsulante, «Añadir recinto…»; una etapa de un recinto, «Enlace de activación» (casilla
+        marcada o no) y «Encuadrar la encapsulante»; la entrada y la salida
         de una expansión, «Encuadrar la macroetapa»; cualquier etapa, «Forzar un parcial…» si hay otro parcial; una encapsulante
         con recintos, «Encuadrar el recinto» (o «los recintos»); una macroetapa, «Encuadrar la expansión» y «Renombrar…»; el
         marco de un recinto, «Encuadrar la encapsulante»; el de un grafcet parcial suelto, «Renombrar…»; una orden de forzado,
+        «Tipo de acción» (con «Orden de forzado» marcado: elegir otro la convierte en una acción de la misma etapa),
         «Editar orden de forzado…» y «Quitar orden de forzado» (una sin completar: «Configurar orden de forzado…», «Separar de la
         etapa» o «del grupo» y «Quitar orden de forzado»). Una etapa, una macroetapa, una transición, un enlace o una barra
         de una cadena de elementos enlazados ofrecen, al final, «Equidistanciar alturas de la cadena» (y, si están entre varios
@@ -1972,7 +2007,7 @@ class Edicion(QObject):
         if orden:  # una orden de forzado: se selecciona y ofrece editarla o quitarla
             self.sel, self.accion = [orden["id"]], None
             self.cambiado.emit()
-            return self._menu_desde(orden["id"])
+            return self._menu_tipo_orden(orden["id"]) + [("-", None)] + self._menu_desde(orden["id"])
         ident = elemento_en(self.M, p)
         if ident is None:
             union = self.union_en(p)
@@ -2033,14 +2068,40 @@ class Edicion(QObject):
         return equi
 
     def _menu_desde(self, ident: str) -> list[tuple[str, Any]]:
-        """Las acciones de jerarquía de un elemento como opciones de menú (las casillas, con su marca en `menu_marcadas` o
-        `menu_desmarcadas`)."""
-        out = []
+        """Las acciones de jerarquía de un elemento como opciones de menú (las casillas, con su marca en `menu_marcadas`
+        o `menu_desmarcadas`). Los tipos de una etapa o de una macroetapa (casillas de `acciones_jerarquia`) van
+        juntos en el submenú «Tipo de etapa», con el icono de su ficha de la paleta y, en una etapa, la casilla
+        «Etapa inicial»."""
+        from .propiedades import icono as icono_ficha  # (propiedades importa este módulo: no puede ir arriba)
+        out: list[tuple[str, Any]] = []
+        tipos: list[tuple[str, Any, Any]] = []
+        fichas = {texto: ficha for _, texto, ficha in TIPOS_ETAPA}
         for texto, funcion, estado in self.acciones_jerarquia(ident):
-            out.append((texto, funcion))
+            if texto in fichas:
+                tipos.append((texto, funcion, icono_ficha(fichas[texto])))
+            else:
+                out.append((texto, funcion))
             if estado is not None:
                 (self.menu_marcadas if estado else self.menu_desmarcadas).add(texto)
+        if tipos:
+            st = next((s for s in self.ed.model["steps"] if s["id"] == ident), None)
+            if st is not None:
+                inicial = bool(st["initial"])
+                tipos.insert(1, (TEXTO_INICIAL, lambda: self.tipo_etapa(ident, not inicial),
+                                 icono_ficha("etapa_inicial")))  # el orden: Etapa, Etapa inicial, Encapsulante, Macroetapa
+                if inicial:
+                    self.menu_marcadas.add(TEXTO_INICIAL)
+            out.insert(0, ("Tipo de etapa", tipos))
         return out
+
+    def _menu_tipo_orden(self, oid: str) -> list[tuple[str, Any]]:
+        """El submenú «Tipo de acción» de una orden de forzado (del modelo o sin completar): los cinco tipos de acción
+        con su icono y «Orden de forzado», marcada. Elegir un tipo de acción la convierte en una acción de su misma
+        etapa."""
+        sub = [(texto, lambda t=t: self.orden_a_accion(oid, t), icono_accion(t)) for t, texto in TIPOS_ACCION]
+        sub.append((TEXTO_ORDEN, lambda: None, icono_accion("forzado")))
+        self.menu_marcadas.add(TEXTO_ORDEN)
+        return [("Tipo de acción", sub)]
 
     def _menu_orden_suelta(self, caja: dict[str, Any]) -> list[tuple[str, Any]]:
         """El menú de una orden de forzado sin completar (suelta, o unida a una etapa sin destino): configurarla (el diálogo de
@@ -2049,7 +2110,8 @@ class Edicion(QObject):
         grupo = self._ids_grupo(did) if not sid else [did]
         self.sel, self.accion = (grupo, did) if not sid else ([did], None)
         self.cambiado.emit()
-        out: list[tuple[str, Any]] = [("Configurar orden de forzado…", lambda: self.configurar_orden(did))]
+        out: list[tuple[str, Any]] = [*self._menu_tipo_orden(did), ("-", None),
+                                      ("Configurar orden de forzado…", lambda: self.configurar_orden(did))]
         if sid:
             out.append(("Separar de la etapa", lambda: self.separar_accion(did)))
         elif len(grupo) > 1:
@@ -2073,6 +2135,7 @@ class Edicion(QObject):
         if actual == "limitada":  # la de un fichero antiguo: una condicionada con límite de tiempo
             textos["condicionada"] = TEXTO_LIMITADA
         sub = [(textos[t], lambda t=t: self.tipo_accion(aid, t), icono_accion(t)) for t, _ in TIPOS_ACCION]
+        sub.append((TEXTO_ORDEN, lambda: self.accion_a_orden(aid), icono_accion("forzado")))
         self.menu_marcadas = {textos["condicionada" if actual == "limitada" else actual]}
         out: list[tuple[str, Any]] = [("Tipo de acción", sub), ("-", None),
                                       ("Editar…", lambda: self.pedir_accion(sid, aid))]
@@ -2835,8 +2898,8 @@ class Edicion(QObject):
         return ident != self.raiz and self.ed.partial_roles().get(ident, {}).get("kind") == "root"
 
     def tipo_encapsulante(self, sid: str, encapsulante: bool = True) -> None:
-        """«Convertir en encapsulante» (esquinas cortadas en el dibujo) o «Convertir en etapa ordinaria» (si no tiene
-        recintos): `set_step_kind`, una operación de deshacer. El núcleo rechaza lo demás (la entrada o la salida de una
+        """«Encapsulante» (esquinas cortadas en el dibujo) o «Etapa» (si no tiene recintos) del submenú «Tipo de etapa»:
+        `set_step_kind`, una operación de deshacer. El núcleo rechaza lo demás (la entrada o la salida de una
         expansión, o una encapsulante con recintos): el aviso en rojo y el parpadeo de la etapa."""
         motivo = self._atomico("convertir en encapsulante" if encapsulante else "devolver a ordinaria",
                                lambda: self.ed.set_step_kind(sid, "enclosing" if encapsulante else "ordinary"))
@@ -2845,6 +2908,55 @@ class Edicion(QObject):
         elif encapsulante:
             self.informar(f"La etapa {self._nom(sid)} es ahora una encapsulante: botón derecho, "
                           "«Añadir recinto…», para darle recintos.")
+        self.cambiado.emit()
+
+    def cambiar_tipo_etapa(self, ident: str, tipo: str) -> None:
+        """«Tipo de etapa» (el submenú del botón derecho y las casillas del panel): `tipo` es «ordinary», «enclosing» o
+        «macro». Entre etapa ordinaria y encapsulante, `tipo_encapsulante`. A macroetapa: `set_step_kind` crea la
+        expansión con su entrada y su salida, que se colocan a la derecha como las de la ficha «Macroetapa»
+        (`poner_macro`); de macroetapa a etapa, la expansión solo puede tener su entrada y su salida (si no, se
+        rechaza: «vacíe la expansión antes»). El elemento conserva su ID, su nombre y su lugar. Una sola operación de
+        deshacer; un rechazo del núcleo es el aviso en rojo y el parpadeo del elemento, y no cambia nada."""
+        m = self.ed.model
+        es_macro = any(x["id"] == ident for x in m["hierarchy"]["macros"])
+        actual = "macro" if es_macro else next((s["kind"] for s in m["steps"] if s["id"] == ident), None)
+        if actual == tipo:
+            self.cambiado.emit()
+            return
+        if actual in ("ordinary", "enclosing") and tipo != "macro":
+            self.tipo_encapsulante(ident, tipo == "enclosing")
+            return
+        x = y = xe = 0
+        if tipo == "macro":
+            px, py = posiciones(self.M)[ident]
+            x, y = px - SX, py
+            sitio = self._columna_expansion(x, y)
+            if sitio is None:
+                self.rechazar(MSG_SIN_SITIO, ident)
+                self.cambiado.emit()
+                return
+            xe = sitio
+
+        def hacer() -> None:
+            self.ed.set_step_kind(ident, tipo)
+            if tipo == "macro":
+                info = self.ed.macro_info(ident)
+                self.ed.move(info.entry, xe, y)
+                self.ed.move(info.exit, xe, y + EXP_DY)
+        motivo = self._atomico("convertir en macroetapa" if tipo == "macro" else "convertir en etapa", hacer)
+        if motivo:
+            self.rechazar(motivo, ident)
+            self.cambiado.emit()
+            return
+        self.sel, self.accion = [ident], None
+        if tipo == "macro":
+            info = self.ed.macro_info(ident)
+            self.informar(f"La etapa {self._nom(ident)} es ahora una macroetapa con su expansión a la derecha: de la "
+                          f"entrada {self.nombres.get(info.entry, '?')} a la salida "
+                          f"{self.nombres.get(info.exit, '?')}.")
+        else:
+            clase = "encapsulante" if tipo == "enclosing" else "ordinaria"
+            self.informar(f"La macroetapa {self._nom(ident)} es ahora una etapa {clase}; su expansión vacía se borró.")
         self.cambiado.emit()
 
     def _sitio_recinto(self, sid: str) -> tuple[int, int]:
@@ -3000,7 +3112,8 @@ class Edicion(QObject):
         revés."""
         m = self.ed.model
         if any(x["id"] == ident for x in m["hierarchy"]["macros"]):
-            return [("Encuadrar la expansión", lambda: self.encuadrar_expansion(ident), None),
+            return [*self._tipos_etapa(ident, "macro"),
+                    ("Encuadrar la expansión", lambda: self.encuadrar_expansion(ident), None),
                     ("Renombrar…", lambda: self.renombrar_macro(ident), None)]
         if self.es_orden_suelta(ident):  # una orden sin completar: se configura y se quita
             return [("Configurar orden de forzado…", lambda: self.configurar_orden(ident), None),
@@ -3020,16 +3133,14 @@ class Edicion(QObject):
         if st is None:
             return []
         out: list[tuple[str, Callable[[], Any], bool | None]] = []
-        if st["kind"] == "ordinary":
-            out.append(("Convertir en encapsulante", lambda: self.tipo_encapsulante(ident, True), None))
-        elif st["kind"] == "enclosing":
+        if st["kind"] in ("ordinary", "enclosing"):  # la entrada y la salida de una expansión no cambian de tipo
+            out += self._tipos_etapa(ident, st["kind"])
+        if st["kind"] == "enclosing":
             out.append(("Añadir recinto…", lambda: self.anadir_recinto(ident), None))
             recintos = [r for r in m["hierarchy"]["enclosures"] if r["ownerStepRef"] == ident]
             if recintos:
                 out.append(("Encuadrar el recinto" if len(recintos) == 1 else "Encuadrar los recintos",
                             lambda: self.encuadrar_recintos(ident), None))
-            else:
-                out.append(("Convertir en etapa ordinaria", lambda: self.tipo_encapsulante(ident, False), None))
         rol = roles.get(st["partialRef"])
         if rol and rol["kind"] == "enclosure":  # una etapa de un recinto: su enlace de activación (casilla) y su encapsulante
             out.append(("Enlace de activación", lambda: self.enlace_activacion(ident), ident in rol["activation"]))
@@ -3040,6 +3151,11 @@ class Edicion(QObject):
         if self._destinos_forzado(ident):
             out.append(("Forzar un parcial…", lambda: self.forzar(ident), None))
         return out
+
+    def _tipos_etapa(self, ident: str, actual: str) -> list[tuple[str, Callable[[], Any], bool | None]]:
+        """Los tipos de una etapa o de una macroetapa como casillas excluyentes (la del tipo `actual`, marcada)."""
+        return [(texto, lambda t=tipo: self.cambiar_tipo_etapa(ident, t), tipo == actual)
+                for tipo, texto, _ in TIPOS_ETAPA]
 
     def descripcion_jerarquia(self, ident: str) -> str:
         """Una línea con lo que un elemento es en la jerarquía, con nombres (nunca IDs): «Macroetapa M1 · expansión M1 ·
@@ -3088,7 +3204,7 @@ class Edicion(QObject):
 
     def ficha_jerarquia(self, ident: str) -> dict[str, Any] | None:
         """Lo que muestra el panel de opciones de un elemento de jerarquía: {texto (su descripción, o vacío), botones
-        (`acciones_jerarquia`)}; None si no hay ni una cosa ni la otra (una etapa ordinaria sin otro parcial al que forzar)."""
+        (`acciones_jerarquia`)}; None si no hay ni una cosa ni la otra (por ejemplo, una transición)."""
         texto, botones = self.descripcion_jerarquia(ident), self.acciones_jerarquia(ident)
         return {"texto": texto, "botones": botones} if texto or botones else None
 
@@ -3199,8 +3315,81 @@ class Edicion(QObject):
         eleccion = self.pedir_forzado(self._datos_forzado(f["sourceStepRef"], f))
         return None if eleccion is None else self._poner_orden(f["sourceStepRef"], fid, eleccion)
 
-    def _poner_orden(self, sid: str, fid: str | None, eleccion: dict[str, Any]) -> str | None:
-        """Crea (sin `fid`) o cambia la orden de forzado de la etapa con lo elegido en el diálogo."""
+    def accion_a_orden(self, aid: str) -> str | None:
+        """«Orden de forzado» en el submenú «Tipo de acción» de una acción (del modelo o sin completar): el mismo
+        diálogo de «Forzar un parcial…» y, al aceptarlo, la acción se quita y se crea la orden de forzado en su
+        lugar, en la misma etapa (`_poner_orden` con `quitar`), todo en una sola operación de deshacer. Cancelar no
+        cambia nada; sin otro parcial al que forzar, se rechaza con el aviso en rojo. Una acción suelta (sin etapa)
+        pasa a ser una orden suelta sin completar o, si el diálogo la completa, sigue suelta (hasta unirla a una
+        etapa). Devuelve el ID de la orden, o None."""
+        sid = self.etapa_accion(aid)
+        datos = self._datos_forzado(sid)
+        if not datos["destinos"]:
+            self.rechazar(MSG_SIN_DESTINO, aid)
+            self.cambiado.emit()
+            return None
+        eleccion = self.pedir_forzado(datos)
+        if eleccion is None:
+            return None
+        if sid:
+            return self._poner_orden(sid, None, eleccion, quitar=aid)
+        forma = eleccion.get("forma")
+        etapas = list(eleccion.get("etapas") or []) if forma == "explicit" else None
+        if forma == "explicit" and not etapas:
+            self.rechazar(MSG_ORDEN_SIN_ETAPAS, aid)
+            self.cambiado.emit()
+            return None
+        motivo = self._atomico("convertir acción en orden de forzado", lambda: self.ed.update_draft_action(
+            aid, tipo="forzado", variable=None, condicion="", valor="", evento="", limite="",
+            destino=eleccion.get("destino"), forma=forma, etapas=etapas))
+        if motivo:
+            self.rechazar(motivo, aid)
+            self.cambiado.emit()
+            return None
+        self._tras_borrador(aid)
+        self.informar(self._descripcion_orden_suelta(self._borrador(aid)) + ".")
+        return aid
+
+    def orden_a_accion(self, fid: str, tipo: str) -> str | None:
+        """Un tipo de acción en el submenú «Tipo de acción» de una orden de forzado (del modelo o sin completar): la
+        orden se convierte en una acción de ese tipo de la misma etapa. Como en `tipo_accion` de una acción a la que
+        le falta algo, la acción nueva es un borrador unido a la etapa con «?» en lo que falta (la variable, el
+        valor…) y se abre su editor (`pedir_accion`) para escribirlo; quitar la orden y crear la acción es una sola
+        operación de deshacer. La orden suelta (sin etapa) pasa a ser una acción suelta. Devuelve el ID de la acción,
+        o None si se rechazó."""
+        nuevo: list[str] = []
+        if self.es_orden_suelta(fid):
+            sid = self._borrador(fid).get("etapa")
+            motivo = self._atomico("convertir orden de forzado en acción", lambda: self.ed.update_draft_action(
+                fid, tipo=tipo, destino=None, forma=None, etapas=None))
+            nuevo.append(fid)
+        else:
+            f = next((f for f in self.ed.model["forces"] if f["id"] == fid), None)
+            if f is None:
+                return None
+            sid = f["sourceStepRef"]
+            px, py = posiciones(self.M)[sid]
+
+            def hacer() -> None:
+                self.ed.delete_force(fid)
+                nuevo.append(self.ed.add_draft_action((ajustar(px - SX + H + ACT_LINK), ajustar(py)),
+                                                      {"tipo": tipo, "etapa": sid}))
+            motivo = self._atomico("convertir orden de forzado en acción", hacer)
+        if motivo:
+            self.rechazar(motivo, fid)
+            self.cambiado.emit()
+            return None
+        self.sel = [sid] if sid else self._ids_grupo(nuevo[0])
+        self.accion, self.ver_accion = nuevo[0], True
+        self.cambia()
+        self.pedir_accion(sid, nuevo[0])
+        return nuevo[0]
+
+    def _poner_orden(self, sid: str, fid: str | None, eleccion: dict[str, Any],
+                     quitar: str | None = None) -> str | None:
+        """Crea (sin `fid`) o cambia la orden de forzado de la etapa con lo elegido en el diálogo. Con `quitar`, la
+        acción (del modelo o sin completar) de ese ID se quita en la misma operación de deshacer: así una acción pasa
+        a ser una orden."""
         forma = eleccion.get("forma")
         etapas = list(eleccion.get("etapas") or []) if forma == "explicit" else None
         if forma == "explicit" and not etapas:
@@ -3211,12 +3400,17 @@ class Edicion(QObject):
         hecho: list[str] = []
 
         def hacer() -> None:
+            if quitar is not None and self._es_borrador(quitar):
+                self.ed.delete_draft_actions([quitar])
+            elif quitar is not None:
+                self.ed.delete([quitar])
             if fid is None:
                 hecho.append(self.ed.add_force(sid, eleccion.get("destino"), forma, etapas))
             else:
                 self.ed.set_force(fid, target_partial=eleccion.get("destino"), kind=forma, steps=etapas)
                 hecho.append(fid)
-        motivo = self._atomico("crear orden de forzado" if fid is None else "editar orden de forzado", hacer)
+        etiqueta = "convertir acción en orden de forzado" if quitar else "crear orden de forzado"
+        motivo = self._atomico(etiqueta if fid is None else "editar orden de forzado", hacer)
         if motivo:
             self.rechazar(motivo, fid or sid)
             self.cambiado.emit()
@@ -3718,7 +3912,8 @@ class Edicion(QObject):
             nombres = [self.nombre(i) for i in dict.fromkeys(malas)]
             out.append("Receptividades vacías o con errores de sintaxis: " + ", ".join(nombres[:-1])
                        + (" y " if len(nombres) > 1 else "") + nombres[-1] + ".")
-        out += [f"{d['code']}: {self.sust(d['message'])}" for d in diags if d["blocks"] and d["code"] != "D-EXP-PENDIENTE"]
+        out += [self.sust(d["message"])[:1].upper() + self.sust(d["message"])[1:]
+                for d in diags if d["blocks"] and d["code"] != "D-EXP-PENDIENTE"]
         return out
 
     def _parcial(self, ident: str) -> str:

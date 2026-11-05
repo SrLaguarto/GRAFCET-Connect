@@ -1260,7 +1260,8 @@ class FichaDeForzado(BaseQt):
         self.assertEqual((e.ed.model["forces"][0]["targetKind"], len(e.ed.undo_stack), e.sel), ("current", n + 1, [fid]))
         # conserva «Forzar un parcial…», «Editar orden…» y «Quitar orden» del menú
         self.assertIn("Forzar un parcial…", dict(e.menu(ch)))
-        self.assertEqual([t for t, _ in e.menu(centro_orden(w, fid))], ["Editar orden de forzado…", "Quitar orden de forzado"])
+        self.assertEqual([t for t, _ in e.menu(centro_orden(w, fid))],
+                         ["Tipo de acción", "-", "Editar orden de forzado…", "Quitar orden de forzado"])
 
     def test_SEDI255_cancelar_el_dialogo_no_haber_otro_parcial_o_un_ciclo_no_cambian_nada_y_encima_de_otro_elemento_no_se_coloca(self):
         """REQ-EDT-02, REQ-JER-02, REQ-EDT-09: soltar la ficha encima de una transición, una macroetapa, una barra o una acción
@@ -1916,7 +1917,7 @@ class EncuadrarYDependencias(BaseQt):
         b = cajas_parciales(e.M)[x.partial]
         zona = QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"])
         opciones = e.menu(centro(e.M, mid))
-        self.assertEqual([t for t, _ in opciones], ["Encuadrar la expansión", "Renombrar…"])
+        self.assertEqual([t for t, _ in opciones], ["Tipo de etapa", "Encuadrar la expansión", "Renombrar…"])
         self.assertNotIn("Abrir expansión", dict(opciones))
         antes, n, rev = self.estado(e), len(e.ed.undo_stack), e.ed.revision
 
@@ -2317,7 +2318,9 @@ class OrdenDeForzadoSuelta(BaseQt):
         self.unir(e, did, "izq", h, "arriba")
         sitio = next(c for c in w.diagrama.cajas_acciones if c["id"] == did)["rect"]
         menu = e.menu(centro_caja(w, did))
-        self.assertEqual([t for t, _ in menu], ["Configurar orden de forzado…", "Separar de la etapa", "Quitar orden de forzado"])
+        self.assertEqual([t for t, _ in menu],
+                         ["Tipo de acción", "-", "Configurar orden de forzado…", "Separar de la etapa",
+                          "Quitar orden de forzado"])
         n = len(e.ed.undo_stack)
         dict(menu)["Separar de la etapa"]()
         orden = next(x for x in e.ed.draft_actions() if x["id"] == did)
@@ -2379,7 +2382,8 @@ class OrdenDeForzadoSuelta(BaseQt):
         w, e, d = self.con_parcial()
         h, g1, b = d["h"], d["g1"], d["b"]
         did = self.suelta(w, e)
-        self.assertEqual([t for t, _ in e.menu(centro_caja(w, did))], ["Configurar orden de forzado…", "Quitar orden de forzado"])
+        self.assertEqual([t for t, _ in e.menu(centro_caja(w, did))],
+                         ["Tipo de acción", "-", "Configurar orden de forzado…", "Quitar orden de forzado"])
         self.assertEqual((e.sel, e.accion), ([did], did))
         pedidas = []
         e.pedir_forzado = lambda datos: pedidas.append(datos) or None
@@ -2398,7 +2402,8 @@ class OrdenDeForzadoSuelta(BaseQt):
         e.mover(destino)
         e.soltar(destino)
         self.assertEqual([t for t, _ in e.menu(centro_caja(w, did))],
-                         ["Configurar orden de forzado…", "Separar del grupo", "Colocación de las acciones", "Quitar orden de forzado"])
+                         ["Tipo de acción", "-", "Configurar orden de forzado…", "Separar del grupo",
+                          "Colocación de las acciones", "Quitar orden de forzado"])
         # Supr quita solo la orden seleccionada, en una operación
         e.seleccionar([did])
         antes_otra = [x for x in e.ed.draft_actions() if x["id"] == otra]
@@ -2415,7 +2420,8 @@ class OrdenDeForzadoSuelta(BaseQt):
         # las órdenes del modelo conservan su menú
         e.pedir_forzado = lambda datos: {"destino": g1, "forma": "empty", "etapas": []}
         fid = e.forzar(h)
-        self.assertEqual([t for t, _ in e.menu(centro_orden(w, fid))], ["Editar orden de forzado…", "Quitar orden de forzado"])
+        self.assertEqual([t for t, _ in e.menu(centro_orden(w, fid))],
+                         ["Tipo de acción", "-", "Editar orden de forzado…", "Quitar orden de forzado"])
         self.assertEqual(w.props.ficha_izq.textos_visibles(), ["Editar orden de forzado…", "Quitar orden de forzado"])
 
     def test_SEDI328_una_orden_suelta_no_ofrece_destinos_que_formarian_un_ciclo_con_la_etapa_de_cualquier_otro_parcial(self):
@@ -2493,9 +2499,9 @@ class AvisosConNombres(BaseQt):
         from unittest import mock
         w, e, d = self.barra_con_tres()
         lineas = e.resumen(e.diagnosticos())
-        borradores = [x for x in lineas if x.startswith("D-ALTERNANCIA")]
-        self.assertEqual(borradores, ["D-ALTERNANCIA: enlace de borrador 2→0 viola la alternancia etapa/transición; no ejecutable",
-                                      "D-ALTERNANCIA: enlace de borrador 1→0 viola la alternancia etapa/transición; no ejecutable"])
+        borradores = [x for x in lineas if "alternancia" in x]
+        self.assertEqual(borradores, ["Enlace de borrador 2→0 viola la alternancia etapa/transición; no ejecutable",
+                                      "Enlace de borrador 1→0 viola la alternancia etapa/transición; no ejecutable"])
         for x in lineas:
             self.assertNotRegex(x, self.INTERNO)
         # el cuadro que sale al pulsar Play
@@ -2516,7 +2522,7 @@ class AvisosConNombres(BaseQt):
         e.nombres = {k: v for k, v in e.nombres.items() if k != d["c"]}
         for x in e.resumen(e.diagnosticos()):
             self.assertNotRegex(x, self.INTERNO)
-        self.assertIn("D-ALTERNANCIA: enlace de borrador 2→0 viola", " ".join(e.resumen(e.diagnosticos())))
+        self.assertIn("Enlace de borrador 2→0 viola", " ".join(e.resumen(e.diagnosticos())))
         with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
             w._no_simulable()
         self.assertIn("2→0", aviso.call_args[0][2])
@@ -2524,7 +2530,7 @@ class AvisosConNombres(BaseQt):
         # y un ID que ya no existe en ninguna parte se llama «un elemento»
         fantasma = "s-" + "0123456789abcdef" * 2
         self.assertEqual(e.sust(f"falla {fantasma}→{d['c']}."), "falla un elemento→0.")
-        self.assertEqual(e.resumen([{"code": "D-X", "message": f"mal {fantasma}", "blocks": True, "target": None}]), ["D-X: mal un elemento"])
+        self.assertEqual(e.resumen([{"code": "D-X", "message": f"mal {fantasma}", "blocks": True, "target": None}]), ["Mal un elemento"])
 
     def test_SEDI311_los_rechazos_los_avisos_y_los_nombres_de_los_elementos_no_enseñan_ids(self):
         """REQ-EDT-09, REQ-EDT-02: ningún mensaje de la edición (`mensaje`, `informar`, `rechazar`) deja un ID interno, que se cambia
@@ -2553,7 +2559,8 @@ class AvisosConNombres(BaseQt):
             self.assertIsNone(e.renombrar(ident, n))
         self.unir(e, a, "abajo", barra, "arriba")
         self.unir(e, barra, "abajo", c, "arriba")
-        self.assertTrue(e.mensaje.startswith("D-ALTERNANCIA: "), e.mensaje)
+        self.assertIn("dos elementos del mismo tipo", e.mensaje)
+        self.assertNotIn("D-ALTERNANCIA", e.mensaje)
         self.assertNotRegex(e.mensaje, self.INTERNO)
         self.assertIn("0", e.mensaje)
         for x in e.diagnosticos():
@@ -2628,7 +2635,7 @@ class AvisosConNombres(BaseQt):
         diags = [d for d in e.diagnosticos() if "valor inicial" in d["message"]]
         self.assertEqual(len(diags), 1)
         self.assertTrue(diags[0]["message"].startswith("marcha declara valor inicial True,"), diags[0]["message"])
-        self.assertIn("D-FORMATO: marcha declara valor inicial", " ".join(e.resumen(e.diagnosticos())))
+        self.assertIn("Marcha declara valor inicial", " ".join(e.resumen(e.diagnosticos())))
         self.assertEqual(e.sust(f"{fantasma} y a"), "un elemento y marcha")
         self.assertEqual(e.sust(""), "")
 

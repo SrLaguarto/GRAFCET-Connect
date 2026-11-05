@@ -46,7 +46,8 @@ class PulidoES(BaseQt):
         self.assertFalse(w.ajustes.contains("modbus/configuracion"))
 
     def test_SESP02_recordado_incluye_canales_y_escalas_sin_asignaciones(self):
-        """REQ-SIM-03, REQ-DAT-02: un proyecto sin mapa usa los parámetros completos recordados, sin copiar variables asignadas."""
+        """REQ-SIM-03, REQ-DAT-02: un proyecto sin mapa usa la conexión y los tiempos recordados (no las cantidades de canales,
+        que son las iniciales), sin copiar variables asignadas."""
         w, p = self.modelo()
         canales = copy.deepcopy(CANALES_INICIALES)
         canales["input-register"] = {"offset": 2, "cantidad": 5}
@@ -56,7 +57,7 @@ class PulidoES(BaseQt):
         w, p = self.modelo("otro")
         c = p.obtener()
         self.assertEqual((c.host, c.puerto, c.unidad, c.periodo_ms, c.timeout_ms), ("10.1.2.3", 1502, 7, 80, 900))
-        self.assertEqual(c.canales, canales); self.assertEqual(c.senales, [])
+        self.assertEqual(c.canales, CANALES_INICIALES); self.assertEqual(c.senales, [])
         self.assertTrue(p.asignar("nivel", "input-register", 2))
         self.assertEqual(p.config.senales[0].escala, "25")
         prefs = json.loads(w.ajustes.value("modbus/configuracion"))

@@ -132,7 +132,7 @@ class OtrosInterfaz(BaseQt):
         self.gesto(p,p+QPointF(60,40));self.assertEqual(self.pos(e)[s],(260,180));self.assertIsNone(e.enlace)
         self.assertFalse(w.props.der.isVisible());self.assertTrue(w.props.s_etiqueta.isVisible())
         textos=[x[0] for x in e.menu(QPointF(360,180))]
-        self.assertIn('Convertir en encapsulante',textos)
+        self.assertIn('Tipo de etapa',textos)
 
     def test_SOTR09_accion_por_evento_reserva_mas_espacio_al_evento(self):
         """REQ-EDT-09: en una acción por evento el editor del evento es claramente mayor que el del valor."""

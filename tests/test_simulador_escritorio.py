@@ -265,7 +265,7 @@ class Ventana(unittest.TestCase):
         try:
             self.w._opciones({**self.w.options, "U-03": "recorrido"})
             self.assertEqual(self.w.v.options["U-03"], "recorrido")
-            self.assertIn("distintas de las decididas: U-03", self.w.l_lect.text(), "el aviso va en la barra de estado")
+            self.assertIn("Ajustes de simulación no habituales", self.w.l_lect.text(), "el aviso va en la barra de estado")
             self.assertEqual(self.w.v.state().get("situation", []), [], "cambiar la lectura deja Pausa sin estado")
             self.w.a_ejecutar.setChecked(True)  # Play: ejecución nueva con la lectura elegida
             self.w._cambiar_tipo_entrada("p", True)  # esta prueba mantiene la entrada
@@ -279,16 +279,14 @@ class Ventana(unittest.TestCase):
             self.w._opciones(normalize_options(None))  # un fallo no deja las lecturas cambiadas a las pruebas siguientes
 
     def test_SAPP08_ajustes_y_lecturas(self):
-        """REQ-SEM-09: «Ajustes» (entre Simulación y Ayuda) tiene las lecturas; el diálogo no ofrece «detener» y el
-        panel derecho ya no las lleva."""
+        """REQ-SEM-09: «Ajustes» (entre Simulación y Ayuda) tiene los ajustes de simulación; el diálogo muestra una sola
+        lectura, sin «detener», y el panel derecho ya no las lleva."""
         from PySide6.QtWidgets import QComboBox, QGroupBox
         from escritorio.ventana import Lecturas
         titulos = [a.text().replace("&", "") for a in self.w.menuBar().actions()]
         self.assertEqual(titulos[titulos.index("Simulación") + 1:], ["Ajustes", "Ayuda"])
         d = Lecturas(self.w, self.w.options)
-        self.assertGreater(len(d.combos), 10)
-        for q, cb in d.combos.items():
-            self.assertNotIn("detener", [cb.itemData(i) for i in range(cb.count())], q)
+        self.assertEqual(sorted(d.botones), ["recorrido", "situacion-anterior"])
         self.assertEqual(d.options(), self.w.options, "sin tocar nada, las lecturas no cambian")
         self.assertFalse(hasattr(self.w, "u03"))
         self.assertNotIn("Lecturas de interpretación", [g.title() for g in self.w.scroll.findChildren(QGroupBox)])
@@ -427,7 +425,7 @@ class Ventana(unittest.TestCase):
         self.assertEqual([b.text() for b in cuadro.buttons()], ["Aceptar"])
         self.assertTrue(cuadro.isModal())
         textos = [w.lista_diag.item(i).text() for i in range(w.lista_diag.count())]
-        self.assertTrue(any("D-LIM-EVOL" in t for t in textos), textos)
+        self.assertTrue(any("presupuesto de" in t and "D-LIM-EVOL" not in t for t in textos), textos)
         self.assertTrue(any("franquea" in t and "t3" in t for t in textos), "qué transiciones")
         # No se repite por tic: más refrescos y tics del mismo episodio no abren otra ventana
         with mock.patch.object(type(w), "_avisar_inestable", autospec=True) as otro:

@@ -39,7 +39,7 @@ ACT_CANAL = 7  # de la derivación a la segunda columna de una matriz, por debaj
 
 # Colores del tema claro de tools/dibujo.css: el dibujo es negro sobre blanco, como en la norma
 COL = {"readout": "#326dcb","panel": "#ffffff", "text": "#1d2330", "muted": "#6b7385", "accent": "#1f6feb", "accent_soft": "#dbe8ff",
-       "ok": "#1a7f37", "active": "#40d641", "active_soft": "#e4f9e4", "true_text": "#40d641", "history": "#1a7f1b", "err": "#c62828", "virt": "#8250df", "glow": "#e36209"}
+       "ok": "#1a7f37", "active": "#40d641", "active_soft": "#e4f9e4", "true_text": "#40d641", "history": "#1a7f1b", "err": "#c62828", "aviso": "#eeb445", "virt": "#8250df", "glow": "#e36209"}
 FONT = "Arial"
 Z_FRAME, Z_LINK, Z_BAR, Z_STEP = 0, 1, 2, 3
 ANCHO_COMENTARIO = 190  # ancho máximo de un comentario antes de pasar a otra línea
@@ -1067,6 +1067,8 @@ FICHAS_ACCION = (("continua", "Continua"), ("condicionada", "Condicionada"), ("a
 
 
 def _accion_ficha(tipo: str) -> dict[str, Any]:
+    if tipo == "forzado":  # la orden de forzado (rectángulo doble) del menú «Tipo de acción»; no es ficha de la paleta
+        return {"id": "ficha", "kind": "force", "text": [{"t": "G{ }"}]}
     q = [{"t": "Q"}]
     if tipo in ("continua", "condicionada"):
         return {"id": "ficha", "kind": "continuous", "text": q, "cond": [{"t": "c"}] if tipo == "condicionada" else None}
@@ -1091,7 +1093,7 @@ def ficha_accion(tipo: str, escala: float = 1.0, dpr: float = 1.0, opacidad: flo
     sc = _escena_ficha(tipo)
     r = sc.itemsBoundingRect()
     if comun:
-        for t, _ in FICHAS_ACCION:
+        for t, _ in (*FICHAS_ACCION, ("forzado", "")):
             r = r.united(_escena_ficha(t).itemsBoundingRect())
     r = r.adjusted(-4, -4, 4, 4)
     pm = QPixmap(max(1, round(r.width() * escala * dpr)), max(1, round(r.height() * escala * dpr)))
@@ -1109,6 +1111,23 @@ def icono_accion(tipo: str, ancho: int = 84, alto: int = 64) -> QIcon:
     """El icono de una ficha de acción (el mismo lienzo para todas), ajustado a ese tamaño."""
     pm, _ = ficha_accion(tipo, 1.0, 2.0, comun=True)
     return QIcon(pm.scaled(ancho * 2, alto * 2, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+
+
+def _icono_marcado(icono: QIcon, lado: int = 48) -> QIcon:
+    """El icono de la opción marcada de un submenú: el mismo dibujo sobre un fondo menta con borde, para que se distinga."""
+    pm = icono.pixmap(lado, lado)
+    marcado = QPixmap(pm.size())
+    marcado.setDevicePixelRatio(pm.devicePixelRatio())
+    marcado.fill(Qt.GlobalColor.transparent)
+    p = QPainter(marcado)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(QPen(QColor("#147f80"), 2))
+    p.setBrush(QColor("#cfeee6"))
+    ancho, alto = pm.width() / pm.devicePixelRatio(), pm.height() / pm.devicePixelRatio()
+    p.drawRoundedRect(QRectF(1, 1, ancho - 2, alto - 2), 5, 5)
+    p.drawPixmap(0, 0, pm)
+    p.end()
+    return QIcon(marcado)
 
 
 class _EstiloIconos(QProxyStyle):
@@ -1167,7 +1186,9 @@ class VistaDiagrama(QGraphicsView):
         self.lista_diagnosticos = QListWidget(self)
         self.lista_diagnosticos.setWordWrap(True)
         self.lista_diagnosticos.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.lista_diagnosticos.setStyleSheet("QListWidget { background:transparent; border:0; font-size:13px; } QListWidget::item { background:rgba(255,255,255,225); padding:2px; }")
+        self.lista_diagnosticos.setStyleSheet(
+            "QListWidget { background:transparent; border:0; font-size:13px; } "
+            "QListWidget::item { background:rgba(255,255,255,225); color:#1d2330; padding:2px; }")
         self.lista_diagnosticos.hide()
         self.indicador_diagnosticos = QLabel(self)
         self.indicador_diagnosticos.setAccessibleName("Incidencias")
@@ -1177,8 +1198,9 @@ class VistaDiagrama(QGraphicsView):
         triangulo.quadTo(20,3,21.4,5.6);triangulo.lineTo(36.6,33.4)
         triangulo.quadTo(38,36,35,36);triangulo.lineTo(5,36)
         triangulo.quadTo(2,36,3.4,33.4);triangulo.closeSubpath()
-        pintor.setPen(QPen(QColor(COL["err"]),2,Qt.PenStyle.SolidLine,Qt.PenCapStyle.RoundCap,Qt.PenJoinStyle.RoundJoin))
-        pintor.setBrush(QColor(COL["err"]));pintor.drawPath(triangulo)
+        pintor.setPen(QPen(QColor(COL["aviso"]),2,Qt.PenStyle.SolidLine,Qt.PenCapStyle.RoundCap,
+                           Qt.PenJoinStyle.RoundJoin))
+        pintor.setBrush(QColor(COL["aviso"]));pintor.drawPath(triangulo)
         pintor.setPen(QPen(QColor("white"),2,Qt.PenStyle.SolidLine,Qt.PenCapStyle.RoundCap))
         pintor.drawLine(20,13,20,24)
         pintor.setPen(Qt.PenStyle.NoPen);pintor.setBrush(QColor("white"))
@@ -1460,6 +1482,11 @@ class VistaDiagrama(QGraphicsView):
                     if t in marcadas:
                         a.setCheckable(True)
                         a.setChecked(True)
+                        if icono:  # con iconos grandes la marca de la casilla no se ve: fila en negrita y icono con fondo
+                            fuente = a.font()
+                            fuente.setBold(True)
+                            a.setFont(fuente)
+                            a.setIcon(_icono_marcado(icono[0]))
                 continue
             a = menu.addAction(texto, accion) if accion is not None else menu.addAction(texto)
             a.setEnabled(accion is not None)

@@ -514,7 +514,8 @@ class Interfaz(unittest.TestCase):
         e.prensar(punto(ids["0"], "abajo"))
         e.soltar(punto(ids["1"], "arriba"))
         self.assertEqual(len(e.M["drafts"]), 1)
-        self.assertIn("D-ALTERNANCIA", e.mensaje)
+        self.assertIn("dos elementos del mismo tipo", e.mensaje)
+        self.assertNotIn("D-ALTERNANCIA", e.mensaje)
         self.assertIn("D-ALTERNANCIA", [d["code"] for d in e.diagnosticos()])
         e.seleccionar([e.M["drafts"][0]["id"]])
         self.assertTrue(e.borrar())
@@ -1645,7 +1646,7 @@ class Interfaz(unittest.TestCase):
                          ["Equidistanciar todo el lienzo"],
                          "en un hueco, un grafcet parcial nuevo y equidistanciar el lienzo (hay una cadena)")
         opciones = dict(e.menu(c))
-        self.assertEqual(list(opciones), ["Colocación de las acciones", "-", "Convertir en encapsulante",
+        self.assertEqual(list(opciones), ["Colocación de las acciones", "-", "Tipo de etapa",
                                           "Equidistanciar alturas de la cadena"])
         pedidas = []
         e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
@@ -2460,7 +2461,8 @@ class Interfaz(unittest.TestCase):
             return {t: f for t, f, _ in dict(opciones)["Tipo de acción"]}
         opciones = e.menu(caja(aid))
         textos = [t for t, _ in opciones]
-        self.assertEqual(list(tipos(opciones)), ["Continua", "Condicionada", "Al activar", "Al desactivar", "Por evento"])
+        self.assertEqual(list(tipos(opciones)),
+                         ["Continua", "Condicionada", "Al activar", "Al desactivar", "Por evento", "Orden de forzado"])
         self.assertTrue(all(len(x) == 3 and not x[2].isNull() for x in dict(opciones)["Tipo de acción"]), "con su icono")
         self.assertEqual(e.menu_marcadas, {"Continua"})
         self.assertEqual(textos[0], "Tipo de acción")
@@ -2558,7 +2560,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.ed.draft_actions(), [])
         # el menú de la etapa conserva «Añadir acción…»
         self.assertEqual(list(dict(e.menu(centro(e.M, ids["1"])))),
-                         ["Colocación de las acciones", "-", "Convertir en encapsulante",
+                         ["Colocación de las acciones", "-", "Tipo de etapa",
                           "Equidistanciar alturas de la cadena"])
 
     def test_SEDI73_guardar_abrir_con_borradores_avisos_y_deshacer(self):
@@ -3041,7 +3043,7 @@ class Interfaz(unittest.TestCase):
         opciones = dict(e.menu(c))
         self.assertEqual([t for t, _ in opciones["Colocación de las acciones"]],
                          ["En fila, pegadas", "En fila, separadas", "En matriz de 2", "En columna"])
-        self.assertEqual(e.menu_marcadas, {"En fila, pegadas"})
+        self.assertEqual(e.menu_marcadas, {"En fila, pegadas", "Etapa"})
         menu = w.diagrama.menu_contextual(e.menu(c))
         sub = next(a.menu() for a in menu.actions() if a.menu() is not None)
         self.assertEqual([(a.text(), a.isChecked()) for a in sub.actions()],
@@ -3055,7 +3057,7 @@ class Interfaz(unittest.TestCase):
         r = cajas()
         self.assertTrue(all(abs(r[i + 1][0] - (r[i][0] + r[i][2]) - ACT_GAP) < 0.01 and r[i][1] == r[i + 1][1] for i in range(2)))
         e.menu(c)
-        self.assertEqual(e.menu_marcadas, {"En fila, separadas"}, "el menú marca la colocación actual")
+        self.assertEqual(e.menu_marcadas, {"En fila, separadas", "Etapa"}, "el menú marca la colocación actual")
         # en columna: una debajo de otra, del mismo ancho, con el hueco que piden sus marcas
         e.colocar_acciones(sid, "columna")
         self.assertEqual(e.ed.presentation["actionLayouts"], {sid: "columna"})
@@ -5942,6 +5944,11 @@ class Interfaz(unittest.TestCase):
                 if d.code in ("D-REF", "D-PROPIETARIO", "D-FORMATO", "D-JERARQUIA-CICLO") and "sin etapas iniciales" not in d.message]
 
     @staticmethod
+    def tipo_etapa_menu(opciones):
+        """Las funciones del submenú «Tipo de etapa» de un menú del botón derecho, por texto."""
+        return {t: f for t, f, *_ in dict(opciones)["Tipo de etapa"]}
+
+    @staticmethod
     def sin_ids(texto):
         """Ningún ID interno (`s-…`, `g-…`, `m-…`, `x-…`, `r-…`) en un texto que se le muestra al usuario."""
         import re
@@ -6230,9 +6237,9 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(self.sin_ids(d["message"]), d["message"])
 
     def test_SEDI175_convertir_en_encapsulante_y_volver_a_etapa_ordinaria(self):
-        """REQ-JER-05, REQ-EDT-09: el botón derecho en una etapa ordinaria ofrece «Convertir en encapsulante»; en una
-        encapsulante, «Añadir recinto…» y «Convertir en etapa ordinaria» (solo si no tiene recintos); la entrada y la salida
-        de una expansión no ofrecen nada. Lo que el núcleo rechaza se muestra en rojo y con parpadeo, sin cambiar nada."""
+        """REQ-JER-05, REQ-EDT-09: el botón derecho en una etapa ofrece «Tipo de etapa» (Etapa, Encapsulante,
+        Macroetapa); en una encapsulante, «Añadir recinto…»; la entrada y la salida de una expansión no ofrecen el
+        submenú. Lo que el núcleo rechaza se muestra en rojo y con parpadeo, sin cambiar nada."""
         w, e = self.vacio()
         self.soltar_ficha("etapa", QPointF(260, 60))
         s = e.sel[0]
@@ -6240,18 +6247,18 @@ class Interfaz(unittest.TestCase):
         def tipo():
             return next(x for x in e.ed.model["steps"] if x["id"] == s)["kind"]
         opciones = e.menu(centro(e.M, s))
-        self.assertEqual([t for t, _ in opciones], ["Colocación de las acciones", "-", "Convertir en encapsulante"])
+        self.assertEqual([t for t, _ in opciones], ["Colocación de las acciones", "-", "Tipo de etapa"])
         n = len(e.ed.undo_stack)
-        dict(opciones)["Convertir en encapsulante"]()
+        self.tipo_etapa_menu(opciones)["Encapsulante"]()
         self.assertEqual((tipo(), len(e.ed.undo_stack)), ("enclosing", n + 1))
         self.assertTrue(e.mensaje_info and self.sin_ids(e.mensaje))
         self.assertEqual([x["kind"] for x in e.M["steps"]], ["enclosing"], "el dibujo recibe el tipo")
         opciones = e.menu(centro(e.M, s))
-        self.assertEqual([t for t, _ in opciones][1:], ["-", "Añadir recinto…", "Convertir en etapa ordinaria"])
+        self.assertEqual([t for t, _ in opciones][1:], ["-", "Tipo de etapa", "Añadir recinto…"])
         # con un recinto ya no se ofrece volver a ordinaria; si se fuerza, el núcleo lo rechaza y no cambia nada
         e.anadir_recinto(s)
         self.assertEqual([t for t, _ in e.menu(centro(e.M, s))][1:],
-                         ["-", "Añadir recinto…", "Encuadrar el recinto", "Forzar un parcial…"])
+                         ["-", "Tipo de etapa", "Añadir recinto…", "Encuadrar el recinto", "Forzar un parcial…"])
         antes, n = self.estado(e), len(e.ed.undo_stack)
         e.parpadeo.parar()
         e.tipo_encapsulante(s, False)
@@ -6262,7 +6269,7 @@ class Interfaz(unittest.TestCase):
         # sin recintos, vuelve a ser una etapa ordinaria; deshacer y rehacer
         e.deshacer()
         self.assertEqual(e.ed.model["hierarchy"]["enclosures"], [])
-        dict(e.menu(centro(e.M, s)))["Convertir en etapa ordinaria"]()
+        self.tipo_etapa_menu(e.menu(centro(e.M, s)))["Etapa"]()
         self.assertEqual(tipo(), "ordinary")
         e.deshacer()
         self.assertEqual(tipo(), "enclosing")
@@ -6339,7 +6346,7 @@ class Interfaz(unittest.TestCase):
         mid = e.poner_macro(QPointF(260, 220))
         x = e.ed.macro_info(mid)
         opciones = e.menu(centro(e.M, mid))
-        self.assertEqual([t for t, _ in opciones], ["Encuadrar la expansión", "Renombrar…"])
+        self.assertEqual([t for t, _ in opciones], ["Tipo de etapa", "Encuadrar la expansión", "Renombrar…"])
         self.assertEqual(e.sel, [mid])
         encuadrados = []
         w.diagrama.encuadrar = lambda r: encuadrados.append(r)
@@ -6679,7 +6686,7 @@ class Interfaz(unittest.TestCase):
         pedidas, respuesta = [], [None]
         e.pedir_forzado = lambda datos: pedidas.append(datos) or respuesta[0]
         opciones = e.menu(centro(e.M, h))
-        self.assertEqual([t for t, _ in opciones][1:], ["-", "Convertir en encapsulante", "Forzar un parcial…"])
+        self.assertEqual([t for t, _ in opciones][1:], ["-", "Tipo de etapa", "Forzar un parcial…"])
         # lo que se le enseña al diálogo: nombres (los ID solo para devolver la elección); cancelar no cambia nada
         antes, n = self.estado(e), len(e.ed.undo_stack)
         self.assertIsNone(dict(opciones)["Forzar un parcial…"]())
@@ -6754,7 +6761,8 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(w.props.pagina, "orden")
         # el menú de la caja (y no el de la etapa)
         opciones = e.menu(pc)
-        self.assertEqual([t for t, _ in opciones], ["Editar orden de forzado…", "Quitar orden de forzado"])
+        self.assertEqual([t for t, _ in opciones],
+                         ["Tipo de acción", "-", "Editar orden de forzado…", "Quitar orden de forzado"])
         self.assertNotIn("Editar orden de forzado…", dict(e.menu(centro(e.M, h))))
         # editar: el diálogo recibe los valores actuales; cambiar a «La situación actual»
         vistos = []
@@ -6836,14 +6844,17 @@ class Interfaz(unittest.TestCase):
             for t in ficha.textos_visibles():  # los botones de jerarquías que siguen visibles caben en el panel
                 bt = ficha.botones[t]
                 self.assertTrue(raiz.contains(QRectF(bt.mapTo(w.props, QPoint(0, 0)), bt.size())), (ident, t))
-        ver(mid, "macro", izq, "Macroetapa M1 · expansión M1 · entrada E1 · salida S1", ["Encuadrar la expansión", "Renombrar…"])
+        ver(mid, "macro", izq, "Macroetapa M1 · expansión M1 · entrada E1 · salida S1",
+            ["Etapa", "Encapsulante", "Macroetapa", "Encuadrar la expansión", "Renombrar…"])
         self.assertIn("Macroetapa M1", w.props.titulo.text())
         ver(r, "marco", izq, "Recinto R de E0 · activación: ninguna", ["Encuadrar la encapsulante"])
         ver(fid, "orden", izq, "Orden: H fuerza R a {B}", ["Editar orden de forzado…", "Quitar orden de forzado"])
-        ver(e0, "etapa", der, "Encapsulante E0 · recintos: R", ["Añadir recinto…", "Encuadrar el recinto", "Forzar un parcial…"])
+        ver(e0, "etapa", der, "Encapsulante E0 · recintos: R",
+            ["Etapa", "Encapsulante", "Macroetapa", "Añadir recinto…", "Encuadrar el recinto", "Forzar un parcial…"])
         ver(x.entry, "etapa", der, "Entrada de la expansión de la macroetapa M1", ["Encuadrar la macroetapa", "Forzar un parcial…"])
         ver(a, "etapa", der, "Del recinto R de E0 · sin enlace de activación",
-            ["Convertir en encapsulante", "Enlace de activación", "Encuadrar la encapsulante", "Forzar un parcial…"])
+            ["Etapa", "Encapsulante", "Macroetapa", "Enlace de activación", "Encuadrar la encapsulante",
+             "Forzar un parcial…"])
         ver(x.partial, "marco", izq, "Expansión de la macroetapa M1 · entrada E1 · salida S1", ["Encuadrar la macroetapa"])
         # los botones hacen lo que el menú: la casilla del enlace de activación, encuadrar, renombrar, editar y quitar
         e.seleccionar([a])
@@ -6874,12 +6885,12 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(izq.texto.text(), "Orden: H fuerza R a la situación vacía")
         izq.botones["Quitar orden de forzado"].click()
         self.assertEqual((e.ed.model["forces"], e.sel, w.props.pagina), ([], [], "vacio"))
-        # una etapa ordinaria del raíz sin otro parcial al que forzar solo ofrece convertirla en encapsulante, sin descripción
+        # una etapa ordinaria del raíz sin otro parcial al que forzar solo ofrece su tipo, sin descripción
         w2, e2 = self.vacio()
         e2.colocar("etapa", QPointF(260, 60))
         e2.seleccionar([e2.sel[0]])
         self.assertEqual((w2.props.ficha_etapa.texto.isHidden(), w2.props.ficha_etapa.textos_visibles()),
-                         (True, ["Convertir en encapsulante"]))
+                         (True, ["Etapa", "Encapsulante", "Macroetapa"]))
         e2.seleccionar([])
         self.assertEqual((w2.props.pagina, w2.props.ficha_etapa.isHidden(), w2.props.ficha_izq.isHidden()), ("vacio", True, True))
 
@@ -7211,7 +7222,8 @@ class Interfaz(unittest.TestCase):
         (f0,) = e.ed.model["forces"]
         self.assertEqual(e.descripcion_jerarquia(f0["id"]), "Orden: H fuerza G a {B}")
         pc = self.centro_orden(w, f0["id"])
-        self.assertEqual([t for t, _ in e.menu(pc)], ["Editar orden de forzado…", "Quitar orden de forzado"])
+        self.assertEqual([t for t, _ in e.menu(pc)],
+                         ["Tipo de acción", "-", "Editar orden de forzado…", "Quitar orden de forzado"])
         # editar: «Vacía» y luego «La situación actual»; el parcial G de los ejemplos aparece por su nombre
         vistos = []
         e.pedir_forzado = lambda datos: vistos.append(datos) or {"destino": "G", "forma": "empty", "etapas": []}

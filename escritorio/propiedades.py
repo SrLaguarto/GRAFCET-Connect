@@ -14,7 +14,8 @@ zonas: a la izquierda una columna estrecha con los campos y a la derecha lo anch
 - Macroetapa, recinto (su marco), expansión, grafcet parcial suelto y orden de forzado (también la que aún no está completa): una
   ficha compacta (`FichaJerarquia`) con su descripción y los mismos botones que el botón derecho (Encuadrar la expansión,
   Renombrar…, Encuadrar la encapsulante, Configurar, Editar o Quitar la orden…; el doble clic en una orden la edita); una
-  etapa lleva la suya sobre su lista de acciones (encapsulante, de un recinto, entrada o salida de una expansión, Forzar un
+  etapa lleva la suya sobre su lista de acciones (su tipo: Etapa, Encapsulante o Macroetapa; de un recinto, entrada o
+  salida de una expansión, Forzar un
   parcial…).
 - Enlace, barra de simultaneidad, varios elementos o nada: lo suyo, o la invitación a elegir un elemento.
 Cada cambio se aplica al momento con las operaciones de Edicion / grafcet/editor.py (una operación de deshacer).
@@ -58,7 +59,8 @@ AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: a
                         "expansión para rellenarla; botón derecho en la macroetapa, «Encuadrar la expansión», para verla "
                         "(«Mostrar dependencias», en la barra de herramientas, dibuja los trazos que la unen a la macroetapa)",
           "encapsulante": "Etapa encapsulante (esquinas cortadas): arrástrela al dibujo, o convierta una etapa con el botón "
-                          "derecho. Botón derecho en la encapsulante, «Añadir recinto…», crea un recinto; se rellena soltando "
+                          "derecho, «Tipo de etapa». Botón derecho en la encapsulante, «Añadir recinto…», crea un "
+                          "recinto; se rellena soltando "
                           "etapas dentro de su marco, y «Enlace de activación» en una de ellas la marca (*); «Encuadrar el "
                           "recinto» lo muestra",
           "parcial": "Grafcet parcial (marco redondeado con «G»): arrástrelo a un hueco del dibujo y crea un grafcet parcial "
@@ -366,11 +368,11 @@ class FichaJerarquia(QWidget):
     activación) marcadas o no. Los botones son siempre los mismos objetos, en un orden fijo: se enseñan o se esconden según el
     elemento, así que un clic puede cambiar la selección sin destruir el botón que lo emite. Sin nada que decir ni ofrecer,
     la ficha entera se esconde."""
-    ORDEN = ("Encuadrar la expansión", "Renombrar…", "Convertir en encapsulante", "Añadir recinto…", "Encuadrar el recinto",
-             "Encuadrar los recintos", "Convertir en etapa ordinaria", "Enlace de activación", "Encuadrar la encapsulante",
+    ORDEN = ("Etapa", "Encapsulante", "Macroetapa", "Encuadrar la expansión", "Renombrar…", "Añadir recinto…",
+             "Encuadrar el recinto", "Encuadrar los recintos", "Enlace de activación", "Encuadrar la encapsulante",
              "Encuadrar la macroetapa", "Forzar un parcial…", "Configurar orden de forzado…", "Editar orden de forzado…",
              "Quitar orden de forzado")  # el mismo orden que el botón derecho
-    CASILLAS = ("Enlace de activación",)
+    CASILLAS = ("Etapa", "Encapsulante", "Macroetapa", "Enlace de activación")  # los tres primeros: «Tipo de etapa»
 
     def __init__(self) -> None:
         super().__init__()
@@ -631,8 +633,13 @@ class PanelPropiedades(QWidget):
             self.s_colocacion.addItem(texto, valor)
         self.s_colocacion.setToolTip("Cómo se colocan las acciones de la etapa en el dibujo")
         self.s_colocacion.activated.connect(lambda _: self.e.colocar_acciones(self.ident, self.s_colocacion.currentData()))
+        self.s_enlace = QCheckBox("Enlace de activación")  # solo en una etapa de un recinto; como la opción del menú
+        self.s_enlace.setToolTip("Al activarse la encapsulante, esta etapa se activa (el «*» del dibujo)")
+        self.s_enlace.clicked.connect(lambda _: self.e.enlace_activacion(self.ident))
         f.addRow("Etiqueta", self.s_etiqueta)
         f.addRow("Tipo", self.s_tipo)
+        f.addRow("", self.s_enlace)
+        self.s_enlace.hide()
         f.addRow("Comentario", self.s_comentario)
         f.addRow("Colocación", self.s_colocacion)
         return w
@@ -877,6 +884,10 @@ class PanelPropiedades(QWidget):
             self._poner(self.s_etiqueta, s["label"])
             self._poner(self.s_comentario, e.comentario(vivo))
             self.s_tipo.setCurrentIndex(1 if s["initial"] else 0)
+            rol = e.ed.partial_roles().get(e.parcial_de(vivo))
+            en_recinto = bool(rol and rol["kind"] == "enclosure")
+            self.s_enlace.setVisible(en_recinto)
+            self.s_enlace.setChecked(en_recinto and vivo in rol["activation"])
             self.s_colocacion.setCurrentIndex(max(0, self.s_colocacion.findData(e.colocacion(vivo))))
             self.der.setCurrentIndex(1)
             self._llenando = True

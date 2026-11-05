@@ -921,7 +921,7 @@ class PanelES(QWidget):
         prefs = self.parametros_defecto
         if config is None:
             config = Configuracion(host, puerto, unidad, prefs.get("periodo_ms", 20), prefs.get("timeout_ms", 500),
-                                   modelo=doc["id"], canales=copy.deepcopy(prefs.get("canales", CANALES_INICIALES)),
+                                   modelo=doc["id"], canales=copy.deepcopy(CANALES_INICIALES),
                                    )
             self.escalas_base = dict(prefs.get("escalas", {}))
         else:

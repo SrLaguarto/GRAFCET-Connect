@@ -80,7 +80,7 @@ class TecnicasQt(unittest.TestCase):
         self.e.deleteLater();QApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);self.rutas.stop();self.tmp.cleanup()
     def test_STEC03_primera_ejecucion_recupera_faltantes_sin_sobrescribir(self):
         """REQ-DAT-02, REQ-EDT-11: QStandardPaths localiza Documentos, crea la estructura y respeta modificaciones."""
-        r=carpetas.asegurar_carpetas();self.assertEqual(r['raiz'],self.documentos/'GrafConnect')
+        r=carpetas.asegurar_carpetas();self.assertEqual(r['raiz'],self.documentos/'GRAFCET Connect')
         for k in ('plantillas','grafcet','laminas'):self.assertTrue(r[k].is_dir())
         archivo=r['plantillas']/'A4_vertical'/'plantilla.json';p=carpetas.cargar_plantilla(archivo);p['primitives'][0]['weight']=.8;carpetas.guardar_plantilla(archivo,p);antes=archivo.read_bytes()
         falta=r['plantillas']/'A3_vertical'/'plantilla.json';falta.unlink();carpetas.asegurar_carpetas();self.assertTrue(falta.is_file());self.assertEqual(archivo.read_bytes(),antes)
@@ -180,10 +180,10 @@ class HojasFlujo(BaseQt):
         with patch('escritorio.laminas.DialogoLaminas.exec') as emergente:
             w.mostrar_hoja(hoja['id']);emergente.assert_not_called()
     def test_STEC11_guardar_por_defecto_en_documentos_grafcet(self):
-        """REQ-EDT-01, REQ-DAT-02: Guardar como propone Documentos/GrafConnect/GRAFCET, fuera de la instalación."""
+        """REQ-EDT-01, REQ-DAT-02: Guardar como propone Documentos/GRAFCET Connect/GRAFCET, fuera de la instalación."""
         w,e=self.vacio();e.ed.add_step('g','1',True);e.cambia()
         with patch('escritorio.archivos.QFileDialog.getSaveFileName',return_value=('','')) as pedir:w.guardar_como()
-        inicial=Path(pedir.call_args.args[2]);self.assertEqual(inicial.parent,Path(self.docs.name)/'GrafConnect'/'GRAFCET')
+        inicial=Path(pedir.call_args.args[2]);self.assertEqual(inicial.parent,Path(self.docs.name)/'GRAFCET Connect'/'GRAFCET')
 
 
 if __name__=='__main__':unittest.main()

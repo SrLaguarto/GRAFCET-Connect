@@ -4,7 +4,7 @@ Simula un ejemplo o un modelo guardado (proyecto o documento de modelo, document
 norma. Entradas, tiempo real (como un autómata: los retardos son temporizadores que cuentan solos), evolución a
 evolución, traza, salidas, variables, temporizadores y, en «Ajustes», las lecturas de interpretación. Toda la
 semántica la decide grafcet/engine.py con el perfil provisional: la ventana no aproxima nada y los bloqueos por
-cuestiones U se muestran tal cual. No es el editor ni declara conformidad con IEC 60848 / UNE-EN 60848.
+cuestiones U se muestran tal cual. No es el editor. Basado en IEC 60848.
 """
 from __future__ import annotations
 
@@ -17,8 +17,9 @@ from math import ceil
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal, QEvent, QElapsedTimer, QSettings, Qt, QTimer, QSize, QRectF, QPointF
-from PySide6.QtGui import QCursor, QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtCore import QObject, Signal, QEvent, QElapsedTimer, QSettings, Qt, QTimer, QSize, QRectF, QPointF, QUrl
+from PySide6.QtGui import (QDesktopServices, QCursor, QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter,
+                           QPainterPath, QPen, QPixmap)
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
                                QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QRadioButton,
@@ -35,7 +36,7 @@ from grafcet.timeutil import parse_duration
 from grafcet.view import Vista, auto_layout, layout_from_presentation, t_trunc
 
 from .diagrama import COL, VistaDiagrama, imagen
-from .edicion import HERRAMIENTAS, Edicion
+from .edicion import HERRAMIENTAS, Edicion, sin_codigos
 from .propiedades import PanelPropiedades, Paleta
 from .navegacion import Navegacion
 from .paneles import PanelPlegable, DivisorPlegable, PilaActual
@@ -44,7 +45,10 @@ from .entradas_salidas import CONEXION_INICIAL, PanelES
 from conexion.configuracion import ARCHIVO, CANALES_INICIALES, Configuracion
 from conexion.coordinador import Coordinador
 
-TITULO = "Simulador GRAFCET"
+TITULO = "GRAFCET Connect"
+URL_CODIGO = "https://github.com/SrLaguarto/GrafConnect"  # dónde está el código (diálogo «Acerca de»)
+URL_FALLOS = "https://github.com/SrLaguarto/GrafConnect/issues"  # dónde se comunica un fallo o una sugerencia
+ICONO_PROGRAMA = Path(__file__).resolve().parent / "recursos" / "grafcet_connect.ico"
 ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
 ALTO_INFERIOR = {"simular": 220, "editar": 240}  # altura inicial del panel inferior: la traza, o las opciones de lo seleccionado
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
@@ -56,7 +60,7 @@ AYUDA_EDICION = {
                    "sobre ella.",
 }
 NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar"}
-AVISO = "Núcleo con perfil provisional · no declara conformidad con IEC 60848 / UNE-EN 60848"
+AVISO = "Basado en IEC 60848"
 ESTADOS = {"pausada-estable": ("estable", "ok"), "pausada-recorrido": ("en recorrido (situación inestable)", "virt"),
            "error": ("detenido por diagnóstico", "err"), "no-compilable": ("no compilable", "err"),
            "finalizada": ("finalizada", "ok"), "preparada": ("preparada", "muted"), "ejecutando": ("ejecutando", "muted")}
@@ -158,58 +162,110 @@ class DialogoForzado(QDialog):
         return {"destino": self.destino.currentData(), "forma": forma, "etapas": marcadas}
 
 
+TEXTOS_FLANCOS = {
+    "situacion-anterior": "De uno en uno. Cuando cambia una entrada, solo avanzan las transiciones que ya estaban "
+                          "listas antes del cambio: la simulación recorre el grafcet paso a paso. Es lo habitual.",
+    "recorrido": "Todo de una vez. Cuando cambia una entrada, el cambio vale durante todo el recorrido de ese "
+                 "instante: el grafcet puede avanzar varias etapas seguidas con el mismo cambio."}
+# (los valores son los de SEMANTIC_OPTIONS["U-03"])
+
+
 class Lecturas(QDialog):
-    """Todas las lecturas de interpretación (SEMANTIC_OPTIONS): la decidida por el responsable va primero."""
+    """«Ajustes de simulación»: una sola opción con palabras normales, cuándo vale el cambio de una entrada (la
+    lectura U-03 de SEMANTIC_OPTIONS). Las demás lecturas no se muestran: conservan los valores con que se abre."""
+
+    CUESTION = "U-03"
 
     def __init__(self, parent: QWidget, options: dict[str, str]) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Lecturas de interpretación")
-        self.resize(760, 560)
+        self.base = dict(options)
+        self.setWindowTitle("Ajustes de simulación")
+        self.resize(560, 300)
         lay = QVBoxLayout(self)
-        note = QLabel("Cada cuestión tiene la lectura decidida por el responsable. Elegir otra no implica conformidad; "
-                      "se avisa en la barra de estado, se registra en la traza y cambiarla reinicia la simulación.")
-        note.setWordWrap(True)
-        lay.addWidget(note)
-        form_host = QWidget()
-        form = QFormLayout(form_host)
-        self.combos: dict[str, QComboBox] = {}
-        self.fijas: dict[str, str] = {}  # cuestiones sin decidir: no se eligen, el motor se detiene con su diagnóstico
-        for q in sorted(SEMANTIC_OPTIONS, key=_q_key):
-            spec = SEMANTIC_OPTIONS[q]
-            label = QLabel(f"<b>{html.escape(q)}</b> · {html.escape(spec['scope'])}")
-            label.setWordWrap(True)
-            if spec["default"] == "detener":
-                fija = QLabel("Sin decidir: se detiene")
-                fija.setStyleSheet(f"color: {COL['muted']}")
-                form.addRow(label, fija)
-                self.fijas[q] = "detener"
-                continue
-            cb = QComboBox()
-            for value, text in spec["values"].items():
-                if value != "detener":  # «detener» es lo que hace el motor con lo abierto: no se ofrece como lectura
-                    cb.addItem(("Por defecto · " if value == spec["default"] else "") + text, value)
-            cb.setCurrentIndex(max(0, cb.findData(options.get(q, spec["default"]))))
-            cb.setToolTip(spec["scope"])
-            form.addRow(label, cb)
-            self.combos[q] = cb
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(form_host)
-        lay.addWidget(scroll)
+        lay.addWidget(QLabel("<b>¿Cuándo vale el cambio de una entrada?</b>"))
+        nota = QLabel("Elija cómo reacciona la simulación cuando una entrada cambia de valor. Si cambia el ajuste, la "
+                      "simulación se reinicia y la barra de estado avisa de que no es el habitual.")
+        nota.setWordWrap(True)
+        lay.addWidget(nota)
+        spec = SEMANTIC_OPTIONS[self.CUESTION]
+        self.grupo = QButtonGroup(self)
+        self.botones: dict[str, QRadioButton] = {}
+        actual = options.get(self.CUESTION, spec["default"])
+        for valor in (v for v in spec["values"] if v in TEXTOS_FLANCOS):
+            r = QRadioButton(TEXTOS_FLANCOS[valor])
+            r.setStyleSheet("QRadioButton { padding: 4px }")
+            r.setChecked(valor == actual)
+            self.grupo.addButton(r)
+            lay.addWidget(r)
+            self.botones[valor] = r
+        lay.addStretch(1)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
                                    | QDialogButtonBox.StandardButton.RestoreDefaults)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        buttons.button(QDialogButtonBox.StandardButton.RestoreDefaults).setText("Volver a las decididas")
+        buttons.button(QDialogButtonBox.StandardButton.RestoreDefaults).setText("Volver al ajuste habitual")
         buttons.button(QDialogButtonBox.StandardButton.RestoreDefaults).clicked.connect(self._defaults)
         lay.addWidget(buttons)
 
     def _defaults(self) -> None:
-        for q, cb in self.combos.items():
-            cb.setCurrentIndex(cb.findData(SEMANTIC_OPTIONS[q]["default"]))
+        self.botones[SEMANTIC_OPTIONS[self.CUESTION]["default"]].setChecked(True)
 
     def options(self) -> dict[str, str]:
-        return {**self.fijas, **{q: cb.currentData() for q, cb in self.combos.items()}}
+        elegido = next((v for v, r in self.botones.items() if r.isChecked()), self.base.get(self.CUESTION))
+        return {**self.base, self.CUESTION: elegido}
+
+
+class AcercaDe(QDialog):
+    """«Acerca de GRAFCET Connect»: icono, versión, licencia, enlace al código, botón para comunicar un fallo y Cerrar. Los
+    enlaces se abren con `QDesktopServices` (`abrir`)."""
+
+    ACENTO = "#147f80"
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        from . import VERSION
+        self.setWindowTitle(f"Acerca de {TITULO}")
+        self.setMinimumWidth(460)
+        self.setStyleSheet("QDialog { background: #f4faf8 } QLabel { color: #1d2330 }")
+        lay = QVBoxLayout(self)
+        lay.setSpacing(8)
+        cab = QHBoxLayout()
+        icono = QLabel()
+        icono.setPixmap(QIcon(str(ICONO_PROGRAMA)).pixmap(64, 64))
+        cab.addWidget(icono)
+        titulo = QLabel(f"<span style='font-size:20px; font-weight:600; color:{self.ACENTO}'>{TITULO}</span><br>"
+                        f"Versión {VERSION}{' · versión de desarrollo' if sello.DESARROLLO else ''}<br>"
+                        "Editor y simulador GRAFCET · Basado en IEC 60848")
+        cab.addWidget(titulo, 1)
+        lay.addLayout(cab)
+        self.l_licencia = QLabel(f"{TITULO} es software libre y de código abierto, publicado con la licencia GPL-3.0. "
+                                 f"Su código está en GitHub:<br><a href=\"{URL_CODIGO}\">{URL_CODIGO}</a>")
+        self.l_licencia.setWordWrap(True)
+        self.l_licencia.linkActivated.connect(self.abrir)
+        lay.addWidget(self.l_licencia)
+        self.l_fallos = QLabel("Si encuentras un fallo o tienes una sugerencia, puedes comunicarlo en GitHub:")
+        self.l_fallos.setWordWrap(True)
+        lay.addWidget(self.l_fallos)
+        self.b_fallo = QPushButton("Comunicar un fallo")
+        self.b_fallo.setStyleSheet(f"QPushButton {{ background: {self.ACENTO}; color: white; font-weight: 600; "
+                                   "border: 0; border-radius: 5px; padding: 6px 14px }")
+        self.b_fallo.clicked.connect(lambda: self.abrir(URL_FALLOS))
+        fila = QHBoxLayout()
+        fila.addWidget(self.b_fallo)
+        fila.addStretch(1)
+        lay.addLayout(fila)
+        garantia = QLabel("Este programa se ofrece sin ninguna garantía. Consulta la licencia completa en el archivo "
+                          "LICENSE. Interfaz con Qt for Python (PySide6), bajo licencia LGPL v3.")
+        garantia.setWordWrap(True)
+        garantia.setStyleSheet("color: #6b7385; font-size: 11px")
+        lay.addWidget(garantia)
+        cerrar = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        cerrar.rejected.connect(self.reject)
+        cerrar.button(QDialogButtonBox.StandardButton.Close).setText("Cerrar")
+        lay.addWidget(cerrar)
+
+    def abrir(self, url: str) -> None:
+        QDesktopServices.openUrl(QUrl(url))
 
 
 def _icono_grafcet() -> QIcon:
@@ -588,10 +644,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
         sim.addSeparator()
         sim.addAction(self.a_avanzar)
         m_ajustes = bar.addMenu("A&justes")
-        m_ajustes.addAction("&Lecturas de interpretación…", self.lecturas)
+        m_ajustes.addAction("&Ajustes de simulación…", self.lecturas)
         ayuda = bar.addMenu("A&yuda")
         ayuda.addAction("&Leyenda del dibujo", self.leyenda)
-        ayuda.addAction("&Acerca de", self.acerca)
+        ayuda.addAction("&Acerca de GRAFCET Connect…", self.acerca)
         for menu in (archivo, edicion, ver, ejemplos, sim, m_ajustes, ayuda):
             bar.removeAction(menu.menuAction())
             bar.addAction(menu.menuAction())
@@ -1049,7 +1105,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         from .carpetas import asegurar_carpetas
         try:inicial=str(asegurar_carpetas()['grafcet'])
         except OSError as exc:QMessageBox.warning(self,"Abrir proyecto",str(exc));return
-        ruta, _ = QFileDialog.getOpenFileName(self, "Abrir proyecto", inicial, "Proyecto GrafConnect (*.grafnet)")
+        ruta, _ = QFileDialog.getOpenFileName(self, "Abrir proyecto", inicial, "Proyecto GRAFCET Connect (*.grafnet)")
         if ruta:
             self.abrir_ruta(Path(ruta))
 
@@ -1487,18 +1543,20 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.l_resumen.setStyleSheet(f"color: {COL['ok'] if not bloq else COL['err']}")
         self.lista_diag.clear()
         for d in diags:
-            q = f" · {d['question']}" if d["question"] else ""
-            nombre = f"{e.nombre(d['target'])} · " if d["target"] else ""
+            nombre = f"{e.nombre(d['target'])}: " if d["target"] else ""
             if d["code"] == "D-TIPO-EVENTO" and d["message"].startswith("Acción por evento"):
                 nombre = ""
-            item = QListWidgetItem(f"{nombre}{d['code']}{q}: {d['message']}")
+            mensaje = d["message"] if nombre else d["message"][:1].upper() + d["message"][1:]
+            item = QListWidgetItem(f"{nombre}{mensaje}")
             item.setData(Qt.ItemDataRole.UserRole, d["target"])
-            item.setToolTip(d["correction"])
-            item.setForeground(QColor(COL["err"] if d["blocks"] else COL["muted"]))
+            # El código no va en el texto (P-IMP-89), pero sigue a la vista en la ayuda emergente (REQ-EDT-09).
+            referencia = f"Referencia: {d['code']}"
+            item.setToolTip(f"{d['correction']}\n{referencia}" if d["correction"] else referencia)
+            item.setForeground(QColor(COL["text"]))  # el rojo queda para lo que impide simular (el resumen)
             self.lista_diag.addItem(item)
         for texto in self._avisos_ejecucion:  # por qué paró el motor la última vez que se simuló
             item = QListWidgetItem(f"Simulación detenida · {texto}")
-            item.setForeground(QColor(COL["err"]))
+            item.setForeground(QColor(COL["text"]))
             self.lista_diag.addItem(item)
         hay_detalle = self.lista_diag.count() > 0
         self.diagrama.actualizar_diagnosticos(hay_detalle)
@@ -1828,7 +1886,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if m.activo and (inestable or not al_arrancar) and (m.adaptador.sesion is not None or m.escritos):
             m.pausar(diagnostico=True)
         evoluciones = [r["text"] for r in vista.state().get("trace", []) if r["kind"] == "evolucion"][-4:]
-        self._avisos_ejecucion = ([f"{d['code']}: {d['message']}"] if d else []) \
+        self._avisos_ejecucion = ([sin_codigos(d["message"])] if d else []) \
             + ([f"Últimas evoluciones: {' · '.join(evoluciones)}"] if inestable and evoluciones else [])
         if inestable:
             if self._aviso_inestable_sesion is not vista.s:
@@ -1836,10 +1894,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 self._avisar_inestable()
         elif al_arrancar:
             QMessageBox.warning(self, TITULO, "No se puede ejecutar: revise los diagnósticos del GRAFCET."
-                                + (f"\n\n{d['code']}: {d['message']}" if d else ""))
+                                + (f"\n\n{sin_codigos(d['message'])}" if d else ""))
         else:
-            self.statusBar().showMessage("El motor se ha detenido por un diagnóstico"
-                                         + (f" ({d['code']})" if d else "") + ": véalo en el panel de diagnósticos.", 12000)
+            self.statusBar().showMessage(
+                "El motor se ha detenido por un diagnóstico: véalo en el panel de diagnósticos.", 12000)
 
     def _avisar_inestable(self) -> None:
         """Ventana modal con un solo botón; no abre un bucle de eventos propio (se llama desde el temporizador)."""
@@ -2011,7 +2069,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 datos = json.loads(str(texto))
                 if not isinstance(datos, dict):
                     raise ValueError("preferencias inválidas")
-                propuesta = {**base, **{k: datos[k] for k in base if k in datos}}
+                # las cantidades de canales no se heredan: una versión anterior guardó aquí 16/8 y las imponía
+                propuesta = {**base, **{k: datos[k] for k in base if k in datos and k != "canales"}}
                 c = Configuracion(**{k: v for k, v in propuesta.items() if k != "escalas"})
                 c.validar({"id": "", "variables": []})
                 if not isinstance(propuesta["escalas"], dict):
@@ -2028,7 +2087,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _recordar_parametros(self, config: Configuracion) -> None:
         datos = {k: getattr(config, k) for k in ("host", "puerto", "unidad", "periodo_ms", "timeout_ms")}
-        datos["canales"] = copy.deepcopy(config.canales or CANALES_INICIALES)
+        datos["canales"] = copy.deepcopy(CANALES_INICIALES)  # (siempre las iniciales: las del proyecto van en su mapa)
         datos["escalas"] = dict(self.panel_es.escalas_base)
         datos["escalas"].update({f"{s.area}:{s.direccion}": s.escala for s in config.senales})
         texto = json.dumps(datos, ensure_ascii=False, sort_keys=True)
@@ -2116,7 +2175,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if anterior == 0 and destino != 0 and self._plegables["derecho"].abierto:
             self._tamanos_paneles["derecho"] = self._plegables["derecho"].width()
         if self.paginas_es.currentIndex()==2 and destino!=2:self.panel_planos.aplicar()
-        if destino==2 and refrescar_planos:self.panel_planos.mostrar()
+        if destino==2 and refrescar_planos:
+            self.panel_planos.mostrar()
+            self.panel_planos.parpadear_boton_hoja()
         self.paginas_es.setCurrentIndex(destino)
         if destino == 0 and anterior != 0:
             # El contenido oculto conserva geometrías viejas al cambiar de pantalla.
@@ -2309,7 +2370,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _diagnostico(self, S: dict[str, Any], rec: bool) -> None:
         e = html.escape
         if S["status"] == "no-compilable":
-            items = "".join(f"<li><b>{e(d['code'])}</b>: {e(d['message'])}<br><i>{e(d.get('correction', ''))}</i></li>"
+            items = "".join(f"<li>{e(sin_codigos(d['message']))}<br><i>{e(d.get('correction', ''))}</i></li>"
                             for d in S.get("diagnostics", []))
             self.diag.setText(f"<b>El programa no puede compilarse</b><ul>{items}</ul>Corrija el modelo; no se ejecuta "
                               "nada hasta entonces.")
@@ -2320,7 +2381,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.diag.hide()
             return
         d, blk = ds[0], S.get("blocked")
-        text = (f"<b>{e(d['code'])}{' · ' + e(d['question']) if d.get('question') else ''}</b><p>{e(d['message'])}</p>"
+        text = (f"<p>{e(sin_codigos(d['message']))}</p>"
                 f"<p><i>{e(d.get('correction', ''))}</i></p>")
         if blk:
             text += (f"<p>Recorrido determinado hasta S = {{{e(', '.join(self.nombre(i) for i in blk['reached']))}}}"
@@ -2338,9 +2399,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _lecturas(self) -> None:
         """Aviso discreto, en la barra de estado, cuando alguna lectura difiere de la decidida por el responsable."""
         changed = [q for q, v in self.options.items() if q in SEMANTIC_OPTIONS and v != SEMANTIC_OPTIONS[q]["default"]]
-        self.l_lect.setText(f"Lecturas distintas de las decididas: {', '.join(sorted(changed, key=_q_key))} · "
-                            if changed else "")
-        self.l_lect.setToolTip("Se registran en la traza y no implican conformidad (Ajustes > Lecturas de interpretación)"
+        self.l_lect.setText("Ajustes de simulación no habituales · " if changed else "")
+        self.l_lect.setToolTip("Cambian cómo reacciona la simulación (Ajustes > Ajustes de simulación)"
                                if changed else "")
 
     def _variables(self, M: dict[str, Any], S: dict[str, Any]) -> None:
@@ -2493,12 +2553,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             QMessageBox.warning(self, TITULO, f"No se pudo guardar {ruta}")
 
     def acerca(self) -> None:
-        QMessageBox.about(self, f"Acerca de {TITULO}", (
-            f"<b>{TITULO}</b> {APP_VERSION}{' · versión de desarrollo' if sello.DESARROLLO else ''}<br><br>Simulador del núcleo GRAFCET con el <b>perfil provisional</b>: no "
-            "declara conformidad con IEC 60848 / UNE-EN 60848. Las lecturas por defecto son las decisiones del "
-            "responsable; lo que sigue abierto se detiene con su cuestión U.<br><br>Interfaz con Qt for Python "
-            "(PySide6), bajo licencia LGPL v3: las bibliotecas de Qt van como ficheros separados en la carpeta del "
-            "programa y pueden sustituirse por otras versiones compatibles."))
+        AcercaDe(self).exec()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -2516,9 +2571,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName(TITULO)
+    app.setWindowIcon(QIcon(str(ICONO_PROGRAMA)))
     from .carpetas import asegurar_carpetas
     try:asegurar_carpetas()
-    except OSError as exc:QMessageBox.warning(None,"Carpetas de GrafConnect",str(exc))
+    except OSError as exc:QMessageBox.warning(None,"Carpetas de GRAFCET Connect",str(exc))
     w = Ventana()
     if args.ejemplo:
         w.cargar_ejemplo(args.ejemplo)

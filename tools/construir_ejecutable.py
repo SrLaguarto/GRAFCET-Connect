@@ -1,11 +1,12 @@
 """Construye la versión portable para Windows del simulador de escritorio (P-IMP-29).
 
-Uso:  python tools/construir_ejecutable.py
-      o doble clic en «Construir ejecutable.bat»
+Uso:  python tools/construir_ejecutable.py --archivo-clave RUTA   (repartible, Nuitka)
+      python tools/construir_ejecutable.py --desarrollo           (clave pública, PyInstaller)
 
-Resultado: dist/GRAFCET/GRAFCET.exe con sus bibliotecas al lado (modo carpeta de PyInstaller, sin instalador).
-La carpeta dist/GRAFCET entera es el programa: se copia donde se quiera y se abre GRAFCET.exe. Las bibliotecas de
-Qt (LGPL v3) quedan como ficheros separados y sustituibles. Necesita PySide6-Essentials y pyinstaller (PyPI).
+Resultado: «dist/GRAFCET Connect/GRAFCET Connect.exe» con sus bibliotecas al lado (modo carpeta, sin instalador).
+Esa carpeta entera es el programa. Las bibliotecas de Qt (LGPL v3) quedan como ficheros separados y sustituibles.
+Necesita PySide6-Essentials y Nuitka (o pyinstaller con --motor pyinstaller). La clave de distribución debe ser
+la misma en todas las versiones: si cambia, los proyectos .grafnet guardados antes dejan de abrirse.
 """
 from __future__ import annotations
 
@@ -19,7 +20,10 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-NOMBRE = "GRAFCET"
+NOMBRE = "GRAFCET Connect"
+sys.path.insert(0, str(ROOT))
+from escritorio import VERSION  # noqa: E402  (la versión se define una sola vez, en escritorio/__init__.py)
+ICONO = ROOT / "escritorio" / "recursos" / "grafcet_connect.ico"
 try:
     from tools.clave_construccion import obtener_clave, fuentes_aisladas, ErrorClave
 except ModuleNotFoundError:
@@ -30,7 +34,7 @@ EXCLUIR = ["tkinter", "unittest", "PySide6.QtNetwork", "PySide6.QtQml", "PySide6
 
 
 def main(argv=None) -> int:
-    parser=argparse.ArgumentParser(description="Construir GrafConnect con su clave de sello")
+    parser=argparse.ArgumentParser(description="Construir GRAFCET Connect con su clave de sello")
     parser.add_argument("--archivo-clave",type=Path,help="Archivo de clave, fuera del repositorio (al menos 32 bytes)")
     parser.add_argument("--desarrollo",action="store_true",help="Construcción explícita con la clave pública de desarrollo")
     parser.add_argument("--motor",choices=("nuitka","pyinstaller"),help="Repartible: Nuitka por defecto; PyInstaller como alternativa. Desarrollo: PyInstaller por defecto.")
@@ -48,17 +52,28 @@ def _construir(fuentes, clave, motor) -> int:
     work = ROOT / "build"
     args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--onedir",
             "--name", NOMBRE, "--paths", str(fuentes), "--distpath", str(ROOT / "dist"), "--workpath", str(work),
-            "--specpath", str(work), "--collect-all=pypdfium2_raw", *[f"--exclude-module={m}" for m in EXCLUIR],
+            "--specpath", str(work), "--collect-all=pypdfium2_raw", "--icon", str(ICONO),
+            "--add-data", str(ICONO) + os.pathsep + "escritorio/recursos",
+            *[f"--exclude-module={m}" for m in EXCLUIR],
             *(["--hidden-import=escritorio._clave_sello"] if repartible else []),
             str(fuentes / "escritorio" / "simulador.py")]
     if motor == "nuitka":
         if importlib.util.find_spec("nuitka") is None:
             print("ERROR: Nuitka no está instalado. No se ha instalado ni cambiado de vía automáticamente; puede elegir --motor pyinstaller.",flush=True)
             return 1
-        args=[sys.executable,"-m","nuitka","--mode=standalone","--enable-plugin=pyside6",
-              "--windows-console-mode=disable","--include-package-data=pypdfium2_raw",
-              "--output-filename="+NOMBRE+".exe","--output-dir="+str(work/"nuitka"),
-              *(["--include-module=escritorio._clave_sello"] if repartible else []),str(fuentes/"escritorio"/"simulador.py")]
+        args = [
+            sys.executable, "-m", "nuitka", "--mode=standalone", "--enable-plugin=pyside6",
+            "--assume-yes-for-downloads", "--windows-console-mode=disable",
+            "--include-package-data=pypdfium2_raw", "--include-package-data=ezdxf",
+            "--windows-icon-from-ico=" + str(ICONO),
+            "--include-data-files=" + str(ICONO) + "=escritorio/recursos/grafcet_connect.ico",
+            "--company-name=" + NOMBRE, "--product-name=" + NOMBRE,
+            "--file-description=" + NOMBRE + ": editor y simulador GRAFCET",
+            "--file-version=" + VERSION + ".0", "--product-version=" + VERSION + ".0",
+            "--output-filename=" + NOMBRE + ".exe", "--output-dir=" + str(work / "nuitka"),
+            *(["--include-module=escritorio._clave_sello"] if repartible else []),
+            str(fuentes / "escritorio" / "simulador.py"),
+        ]
     print(" ".join(args), flush=True)
     # PATH de herramientas ajenas puede contener DLL con el mismo nombre y otra ABI
     # (p. ej. icuuc.dll de Poppler). Qt usa la ICU de Windows. La compilación solo

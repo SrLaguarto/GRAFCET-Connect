@@ -32,15 +32,17 @@ Primera versión para Windows: simula los ejemplos y los modelos guardados con e
 con un clic. Al abrir un ejemplo o un modelo, el programa queda en **Pausa**, sin estado (sin etapas activas ni temporizadores), que es el modo de edición (en el resto de
 este documento, «modo Editar»). **Play** (F5, «Ejecutar») compila lo editado y simula en tiempo real, como un autómata;
 los retardos se ven como temporizadores: sobre la duración de su receptividad (o de la condición o evento de una acción) aparece el tiempo transcurrido («0,5 s») mientras cuenta, y «3 s ✓» al vencer. **Pausa** detiene y vuelve a editar, y deja todo a 0 hasta el siguiente Play (sin etapas activas ni temporizadores; con E/S externas conectadas, pide el cero de las salidas asignadas). Cada Play empieza una sesión nueva desde la situación inicial. **Reiniciar** (Ctrl+R)
-en Play vuelve a la situación inicial sin cerrar la conexión y lee las entradas antes de escribir (en Pausa no crea sesión). Hay traza, salidas, variables y todas las lecturas de interpretación
-(menú «Ajustes»). Los paneles derecho e inferior se pliegan, y el dibujo admite zoom: la rueda lo hace anclado al puntero, y «Centrar todo» (Ctrl+0; menú Ver; al simular, también doble clic) encaja y centra lo dibujado (P-IMP-30 y P-IMP-64); «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar), y el botón central (la rueda) arrastra el dibujo, al editar y al simular (P-IMP-68). «Proyecto > Abrir…» abre un proyecto `.grafnet`
+en Play vuelve a la situación inicial sin cerrar la conexión y lee las entradas antes de escribir (en Pausa no crea sesión). Hay traza, salidas y variables. En el menú **Ajustes > Ajustes de simulación…** se pregunta solo «¿Cuándo vale el cambio de una entrada?»: «De uno en uno» (por defecto, lectura `situacion-anterior` de U-03) o «Todo de una vez» (`recorrido`); las demás lecturas de interpretación conservan su valor y no se muestran (P-IMP-88). Si el ajuste no es el habitual, la barra de estado lo avisa. Los paneles derecho e inferior se pliegan, y el dibujo admite zoom: la rueda lo hace anclado al puntero, y «Centrar todo» (Ctrl+0; menú Ver; al simular, también doble clic) encaja y centra lo dibujado (P-IMP-30 y P-IMP-64); «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar), y el botón central (la rueda) arrastra el dibujo, al editar y al simular (P-IMP-68). «Proyecto > Abrir…» abre un proyecto `.grafnet`
 (archivo único con sello; no admite carpetas ni JSON sueltos); «Guardar» y «Guardar como…» guardan el modelo en curso con su
 dibujo en ese archivo. Con «Proyecto > Nuevo proyecto» se crea un modelo vacío; en Pausa, un ejemplo o un modelo abierto se edita con el editor de un secuencial: etapas, transiciones, enlaces, receptividades, deshacer, diagnósticos y recuperación (P-IMP-32). La paleta tiene ocho fichas, en dos columnas; pide cuatro filas y, en ventanas bajas, se encoge a tres con barra de desplazamiento: Etapa, Transición, Simultaneidad, Acción, Macroetapa, Encapsulante, **Grafcet parcial** (marco redondeado con «G»: se suelta en un hueco y crea un grafcet parcial vacío) y **Forzado**, que soltado en un hueco crea un borrador suelto (`G?{?}`) y, unido a una etapa, se configura como la orden `G{ }`; un borrador suelto o incompleto bloquea Play hasta completarlo (P-IMP-61, P-IMP-62, P-IMP-65, P-IMP-66, P-IMP-68 y P-IMP-72). Supr con una acción o una orden señalada borra solo esa acción u orden, no la etapa; «Equidistanciar» ordena las alturas de una cadena (P-IMP-65).
 
 - Desde el código: doble clic en «Abrir simulador.bat», o `python escritorio/simulador.py [modelo]`.
 - Versión portable: «Construir ejecutable.bat» (o `python tools/construir_ejecutable.py`) deja el programa en
-  `dist/GRAFCET/`. Esa carpeta entera es el programa: se copia donde se quiera y se abre `GRAFCET.exe`, sin instalar
+  `dist/GRAFCET Connect/`. Esa carpeta entera es el programa: se copia donde se quiera y se abre `GRAFCET Connect.exe`, sin instalar
   Python. `dist/` y `build/` no se versionan.
+- Barra de estado: «Basado en IEC 60848». Indica la base del programa; no es una declaración de conformidad (P-IMP-90).
+- Avisos y diagnósticos: no muestran códigos internos (como `D-…`, `U-…` o `REQ-…`), que siguen en los datos. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular» (P-IMP-89).
+- **Ayuda > Acerca de GRAFCET Connect…**: versión, «Basado en IEC 60848», licencia GPL-3.0 y enlace al código. El botón **Comunicar un fallo** abre las Issues de GitHub (https://github.com/SrLaguarto/GrafConnect/issues). El icono del programa es `escritorio/recursos/grafcet_connect.ico` (P-IMP-90).
 
 ### Conectar con Factory I/O (P-IMP-50)
 
@@ -53,7 +55,7 @@ En Factory I/O seleccione **Modbus TCP/IP Server** y asigne sensores a entradas
 discretas/input registers y actuadores a coils/holding registers. Confirme IP,
 puerto, Slave ID y direcciones en su instalación; no se asignan automáticamente.
 
-En GrafConnect, simule el modelo y pulse **E/S externas** en la barra; ese botón pasa a **Vista GRAFCET** y vuelve al dibujo al pulsarlo. La flecha
+En GRAFCET Connect, simule el modelo y pulse **E/S externas** en la barra; ese botón pasa a **Vista GRAFCET** y vuelve al dibujo al pulsarlo. La flecha
 Atrás vuelve al GRAFCET sin desconectar. Arrastre las variables
 a los canales de su lado (Input o Input Reg a la izquierda; Coil o Holding Reg a la derecha). En **Configuración** puede
 ajustar área, dirección **base cero** y formato BOOL/INT16/UINT16. La escala numérica
@@ -63,7 +65,7 @@ analógicas, `valor GRAFCET = registro / escala`; para 3,14 use escala 100 y reg
 representables detienen la conexión; no hay redondeo ni saturación.
 
 Los campos de offset y cantidad de I/Q/AI/AQ están en **Configuración**, en «Canales del servidor» (ya no hay botón «+ Canales»); copie la configuración
-de Factory I/O. Modbus no permite deducir sus cantidades reales por sondeo en este
+de Factory I/O. Un proyecto sin mapa propio abre con 32 canales digitales (Input y Coil) y 12 numéricos (Input Reg y Holding Reg), con offset 0; no hereda las cantidades de canales de preferencias anteriores, aunque sí el servidor y los tiempos (P-IMP-87). Modbus no permite deducir sus cantidades reales por sondeo en este
 servidor. Use la **×**, que aparece al pasar el ratón por la asignación, para desasignar, o arrastre desde el propio slot para mover;
 si está conectado, pulse **Desconectar / editar** primero. Con solo entradas se
 admite observación sin motor compilado, también en Pausa. Sin salidas asignadas no se escribe nada; con salidas asignadas, Conectar les pone antes el cero.
@@ -152,6 +154,14 @@ Cada commit traza requisito, cambio y prueba:
 ## Procedencia (REQ-CR-02, REQ-CR-03, REQ-CR-04)
 
 El núcleo se ha hecho solo con los doce documentos del paquete. El 25-10-2026, a petición del responsable de producto, se consultaron algunas imágenes de la norma aportadas por el responsable de producto (fuente IMG del documento 02, de uso autorizado) para ajustar la **notación gráfica del banco de pruebas**: P18-01, P19-04, P19-05, P20-02, P22-03, P26-01, P27-03, P28-02, P31-06, P32-02 y P32-04. El 27-10-2026, también a petición suya, se consultaron las de jerarquía: P40-02, P42-01, P42-02, P42-03, P42-04, P42-05, P43-01, P43-02, P44-01, P45-01, P47-01, P47-02 y P47-03. Solo se tomaron proporciones y convenciones de dibujo (P-IMP-17, P-IMP-24); no se copió ningún activo ni se abrió otro contenido de esa carpeta (ni el PDF ni la subcarpeta «Claude outputs»). No se han consultado otros productos, sus repositorios ni sus capturas. No se ha accedido a la red. Ningún oráculo procede de otro producto: las pruebas implementan los oráculos del documento 11 y, como variantes declaradas, los casos suplementarios S-xx. No se ha detectado contaminación. Como advierte el documento 02, no se afirma un aislamiento absoluto respecto al entrenamiento del modelo.
+
+## Licencia
+
+GRAFCET Connect (versión 1.0.0) es software libre y de código abierto, publicado con la licencia **GPL-3.0**. El texto completo está en el fichero [LICENSE](LICENSE) de la raíz. El código está en https://github.com/SrLaguarto/GrafConnect.
+
+Las bibliotecas de Qt (PySide6, Qt for Python) van en el ejecutable como ficheros separados, bajo la licencia LGPL v3, y pueden sustituirse por otras versiones compatibles. La clave de distribución del sello de los proyectos `.grafnet` no forma parte del código publicado: se inyecta solo al construir el ejecutable (P-IMP-80). La clave de desarrollo, que sí es pública, está en `escritorio/sello.py`.
+
+Este programa se ofrece sin ninguna garantía. Ver el fichero LICENSE para las condiciones completas (P-IMP-90).
 
 ## Lo que falta
 
@@ -248,7 +258,7 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
   - Una acción suelta que toca el lado derecho de otra (o el lado inferior, en colocación en columna) se pega a ella, con un imán de 16 píxeles. Varias acciones sueltas pegadas forman un grupo que se mueve junto y se une a una etapa de una vez.
 - **Enlace de la etapa:** el trazo horizontal que une la etapa con sus acciones se selecciona con un clic. Supr, o botón derecho → «Eliminar el enlace», separa todas las acciones de la etapa: cada una queda suelta, donde estaba. «Separar de la etapa» separa solo la acción elegida; «Separar del grupo», en un grupo suelto, la saca del grupo; «Quitar» la borra.
 - **Borrar una etapa:** borra también sus acciones y los borradores unidos a ella. Ctrl+Z lo restaura todo.
-- **Tipo por botón derecho:** en una acción, «Tipo de acción» es un submenú con los cinco tipos, con sus dibujos, y marca el actual. Después van «Editar…», la separación, «Colocación de las acciones» (en un grupo suelto), «Mover a la izquierda» o «a la derecha» (en columna, «Mover arriba» o «Mover abajo») y «Quitar». Si al cambiar de tipo faltan datos, la acción queda con «?» en lo que falta y se abre el panel para completarlo.
+- **Tipo por botón derecho:** en una acción, «Tipo de acción» es un submenú con los cinco tipos, con sus dibujos, y marca el actual. Incluye también «Orden de forzado», que convierte la acción en una orden de forzado de su etapa; en una orden, el mismo submenú la vuelve acción de la misma etapa (P-IMP-86). Después van «Editar…», la separación, «Colocación de las acciones» (en un grupo suelto), «Mover a la izquierda» o «a la derecha» (en columna, «Mover arriba» o «Mover abajo») y «Quitar». Si al cambiar de tipo faltan datos, la acción queda con «?» en lo que falta y se abre el panel para completarlo.
 - **Colocación de las acciones de una etapa:** con el botón derecho en la etapa, «Colocación de las acciones» ofrece cuatro formas, con la actual marcada: «En fila, pegadas» (por defecto), «En fila, separadas» (cada caja unida a una línea común que sale de la etapa), «En matriz de 2» (dos columnas, en orden de lectura: se llenan dos huecos y se cambia de fila; una barra común a la izquierda, que sale del enlace de la etapa) y «En columna» (una debajo de otra, unidas por una línea vertical). Cada caja se ensancha con su texto. La colocación se guarda en el proyecto, etapa por etapa, o por grupo suelto. Si la colocación elegida no cabe, se aparta lo que estorba (ver «No se puede poner un elemento encima de otro»); la colocación no cambia sola.
 - **Acciones limitadas de ficheros antiguos:** una continua con límite de tiempo de un fichero anterior se sigue dibujando y simulando igual, con su límite como una condición más (`NOT 3s/X1`). En el menú y en el panel aparece como «Condicionada (con límite de tiempo)». Ese tipo ya no se ofrece; al editar su condición se conserva el límite, salvo que se quite.
 
@@ -300,8 +310,7 @@ en el dibujo, no su parcial.
   etapa de entrada (E1, E2…) y una de salida (S1, S2…), unidas a la macroetapa (con «Mostrar dependencias» activado, por trazos discontinuos). La expansión no
   lleva ruta interior: se rellena soltando etapas y transiciones dentro de su zona. Botón derecho: «Encuadrar la expansión» y
   «Renombrar…». El doble clic en la macroetapa encuadra la expansión.
-- **Encapsulante.** Se arrastra la ficha, o se convierte una etapa con el botón derecho, «Convertir en encapsulante».
-  «Convertir en etapa ordinaria» la devuelve si no tiene recintos.
+- **Encapsulante y tipo de etapa.** Se arrastra la ficha, o se elige en el submenú «Tipo de etapa» del botón derecho sobre una etapa: Etapa, Etapa inicial (casilla), Encapsulante o Macroetapa, con la actual marcada (P-IMP-86). Una encapsulante vuelve a etapa si no tiene recintos. Una etapa pasa a macroetapa conservando nombre, posición y enlaces, y recibe una expansión vacía (entrada y salida); se rechaza si es inicial, si tiene acciones u órdenes de forzado o enlace de activación, o si es encapsulante con recintos. Una macroetapa vuelve a etapa solo si su expansión está vacía.
 - **Recintos.** Botón derecho en la encapsulante, «Añadir recinto…», y el nombre (G1, G2…: el primero libre entre parciales y macroetapas). El marco vacío aparece a su
   derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos. Con «Mostrar dependencias» (botón junto al zoom) se dibujan dos trazos discontinuos, desde las esquinas de la encapsulante más cercanas hasta las dos esquinas del lado del recinto que mira hacia ella (P-IMP-68).
 - **Grafcet parcial suelto.** Se arrastra la ficha «Grafcet parcial» (marco redondeado con «G») a un hueco del dibujo, o se usa «Nuevo grafcet parcial aquí» del botón derecho en el hueco. Crea un parcial vacío, con nombre automático (G1, G2…) y su marco en ese punto, en una sola operación de deshacer. Las etapas que se suelten dentro pasan a él. Se renombra con «Renombrar…» (botón derecho o doble clic en su borde); es destino de la ficha «Forzado»; Supr lo borra con aviso si hay órdenes que lo apuntan. Se guarda y se abre como cualquier otro parcial. Sin posición guardada no se dibuja, y su marco vacío solo se ve al editar, no al simular.
@@ -310,7 +319,7 @@ en el dibujo, no su parcial.
 - **Lazo de selección (P-IMP-73).** Si el rectángulo encierra por completo el marco de un recinto o de un parcial suelto, también lo selecciona aunque esté vacío. El marco se puede mover con lo seleccionado o borrar con Supr; si el borrado afecta a la jerarquía, aparece el mismo aviso de confirmación que al borrar desde otras selecciones.
 - **Enlaces en borrador al abrir (P-IMP-71).** Si algún extremo de un enlace en borrador ya no existe, el editor quita ese enlace al cargar y avisa una vez. La reparación se guarda al guardar el proyecto.
 - **Forzado desde la paleta (P-IMP-68).** La ficha «Forzado» (rectángulo doble «G{ }») se arrastra como una acción: soltada en un hueco crea una orden suelta, con «G?{?}», que no se simula; soltada sobre una etapa (o sobre una de sus acciones u órdenes, o a menos de 16 del borde derecho de su fila) queda unida a ella y abre sus opciones. Se une a mano a una etapa tirando de su punto de unión, como una acción. Solo pasa a ser orden del modelo unida y completa. Separarla o «Eliminar el enlace» la devuelve a suelta, también si ya estaba en el modelo; borrar su destino o sus etapas la deja sin completar; un ciclo de forzado se rechaza al unir. Se configura con doble clic, con el menú o con el panel.
-- **Enlace de activación.** Botón derecho en una etapa de un recinto, «Enlace de activación» (casilla). La etapa marcada
+- **Enlace de activación.** Botón derecho en una etapa de un recinto, «Enlace de activación», o su casilla en las propiedades de la etapa (P-IMP-86). La etapa marcada
   lleva un «\*» y se activa cuando se activa la encapsulante (P-IMP-23).
 - **Forzar un parcial.** Botón derecho en una etapa, «Forzar un parcial…»: se elige el parcial destino y la forma. La
   orden se dibuja como una caja `G{…}` en rectángulo doble, con las acciones de esa etapa, y está vigente mientras la etapa

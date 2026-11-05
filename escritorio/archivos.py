@@ -19,7 +19,7 @@ class ArchivosProyecto:
         from .carpetas import asegurar_carpetas,nombre_proyecto
         try:inicial=actual or asegurar_carpetas()['grafcet']/nombre_proyecto(e.titulo)
         except OSError as exc:QMessageBox.warning(self,'Guardar proyecto',str(exc));return False
-        ruta,_=QFileDialog.getSaveFileName(self,'Guardar proyecto como',str(inicial),'Proyecto GrafConnect (*.grafnet)')
+        ruta,_=QFileDialog.getSaveFileName(self,'Guardar proyecto como',str(inicial),'Proyecto GRAFCET Connect (*.grafnet)')
         if not ruta:return False
         destino=Path(ruta)
         if destino.suffix.lower()!='.grafnet':

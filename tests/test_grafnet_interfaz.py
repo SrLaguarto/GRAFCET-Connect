@@ -10,7 +10,8 @@ from grafcet.persistence import open_project
 if QT:
     from PySide6.QtCore import Qt,QEvent
     from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QApplication,QMessageBox
+    from PySide6.QtWidgets import QApplication,QLabel,QMessageBox
+    from escritorio.ventana import AcercaDe
     from conexion.configuracion import Configuracion,ARCHIVO
 
 
@@ -71,8 +72,9 @@ class GrafnetInterfaz(BaseQt):
         """REQ-DAT-02: Acerca de identifica desarrollo sin revelar la clave y la marca no aparece en una versión repartible."""
         w,e=self.preparar()
         for desarrollo in (True,False):
-            with patch.object(sello,'DESARROLLO',desarrollo),patch('escritorio.ventana.QMessageBox.about') as acerca:
-                w.acerca();texto=acerca.call_args.args[2]
+            vistos=[]
+            with patch.object(sello,'DESARROLLO',desarrollo),patch.object(AcercaDe,'exec',lambda d:vistos.append(d) or 0):
+                w.acerca();texto=' '.join(x.text() for x in vistos[0].findChildren(QLabel))
                 self.assertEqual('versión de desarrollo' in texto,desarrollo)
                 self.assertNotIn(sello.CLAVE.hex(),texto)
 

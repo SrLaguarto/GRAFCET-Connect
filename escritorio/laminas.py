@@ -198,7 +198,7 @@ class DocumentoLaminas:
     def exportar_pdf(self,ruta):
         def escribir(tmp):
             writer=QPdfWriter(tmp);writer.setResolution(300);writer.setPageLayout(self.layout())
-            writer.setTitle(self.ajustes['campos']['titulo']);writer.setCreator('GrafConnect')
+            writer.setTitle(self.ajustes['campos']['titulo']);writer.setCreator('GRAFCET Connect')
             self.pintar_dispositivo(writer)
             del writer
         self._atomico(ruta,escribir)
@@ -532,7 +532,7 @@ class DialogoLaminas(QDialog):
         try:inicial=str(asegurar_carpetas()['plantillas'])
         except OSError as exc:QMessageBox.warning(self,'Importar plantilla',str(exc));return
         nombre,_=QFileDialog.getOpenFileName(self,'Importar plantilla de lámina',inicial,
-            'Plantillas (*.dxf *.DXF *.pdf *.svg *.json);;Plantilla GrafConnect (*.json);;DXF (*.dxf *.DXF);;PDF (*.pdf);;SVG (*.svg);;Todos los archivos (*)')
+            'Plantillas (*.dxf *.DXF *.pdf *.svg *.json);;Plantilla GRAFCET Connect (*.json);;DXF (*.dxf *.DXF);;PDF (*.pdf);;SVG (*.svg);;Todos los archivos (*)')
         if not nombre:return
         try:
             pagina=0
@@ -654,7 +654,7 @@ class DialogoLaminas(QDialog):
         from .carpetas import asegurar_carpetas,guardar_plantilla
         try:
             inicial=asegurar_carpetas()['plantillas']/'plantilla_personalizada.json'
-            nombre,_=QFileDialog.getSaveFileName(self,'Guardar plantilla en biblioteca',str(inicial),'Plantilla GrafConnect (*.json)',options=QFileDialog.Option.DontConfirmOverwrite)
+            nombre,_=QFileDialog.getSaveFileName(self,'Guardar plantilla en biblioteca',str(inicial),'Plantilla GRAFCET Connect (*.json)',options=QFileDialog.Option.DontConfirmOverwrite)
             if not nombre:return
             destino=Path(nombre)
             if destino.suffix.lower()!='.json':destino=destino.with_name(destino.name+'.json')

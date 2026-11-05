@@ -529,7 +529,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(w.modbus.estado, "conectado")
                 self.assertIs(w.modbus.cliente._socket, socket)
                 self.assertIsNone(w.modbus.adaptador.sesion)
-                self.assertTrue(any("D-LIM-EVOL" in w.lista_diag.item(i).text() for i in range(w.lista_diag.count())))
+                self.assertTrue(any("presupuesto de" in w.lista_diag.item(i).text() for i in range(w.lista_diag.count())))
                 w._desconectar_modbus()
                 esperar(lambda: not w.modbus.activo)
             finally:

@@ -37,6 +37,10 @@ class PaginaPlanos(QWidget):
     def __init__(self,ventana):
         super().__init__();self.ventana=ventana;self.editor=None;self.origen=None;self.hoja_id=None
         self.aplicando=False;self.cargando=False;self.automatico=True;self.factor_zoom=1.;self.graficos=[];self.pan=None;self.grafico_actual=0
+        self.parpadeos_hoja=0
+        self.t_hoja=QTimer(self)
+        self.t_hoja.setInterval(350)
+        self.t_hoja.timeout.connect(self._paso_parpadeo_hoja)
         self.lista_timer=QTimer(self);self.lista_timer.setSingleShot(True);self.lista_timer.setInterval(0);self.lista_timer.timeout.connect(self.ajustar_lista)
         self.dimension_timer=QTimer(self);self.dimension_timer.setSingleShot(True);self.dimension_timer.setInterval(0);self.dimension_timer.timeout.connect(self.dimensionar)
         self.guardar_timer=QTimer(self);self.guardar_timer.setSingleShot(True);self.guardar_timer.setInterval(400);self.guardar_timer.timeout.connect(self.aplicar)
@@ -135,6 +139,39 @@ class PaginaPlanos(QWidget):
             fila=next((i for i in range(self.lista.count()) if self.lista.item(i).data(Qt.ItemDataRole.UserRole)==ident),-1)
             self.ajustar_lista();self.lista.setCurrentRow(fila);self.lista.blockSignals(False);self.cargar(ident)
         finally:self.cargando=False
+        self.estilo_boton_hoja()
+
+    ACENTO_HOJA = '#147f80'  # el acento del tema Menta (el de los títulos de esta página)
+    ACENTO_HOJA_CLARO = '#8fcdce'
+
+    def estilo_boton_hoja(self, fase=True):
+        """«+ Añadir hoja» es el botón principal (fondo de acento, texto blanco) mientras no hay ninguna hoja; con
+        hojas, el estilo normal. `fase` False es el tono claro del parpadeo."""
+        sin_hojas = self.lista.count() == 0 and self.ventana.edicion is not None
+        if not sin_hojas:
+            self.t_hoja.stop()
+            self.b_hoja.setStyleSheet('')
+            return
+        fondo = self.ACENTO_HOJA if fase else self.ACENTO_HOJA_CLARO
+        self.b_hoja.setStyleSheet(
+            f'QToolButton {{ background:{fondo}; color:white; font-weight:600; border:1px solid {self.ACENTO_HOJA}; '
+            'border-radius:5px; padding:5px 10px }')
+
+    def parpadear_boton_hoja(self):
+        """Al entrar en la pestaña sin hojas, el botón parpadea suavemente tres veces (alterna dos tonos del acento)."""
+        if self.lista.count() or self.ventana.edicion is None:
+            return
+        self.parpadeos_hoja = 6
+        self.estilo_boton_hoja(False)
+        self.t_hoja.start()
+
+    def _paso_parpadeo_hoja(self):
+        self.parpadeos_hoja -= 1
+        if self.parpadeos_hoja <= 0:
+            self.t_hoja.stop()
+            self.estilo_boton_hoja(True)
+            return
+        self.estilo_boton_hoja(self.parpadeos_hoja % 2 == 0)
 
     def elegir(self,fila):
         if fila>=0 and not self.cargando:self.cargar(self.lista.item(fila).data(Qt.ItemDataRole.UserRole))

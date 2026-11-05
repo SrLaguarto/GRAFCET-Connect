@@ -11,7 +11,7 @@ from grafcet.plantillas_tecnicas import PREDETERMINADAS,plantilla_tecnica
 def directorios():
     documentos=QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
     if not documentos:raise OSError('No se pudo localizar la carpeta Documentos del usuario')
-    raiz=Path(documentos)/'GrafConnect'
+    raiz=Path(documentos)/'GRAFCET Connect'
     return {'raiz':raiz,'plantillas':raiz/'Plantillas','grafcet':raiz/'GRAFCET','laminas':raiz/'Láminas'}
 
 

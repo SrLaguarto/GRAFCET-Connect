@@ -1,8 +1,8 @@
-Simulador GRAFCET (versión portable, primera versión)
+GRAFCET Connect (versión portable 1.0.0)
 ====================================================
 
-Abrir: doble clic en GRAFCET.exe. No necesita instalación ni conexión a la red. La carpeta entera es el
-programa: puede copiarse a otro sitio o a un USB, pero GRAFCET.exe no funciona separado de ella.
+Abrir: doble clic en «GRAFCET Connect.exe». No necesita instalación ni conexión a la red. La carpeta entera es el
+programa: puede copiarse a otro sitio o a un USB, pero «GRAFCET Connect.exe» no funciona separado de ella.
 
 Qué hace
 - Simula los ejemplos (menú Ejemplos) y los proyectos guardados (Proyecto > Abrir…): un archivo .grafnet.
@@ -13,8 +13,10 @@ Qué hace
   retardo es un temporizador: sobre la duración de su receptividad (o de la condición o evento de una acción) se ve el tiempo transcurrido («0,5 s») mientras cuenta, y «3 s ✓» al vencer. Pausa (F5 de nuevo) detiene y
   vuelve a editar y deja todo a 0 hasta el siguiente Play (sin etapas activas ni temporizadores); cada Play empieza desde la situación inicial. Barra de herramientas: Ejecutar/Pausa
   y Reiniciar (Ctrl+R). «Simulación > Avanzar el tiempo…» es una herramienta de depuración, solo en Play.
-- Ajustes > Lecturas de interpretación: por defecto, las decididas por el responsable; lo que sigue abierto se
-  detiene con su cuestión U en vez de aproximarse. Si se elige otra, la barra de estado lo avisa.
+- Ajustes > Ajustes de simulación…: una sola pregunta, «¿Cuándo vale el cambio de una entrada?», con «De uno en uno»
+  (por defecto) o «Todo de una vez». Las demás lecturas de interpretación conservan su valor y no se muestran. Lo que
+  sigue abierto se detiene con su cuestión U en vez de aproximarse. Si se elige otra, la barra de estado lo avisa
+  («Ajustes de simulación no habituales»).
 - Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J). Al simular, el
   panel inferior muestra la traza.
 - Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), rueda del ratón (anclada al puntero), Ctrl+= y Ctrl+−; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
@@ -33,6 +35,9 @@ Qué hace
   Los retardos se escriben como 3s/X1. Play valida el grafcet y lo ejecuta; si no compila o está vacío, dice por qué,
   queda en Pausa y parpadean en naranja los elementos con error. Cada cierto tiempo se guarda una copia de recuperación.
 - Ayuda > Leyenda del dibujo: ventana con lo que significa cada trazo y cada color.
+- Ayuda > Acerca de GRAFCET Connect…: versión, licencia GPL-3.0, enlace al código y el botón «Comunicar un fallo»,
+  que abre las Issues de GitHub (https://github.com/SrLaguarto/GrafConnect/issues).
+- Los avisos no muestran códigos internos. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular».
 
 
 Selección, salto y repetición (corrección del paso 3, P-IMP-33)
@@ -48,9 +53,10 @@ El menú Ejemplos incluye «Selección de secuencia», «Salto de etapas» y «R
 
 Qué no es
 - Edita macroetapas, encapsulantes con recintos y órdenes de forzado (ver «Jerarquías») y grafcets parciales sueltos. Variables, acciones, receptividades, selección, salto y repetición sí se editan.
-- Usa un perfil provisional y NO declara conformidad con IEC 60848 / UNE-EN 60848.
+- Basado en IEC 60848. La barra de estado lo muestra; no es una declaración de conformidad con la norma.
 
 Licencias
+- GRAFCET Connect se publica con la licencia GPL-3.0 (fichero LICENSE). Código: https://github.com/SrLaguarto/GrafConnect
 - Interfaz con Qt for Python (PySide6), bajo LGPL v3. Las bibliotecas de Qt están como ficheros separados en
   la carpeta _internal y pueden sustituirse por otras versiones compatibles.
 
@@ -215,7 +221,7 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
   «Separar de la etapa» separa solo la acción elegida; «Separar del grupo», en un grupo suelto, la saca del grupo;
   «Quitar» la borra.
 - Borrar una etapa: borra también sus acciones y los borradores unidos a ella. Ctrl+Z lo restaura todo.
-- Tipo por botón derecho: en una acción, «Tipo de acción» es un submenú con los cinco tipos, con sus dibujos, y marca
+- Tipo por botón derecho: en una acción, «Tipo de acción» es un submenú con los cinco tipos y «Orden de forzado» (que convierte la acción en orden de forzado de su etapa), con sus dibujos, y marca
   el actual. Después van «Editar…», la separación, «Colocación de las acciones» (en un grupo suelto), «Mover a la
   izquierda» o «a la derecha» (en columna, «Mover arriba» o «Mover abajo») y «Quitar». Si al cambiar de tipo faltan
   datos, la acción queda con «?» en lo que falta y se abre el panel para completarlo.
@@ -321,14 +327,15 @@ dibujo.
   de entrada (E1, E2…) y una de salida (S1, S2…), unidas a la macroetapa (con «Mostrar dependencias» activado, por trazos discontinuos). La expansión no lleva
   ruta interior: se rellena soltando etapas y transiciones dentro de su zona. Botón derecho: «Encuadrar la expansión» y
   «Renombrar…». El doble clic en la macroetapa encuadra la expansión.
-- Encapsulante: se arrastra la ficha, o se convierte una etapa con el botón derecho, «Convertir en encapsulante».
-  «Convertir en etapa ordinaria» la devuelve si no tiene recintos.
+- Encapsulante y tipo de etapa: se arrastra la ficha, o se elige en el botón derecho de una etapa, submenú «Tipo de etapa»
+  (Etapa, Etapa inicial, Encapsulante o Macroetapa; la actual, marcada). Una encapsulante vuelve a etapa si no tiene
+  recintos. Una macroetapa vuelve a etapa solo si su expansión está vacía.
 - Recintos: botón derecho en la encapsulante, «Añadir recinto…», y el nombre (G1, G2…: el primero libre entre parciales y macroetapas). El marco vacío aparece a su
   derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos. Con «Mostrar dependencias» (botón junto al zoom) se dibujan dos trazos discontinuos, desde las esquinas de la encapsulante más cercanas hasta las dos esquinas del lado del recinto que mira hacia ella (P-IMP-68).
 - Grafcet parcial suelto: se arrastra la ficha «Grafcet parcial» (marco redondeado con «G») a un hueco del dibujo, o se usa «Nuevo grafcet parcial aquí» del botón derecho en el hueco. Crea un parcial vacío, con nombre automático (G1, G2…) y su marco en ese punto, en una sola operación de deshacer. Las etapas que se suelten dentro pasan a él. Se renombra con «Renombrar…» (botón derecho o doble clic en su borde); es destino de la ficha «Forzado»; Supr lo borra con aviso si hay órdenes que lo apuntan. Se guarda y se abre como cualquier otro parcial. Sin posición guardada no se dibuja, y su marco vacío solo se ve al editar, no al simular.
 - Mostrar dependencias: botón junto a los controles de zoom, apagado por defecto y recordado entre sesiones. Con él se dibujan los trazos discontinuos que unen una macroetapa con su expansión y una encapsulante con su recinto; sin él no aparecen. No cambia la disposición, los marcos ni la selección.
 - Marcos de los parciales (P-IMP-68): el marco de un parcial rodea todo lo que se dibuja de él: etapas, transiciones con sus textos, acciones y órdenes, barras y recorridos de enlaces, también los de retorno. Deja 26 px a los lados y 22 arriba y abajo. No cuentan el estado del temporizador, las etiquetas de simulación ni los comentarios.
-- Enlace de activación: botón derecho en una etapa de un recinto, «Enlace de activación» (casilla). La etapa marcada
+- Enlace de activación: botón derecho en una etapa de un recinto, «Enlace de activación» (o su casilla en las propiedades de la etapa). La etapa marcada
   lleva un «*» y se activa cuando se activa la encapsulante (P-IMP-23).
 - Forzar un parcial: botón derecho en una etapa, «Forzar un parcial…»: se elige el parcial destino y la forma. La orden
   se dibuja como una caja G{…} en rectángulo doble, con las acciones de esa etapa, y está vigente mientras la etapa esté activa.
@@ -367,7 +374,7 @@ E/S externas (Factory I/O) y botón conmutador (P-IMP-63)
 - El panel tiene a la izquierda la lista SENSORES y a la derecha la lista ACTUADORES: arrastre cada variable a un canal de su lado. En el centro, un marco con la cabecera «(IP:puerto)» y «Esclavo ID:n»: a su izquierda, los canales Input e Input Reg; a su derecha, Coil y Holding Reg. El nombre de la variable asignada aparece fuera del marco, pegado a él. Al arrastrar, se resalta la fila entera.
 - Cada canal tiene un indicador: tenue si no tiene variable, del color de su tipo si la tiene, y más vivo si la señal está activa. Bool es verde, Decimal azul, Entera naranja y Cualquiera blanco. El resumen de abajo cuenta «x/y entradas asignadas · x/y salidas asignadas».
 - Para quitar una asignación, pase el ratón por ella y pulse la «×», que solo aparece al pasar el ratón (con la conexión activa, antes pulse «Desconectar / editar»). También puede usar el menú contextual del canal.
-- «+ Canales» ya no existe: los campos de offset y cantidad de I/Q/AI/AQ están en Configuración, en «Canales del servidor».
+- «+ Canales» ya no existe: los campos de offset y cantidad de I/Q/AI/AQ están en Configuración, en «Canales del servidor». Un proyecto sin mapa propio abre con 32 canales digitales y 12 numéricos; no hereda las cantidades de canales de preferencias anteriores.
 - El estado de conexión va en su propia fila, bajo el título. Si hay un fallo, el texto hace salto de línea y su mensaje completo aparece al pasar el ratón por encima. Los fallos de red habituales se explican en una frase, por ejemplo: «Factory I/O cerró o anuló la conexión (WinError 10053). Salidas no garantizadas. Pulsa Conectar para reanudar. Detalle: …».
 
 
@@ -404,6 +411,6 @@ Rondas 5 y 6 (P-IMP-71 a P-IMP-79)
 - Cortar, copiar y pegar (Ctrl+X, Ctrl+C, Ctrl+V y clic derecho), con su jerarquía; se pega bajo el ratón o en el hueco libre más cercano.
 - Al simular, las entradas son pulsadores (Ctrl enclava; clic derecho: interruptor). Play/Stop con «Stop» en lugar de «Pausa». Play oculta la paleta y el panel inferior y no mueve el dibujo.
 - Lo activo en verde lima y lo verdadero coloreado; temporizador sin cápsula; dependencias por esquinas; barras Y no válidas bloquean Play.
-- Panel E/S en castellano, más compacto, con los valores de Factory I/O por defecto (192.168.1.133:502, esclavo 1, 16+16, 8+8, escala 100) y sin bloque inferior de configuración.
+- Panel E/S en castellano, más compacto, con los valores de Factory I/O por defecto (192.168.1.133:502, esclavo 1, escala 100; desde la 1.0.0, 32 digitales y 12 numéricos) y sin bloque inferior de configuración.
 - Paleta con dos columnas y nombres debajo; paneles plegables; diagnósticos junto al zoom; notas de texto e imágenes.
 - Borradores huérfanos que se limpian al abrir; órdenes y acciones sin configurar bloquean Play; el lazo selecciona marcos.

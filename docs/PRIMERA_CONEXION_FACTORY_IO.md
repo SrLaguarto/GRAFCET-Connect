@@ -2,11 +2,11 @@
 
 No necesitas crear un GRAFCET para esta prueba: hay uno preparado.
 Esta guía se refiere al último estado de tus capturas; si cambias la configuración
-de Factory I/O, copia los nuevos valores en GrafConnect.
+de Factory I/O, copia los nuevos valores en GRAFCET Connect.
 
 ## 1. Abre el programa y el proyecto preparados
 
-1. Cierra la versión anterior de GrafConnect. Abre **dist/GRAFCET/GRAFCET.exe**
+1. Cierra la versión anterior de GRAFCET Connect. Abre **dist/GRAFCET Connect/GRAFCET Connect.exe**
    desde la carpeta `implementacion` de este proyecto.
 2. Pulsa el botón **E/S externas** de la barra superior, junto a Reiniciar;
    después **Configuración → Abrir prueba guiada**. La flecha Atrás vuelve al GRAFCET, y el botón de la barra, que en esa vista se llama **Vista GRAFCET**, también.
@@ -24,7 +24,7 @@ de Factory I/O, copia los nuevos valores en GrafConnect.
 
 En Factory I/O, tus capturas muestran **Modbus TCP/IP Server** y este mapa:
 
-| Elemento de la escena | Terminal de Factory I/O | Variable de GrafConnect | Área en GrafConnect | Dirección |
+| Elemento de la escena | Terminal de Factory I/O | Variable de GRAFCET Connect | Área en GRAFCET Connect | Dirección |
 |---|---|---|---|---|
 | Pulsador marcha | Input 0 (I00) | PM | Inputs (entradas digitales 0/1) | 0 |
 | Cinta entrada | Coil 0 (Q00) | Q00 | Coils (señales digitales 0/1) | 0 |
@@ -38,7 +38,7 @@ El GRAFCET ya está hecho: **etapa 0 inicial (espera) → transición PM → eta
 (acciones continuas Q00 y Q01)**. Al pulsar PM, las dos cintas arrancan y siguen
 activas al soltarlo. No hay transición de parada en este ejemplo.
 
-En GrafConnect abre **Configuración** para comprobar los campos de conexión:
+En GRAFCET Connect abre **Configuración** para comprobar los campos de conexión:
 
 | Campo | Valor de tu última captura |
 |---|---|
@@ -62,7 +62,7 @@ Factory I/O para esta primera prueba.
 En **Configuración → Canales del servidor** copia el offset y la cantidad de
 Factory I/O. En tu última captura: offset 0 en las cuatro filas; cantidades
 **I=16, Q=16, AI=4, AQ=4**. El ejemplo guiado ya contiene esos valores.
-Estos cambios solo ajustan GrafConnect: no crean canales en Factory I/O.
+Estos cambios solo ajustan GRAFCET Connect: no crean canales en Factory I/O.
 No se pueden deducir por Modbus: tu servidor responde incluso en dirección 65535.
 Si reduces un rango y una señal quedaría fuera, quítala o muévela primero.
 Con muchos canales, desplaza verticalmente la zona central para ver los demás.
@@ -78,7 +78,7 @@ válido y pulsar Ejecutar (Play). El estado de conexión muestra el detalle al p
 
 1. En Factory I/O deja activo el driver **Modbus TCP/IP Server**. En tu captura
    aparece un indicador verde y la opción «PARAR»: no pulses PARAR para esta prueba.
-   Ese indicador por sí solo no demuestra que GrafConnect esté conectado.
+   Ese indicador por sí solo no demuestra que GRAFCET Connect esté conectado.
 2. En Configuración puedes pulsar **Probar conexión** (opcional, sin escribir salidas).
 3. Arriba del panel debe aparecer **«Conexión probada»**; el detalle está al dejar
    el ratón sobre el estado.
@@ -96,7 +96,7 @@ programa queda en Pausa; con la conexión viva, en Pausa se siguen observando la
 
 1. En Factory I/O vuelve desde DRIVER a la escena con la flecha de atrás y pon
    la escena en marcha con su botón de reproducción (▶).
-2. En GrafConnect pulsa **Ejecutar** (Play, F5) en la barra superior. El botón pasa
+2. En GRAFCET Connect pulsa **Ejecutar** (Play, F5) en la barra superior. El botón pasa
    a decir **Pausa** mientras la simulación corre; Pausa detiene y vuelve a editar,
    sin cerrar la conexión, y deja las salidas a cero hasta el siguiente Ejecutar.
 3. Acciona el **Pulsador marcha de la escena**, manteniéndolo aproximadamente un
@@ -107,13 +107,13 @@ programa queda en Pausa; con la conexión viva, en Pausa se siguen observando la
    permanece en la etapa 1.
 5. No hace falta generar cajas, activar el Emisor ni probar toda la instalación.
    Para detener la planta simulada, usa su control de pausa en Factory I/O.
-   Pausa en GrafConnect pone a cero las salidas: las cintas se paran, y sigue
+   Pausa en GRAFCET Connect pone a cero las salidas: las cintas se paran, y sigue
    observando PM. Para repetir desde la etapa 0, pulsa Reiniciar (Ctrl+R) en
-   GrafConnect: mantiene Modbus conectado y, en Ejecutar, vuelve a la etapa 0 leyendo antes las entradas (no escribe salidas iniciales a ciegas). Si
+   GRAFCET Connect: mantiene Modbus conectado y, en Ejecutar, vuelve a la etapa 0 leyendo antes las entradas (no escribe salidas iniciales a ciegas). Si
    estabas en Ejecutar, la simulación sigue en marcha; si estabas en Pausa, Reiniciar no crea sesión (todo queda a 0) y tienes que pulsar
    después Ejecutar (cada Ejecutar empieza desde la etapa 0) y vuelve a accionar PM.
 
-Si PM cambia pero Q00 y Q01 no, comprueba primero que GrafConnect está en Play (el botón muestra «Pausa»).
+Si PM cambia pero Q00 y Q01 no, comprueba primero que GRAFCET Connect está en Play (el botón muestra «Pausa»).
 Si PM y las salidas cambian pero las cintas no, anota ese resultado: no es el mismo problema que
 un fallo de conexión. Si PM no cambia, anota si el pulsador aparece activo en Factory I/O.
 
@@ -124,9 +124,9 @@ un fallo de conexión. Si PM no cambia, anota si el pulsador aparece activo en F
 | Host / IP | Dirección del ordenador donde está escuchando Factory I/O. |
 | Puerto | Punto de acceso de la comunicación; aquí 502. |
 | Esclavo ID / Unidad | Identificador Modbus; debe coincidir en ambos programas, aquí 1. |
-| Inputs / discrete | Entradas digitales: sensores o pulsadores que GrafConnect lee como 0 o 1. |
-| Coils | Señales digitales modificables: aquí GrafConnect las escribe para activar o desactivar actuadores. |
-| Input Registers | Números que GrafConnect puede leer de sensores analógicos. No se usan en esta prueba. |
+| Inputs / discrete | Entradas digitales: sensores o pulsadores que GRAFCET Connect lee como 0 o 1. |
+| Coils | Señales digitales modificables: aquí GRAFCET Connect las escribe para activar o desactivar actuadores. |
+| Input Registers | Números que GRAFCET Connect puede leer de sensores analógicos. No se usan en esta prueba. |
 | Holding Registers | Números modificables que pueden servir para consignas de actuadores. No se usan en esta prueba. |
 | BOOL | Un valor de dos estados: 0/1 o apagado/encendido. |
 | Dirección (base 0) | Número del terminal: Input 0 significa dirección 0; Coil 0 también significa dirección 0. |
@@ -168,9 +168,9 @@ la prueba del pulsador y del movimiento de la cinta desde la interfaz.
 - En las capturas iniciales de tu driver, las cantidades de registros numéricos
   estaban a 0. Para probar números, habilita registros en Factory I/O y asigna
   un sensor/actuador numérico de la escena. Añadir una variable Entera en
-  GrafConnect por sí solo no crea ese canal en Factory I/O.
+  GRAFCET Connect por sí solo no crea ese canal en Factory I/O.
 - Para una consigna decimal 3,14 con escala 100 se envía el registro 314. La escala
-  está fijada ahora en 100 para todas las señales numéricas de GrafConnect,
+  está fijada ahora en 100 para todas las señales numéricas de GRAFCET Connect,
   tanto de entrada como de salida, incluidos los mapas guardados antes. Mantén
   el driver Factory I/O también en 100. Factory
   recibe direcciones y valores, no nombres de variables ni acciones GRAFCET.

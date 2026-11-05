@@ -157,7 +157,7 @@ class Incidencias(BaseQt):
         with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
             w.a_ejecutar.setChecked(True)
         self.assertTrue(aviso.called);self.assertFalse(w.a_ejecutar.isChecked())
-        self.assertIn("D-ALTERNANCIA",aviso.call_args.args[2])
+        self.assertIn("alternancia",aviso.call_args.args[2]);self.assertNotIn("D-ALTERNANCIA",aviso.call_args.args[2])
         d=w.diagrama
         for ancho in (1366,1000):
             w.resize(ancho,768);QTest.qWait(20)
@@ -177,7 +177,7 @@ class Incidencias(BaseQt):
         e.ed.bar_link(bar,"arriba",a);e.ed.bar_link(bar,"abajo",t);e.ed.bar_link(bar,"abajo",u);e.cambia()
         self.assertIn(bar,e.marcados())
         with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:w.a_ejecutar.setChecked(True)
-        self.assertFalse(w.a_ejecutar.isChecked());self.assertIn("D-SIMULTANEIDAD",aviso.call_args.args[2])
+        self.assertFalse(w.a_ejecutar.isChecked());self.assertIn("simultaneidad",aviso.call_args.args[2]);self.assertNotIn("D-SIMULTANEIDAD",aviso.call_args.args[2])
         from grafcet.view import Vista
         from grafcet.profile import normalize_options
         v=Vista("m","","",lambda:(e.ed.model,e.layout()),normalize_options(None),presentation=e.ed.presentation)

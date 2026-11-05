@@ -1,9 +1,9 @@
 {
- "date": "2026-11-04T18:01:11+01:00",
+ "date": "2026-11-05T10:58:44+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 881,
+ "total": 904,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -65,6 +65,109 @@
     "REQ-EDT-09"
    ],
    "summary": "REQ-EDT-09: icono rojo junto al texto, debajo del zoom, manteniendo clic en diagnóstico y espacios transparentes."
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU01_el_panel_de_una_etapa_de_un_recinto_tiene_la_casilla_enlace_de_activacion",
+   "case": "S-AJU01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-05, REQ-EDT-09: el panel de opciones de una etapa de un recinto muestra la casilla «Enlace de"
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU02_un_proyecto_nuevo_no_hereda_los_16_8_recordados_de_una_version_anterior",
+   "case": "S-AJU02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-DAT-02: las preferencias recordadas por una versión anterior (16 digitales y 8 numéricas)"
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU03_las_cantidades_de_un_proyecto_concreto_se_respetan_y_no_se_recuerdan_globalmente",
+   "case": "S-AJU03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-DAT-02, REQ-SIM-03: un proyecto con su propio mapa conserva sus cantidades; lo que se recuerda para los"
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU04_el_dialogo_de_ajustes_de_simulacion_tiene_una_sola_opcion_con_palabras_normales",
+   "case": "S-AJU04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SEM-09"
+   ],
+   "summary": "REQ-SEM-09: «Ajustes de simulación» muestra solo la lectura de los eventos de entrada, con dos textos sin"
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU05_barra_de_estado_basado_en_iec_60848_y_aviso_de_ajuste_no_habitual",
+   "case": "S-AJU05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-NOR-02",
+    "REQ-SEM-09"
+   ],
+   "summary": "REQ-NOR-02, REQ-SEM-09: la barra de estado dice «Basado en IEC 60848» (sin «conformidad» ni"
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU06_los_avisos_no_llevan_codigos_internos_ni_rojo_agresivo",
+   "case": "S-AJU06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: la lista de diagnósticos dice «t1: la receptividad está vacía» (sin D-…, U-… ni H-…), con"
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU07_los_rechazos_del_nucleo_se_muestran_sin_codigos",
+   "case": "S-AJU07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un rechazo del núcleo (aquí, convertir en macroetapa una etapa inicial) se enseña sin código."
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU08_el_boton_anadir_hoja_es_principal_y_parpadea_mientras_no_hay_hojas",
+   "case": "S-AJU08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11: con la pestaña Planos sin hojas, «+ Añadir hoja» tiene el fondo del acento y texto blanco y"
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU09_la_opcion_marcada_del_submenu_tipo_de_etapa_se_distingue",
+   "case": "S-AJU09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: en «Tipo de etapa» el orden es Etapa, Etapa inicial, Encapsulante, Macroetapa y la fila marcada"
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU10_acerca_de_se_abre_desde_el_menu_ayuda_con_version_licencia_y_enlaces",
+   "case": "S-AJU10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-NOR-02"
+   ],
+   "summary": "REQ-NOR-02: «Ayuda > Acerca de GRAFCET Connect…» abre un diálogo con la versión (la de escritorio.VERSION),"
+  },
+  {
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU11_la_version_es_una_sola_constante_compartida_con_el_constructor",
+   "case": "S-AJU11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-NOR-02"
+   ],
+   "summary": "REQ-NOR-02: tools/construir_ejecutable.py lee la versión de escritorio.VERSION, sin duplicar el número."
   },
   {
    "test": "test_ajustes_trazos_es.ArrastreES.test_SAFI05_destino_resaltado_solo_fuera_del_plc_en_ambos_lados",
@@ -2318,7 +2421,7 @@
     "REQ-EDT-09",
     "REQ-JER-05"
    ],
-   "summary": "REQ-JER-05, REQ-EDT-09: el botón derecho en una etapa ordinaria ofrece «Convertir en encapsulante»; en una"
+   "summary": "REQ-JER-05, REQ-EDT-09: el botón derecho en una etapa ofrece «Tipo de etapa» (Etapa, Encapsulante,"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI176_enlace_de_activacion_como_casilla_marcada_o_desmarcada",
@@ -4474,6 +4577,134 @@
    "summary": "REQ-SIM-03: una respuesta antigua de reasignación no reemplaza la sesión nueva de Play."
   },
   {
+   "test": "test_menus_tipo.SubmenusDeTipo.test_SMTP10_accion_a_orden_de_forzado_aceptar_cancelar_y_deshacer",
+   "case": "S-MTP10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-EDT-09, REQ-JER-02: «Tipo de acción > Orden de forzado» en una acción de una etapa abre el diálogo de"
+  },
+  {
+   "test": "test_menus_tipo.SubmenusDeTipo.test_SMTP11_accion_sin_completar_o_suelta_a_orden_y_rechazos",
+   "case": "S-MTP11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-EDT-09, REQ-JER-02: una acción sin completar unida a una etapa pasa a orden del modelo; una suelta, a"
+  },
+  {
+   "test": "test_menus_tipo.SubmenusDeTipo.test_SMTP12_ciclo_de_forzado_al_convertir_una_accion_no_cambia_nada",
+   "case": "S-MTP12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-JER-02, REQ-EDT-09: si el núcleo rechaza la orden (ciclo, D-JERARQUIA-CICLO), la acción sigue donde"
+  },
+  {
+   "test": "test_menus_tipo.SubmenusDeTipo.test_SMTP13_orden_de_forzado_a_accion_del_modelo_sin_completar_y_suelta",
+   "case": "S-MTP13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-02"
+   ],
+   "summary": "REQ-EDT-09, REQ-JER-02: el menú de una orden de forzado (del modelo, sin completar unida o suelta) lleva"
+  },
+  {
+   "test": "test_menus_tipo.SubmenusDeTipo.test_SMTP20_submenu_tipo_de_etapa_con_iconos_marcas_y_casilla_de_inicial",
+   "case": "S-MTP20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-04",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-04, REQ-JER-05, REQ-EDT-09: el botón derecho en una etapa ofrece «Tipo de etapa» con icono por"
+  },
+  {
+   "test": "test_menus_tipo.SubmenusDeTipo.test_SMTP21_los_cuatro_cambios_de_tipo_de_etapa_con_el_menu",
+   "case": "S-MTP21",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-04",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-04, REQ-JER-05, REQ-EDT-09: Etapa <-> Encapsulante y Etapa/Encapsulante <-> Macroetapa desde el"
+  },
+  {
+   "test": "test_menus_tipo.SubmenusDeTipo.test_SMTP22_rechazos_del_tipo_de_etapa_se_muestran_en_rojo_y_no_cambian_nada",
+   "case": "S-MTP22",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-04",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-04, REQ-JER-05, REQ-EDT-09: una encapsulante con recintos no vuelve a etapa ni pasa a macroetapa;"
+  },
+  {
+   "test": "test_menus_tipo.SubmenusDeTipo.test_SMTP23_macroetapa_por_conversion_se_guarda_y_se_abre_y_simula_como_la_de_la_ficha",
+   "case": "S-MTP23",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-01",
+    "REQ-EDT-08",
+    "REQ-JER-04"
+   ],
+   "summary": "REQ-JER-04, REQ-DAT-01, REQ-EDT-08: la macroetapa que sale de convertir una etapa desde el menú tiene la"
+  },
+  {
+   "test": "test_menus_tipo.TipoDeEtapaEnElNucleo.test_SMTP01_etapa_a_macroetapa_conserva_id_nombre_posicion_y_enlaces_y_equivale_a_add_macro",
+   "case": "S-MTP01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-08",
+    "REQ-JER-04",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-JER-04, REQ-EDT-08, REQ-MOD-07: `set_step_kind(etapa, \"macro\")` deja una macroetapa con el ID, el"
+  },
+  {
+   "test": "test_menus_tipo.TipoDeEtapaEnElNucleo.test_SMTP02_macroetapa_a_etapa_ordinaria_o_encapsulante_solo_con_la_expansion_vacia",
+   "case": "S-MTP02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-04",
+    "REQ-JER-05",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-JER-04, REQ-JER-05, REQ-MOD-07: una macroetapa pasa a etapa ordinaria o encapsulante con su ID y sus"
+  },
+  {
+   "test": "test_menus_tipo.TipoDeEtapaEnElNucleo.test_SMTP03_rechazos_al_convertir_en_macroetapa",
+   "case": "S-MTP03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-04",
+    "REQ-JER-05",
+    "REQ-MOD-07"
+   ],
+   "summary": "REQ-JER-04, REQ-JER-05, REQ-MOD-07: una encapsulante con recintos, una etapa inicial, una con acciones"
+  },
+  {
+   "test": "test_menus_tipo.TipoDeEtapaEnElNucleo.test_SMTP04_etapa_con_ordenes_o_enlace_de_activacion_no_pasa_a_macroetapa_con_texto_claro",
+   "case": "S-MTP04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-JER-04",
+    "REQ-JER-05"
+   ],
+   "summary": "REQ-JER-04, REQ-JER-05, REQ-EDT-09: una etapa que es origen de una orden de forzado, la que lleva el"
+  },
+  {
    "test": "test_modbus.ModbusTests.test_SFIO01_digitales_fragmentacion",
    "case": "S-FIO01",
    "outcome": "pasa",
@@ -6027,7 +6258,7 @@
     "REQ-DAT-02",
     "REQ-EDT-01"
    ],
-   "summary": "REQ-EDT-01, REQ-DAT-02: Guardar como propone Documentos/GrafConnect/GRAFCET, fuera de la instalación."
+   "summary": "REQ-EDT-01, REQ-DAT-02: Guardar como propone Documentos/GRAFCET Connect/GRAFCET, fuera de la instalación."
   },
   {
    "test": "test_plantillas_tecnicas.TecnicasNucleo.test_STEC01_cajetin_180_por_36_y_divisiones_en_los_tres_formatos",
@@ -6398,7 +6629,7 @@
     "REQ-DAT-02",
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03, REQ-DAT-02: un proyecto sin mapa usa los parámetros completos recordados, sin copiar variables asignadas."
+   "summary": "REQ-SIM-03, REQ-DAT-02: un proyecto sin mapa usa la conexión y los tiempos recordados (no las cantidades de canales,"
   },
   {
    "test": "test_pulido_es.PulidoES.test_SESP03_json_del_proyecto_manda_sobre_preferencias",
@@ -7047,7 +7278,7 @@
    "requirements": [
     "REQ-SEM-09"
    ],
-   "summary": "REQ-SEM-09: «Ajustes» (entre Simulación y Ayuda) tiene las lecturas; el diálogo no ofrece «detener» y el"
+   "summary": "REQ-SEM-09: «Ajustes» (entre Simulación y Ayuda) tiene los ajustes de simulación; el diálogo muestra una sola"
   },
   {
    "test": "test_simulador_escritorio.Ventana.test_SAPP09_play_pausa_y_un_solo_control",
@@ -7309,7 +7540,7 @@
     "REQ-ACT-02",
     "REQ-JER-01"
    ],
-   "summary": "REQ-ACT-02, REQ-JER-01: decisión del responsable (4-nov-2026): manda la etapa activa, la inactiva no fuerza 0."
+   "summary": "REQ-ACT-02, REQ-JER-01: decisión del responsable (4-nov-2026), manda la etapa activa."
   },
   {
    "test": "test_suplementarios.Hallazgos.test_SH09_reentrada_en_el_mismo_instante_conserva_la_duracion",
