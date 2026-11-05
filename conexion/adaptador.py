@@ -22,6 +22,13 @@ def texto_numero(valor) -> str:
     return texto.replace(".", ",")
 
 
+def redondear_escolar(valor) -> int:
+    """El entero más cercano, con las mitades lejos de cero (1,5 → 2; -1,5 → -2), sin pasar por float."""
+    f = Fraction(valor)
+    entero = int(abs(f) + Fraction(1, 2))
+    return -entero if f < 0 else entero
+
+
 def _tipo_legible(tipo) -> str:
     if tipo.kind == "int":
         return "Entera"
@@ -40,8 +47,6 @@ def _entrada_no_cabe(variable, numero) -> ErrorConversion:
     """El texto cuando un valor que manda la planta no es representable en el tipo de la variable de entrada."""
     cabecera = (f"La entrada «{variable.name}» es {_tipo_legible(variable.type)}, "
                 f"pero el simulador de procesos ha enviado {texto_numero(numero)}.")
-    if variable.type.kind == "int" and Fraction(numero).denominator != 1:
-        return ErrorConversion(cabecera + " Cámbiela a Decimal (2 decimales) en Variables.")
     if variable.type.kind == "decimal":
         return ErrorConversion(cabecera + " Aumente los decimales de la variable en Variables.")
     return ErrorConversion(cabecera + " Ese valor no cabe en la variable.")
@@ -56,6 +61,7 @@ class MonitorEntradas:
         self.sesion = None
         self.entradas = [s for s in config.senales if roles[s.variable] == "input"]
         self.salidas = []
+        self.redondeos = {}
         self.salidas_control = [s for s in config.senales if roles[s.variable] == "output"]
 
     @classmethod
@@ -65,6 +71,7 @@ class MonitorEntradas:
         monitor.sesion = None
         monitor.entradas = list(adaptador.entradas)
         monitor.salidas = []
+        monitor.redondeos = {}
         monitor.salidas_control = list(adaptador.salidas or getattr(adaptador, "salidas_control", []))
         return monitor
 
@@ -78,6 +85,8 @@ class Adaptador:
         self.config, self.sesion = config, sesion
         self.entradas = [s for s in config.senales if sesion.cm.variables[s.variable].role == "input"]
         self.salidas = [s for s in config.senales if sesion.cm.variables[s.variable].role == "output"]
+        # Entradas Enteras que han recibido decimales y se han redondeado: {variable: (último recibido, último usado)}
+        self.redondeos = {}
 
     def aplicar(self, muestra: dict):
         s = self.sesion
@@ -93,6 +102,7 @@ class Adaptador:
                 valor = check_fits(v.type, raw)
             else:
                 valor = self._registro_a_valor(senal, v, raw)
+                self._anotar_redondeo(senal, v, raw, valor)
             if not in_domain(v.type, v.domain, valor):
                 raise ErrorConversion(f"La entrada «{v.name}» ha recibido {texto_numero(valor)}, que está fuera de los "
                                       "valores que permite su dominio.")
@@ -109,10 +119,20 @@ class Adaptador:
             raise ErrorConversion(f"El simulador de procesos ha enviado un registro no válido para la entrada «{v.name}»")
         numero = raw - 65536 if senal.formato == "INT16" and raw >= 32768 else raw
         leido = Fraction(numero) / Fraction(senal.escala)
+        usado = redondear_escolar(leido) if v.type.kind == "int" else leido
         try:
-            return check_fits(v.type, leido)
+            return check_fits(v.type, usado)
         except DiagnosticError:
             raise _entrada_no_cabe(v, leido) from None
+
+    def _anotar_redondeo(self, senal, v, raw, valor):
+        """Si una Entera ha recibido decimales (el registro dividido por su escala no es entero), lo deja anotado."""
+        if v.type.kind != "int":
+            return
+        numero = raw - 65536 if senal.formato == "INT16" and raw >= 32768 else raw
+        recibido = Fraction(numero) / Fraction(senal.escala)
+        if recibido != valor:
+            self.redondeos[senal.variable] = (recibido, valor)
 
     @staticmethod
     def _valor_a_registro(senal, nombre, valor):

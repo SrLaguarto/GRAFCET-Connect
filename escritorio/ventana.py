@@ -51,8 +51,8 @@ from conexion.configuracion import ARCHIVO, CANALES_INICIALES, Configuracion
 from conexion.coordinador import Coordinador
 
 TITULO = "GRAFCET Connect"
-URL_CODIGO = "https://github.com/SrLaguarto/GrafConnect"  # dónde está el código (diálogo «Acerca de»)
-URL_FALLOS = "https://github.com/SrLaguarto/GrafConnect/issues"  # dónde se comunica un fallo o una sugerencia
+URL_CODIGO = "https://github.com/SrLaguarto/GRAFCET-Connect"  # dónde está el código (diálogo «Acerca de»)
+URL_FALLOS = "https://github.com/SrLaguarto/GRAFCET-Connect/issues"  # dónde se comunica un fallo o una sugerencia
 ICONO_PROGRAMA = Path(__file__).resolve().parent / "recursos" / "grafcet_connect.ico"
 ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
 ALTO_INFERIOR = {"simular": 220, "editar": 240}  # altura inicial del panel inferior: la traza, o las opciones de lo seleccionado
@@ -66,6 +66,14 @@ AYUDA_EDICION = {
 }
 NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar"}
 AVISO = "Basado en IEC 60848"
+TEXTOS_FIRMA = {
+    "sin_firma": ("Archivo sin firma",
+                  "Este archivo no se guardó con esta versión de GRAFCET Connect o se modificó fuera del programa. "
+                  "Se puede usar con normalidad; al guardarlo seguirá sin firma."),
+    "desarrollo": ("Archivo de la versión de desarrollo (sin firma de esta versión)",
+                   "Este archivo está firmado con la clave de la versión de desarrollo, no con la de esta versión. "
+                   "Se puede usar con normalidad; al guardarlo seguirá sin firma de esta versión."),
+}
 ESTADOS = {"pausada-estable": ("estable", "ok"), "pausada-recorrido": ("en recorrido (situación inestable)", "virt"),
            "error": ("detenido por diagnóstico", "err"), "no-compilable": ("no compilable", "err"),
            "finalizada": ("finalizada", "ok"), "preparada": ("preparada", "muted"), "ejecutando": ("ejecutando", "muted")}
@@ -820,6 +828,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.l_reloj = QLabel()
         self.l_reloj.setStyleSheet("font-weight: 600")
         sb.addWidget(self.l_aviso, 1)
+        self.l_firma = QLabel()  # «Archivo sin firma»: discreto y permanente mientras el archivo abierto no tenga firma válida
+        self.l_firma.setStyleSheet(f"color: {COL['muted']}")
+        self.l_firma.hide()
+        sb.addWidget(self.l_firma)
         # el mensaje temporal sustituye al texto fijo mientras dura (si no, se dibujan uno encima del otro)
         sb.messageChanged.connect(lambda texto: self.l_aviso.setVisible(not texto))
         sb.addPermanentWidget(self.l_lect)
@@ -1269,8 +1281,17 @@ class Ventana(ArchivosProyecto, QMainWindow):
             a.setEnabled(on)
         self._actualizar_portapapeles()
 
+    def _indicar_firma(self, e) -> None:
+        """Indicación permanente en la barra de estado si el archivo abierto no tiene la firma de esta versión."""
+        firma = getattr(getattr(e, "contenedor", None), "firma", "valida")
+        texto, ayuda = TEXTOS_FIRMA.get(firma, ("", ""))
+        self.l_firma.setText(texto)
+        self.l_firma.setToolTip(ayuda)
+        self.l_firma.setVisible(bool(texto))
+
     def _titulo_ventana(self) -> None:
         e = self.edicion
+        self._indicar_firma(e)
         if hasattr(self,"panel_planos"):
             if self.paginas_es.currentIndex()==2 and self.panel_planos.origen is not e and not self.panel_planos.cargando:self.panel_planos.mostrar()
             else:self.panel_planos.actualizar_titulo()
@@ -1899,6 +1920,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
         self.panel_es.mostrar_tiempos(self.modbus.medidas, self.modbus.ultima_parada)
         self.panel_es.ocupado(self.modbus.activo)
+        self.panel_es.mostrar_redondeos(self.modbus.adaptador.redondeos if self.modbus.adaptador else {})
         if self.modo == "simular" and self.paginas_es.currentIndex() == 0:
             self.refrescar()
         else:

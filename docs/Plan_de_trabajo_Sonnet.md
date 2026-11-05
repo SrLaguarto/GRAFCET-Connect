@@ -58,7 +58,7 @@ I/O. El 5 y el 6 pueden hacerse después.
 - **Sin red**, salvo la conexión local con Factory I/O del paso 7, que el usuario activa a mano.
 - **Imágenes de la norma** (`C:\Users\Trabajo\Desktop\Proyecto GRAFCET Chatgpt\Norma UNE Grafcet\Imagenes UNE
   GRAFCET`):
-  - solo las que cita el README, en «Procedencia»;
+  - solo las que cita docs/DESARROLLO.md, en «Procedencia»;
   - solo para tomar proporciones y convenciones de dibujo;
   - nunca copies un activo;
   - no abras el PDF, la carpeta «Claude outputs» ni nada más de «Proyecto GRAFCET Chatgpt».
@@ -517,7 +517,7 @@ o se pausa la simulación, ¿qué se escribe en los actuadores?
 - Sube `APP_VERSION` en `grafcet/profile.py`, por ejemplo a `0.2.0-dev`.
 - Actualiza `escritorio/LEEME.txt` con el editor y la conexión, y regenera `dist/GRAFCET`.
 - Pon al día:
-  - el README («Uso», «Estructura», «Lo que falta»);
+  - docs/DESARROLLO.md («Uso», «Estructura», «Lo que falta»);
   - `docs/03`: estado de la interfaz y de la distribución;
   - `docs/04`: P-IMP nuevas;
   - `spec/clasificacion.py`, con la trazabilidad regenerada.

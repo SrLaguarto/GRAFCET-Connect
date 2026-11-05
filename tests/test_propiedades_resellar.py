@@ -107,8 +107,8 @@ class Metadatos(unittest.TestCase):
         finally:
             abierto.cerrar()
 
-    def test_SPRP04_info_manipulado_sin_resellar_se_rechaza(self):
-        """REQ-DAT-02: info.json está cubierto por el sello: cambiarlo sin resellar rechaza el archivo."""
+    def test_SPRP04_info_manipulado_sin_resellar_abre_sin_firma(self):
+        """REQ-DAT-02: info.json está cubierto por el sello: cambiarlo sin resellar no rechaza el archivo, que abre sin firma."""
         destino = self.guardar(autor='Ana')
         entradas = entradas_de(destino.read_bytes())
         entradas[INFO] = entradas[INFO].replace(b'Ana', b'Eva')
@@ -117,7 +117,12 @@ class Metadatos(unittest.TestCase):
             for nombre, datos in entradas.items():
                 z.writestr(nombre, datos)
         with self.assertRaises(ErrorContenedor):
-            abrir_grafnet(manipulado, CLAVE, 'rechazar')
+            abrir_grafnet(manipulado, CLAVE, 'rechazar')  # la política del contenedor sigue existiendo
+        abierto = abrir_grafnet(manipulado, CLAVE)
+        try:
+            self.assertEqual((abierto.firma, abierto.sello_valido, abierto.info['autor']), ('sin_firma', False, 'Eva'))
+        finally:
+            abierto.cerrar()
 
     def test_SPRP05_info_mal_formado_con_sello_valido_se_ignora(self):
         """REQ-DAT-02: un info.json con tipos o tamaño incorrectos no rechaza el archivo: datos desconocidos."""
@@ -267,7 +272,7 @@ class DialogoPropiedades(BaseQt):
         w, e = self.vacio()
         with patch.dict(os.environ, {'USERNAME': 'maria'}):
             d = self.propiedades()
-            self.assertEqual((d.nombre, d.sello, d.autor), ('sin guardar', 'Se sellará al guardar', 'maria'))
+            self.assertEqual((d.nombre, d.sello, d.autor), ('sin guardar', 'Se firmará al guardar', 'maria'))
         with patch.dict(os.environ, {'USERNAME': ''}), patch.object(pa.getpass, 'getuser', return_value='respaldo'):
             self.assertEqual(pa.autor_por_defecto(), 'respaldo')
         with patch.dict(os.environ, {'USERNAME': ''}), patch.object(pa.getpass, 'getuser', side_effect=OSError):
@@ -295,7 +300,7 @@ class DialogoPropiedades(BaseQt):
         e.cambia()
         self.guardar()
         d = self.propiedades()
-        self.assertTrue(d.sello.startswith('Válido: sellado con la clave de esta versión de GRAFCET Connect'))
+        self.assertTrue(d.sello.startswith('Firmado con esta versión de GRAFCET Connect (clave de '))
         self.assertEqual(d.algoritmo, 'HMAC-SHA256')
         grupos = d.huella.split(' ')
         self.assertEqual([len(g) for g in grupos], [4, 4, 4, 4])
@@ -318,7 +323,7 @@ class DialogoPropiedades(BaseQt):
         self.assertEqual(d.version_creacion, pa.ANTIGUO)
         self.assertEqual(d.creado, pa.ANTIGUO)
         self.assertEqual(d.nombre, 'antiguo.grafnet')
-        self.assertTrue(d.sello.startswith('Válido'))
+        self.assertTrue(d.sello.startswith('Firmado con esta versión'))
 
 
 if __name__ == '__main__':

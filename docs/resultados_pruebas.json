@@ -1,9 +1,9 @@
 {
- "date": "2026-11-05T14:42:29+01:00",
+ "date": "2026-11-05T16:01:49+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 938,
+ "total": 946,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -4015,13 +4015,13 @@
    "summary": "REQ-DAT-01, REQ-DAT-02: el archivo conserva E/S y recursos sin exponer carpetas como formato de proyecto."
   },
   {
-   "test": "test_grafnet_interfaz.GrafnetInterfaz.test_SGFN12_rechaza_carpetas_json_y_otro_sello",
+   "test": "test_grafnet_interfaz.GrafnetInterfaz.test_SGFN12_rechaza_carpetas_y_json_pero_abre_con_otro_sello",
    "case": "S-GFN12",
    "outcome": "pasa",
    "requirements": [
     "REQ-DAT-02"
    ],
-   "summary": "REQ-DAT-02: una versión repartible solo admite archivos .grafnet firmados con su propia clave."
+   "summary": "REQ-DAT-02: carpetas y JSON sueltos se rechazan; un .grafnet con otra clave se abre sin firma válida."
   },
   {
    "test": "test_grafnet_interfaz.GrafnetInterfaz.test_SGFN14_fallo_al_guardar_no_cambia_destino_ni_dirty",
@@ -4080,6 +4080,51 @@
     "REQ-EDT-01"
    ],
    "summary": "REQ-DAT-02, REQ-EDT-01: la interfaz solo escribe proyectos .grafnet y nunca crea la carpeta del formato anterior."
+  },
+  {
+   "test": "test_grafnet_interfaz.GrafnetInterfaz.test_SGFN30_archivo_sin_sello_abre_sin_firma_con_indicacion_en_la_barra",
+   "case": "S-GFN30",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un archivo sin sello se abre sin cuadros modales, con estado sin_firma y «Archivo sin firma» en la barra."
+  },
+  {
+   "test": "test_grafnet_interfaz.GrafnetInterfaz.test_SGFN31_clave_de_desarrollo_en_version_de_distribucion_es_estado_desarrollo",
+   "case": "S-GFN31",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: con clave de distribución, un archivo firmado con la de desarrollo abre con estado «desarrollo»."
+  },
+  {
+   "test": "test_grafnet_interfaz.GrafnetInterfaz.test_SGFN32_guardar_y_guardar_como_de_archivo_sin_firma_no_firman",
+   "case": "S-GFN32",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un archivo abierto sin firma sigue sin firma al guardarlo, con Guardar y con Guardar como."
+  },
+  {
+   "test": "test_grafnet_interfaz.GrafnetInterfaz.test_SGFN33_proyecto_nuevo_y_archivo_firmado_se_siguen_firmando",
+   "case": "S-GFN33",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un proyecto nuevo se firma al guardar y uno abierto con firma válida sigue firmado al guardarlo."
+  },
+  {
+   "test": "test_grafnet_interfaz.GrafnetInterfaz.test_SGFN34_archivo_manipulado_abre_sin_firma",
+   "case": "S-GFN34",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un archivo con el contenido cambiado sin re-sellar no se rechaza: abre como sin_firma."
   },
   {
    "test": "test_inicio_y_ejemplos.EjemplosAula.test_SIEJ01_siete_ejemplos_compilan_con_entradas_y_salidas",
@@ -4879,14 +4924,23 @@
    "summary": "REQ-ROB-01: los números de los mensajes llevan coma decimal y sin ceros de más."
   },
   {
-   "test": "test_modbus_avisos.MensajesConversion.test_SFIO71_entrada_entera_con_decimales_dice_que_variable_y_que_hacer",
+   "test": "test_modbus_avisos.MensajesConversion.test_SFIO71_entrada_entera_con_decimales_se_redondea_y_se_anota",
    "case": "S-FIO71",
    "outcome": "pasa",
    "requirements": [
     "REQ-EXP-01",
     "REQ-ROB-01"
    ],
-   "summary": "REQ-ROB-01, REQ-EXP-01: una Entera que recibe 1,3 (130 con escala 100) no entra en el motor y el error nombra la"
+   "summary": "REQ-ROB-01, REQ-EXP-01: una Entera que recibe 1,3 (130 con escala 100) usa 1, sin error, y el redondeo queda"
+  },
+  {
+   "test": "test_modbus_avisos.MensajesConversion.test_SFIO71b_entera_sin_decimales_no_anota_y_la_conexion_sigue_en_estado_conectado",
+   "case": "S-FIO71b",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01"
+   ],
+   "summary": "REQ-ROB-01: una Entera con escala 1 no anota redondeos; con escala 100 y decimales no hay error."
   },
   {
    "test": "test_modbus_avisos.MensajesConversion.test_SFIO72_entrada_decimal_con_mas_decimales_de_los_declarados",
@@ -4952,6 +5006,16 @@
     "REQ-SIM-03"
    ],
    "summary": "REQ-SIM-03: la medida de sondeo y ciclo se conserva (texto y tooltip) pero la línea queda oculta."
+  },
+  {
+   "test": "test_modbus_avisos.PanelAvisos.test_SFIO79_el_redondeo_recibido_marca_la_variable_en_ambar_con_lo_recibido_y_lo_usado",
+   "case": "S-FIO79",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ROB-01",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03, REQ-ROB-01: tras un redondeo la fila de la Entera lleva el aviso con lo recibido y lo usado; sin"
   },
   {
    "test": "test_modbus_ciclo.CicloTests.test_SFIO09_ciclo_pausa_diagnostico",
@@ -6844,13 +6908,13 @@
    "summary": "REQ-DAT-02: un archivo sin info.json abre igual; al guardarlo no se inventan creado ni version_creacion."
   },
   {
-   "test": "test_propiedades_resellar.Metadatos.test_SPRP04_info_manipulado_sin_resellar_se_rechaza",
+   "test": "test_propiedades_resellar.Metadatos.test_SPRP04_info_manipulado_sin_resellar_abre_sin_firma",
    "case": "S-PRP04",
    "outcome": "pasa",
    "requirements": [
     "REQ-DAT-02"
    ],
-   "summary": "REQ-DAT-02: info.json está cubierto por el sello: cambiarlo sin resellar rechaza el archivo."
+   "summary": "REQ-DAT-02: info.json está cubierto por el sello: cambiarlo sin resellar no rechaza el archivo, que abre sin firma."
   },
   {
    "test": "test_propiedades_resellar.Metadatos.test_SPRP05_info_mal_formado_con_sello_valido_se_ignora",
@@ -7326,6 +7390,16 @@
     "REQ-MOD-03"
    ],
    "summary": "REQ-EDT-02, REQ-MOD-03: carril de retorno fuera de las cajas, compartido por Qt y JS."
+  },
+  {
+   "test": "test_remates_acciones.RematesQt.test_SCOR11_selector_de_variable_no_se_aplasta_tras_parpadear_ni_con_el_panel_alto_o_bajo",
+   "case": "S-COR11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: el desplegable «Variable» de una acción nunca es más bajo que un campo de texto del"
   },
   {
    "test": "test_remates_interfaz.Remates.test_SREM01_divisor_no_realimenta_relayout_de_paleta",

@@ -33,6 +33,7 @@ from .edicion import CONTINUAS, DISPARADOR, Edicion, Parpadeo
 from .variables import nombre_tipo
 
 SIN_VARIABLES = "(sin variables: créelas en la tabla de variables)"  # la lista de variables, si no hay ninguna que valga
+ALTO_SELECTOR = 62  # alto del selector de variable (dibujado como una caja de acción); nada debe dejarlo por debajo
 ESTILO_FICHA = (f"QPushButton {{ background: {COLORES['comparacion']}; color: white; font-weight: 600; border: 2px solid "
                 f"transparent; border-radius: 9px; padding: 5px 22px; }}"
                 "QPushButton:checked { border: 3px solid #FFD43B; }")
@@ -102,9 +103,11 @@ class PanelAccion(QWidget):
         f.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         lay.addLayout(f)
         self.variable = _ComboVariable()
-        self.variable.setMinimumHeight(62)
+        self.variable.setMinimumHeight(ALTO_SELECTOR)
         self.variable.setObjectName("selectorVariableAccion")
-        self.variable.setStyleSheet("QComboBox#selectorVariableAccion { min-height:62px; padding:0; }")
+        # Su hoja de estilo no se toca más (el parpadeo lo pinta `paintEvent`): sustituirla deja el min-height:18px
+        # general
+        self.variable.setStyleSheet(f"QComboBox#selectorVariableAccion {{ min-height:{ALTO_SELECTOR}px; padding:0; }}")
         self.variable.setAccessibleName("Variable de la acción")
         self.variable.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.variable.setMinimumContentsLength(8)
@@ -376,5 +379,6 @@ class PanelAccion(QWidget):
         activos = self.parpadeo.activos()
         for clave, w in (("variable", self.variable), ("valor", self.valor), ("limite", self.limite)):
             w.setProperty("parpadeando", clave in activos)
-            w.setStyleSheet(f"background: {COL['glow']}" if clave in activos else "")
+            if w is not self.variable:  # el selector se pinta solo con la propiedad: ver ALTO_SELECTOR
+                w.setStyleSheet(f"background: {COL['glow']}" if clave in activos else "")
             w.update()

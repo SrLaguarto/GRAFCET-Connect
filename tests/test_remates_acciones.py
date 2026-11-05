@@ -132,6 +132,23 @@ class RematesQt(BaseQt):
         self.assertGreaterEqual(w.props.accion.variable.height(),62)
         self.assertGreaterEqual(w._minimo_panel('inferior'),w.props.layout().totalHeightForWidth(w.props.width()))
 
+    def test_SCOR11_selector_de_variable_no_se_aplasta_tras_parpadear_ni_con_el_panel_alto_o_bajo(self):
+        """REQ-EDT-02, REQ-EDT-09: el desplegable «Variable» de una acción nunca es más bajo que un campo de texto del
+        panel, con el panel a su altura mínima o más alto y tras el parpadeo (que antes le quitaba su hoja de estilo)."""
+        w,e,s=self.preparar();e.nueva_variable('Abrir','output',{'kind':'int'})
+        self.assertIsNone(e.poner_accion(s,{'tipo':'activacion','variable':'Abrir','valor':'5'}))
+        w.editar_accion(s,e.acciones(s)[0]['id']);QApplication.processEvents()
+        acc=w.props.accion;total=sum(w.vsplit.sizes())
+        def comprobar(contexto):
+            QApplication.processEvents()
+            self.assertGreaterEqual(acc.variable.height(),acc.valor.height(),contexto)
+            self.assertGreaterEqual(acc.variable.height(),acc.valor.sizeHint().height(),contexto)
+            self.assertGreaterEqual(acc.variable.height(),62,contexto)
+        for alto in (w._minimo_panel('inferior'),w._minimo_panel('inferior')+200):
+            w.vsplit.setSizes([total-alto,alto]);comprobar(f'alto {alto}')
+            acc.parpadeo.iniciar({'variable'});comprobar(f'parpadeando con alto {alto}')
+            acc.parpadeo.parar();acc._pintar();comprobar(f'tras parpadear con alto {alto}')
+
     def test_SCOR08_color_flanco_en_qt(self):
         """REQ-SIM-03: un nivel verdadero sin flanco conserva el color normal."""
         m=M().var('p').step('A',True).step('B');m.trans('t',['B'],['A'],'rise(p)')

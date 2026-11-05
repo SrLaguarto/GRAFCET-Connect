@@ -10,7 +10,7 @@ from .proyecto_archivo import abrir_grafnet,guardar_grafnet
 
 class ArchivosProyecto:
     def _leer_grafnet_gui(self,ruta):
-        return abrir_grafnet(ruta,sello.CLAVE,sello.POLITICA_SELLO)
+        return abrir_grafnet(ruta,sello.CLAVE,sello.POLITICA_SELLO,None if sello.DESARROLLO else sello.CLAVE_DESARROLLO)
 
     def guardar_como(self):
         if getattr(self,"solo_lectura",False):return False
@@ -41,7 +41,7 @@ class ArchivosProyecto:
         if e is None or self._variables_sin_nombre():return False
         try:
             config=self._configuracion_para_guardar(e.ed.model)
-            archivo=guardar_grafnet(destino,e.proyecto(),sello.CLAVE,e.ruta,
+            archivo=guardar_grafnet(destino,e.proyecto(),sello.CLAVE if e.puede_firmarse else None,e.ruta,
                                     lambda raiz:config.guardar(raiz/ARCHIVO,e.ed.model),
                                     e.info_archivo,autor_para_guardar(e))
         except (OSError,ValueError,DiagnosticError) as exc:
@@ -56,4 +56,5 @@ class ArchivosProyecto:
     @staticmethod
     def _adoptar_archivo(e,archivo):
         e.contenedor=archivo;e.archivo=archivo.archivo;e.info_archivo=dict(archivo.info);e.autor_archivo=None
+        e.puede_firmarse=archivo.firma=='valida'  # un archivo abierto sin firma válida sigue sin firma al guardarlo
         e.ruta=archivo.raiz;e.proyecto_base=archivo.proyecto

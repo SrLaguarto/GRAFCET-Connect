@@ -153,6 +153,7 @@ class Edicion(QObject):
         self.archivo: Path | None = None  # el .grafnet de donde viene o donde se guardó
         self.contenedor: Any = None  # su ProyectoArchivo (área temporal, sello y huella)
         self.info_archivo: dict | None = None  # metadatos de ese archivo ({} si es anterior a la 1.0); None: sin guardar
+        self.puede_firmarse = True  # False si se abrió sin firma válida: Guardar y Guardar como lo dejan sin firma
         self.autor_archivo: str | None = None  # autor puesto a mano; None: el del archivo o el recordado en preferencias
         self.ignorados = self._sanear_borradores()
         self.enlaces_quitados = len(ed.cleaned_draft_link_ids)

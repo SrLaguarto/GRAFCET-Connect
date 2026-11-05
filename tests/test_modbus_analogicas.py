@@ -48,8 +48,8 @@ class AnalogicasTests(unittest.TestCase):
 
     def test_SFIO13_rechaza_perdida_precision(self):
         """REQ-EXP-01: una entrada no representable no entra en el motor."""
-        m = M().var("sensor", kind="int").step("E0", True)
-        a = Adaptador(Configuracion(senales=[Senal("sensor", "holding", 0, "INT16", "10")]), session(m.compile()))
+        m = M().var("sensor", kind="decimal", scale=1).step("E0", True)
+        a = Adaptador(Configuracion(senales=[Senal("sensor", "holding", 0, "INT16", "100")]), session(m.compile()))
         with self.assertRaises(Exception):
             a.aplicar({"sensor": 15})
         self.assertEqual(a.sesion.z.values["sensor"], 0)

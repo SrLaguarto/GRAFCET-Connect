@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxL
                                QAbstractItemView, QMenu, QApplication, QGridLayout, QStyle,
                                QStyledItemDelegate)
 
+from conexion.adaptador import texto_numero
 from conexion.configuracion import ETIQUETA_CANAL, CONEXION_INICIAL, CANALES_INICIALES, Configuracion, Senal
 
 AREAS = {"discrete": "Entradas digitales (Discrete Inputs)",
@@ -92,7 +93,7 @@ def encaja(variable, area):
 
 def aviso_escala(variable, senal):
     """Aviso (ámbar) si una variable Entera va a un registro con escala distinta de 1, como la del simulador de procesos (100):
-    la planta manda valores con decimales y una Entera no los admite. Cadena vacía si no hay nada que avisar."""
+    la planta manda valores con decimales y una Entera los redondea. Cadena vacía si no hay nada que avisar."""
     if variable is None or senal is None or variable["type"]["kind"] != "int" or senal.formato == "BOOL":
         return ""
     try:
@@ -101,7 +102,14 @@ def aviso_escala(variable, senal):
         return ""
     if escala == 1:
         return ""
-    return "El simulador de procesos manda este valor con decimales: ponga la variable como Decimal (2 decimales)"
+    return ("El simulador de procesos manda este valor con decimales: se redondeará al entero más cercano. "
+            "Para el valor exacto, ponga la variable como Decimal (2 decimales).")
+
+
+def aviso_redondeo(recibido, usado):
+    """El aviso (ámbar) de una Entera que ya ha recibido un valor con decimales y lo ha redondeado."""
+    return (f"El simulador de procesos ha enviado {texto_numero(recibido)} y la variable es Entera: se usa "
+            f"{texto_numero(usado)}. Para el valor exacto, póngala como Decimal (2 decimales).")
 
 
 def areas_variable(variable):
@@ -254,9 +262,7 @@ class TerminalES(QFrame):
         self.nombre.setStyleSheet("color:#9a5b00" if aviso else "color:#203b45")
         self.marca = None
         if aviso:  # señal ámbar junto a la fila: no impide nada, solo avisa
-            self.marca = QLabel("⚠")
-            self.marca.setStyleSheet("color:#c77700; font-size:11px")
-            self.marca.setToolTip(aviso)
+            self.marca = self._crear_marca(aviso)
             self.nombre.setToolTip(aviso)
         self.valor = QLabel("—" if variable else "", self)
         self.valor.setStyleSheet("color:#526e66; font-size:10px")
@@ -291,6 +297,7 @@ class TerminalES(QFrame):
             self.b_quitar.clicked.connect(lambda: panel.quitar(variable["id"]))
             self.b_quitar.hide()  # solo al pasar el ratón por la fila
         l = QHBoxLayout(self)
+        self._diseno = l
         l.setContentsMargins(0, 0, 0, 0)
         l.setSpacing(0)
         if entrada:
@@ -312,6 +319,26 @@ class TerminalES(QFrame):
             if self.b_quitar:
                 l.addWidget(self.b_quitar)
         self.setToolTip(f"{AREAS[area]} · dirección {direccion}\nArrastra una variable. Botón derecho para quitar o configurar.")
+
+    @staticmethod
+    def _crear_marca(texto):
+        marca = QLabel("⚠")
+        marca.setStyleSheet("color:#c77700; font-size:11px")
+        marca.setToolTip(texto)
+        return marca
+
+    def fijar_redondeo(self, texto):
+        """Marca la fila en ámbar con el aviso de un redondeo recibido (sustituye al preventivo mientras dure)."""
+        texto = texto or self.aviso
+        if texto and self.marca is None:
+            self.marca = self._crear_marca(texto)
+            entrada = self.area in ("discrete", "input-register")
+            self._diseno.insertWidget(self._diseno.indexOf(self.nombre) + (0 if entrada else 1), self.marca)
+        if self.marca is not None:
+            self.marca.setToolTip(texto)
+            self.marca.setVisible(bool(texto))
+        self.nombre.setToolTip(texto)
+        self.nombre.setStyleSheet("color:#9a5b00" if texto else "color:#203b45")
 
     def mimeData(self):
         datos = QMimeData()
@@ -549,6 +576,7 @@ class PanelES(QWidget):
         self.conexion_defecto = CONEXION_INICIAL  # (host, puerto, esclavo) que propone `cargar` si no hay mapa guardado
         self.aviso = ""  # asignaciones quitadas al poner al día con el modelo; dura hasta la siguiente acción sobre el mapa
         self.pista_canales = ""  # variables sin dónde asignarse porque su área tiene cantidad 0
+        self.redondeos = {}  # {variable: (recibido, usado)} de la conexión; ver mostrar_redondeos
         self.avisos_escala = ""  # variables Enteras con escala distinta de 1 (ámbar, junto a su fila y en la nota)
         self.pendiente = False  # con la conexión viva: hay variables nuevas que se verán al desconectar
         self.indicadores = {}
@@ -1176,8 +1204,21 @@ class PanelES(QWidget):
             if texto:
                 avisos.append(f"«{variables[s.variable]['name']}»: {texto}")
         self.avisos_escala = "; ".join(avisos)
+        self._pintar_redondeos()
         self.pista_canales = f"Sin canales en {', '.join(vacias)}: sube su cantidad en Configuración" if vacias else ""
         self._pintar_nota()
+
+    def mostrar_redondeos(self, redondeos):
+        """Marca en ámbar las Enteras que han recibido decimales en esta conexión (con el último valor y el usado)."""
+        if redondeos == self.redondeos:
+            return
+        self.redondeos = dict(redondeos)
+        self._pintar_redondeos()
+
+    def _pintar_redondeos(self):
+        for terminal in self.terminales.values():
+            dato = terminal.variable and self.redondeos.get(terminal.variable["id"])
+            terminal.fijar_redondeo(aviso_redondeo(*dato) if dato else "")
 
     def mostrar_valores(self, valores):
         def activo(valor):

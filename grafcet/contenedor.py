@@ -56,7 +56,8 @@ def _escribir_zip(entradas):
     return salida.getvalue()
 
 
-def empaquetar(raiz: Path, clave: bytes, info: bytes | None = None) -> bytes:
+def empaquetar(raiz: Path, clave: bytes | None, info: bytes | None = None) -> bytes:
+    """`clave` None: el archivo se escribe sin sello (un archivo abierto sin firma válida no se firma al guardarlo)."""
     entradas = {}
     raiz = Path(raiz)
     for p in raiz.rglob('*'):
@@ -74,7 +75,8 @@ def empaquetar(raiz: Path, clave: bytes, info: bytes | None = None) -> bytes:
         entradas[INFO] = info
     if len(entradas) > MAX_ENTRADAS or sum(map(len,entradas.values())) > MAX_BYTES:
         raise ErrorContenedor('El proyecto supera el tamaño permitido')
-    entradas[SELLO] = _firma(entradas, clave)
+    if clave is not None:
+        entradas[SELLO] = _firma(entradas, clave)
     return _escribir_zip(entradas)
 
 

@@ -4,6 +4,10 @@ GRAFCET Connect (versión portable 1.0.0)
 Abrir: doble clic en «GRAFCET Connect.exe». No necesita instalación ni conexión a la red. La carpeta entera es el
 programa: puede copiarse a otro sitio o a un USB, pero «GRAFCET Connect.exe» no funciona separado de ella.
 
+Instalador (alternativa): «GRAFCET-Connect-1.0.0-setup.exe» instala el programa sin permisos de administrador. Crea el
+acceso en el menú Inicio (y en el escritorio, si lo marca), asocia los .grafnet si lo deja marcado y se desinstala desde
+Configuración > Aplicaciones. Contiene la misma carpeta que la versión portable (P-IMP-103).
+
 Qué hace
 - Simula los ejemplos (menú Ejemplos) y los proyectos guardados (Proyecto > Abrir…): un archivo .grafnet.
 - Dibuja el grafcet con la notación de la norma y muestra la evolución: etapas activas e inestables,
@@ -22,7 +26,7 @@ Qué hace
 - Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), rueda del ratón (anclada al puntero), Ctrl+= y Ctrl+−; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Al cambiar el tamaño de la ventana principal, el dibujo se vuelve a encajar y centrar como «Centrar todo», tras 200 ms; plegar paneles no lo dispara. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
 - Proyecto > Guardar (Ctrl+S) o Guardar como… (Ctrl+Mayús+S): guarda el proyecto con su dibujo en un archivo .grafnet, para abrirlo después.
 - Proyecto > Propiedades del archivo…: autor (se puede cambiar; por defecto, el usuario de Windows), fechas de creación y de última edición, versiones de GRAFCET Connect con que se creó y se guardó por última vez, versión del formato y sello del archivo. Muestra también los datos de este programa (versión, distribución o desarrollo, y fecha de instalación). Los archivos anteriores a la 1.0 muestran «desconocida (archivo anterior a la 1.0)» en fechas y versiones.
-- Aviso: los archivos guardados con la versión de desarrollo no abren en esta versión 1.0. El autor del programa puede volver a sellarlos.
+- Firma: el programa abre todos los archivos .grafnet, también los guardados con la versión de desarrollo o sin firma. La barra de estado indica «Archivo sin firma» (o «Archivo de la versión de desarrollo») si no tienen la firma de esta versión; al guardarlos siguen sin firma. El autor del programa puede volver a sellarlos.
 - Editor de un grafcet secuencial (Proyecto > Nuevo proyecto, o editar en Pausa cualquier modelo abierto): paleta a la
   izquierda, con la etapa, la transición, la simultaneidad y la acción (las fichas se arrastran al dibujo; sin herramienta, el ratón
   selecciona, mueve y enlaza). Puntos de unión arriba y abajo (al acercar el puntero se marcan y de ellos sale el
@@ -38,7 +42,7 @@ Qué hace
   queda en Pausa y parpadean en naranja los elementos con error. Cada cierto tiempo se guarda una copia de recuperación.
 - Ayuda > Leyenda del dibujo: ventana no modal y desplazable, por secciones (Etapas, Transiciones, Acciones, Jerarquía y forzado, Temporizadores, Ratón y teclado). Cada entrada tiene una miniatura dibujada con el propio código de dibujo, con sus colores reales.
 - Ayuda > Acerca de GRAFCET Connect…: versión, licencia GPL-3.0 y licencia comercial bajo petición, enlace al código y el botón «Comunicar un fallo»,
-  que abre las Issues de GitHub (https://github.com/SrLaguarto/GrafConnect/issues).
+  que abre las Issues de GitHub (https://github.com/SrLaguarto/GRAFCET-Connect/issues).
 - Los avisos no muestran códigos internos y usan vocabulario GRAFCET. El detalle técnico y la «Referencia: código» van en la ayuda emergente de cada aviso. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular».
 
 
@@ -58,7 +62,7 @@ Qué no es
 - Basado en IEC 60848. La barra de estado lo muestra; no es una declaración de conformidad con la norma.
 
 Licencias
-- GRAFCET Connect se publica con la licencia GPL-3.0. Código: https://github.com/SrLaguarto/GrafConnect
+- GRAFCET Connect se publica con la licencia GPL-3.0. Código: https://github.com/SrLaguarto/GRAFCET-Connect
 - Licencia comercial bajo petición: si quiere usarlo en un producto o servicio que no pueda cumplir la GPL-3.0, pídala a través de GitHub (https://github.com/SrLaguarto).
 - Interfaz con Qt for Python (PySide6), bajo LGPL v3. Las bibliotecas de Qt están como ficheros separados en
   la carpeta del programa y pueden sustituirse por otras versiones compatibles.
@@ -394,7 +398,7 @@ Segunda ronda: Pausa a cero, conexión y panel de E/S (P-IMP-67)
 - Un mapa guardado con variables borradas o incompatibles se carga sin ellas y con aviso; un archivo corrupto se sigue rechazando entero.
 - En la tabla de variables, Supr quita la variable seleccionada (en modo Editar y sin una celda abierta), igual que «Quitar»; si la variable está en uso, lo dice y no la quita. También vale el Supr del teclado numérico. La tabla admite una sola fila seleccionada.
 - Una variable que pasa de Booleana a Entera o Decimal se recoloca sola en el primer registro libre, en lugar de quitarse con aviso (P-IMP-94).
-- Si una variable Entera se asigna a un registro con escala distinta de 1, el panel muestra un aviso ámbar (⚠): «El simulador de procesos manda este valor con decimales: ponga la variable como Decimal (2 decimales)». Si aun así llega un valor no entero, la conexión se para y no se redondea.
+- Si una variable Entera se asigna a un registro con escala distinta de 1, el panel muestra un aviso ámbar (⚠) de que el valor se redondeará al entero más cercano. Si llega un valor con decimales (p. ej. 1,3), se redondea (1,5 pasa a 2; −1,5 pasa a −2), la conexión sigue y la fila de la variable se marca en ámbar con ⚠; su ayuda emergente dice el valor recibido y el usado. Para el valor exacto, ponga la variable como Decimal (2 decimales) (P-IMP-102).
 - Consejo: las señales analógicas del simulador de procesos, como Decimal con 2 decimales.
 
 Ronda 4 (P-IMP-68 y P-IMP-69)

@@ -74,9 +74,15 @@ def huella_agrupada(huella: str) -> str:
 
 def _texto_sello(e) -> tuple[str, str, str]:
     if e.contenedor is None:
-        return "Se sellará al guardar", "", ""
-    clave = "de desarrollo" if sello.DESARROLLO else "de distribución"
-    texto = f"Válido: sellado con la clave de esta versión de GRAFCET Connect (clave {clave})"
+        return "Se firmará al guardar", "", ""
+    if e.contenedor.firma == "valida":
+        clave = "de desarrollo" if sello.DESARROLLO else "de distribución"
+        texto = f"Firmado con esta versión de GRAFCET Connect (clave {clave})"
+    elif e.contenedor.firma == "desarrollo":
+        texto = "Firmado con la versión de desarrollo: no es una firma de esta versión"
+    else:
+        texto = ("Sin firma válida: sin sello, de otra versión o modificado fuera del programa. "
+                 "Al guardarlo seguirá sin firma.")
     return texto, ALGORITMO, huella_agrupada(e.contenedor.huella)
 
 

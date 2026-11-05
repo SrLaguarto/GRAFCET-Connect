@@ -10,4 +10,4 @@ except ModuleNotFoundError as exc:
     CLAVE = CLAVE_DESARROLLO
     DESARROLLO = True
 
-POLITICA_SELLO = "rechazar"
+POLITICA_SELLO = "importar"  # la firma no bloquea la apertura: solo informa

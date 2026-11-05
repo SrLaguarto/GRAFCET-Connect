@@ -4,7 +4,7 @@ Instrucciones para Claude Code en este repositorio: aplicación de edición y si
 `grafcet/`, simulador y editor de escritorio en `escritorio/`, banco de pruebas y comparador en `tools/`).
 
 Las reglas del proyecto ya escritas siguen vigentes y mandan sobre este fichero en lo que regulan:
-`README.md` (uso, estructura, convención de commits y procedencia) y la sección 1 de
+`docs/DESARROLLO.md` (uso, estructura, convención de commits y procedencia) y la sección 1 de
 `docs/Plan_de_trabajo_Sonnet.md` (límites, arquitectura, comprobaciones y convenciones).
 
 ## Arquitectura de agentes

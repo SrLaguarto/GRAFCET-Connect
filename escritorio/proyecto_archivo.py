@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 import tempfile
 from grafcet.contenedor import (empaquetar,extraer_completo,guardar_atomico,inspeccionar,construir_info,
-                                serializar_info,MAX_BYTES,ErrorContenedor)
+                                serializar_info,sello_valido,MAX_BYTES,ErrorContenedor)
 from grafcet.persistence import open_project,save_project
 from grafcet.profile import APP_VERSION
 
@@ -30,6 +30,7 @@ class ProyectoArchivo:
     sello_valido: bool
     info: dict = field(default_factory=dict)  # `_grafnet/info.json` validado; {} si no lo tenía
     huella: str = ''  # SHA-256 (hex) de las entradas selladas
+    firma: str = 'valida'  # 'valida' (clave de esta versión), 'desarrollo' o 'sin_firma' (sin sello, otra clave o modificado)
 
     @property
     def raiz(self):return Path(self.temporal.name)
@@ -40,7 +41,12 @@ class ProyectoArchivo:
         self.cerrar()
 
 
-def abrir_grafnet(archivo,clave,politica):
+FIRMA_VALIDA,FIRMA_DESARROLLO,SIN_FIRMA='valida','desarrollo','sin_firma'
+
+
+def abrir_grafnet(archivo,clave,politica='importar',clave_desarrollo=None):
+    """Abre un .grafnet. Con 'importar' (lo que usa el programa) la firma no bloquea: se registra en `firma`.
+    `clave_desarrollo` solo se pasa en una versión de distribución, para reconocer los archivos de desarrollo."""
     archivo=Path(archivo)
     if archivo.stat().st_size>MAX_BYTES:raise ErrorContenedor('El archivo supera el tamaño permitido')
     datos=archivo.read_bytes()
@@ -49,14 +55,18 @@ def abrir_grafnet(archivo,clave,politica):
         extraccion=extraer_completo(datos,Path(temporal.name),clave,politica)
         proyecto=open_project(Path(temporal.name))
         if not proyecto.models():raise ErrorContenedor('El proyecto no contiene ningún modelo')
-        return ProyectoArchivo(archivo,temporal,proyecto,extraccion.valido,extraccion.info,extraccion.huella)
+        if extraccion.valido:firma=FIRMA_VALIDA
+        elif clave_desarrollo is not None and clave_desarrollo!=clave and sello_valido(datos,clave_desarrollo):firma=FIRMA_DESARROLLO
+        else:firma=SIN_FIRMA
+        return ProyectoArchivo(archivo,temporal,proyecto,extraccion.valido,extraccion.info,extraccion.huella,firma)
     except BaseException:
         temporal.cleanup();raise
 
 
 def guardar_grafnet(archivo,proyecto,clave,origen=None,preparar=None,info_previa=None,autor=''):
     """Solo sustituye el destino después de preparar y sellar el proyecto entero. `info_previa` son los metadatos del
-    archivo abierto (None en un proyecto nuevo): se conservan creado y version_creacion y se actualiza el resto."""
+    archivo abierto (None en un proyecto nuevo): se conservan creado y version_creacion y se actualiza el resto.
+    `clave` None: se guarda sin sello (archivo abierto sin firma válida)."""
     temporal=EspacioTemporal(prefix='grafconnect-guardar-')
     try:
         raiz=Path(temporal.name)
@@ -76,7 +86,9 @@ def guardar_grafnet(archivo,proyecto,clave,origen=None,preparar=None,info_previa
         datos=empaquetar(raiz,clave,serializar_info(info))
         if len(datos)>MAX_BYTES:raise ErrorContenedor("El archivo supera el tamaño permitido")
         guardar_atomico(Path(archivo),datos)
-        return ProyectoArchivo(Path(archivo),temporal,proyecto,True,info,inspeccionar(datos)[1])
+        firmado=clave is not None
+        return ProyectoArchivo(Path(archivo),temporal,proyecto,firmado,info,inspeccionar(datos)[1],
+                               FIRMA_VALIDA if firmado else SIN_FIRMA)
     except BaseException:
         temporal.cleanup();raise
 
@@ -92,7 +104,7 @@ def comprobar_contenedor():
         ruta=Path(tmp)/'comprobacion.grafnet'
         guardado=guardar_grafnet(ruta,p,CLAVE)
         try:
-            abierto=abrir_grafnet(ruta,CLAVE,'rechazar')
+            abierto=abrir_grafnet(ruta,CLAVE)
             try:
                 if abierto.proyecto.documents != guardado.proyecto.documents:raise ValueError('El contenedor no conserva los documentos')
             finally:abierto.cerrar()

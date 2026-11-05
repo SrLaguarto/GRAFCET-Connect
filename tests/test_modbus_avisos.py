@@ -28,18 +28,30 @@ class MensajesConversion(unittest.TestCase):
         self.assertEqual(texto_numero(Fraction(40)), "40")
         self.assertEqual(texto_numero(-Fraction(1, 100)), "-0,01")
 
-    def test_SFIO71_entrada_entera_con_decimales_dice_que_variable_y_que_hacer(self):
-        """REQ-ROB-01, REQ-EXP-01: una Entera que recibe 1,3 (130 con escala 100) no entra en el motor y el error nombra la
-        variable y el valor, sin redondear."""
+    def test_SFIO71_entrada_entera_con_decimales_se_redondea_y_se_anota(self):
+        """REQ-ROB-01, REQ-EXP-01: una Entera que recibe 1,3 (130 con escala 100) usa 1, sin error, y el redondeo queda
+        anotado con lo recibido y lo usado; mitades lejos de cero, también con INT16 negativo."""
         m = M().var("nivel", kind="int").step("E0", True)
         a = Adaptador(Configuracion(senales=[Senal("nivel", "input-register", 0, "INT16", "100")]), session(m.compile()))
-        with self.assertRaises(ErrorConversion) as ctx:
-            a.aplicar({"nivel": 130})
-        self.assertEqual(str(ctx.exception), "La entrada «nivel» es Entera, pero el simulador de procesos ha enviado 1,3. "
-                                             "Cámbiela a Decimal (2 decimales) en Variables.")
-        self.assertEqual(a.sesion.z.values["nivel"], 0, "no se redondea ni se aplica")
-        a.aplicar({"nivel": 200})
-        self.assertEqual(a.sesion.z.values["nivel"], 2)
+        for raw, esperado in ((130, 1), (150, 2), (249, 2), (65536 - 150, -2), (65536 - 130, -1), (200, 2)):
+            a.aplicar({"nivel": raw})
+            self.assertEqual(a.sesion.z.values["nivel"], esperado, raw)
+        a.aplicar({"nivel": 65536 - 150})
+        self.assertEqual(a.redondeos["nivel"], (Fraction(-3, 2), -2))
+        a.aplicar({"nivel": 130})
+        self.assertEqual(a.redondeos["nivel"], (Fraction(13, 10), 1))
+
+    def test_SFIO71b_entera_sin_decimales_no_anota_y_la_conexion_sigue_en_estado_conectado(self):
+        """REQ-ROB-01: una Entera con escala 1 no anota redondeos; con escala 100 y decimales no hay error."""
+        m = M().var("nivel", kind="int").step("E0", True)
+        a = Adaptador(Configuracion(senales=[Senal("nivel", "input-register", 0, "INT16", "1")]), session(m.compile()))
+        a.aplicar({"nivel": 7})
+        self.assertEqual(a.sesion.z.values["nivel"], 7)
+        self.assertEqual(a.redondeos, {})
+        cfg = Configuracion(senales=[Senal("nivel", "input-register", 0, "INT16", "100")])
+        a2 = Adaptador(cfg, session(m.compile()))
+        a2.aplicar({"nivel": 130})  # no lanza ErrorConversion: el coordinador no pasa a error
+        self.assertEqual(a2.sesion.status, "pausada-estable")
 
     def test_SFIO72_entrada_decimal_con_mas_decimales_de_los_declarados(self):
         """REQ-EXP-01: un Decimal de 2 decimales que recibe 1,234 lo dice con el nombre de la variable."""
@@ -82,8 +94,8 @@ class MensajesConversion(unittest.TestCase):
     def test_SFIO75_el_error_de_conversion_llega_al_estado_del_coordinador(self):
         """REQ-ROB-01: lo que sube hasta el estado es el texto del alumno, no uno genérico ni con «Detalle»."""
         from conexion.coordinador import Coordinador
-        texto = ("La entrada «nivel» es Entera, pero el simulador de procesos ha enviado 1,3. "
-                 "Cámbiela a Decimal (2 decimales) en Variables.")
+        texto = ("La entrada «temp» es Decimal (2 decimales), pero el simulador de procesos ha enviado 1,234. "
+                 "Aumente los decimales de la variable en Variables.")
         mensaje = Coordinador._mensaje_de_error(ErrorConversion(texto), texto.rstrip("."))
         self.assertTrue(mensaje.startswith(texto[:-1]), mensaje)
         self.assertNotIn("Detalle", mensaje)
@@ -136,6 +148,7 @@ class PanelAvisos(unittest.TestCase):
             Senal("nivel", "input-register", 0, "INT16", "100"), Senal("temp", "input-register", 1, "INT16", "100"),
             Senal("v", "holding", 0, "INT16", "1"), Senal("a", "discrete", 0)]))
         t = panel.terminales
+        self.assertIn("se redondeará al entero más cercano", t[("input-register", 0)].aviso)
         self.assertIn("Decimal (2 decimales)", t[("input-register", 0)].aviso)
         self.assertIsNotNone(t[("input-register", 0)].marca)
         for clave in (("input-register", 1), ("holding", 0), ("discrete", 0)):
@@ -144,6 +157,29 @@ class PanelAvisos(unittest.TestCase):
         self.assertIn("«nivel»", panel.avisos_escala)
         self.assertNotIn("«temp»", panel.avisos_escala)
         self.assertEqual(aviso_escala(doc["variables"][0], Senal("nivel", "input-register", 0, "INT16", "1")), "")
+        app.processEvents()
+
+    def test_SFIO79_el_redondeo_recibido_marca_la_variable_en_ambar_con_lo_recibido_y_lo_usado(self):
+        """REQ-SIM-03, REQ-ROB-01: tras un redondeo la fila de la Entera lleva el aviso con lo recibido y lo usado; sin
+        redondeos (otra conexión) vuelve al aviso preventivo o a ninguno."""
+        app = QApplication.instance() or QApplication([])
+        doc = M().var("nivel", kind="int").var("n2", kind="int").step("E0", True).doc
+        canales = {"discrete": {"offset": 0, "cantidad": 2}, "coil": {"offset": 0, "cantidad": 2},
+                   "input-register": {"offset": 0, "cantidad": 2}, "holding": {"offset": 0, "cantidad": 2}}
+        panel = PanelES()
+        panel.cargar(doc, Configuracion(modelo=doc["id"], canales=canales, senales=[
+            Senal("nivel", "input-register", 0, "INT16", "1"), Senal("n2", "input-register", 1, "INT16", "100")]))
+        t = panel.terminales
+        self.assertIsNone(t[("input-register", 0)].marca)
+        panel.mostrar_redondeos({"nivel": (Fraction(13, 10), 1)})
+        marca = t[("input-register", 0)].marca
+        self.assertIsNotNone(marca)
+        self.assertTrue(marca.isVisibleTo(panel) or not marca.isHidden())
+        self.assertEqual(marca.toolTip(), "El simulador de procesos ha enviado 1,3 y la variable es Entera: se usa 1. "
+                                          "Para el valor exacto, póngala como Decimal (2 decimales).")
+        panel.mostrar_redondeos({})
+        self.assertTrue(t[("input-register", 0)].marca.isHidden())
+        self.assertIn("se redondeará", t[("input-register", 1)].marca.toolTip())
         app.processEvents()
 
     def test_SFIO78_la_linea_de_sondeo_y_ciclo_no_se_ve(self):

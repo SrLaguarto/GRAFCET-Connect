@@ -3,7 +3,8 @@
 Uso:  python tools/construir_ejecutable.py --archivo-clave RUTA   (repartible, Nuitka)
       python tools/construir_ejecutable.py --desarrollo           (clave pública, PyInstaller)
 
-Resultado: «dist/GRAFCET Connect/GRAFCET Connect.exe» con sus bibliotecas al lado (modo carpeta, sin instalador).
+Resultado: «dist/GRAFCET Connect/GRAFCET Connect.exe» con sus bibliotecas al lado (modo carpeta) y, en la
+construcción repartible, el zip portable y el instalador de Inno Setup (tools/instalador.iss), ambos en dist/.
 Esa carpeta entera es el programa. Las bibliotecas de Qt (LGPL v3) quedan como ficheros separados y sustituibles.
 Necesita PySide6-Essentials y Nuitka (o pyinstaller con --motor pyinstaller). La clave de distribución debe ser
 la misma en todas las versiones: si cambia, los proyectos .grafnet guardados antes dejan de abrirse.
@@ -98,7 +99,12 @@ def _construir(fuentes, clave, motor) -> int:
             print("ERROR: Nuitka no generó la carpeta standalone esperada.",flush=True);return 1
         if dist.exists():
             if not dist.resolve().is_relative_to((ROOT/"dist").resolve()):raise ValueError("Destino de construcción no válido")
-            shutil.rmtree(dist)
+            try:
+                shutil.rmtree(dist)
+            except PermissionError:
+                print("ERROR: no se puede sustituir dist/" + NOMBRE + ": el programa se está ejecutando desde esa "
+                      "carpeta. Ciérrelo y vuelva a construir.", flush=True)
+                return 1
         shutil.copytree(origen,dist)
     shutil.copy(ROOT / "escritorio" / "LEEME.txt", dist / "LEEME.txt")
     # El ejemplo que se entrega también lleva el sello de la misma distribución.
@@ -139,6 +145,36 @@ def _construir(fuentes, clave, motor) -> int:
             print("Clave de distribución comprobada en el ejecutable.", flush=True)
     size = sum(f.stat().st_size for f in dist.rglob("*") if f.is_file())
     print(f"\nListo: {dist / (NOMBRE + '.exe')}  ({size / 1e6:.0f} MB en la carpeta)")
+    if repartible:
+        return _entregas(dist)
+    return 0
+
+
+def _iscc() -> Path | None:
+    """El compilador de Inno Setup, si está instalado (para el usuario o para todos)."""
+    candidatos = [os.environ.get("ISCC", ""),
+                  Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 6" / "ISCC.exe",
+                  Path(os.environ.get("ProgramFiles(x86)", "")) / "Inno Setup 6" / "ISCC.exe",
+                  Path(os.environ.get("ProgramFiles", "")) / "Inno Setup 6" / "ISCC.exe"]
+    return next((Path(c) for c in candidatos if c and Path(c).is_file()), None)
+
+
+def _entregas(dist: Path) -> int:
+    """Las dos formas de repartir la misma carpeta: el zip portable y el instalador (tools/instalador.iss)."""
+    salida = ROOT / "dist"
+    base = salida / f"GRAFCET-Connect-{VERSION}-win64"
+    zip_portable = shutil.make_archive(str(base), "zip", root_dir=salida, base_dir=NOMBRE)
+    print(f"Portable: {zip_portable}", flush=True)
+    iscc = _iscc()
+    if iscc is None:
+        print("AVISO: Inno Setup no está instalado; no se ha creado el instalador.", flush=True)
+        return 0
+    orden = [str(iscc), "/Q", f"/DVersion={VERSION}", f"/DOrigen={dist}", f"/DSalida={salida}", f"/DRaiz={ROOT}",
+             str(ROOT / "tools" / "instalador.iss")]
+    if subprocess.run(orden).returncode:
+        print("ERROR: Inno Setup no pudo crear el instalador.", flush=True)
+        return 1
+    print(f"Instalador: {salida / f'GRAFCET-Connect-{VERSION}-setup.exe'}", flush=True)
     return 0
 
 
