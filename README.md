@@ -1,8 +1,8 @@
 # GRAFCET Connect
 
-Editor y simulador de GRAFCET para el aula, basado en IEC 60848, con conexión Modbus TCP a simuladores de procesos.
+Editor y simulador de GRAFCET, basado en IEC 60848, con conexión Modbus TCP a simuladores de procesos.
 
-Pensado para alumnado y profesorado de automatización (FP). Permite dibujar un grafcet, simularlo con entradas pulsables, documentarlo en planos con cajetín y, si hace falta, conectarlo a un simulador de procesos por Modbus TCP. Es una herramienta de aprendizaje y consulta: no es una declaración de conformidad con la norma.
+Pensado para quien aprende, enseña o trabaja con automatización. Permite dibujar un grafcet, simularlo con entradas pulsables, documentarlo en planos con cajetín y, si hace falta, conectarlo a un simulador de procesos por Modbus TCP. Es una herramienta de aprendizaje y consulta: no es una declaración de conformidad con la norma.
 
 **Contenido:** [Características](#características) · [Descargar e instalar](#descargar-e-instalar) · [Primeros pasos](#primeros-pasos) · [Ejemplos incluidos](#ejemplos-incluidos) · [Preguntas frecuentes](#preguntas-frecuentes) · [Comunicar un fallo](#comunicar-un-fallo) · [Licencia](#licencia) · [Para desarrolladores](#para-desarrolladores)
 
