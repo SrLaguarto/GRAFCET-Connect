@@ -36,7 +36,6 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
   - **PDF**: se elige la página; los textos extraíbles son editables y el resto queda como fondo.
   - **SVG**: queda como fondo, sin campos editables.
   - **JSON** de GRAFCET Connect: una plantilla guardada antes.
-  - DWG y SLDDRT no se admiten: el programa indica que hay que exportar el dibujo como DXF.
 - Plantillas predeterminadas A4 (vertical), A3 (horizontal y vertical) y A2, A1 y A0 en ambas orientaciones. Desde **Lámina** también se edita una plantilla, se usa la estándar, se quita, se guarda en la biblioteca o se restaura la predeterminada.
 - El cajetín (180 × 36 mm) incluye dibujado y comprobado (fecha, autor y firma), razón social, escala, nombre del plano, número, «sustituye a» y «sustituido por».
 - **Proyecto > Exportar…** genera PDF o SVG (un SVG por hoja si hay varias). **Proyecto > Imprimir…** (Ctrl+P) imprime las hojas.
