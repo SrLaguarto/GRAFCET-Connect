@@ -16,7 +16,7 @@ Editor y simulador de GRAFCET para el aula, basado en IEC 60848, con conexión M
 
 Para Windows 10 y 11 hay dos opciones en la sección [Releases](https://github.com/SrLaguarto/GRAFCET-Connect/releases) del repositorio:
 
-- **Instalador** `GRAFCET-Connect-1.0.0-setup.exe` (recomendado para la mayoría). No necesita permisos de administrador, crea el acceso en el menú Inicio, abre los archivos `.grafnet` con doble clic y se desinstala desde Configuración > Aplicaciones.
+- **Instalador** `GRAFCET-Connect-1.0.0-setup.exe` (recomendado para la mayoría). Se instala en Archivos de programa (pide permisos de administrador; sin ellos, puede instalarse solo para su usuario), crea el acceso en el menú Inicio, abre los archivos `.grafnet` con doble clic y se desinstala desde Configuración > Aplicaciones.
 - **Portable** `GRAFCET-Connect-1.0.0-win64.zip`: descomprima la carpeta entera y ejecute `GRAFCET Connect.exe`. Sirve para un USB o para equipos sin permisos para instalar.
 
 - No necesita conexión a internet.

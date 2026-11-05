@@ -6,11 +6,11 @@ Equipo: Windows-11-10.0.26200-SP0 · AMD64 · 16 CPU lógicas · Python 3.12.10.
 
 | Medida | Mediana | Máximo | Objetivo P (doc. 10) | Estado indicativo |
 |---|---|---|---|---|
-| Validación completa (≤5 s) | 0.997 s | 1.235 s | ≤5 s | dentro |
-| Guardar modelo (≤5 s) | 0.458 s | 0.479 s | ≤5 s | dentro |
-| Abrir modelo (≤5 s) | 0.260 s | 0.270 s | ≤5 s | dentro |
-| Operación de vista (mover), p95 de 100 | 23 ms (mediana) | 27 ms | p95 ≤100 ms | dentro (p95 25 ms) |
-| Edición semántica (renombrar), 5 repeticiones | 782 ms | 797 ms | sin objetivo en doc. 10 | informativo |
+| Validación completa (≤5 s) | 0.900 s | 0.983 s | ≤5 s | dentro |
+| Guardar modelo (≤5 s) | 0.462 s | 0.463 s | ≤5 s | dentro |
+| Abrir modelo (≤5 s) | 0.279 s | 0.304 s | ≤5 s | dentro |
+| Operación de vista (mover), p95 de 100 | 23 ms (mediana) | 29 ms | p95 ≤100 ms | dentro (p95 25 ms) |
+| Edición semántica (renombrar), 5 repeticiones | 764 ms | 791 ms | sin objetivo en doc. 10 | informativo |
 | Pico de memoria de la validación | 74 MiB | — | ≤2 GiB | dentro |
 
 Observaciones:

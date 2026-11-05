@@ -1,7 +1,8 @@
 ; Instalador de GRAFCET Connect (Inno Setup 6). Lo compila tools/construir_ejecutable.py con:
 ;   ISCC.exe /DVersion=1.0.0 /DOrigen=<dist\GRAFCET Connect> /DSalida=<dist> /DRaiz=<raíz del repositorio> instalador.iss
-; Instala para el usuario actual (sin permisos de administrador), crea el acceso en el menú Inicio, asocia los
-; archivos .grafnet al programa y deja un desinstalador. La versión portable (zip) sigue siendo la misma carpeta.
+; Instala por defecto en Archivos de programa para todos los usuarios (pide permisos de administrador); quien no
+; los tenga puede elegir instalarlo solo para su usuario. Crea el acceso en el menú Inicio, asocia los archivos
+; .grafnet al programa y deja un desinstalador. La versión portable (zip) sigue siendo la misma carpeta.
 
 #ifndef Version
   #define Version "0.0.0"
@@ -32,7 +33,7 @@ AppUpdatesURL=https://github.com/SrLaguarto/GRAFCET-Connect/releases
 DefaultDirName={autopf}\{#Nombre}
 DefaultGroupName={#Nombre}
 DisableProgramGroupPage=yes
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
