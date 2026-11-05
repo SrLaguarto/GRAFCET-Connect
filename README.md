@@ -42,7 +42,19 @@ dibujo en ese archivo. Con «Proyecto > Nuevo proyecto» se crea un modelo vací
   Python. `dist/` y `build/` no se versionan.
 - Barra de estado: «Basado en IEC 60848». Indica la base del programa; no es una declaración de conformidad (P-IMP-90).
 - Avisos y diagnósticos: no muestran códigos internos (como `D-…`, `U-…` o `REQ-…`), que siguen en los datos. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular» (P-IMP-89). Los avisos usan vocabulario GRAFCET, sin jerga interna; el detalle técnico y la «Referencia: código» van en la ayuda emergente de cada aviso (P-IMP-89).
-- **Ayuda > Acerca de GRAFCET Connect…**: versión, «Basado en IEC 60848», licencia GPL-3.0 y enlace al código. El botón **Comunicar un fallo** abre las Issues de GitHub (https://github.com/SrLaguarto/GrafConnect/issues). El icono del programa es `escritorio/recursos/grafcet_connect.ico` (P-IMP-90).
+- **Ayuda > Acerca de GRAFCET Connect…**: versión, «Basado en IEC 60848», licencia GPL-3.0 (y licencia comercial bajo petición) y enlace al código. El botón **Comunicar un fallo** abre las Issues de GitHub (https://github.com/SrLaguarto/GrafConnect/issues). El icono del programa es `escritorio/recursos/grafcet_connect.ico` (P-IMP-90).
+
+### Propiedades del archivo y sello (P-IMP-98)
+
+«Proyecto > Propiedades del archivo…» muestra el autor, las fechas de creación y de última edición, las versiones de GRAFCET Connect con que se creó y se guardó por última vez el archivo, la versión del formato y el sello. El autor se puede cambiar; por defecto es el usuario de Windows al crear el proyecto. El mismo diálogo muestra los datos del programa: versión, distribución o desarrollo, y fecha de instalación (la del ejecutable).
+
+El sello (HMAC-SHA256) indica si el archivo es válido con la clave de esta versión. La huella del contenido (SHA-256) sirve para comparar copias; la clave nunca se muestra. Los metadatos van en la entrada opcional `_grafnet/info.json`, sellada como el resto del archivo. Los archivos anteriores a la 1.0 abren igual y muestran «desconocida (archivo anterior a la 1.0)».
+
+El ejecutable 1.0 rechaza los archivos guardados con la versión de desarrollo. El autor del programa puede volver a sellarlos con `tools/resellar.py`, que escribe las copias en `sellados_1.0/`, junto al original, y no toca el original. Ignora los archivos ya sellados para la distribución y no toca los de sello no válido. La clave de distribución se lee de un archivo que debe estar fuera del repositorio:
+
+```bash
+python tools/resellar.py --archivo-clave RUTA archivos-o-carpeta
+```
 
 ### Conectar con Factory I/O (P-IMP-50)
 
@@ -159,7 +171,16 @@ El núcleo se ha hecho solo con los doce documentos del paquete. El 25-10-2026, 
 
 GRAFCET Connect (versión 1.0.0) es software libre y de código abierto, publicado con la licencia **GPL-3.0**. El texto completo está en el fichero [LICENSE](LICENSE) de la raíz. El código está en https://github.com/SrLaguarto/GrafConnect.
 
+Además, el autor ofrece **licencias comerciales bajo petición** a quien quiera usar GRAFCET Connect en un producto o servicio que no pueda cumplir la GPL-3.0. Se piden a través de GitHub: https://github.com/SrLaguarto. En la práctica:
+
+- Con la GPL-3.0, cualquiera puede usar, estudiar, modificar y redistribuir GRAFCET Connect, también vendiéndolo, siempre que publique el código bajo GPL-3.0.
+- Quien quiera integrarlo en un producto cerrado, que no pueda publicar su código bajo GPL-3.0, necesita la licencia comercial.
+
+Las contribuciones se aceptan según [CONTRIBUTING.md](CONTRIBUTING.md), que permite al autor publicarlas también con otras licencias (P-IMP-96).
+
 Las bibliotecas de Qt (PySide6, Qt for Python) van en el ejecutable como ficheros separados, bajo la licencia LGPL v3, y pueden sustituirse por otras versiones compatibles. La clave de distribución del sello de los proyectos `.grafnet` no forma parte del código publicado: se inyecta solo al construir el ejecutable (P-IMP-80). La clave de desarrollo, que sí es pública, está en `escritorio/sello.py`.
+
+Los textos de las licencias de las bibliotecas de terceros van en la carpeta `licencias/`, con un resumen en `licencias/TERCEROS.txt` (P-IMP-97). Factory I/O es una marca de Real Games; GRAFCET Connect no está afiliado a Real Games.
 
 Este programa se ofrece sin ninguna garantía. Ver el fichero LICENSE para las condiciones completas (P-IMP-90).
 

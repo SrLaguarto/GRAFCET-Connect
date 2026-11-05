@@ -5,6 +5,9 @@ GRAFCET Connect es software libre bajo la licencia GNU GPL versión 3 (archivo
 GRAFCET-Connect-GPL-3.0.txt). Se ofrece sin ninguna garantía.
 Código fuente: https://github.com/SrLaguarto/GrafConnect
 
+Para usos que no puedan cumplir la GPL-3.0, el autor ofrece licencias
+comerciales: pídalas a través de GitHub.
+
 El programa incluye bibliotecas de terceros, cada una con su propia licencia.
 Sus textos están en las subcarpetas de esta carpeta:
 

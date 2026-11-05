@@ -228,7 +228,9 @@ class AcercaDe(QDialog):
         cab.addWidget(titulo, 1)
         lay.addLayout(cab)
         self.l_licencia = QLabel(f"{TITULO} es software libre y de código abierto, publicado con la licencia GPL-3.0. "
-                                 f"Su código está en GitHub:<br><a href=\"{URL_CODIGO}\">{URL_CODIGO}</a>")
+                                 f"Su código está en GitHub:<br><a href=\"{URL_CODIGO}\">{URL_CODIGO}</a><br><br>"
+                                 "Para usarlo en un producto o servicio que no pueda cumplir la GPL-3.0, el "
+                                 "autor ofrece licencias comerciales: pídalas a través de GitHub.")
         self.l_licencia.setWordWrap(True)
         self.l_licencia.linkActivated.connect(self.abrir)
         lay.addWidget(self.l_licencia)

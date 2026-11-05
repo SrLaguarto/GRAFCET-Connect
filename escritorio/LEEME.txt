@@ -21,6 +21,8 @@ Qué hace
   panel inferior muestra la traza.
 - Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), rueda del ratón (anclada al puntero), Ctrl+= y Ctrl+−; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Al cambiar el tamaño de la ventana principal, el dibujo se vuelve a encajar y centrar como «Centrar todo», tras 200 ms; plegar paneles no lo dispara. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
 - Proyecto > Guardar (Ctrl+S) o Guardar como… (Ctrl+Mayús+S): guarda el proyecto con su dibujo en un archivo .grafnet, para abrirlo después.
+- Proyecto > Propiedades del archivo…: autor (se puede cambiar; por defecto, el usuario de Windows), fechas de creación y de última edición, versiones de GRAFCET Connect con que se creó y se guardó por última vez, versión del formato y sello del archivo. Muestra también los datos de este programa (versión, distribución o desarrollo, y fecha de instalación). Los archivos anteriores a la 1.0 muestran «desconocida (archivo anterior a la 1.0)» en fechas y versiones.
+- Aviso: los archivos guardados con la versión de desarrollo no abren en esta versión 1.0. El autor del programa puede volver a sellarlos.
 - Editor de un grafcet secuencial (Proyecto > Nuevo proyecto, o editar en Pausa cualquier modelo abierto): paleta a la
   izquierda, con la etapa, la transición, la simultaneidad y la acción (las fichas se arrastran al dibujo; sin herramienta, el ratón
   selecciona, mueve y enlaza). Puntos de unión arriba y abajo (al acercar el puntero se marcan y de ellos sale el
@@ -35,7 +37,7 @@ Qué hace
   Los retardos se escriben como 3s/X1. Play valida el grafcet y lo ejecuta; si no compila o está vacío, dice por qué,
   queda en Pausa y parpadean en naranja los elementos con error. Cada cierto tiempo se guarda una copia de recuperación.
 - Ayuda > Leyenda del dibujo: ventana no modal y desplazable, por secciones (Etapas, Transiciones, Acciones, Jerarquía y forzado, Temporizadores, Ratón y teclado). Cada entrada tiene una miniatura dibujada con el propio código de dibujo, con sus colores reales.
-- Ayuda > Acerca de GRAFCET Connect…: versión, licencia GPL-3.0, enlace al código y el botón «Comunicar un fallo»,
+- Ayuda > Acerca de GRAFCET Connect…: versión, licencia GPL-3.0 y licencia comercial bajo petición, enlace al código y el botón «Comunicar un fallo»,
   que abre las Issues de GitHub (https://github.com/SrLaguarto/GrafConnect/issues).
 - Los avisos no muestran códigos internos y usan vocabulario GRAFCET. El detalle técnico y la «Referencia: código» van en la ayuda emergente de cada aviso. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular».
 
@@ -57,6 +59,7 @@ Qué no es
 
 Licencias
 - GRAFCET Connect se publica con la licencia GPL-3.0. Código: https://github.com/SrLaguarto/GrafConnect
+- Licencia comercial bajo petición: si quiere usarlo en un producto o servicio que no pueda cumplir la GPL-3.0, pídala a través de GitHub (https://github.com/SrLaguarto).
 - Interfaz con Qt for Python (PySide6), bajo LGPL v3. Las bibliotecas de Qt están como ficheros separados en
   la carpeta del programa y pueden sustituirse por otras versiones compatibles.
 - Los textos de todas las licencias (la propia y las de las bibliotecas incluidas) están en la carpeta
