@@ -255,8 +255,10 @@ class AjustesYAvisos(BaseQt):
                 d = AcercaDe.ultimo
                 textos = " ".join(x.text() for x in d.findChildren(QLabel))
                 for esperado in ("GRAFCET Connect", f"Versión {VERSION}", "Basado en IEC 60848", "GPL-3.0", URL_CODIGO,
-                                 "sin ninguna garantía", "licencias", "Real Games"):
+                                 "sin ninguna garantía", "licencias", ">GitHub</a>"):
                     self.assertIn(esperado, textos)
+                self.assertNotIn("Factory", textos)  # sin productos concretos (P-IMP-99)
+                self.assertNotIn(f">{URL_CODIGO}<", textos)  # la dirección va en el enlace «GitHub»
                 d.l_licencia.linkActivated.emit(URL_CODIGO)
                 d.b_fallo.click()
         self.assertEqual(abiertos, [URL_CODIGO, URL_FALLOS])

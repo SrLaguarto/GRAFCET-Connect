@@ -64,8 +64,6 @@ Licencias
   la carpeta del programa y pueden sustituirse por otras versiones compatibles.
 - Los textos de todas las licencias (la propia y las de las bibliotecas incluidas) están en la carpeta
   «licencias», con un resumen en licencias/TERCEROS.txt.
-- Factory I/O es una marca de Real Games. GRAFCET Connect se comunica con él por Modbus TCP, pero no está
-  afiliado a Real Games ni cuenta con su respaldo.
 
 
 Ajustar flechas y realimentaciones (P-IMP-35 a P-IMP-37)
@@ -375,14 +373,14 @@ En modo Editar:
 - Paleta: pide cuatro filas de fichas; en una ventana baja se encoge a tres, con barra de desplazamiento, y sigue en dos columnas. A 1366×768 se ven las ocho fichas sin barra: el panel de Opciones cede hasta 328 px para que la paleta quepa entera, mientras no mueva usted el divisor entre el dibujo y ese panel (si lo mueve, se respeta su altura). En la ventana más baja, «Forzado» se alcanza desplazando la paleta.
 
 
-E/S externas (Factory I/O) y botón conmutador (P-IMP-63)
+E/S externas (simulador de procesos por Modbus) y botón conmutador (P-IMP-63)
 
 - El botón «E/S externas» de la barra abre el panel de E/S. Mientras se ve, el botón está marcado y dice «Vista GRAFCET» (con un icono de etapa, transición y etapa); pulsado, vuelve al dibujo. La flecha ← hace lo mismo. Ninguna de las dos desconecta la conexión. Tiene un ancho fijo, el del texto más largo, así que la barra no se mueve al alternar.
 - El panel tiene a la izquierda la lista SENSORES y a la derecha la lista ACTUADORES: arrastre cada variable a un canal de su lado. En el centro, un marco con la cabecera «(IP:puerto)» y «Esclavo ID:n»: a su izquierda, los canales Input e Input Reg; a su derecha, Coil y Holding Reg. El nombre de la variable asignada aparece fuera del marco, pegado a él. Al arrastrar, se resalta la fila entera.
 - Cada canal tiene un indicador: tenue si no tiene variable, del color de su tipo si la tiene, y más vivo si la señal está activa. Bool es verde, Decimal azul, Entera naranja y Cualquiera blanco. El resumen de abajo cuenta «x/y entradas asignadas · x/y salidas asignadas».
 - Para quitar una asignación, pase el ratón por ella y pulse la «×», que solo aparece al pasar el ratón (con la conexión activa, antes pulse «Desconectar / editar»). También puede usar el menú contextual del canal.
 - «+ Canales» ya no existe: los campos de offset y cantidad de I/Q/AI/AQ están en Configuración, en «Canales del servidor». Un proyecto sin mapa propio abre con 32 canales digitales y 12 numéricos; no hereda las cantidades de canales de preferencias anteriores.
-- El estado de conexión va en su propia fila, bajo el título. Si hay un fallo, el texto hace salto de línea y su mensaje completo aparece al pasar el ratón por encima. Los fallos de red habituales se explican en una frase, por ejemplo: «Factory I/O cerró o anuló la conexión. Salidas no garantizadas. Pulsa Conectar para reanudar. Detalle: …».
+- El estado de conexión va en su propia fila, bajo el título. Si hay un fallo, el texto hace salto de línea y su mensaje completo aparece al pasar el ratón por encima. Los fallos de red habituales se explican en una frase, por ejemplo: «El simulador de procesos cerró la conexión. Salidas no garantizadas. Pulse Conectar para reanudar. Detalle: …».
 
 
 Segunda ronda: Pausa a cero, conexión y panel de E/S (P-IMP-67)
@@ -396,8 +394,8 @@ Segunda ronda: Pausa a cero, conexión y panel de E/S (P-IMP-67)
 - Un mapa guardado con variables borradas o incompatibles se carga sin ellas y con aviso; un archivo corrupto se sigue rechazando entero.
 - En la tabla de variables, Supr quita la variable seleccionada (en modo Editar y sin una celda abierta), igual que «Quitar»; si la variable está en uso, lo dice y no la quita. También vale el Supr del teclado numérico. La tabla admite una sola fila seleccionada.
 - Una variable que pasa de Booleana a Entera o Decimal se recoloca sola en el primer registro libre, en lugar de quitarse con aviso (P-IMP-94).
-- Si una variable Entera se asigna a un registro con escala distinta de 1, el panel muestra un aviso ámbar (⚠): «Factory I/O manda este valor con decimales: ponga la variable como Decimal (2 decimales)». Si aun así llega un valor no entero, la conexión se para y no se redondea.
-- Consejo: las analógicas de Factory I/O, como Decimal con 2 decimales.
+- Si una variable Entera se asigna a un registro con escala distinta de 1, el panel muestra un aviso ámbar (⚠): «El simulador de procesos manda este valor con decimales: ponga la variable como Decimal (2 decimales)». Si aun así llega un valor no entero, la conexión se para y no se redondea.
+- Consejo: las señales analógicas del simulador de procesos, como Decimal con 2 decimales.
 
 Ronda 4 (P-IMP-68 y P-IMP-69)
 
@@ -421,6 +419,6 @@ Rondas 5 y 6 (P-IMP-71 a P-IMP-79)
 - Cortar, copiar y pegar (Ctrl+X, Ctrl+C, Ctrl+V y clic derecho), con su jerarquía; se pega bajo el ratón o en el hueco libre más cercano.
 - Al simular, las entradas son pulsadores (Ctrl enclava; clic derecho: interruptor). Play/Stop con «Stop» en lugar de «Pausa». Play oculta la paleta y el panel inferior y no mueve el dibujo.
 - Lo activo en verde lima y lo verdadero coloreado; temporizador sin cápsula; dependencias por esquinas; barras Y no válidas bloquean Play.
-- Panel E/S en castellano, más compacto, con los valores de Factory I/O por defecto (192.168.1.133:502, esclavo 1, escala 100; desde la 1.0.0, 32 digitales y 12 numéricos) y sin bloque inferior de configuración.
+- Panel E/S en castellano, más compacto, con los valores del simulador de procesos por defecto (192.168.1.133:502, esclavo 1, escala 100; desde la 1.0.0, 32 digitales y 12 numéricos) y sin bloque inferior de configuración.
 - Paleta con dos columnas y nombres debajo; paneles plegables; diagnósticos junto al zoom; notas de texto e imágenes.
 - Borradores huérfanos que se limpian al abrir; órdenes y acciones sin configurar bloquean Play; el lazo selecciona marcos.

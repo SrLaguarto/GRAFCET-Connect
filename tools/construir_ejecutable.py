@@ -80,9 +80,15 @@ def _construir(fuentes, clave, motor) -> int:
     # necesita el intérprete actual y las herramientas del sistema, no ese PATH.
     env = os.environ.copy()
     env.pop("GRAFCONNECT_CLAVE_SELLO",None)
+    # La app de Claude y Python de la Microsoft Store redirigen %LOCALAPPDATA%: el compilador que descarga Nuitka
+    # quedaría a medias. Su caché va en build/, fuera de esa carpeta.
+    env.setdefault("NUITKA_CACHE_DIR", str(ROOT / "build" / "nuitka-cache"))
     windows = Path(env.get("SystemRoot", r"C:\Windows"))
     env["PATH"] = os.pathsep.join(map(str, (Path(sys.executable).parent, windows / "System32", windows)))
-    r = subprocess.run(args, cwd=ROOT, env=env)
+    # Se compila desde las fuentes aisladas (con la clave inyectada), nunca desde el paquete del repositorio.
+    env["PYTHONPATH"] = str(fuentes)
+    r = subprocess.run(args, cwd=fuentes, env=env)
+    env.pop("PYTHONPATH", None)
     if r.returncode:
         return r.returncode
     dist = ROOT / "dist" / NOMBRE
@@ -100,7 +106,7 @@ def _construir(fuentes, clave, motor) -> int:
     from grafcet.contenedor import empaquetar,guardar_atomico
     from escritorio.sello import CLAVE as CLAVE_DESARROLLO
     guardar_atomico(dist/"Prueba-Modbus.grafnet",empaquetar(ROOT/"pruebas_manuales"/"factoryio_digital",clave if clave is not None else CLAVE_DESARROLLO))
-    shutil.copy(ROOT / "docs" / "PRIMERA_CONEXION_FACTORY_IO.md", dist / "PRIMERA_CONEXION_FACTORY_IO.md")
+    shutil.copy(ROOT / "docs" / "PRIMERA_CONEXION_MODBUS.md", dist / "PRIMERA_CONEXION_MODBUS.md")
     _copiar_licencias(dist / "licencias")
     # Un build correcto no basta: comprobar la carga de Qt y el dibujo en el EXE.
     with tempfile.TemporaryDirectory(prefix="grafcet-arranque-") as tmp:
@@ -123,6 +129,14 @@ def _construir(fuentes, clave, motor) -> int:
         if archivo.returncode:
             print("ERROR: falló ZIP o sello en el ejecutable empaquetado.",flush=True);return 1
         print("Contenedor y sello del ejecutable comprobados.",flush=True)
+        if repartible:
+            ejemplo = str(dist / "Prueba-Modbus.grafnet")
+            dis = subprocess.run([str(dist / (NOMBRE + ".exe")), "--prueba-distribucion", ejemplo],
+                                 cwd=dist, env=prueba_env, timeout=30)
+            if dis.returncode:
+                print("ERROR: el ejecutable no lleva la clave de distribución.", flush=True)
+                return 1
+            print("Clave de distribución comprobada en el ejecutable.", flush=True)
     size = sum(f.stat().st_size for f in dist.rglob("*") if f.is_file())
     print(f"\nListo: {dist / (NOMBRE + '.exe')}  ({size / 1e6:.0f} MB en la carpeta)")
     return 0

@@ -56,14 +56,14 @@ El ejecutable 1.0 rechaza los archivos guardados con la versión de desarrollo. 
 python tools/resellar.py --archivo-clave RUTA archivos-o-carpeta
 ```
 
-### Conectar con Factory I/O (P-IMP-50)
+### Conectar con un simulador de procesos por Modbus (P-IMP-50)
 
-Para una primera prueba sin crear un modelo, pulse el botón **E/S externas → Configuración
-→ Abrir prueba guiada** y siga [la guía paso a paso](docs/PRIMERA_CONEXION_FACTORY_IO.md). El
+Para una primera prueba con un simulador de procesos con servidor Modbus TCP, sin crear un modelo, pulse el botón **E/S externas → Configuración
+→ Abrir prueba guiada** y siga [la guía paso a paso](docs/PRIMERA_CONEXION_MODBUS.md). El
 ejemplo coincide con el mapa facilitado por el responsable; compruebe su IP actual.
 La primera vez, la IP propuesta es 192.168.1.133, puerto 502 y esclavo 1. Después se propone la última conexión que funcionó o la última prueba con éxito, que se recuerda entre sesiones. Si el proyecto trae su propio mapa guardado, manda el del proyecto.
 
-En Factory I/O seleccione **Modbus TCP/IP Server** y asigne sensores a entradas
+En el simulador de procesos seleccione **Modbus TCP/IP Server** y asigne sensores a entradas
 discretas/input registers y actuadores a coils/holding registers. Confirme IP,
 puerto, Slave ID y direcciones en su instalación; no se asignan automáticamente.
 
@@ -77,7 +77,7 @@ analógicas, `valor GRAFCET = registro / escala`; para 3,14 use escala 100 y reg
 representables detienen la conexión; no hay redondeo ni saturación. Si una variable Entera recibe un valor con decimales, el panel avisa con un aviso ámbar (⚠) que sugiere ponerla como Decimal (2 decimales), y si aun así llega un valor no entero, la conexión se para sin redondear (P-IMP-94). Al cambiar una variable de Booleana a Entera o Decimal, se recoloca sola en el primer registro libre.
 
 Los campos de offset y cantidad de I/Q/AI/AQ están en **Configuración**, en «Canales del servidor» (ya no hay botón «+ Canales»); copie la configuración
-de Factory I/O. Un proyecto sin mapa propio abre con 32 canales digitales (Input y Coil) y 12 numéricos (Input Reg y Holding Reg), con offset 0; no hereda las cantidades de canales de preferencias anteriores, aunque sí el servidor y los tiempos (P-IMP-87). Modbus no permite deducir sus cantidades reales por sondeo en este
+del simulador de procesos. Un proyecto sin mapa propio abre con 32 canales digitales (Input y Coil) y 12 numéricos (Input Reg y Holding Reg), con offset 0; no hereda las cantidades de canales de preferencias anteriores, aunque sí el servidor y los tiempos (P-IMP-87). Modbus no permite deducir sus cantidades reales por sondeo en este
 servidor. Use la **×**, que aparece al pasar el ratón por la asignación, para desasignar, o arrastre desde el propio slot para mover;
 si está conectado, pulse **Desconectar / editar** primero. Con solo entradas se
 admite observación sin motor compilado, también en Pausa. Sin salidas asignadas no se escribe nada; con salidas asignadas, Conectar les pone antes el cero.
@@ -99,7 +99,7 @@ El periodo de servicio es configurable (20 ms iniciales, desde 5 ms). El interva
 incluye latencia y lecturas/escrituras por señal; pulsos breves pueden perderse.
 El panel muestra la última lectura y la última escritura confirmada mientras está
 conectado, no una confirmación física del actuador. La integración se prueba con
-servidores locales simulados: **pendiente validar una escena real con Factory I/O**. Límites conocidos, sin decidir: si se abre otro proyecto mientras se prueba la conexión, el estado puede quedarse en «probando» hasta Desconectar (ya ocurría antes); cerrar la ventana con la red caída sigue sin avisar.
+servidores locales simulados: **pendiente validar una escena real con el simulador de procesos**. Límites conocidos, sin decidir: si se abre otro proyecto mientras se prueba la conexión, el estado puede quedarse en «probando» hasta Desconectar (ya ocurría antes); cerrar la ventana con la red caída sigue sin avisar.
 
 ### Banco de pruebas y comparador de decisiones
 
@@ -180,8 +180,7 @@ Las contribuciones se aceptan según [CONTRIBUTING.md](CONTRIBUTING.md), que per
 
 Las bibliotecas de Qt (PySide6, Qt for Python) van en el ejecutable como ficheros separados, bajo la licencia LGPL v3, y pueden sustituirse por otras versiones compatibles. La clave de distribución del sello de los proyectos `.grafnet` no forma parte del código publicado: se inyecta solo al construir el ejecutable (P-IMP-80). La clave de desarrollo, que sí es pública, está en `escritorio/sello.py`.
 
-Los textos de las licencias de las bibliotecas de terceros van en la carpeta `licencias/`, con un resumen en `licencias/TERCEROS.txt` (P-IMP-97). Factory I/O es una marca de Real Games; GRAFCET Connect no está afiliado a Real Games.
-
+Los textos de las licencias de las bibliotecas de terceros van en la carpeta `licencias/`, con un resumen en `licencias/TERCEROS.txt` (P-IMP-97).
 Este programa se ofrece sin ninguna garantía. Ver el fichero LICENSE para las condiciones completas (P-IMP-90).
 
 ## Lo que falta

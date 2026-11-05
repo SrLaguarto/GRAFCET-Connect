@@ -1,8 +1,8 @@
-# Primera conexión: sigue estos pasos con tus capturas
+# Primera conexión con un simulador de procesos por Modbus: sigue estos pasos con tus capturas
 
 No necesitas crear un GRAFCET para esta prueba: hay uno preparado.
 Esta guía se refiere al último estado de tus capturas; si cambias la configuración
-de Factory I/O, copia los nuevos valores en GRAFCET Connect.
+de tu simulador de procesos, copia los nuevos valores en GRAFCET Connect.
 
 ## 1. Abre el programa y el proyecto preparados
 
@@ -10,7 +10,7 @@ de Factory I/O, copia los nuevos valores en GRAFCET Connect.
    desde la carpeta `implementacion` de este proyecto.
 2. Pulsa el botón **E/S externas** de la barra superior, junto a Reiniciar;
    después **Configuración → Abrir prueba guiada**. La flecha Atrás vuelve al GRAFCET, y el botón de la barra, que en esa vista se llama **Vista GRAFCET**, también.
-3. El título debe indicar «Prueba Factory I O - PM y dos cintas». Este proyecto
+3. El título debe indicar «Prueba Modbus - PM y dos cintas». Este proyecto
    ya tiene etapa inicial, variables y acción. También está disponible en
    `prueba_factoryio_digital/manifest.json`, junto al ejecutable, por si quieres
    abrirlo con **Proyecto → Abrir modelo…**. Al abrirlo, el programa queda en Pausa y sin estado: no hay etapas activas hasta que pulse Ejecutar.
@@ -22,9 +22,9 @@ de Factory I/O, copia los nuevos valores en GRAFCET Connect.
 
 ## 2. Comprueba estos valores, sin cambiar tu escena
 
-En Factory I/O, tus capturas muestran **Modbus TCP/IP Server** y este mapa:
+En el simulador de procesos, tus capturas muestran **Modbus TCP/IP Server** y este mapa:
 
-| Elemento de la escena | Terminal de Factory I/O | Variable de GRAFCET Connect | Área en GRAFCET Connect | Dirección |
+| Elemento de la escena | Terminal del simulador de procesos | Variable de GRAFCET Connect | Área en GRAFCET Connect | Dirección |
 |---|---|---|---|---|
 | Pulsador marcha | Input 0 (I00) | PM | Inputs (entradas digitales 0/1) | 0 |
 | Cinta entrada | Coil 0 (Q00) | Q00 | Coils (señales digitales 0/1) | 0 |
@@ -49,20 +49,20 @@ En GRAFCET Connect abre **Configuración** para comprobar los campos de conexió
 | Espera | Déjalo en **500 ms** |
 
 Una captura anterior muestra 127.0.0.1. Usa la dirección que esté mostrando
-**ahora** Factory I/O en CONFIGURACIÓN y en el centro del DRIVER. El proyecto
+**ahora** el simulador de procesos en CONFIGURACIÓN y en el centro del DRIVER. El proyecto
 preparado tiene 192.168.1.133, según tus últimas dos capturas. La primera vez que usas el programa, la IP propuesta es 192.168.1.133, puerto 502 y esclavo 1; después propone la última conexión que funcionó o la última prueba con éxito. Si el proyecto trae su propio mapa guardado, manda el del proyecto.
 
 Las tres señales son digitales: formato **BOOL (apagado/encendido)** y escala **1**.
-La escala **100** que se ve en Factory I/O sirve para las señales numéricas y no
-debes copiarla en estas tres señales digitales. No cambies los demás ajustes de
-Factory I/O para esta primera prueba.
+La escala **100** que se ve en el simulador de procesos sirve para las señales numéricas y no
+debes copiarla en estas tres señales digitales. No cambies los demás ajustes del
+simulador de procesos para esta primera prueba.
 
 ### Cantidades y direcciones de canales
 
-En **Configuración → Canales del servidor** copia el offset y la cantidad de
-Factory I/O. En tu última captura: offset 0 en las cuatro filas; cantidades
+En **Configuración → Canales del servidor** copia el offset y la cantidad del
+simulador de procesos. En tu última captura: offset 0 en las cuatro filas; cantidades
 **I=16, Q=16, AI=4, AQ=4**. El ejemplo guiado ya contiene esos valores.
-Estos cambios solo ajustan GRAFCET Connect: no crean canales en Factory I/O.
+Estos cambios solo ajustan GRAFCET Connect: no crean canales en el simulador de procesos.
 No se pueden deducir por Modbus: tu servidor responde incluso en dirección 65535.
 Si reduces un rango y una señal quedaría fuera, quítala o muévela primero.
 Con muchos canales, desplaza verticalmente la zona central para ver los demás.
@@ -76,7 +76,7 @@ válido y pulsar Ejecutar (Play). El estado de conexión muestra el detalle al p
 
 ## 3. Comprueba la conexión, todavía sin mover la cinta
 
-1. En Factory I/O deja activo el driver **Modbus TCP/IP Server**. En tu captura
+1. En el simulador de procesos deja activo el driver **Modbus TCP/IP Server**. En tu captura
    aparece un indicador verde y la opción «PARAR»: no pulses PARAR para esta prueba.
    Ese indicador por sí solo no demuestra que GRAFCET Connect esté conectado.
 2. En Configuración puedes pulsar **Probar conexión** (opcional, sin escribir salidas).
@@ -94,7 +94,7 @@ válido y pulsar Ejecutar (Play). El estado de conexión muestra el detalle al p
 Hay un solo control de ejecución: **Ejecutar** (Play) simula y **Pausa** vuelve a editar. Al abrir el ejemplo, el
 programa queda en Pausa; con la conexión viva, en Pausa se siguen observando las entradas (PM) y las salidas asignadas quedan a cero.
 
-1. En Factory I/O vuelve desde DRIVER a la escena con la flecha de atrás y pon
+1. En el simulador de procesos vuelve desde DRIVER a la escena con la flecha de atrás y pon
    la escena en marcha con su botón de reproducción (▶).
 2. En GRAFCET Connect pulsa **Ejecutar** (Play, F5) en la barra superior. El botón pasa
    a decir **Pausa** mientras la simulación corre; Pausa detiene y vuelve a editar,
@@ -106,7 +106,7 @@ programa queda en Pausa; con la conexión viva, en Pausa se siguen observando la
    Al soltarlo, PM vuelve a 0, pero ambas cintas siguen en marcha porque el GRAFCET
    permanece en la etapa 1.
 5. No hace falta generar cajas, activar el Emisor ni probar toda la instalación.
-   Para detener la planta simulada, usa su control de pausa en Factory I/O.
+   Para detener la planta simulada, usa su control de pausa en el simulador de procesos.
    Pausa en GRAFCET Connect pone a cero las salidas: las cintas se paran, y sigue
    observando PM. Para repetir desde la etapa 0, pulsa Reiniciar (Ctrl+R) en
    GRAFCET Connect: mantiene Modbus conectado y, en Ejecutar, vuelve a la etapa 0 leyendo antes las entradas (no escribe salidas iniciales a ciegas). Si
@@ -115,13 +115,13 @@ programa queda en Pausa; con la conexión viva, en Pausa se siguen observando la
 
 Si PM cambia pero Q00 y Q01 no, comprueba primero que GRAFCET Connect está en Play (el botón muestra «Pausa»).
 Si PM y las salidas cambian pero las cintas no, anota ese resultado: no es el mismo problema que
-un fallo de conexión. Si PM no cambia, anota si el pulsador aparece activo en Factory I/O.
+un fallo de conexión. Si PM no cambia, anota si el pulsador aparece activo en el simulador de procesos.
 
 ## Qué significan las palabras
 
 | Texto | Significado para esta conexión |
 |---|---|
-| Host / IP | Dirección del ordenador donde está escuchando Factory I/O. |
+| Host / IP | Dirección del ordenador donde está escuchando el simulador de procesos. |
 | Puerto | Punto de acceso de la comunicación; aquí 502. |
 | Esclavo ID / Unidad | Identificador Modbus; debe coincidir en ambos programas, aquí 1. |
 | Inputs / discrete | Entradas digitales: sensores o pulsadores que GRAFCET Connect lee como 0 o 1. |
@@ -166,13 +166,13 @@ la prueba del pulsador y del movimiento de la cinta desde la interfaz.
   El modelo admite enteros más grandes, pero no todos caben en un registro Modbus.
   No se redondea ni se recorta automáticamente.
 - En las capturas iniciales de tu driver, las cantidades de registros numéricos
-  estaban a 0. Para probar números, habilita registros en Factory I/O y asigna
+  estaban a 0. Para probar números, habilita registros en el simulador de procesos y asigna
   un sensor/actuador numérico de la escena. Añadir una variable Entera en
-  GRAFCET Connect por sí solo no crea ese canal en Factory I/O.
+  GRAFCET Connect por sí solo no crea ese canal en el simulador de procesos.
 - Para una consigna decimal 3,14 con escala 100 se envía el registro 314. La escala
   está fijada ahora en 100 para todas las señales numéricas de GRAFCET Connect,
   tanto de entrada como de salida, incluidos los mapas guardados antes. Mantén
-  el driver Factory I/O también en 100. Factory
+  también en 100 la escala del driver del simulador de procesos. El simulador de procesos
   recibe direcciones y valores, no nombres de variables ni acciones GRAFCET.
 - Para recibir valores con decimales usa una variable **Decimal**: un registro
   125 representa 1,25 y no cabe exactamente en una variable Entera. No se redondea.

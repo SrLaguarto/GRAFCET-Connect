@@ -21,6 +21,3 @@ Sus textos están en las subcarpetas de esta carpeta:
 - ezdxf: MIT. Sus dependencias numpy (BSD-3-Clause y otras), fonttools (MIT),
   pyparsing (MIT) y typing_extensions (PSF-2.0).
 - Python, de la Python Software Foundation: licencia PSF (carpeta Python).
-
-Factory I/O es una marca de Real Games. GRAFCET Connect se comunica con él por
-Modbus TCP, pero no está afiliado a Real Games ni cuenta con su respaldo.

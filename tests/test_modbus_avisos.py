@@ -1,4 +1,4 @@
-"""Avisos y errores de la conexión con Factory I/O: Decimal como numérica, Entera con escala y mensajes legibles."""
+"""Avisos y errores de la conexión con el simulador de procesos: Decimal como numérica, Entera con escala y mensajes legibles."""
 import os
 import tempfile
 import unittest
@@ -35,7 +35,7 @@ class MensajesConversion(unittest.TestCase):
         a = Adaptador(Configuracion(senales=[Senal("nivel", "input-register", 0, "INT16", "100")]), session(m.compile()))
         with self.assertRaises(ErrorConversion) as ctx:
             a.aplicar({"nivel": 130})
-        self.assertEqual(str(ctx.exception), "La entrada «nivel» es Entera, pero Factory I/O ha enviado 1,3. "
+        self.assertEqual(str(ctx.exception), "La entrada «nivel» es Entera, pero el simulador de procesos ha enviado 1,3. "
                                              "Cámbiela a Decimal (2 decimales) en Variables.")
         self.assertEqual(a.sesion.z.values["nivel"], 0, "no se redondea ni se aplica")
         a.aplicar({"nivel": 200})
@@ -47,7 +47,7 @@ class MensajesConversion(unittest.TestCase):
         a = Adaptador(Configuracion(senales=[Senal("temp", "input-register", 0, "INT16", "1000")]), session(m.compile()))
         with self.assertRaises(ErrorConversion) as ctx:
             a.aplicar({"temp": 1234})
-        self.assertIn("La entrada «temp» es Decimal (2 decimales), pero Factory I/O ha enviado 1,234.", str(ctx.exception))
+        self.assertIn("La entrada «temp» es Decimal (2 decimales), pero el simulador de procesos ha enviado 1,234.", str(ctx.exception))
 
     def test_SFIO73_salida_no_representable_nombra_la_variable(self):
         """REQ-EXP-01: una salida con más decimales que el registro, o fuera de su rango, lo dice con el nombre."""
@@ -57,7 +57,7 @@ class MensajesConversion(unittest.TestCase):
         a.sesion.z.values["pos"] = Fraction(2345, 1000)
         with self.assertRaises(ErrorConversion) as ctx:
             a.valores_salida()
-        self.assertTrue(str(ctx.exception).startswith("La salida «pos» vale 2,345 y el registro de Factory I/O solo admite "
+        self.assertTrue(str(ctx.exception).startswith("La salida «pos» vale 2,345 y el registro del simulador de procesos solo admite "
                                                       "2 decimales"), str(ctx.exception))
         a.sesion.z.values["pos"] = Fraction(400)
         with self.assertRaises(ErrorConversion) as ctx:
@@ -77,12 +77,12 @@ class MensajesConversion(unittest.TestCase):
             error = ErrorModbus(str(causa))
             error.__cause__ = causa
             self.assertNotIn("WinError", explicar_fallo(error))
-            self.assertIn("Factory I/O", explicar_fallo(error))
+            self.assertIn("El simulador de procesos", explicar_fallo(error))
 
     def test_SFIO75_el_error_de_conversion_llega_al_estado_del_coordinador(self):
         """REQ-ROB-01: lo que sube hasta el estado es el texto del alumno, no uno genérico ni con «Detalle»."""
         from conexion.coordinador import Coordinador
-        texto = ("La entrada «nivel» es Entera, pero Factory I/O ha enviado 1,3. "
+        texto = ("La entrada «nivel» es Entera, pero el simulador de procesos ha enviado 1,3. "
                  "Cámbiela a Decimal (2 decimales) en Variables.")
         mensaje = Coordinador._mensaje_de_error(ErrorConversion(texto), texto.rstrip("."))
         self.assertTrue(mensaje.startswith(texto[:-1]), mensaje)

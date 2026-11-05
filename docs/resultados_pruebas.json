@@ -1,5 +1,5 @@
 {
- "date": "2026-11-05T13:14:16+01:00",
+ "date": "2026-11-05T14:42:29+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
@@ -5382,7 +5382,7 @@
    "summary": "REQ-SIM-03, REQ-EDT-07: en Play, E/S externas enseña las variables del modelo que se ejecuta; al volver a Pausa y"
   },
   {
-   "test": "test_modbus_panel.PanelTests.test_SFIO43_la_primera_vez_el_servidor_propuesto_es_el_de_factory_io",
+   "test": "test_modbus_panel.PanelTests.test_SFIO43_la_primera_vez_el_servidor_propuesto_es_el_del_simulador",
    "case": "S-FIO43",
    "outcome": "pasa",
    "requirements": [
@@ -6925,7 +6925,7 @@
    "summary": "REQ-DAT-02: la clave debe tener 32 bytes como mínimo y no aparece en la salida."
   },
   {
-   "test": "test_pulido_es.PulidoES.test_SESP01_sin_proyecto_ni_preferencias_usa_factory_io",
+   "test": "test_pulido_es.PulidoES.test_SESP01_sin_proyecto_ni_preferencias_usa_el_del_simulador",
    "case": "S-ESP01",
    "outcome": "pasa",
    "requirements": [

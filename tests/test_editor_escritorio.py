@@ -4213,7 +4213,7 @@ class Interfaz(unittest.TestCase):
         from PySide6.QtGui import QFontMetrics
         from PySide6.QtWidgets import QFrame
         from escritorio.entradas_salidas import PanelES
-        largo = ("Factory I/O cerró o anuló la conexión (WinError 10053). Salidas no garantizadas. Pulsa Conectar para "
+        largo = ("El simulador de procesos cerró o anuló la conexión (WinError 10053). Salidas no garantizadas. Pulsa Conectar para "
                  "reanudar. Detalle: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host")
         p = PanelES()
         try:

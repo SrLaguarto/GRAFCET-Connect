@@ -37,7 +37,7 @@ class Configuracion:
     senales: list[Senal] = field(default_factory=list)
     canales: dict[str, dict[str, int]] = field(default_factory=dict)
 
-    def fijar_escalas_factoryio(self):
+    def fijar_escalas_simulador(self):
         for s in self.senales:
             s.escala = "1" if s.formato == "BOOL" else "100"
 

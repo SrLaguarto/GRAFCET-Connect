@@ -39,7 +39,7 @@ def _decimales_de_escala(escala):
 def _entrada_no_cabe(variable, numero) -> ErrorConversion:
     """El texto cuando un valor que manda la planta no es representable en el tipo de la variable de entrada."""
     cabecera = (f"La entrada «{variable.name}» es {_tipo_legible(variable.type)}, "
-                f"pero Factory I/O ha enviado {texto_numero(numero)}.")
+                f"pero el simulador de procesos ha enviado {texto_numero(numero)}.")
     if variable.type.kind == "int" and Fraction(numero).denominator != 1:
         return ErrorConversion(cabecera + " Cámbiela a Decimal (2 decimales) en Variables.")
     if variable.type.kind == "decimal":
@@ -84,7 +84,7 @@ class Adaptador:
         if s.status != "pausada-estable":
             raise RuntimeError("El motor no está estable")
         if set(muestra) != {x.variable for x in self.entradas}:
-            raise ErrorConversion("Factory I/O no ha enviado todas las entradas asignadas")
+            raise ErrorConversion("El simulador de procesos no ha enviado todas las entradas asignadas")
         cambios = {}
         for senal in self.entradas:
             raw = muestra[senal.variable]
@@ -106,7 +106,7 @@ class Adaptador:
     def _registro_a_valor(senal, v, raw):
         """El valor del motor que representa un registro leído (con signo si es INT16, dividido por la escala)."""
         if type(raw) is not int or not 0 <= raw <= 65535:
-            raise ErrorConversion(f"Factory I/O ha enviado un registro no válido para la entrada «{v.name}»")
+            raise ErrorConversion(f"El simulador de procesos ha enviado un registro no válido para la entrada «{v.name}»")
         numero = raw - 65536 if senal.formato == "INT16" and raw >= 32768 else raw
         leido = Fraction(numero) / Fraction(senal.escala)
         try:
@@ -121,7 +121,7 @@ class Adaptador:
         numero = Fraction(valor) * escala
         if numero.denominator != 1:
             decimales = _decimales_de_escala(escala)
-            motivo = (f"el registro de Factory I/O solo admite {decimales} decimales" if decimales is not None else
+            motivo = (f"el registro del simulador de procesos solo admite {decimales} decimales" if decimales is not None else
                       f"no se puede escribir en el registro con la escala {texto_numero(escala)}")
             raise ErrorConversion(f"La salida «{nombre}» vale {texto_numero(valor)} y {motivo}. "
                                   "Reduzca los decimales de la variable en Variables.")

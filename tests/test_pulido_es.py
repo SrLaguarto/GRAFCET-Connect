@@ -33,7 +33,7 @@ class PulidoES(BaseQt):
         w._cargar()
         return w, w.panel_es
 
-    def test_SESP01_sin_proyecto_ni_preferencias_usa_factory_io(self):
+    def test_SESP01_sin_proyecto_ni_preferencias_usa_el_del_simulador(self):
         """REQ-SIM-03: sin configuración propia ni recordada se proponen servidor y cantidades iniciales de conexión."""
         w, p = self.modelo()
         c = p.obtener()

@@ -91,7 +91,7 @@ def encaja(variable, area):
 
 
 def aviso_escala(variable, senal):
-    """Aviso (ámbar) si una variable Entera va a un registro con escala distinta de 1, como la de Factory I/O (100):
+    """Aviso (ámbar) si una variable Entera va a un registro con escala distinta de 1, como la del simulador de procesos (100):
     la planta manda valores con decimales y una Entera no los admite. Cadena vacía si no hay nada que avisar."""
     if variable is None or senal is None or variable["type"]["kind"] != "int" or senal.formato == "BOOL":
         return ""
@@ -101,7 +101,7 @@ def aviso_escala(variable, senal):
         return ""
     if escala == 1:
         return ""
-    return "Factory I/O manda este valor con decimales: ponga la variable como Decimal (2 decimales)"
+    return "El simulador de procesos manda este valor con decimales: ponga la variable como Decimal (2 decimales)"
 
 
 def areas_variable(variable):

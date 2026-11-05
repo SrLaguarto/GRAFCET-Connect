@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-11-05T13:14:16+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 938 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-11-05T14:42:29+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 938 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -662,7 +662,7 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-EJ02 | REQ-ACT-02, REQ-EVT-01, REQ-EVT-03 | pasa | `test_SEJ02_contador_por_flanco_en_una_etapa` | ejemplo del responsable; una cuenta por cada subida de I02 con 1 activa, ninguna en 0. |
 | S-ESC01 | REQ-ACT-03, REQ-EDT-09 | pasa | `test_SESC01_conflictos_seguros_no_compilan` | activación/activación, desactivación/desactivación, activación/desactivación y misma etapa. |
 | S-ESC02 | REQ-ACT-03, REQ-ACT-05 | pasa | `test_SESC02_no_son_conflictos_seguros` | la misma constante, etapas en secuencia y eventos distintos no impiden compilar. |
-| S-ESP01 | REQ-SIM-03 | pasa | `test_SESP01_sin_proyecto_ni_preferencias_usa_factory_io` | sin configuración propia ni recordada se proponen servidor y cantidades iniciales de conexión. |
+| S-ESP01 | REQ-SIM-03 | pasa | `test_SESP01_sin_proyecto_ni_preferencias_usa_el_del_simulador` | sin configuración propia ni recordada se proponen servidor y cantidades iniciales de conexión. |
 | S-ESP02 | REQ-DAT-02, REQ-SIM-03 | pasa | `test_SESP02_recordado_incluye_canales_y_escalas_sin_asignaciones` | un proyecto sin mapa usa la conexión y los tiempos recordados (no las cantidades de canales, |
 | S-ESP03 | REQ-DAT-02, REQ-SIM-03 | pasa | `test_SESP03_json_del_proyecto_manda_sobre_preferencias` | servidor, cantidades y escala del proyecto tienen prioridad sobre la última configuración. |
 | S-ESP04 | REQ-DAT-02, REQ-EDT-01 | pasa | `test_SESP04_primera_guarda_adjunta_mapa_y_viaja_con_el_proyecto` | la primera guarda de proyecto incluye la conexión y la copia transportada conserva sus ajustes. |
@@ -729,7 +729,7 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-FIO40 | REQ-SIM-02, REQ-SIM-03 | pasa | `test_SFIO40_conexion_activa_actualiza_variables_y_mapa_sin_reconectar` | altas y asignaciones se publican entre ciclos conservando TCP y canales existentes. |
 | S-FIO41 | REQ-DAT-02, REQ-SIM-03 | pasa | `test_SFIO41_canales_fijados_a_mano_se_conservan_y_se_avisa_si_un_area_se_queda_sin_canales` | con las cantidades de canal escritas a mano no se inventan canales; si una variable |
 | S-FIO42 | REQ-EDT-07, REQ-SIM-03 | pasa | `test_SFIO42_camino_de_simulacion_el_panel_sigue_a_las_variables_del_modelo_en_ejecucion` | en Play, E/S externas enseña las variables del modelo que se ejecuta; al volver a Pausa y |
-| S-FIO43 | REQ-SIM-03 | pasa | `test_SFIO43_la_primera_vez_el_servidor_propuesto_es_el_de_factory_io` | sin nada recordado ni mapa guardado, el panel propone 192.168.1.133, puerto 502 y esclavo 1; no se |
+| S-FIO43 | REQ-SIM-03 | pasa | `test_SFIO43_la_primera_vez_el_servidor_propuesto_es_el_del_simulador` | sin nada recordado ni mapa guardado, el panel propone 192.168.1.133, puerto 502 y esclavo 1; no se |
 | S-FIO44 | REQ-SIM-03 | pasa | `test_SFIO44_recuerda_el_ultimo_servidor_que_conecto_y_lo_propone_en_proyectos_nuevos_y_al_reiniciar` | tras conectar con éxito, host, puerto y esclavo se recuerdan en los ajustes de la aplicación y se |
 | S-FIO45 | REQ-SIM-03 | pasa | `test_SFIO45_la_prueba_de_conexion_con_exito_tambien_recuerda_y_un_fallo_no` | «Probar conexión» con éxito recuerda el servidor; una conexión que falla no lo cambia. |
 | S-FIO46 | REQ-DAT-02, REQ-SIM-03 | pasa | `test_SFIO46_el_mapa_guardado_del_proyecto_manda_sobre_el_servidor_recordado` | un proyecto con su configuración Modbus guardada abre con la suya, aunque haya un servidor |

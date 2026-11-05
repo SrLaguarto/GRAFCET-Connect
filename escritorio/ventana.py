@@ -228,7 +228,7 @@ class AcercaDe(QDialog):
         cab.addWidget(titulo, 1)
         lay.addLayout(cab)
         self.l_licencia = QLabel(f"{TITULO} es software libre y de código abierto, publicado con la licencia GPL-3.0. "
-                                 f"Su código está en GitHub:<br><a href=\"{URL_CODIGO}\">{URL_CODIGO}</a><br><br>"
+                                 f"Su código está en <a href=\"{URL_CODIGO}\">GitHub</a>.<br><br>"
                                  "Para usarlo en un producto o servicio que no pueda cumplir la GPL-3.0, el "
                                  "autor ofrece licencias comerciales: pídalas a través de GitHub.")
         self.l_licencia.setWordWrap(True)
@@ -247,8 +247,7 @@ class AcercaDe(QDialog):
         lay.addLayout(fila)
         garantia = QLabel("Este programa se ofrece sin ninguna garantía. Las licencias, la propia y las de las "
                           "bibliotecas incluidas, están en la carpeta «licencias». Interfaz con Qt for Python "
-                          "(PySide6), bajo licencia LGPL v3. Factory I/O es una marca de Real Games; GRAFCET "
-                          "Connect no está afiliado a Real Games.")
+                          "(PySide6), bajo licencia LGPL v3.")
         garantia.setWordWrap(True)
         garantia.setStyleSheet("color: #6b7385; font-size: 11px")
         lay.addWidget(garantia)
@@ -2540,11 +2539,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ejemplo", choices=list(EJEMPLOS), help="ejemplo con el que empezar")
     ap.add_argument("--captura", metavar="PNG", help="guardar una captura de la ventana y salir (comprobación)")
     ap.add_argument("--prueba-contenedor",action="store_true",help=argparse.SUPPRESS)
+    ap.add_argument("--prueba-distribucion", metavar="GRAFNET", help=argparse.SUPPRESS)
     args = ap.parse_args(argv if argv is not None else sys.argv[1:])
     if args.prueba_contenedor:
         from .proyecto_archivo import comprobar_contenedor
         comprobar_contenedor()
         return 0
+    if args.prueba_distribucion:
+        # Comprobación de construcción: clave de distribución (no la de desarrollo) y que abre su propio ejemplo.
+        from grafcet.contenedor import sello_valido
+        datos = Path(args.prueba_distribucion).read_bytes()
+        return 0 if not sello.DESARROLLO and sello_valido(datos, sello.CLAVE) else 3
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName(TITULO)
     app.setWindowIcon(QIcon(str(ICONO_PROGRAMA)))

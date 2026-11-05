@@ -18,7 +18,7 @@ CLAVE_ANTERIOR = "anterior"  # variable de una salida del mapa anterior en un ce
 
 def explicar_fallo(exc) -> str:
     """Una primera frase corta y legible, sin códigos, para los fallos de red habituales (conexión anulada o reiniciada
-    por Factory I/O, rechazada, tiempo agotado); cadena vacía si no se reconoce (el mensaje sigue siendo el técnico).
+    por el simulador de procesos, rechazada, tiempo agotado); cadena vacía si no se reconoce (el mensaje sigue siendo el técnico).
     Solo explica: no decide nada del estado ni del comportamiento."""
     causa = exc.__cause__ if isinstance(exc.__cause__, OSError) else exc
     texto = str(exc)
@@ -26,14 +26,14 @@ def explicar_fallo(exc) -> str:
     if codigo is None and (m := re.search(r"WinError (\d+)", texto)):
         codigo = int(m.group(1))
     if codigo in WINERROR_CORTADA or isinstance(causa, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
-        return "Factory I/O cerró la conexión"
+        return "El simulador de procesos cerró la conexión"
     if codigo == WINERROR_RECHAZADA or isinstance(causa, ConnectionRefusedError):
-        return ("Factory I/O no acepta la conexión: compruebe que la simulación está en marcha, "
-                "el servidor Modbus activo y la IP")
+        return ("El simulador de procesos no acepta la conexión: compruebe que está en marcha, "
+                "con el servidor Modbus activo, y la IP")
     if codigo == WINERROR_TIEMPO or isinstance(causa, TimeoutError) or "Tiempo de espera Modbus agotado" in texto:
-        return "Factory I/O no ha respondido a tiempo"
+        return "El simulador de procesos no ha respondido a tiempo"
     if "El servidor cerró la conexión" in texto:
-        return "Factory I/O cerró la conexión"
+        return "El simulador de procesos cerró la conexión"
     return ""
 
 
