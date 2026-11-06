@@ -7,8 +7,8 @@ Una barrita de color indica el tipo de la variable (Bool, Decimal, Entera, Cualq
 from dataclasses import replace
 import json
 import copy
-from PySide6.QtCore import Signal, Qt, QMimeData, QSize, QRect, QEvent
-from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPixmap
+from PySide6.QtCore import Signal, Qt, QMimeData, QSize, QRect, QEvent, QRegularExpression, QTimer
+from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPixmap, QRegularExpressionValidator
 from fractions import Fraction
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox, QSizePolicy,
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxL
                                QStyledItemDelegate)
 
 from conexion.adaptador import texto_numero
-from conexion.configuracion import ETIQUETA_CANAL, CONEXION_INICIAL, CANALES_INICIALES, Configuracion, Senal
+from conexion.configuracion import ETIQUETA_CANAL, CONEXION_INICIAL, CANALES_INICIALES, Configuracion, Senal, normalizar_host
 
 AREAS = {"discrete": "Entradas digitales (Discrete Inputs)",
          "coil": "Salidas digitales (Coils)",
@@ -62,10 +62,13 @@ ESTILO_PANEL = """
     QListWidget#listaES { background:transparent; border:0; outline:0; }
     QScrollArea#scrollES { background:white; border:1px solid #d4e7e8; border-radius:7px; }
     QScrollArea#scrollES > QWidget > QWidget { background:white; }
-    QWidget#cuerpoES QScrollBar:vertical { background:transparent; width:8px; margin:0; }
-    QWidget#cuerpoES QScrollBar::handle:vertical { background:#aacfc3; border-radius:3px; min-height:24px; }
-    QWidget#cuerpoES QScrollBar::add-line:vertical, QWidget#cuerpoES QScrollBar::sub-line:vertical { height:0; }
-    QWidget#cuerpoES QScrollBar::add-page:vertical, QWidget#cuerpoES QScrollBar::sub-page:vertical { background:transparent; }
+    QScrollArea#scrollCuerpoES, QScrollArea#scrollCuerpoES > QWidget > QWidget#cuerpoES { background:transparent; }
+    QWidget#conexionES QScrollBar:vertical { background:#dcebeb; width:12px; margin:0; border-radius:6px; }
+    QWidget#conexionES QScrollBar::handle:vertical { background:#7fa7a8; border-radius:5px; margin:1px; min-height:30px; }
+    QWidget#conexionES QScrollBar:horizontal { background:#dcebeb; height:12px; margin:0; border-radius:6px; }
+    QWidget#conexionES QScrollBar::handle:horizontal { background:#7fa7a8; border-radius:5px; margin:1px; min-width:30px; }
+    QWidget#conexionES QScrollBar::add-line, QWidget#conexionES QScrollBar::sub-line { height:0; width:0; }
+    QWidget#conexionES QScrollBar::add-page, QWidget#conexionES QScrollBar::sub-page { background:transparent; }
     QPushButton#quitarES { background:transparent; color:#637d75; border:0; padding:0; font-size:14px; }
     QPushButton#quitarES:hover { color:#b13d3d; }
     QPushButton#quitarES:disabled { color:#8a9c95; }
@@ -93,8 +96,9 @@ def encaja(variable, area):
 
 def aviso_escala(variable, senal):
     """Aviso (ámbar) si una variable Entera va a un registro con escala distinta de 1, como la del simulador de procesos (100):
-    la planta manda valores con decimales y una Entera los redondea. Cadena vacía si no hay nada que avisar."""
-    if variable is None or senal is None or variable["type"]["kind"] != "int" or senal.formato == "BOOL":
+    la planta manda valores con decimales y una Entera los redondea. Solo para lo que el programa RECIBE (entradas): una salida
+    Entera con escala 100 (5 → 500) no pierde nada. Cadena vacía si no hay nada que avisar."""
+    if variable is None or senal is None or variable["role"] != "input" or variable["type"]["kind"] != "int"             or senal.formato == "BOOL":
         return ""
     try:
         escala = Fraction(senal.escala)
@@ -263,7 +267,7 @@ class TerminalES(QFrame):
         self.marca = None
         if aviso:  # señal ámbar junto a la fila: no impide nada, solo avisa
             self.marca = self._crear_marca(aviso)
-            self.nombre.setToolTip(aviso)
+        self.nombre.setToolTip(self._ayuda_nombre(aviso))  # el nombre entero, aunque la etiqueta lo recorte con «…»
         self.valor = QLabel("—" if variable else "", self)
         self.valor.setStyleSheet("color:#526e66; font-size:10px")
         self.valor.setVisible(analogica)
@@ -320,6 +324,11 @@ class TerminalES(QFrame):
                 l.addWidget(self.b_quitar)
         self.setToolTip(f"{AREAS[area]} · dirección {direccion}\nArrastra una variable. Botón derecho para quitar o configurar.")
 
+    def _ayuda_nombre(self, aviso=""):
+        """Ayuda de la etiqueta del nombre: el nombre entero (la etiqueta lo recorta) y, si lo hay, el aviso."""
+        nombre = self.variable["name"] if self.variable else ""
+        return "\n".join(x for x in (nombre, aviso) if x)
+
     @staticmethod
     def _crear_marca(texto):
         marca = QLabel("⚠")
@@ -337,7 +346,7 @@ class TerminalES(QFrame):
         if self.marca is not None:
             self.marca.setToolTip(texto)
             self.marca.setVisible(bool(texto))
-        self.nombre.setToolTip(texto)
+        self.nombre.setToolTip(self._ayuda_nombre(texto))
         self.nombre.setStyleSheet("color:#9a5b00" if texto else "color:#203b45")
 
     def mimeData(self):
@@ -538,6 +547,138 @@ class _ComboConfiguracion(_SinRueda, QComboBox):
     pass
 
 
+class _Octeto(QLineEdit):
+    """Una de las cuatro cajas de la IP: solo cifras, hasta 255. Tres cifras o un punto pasan a la siguiente; Retroceso en
+    una caja vacía vuelve a la anterior; pegar «a.b.c.d» reparte los números."""
+
+    def __init__(self, campo, indice):
+        super().__init__()
+        self.campo, self.indice, self._previo = campo, indice, ""
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setFixedWidth(46)
+        self.setMaxLength(15)  # lo que cabe al pegar una IP entera; al teclear nunca pasa de 3
+        self.setValidator(QRegularExpressionValidator(QRegularExpression(r"[0-9.]*"), self))
+        self.setStyleSheet("padding: 4px 2px")
+        self.textEdited.connect(self._editado)
+
+    def _editado(self, texto):
+        texto = texto.strip()
+        if "." in texto or len(texto) > 3:
+            if self.campo._repartir(texto, self.indice):
+                return
+            texto = self._previo
+        elif texto and int(texto) > 255:
+            texto = self._previo
+        if texto != self.text():
+            self.setText(texto)
+        self._previo = texto
+        if len(texto) == 3 and self.cursorPosition() == 3:
+            self.campo._ir_a(self.indice + 1)
+
+    def keyPressEvent(self, e):
+        clave = e.key()
+        if clave in (Qt.Key.Key_Period, Qt.Key.Key_Comma, Qt.Key.Key_Space) or e.text() == ".":
+            if self.text():
+                self.campo._ir_a(self.indice + 1)
+            e.accept()
+            return
+        if clave == Qt.Key.Key_Backspace and not self.text() and not self.hasSelectedText():
+            self.campo._ir_a(self.indice - 1, al_final=True)
+            e.accept()
+            return
+        if clave == Qt.Key.Key_Left and self.cursorPosition() == 0 and not self.hasSelectedText():
+            self.campo._ir_a(self.indice - 1, al_final=True)
+            e.accept()
+            return
+        if clave == Qt.Key.Key_Right and self.cursorPosition() == len(self.text()) and not self.hasSelectedText():
+            self.campo._ir_a(self.indice + 1)
+            e.accept()
+            return
+        super().keyPressEvent(e)
+
+    def sin_ceros(self):
+        """Al salir de la caja: «010» pasa a «10» y «000» a «0»."""
+        if self.text().isdigit() and self.text() != str(int(self.text())):
+            self.setText(str(int(self.text())))
+            self._previo = self.text()
+
+    def focusOutEvent(self, e):
+        super().focusOutEvent(e)
+        self.sin_ceros()
+        QTimer.singleShot(0, self.campo._comprobar_salida)
+
+
+class CampoIPv4(QWidget):
+    """Dirección IPv4 en cuatro cajas con los puntos fijos entre ellas. Mismo uso que un QLineEdit en lo que necesita el panel:
+    `text()`, `setText()` y la señal `editingFinished` (al salir de la dirección o pulsar Intro)."""
+    editingFinished = Signal()
+    NOMBRES = ("primer", "segundo", "tercer", "cuarto")
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(3)
+        self.cajas = []
+        for i in range(4):
+            if i:
+                punto = QLabel(".")
+                punto.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                lay.addWidget(punto)
+            caja = _Octeto(self, i)
+            caja.setAccessibleName(f"IP, {self.NOMBRES[i]} número")
+            caja.returnPressed.connect(self._intro)
+            lay.addWidget(caja)
+            self.cajas.append(caja)
+        lay.addStretch(1)
+        for anterior, caja in zip(self.cajas, self.cajas[1:]):
+            self.setTabOrder(anterior, caja)
+        self.setFocusProxy(self.cajas[0])
+        self.setAccessibleName("IP (Host)")
+
+    def text(self):
+        return ".".join(c.text() for c in self.cajas)
+
+    def _intro(self):
+        for caja in self.cajas:
+            caja.sin_ceros()
+        self.editingFinished.emit()
+
+    def setText(self, texto):
+        partes = normalizar_host(texto).split(".")
+        for caja, parte in zip(self.cajas, partes):
+            caja.setText(parte)
+            caja._previo = parte
+
+    def _ir_a(self, indice, al_final=False):
+        if 0 <= indice < 4:
+            caja = self.cajas[indice]
+            caja.setFocus(Qt.FocusReason.TabFocusReason)
+            if al_final:
+                caja.setCursorPosition(len(caja.text()))
+            else:
+                caja.selectAll()
+
+    def _repartir(self, texto, desde):
+        """Reparte un texto pegado «a.b.c.d» (entero, desde la primera caja; o parte de él, desde la caja `desde`). False si no son números de 0 a 255."""
+        partes = texto.replace(",", ".").split(".")
+        if partes and partes[-1] == "" and len(partes) > 1:
+            partes.pop()  # un punto final: «192.168.» se trata como «192.168»
+        if len(partes) == 4:
+            desde = 0  # una dirección entera se reparte desde la primera caja, sea cual sea la que se pegó
+        if not partes or len(partes) > 4 - desde or not all(p.isdigit() and len(p) <= 3 and int(p) <= 255 for p in partes):
+            return False
+        for caja, parte in zip(self.cajas[desde:], partes):
+            caja.setText(parte)
+            caja._previo = parte
+        self._ir_a(min(desde + len(partes), 3))
+        return True
+
+    def _comprobar_salida(self):
+        if not any(c.hasFocus() for c in self.cajas):
+            self.editingFinished.emit()
+
+
 class DialogoConfiguracion(QDialog):
     def closeEvent(self, evento):
         panel = self.parent()
@@ -556,6 +697,7 @@ class PanelES(QWidget):
     cargar_archivo = Signal()
     abrir_prueba = Signal()
     volver = Signal()
+    estado_cambiado = Signal(str, str)  # (estado, mensaje): lo que enseña el indicador de la barra de simulación
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -575,6 +717,8 @@ class PanelES(QWidget):
         self.firma_modelo = ()
         self.conexion_defecto = CONEXION_INICIAL  # (host, puerto, esclavo) que propone `cargar` si no hay mapa guardado
         self.aviso = ""  # asignaciones quitadas al poner al día con el modelo; dura hasta la siguiente acción sobre el mapa
+        self.aviso_host_defecto = ""  # la dirección recordada no era una IP (la ventana lo dice): se avisa en el mapa nuevo
+        self.aviso_host = ""  # lo mismo, ya en el estado: hasta que el usuario aplique el mapa con una IP escrita
         self.pista_canales = ""  # variables sin dónde asignarse porque su área tiene cantidad 0
         self.redondeos = {}  # {variable: (recibido, usado)} de la conexión; ver mostrar_redondeos
         self.avisos_escala = ""  # variables Enteras con escala distinta de 1 (ámbar, junto a su fila y en la nota)
@@ -647,7 +791,8 @@ class PanelES(QWidget):
         scroll = QScrollArea()
         scroll.setObjectName("scrollES")
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.lienzo)
         self.cuentas = {}
@@ -671,7 +816,15 @@ class PanelES(QWidget):
         zona.addWidget(columnas[0], 1)
         zona.addWidget(scroll, 3)
         zona.addWidget(columnas[1], 1)
-        raiz.addWidget(cuerpo, 1)
+        # con la ventana pequeña el cuerpo entero se desplaza (barras cuando hacen falta) en vez de cortarse
+        self.scroll_cuerpo = QScrollArea()
+        self.scroll_cuerpo.setObjectName("scrollCuerpoES")
+        self.scroll_cuerpo.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_cuerpo.setWidgetResizable(True)
+        self.scroll_cuerpo.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_cuerpo.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_cuerpo.setWidget(cuerpo)
+        raiz.addWidget(self.scroll_cuerpo, 1)
         # Pie: leyenda de los colores de tipo y resumen de lo asignado
         pie = QFrame()
         pie.setObjectName("pieES")
@@ -716,7 +869,7 @@ class PanelES(QWidget):
         servidor = QLabel("Conexión Modbus")
         servidor.setStyleSheet("font-size:15px; color:#167d79; padding:8px 0")
         configuracion.addWidget(servidor)
-        self.host = QLineEdit()
+        self.host = CampoIPv4()
         self.puerto = _SpinConfiguracion()
         self.puerto.setRange(1, 65535)
         self.unidad = _SpinConfiguracion()
@@ -727,7 +880,6 @@ class PanelES(QWidget):
         self.timeout = _SpinConfiguracion()
         self.timeout.setRange(10, 10000)
         self.timeout.setSuffix(" ms")
-        self.host.setFixedWidth(260)
         self.puerto.setFixedWidth(110)
         self.unidad.setFixedWidth(110)
         self.host.setToolTip("Copia la dirección del software que actúa como servidor Modbus. Debe coincidir con el servidor activo.")
@@ -885,6 +1037,7 @@ class PanelES(QWidget):
         self.check.setToolTip(mensaje)
         self.estado.setStyleSheet(f"color:{'#205d35' if conectado else '#9d302b' if fallo else '#6a5637' if self._hubo_conexion else '#526e66'}")
         self.estado.setVisible(True)
+        self.estado_cambiado.emit(estado, mensaje)
 
     def admite(self, vid, area):
         v = next((v for v in self.variables if v["id"] == vid), None)
@@ -979,8 +1132,11 @@ class PanelES(QWidget):
                                    modelo=doc["id"], canales=copy.deepcopy(CANALES_INICIALES),
                                    )
             self.escalas_base = dict(prefs.get("escalas", {}))
+            self.aviso_host = self.aviso_host_defecto
         else:
             self.escalas_base = {f"{s.area}:{s.direccion}": s.escala for s in config.senales}
+            self.aviso_host = getattr(config, "aviso_host", "") or (
+                self.aviso_host if self.doc is not None and self.doc["id"] == doc["id"] and config.host == self.host.text() else "")
         config, quitadas = self._depurar(doc, config, nombres)
         quitadas = [*avisos, *quitadas]
         self.doc = doc
@@ -1014,7 +1170,7 @@ class PanelES(QWidget):
             for col, texto in ((1, v["name"]), (2, "Entrada" if v["role"] == "input" else "Salida"), (3, TIPOS[v["type"]["kind"]])):
                 item = QTableWidgetItem(texto)
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                item.setToolTip(v["id"])
+                item.setToolTip(texto if col == 1 else v["id"])
                 self.tabla.setItem(fila, col, item)
             area = _ComboConfiguracion()
             for clave in areas_variable(v):
@@ -1101,7 +1257,7 @@ class PanelES(QWidget):
             self._pintar_nota()
 
     def _pintar_nota(self):
-        partes = (self.aviso, self.avisos_escala, self.pista_canales, "Hay variables nuevas o cambiadas: se verán al desconectar" if self.pendiente else "")
+        partes = (self.aviso_host, self.aviso, self.avisos_escala, self.pista_canales, "Hay variables nuevas o cambiadas: se verán al desconectar" if self.pendiente else "")
         self.estado.fijar_nota(" · ".join(t for t in partes if t))
 
     def obtener(self):
@@ -1111,7 +1267,7 @@ class PanelES(QWidget):
                 senales.append(Senal(v["id"], self.tabla.cellWidget(fila, 4).currentData(),
                                      self.tabla.cellWidget(fila, 5).value(), self.tabla.cellWidget(fila, 6).currentData(),
                                      "1" if v["type"]["kind"] == "bool" else self.tabla.cellWidget(fila, 7).text()))
-        c = Configuracion(self.host.text().strip(), self.puerto.value(), self.unidad.value(),
+        c = Configuracion(self.host.text(), self.puerto.value(), self.unidad.value(),
                           self.periodo.value(), self.timeout.value(), self.doc["id"], senales)
         c.canales = ({area: {"offset": self.offsets[area].value(), "cantidad": self.cantidades[area].value()}
                       for area in AREAS})
@@ -1129,6 +1285,7 @@ class PanelES(QWidget):
         self.config = c
         self.escalas_base.update({f"{s.area}:{s.direccion}": s.escala for s in c.senales})
         self.aviso = ""  # el usuario ya ha actuado sobre el mapa
+        self.aviso_host = ""  # (y ha puesto la IP, que obtener() ya validó)
         self._dibujar()
         if not getattr(self,"conectado",False):
             self.estado.setText("Configuración actualizada · desconectado. Pulsa «Conectar».")
@@ -1161,7 +1318,7 @@ class PanelES(QWidget):
             item.setData(ROL_COLOR, color_tipo(v))
             item.setData(ROL_ASIGNADA, v["id"] in asignadas)
             item.setData(ROL_ACTIVO, False)
-            item.setToolTip(f"{TIPOS[v['type']['kind']]} · " + (f"asignada a {asignadas[v['id']]}" if v["id"] in asignadas else "sin asignar"))
+            item.setToolTip(f"{v['name']}\n{TIPOS[v['type']['kind']]} · " + (f"asignada a {asignadas[v['id']]}" if v["id"] in asignadas else "sin asignar"))
             if v["type"]["kind"] == "duration":
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
             (self.lista_entradas if v["role"] == "input" else self.lista_salidas).addItem(item)

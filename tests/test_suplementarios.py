@@ -84,9 +84,11 @@ class Hallazgos(unittest.TestCase):
         with self.assertRaises(DiagnosticError) as ctx:
             ed.add_variable("n", "internal", {"kind": "int"}, initial="5")
         self.assertEqual((ctx.exception.diagnostics[0].code, ctx.exception.diagnostics[0].field), ("D-FORMATO", "initialValue"))
-        v = ed.add_variable("e", "input", {"kind": "bool"}, initial=True)  # las entradas las da el escenario
+        with self.assertRaises(DiagnosticError):  # P-IMP-117: tampoco una entrada declara valor inicial
+            ed.add_variable("e", "input", {"kind": "bool"}, initial=True)
+        v = ed.add_variable("e", "input", {"kind": "bool"})
         ed.change_variable(v, role="internal")
-        self.assertIs(next(x for x in ed.model["variables"] if x["id"] == v)["initialValue"], False, "deja de ser entrada: 0")
+        self.assertIs(next(x for x in ed.model["variables"] if x["id"] == v)["initialValue"], False, "cambia de rol: 0")
         with self.assertRaises(DiagnosticError):
             ed.change_variable(v, initialValue=True)
 

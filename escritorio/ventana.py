@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import html
 import json
+import os
 import re
 from time import perf_counter
 from math import ceil
@@ -28,6 +29,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
 
 from . import recursos_ui  # Registra los iconos vectoriales incorporados.
 from . import propiedades_archivo
+from . import actualizaciones
 from grafcet.diagnostics import DiagnosticError
 from grafcet.engine import Session
 from grafcet.examples import EJEMPLOS
@@ -37,7 +39,7 @@ from grafcet.timeutil import parse_duration
 from grafcet.view import Vista, auto_layout, layout_from_presentation, t_trunc
 
 from .diagrama import COL, VistaDiagrama, imagen
-from .edicion import HERRAMIENTAS, Edicion, sin_codigos
+from .edicion import HERRAMIENTAS, Edicion, aviso_valores_iniciales, quitar_valores_iniciales, sin_codigos
 from .propiedades import PanelPropiedades, Paleta
 from .navegacion import Navegacion
 from .leyenda import Leyenda
@@ -47,7 +49,7 @@ from .alto_opciones import agrandar_para_transicion
 from .paneles import PanelPlegable, DivisorPlegable, PilaActual
 from .variables import PanelVariables
 from .entradas_salidas import CONEXION_INICIAL, PanelES
-from conexion.configuracion import ARCHIVO, CANALES_INICIALES, Configuracion
+from conexion.configuracion import ARCHIVO, CANALES_INICIALES, Configuracion, aviso_host, normalizar_host
 from conexion.coordinador import Coordinador
 
 TITULO = "GRAFCET Connect"
@@ -419,7 +421,7 @@ class _RespuestaModbus(QObject):
 
 
 class Ventana(ArchivosProyecto, QMainWindow):
-    def __init__(self, ajustes: QSettings | None = None) -> None:
+    def __init__(self, ajustes: QSettings | None = None, obtener=None) -> None:
         super().__init__()
         self.setWindowTitle(TITULO)
         self.resize(1360, 860)
@@ -472,6 +474,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._parametros_recordados = self._leer_parametros_recordados()
         self._conexion_recordada = tuple(self._parametros_recordados[k] for k in ("host", "puerto", "unidad"))
         self.panel_es.conexion_defecto = self._conexion_recordada
+        self.panel_es.aviso_host_defecto = getattr(self, "_aviso_host_recordado", "")
         self.panel_es.parametros_defecto = copy.deepcopy(self._parametros_recordados)
         central = self.takeCentralWidget()
         self.paginas_es = QStackedWidget()
@@ -484,7 +487,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.pestanas_vistas=QTabBar();self.pestanas_vistas.setExpanding(False);self.pestanas_vistas.setDrawBase(True)
         for texto in ('GRAFCET','PLANOS','E/S externas'):self.pestanas_vistas.addTab(texto)
         self.pestanas_vistas.setStyleSheet("QTabBar {background:#e4eae9; border:0;} QTabBar::tab {min-width:100px; padding:8px 20px; margin:5px 3px 0 0; background:transparent; color:#536169; border:0; border-top-left-radius:9px; border-top-right-radius:9px;} QTabBar::tab:selected {background:white; color:#20343b;} QTabBar::tab:hover:!selected {background:#d7e1df;}")
-        disposicion.addWidget(self.pestanas_vistas)
+        # La fila de arriba: las pestañas a la izquierda y, a la derecha del todo, la luz de la conexión externa (`luz_es`)
+        self.fila_pestanas=QWidget();self.fila_pestanas.setObjectName('filaPestanas');self.fila_pestanas.setAttribute(Qt.WidgetAttribute.WA_StyledBackground,True)
+        self.fila_pestanas.setStyleSheet('QWidget#filaPestanas {background:#e4eae9;}')
+        fila_p=QHBoxLayout(self.fila_pestanas);fila_p.setContentsMargins(0,0,6,0);fila_p.setSpacing(0)
+        fila_p.addWidget(self.pestanas_vistas);fila_p.addStretch(1)
+        disposicion.addWidget(self.fila_pestanas)
         self.aviso_traer=QWidget();self.aviso_traer.setObjectName('avisoSeleccionPlanos');self.aviso_traer.setStyleSheet('QWidget#avisoSeleccionPlanos {background:#f3e9cd; color:#574922; border-radius:3px;} QWidget#avisoSeleccionPlanos QLabel {background:transparent;} QWidget#avisoSeleccionPlanos QPushButton {background:white; color:#3b403b; border:1px solid #9b8959; padding:6px 12px; border-radius:3px;} QWidget#avisoSeleccionPlanos QPushButton:hover {background:#fffaf0; border-color:#665526;} QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja {background:#27665c; color:white; border-color:#1d5048;} QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja:hover {background:#1b5149;}');fila=QHBoxLayout(self.aviso_traer);fila.setContentsMargins(12,7,12,7);fila.addWidget(QLabel('PLANOS · Selecciona el GRAFCET para la hoja'))
         self.b_confirmar_traer=QPushButton('Añadir selección a la hoja');self.b_confirmar_traer.setObjectName('confirmarSeleccionHoja');fila.addWidget(self.b_confirmar_traer);cancelar=QPushButton('Cancelar');fila.addWidget(cancelar);fila.addStretch(1)
         self.b_confirmar_traer.clicked.connect(self.confirmar_traer);cancelar.clicked.connect(self.cancelar_traer)
@@ -500,6 +508,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.panel_es.aplicar.connect(self._persistir_mapa_modbus)
         self._barra_herramientas()
         self._paneles()
+        self.panel_es.estado_cambiado.connect(self._luz_es)
+        self._version_nueva: actualizaciones.Resultado | None = None
+        self.comprobador = actualizaciones.Comprobador(self, obtener)
+        self.comprobador.resultado.connect(self._resultado_actualizacion)
         self.nuevo()
         self._cargar_config_modbus(self.edicion.ed.model)
         for nombre in ("izquierdo","derecho","inferior"):
@@ -614,6 +626,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_borrar = self._accion("&Borrar la selección\tSupr", lambda: self.edicion and self.edicion.borrar(), "Del")
         self.a_debajo = self._accion("&Añadir debajo\tCtrl+Enter", lambda: self.edicion and self.edicion.anadir_debajo(), "Ctrl+Return")
         self.a_debajo.setToolTip("Con una etapa seleccionada: transición y etapa enlazadas debajo (Ctrl+Intro)")
+        # El atajo (Ctrl+Mayús+Izquierda/Derecha) lo trata VistaDiagrama.keyPressEvent: aquí solo va en el texto, sin QShortcut,
+        # para no crear un atajo ambiguo.
+        self.a_girar_izq = self._accion("Girar transición en sentido &antihorario	Ctrl+Mayús+Izquierda",
+                                        lambda: self.edicion and self.edicion.girar_transiciones(-1))
+        self.a_girar_der = self._accion("Girar transición en sentido &horario	Ctrl+Mayús+Derecha",
+                                        lambda: self.edicion and self.edicion.girar_transiciones(1))
         self.a_cortar = self._accion("Cortar", lambda: self._portapapeles_accion("cortar"), "Ctrl+X")
         self.a_copiar = self._accion("Copiar", lambda: self._portapapeles_accion("copiar"), "Ctrl+C")
         self.a_pegar = self._accion("Pegar", lambda: self._portapapeles_accion("pegar"), "Ctrl+V")
@@ -629,7 +647,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_enviar_lamina=self._accion("Enviar a plano…",self.enviar_seleccion_lamina)
         edicion.addAction(self.a_enviar_lamina)
         edicion.addSeparator()
-        for a in (self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo):
+        for a in (self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo, self.a_girar_izq, self.a_girar_der):
             edicion.addAction(a)
         edicion.addSeparator()
         for a in self.a_herr.values():
@@ -642,8 +660,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
             sim.addAction(a)
         m_ajustes = bar.addMenu("A&justes")
         m_ajustes.addAction("&Ajustes de simulación…", self.lecturas)
+        self.a_actualizar_arranque = self._accion("&Buscar actualizaciones al arrancar", self._buscar_al_arrancar, marcable=True)
+        self.a_actualizar_arranque.blockSignals(True)
+        self.a_actualizar_arranque.setChecked(actualizaciones.al_arrancar_activo(self.ajustes))
+        self.a_actualizar_arranque.blockSignals(False)
+        m_ajustes.addAction(self.a_actualizar_arranque)
         ayuda = bar.addMenu("A&yuda")
         ayuda.addAction("&Leyenda del dibujo", self.leyenda)
+        ayuda.addAction("&Buscar actualizaciones…", lambda: self.buscar_actualizaciones(True))
         ayuda.addAction("&Acerca de GRAFCET Connect…", self.acerca)
         for menu in (archivo, edicion, ver, ejemplos, sim, m_ajustes, ayuda):
             bar.removeAction(menu.menuAction())
@@ -723,7 +747,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setWidget(der)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # con la ventana pequeña, también se desplaza a los lados
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         # Página de edición: la herramienta, la selección y los diagnósticos (REQ-EDT-09)
         pag = QWidget()
         pag.setObjectName("panelVariables")
@@ -754,10 +779,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
         pl.addStretch(1)
         self.derecho = PilaActual()
         self.derecho.addWidget(self.scroll)
-        pag_scroll = QScrollArea()  # si no cabe en alto, se desplaza (el ancho es el del panel, sin barra horizontal)
+        pag_scroll = QScrollArea()  # si no cabe, se desplaza en alto y en ancho
         pag_scroll.setWidgetResizable(True)
         pag_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        pag_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        pag_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        pag_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         pag_scroll.setWidget(pag)
         self.derecho.addWidget(pag_scroll)
         self.derecho.setMinimumWidth(300)  # al simular; al editar, el mismo margen de ancho que el panel izquierdo
@@ -832,6 +858,26 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.l_firma.setStyleSheet(f"color: {COL['muted']}")
         self.l_firma.hide()
         sb.addWidget(self.l_firma)
+        self.aviso_version = QFrame()  # aviso discreto y descartable de versión nueva (no modal)
+        self.aviso_version.setObjectName("avisoVersion")
+        self.aviso_version.setStyleSheet("QFrame#avisoVersion { background: #e8f5f3; border: 1px solid #a2d2cd; border-radius: 4px; } "
+                                         "QFrame#avisoVersion QPushButton { padding: 1px 8px; }")
+        av = QHBoxLayout(self.aviso_version)
+        av.setContentsMargins(8, 1, 4, 1)
+        self.l_version = QLabel()
+        av.addWidget(self.l_version)
+        self.b_descargar = QPushButton("Descargar")
+        self.b_descargar.clicked.connect(self._descargar_version)
+        self.b_ahora_no = QPushButton("Ahora no")
+        self.b_ahora_no.clicked.connect(self._descartar_version)
+        av.addWidget(self.b_descargar)
+        av.addWidget(self.b_ahora_no)
+        self.aviso_version.setFixedHeight(20)  # no más alto que la barra de estado: al mostrarse no debe cambiar su altura
+        self.b_descargar.setFixedHeight(18)
+        self.b_ahora_no.setFixedHeight(18)
+        av.setContentsMargins(8, 0, 4, 0)
+        self.aviso_version.hide()
+        sb.addWidget(self.aviso_version)
         # el mensaje temporal sustituye al texto fijo mientras dura (si no, se dibujan uno encima del otro)
         sb.messageChanged.connect(lambda texto: self.l_aviso.setVisible(not texto))
         sb.addPermanentWidget(self.l_lect)
@@ -894,15 +940,18 @@ class Ventana(ArchivosProyecto, QMainWindow):
             QTableWidget, QListWidget { background: white; border: 0; gridline-color: #e4eff1;
                 selection-background-color: #e3f3f0; selection-color: #126a68; }
             QListWidget#paletaElementos::item { padding-left: 7px; border: 0; }
+            QListWidget#paletaElementos QScrollBar:vertical { width: 7px; }  /* la paleta mide justo dos columnas de fichas */
             QListWidget#paletaElementos::item:hover { background: #f0f8f7; }
             QHeaderView::section { background: #eaf6f5; border: 0; padding: 6px 4px; color: #197d81; }
             QScrollArea { border: 0; background: transparent; }
-            QScrollBar:horizontal { height: 7px; background: #f2f8f8; margin: 0; }
-            QScrollBar::handle:horizontal { background: #c5dddd; min-width: 24px; border-radius: 3px; }
+            QScrollBar:horizontal { height: 12px; background: #dcebeb; margin: 0; border-radius: 6px; }
+            QScrollBar::handle:horizontal { background: #7fa7a8; min-width: 30px; border-radius: 5px; margin: 1px; }
+            QScrollBar::handle:horizontal:hover { background: #5e8e90; }
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
             QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
-            QScrollBar:vertical { width: 7px; background: #f2f8f8; margin: 0; }
-            QScrollBar::handle:vertical { background: #c5dddd; min-height: 24px; border-radius: 3px; }
+            QScrollBar:vertical { width: 12px; background: #dcebeb; margin: 0; border-radius: 6px; }
+            QScrollBar::handle:vertical { background: #7fa7a8; min-height: 30px; border-radius: 5px; margin: 1px; }
+            QScrollBar::handle:vertical:hover { background: #5e8e90; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
             QSplitter::handle { background: #eef7f7; }
@@ -915,6 +964,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.tb_sim.addAction(self.a_ejecutar)
         self.tb_sim.addSeparator()
         self.tb_sim.addAction(self.a_reiniciar)
+        self.luz_es = QToolButton()  # estado de la conexión externa (Modbus), a la vista mientras se simula
+        self.luz_es.setObjectName("luzES")
+        self.luz_es.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.luz_es.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.luz_es.setStyleSheet("QToolButton#luzES { border: 0; background: transparent; padding: 3px 6px; }")
+        self.luz_es.clicked.connect(lambda: self.mostrar_es())
+        self.fila_pestanas.layout().addWidget(self.luz_es)  # al final de la fila de pestañas, no junto a Reiniciar
+        self._luz_es("desconectado", "")
         self.addToolBar(self.tb_sim)
         self.tb_conexion = QToolBar("Conexión")
         self.tb_conexion.setObjectName("barraConexion")
@@ -1088,6 +1145,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if not self._salir_de_edicion():
             if contenedor is not None:contenedor.cerrar()
             return False
+        quitadas = quitar_valores_iniciales(op.doc)  # P-IMP-117: ninguna variable declara un valor inicial fuera del grafcet
         layout = layout_from_presentation(op.presentations[0]) if op.presentations else {}
         avisos = [str(d) for d in op.diagnostics]
         ayuda = (f"Modelo abierto de {ruta}. "
@@ -1103,6 +1161,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
             checked.setChecked(False)
             self.grupo.setExclusive(True)
         self._cargar()
+        if quitadas:
+            if self.edicion is not None:
+                self.edicion.ed.dirty = True  # guardar escribe el arreglo; abrir solo no firma ni guarda nada
+            QMessageBox.information(self, TITULO, aviso_valores_iniciales(quitadas))
         return True
 
     def abrir(self) -> None:
@@ -1277,7 +1339,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         return [("Pegar", (lambda: self._portapapeles_accion("pegar", punto)) if self._portapapeles is not None else None)]
 
     def _acciones_edicion(self, on: bool) -> None:
-        for a in (*self.a_herr.values(), self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo):
+        for a in (*self.a_herr.values(), self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo, self.a_girar_izq, self.a_girar_der):
             a.setEnabled(on)
         self._actualizar_portapapeles()
 
@@ -2050,7 +2112,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _leer_conexion_recordada(self) -> tuple[str, int, int]:
         """El último (host, puerto, esclavo) con el que se conectó o se probó con éxito; la primera vez, la configuración inicial."""
         a = self.ajustes
-        host = str(a.value("modbus/host", CONEXION_INICIAL[0]) or "").strip()
+        crudo = a.value("modbus/host", CONEXION_INICIAL[0])
+        self._aviso_host_recordado = aviso_host(crudo)  # lo que no es IP no se cambia en silencio: el panel avisa
+        host = normalizar_host(crudo)  # «localhost» pasa a 127.0.0.1; lo que no es IPv4, a la inicial (sin guardarlo todavía)
         puerto, unidad = a.value("modbus/puerto", CONEXION_INICIAL[1], type=int), a.value("modbus/unidad", CONEXION_INICIAL[2], type=int)
         if not host or not 1 <= puerto <= 65535 or not 0 <= unidad <= 255:  # un valor roto no debe dejar sin conexión propuesta
             return CONEXION_INICIAL
@@ -2096,6 +2160,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._parametros_recordados = datos
         self._conexion_recordada = tuple(datos[k] for k in ("host", "puerto", "unidad"))
         self.panel_es.conexion_defecto = self._conexion_recordada
+        self.panel_es.aviso_host_defecto = ""  # (ya se guardó una IP, con éxito)
         self.panel_es.parametros_defecto = copy.deepcopy(datos)
 
     def _recordar_conexion(self) -> None:
@@ -2214,7 +2279,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_planos.setToolTip("Volver al GRAFCET" if planos else "Editar planos, plantillas y cajetín")
         self.a_ejecutar.setEnabled(not(es or planos or pendiente));self.a_reiniciar.setEnabled(not(es or planos or pendiente))
         editar=self.modo=="editar" and not planos and not pendiente and not getattr(self,"solo_lectura",False)
-        for a in (*self.a_herr.values(),self.a_debajo):a.setEnabled(editar)
+        for a in (*self.a_herr.values(),self.a_debajo,self.a_girar_izq,self.a_girar_der):a.setEnabled(editar)
         e=self.edicion
         self.a_deshacer.setEnabled(not pendiente and (editar or planos) and e is not None and bool(e.ed.undo_stack));self.a_rehacer.setEnabled(not pendiente and (editar or planos) and e is not None and bool(e.ed.redo_stack));self.a_borrar.setEnabled(editar and e is not None and bool(e.sel))
         self.a_dependencias.setEnabled(not planos) if hasattr(self,"a_dependencias") else None
@@ -2421,9 +2486,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 item = t.item(i, j)
                 if item is None:
                     item = QTableWidgetItem(c)
+                    item.setToolTip(c)  # el texto entero, aunque la celda lo recorte
                     t.setItem(i, j, item)
                 elif item.text() != c:
                     item.setText(c)
+                    item.setToolTip(c)
                 if j == col_color and item.foreground().color() != QColor(COL[color]):
                     item.setForeground(QColor(COL[color]))
 
@@ -2552,6 +2619,67 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def acerca(self) -> None:
         AcercaDe(self).exec()
 
+    # -- indicador de la conexión externa -------------------------------------------------------
+    def _luz_es(self, estado: str, mensaje: str = "") -> None:
+        """Punto de color y texto breve en la barra de simulación: verde conectada, gris desconectada, rojo error."""
+        color, texto = {"conectado": ("#3f9d4a", "conectada"), "error": ("#d64545", "error"),
+                        "diagnostico": ("#d64545", "error")}.get(estado, ("#8a949c", "desconectada"))
+        punto = QPixmap(12, 12)
+        punto.fill(Qt.GlobalColor.transparent)
+        p = QPainter(punto)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(QColor(color))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(1, 1, 10, 10)
+        p.end()
+        self.luz_es.setIcon(QIcon(punto))
+        self.luz_es.setIconSize(QSize(12, 12))
+        self.luz_es.setText(f"E/S externas: {texto}")
+        self.luz_es.setToolTip((mensaje + "\n" if mensaje else "") + "Clic para abrir la vista de E/S externas")
+        self.luz_es.setAccessibleName(f"E/S externas: {texto}")
+        self.luz_es.setProperty("estadoLuz", texto)
+
+    # -- actualizaciones -----------------------------------------------------------------------
+    def _buscar_al_arrancar(self, on: bool) -> None:
+        self.ajustes.setValue(actualizaciones.CLAVE_AL_ARRANCAR, bool(on))
+        self.ajustes.sync()
+
+    def buscar_actualizaciones(self, manual: bool = False) -> None:
+        """Consulta la última versión publicada en segundo plano. En el arranque (manual=False) no dice nada si falla."""
+        if manual:
+            self.statusBar().showMessage("Buscando actualizaciones…", 3000)
+        self.comprobador.comprobar(manual)
+
+    def _resultado_actualizacion(self, manual: bool, r: actualizaciones.Resultado) -> None:
+        if r.estado == "nueva":
+            if manual:
+                self.aviso_version.hide()
+                caja = QMessageBox(QMessageBox.Icon.Information, TITULO,
+                                   f"Hay una versión nueva de GRAFCET Connect ({r.version}). Esta es la {APP_VERSION}.", parent=self)
+                descargar = caja.addButton("Descargar", QMessageBox.ButtonRole.AcceptRole)
+                caja.addButton("Cerrar", QMessageBox.ButtonRole.RejectRole)
+                caja.exec()
+                if caja.clickedButton() is descargar:
+                    QDesktopServices.openUrl(QUrl(actualizaciones.url_segura(r.url)))
+            elif actualizaciones.ignorada(self.ajustes) != r.version:
+                self._version_nueva = r
+                self.l_version.setText(f"Hay una versión nueva de GRAFCET Connect ({r.version}).")
+                self.aviso_version.show()
+        elif manual:
+            texto = ("Ya tiene la última versión de GRAFCET Connect." if r.estado == "al_dia" else
+                     "No se ha podido comprobar: sin conexión o sin respuesta del servidor.")
+            QMessageBox.information(self, TITULO, texto)
+
+    def _descargar_version(self) -> None:
+        if self._version_nueva:
+            QDesktopServices.openUrl(QUrl(actualizaciones.url_segura(self._version_nueva.url)))
+        self.aviso_version.hide()
+
+    def _descartar_version(self) -> None:
+        if self._version_nueva:
+            actualizaciones.ignorar(self.ajustes, self._version_nueva.version)
+        self.aviso_version.hide()
+
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
@@ -2597,6 +2725,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.modelo and not w.abrir_ruta(Path(args.modelo)):
         return 1 if args.captura else 0
     w.show()
+    if (not args.captura and not os.environ.get(actualizaciones.VARIABLE_SIN_ACTUALIZAR)
+            and actualizaciones.al_arrancar_activo(w.ajustes)):
+        QTimer.singleShot(1500, w.buscar_actualizaciones)  # con la ventana ya a la vista; en un hilo, sin bloquear
     if args.captura:
         QTimer.singleShot(300, lambda: (w.grab().save(args.captura), app.quit()))
     return app.exec()

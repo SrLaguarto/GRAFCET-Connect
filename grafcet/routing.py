@@ -6,6 +6,99 @@ TALLO_E = 16  # tramo vertical mínimo de un enlace al salir de una etapa o al l
 TALLO_T = 24  # ... y a cada lado de una transición: el trazo nunca llega de lado
 TALLO_CORTO = 8  # si no caben los tramos enteros, se acortan hasta aquí antes de dar un rodeo
 
+# Sentido de la evolución a través de una transición (`presentation.transitionOrientations`; en el modelo de la vista,
+# `orient` de cada transición, y lo que falta o no se conoce es «abajo»): el vector (dx, dy) en el dibujo (y crece hacia
+# abajo). El trazo de la transición es perpendicular a él (`NORMAL`): vertical si la evolución es horizontal.
+SENTIDO = {"abajo": (0, 1), "derecha": (1, 0), "arriba": (0, -1), "izquierda": (-1, 0)}
+NORMAL = {"abajo": (1, 0), "derecha": (0, -1), "arriba": (-1, 0), "izquierda": (0, 1)}  # el sentido girado 90° a la izquierda en pantalla
+
+
+def orientacion(t: dict[str, Any]) -> str:
+    """`abajo` (la de siempre), `derecha`, `arriba` o `izquierda` de una transición de la vista."""
+    o = t.get("orient")
+    return o if o in ("derecha", "arriba", "izquierda") else "abajo"
+
+
+def punto_t(t: dict[str, Any], tx: float, ty: float, u: float, v: float = 0.0) -> tuple[float, float]:
+    """El punto del dibujo a `u` del centro de la transición (tx, ty) en el sentido de su evolución y a `v` en el de su
+    trazo (`NORMAL`)."""
+    (dx, dy), (nx, ny) = SENTIDO[orientacion(t)], NORMAL[orientacion(t)]
+    return tx + dx * u + nx * v, ty + dy * u + ny * v
+
+
+def _mas(p: tuple[float, float], d: tuple[int, int], k: float) -> tuple[float, float]:
+    return p[0] + d[0] * k, p[1] + d[1] * k
+
+
+def _limpia(pts: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Sin puntos repetidos ni intermedios de un tramo recto."""
+    out: list[tuple[float, float]] = []
+    for p in pts:
+        if out and out[-1] == p:
+            continue
+        if len(out) > 1 and ((out[-2][0] == out[-1][0] == p[0]) or (out[-2][1] == out[-1][1] == p[1])):
+            out[-1] = p
+            continue
+        out.append(p)
+    return out
+
+
+def _ruta_t(a: tuple[float, float], da: tuple[int, int], ta: float, b: tuple[float, float], db: tuple[int, int],
+            tb: float) -> list[tuple[float, float]]:
+    """Recorrido ortogonal de `a` (una etapa: sale en vertical, sentido `da`, con al menos `ta` de tramo recto) a `b` (llega en
+    el sentido `db`, con al menos `tb`): una «L» si cabe; si no, un rodeo. `db` es perpendicular a `da` (evolución
+    horizontal) u opuesto (evolución hacia arriba: el enlace da la vuelta, por debajo de los dos o por un carril al lado)."""
+    a0, b0 = _mas(a, da, ta), _mas(b, db, -tb)
+    if db[1] == 0:  # llega en horizontal
+        k = (a0[0], b0[1])
+        if (k[1] - a0[1]) * da[1] >= 0 and (b0[0] - k[0]) * db[0] >= 0:
+            return _limpia([a, k, b])
+        return _limpia([a, a0, (b0[0], a0[1]), b0, b])  # rodeo: salir, cruzar por el costado y llegar por el eje de `b`
+    lejos = max(a0[1] * da[1], b0[1] * da[1]) * da[1]
+    if abs(a[0] - b[0]) >= H + 10:
+        return _limpia([a, (a[0], lejos), (b[0], lejos), b])
+    carril = max(a[0], b[0]) + H + 26
+    return _limpia([a, a0, (carril, a0[1]), (carril, b0[1]), b0, b])
+
+
+def _enlace_t(t: dict[str, Any], tx: float, ty: float, px: float, py: float, rol: str, simul: bool,
+              entrada: float | None = None) -> list[tuple[float, float]]:
+    """El recorrido de un enlace de una transición girada (`orient` ≠ «abajo»): sale de la etapa (px, py) por abajo y llega
+    a la transición en el sentido de su evolución, o sale de la transición en ese sentido y llega a la etapa por arriba. Con
+    una simultaneidad en ese lado, llega al doble trazo (a la altura de la etapa, medida sobre el trazo)."""
+    o = orientacion(t)
+    d, n = SENTIDO[o], NORMAL[o]
+    v = (px - tx) * n[0] + (py - ty) * n[1]
+    if rol == "pre":
+        fin = punto_t(t, tx, ty, -(SIMUL + BARRA_GROSOR), v) if simul else (tx, ty)
+        return _ruta_t((px, py + H), (0, 1), TALLO_E, fin, d, 0 if simul else TALLO_T)
+    ini = punto_t(t, tx, ty, SIMUL + BARRA_GROSOR, v) if simul else (tx, ty)
+    return _ruta_t((px, py - H), (0, -1), TALLO_E, ini, (-d[0], -d[1]), 0 if simul else TALLO_T)[::-1]
+
+
+def desplazar_tramos(pts: list[tuple[float, float]], tramos: Any) -> list[tuple[float, float]]:
+    """Aplica a un recorrido ortogonal el ajuste manual de `route["tramos"]` ({"n": nº de puntos con que se guardó, "<i>":
+    desplazamiento del tramo i}): cada tramo interior se corre en perpendicular a su eje, con sus dos puntos (los vecinos,
+    perpendiculares, se alargan o acortan). Los desplazamientos son relativos al recorrido automático, así que siguen valiendo
+    si se mueve lo que enlaza; si el recorrido cambia de forma (otro nº de puntos), el ajuste ya no se aplica."""
+    if not isinstance(tramos, dict) or str(tramos.get("n")) != str(len(pts)):
+        return pts
+    out = list(pts)
+    for clave, valor in tramos.items():
+        try:
+            i, d = int(clave), float(valor)
+        except (TypeError, ValueError):
+            continue  # "n" y lo que no sea un número
+        if not 0 < i < len(pts) - 2:
+            continue
+        a, b = out[i], out[i + 1]
+        if a[0] == b[0]:
+            out[i], out[i + 1] = (a[0] + d, a[1]), (b[0] + d, b[1])
+        elif a[1] == b[1]:
+            out[i], out[i + 1] = (a[0], a[1] + d), (b[0], b[1] + d)
+    return out
+
+
 def posiciones(M):
     return {n["id"]: (n["x"] + SX, n["y"]) for key in ("steps", "macros", "transitions") for n in M.get(key, [])}
 
@@ -87,12 +180,16 @@ def _flechas_de_lazo(out: list[dict[str, Any]]) -> set[str]:
 
 
 def _separar_lazos(M, out, pos):
-    """Preferir carriles sin cruces con enlaces y cajas, conservando las rutas fijadas a mano."""
+    """Preferir carriles sin cruces con enlaces y cajas, conservando las rutas fijadas a mano. Un tramo que el usuario ha
+    colocado a mano (`route` de su estilo) manda: ni se mueve ni aparta a los demás enlaces, de modo que se puede dejar encima
+    de otro enlace (P-IMP-113); la separación automática es solo entre enlaces sin colocar a mano."""
+    def a_mano(e):
+        return bool(M.get("linkStyles", {}).get(e["id"], {}).get("route"))
     lazos = [e for e in out if len(e["pts"]) == 6 and e["rol"] in ("pre", "post")
              and any(b[1] < a[1] for a, b in zip(e["pts"], e["pts"][1:]))
-             and not M.get("linkStyles", {}).get(e["id"], {}).get("route")]
+             and not a_mano(e) and not e.get("orient")]
     ids = {e["id"] for e in lazos}
-    fijos = [e for e in out if e["id"] not in ids]
+    fijos = [e for e in out if e["id"] not in ids and not a_mano(e)]
     cajas = [(n["id"], pos[n["id"]][0]-H, pos[n["id"]][1]-H,
               pos[n["id"]][0]+H, pos[n["id"]][1]+H)
              for coll in ("steps", "macros") for n in M.get(coll, [])]
@@ -163,8 +260,10 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
     # Una misma etapa comparte la línea de selección/convergencia entre todas sus ramas.
     salidas, entradas = {}, {}
     for sid, (px, py) in pos.items():
-        salen = [t for t in M["transitions"] if sid in t.get("preDib", t["pre"]) and not t.get("simulPre")]
-        llegan = [t for t in M["transitions"] if sid in t.get("postDib", t["post"]) and not t.get("simulPost")]
+        salen = [t for t in M["transitions"] if sid in t.get("preDib", t["pre"]) and not t.get("simulPre")
+                 and orientacion(t) == "abajo"]
+        llegan = [t for t in M["transitions"] if sid in t.get("postDib", t["post"]) and not t.get("simulPost")
+                  and orientacion(t) == "abajo"]
         if len(salen) > 1:
             limites = [t["y"] - TALLO_T for t in salen if t["y"] > py + H]
             salidas[sid] = max(py + H + TALLO_E, min([py + H + 20] + limites))
@@ -173,10 +272,17 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
             entradas[sid] = min(py - H - TALLO_E, max([py - H - 20] + limites))
     for t in M["transitions"]:
         tx, ty = pos[t["id"]]
+        giro = orientacion(t)
         for sid in t.get("preDib", t["pre"]):
             if sid not in pos:
                 continue
             px, py = pos[sid]
+            if giro != "abajo":  # evolución girada: recorrido propio, sin carriles (tiradores en sus tramos interiores)
+                simul = bool(t.get("simulPre"))
+                out.append({"id": f"{t['id']}|{sid}|pre", "tid": t["id"], "sid": sid, "rol": "pre", "orient": giro,
+                            "pts": _enlace_t(t, tx, ty, px, py, "pre", simul), "tallos": (TALLO_E, 0 if simul else TALLO_T),
+                            "simul": simul})
+                continue
             if py > ty:  # retorno: salir por debajo de la etapa y entrar por encima de la transición o su barra
                 fin = ty - SIMUL - BARRA_GROSOR if t.get("simulPre") else ty
                 alto = fin - 30
@@ -195,6 +301,12 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
             if sid not in pos:
                 continue
             px, py = pos[sid]
+            if giro != "abajo":
+                simul = bool(t.get("simulPost"))
+                out.append({"id": f"{t['id']}|{sid}|post", "tid": t["id"], "sid": sid, "rol": "post", "orient": giro,
+                            "pts": _enlace_t(t, tx, ty, px, py, "post", simul), "tallos": (0 if simul else TALLO_T, TALLO_E),
+                            "simul": simul})
+                continue
             if py <= ty:  # enlace ascendente, por la izquierda del parcial
                 lx, top = _carril(lanes, left, min_x, t, tx, px), entradas.get(sid, py - H - TALLO_E)
                 pts = [(tx, ty), (tx, ty + TALLO_T), (lx, ty + TALLO_T), (lx, top), (px, top), (px, py - H)]
@@ -237,7 +349,9 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
         route = style.get("route", {})
         # Un tramo fijado a mano tampoco se come el tramo vertical mínimo de cada extremo
         bajo, alto = pts[0][1] + e["tallos"][0], pts[-1][1] - e["tallos"][1]
-        if "laneX" in route and len(pts) == 6:
+        if e.get("orient"):  # una transición girada tiene su propio recorrido; a mano solo se corren sus tramos interiores
+            pts = desplazar_tramos(pts, route.get("tramos"))
+        elif "laneX" in route and len(pts) == 6:
             x = float(route["laneX"]) + SX
             y1 = max(float(route.get("exitY", bajo)), bajo)
             y2 = min(float(route.get("entryY", alto)), alto)
@@ -252,7 +366,7 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
     _separar_lazos(M, out, pos)
     for e in out:
         pts = e["pts"]
-        if e["rol"] == "post" and len(pts) == 6 and pts[-3][0] > pts[-1][0] + H + 8:
+        if e["rol"] == "post" and len(pts) == 6 and pts[-3][0] > pts[-1][0] + H + 8 and not e.get("orient"):
             # Retorno desde la derecha: pasar por encima de las marcas de las acciones,
             # conservando la unión final entre la transición anterior y la etapa.
             destino = next((s for s in M["steps"] if s["id"] == e["sid"]), {})
@@ -275,6 +389,8 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
                           "axis": "x" if a[0] == b[0] else "y"}
                          for i, (a, b) in enumerate(zip(pts, pts[1:]))
                          if 0 < i < len(pts)-2 and a != b]
+        if e.get("orient"):
+            e["handles"] = [dict(h, orient=True) for h in e["handles"]]
         if "routePts" in e:
             # Los dos codos protectores son automáticos; conservar los tres tiradores de la ruta original.
             e["handles"] = [dict(h, routeSegment={1: 1, 2: 2, 5: 3}[h["segment"]])
@@ -293,7 +409,12 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
         has_join = e["rol"] == "post" and len(joins) > 1 and joins[0] == e["id"]
         e["arrowKinds"] = ["flow"] + (["join"] if has_join or "join" in style.get("arrows", {}) else [])
         # Por defecto, solo la flecha de recorrido de un enlace que sube, una por lazo; la de unión se muestra a mano
-        for key, visible, segment, ratio in (("flow", e["id"] in auto, default, 0.5),
+        # Un enlace que sale de una transición girada («derecha», «arriba», «izquierda») lleva siempre su flecha, junto a la
+        # transición (la evolución no es de arriba abajo: IEC 60848 la indica con una flecha)
+        girado = e["rol"] == "post" and e.get("orient") is not None
+        primero = ((pts[1][0]-pts[0][0])**2 + (pts[1][1]-pts[0][1])**2)**0.5 if girado else 0
+        for key, visible, segment, ratio in (("flow", girado or e["id"] in auto, 0 if girado else default,
+                                              min(0.5, 16 / primero) if primero else 0.5),
                                              ("join", False, len(pts)-2, 0.5)):
             config = style.get("arrows", {}).get(key, {})
             if not config.get("visible", visible):

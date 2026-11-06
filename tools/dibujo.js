@@ -9,6 +9,10 @@ const NS = "http://www.w3.org/2000/svg";
 const SX = 100;       // margen izquierdo del dibujo
 const H = 22;         // semilado de la etapa cuadrada
 const TB = 8;         // trazo de 16 px frente al lado de etapa de 44 px
+// Sentido de la evolución de una transición (`orient` en su vista; lo que falta es «abajo») y el de su trazo: grafcet/routing.py
+const SENTIDO = {abajo: [0, 1], derecha: [1, 0], arriba: [0, -1], izquierda: [-1, 0]};
+const NORMAL = {abajo: [1, 0], derecha: [0, -1], arriba: [-1, 0], izquierda: [0, 1]};
+const orientacion = t => (["derecha", "arriba", "izquierda"].includes(t.orient) ? t.orient : "abajo");
 const BARRA_GROSOR = 8;
 const ACT_LINK = 26;  // enlace etapa–acción (≈0,6 del lado)
 const ACT_MIN = 80;   // anchura mínima de una acción
@@ -168,34 +172,67 @@ function drawDiagram(svg, M, S, opciones = {}) {
     parcialDeDibujo = t.partial;
     const tx = t.x + SX, ty = t.y, ob = (S.transitions||{})[t.id] || {}, rol = roles[t.id] || "";
     const pre = (t.preDib || t.pre).map(p => pos[p]), post = (t.postDib || t.post).map(p => pos[p]);
-    if (t.simulPre) {
+    const giro = orientacion(t), horizontal = giro === "derecha" || giro === "izquierda";
+    if (giro !== "abajo") {  // evolución girada: lo mismo que abajo, sobre el eje de la evolución (grafcet/routing.py: punto_t)
+      const [dx, dy] = SENTIDO[giro], [nx, ny] = NORMAL[giro];
+      const P = (u, v = 0) => [tx + dx * u + nx * v, ty + dy * u + ny * v];
+      const trazo = (a, b) => el("path", {d:`M${a[0]},${a[1]} L${b[0]},${b[1]}`, class:"link " + rol}, links);
+      [[-1, pre, t.simulPre || pre.length > 1], [1, post, t.simulPost]].forEach(([signo, otros, hay]) => {
+        if (!hay) return;
+        const vs = [...otros.map(q => (q.x - tx) * nx + (q.y - ty) * ny), 0], lo = Math.min(...vs) - 8, hi = Math.max(...vs) + 8;
+        const u1 = signo * SIMUL, u2 = signo * (SIMUL + BARRA_GROSOR);
+        const a = P(u1 + signo, lo), b = P(u2 - signo, hi);
+        el("rect", {x:Math.min(a[0], b[0]), y:Math.min(a[1], b[1]), width:Math.abs(b[0] - a[0]), height:Math.abs(b[1] - a[1]), class:"sync-gap"}, bars);
+        [u1, u2].forEach(u => { const q = P(u, lo), r = P(u, hi);
+          el("line", {x1:q[0], y1:q[1], x2:r[0], y2:r[1], class:"dbl " + rol}, bars); });
+        trazo(P(u1), [tx, ty]);
+      });
+      if (!pre.length) trazo(P(-TALLO_T), [tx, ty]);
+      if (!post.length) trazo([tx, ty], P(TALLO_T));
+    }
+    if (giro === "abajo" && t.simulPre) {
       const xs = [...pre.map(p=>p.x), tx], yy = ty - 14;
       el("rect", {x:Math.min(...xs)-8,y:yy-BARRA_GROSOR+1,width:Math.max(...xs)-Math.min(...xs)+16,height:BARRA_GROSOR-2,class:"sync-gap"}, bars);
       [yy, yy-BARRA_GROSOR].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl " + rol}, bars));
       el("path", {d:`M${tx},${yy} V${ty}`, class:"link " + rol}, links);
     }
-    if (t.simulPost) {
+    if (giro === "abajo" && t.simulPost) {
       const xs = [...post.map(p=>p.x), tx], yy = ty + 14;
       el("rect", {x:Math.min(...xs)-8,y:yy+1,width:Math.max(...xs)-Math.min(...xs)+16,height:BARRA_GROSOR-2,class:"sync-gap"}, bars);
       [yy, yy+BARRA_GROSOR].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl " + rol}, bars));
       el("path", {d:`M${tx},${ty} V${yy}`, class:"link " + rol}, links);
     }
-    if (!pre.length) el("path", {d:`M${tx},${ty-24} V${ty}`, class:"link " + rol}, links);    // transición fuente
-    if (!post.length) el("path", {d:`M${tx},${ty} V${ty+24}`, class:"link " + rol}, links);   // transición sumidero
+    if (giro === "abajo" && !pre.length) el("path", {d:`M${tx},${ty-24} V${ty}`, class:"link " + rol}, links);    // transición fuente
+    if (giro === "abajo" && !post.length) el("path", {d:`M${tx},${ty} V${ty+24}`, class:"link " + rol}, links);   // transición sumidero
     const cls = ["tr", roles[t.id] || "", ob.validated?"validated":"", ob.fireable?"fireable":"", cleared.has(t.id)?"cleared":"",
                  blk && blk.element === t.id ? "question" : ""].join(" ");
     const g = el("g", {class:cls}, bars);
     el("title", {}, g).textContent = `Transición ${t.label}: validada ${ob.validated?"sí":"no"}, receptividad ${ob.receptivity?"verdadera":"falsa"}` +
       (ob.forced ? "; su parcial está forzado y no evoluciona" : "");
-    el("line", {x1:tx-TB, x2:tx+TB, y1:ty, y2:ty, class:"bar"}, g);
-    const tl = t.showLabel !== false ? txt(g, tx-TB-6, ty+5, `(${t.label})`, {"text-anchor":"end", class:"tdes"}) : null;
-    const tc = segText(g, tx+TB+8, ty+5, t.cond, "tcond", "start", S.truth || {});
+    // Con el trazo vertical (evolución horizontal), la designación va debajo y la receptividad encima, horizontales y centradas
+    el("line", horizontal ? {x1:tx, x2:tx, y1:ty-TB, y2:ty+TB, class:"bar"} : {x1:tx-TB, x2:tx+TB, y1:ty, y2:ty, class:"bar"}, g);
+    const yc = horizontal ? ty - TB - 9 : ty + 5;
+    const tl = t.showLabel !== false ? (horizontal ? txt(g, tx, ty+TB+19, `(${t.label})`, {"text-anchor":"middle", class:"tdes"})
+                                                   : txt(g, tx-TB-6, ty+5, `(${t.label})`, {"text-anchor":"end", class:"tdes"})) : null;
+    const tc = horizontal ? segText(g, tx, yc, t.cond, "tcond", "middle", S.truth || {})
+                          : segText(g, tx+TB+8, yc, t.cond, "tcond", "start", S.truth || {});
     geo.trans[t.id] = cajaTransicion(t, tx, ty, pre.filter(q => q), post.filter(q => q), tl ? tl.getComputedTextLength() : null,
                                      t.cond && t.cond.length ? tc.getComputedTextLength() : null);
-    const derecha = timerText(g, tc, t.cond, ty+5, t.conditionRef, S);
+    const derecha = timerText(g, tc, t.cond, yc, t.conditionRef, S);
+    // Al simular: el valor de cada variable numérica de la receptividad (`numericVars`), en pequeño y en azul, centrado sobre su
+    // nombre y por encima del texto (y de la duración de un temporizador); igual que `_valores_variables` de escritorio/diagrama.py
+    const lecturas = S.variableReadouts || {};
+    if (t.cond && t.cond.length && (t.numericVars || []).length && Object.keys(lecturas).length) {
+      const base = yc - ascenso(14) - 3 - (t.tmr ? TMR_EXTRA : 0);
+      t.numericVars.forEach(vid => {
+        const valor = lecturas[vid], i = t.cond.findIndex(sg => sg.t === nameOf(M, vid));
+        if (valor === undefined || i < 0 || !tc.children[i]) return;
+        txt(g, (extremo(tc.children[i], false) + extremo(tc.children[i], true)) / 2, base, valor, {"text-anchor":"middle", class:"variable-value"});
+      });
+    }
     if (t.comment) {  // a la derecha de la receptividad y del estado de su temporizador
-      const fin = Math.max(tx+TB+8 + tc.getComputedTextLength() + (t.cond ? 14 : 0), derecha ? derecha + 8 : 0);
-      comentario(g, fin, ty, t.comment);
+      const x0 = horizontal ? tx + tc.getComputedTextLength() / 2 : tx+TB+8 + tc.getComputedTextLength();
+      comentario(g, Math.max(x0 + (t.cond ? 14 : 0), derecha ? derecha + 8 : 0), horizontal ? yc - 5 : ty, t.comment);
     }
   });
   // Exactamente los mismos recorridos que Qt y la detección del ratón.
@@ -270,12 +307,32 @@ function drawDiagram(svg, M, S, opciones = {}) {
 // Lo que ocupa una transición en el dibujo ([x0, y0, x1, y1]): el trazo (y su tramo recto si no tiene etapa anterior o siguiente),
 // su designación a la izquierda (ancho wl), su receptividad a la derecha (ancho wc) y el doble trazo de una simultaneidad
 function cajaTransicion(t, tx, ty, pre, post, wl, wc) {
+  const giro = orientacion(t);
+  if (giro !== "abajo") return cajaTransicionGirada(t, giro, tx, ty, pre, post, wl, wc);
   let r = [tx - TB, ty - (pre.length ? 0 : TALLO_T), tx + TB, ty + (post.length ? 0 : TALLO_T)];
   const unir = (x0, y0, x1, y1) => { r = [Math.min(r[0], x0), Math.min(r[1], y0), Math.max(r[2], x1), Math.max(r[3], y1)]; };
   if (wl !== null) unir(tx - TB - 6 - wl, ty - 12, tx - TB - 6, ty + 9);
   if (wc !== null) unir(tx + TB + 8, ty - 12, tx + TB + 8 + wc, ty + 9);
   if (t.simulPre) { const xs = [...pre.map(q => q.x), tx]; unir(Math.min(...xs) - 8, ty - SIMUL - BARRA_GROSOR, Math.max(...xs) + 8, ty - SIMUL); }
   if (t.simulPost) { const xs = [...post.map(q => q.x), tx]; unir(Math.min(...xs) - 8, ty + SIMUL, Math.max(...xs) + 8, ty + SIMUL + BARRA_GROSOR); }
+  return r;
+}
+
+// La de `cajaTransicion` para una transición girada (grafcet/routing.py: punto_t; escritorio/diagrama.py: _contenido_parciales)
+function cajaTransicionGirada(t, giro, tx, ty, pre, post, wl, wc) {
+  const [dx, dy] = SENTIDO[giro], [nx, ny] = NORMAL[giro], horizontal = giro === "derecha" || giro === "izquierda";
+  const P = (u, v = 0) => [tx + dx * u + nx * v, ty + dy * u + ny * v];
+  let r = null;
+  const unir = (x0, y0, x1, y1) => { r = r ? [Math.min(r[0], x0), Math.min(r[1], y0), Math.max(r[2], x1), Math.max(r[3], y1)] : [x0, y0, x1, y1]; };
+  const punto = q => unir(q[0], q[1], q[0], q[1]);
+  [P(0, -TB), P(0, TB), P(pre.length ? 0 : -TALLO_T), P(post.length ? 0 : TALLO_T)].forEach(punto);
+  if (wl !== null) horizontal ? unir(tx - wl / 2, ty + TB + 2, tx + wl / 2, ty + TB + 23) : unir(tx - TB - 6 - wl, ty - 12, tx - TB - 6, ty + 9);
+  if (wc !== null) horizontal ? unir(tx - wc / 2, ty - TB - 26, tx + wc / 2, ty - TB - 5) : unir(tx + TB + 8, ty - 12, tx + TB + 8 + wc, ty + 9);
+  [[-1, pre, t.simulPre || pre.length > 1], [1, post, t.simulPost]].forEach(([signo, otros, hay]) => {
+    if (!hay) return;
+    const vs = [...otros.map(q => (q.x - tx) * nx + (q.y - ty) * ny), 0];
+    [signo * SIMUL, signo * (SIMUL + BARRA_GROSOR)].forEach(u => [Math.min(...vs) - 8, Math.max(...vs) + 8].forEach(v => punto(P(u, v))));
+  });
   return r;
 }
 

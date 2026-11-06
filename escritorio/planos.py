@@ -288,16 +288,21 @@ class PaginaPlanos(QWidget):
         if not self.editor:return super().eventFilter(obj,event)
         if obj is self.editor.area.viewport() and event.type()==QEvent.Type.Resize:self.dimension_timer.start()
         if event.type()==QEvent.Type.Wheel:
-            if not event.angleDelta().y():return True
-            from .diagrama import ZOOM_PASO
+            from .diagrama import factor_zoom_rueda,desplazamiento_rueda,modo_rueda
+            if modo_rueda(event)=="desplaza":  # Mayús + rueda: en horizontal; dos dedos de un panel táctil: en los dos ejes
+                dx,dy=desplazamiento_rueda(event);a=self.editor.area;h,v=a.horizontalScrollBar(),a.verticalScrollBar();h.setValue(h.value()-dx);v.setValue(v.value()-dy);return True
+            factor=factor_zoom_rueda(event)
+            if factor==1.0:return True
             area=self.editor.area;vista=self.editor.vista;local=event.position()
             if obj is area.viewport():local=local-vista.pos()
             punto=vista.punto_hoja(local);pantalla=local+vista.pos()
-            self.zoom(ZOOM_PASO if event.angleDelta().y()>0 else 1/ZOOM_PASO)
+            self.zoom(factor)
             d=self.editor.documento;k=min((vista.width()-24)/d.ancho,(vista.height()-24)/d.alto)
             nuevo=QPointF((vista.width()-d.ancho*k)/2+punto.x()*k,(vista.height()-d.alto*k)/2+punto.y()*k)
             h,v=area.horizontalScrollBar(),area.verticalScrollBar();delta=nuevo+vista.pos()-pantalla
             h.setValue(round(h.value()+delta.x()));v.setValue(round(v.value()+delta.y()));return True
+        if event.type()==QEvent.Type.NativeGesture and event.gestureType()==Qt.NativeGestureType.ZoomNativeGesture:
+            self.zoom(max(.2,1+event.value()));return True  # el pellizco de un panel táctil (macOS, Linux)
         if event.type()==QEvent.Type.MouseButtonPress and event.button()==Qt.MouseButton.LeftButton and obj is self.editor.vista:
             vista=self.editor.vista;t=vista.textos
             if t and (vista.nuevo_texto or (vista.zona and t.b_zona.isChecked()) or any(i.contains(i.mapFromScene(vista.punto_hoja(event.position()))) for i in t.items)):return False

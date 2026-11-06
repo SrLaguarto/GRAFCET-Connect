@@ -159,6 +159,14 @@ class PanelAvisos(unittest.TestCase):
         self.assertEqual(aviso_escala(doc["variables"][0], Senal("nivel", "input-register", 0, "INT16", "1")), "")
         app.processEvents()
 
+    def test_SFIO78b_el_aviso_de_escala_solo_es_para_lo_que_el_programa_recibe(self):
+        """REQ-SIM-03: una Entera de salida enviada con escala 100 (5 → 500) no pierde nada y no avisa; una Entera de entrada con
+        escala 100 sí."""
+        doc = M().var("nivel", kind="int").var("v", "output", kind="int").step("E0", True).doc
+        entrada, salida = doc["variables"]
+        self.assertEqual(aviso_escala(salida, Senal("v", "holding", 0, "INT16", "100")), "")
+        self.assertIn("se redondeará", aviso_escala(entrada, Senal("nivel", "input-register", 0, "INT16", "100")))
+
     def test_SFIO79_el_redondeo_recibido_marca_la_variable_en_ambar_con_lo_recibido_y_lo_usado(self):
         """REQ-SIM-03, REQ-ROB-01: tras un redondeo la fila de la Entera lleva el aviso con lo recibido y lo usado; sin
         redondeos (otra conexión) vuelve al aviso preventivo o a ninguno."""

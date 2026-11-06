@@ -28,6 +28,7 @@ from grafcet.persistence import Project, add_document, new_project, save_project
 from grafcet.profile import normalize_options
 from grafcet.routing import project_on_link
 from grafcet.timeutil import parse_duration
+from grafcet.values import format_value, parse_type, parse_value, zero
 from grafcet.view import (Vista, display_names, force_situation, norm, layout_from_presentation, presentation_for,
                          substitute)
 
@@ -35,12 +36,16 @@ from .mensajes import amable, correccion_amable
 from .bloques import _dur_usuario, normalizar_duracion
 from .anotaciones import en as anotacion_en, rect as rect_anotacion, importar_imagen, editar_texto
 from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, REJILLA, SX, TB, VACIO_H, VACIO_W, _distancia, _extra,
-                       _geometria_acciones, _Pintor, ancla_en, anclas, barra, cajas_parciales, elemento_en, enlaces,
+                       _geometria_acciones, _Pintor, ancla_en, anclas, barra, caja_barra, cajas_parciales, elemento_en, enlaces,
+                       orientaciones, rects_textos_t,
                        icono_accion, posiciones)
 
 HERRAMIENTAS = ("seleccionar",)  # el ratón selecciona, mueve y enlaza; los elementos nuevos solo se colocan arrastrándolos
 DY = 60  # distancia vertical estándar: tres pasos de rejilla entre etapa y transición
 IMAN = 40  # a qué distancia horizontal (dos pasos de rejilla) un elemento movido se alinea con uno enlazado
+RADIO_UNION = 8  # a qué distancia (px al 100 %) dos puntos de unión libres compatibles se unen solos al soltar un elemento
+RADIO_UNION_MAX = 12  # tope en unidades del dibujo: con zoom bajo no une lo que no está casi encima
+BORDE_ACCION = 6  # el grosor (px al 100 %) de los bordes derecho e inferior de una acción de los que se tira para sacar otra
 IMAN_ACCION = 16  # a qué distancia de otra acción se pega una acción suelta (lado derecho, o inferior en columna)
 TIPOS_ACCION = FICHAS_ACCION  # continua, condicionada, al activar, al desactivar, por evento (+ «limitada» de ficheros antiguos)
 TEXTO_LIMITADA = "Condicionada (con límite de tiempo)"
@@ -143,6 +148,29 @@ def ajustar(v: float) -> int:
     return round(v / REJILLA) * REJILLA
 
 
+def quitar_valores_iniciales(doc: dict[str, Any]) -> list[str]:
+    """P-IMP-117: todas las variables empiezan en 0 (falso). Pone a cero los valores iniciales declarados en `doc` (un
+    fichero hecho a mano o por otra herramienta) y devuelve una frase por variable cambiada, p. ej. «N empezaba en 3»."""
+    quitadas = []
+    for v in doc.get("variables", []):
+        try:
+            t = parse_type(v["type"])
+            if parse_value(t, v["initialValue"]) == zero(t):
+                continue
+            antes = v["initialValue"]
+            v["initialValue"] = format_value(t, zero(t))
+        except (DiagnosticError, KeyError, TypeError, ValueError):
+            continue  # un fichero mal formado lo informa la validación
+        texto = {True: "verdadero", False: "falso"}.get(antes, antes)
+        quitadas.append(f"{v['name']} empezaba en {texto}")
+    return quitadas
+
+
+def aviso_valores_iniciales(quitadas: list[str]) -> str:
+    return (f"Valores iniciales quitados: {'; '.join(quitadas)}. En GRAFCET Connect todas las variables empiezan en 0; "
+            "si la condición necesita un número, escríbalo en la receptividad (por ejemplo C = 3).")
+
+
 class Edicion(QObject):
     cambiado = Signal()    # el modelo, la selección o los diagnósticos cambiaron: hay que redibujarlo todo
     redibujar = Signal()   # solo cambia el dibujo (un arrastre en curso)
@@ -169,7 +197,6 @@ class Edicion(QObject):
         self.parpadeo.cambia.connect(self.redibujar)
         self.arrastre: dict[str, Any] | None = None  # id, desplazamiento del agarre, posición actual, si se movió
         self.enlace: dict[str, Any] | None = None    # punto de unión de origen de un enlace que se está trazando
-        self.inicio_rama: dict[str, Any] | None = None  # clic selecciona el enlace; arrastrar abre una rama
         self.flecha = "flow"
         self.accion: str | None = None  # la acción señalada de la etapa seleccionada (clic en su caja)
         self.ver_accion = False  # las opciones muestran la acción señalada de la etapa (no la etapa): clic en su caja, Editar…
@@ -341,7 +368,7 @@ class Edicion(QObject):
         self.vista = Vista(ed.model["id"], self.titulo, "", lambda: (ed.model, self.layout()), self.opciones,
                            hidden=ed.hidden_labels(), bars=self._barras(), link_styles=self.estilos_enlaces(),
                            draft_actions=self._borradores(), action_layouts=ed.action_layouts(),
-                           comments=ed.comments())
+                           comments=ed.comments(), orientations=ed.transition_orientations())
         self.M = self.vista.model
         self.M["annotations"] = self.ed.annotations()
         if self.arrastre:
@@ -603,18 +630,81 @@ class Edicion(QObject):
             return
         if tipo == "parcial":
             self.poner_parcial(p)
-        elif tipo in ("etapa", "etapa_inicial"):
-            self.poner_etapa(p, inicial=tipo == "etapa_inicial")
-        elif tipo == "encapsulante":
-            self.poner_etapa(p, tipo="enclosing")
+        elif tipo in ("etapa", "etapa_inicial", "encapsulante", "transicion"):
+            with self.ed.group("colocar"):  # (con su enlace, si queda muy cerca de un punto de unión libre: un solo paso)
+                if tipo == "transicion":
+                    nuevo = self.poner_transicion(p)
+                else:
+                    nuevo = self.poner_etapa(p, inicial=tipo == "etapa_inicial", tipo="enclosing" if tipo == "encapsulante" else "ordinary")
+                self._unir_cercanos({nuevo})
+            self.cambia()
         elif tipo == "macroetapa":
             self.poner_macro(p)
-        elif tipo == "transicion":
-            self.poner_transicion(p)
         elif tipo in ("simultaneidad", "simultaneidad:apertura", "simultaneidad:cierre"):
             self.poner_barra(p, "Y")
         elif tipo == "accion" or tipo.startswith("accion:"):
-            self.poner_accion_suelta(p, tipo.partition(":")[2] or "continua")
+            with self.ed.group("colocar acción"):
+                did = self.poner_accion_suelta(p, tipo.partition(":")[2] or "continua")
+                if did:
+                    self._unir_cercanos({did})
+
+    # -- unión automática al soltar (P-IMP-114) --------------------------------------------------------------
+    def _zoom(self) -> float:
+        escala = getattr(self.diagrama, "escala", None)
+        return (escala() if callable(escala) else 1.0) or 1.0
+
+    def _ancla_libre(self, a: dict[str, Any]) -> bool:
+        """Si el punto de unión `a` (de `anclas`) está libre: una transición, sin etapa anterior (arriba) o siguiente
+        (abajo); una etapa, sin transición que llegue a ella (arriba) o salga de ella (abajo) y, a la derecha, sin acciones;
+        el de una acción suelta, siempre."""
+        M, ident, lado = self.M, a["id"], a["lado"]
+        t = next((t for t in M["transitions"] if t["id"] == ident), None)
+        if t is not None:
+            return not t["pre" if lado == "arriba" else "post"]
+        if lado == "izq":
+            return True
+        if lado == "der":
+            return not any(s["id"] == ident and s["actions"] for s in M["steps"]) and not any(
+                d.get("etapa") == ident for d in M.get("draftActions", []))
+        clave = "post" if lado == "arriba" else "pre"
+        return not any(ident in u[clave] for u in M["transitions"])
+
+    def _par_union(self, a: dict[str, Any], b: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        """Los dos puntos, en el orden de `unir` (el que emite, de abajo, primero), si forman un par válido: salida de
+        transición con entrada de etapa, salida de etapa con entrada de transición, o el punto de una acción suelta con el
+        de las acciones de una etapa. Cualquier otro: None."""
+        pasos, trans = self._pasos(), {t["id"] for t in self.M["transitions"]}
+        for x, y in ((a, b), (b, a)):
+            if x["lado"] == "izq" and y["lado"] == "der" and y["id"] in pasos and x["id"] not in pasos | trans:
+                return x, y
+            if x["lado"] == "abajo" and y["lado"] == "arriba" and (
+                    (x["id"] in trans and y["id"] in pasos) or (x["id"] in pasos and y["id"] in trans)):
+                return x, y
+        return None
+
+    def _unir_cercanos(self, ids: set[str]) -> bool:
+        """Al soltar `ids` (recién creados o movidos): si un punto de unión libre de alguno queda a RADIO_UNION o menos (a
+        la escala del dibujo) de un punto libre compatible de otro elemento (no de los soltados con él), los une como si se
+        hubiera trazado el enlace (`unir`), dentro del mismo paso de deshacer. Elige el par más cercano; sin par válido, nada.
+        Devuelve si unió algo (P-IMP-114)."""
+        self.reconstruir()
+        radio = min(RADIO_UNION / self._zoom(), RADIO_UNION_MAX)
+        pos = posiciones(self.M)
+        propios = [a for i in ids if i in pos or any(d["id"] == i for d in self.M.get("draftActions", []))
+                   for a in anclas(self.M, i) if self._ancla_libre(a)]
+        ajenos = [a for i in [*pos, *(d["id"] for d in self.M.get("draftActions", []))] if i not in ids
+                  for a in anclas(self.M, i) if self._ancla_libre(a)]
+        mejor: tuple[float, tuple[dict[str, Any], dict[str, Any]]] | None = None
+        for a in propios:
+            for b in ajenos:
+                d = ((a["pos"].x() - b["pos"].x()) ** 2 + (a["pos"].y() - b["pos"].y()) ** 2) ** 0.5
+                par = self._par_union(a, b) if d <= radio else None
+                if par and (mejor is None or d < mejor[0]):
+                    mejor = (d, par)
+        if mejor is None:
+            return False
+        self.unir(*mejor[1])
+        return True
 
     def poner_accion_suelta(self, p: QPointF, tipo: str = "continua") -> str:
         """Una ficha de acción soltada en un punto: una acción suelta de ese tipo, sin variable todavía (se dibuja con «?»),
@@ -663,6 +753,32 @@ class Edicion(QObject):
         if caja and caja.get("suelta"):  # sobre una acción suelta: se ve el punto de unión de su grupo
             ident = caja["cabeza"]
         self.diagrama.marcar_anclas(anclas(self.M, ident or (cerca["id"] if cerca else "")), cerca)
+        borde = self._borde_accion(caja, p) if caja else None
+        if borde:  # en el borde derecho o inferior de una acción: el punto de donde se tira, y el cursor del sentido
+            x, y, w, h = caja["rect"]
+            punto = {"id": caja["id"], "lado": "nueva_" + borde,
+                     "pos": QPointF(x + w, y + h / 2) if borde == "der" else QPointF(x + w / 2, y + h)}
+            self.diagrama.marcar_anclas([punto], punto)
+        vista = getattr(self.diagrama, "viewport", None)
+        if callable(vista) and (borde or getattr(self, "_cursor_borde", False)):
+            vista().setCursor(Qt.CursorShape.SizeHorCursor if borde == "der" else Qt.CursorShape.SizeVerCursor if borde
+                              else Qt.CursorShape.CrossCursor)
+        self._cursor_borde = bool(borde)
+
+    def _arrastre_tramo(self, enlace: str, p: QPointF) -> dict[str, Any] | None:
+        """Agarrar el cuerpo de un enlace y arrastrar mueve el tramo de su recorrido que se agarra (como su tirador, sin
+        seleccionarlo antes): None si el punto no cae en un tramo movible (el primero y el último, que unen con la etapa o la
+        transición, no se mueven; un enlace recto no tiene ninguno): entonces solo se selecciona."""
+        for r in enlaces(self.M):
+            if r["id"] != enlace:
+                continue
+            pts = r["pts"]
+            for h in r["handles"]:
+                i = h["segment"]
+                if _distancia(p, pts[i], pts[i + 1]) <= 7:
+                    return {"id": r["id"], "tipo": "tramo", "pts": r.get("routePts", r["pts"]), "handle": h, "movido": False,
+                            "start": p, "style": copy.deepcopy(self.ed.link_styles().get(r["id"], {}))}
+        return None
 
     def _barra(self, ident: str | None) -> dict[str, Any] | None:
         return next((b for b in self.M.get("bars", []) if b["id"] == ident), None)
@@ -715,7 +831,12 @@ class Edicion(QObject):
                 self.accion, self.ver_accion = None, False
             else:  # La etapa es el contexto de propiedades; solo se resalta la acción.
                 self.sel, self.accion, self.ver_accion = [caja["etapa"]], caja["id"], True
+                borde = self._borde_accion(caja, p)
+                if borde:  # del borde derecho o inferior, arrastrar saca una acción nueva a continuación de esta
+                    self.enlace = {"id": caja["id"], "lado": "nueva_" + borde, "pos": p, "nueva": borde}
+            enlace = self.enlace
             self.cambiado.emit()
+            self.enlace = enlace  # (los que atienden el cambio pueden rehacer el estado del gesto)
             return True
         orden = self.orden_en(p) if ident is None and not punto else None
         if orden:  # una orden de forzado se selecciona (no se mueve ni se ordena: no es una acción)
@@ -776,12 +897,11 @@ class Edicion(QObject):
         self.sel = [ident] if ident else previa
         if ident is None:  # un hueco: arrastrar dibuja el rectángulo de selección (el lazo)
             self.lazo = {"ini": p, "movido": False, "previa": previa}
-        if ident and "|" in ident and ident.split("|")[2] in ("pre", "post"):
-            _, sid, rol = ident.split("|")
-            self.inicio_rama = {"id": sid, "lado": "abajo" if rol == "pre" else "arriba", "pos": p}
         pos = posiciones(self.M).get(ident or "")
         b = self._barra(ident)
-        if pos:
+        if ident and "|" in ident:  # un enlace: agarrarlo y arrastrar mueve el tramo agarrado (no abre ninguna rama)
+            self.arrastre = self._arrastre_tramo(ident, p)
+        elif pos:
             self.arrastre = {"id": ident, "dx": p.x() - pos[0], "dy": p.y() - pos[1], "x": pos[0] - SX, "y": pos[1],
                              "movido": False}
         elif b:
@@ -806,9 +926,9 @@ class Edicion(QObject):
         """Lo que queda entero dentro del rectángulo (a, b): etapas, macroetapas, transiciones, barras, acciones y marcos."""
         r = QRectF(a, b).normalized()
         out = []
+        giros = orientaciones(self.M)
         for ident, (x, y) in posiciones(self.M).items():
-            es_t = any(t["id"] == ident for t in self.M["transitions"])
-            caja = QRectF(x - TB, y - 2, 2 * TB, 4) if es_t else QRectF(x - H, y - H, 2 * H, 2 * H)
+            caja = caja_barra(giros[ident], x, y) if ident in giros else QRectF(x - H, y - H, 2 * H, 2 * H)
             if r.contains(caja):
                 out.append(ident)
         for bar in self.M.get("bars", []):
@@ -841,8 +961,6 @@ class Edicion(QObject):
         return cerca if cerca is not None and 0 < abs(cerca - x) <= IMAN else x
 
     def mover(self, p: QPointF, event: Any = None) -> bool:
-        if self.inicio_rama and (p - self.inicio_rama["pos"]).manhattanLength() > 8:
-            self.enlace, self.inicio_rama = self.inicio_rama, None
         a = self.arrastre
         if a and a.get("tipo") in ("anotacion","tamano_anotacion"):
             if a["tipo"] == "anotacion":
@@ -861,7 +979,19 @@ class Edicion(QObject):
                 a["style"].setdefault("arrows", {}).setdefault(self.flecha, {}).update(segment=segment, ratio=str(ratio))
             else:
                 pts, handle = a["pts"], a["handle"]
-                if len(pts) == 6:
+                if handle.get("orient"):  # enlace de una transición girada: se corre el tramo, en perpendicular a su eje
+                    i = handle["segment"]
+                    vertical = pts[i][0] == pts[i + 1][0]
+                    previo = a.setdefault("tramos0", a["style"].get("route", {}).get("tramos", {}))  # lo guardado al pulsar
+                    valido = isinstance(previo, dict) and str(previo.get("n")) == str(len(pts))
+                    d0 = float(previo.get(str(i), 0)) if valido else 0.0
+                    destino = ajustar(p.x() if vertical else p.y())
+                    nuevo = dict(previo) if valido else {}
+                    desplazamiento = d0 + destino - pts[i][0 if vertical else 1]
+                    nuevo.update({"n": str(len(pts)), str(i): str(int(desplazamiento)) if desplazamiento == int(desplazamiento)
+                                  else str(desplazamiento)})
+                    a["style"]["route"] = {**a["style"].get("route", {}), "tramos": nuevo}
+                elif len(pts) == 6:
                     route = a["style"].setdefault("route", {"laneX": str(pts[2][0]-SX),
                                                             "exitY": str(pts[1][1]), "entryY": str(pts[3][1])})
                     key = {1: "exitY", 2: "laneX", 3: "entryY"}[handle.get("routeSegment", handle["segment"])]
@@ -930,6 +1060,10 @@ class Edicion(QObject):
             if self.diagrama is not None:
                 self.diagrama.lazo(lz["ini"], p)
             return True
+        if self.enlace and self.enlace.get("nueva"):  # de un borde de una acción: la acción nueva que saldrá
+            if self.diagrama is not None:
+                self.diagrama.trazo_provisional(self.enlace["pos"], p)
+            return True
         if self.enlace and self.diagrama is not None:
             destino = self._destino(p, self.enlace)
             self.diagrama.trazo_provisional(self.enlace["pos"], destino["pos"] if destino else p)
@@ -956,7 +1090,6 @@ class Edicion(QObject):
         return destino
 
     def soltar(self, p: QPointF, event: Any = None) -> bool:
-        self.inicio_rama = None
         if self.lazo:
             lz, self.lazo = self.lazo, None
             if self.diagrama is not None:
@@ -985,7 +1118,7 @@ class Edicion(QObject):
                 if self._hay_solape(a):
                     return self._devolver()
                 self._marcar_solape(None)
-                self.mover_grupo(a["ids"], a["x"], a["y"])
+                self.mover_grupo(a["ids"], a["x"], a["y"], unir=True)
                 return True
             if a["movido"] and a.get("tipo") not in ("flecha", "tramo", "estirar") and self._hay_solape(a):
                 return self._devolver()  # encima de otro elemento: vuelve a su sitio
@@ -998,8 +1131,17 @@ class Edicion(QObject):
                 elif a.get("tipo") == "barra":
                     self.ed.move_bar(a["id"], a["x"], a["y"])
                 else:
-                    self.ed.move(a["id"], a["x"], a["y"])
+                    with self.ed.group("mover"):  # (y, si queda pegado a un punto de unión libre, su enlace: un solo paso)
+                        self.ed.move(a["id"], a["x"], a["y"])
+                        self._unir_cercanos({a["id"]})
             self.cambia()
+            return True
+        if self.enlace and self.enlace.get("nueva"):
+            origen, self.enlace = self.enlace, None
+            if self.diagrama is not None:
+                self.diagrama.trazo_provisional(None)
+            if (p - origen["pos"]).manhattanLength() > 8 / self._zoom():  # un clic sin arrastrar solo selecciona
+                self.anadir_accion_tras(origen["id"], origen["nueva"])
             return True
         if self.enlace:
             origen, self.enlace = self.enlace, None
@@ -1044,8 +1186,8 @@ class Edicion(QObject):
     def _elementos(self) -> list[tuple[str, QRectF, str]]:
         """La caja de cada elemento que no puede quedar tapado, tal como está dibujado (etapas, macroetapas, transiciones,
         barras, acciones y grupos de acciones; no cuentan los comentarios ni los enlaces): (ID, caja, etapa de la acción)."""
-        trans = {t["id"] for t in self.M["transitions"]}
-        out = [(i, QRectF(x - TB, y - 2, 2 * TB, 4) if i in trans else QRectF(x - H, y - H, 2 * H, 2 * H), "")
+        trans = orientaciones(self.M)
+        out = [(i, caja_barra(trans[i], x, y) if i in trans else QRectF(x - H, y - H, 2 * H, 2 * H), "")
                for i, (x, y) in posiciones(self.M).items()]
         out += [(b["id"], QRectF(*barra(b)), "") for b in self.M.get("bars", [])]
         out += [(c["id"], QRectF(*c["rect"]), c["etapa"] or "")
@@ -1091,11 +1233,7 @@ class Edicion(QObject):
         out = []
         for t in self.M["transitions"]:
             tx, ty = t["x"] + SX, t["y"]
-            if t.get("showLabel", True):
-                w = _Pintor.ancho([{"t": f"({t.get('label', t['id'])})"}], 13)
-                out.append((QRectF(tx - TB - 6 - w, ty - 12, w, 21), t["id"]))
-            if t.get("cond"):
-                out.append((QRectF(tx + TB + 8, ty - 12, _Pintor.ancho(t["cond"], 14), 21), t["id"]))
+            out += [(r, t["id"]) for r in rects_textos_t(t, tx, ty) if r is not None]
         return out
 
     def _situacion(self, clave: str) -> tuple[float, float, list[dict[str, Any]], bool] | None:
@@ -1129,12 +1267,12 @@ class Edicion(QObject):
                   for a, ax, cy, w in cajas]
         lineas = [QRectF(min(x1, x2) - 1, min(y1, y2) - 1, abs(x2 - x1) + 2, abs(y2 - y1) + 2).adjusted(0, 0, m, 0)
                   for tramo in trazos for (x1, y1), (x2, y2) in zip(tramo, tramo[1:])]
-        trans = {t["id"] for t in self.M["transitions"]}
+        trans = orientaciones(self.M)
         pos = posiciones(self.M)
         obstaculos: list[tuple[QRectF, float, float]] = []
         for i, (px, py) in pos.items():
             if i != clave:
-                r = QRectF(px - TB, py - 2, 2 * TB, 4) if i in trans else QRectF(px - H, py - H, 2 * H, 2 * H)
+                r = caja_barra(trans[i], px, py) if i in trans else QRectF(px - H, py - H, 2 * H, 2 * H)
                 obstaculos.append((r, px, r.left()))
         for b in self.M.get("bars", []):
             bx, by, bw, bh = barra(b)
@@ -1369,9 +1507,9 @@ class Edicion(QObject):
         a = self._arrastre_grupo(self.sel[0], QPointF(), (list(self.sel), self.accion, self.ver_accion))
         if a is None: return False
         a.update(x=a['x0']+dx, y=a['y0']+dy, movido=True)
-        return self._soltar_grupo(a)
+        return self._soltar_grupo(a, unir=False)  # con las flechas no se une solo: es un ajuste fino
 
-    def _soltar_grupo(self, a: dict[str, Any]) -> bool:
+    def _soltar_grupo(self, a: dict[str, Any], unir: bool = True) -> bool:
         """Termina el arrastre de varios seleccionados: sin haberse movido (un clic), la selección se queda en el elemento
         pulsado; encima de algo que no se mueve, vuelven a su sitio; si no, se mueven todos con una sola operación de
         deshacer, con las rutas de los enlaces entre ellos."""
@@ -1382,8 +1520,11 @@ class Edicion(QObject):
             if self._hay_solape(a):
                 return self._devolver()
             dx, dy = a["x"] - a["x0"], a["y"] - a["y0"]
-            self.ed.move_many({i: (x + dx, y + dy) for i, (x, y) in a["inicio"].items()},
-                              self._rutas_con_grupo(set(a["ids"]), dx, dy))
+            with self.ed.group("mover"):
+                self.ed.move_many({i: (x + dx, y + dy) for i, (x, y) in a["inicio"].items()},
+                                  self._rutas_con_grupo(set(a["ids"]), dx, dy))
+                if unir:
+                    self._unir_cercanos(set(a["ids"]))
         self.cambia()
         return True
 
@@ -1478,10 +1619,38 @@ class Edicion(QObject):
             else:
                 nuevo = ed.add_step(parcial, ed.next_label("step"), at=(x, y))
                 ed.connect(base, nuevo) if abajo else ed.connect(nuevo, base)
+            self._unir_cercanos({nuevo})  # y, si su otro punto queda muy cerca de uno libre compatible, también se une (P-IMP-114)
         self.sel = [nuevo]
         self.informar("Rama abierta: " + ("escriba la receptividad en las propiedades." if es_paso else "etapa nueva."))
         self.cambia()
         return nuevo
+
+    def _ocupado(self, x: float, y: float, margen: float = 45) -> bool:
+        """Si ya hay una etapa, macroetapa o transición a menos de `margen` del punto del modelo (x, y), a lo ancho y a lo alto
+        (para no colocar encima una transición nueva)."""
+        return any(abs(px - SX - x) < margen and abs(py - y) < margen for px, py in posiciones(self.M).values())
+
+    def enlazar_etapas(self, origen: dict[str, Any], destino: dict[str, Any]) -> None:
+        """Arrastrar de una etapa a otra etapa existente las une **con una transición nueva en medio** (receptividad
+        pendiente): del punto de abajo de la que se arrastra a la otra, o, si se arrastra del punto de arriba, de la otra a
+        ella. Si la otra queda debajo con sitio entre las dos, la transición va en medio; si queda al mismo nivel o encima
+        es un salto o una repetición de secuencia (`saltar`), con su enlace de retorno."""
+        ini, fin = (origen["id"], destino["id"]) if origen["lado"] == "abajo" else (destino["id"], origen["id"])
+        if ini == fin:
+            self.rechazar("Una etapa no salta a sí misma.", ini)
+            self.cambiado.emit()
+            return
+        pos = posiciones(self.M)
+        ty = ajustar((pos[ini][1] + pos[fin][1]) / 2)
+        tx = pos[ini][0] - SX
+        if pos[fin][1] - pos[ini][1] < 2 * DY or self._ocupado(tx, ty):
+            self.saltar(ini, fin)
+            return
+        tid, _ = self.ed.add_transition(self.parcial_de(ini), "", [ini], [fin], at=(tx, ty),
+                                        label=self.ed.next_label("transition"))
+        self.sel = [tid]
+        self.informar("Transición nueva entre las dos etapas: escriba su receptividad en las propiedades.")
+        self.cambia()
 
     def saltar(self, origen: str, destino: str) -> str:
         """Salto de secuencia: una transición nueva (receptividad pendiente) de la etapa origen a la etapa destino, junto
@@ -1526,6 +1695,8 @@ class Edicion(QObject):
             except DiagnosticError as exc:
                 self.rechazar("; ".join(self.sust(d.message) for d in exc.diagnostics), barra_["id"], otro["id"])
             self.cambia()
+        elif origen["id"] in self._pasos() and destino["id"] in self._pasos():
+            self.enlazar_etapas(origen, destino)  # de etapa a etapa, siempre con una transición en medio
         elif origen["lado"] == "abajo":  # el punto de abajo emite el enlace
             self.conectar(origen["id"], destino["id"])
         else:  # el punto de arriba lo recibe: se arrastra de la entrada de un elemento a lo que va antes
@@ -1799,9 +1970,13 @@ class Edicion(QObject):
             self.diagrama.marcar_prohibido(malas or None)
         return not malas
 
-    def mover_grupo(self, ids: list[str], x: float, y: float) -> None:
-        """Mueve una acción suelta, con las que lleva pegadas, a la posición del modelo (x, y): una operación de deshacer."""
-        self.ed.update_draft_actions({i: {"x": x, "y": y} for i in ids})
+    def mover_grupo(self, ids: list[str], x: float, y: float, unir: bool = False) -> None:
+        """Mueve una acción suelta, con las que lleva pegadas, a la posición del modelo (x, y): una operación de deshacer.
+        Con `unir` (al soltarla con el ratón), si su punto de unión queda muy cerca del de una etapa, se une a ella."""
+        with self.ed.group("mover"):
+            self.ed.update_draft_actions({i: {"x": x, "y": y} for i in ids})
+            if unir:
+                self._unir_cercanos(set(ids))
         self.cambia()
 
     def _pegar_a_grupo(self, ids: list[str], objetivo: dict[str, Any]) -> None:
@@ -2035,12 +2210,18 @@ class Edicion(QObject):
             equi = [] if ident in cajas_parciales(self.M) else self._menu_equidistancia(ident, en_varios)
             return self._menu_desde(ident) + ([("-", None)] + equi if equi else [])
         equi = self._menu_equidistancia(ident, en_varios)
-        if not any(s["id"] == ident for s in self.M["steps"]):  # una transición, un enlace, una barra
-            if equi:
+        if ident in orientaciones(self.M):  # una transición: girarla (y, si está en una cadena, equidistanciar)
+            if not en_varios:
+                self.sel, self.accion = [ident], None
+            self.cambiado.emit()
+            return self._menu_giro(ident) + ([("-", None)] + equi if equi else [])
+        if not any(s["id"] == ident for s in self.M["steps"]):  # un enlace, una barra
+            flecha = self._menu_flecha(ident) if not en_varios else []
+            if equi or flecha:
                 if not en_varios:
                     self.sel, self.accion = [ident], None
                 self.cambiado.emit()
-            return equi
+            return flecha + ([("-", None)] if flecha and equi else []) + equi
         if not en_varios:
             self.sel, self.accion = [ident], None
         self.cambiado.emit()
@@ -2048,7 +2229,70 @@ class Edicion(QObject):
         opciones = self._menu_desde(ident)
         return [("Colocación de las acciones", [(texto, lambda v=v: self.colocar_acciones(ident, v))
                                                 for v, texto in COLOCACIONES])] \
+\
             + ([("-", None)] + opciones if opciones else []) + ([("-", None)] + equi if equi else [])
+
+    def flecha_visible(self, ident: str) -> bool | None:
+        """Si el enlace `ident` se dibuja ahora con su flecha de recorrido; None si no es un enlace."""
+        ruta = next((r for r in enlaces(self.M) if r["id"] == ident), None)
+        return None if ruta is None else any(f["key"] == "flow" for f in ruta["arrows"])
+
+    def alternar_flecha(self, ident: str) -> bool:
+        """«Mostrar flecha» / «Quitar flecha» del enlace `ident`: fija a mano `linkStyles[ident].arrows.flow.visible` (sin la
+        clave, la decide el programa: enlaces que suben, transiciones giradas). Una sola operación de deshacer; solo
+        presentación. Devuelve si cambió algo."""
+        visible = self.flecha_visible(ident)
+        if visible is None:
+            return False
+        style = copy.deepcopy(self.ed.link_styles().get(ident, {}))
+        style.setdefault("arrows", {}).setdefault("flow", {})["visible"] = not visible
+        self.ed.set_link_style(ident, style)
+        self.cambia()
+        return True
+
+    def _menu_flecha(self, ident: str) -> list[tuple[str, Any]]:
+        """Solo la opción que cambia el estado actual: «Mostrar flecha» si el enlace no la lleva, «Quitar flecha» si la lleva."""
+        visible = self.flecha_visible(ident)
+        if visible is None:
+            return []
+        return [("Quitar flecha" if visible else "Mostrar flecha", lambda: self.alternar_flecha(ident))]
+
+    def _menu_giro(self, tid: str) -> list[tuple[str, Any]]:
+        """«Girar en sentido antihorario» y «Girar en sentido horario» de una transición: si está entre varias seleccionadas,
+        giran todas."""
+        ids = self._transiciones_sel() if tid in self.sel else [tid]
+        return [("Girar en sentido antihorario", lambda: self.girar_transiciones(-1, ids)),
+                ("Girar en sentido horario", lambda: self.girar_transiciones(1, ids))]
+
+    def orientacion_transicion(self, tid: str) -> str:
+        """El sentido de la evolución a través de la transición: «abajo» (por defecto), «derecha», «arriba» o «izquierda»."""
+        valor = self.ed.transition_orientations().get(tid, "abajo")
+        return valor if valor in self.ed.TRANSITION_ORIENTATIONS else "abajo"
+
+    def _transiciones_sel(self, ids: list[str] | None = None) -> list[str]:
+        """Las transiciones de `ids` (por defecto, la selección)."""
+        todas = {t["id"] for t in self.M["transitions"]}
+        return [i for i in dict.fromkeys(self.sel if ids is None else ids) if i in todas]
+
+    def girar_transiciones(self, sentido: int | str, transiciones: list[str] | None = None) -> bool:
+        """«Girar en sentido horario» (positivo, o «horario»/«derecha») o «antihorario» (negativo, o «antihorario»/«izquierda») las transiciones
+        seleccionadas (o `transiciones`): el sentido de la evolución a través de la transición pasa al siguiente a derechas
+        (como las agujas del reloj en pantalla) abajo → izquierda → arriba → derecha → abajo, o al anterior a izquierdas. El
+        trazo se coloca perpendicular a la evolución y el texto sigue horizontal. Es una operación de vista (no cambia el
+        modelo ni la simulación) y una sola de deshacer. Devuelve si giró algo."""
+        paso = 1 if sentido in ("horario", "derecha", "der") or (isinstance(sentido, int) and sentido > 0) else -1
+        ids = self._transiciones_sel(transiciones)
+        if not ids:
+            self.informar("Seleccione una transición para girarla.")
+            self.cambiado.emit()
+            return False
+        orden = self.ed.TRANSITION_ORIENTATIONS
+        nuevos = {i: orden[(orden.index(self.orientacion_transicion(i)) + paso) % len(orden)] for i in ids}
+        motivo = self._atomico("girar las transiciones", lambda: self.ed.set_transition_orientations(nuevos), hueco=False)
+        self._decir(motivo)
+        if motivo:
+            self.parpadear(ids)
+        return motivo is None
 
     def _menu_equidistancia(self, ident: str, en_varios: bool = False) -> list[tuple[str, Any]]:
         """«Equidistanciar alturas de la cadena» si `ident` está en una (etapas, macroetapas, transiciones y barras enlazados)
@@ -2361,7 +2605,7 @@ class Edicion(QObject):
             return f"La variable «{nombre}» no existe."
         if nombre and var is None and (motivo := self.motivo_nombre(nombre)):
             return motivo
-        motivo = self._revisar_textos(d, self.parcial_de(sid))
+        motivo = self._revisar_textos(d, self.parcial_de(sid), nombre if var is None else None)
         if motivo:
             return motivo
         falta = set(self.faltan({**d, "variable": nombre if var else ""}, self.parcial_de(sid)))
@@ -2387,9 +2631,11 @@ class Edicion(QObject):
             self.cambiado.emit()
         return None
 
-    def _revisar_textos(self, d: dict[str, str], parcial: str | None = None) -> str | None:
+    def _revisar_textos(self, d: dict[str, str], parcial: str | None = None, nueva: str | None = None) -> str | None:
         """Por qué un texto de la acción (condición, valor, evento) no se interpreta en el ámbito del `parcial` de su etapa
-        (por defecto, el raíz); None si todos sirven."""
+        (por defecto, el raíz); None si todos sirven. `nueva` es la variable que se va a declarar con la misma operación
+        (`crear`): todavía no existe, pero un texto que solo falla por ella (`K := K + 1`) sirve, como una vez unida la
+        acción a su etapa; un texto mal escrito, o con otra variable inexistente, se sigue rechazando."""
         raiz = parcial or self.raiz
         for campo, usa, booleana, nombre in (("condicion", d["tipo"] in CONTINUAS, True, "La condición"),
                                              ("valor", d["tipo"] in DISPARADOR, False, "El valor"),
@@ -2397,6 +2643,10 @@ class Edicion(QObject):
             texto = d.get(campo, "").strip()
             if usa and texto:
                 diag = self.ed.check_expression(self._n(texto, booleana), raiz)
+                if diag is not None and nueva:
+                    faltan = self.ed.undeclared_variables(self._n(texto, booleana), raiz)
+                    if faltan and set(faltan) <= {nueva}:
+                        continue
                 if diag is not None:
                     return f"{nombre} no es válido: {self.sust(diag.message)}"
         if d["tipo"] == "limitada" and d.get("limite", "").strip() and normalizar_duracion(d["limite"]) is None:
@@ -2420,7 +2670,7 @@ class Edicion(QObject):
             return f"La variable «{nombre}» no existe."
         if nombre and var is None and (motivo := self.motivo_nombre(nombre)):
             return motivo
-        motivo = self._revisar_textos(d, self._parcial(did))
+        motivo = self._revisar_textos(d, self._parcial(did), nombre if var is None else None)
         if motivo:
             return motivo
 
@@ -2473,6 +2723,50 @@ class Edicion(QObject):
             nonlocal did
             did = self.ed.add_draft_action((ajustar(x + H + ACT_LINK), ajustar(y)), {"etapa": sid})
         motivo = self._atomico("añadir acción", hacer)
+        if motivo:
+            self.rechazar(motivo, sid)
+            self.cambiado.emit()
+            return ""
+        self.sel, self.accion, self.ver_accion = [sid], did, True
+        self.cambia()
+        self.pedir_accion(sid, did)
+        return did
+
+    def _borde_accion(self, caja: dict[str, Any], p: QPointF) -> str | None:
+        """«der» o «abajo» si el punto está en el borde de la caja de una acción de una etapa del que se tira para sacar otra
+        acción; None si no. Depende de la colocación de las acciones de la etapa, que nunca cambia por esto: en «fila» y «fila
+        separada», solo el borde derecho; en «columna», solo el inferior (la nueva va debajo); en «matriz 2», ninguno."""
+        if not caja.get("etapa") or caja.get("forzado") or caja.get("suelta"):
+            return None
+        x, y, w, h = caja["rect"]
+        tol = BORDE_ACCION / self._zoom()
+        if not (x <= p.x() <= x + w and y <= p.y() <= y + h):
+            return None
+        colocacion = self.colocacion(caja["etapa"])
+        if colocacion in ("fila", "fila-separada"):
+            return "der" if x + w - p.x() <= tol else None
+        if colocacion == "columna":
+            return "abajo" if y + h - p.y() <= tol else None
+        return None  # matriz de 2: la acción nueva no tiene un sitio evidente, se añade desde la etapa
+
+    def anadir_accion_tras(self, aid: str, borde: str) -> str:
+        """Tirar del borde de una acción de una etapa (el derecho en fila, el inferior en columna; `_borde_accion`): una acción
+        nueva, vacía («?», como «Añadir acción…»), de la misma etapa y a continuación de aquella. La colocación de las acciones
+        no cambia nunca. Un solo paso de deshacer (P-IMP-115). Una acción sin completar se coloca justo detrás; si la de la que
+        se tira es del modelo, queda al final de las de su etapa (las sin completar van después de las completas)."""
+        caja = next((c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["id"] == aid), None)
+        sid = caja["etapa"] if caja else None
+        if not sid:
+            return ""
+        x, y = posiciones(self.M)[sid][0] - SX, posiciones(self.M)[sid][1]
+        did = ""
+
+        def hacer() -> None:
+            nonlocal did
+            did = self.ed.add_draft_action((ajustar(x + H + ACT_LINK), ajustar(y)), {"etapa": sid})
+            if self._es_borrador(aid):
+                self._pegar_a_etapa([did], sid, aid)
+        motivo = self._atomico("nueva acción desde una acción", hacer)
         if motivo:
             self.rechazar(motivo, sid)
             self.cambiado.emit()
@@ -3541,7 +3835,7 @@ class Edicion(QObject):
         marco de un parcial, el recorrido de un enlace, el enlace de una etapa con sus acciones y un enlace en borrador. None si
         no hay nada seleccionado que esté dibujado. Es lo que encuadra «Centrar selección» (`VistaDiagrama.centrar_seleccion`)."""
         M, pos = self.M, posiciones(self.M)
-        trans = {t["id"] for t in M["transitions"]}
+        trans = orientaciones(M)
         acciones = {c["id"]: c for c in getattr(self.diagrama, "cajas_acciones", None) or []}
         ordenes = {c["id"]: c for c in getattr(self.diagrama, "cajas_ordenes", None) or []}
         marcos, rutas = cajas_parciales(M), {e["id"]: e["pts"] for e in enlaces(M)}
@@ -3553,7 +3847,7 @@ class Edicion(QObject):
                 puntos.append(rect_anotacion(n))
             elif ident in pos:
                 x, y = pos[ident]
-                puntos.append(QRectF(x - TB, y - 2, 2 * TB, 4) if ident in trans else QRectF(x - H, y - H, 2 * H, 2 * H))
+                puntos.append(caja_barra(trans[ident], x, y) if ident in trans else QRectF(x - H, y - H, 2 * H, 2 * H))
                 puntos += [QRectF(*c["rect"]) for c in (*acciones.values(), *ordenes.values()) if c["etapa"] == ident]
                 puntos += [r for r, tid in textos if tid == ident]
             elif (b := self._barra(ident)) is not None:
@@ -3599,9 +3893,9 @@ class Edicion(QObject):
         macroetapas, transiciones y sus textos, barras, y las acciones y órdenes, que cuentan como de su etapa), según el
         modelo y sin esperar a que se dibuje."""
         M, m = self.M, MARGEN_SOLAPE
-        trans = {t["id"] for t in M["transitions"]}
+        trans = orientaciones(M)
         cajas: list[tuple[str, QRectF]] = [
-            (i, QRectF(x - TB, y - 2, 2 * TB, 4) if i in trans else QRectF(x - H, y - H, 2 * H, 2 * H))
+            (i, caja_barra(trans[i], x, y) if i in trans else QRectF(x - H, y - H, 2 * H, 2 * H))
             for i, (x, y) in posiciones(M).items()]
         for b in M.get("bars", []):
             bx, by, bw, bh = barra(b)
@@ -3943,6 +4237,19 @@ class Edicion(QObject):
         """El significado (árbol de la expresión) de un texto de receptividad (o de condición o evento de una acción) que
         se interpreta, para dibujarlo."""
         return self.ed._make_expr(self.ed.model, self._n(texto), self._parcial(tid))[0]["meaning"]
+
+    def vista_formula(self, texto: str, ident: str | None = None, booleana: bool = True) -> list[dict[str, Any]] | None:
+        """Los segmentos con que se dibuja una fórmula (la receptividad de la transición `ident`, o la condición, el evento o el
+        valor —con `booleana=False`— de la acción `ident`): la notación del dibujo (↑, ↓, sobrerrayado, · y +). None si está
+        vacía o no se interpreta (entonces se ve tal cual la escribió el usuario)."""
+        t = texto.strip()
+        if not t:
+            return None
+        try:
+            meaning, diag = self.ed._make_expr(self.ed.model, self._n(t, booleana), self._parcial(ident) if ident else None)
+        except Exception:  # noqa: BLE001 - un texto a medias no debe romper el panel
+            return None
+        return None if diag is not None else norm(meaning["meaning"], booleana, self.nombres)
 
     def sin_declarar(self, tid: str, texto: str) -> list[str]:
         """Variables que usa la receptividad (o la condición o el evento de una acción) y todavía no existen."""

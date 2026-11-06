@@ -23,12 +23,12 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from PySide6.QtCore import Qt, QRect, QRectF
-from PySide6.QtGui import QColor, QPen, QFont
-from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QPushButton, QVBoxLayout, QWidget, QStylePainter, QStyleOptionComboBox, QStyle)
+from PySide6.QtGui import QColor, QPainter, QPen, QFont, QTextDocument
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
+                               QPushButton, QVBoxLayout, QWidget, QStylePainter, QStyleOptionComboBox, QStyleOptionFrame, QStyle)
 
 from .bloques import COLORES, Programador
-from .diagrama import COL
+from .diagrama import COL, _html
 from .edicion import CONTINUAS, DISPARADOR, Edicion, Parpadeo
 from .variables import nombre_tipo
 
@@ -37,6 +37,46 @@ ALTO_SELECTOR = 62  # alto del selector de variable (dibujado como una caja de a
 ESTILO_FICHA = (f"QPushButton {{ background: {COLORES['comparacion']}; color: white; font-weight: 600; border: 2px solid "
                 f"transparent; border-radius: 9px; padding: 5px 22px; }}"
                 "QPushButton:checked { border: 3px solid #FFD43B; }")
+
+
+class CajaFormula(QLineEdit):
+    """El cuadro de texto de una fórmula (la receptividad de una transición, la condición, el evento o el valor de una acción).
+    No se edita (la fórmula se arma con bloques): si se interpreta, se ve con la notación del dibujo (↑ y ↓, la negación como
+    sobrerrayado, · y +), la misma que `diagrama._html`; si no, el texto tal cual. Es un QLineEdit de solo lectura y sin foco:
+    `text()` es siempre el texto del usuario que arman los bloques."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.formato: Callable[[str], str | None] | None = None  # texto -> HTML con la notación del dibujo (None: se ve tal cual)
+        self.setReadOnly(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+    def html_mostrado(self) -> str | None:
+        """El HTML con que se ve ahora la fórmula, o None si se ve el texto tal cual (vacía o no se interpreta)."""
+        if not self.text().strip() or self.formato is None:
+            return None
+        try:
+            return self.formato(self.text())
+        except Exception:  # noqa: BLE001 - un texto a medias no debe romper el pintado
+            return None
+
+    def paintEvent(self, evento) -> None:  # noqa: N802
+        html = self.html_mostrado()
+        if html is None:
+            super().paintEvent(evento)
+            return
+        p = QPainter(self)
+        opcion = QStyleOptionFrame()
+        self.initStyleOption(opcion)
+        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_PanelLineEdit, opcion, p, self)
+        zona = self.style().subElementRect(QStyle.SubElement.SE_LineEditContents, opcion, self).adjusted(3, 0, -3, 0)
+        doc = QTextDocument()
+        doc.setDefaultFont(self.font())
+        doc.setDocumentMargin(0)
+        doc.setHtml(f'<span style="color:{self.palette().text().color().name()}">{html}</span>')
+        p.setClipRect(zona)
+        p.translate(zona.left(), zona.top() + (zona.height() - doc.size().height()) / 2)
+        doc.drawContents(p)
 
 
 class _ComboVariable(QComboBox):
@@ -130,7 +170,8 @@ class PanelAccion(QWidget):
         self.caja_fichas = QWidget()
         fl = QHBoxLayout(self.caja_fichas)
         fl.setContentsMargins(0, 0, 0, 0)
-        fl.addWidget(QLabel("Valor :="))
+        self.l_fichas = QLabel("? :=")  # «Q :=»: la variable de la acción
+        fl.addWidget(self.l_fichas)
         self.grupo_fichas = QButtonGroup(self)
         self.fichas: dict[str, QPushButton] = {}
         for v in ("1", "0"):
@@ -153,18 +194,13 @@ class PanelAccion(QWidget):
         self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()
         nl.addWidget(self.prog, 1)
         fila = QHBoxLayout()
-        self.valor = QLineEdit()  # el texto del valor: solo se ve; «Escribir a mano» lo deja editar
-        self.valor.setReadOnly(True)
+        self.valor = CajaFormula()  # el valor, con la notación del dibujo; se arma con los bloques
+        self.valor.formato = self._formato_valor
         self.valor.setPlaceholderText("el valor se arma con bloques (CT + 1, 5…)")
         self.valor.textChanged.connect(self._valor_cambiado)
-        self.valor.textEdited.connect(lambda t: self.prog.poner(t))
-        self.valor.editingFinished.connect(lambda: self._aplicar("valor"))
-        self.manual = QCheckBox("Escribir a mano")
-        self.manual.setToolTip("Dejar editar el texto del valor (CT + 1, 5…); lo escrito pasa a bloques")
-        self.manual.toggled.connect(lambda on: self.valor.setReadOnly(not on))
-        fila.addWidget(QLabel("Valor (:=)"))
+        self.l_valor = QLabel("? :=")  # «Q :=», sin paréntesis; «? :=» mientras no hay variable
+        fila.addWidget(self.l_valor)
         fila.addWidget(self.valor, 1)
-        fila.addWidget(self.manual)
         nl.addLayout(fila)
         vl.addWidget(self.caja_numerica, 1)
 
@@ -178,9 +214,6 @@ class PanelAccion(QWidget):
         d = e.datos_accion(aid)
         if self._rechazado is not None and (otra or self._rechazado[0] != aid):
             self._rechazado = None
-        if otra:
-            self.manual.setChecked(False)
-            self.valor.setReadOnly(True)
         if otra:  # otra acción: lo escrito sin confirmar en un campo se descarta (nunca se aplica a la nueva)
             for campo in (self.valor, self.limite):
                 campo.blockSignals(True)
@@ -259,12 +292,21 @@ class PanelAccion(QWidget):
         for w in (self.l_limite, self.limite):
             w.setVisible(clave == "limitada")
         self._rellenar_variables()
+        for etiqueta in (self.l_valor, self.l_fichas):
+            etiqueta.setText(f"{self._elegida or '?'} :=")
         self.caja_valor.setVisible(not continua)
         booleana = self._tipo_variable() == "bool"
         self.caja_fichas.setVisible(not continua and booleana)
         self.caja_numerica.setVisible(not continua and not booleana)
         self.prog.refrescar()
         self._previsualizar()
+
+    def _formato_valor(self, texto: str) -> str | None:
+        """El valor con la notación del dibujo (el de `Edicion._segmentos`); None si no se interpreta."""
+        if self.e is None or self.aid is None:
+            return None
+        segmentos = self.e.vista_formula(texto, self.aid, booleana=False)
+        return None if segmentos is None else _html(segmentos)
 
     def frase_explicativa(self) -> str:
         """La acción en lenguaje claro, según su tipo."""
@@ -370,6 +412,7 @@ class PanelAccion(QWidget):
             self.parpadeo.iniciar({campo or "variable"})
             return False
         self._rechazado = None
+        self._previsualizar()  # (la edición ya repintó el panel con el aviso de antes: una acción suelta sigue siendo borrador)
         if self._reparo():  # la variable no vale para este tipo: se aplica, y el aviso (naranja) parpadea
             self.parpadeo.iniciar({"variable"})
         return True

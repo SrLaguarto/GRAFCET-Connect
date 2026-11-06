@@ -16,6 +16,7 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 - Enlaces trazados con el ratón desde los puntos de unión, con selección de secuencia, salto de etapas y repetición. Los retornos llevan su flecha y se recolocan a mano.
 - Receptividades, condiciones y eventos con un programador de bloques, o escritos a mano.
 - Acciones continuas, condicionadas, al activar, al desactivar y por evento. Tipos de etapa (etapa, etapa inicial, encapsulante, macroetapa) desde el botón derecho.
+- Girar la evolución a través de una transición (en sentido horario o antihorario; menú contextual, Editar o Ctrl+Mayús+←/→), con los tramos de sus enlaces movibles: trazo vertical con enlaces horizontales y flecha cuando no va hacia abajo.
 - Tabla de variables de entrada, salida y memoria, booleanas, enteras o decimales.
 - Cortar, copiar y pegar (Ctrl+X, Ctrl+C, Ctrl+V), deshacer y rehacer, buscar elemento (Ctrl+F) y equidistanciar alturas.
 
@@ -44,6 +45,7 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 ### Conexión con simuladores de procesos
 
 - Cliente Modbus TCP. El botón **E/S externas** de la barra abre la asignación: sensores a la izquierda y actuadores a la derecha.
+- La fila de pestañas (GRAFCET, PLANOS, E/S externas) muestra, a la derecha del todo, la luz de conexión: verde si está conectada, gris si no lo está y rojo si hay un error. Un clic abre **E/S externas**.
 - **Configuración** reúne la IP, el puerto (502 por defecto), el esclavo y los canales del servidor (por defecto, 32 digitales y 12 numéricos, con offset y cantidad ajustables).
 - Las variables nuevas se asignan solas a canales libres. También se pueden arrastrar a otro canal, y se quitan con la ×.
 - **Conectar** pone a cero las salidas asignadas antes de la primera lectura. **Desconectar / editar** escribe el cero antes de cerrar la conexión.
@@ -59,11 +61,12 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 
 ## Descargar e instalar
 
-Descargue el instalador `GRAFCET-Connect-1.0.1-setup.exe` desde la sección [Releases](https://github.com/SrLaguarto/GRAFCET-Connect/releases) del repositorio.
+Descargue el instalador `GRAFCET-Connect-1.0.2-setup.exe` desde la sección [Releases](https://github.com/SrLaguarto/GRAFCET-Connect/releases) del repositorio.
 
 - **Requisitos:** Windows 10 o Windows 11 de 64 bits. No necesita conexión a internet para funcionar.
 - **Instalación:** por defecto se instala en Archivos de programa, lo que pide permisos de administrador. Si no los tiene, el instalador ofrece instalarlo solo para su usuario. Crea el acceso en el menú Inicio, ofrece un acceso en el escritorio (desmarcado por defecto) y asocia los archivos `.grafnet` (marcado por defecto).
 - **Aviso de Windows:** la primera vez puede aparecer «Windows protegió su PC», porque el programa no lleva firma digital de código. Pulse «Más información» y después «Ejecutar de todas formas». Esto ocurre también con el instalador.
+- **Actualizaciones:** al arrancar, el programa consulta en segundo plano si hay una versión nueva publicada en GitHub y avisa en la barra de estado, con «Descargar» o «Ahora no». Se desactiva en **Ajustes > Buscar actualizaciones al arrancar**. Sin conexión no hace nada, y no descarga ni instala nada. **Ayuda > Buscar actualizaciones…** comprueba a mano.
 - **Desinstalación:** desde Configuración > Aplicaciones.
 
 ## Primeros pasos
@@ -85,7 +88,10 @@ Descargue el instalador `GRAFCET-Connect-1.0.1-setup.exe` desde la sección [Rel
 | Buscar elemento | Ctrl+F |
 | Conectar el elemento seleccionado con otro, sin ratón | Ctrl+K |
 | Centrar todo el dibujo | Ctrl+0 |
-| Acercar / alejar | Ctrl+= / Ctrl+- |
+| Acercar / alejar | Rueda del ratón (con o sin Ctrl), o Ctrl+= / Ctrl+- |
+| Desplazar en horizontal | Mayús+rueda |
+| Panel táctil | Dos dedos desplazan; pellizco acerca y aleja |
+| Girar la transición seleccionada | Ctrl+Mayús+← / → |
 | Mostrar u ocultar paneles izquierdo, derecho e inferior | Ctrl+L, Ctrl+B, Ctrl+J |
 | Imprimir | Ctrl+P |
 

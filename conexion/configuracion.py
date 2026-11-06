@@ -3,6 +3,7 @@ from dataclasses import asdict, dataclass, field
 from fractions import Fraction
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 
@@ -11,6 +12,37 @@ CONEXION_INICIAL = ("192.168.1.133", 502, 1)
 CANALES_INICIALES = {a: {"offset": 0, "cantidad": 32 if a in ("discrete", "coil") else 12}
                      for a in ("discrete", "coil", "input-register", "holding")}
 ETIQUETA_CANAL = {"discrete": "Entrada", "input-register": "Entrada numérica", "coil": "Salida", "holding": "Salida numérica"}
+_IPV4 = re.compile(r"(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}")
+
+
+def es_ipv4(texto) -> bool:
+    """Cuatro números de 0 a 255 separados por puntos (sin ceros a la izquierda)."""
+    return isinstance(texto, str) and _IPV4.fullmatch(texto) is not None
+
+
+def normalizar_host(texto) -> str:
+    """Un host guardado que no es IPv4: «localhost» pasa a 127.0.0.1 y cualquier otra cosa, a la dirección inicial."""
+    if isinstance(texto, str):
+        texto = texto.strip()
+        if es_ipv4(texto):
+            return texto
+        partes = texto.split(".")
+        if len(partes) == 4 and all(x.isdigit() and len(x) <= 3 for x in partes):
+            sin_ceros = ".".join(str(int(x)) for x in partes)
+            if es_ipv4(sin_ceros):
+                return sin_ceros
+        if texto.lower() == "localhost":
+            return "127.0.0.1"
+    return CONEXION_INICIAL[0]
+
+
+def aviso_host(texto) -> str:
+    """El aviso para un host guardado que no es IPv4 ni «localhost» (un nombre DNS, una IPv6…), que `normalizar_host` cambia
+    por la dirección inicial: no se hace en silencio. Vacío si el host sirve (o no hay)."""
+    if not isinstance(texto, str) or not (texto := texto.strip()) or es_ipv4(texto) or texto.lower() == "localhost" \
+            or es_ipv4(normalizar_host(texto)) and normalizar_host(texto) != CONEXION_INICIAL[0]:
+        return ""
+    return f"La dirección guardada ({texto}) no es una IP. Escriba la IP del servidor."
 
 
 @dataclass
@@ -44,6 +76,8 @@ class Configuracion:
     def validar(self, doc: dict):
         if not isinstance(self.host, str) or not self.host.strip():
             raise ValueError("Falta la dirección del servidor")
+        if not es_ipv4(self.host.strip()):
+            raise ValueError("La dirección del servidor debe ser una IP de cuatro números entre 0 y 255 (por ejemplo, 192.168.1.133)")
         for valor, minimo, maximo in ((self.puerto, 1, 65535), (self.unidad, 0, 255),
                                       (self.periodo_ms, 5, 10000), (self.timeout_ms, 10, 10000)):
             if type(valor) is not int or not minimo <= valor <= maximo:
@@ -152,6 +186,9 @@ class Configuracion:
             datos.pop("escucha", None)
             datos["senales"] = [Senal(**s) for s in datos["senales"]]
             config = cls(**datos)
+            aviso = aviso_host(config.host)
+            config.host = normalizar_host(config.host)  # un mapa antiguo con «localhost» u otro nombre sigue cargando
+            config.aviso_host = aviso  # (no es un campo: no se guarda; el panel lo enseña hasta que se escriba otra IP)
             quitadas = config.quitar_obsoletas(doc)
             config.validar(doc)
             if avisos is not None:

@@ -949,12 +949,14 @@ class EquidistanciarEnElDibujo(BaseQt):
         opciones = [t for t, _ in e.menu(centro(e.M, ids[2]))]
         self.assertEqual(opciones[:1], ["Colocación de las acciones"])
         self.assertEqual(opciones[-1], self.OPCION)
-        # una transición y un enlace: solo esa opción, y el clic derecho los selecciona
-        self.assertEqual([t for t, _ in e.menu(centro(e.M, ids[1]))], [self.OPCION])
+        # una transición (con el giro de su evolución antes) y un enlace (solo esa opción): el clic derecho los selecciona
+        self.assertEqual([t for t, _ in e.menu(centro(e.M, ids[1]))],
+                         ["Girar en sentido antihorario", "Girar en sentido horario", "-", self.OPCION])
         self.assertEqual(e.sel, [ids[1]])
         enlace = next(r for r in enlaces(e.M) if r["tid"] == ids[3] and r["rol"] == "pre")
         (x0, y0), (x1, y1) = enlace["pts"][0], enlace["pts"][1]
-        self.assertEqual([t for t, _ in e.menu(QPointF((x0 + x1) / 2, (y0 + y1) / 2))], [self.OPCION])
+        self.assertEqual([t for t, _ in e.menu(QPointF((x0 + x1) / 2, (y0 + y1) / 2))],
+                         ["Mostrar flecha", "-", self.OPCION])  # un enlace que baja no lleva flecha
         self.assertEqual(e.sel, [enlace["id"]])
         # en el hueco: todo el lienzo
         self.assertEqual([t for t, _ in e.menu(QPointF(600, 400))],

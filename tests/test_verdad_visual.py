@@ -52,7 +52,7 @@ class VerdadVisual(unittest.TestCase):
         v=modelo(); v.act("fijar", {"cambios":{"p":True}}); v.act("avanzar", {"us":3_000_000})
         antes=copy.deepcopy(v.s.z); traza=copy.deepcopy(v.s.trace.records)
         segs=v.model["transitions"][0]["cond"]; st=v.state()
-        for nombre in ("p","y","mem","X","A"," ≥ ","3s","/","2s","1"):
+        for nombre in ("p","y","mem","XA"," ≥ ","3s","/","2s","1"):  # (la variable de etapa es un solo segmento: XA, sin subíndice)
             ss=[s for s in segs if s["t"]==nombre]; self.assertTrue(ss,nombre)
             self.assertTrue(all(any(st["truth"].get(k) is True for k in s["eval"]) for s in ss),nombre)
         cero=next(s for s in segs if s["t"]=="0")

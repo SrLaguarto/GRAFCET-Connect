@@ -4,7 +4,7 @@ GRAFCET Connect (versión portable 1.0.0)
 Abrir: doble clic en «GRAFCET Connect.exe». No necesita instalación ni conexión a la red. La carpeta entera es el
 programa: puede copiarse a otro sitio o a un USB, pero «GRAFCET Connect.exe» no funciona separado de ella.
 
-Instalador (alternativa): «GRAFCET-Connect-1.0.1-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
+Instalador (alternativa): «GRAFCET-Connect-1.0.2-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
 acceso en el menú Inicio (y en el escritorio, si lo marca), asocia los .grafnet si lo deja marcado y se desinstala desde
 Configuración > Aplicaciones. Contiene la misma carpeta que la versión portable (P-IMP-103).
 
@@ -23,7 +23,7 @@ Qué hace
   («Ajustes de simulación no habituales»).
 - Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J). Al simular, el
   panel inferior muestra la traza.
-- Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), rueda del ratón (anclada al puntero), Ctrl+= y Ctrl+−; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Al cambiar el tamaño de la ventana principal, el dibujo se vuelve a encajar y centrar como «Centrar todo», tras 200 ms; plegar paneles no lo dispara. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
+- Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), la rueda del ratón (sola o con Ctrl; anclada al puntero), Ctrl+= y Ctrl+−; Mayús+rueda desplaza en horizontal y el gesto de dos dedos de un panel táctil, en los dos ejes; el pellizco del panel táctil hace zoom; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Al cambiar el tamaño de la ventana principal, el dibujo se vuelve a encajar y centrar como «Centrar todo», tras 200 ms; plegar paneles no lo dispara. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
 - Proyecto > Guardar (Ctrl+S) o Guardar como… (Ctrl+Mayús+S): guarda el proyecto con su dibujo en un archivo .grafnet, para abrirlo después.
 - Proyecto > Propiedades del archivo…: autor (se puede cambiar; por defecto, el usuario de Windows), fechas de creación y de última edición, versiones de GRAFCET Connect con que se creó y se guardó por última vez, versión del formato y sello del archivo. Muestra también los datos de este programa (versión, distribución o desarrollo, y fecha de instalación). Los archivos anteriores a la 1.0 muestran «desconocida (archivo anterior a la 1.0)» en fechas y versiones.
 - Firma: el programa abre todos los archivos .grafnet, también los guardados con la versión de desarrollo o sin firma. La barra de estado indica «Archivo sin firma» (o «Archivo de la versión de desarrollo») si no tienen la firma de esta versión; al guardarlos siguen sin firma. El autor del programa puede volver a sellarlos.
@@ -35,8 +35,9 @@ Qué hace
   Los enlaces se seleccionan con un clic (se pueden quitar o volver a enlazar; el sentido sale del trazo, y de
   abajo arriba lleva flecha). La simultaneidad (doble trazo) es una barra de la paleta que se suelta en el dibujo,
   se enlaza con etapas y transiciones y se ensancha estirando de sus extremos. Las alternativas se construyen con
-  el ratón, arrastrando de un punto de unión: a un hueco crea lo que sigue (una transición desde una etapa, una
-  etapa desde una transición: así se abre una rama), a un enlace une la rama ahí (si sale de una transición) o
+  el ratón, arrastrando de un punto de unión: a un hueco crea lo que sigue (desde una etapa, una transición;
+  desde una transición, una etapa: así se abre una rama), a otra etapa las une con una transición
+  nueva en medio, a un enlace une la rama ahí (si sale de una transición) o
   hace un salto de secuencia (si sale de una etapa). El ejemplo «Alternativas y salto de secuencia» lo muestra.
   Los retardos se escriben como 3s/X1. Play valida el grafcet y lo ejecuta; si no compila o está vacío, dice por qué,
   queda en Pausa y parpadean en naranja los elementos con error. Cada cierto tiempo se guarda una copia de recuperación.
@@ -48,12 +49,18 @@ Qué hace
 
 Selección, salto y repetición (corrección del paso 3, P-IMP-33)
 
-- Selección: arrastre desde la salida inferior de una etapa, o desde su enlace de salida, hasta un hueco lateral: se crea otra transición. De su salida, arrastre a una etapa o a otro hueco para crearla. Las ramas comparten la línea horizontal.
+- Selección: arrastre desde la salida inferior de una etapa hasta un hueco: se crea la transición que sigue. De la salida de una transición, arrastre a un hueco para crear la etapa que sigue. Si suelta una etapa sobre otra, las une con una transición nueva (o con un salto si la otra está por encima). Arrastrar un enlace lo mueve (ya no crea transiciones). Las ramas comparten la línea horizontal.
 - Salto de etapas: arrastre desde la salida inferior de la etapa inicial del salto hasta un enlace que llegue a la etapa de destino. Se crea una transición lateral con receptividad pendiente. También funciona desde la entrada superior del destino hasta un enlace de salida del origen.
 - Repetición: haga el mismo gesto hacia el enlace de entrada de una etapa anterior. También puede crear una transición lateral y unir su salida a esa etapa. El retorno lleva flecha ascendente automáticamente.
 - Unir una entrada: desde el punto superior de una transición hasta un enlace que salga de una etapa se toma esa etapa como anterior; no se añade una segunda etapa a la transición del enlace.
-- Arriba recibe y abajo emite, independientemente de dónde esté el otro elemento. Un clic en un enlace lo selecciona; arrastrarlo abre una rama. Cada conexión o creación se deshace con Ctrl+Z.
+- Arriba recibe y abajo emite, independientemente de dónde esté el otro elemento. Un clic en un enlace lo selecciona; arrastrarlo mueve el tramo que se agarra (sin abrir ninguna rama: las ramas se abren desde un punto de unión). Cada conexión o creación se deshace con Ctrl+Z.
 - Una transición con varias etapas anteriores o siguientes sigue siendo una simultaneidad, y usa la barra de la paleta.
+- Unión automática al soltar: si al soltar un elemento (recién creado o movido) uno de sus puntos de unión libres queda a 8 píxeles
+  o menos (medidos en pantalla, así que con zoom se escalan) de un punto libre compatible de otro elemento, se unen solos, como
+  si se hubiera trazado el enlace: la salida de una transición con la entrada de una etapa, la salida de una etapa con la
+  entrada de una transición (también con transiciones giradas, con sus puntos girados) y el punto de una acción suelta con el
+  de las acciones de una etapa. Con cualquier otro par, o con un punto ya ocupado, no se une nada. No atrae desde lejos y
+  entra en el mismo paso de Deshacer que el soltar. Las flechas del teclado no unen solas.
 
 El menú Ejemplos incluye «Selección de secuencia», «Salto de etapas» y «Repetición de secuencia» para probar cada caso por separado. El retorno se actualiza al mover los elementos; se guarda la topología y la posición, no una flecha decorativa independiente.
 
@@ -75,7 +82,7 @@ Ajustar flechas y realimentaciones (P-IMP-35 a P-IMP-37)
 En modo Editar:
 
 1. Por defecto solo lleva flecha un enlace que sube, y una por lazo, en el enlace más largo. Un enlace que baja no lleva flecha.
-2. Arrastre una flecha directamente para desplazarla por su enlace, incluidos los tramos horizontales. Con el enlace seleccionado, «Mostrar flecha» la oculta o la muestra (también la de un enlace corto de un lazo, o la de unión donde llegan dos ramas). La flecha siempre sigue el sentido del enlace; para invertir un enlace, quítelo y vuelva a enlazar.
+2. Con el botón derecho en un enlace, «Mostrar flecha» (si no la lleva) o «Quitar flecha» (si la lleva); solo sale la opción que cambia el estado. Arrastre una flecha directamente para desplazarla por su enlace, incluidos los tramos horizontales. Con el enlace seleccionado, «Mostrar flecha» la oculta o la muestra (también la de un enlace corto de un lazo, o la de unión donde llegan dos ramas). La flecha siempre sigue el sentido del enlace; para invertir un enlace, quítelo y vuelva a enlazar.
 3. Seleccione el enlace de realimentación. Aparecen cuadrados: arrastre el del tramo vertical para llevar el retorno a izquierda o derecha; los de los tramos horizontales cambian sus alturas. El recorrido se recoloca a mano.
 4. «Restablecer flecha automática» devuelve la flecha a su sitio.
 
@@ -93,7 +100,7 @@ En modo Editar, la pantalla tiene tres zonas:
   «Tipo de acción»). Las fichas se colocan arrastrándolas al dibujo; un clic en una ficha solo muestra su ayuda. El
   panel izquierdo se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L).
 - Dibujo (centro): donde se ve y se toca el grafcet. Con el ratón se selecciona, se mueve y se enlaza; la rueda
-  hace zoom.
+  hace zoom y Mayús+rueda desplaza en horizontal.
 - Opciones (panel inferior): ocupa todo el ancho de la ventana, debajo de los paneles laterales. Muestra la
   configuración de lo que está seleccionado. Sin selección, dice «Haga clic en
   un elemento del dibujo para ver y cambiar sus opciones». Se despliega y se pliega con su flecha; el divisor con el
@@ -164,8 +171,9 @@ En modo Editar:
 - Variables (lado derecho, al editar): tres columnas, Nombre, Papel y Tipo. El papel es entrada, salida o memoria; el
   tipo, booleana, entera o decimal con 2 decimales. Papel y Tipo se ven como texto y, al pulsar la celda, aparece su
   lista desplegable. Las variables internas se llaman memorias en la pantalla; el archivo las guarda igual que antes.
-  El valor inicial y la unidad que tuviera un fichero se conservan aunque la tabla no los muestre; las variables
-  nuevas no los tienen. Los usos no se listan, pero una variable usada no se puede quitar, y el mensaje lo dice.
+  La unidad que tuviera un fichero se conserva aunque la tabla no la muestre. Ninguna variable tiene valor inicial: todas
+  empiezan en 0 (falso), entradas incluidas. Un fichero que declarara otro valor se abre igualmente, con ese valor
+  a 0 y un aviso (un número fijo se escribe en la receptividad, por ejemplo C = 3). Los usos no se listan, pero una variable usada no se puede quitar, y el mensaje lo dice.
   Cambiar el nombre actualiza las receptividades y acciones que la usan. Un fichero antiguo con un decimal de 1 o 3
   decimales, o de tipo duración, muestra su tipo («Decimal (3)», «Duración») y sigue funcionando; si se cambia su
   tipo, solo se elige entre los tres que se ofrecen.
@@ -205,8 +213,9 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
   · Si es numérica, el valor puede ser un número (por ejemplo 5), una variable numérica, o una operación «+», «−», «×»
     o «÷» entre dos huecos. Las operaciones se pueden anidar: CT * 2 - 1 es una resta cuyo primer operando es
     «CT × 2».
-  · Debajo se ve el texto del valor, de solo lectura. La casilla «Escribir a mano» lo deja editar; lo escrito pasa a
-    bloques.
+  · A la izquierda de las fichas o de los bloques se lee «Q :=» (la variable de la acción; «? :=» mientras no hay
+    ninguna) y debajo, el texto del valor con la notación del dibujo (CT + 1, ↑, ↓, sobrerrayado para NOT, · y +). No se
+    escribe a mano: el valor se arma con bloques.
   · Un valor que el programa no entiende no se guarda, y el panel dice por qué.
 - Condición o evento: se programan con bloques en el mismo panel. Una condicionada sin condición válida es un
   borrador: no se simula y se dibuja con «?». Elegir «Continua» quita la condición.
@@ -225,6 +234,12 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
   · Una acción suelta que toca el lado derecho de otra (o el lado inferior, en colocación en columna) se pega a ella,
     con un imán de 16 píxeles. Varias acciones sueltas pegadas forman un grupo que se mueve junto y se une a una
     etapa de una vez.
+- Acción nueva desde una acción: con el cursor en el borde derecho de una acción de una etapa (cambia a flechas horizontales y
+  aparece un punto), arrastre: se crea otra acción vacía («?», como «Añadir acción…», con su diálogo de edición) de la misma
+  etapa, a continuación de ella. Solo hay un borde por colocación y la colocación nunca cambia: en «fila» y «fila separada», el
+  borde derecho; en «columna», el borde inferior (cursor de flechas verticales; la nueva va debajo); en «matriz de 2», ninguno. Un clic en el borde, o arrastrar por el cuerpo, solo
+  selecciona o mueve como siempre. Es un único paso de Deshacer. Si la acción de la que se tira es del modelo (completa),
+  la nueva queda al final de las de su etapa (las sin completar van después de las completas).
 - Enlace de la etapa: el trazo horizontal que une la etapa con sus acciones se selecciona con un clic. Supr, o botón
   derecho > «Eliminar el enlace», separa todas las acciones de la etapa: cada una queda suelta, donde estaba.
   «Separar de la etapa» separa solo la acción elegida; «Separar del grupo», en un grupo suelto, la saca del grupo;
@@ -242,6 +257,18 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
   ensancha con su texto. La colocación se guarda en el proyecto, etapa por etapa, o por grupo suelto. Si la colocación
   elegida no cabe, se aparta lo que estorba (ver «No se puede poner un elemento encima de otro»); la colocación no
   cambia sola.
+- Girar una transición: con el botón derecho en una transición, «Girar en sentido horario» y «Girar en sentido antihorario»
+  (también Editar > «Girar transición en sentido horario / antihorario», y Ctrl+Mayús+Derecha / Izquierda con la transición
+  seleccionada) cambian el sentido de la evolución a través de ella: abajo (por defecto) → izquierda → arriba → derecha, en
+  sentido horario (como las agujas del reloj); al revés, en sentido antihorario. Los tramos del enlace de una transición girada
+  se mueven arrastrando sus cuadrados, como los de cualquier enlace. Con la evolución horizontal el trazo de la transición es vertical, el
+  enlace llega por el lado contrario al sentido y sale en él, y la receptividad se escribe encima del trazo y la
+  designación debajo, siempre horizontales. Con «arriba» el trazo sigue horizontal y los enlaces llegan por abajo y salen por
+  arriba. Cuando la evolución no va hacia abajo, el enlace que sale de la transición lleva una flecha que indica el sentido.
+  El giro es solo de dibujo: no cambia el significado ni la simulación. Se guarda en el proyecto y se deshace con Ctrl+Z.
+- Colocar un tramo de un enlace a mano: al arrastrar un tramo de un enlace y soltarlo, se queda exactamente donde se
+  suelta, aunque quede encima de otro enlace; la recolocación automática de los demás enlaces no lo mueve ni se aparta
+  de él.
 - Acciones limitadas de ficheros antiguos: una continua con límite de tiempo de un fichero anterior se sigue dibujando
   y simulando igual, con su límite como una condición más (NOT 3s/X1). En el menú y en el panel aparece como
   «Condicionada (con límite de tiempo)». Ese tipo ya no se ofrece; al editar su condición se conserva el límite, salvo
@@ -266,8 +293,9 @@ piezas, en lugar de escribirlo.
   existen). En la última fila, el aviso, «⤢ Ampliar» (abre el programador en una ventana más grande, sincronizada) y
   la papelera.
 - Bloques ya puestos: cada bloque del área tiene su ▾ para cambiar de elemento (otra etapa, otra variable).
-- Fórmula en texto: es de solo lectura. La casilla «Escribir a mano» la deja editar; lo escrito pasa a bloques. Al
-  desmarcarla vuelve a ser de solo lectura.
+- Fórmula en texto: no se edita (no hay casilla «Escribir a mano»); la fórmula se arma solo con bloques y el cuadro la
+  muestra con la notación del dibujo: ↑ y ↓ para los flancos, NOT como sobrerrayado, · y +, y X3 para las etapas. Si el
+  programa no la entiende (a medias), se ve el texto tal cual.
 - Operadores: «y» (oliva) y «o» (fucsia) tienen colores distintos; «no», «flanco de subida ↑», «flanco de bajada ↓» y
   los demás son gris pizarra. Las condiciones son bloques hexagonales: una variable booleana o una etapa, con un ▾
   para elegir cuál.

@@ -141,7 +141,7 @@ def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = Non
     elif op in ("active", "activePartial", "activeMacro"):
         nombre = names.get(m["reference"], m["reference"])
         num = re.fullmatch(r"E(\d+)", nombre) if op == "active" else None
-        out = [_seg("X"), _seg(num.group(1) if num else nombre, s=True)]
+        out = [_seg("X" + (num.group(1) if num else nombre))]  # X3, sin subíndice (así se escribe la variable de etapa)
     elif op in ("rise", "fall"):
         cuerpo = hijo(0)
         if m["operands"][0]["operator"] not in ("ref", "active", "lit"):
@@ -179,6 +179,13 @@ def _con_retardo(e: dict[str, Any] | None) -> dict[str, bool]:
     """{"tmr": True} si la expresión de una condición o un evento lleva un retardo t1/condición/t2; el dibujo reserva
     sitio encima para el tiempo transcurrido del temporizador (no depende del estado: la disposición no cambia al simular)."""
     return {"tmr": True} if e is not None and e["mode"] == "executable" and _tiene_retardo(e["meaning"]) else {}
+
+
+def _numericas(e: dict[str, Any] | None, numericas: set[str]) -> dict[str, list[str]]:
+    """Las variables numéricas (enteras o decimales) que usa una receptividad, por orden de aparición (`numericVars`, solo si
+    hay alguna): en la simulación se dibuja su valor junto a la transición."""
+    ids = list(dict.fromkeys(i for i in ((e or {}).get("bindings") or {}).values() if i in numericas))
+    return {"numericVars": ids} if ids else {}
 
 
 def t_s(us: str | int) -> str:
@@ -237,7 +244,8 @@ class Vista:
                  hidden: frozenset[str] | set[str] = frozenset(), bars: list[dict[str, Any]] | None = None,
                  presentation: dict[str, Any] | None = None, link_styles: dict[str, Any] | None = None,
                  draft_actions: list[dict[str, Any]] | None = None,
-                 action_layouts: dict[str, str] | None = None, comments: dict[str, str] | None = None) -> None:
+                 action_layouts: dict[str, str] | None = None, comments: dict[str, str] | None = None,
+                 orientations: dict[str, str] | None = None) -> None:
         m, layout = build()
         # comentarios de etapas y transiciones (presentación: nunca entran en el significado ni en la simulación)
         self.comments = {n["elementRef"]: n["text"] for n in (presentation or {}).get("notes", [])
@@ -254,6 +262,10 @@ class Vista:
         # colocación de las acciones de cada etapa (presentación); lo que no se conoce vale «fila»
         self.action_layouts = {k: v for k, v in (crudos if isinstance(crudos, dict) else {}).items()
                                if v in ("fila", "fila-separada", "matriz-2", "columna")}
+        # sentido de la evolución a través de cada transición (presentación); lo que no se conoce vale «abajo»
+        giros = orientations if orientations is not None else (presentation or {}).get("transitionOrientations", {})
+        self.orientations = {k: v for k, v in (giros if isinstance(giros, dict) else {}).items()
+                             if v in ("derecha", "arriba", "izquierda")}
         doc = m.doc if isinstance(m, M) else m
         self.key, self.options, self.doc = key, options, doc
         self.texts: dict[str, str] = {}
@@ -294,6 +306,7 @@ class Vista:
                    layout: Layout | None) -> dict[str, Any]:
         layout = {**auto_layout(doc), **(layout or {})}
         exprs = {e["id"]: e for e in doc["expressions"]}
+        numericas = {v["id"] for v in doc["variables"] if v["type"]["kind"] in ("int", "decimal")}
         self.texts = {eid: e["text"] for eid, e in exprs.items()}
         names = self.names
         self.where = {t["conditionRef"]: f"transición {names[t['id']]}" for t in doc["transitions"]}
@@ -380,7 +393,9 @@ class Vista:
                              "pre": t["preRefs"], "post": t["postRefs"],
                              "partial": t["partialRef"], "cond": disp(t["conditionRef"], top=True),
                              "conditionRef": t["conditionRef"], **_con_retardo(exprs.get(t["conditionRef"])),
+                             **_numericas(exprs.get(t["conditionRef"]), numericas),
                              "x": layout[t["id"]][0], "y": layout[t["id"]][1],
+                             **({"orient": self.orientations[t["id"]]} if t["id"] in self.orientations else {}),
                              **({"comment": self.comments[t["id"]]} if t["id"] in self.comments else {})}
                             for t in doc["transitions"]],
             "drafts": [{"id": d["id"], "from": d["fromRef"], "to": d["toRef"]} for d in doc.get("draftLinks", [])],

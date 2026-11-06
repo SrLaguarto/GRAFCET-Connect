@@ -146,10 +146,10 @@ class Nucleo(unittest.TestCase):
         con = {t["label"]: [{k: v for k, v in s.items() if k != "eval"} for s in t["cond"]] for t in M["transitions"]}
         for t in M["transitions"]:
             raiz = t["conditionRef"]
-            esperadas = [[raiz]] if t["label"] == "t1" else [[raiz], [raiz], [raiz + ".1", raiz], [raiz + ".1", raiz]]
+            esperadas = [[raiz]] if t["label"] == "t1" else [[raiz], [raiz], [raiz + ".1", raiz]]
             self.assertEqual([s["eval"] for s in t["cond"]], esperadas)
         self.assertEqual(sorted(con.values(), key=lambda c: c[0]["t"]),
-                         [[{"t": "2s"}, {"t": "/"}, {"t": "X"}, {"t": "1", "s": True}], [{"t": "marcha"}]])  # la etapa E1 es X1
+                         [[{"t": "2s"}, {"t": "/"}, {"t": "X1"}], [{"t": "marcha"}]])  # la etapa E1 es X1
         acc = next(a for s in M["steps"] for a in s["actions"])
         self.assertEqual((acc["text"], acc["target"]), ([{"t": "motor"}], motor), "se muestra el nombre, la clave es el ID")
         st = run(v, ("entrada", {"var": marcha}), ("avanzar", {"us": 500_000}))

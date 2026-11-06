@@ -150,7 +150,8 @@ class PanelVariables(QWidget):
         self.tabla.setColumnWidth(1, max(fm.horizontalAdvance(t) for _, t in PAPELES + (("", "Papel"),)) + 8)
         self.tabla.setColumnWidth(2, max(fm.horizontalAdvance(t) for _, t in TIPOS + (({}, "Tipo"),)) + 8)
         cab.setMinimumSectionSize(20)
-        self.tabla.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # los nombres largos se elidén
+        self.tabla.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # los nombres largos se elidén; si ni así cabe, barra
+        self.tabla.setMinimumWidth(190)  # por debajo, el panel que la contiene se desplaza en vez de aplastar las columnas
         self.tabla.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.tabla.setItemDelegate(_DelegadoCombo(self))
         self.tabla.clicked.connect(self._clic)
@@ -227,7 +228,8 @@ class PanelVariables(QWidget):
     def _ajustar_tabla(self):
         alto = min(320, self.tabla.horizontalHeader().height()
                    + sum(self.tabla.rowHeight(r) for r in range(self.tabla.rowCount()))
-                   + 2 * self.tabla.frameWidth())
+                   + 2 * self.tabla.frameWidth()
+                   + (self.tabla.horizontalScrollBar().height() if self.tabla.horizontalScrollBar().isVisible() else 0))
         if alto != getattr(self.tabla, "alto_filas", None):
             self.tabla.alto_filas = alto
             self.tabla.setFixedHeight(alto)
@@ -321,10 +323,8 @@ class PanelVariables(QWidget):
             f["tipo"] = dict(tipo)
             self._clave = ""
             return
-        v = next(x for x in self.e.ed.model["variables"] if x["id"] == f["id"])
-        inicial = {"bool": False}.get(tipo["kind"], "0")  # al cambiar de tipo, el valor inicial vuelve a 0
-        self._resultado(self.e.cambiar_variable(f["id"], type=dict(tipo),
-                                                **({"initialValue": inicial} if v["role"] == "input" else {})), f)
+        # al cambiar de tipo, el valor inicial vuelve a 0 (cambiar_variable lo hace siempre)
+        self._resultado(self.e.cambiar_variable(f["id"], type=dict(tipo)), f)
 
     def _editado(self, it: QTableWidgetItem) -> None:
         if self._llenando or self.e is None or it.column() != 0 or not 0 <= it.row() < len(self._filas):

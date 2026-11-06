@@ -1,10 +1,10 @@
 {
- "date": "2026-11-05T18:21:37+01:00",
+ "date": "2026-11-06T15:38:39+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 948,
- "failures": 0,
+ "total": 1019,
+ "failures": 1,
  "errors": 0,
  "results": [
   {
@@ -248,6 +248,642 @@
    "summary": "REQ-MOD-03, REQ-EDT-02, REQ-EDT-14: un retorno exterior rodea al interior; no se altera una ruta manual ni el modelo."
   },
   {
+   "test": "test_aula.AccionesSueltas.test_SAUL08_play_no_une_una_accion_suelta_bajo_el_extremo_de_una_transicion",
+   "case": "S-AUL08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: una acción suelta con su punto de unión bajo el extremo de una transición sumidero sigue"
+  },
+  {
+   "test": "test_aula.AccionesSueltas.test_SAUL09_una_acciones_suelta_de_contador_con_variable_nueva_no_da_error",
+   "case": "S-AUL09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: «C := C + 1» en una acción suelta cuya variable se declara en la misma operación no da «no interpretado»,"
+  },
+  {
+   "test": "test_aula.EnlacesColocadosAMano.test_SAUL19_un_tramo_dejado_sobre_otro_enlace_se_queda_y_no_aparta_a_los_automaticos",
+   "case": "S-AUL19",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: dos retornos; se deja el carril de uno sobre el del otro (también colocado a mano): se quedan solapados,"
+  },
+  {
+   "test": "test_aula.EnlacesColocadosAMano.test_SAUL20_dos_tramos_horizontales_a_mano_en_la_misma_altura_se_quedan_solapados",
+   "case": "S-AUL20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el tramo medio de un enlace llevado a la altura del de otro enlace se queda ahí, aunque se muevan otros"
+  },
+  {
+   "test": "test_aula.Gestos.test_SAUL02_arrastrar_un_enlace_mueve_su_tramo_y_no_crea_nada",
+   "case": "S-AUL02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: agarrar el cuerpo de un enlace y arrastrar mueve el tramo (sin seleccionarlo antes); no abre ramas."
+  },
+  {
+   "test": "test_aula.Gestos.test_SAUL03_arrastrar_un_enlace_recto_solo_lo_selecciona",
+   "case": "S-AUL03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un enlace sin tramos que mover (recto) se selecciona, pero arrastrarlo no crea ni mueve nada."
+  },
+  {
+   "test": "test_aula.Gestos.test_SAUL04_arrastrar_de_una_etapa_a_un_hueco_crea_solo_una_transicion",
+   "case": "S-AUL04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: de una etapa a un hueco se crea solo una transición enlazada, y una sola operación de deshacer."
+  },
+  {
+   "test": "test_aula.Gestos.test_SAUL05_arrastrar_de_una_etapa_a_otra_etapa_las_une_con_una_transicion",
+   "case": "S-AUL05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: soltar sobre otra etapa crea una transición entre las dos (nunca un enlace etapa-etapa en borrador)."
+  },
+  {
+   "test": "test_aula.Gestos.test_SAUL06_soltar_sobre_una_etapa_anterior_es_un_retorno_con_transicion",
+   "case": "S-AUL06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: si la otra etapa queda encima, la transición nueva hace el retorno (salto o repetición de secuencia)."
+  },
+  {
+   "test": "test_aula.Gestos.test_SAUL07_arrastrar_de_una_transicion_a_un_hueco_sigue_creando_una_etapa",
+   "case": "S-AUL07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: de una transición a un hueco se crea solo la etapa que sigue."
+  },
+  {
+   "test": "test_aula.GiroDeTransiciones.test_SAUL13_girar_a_derechas_y_a_izquierdas_recorre_las_cuatro_orientaciones_con_deshacer",
+   "case": "S-AUL13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: a derechas (como las agujas del reloj en pantalla) abajo → izquierda → arriba → derecha → abajo; a"
+  },
+  {
+   "test": "test_aula.GiroDeTransiciones.test_SAUL14_el_menu_del_boton_derecho_la_barra_de_menus_y_el_atajo_giran",
+   "case": "S-AUL14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: «Girar en sentido antihorario» y «Girar en sentido horario» en el menú de la transición, «Girar transición en"
+  },
+  {
+   "test": "test_aula.GiroDeTransiciones.test_SAUL15_el_trazo_es_vertical_con_el_texto_horizontal_sin_pisar_los_enlaces",
+   "case": "S-AUL15",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: con evolución horizontal el trazo es vertical y la receptividad (encima) y la designación (debajo)"
+  },
+  {
+   "test": "test_aula.GiroDeTransiciones.test_SAUL16_anclas_caja_y_clic_siguen_a_la_orientacion",
+   "case": "S-AUL16",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: los puntos de unión, la caja del trazo y el clic en la transición siguen su orientación."
+  },
+  {
+   "test": "test_aula.GiroDeTransiciones.test_SAUL17_la_orientacion_se_guarda_y_se_abre",
+   "case": "S-AUL17",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: viaja en `presentation.transitionOrientations` del archivo y al reabrirlo el dibujo es el mismo."
+  },
+  {
+   "test": "test_aula.GiroDeTransiciones.test_SAUL18_el_modelo_no_cambia_con_el_giro",
+   "case": "S-AUL18",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-06"
+   ],
+   "summary": "REQ-EDT-02, REQ-MOD-06: el giro es solo presentación: el modelo queda igual y el grafcet sigue pudiendo simularse."
+  },
+  {
+   "test": "test_aula.GiroDeTransicionesNucleo.test_SAUL10_el_giro_de_las_acciones_ya_no_existe",
+   "case": "S-AUL10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: se retiró el giro del bloque de acciones de una etapa (P-IMP-107 pasa a ser el de la transición)."
+  },
+  {
+   "test": "test_aula.GiroDeTransicionesNucleo.test_SAUL11_cada_orientacion_gira_el_trazo_y_los_enlaces_y_pone_flecha",
+   "case": "S-AUL11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-06"
+   ],
+   "summary": "REQ-EDT-02, REQ-MOD-06: el enlace llega a la transición y sale de ella en el sentido de su evolución, en tramos"
+  },
+  {
+   "test": "test_aula.GiroDeTransicionesNucleo.test_SAUL12_formato_valor_desconocido_borrar_deshacer_y_pegar",
+   "case": "S-AUL12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-EDT-04"
+   ],
+   "summary": "REQ-DAT-02, REQ-EDT-04: `presentation.transitionOrientations` solo guarda lo que no es «abajo»; un valor desconocido se"
+  },
+  {
+   "test": "test_aula.NuevaAccionDesdeUnaAccion.test_SAUL30_del_borde_derecho_sale_una_accion_a_continuacion",
+   "case": "S-AUL30",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: arrastrar del borde derecho de una acción crea otra, vacía, de la misma etapa y detrás; un paso de deshacer."
+  },
+  {
+   "test": "test_aula.NuevaAccionDesdeUnaAccion.test_SAUL31_en_fila_el_borde_inferior_no_saca_nada_ni_cambia_la_colocacion",
+   "case": "S-AUL31",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: en fila el borde inferior no es un punto de tirar: no crea ninguna acción ni pasa la etapa a columna."
+  },
+  {
+   "test": "test_aula.NuevaAccionDesdeUnaAccion.test_SAUL32_un_clic_o_el_cuerpo_de_la_accion_no_crean_nada",
+   "case": "S-AUL32",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: pulsar y soltar sin arrastrar (en el borde o en el cuerpo) solo selecciona la acción; arrastrar el cuerpo no crea."
+  },
+  {
+   "test": "test_aula.NuevaAccionDesdeUnaAccion.test_SAUL33_en_columna_el_borde_derecho_no_saca_nada",
+   "case": "S-AUL33",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: en columna las acciones van debajo: el borde derecho no es un punto de tirar (el inferior sí)."
+  },
+  {
+   "test": "test_aula.NuevaAccionDesdeUnaAccion.test_SAUL34_en_columna_el_borde_inferior_saca_otra_debajo_sin_cambiar_la_colocacion",
+   "case": "S-AUL34",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: en columna el borde inferior crea otra acción de la etapa (un paso de deshacer) y la colocación sigue en"
+  },
+  {
+   "test": "test_aula.NuevaAccionDesdeUnaAccion.test_SAUL35_fila_separada_solo_borde_derecho_y_matriz_ninguno",
+   "case": "S-AUL35",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: en fila separada vale el borde derecho y no el inferior; en matriz de 2 no vale ninguno; la colocación no cambia."
+  },
+  {
+   "test": "test_aula.RuedaYTactil.test_SAUL17_rueda_y_ctrl_rueda_hacen_zoom_mayus_y_dos_dedos_desplazan",
+   "case": "S-AUL17",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-SIM-03: la rueda del ratón sola y Ctrl+rueda hacen zoom anclado al puntero; Mayús+rueda desplaza en"
+  },
+  {
+   "test": "test_aula.UnionAutomatica.test_SAUL21_una_etapa_soltada_muy_cerca_de_la_salida_de_una_transicion_se_une",
+   "case": "S-AUL21",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la etapa que se suelta con su entrada a 8 px o menos de la salida libre de una transición se une a ella,"
+  },
+  {
+   "test": "test_aula.UnionAutomatica.test_SAUL22_lejos_o_con_el_punto_ocupado_no_se_une_nada",
+   "case": "S-AUL22",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: a más de 8 px, o si el punto ya tiene un enlace, no se une; tampoco etapa con etapa."
+  },
+  {
+   "test": "test_aula.UnionAutomatica.test_SAUL23_una_transicion_soltada_cerca_de_la_salida_de_una_etapa_se_une",
+   "case": "S-AUL23",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la transición que se suelta con su entrada muy cerca de la salida libre de una etapa se une a ella."
+  },
+  {
+   "test": "test_aula.UnionAutomatica.test_SAUL24_respeta_el_zoom",
+   "case": "S-AUL24",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el radio son 8 px de pantalla: con zoom 200 % son 4 unidades del dibujo; con 50 %, 16."
+  },
+  {
+   "test": "test_aula.UnionAutomatica.test_SAUL25_una_transicion_girada_usa_sus_puntos_girados",
+   "case": "S-AUL25",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: con la transición girada a la derecha, su salida está a su derecha y es ahí donde une."
+  },
+  {
+   "test": "test_aula.UnionAutomatica.test_SAUL26_una_transicion_creada_arrastrando_une_tambien_su_otro_punto",
+   "case": "S-AUL26",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la transición que sale de arrastrar de una etapa a un hueco se une también a la etapa que queda debajo si su"
+  },
+  {
+   "test": "test_aula.UnionAutomatica.test_SAUL27_la_paleta_tambien_une_en_un_solo_paso",
+   "case": "S-AUL27",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: una transición soltada desde la paleta junto a la salida de una etapa se une; un solo paso de deshacer."
+  },
+  {
+   "test": "test_aula.UnionAutomatica.test_SAUL28_una_accion_suelta_se_une_al_punto_de_acciones_de_una_etapa",
+   "case": "S-AUL28",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el punto de una acción suelta a 8 px o menos del de las acciones de una etapa sin ellas las une; con el punto"
+  },
+  {
+   "test": "test_aula.UnionAutomatica.test_SAUL29_con_las_flechas_no_se_une_solo",
+   "case": "S-AUL29",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el ajuste fino con el teclado no une nada."
+  },
+  {
+   "test": "test_aula.ValoresEnTransiciones.test_SAUL16_al_simular_se_ve_el_valor_de_la_variable_numerica_de_la_receptividad",
+   "case": "S-AUL16",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: junto a «n ≥ 3» se dibuja el valor actual de n, en el estilo de las acciones, solo en simulación y sin"
+  },
+  {
+   "test": "test_aula.ValoresInicialesFueraDelGrafcet.test_SAUL36_variable_nueva_de_cualquier_rol_empieza_en_cero",
+   "case": "S-AUL36",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: una entrada nueva empieza en 0 (falso) y otro valor inicial se rechaza."
+  },
+  {
+   "test": "test_aula.ValoresInicialesFueraDelGrafcet.test_SAUL37_abrir_un_archivo_con_valor_inicial_lo_quita_y_avisa",
+   "case": "S-AUL37",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: el archivo se abre, el valor inicial pasa a 0, hay un aviso y el proyecto queda modificado."
+  },
+  {
+   "test": "test_aula.ValoresInicialesFueraDelGrafcet.test_SAUL38_archivo_sin_valores_iniciales_no_avisa_ni_queda_modificado",
+   "case": "S-AUL38",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-07: un archivo con todo a 0 se abre sin aviso y sin cambios pendientes."
+  },
+  {
+   "test": "test_aula.VariableDeEtapaSinSubindice.test_SAUL01_la_variable_de_etapa_se_escribe_x3_sin_subindice",
+   "case": "S-AUL01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: X3 se dibuja y se previsualiza como texto plano, sin subíndice."
+  },
+  {
+   "test": "test_aula_pequena.AvisoVersion.test_SACT04_aviso_no_modal_y_ahora_no_se_recuerda",
+   "case": "S-ACT04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: una versión nueva se avisa sin ventana modal; «Ahora no» la recuerda y no se repite en el arranque."
+  },
+  {
+   "test": "test_aula_pequena.AvisoVersion.test_SACT05_fallo_en_el_arranque_no_dice_nada",
+   "case": "S-ACT05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: en el arranque, un fallo de red no muestra aviso ni mensaje."
+  },
+  {
+   "test": "test_aula_pequena.AvisoVersion.test_SACT06_comprobacion_manual_informa_siempre",
+   "case": "S-ACT06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: «Buscar actualizaciones…» informa de nueva versión, última versión o imposibilidad de comprobar."
+  },
+  {
+   "test": "test_aula_pequena.AvisoVersion.test_SACT07_ajuste_al_arrancar",
+   "case": "S-ACT07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: «Buscar actualizaciones al arrancar» está activo por defecto y se guarda."
+  },
+  {
+   "test": "test_aula_pequena.AvisoVersion.test_SACT08_el_hilo_entrega_el_resultado",
+   "case": "S-ACT08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: sin modo síncrono, la consulta va en un hilo y el resultado llega a la interfaz."
+  },
+  {
+   "test": "test_aula_pequena.AvisoVersion.test_SACT09_una_comprobacion_manual_con_otra_en_marcha_tambien_contesta",
+   "case": "S-ACT09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: si se pide una comprobación manual mientras corre la del arranque, su resultado se entrega como manual."
+  },
+  {
+   "test": "test_aula_pequena.AvisoVersion.test_SACT10_solo_se_abren_las_urls_del_repositorio",
+   "case": "S-ACT10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: «Descargar» abre la URL de la publicación solo si es de github.com/SrLaguarto/GRAFCET-Connect/; si no, la última."
+  },
+  {
+   "test": "test_aula_pequena.Barras.test_SSCR01_ventana_pequena_con_barras_a_la_vista",
+   "case": "S-SCR01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con la ventana pequeña los paneles laterales se desplazan en ambos sentidos y las barras se ven."
+  },
+  {
+   "test": "test_aula_pequena.CampoIP.test_SIP03_campo_de_cuatro_cajas",
+   "case": "S-IP03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: la IP son cuatro cajas con nombre accesible; text()/setText() usan «a.b.c.d»."
+  },
+  {
+   "test": "test_aula_pequena.CampoIP.test_SIP04_teclado_salta_y_rechaza",
+   "case": "S-IP04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: tres cifras o un punto pasan a la siguiente caja; solo cifras; no se admite más de 255."
+  },
+  {
+   "test": "test_aula_pequena.CampoIP.test_SIP05_retroceso_y_pegado",
+   "case": "S-IP05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: Retroceso en una caja vacía vuelve a la anterior; pegar «a.b.c.d» en cualquier caja reparte los números."
+  },
+  {
+   "test": "test_aula_pequena.CampoIP.test_SIP06_editingfinished_al_salir",
+   "case": "S-IP06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: la señal editingFinished se emite al salir de la dirección o con Intro, no al saltar entre cajas."
+  },
+  {
+   "test": "test_aula_pequena.CampoIP.test_SIP07_host_recordado_no_ipv4",
+   "case": "S-IP07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: un host guardado que no es IPv4 se carga normalizado, con aviso, y sin reescribir lo guardado."
+  },
+  {
+   "test": "test_aula_pequena.CampoIP.test_SIP09_el_panel_enseña_el_aviso_hasta_que_se_aplica_una_ip",
+   "case": "S-IP09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: con un host recordado que no es IP, el estado del panel de E/S lo dice y las cajas llevan la IP inicial;"
+  },
+  {
+   "test": "test_aula_pequena.CampoIP.test_SIP10_ceros_a_la_izquierda_se_quitan_al_salir_de_la_caja",
+   "case": "S-IP10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: «010» pasa a «10» y «000» a «0» al salir de la caja o pulsar Intro."
+  },
+  {
+   "test": "test_aula_pequena.HostIPv4.test_SIP01_validacion_de_host",
+   "case": "S-IP01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: el host de la conexión Modbus es una IPv4; lo demás se rechaza con un mensaje claro."
+  },
+  {
+   "test": "test_aula_pequena.HostIPv4.test_SIP02_host_guardado_no_valido",
+   "case": "S-IP02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: «localhost» se carga como 127.0.0.1; cualquier otro valor no válido, como la dirección inicial, pero con"
+  },
+  {
+   "test": "test_aula_pequena.HostIPv4.test_SIP08_mapa_guardado_con_nombre_dns_carga_con_aviso_y_no_se_reescribe",
+   "case": "S-IP08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: un mapa con un host que no es IP carga con la IP inicial en las cajas y un aviso; el fichero no cambia."
+  },
+  {
+   "test": "test_aula_pequena.Luz.test_SLUZ01_luz_de_la_conexion_externa",
+   "case": "S-LUZ01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: la barra de simulación muestra si la conexión externa está conectada, desconectada o en error."
+  },
+  {
+   "test": "test_aula_pequena.MenuGirar.test_SGIR01_menu_girar_transicion",
+   "case": "S-GIR01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: el menú Editar gira la transición seleccionada; sin atajo propio (lo trata el dibujo) y desactivado fuera de edición."
+  },
+  {
+   "test": "test_aula_pequena.PulidoTrasLaSegundaPrueba.test_SPUL01_el_nombre_entero_sale_en_la_ayuda_de_cada_lugar_donde_se_recorta",
+   "case": "S-PUL01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-07",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-07, REQ-SIM-03: la tabla de variables, las listas del panel de E/S, las tablas de la simulación y las fichas"
+  },
+  {
+   "test": "test_aula_pequena.PulidoTrasLaSegundaPrueba.test_SPUL02_el_boton_derecho_en_un_enlace_muestra_o_quita_la_flecha",
+   "case": "S-PUL02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: «Mostrar flecha» si el enlace no la lleva y «Quitar flecha» si la lleva (solo la que cambia el estado);"
+  },
+  {
+   "test": "test_aula_pequena.PulidoTrasLaSegundaPrueba.test_SPUL03_los_tramos_de_un_enlace_de_transicion_girada_se_mueven_y_se_deshacen",
+   "case": "S-PUL03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el enlace de una transición girada tiene tiradores; arrastrar uno corre ese tramo (route.tramos, relativo"
+  },
+  {
+   "test": "test_aula_pequena.PulidoTrasLaSegundaPrueba.test_SPUL04_una_accion_suelta_con_un_valor_valido_no_deja_el_aviso_de_antes",
+   "case": "S-PUL04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: armar «Q + 1» con bloques en una acción suelta pasa por textos a medias (avisa) y, al quedar válido, el aviso"
+  },
+  {
+   "test": "test_aula_pequena.PulidoTrasLaSegundaPrueba.test_SPUL05_la_formula_de_la_transicion_y_el_valor_de_la_accion_se_ven_con_la_notacion_del_dibujo",
+   "case": "S-PUL05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: sin «Escribir a mano» en ninguna; el cuadro de la fórmula no se edita y la muestra como el dibujo (↑, ↓,"
+  },
+  {
+   "test": "test_aula_pequena.PulidoTrasLaSegundaPrueba.test_SPUL06_la_luz_de_la_conexion_va_al_final_de_la_fila_de_las_pestanas",
+   "case": "S-PUL06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: «E/S externas: …» queda a la derecha del todo de la fila de GRAFCET / PLANOS / E/S externas, no junto a"
+  },
+  {
+   "test": "test_aula_pequena.TeclasDeGiro.test_SGIR02_ctrl_mayus_flechas_no_giran_en_solo_lectura_ni_al_simular",
+   "case": "S-GIR02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: Ctrl+Mayús+←/→ gira al editar y no hace nada con el controlador de solo selección ni al simular."
+  },
+  {
+   "test": "test_aula_pequena.Versiones.test_SACT01_comparacion_numerica",
+   "case": "S-ACT01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: las versiones se comparan como tuplas numéricas, no como texto."
+  },
+  {
+   "test": "test_aula_pequena.Versiones.test_SACT02_interpreta_el_json",
+   "case": "S-ACT02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: la respuesta de GitHub da nueva, al día o fallo."
+  },
+  {
+   "test": "test_aula_pequena.Versiones.test_SACT03_los_fallos_son_silenciosos",
+   "case": "S-ACT03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: sin red, con límite de peticiones o con basura, la consulta no lanza: devuelve fallo."
+  },
+  {
    "test": "test_avisos_leyenda.Interfaz.test_SALT01_panel_de_transicion_enseña_todos_los_operadores_sin_barra",
    "case": "S-ALT01",
    "outcome": "pasa",
@@ -288,7 +924,7 @@
   {
    "test": "test_avisos_leyenda.Interfaz.test_SRCT01_cambiar_el_tamaño_de_la_ventana_recentra_tras_el_retardo",
    "case": "S-RCT01",
-   "outcome": "pasa",
+   "outcome": "falla",
    "requirements": [
     "REQ-EDT-09"
    ],
@@ -2811,7 +3447,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: clic selecciona un enlace; arrastre desde él abre otra rama en una transacción."
+   "summary": "REQ-EDT-02: clic selecciona un enlace; arrastrarlo mueve su tramo (no abre ninguna rama), en una operación."
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI260_supr_quita_la_variable_seleccionada_como_el_boton",
@@ -3114,7 +3750,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: lo escrito en el campo de texto aparece en bloques; un texto que no se puede analizar no cambia los"
+   "summary": "REQ-EDT-02: un texto (el guardado) se pasa a bloques con `poner`; uno que no se puede analizar no cambia los"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI53_deshacer_cambios_de_bloques",
@@ -5008,6 +5644,15 @@
    "summary": "REQ-SIM-03: la medida de sondeo y ciclo se conserva (texto y tooltip) pero la línea queda oculta."
   },
   {
+   "test": "test_modbus_avisos.PanelAvisos.test_SFIO78b_el_aviso_de_escala_solo_es_para_lo_que_el_programa_recibe",
+   "case": "S-FIO78b",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: una Entera de salida enviada con escala 100 (5 → 500) no pierde nada y no avisa; una Entera de entrada con"
+  },
+  {
    "test": "test_modbus_avisos.PanelAvisos.test_SFIO79_el_redondeo_recibido_marca_la_variable_en_ambar_con_lo_recibido_y_lo_usado",
    "case": "S-FIO79",
    "outcome": "pasa",
@@ -5850,7 +6495,7 @@
     "REQ-EDT-02",
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-09: fórmula, estado, ampliar y papelera comparten fila; vista previa y edición manual siguen disponibles."
+   "summary": "REQ-EDT-02, REQ-EDT-09: fórmula, estado, ampliar y papelera comparten fila; vista previa sigue disponible y la fórmula no se edita a mano."
   },
   {
    "test": "test_paneles_plegables.Paneles.test_SPAN06_editor_compacto_util_a_1000_y_categorias_accesibles",

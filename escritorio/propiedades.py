@@ -36,7 +36,7 @@ from grafcet.routing import TALLO_T
 from grafcet.expressions import is_event_positive
 from grafcet.view import norm
 
-from .acciones import PanelAccion
+from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
 from .paneles import PilaActual
 from .diagrama import ACT_MIN, COL, H, MARK, TB, VACIO_H, VACIO_W, _html
@@ -518,20 +518,15 @@ class PanelPropiedades(QWidget):
         self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()  # Ctrl+Z en la ventana ampliada
         self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()
         lay.addWidget(self.prog, 1)
-        # Debajo del área, toda la receptividad: el texto de la fórmula (solo se ve; «Escribir a mano» lo deja editar), cómo
+        # Debajo del área, toda la receptividad: el texto de la fórmula (solo se ve, con la notación del dibujo), cómo
         # se escribe, cómo se dibuja, el estado y «Crear las que faltan»
         self.caja_formula = QWidget()
         g = QGridLayout(self.caja_formula)
         g.setContentsMargins(0, 0, 0, 0)
         g.setVerticalSpacing(2)
-        self.t_texto = QLineEdit()
-        self.t_texto.setReadOnly(True)
+        self.t_texto = CajaFormula()  # no se edita: se ve con la notación del dibujo y la arman los bloques
+        self.t_texto.formato = self._formato_formula
         self.t_texto.setPlaceholderText("la fórmula se arma con bloques")
-        self.t_texto.textEdited.connect(self._escrito)
-        self.t_texto.editingFinished.connect(self._aplicar)
-        self.t_manual = QCheckBox("Escribir a mano")
-        self.t_manual.setToolTip("Dejar editar el texto de la fórmula (↑a AND NOT b, X1, 3s/X1…); lo escrito pasa a bloques")
-        self.t_manual.toggled.connect(self._manual)
         self.t_vista = QLabel()
         self.t_vista.setWordWrap(True)
         self.t_vista.setTextFormat(Qt.TextFormat.RichText)
@@ -549,7 +544,6 @@ class PanelPropiedades(QWidget):
         self.t_previa.setText("Vista previa")
         self.t_previa.setCheckable(True)
         self.t_previa.setAutoRaise(True)
-        cabecera.addWidget(self.t_manual)
         cabecera.addWidget(self.t_previa)
         self.detalles_bloques = QWidget()
         resumen = QHBoxLayout(self.detalles_bloques)
@@ -726,17 +720,13 @@ class PanelPropiedades(QWidget):
         self._previsualizar()
         self._aplicar()
 
-    def _escrito(self) -> None:
-        self.prog.poner(self.t_texto.text())
-        self._previsualizar()
-
-    def _manual(self, on: bool) -> None:
-        """«Escribir a mano»: marcada, el texto de la fórmula se puede editar; desmarcada, vuelve a ser de solo lectura."""
-        self.t_texto.setReadOnly(not on)
-        if on:
-            self.t_texto.setFocus()
-        elif self._objetivo is not None and self.e is not None:
-            self._aplicar()
+    def _formato_formula(self, texto: str) -> str | None:
+        """La fórmula (receptividad, condición o evento) con la notación del dibujo; None si no se interpreta."""
+        o = self._objetivo
+        if o is None or self.e is None:
+            return None
+        segmentos = self.e.vista_formula(texto, o[1])
+        return None if segmentos is None else _html(segmentos)
 
     def _enlace(self) -> QWidget:
         w = QWidget()
@@ -865,14 +855,6 @@ class PanelPropiedades(QWidget):
         else:
             self.accion.caja_valor.setVisible(False)
         if self._objetivo is not None:
-            if self._objetivo != self._anterior:  # otro objetivo: el texto vuelve a ser de solo lectura
-                self.t_manual.blockSignals(True)
-                self.t_manual.setChecked(False)
-                self.t_manual.blockSignals(False)
-                self.t_texto.setReadOnly(True)
-                self.t_texto.blockSignals(True)  # sin «editingFinished»: aún tiene el texto del objetivo anterior
-                self.t_texto.clearFocus()
-                self.t_texto.blockSignals(False)
             guardado = self._guardado()
             self._poner(self.t_texto, guardado)
             self.prog.poner(guardado)
@@ -948,23 +930,6 @@ class PanelPropiedades(QWidget):
     def _poner(campo: QLineEdit, texto: str) -> None:
         if not campo.hasFocus() and campo.text() != texto:
             campo.setText(texto)
-
-    def _insertar(self, texto: str) -> None:
-        if self.ident is None:
-            return
-        self.t_texto.setFocus()
-        self.t_texto.insert(f" {texto.strip()} ")  # siempre un espacio delante y otro detrás; los sobrantes se quitan al guardar
-        self.prog.poner(self.t_texto.text())
-        self._previsualizar()
-
-    def _prefijar(self, prefijo: str) -> None:
-        """NOT, ↑ o ↓ delante del texto seleccionado: si no es un solo nombre, entre paréntesis; sin selección, solo el
-        prefijo."""
-        sel = self.t_texto.selectedText().strip()
-        if sel:
-            self._insertar(prefijo + (sel if re.fullmatch(r"[\w.]+", sel) else f"({sel})"))
-        else:
-            self._insertar(prefijo)
 
     def _comentar(self, campo: QLineEdit) -> None:
         """El comentario de la etapa o transición mostrada: una operación de deshacer al confirmar."""

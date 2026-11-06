@@ -18,9 +18,9 @@ from __future__ import annotations
 import html
 from typing import Any
 
-from grafcet.routing import TALLO_T, enlaces
+from grafcet.routing import NORMAL, SENTIDO, TALLO_T, enlaces, orientacion, punto_t
 
-from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, QSettings, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, QPainter, QPainterPath, QPen,
                            QPixmap, QRegion)
 from PySide6.QtWidgets import (QApplication, QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QListWidget, QHBoxLayout, QLabel,
@@ -283,6 +283,25 @@ def _estado_temporal(pt: _Pintor, x: float, y: float, segs: list[dict[str, Any]]
     return derecha
 
 
+def _valores_variables(pt: _Pintor, x: float, y: float, t: dict[str, Any], S: dict[str, Any], nombres: dict[str, str],
+                       z: float, tip: str | None = None) -> None:
+    """Al simular, el valor actual de cada variable numérica (`numericVars`: contadores, magnitudes) que usa la receptividad de
+    la transición, como el de una acción (`_caja_accion`): en pequeño y en azul, centrado sobre el nombre de la variable en el
+    texto de la receptividad y por encima de él (y de la duración de un temporizador, si la hay). La condición se escribe con su
+    línea base en `y`. Fuera de la simulación (sin lecturas) no se dibuja nada."""
+    lecturas, segs = S.get("variableReadouts") or {}, t.get("cond")
+    if not lecturas or not segs or not t.get("numericVars"):
+        return
+    lim = pt.limites(segs, 14)
+    base = y - pt.ascenso(14) - 3 - (TMR_EXTRA if t.get("tmr") else 0)
+    for vid in t["numericVars"]:
+        valor, nombre = lecturas.get(vid), nombres.get(vid, vid)
+        i = next((n for n, sg in enumerate(segs) if sg["t"] == nombre), None)
+        if valor is None or i is None:
+            continue
+        pt.text(x + (lim[i] + lim[i + 1]) / 2, base, pt.seg(valor), 10, "readout", z, anchor="middle", tip=tip, mono=True)
+
+
 REJILLA = 20   # paso de la rejilla del editor (coordenadas del modelo)
 ALTO_T = 14    # semialtura del área de una transición al editar (el trazo es fino: se acierta mejor así)
 ANCLA = TALLO_T  # distancia de los puntos de unión de una transición a su centro: al final de su tramo recto, lejos del
@@ -291,6 +310,60 @@ ANCLA_S = 28   # ... y si ese lado es una simultaneidad (el punto queda fuera de
 SIMUL = 14     # distancia del doble trazo de una simultaneidad al centro de la transición
 RADIO_ANCLA = 14  # a qué distancia del puntero se marca un punto de unión (generoso: se agarra sin puntería)
 Z_EDIT = 10    # selección, tiradores y marcas por encima de todo el dibujo
+EVOLUCION_HORIZONTAL = ("derecha", "izquierda")  # orientaciones de una transición cuyo trazo es vertical
+
+
+def caja_barra(o: str, x: float, y: float) -> QRectF:
+    """La caja del trazo de una transición centrada en (x, y) con la orientación `o` (vertical si la evolución es horizontal)."""
+    return QRectF(x - 2, y - TB, 4, 2 * TB) if o in EVOLUCION_HORIZONTAL else QRectF(x - TB, y - 2, 2 * TB, 4)
+
+
+def orientaciones(M: dict[str, Any]) -> dict[str, str]:
+    """La orientación de cada transición de la vista (`abajo` la de siempre)."""
+    return {t["id"]: orientacion(t) for t in M["transitions"]}
+
+
+def rects_textos_t(t: dict[str, Any], x: float, y: float) -> tuple[QRectF | None, QRectF | None]:
+    """Lo que ocupan la designación y la receptividad de una transición centrada en (x, y): a izquierda y derecha del trazo
+    (evolución vertical) o, si el trazo es vertical, la designación debajo y la receptividad encima, centradas en él, para que
+    no pisen los enlaces horizontales."""
+    horizontal = orientacion(t) in EVOLUCION_HORIZONTAL
+    etq = cond = None
+    if t.get("showLabel", True):
+        w = _Pintor.ancho([{"t": f"({t.get('label', t['id'])})"}], 13)
+        etq = QRectF(x - w / 2, y + TB + 2, w, 21) if horizontal else QRectF(x - TB - 6 - w, y - 12, w, 21)
+    if t.get("cond"):
+        w = _Pintor.ancho(t["cond"], 14)
+        cond = QRectF(x - w / 2, y - TB - 26, w, 21) if horizontal else QRectF(x + TB + 8, y - 12, w, 21)
+    return etq, cond
+
+
+def _trazos_girada(pt: _Pintor, t: dict[str, Any], tx: float, ty: float, pre: list[tuple[float, float]],
+                   post: list[tuple[float, float]], trazo: QPen) -> None:
+    """Los tramos rectos de una transición cuya evolución no va hacia abajo (sin etapa anterior o siguiente) y los dobles
+    trazos de sus simultaneidades, en el eje de su evolución: lo que hace el dibujo normal, girado."""
+    n = NORMAL[orientacion(t)]
+
+    def P(u: float, v: float = 0.0) -> tuple[float, float]:
+        return punto_t(t, tx, ty, u, v)
+
+    def doble(signo: int, otros: list[tuple[float, float]]) -> None:
+        vs = [(p[0] - tx) * n[0] + (p[1] - ty) * n[1] for p in otros] + [0.0]
+        lo, hi = min(vs) - 8, max(vs) + 8
+        u1, u2 = signo * SIMUL, signo * (SIMUL + BARRA_GROSOR)
+        for u in (u1, u2):
+            pt.line(*P(u, lo), *P(u, hi), trazo, Z_LINK)
+        (x0, y0), (x1, y1) = P(u1 + signo, lo), P(u2 - signo, hi)
+        pt.rect(min(x0, x1), min(y0, y1), abs(x1 - x0), abs(y1 - y0), None, Z_LINK + 0.1, "panel")
+        pt.line(*P(u1), tx, ty, trazo, Z_LINK)
+    if len(pre) > 1 or t.get("simulPre"):
+        doble(-1, pre)
+    if t.get("simulPost"):
+        doble(1, post)
+    if not pre:
+        pt.line(*P(-TALLO_T), tx, ty, trazo, Z_LINK)
+    if not post:
+        pt.line(tx, ty, *P(TALLO_T), trazo, Z_LINK)
 
 
 def posiciones(M: dict[str, Any]) -> dict[str, tuple[float, float]]:
@@ -333,6 +406,9 @@ def anclas(M: dict[str, Any], ident: str) -> list[dict[str, Any]]:
     t = next((t for t in M["transitions"] if t["id"] == ident), None)
     arriba = H if t is None else ANCLA_S if t.get("simulPre") else ANCLA
     abajo = H if t is None else ANCLA_S if t.get("simulPost") else ANCLA
+    if t is not None and orientacion(t) != "abajo":  # «arriba» es la entrada (el lado de donde viene la evolución)
+        return [{"id": ident, "lado": "arriba", "pos": QPointF(*punto_t(t, x, y, -arriba))},
+                {"id": ident, "lado": "abajo", "pos": QPointF(*punto_t(t, x, y, abajo))}]
     out = [{"id": ident, "lado": "arriba", "pos": QPointF(x, y - arriba)},
            {"id": ident, "lado": "abajo", "pos": QPointF(x, y + abajo)}]
     if any(st["id"] == ident for st in M["steps"]):
@@ -410,6 +486,11 @@ def elemento_en(M: dict[str, Any], p: QPointF) -> str | None:
     pos = posiciones(M)
     for t in M["transitions"]:  # el trazo, su designación a la izquierda y su receptividad a la derecha
         x, y = pos[t["id"]]
+        if orientacion(t) in EVOLUCION_HORIZONTAL:  # trazo vertical; designación (debajo) y receptividad (encima), centradas
+            if abs(p.x() - x) <= ALTO_T and abs(p.y() - y) <= TB + 6 or any(
+                    r is not None and r.adjusted(-2, -2, 2, 2).contains(p) for r in rects_textos_t(t, x, y)):
+                return t["id"]
+            continue
         ancho = 8 * sum(len(sg["t"]) for sg in (t.get("cond") or []))
         if -(TB + 44) <= p.x() - x <= TB + 12 + ancho and abs(p.y() - y) <= ALTO_T:
             return t["id"]
@@ -457,7 +538,7 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
             (x1, y1), (x2, y2) = seg
             pt.line(x1, y1, x2, y2, pt.pen("err", 3 if d["id"] in sel else 1.8, (6, 4)), Z_EDIT,
                     "Enlace en borrador: une dos elementos del mismo tipo y no es ejecutable")
-    trans = {t["id"] for t in M["transitions"]}
+    trans = orientaciones(M)
     rutas = {e["id"]: e for e in enlaces(M)}
     barras = {b["id"]: b for b in M.get("bars", [])}
     marcos = cajas_parciales(M, pos)  # un parcial (recinto, expansión) seleccionado o en cuestión se remarca en su marco
@@ -486,7 +567,7 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
         if ident not in pos:
             continue
         x, y = pos[ident]
-        hx, hy = (TB + 6, ALTO_T) if ident in trans else (H + 6, H + 6)
+        hx, hy = ((ALTO_T, TB + 6) if trans[ident] in EVOLUCION_HORIZONTAL else (TB + 6, ALTO_T)) if ident in trans else (H + 6, H + 6)
         pt.rect(x - hx, y - hy, 2 * hx, 2 * hy, pt.pen(color, width, (5, 3)), Z_EDIT)
         if color == "accent":  # tiradores en las esquinas
             for cx, cy in ((x - hx, y - hy), (x + hx, y - hy), (x - hx, y + hy), (x + hx, y + hy)):
@@ -503,7 +584,7 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
             pt.rect(bx - 7, by - 9, w + 14, h + 18, pt.pen("glow", 3.5), Z_EDIT + 0.5)
         elif ident in pos:
             x, y = pos[ident]
-            hx, hy = (TB + 9, ALTO_T + 3) if ident in trans else (H + 9, H + 9)
+            hx, hy = ((ALTO_T + 3, TB + 9) if trans[ident] in EVOLUCION_HORIZONTAL else (TB + 9, ALTO_T + 3)) if ident in trans else (H + 9, H + 9)
             pt.rect(x - hx, y - hy, 2 * hx, 2 * hy, pt.pen("glow", 3.5), Z_EDIT + 0.5)
 
 
@@ -581,21 +662,24 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         trazo = pt.pen(roles.get(t["id"], "text"))
         pre = [pos[p] for p in t.get("preDib", t["pre"]) if p in pos]
         post = [pos[p] for p in t.get("postDib", t["post"]) if p in pos]
-        if len(pre) > 1 or t.get("simulPre"):
+        giro = orientacion(t)
+        if giro != "abajo":
+            _trazos_girada(pt, t, tx, ty, pre, post, trazo)
+        if giro == "abajo" and (len(pre) > 1 or t.get("simulPre")):
             xs, yy = [p[0] for p in pre] + [tx], ty - SIMUL
             pt.line(min(xs) - 8, yy, max(xs) + 8, yy, trazo, Z_LINK)
             pt.rect(min(xs)-8, yy-BARRA_GROSOR+1, max(xs)-min(xs)+16, BARRA_GROSOR-2, None, Z_LINK+0.1, "panel")
             pt.line(min(xs) - 8, yy - BARRA_GROSOR, max(xs) + 8, yy - BARRA_GROSOR, trazo, Z_LINK)
             pt.line(tx, yy, tx, ty, trazo, Z_LINK)
-        if t.get("simulPost"):
+        if giro == "abajo" and t.get("simulPost"):
             xs, yy = [p[0] for p in post] + [tx], ty + SIMUL
             pt.line(tx, ty, tx, yy, trazo, Z_LINK)
             pt.line(min(xs) - 8, yy, max(xs) + 8, yy, trazo, Z_LINK)
             pt.rect(min(xs)-8, yy+1, max(xs)-min(xs)+16, BARRA_GROSOR-2, None, Z_LINK+0.1, "panel")
             pt.line(min(xs) - 8, yy + BARRA_GROSOR, max(xs) + 8, yy + BARRA_GROSOR, trazo, Z_LINK)
-        if not pre:
+        if giro == "abajo" and not pre:
             pt.line(tx, ty - TALLO_T, tx, ty, trazo, Z_LINK)  # transición fuente: su tramo recto es parte de ella
-        if not post:
+        if giro == "abajo" and not post:
             pt.line(tx, ty, tx, ty + TALLO_T, trazo, Z_LINK)  # transición sumidero
         color, width = "text", 2.4
         if ob.get("validated"):
@@ -611,12 +695,25 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         tip = (f"Transición {t.get('label', t['id'])}: validada {'sí' if ob.get('validated') else 'no'}, receptividad "
                f"{'verdadera' if ob.get('receptivity') else 'falsa'}"
                + ("; su parcial está forzado y no evoluciona" if ob.get("forced") else ""))
+        if giro in EVOLUCION_HORIZONTAL:  # trazo vertical; designación debajo y receptividad encima, horizontales y centradas
+            pt.line(tx, ty - TB, tx, ty + TB, pt.pen(color, width), Z_BAR, tip)
+            if t.get("showLabel", True):
+                pt.text(tx, ty + TB + 19, pt.seg(f"({t.get('label', t['id'])})"), 13, color, Z_BAR, "middle", tip)
+            w = _Pintor.ancho(t["cond"], 14) if t.get("cond") else 0
+            x0, yb = tx - w / 2, ty - TB - 9
+            pt.text(x0, yb, t.get("cond"), 14, "text", Z_BAR, tip=tip)
+            derecha = _estado_temporal(pt, x0, yb, t.get("cond"), 14, t.get("conditionRef"), tmp, Z_BAR, tip)
+            _valores_variables(pt, x0, yb, t, S, M.get("names", {}), Z_BAR, tip)
+            if t.get("comment"):
+                pt.comentario(max(x0 + w + (14 if w else 0), derecha + 8), yb - 5, t["comment"], Z_BAR)
+            continue
         pt.line(tx - TB, ty, tx + TB, ty, pt.pen(color, width), Z_BAR, tip)
         if t.get("showLabel", True):
             pt.text(tx - TB - 6, ty + 5, pt.seg(f"({t.get('label', t['id'])})"), 13, color, Z_BAR, "end", tip)
         w = pt.text(tx + TB + 8, ty + 5, t.get("cond"), 14, "text", Z_BAR, tip=tip)
         fin = tx + TB + 8 + w
         derecha = _estado_temporal(pt, tx + TB + 8, ty + 5, t.get("cond"), 14, t.get("conditionRef"), tmp, Z_BAR, tip)
+        _valores_variables(pt, tx + TB + 8, ty + 5, t, S, M.get("names", {}), Z_BAR, tip)
         if t.get("comment"):  # a la derecha de la receptividad (o de la transición, si no tiene)
             pt.comentario(max(fin + (14 if w else 0), derecha + 8), ty, t["comment"], Z_BAR)
     for b in M.get("bars", []):  # barras de simultaneidad (doble trazo) y de alternativa (trazo simple), con sus conectores
@@ -750,6 +847,20 @@ def _contenido_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]])
         de[t["id"]] = pid = t.get("partial")
         pre = [pos[p] for p in t.get("preDib", t["pre"]) if p in pos]
         post = [pos[p] for p in t.get("postDib", t["post"]) if p in pos]
+        if orientacion(t) != "abajo":  # transición girada: su trazo, sus tramos rectos y sus textos
+            n = NORMAL[orientacion(t)]
+            for u, v in ((0, -TB), (0, TB), (-TALLO_T if not pre else 0, 0), (TALLO_T if not post else 0, 0)):
+                anotar(pid, *punto_t(t, tx, ty, u, v), *punto_t(t, tx, ty, u, v))
+            for r in rects_textos_t(t, tx, ty):
+                if r is not None:
+                    anotar(pid, r.left(), r.top(), r.right(), r.bottom())
+            for signo, otros, hay in ((-1, pre, len(pre) > 1 or t.get("simulPre")), (1, post, t.get("simulPost"))):
+                if hay:
+                    vs = [(p[0] - tx) * n[0] + (p[1] - ty) * n[1] for p in otros] + [0.0]
+                    for u in (signo * SIMUL, signo * (SIMUL + BARRA_GROSOR)):
+                        for v in (min(vs) - 8, max(vs) + 8):
+                            anotar(pid, *punto_t(t, tx, ty, u, v), *punto_t(t, tx, ty, u, v))
+            continue
         anotar(pid, tx - TB, ty - (TALLO_T if not pre else 0), tx + TB, ty + (TALLO_T if not post else 0))
         if t.get("showLabel", True):
             w = _Pintor.ancho([{"t": f"({t.get('label', t['id'])})"}], 13)
@@ -1140,6 +1251,45 @@ class _EstiloIconos(QProxyStyle):
 
 
 ZOOM_MIN, ZOOM_MAX, ZOOM_PASO = 0.1, 8.0, 1.15
+PASO_RUEDA = 60   # px que desplaza un giro de rueda (120 unidades de `angleDelta`) cuando no hace zoom
+
+
+def modo_rueda(event: Any) -> str:
+    """Qué hace un evento de rueda: «zoom» o «desplaza». Ctrl + rueda hace zoom (también el pellizco de un panel táctil de
+    Windows, que llega así); el gesto de dos dedos de un panel táctil (`pixelDelta` o fase de desplazamiento) desplaza en los dos
+    ejes; Mayús + rueda desplaza en horizontal; la rueda de un ratón sola hace zoom, anclado al puntero."""
+    if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        return "zoom"
+    if not event.pixelDelta().isNull() or event.phase() != Qt.ScrollPhase.NoScrollPhase:
+        return "desplaza"
+    return "desplaza" if event.modifiers() & Qt.KeyboardModifier.ShiftModifier else "zoom"
+
+
+def factor_zoom_rueda(event: Any) -> float:
+    """El factor de zoom de un giro de rueda. Con Ctrl (o el pellizco de un panel táctil de Windows): `ZOOM_PASO` por cada 120
+    unidades de `angleDelta`, así que los giros finos acercan o alejan en proporción. Con la rueda sola: un paso por giro, en el
+    sentido del giro. 1 si no hay giro."""
+    ang = event.angleDelta()
+    d = ang.y() or ang.x()
+    if not d:
+        return 1.0
+    if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        return ZOOM_PASO ** (max(-720, min(720, d)) / 120)
+    return ZOOM_PASO if d > 0 else 1 / ZOOM_PASO
+
+
+def desplazamiento_rueda(event: Any) -> tuple[int, int]:
+    """Lo que hay que mover el contenido (px; positivo = a la derecha, abajo) con una rueda sin Ctrl o con el gesto de dos dedos
+    de un panel táctil: `pixelDelta` si lo da el sistema; si no, `angleDelta` a `PASO_RUEDA` px por giro de rueda, con Mayús para
+    desplazar en horizontal. Un panel táctil puede mover en los dos ejes a la vez. Las barras de desplazamiento restan esto."""
+    pix = event.pixelDelta()
+    if not pix.isNull():
+        return pix.x(), pix.y()
+    ang = event.angleDelta()
+    dx, dy = ang.x() * PASO_RUEDA / 120, ang.y() * PASO_RUEDA / 120
+    if event.modifiers() & Qt.KeyboardModifier.ShiftModifier and not dx:
+        dx, dy = dy, 0
+    return round(dx), round(dy)
 ZOOM_AJUSTE_MAX = 1.6   # lo más que se amplía al encajar algo (centrar todo, encuadrar): un dibujo pequeño no se agranda sin límite
 MARGEN_AJUSTE = 24   # px libres alrededor del dibujo al centrarlo todo
 CLAVE_DEPENDENCIAS = "dibujo/mostrar_dependencias"  # dónde recuerda QSettings si se muestran las dependencias
@@ -1242,6 +1392,9 @@ class VistaDiagrama(QGraphicsView):
         delta = {Qt.Key.Key_Left:(-REJILLA,0), Qt.Key.Key_Right:(REJILLA,0), Qt.Key.Key_Up:(0,-REJILLA), Qt.Key.Key_Down:(0,REJILLA)}.get(e.key())
         if c and delta and not e.modifiers():
             c.mover_teclado(*delta); e.accept(); return
+        if c and hasattr(c, "girar_transiciones") and not getattr(c, "solo_seleccion", False) and e.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right) and e.modifiers() == (
+                Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
+            c.girar_transiciones(-1 if e.key() == Qt.Key.Key_Left else 1); e.accept(); return  # girar las transiciones seleccionadas
         if c and e.key() == Qt.Key.Key_Escape:
             c.seleccionar([]); e.accept(); return
         if c and e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and not e.modifiers():
@@ -1254,7 +1407,7 @@ class VistaDiagrama(QGraphicsView):
         ident = c.sel[-1]
         if any(t['id'] == ident for t in c.M['transitions']):
             c.pedir_condicion(ident)
-            if hasattr(self.window(), 'props'): self.window().props.t_manual.setFocus()
+            if hasattr(self.window(), 'props'): self.window().props.prog.setFocus()
         elif any(s['id'] == ident for s in c.M['steps']): c.pedir_etiqueta(ident)
         elif any(a['id'] == ident for a in c.ed.model['actions']) or c._es_borrador(ident):
             sid = next((s["id"] for s in c.M["steps"] if any(a["id"] == ident for a in s.get("actions", []))), None)
@@ -1822,12 +1975,31 @@ class VistaDiagrama(QGraphicsView):
         self._colocar()
 
     def wheelEvent(self, event: Any) -> None:  # noqa: N802
-        """La rueda (con o sin Ctrl) acerca o aleja anclada al puntero; el dibujo se mueve arrastrándolo."""
+        """La rueda del ratón (sola o con Ctrl) acerca o aleja anclada al puntero, y el pellizco de un panel táctil también;
+        Mayús + rueda desplaza en horizontal y el gesto de dos dedos de un panel táctil, en los dos ejes (`modo_rueda`)."""
         self._origen = False
-        if not event.angleDelta().y():
+        if modo_rueda(event) == "zoom":
+            if (f := factor_zoom_rueda(event)) != 1.0:
+                self.zoom(f, event.position())
+            event.accept()
             return
-        self.zoom(ZOOM_PASO if event.angleDelta().y() > 0 else 1 / ZOOM_PASO, event.position())
+        dx, dy = desplazamiento_rueda(event)
+        if dx or dy:
+            self._manual = True  # mover la vista a mano: ya no se reencaja sola (como arrastrar con el botón central)
+            self._barras()
+            h, v = self.horizontalScrollBar(), self.verticalScrollBar()
+            h.setValue(h.value() - dx)
+            v.setValue(v.value() - dy)
         event.accept()
+
+    def viewportEvent(self, event: Any) -> bool:  # noqa: N802
+        """El pellizco de un panel táctil (gesto nativo de zoom, macOS y Linux) acerca o aleja anclado a los dedos."""
+        if event.type() == QEvent.Type.NativeGesture and event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
+            self._origen = False
+            self.zoom(max(0.2, 1.0 + event.value()), event.position())
+            event.accept()
+            return True
+        return super().viewportEvent(event)
 
     def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802
         if self.controlador is not None:

@@ -48,12 +48,13 @@ def _coord(v: Any) -> str:
 
 
 def _check_initial(role: str, t: Any, init: Any) -> None:
-    """Hoja 08, 1.5 A y su comentario: fuera del grafcet no se declara ningún valor inicial. Las variables que no
-    son entradas empiezan en 0; otro valor se pone con una acción «al activar» en la etapa inicial."""
-    if role != "input" and parse_value(t, init) != zero(t):
+    """Hoja 08, 1.5 A y su comentario: fuera del grafcet no se declara ningún valor inicial (P-IMP-117). Todas las
+    variables, entradas incluidas, empiezan en 0 (falso); otro valor se escribe en la receptividad o se pone con una
+    acción «al activar» en la etapa inicial."""
+    if parse_value(t, init) != zero(t):
         raise DiagnosticError(Diagnostic(
-            "D-FORMATO", "las variables que no son entradas empiezan en 0: el valor inicial se pone con una acción "
-            "«al activar» en la etapa inicial (hoja 08, 1.5)", field="initialValue"))
+            "D-FORMATO", "las variables empiezan en 0 (falso): un valor fijo se escribe en la receptividad o se pone "
+            "con una acción «al activar» en la etapa inicial", field="initialValue"))
 
 
 @dataclass
@@ -608,6 +609,61 @@ class Editor:
             if not d:
                 del p["actionLayouts"]
         self._txn("colocación de las acciones", fn, view_only=True)
+
+    # Sentido de la evolución a través de una transición (presentación, `presentation.transitionOrientations`: {ID de
+    # transición: valor}); sin entrada vale «abajo» (el dibujo de siempre). «derecha», «arriba» e «izquierda» giran el trazo
+    # de la transición y sus enlaces; no cambian la semántica. A derechas (sentido de las agujas del reloj en pantalla):
+    # abajo → izquierda → arriba → derecha → abajo.
+    TRANSITION_ORIENTATIONS = ("abajo", "izquierda", "arriba", "derecha")
+
+    def transition_orientations(self) -> dict[str, str]:
+        d = self.presentation.get("transitionOrientations", {})
+        return d if isinstance(d, dict) else {}
+
+    def set_transition_orientation(self, tid: str, orientation: str) -> None:
+        """El sentido de la evolución a través de la transición: «abajo» (por defecto), «derecha», «arriba» o «izquierda». Solo
+        presentación: no cambia el modelo ni la revisión. «abajo» quita la entrada (un fichero sin giros no la lleva)."""
+        if orientation not in self.TRANSITION_ORIENTATIONS:
+            raise DiagnosticError(Diagnostic("D-FORMATO", f"orientación de transición desconocida: {orientation!r}"))
+        if not any(t["id"] == tid for t in self.model["transitions"]):
+            raise DiagnosticError(Diagnostic("D-REF", f"transición inexistente: {tid}", element=tid))
+
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            d = p["transitionOrientations"] = dict(p["transitionOrientations"])                 if isinstance(p.get("transitionOrientations"), dict) else {}
+            if orientation == "abajo":
+                d.pop(tid, None)
+            else:
+                d[tid] = orientation
+            if not d:
+                del p["transitionOrientations"]
+        self._txn("orientación de la transición", fn, view_only=True)
+
+    def set_transition_orientations(self, orientations: dict[str, str]) -> None:
+        """Varias transiciones a la vez (ID -> orientación), en una sola operación de deshacer."""
+        for tid, orientation in orientations.items():
+            if orientation not in self.TRANSITION_ORIENTATIONS:
+                raise DiagnosticError(Diagnostic("D-FORMATO", f"orientación de transición desconocida: {orientation!r}"))
+            if not any(t["id"] == tid for t in self.model["transitions"]):
+                raise DiagnosticError(Diagnostic("D-REF", f"transición inexistente: {tid}", element=tid))
+
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            d = p["transitionOrientations"] = dict(p["transitionOrientations"])                 if isinstance(p.get("transitionOrientations"), dict) else {}
+            for tid, orientation in orientations.items():
+                if orientation == "abajo":
+                    d.pop(tid, None)
+                else:
+                    d[tid] = orientation
+            if not d:
+                del p["transitionOrientations"]
+            # Los tramos corridos a mano se miden sobre el recorrido de la orientación anterior: dejan de valer.
+            estilos = p.get("linkStyles", {})
+            for lid, estilo in list(estilos.items()):
+                ruta = estilo.get("route") if isinstance(estilo, dict) else None
+                if isinstance(ruta, dict) and "tramos" in ruta and set(lid.split("|")) & set(orientations):
+                    ruta = estilos[lid]["route"] = {k: v for k, v in ruta.items() if k != "tramos"}
+                    if not ruta:
+                        del estilos[lid]["route"]
+        self._txn("orientación de las transiciones", fn, view_only=True)
 
     def move(self, ident: str, x: Any, y: Any) -> None:
         if any(n["id"] == ident for n in self.annotations()):
@@ -1209,8 +1265,8 @@ class Editor:
                     raise DiagnosticError(Diagnostic("D-FORMATO", f"campo no editable: {k}"))
                 var[k] = val
             t = parse_type(var["type"])
-            if var["role"] != "input" and "initialValue" not in changes:
-                var["initialValue"] = format_value(t, zero(t))  # al dejar de ser entrada, empieza en 0
+            if "initialValue" not in changes:
+                var["initialValue"] = format_value(t, zero(t))  # al cambiar de rol o de tipo, empieza en 0
             _check_initial(var["role"], t, var["initialValue"])
         self._txn("cambiar variable", fn)
         return impact
@@ -1433,6 +1489,10 @@ class Editor:
                 p["actionLayouts"] = {k: v for k, v in p["actionLayouts"].items() if k not in doomed}
                 if not p["actionLayouts"]:
                     del p["actionLayouts"]
+            if isinstance(p.get("transitionOrientations"), dict):
+                p["transitionOrientations"] = {k: v for k, v in p["transitionOrientations"].items() if k not in doomed}
+                if not p["transitionOrientations"]:
+                    del p["transitionOrientations"]
             m["steps"].append({"id": mid, "label": label, "partialRef": padre, "kind": kind, "initial": False,
                                "actionRefs": []})
             self._find(m["partials"], padre, "el parcial")["stepRefs"].append(mid)
@@ -1693,6 +1753,10 @@ class Editor:
                 p["actionLayouts"] = {k: v for k, v in p["actionLayouts"].items() if k not in doomed}
                 if not p["actionLayouts"]:
                     del p["actionLayouts"]
+            if isinstance(p.get("transitionOrientations"), dict):
+                p["transitionOrientations"] = {k: v for k, v in p["transitionOrientations"].items() if k not in doomed}
+                if not p["transitionOrientations"]:
+                    del p["transitionOrientations"]
             return plan
         return self._txn("borrar", fn)
 
@@ -1790,6 +1854,8 @@ class Editor:
                 d.pop("etapa", None)
         view["actionLayouts"] = {k: v for k, v in self.action_layouts().items()
                                  if k in chosen or any(d.get("grupo") == k for d in view["draftActions"])}
+        if giros := {k: v for k, v in self.transition_orientations().items() if k in chosen}:
+            view["transitionOrientations"] = giros
         view["notes"] = [copy.deepcopy(n) for n in p.get("notes", []) if n.get("elementRef") in chosen or n.get("id") in chosen]
         view["linkStyles"] = {k: copy.deepcopy(v) for k, v in self.link_styles().items()
                               if all(i in chosen for i in k.split("|")[:2])}
@@ -1967,7 +2033,7 @@ class Editor:
                         for fieldname, meaning in frag.presentation.get("draftMeanings", {}).get(item["id"], {}).items():
                             new[fieldname] = ex.render(_remap_meaning(meaning, mp), names)
                     p.setdefault(k, []).append(new)
-            for k in ("actionLayouts", "linkStyles"):
+            for k in ("actionLayouts", "transitionOrientations", "linkStyles"):
                 for ident, value in frag.presentation.get(k, {}).items():
                     key = "|".join(mp(i) for i in ident.split("|")) if k == "linkStyles" else mp(ident)
                     value = copy.deepcopy(value)

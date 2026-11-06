@@ -23,7 +23,7 @@ from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRect, QRectF, QS
 from PySide6.QtGui import (QColor, QCursor, QDrag, QFont, QFontMetricsF, QKeySequence, QPainter, QPainterPath, QPen,
                            QPixmap, QPolygonF, QShortcut)
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit, QMenu, QPushButton, QScrollArea,
-                               QSizePolicy, QVBoxLayout, QWidget, QWidgetItem)
+                               QSizePolicy, QToolTip, QVBoxLayout, QWidget, QWidgetItem)
 
 from grafcet.expressions import CMP, FUNCS_EXPR, FUNCS_REF, KEYWORDS, ParseError, _Parser, parse, render
 from grafcet.notation import a_nucleo, a_usuario, normalizar_espacios, x_etapa
@@ -528,10 +528,11 @@ _ARRASTRE = {"resuelto": False}  # el arrastre en curso (solo hay uno): si algú
 
 class _Pieza:
     """Una pieza ya medida de un bloque: texto, desplegable o campo."""
-    __slots__ = ("tipo", "clave", "texto", "vacio", "w", "h")
+    __slots__ = ("tipo", "clave", "texto", "vacio", "w", "h", "completo")
 
-    def __init__(self, tipo: str, clave: str, texto: str, vacio: bool, w: float, h: float) -> None:
+    def __init__(self, tipo: str, clave: str, texto: str, vacio: bool, w: float, h: float, completo: str = "") -> None:
         self.tipo, self.clave, self.texto, self.vacio, self.w, self.h = tipo, clave, texto, vacio, w, h
+        self.completo = completo  # el texto entero, si el que se ve está recortado con «…» (sale en la ayuda emergente)
 
 
 class _Caja:
@@ -565,6 +566,7 @@ class Motor:
     def reiniciar(self) -> None:
         self.vars, self.etapas = self.fuente()
         self.nat = {}
+        self.recortadas: list[tuple[QRectF, str]] = []  # (sitio, texto entero) de las piezas con el texto recortado
 
     # -- qué lleva cada bloque
     def elementos(self, n: dict[str, Any]) -> list[tuple]:
@@ -636,7 +638,7 @@ class Motor:
         tipo = e[0]
         if tipo == "txt":
             vis = self.mb.elidedText(e[2], Qt.TextElideMode.ElideRight, maxw) if maxw < 100000 else e[2]
-            return _Pieza("txt", "", vis, False, self.mb.horizontalAdvance(vis), 16)
+            return _Pieza("txt", "", vis, False, self.mb.horizontalAdvance(vis), 16, e[2] if vis != e[2] else "")
         if tipo == "boton":
             return _Pieza("boton", e[1], e[2], False, 22, ALTO)
         if tipo == "paren":
@@ -645,7 +647,8 @@ class Motor:
         vacio = tipo == "campo" and not e[2]
         extra = 22 if tipo == "drop" else 12
         vis = self.m.elidedText(texto, Qt.TextElideMode.ElideRight, max(maxw - extra, 20))
-        return _Pieza(tipo, e[1], vis, vacio, max(30 if tipo == "campo" else 0, self.m.horizontalAdvance(vis) + extra), ALTO)
+        return _Pieza(tipo, e[1], vis, vacio, max(30 if tipo == "campo" else 0, self.m.horizontalAdvance(vis) + extra), ALTO,
+                      texto if vis != texto else "")
 
     def natural(self, n: dict[str, Any] | None, ruta: tuple) -> float:
         if n is None:
@@ -817,7 +820,10 @@ class Motor:
         for x, y, it in c.items:
             if isinstance(it, _Caja):
                 self.registrar(it, ox + x, oy + y, bloques, piezas)
-            elif it.tipo not in ("txt", "paren"):
+                continue
+            if it.completo:
+                self.recortadas.append((QRectF(ox + x, oy + y, it.w, it.h), it.completo))
+            if it.tipo not in ("txt", "paren"):
                 piezas.append((QRectF(ox + x, oy + y, it.w, it.h), it.tipo, c.ruta, it.clave))
 
     # -- dibujo
@@ -1091,6 +1097,21 @@ class _Superficie(QWidget):
         self._calcular(self.width())
         dentro = [(r.width() * r.height(), ruta) for r, ruta, n in self._bloques if r.contains(pos)]
         return min(dentro)[1] if dentro else None
+
+    def _completo_en(self, pos: QPointF) -> str:
+        """El texto entero de la pieza recortada («…») que hay bajo el puntero, o vacío."""
+        self._calcular(self.width())
+        return next((t for r, t in self.motor.recortadas if r.contains(pos)), "")
+
+    def event(self, ev: Any) -> bool:
+        if ev.type() == QEvent.Type.ToolTip:
+            texto = self._completo_en(QPointF(ev.pos()))
+            if texto:
+                QToolTip.showText(ev.globalPos(), texto, self)
+            else:
+                QToolTip.hideText()
+            return True
+        return super().event(ev)
 
     def _pieza_en(self, pos: QPointF) -> tuple | None:
         self._calcular(self.width())

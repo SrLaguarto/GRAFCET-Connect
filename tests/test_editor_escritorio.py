@@ -345,8 +345,7 @@ class Interfaz(unittest.TestCase):
         if variable:
             a.variable.setCurrentText(variable)
         if valor:
-            a.valor.setText(valor)
-            a.valor.editingFinished.emit()
+            a._desde_bloques(valor)
         return a
 
     # -- el grafcet de la validación: E0 -marcha-> E1 -paro-> E0 ---------------------------------------
@@ -511,8 +510,7 @@ class Interfaz(unittest.TestCase):
         def punto(i, lado):
             return next(x for x in anclas(e.M, i) if x["lado"] == lado)["pos"]
         e.herramienta = "seleccionar"
-        e.prensar(punto(ids["0"], "abajo"))
-        e.soltar(punto(ids["1"], "arriba"))
+        e.conectar(ids["0"], ids["1"])  # (arrastrar de una etapa a otra ya crea una transición en medio: ver test_aula)
         self.assertEqual(len(e.M["drafts"]), 1)
         self.assertIn("dos elementos del mismo tipo", e.mensaje)
         self.assertNotIn("D-ALTERNANCIA", e.mensaje)
@@ -691,26 +689,10 @@ class Interfaz(unittest.TestCase):
         e.seleccionar([ts["t2"]])
         p = w.props
         self.assertEqual((p.pagina, p.t_texto.text(), p.t_etiqueta.text()), ("transicion", "paro", "t2"))
-        p.t_texto.clear()
-        p._prefijar("NOT ")
-        p._prefijar("↑")
-        p._insertar("marcha")
-        self.assertEqual(normalizar_espacios(p.t_texto.text()), "NOT ↑marcha")
-        self.assertTrue(p.t_texto.text().startswith(" ") and p.t_texto.text().endswith(" "), "cada inserción, entre espacios")
-        p.t_texto.editingFinished.emit()
+        p._desde_bloques(" NOT  ↑ marcha ")  # lo que arman los bloques
         self.assertEqual(e.texto_condicion(ts["t2"]), "NOT rise(marcha)", "el núcleo guarda su sintaxis")
         self.assertEqual(p.t_texto.text(), "NOT ↑marcha", "y el panel la muestra con flechas")
-        # NOT sobre un texto seleccionado: NOT y, entre paréntesis, la selección
-        p.t_texto.setText("marcha AND paro")
-        p.t_texto.selectAll()
-        p._prefijar("NOT ")
-        self.assertEqual(normalizar_espacios(p.t_texto.text()), "NOT (marcha AND paro)")
-        p.t_texto.setText("marcha AND  paro")
-        p.t_texto.setSelection(12, 4)
-        p._prefijar("↓")
-        self.assertEqual(normalizar_espacios(p.t_texto.text()), "marcha AND ↓paro")
-        p.t_texto.setText("NOT ↑marcha")
-        p.t_texto.editingFinished.emit()
+        p._desde_bloques("NOT ↑marcha")
         self.assertTrue(e.ed.validate().can_simulate)
         p._previsualizar()
         self.assertIn("↑", p.t_dibujo.text())
@@ -728,15 +710,12 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(p.t_crear.isHidden())
         self.assertIn(("fin", "fin"), p.prog.opciones("entrada"), "el cajón de entradas")
         self.assertIn(("X1", "X1"), p.prog.opciones("etapa"), "la etapa 1 se escribe X1")
-        p.t_texto.setText("X1 AND  ↑marcha")
-        p.t_texto.editingFinished.emit()
+        p._desde_bloques("X1 AND  ↑marcha")
         self.assertEqual(e.texto_condicion(ts["t2"]), "active(`1`) AND rise(marcha)", "espacios normalizados")
         self.assertEqual(p.t_texto.text(), "X1 AND ↑marcha")
-        p.t_texto.setText("paro")
-        p.t_texto.editingFinished.emit()
+        p._desde_bloques("paro")
         # Receptividad vacia o mal escrita: no compila y lo dice
-        p.t_texto.setText("marcha AND")
-        p.t_texto.editingFinished.emit()
+        p._desde_bloques("marcha AND")
         self.assertIn("t2", "; ".join(e.resumen(e.diagnosticos())))
         # Etiqueta oculta: no se dibuja y se conserva al guardar y abrir
         e.poner_condicion(ts["t2"], "paro")
@@ -1126,7 +1105,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.ed.get(nuevo)['preRefs'], [ids['0']])
 
     def test_SEDI25_arrastrar_desde_linea_de_seleccion(self):
-        """REQ-EDT-02: clic selecciona un enlace; arrastre desde él abre otra rama en una transacción."""
+        """REQ-EDT-02: clic selecciona un enlace; arrastrarlo mueve su tramo (no abre ninguna rama), en una operación."""
         from escritorio.diagrama import enlaces
         self.proyecto_fixture('seleccion')
         self.w.cambiar_modo('editar')
@@ -1142,10 +1121,11 @@ class Interfaz(unittest.TestCase):
         QTest.mousePress(d.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, d.mapFromScene(p))
         QTest.mouseMove(d.viewport(), d.mapFromScene(destino))
         QTest.mouseRelease(d.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, d.mapFromScene(destino))
-        nueva = next(t for t in e.ed.model['transitions'] if t['id'] not in ('t1', 't2'))
-        self.assertEqual(nueva['preRefs'], ['5'])
+        self.assertEqual(len(e.M['transitions']), 2, 'no se abre ninguna rama')
+        self.assertIn(ruta['id'], e.ed.link_styles(), 'el tramo agarrado se movió')
         self.assertEqual(len(e.ed.undo_stack), n+1)
         e.deshacer()
+        self.assertNotIn(ruta['id'], e.ed.link_styles())
         self.assertEqual(len(e.M['transitions']), 2)
 
     def test_SEDI26_geometria_comun_retorno_y_movimiento(self):
@@ -1666,8 +1646,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(d.variable.currentText(), "CT")
         self.assertEqual(len(e.ed.undo_stack), n + 1, "la elección de la variable, una operación")
         self.assertEqual(e.faltan(e.acciones(ids["1"])[0]), ["valor"], "sin valor, la acción queda como borrador")
-        d.valor.setText("CT + 1")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("CT + 1")
         self.assertEqual(len(e.ed.undo_stack), n + 2, "completar la acción es otra operación")
         self.assertEqual(e.datos_accion(e.acciones(ids["1"])[0]["id"])["valor"], "CT + 1")
         self.assertTrue(e.ed.validate().can_simulate)
@@ -1686,8 +1665,7 @@ class Interfaz(unittest.TestCase):
         d = self.panel_accion(ids["1"], aid)  # cambiarla: memorizada al desactivar, CT := 0
         self.assertEqual((d.clave_tipo, d.variable.currentText(), d.valor.text()), ("activacion", "CT", "CT + 1"))
         self.poner_tipo(d, "desactivacion")
-        d.valor.setText("0")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("0")
         self.assertEqual(e.datos_accion(aid)["tipo"], "desactivacion")
         self.assertEqual((e.datos_accion(aid)["valor"], e.acciones(ids["1"])[0]["id"]), ("0", aid), "conserva su ID")
         e.quitar_accion(aid)
@@ -1721,8 +1699,7 @@ class Interfaz(unittest.TestCase):
         d = self.panel_accion(ids["1"])
         self.assertFalse(hasattr(d, "cond") or hasattr(d, "evento"), "sin programador de condición dentro")
         self.poner_tipo(d, "evento")
-        d.valor.setText("1")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("1")
         n = len(e.ed.undo_stack)
         d.variable.setCurrentText("paro")  # una entrada: no se puede escribir (ni se ofrece en la lista)
         self.assertEqual(len(e.ed.undo_stack), n + 1, "se aplica al momento, como una operación")
@@ -1746,8 +1723,7 @@ class Interfaz(unittest.TestCase):
         d = self.panel_accion(ids["1"])
         d.variable.setCurrentText("M1")
         self.poner_tipo(d, "activacion")
-        d.valor.setText("X1")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("X1")
         self.assertIn("puede ser la etapa E1 o la etapa 1", d.msg.text())
         self.assertIn("active(`1`)", d.msg.text())
         e.seleccionar([ts["t1"]])  # y el panel de la transición avisa igual
@@ -1763,15 +1739,14 @@ class Interfaz(unittest.TestCase):
         self.assertIn(("internal", "Memoria"), PAPELES)
         e.nueva_variable("CT", "internal", {"kind": "int"})
         d = self.anadir_accion(ids["1"], "activacion", "CT")
-        d.valor.setText("CT + 1")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("CT + 1")
         self.assertEqual(next(v for v in e.ed.model["variables"] if v["name"] == "CT")["role"], "internal")
         pv = self.w.variables
         fila = [pv.tabla.item(r, 0).text() for r in range(pv.tabla.rowCount())].index("CT")
         self.assertEqual(pv.tabla.item(fila, 1).text(), "Memoria")
 
     def test_SEDI52_texto_y_bloques_sincronizados(self):
-        """REQ-EDT-02: lo escrito en el campo de texto aparece en bloques; un texto que no se puede analizar no cambia los
+        """REQ-EDT-02: un texto (el guardado) se pasa a bloques con `poner`; uno que no se puede analizar no cambia los
         bloques y avisa; un cambio de bloques escribe el texto y se aplica al modelo."""
         from escritorio import bloques
         w = self.w
@@ -1779,19 +1754,16 @@ class Interfaz(unittest.TestCase):
         e.seleccionar([ts["t1"]])
         prog, p = w.props.prog, w.props
         self.assertEqual((prog.lienzo.arbol["k"], prog.texto()), ("var", "marcha"))
-        p.t_texto.setText("↑marcha AND NOT X1")
-        p.t_texto.textEdited.emit(p.t_texto.text())
+        prog.poner("↑marcha AND NOT X1")
         a = prog.lienzo.arbol
         self.assertEqual((a["k"], a["a"]["k"], a["b"]["k"], a["b"]["a"]["n"]), ("y", "sube", "no", "X1"))
         self.assertTrue(prog.aviso.isHidden())
-        p.t_texto.setText("marcha AND")  # a medias: los bloques se quedan como estaban
-        p.t_texto.textEdited.emit(p.t_texto.text())
+        prog.poner("marcha AND")  # a medias: los bloques se quedan como estaban
         self.assertEqual(prog.texto(), "↑marcha AND NOT X1")
         self.assertFalse(prog.aviso.isHidden())
         self.assertTrue(prog.aviso.text().startswith("No se puede pasar a bloques: "), prog.aviso.text())
         self.assertLess(len(prog.aviso.text()), 120, "una línea breve")
-        p.t_texto.setText("marcha AND ?")  # un hueco es un hueco
-        p.t_texto.textEdited.emit(p.t_texto.text())
+        prog.poner("marcha AND ?")  # un hueco es un hueco
         self.assertTrue(prog.aviso.isHidden())
         self.assertIsNone(prog.lienzo.arbol["b"])
         n = len(e.ed.undo_stack)  # un cambio de bloques escribe el texto y se aplica, con una operación del editor
@@ -1939,10 +1911,9 @@ class Interfaz(unittest.TestCase):
                          ("NOT marcha", "NOT marcha", n + 1))
         e.deshacer()
         self.assertEqual((p.t_texto.text(), prog.texto()), ("marcha", "marcha"))
-        p.t_texto.setText("paro AND marcha")
-        p.t_texto.textEdited.emit(p.t_texto.text())
+        prog.poner("paro AND marcha")
         self.assertEqual((prog.lienzo.arbol["k"], prog.texto()), ("y", "paro AND marcha"))
-        self.assertEqual(len(e.ed.undo_stack), n, "escribir el texto no aplica hasta terminar")
+        self.assertEqual(len(e.ed.undo_stack), n, "poner un texto en los bloques no aplica nada")
 
     def test_SEDI61_panel_plegado_se_despliega_con_el_doble_clic(self):
         """REQ-EDT-02: con el panel inferior plegado no se despliega solo al seleccionar; el doble clic en una transición,
@@ -2148,9 +2119,7 @@ class Interfaz(unittest.TestCase):
         v.close()
         # «Crear las que faltan»
         prog.elegir_categoria("entrada")
-        w.props.t_manual.setChecked(True)
         w.props.t_texto.setText("nueva_in AND marcha")
-        w.props.t_texto.textEdited.emit(w.props.t_texto.text())
         w.props._previsualizar()
         self.assertFalse(w.props.t_crear.isHidden())
         w.props.t_crear.click()
@@ -2172,7 +2141,7 @@ class Interfaz(unittest.TestCase):
     def test_SEDI68_receptividad_en_el_panel_con_texto_de_solo_lectura(self):
         """REQ-EDT-02: toda la receptividad está a la derecha del panel de opciones (texto de la fórmula, «Escrito», «Se
         dibuja» y «Crear las que faltan»); su columna estrecha de la izquierda solo lleva etiqueta, «Mostrar etiqueta» y
-        comentario. El texto se ve pero no se edita hasta marcar «Escribir a mano»; desmarcada, vuelve a solo lectura."""
+        comentario. El texto se ve (con la notación del dibujo) pero no se edita: no hay «Escribir a mano»."""
         from escritorio import bloques
         w = self.w
         e, ids, ts = self.secuencial()
@@ -2183,7 +2152,7 @@ class Interfaz(unittest.TestCase):
         QApplication.processEvents()
         izq = p.izq.widget(2)  # la columna de la transición, a la izquierda del panel de opciones
         derecha = p.pagina_bloques
-        for campo in (p.t_texto, p.t_vista, p.t_dibujo, p.t_crear, p.t_manual, p.t_estado):
+        for campo in (p.t_texto, p.t_vista, p.t_dibujo, p.t_crear, p.t_estado):
             self.assertFalse(izq.isAncestorOf(campo), "no están en la columna estrecha")
             self.assertTrue(derecha.isAncestorOf(campo), "están a su derecha")
         self.assertTrue(izq.isAncestorOf(p.t_etiqueta) and izq.isAncestorOf(p.t_mostrar) and izq.isAncestorOf(p.t_comentario))
@@ -2192,36 +2161,23 @@ class Interfaz(unittest.TestCase):
                          ["Etiqueta"])
         self.assertEqual(p.t_texto.text(), "marcha")
         self.assertTrue(p.t_texto.isReadOnly(), "se ve pero no se edita")
-        self.assertFalse(p.t_manual.isChecked())
-        self.assertEqual(p.t_manual.text(), "Escribir a mano")
+        self.assertFalse(hasattr(p, "t_manual"), "sin «Escribir a mano»")
+        self.assertEqual(p.t_texto.focusPolicy(), Qt.FocusPolicy.NoFocus)
         # con bloques el texto sigue las piezas, sin dejar editar
         n = len(e.ed.undo_stack)
         prog.lienzo.soltar((), bloques.nuevo("no"))
         self.assertEqual((p.t_texto.text(), p.t_texto.isReadOnly(), len(e.ed.undo_stack)), ("NOT marcha", True, n + 1))
-        # «Escribir a mano»: editable; lo escrito pasa a bloques y se aplica al terminar
-        p.t_manual.setChecked(True)
-        self.assertFalse(p.t_texto.isReadOnly())
-        p.t_texto.setText("paro AND marcha")
-        p.t_texto.textEdited.emit(p.t_texto.text())
-        self.assertEqual((prog.lienzo.arbol["k"], prog.texto()), ("y", "paro AND marcha"))
-        p.t_texto.editingFinished.emit()
-        self.assertEqual(e.texto_usuario(ts["t1"]), "paro AND marcha")
-        self.assertEqual(len(e.ed.undo_stack), n + 2)
-        p.t_manual.setChecked(False)
-        self.assertTrue(p.t_texto.isReadOnly(), "desmarcada, vuelve a solo lectura")
-        # otra transición: solo lectura aunque se hubiera dejado marcada
-        p.t_manual.setChecked(True)
+        # otra transición: sigue el texto de esa, también sin editar
         e.seleccionar([ts["t2"]])
-        self.assertTrue(p.t_texto.isReadOnly() and not p.t_manual.isChecked())
+        self.assertTrue(p.t_texto.isReadOnly())
         self.assertEqual(p.t_texto.text(), "paro")
         # lo que faltaba por crear, y el texto escrito de cómo se dibuja, están ahí
-        p.t_manual.setChecked(True)
         p.t_texto.setText("↑nueva")
-        p.t_texto.textEdited.emit(p.t_texto.text())
+        p._previsualizar()
         self.assertFalse(p.t_crear.isHidden())
         self.assertIn("nueva", p.t_vista.text())
         p.t_texto.setText("↑marcha")
-        p.t_texto.textEdited.emit(p.t_texto.text())
+        p._previsualizar()
         self.assertIn("↑", p.t_dibujo.text())
         self.assertIn("correcta", p.t_estado.text())
 
@@ -2818,13 +2774,13 @@ class Interfaz(unittest.TestCase):
     def test_SEDI79_tabla_de_variables_nombre_papel_tipo(self):
         """REQ-EDT-07: la tabla tiene solo Nombre, Papel y Tipo; se ofrecen Booleana, Entera y Decimal con 2 decimales;
         una variable de un fichero antiguo (decimal de 1 o 3 decimales, duración) se ve con su tipo y funciona, y si se
-        le cambia el tipo solo se elige entre los tres; el valor inicial y la unidad que ya tuviera se conservan."""
+        le cambia el tipo solo se elige entre los tres; la unidad que ya tuviera se conserva."""
         from escritorio.variables import TIPOS
         w = self.w
         w.nuevo()
         e, pv = w.edicion, w.variables
         e.nueva_variable("a", "input")
-        e.ed.add_variable("T3", "input", {"kind": "decimal", "scale": 3}, unit="s", initial="1.500")
+        e.ed.add_variable("T3", "input", {"kind": "decimal", "scale": 3}, unit="s")
         e.ed.add_variable("T1", "output", {"kind": "decimal", "scale": 1})
         e.ed.add_variable("D", "input", {"kind": "duration"}, unit="ms")
         e.cambia()
@@ -2852,7 +2808,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((v["unit"], len(e.ed.undo_stack)), ("s", n + 1), "la unidad se conserva; una operación")
         self.assertEqual(pv.tabla.item(1, 2).text(), "Entera")
         self.assertEqual(len(pv.opciones(1, 2)), 3, "ya no ofrece el tipo antiguo")
-        # renombrar y cambiar el papel conservan la unidad y el valor inicial del modelo
+        # renombrar conserva la unidad
         d = next(x for x in e.ed.model["variables"] if x["name"] == "D")
         pv.tabla.item(3, 0).setText("Dur")
         self.assertEqual((d["unit"], next(x for x in e.ed.model["variables"] if x["id"] == d["id"])["unit"]), ("ms", "ms"))
@@ -3159,7 +3115,7 @@ class Interfaz(unittest.TestCase):
         pv = w.variables
         e.nueva_variable("un_nombre_muy_largo_de_variable", "output")
         self.app.processEvents()
-        self.assertEqual(pv.tabla.horizontalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.assertEqual(pv.tabla.horizontalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # visible si no cabe
         r = [pv.tabla.item(i, 0).text() for i in range(pv.tabla.rowCount())].index("un_nombre_muy_largo_de_variable")
         self.assertEqual(pv.tabla.item(r, 0).toolTip(), "un_nombre_muy_largo_de_variable")
         tabla = pv.tabla
@@ -3712,9 +3668,7 @@ class Interfaz(unittest.TestCase):
         # una variable que no existe: sigue siendo borrador y «Crear las que faltan» la declara y completa la acción
         prog.lienzo.quitar((0,))
         (b,) = e.ed.draft_actions()
-        p.t_manual.setChecked(True)
         p.t_texto.setText("↑nueva_in")
-        p.t_texto.textEdited.emit(p.t_texto.text())
         p._aplicar()
         self.assertEqual(e.ed.draft_actions()[0]["evento"], "↑nueva_in")
         self.assertIn("No existen: nueva_in", p.t_estado.text())
@@ -3726,9 +3680,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((e.ed.draft_actions(), e.datos_accion(e.accion)["evento"]), ([], "↑nueva_in"))
         # un nombre que no vale (entre comillas invertidas): no se crea, mensaje y parpadeo
         self.panel_accion(s1, e.acciones(s1)[-1]["id"])
-        p.t_manual.setChecked(True)
         p.t_texto.setText("↑(`OR`)")
-        p.t_texto.textEdited.emit(p.t_texto.text())
         p._aplicar()
         n = len(e.ed.undo_stack)
         self.assertFalse(p.t_crear.isHidden())
@@ -3739,7 +3691,6 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(p.parpadeo_crear.t.isActive())
         self.assertEqual(e.mensaje, p.t_estado.text())
         p.parpadeo_crear.parar()
-        p.t_manual.setChecked(False)
         # una acción suelta, y las de un grupo
         d = e.poner_accion_suelta(QPointF(800, 300), "condicionada")
         e.seleccionar([d])
@@ -3788,8 +3739,7 @@ class Interfaz(unittest.TestCase):
         # por evento: sin evento, borrador; el valor se programa aparte
         d = self.anadir_accion(s1, "evento", "Q02")
         self.assertEqual(e.faltan(e._datos_borrador(e.ed.draft_actions()[1])), ["valor", "evento"])
-        d.valor.setText("1")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("1")
         self.assertEqual([x["tipo"] for x in e.ed.draft_actions()], ["condicionada", "evento"])
         self.assertEqual(e.faltan(e._datos_borrador(e.ed.draft_actions()[1])), ["evento"])
         # una condicionada completa: abrir y cambiar la variable conserva su condición
@@ -4290,8 +4240,7 @@ class Interfaz(unittest.TestCase):
         d.poner_variable("TOT")
         self.assertEqual(d.variable.currentText(), "TOT")
         self.assertEqual(len(e.ed.undo_stack), n + 2, "crear la variable y elegirla: dos operaciones")
-        d.valor.setText("TOT + 1")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("TOT + 1")
         self.assertEqual(len(e.ed.undo_stack), n + 3)
         # una continua no escribe una variable entera: al cambiar de tipo se vuelve a elegir
         a = e.acciones(s1)[-1]["id"]
@@ -4346,10 +4295,8 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((d.valor.text(), d.prog.texto()), ("CT + 1", "CT + 1"))
         arbol = d.prog.lienzo.arbol
         self.assertEqual((arbol["k"], arbol["op"], arbol["a"], arbol["b"]), ("ar", "+", {"k": "vnum", "n": "CT"}, {"k": "num", "v": "1"}))
-        self.assertTrue(d.valor.isReadOnly())
-        d.manual.setChecked(True)
-        self.assertFalse(d.valor.isReadOnly())
-        d.manual.setChecked(False)
+        self.assertTrue(d.valor.isReadOnly(), "el valor se arma con bloques: no se edita a mano")
+        self.assertFalse(hasattr(d, "manual"))
         # la paleta corta: Número, Variables, Operadores
         self.assertEqual([c for c, _ in d.prog.lista_categorias], ["numero", "vnum", "aritm"])
         d.prog.elegir_categoria("vnum")
@@ -4358,8 +4305,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual([n["op"] if n["k"] == "ar" else n["k"] for n in d.prog.paleta._raices],
                          ["+", "-", "*", "/", "par"], "los cuatro operadores y el paréntesis")
         # con bloques: CT * 2 - 1, anidado (un operador sobre otro lo envuelve); lo a medias no se guarda
-        d.valor.setText("")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("")
         lienzo = d.prog.lienzo
         d.prog.colocar(bloques.nuevo("ar", op="*"))
         lienzo.soltar(("a",), bloques.nuevo("vnum", n="CT"))
@@ -4384,15 +4330,12 @@ class Interfaz(unittest.TestCase):
                                         "b": bloques.nuevo("ar", op="+", a=bloques.nuevo("num", v="2"), b=bloques.nuevo("num", v="3"))}),
                          "1 - (2 + 3)")
         self.assertEqual(texto_a_arbol_valor("I02 + 1", vars_, [])["a"]["k"], "texto", "una booleana no es un operando numérico")
-        # de texto a bloques en el panel (a mano)
-        d.manual.setChecked(True)
-        d.valor.setText("(CT + 1) * 2")
-        d.valor.textEdited.emit(d.valor.text())
+        # de texto a bloques (el texto guardado)
+        d.prog.poner("(CT + 1) * 2")
         self.assertEqual((lienzo.arbol["op"], lienzo.arbol["a"]["k"], lienzo.arbol["a"]["a"]["op"]), ("*", "par", "+"),
                          "el paréntesis escrito es un bloque «( )»")
         # lo escrito se guarda al terminar: el texto de siempre, que el núcleo analiza como siempre
-        d.valor.setText("CT * 2 - 1")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("CT * 2 - 1")
         (a,) = e.acciones(s1)[-1:]
         self.assertEqual((a["variable"], a["valor"]), ("CT", "CT * 2 - 1"))
         self.assertTrue(e.ed.validate().can_simulate)
@@ -4401,8 +4344,7 @@ class Interfaz(unittest.TestCase):
         self.poner_tipo(d, "activacion")
         d.poner_variable("CT")
         n = len(e.ed.undo_stack)
-        d.valor.setText("CT +")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("CT +")
         self.assertTrue(d.msg.text())
         self.assertEqual(len(e.ed.undo_stack), n, "no se guardó nada")
         # un número editado desde el área de la paleta o con el campo, en el propio bloque
@@ -4429,8 +4371,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(p.objetivo_bloques()[2], "condicion")
         self.poner_tipo(d, "activacion")
         d.poner_variable("CT")
-        d.valor.setText("CT + 1")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("CT + 1")
         self.assertEqual(d.frase.text(), "Al activarse la etapa 1: CT := CT + 1.")
         self.assertTrue(p.pagina_bloques.isHidden() and not d.caja_valor.isHidden())
         self.poner_tipo(d, "desactivacion")
@@ -4785,7 +4726,7 @@ class Interfaz(unittest.TestCase):
                 self.assertTrue(raiz.contains(r), f"{tam} {sel}: «{b.text() or b.toolTip()}» fuera del panel {r} {raiz}")
                 g = QRectF(b.mapTo(w, QPoint(0, 0)), b.size())
                 self.assertTrue(QRectF(w.rect()).contains(g), f"{tam} {sel}: «{b.text() or b.toolTip()}» fuera de la ventana")
-            for nombre in ("t_manual", "t_crear"):
+            for nombre in ("t_crear",):
                 c = getattr(p, nombre)
                 if c.isVisibleTo(p):
                     self.assertGreaterEqual(c.width(), c.sizeHint().width(), f"{tam} {sel}: {nombre} recortado")
@@ -4946,7 +4887,6 @@ class Interfaz(unittest.TestCase):
         valores = lambda: [e.datos_accion(i)["valor"] for i in (A, B)]  # noqa: E731
         p = w.props.accion
         w.editar_accion(ids["1"], A)
-        p.manual.setChecked(True)
         p.valor.setFocus()
         p.valor.setText("99")  # a medio escribir, sin confirmar
         w.editar_accion(ids["1"], B)  # cambia la acción mostrada sin clic
@@ -5088,8 +5028,7 @@ class Interfaz(unittest.TestCase):
         d.prog.elegir_categoria("aritm")
         self.assertEqual([n["k"] for n in d.prog.paleta.bloques()], ["ar"] * 4 + ["par"])
         lienzo = d.prog.lienzo
-        d.valor.setText("")
-        d.valor.editingFinished.emit()
+        d._desde_bloques("")
         lienzo.soltar((), nuevo("ar", op="+"))
         lienzo.soltar(("b",), nuevo("num", v="1"))
         lienzo.soltar(("a",), nuevo("par"))

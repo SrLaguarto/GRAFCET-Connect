@@ -81,7 +81,7 @@ class Paneles(BaseQt):
         self.assertEqual(w.props.t_texto.text(),formula)
 
     def test_SPAN05_formula_estado_y_controles_en_una_fila_con_vista_previa(self):
-        """REQ-EDT-02, REQ-EDT-09: fórmula, estado, ampliar y papelera comparten fila; vista previa y edición manual siguen disponibles."""
+        """REQ-EDT-02, REQ-EDT-09: fórmula, estado, ampliar y papelera comparten fila; vista previa sigue disponible y la fórmula no se edita a mano."""
         w,e=self.preparar();p=w.props
         centros=[c.mapTo(p,c.rect().center()).y() for c in (p.t_texto,p.t_estado,p.prog.ampliar,p.prog.papelera)]
         self.assertLessEqual(max(centros)-min(centros),3)
@@ -89,9 +89,7 @@ class Paneles(BaseQt):
         QTest.mouseClick(p.t_previa,Qt.MouseButton.LeftButton);QApplication.processEvents()
         self.assertTrue(p.t_vista.isVisible());self.assertTrue(p.t_dibujo.isVisible())
         self.assertIn("a",p.t_vista.text());QTest.mouseClick(p.t_previa,Qt.MouseButton.LeftButton)
-        QTest.mouseClick(p.t_manual,Qt.MouseButton.LeftButton,pos=QPoint(8,p.t_manual.height()//2))
-        self.assertFalse(p.t_texto.isReadOnly())
-        p.t_texto.setFocus();p.t_texto.selectAll();QTest.keyClicks(p.t_texto,"a AND NOT b");p.t_texto.editingFinished.emit()
+        p._desde_bloques("a AND NOT b")
         self.assertEqual(e.texto_usuario("t"),"a AND NOT b")
         QTest.mouseClick(p.prog.ampliar,Qt.MouseButton.LeftButton);QApplication.processEvents()
         ventana=p.prog._ventana
