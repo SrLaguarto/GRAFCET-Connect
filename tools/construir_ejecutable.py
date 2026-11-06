@@ -182,7 +182,13 @@ def _entregas(dist: Path) -> int:
     if subprocess.run(orden).returncode:
         print("ERROR: Inno Setup no pudo crear el instalador.", flush=True)
         return 1
-    print(f"Instalador: {salida / f'GRAFCET-Connect-{VERSION}-setup.exe'}", flush=True)
+    instalador = salida / f"GRAFCET-Connect-{VERSION}-setup.exe"
+    print(f"Instalador: {instalador}", flush=True)
+    # Copia con nombre fijo: subida también a cada release, deja un enlace que siempre baja la última versión
+    # (https://github.com/SrLaguarto/GRAFCET-Connect/releases/latest/download/GRAFCET-Connect-setup.exe).
+    fijo = salida / "GRAFCET-Connect-setup.exe"
+    shutil.copyfile(instalador, fijo)
+    print(f"Instalador con nombre fijo (súbalo también a la release): {fijo}", flush=True)
     return 0
 
 

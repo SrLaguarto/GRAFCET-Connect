@@ -47,6 +47,9 @@ dibujo en ese archivo. Con «Proyecto > Nuevo proyecto» se crea un modelo vací
 - Instalador (P-IMP-103): en la construcción repartible, `tools/construir_ejecutable.py` (función `_entregas`) crea también el zip
   portable `dist/GRAFCET-Connect-1.0.0-win64.zip` y, si Inno Setup 6 está instalado, compila `tools/instalador.iss` en
   `dist/GRAFCET-Connect-1.0.0-setup.exe`. Ambos contienen la misma carpeta; sin Inno Setup, la construcción avisa y solo queda el zip.
+  También deja una copia del instalador con nombre fijo, `dist/GRAFCET-Connect-setup.exe`. En cada release se suben los dos
+  instaladores (con versión y con nombre fijo), de modo que
+  `https://github.com/SrLaguarto/GRAFCET-Connect/releases/latest/download/GRAFCET-Connect-setup.exe` siempre baja la última versión.
   La construcción avisa si el programa se está ejecutando desde `dist/` y no sustituye la carpeta. El instalador no lleva firma digital de código.
 - Barra de estado: «Basado en IEC 60848». Indica la base del programa; no es una declaración de conformidad (P-IMP-90).
 - Avisos y diagnósticos: no muestran códigos internos (como `D-…`, `U-…` o `REQ-…`), que siguen en los datos. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular» (P-IMP-89). Los avisos usan vocabulario GRAFCET, sin jerga interna; el detalle técnico y la «Referencia: código» van en la ayuda emergente de cada aviso (P-IMP-89).

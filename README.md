@@ -61,7 +61,7 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 
 ## Descargar e instalar
 
-Descargue el instalador `GRAFCET-Connect-1.0.2-setup.exe` desde la sección [Releases](https://github.com/SrLaguarto/GRAFCET-Connect/releases) del repositorio.
+Descargue el instalador de la última versión: [GRAFCET-Connect-setup.exe](https://github.com/SrLaguarto/GRAFCET-Connect/releases/latest/download/GRAFCET-Connect-setup.exe). Este enlace siempre baja la versión más reciente. Las notas de cada versión están en [Releases](https://github.com/SrLaguarto/GRAFCET-Connect/releases).
 
 - **Requisitos:** Windows 10 o Windows 11 de 64 bits. No necesita conexión a internet para funcionar.
 - **Instalación:** por defecto se instala en Archivos de programa, lo que pide permisos de administrador. Si no los tiene, el instalador ofrece instalarlo solo para su usuario. Crea el acceso en el menú Inicio, ofrece un acceso en el escritorio (desmarcado por defecto) y asocia los archivos `.grafnet` (marcado por defecto).
