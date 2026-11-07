@@ -33,8 +33,14 @@ REGLAS: tuple[tuple[re.Pattern[str], str], ...] = tuple((re.compile(p, re.S), t)
     (r"^(.+?)→(.+?) une dos elementos del mismo tipo.*",
      r"\1 y \2 son dos elementos del mismo tipo: solo se unen una etapa y una transición."
      " Queda como borrador y no se simula."),
+    (r"^enlace de borrador (.+?)→(.+?) viola la alternancia.*\(etapa→etapa\)$",
+     r"Enlace en borrador entre las etapas \1 y \2: dos etapas no pueden ir seguidas. "
+     "Bórrelo o ponga una transición en medio."),
+    (r"^enlace de borrador (.+?)→(.+?) viola la alternancia.*\(transición→transición\)$",
+     r"Enlace en borrador entre las transiciones \1 y \2: dos transiciones no pueden ir seguidas. "
+     "Bórrelo o ponga una etapa en medio."),
     (r"^enlace de borrador (.+?)→(.+?) viola la alternancia.*",
-     r"Enlace de borrador \1→\2 no respeta la alternancia etapa-transición y no se simula."),
+     r"Enlace en borrador entre \1 y \2: no respeta la alternancia etapa-transición. Bórrelo o corríjalo."),
     (r"^etiqueta «(.+)» (?:repetida|ya existe) en el parcial.*", r"Ya existe otra etapa llamada «\1» en este grafcet."),
     (r"^(?:nombre|variable) «(.+)» (?:repetido|ya existe) en el ámbito.*", r"Ya existe otra variable llamada «\1»."),
     (r"^«(.+)» ya existe(?: en el ámbito)?; el ID no cambia", r"Ya existe «\1»: elija otro nombre."),

@@ -21,7 +21,7 @@ de instalación (por defecto `C:\Program Files\GRAFCET Connect\Prueba-Modbus.gra
 
 ## 3. Conectar
 
-1. Vaya a la pestaña **E/S externas**.
+1. Pulse la luz «E/S externas», a la derecha de la fila de pestañas.
 2. Compruebe **IP**, **Puerto** (502) y **Esclavo ID** (1). La IP se escribe en cuatro casillas; puede pegar la IP entera en la primera. Los valores por defecto son 192.168.1.133:502, esclavo 1.
 3. Pulse **Conectar**. El estado pasa a «Conectado»; el panel muestra el valor de cada entrada y salida asignada. En la barra de simulación, la luz de conexión se pone en verde.
 

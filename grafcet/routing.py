@@ -4,6 +4,7 @@ from typing import Any
 SX, H, SIMUL, BARRA_GROSOR = 100, 22, 14, 8
 TALLO_E = 16  # tramo vertical mínimo de un enlace al salir de una etapa o al llegar a ella
 TALLO_T = 24  # ... y a cada lado de una transición: el trazo nunca llega de lado
+CRUCE = 14  # cuánto asoma por el otro lado de la barra el enlace de un elemento unido por el lado equivocado
 TALLO_CORTO = 8  # si no caben los tramos enteros, se acortan hasta aquí antes de dar un rodeo
 
 # Sentido de la evolución a través de una transición (`presentation.transitionOrientations`; en el modelo de la vista,
@@ -180,16 +181,16 @@ def _flechas_de_lazo(out: list[dict[str, Any]]) -> set[str]:
 
 
 def _separar_lazos(M, out, pos):
-    """Preferir carriles sin cruces con enlaces y cajas, conservando las rutas fijadas a mano. Un tramo que el usuario ha
-    colocado a mano (`route` de su estilo) manda: ni se mueve ni aparta a los demás enlaces, de modo que se puede dejar encima
-    de otro enlace (P-IMP-113); la separación automática es solo entre enlaces sin colocar a mano."""
-    def a_mano(e):
-        return bool(M.get("linkStyles", {}).get(e["id"], {}).get("route"))
-    lazos = [e for e in out if len(e["pts"]) == 6 and e["rol"] in ("pre", "post")
+    """Preferir carriles sin cruces con enlaces y cajas. Se calcula siempre sobre los recorridos automáticos de todos los
+    enlaces, también los colocados a mano (`route` de su estilo): colocar un tramo a mano no mueve a ningún otro enlace, ni
+    antes de soltarlo ni después, y el tramo colocado se superpone después, tal como se soltó (P-IMP-113 y P-IMP-118). Así un
+    retorno automático no «huye» del tramo que se arrastra hacia él; la separación automática sigue siendo entre los enlaces
+    tal como se dibujan sin colocar nada a mano."""
+    lazos = [e for e in out if len(e["pts"]) == 6 and (e["rol"] in ("pre", "post") or e.get("cruza"))
              and any(b[1] < a[1] for a, b in zip(e["pts"], e["pts"][1:]))
-             and not a_mano(e) and not e.get("orient")]
+             and not e.get("orient")]
     ids = {e["id"] for e in lazos}
-    fijos = [e for e in out if e["id"] not in ids and not a_mano(e)]
+    fijos = [e for e in out if e["id"] not in ids]
     cajas = [(n["id"], pos[n["id"]][0]-H, pos[n["id"]][1]-H,
               pos[n["id"]][0]+H, pos[n["id"]][1]+H)
              for coll in ("steps", "macros") for n in M.get(coll, [])]
@@ -329,20 +330,34 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
                     continue
                 ex, ey = pos[ident]
                 cx = min(max(ex, bx), bx + w)
+                cruza = (ey > by) if lado == "arriba" else (ey < by)  # unido por el lado contrario al que está dibujado
+                lx = min(ex, cx) - 70  # (por si cruza: el carril lateral de partida; `_separar_lazos` lo recoloca)
                 if lado == "arriba":
                     y0 = ey + (H if ident in steps else 0)
                     mid = (y0 + by) / 2
-                    pts = [(ex, y0), (ex, mid), (cx, mid), (cx, by)]
+                    if cruza:  # el elemento está debajo de la barra y emite hacia ella: sale por abajo, rodea y llega a su cara de arriba
+                        sal = y0 + (TALLO_E if ident in steps else TALLO_T)
+                        pts = [(ex, y0), (ex, sal), (lx, sal), (lx, by - CRUCE), (cx, by - CRUCE), (cx, by)]
+                    else:
+                        pts = [(ex, y0), (ex, mid), (cx, mid), (cx, by)]
                 else:
                     y0 = ey - (H if ident in steps else 0)
                     mid = (by + h + y0) / 2
-                    pts = [(cx, by + h), (cx, mid), (ex, mid), (ex, y0)]
+                    if cruza:  # el elemento está encima de la barra y recibe de ella (un retorno): sale de su cara de abajo, rodea
+                        # por un carril lateral y entra por arriba, sin atravesar lo que hay en medio
+                        ent = y0 - (TALLO_E if ident in steps else TALLO_T)
+                        pts = [(cx, by + h), (cx, by + h + CRUCE), (lx, by + h + CRUCE), (lx, ent), (ex, ent), (ex, y0)]
+                    else:
+                        pts = [(cx, by + h), (cx, mid), (ex, mid), (ex, y0)]
+                tallo = TALLO_E if ident in steps else TALLO_T  # (lo que da la vuelta conserva sus tramos mínimos si se coloca a mano)
+                tallos = (0, 0) if not cruza else (tallo, CRUCE) if lado == "arriba" else (CRUCE, tallo)
                 out.append({"id": f"{b['id']}|{ident}|barra", "tid": b["id"], "sid": ident, "rol": "barra", "pts": pts,
-                            "tallos": (0, 0), "simul": False})
+                            "tallos": tallos, "simul": False, **({"cruza": True} if cruza else {})})
     llegadas = {}
     for e in out:
         if e["rol"] == "post":
             llegadas.setdefault(e["sid"], []).append(e["id"])
+    _separar_lazos(M, out, pos)  # primero, los carriles automáticos de todos; encima, lo colocado a mano
     for e in out:
         style = M.get("linkStyles", {}).get(e["id"], {})
         pts = e["pts"]
@@ -363,7 +378,6 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
             y = min(max(y, bajo), alto) if bajo <= alto else y
             pts = [pts[0], (pts[0][0], y), (pts[-1][0], y), pts[-1]]
         e["pts"] = pts
-    _separar_lazos(M, out, pos)
     for e in out:
         pts = e["pts"]
         if e["rol"] == "post" and len(pts) == 6 and pts[-3][0] > pts[-1][0] + H + 8 and not e.get("orient"):
@@ -413,7 +427,7 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
         # transición (la evolución no es de arriba abajo: IEC 60848 la indica con una flecha)
         girado = e["rol"] == "post" and e.get("orient") is not None
         primero = ((pts[1][0]-pts[0][0])**2 + (pts[1][1]-pts[0][1])**2)**0.5 if girado else 0
-        for key, visible, segment, ratio in (("flow", girado or e["id"] in auto, 0 if girado else default,
+        for key, visible, segment, ratio in (("flow", girado or e["id"] in auto or bool(e.get("cruza")), 0 if girado else default,
                                               min(0.5, 16 / primero) if primero else 0.5),
                                              ("join", False, len(pts)-2, 0.5)):
             config = style.get("arrows", {}).get(key, {})
@@ -450,22 +464,58 @@ def project_on_link(pts, point):
 
 
 
+def _quienes(ids, pasos, macros):
+    """«la etapa 3», «las etapas 3 y 4», «la transición t1»… (con los ID: quien muestra el aviso los cambia por los nombres)."""
+    ids = sorted(ids)
+    grupos = (("etapa", "etapas", [i for i in ids if i in pasos and i not in macros]),
+              ("macroetapa", "macroetapas", [i for i in ids if i in macros]),
+              ("transición", "transiciones", [i for i in ids if i not in pasos]))
+    partes = []
+    for uno, varios, lista in grupos:
+        if lista:
+            partes.append(f"{'la ' + uno if len(lista) == 1 else 'las ' + varios} " +
+                          (lista[0] if len(lista) == 1 else ", ".join(lista[:-1]) + " y " + lista[-1]))
+    return " y ".join(partes)
+
+
 def validar_barras(modelo, barras):
-    """La barra Y representa los precedentes o siguientes de una sola transición (REQ-MOD-03)."""
+    """La barra Y representa los precedentes o siguientes de una sola transición (REQ-MOD-03). El aviso dice qué lleva unido
+    cada lado de la barra (con ID, que quien lo muestra cambia por los nombres) y qué debe quedar."""
     from .diagnostics import Diagnostic
     diagnosticos = []
-    pasos = {s["id"] for s in modelo.get("steps", [])} | {m["id"] for m in modelo.get("hierarchy", {}).get("macros", [])}
+    macros = {m["id"] for m in modelo.get("hierarchy", {}).get("macros", [])}
+    pasos = {s["id"] for s in modelo.get("steps", [])} | macros
     transiciones = {t["id"] for t in modelo.get("transitions", [])}
+    enlaces_modelo = {(s, t["id"]) for t in modelo.get("transitions", []) for s in t["preRefs"]} |                      {(t["id"], s) for t in modelo.get("transitions", []) for s in t["postRefs"]}
     for b in barras:
-        a, z = set(b["arriba"]), set(b["abajo"])
-        if b["kind"] != "Y" or not a or not z:
-            continue  # una barra aún sin conectar se conserva como elemento de edición
+        # lo que ya no existe no se dibuja (Vista lo ignora) y tampoco cuenta aquí
+        a, z = {i for i in b["arriba"] if i in pasos | transiciones}, {i for i in b["abajo"] if i in pasos | transiciones}
+        # la barra dibuja unida cada pareja de arriba con abajo: si el grafcet no la tiene unida, el dibujo no es el modelo
+        sueltas = sorted((x, y) for x in a for y in z if (x in pasos) != (y in pasos) and (x, y) not in enlaces_modelo)
+        if sueltas:
+            nombres = ", ".join(f"{x}→{y}" for x, y in sueltas)
+            diagnosticos.append(Diagnostic("D-SIMULTANEIDAD", f"{b['id']} dibuja unidos {nombres}, pero en el grafcet no lo "
+                                           "están. Quite uno de los dos de la barra y vuelva a unirlo.", element=b["id"]))
+        if not a or not z:  # una barra aún sin conectar se conserva como elemento de edición, con un aviso que no bloquea
+            que = "nada conectado" if not a and not z else f"nada conectado por {'arriba' if not a else 'abajo'}"
+            diagnosticos.append(Diagnostic("D-BARRA-SUELTA", f"{b['id']} no tiene {que}. Únala o bórrela.", element=b["id"]))
+            continue
+        if b["kind"] != "Y":
+            continue
         if (a | z) <= pasos or (a | z) <= transiciones:
             continue  # la alternancia ya diagnostica estas parejas sin transición o sin etapa
         divergencia = len(a) == 1 and a <= transiciones and z <= pasos
         convergencia = a <= pasos and len(z) == 1 and z <= transiciones
         if not (divergencia or convergencia):
-            diagnosticos.append(Diagnostic("D-SIMULTANEIDAD",
-                "La barra de simultaneidad debe agrupar las etapas de una única transición, no varias transiciones alternativas.",
-                element=b["id"]))
+            lados = (("por arriba", a), ("por abajo", z))
+            mezclados = [f"a la vez {_quienes(ids, pasos, macros)} {lado}" for lado, ids in lados
+                         if ids & transiciones and ids - transiciones]
+            if mezclados:
+                motivo = "tiene " + " y ".join(mezclados)
+            else:
+                motivo = f"tiene {_quienes(a, pasos, macros)} por arriba y {_quienes(z, pasos, macros)} por abajo"
+            varias = len(a & transiciones) > 1 or len(z & transiciones) > 1
+            arreglo = ("Una simultaneidad une varias etapas con una sola transición: quite de la barra lo que sobre"
+                       + (", o use una barra de alternativa si son alternativas." if varias else "."))
+            diagnosticos.append(Diagnostic("D-SIMULTANEIDAD", f"{b['id']} {motivo}. {arreglo}", element=b["id"]))
     return diagnosticos

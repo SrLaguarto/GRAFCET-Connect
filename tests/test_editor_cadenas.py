@@ -2501,17 +2501,17 @@ class AvisosConNombres(BaseQt):
         from unittest import mock
         w, e, d = self.barra_con_tres()
         lineas = e.resumen(e.diagnosticos())
-        borradores = [x for x in lineas if "alternancia" in x]
-        self.assertEqual(borradores, ["Enlace de borrador 2→0 no respeta la alternancia etapa-transición y no se simula.",
-                                      "Enlace de borrador 1→0 no respeta la alternancia etapa-transición y no se simula."])
+        borradores = [x for x in lineas if "Enlace en borrador" in x]
+        self.assertEqual(borradores, ["Enlace en borrador entre las etapas 2 y 0: dos etapas no pueden ir seguidas. Bórrelo o ponga una transición en medio.",
+                                      "Enlace en borrador entre las etapas 1 y 0: dos etapas no pueden ir seguidas. Bórrelo o ponga una transición en medio."])
         for x in lineas:
             self.assertNotRegex(x, self.INTERNO)
         # el cuadro que sale al pulsar Play
         with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
             w._no_simulable()
         texto = aviso.call_args[0][2]
-        self.assertIn("2→0", texto)
-        self.assertIn("1→0", texto)
+        self.assertIn("las etapas 2 y 0", texto)
+        self.assertIn("las etapas 1 y 0", texto)
         self.assertNotRegex(texto, self.INTERNO)
         # el panel de diagnósticos: texto y ayuda
         w.refrescar_edicion()
@@ -2524,10 +2524,10 @@ class AvisosConNombres(BaseQt):
         e.nombres = {k: v for k, v in e.nombres.items() if k != d["c"]}
         for x in e.resumen(e.diagnosticos()):
             self.assertNotRegex(x, self.INTERNO)
-        self.assertIn("Enlace de borrador 2→0 no respeta", " ".join(e.resumen(e.diagnosticos())))
+        self.assertIn("Enlace en borrador entre las etapas 2 y 0:", " ".join(e.resumen(e.diagnosticos())))
         with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
             w._no_simulable()
-        self.assertIn("2→0", aviso.call_args[0][2])
+        self.assertIn("las etapas 2 y 0", aviso.call_args[0][2])
         self.assertNotRegex(aviso.call_args[0][2], self.INTERNO)
         # y un ID que ya no existe en ninguna parte se llama «un elemento»
         fantasma = "s-" + "0123456789abcdef" * 2

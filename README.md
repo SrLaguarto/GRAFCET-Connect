@@ -45,7 +45,7 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 ### Conexión con simuladores de procesos
 
 - Cliente Modbus TCP. El botón **E/S externas** de la barra abre la asignación: sensores a la izquierda y actuadores a la derecha.
-- La fila de pestañas (GRAFCET, PLANOS, E/S externas) muestra, a la derecha del todo, la luz de conexión: verde si está conectada, gris si no lo está y rojo si hay un error. Un clic abre **E/S externas**.
+- La fila de pestañas (GRAFCET, PLANOS) muestra, a la derecha del todo, la luz de conexión: verde si está conectada, gris si no lo está y rojo si hay un error. Es la entrada a **E/S externas**: un clic la abre (y queda resaltada mientras se ve); GRAFCET o PLANOS vuelven.
 - **Configuración** reúne la IP, el puerto (502 por defecto), el esclavo y los canales del servidor (por defecto, 32 digitales y 12 numéricos, con offset y cantidad ajustables).
 - Las variables nuevas se asignan solas a canales libres. También se pueden arrastrar a otro canal, y se quitan con la ×.
 - **Conectar** pone a cero las salidas asignadas antes de la primera lectura. **Desconectar / editar** escribe el cero antes de cerrar la conexión.

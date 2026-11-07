@@ -40,7 +40,8 @@ class VistaSimulacion(BaseQt):
 
     def test_SMOD02_play_oculta_y_stop_restaura_tamanos_y_divisor_manual(self):
         """REQ-EDT-09, REQ-SIM-03: Play oculta paleta e inferior; Stop restaura sus tamaños y el reparto manual."""
-        w,d=self.preparar();w.vsplit.moveSplitter(420,1);self.procesar()
+        w,d=self.preparar();w.props.t_fijar.setChecked(True)  # (sin fijar, el panel inferior vuelve plegado de simular)
+        w.vsplit.moveSplitter(420,1);self.procesar()
         anterior=(w.dock.width(),w.derecho.width(),w.inferior.height(),w.vsplit.sizes())
         self.assertFalse(w._opciones_automaticas)
         self.ejecutar(w,True)

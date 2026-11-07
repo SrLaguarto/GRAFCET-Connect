@@ -43,6 +43,7 @@ CATALOGO: dict[str, tuple[str, str, str]] = {
     "D-LIM-DATOS": ("error", "10", "Reducir tamaño o profundidad, o ampliar el perfil"),
     # Propuestos por la implementación (P-IMP-01), pendientes de ratificación
     "D-SIMULTANEIDAD": ("error", "REQ-MOD-03", "Unir una única transición con sus etapas precedentes o siguientes; usar alternativa para varias transiciones"),
+    "D-BARRA-SUELTA": ("advertencia", "REQ-MOD-03", "Una la barra a lo que va por encima y por debajo, o bórrela"),
     "D-ALTERNANCIA": ("error", "P-IMP-01", "Insertar la transición o etapa intermedia"),
     "D-NOMBRE-COLISION": ("error", "P-IMP-01", "Usar un nombre único en el ámbito"),
     "D-JERARQUIA-INICIAL": ("error", "P-IMP-01", "Hacer coherentes las etapas iniciales con sus encapsulantes"),

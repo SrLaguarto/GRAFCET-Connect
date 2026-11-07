@@ -46,7 +46,7 @@ class PlanosIntegrados(BaseQt):
         for a in (w.a_ejecutar,w.a_reiniciar,w.a_borrar,w.a_debajo):self.assertFalse(a.isEnabled())
         QTest.mouseClick(w.tb_sim.widgetForAction(w.a_ejecutar),Qt.MouseButton.LeftButton);QTest.keyClick(p.editor.vista,Qt.Key.Key_Delete)
         self.assertEqual(e.ed.model,antes);self.assertEqual(w.modo,'editar')
-        QTest.mouseClick(w.pestanas_vistas,Qt.MouseButton.LeftButton,pos=w.pestanas_vistas.tabRect(2).center());self.assertEqual(w.paginas_es.currentIndex(),1);self.assertFalse(w.a_planos.isChecked());self.assertTrue(w.a_es.isChecked())
+        QTest.mouseClick(w.luz_es,Qt.MouseButton.LeftButton);self.assertEqual(w.paginas_es.currentIndex(),1);self.assertFalse(w.a_planos.isChecked());self.assertTrue(w.a_es.isChecked())
         p=self.pulsar_planos();self.assertEqual(w.paginas_es.currentIndex(),2);self.assertFalse(w.a_es.isChecked())
         QTest.mouseClick(w.pestanas_vistas,Qt.MouseButton.LeftButton,pos=w.pestanas_vistas.tabRect(0).center());self.assertEqual(w.paginas_es.currentIndex(),0);self.assertFalse(w.a_planos.isChecked());self.assertTrue(w.a_ejecutar.isEnabled())
     def test_SPAG03_guardar_aplica_cambios_sin_esperar_el_temporizador(self):

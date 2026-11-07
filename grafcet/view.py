@@ -289,6 +289,7 @@ class Vista:
             self.start_diags = self.s.start()
         try:
             self.model = self._structure(key, title, help_text, doc, res.can_simulate, layout)
+            self.names.update({b["id"]: b["label"] for b in self.model["bars"]})  # «Simultaneidad 1», no el ID de la barra
             from .annotations import visual_notes
             self.model["annotations"] = visual_notes(presentation or {})
             self.model["linkStyles"] = styles

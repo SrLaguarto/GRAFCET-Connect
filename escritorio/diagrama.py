@@ -531,12 +531,16 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
     pertenencia.update({q["id"]: q["id"] for q in M.get("partials", [])})
     pertenencia.update({a["id"]: s.get("partial") or "g" for s in M.get("steps", []) for a in s.get("actions", [])})
     for e in enlaces(M): pertenencia[e["id"]] = pertenencia.get(e.get("tid") or e.get("sid"))
+    etapas = {s["id"] for s in M["steps"]} | {m["id"] for m in M.get("macros", [])}
     for d in M.get("drafts", []):
         pt.parcial = pertenencia.get(d.get("from"))
         seg = _segmento(M, pos, d)
         if seg:
             (x1, y1), (x2, y2) = seg
+            mixto = d.get("from") in etapas and d.get("to") in {t["id"] for t in M["transitions"]}
             pt.line(x1, y1, x2, y2, pt.pen("err", 3 if d["id"] in sel else 1.8, (6, 4)), Z_EDIT,
+                    "Enlace en borrador: una etapa llega a una transición que ya tiene otra etapa anterior; falta la barra de "
+                    "simultaneidad. No es ejecutable" if mixto else
                     "Enlace en borrador: une dos elementos del mismo tipo y no es ejecutable")
     trans = orientaciones(M)
     rutas = {e["id"]: e for e in enlaces(M)}
@@ -1398,7 +1402,7 @@ class VistaDiagrama(QGraphicsView):
         if c and e.key() == Qt.Key.Key_Escape:
             c.seleccionar([]); e.accept(); return
         if c and e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and not e.modifiers():
-            self.editar_propiedades_teclado(); e.accept(); return
+            (c.explicito if hasattr(c, "explicito") else lambda f: f())(self.editar_propiedades_teclado); e.accept(); return
         super().keyPressEvent(e)
 
     def editar_propiedades_teclado(self):

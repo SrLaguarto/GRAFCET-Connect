@@ -688,8 +688,15 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
                 v.add("D-FORMATO", f"el parcial {pid} está dentro de {p['ownerRef']} sin encapsulante: no se admite; "
                       "use una etapa encapsulante (respuesta 8.1 C)", pid, "ownerRef")
     for dl in drafts:
-        v.add("D-ALTERNANCIA", f"enlace de borrador {dl['fromRef']}→{dl['toRef']} viola la alternancia "
-              "etapa/transición; no ejecutable", dl["id"])
+        a, z = dl["fromRef"], dl["toRef"]
+        if (a in raw_steps or a in macro_ids) and z in raw_trans and raw_trans[z]["preRefs"]:
+            # una etapa que llega a una transición que ya tiene etapa anterior: falta la barra de simultaneidad (P-IMP-118)
+            v.add("D-SIMULTANEIDAD", f"La etapa {a} llega a la transición {z}, que ya tiene otra etapa anterior: "
+                  "use una barra de simultaneidad.", dl["id"])
+            continue
+        tipo = lambda x: "etapa" if x in raw_steps or x in macro_ids else "transición" if x in raw_trans else "elemento"
+        v.add("D-ALTERNANCIA", f"enlace de borrador {a}→{z} viola la alternancia "
+              f"etapa/transición; no ejecutable ({tipo(a)}→{tipo(z)})", dl["id"])
 
     has_h = bool(forces or macros or expansions or enclosures)
     for cap, present in (("jerarquia.forzado", forces), ("jerarquia.macroetapas", macros or expansions),

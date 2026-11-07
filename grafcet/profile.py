@@ -15,7 +15,7 @@ from .diagnostics import Diagnostic
 PROFILE_ID = "grafcet-impl-provisional"
 PROFILE_VERSION = "0.1.0"
 FORMAT_VERSION = "0.1"
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.3"
 NORMATIVE_BASE = {
     "standard": "IEC 60848",
     "edition": "3.0",

@@ -157,7 +157,7 @@ class Incidencias(BaseQt):
         with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
             w.a_ejecutar.setChecked(True)
         self.assertTrue(aviso.called);self.assertFalse(w.a_ejecutar.isChecked())
-        self.assertIn("alternancia",aviso.call_args.args[2]);self.assertNotIn("D-ALTERNANCIA",aviso.call_args.args[2])
+        self.assertIn("no pueden ir seguidas",aviso.call_args.args[2]);self.assertNotIn("D-ALTERNANCIA",aviso.call_args.args[2])
         d=w.diagrama
         for ancho in (1366,1000):
             w.resize(ancho,768);QTest.qWait(20)

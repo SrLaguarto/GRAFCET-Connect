@@ -80,15 +80,15 @@ class Paneles(BaseQt):
         self.assertTrue(w.inferior.isVisible());self.assertAlmostEqual(w.inferior.height(),alto,delta=2)
         self.assertEqual(w.props.t_texto.text(),formula)
 
-    def test_SPAN05_formula_estado_y_controles_en_una_fila_con_vista_previa(self):
-        """REQ-EDT-02, REQ-EDT-09: fórmula, estado, ampliar y papelera comparten fila; vista previa sigue disponible y la fórmula no se edita a mano."""
+    def test_SPAN05_formula_estado_y_controles_en_una_fila_sin_vista_previa(self):
+        """REQ-EDT-02, REQ-EDT-09: fórmula, estado, ampliar y papelera comparten fila; ya no hay «Vista previa» (sí «Fijar») y la fórmula no se edita a mano."""
         w,e=self.preparar();p=w.props
         centros=[c.mapTo(p,c.rect().center()).y() for c in (p.t_texto,p.t_estado,p.prog.ampliar,p.prog.papelera)]
         self.assertLessEqual(max(centros)-min(centros),3)
-        self.assertFalse(p.detalles_bloques.isVisible());self.assertTrue(p.t_texto.isReadOnly())
-        QTest.mouseClick(p.t_previa,Qt.MouseButton.LeftButton);QApplication.processEvents()
-        self.assertTrue(p.t_vista.isVisible());self.assertTrue(p.t_dibujo.isVisible())
-        self.assertIn("a",p.t_vista.text());QTest.mouseClick(p.t_previa,Qt.MouseButton.LeftButton)
+        self.assertTrue(p.t_texto.isReadOnly());self.assertTrue(p.t_fijar.isVisible())
+        self.assertFalse(hasattr(p,"t_previa"));self.assertFalse(hasattr(p,"detalles_bloques"))
+        self.assertFalse(p.t_vista.isVisible());self.assertFalse(p.t_dibujo.isVisible())  # (se calculan, pero ya no se enseñan)
+        self.assertIn("a",p.t_vista.text())
         p._desde_bloques("a AND NOT b")
         self.assertEqual(e.texto_usuario("t"),"a AND NOT b")
         QTest.mouseClick(p.prog.ampliar,Qt.MouseButton.LeftButton);QApplication.processEvents()
@@ -123,7 +123,8 @@ class Paneles(BaseQt):
 
     def test_SPAN08_simulacion_y_edicion_conservan_paneles_y_nombres_de_pestanas(self):
         """REQ-SIM-03, REQ-EDT-09: Play oculta Elementos, y los paneles de edición se recuperan sin perder sus preferencias."""
-        w,e=self.preparar();w.flechas["derecho"].click();QApplication.processEvents()
+        w,e=self.preparar();w.props.t_fijar.setChecked(True)  # (sin fijar, el panel inferior vuelve plegado: SAUC42)
+        w.flechas["derecho"].click();QApplication.processEvents()
         antes=w.vsplit.sizes()
         w.a_ejecutar.setChecked(True);w.rt.stop();QApplication.processEvents()
         self.assertFalse(w._plegables["izquierdo"].isVisible())
@@ -151,7 +152,7 @@ class Paneles(BaseQt):
         for n in ('izquierdo','derecho'):w._mostrar_panel(n,False)
         QApplication.processEvents()
         for ancho in (1000,1900,1100):
-            QTest.mouseClick(w.pestanas_vistas,Qt.MouseButton.LeftButton,pos=w.pestanas_vistas.tabRect(2).center())
+            QTest.mouseClick(w.luz_es,Qt.MouseButton.LeftButton)
             w.resize(ancho,1000);QApplication.processEvents();w._poner_modo();QApplication.processEvents()
             QTest.mouseClick(w.pestanas_vistas,Qt.MouseButton.LeftButton,pos=w.pestanas_vistas.tabRect(0).center())
             QApplication.processEvents()
@@ -165,7 +166,7 @@ class Paneles(BaseQt):
         """REQ-EDT-09: el lateral abierto conserva el ancho elegido sin absorber el dibujo al volver de E/S."""
         w,e=self.preparar(2500,1400)
         self.arrastrar(w.split,QPoint(-100,0));ancho=w._plegables['derecho'].width()
-        QTest.mouseClick(w.pestanas_vistas,Qt.MouseButton.LeftButton,pos=w.pestanas_vistas.tabRect(2).center())
+        QTest.mouseClick(w.luz_es,Qt.MouseButton.LeftButton)
         w.resize(1100,1000);QApplication.processEvents();w._poner_modo();QApplication.processEvents()
         QTest.mouseClick(w.pestanas_vistas,Qt.MouseButton.LeftButton,pos=w.pestanas_vistas.tabRect(0).center())
         QApplication.processEvents()

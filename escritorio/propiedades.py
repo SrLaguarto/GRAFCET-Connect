@@ -446,11 +446,19 @@ class PanelPropiedades(QWidget):
         self.parpadeo_crear = Parpadeo(self)  # «Crear las que faltan» parpadea si un nombre no vale
         self.parpadeo_crear.cambia.connect(self._pintar_crear)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(12, 8, 12, 8)
-        lay.setSpacing(3)
+        lay.setContentsMargins(10, 4, 10, 4)
+        lay.setSpacing(2)
+        # Una sola fila de cabecera (P-IMP-118): el título, lo que programan los bloques (si no repite el título) y «Fijar»;
+        # a la derecha queda libre el sitio del botón de plegar
+        self.cabecera = QWidget()
+        self.cabecera.setObjectName("cabeceraPropiedades")
+        self.fila_cabecera = QHBoxLayout(self.cabecera)
+        self.fila_cabecera.setContentsMargins(8, 0, 30, 0)
+        self.fila_cabecera.setSpacing(10)
         self.titulo = QLabel()
         self.titulo.setObjectName("tituloPropiedades")
-        lay.addWidget(self.titulo)
+        self.fila_cabecera.addWidget(self.titulo)
+        lay.addWidget(self.cabecera)
         self.vacio = QLabel(self.TEXTO_VACIO)
         self.vacio.setObjectName("ayudaPropiedades")
         lay.addWidget(self.vacio)
@@ -489,6 +497,18 @@ class PanelPropiedades(QWidget):
         self.der.addWidget(nota)  # 5: texto o imagen
         cuerpo.addWidget(self.der, 1)
         cuerpo.addStretch(0)
+        # «Fijar» (en el sitio de la antigua «Vista previa», en todas las páginas): sin fijar, el panel se esconde solo al
+        # hacer clic en el dibujo fuera del elemento que muestra (lo decide la ventana)
+        self.t_fijar = QToolButton()
+        self.t_fijar.setText("Fijar")
+        self.t_fijar.setCheckable(True)
+        self.t_fijar.setAutoRaise(True)
+        self.t_fijar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.t_fijar.setToolTip("Mantiene abierto este panel. Sin fijar, se esconde al hacer clic fuera del elemento.")
+        self.t_fijar.setStyleSheet(f"QToolButton{{padding:1px 8px;border:1px solid transparent;border-radius:3px;}}"
+                                   f"QToolButton:hover{{border-color:{COL['accent']};}}"
+                                   f"QToolButton:checked{{background:{COL['accent']};color:white;border-color:{COL['accent']};}}")
+        self.fila_cabecera.addWidget(self.t_fijar)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
@@ -509,10 +529,9 @@ class PanelPropiedades(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(2)
         self.l_bloques = QLabel()
-        self.l_bloques.setStyleSheet(f"color: {COL['muted']}")
-        cabecera = QHBoxLayout()
-        cabecera.addWidget(self.l_bloques, 1)
-        lay.addLayout(cabecera)
+        self.l_bloques.setStyleSheet(f"color: {COL['muted']}; background: transparent")
+        self.fila_cabecera.addWidget(self.l_bloques)
+        self.fila_cabecera.addStretch(1)
         self.prog = Programador(lambda: self.e.fuente_bloques() if self.e is not None else ({}, []), compacto=True)
         self.prog.cambiado.connect(self._desde_bloques)
         self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()  # Ctrl+Z en la ventana ampliada
@@ -527,12 +546,14 @@ class PanelPropiedades(QWidget):
         self.t_texto = CajaFormula()  # no se edita: se ve con la notación del dibujo y la arman los bloques
         self.t_texto.formato = self._formato_formula
         self.t_texto.setPlaceholderText("la fórmula se arma con bloques")
-        self.t_vista = QLabel()
-        self.t_vista.setWordWrap(True)
+        # (el texto escrito y el dibujado de la receptividad ya no se enseñan; `_previsualizar` los sigue calculando, y las
+        # pruebas los leen, en estas dos etiquetas ocultas)
+        self.t_vista = QLabel(self.pagina_bloques)
         self.t_vista.setTextFormat(Qt.TextFormat.RichText)
-        self.t_dibujo = QLabel()
+        self.t_dibujo = QLabel(self.pagina_bloques)
         self.t_dibujo.setTextFormat(Qt.TextFormat.RichText)
-        self.t_dibujo.setWordWrap(True)
+        self.t_vista.hide()
+        self.t_dibujo.hide()
         self.t_estado = QLabel()
         self.t_estado.setWordWrap(True)
         self.t_crear = QPushButton("Crear las que faltan")
@@ -540,21 +561,6 @@ class PanelPropiedades(QWidget):
         self.t_crear.clicked.connect(self._crear)
         g.addWidget(QLabel("Fórmula"), 0, 0)
         g.addWidget(self.t_texto, 0, 1)
-        self.t_previa = QToolButton()
-        self.t_previa.setText("Vista previa")
-        self.t_previa.setCheckable(True)
-        self.t_previa.setAutoRaise(True)
-        cabecera.addWidget(self.t_previa)
-        self.detalles_bloques = QWidget()
-        resumen = QHBoxLayout(self.detalles_bloques)
-        resumen.setContentsMargins(0, 0, 0, 0)
-        resumen.setSpacing(8)
-        resumen.addWidget(QLabel("Escrito"))
-        resumen.addWidget(self.t_vista, 1)
-        resumen.addWidget(QLabel("Se dibuja"))
-        resumen.addWidget(self.t_dibujo, 1)
-        self.detalles_bloques.hide()
-        self.t_previa.toggled.connect(self.detalles_bloques.setVisible)
         self.t_estado.setMinimumWidth(QFontMetrics(self.t_estado.font()).horizontalAdvance("Receptividad correcta.")+8)
         self.t_estado.setMaximumWidth(260)
         self.t_texto.setMinimumWidth(80)
@@ -565,7 +571,6 @@ class PanelPropiedades(QWidget):
             g.addWidget(control, 0, columna)
         g.setColumnStretch(1, 1)
         lay.addWidget(self.caja_formula)
-        lay.addWidget(self.detalles_bloques)
         self._ver_bloques(None)
         return w
 
@@ -573,6 +578,7 @@ class PanelPropiedades(QWidget):
         """El programador de la transición o de la acción (condición o evento), o nada si no hay que programar."""
         self.pagina_bloques.setVisible(titulo is not None)
         self.l_bloques.setText(titulo or "")
+        self.l_bloques.setVisible(titulo is not None and self.pagina != "transicion")  # el título ya dice «Transición t»
 
     def objetivo_bloques(self) -> tuple | None:
         """Lo que programan los bloques ahora: ("transicion", ID) o ("accion", ID, «condicion» o «evento»)."""

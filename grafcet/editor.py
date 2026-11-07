@@ -102,7 +102,17 @@ class Editor:
             self.model = copy.deepcopy(model)
             self.model["draftLinks"] = [d for d in self.model["draftLinks"]
                                         if d["fromRef"] in endpoints and d["toRef"] in endpoints]
-        self.dirty = bool(self.cleaned_draft_link_ids)
+        # Lo mismo con las barras: lo que une y ya no existe, o está repetido, se quita (el dibujo no lo enseña y avisaría sin motivo).
+        self.cleaned_bar_refs = 0
+        if any(i not in endpoints or lista.count(i) > 1 for b in self.presentation.get("barras", [])
+               for lista in (b.get("arriba", []), b.get("abajo", [])) for i in lista):
+            self.presentation = copy.deepcopy(self.presentation)
+            for b in self.presentation["barras"]:
+                for lado in ("arriba", "abajo"):
+                    vistos = [i for i in dict.fromkeys(b.get(lado, [])) if i in endpoints]
+                    self.cleaned_bar_refs += len(b.get(lado, [])) - len(vistos)
+                    b[lado] = vistos
+        self.dirty = bool(self.cleaned_draft_link_ids) or bool(self.cleaned_bar_refs)
         self.model["revisionId"] = compute_revision(self.model)
 
     # -- infraestructura de transacciones
@@ -119,6 +129,7 @@ class Editor:
         work_p = copy.deepcopy(self.presentation)
         result = fn(work_m, work_p)  # una excepción deja el documento intacto y sin historial
         if not view_only:
+            self._resincronizar(work_m)  # un texto ligado a una etapa ya no repetida vuelve a cuadrar con su número
             work_m["revisionId"] = compute_revision(work_m)
         self.model, self.presentation = work_m, work_p
         self.undo_stack.append((label, before, (work_m, work_p)))
@@ -567,6 +578,26 @@ class Editor:
     # -- conexión explícita (REQ-MOD-02, REQ-MOD-03; P-IMP-05)
     def connect(self, src: str, dst: str) -> Diagnostic | None:
         return self._txn("conectar", lambda m, p: self._link_in(m, src, dst))
+
+    def draft_link(self, step: str, transition: str) -> Diagnostic | None:
+        """Una etapa que llega a una transición que ya tiene otra etapa anterior (P-IMP-118): no es un enlace del modelo
+        (serían dos etapas anteriores sin la barra de simultaneidad) sino un enlace de borrador, no ejecutable, que
+        `validate` informa como D-SIMULTANEIDAD. Si el enlace ya existe, no hace nada."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> Diagnostic | None:
+            idx = self._index(m)
+            if step not in idx or idx[step][0] not in self._ETAPAS or transition not in idx or idx[transition][0] != "transitions":
+                raise DiagnosticError(Diagnostic("D-REF", "un enlace de borrador así une una etapa con una transición"))
+            if any(d["fromRef"] == step and d["toRef"] == transition for d in m["draftLinks"]):
+                return None
+            did = self.ids.new("l")
+            m["draftLinks"].append({"id": did, "fromRef": step, "toRef": transition})
+            return Diagnostic("D-SIMULTANEIDAD", self._msg_simultaneidad(step, transition), element=did)
+        return self._txn("enlace de borrador", fn)
+
+    @staticmethod
+    def _msg_simultaneidad(step: str, transition: str) -> str:
+        return (f"La etapa {step} llega a la transición {transition}, que ya tiene otra etapa anterior: "
+                "use una barra de simultaneidad.")
 
     # -- vista (solo presentación)
     def link_styles(self) -> dict[str, Any]:
@@ -1218,8 +1249,14 @@ class Editor:
             return it.get("label", ident)
         return name_of
 
-    def rename(self, ident: str, new_name: str) -> list[str]:
-        """Cambia etiqueta o nombre; conserva el ID y actualiza el texto de los usos."""
+    def rename(self, ident: str, new_name: str, repetida: bool = False) -> list[str]:
+        """Cambia etiqueta o nombre; conserva el ID y actualiza el texto de los usos.
+
+        Con `repetida` (solo etapas, P-IMP-118) el número de una etapa puede coincidir con el de otra del parcial: es un
+        estado de edición, no un modelo válido (`validate` da D-NOMBRE-COLISION y no se puede simular). Mientras hay
+        etiquetas repetidas, el texto de las expresiones que usan una etapa repetida no se reescribe: siguen ligadas por
+        ID (`bindings`/`meaning`), nada se liga a la otra etapa. Al dejar de estar repetida, el texto se vuelve a escribir
+        con los nombres actuales."""
         def fn(m: dict[str, Any], p: dict[str, Any]) -> list[str]:
             if not valid_label(new_name):
                 raise DiagnosticError(Diagnostic("D-FORMATO", "nombre inválido"))
@@ -1228,8 +1265,9 @@ class Editor:
                 raise DiagnosticError(Diagnostic("D-FORMATO", "este elemento no tiene nombre", element=ident))
             fld = "name" if coll == "variables" else "label"
             scope_fld = {"variables": "scopeRef", "steps": "partialRef"}.get(coll)
-            if scope_fld and any(o is not it and o.get(scope_fld) == it[scope_fld] and label_key(o[fld]) == label_key(new_name)
-                                 for o in m[coll]):
+            if scope_fld and not (repetida and coll == "steps") and any(
+                    o is not it and o.get(scope_fld) == it[scope_fld] and label_key(o[fld]) == label_key(new_name)
+                    for o in m[coll]):
                 raise DiagnosticError(Diagnostic("D-NOMBRE-COLISION", f"«{new_name}» ya existe en el ámbito; el ID no cambia",
                                                  element=ident))
             if coll in ("partials", "macros"):  # el nombre de un parcial o de una macroetapa es único en el modelo
@@ -1238,21 +1276,54 @@ class Editor:
                     raise DiagnosticError(Diagnostic("D-NOMBRE-COLISION", f"«{new_name}» ya existe; el ID no cambia",
                                                      element=ident))
             it[fld] = new_name
-            name_of = self._render_names(m)
-            touched = []
-            for e in m["expressions"]:
-                if e["mode"] == "executable" and ident in e["bindings"].values():
-                    used: dict[str, str] = {}
-
-                    def record(i: str) -> str:
-                        n = name_of(i)
-                        used[n] = i
-                        return n
-                    e["text"] = ex.render(e["meaning"], record)
-                    e["bindings"] = used
-                    touched.append(e["id"])
+            touched = self._resincronizar(m, ident)
             return touched
         return self._txn("renombrar", fn)
+
+    def _resincronizar(self, m: dict[str, Any], ident: str | None = None) -> list[str]:
+        """Reescribe el texto de las expresiones que nombran una etapa con una etiqueta que ya no es la suya (o que usan
+        `ident`, recién renombrado), con los nombres actuales. No toca las ligadas a una etapa que sigue repetida (no se
+        podría nombrar sin ambigüedad). Se aplica tras cualquier transacción que cambie el modelo (P-IMP-119): al borrar,
+        pegar o renombrar la otra etapa, el texto vuelve a cuadrar."""
+        repetidas = self.etapas_repetidas(m)
+        etapas = {s["id"]: s for s in m["steps"]}
+
+        def nombra(clave: str, label: str) -> bool:
+            return clave == label or clave.endswith("." + label)
+
+        def desfasada(e: dict[str, Any]) -> bool:
+            return any(i in etapas and not nombra(clave, etapas[i]["label"]) for clave, i in e["bindings"].items())
+        touched: list[str] = []
+        name_of = None
+        for e in m["expressions"]:
+            if e["mode"] != "executable" or "meaning" not in e or (
+                    (ident is None or ident not in e["bindings"].values()) and not desfasada(e)):
+                continue
+            if any(i in repetidas for i in e["bindings"].values()):
+                continue
+            if name_of is None:
+                name_of = self._render_names(m)
+            used: dict[str, str] = {}
+
+            def record(i: str) -> str:
+                n = name_of(i)
+                used[n] = i
+                return n
+            try:
+                texto = ex.render(e["meaning"], record)
+            except KeyError:
+                continue
+            e["text"], e["bindings"] = texto, used
+            touched.append(e["id"])
+        return touched
+
+    @staticmethod
+    def etapas_repetidas(m: dict[str, Any]) -> set[str]:
+        """Los ID de las etapas cuya etiqueta coincide con la de otra del mismo parcial (D-NOMBRE-COLISION)."""
+        grupos: dict[tuple[str, str], list[str]] = {}
+        for s in m["steps"]:
+            grupos.setdefault((s["partialRef"], label_key(s["label"])), []).append(s["id"])
+        return {i for g in grupos.values() if len(g) > 1 for i in g}
 
     def change_variable(self, vid: str, **changes: Any) -> list[dict[str, str]]:
         """Cambia rol, tipo, unidad, dominio o valor inicial; devuelve los usos afectados (REQ-EDT-07)."""

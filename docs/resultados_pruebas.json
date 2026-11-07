@@ -1,9 +1,9 @@
 {
- "date": "2026-11-06T15:38:39+01:00",
+ "date": "2026-11-07T13:08:49+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 1019,
+ "total": 1080,
  "failures": 1,
  "errors": 0,
  "results": [
@@ -611,6 +611,381 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-EDT-02: X3 se dibuja y se previsualiza como texto plano, sin subíndice."
+  },
+  {
+   "test": "test_aula_cambios.ConectoresSolapados.test_SAUC15_un_carril_arrastrado_sobre_otro_enlace_se_queda_y_el_otro_no_huye",
+   "case": "S-AUC15",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el carril de un retorno llevado sobre el de otro (automático o ya colocado a mano) queda donde se suelta"
+  },
+  {
+   "test": "test_aula_cambios.ConectoresSolapados.test_SAUC16_un_tramo_horizontal_de_un_salto_sobre_otro_enlace_tampoco_mueve_a_los_demas",
+   "case": "S-AUC16",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: igual con los tramos horizontales (salida y entrada de un retorno, tramo medio de un salto): se quedan"
+  },
+  {
+   "test": "test_aula_cambios.ConectoresSolapados.test_SAUC21_el_tramo_pegado_a_otro_se_guarda_se_abre_y_se_deshace_y_lejos_sigue_la_rejilla",
+   "case": "S-AUC21",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-DAT-02: a menos de media rejilla de un tramo paralelo ajeno se pega exacto; más lejos, a la rejilla;"
+  },
+  {
+   "test": "test_aula_cambios.EntradaAES.test_SAUC30_a_es_externas_se_entra_por_la_luz_y_no_por_una_pestana",
+   "case": "S-AUC30",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: la pestaña E/S externas no se ve; un clic en la luz de conexión abre E/S y la deja activa; GRAFCET vuelve."
+  },
+  {
+   "test": "test_aula_cambios.EtapasConElMismoNumero.test_SAUC05_un_numero_repetido_se_admite_y_se_marca_como_error",
+   "case": "S-AUC05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-MOD-06"
+   ],
+   "summary": "REQ-EDT-09, REQ-MOD-06: el número de una etapa puede coincidir con otro; se avisa en palabras y Play no arranca."
+  },
+  {
+   "test": "test_aula_cambios.EtapasConElMismoNumero.test_SAUC06_las_expresiones_siguen_ligadas_por_id_y_al_renombrar_de_vuelta_todo_cuadra",
+   "case": "S-AUC06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-06"
+   ],
+   "summary": "REQ-MOD-06: mientras el número está repetido, X2 y X3 siguen ligadas a sus etapas; al corregirlo, el texto se reescribe."
+  },
+  {
+   "test": "test_aula_cambios.EtapasConElMismoNumero.test_SAUC07_una_referencia_nueva_a_un_numero_repetido_no_se_liga_a_ninguna_etapa",
+   "case": "S-AUC07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-06"
+   ],
+   "summary": "REQ-MOD-06: escribir X3 con dos etapas «3» no se liga a la equivocada: queda como texto pendiente y se avisa."
+  },
+  {
+   "test": "test_aula_cambios.EtapasConElMismoNumero.test_SAUC08_se_guarda_y_se_abre_con_el_numero_repetido",
+   "case": "S-AUC08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un proyecto con dos etapas con el mismo número se guarda, se abre igual y sigue sin poder simularse."
+  },
+  {
+   "test": "test_aula_cambios.EtapasConElMismoNumero.test_SAUC09_el_dibujo_marca_las_dos_etapas_y_el_resto_de_nombres_sigue_siendo_unico",
+   "case": "S-AUC09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: las dos etapas salen marcadas en rojo; una variable o un parcial repetidos siguen rechazándose."
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC31_arranca_plegado_y_sin_fijar_con_ajustes_vacios_o_antiguos",
+   "case": "S-AUC31",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con ajustes vacíos, o con un `paneles/inferior=True` antiguo sin `inferior_fijo`, el panel inferior de"
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC32_arranca_abierto_y_fijado_si_se_guardo_fijado",
+   "case": "S-AUC32",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con `paneles/inferior_fijo` y `paneles/inferior` en True arranca abierto y fijado; fijado pero con el"
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC33_fijar_se_guarda_en_los_ajustes_y_tiene_su_tooltip",
+   "case": "S-AUC33",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: «Fijar» es un botón marcable con su tooltip, visible sin nada seleccionado, y guarda `paneles/inferior_fijo`."
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC34_el_doble_clic_abre_y_el_clic_en_el_fondo_lo_esconde",
+   "case": "S-AUC34",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: doble clic en una etapa abre el panel; un clic en el fondo lo esconde."
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC35_el_clic_en_el_mismo_elemento_no_lo_esconde_y_en_otro_si",
+   "case": "S-AUC35",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un clic en el mismo elemento (o arrastrarlo) no esconde el panel; un clic en otro elemento, sí."
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC36_el_lazo_que_cambia_la_seleccion_esconde_el_panel",
+   "case": "S-AUC36",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: seleccionar con lazo otros elementos esconde el panel sin fijar."
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC37_el_doble_clic_en_otro_elemento_cambia_el_contenido_sin_cerrar",
+   "case": "S-AUC37",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con el panel abierto, un doble clic en otro elemento no lo hace parpadear: cambia de contenido y sigue abierto."
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC38_fijado_ningun_clic_lo_esconde_pero_la_flecha_y_ctrl_j_si_lo_pliegan",
+   "case": "S-AUC38",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: fijado, ni el fondo ni otro elemento lo esconden y la selección lo actualiza; la flecha y Ctrl+J lo"
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC39_un_clic_dentro_del_panel_o_en_variables_no_lo_esconde",
+   "case": "S-AUC39",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un clic en la lista de variables, en el propio panel o en la paleta no esconde el panel sin fijar."
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC40_seleccionar_con_el_panel_plegado_no_lo_abre_ni_parpadea",
+   "case": "S-AUC40",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un clic que selecciona, con el panel plegado, no lo abre ni deja rastro de parpadeo en la pestaña."
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC41_al_esconderlo_el_dibujo_no_salta",
+   "case": "S-AUC41",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: al esconderse el panel, los puntos de la escena siguen en el mismo sitio de la pantalla."
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC42_al_volver_de_simular_el_panel_solo_sigue_abierto_si_estaba_fijado",
+   "case": "S-AUC42",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: al volver de simular, un panel abierto sin fijar vuelve plegado y uno fijado vuelve abierto."
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC43_plegado_al_arrancar_no_deja_hueco_debajo_de_la_pestana",
+   "case": "S-AUC43",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con la ventana ya mostrada, y al agrandarla, el panel plegado es solo su pestaña pegada al borde inferior y el"
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC44_se_esconde_al_pulsar_sin_ensenar_la_pagina_nueva",
+   "case": "S-AUC44",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: el clic fuera lo esconde al pulsar, sin esperas: no se ve antes el panel vacío ni el del otro elemento,"
+  },
+  {
+   "test": "test_aula_cambios.PanelInferiorFijarYEsconder.test_SAUC45_el_aviso_de_no_poner_encima_no_se_queda_cuando_ya_no_es_cierto",
+   "case": "S-AUC45",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: arrastrar una ficha por encima de un elemento avisa; al llegar a un hueco el aviso se va, y el de una"
+  },
+  {
+   "test": "test_aula_cambios.PanelPlegadoNoSeAbre.test_SAUC01_seleccionar_no_abre_el_panel_plegado_ni_hace_parpadear_su_pestana",
+   "case": "S-AUC01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con el panel inferior plegado, seleccionar una etapa o una transición no lo despliega y la pestaña no parpadea."
+  },
+  {
+   "test": "test_aula_cambios.PanelPlegadoNoSeAbre.test_SAUC02_el_doble_clic_y_intro_abren_el_panel_plegado",
+   "case": "S-AUC02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: el doble clic en una etapa, una transición o una acción, y Intro con algo seleccionado, despliegan el panel."
+  },
+  {
+   "test": "test_aula_cambios.PanelPlegadoNoSeAbre.test_SAUC03_una_accion_nueva_no_abre_el_panel_plegado",
+   "case": "S-AUC03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: añadir una acción (que pide su editor) o soltar una transición nueva no despliega un panel plegado."
+  },
+  {
+   "test": "test_aula_cambios.PanelPlegadoNoSeAbre.test_SAUC04_con_el_panel_abierto_la_seleccion_lo_actualiza",
+   "case": "S-AUC04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con el panel abierto, seleccionar cambia su página como siempre."
+  },
+  {
+   "test": "test_aula_cambios.PanelesMasCompactos.test_SAUC19_la_cabecera_del_panel_inferior_es_una_sola_fila_y_hay_menos_capas_sobre_el_dibujo",
+   "case": "S-AUC19",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: el título, «Fijar» y lo demás de la cabecera comparten fila; el primer control queda a menos de"
+  },
+  {
+   "test": "test_aula_cambios.PanelesMasCompactos.test_SAUC20_la_cabecera_de_una_accion_enseña_su_condicion_en_la_misma_fila",
+   "case": "S-AUC20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: en una acción con condición, lo que programan los bloques se dice en la fila del título."
+  },
+  {
+   "test": "test_aula_cambios.PegadoSoloSiSolapan.test_SAUC25_en_una_transicion_girada_se_pega_exacto_solo_si_los_tramos_se_solapan",
+   "case": "S-AUC25",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: tramo vertical de una transición girada: con un paralelo ajeno fuera de la rejilla a menos de 10 y que"
+  },
+  {
+   "test": "test_aula_cambios.RevisionIndependiente.test_SAUC22_intro_con_el_selector_de_hojas_no_hace_nada_ni_falla",
+   "case": "S-AUC22",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: en el modo de seleccionar para una hoja, Intro con una etapa seleccionada se queda en silencio."
+  },
+  {
+   "test": "test_aula_cambios.RevisionIndependiente.test_SAUC23_al_resolver_el_repetido_borrando_la_otra_etapa_el_texto_se_reescribe",
+   "case": "S-AUC23",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-06"
+   ],
+   "summary": "REQ-MOD-06: etapa «3» renombrada a «4» (repetida) y la otra «4» borrada: la receptividad deja de decir X3 y dice X4."
+  },
+  {
+   "test": "test_aula_cambios.RevisionIndependiente.test_SAUC24_intercambiar_dos_numeros_sigue_funcionando",
+   "case": "S-AUC24",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-06"
+   ],
+   "summary": "REQ-MOD-06: 3→4 (repetido) y luego 4→3 en la otra: se cruzan los números y cada texto sigue ligado a su etapa."
+  },
+  {
+   "test": "test_aula_cambios.SensibilidadDeTirarDeUnaAccion.test_SAUC17_el_borde_de_una_accion_se_agarra_a_la_misma_distancia_que_un_punto_de_union",
+   "case": "S-AUC17",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: a 50 %, 100 % y 150 %, el alcance del borde derecho de una acción (por fuera y por dentro) es el de la"
+  },
+  {
+   "test": "test_aula_cambios.SensibilidadDeTirarDeUnaAccion.test_SAUC18_el_cuerpo_de_la_accion_sigue_seleccionando_y_el_borde_ensanchado_no_crea_sin_arrastrar",
+   "case": "S-AUC18",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el centro de la acción no es un borde (selecciona), un clic en el borde ensanchado solo selecciona y"
+  },
+  {
+   "test": "test_aula_cambios.UnirEnlacesConLibertad.test_SAUC10_salida_de_una_transicion_junto_a_otra_se_une_a_su_etapa_siguiente",
+   "case": "S-AUC10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-MOD-03: la salida de una transición soltada justo debajo de t1 (junto a su tallo, encima de su"
+  },
+  {
+   "test": "test_aula_cambios.UnirEnlacesConLibertad.test_SAUC11_una_etapa_a_una_transicion_con_etapa_anterior_es_un_borrador",
+   "case": "S-AUC11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-EDT-09, REQ-MOD-03: soltar la salida de la etapa 3 sobre el enlace de la etapa 1 a su transición (o junto a"
+  },
+  {
+   "test": "test_aula_cambios.UnirEnlacesConLibertad.test_SAUC12_el_borrador_de_simultaneidad_impide_play_se_guarda_y_se_abre",
+   "case": "S-AUC12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-SIM-08"
+   ],
+   "summary": "REQ-DAT-02, REQ-SIM-08: Play lo rechaza con el aviso; el archivo guardado y reabierto conserva el borrador."
+  },
+  {
+   "test": "test_aula_cambios.UnirEnlacesConLibertad.test_SAUC13_dos_transiciones_ya_con_etapas_se_unen_como_borrador",
+   "case": "S-AUC13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: unir dos transiciones existentes (con etapas) no se rechaza: queda un borrador por la"
+  },
+  {
+   "test": "test_aula_cambios.UnirEnlacesConLibertad.test_SAUC14_una_etapa_a_una_transicion_sin_etapa_anterior_se_une_de_verdad",
+   "case": "S-AUC14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: lo que sí es válido sigue uniéndose: una etapa a una transición sin etapa anterior."
   },
   {
    "test": "test_aula_pequena.AvisoVersion.test_SACT04_aviso_no_modal_y_ahora_no_se_recuerda",
@@ -6488,14 +6863,14 @@
    "summary": "REQ-EDT-09: el editor no se comprime por debajo de su mínimo útil; la pestaña y Ctrl+J conservan la altura anterior."
   },
   {
-   "test": "test_paneles_plegables.Paneles.test_SPAN05_formula_estado_y_controles_en_una_fila_con_vista_previa",
+   "test": "test_paneles_plegables.Paneles.test_SPAN05_formula_estado_y_controles_en_una_fila_sin_vista_previa",
    "case": "S-PAN05",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-02",
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-09: fórmula, estado, ampliar y papelera comparten fila; vista previa sigue disponible y la fórmula no se edita a mano."
+   "summary": "REQ-EDT-02, REQ-EDT-09: fórmula, estado, ampliar y papelera comparten fila; ya no hay «Vista previa» (sí «Fijar») y la fórmula no se edita a mano."
   },
   {
    "test": "test_paneles_plegables.Paneles.test_SPAN06_editor_compacto_util_a_1000_y_categorias_accesibles",
@@ -8419,6 +8794,205 @@
     "REQ-SIM-03"
    ],
    "summary": "REQ-SIM-03, REQ-JER-04: si el modelo compila con las lecturas por defecto pero no con las activas (7.7 = B con una"
+  },
+  {
+   "test": "test_simultaneidad_edicion.BarraInferiorDeUnaConvergencia.test_SSIM06_la_salida_de_una_etapa_y_la_barra_inferior_se_unen_se_arrastre_de_donde_se_arrastre",
+   "case": "S-SIM06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: arrastrar la salida de una etapa a cualquier punto de la barra (su punto de abajo incluido, y"
+  },
+  {
+   "test": "test_simultaneidad_edicion.BarraSuelta.test_SSIM15_una_barra_recien_puesta_avisa_de_los_dos_lados",
+   "case": "S-SIM15",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-09: una barra sin nada unido se conserva, avisa «no tiene nada conectado» con su nombre (una vez),"
+  },
+  {
+   "test": "test_simultaneidad_edicion.BarraSuelta.test_SSIM16_con_un_lado_vacio_dice_cual_y_desaparece_al_conectar",
+   "case": "S-SIM16",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-09: con algo solo por arriba avisa «por abajo»; con algo solo por abajo, «por arriba»; al conectar"
+  },
+  {
+   "test": "test_simultaneidad_edicion.BarraSuelta.test_SSIM17_la_barra_de_alternativa_tambien_avisa_y_lo_ya_borrado_no_cuenta",
+   "case": "S-SIM17",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03: la barra de alternativa sin conectar avisa igual que la Y; un elemento unido que ya no existe no cuenta"
+  },
+  {
+   "test": "test_simultaneidad_edicion.BarraSuelta.test_SSIM18_vista_muestra_el_nombre_de_la_barra_y_no_su_id",
+   "case": "S-SIM18",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: el mensaje que `Vista` da (no compilable en Play, y el aviso de barra suelta) usa «Simultaneidad 1», no el"
+  },
+  {
+   "test": "test_simultaneidad_edicion.BarrasAlEditar.test_SSIM01_una_etapa_soltada_en_el_punto_de_abajo_de_la_barra_se_une_por_arriba",
+   "case": "S-SIM01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: una etapa dibujada encima de la barra queda unida por arriba aunque se suelte en el punto"
+  },
+  {
+   "test": "test_simultaneidad_edicion.BarrasAlEditar.test_SSIM02_el_aviso_de_la_barra_nombra_lo_unido_y_no_repite_el_nombre",
+   "case": "S-SIM02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-09: una etapa y una transición por el mismo lado: el aviso las nombra (sin ID), dice qué queda"
+  },
+  {
+   "test": "test_simultaneidad_edicion.BarrasAlEditar.test_SSIM03_el_borrador_entre_etapas_se_explica_una_vez",
+   "case": "S-SIM03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-09: el aviso de un enlace en borrador entre dos etapas dice qué enlaza y cómo arreglarlo, una sola"
+  },
+  {
+   "test": "test_simultaneidad_edicion.BarrasAlEditar.test_SSIM04_lo_que_no_existe_se_limpia_al_abrir_y_no_avisa",
+   "case": "S-SIM04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-DAT-02: una barra de un fichero con una unión a un elemento que ya no existe (o repetida) se abre sin"
+  },
+  {
+   "test": "test_simultaneidad_edicion.BarrasAlEditar.test_SSIM05_una_pareja_que_la_barra_dibuja_unida_y_el_grafcet_no_se_avisa",
+   "case": "S-SIM05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-09: si el dibujo une dos elementos por la barra y el modelo no tiene ese enlace, el aviso lo dice"
+  },
+  {
+   "test": "test_simultaneidad_edicion.LadoEquivocadoSeVe.test_SSIM10_lo_unido_por_el_lado_contrario_se_dibuja_atravesando_la_barra_y_el_aviso_lo_dice",
+   "case": "S-SIM10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-09: un elemento unido por el lado contrario al que se ve asoma por el otro lado de la barra; los"
+  },
+  {
+   "test": "test_simultaneidad_edicion.LadoPorElPuntoDeUnion.test_SSIM11_etapa_encima_de_su_salida_a_la_punta_inferior_y_al_reves_se_une_por_arriba",
+   "case": "S-SIM11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: una etapa encima de la barra, de su salida a la punta inferior de la barra o de esa punta a"
+  },
+  {
+   "test": "test_simultaneidad_edicion.LadoPorElPuntoDeUnion.test_SSIM12_de_la_punta_inferior_a_la_entrada_de_una_etapa_encima_es_una_divergencia_que_cruza_y_se_puede_simular",
+   "case": "S-SIM12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02, REQ-SIM-03: t1 -> barra -> {1, 0} con la 0 encima: arrastrar de la punta inferior de la barra"
+  },
+  {
+   "test": "test_simultaneidad_edicion.LadoPorElPuntoDeUnion.test_SSIM13_etapa_debajo_a_su_entrada_se_une_por_abajo_sin_cruzar",
+   "case": "S-SIM13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: una etapa debajo de la barra, de la punta inferior o de la superior de la barra a su entrada,"
+  },
+  {
+   "test": "test_simultaneidad_edicion.LadoPorElPuntoDeUnion.test_SSIM14_cuando_el_lado_no_es_el_de_la_punta_se_dice_por_cual_se_ha_unido",
+   "case": "S-SIM14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: soltar la salida de una etapa en la punta inferior la une por arriba y el aviso informativo lo dice, con"
+  },
+  {
+   "test": "test_simultaneidad_edicion.LadoPorElPuntoDeUnion.test_SSIM19_desde_la_barra_al_cuerpo_de_un_elemento_cuenta_donde_esta",
+   "case": "S-SIM19",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: soltar en el cuerpo, sin apuntar a un punto de unión, no depende de la mitad de la etapa: la"
+  },
+  {
+   "test": "test_simultaneidad_edicion.LadoPorElPuntoDeUnion.test_SSIM20_lo_que_da_la_vuelta_conserva_sus_tramos_minimos_colocado_a_mano",
+   "case": "S-SIM20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el tramo de entrada de un retorno desde la barra no se pega a la etapa aunque se arrastre hasta ella."
+  },
+  {
+   "test": "test_simultaneidad_edicion.SimultaneidadesAnidadas.test_SSIM07_simultaneidad_anidada_en_cualquier_orden_y_con_barras_interiores_dentro_solapadas_o_mas_anchas",
+   "case": "S-SIM07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02, REQ-SIM-03: divergencia y convergencia interiores dentro de una rama de otra exterior, hechas"
+  },
+  {
+   "test": "test_simultaneidad_edicion.SimultaneidadesAnidadas.test_SSIM08_simultaneidad_anidada_con_las_barras_muy_juntas_en_vertical",
+   "case": "S-SIM08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02, REQ-SIM-03: lo mismo con los elementos a 60 de distancia vertical (las barras interiores quedan"
+  },
+  {
+   "test": "test_simultaneidad_edicion.SimultaneidadesAnidadas.test_SSIM09_soltar_sobre_otra_barra_une_a_la_que_hay_bajo_el_puntero",
+   "case": "S-SIM09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-MOD-03"
+   ],
+   "summary": "REQ-MOD-03, REQ-EDT-02: la salida de una etapa soltada sobre una barra que no es la suya la une a ESA barra (nunca a"
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU03_accion_por_evento_en_etapa_que_sale",

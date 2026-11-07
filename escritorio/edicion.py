@@ -35,7 +35,7 @@ from grafcet.view import (Vista, display_names, force_situation, norm, layout_fr
 from .mensajes import amable, correccion_amable
 from .bloques import _dur_usuario, normalizar_duracion
 from .anotaciones import en as anotacion_en, rect as rect_anotacion, importar_imagen, editar_texto
-from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, REJILLA, SX, TB, VACIO_H, VACIO_W, _distancia, _extra,
+from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, RADIO_ANCLA, REJILLA, SX, TB, VACIO_H, VACIO_W, _distancia, _extra,
                        _geometria_acciones, _Pintor, ancla_en, anclas, barra, caja_barra, cajas_parciales, elemento_en, enlaces,
                        orientaciones, rects_textos_t,
                        icono_accion, posiciones)
@@ -45,7 +45,7 @@ DY = 60  # distancia vertical estándar: tres pasos de rejilla entre etapa y tra
 IMAN = 40  # a qué distancia horizontal (dos pasos de rejilla) un elemento movido se alinea con uno enlazado
 RADIO_UNION = 8  # a qué distancia (px al 100 %) dos puntos de unión libres compatibles se unen solos al soltar un elemento
 RADIO_UNION_MAX = 12  # tope en unidades del dibujo: con zoom bajo no une lo que no está casi encima
-BORDE_ACCION = 6  # el grosor (px al 100 %) de los bordes derecho e inferior de una acción de los que se tira para sacar otra
+BORDE_ACCION = RADIO_ANCLA  # a cada lado de los bordes derecho e inferior de una acción, de los que se tira para sacar otra: lo mismo que el radio de un punto de unión, en unidades del dibujo (crece con el zoom igual que él)
 IMAN_ACCION = 16  # a qué distancia de otra acción se pega una acción suelta (lado derecho, o inferior en columna)
 TIPOS_ACCION = FICHAS_ACCION  # continua, condicionada, al activar, al desactivar, por evento (+ «limitada» de ficheros antiguos)
 TEXTO_LIMITADA = "Condicionada (con límite de tiempo)"
@@ -185,6 +185,7 @@ class Edicion(QObject):
         self.autor_archivo: str | None = None  # autor puesto a mano; None: el del archivo o el recordado en preferencias
         self.ignorados = self._sanear_borradores()
         self.enlaces_quitados = len(ed.cleaned_draft_link_ids)
+        self.barras_limpiadas = ed.cleaned_bar_refs  # uniones de barra a elementos que ya no existen, quitadas al abrir
         parciales = [p["id"] for p in ed.model["partials"]]
         self.raiz = "g" if "g" in parciales else parciales[0]
         self.herramienta = "seleccionar"
@@ -208,6 +209,9 @@ class Edicion(QObject):
         self.pedir_condicion: Callable[[str], None] = lambda tid: None
         self.pedir_etiqueta: Callable[[str], None] = lambda ident: None
         self.pedir_accion: Callable[[str, str | None], None] = lambda sid, aid: None
+        self.pedido_explicito = False  # True mientras el usuario pide las opciones (doble clic, Intro, «Editar…»)
+        self._clave_antes: tuple | None = None  # lo que mostraba el panel de opciones al pulsar el ratón (`clave_panel`)
+        self.tras_gesto: Callable[[tuple, tuple], None] | None = None  # (antes, después) al pulsar y al soltar en el dibujo
         self.confirmar_borrado: Callable[[dict[str, list[str]]], bool] = lambda plan: True
         # (título, rótulo, propuesta) -> el texto escrito, o None si se cancela; sin ventana, vale la propuesta
         self.pedir_texto: Callable[[str, str, str], str | None] = lambda titulo, etiqueta, actual: actual
@@ -383,6 +387,7 @@ class Edicion(QObject):
         vivos = set(posiciones(self.M)) | {d["id"] for d in self.M.get("drafts", [])} | {e["id"] for e in enlaces(self.M)} | {b["id"] for b in self.M.get("bars", [])}
         vivos |= {n["id"] for n in self.M.get("annotations",[])}
         self.nombres.update({n["id"]:("Texto" if n["kind"] == "text" else n.get("name","Imagen")) for n in self.M.get("annotations",[])})
+        self.nombres.update({b["id"]: b["label"] for b in self.M.get("bars", [])})  # los avisos de una barra la llaman «Simultaneidad 2»
         vivos |= set(cajas_parciales(self.M))  # los parciales con marco (un recinto, una expansión) también se seleccionan
         vivos |= {f["id"] for f in ed.model["forces"]}  # y las órdenes de forzado
         vivos |= {a["id"] for a in ed.model["actions"]} | {d["id"] for d in ed.draft_actions()}
@@ -431,7 +436,21 @@ class Edicion(QObject):
     def diagnosticos(self) -> list[dict[str, Any]]:
         """Los diagnósticos del modelo para el panel (REQ-EDT-09): código, texto con nombres, corrección y elemento."""
         out = []
+        repetidas = self._grupos_repetidos()
+        for grupo in repetidas:  # un solo aviso por número repetido, con todas sus etapas marcadas en el dibujo (P-IMP-118)
+            n = len(grupo)
+            etiqueta = self.ed.get(grupo[0])["label"]
+            que = "número" if etiqueta.isdigit() else "nombre"
+            mensaje = (f"Hay dos etapas con el {que} {etiqueta}: cambie una." if n == 2 else
+                       f"Hay {n} etapas con el {que} {etiqueta}: deje solo una con ese {que}.")
+            out.append({"code": "D-NOMBRE-COLISION", "message": mensaje,
+                        "correction": "Cambie el número de una de las etapas marcadas (en Propiedades, o con doble clic en ella)",
+                        "severity": "error", "blocks": True, "question": None, "element": grupo[0], "target": grupo[0],
+                        "targets": list(grupo)})
+        enrepetidas = {i for g in repetidas for i in g}
         for d in self.ed.validate().diagnostics:
+            if d.code == "D-NOMBRE-COLISION" and d.element in enrepetidas:
+                continue
             mensaje, correccion = self.sust(d.message), self.sust(correccion_amable(d.code, d.correction))
             evento = next((a for a in self.ed.model["actions"] if a.get("trigger", {}).get("kind") == "event" and d.element in (a["id"],a["trigger"].get("expressionRef"))), None)
             if d.code == "D-TIPO-EVENTO" and evento:
@@ -442,10 +461,13 @@ class Edicion(QObject):
                 mensaje += " Use un flanco de subida (↑) o de bajada (↓), según lo que necesite."
             if d.code == "D-EXP-PENDIENTE":
                 mensaje = self._texto_expresion_pendiente(mensaje, self.dibujable(d.element))
+            if d.code == "D-SIMULTANEIDAD":
+                mensaje += self._lados_cruzados(d.element)
             mensaje = sin_codigos(mensaje)
             out.append({"code": d.code, "message": mensaje, "correction": correccion,
                         "severity": d.severity, "blocks": d.blocks_start, "question": d.question,
-                        "element": d.element, "target": evento["id"] if d.code == "D-TIPO-EVENTO" and evento else self.dibujable(d.element)})
+                        "element": d.element, "target": evento["id"] if d.code == "D-TIPO-EVENTO" and evento else self.dibujable(d.element),
+                        "completo": d.code in ("D-SIMULTANEIDAD", "D-BARRA-SUELTA") or (d.code == "D-ALTERNANCIA" and self._es_enlace_borrador(d.element))})
         if self.ignorados:
             out.append({"code": "AVISO", "severity": "advertencia", "blocks": False, "question": None, "element": None,
                         "target": None, "correction": "Se descartó al abrir; vuelva a colocar la acción si hacía falta",
@@ -471,6 +493,25 @@ class Edicion(QObject):
                         "correction": "Una la acción a una etapa con un enlace desde su punto de unión izquierdo"
                         if suelta else "Complete la acción con «Editar…» (botón derecho en ella)"})
         return out
+
+    def _lados_cruzados(self, barra_id: str | None) -> str:
+        """Si algo está unido a la barra por el lado contrario al que se ve (encima, por abajo; debajo, por arriba): una frase
+        que lo dice, para añadir al aviso de la barra (su enlace da la vuelta en el dibujo); si no, vacío."""
+        b = next((b for b in self.M.get("bars", []) if b["id"] == barra_id), None)
+        if b is None:
+            return ""
+        pos = posiciones(self.M)
+        mal = [(i, lado) for lado, ids in (("arriba", b["arriba"]), ("abajo", b["abajo"])) for i in ids
+               if i in pos and (pos[i][1] > b["y"] if lado == "arriba" else pos[i][1] < b["y"])]
+        if not mal:
+            return ""
+        quien = ", ".join(self._nom(i) for i, _ in mal)
+        return (f" {quien} {'está' if len(mal) == 1 else 'están'} unida{'' if len(mal) == 1 else 's'} por el lado contrario al que "
+                "se ve (su línea da la vuelta a la barra): quítela de la barra y vuelva a unirla desde su salida, si va antes de la "
+                "barra, o a su entrada, si va después.")
+
+    def _es_enlace_borrador(self, ident: str | None) -> bool:
+        return any(d["id"] == ident for d in self.ed.model.get("draftLinks", []))
 
     def _texto_expresion_pendiente(self, mensaje: str, objetivo: str | None) -> str:
         """D-EXP-PENDIENTE en palabras normales: «la receptividad está vacía» o «no es válida: «texto»» (de una
@@ -509,7 +550,20 @@ class Edicion(QObject):
         return elemento if elemento in cajas_parciales(self.M) or any(b["id"] == elemento for b in self.M.get("bars", [])) else None
 
     def marcados(self) -> set[str]:
-        return {d["target"] for d in self.diagnosticos() if d["blocks"] and d["target"]}
+        return self.marcados_de(self.diagnosticos())
+
+    @staticmethod
+    def marcados_de(diags: list[dict[str, Any]]) -> set[str]:
+        """Los elementos del dibujo que se marcan en rojo: el de cada diagnóstico que impide simular (un aviso puede
+        marcar varios, como las etapas con el mismo número)."""
+        return {t for d in diags if d["blocks"] for t in (d.get("targets") or [d["target"]]) if t}
+
+    def _grupos_repetidos(self) -> list[list[str]]:
+        """Las etapas de cada parcial que comparten número o nombre, agrupadas en el orden del modelo."""
+        grupos: dict[tuple[str, str], list[str]] = {}
+        for s in self.ed.model["steps"]:
+            grupos.setdefault((s["partialRef"], label_key(s["label"])), []).append(s["id"])
+        return [g for g in grupos.values() if len(g) > 1]
 
     def cambia(self) -> None:
         self.reconstruir()
@@ -749,7 +803,7 @@ class Edicion(QObject):
             return
         ident = elemento_en(self.M, p)
         cerca = self._punto(p, ident)
-        caja = self.accion_en(p) if ident is None else None
+        caja = (self.accion_en(p) or self._accion_por_borde(p)) if ident is None else None
         if caja and caja.get("suelta"):  # sobre una acción suelta: se ve el punto de unión de su grupo
             ident = caja["cabeza"]
         self.diagrama.marcar_anclas(anclas(self.M, ident or (cerca["id"] if cerca else "")), cerca)
@@ -764,6 +818,33 @@ class Edicion(QObject):
             vista().setCursor(Qt.CursorShape.SizeHorCursor if borde == "der" else Qt.CursorShape.SizeVerCursor if borde
                               else Qt.CursorShape.CrossCursor)
         self._cursor_borde = bool(borde)
+
+    @staticmethod
+    def _num(v: float) -> str:
+        return str(int(v)) if v == int(v) else str(v)
+
+    @staticmethod
+    def _rango_tramo(pts: list[Any], i: int, vertical: bool) -> tuple[float, float]:
+        """Lo que ocupa el tramo i de un recorrido a lo largo del otro eje (y si es vertical, x si es horizontal)."""
+        e = 1 if vertical else 0
+        return min(pts[i][e], pts[i + 1][e]), max(pts[i][e], pts[i + 1][e])
+
+    def _pegar_a_paralelo(self, valor: float, vertical: bool, propio: str, rango: tuple[float, float]) -> float:
+        """Al colocar a mano un tramo (P-IMP-118): si la posición de la rejilla lo deja a media rejilla (10) o menos de un tramo
+        paralelo de OTRO enlace que de verdad coincide con él a lo largo del otro eje (`rango` y el del otro se cortan, con 4 de
+        margen), queda exactamente en la coordenada de ese tramo (solo hacia el solape, nunca para apartarse); si no, la
+        posición de la rejilla. `vertical`: el tramo es vertical (su x); si no, su y."""
+        eje = 0 if vertical else 1
+        mejor = None
+        for r in enlaces(self.M):
+            if r["id"] == propio:
+                continue
+            for u, v in zip(r["pts"], r["pts"][1:]):
+                lo, hi = min(u[1 - eje], v[1 - eje]), max(u[1 - eje], v[1 - eje])
+                if u != v and u[eje] == v[eje] and abs(u[eje] - valor) <= REJILLA / 2                         and max(lo, rango[0]) <= min(hi, rango[1]) + 4:
+                    if mejor is None or abs(u[eje] - valor) < abs(mejor - valor):
+                        mejor = u[eje]
+        return valor if mejor is None else mejor
 
     def _arrastre_tramo(self, enlace: str, p: QPointF) -> dict[str, Any] | None:
         """Agarrar el cuerpo de un enlace y arrastrar mueve el tramo de su recorrido que se agarra (como su tirador, sin
@@ -783,7 +864,32 @@ class Edicion(QObject):
     def _barra(self, ident: str | None) -> dict[str, Any] | None:
         return next((b for b in self.M.get("bars", []) if b["id"] == ident), None)
 
+    def clave_panel(self) -> tuple[tuple[str, ...], str | None]:
+        """Lo que muestra el panel de opciones: lo seleccionado y la acción señalada (para saber si un gesto lo cambia)."""
+        return tuple(self.sel), self.accion_activa()
+
     def prensar(self, p: QPointF, event: Any = None) -> bool:
+        """Empieza el gesto del ratón y avisa a `tras_gesto(antes, despues)`: si pulsar ya cambia lo que mostraba el panel de
+        opciones, la ventana lo esconde en ese momento (sin fijar), sin enseñar antes la página nueva."""
+        self._clave_antes = self.clave_panel()
+        if self.mensaje in (MSG_SOLAPE, MSG_SOLAPE_PARCIAL):  # el aviso de una ficha ya soltada no sigue a la vista
+            self.mensaje = ""
+            self.cambiado.emit()
+        resultado = self._prensar(p, event)
+        if self.tras_gesto is not None:
+            self.tras_gesto(self._clave_antes, self.clave_panel())
+        return resultado
+
+    def soltar(self, p: QPointF, event: Any = None) -> bool:
+        """Termina el gesto del ratón y avisa a `tras_gesto(antes, despues)` de lo que mostraba el panel de opciones al
+        pulsar y de lo que muestra al soltar (lo que cambia al soltar, como una selección con lazo)."""
+        antes, self._clave_antes = self._clave_antes, None
+        resultado = self._soltar(p, event)
+        if antes is not None and self.tras_gesto is not None:
+            self.tras_gesto(antes, self.clave_panel())
+        return resultado
+
+    def _prensar(self, p: QPointF, event: Any = None) -> bool:
         ident = elemento_en(self.M, p)
         n = self.anotacion(ident)
         if n:
@@ -806,7 +912,7 @@ class Edicion(QObject):
             self.cambiado.emit()
             self.enlace = punto
             return True
-        caja = self.accion_en(p) if ident is None else None
+        caja = (self.accion_en(p) or self._accion_por_borde(p)) if ident is None else None
         if caja:
             if caja.get("suelta") and not amplia and caja["id"] in self.sel and set(self.sel) - set(self._ids_grupo(caja["id"])):
                 # una de las seleccionadas junto a otras cosas: no se deshace la selección, se mueven todas juntas
@@ -985,7 +1091,7 @@ class Edicion(QObject):
                     previo = a.setdefault("tramos0", a["style"].get("route", {}).get("tramos", {}))  # lo guardado al pulsar
                     valido = isinstance(previo, dict) and str(previo.get("n")) == str(len(pts))
                     d0 = float(previo.get(str(i), 0)) if valido else 0.0
-                    destino = ajustar(p.x() if vertical else p.y())
+                    destino = self._pegar_a_paralelo(ajustar(p.x() if vertical else p.y()), vertical, a["id"], self._rango_tramo(pts, i, vertical))
                     nuevo = dict(previo) if valido else {}
                     desplazamiento = d0 + destino - pts[i][0 if vertical else 1]
                     nuevo.update({"n": str(len(pts)), str(i): str(int(desplazamiento)) if desplazamiento == int(desplazamiento)
@@ -995,9 +1101,14 @@ class Edicion(QObject):
                     route = a["style"].setdefault("route", {"laneX": str(pts[2][0]-SX),
                                                             "exitY": str(pts[1][1]), "entryY": str(pts[3][1])})
                     key = {1: "exitY", 2: "laneX", 3: "entryY"}[handle.get("routeSegment", handle["segment"])]
-                    route[key] = str(ajustar(p.x()-SX if key == "laneX" else p.y()))
+                    vertical = key == "laneX"
+                    k = handle.get("routeSegment", handle["segment"])
+                    v = self._pegar_a_paralelo(ajustar(p.x() if vertical else p.y()), vertical, a["id"],
+                                               self._rango_tramo(pts, k, vertical))
+                    route[key] = self._num(v - SX if vertical else v)
                 elif len(pts) == 4:
-                    a["style"]["route"] = {"middleY": str(ajustar(p.y()))}
+                    a["style"]["route"] = {"middleY": self._num(self._pegar_a_paralelo(
+                        ajustar(p.y()), False, a["id"], self._rango_tramo(pts, handle["segment"], False)))}
             a["movido"] = True
             self.reconstruir()
             self.redibujar.emit()
@@ -1089,7 +1200,7 @@ class Edicion(QObject):
                 destino = anclas(self.M, caja["cabeza"])[0]  # una acción de un grupo suelto: el grupo entero
         return destino
 
-    def soltar(self, p: QPointF, event: Any = None) -> bool:
+    def _soltar(self, p: QPointF, event: Any = None) -> bool:
         if self.lazo:
             lz, self.lazo = self.lazo, None
             if self.diagrama is not None:
@@ -1170,6 +1281,9 @@ class Edicion(QObject):
             if destino is None and ident and "|" in ident and ident.split("|")[2] in ("pre", "post"):
                 self.unir_a_enlace(origen, ident)  # soltado sobre un enlace: una rama que se une ahí
                 return True
+            if destino and destino["id"] != origen["id"] and (enlace := self._enlace_del_punto(origen, destino)):
+                self.unir_a_enlace(origen, enlace)  # soltado junto al tallo de una transición: el enlace que sale de él
+                return True
             if destino is None and ident is None:  # soltado en un hueco: se abre una rama con el elemento que sigue
                 self.crear_desde(origen, p)
                 return True
@@ -1177,6 +1291,12 @@ class Edicion(QObject):
                 cerca = sorted((a for a in anclas(self.M, ident or "") if a["lado"] != "der" or origen["lado"] == "izq"),
                                key=lambda a: (a["pos"].x() - p.x()) ** 2 + (a["pos"].y() - p.y()) ** 2)
                 destino = cerca[0] if cerca else None
+                # desde una barra, sin apuntar a un punto concreto, cuenta dónde está el elemento: lo de encima emite hacia la
+                # barra y lo de debajo recibe de ella (soltar en la mitad baja de la etapa de debajo no es unir su salida)
+                barra_, pos = self._barra(origen["id"]), posiciones(self.M)
+                if barra_ and ident in pos and abs(pos[ident][1] - barra_["y"]) > H:
+                    lado = "abajo" if pos[ident][1] < barra_["y"] else "arriba"
+                    destino = next((a for a in cerca if a["lado"] == lado), destino)
             if destino and destino["id"] != origen["id"]:
                 self.unir(origen, destino)
             return True
@@ -1568,6 +1688,18 @@ class Edicion(QObject):
             return []
         return self._solapa([caja], set())
 
+    def _enlace_del_punto(self, origen: dict[str, Any], destino: dict[str, Any]) -> str | None:
+        """Soltar la salida de una transición sobre la salida de otra que ya tiene su etapa siguiente (o la entrada sobre la
+        entrada de una que ya tiene su etapa anterior) es unirse a ese enlace, como si se soltara sobre él: una convergencia
+        (O) en esa etapa. Cerca del tallo de la transición, su punto de unión gana al enlace que sale de él (P-IMP-118).
+        Devuelve el ID de ese enlace, o None si no es el caso (entonces son dos transiciones seguidas: un borrador)."""
+        ts = {t["id"] for t in self.M["transitions"]}
+        if origen["id"] not in ts or destino["id"] not in ts or origen["lado"] != destino["lado"]:
+            return None
+        rol = {"abajo": "post", "arriba": "pre"}.get(origen["lado"])
+        propios = [e["id"] for e in enlaces(self.M) if e["tid"] == destino["id"] and e["rol"] == rol]
+        return propios[0] if rol and len(propios) == 1 else None
+
     def unir_a_enlace(self, origen: dict[str, Any], enlace: str) -> None:
         """Arrastrar de un punto de unión al **enlace** de una transición con su etapa siguiente construye una rama
         (alternativa, O) que se une ahí: de una transición, su etapa siguiente pasa a ser la de ese enlace (la rama
@@ -1582,7 +1714,13 @@ class Edicion(QObject):
             elif src != sid:
                 self.saltar(sid, src)
             return
-        if recibe or rol != "post":
+        if not recibe and rol == "pre" and src in self._pasos():  # una etapa a una transición que ya tiene etapa anterior
+            if src == sid:
+                self.rechazar("Una etapa no puede llegar a la transición que sale de ella.", src)
+                self.cambiado.emit()
+            else:
+                self.borrador_simultaneidad(src, tid)
+        elif recibe or rol != "post":
             self.rechazar("Una rama se une a un enlace que llega a una etapa (de una transición a su etapa siguiente).",
                           src, enlace)
             self.cambiado.emit()
@@ -1621,7 +1759,7 @@ class Edicion(QObject):
                 ed.connect(base, nuevo) if abajo else ed.connect(nuevo, base)
             self._unir_cercanos({nuevo})  # y, si su otro punto queda muy cerca de uno libre compatible, también se une (P-IMP-114)
         self.sel = [nuevo]
-        self.informar("Rama abierta: " + ("escriba la receptividad en las propiedades." if es_paso else "etapa nueva."))
+        self.informar("Rama abierta: " + ("escriba la receptividad en las propiedades (doble clic en la transición)." if es_paso else "etapa nueva."))
         self.cambia()
         return nuevo
 
@@ -1649,7 +1787,7 @@ class Edicion(QObject):
         tid, _ = self.ed.add_transition(self.parcial_de(ini), "", [ini], [fin], at=(tx, ty),
                                         label=self.ed.next_label("transition"))
         self.sel = [tid]
-        self.informar("Transición nueva entre las dos etapas: escriba su receptividad en las propiedades.")
+        self.informar("Transición nueva entre las dos etapas: escriba su receptividad en las propiedades (doble clic en ella).")
         self.cambia()
 
     def saltar(self, origen: str, destino: str) -> str:
@@ -1665,14 +1803,25 @@ class Edicion(QObject):
                                         label=self.ed.next_label("transition"))
         self.sel = [tid]
         tipo = "Repetición de secuencia" if pos[destino][1] <= pos[origen][1] else "Salto de secuencia"
-        self.informar(tipo + ": escriba su receptividad en las propiedades.")
+        self.informar(tipo + ": escriba su receptividad en las propiedades (doble clic en ella).")
         self.cambia()
         return tid
+
+    def _lado_en_barra(self, barra_: dict[str, Any], otro: dict[str, Any]) -> str:
+        """Por qué lado de la barra queda unido el elemento `otro`: lo da su punto de unión, no la punta de la barra elegida ni
+        dónde está dibujado. El punto de abajo del elemento emite hacia la barra (queda por `arriba` de ella) y el de arriba
+        recibe de la barra (queda por `abajo`). Así una etapa encima de la barra se une por arriba si se arrastra desde su
+        salida, aunque se suelte en la punta inferior de la barra (P-IMP-125), y por abajo si se arrastra a su entrada
+        (un retorno o una divergencia hacia atrás, que se dibuja cruzando la barra). Sin punto de arriba o de abajo, manda la
+        punta de la barra."""
+        return {"abajo": "arriba", "arriba": "abajo"}.get(otro["lado"], barra_["lado"])
 
     def unir(self, origen: dict[str, Any], destino: dict[str, Any]) -> None:
         """Enlaza dos puntos de unión. Manda el punto del que se arrastra: el de abajo emite el enlace (va hacia el otro
         elemento) y el de arriba lo recibe (viene del otro). Si el enlace queda de abajo arriba, se dibuja con flecha. Con una
-        barra, el elemento queda por encima o por debajo según el lado de la barra."""
+        barra, el lado lo da el punto de unión del elemento: el de abajo emite hacia la barra (queda por arriba de ella) y el de
+        arriba recibe de ella (queda por abajo), sea cual sea la punta de la barra elegida y dónde esté dibujado
+        (`_lado_en_barra`)."""
         if {origen["lado"], destino["lado"]} & {"izq", "der"}:  # una acción suelta con una etapa
             acc = next((x for x in (origen, destino) if x["lado"] == "izq"), None)
             otro = destino if acc is origen else origen
@@ -1689,20 +1838,37 @@ class Edicion(QObject):
             self.cambiado.emit()
         elif ba or bb:
             barra_, otro = (origen, destino) if ba else (destino, origen)
+            lado = self._lado_en_barra(barra_, otro)
             try:
-                diag = self.ed.bar_link(barra_["id"], barra_["lado"], otro["id"])
+                diag = self.ed.bar_link(barra_["id"], lado, otro["id"])
                 self.mensaje = f"{diag.code}: {self.sust(diag.message)}" if diag else ""
+                if lado != barra_["lado"] and not diag:
+                    self.informar(f"«{self._nom(otro['id'])}» {'sale hacia la barra' if lado == 'arriba' else 'recibe de la barra'}: "
+                                  f"se ha unido por {'arriba' if lado == 'arriba' else 'abajo'}.")
             except DiagnosticError as exc:
                 self.rechazar("; ".join(self.sust(d.message) for d in exc.diagnostics), barra_["id"], otro["id"])
             self.cambia()
         elif origen["id"] in self._pasos() and destino["id"] in self._pasos():
             self.enlazar_etapas(origen, destino)  # de etapa a etapa, siempre con una transición en medio
         elif origen["lado"] == "abajo":  # el punto de abajo emite el enlace
-            self.conectar(origen["id"], destino["id"])
+            self.conectar(origen["id"], destino["id"], borrador=True)
         else:  # el punto de arriba lo recibe: se arrastra de la entrada de un elemento a lo que va antes
-            self.conectar(destino["id"], origen["id"])
+            self.conectar(destino["id"], origen["id"], borrador=True)
+
+    def explicito(self, f: Callable[..., Any], *args: Any) -> Any:
+        """Ejecuta una petición de opciones hecha por el usuario: el panel inferior se despliega aunque esté plegado
+        (P-IMP-118). Las peticiones que salen de otras operaciones (una acción nueva, una transición recién soltada)
+        no lo abren si está plegado."""
+        self.pedido_explicito = True
+        try:
+            return f(*args)
+        finally:
+            self.pedido_explicito = False
 
     def doble(self, p: QPointF, event: Any = None) -> bool:
+        return self.explicito(self._doble, p, event)
+
+    def _doble(self, p: QPointF, event: Any = None) -> bool:
         if n := self.anotacion(elemento_en(self.M,p)):
             self.editar_anotacion(n["id"]);return True
         caja = self.accion_en(p)
@@ -1962,6 +2128,9 @@ class Edicion(QObject):
         if malas and self.mensaje != aviso:
             self.informar(aviso)
             self.cambiado.emit()  # (vuelve a dibujar: las marcas se ponen después)
+        elif not malas and self.mensaje == aviso:  # ya está sobre un hueco: el aviso no sigue diciendo lo contrario
+            self.mensaje = ""
+            self.cambiado.emit()
         if hasattr(self.diagrama, "marcar_destino"):  # lo que tiene parcial se recuadra en el marco donde caería (no en el raíz)
             cae = ficha in ("etapa", "encapsulante", "macroetapa", "transicion") and not malas
             self.diagrama.marcar_destino(cajas_parciales(self.M).get(self.parcial_en(p)) if cae else None)
@@ -2388,7 +2557,7 @@ class Edicion(QObject):
         sub.append((TEXTO_ORDEN, lambda: self.accion_a_orden(aid), icono_accion("forzado")))
         self.menu_marcadas = {textos["condicionada" if actual == "limitada" else actual]}
         out: list[tuple[str, Any]] = [("Tipo de acción", sub), ("-", None),
-                                      ("Editar…", lambda: self.pedir_accion(sid, aid))]
+                                      ("Editar…", lambda: self.explicito(self.pedir_accion, sid, aid))]
         if sid:
             out.append(("Separar de la etapa", lambda: self.separar_accion(aid)))
         elif len(grupo) > 1:
@@ -2732,21 +2901,27 @@ class Edicion(QObject):
         self.pedir_accion(sid, did)
         return did
 
+    def _accion_por_borde(self, p: QPointF) -> dict[str, Any] | None:
+        """La caja de acción de una etapa cuyo borde de tirar (`_borde_accion`) queda justo por fuera del punto, que no está
+        sobre ninguna otra acción: el borde se agarra a los dos lados, como un punto de unión."""
+        return next((c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if self._borde_accion(c, p)), None)
+
     def _borde_accion(self, caja: dict[str, Any], p: QPointF) -> str | None:
         """«der» o «abajo» si el punto está en el borde de la caja de una acción de una etapa del que se tira para sacar otra
-        acción; None si no. Depende de la colocación de las acciones de la etapa, que nunca cambia por esto: en «fila» y «fila
+        acción; None si no. Se agarra a los dos lados del borde, a BORDE_ACCION del dibujo (lo mismo que un punto de unión, y
+        a cualquier zoom), sin pasar de un tercio del lado de la caja por dentro, para que el cuerpo siga agarrándose para
+        seleccionar y mover. Depende de la colocación de las acciones de la etapa, que nunca cambia por esto: en «fila» y «fila
         separada», solo el borde derecho; en «columna», solo el inferior (la nueva va debajo); en «matriz 2», ninguno."""
         if not caja.get("etapa") or caja.get("forzado") or caja.get("suelta"):
             return None
         x, y, w, h = caja["rect"]
-        tol = BORDE_ACCION / self._zoom()
-        if not (x <= p.x() <= x + w and y <= p.y() <= y + h):
-            return None
         colocacion = self.colocacion(caja["etapa"])
         if colocacion in ("fila", "fila-separada"):
-            return "der" if x + w - p.x() <= tol else None
+            dentro = min(BORDE_ACCION, w / 3)
+            return "der" if y <= p.y() <= y + h and x + w - dentro <= p.x() <= x + w + BORDE_ACCION else None
         if colocacion == "columna":
-            return "abajo" if y + h - p.y() <= tol else None
+            dentro = min(BORDE_ACCION, h / 3)
+            return "abajo" if x <= p.x() <= x + w and y + h - dentro <= p.y() <= y + h + BORDE_ACCION else None
         return None  # matriz de 2: la acción nueva no tiene un sitio evidente, se añade desde la etapa
 
     def anadir_accion_tras(self, aid: str, borde: str) -> str:
@@ -3957,15 +4132,22 @@ class Edicion(QObject):
             x = max(pos[o["id"]][0] for o in hermanas) - SX + 160
             self.ed.move(t["id"], x, pos[t["id"]][1])
 
-    def conectar(self, origen: str, destino: str) -> None:
-        """Etapa→transición o transición→etapa; entre dos del mismo tipo queda como borrador (D-ALTERNANCIA)."""
+    def conectar(self, origen: str, destino: str, borrador: bool = False) -> None:
+        """Etapa→transición o transición→etapa; entre dos del mismo tipo queda como borrador (D-ALTERNANCIA), también entre
+        dos transiciones que ya tienen etapas. Una segunda etapa anterior en una transición es una simultaneidad: se
+        rechaza, salvo con `borrador` (el enlace trazado con el ratón), que lo deja como borrador no ejecutable
+        (D-SIMULTANEIDAD) en vez de un enlace de modelo de apariencia válida."""
         m = self.ed.model
-        t = next((t for t in m["transitions"] if t["id"] in (origen, destino)), None)
+        ids_t = {t["id"] for t in m["transitions"]}
+        t = next((t for t in m["transitions"] if t["id"] in (origen, destino)), None) if len({origen, destino} & ids_t) == 1 else None
         if t is not None:
             v = next(v for v in self.M["transitions"] if v["id"] == t["id"])
             pre = destino == t["id"]
             refs, otra = (t["preRefs"], origen) if pre else (t["postRefs"], destino)
             if refs and otra not in refs and not v["simulPre" if pre else "simulPost"]:
+                if borrador and pre and origen in self._pasos():
+                    self.borrador_simultaneidad(origen, t["id"])
+                    return
                 self.rechazar(f"«{self._nom(t['id'])}» ya tiene una etapa {'anterior' if pre else 'siguiente'}: "
                               "varias en una misma transición son una simultaneidad; arrastre el elemento «Simultaneidad» "
                               "de la paleta junto al punto de unión de la transición.", t["id"], origen, destino)
@@ -3978,6 +4160,19 @@ class Edicion(QObject):
             self.mensaje = f"{diag.code}: {self.sust(diag.message)}" if diag else ""
         except DiagnosticError as exc:
             self.rechazar("; ".join(self.sust(d.message) for d in exc.diagnostics), origen, destino)
+        self.cambia()
+
+    def borrador_simultaneidad(self, etapa: str, transicion: str) -> None:
+        """Una etapa que llega a una transición que ya tiene otra etapa anterior: no se crea un enlace del modelo (serían dos
+        etapas anteriores sin la barra de simultaneidad), sino un enlace de borrador, en rojo discontinuo, que se puede
+        quitar o deshacer y que impide simular (P-IMP-118)."""
+        try:
+            diag = self.ed.draft_link(etapa, transicion)
+        except DiagnosticError as exc:
+            self.rechazar("; ".join(self.sust(d.message) for d in exc.diagnostics), etapa, transicion)
+            self.cambiado.emit()
+            return
+        self.mensaje = self.sust(diag.message) if diag else ""
         self.cambia()
 
     def anadir_debajo(self) -> str | None:
@@ -4173,7 +4368,7 @@ class Edicion(QObject):
     def renombrar(self, ident: str, nuevo: str) -> str | None:
         """Cambia la etiqueta de una etapa o transición; devuelve el motivo si no se pudo."""
         try:
-            self.ed.rename(ident, nuevo)
+            self.ed.rename(ident, nuevo, repetida=True)  # un número repetido se admite como borrador (P-IMP-118)
         except DiagnosticError as exc:
             self.parpadear([ident])
             return "; ".join(f"{self.sust(d.message).rstrip('.')}. {self.sust(d.correction)}" for d in exc.diagnostics)

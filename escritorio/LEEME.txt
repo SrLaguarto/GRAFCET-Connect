@@ -1,10 +1,10 @@
-GRAFCET Connect (versión portable 1.0.0)
+GRAFCET Connect (versión portable 1.0.3)
 ====================================================
 
 Abrir: doble clic en «GRAFCET Connect.exe». No necesita instalación ni conexión a la red. La carpeta entera es el
 programa: puede copiarse a otro sitio o a un USB, pero «GRAFCET Connect.exe» no funciona separado de ella.
 
-Instalador (alternativa): «GRAFCET-Connect-1.0.2-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
+Instalador (alternativa): «GRAFCET-Connect-1.0.3-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
 acceso en el menú Inicio (y en el escritorio, si lo marca), asocia los .grafnet si lo deja marcado y se desinstala desde
 Configuración > Aplicaciones. Contiene la misma carpeta que la versión portable (P-IMP-103).
 
@@ -54,6 +54,7 @@ Selección, salto y repetición (corrección del paso 3, P-IMP-33)
 - Repetición: haga el mismo gesto hacia el enlace de entrada de una etapa anterior. También puede crear una transición lateral y unir su salida a esa etapa. El retorno lleva flecha ascendente automáticamente.
 - Unir una entrada: desde el punto superior de una transición hasta un enlace que salga de una etapa se toma esa etapa como anterior; no se añade una segunda etapa a la transición del enlace.
 - Arriba recibe y abajo emite, independientemente de dónde esté el otro elemento. Un clic en un enlace lo selecciona; arrastrarlo mueve el tramo que se agarra (sin abrir ninguna rama: las ramas se abren desde un punto de unión). Cada conexión o creación se deshace con Ctrl+Z.
+- Una etapa o transición se une a una barra por el lado en que está dibujada (encima, por arriba; debajo, por abajo), aunque se suelte en el punto de unión del otro lado. Si una barra de simultaneidad no es válida, el aviso dice qué lleva unido por arriba y por abajo; para quitar lo que sobra, seleccione su conector y pulse Supr. Al abrir un archivo se quitan de las barras las uniones a elementos que ya no existen.
 - Una transición con varias etapas anteriores o siguientes sigue siendo una simultaneidad, y usa la barra de la paleta.
 - Unión automática al soltar: si al soltar un elemento (recién creado o movido) uno de sus puntos de unión libres queda a 8 píxeles
   o menos (medidos en pantalla, así que con zoom se escalan) de un punto libre compatible de otro elemento, se unen solos, como
@@ -103,7 +104,7 @@ En modo Editar, la pantalla tiene tres zonas:
   hace zoom y Mayús+rueda desplaza en horizontal.
 - Opciones (panel inferior): ocupa todo el ancho de la ventana, debajo de los paneles laterales. Muestra la
   configuración de lo que está seleccionado. Sin selección, dice «Haga clic en
-  un elemento del dibujo para ver y cambiar sus opciones». Se despliega y se pliega con su flecha; el divisor con el
+  un elemento del dibujo para ver y cambiar sus opciones». Se despliega y se pliega con su flecha (plegado, no se abre al seleccionar: ver más arriba); el divisor con el
   dibujo se arrastra, y el programa recuerda la altura que le dio en Pausa y en Play por separado.
 
 Dónde se cambia cada cosa
@@ -234,8 +235,8 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
   · Una acción suelta que toca el lado derecho de otra (o el lado inferior, en colocación en columna) se pega a ella,
     con un imán de 16 píxeles. Varias acciones sueltas pegadas forman un grupo que se mueve junto y se une a una
     etapa de una vez.
-- Acción nueva desde una acción: con el cursor en el borde derecho de una acción de una etapa (cambia a flechas horizontales y
-  aparece un punto), arrastre: se crea otra acción vacía («?», como «Añadir acción…», con su diálogo de edición) de la misma
+- Acción nueva desde una acción: con el cursor en el borde derecho de una acción de una etapa (a 14 unidades del dibujo a cada
+  lado del borde, como un punto de unión y a cualquier zoom; cambia a flechas horizontales y aparece un punto), arrastre: se crea otra acción vacía («?», como «Añadir acción…», con su diálogo de edición) de la misma
   etapa, a continuación de ella. Solo hay un borde por colocación y la colocación nunca cambia: en «fila» y «fila separada», el
   borde derecho; en «columna», el borde inferior (cursor de flechas verticales; la nueva va debajo); en «matriz de 2», ninguno. Un clic en el borde, o arrastrar por el cuerpo, solo
   selecciona o mueve como siempre. Es un único paso de Deshacer. Si la acción de la que se tira es del modelo (completa),
@@ -269,6 +270,30 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
 - Colocar un tramo de un enlace a mano: al arrastrar un tramo de un enlace y soltarlo, se queda exactamente donde se
   suelta, aunque quede encima de otro enlace; la recolocación automática de los demás enlaces no lo mueve ni se aparta
   de él.
+  Mientras se arrastra, y al soltar, ningún otro enlace se mueve (P-IMP-118): los retornos automáticos se colocan como si
+  nada se hubiera colocado a mano y el tramo colocado se superpone, en la rejilla de 20 px; si queda a 10 o menos de un tramo
+  paralelo de otro enlace, se pega exactamente a él (también durante el arrastre), para poder poner un conector justo encima de otro.
+- El panel de opciones no se abre solo (P-IMP-118 y P-IMP-128): el programa arranca con él escondido y seleccionar un
+  elemento, añadir una acción o soltar una transición nueva no lo despliegan. Lo abre el doble clic en el elemento, Intro
+  con él seleccionado, «Editar…» en el menú de una acción, su pestaña o Ctrl+J. Sin fijar, se esconde solo al hacer clic en
+  el dibujo fuera del elemento (en el fondo o en otro elemento); un clic en Variables, la paleta o los menús no lo esconde.
+  Con «Fijar» (en su cabecera), se queda abierto, la selección lo actualiza y vuelve abierto al arrancar; la flecha y
+  Ctrl+J lo siguen plegando.
+- Número de etapa repetido (P-IMP-118): se puede poner a una etapa un número que ya tiene otra (para reordenar números
+  no hace falta pasar por uno libre). Las dos salen marcadas en rojo, el panel de diagnósticos dice «Hay dos etapas con el
+  número 3: cambie una.» y Play no arranca con ese mismo aviso. Se guarda y se abre igual. Mientras haya dos con el mismo
+  número, las receptividades que ya nombraban esas etapas siguen ligadas a la suya (el texto no se reescribe y no se
+  liga a la otra); una receptividad nueva con ese número queda como texto pendiente. Al cambiar el número de una de las
+  dos, los textos se reescriben con los números de ahora.
+- Unir con más libertad (P-IMP-118): la salida de una transición soltada junto al tallo de otra que ya tiene etapa siguiente
+  (o sobre su enlace con ella) se une a esa etapa, una convergencia en O. La salida de una etapa soltada sobre una
+  transición que ya tiene otra etapa anterior, o sobre su enlace de entrada, no se rechaza: deja un enlace en borrador (rojo
+  discontinuo) con el aviso «La etapa 4 llega a la transición t1, que ya tiene otra etapa anterior: use una barra de
+  simultaneidad.», que se quita o se deshace como cualquier borrador y que impide Play. Dos transiciones ya enlazadas con
+  etapas se pueden unir: queda un borrador por la alternancia, como dos etapas seguidas.
+- Menos capas de cabecera (P-IMP-118): el panel inferior tiene una sola fila de cabecera (título, lo que programan los
+  bloques y «Fijar»); sobre el dibujo, las pestañas, la barra de Play y la cabecera del dibujo son más bajas. A
+  1366×768 el dibujo empieza 21 px más arriba y los controles del panel inferior, 11 px (36 en una transición).
 - Acciones limitadas de ficheros antiguos: una continua con límite de tiempo de un fichero anterior se sigue dibujando
   y simulando igual, con su límite como una condición más (NOT 3s/X1). En el menú y en el panel aparece como
   «Condicionada (con límite de tiempo)». Ese tipo ya no se ofrece; al editar su condición se conserva el límite, salvo
@@ -407,7 +432,7 @@ En modo Editar:
 
 E/S externas (simulador de procesos por Modbus) y botón conmutador (P-IMP-63)
 
-- El botón «E/S externas» de la barra abre el panel de E/S. Mientras se ve, el botón está marcado y dice «Vista GRAFCET» (con un icono de etapa, transición y etapa); pulsado, vuelve al dibujo. La flecha ← hace lo mismo. Ninguna de las dos desconecta la conexión. Tiene un ancho fijo, el del texto más largo, así que la barra no se mueve al alternar.
+- A E/S se entra con la luz «E/S externas: …» del extremo derecho de la fila de pestañas (ya no hay pestaña propia): un clic la abre y la luz queda resaltada mientras se ve; las pestañas GRAFCET y PLANOS vuelven. El botón «E/S externas» abre el panel de E/S. Mientras se ve, el botón está marcado y dice «Vista GRAFCET» (con un icono de etapa, transición y etapa); pulsado, vuelve al dibujo. La flecha ← hace lo mismo. Ninguna de las dos desconecta la conexión. Tiene un ancho fijo, el del texto más largo, así que la barra no se mueve al alternar.
 - El panel tiene a la izquierda la lista SENSORES y a la derecha la lista ACTUADORES: arrastre cada variable a un canal de su lado. En el centro, un marco con la cabecera «(IP:puerto)» y «Esclavo ID:n»: a su izquierda, los canales Input e Input Reg; a su derecha, Coil y Holding Reg. El nombre de la variable asignada aparece fuera del marco, pegado a él. Al arrastrar, se resalta la fila entera.
 - Cada canal tiene un indicador: tenue si no tiene variable, del color de su tipo si la tiene, y más vivo si la señal está activa. Bool es verde, Decimal azul, Entera naranja y Cualquiera blanco. El resumen de abajo cuenta «x/y entradas asignadas · x/y salidas asignadas».
 - Para quitar una asignación, pase el ratón por ella y pulse la «×», que solo aparece al pasar el ratón (con la conexión activa, antes pulse «Desconectar / editar»). También puede usar el menú contextual del canal.

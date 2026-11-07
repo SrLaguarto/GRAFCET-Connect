@@ -60,7 +60,7 @@ ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabl
 ALTO_INFERIOR = {"simular": 220, "editar": 240}  # altura inicial del panel inferior: la traza, o las opciones de lo seleccionado
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
 AYUDA_EDICION = {
-    "seleccionar": "Clic selecciona un elemento y muestra sus opciones abajo; arrastrarlo lo mueve (a la "
+    "seleccionar": "Clic selecciona un elemento (doble clic o Intro abre sus opciones abajo); arrastrarlo lo mueve (a la "
                    "rejilla, y no encima de otro elemento); de un punto de unión (arriba o abajo de una etapa o transición, "
                    "a la derecha de una etapa) sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y deshacen y rehacen. Los "
                    "elementos y las acciones nuevos se arrastran desde la paleta de la izquierda; otro tipo de acción, con botón derecho "
@@ -486,7 +486,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         contenedor=QWidget();disposicion=QVBoxLayout(contenedor);disposicion.setContentsMargins(0,0,0,0);disposicion.setSpacing(0)
         self.pestanas_vistas=QTabBar();self.pestanas_vistas.setExpanding(False);self.pestanas_vistas.setDrawBase(True)
         for texto in ('GRAFCET','PLANOS','E/S externas'):self.pestanas_vistas.addTab(texto)
-        self.pestanas_vistas.setStyleSheet("QTabBar {background:#e4eae9; border:0;} QTabBar::tab {min-width:100px; padding:8px 20px; margin:5px 3px 0 0; background:transparent; color:#536169; border:0; border-top-left-radius:9px; border-top-right-radius:9px;} QTabBar::tab:selected {background:white; color:#20343b;} QTabBar::tab:hover:!selected {background:#d7e1df;}")
+        self.pestanas_vistas.setTabVisible(2,False)  # a E/S se entra por la luz de conexión (`luz_es`); el índice 2 solo marca la página
+        self.pestanas_vistas.setStyleSheet("QTabBar {background:#e4eae9; border:0;} QTabBar::tab {min-width:100px; padding:5px 20px; margin:3px 3px 0 0; background:transparent; color:#536169; border:0; border-top-left-radius:9px; border-top-right-radius:9px;} QTabBar::tab:selected {background:white; color:#20343b;} QTabBar::tab:hover:!selected {background:#d7e1df;}")
         # La fila de arriba: las pestañas a la izquierda y, a la derecha del todo, la luz de la conexión externa (`luz_es`)
         self.fila_pestanas=QWidget();self.fila_pestanas.setObjectName('filaPestanas');self.fila_pestanas.setAttribute(Qt.WidgetAttribute.WA_StyledBackground,True)
         self.fila_pestanas.setStyleSheet('QWidget#filaPestanas {background:#e4eae9;}')
@@ -515,7 +516,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.nuevo()
         self._cargar_config_modbus(self.edicion.ed.model)
         for nombre in ("izquierdo","derecho","inferior"):
-            self._mostrar_panel(nombre,nombre!="inferior",guardar=False)
+            self._mostrar_panel(nombre, nombre != "inferior" or self._inferior_al_arrancar, guardar=False)
         self._accesibilidad()
 
     # -- construcción ---------------------------------------------------------------------------
@@ -683,8 +684,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         izq = QWidget()
         izq.setObjectName("panelDibujo")
         il = QVBoxLayout(izq)
-        il.setContentsMargins(10, 8, 10, 8)
-        il.setSpacing(6)
+        il.setContentsMargins(10, 5, 10, 6)
+        il.setSpacing(4)
         cab = QHBoxLayout()
         self.estado = QLabel()
         self.titulo = QLabel()
@@ -703,7 +704,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.recentrado = Recentrado(lambda: self.diagrama.ajustar(), self)
         self.navegacion = Navegacion(self.diagrama)
         cab.addWidget(self.navegacion)
-        self.estado.setMinimumHeight(self.navegacion.buscador.sizeHint().height()+8)
+        self.estado.setMinimumHeight(self.navegacion.buscador.sizeHint().height()+4)
         ver_navegacion = self._accion("Navegación y filtros…", self.navegacion.abrir_opciones)
         next(a.menu() for a in self.menuBar().actions() if a.text()=="&Ver").addAction(ver_navegacion)
         il.addWidget(self.diagrama, 1)
@@ -845,7 +846,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.vsplit.setStretchFactor(1, 0)
         self.vsplit.setSizes([520, ALTO_INFERIOR["simular"]])
         self.setCentralWidget(self.vsplit)
-        self.props.t_previa.toggled.connect(lambda _: self._dimensionar_opciones())
+        self.props.t_fijar.toggled.connect(self._fijar_cambiado)
         # Barra de estado: aviso de conformidad, lecturas distintas de las decididas, instante lógico
         sb = self.statusBar()
         self.l_aviso = QLabel(AVISO)
@@ -906,21 +907,22 @@ class Ventana(ArchivosProyecto, QMainWindow):
             QWidget#panelDibujo, QWidget#panelElementos, QWidget#panelVariables,
             QWidget#panelPropiedades { background: white; border: 1px solid #d4e7e8; border-radius: 7px; }
             QLabel#tituloPanel { font-size: 16px; font-weight: 600; color: #122849; border: 0; }
-            QLabel#tituloPropiedades { color: #127c80; font-size: 14px; font-weight: 600;
-                background: #eaf6f5; border-radius: 4px; padding: 5px 8px; }
+            QWidget#cabeceraPropiedades { background: #eaf6f5; border-radius: 4px; }
+            QLabel#tituloPropiedades { color: #127c80; font-size: 13px; font-weight: 600; background: transparent;
+                padding: 3px 0; }
             QLabel#ayudaPropiedades { color: #657b8b; padding: 4px 8px; }
             QMenuBar { background: white; padding: 2px 8px; border-bottom: 1px solid #e2eeee; }
             QMenuBar::item { padding: 5px 10px; }
             QMenuBar::item:selected, QMenu::item:selected { background: #e8f5f3; }
             QMenu { background: white; border: 1px solid #cde2e3; padding: 4px; }
             QMenu::item { padding: 6px 22px; }
-            QToolBar { background: white; border: 0; border-bottom: 1px solid #dcebec; spacing: 5px; padding: 6px 3px; }
-            QToolBar QToolButton { padding: 5px 7px; border: 1px solid transparent; border-radius: 2px; }
+            QToolBar { background: white; border: 0; border-bottom: 1px solid #dcebec; spacing: 5px; padding: 3px 3px; }
+            QToolBar QToolButton { padding: 3px 7px; border: 1px solid transparent; border-radius: 2px; }
             QToolButton#bibliotecaPlanos { padding-right:28px; }
             QToolButton#bibliotecaPlanos::menu-indicator { image:url(:/grafconnect/desplegar.svg); subcontrol-origin:padding; subcontrol-position:center right; right:8px; width:12px; height:8px; }
             QToolBar QToolButton:hover { background: #edf8f6; border-color: #c7e5e1; }
             QToolBar QToolButton:checked { background: #d5e6e2; border-color: #82aaa2; color:#23483f; }
-            QToolBar#barraSimulacion QToolButton { color: #334b50; background: transparent; padding: 5px 10px; }
+            QToolBar#barraSimulacion QToolButton { color: #334b50; background: transparent; padding: 3px 10px; }
             QToolBar#barraSimulacion QToolButton:hover { background: #d9efeb; }
             QToolBar#barraConexion QToolButton { border: 1px solid #a2d2cd; background: white; color: #167d80; }
             QLineEdit, QComboBox, QSpinBox { background: white; border: 1px solid #ccdfe5; border-radius: 4px;
@@ -968,7 +970,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.luz_es.setObjectName("luzES")
         self.luz_es.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.luz_es.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.luz_es.setStyleSheet("QToolButton#luzES { border: 0; background: transparent; padding: 3px 6px; }")
+        self.luz_es.setStyleSheet(
+            "QToolButton#luzES { border: 1px solid #b8c6c4; border-radius: 11px; background: #f4f7f7; color: #20343b; padding: 3px 10px; }"
+            "QToolButton#luzES:hover { background: #d7e1df; border-color: #8fa5a3; }"
+            "QToolButton#luzES[abierta=\"true\"] { background: white; border: 1px solid #20343b; font-weight: 600; }")
+        self.luz_es.setProperty("abierta", False)
         self.luz_es.clicked.connect(lambda: self.mostrar_es())
         self.fila_pestanas.layout().addWidget(self.luz_es)  # al final de la fila de pestañas, no junto a Reiniciar
         self._luz_es("desconectado", "")
@@ -1027,9 +1033,15 @@ class Ventana(ArchivosProyecto, QMainWindow):
             panel.alternar.connect(lambda n=nombre: self._mostrar_panel(n, not self._accion_panel(n).isChecked()))
             panel.desplegar.connect(lambda tamano,n=nombre:self._abrir_desde_tiron(n,tamano))
         self.flechas["izquierdo"].hide()
+        fijo = self.ajustes.value("paneles/inferior_fijo", False, type=bool)
+        self.props.t_fijar.blockSignals(True)
+        self.props.t_fijar.setChecked(fijo)
+        self.props.t_fijar.blockSignals(False)
         for nombre in ("izquierdo", "derecho", "inferior"):
             accion = self._accion_panel(nombre)
             visible = self.ajustes.value(f"paneles/{nombre}", True, type=bool)
+            if nombre == "inferior":  # sin fijar, arranca plegado aunque un ajuste antiguo lo dejara abierto
+                visible = self._inferior_al_arrancar = visible and fijo
             accion.blockSignals(True)
             accion.setChecked(visible)
             accion.blockSignals(False)
@@ -1038,10 +1050,48 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _panel(self, nombre: str) -> QWidget:
         return {"izquierdo": self.dock, "derecho": self.derecho, "inferior": self.inferior}[nombre]
 
-    def _abrir_opciones(self) -> None:
-        """Despliega el panel inferior (las opciones de lo seleccionado), si estaba plegado."""
+    def _abrir_opciones(self, explicito: bool = True) -> None:
+        """Despliega el panel inferior (las opciones de lo seleccionado) si estaba plegado, pero solo cuando el usuario lo
+        pide (doble clic, Intro, «Editar…»). En otro caso (P-IMP-118) un panel plegado se queda plegado."""
+        panel = self._plegables["inferior"]
+        if not explicito and not panel.abierto:
+            return
         self._mostrar_panel("inferior", True)
         agrandar_para_transicion(self)
+
+    def _fijado(self) -> bool:
+        return self.props.t_fijar.isChecked()
+
+    def _fijar_cambiado(self, fijo: bool) -> None:
+        """«Fijar»: se guarda (arranca abierto solo si está fijado) y fijado ya no se esconde nada."""
+        self.ajustes.setValue("paneles/inferior_fijo", fijo)
+
+    def _tras_gesto(self, antes: tuple, despues: tuple) -> None:
+        """Pulsar o soltar el ratón en el dibujo (`antes` y `despues`: lo seleccionado y la acción señalada, `Edicion.clave_panel`).
+        Con el panel de opciones abierto y sin fijar, un gesto que lo deja vacío o en otro elemento lo esconde al momento, sin
+        estados intermedios; sobre el mismo elemento, no. Un panel que no mostraba nada se limita a actualizarse."""
+        if (self.modo != "editar" or getattr(self, "solo_lectura", False) or not self._plegables["inferior"].abierto
+                or self._fijado()):
+            return
+        mismo = despues == antes and bool(despues[0])
+        sin_nada = not antes[0] and antes[1] is None and bool(despues[0])
+        if not mismo and not sin_nada:
+            self._ocultar_sin_fijar()
+
+    def _ocultar_sin_fijar(self) -> None:
+        """Esconde el panel de opciones sin que el dibujo salte: el punto de la escena de su esquina superior izquierda
+        sigue en el mismo sitio de la pantalla."""
+        d = self.diagrama
+        punto = d.mapToScene(0, 0)
+        self._mostrar_panel("inferior", False)
+
+        def corregir() -> None:
+            dx, dy = d.mapFromScene(punto).x(), d.mapFromScene(punto).y()
+            if dx or dy:
+                d.horizontalScrollBar().setValue(d.horizontalScrollBar().value() + dx)
+                d.verticalScrollBar().setValue(d.verticalScrollBar().value() + dy)
+        corregir()
+        QTimer.singleShot(0, d, corregir)
 
     def _accion_panel(self, nombre: str) -> QAction:
         return {"izquierdo": self.a_izquierdo, "derecho": self.a_derecho, "inferior": self.a_inferior}[nombre]
@@ -1424,9 +1474,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
         e.diagrama = self.diagrama
         e.cambiado.connect(self.refrescar_edicion)
         e.redibujar.connect(self._redibujar_edicion)
-        e.pedir_condicion = self.editar_condicion
-        e.pedir_etiqueta = self.editar_etiqueta
-        e.pedir_accion = self.editar_accion
+        # (lo que pide el usuario, con doble clic, Intro o «Editar…», despliega el panel; lo que piden otras operaciones, no: P-IMP-118)
+        e.pedir_condicion = lambda tid: self.editar_condicion(tid, e.pedido_explicito)
+        e.pedir_etiqueta = lambda ident: self.editar_etiqueta(ident, e.pedido_explicito)
+        e.pedir_accion = lambda sid, aid: self.editar_accion(sid, aid, e.pedido_explicito)
+        e.tras_gesto = self._tras_gesto
         e.confirmar_borrado = self._confirmar_borrado
         e.pedir_texto = lambda titulo, etiqueta, actual: self._pedir_texto(titulo, etiqueta, actual)
         e.pedir_forzado = lambda datos: self._pedir_forzado(datos)
@@ -1434,6 +1486,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
             cantidad, e.enlaces_quitados = e.enlaces_quitados, 0
             aviso = ("Se quitó un enlace en borrador que apuntaba a elementos que ya no existen" if cantidad == 1 else
                      f"Se quitaron {cantidad} enlaces en borrador que apuntaban a elementos que ya no existen")
+            e.informar(aviso)
+            QMessageBox.information(self, TITULO, aviso)
+        if e.barras_limpiadas:
+            cantidad, e.barras_limpiadas = e.barras_limpiadas, 0
+            aviso = ("Se quitó de una barra la unión con un elemento que ya no existe" if cantidad == 1 else
+                     f"Se quitaron de las barras {cantidad} uniones con elementos que ya no existen")
             e.informar(aviso)
             QMessageBox.information(self, TITULO, aviso)
 
@@ -1456,13 +1514,16 @@ class Ventana(ArchivosProyecto, QMainWindow):
         ancho = (lateral.width() if lateral.abierto else self._tamanos_paneles["derecho"]) if getattr(self, "_anchos_puestos", False) else self.ancho_lateral
         guardado = getattr(self, "_paneles_edicion", None)
         if not editar and guardado is None:
-            self._paneles_edicion = {"izquierdo": self.a_izquierdo.isChecked(), "inferior": self.a_inferior.isChecked(),
+            self._paneles_edicion = {"izquierdo": self.a_izquierdo.isChecked(),
+                                    "inferior": self.a_inferior.isChecked() and self._fijado(),  # sin fijar, vuelve plegado
                                     "tamanos": self.vsplit.sizes() if self.isVisible() else None}
         self.tb_edit.setVisible(editar)
         self.variables.setEnabled(editar)
         self.props.setEnabled(editar); self.paleta.setEnabled(editar)
         for accion in (self.a_guardar,self.a_guardar_como,self.a_enviar_lamina,self.a_exportar): accion.setEnabled(not getattr(self,"solo_lectura",False))
-        self.pestanas_vistas.setTabEnabled(1,not getattr(self,"solo_lectura",False))
+        # (con la pestaña de E/S oculta y marcada, Qt elegiría otra al habilitar PLANOS: se vuelve a marcar la de la página que se ve)
+        self.pestanas_vistas.blockSignals(True);self.pestanas_vistas.setTabEnabled(1,not getattr(self,"solo_lectura",False))
+        self.pestanas_vistas.setCurrentIndex({0:0,1:2,2:1}[self.paginas_es.currentIndex()]);self.pestanas_vistas.blockSignals(False)
         self._acciones_edicion(editar)
         self.derecho.setCurrentIndex(1 if editar else 0)
         self.inferior.setCurrentIndex(1 if editar else 0)
@@ -1531,8 +1592,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
         encoge y se desplaza."""
         if self.isVisible() and self.inferior.isVisible():
             self._alturas["simular" if editar else "editar"] = self.vsplit.sizes()[1]
-        if self.inferior.isHidden() and self.isVisible():
-            return  # plegado: al desplegarlo vuelve a su altura
+        if self.inferior.isHidden():  # plegado, solo su pestaña y el resto para el dibujo: al desplegarlo vuelve a su altura
+            grosor = self._plegables["inferior"].GROSOR_PESTANA
+            self.vsplit.setSizes([max(sum(self.vsplit.sizes()) - grosor, 100), grosor])
+            return
         alto = self._alturas["editar" if editar else "simular"]
         total = max(sum(self.vsplit.sizes()), alto + 200)
         if editar and alto == ALTO_INFERIOR["editar"] and not self.dock.isHidden():  # (a 1366×768: el inferior pasa de 380 a 328)
@@ -1558,7 +1621,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         QMessageBox.warning(self, TITULO, "El grafcet no compila, no se puede simular todavía:\n\n"
                             + "\n".join(f"• {x}" for x in lineas[:8]) + ("\n…" if len(lineas) > 8 else ""))
         # cada elemento con un error parpadea en naranja (después del aviso, que lo tapa) y se lleva a la vista
-        self.edicion.parpadear([d["target"] for d in self.edicion.diagnosticos() if d["blocks"] and d["target"]])
+        self.edicion.parpadear(sorted(self.edicion.marcados_de(self.edicion.diagnosticos())))
 
     def _variables_sin_nombre(self) -> bool:
         """Si hay filas de variable sin nombre (solo de la interfaz): el aviso, el parpadeo de la fila y True; no se
@@ -1588,14 +1651,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if e is None or self.modo != "editar":
             return
         diags = e.diagnosticos()
-        marcados = {d["target"] for d in diags if d["blocks"] and d["target"]}
+        marcados = e.marcados_de(diags)
         self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), marcados, e.parpadeo.activos())
         self.estado.setText("ejemplo · solo lectura" if getattr(self,"solo_lectura",False) else "editando")
         self.estado.setStyleSheet(f"color: {COL['accent']}; border: 1px solid {COL['accent']}; border-radius: 9px; "
                                   "padding: 1px 9px")
         self.titulo.setText(f"{e.titulo}{' *' if e.ed.dirty else ''}")
         self.ayuda.setToolTip(self._ayuda if getattr(self,"solo_lectura",False) else AYUDA_EDICION[e.herramienta])
-        self.ayuda.setText(self._ayuda if getattr(self,"solo_lectura",False) else e.mensaje or "Arrastre fichas desde la paleta; seleccione un elemento para ver sus propiedades.")
+        self.ayuda.setText(self._ayuda if getattr(self,"solo_lectura",False) else e.mensaje or "Arrastre fichas desde la paleta; doble clic en un elemento para ver sus propiedades.")
         error = bool(e.mensaje) and not e.mensaje_info  # un aviso informativo no va en rojo
         self.ayuda.setStyleSheet(f"color: {COL['err'] if error else COL['muted']}; font-weight: {600 if error else 400}")
         if e.mensaje:
@@ -1630,6 +1693,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
             nombre = f"{e.nombre(d['target'])}: " if d["target"] else ""
             if d["code"] == "D-TIPO-EVENTO" and d["message"].startswith("Acción por evento"):
                 nombre = ""
+            if d.get("completo"):
+                nombre = ""  # el aviso ya nombra el enlace o la barra: no se repite delante
             mensaje = d["message"] if nombre else d["message"][:1].upper() + d["message"][1:]
             principal, completo = partir(f"{nombre}{mensaje}")
             item = QListWidgetItem(principal)
@@ -1670,12 +1735,13 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 self.diagrama.centrar_en(c)
             e.parpadear([target], centrar=False)  # ya está centrado
 
-    def editar_condicion(self, tid: str) -> None:
-        """Doble clic en una transición: la selecciona y despliega el panel inferior con su receptividad."""
+    def editar_condicion(self, tid: str, explicito: bool = True) -> None:
+        """Doble clic en una transición: la selecciona y despliega el panel inferior con su receptividad (solo si lo pide el
+        usuario: con `explicito` falso, un panel plegado se queda plegado)."""
         self.edicion.seleccionar([tid])
-        self._abrir_opciones()
+        self._abrir_opciones(explicito)
 
-    def editar_accion(self, sid: str | None, aid: str | None = None) -> None:
+    def editar_accion(self, sid: str | None, aid: str | None = None, explicito: bool = True) -> None:
         """Doble clic en una acción, «Editar…» o una acción recién unida a una etapa: la selecciona y despliega el panel inferior
         con sus opciones (tipo, variable, valor, condición o evento: todo se aplica al momento). Sin `aid`, añade una acción
         nueva a la etapa."""
@@ -1687,14 +1753,15 @@ class Ventana(ArchivosProyecto, QMainWindow):
         e.accion, e.ver_accion = aid, True
         e.sel = [sid] if sid else (e.sel if aid in e.sel else [aid])
         e.cambiado.emit()
-        self._abrir_opciones()
+        self._abrir_opciones(explicito)
 
-    def editar_etiqueta(self, ident: str) -> None:
+    def editar_etiqueta(self, ident: str, explicito: bool = True) -> None:
         """Doble clic en una etapa: despliega las opciones y lleva el cursor a su etiqueta."""
         self.edicion.seleccionar([ident])
-        self._abrir_opciones()
-        self.props.s_etiqueta.setFocus()
-        self.props.s_etiqueta.selectAll()
+        self._abrir_opciones(explicito)
+        if self._plegables["inferior"].abierto:
+            self.props.s_etiqueta.setFocus()
+            self.props.s_etiqueta.selectAll()
 
     def leyenda(self) -> None:
         """«Ayuda > Leyenda del dibujo»: una ventana propia (no modal) con lo que significa cada trazo y color."""
@@ -2270,6 +2337,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         indice=self.paginas_es.currentIndex()
         if hasattr(self,'pestanas_vistas'):
             self.pestanas_vistas.blockSignals(True);self.pestanas_vistas.setCurrentIndex({0:0,1:2,2:1}[indice]);self.pestanas_vistas.blockSignals(False)
+            self.luz_es.setProperty("abierta",indice==1);self.luz_es.style().unpolish(self.luz_es);self.luz_es.style().polish(self.luz_es)  # activa mientras se ve E/S
             pendiente=self.destino_traer is not None and self.destino_traer[0] is self.edicion
             self.aviso_traer.setVisible(indice==0 and pendiente)
         if hasattr(self,'tb_edit'):self.tb_edit.setVisible(indice==0 and self.modo=='editar' and not getattr(self,'solo_lectura',False))
@@ -2635,7 +2703,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.luz_es.setIcon(QIcon(punto))
         self.luz_es.setIconSize(QSize(12, 12))
         self.luz_es.setText(f"E/S externas: {texto}")
-        self.luz_es.setToolTip((mensaje + "\n" if mensaje else "") + "Clic para abrir la vista de E/S externas")
+        self.luz_es.setToolTip((mensaje + "\n" if mensaje else "") + "Abrir E/S externas")
         self.luz_es.setAccessibleName(f"E/S externas: {texto}")
         self.luz_es.setProperty("estadoLuz", texto)
 

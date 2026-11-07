@@ -609,7 +609,7 @@ class EnlacesColocadosAMano(BaseQt):
         def post(tid):
             return next(r for r in enlaces(e.M) if r["tid"] == tid and r["rol"] == "post")
         self.assertEqual((post(t3)["pts"][2][0], post(t4)["pts"][2][0]), (292.0, 104.0), "los dos retornos, automáticos")
-        self.arrastrar_tramo(e, post(t4), "x", 300.0, 132.0)  # el carril de t4, hacia donde iría el de t3 (130) si estuviera solo
+        self.arrastrar_tramo(e, post(t4), "x", 300.0, 132.0)  # el carril de t4, hacia donde iría el de t3 (130) si estuviera solo (no hace huir al automático)
         r4 = post(t4)
         estilo = e.ed.link_styles()[r4["id"]]
         self.assertEqual(set(estilo), {"route"})
@@ -617,7 +617,7 @@ class EnlacesColocadosAMano(BaseQt):
         x4 = r4["pts"][2][0]
         self.assertEqual(x4, SX + float(estilo["route"]["laneX"]))
         self.assertEqual(x4, 140.0, "queda donde se soltó (ajustado a la rejilla)")
-        self.assertEqual(post(t3)["pts"][2][0], 130.0, "el automático no se aparta del colocado a mano: va a su sitio natural")
+        self.assertEqual(post(t3)["pts"][2][0], 292.0, "el automático no se mueve cuando se coloca a mano otro enlace (P-IMP-118)")
         # el otro, también a mano, justo en el mismo carril: solapados exactamente
         e.ed.set_link_style(post(t3)["id"], {"route": {"laneX": estilo["route"]["laneX"], "exitY": "544", "entryY": "42"}})
         self.assertEqual(post(t4)["pts"][2][0], x4, "el automático que se coloca a mano no mueve al otro")

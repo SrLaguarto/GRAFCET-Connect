@@ -546,7 +546,8 @@ class Interfaz(unittest.TestCase):
         guardar, abrir otro modelo o cerrar pregunta."""
         w = self.w
         e, ids, ts = self.secuencial()
-        self.assertIn("ya existe", e.renombrar(ids["1"], "0").lower())
+        self.assertIsNone(e.renombrar(ids["1"], "0"))  # P-IMP-118: un número repetido se admite, y se marca como error
+        self.assertTrue(any(d["code"] == "D-NOMBRE-COLISION" and d["blocks"] for d in e.diagnosticos()))
         self.assertIsNone(e.renombrar(ids["1"], "Marcha"))
         self.assertEqual({s["id"]: s["label"] for s in e.M["steps"]}[ids["1"]], "Marcha")
         self.assertTrue(e.ed.dirty)
@@ -670,9 +671,12 @@ class Interfaz(unittest.TestCase):
         p.s_etiqueta.setText("Marcha")
         p.s_etiqueta.editingFinished.emit()
         self.assertEqual(e.nombres[ids["1"]], "Marcha")
-        p.s_etiqueta.setText("0")  # ya existe
+        p.s_etiqueta.setText("0")  # ya lo tiene otra etapa: se admite y se marca como error (P-IMP-118)
         p.s_etiqueta.editingFinished.emit()
-        self.assertIn("ya existe", p.msg.text().lower())
+        self.assertEqual((p.msg.text(), p.s_etiqueta.text(), e.ed.get(ids["1"])["label"]), ("", "0", "0"))
+        self.assertTrue(any(d["code"] == "D-NOMBRE-COLISION" and d["blocks"] for d in e.diagnosticos()))
+        p.s_etiqueta.setText("Marcha")
+        p.s_etiqueta.editingFinished.emit()
         self.assertEqual(p.s_etiqueta.text(), "Marcha")
         p.s_tipo.setCurrentIndex(1)
         p.s_tipo.activated.emit(1)
@@ -882,14 +886,15 @@ class Interfaz(unittest.TestCase):
         salto = next(t for t in e.ed.model["transitions"] if t["id"] not in (ts["t1"], ts["t2"], t3, t4))
         self.assertEqual((salto["preRefs"], salto["postRefs"], salto["label"]), ([ids["0"]], [e2], "t5"))
         self.assertEqual(e.sel, [salto["id"]])
-        # Una rama solo se une a un enlace que llega a una etapa
+        # Una etapa soltada sobre el enlace de entrada de una transición no es una rama: queda como borrador (P-IMP-118)
         antes = len(e.ed.undo_stack)
         e.prensar(pt(ids["1"], "abajo"))
         lista = {x["id"]: x for x in enlaces(e.M)}
         pre = lista[f"{ts['t1']}|{ids['0']}|pre"]["pts"]
         e.soltar(sobre(pre[:2], 0.5))  # el primer tramo, lejos de la transicion
-        self.assertIn("llega a una etapa", e.mensaje)
-        self.assertEqual(len(e.ed.undo_stack), antes)
+        self.assertIn("simultaneidad", e.mensaje)
+        self.assertEqual(len(e.ed.model["draftLinks"]), 1)
+        self.assertEqual(len(e.ed.undo_stack), antes + 1)
 
     def test_SEDI20_sentido_del_enlace_segun_el_trazo(self):
         """REQ-MOD-03: de arriba abajo, el enlace no lleva flecha; de abajo arriba, si (sale solo del trazo)."""
@@ -4139,7 +4144,8 @@ class Interfaz(unittest.TestCase):
         w=self.w;w.edicion.ed.add_step("g","0",True);w.edicion.cambia();w.show();self.app.processEvents();tabs=w.pestanas_vistas
         self.assertEqual([tabs.tabText(i) for i in range(tabs.count())],['GRAFCET','PLANOS','E/S externas'])
         for pesta,indice in ((2,1),(1,2),(0,0),(2,1)):
-            QTest.mouseClick(tabs,Qt.MouseButton.LeftButton,pos=tabs.tabRect(pesta).center())
+            if pesta==2:QTest.mouseClick(w.luz_es,Qt.MouseButton.LeftButton)  # a E/S se entra por la luz de conexión: su pestaña no se ve
+            else:QTest.mouseClick(tabs,Qt.MouseButton.LeftButton,pos=tabs.tabRect(pesta).center())
             self.assertEqual(w.paginas_es.currentIndex(),indice);self.assertEqual(tabs.currentIndex(),pesta)
         w.panel_es.b_volver.click();self.assertEqual((w.paginas_es.currentIndex(),tabs.currentIndex()),(0,0))
         w.mostrar_es();self.assertEqual(tabs.currentIndex(),2)
@@ -4150,10 +4156,11 @@ class Interfaz(unittest.TestCase):
     def test_SEDI270_las_pestanas_no_se_mueven_al_cambiar_de_vista(self):
         """REQ-SIM-03: las pestañas tienen textos y geometría estables al cambiar entre los tres espacios."""
         w=self.w;w.resize(1366,768);w.show();self.app.processEvents();tabs=w.pestanas_vistas
-        medidas=[tabs.tabRect(i) for i in range(3)];pos=tabs.mapTo(w,QPoint(0,0))
+        medidas=[tabs.tabRect(i) for i in range(2)];pos=tabs.mapTo(w,QPoint(0,0))
         for i in (2,1,0,1,2,0):
-            QTest.mouseClick(tabs,Qt.MouseButton.LeftButton,pos=tabs.tabRect(i).center());self.app.processEvents()
-            self.assertEqual([tabs.tabRect(j) for j in range(3)],medidas);self.assertEqual(tabs.mapTo(w,QPoint(0,0)),pos)
+            QTest.mouseClick(w.luz_es,Qt.MouseButton.LeftButton) if i==2 else QTest.mouseClick(tabs,Qt.MouseButton.LeftButton,pos=tabs.tabRect(i).center())
+            self.app.processEvents()
+            self.assertEqual([tabs.tabRect(j) for j in range(2)],medidas);self.assertEqual(tabs.mapTo(w,QPoint(0,0)),pos)
             self.assertEqual(tabs.currentIndex(),i)
 
     def test_SEDI266_el_estado_de_conexion_hace_salto_de_linea_y_no_se_corta(self):
