@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit, 
 from grafcet.expressions import CMP, FUNCS_EXPR, FUNCS_REF, KEYWORDS, ParseError, _Parser, parse, render
 from grafcet.notation import a_nucleo, a_usuario, normalizar_espacios, x_etapa
 
+from . import estilo
+
 # -- modelo: el árbol de bloques --------------------------------------------------------------------------
 # Un nodo es un diccionario con su clase en "k"; un hueco es None:
 #   var(n, papel)  etapa(n)  const(v)  y(a, b, c…)  o(a, b, c…)  no(a)  sube(a)  baja(a)  temp(t1, t2, a)
@@ -1696,10 +1698,12 @@ class Programador(QWidget):
             b.setIconSize(QSize(10, 10))
             b.setToolTip(titulo)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setStyleSheet("QPushButton { text-align: left; padding: 4px 7px; border: 1px solid transparent; "
-                            "border-radius: 5px; background: transparent; }"
-                            "QPushButton:hover { background: #EDF7F3; }"
-                            "QPushButton:checked { color: #147e7c; background: #e7f5f3; border: 1px solid #b8ded8; font-weight: 600; }")
+            b.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)  # objetivo táctil de 32 px
+            b.setStyleSheet(f"QPushButton {{ text-align: left; padding: 4px 10px; border: 1px solid transparent; "
+                            f"border-radius: {estilo.R_S}px; background: transparent; min-height: 0px; }}"
+                            f"QPushButton:hover {{ background: {estilo.HOVER}; }}"
+                            f"QPushButton:focus {{ border: 2px dashed {estilo.FOCO}; padding: 3px 9px; }}"
+                            f"QPushButton:checked {{ color: {estilo.TINTA}; background: {estilo.ACENTO_SUAVE}; border: 1px solid {estilo.ACENTO}; }}")
             b.clicked.connect(lambda _=False, c=clave: self.elegir_categoria(c))
             cl.addWidget(b)
             self.categorias[clave] = b
@@ -1709,7 +1713,7 @@ class Programador(QWidget):
         self._sc_carpetas.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: white; }")
         self._sc_carpetas.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._sc_carpetas.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._sc_carpetas.setFixedHeight(43)
+        self._sc_carpetas.setFixedHeight(48)  # los botones de 32 px y, debajo, la barra de desplazamiento de 12
         raiz.addWidget(self._sc_carpetas)
         raiz.addLayout(lay, 1)
         # columna 2: los bloques de la categoría elegida

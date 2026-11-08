@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QWidget,QDialog,QVBoxLayout,QHBoxLayout,QFormLayo
     QComboBox,QDoubleSpinBox,QLineEdit,QCheckBox,QPushButton,QLabel,QFileDialog,QMessageBox,
     QMenuBar,QInputDialog,QStackedWidget,QDialogButtonBox,QSizePolicy,QGraphicsScene,QGraphicsTextItem,QGraphicsRectItem,QGraphicsPathItem,QGraphicsPixmapItem)
 from grafcet.laminas import FORMATOS,CAMPOS,ajustes_lamina
+from . import estilo
 from .diagrama import dibujar,Z_EDIT,Z_STEP
 
 ROTULOS={'titulo':'Título','proyecto':'Proyecto','autor':'Autor','centro':'Centro o empresa','fecha':'Fecha',
@@ -299,7 +300,7 @@ class VistaLamina(QWidget):
         super().__init__(parent);self.documento=None;self.indice=0;self.setMinimumSize(260,220);self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.colocar=lambda offset:None;self.arrastre=None;self.seleccionado=False;self.capa=0;self.elegir_capa=lambda i:None;self.eliminar_grafico=lambda:None;self.textos=None;self.nuevo_texto=False;self.zona=False;self.inicio_texto=None;self.inicio_zona=None
     def paintEvent(self,event):
-        p=QPainter(self);p.fillRect(self.rect(),QColor('#e5e0d8'))
+        p=QPainter(self);p.fillRect(self.rect(),QColor(estilo.MESA))
         d=self.documento
         if d is None:return
         escala=min((self.width()-24)/d.ancho,(self.height()-24)/d.alto)

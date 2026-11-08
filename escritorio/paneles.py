@@ -1,8 +1,77 @@
 """Paneles plegables por cabecera o divisor, sin controles encima del dibujo."""
-from PySide6.QtCore import QEvent, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import (QApplication, QLayout, QSplitter, QSplitterHandle,
+from PySide6.QtCore import QEvent, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QTextLayout, QTextOption
+from PySide6.QtWidgets import (QApplication, QLabel, QLayout, QSplitter, QSplitterHandle,
                                QSizePolicy, QStackedWidget, QToolButton, QVBoxLayout, QWidget)
+
+from . import estilo
+
+
+class EtiquetaAyuda(QLabel):
+    """Texto de ayuda de una fila: se parte por palabras hasta `lineas` líneas y, si aun así no cabe, la última acaba en «…»
+    (el texto entero va en la ayuda emergente, que pone quien la usa). No impone su ancho a la fila: ocupa lo que sobra."""
+
+    def __init__(self, lineas: int = 2) -> None:
+        super().__init__()
+        self.lineas = lineas
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def fijar_lineas(self, lineas: int) -> None:
+        if lineas != self.lineas:
+            self.lineas = lineas
+            self.updateGeometry()
+            self.update()
+
+    def _renglones(self, ancho: int) -> list[tuple[int, int]]:
+        capa = QTextLayout(self.text(), self.font())
+        opcion = QTextOption()
+        opcion.setWrapMode(QTextOption.WrapMode.WordWrap)
+        capa.setTextOption(opcion)
+        capa.beginLayout()
+        trozos = []
+        while True:
+            linea = capa.createLine()
+            if not linea.isValid():
+                break
+            linea.setLineWidth(max(40, ancho))
+            trozos.append((linea.textStart(), linea.textLength()))
+        capa.endLayout()
+        return trozos
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, ancho: int) -> int:  # noqa: N802
+        n = max(1, min(self.lineas, len(self._renglones(ancho)))) if self.text() else 1
+        return n * self.fontMetrics().lineSpacing() + 2
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(200, self.heightForWidth(max(200, self.width())))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(0, self.fontMetrics().lineSpacing() + 2)
+
+    def paintEvent(self, evento) -> None:  # noqa: N802
+        texto, ancho = self.text(), self.width()
+        if not texto or ancho < 20:
+            return
+        p = QPainter(self)
+        p.setFont(self.font())
+        p.setPen(self.palette().color(self.foregroundRole()))
+        fm = self.fontMetrics()
+        trozos = self._renglones(ancho)
+        n = min(self.lineas, len(trozos))
+        alto = fm.lineSpacing()
+        arriba = max(0, (self.height() - n * alto) // 2)
+        for i in range(n):
+            ini, largo = trozos[i]
+            fin = len(texto) if i == n - 1 and len(trozos) > n else ini + largo
+            linea = texto[ini:fin].rstrip()
+            if i == n - 1 and len(trozos) > n:
+                linea = fm.elidedText(texto[ini:], Qt.TextElideMode.ElideRight, ancho)
+            p.drawText(QRect(0, arriba + i * alto, ancho, alto), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, linea)
+        p.end()
 
 
 class PilaActual(QStackedWidget):
@@ -62,9 +131,22 @@ class PestanaPanel(QToolButton):
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.fillRect(self.rect(), QColor("#e4f3ee" if self.underMouse() else "#eef7f4"))
-        p.setPen(QColor("#b9dcd2"));p.drawRect(self.rect().adjusted(0, 0, -1, -1))
-        p.setPen(QColor("#147f80"))
+        p.fillRect(self.rect(), QColor(estilo.ACENTO_SUAVE if self.underMouse() else estilo.SUPERFICIE_2))
+        p.setPen(QColor(estilo.BORDE_CONTROL if self.hasFocus() else estilo.BORDE));p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        if self.hasFocus():
+            borde = QColor(estilo.FOCO)
+            borde.setAlpha(255)
+            lapiz = p.pen()
+            lapiz.setColor(borde)
+            lapiz.setWidth(2)
+            lapiz.setStyle(Qt.PenStyle.DashLine)
+            p.setPen(lapiz)
+            p.drawRect(self.rect().adjusted(2, 2, -3, -3))
+        fuente = QFont(self.font())
+        fuente.setPixelSize(estilo.T_BASE)
+        fuente.setBold(True)
+        p.setFont(fuente)
+        p.setPen(QColor(estilo.ACENTO))
         if self.lateral:
             p.translate(self.width()/2, self.height()/2);p.rotate(-90)
             r = QRectF(-self.height()/2, -self.width()/2, self.height(), self.width())
@@ -92,10 +174,11 @@ class PanelPlegable(QWidget):
         self._origen_tiron = None
         self.cerrar = QToolButton(contenido)
         self.cerrar.setAutoRaise(True)
-        self.cerrar.setFixedSize(24, 24)
+        self.cerrar.setFixedSize(32, 32)
         self.cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.cerrar.setStyleSheet("QToolButton{border:0;background:transparent;color:#147f80;font-size:14px;}"
-                                 "QToolButton:hover{background:#e4f3ee;border-radius:3px;}")
+        self.cerrar.setStyleSheet(f"QToolButton{{border:1px solid transparent;background:transparent;color:{estilo.ACENTO};font-size:16px;font-weight:700;border-radius:{estilo.R_S}px;}}"
+                                  f"QToolButton:hover{{background:{estilo.ACENTO_SUAVE};}}"
+                                  f"QToolButton:focus{{border:2px dashed {estilo.FOCO};}}")
         self.cerrar.clicked.connect(self.alternar)
         contenido.installEventFilter(self)
         l = QVBoxLayout(self);l.setContentsMargins(0, 0, 0, 0);l.setSpacing(0)
@@ -146,7 +229,7 @@ class PanelPlegable(QWidget):
         return super().eventFilter(objeto, evento)
 
     def _situar_cierre(self):
-        self.cerrar.move(max(0, self.contenido.width()-30), 5)
+        self.cerrar.move(max(0, self.contenido.width()-36), 4)
         self.cerrar.raise_()
 
 

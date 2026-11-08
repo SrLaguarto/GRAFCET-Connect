@@ -26,6 +26,8 @@ from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, 
 from PySide6.QtWidgets import (QApplication, QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QListWidget, QHBoxLayout, QLabel,
                                QMenu, QProxyStyle, QStyle, QToolButton, QWidget)
 
+from . import estilo
+
 SX = 100       # margen izquierdo del dibujo
 H = 22         # semilado de la etapa cuadrada (unidad: lado = 2·H)
 TB = 8         # trazo de transición de 16 px frente al lado de etapa de 44 px
@@ -1236,8 +1238,8 @@ def _icono_marcado(icono: QIcon, lado: int = 48) -> QIcon:
     marcado.fill(Qt.GlobalColor.transparent)
     p = QPainter(marcado)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(QPen(QColor("#147f80"), 2))
-    p.setBrush(QColor("#cfeee6"))
+    p.setPen(QPen(QColor(estilo.ACENTO), 2))
+    p.setBrush(QColor(estilo.ACENTO_SUAVE))
     ancho, alto = pm.width() / pm.devicePixelRatio(), pm.height() / pm.devicePixelRatio()
     p.drawRoundedRect(QRectF(1, 1, ancho - 2, alto - 2), 5, 5)
     p.drawPixmap(0, 0, pm)
@@ -1298,8 +1300,35 @@ ZOOM_AJUSTE_MAX = 1.6   # lo más que se amplía al encajar algo (centrar todo, 
 MARGEN_AJUSTE = 24   # px libres alrededor del dibujo al centrarlo todo
 CLAVE_DEPENDENCIAS = "dibujo/mostrar_dependencias"  # dónde recuerda QSettings si se muestran las dependencias
 VISIBLE_MIN = 80     # px del dibujo que, como mínimo, siguen a la vista al desplazarse o alejar (nunca se pierde del todo)
-ESTILO_FLECHA = ("QToolButton { background: rgba(255,255,255,215); border: 1px solid #c3c9d6; border-radius: 4px; "
-                 "color: #1d2330; font-size: 13px } QToolButton:hover { background: #dbe8ff }")
+ESTILO_FLECHA = (f"QToolButton {{ background: rgba(255,255,255,235); border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_S}px; "
+                 f"color: {estilo.TINTA}; font-size: 13px }} QToolButton:hover {{ background: {estilo.ACENTO_SUAVE} }}")
+ESTILO_BARRA_ZOOM = (
+    f"QFrame#barraZoom {{ background: rgba(255,255,255,242); border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_M}px }} "
+    f"QFrame#barraZoom QToolButton {{ border: 1px solid transparent; border-radius: {estilo.R_S}px; padding: 0 8px; min-height: 30px; "
+    f"min-width: 30px; font-size: 13px; font-weight: 600; color: {estilo.TINTA}; background: transparent }} "
+    f"QFrame#barraZoom QToolButton#pasoZoom {{ font-size: 20px; padding: 0 4px; }} "
+    f"QFrame#barraZoom QToolButton:hover {{ background: {estilo.ACENTO_SUAVE}; border-color: {estilo.ACENTO_BORDE} }} "
+    f"QFrame#barraZoom QToolButton:pressed {{ background: {estilo.PULSADO} }} "
+    f"QFrame#barraZoom QToolButton:disabled {{ color: {estilo.DESHABILITADO}; background: transparent; border-color: transparent }} "
+    f"QFrame#barraZoom QToolButton:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 7px }} "
+    f"QFrame#barraZoom QToolButton#pasoZoom:focus {{ padding: 0 3px }} "
+    f"QFrame#barraZoom QLabel {{ border: none; min-width: 48px; color: {estilo.TINTA}; font-weight: 600; background: transparent }}")
+
+
+class _BarraZoom(QFrame):
+    """El recuadro de los controles del zoom: se vuelve a medir cuando cambian la hoja de estilo, la letra o el contenido
+    (si no, quedaba tan estrecho como con la letra por defecto y los botones mostraban «Cent…todo»)."""
+
+    def event(self, e: QEvent) -> bool:  # noqa: N802
+        resultado = super().event(e)
+        if e.type() in (QEvent.Type.LayoutRequest, QEvent.Type.StyleChange, QEvent.Type.FontChange, QEvent.Type.Polish):
+            tam = self.layout().totalSizeHint() if self.layout() is not None else self.sizeHint()
+            if tam.isValid() and tam != self.size():
+                self.resize(tam)
+                vista = self.parentWidget()
+                if vista is not None and hasattr(vista, "_colocar"):
+                    vista._colocar()
+        return resultado
 
 
 class VistaDiagrama(QGraphicsView):
@@ -1342,7 +1371,8 @@ class VistaDiagrama(QGraphicsView):
         self.lista_diagnosticos.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.lista_diagnosticos.setStyleSheet(
             "QListWidget { background:transparent; border:0; font-size:13px; } "
-            "QListWidget::item { background:rgba(255,255,255,225); color:#1d2330; padding:2px; }")
+            f"QListWidget:focus {{ border:2px dashed {estilo.FOCO}; }} "
+            f"QListWidget::item {{ background:rgba(255,255,255,235); color:{estilo.TINTA}; padding:2px; }}")
         self.lista_diagnosticos.hide()
         self.indicador_diagnosticos = QLabel(self)
         self.indicador_diagnosticos.setAccessibleName("Incidencias")
@@ -1654,54 +1684,63 @@ class VistaDiagrama(QGraphicsView):
 
     def _barra_zoom(self) -> None:
         """Controles del zoom sobre el dibujo, arriba a la derecha: «−», porcentaje, «+», «Centrar todo» y «Centrar selección».
-        La ventana aloja «Mostrar dependencias» en su barra de herramientas."""
-        self.barra = QFrame(self)
-        self.barra.setStyleSheet("QFrame { background: rgba(255,255,255,215); border: 1px solid #c7dfd9; "
-                                 "border-radius: 4px } QToolButton { border: none; padding: 2px 7px; font-size: 14px } "
-                                 "QToolButton:hover { background: #ddefe8 } QLabel { border: none; min-width: 42px }")
+        Los dos últimos llevan icono y texto; en una ventana estrecha (pantalla partida) solo el icono, con su ayuda. La
+        ventana aloja «Mostrar dependencias» en su barra de herramientas."""
+        self.barra = _BarraZoom(self)
+        self.barra.setObjectName("barraZoom")
+        self.barra.setStyleSheet(ESTILO_BARRA_ZOOM)
         lay = QHBoxLayout(self.barra)
-        lay.setContentsMargins(3, 2, 3, 2)
-        lay.setSpacing(0)
+        lay.setContentsMargins(4, 3, 4, 3)
+        lay.setSpacing(2)
         self.b_menos = QToolButton()
+        self.b_menos.setObjectName("pasoZoom")
         self.b_menos.setText("−")
         self.b_menos.setToolTip("Alejar (Ctrl+−)")
         self.b_menos.clicked.connect(self.alejar)
         self.l_zoom = QLabel("100 %")
         self.l_zoom.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.b_mas = QToolButton()
+        self.b_mas.setObjectName("pasoZoom")
         self.b_mas.setText("+")
         self.b_mas.setToolTip("Acercar (Ctrl+=)")
         self.b_mas.clicked.connect(self.acercar)
         self.b_ajustar = QToolButton()
         self.b_ajustar.setText("Centrar todo")
+        self.b_ajustar.setIcon(estilo.icono("ajustar", estilo.TINTA, tam=20))
+        self.b_ajustar.setIconSize(QSize(20, 20))
         self.b_ajustar.setToolTip("Centrar todo el dibujo en la ventana (Ctrl+0; en simulación, también doble clic)")
-        self.b_ajustar.setStyleSheet("QToolButton { border: 1px solid #c7dfd9; border-radius: 3px; margin-left: 4px; "
-                                     "background: #eef8f4 } QToolButton:hover { background: #ddefe8 }")
         self.b_ajustar.clicked.connect(self.ajustar)
         self.b_seleccion = QToolButton()
         self.b_seleccion.setText("Centrar selección")
+        self.b_seleccion.setIcon(estilo.icono("centrar", estilo.TINTA, tam=20))
+        self.b_seleccion.setIconSize(QSize(20, 20))
         self.b_seleccion.setToolTip("Centrar selección: encaja y centra en la ventana lo que hay seleccionado (solo al editar). "
                                     "Sin nada seleccionado, o al simular, no hace nada")
-        self.b_seleccion.setStyleSheet("QToolButton { border: 1px solid #c7dfd9; border-radius: 3px; margin-left: 4px; "
-                                       "background: #eef8f4 } QToolButton:hover { background: #ddefe8 } "
-                                       "QToolButton:disabled { color: #9aa3b5; background: #f4f6fa }")
         self.b_seleccion.setEnabled(False)
         self.b_seleccion.clicked.connect(self.centrar_seleccion)
+        for b in (self.b_menos, self.b_mas, self.b_ajustar, self.b_seleccion):
+            b.setAccessibleName(b.toolTip().split(" (")[0].split(":")[0])
         self.b_dependencias = QToolButton()
         self.b_dependencias.setText("Mostrar dependencias")
         self.b_dependencias.setCheckable(True)
         self.b_dependencias.setToolTip("Mostrar dependencias: dibuja los trazos discontinuos que unen una macroetapa con su "
                                        "expansión y una encapsulante con sus recintos. Apagado por defecto; se recuerda")
-        self.b_dependencias.setStyleSheet("QToolButton { border: 1px solid #c7dfd9; border-radius: 3px; margin-left: 4px; "
-                                          "background: #eef8f4 } QToolButton:hover { background: #ddefe8 } "
-                                          "QToolButton:checked { background: #167d79; color: #ffffff; border-color: #167d79 } "
-                                          "QToolButton:checked:hover { background: #218c81 }")
         self.b_dependencias.clicked.connect(self.mostrar_dependencias)
         for w in (self.b_menos, self.l_zoom, self.b_mas, self.b_ajustar, self.b_seleccion):
             lay.addWidget(w)
         self.b_dependencias.setParent(self)
         self.b_dependencias.hide()  # la ventana la aloja en la barra de herramientas
+        self.compactar(False, False)
         self.barra.adjustSize()
+
+    def compactar(self, estrecho: bool, bajo: bool) -> None:
+        """Ventana estrecha: «Centrar todo» y «Centrar selección» pasan a solo icono; baja: los controles se quedan en 32 px."""
+        estilo_boton = Qt.ToolButtonStyle.ToolButtonIconOnly if estrecho else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        for b in (self.b_ajustar, self.b_seleccion):
+            b.setToolButtonStyle(estilo_boton)
+        self.barra.layout().invalidate()
+        self.barra.adjustSize()
+        self._colocar()
 
     def _ajustes(self) -> QSettings | None:
         """Dónde se recuerda el estado de las dependencias: los `ajustes` propios o, si no hay, los de la ventana que contiene

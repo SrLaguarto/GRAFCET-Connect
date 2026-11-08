@@ -3,6 +3,8 @@ from PySide6.QtCore import QEvent, QRectF, Qt
 from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
                               QListWidget, QListWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
+from . import estilo
+
 PARCIAL_ITEM = 42
 
 
@@ -56,13 +58,19 @@ class Navegacion(QFrame):
         self.buscar = QLineEdit(); self.buscar.setFixedWidth(210); self.buscar.setPlaceholderText('Buscar… (Ctrl+F)')
         self.buscar.setAccessibleName('Buscar elemento por nombre')
         self.buscar.setAccessibleDescription('Intro o flecha abajo: siguiente resultado. Mayús+Intro o flecha arriba: anterior. Esc cierra.')
+        self.buscar.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)  # como los botones de al lado: la fila de la cabecera no cambia al abrirlo
+        self.buscar.setStyleSheet(f'QLineEdit {{ min-height: 0px; padding: 0 8px; }} QLineEdit:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 7px; }}')
         self.buscar.installEventFilter(self); controles.addWidget(self.buscar)
-        self.contador = QLabel('0/0'); self.contador.setMinimumWidth(28); controles.addWidget(self.contador)
+        self.contador = QLabel('0/0'); self.contador.setMinimumWidth(40); controles.addWidget(self.contador)
         self.anterior = QToolButton(); self.anterior.setText('↑'); self.anterior.setToolTip('Resultado anterior (Mayús+Intro)')
         self.siguiente = QToolButton(); self.siguiente.setText('↓'); self.siguiente.setToolTip('Resultado siguiente (Intro)')
         self.cerrar = QToolButton(); self.cerrar.setText('×'); self.cerrar.setToolTip('Cerrar búsqueda (Esc)')
         for boton in (self.anterior,self.siguiente,self.cerrar):
             boton.setAccessibleName(boton.toolTip()); boton.setAccessibleDescription(boton.toolTip()); controles.addWidget(boton)
+            boton.setFixedSize(estilo.ALTO_CONTROL_COMPACTO, estilo.ALTO_CONTROL_COMPACTO)  # objetivos táctiles de 32 px
+            boton.setStyleSheet(f'QToolButton {{ font-size: 16px; font-weight: 600; border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_S}px; background: {estilo.SUPERFICIE}; }} '
+                                f'QToolButton:hover {{ background: {estilo.HOVER}; }} QToolButton:disabled {{ color: {estilo.DESHABILITADO}; border-color: {estilo.BORDE}; }} '
+                                f'QToolButton:focus {{ border: 2px dashed {estilo.FOCO}; }}')
         fila.addWidget(self.buscador)
         self.aviso_corto=QToolButton(); self.aviso_corto.setToolTip('Ver filtro y lista de elementos'); fila.addWidget(self.aviso_corto)
         self.aviso_corto.clicked.connect(self.abrir_opciones)

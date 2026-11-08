@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
                                QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle, QMenu, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
 
 from . import recursos_ui  # Registra los iconos vectoriales incorporados.
+from . import estilo
+from .estilo import _trazos_reinicio  # noqa: F401  (las pruebas lo leen desde aquí)
 from . import propiedades_archivo
 from . import actualizaciones
 from grafcet.diagnostics import DiagnosticError
@@ -46,7 +48,7 @@ from .leyenda import Leyenda
 from .recentrado import Recentrado
 from .mensajes import amable, motivo_parada, partir
 from .alto_opciones import agrandar_para_transicion
-from .paneles import PanelPlegable, DivisorPlegable, PilaActual
+from .paneles import PanelPlegable, DivisorPlegable, PilaActual, EtiquetaAyuda
 from .variables import PanelVariables
 from .entradas_salidas import CONEXION_INICIAL, PanelES
 from conexion.configuracion import ARCHIVO, CANALES_INICIALES, Configuracion, aviso_host, normalizar_host
@@ -218,14 +220,14 @@ class AcercaDe(QDialog):
     """«Acerca de GRAFCET Connect»: icono, versión, licencia, enlace al código, botón para comunicar un fallo y Cerrar. Los
     enlaces se abren con `QDesktopServices` (`abrir`)."""
 
-    ACENTO = "#147f80"
+    ACENTO = estilo.ACENTO
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         from . import VERSION
         self.setWindowTitle(f"Acerca de {TITULO}")
         self.setMinimumWidth(460)
-        self.setStyleSheet("QDialog { background: #f4faf8 } QLabel { color: #1d2330 }")
+        self.setStyleSheet(f"QDialog {{ background: {estilo.FONDO} }} QLabel {{ color: {estilo.TINTA} }}")
         lay = QVBoxLayout(self)
         lay.setSpacing(8)
         cab = QHBoxLayout()
@@ -259,7 +261,7 @@ class AcercaDe(QDialog):
                           "bibliotecas incluidas, están en la carpeta «licencias». Interfaz con Qt for Python "
                           "(PySide6), bajo licencia LGPL v3.")
         garantia.setWordWrap(True)
-        garantia.setStyleSheet("color: #6b7385; font-size: 11px")
+        garantia.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: 12px")
         lay.addWidget(garantia)
         cerrar = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         cerrar.rejected.connect(self.reject)
@@ -272,91 +274,23 @@ class AcercaDe(QDialog):
 
 def _icono_grafcet() -> QIcon:
     """Esquema de etapa, transición y etapa (el dibujo GRAFCET), para el botón que vuelve desde la vista de E/S."""
-    pm = QPixmap(40, 40)
-    pm.fill(Qt.GlobalColor.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(QPen(QColor("#2f5b88"), 3))
-    p.drawRect(10, 3, 20, 12)  # etapa
-    p.drawLine(20, 15, 20, 20)
-    p.drawLine(12, 20, 28, 20)  # transición: la barra que corta el enlace
-    p.drawLine(20, 20, 20, 25)
-    p.drawRect(10, 25, 20, 12)  # etapa
-    p.end()
-    return QIcon(pm)
+    return estilo.icono_grafcet()
 
 
-def _trazos_reinicio() -> tuple[QPainterPath, QPainterPath]:
-    """Arco abierto arriba y punta angular, según la referencia del responsable."""
-    arco = QPainterPath()
-    arco.arcMoveTo(QRectF(4, 4, 16, 16), 90)
-    arco.arcTo(QRectF(4, 4, 16, 16), 90, -315)
-    extremo = arco.currentPosition()
-    t = QPointF(2 ** -.5, -2 ** -.5)
-    vertice = extremo + t * 3
-    punta = QPainterPath(vertice - QPointF(5, 0))
-    punta.lineTo(vertice)
-    punta.lineTo(vertice + QPointF(0, 5))
-    return arco, punta
-
-
-def _icono_barra(tipo: str, color: str = "#43545e") -> QIcon:
-    """Iconos de línea propios para los controles de la aplicación (no son notación GRAFCET)."""
-    pm = QPixmap(48, 48)
-    pm.setDevicePixelRatio(2)
-    pm.fill(Qt.GlobalColor.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(QPen(QColor(color), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
-    trazos = {
-        "nuevo": [[(7, 3), (14, 3), (19, 8), (19, 21), (5, 21), (5, 3), (7, 3)], [(14, 3), (14, 9), (19, 9)]],
-        "abrir": [[(3, 8), (3, 5), (9, 5), (12, 8), (21, 8), (19, 20), (3, 20), (3, 8), (21, 8)]],
-        "guardar": [[(4, 3), (18, 3), (21, 6), (21, 21), (3, 21), (3, 3), (4, 3)], [(7, 3), (7, 10), (17, 10), (17, 3)],
-                    [(7, 21), (7, 14), (17, 14), (17, 21)]],
-        "borrar": [[(4, 6), (20, 6)], [(8, 6), (8, 3), (16, 3), (16, 6)], [(6, 6), (7, 21), (17, 21), (18, 6)],
-                   [(10, 10), (10, 17)], [(14, 10), (14, 17)]],
-        "deshacer": [[(8, 4), (3, 9), (8, 14)], [(3, 9), (13, 9), (18, 11), (20, 15), (18, 20)]],
-        "rehacer": [[(16, 4), (21, 9), (16, 14)], [(21, 9), (11, 9), (6, 11), (4, 15), (6, 20)]],
-        "debajo": [[(6, 4), (18, 4)], [(12, 8), (12, 21)], [(7, 16), (12, 21), (17, 16)]],
-        "pausa": [[(8, 5), (8, 19)], [(16, 5), (16, 19)]],
-        "conexion": [[(3, 5), (10, 5), (10, 11), (3, 11), (3, 5)], [(14, 13), (21, 13), (21, 20), (14, 20), (14, 13)],
-                     [(6, 11), (6, 17), (14, 17)], [(17, 13), (17, 8), (10, 8)]],
-    }
-    if tipo == "play":
-        path = QPainterPath()
-        path.moveTo(8, 6)
-        path.lineTo(18, 12)
-        path.lineTo(8, 18)
-        path.closeSubpath()
-        p.fillPath(path, QColor(color))
-    elif tipo == "stop":
-        p.fillRect(QRectF(6, 6, 12, 12), QColor(color))
-    elif tipo == "dependencias":
-        p.drawRect(QRectF(2, 9, 6, 6))
-        p.drawRoundedRect(QRectF(15, 3, 8, 18), 1, 1)
-        pen = p.pen();pen.setStyle(Qt.PenStyle.DotLine);pen.setWidthF(1.2);p.setPen(pen)
-        p.drawLine(QPointF(8, 9), QPointF(15, 3))
-        p.drawLine(QPointF(8, 15), QPointF(15, 21))
-    elif tipo == "reiniciar":
-        arco, punta = _trazos_reinicio()
-        p.drawPath(arco)
-        p.drawPath(punta)
-    for trazo in trazos.get(tipo, []):
-        path = QPainterPath()
-        path.moveTo(*trazo[0])
-        for punto in trazo[1:]:
-            path.lineTo(*punto)
-        p.drawPath(path)
-    p.end()
-    return QIcon(pm)
+def _icono_barra(tipo: str, color: str = estilo.TINTA) -> QIcon:
+    """Iconos de línea propios para los controles de la aplicación (no son notación GRAFCET); de un solo trazo (estilo.py)."""
+    return estilo.icono(tipo, color)
 
 
 class _BotonEntrada(QPushButton):
-    """El estado marcado sigue el valor de la entrada, no el automatismo checkable de Qt."""
+    """El estado marcado sigue el valor de la entrada, no el automatismo checkable de Qt. Pulsada, enclavada o conmutada
+    se distingue por la forma del icono (anillo, punto, candado, interruptor), por el texto («= 1») y por el relleno."""
     def __init__(self) -> None:
         super().__init__()
         self.setCheckable(True)
+        self.setProperty("entrada", True)
         self.control = self.enclavado = self.liberar = self.interruptor = self.nc = False
+        self.setMinimumHeight(estilo.ALTO_CONTROL + 4)
 
     def mousePressEvent(self, event: Any) -> None:  # noqa: N802
         self.control = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
@@ -367,30 +301,44 @@ class _BotonEntrada(QPushButton):
         if estado == getattr(self, "_indicador", None):
             return
         self._indicador = estado
-        pm = QPixmap(20, 16)
+        pm = QPixmap(48, 40)
+        pm.setDevicePixelRatio(2)
         pm.fill(Qt.GlobalColor.transparent)
         p = QPainter(pm)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = QColor("#147f80" if on else "#718a85")
-        p.setPen(QPen(color, 1.4))
+        color = QColor(estilo.ACENTO if on else estilo.TINTA_3)
+        p.setPen(QPen(color, 1.6))
         if self.interruptor:
-            p.drawRoundedRect(QRectF(1, 4, 17, 8), 4, 4)
+            p.drawRoundedRect(QRectF(1, 4, 20, 12), 6, 6)
             p.setBrush(color)
-            p.drawEllipse(QPointF(14 if on else 5, 8), 2.2, 2.2)
+            p.drawEllipse(QPointF(15 if on else 7, 10), 3.4, 3.4)
         elif self.enclavado:
-            p.drawArc(QRectF(6, 1, 6, 10), 0, 180 * 16)
-            p.setBrush(QColor("#d5eee5"))
-            p.drawRoundedRect(QRectF(4, 7, 10, 7), 1.5, 1.5)
-            p.drawLine(9, 10, 9, 12)
+            p.drawArc(QRectF(7, 1, 8, 12), 0, 180 * 16)
+            p.setBrush(QColor(estilo.ACENTO_SUAVE))
+            p.drawRoundedRect(QRectF(5, 8, 12, 9), 1.5, 1.5)
+            p.drawLine(11, 11, 11, 14)
         else:
             p.setBrush(color if on else Qt.BrushStyle.NoBrush)
-            p.drawEllipse(QPointF(9, 8), 4, 4)
+            p.drawEllipse(QPointF(11, 10), 5.5, 5.5)
         p.end()
-        self.setIconSize(QSize(20, 16))
+        self.setIconSize(QSize(24, 20))
         self.setIcon(QIcon(pm))
 
     def nextCheckState(self) -> None:  # noqa: N802
         pass  # refrescar() pone el valor confirmado por la simulación
+
+
+class _AjustaBanda(QObject):
+    """Mantiene la franja de modo pegada al borde superior de la tarjeta del dibujo, a todo su ancho."""
+    def __init__(self, tarjeta: QWidget, banda: QWidget) -> None:
+        super().__init__(tarjeta)
+        self.tarjeta, self.banda = tarjeta, banda
+
+    def eventFilter(self, objeto: Any, evento: Any) -> bool:  # noqa: N802
+        if evento.type() in (QEvent.Type.Resize, QEvent.Type.Show):
+            self.banda.setGeometry(1, 1, max(0, self.tarjeta.width() - 2), 5)
+            self.banda.raise_()
+        return False
 
 
 class _ControlPulsadores(QObject):
@@ -440,6 +388,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.reloj = QElapsedTimer()
         self.edicion: Edicion | None = None
         self._alturas = dict(ALTO_INFERIOR)
+        self._compacto = (False, False)  # (estrecho, bajo): lo fija el tamaño de la ventana (estilo.tamano_compacto)
+        self._manual_paneles: dict[str, bool] = {}  # paneles que el usuario ha plegado o desplegado a mano: no se tocan solos
+        self._auto_plegados: set[str] = set()  # paneles que el modo compacto ha plegado solo (y volverá a abrir)
         self.modo = "editar"  # solo cambia con Play (simular) y Pausa (editar)
         self._respuesta_modbus = _RespuestaModbus(self)
         self._respuesta_modbus.lista.connect(self._tick, Qt.ConnectionType.QueuedConnection)
@@ -487,14 +438,25 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.pestanas_vistas=QTabBar();self.pestanas_vistas.setExpanding(False);self.pestanas_vistas.setDrawBase(True)
         for texto in ('GRAFCET','PLANOS','E/S externas'):self.pestanas_vistas.addTab(texto)
         self.pestanas_vistas.setTabVisible(2,False)  # a E/S se entra por la luz de conexión (`luz_es`); el índice 2 solo marca la página
-        self.pestanas_vistas.setStyleSheet("QTabBar {background:#e4eae9; border:0;} QTabBar::tab {min-width:100px; padding:5px 20px; margin:3px 3px 0 0; background:transparent; color:#536169; border:0; border-top-left-radius:9px; border-top-right-radius:9px;} QTabBar::tab:selected {background:white; color:#20343b;} QTabBar::tab:hover:!selected {background:#d7e1df;}")
+        self.pestanas_vistas.setObjectName("pestanasVistas")  # su aspecto lo da la hoja global (estilo.py)
+        self.pestanas_vistas.setUsesScrollButtons(False)  # son dos pestañas: nunca flechas de desplazamiento
+        self.pestanas_vistas.setAccessibleName("Vista: GRAFCET, PLANOS")
         # La fila de arriba: las pestañas a la izquierda y, a la derecha del todo, la luz de la conexión externa (`luz_es`)
         self.fila_pestanas=QWidget();self.fila_pestanas.setObjectName('filaPestanas');self.fila_pestanas.setAttribute(Qt.WidgetAttribute.WA_StyledBackground,True)
-        self.fila_pestanas.setStyleSheet('QWidget#filaPestanas {background:#e4eae9;}')
-        fila_p=QHBoxLayout(self.fila_pestanas);fila_p.setContentsMargins(0,0,6,0);fila_p.setSpacing(0)
+        fila_p=QHBoxLayout(self.fila_pestanas);fila_p.setContentsMargins(estilo.E2,0,estilo.E2,0);fila_p.setSpacing(0)
         fila_p.addWidget(self.pestanas_vistas);fila_p.addStretch(1)
         disposicion.addWidget(self.fila_pestanas)
-        self.aviso_traer=QWidget();self.aviso_traer.setObjectName('avisoSeleccionPlanos');self.aviso_traer.setStyleSheet('QWidget#avisoSeleccionPlanos {background:#f3e9cd; color:#574922; border-radius:3px;} QWidget#avisoSeleccionPlanos QLabel {background:transparent;} QWidget#avisoSeleccionPlanos QPushButton {background:white; color:#3b403b; border:1px solid #9b8959; padding:6px 12px; border-radius:3px;} QWidget#avisoSeleccionPlanos QPushButton:hover {background:#fffaf0; border-color:#665526;} QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja {background:#27665c; color:white; border-color:#1d5048;} QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja:hover {background:#1b5149;}');fila=QHBoxLayout(self.aviso_traer);fila.setContentsMargins(12,7,12,7);fila.addWidget(QLabel('PLANOS · Selecciona el GRAFCET para la hoja'))
+        self.aviso_traer=QWidget();self.aviso_traer.setObjectName('avisoSeleccionPlanos')
+        self.aviso_traer.setStyleSheet(
+            f'QWidget#avisoSeleccionPlanos {{background:{estilo.AVISO_FONDO}; color:{estilo.TINTA}; border-top:2px solid {estilo.AVISO_BORDE}; border-radius:{estilo.R_S}px;}} '
+            'QWidget#avisoSeleccionPlanos QLabel {background:transparent; font-weight:600;} '
+            f'QWidget#avisoSeleccionPlanos QPushButton {{background:white; color:{estilo.TINTA}; border:1px solid {estilo.BORDE_CONTROL}; padding:0 14px; border-radius:{estilo.R_S}px; min-height:{estilo.ALTO_CONTROL - 2}px;}} '
+            f'QWidget#avisoSeleccionPlanos QPushButton:hover {{background:{estilo.HOVER}; border-color:{estilo.TINTA};}} '
+            f'QWidget#avisoSeleccionPlanos QPushButton:focus {{border:2px dashed {estilo.FOCO}; padding:0 13px; min-height:{estilo.ALTO_CONTROL - 4}px;}} '
+            f'QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja {{background:{estilo.CONFIRMAR}; color:white; border-color:#1d5048; font-weight:600;}} '
+            'QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja:hover {background:#1b5149;} '
+            'QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja:focus {border:2px dashed white;}')
+        fila=QHBoxLayout(self.aviso_traer);fila.setContentsMargins(12,estilo.E2,12,estilo.E2);fila.setSpacing(estilo.E2);fila.addWidget(QLabel('PLANOS · Selecciona el GRAFCET para la hoja'))
         self.b_confirmar_traer=QPushButton('Añadir selección a la hoja');self.b_confirmar_traer.setObjectName('confirmarSeleccionHoja');fila.addWidget(self.b_confirmar_traer);cancelar=QPushButton('Cancelar');fila.addWidget(cancelar);fila.addStretch(1)
         self.b_confirmar_traer.clicked.connect(self.confirmar_traer);cancelar.clicked.connect(self.cancelar_traer)
         self.destino_traer=None;self.aviso_traer.hide();disposicion.addWidget(self.paginas_es,1);disposicion.addWidget(self.aviso_traer)
@@ -684,27 +646,36 @@ class Ventana(ArchivosProyecto, QMainWindow):
         izq = QWidget()
         izq.setObjectName("panelDibujo")
         il = QVBoxLayout(izq)
-        il.setContentsMargins(10, 5, 10, 6)
-        il.setSpacing(4)
+        il.setContentsMargins(estilo.E3 - 2, 6, estilo.E3 - 2, estilo.E2)
+        il.setSpacing(2)
+        self._margenes_dibujo = (estilo.E3 - 2, 6, estilo.E3 - 2, estilo.E2)
+        # Franja de color de lo alto de la tarjeta del dibujo: azul tinta al editar, verde al simular (no ocupa sitio)
+        self.banda_modo = QWidget(izq)
+        self.banda_modo.setObjectName("bandaModo")
+        self.banda_modo.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.banda_modo.setFixedHeight(5)
+        self.banda_modo.setProperty("modo", "editar")
+        self.banda_modo.setAccessibleName("Modo")
+        izq.installEventFilter(_AjustaBanda(izq, self.banda_modo))
         cab = QHBoxLayout()
+        cab.setSpacing(estilo.E3)
         self.estado = QLabel()
+        self.estado.setObjectName("chipModo")
         self.titulo = QLabel()
-        self.titulo.setStyleSheet("font-size: 15px; font-weight: 600; color: #147f80")
+        self.titulo.setStyleSheet(f"font-size: {estilo.T_TITULO}px; font-weight: 700; color: {estilo.TINTA}")
         cab.addWidget(self.estado)
         cab.addWidget(self.titulo)
         il.addLayout(cab)
-        self.ayuda = QLabel()
-        self.ayuda.setWordWrap(False)
-        self.ayuda.setMinimumWidth(0)
-        from PySide6.QtWidgets import QSizePolicy
-        self.ayuda.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
-        self.ayuda.setStyleSheet(f"color: {COL['muted']}")
+        self.ayuda = EtiquetaAyuda(2)
+        self.ayuda.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px")
         cab.addWidget(self.ayuda,1)
         self.diagrama = VistaDiagrama()
         self.recentrado = Recentrado(lambda: self.diagrama.ajustar(), self)
         self.navegacion = Navegacion(self.diagrama)
         cab.addWidget(self.navegacion)
-        self.estado.setMinimumHeight(self.navegacion.buscador.sizeHint().height()+4)
+        self.estado.setFixedHeight(estilo.ALTO_BARRA - 8)  # el chip de modo; la fila mide lo del buscador, para que no salte al abrirlo
+        self.titulo.setMinimumHeight(estilo.ALTO_CONTROL_COMPACTO)  # la fila mide lo que el buscador (32 px): no salta al abrirlo
+        cab.setAlignment(self.estado, Qt.AlignmentFlag.AlignVCenter)
         ver_navegacion = self._accion("Navegación y filtros…", self.navegacion.abrir_opciones)
         next(a.menu() for a in self.menuBar().actions() if a.text()=="&Ver").addAction(ver_navegacion)
         il.addWidget(self.diagrama, 1)
@@ -725,8 +696,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.diag = QLabel()
         self.diag.setWordWrap(True)
         self.diag.setTextFormat(Qt.TextFormat.RichText)
-        self.diag.setStyleSheet(f"border: 1px solid {COL['err']}; background: #fdecea; color: #1d2330; "
-                                "border-radius: 6px; padding: 8px")
+        self.diag.setStyleSheet(f"border: 1px solid {estilo.ERROR}; background: {estilo.ERROR_FONDO}; color: {estilo.TINTA}; "
+                                f"border-radius: {estilo.R_M}px; padding: {estilo.E2}px")
         self.lado.addWidget(self.diag)
 
         _, lay = self._caja("Entradas")
@@ -734,14 +705,22 @@ class Ventana(ArchivosProyecto, QMainWindow):
         lay.addLayout(self.rejilla)
         self.aviso = QLabel()
         self.aviso.setWordWrap(True)
-        self.aviso.setStyleSheet(f"color: {COL['err']}")
+        self.aviso.setStyleSheet(f"color: {estilo.ERROR}")
         lay.addWidget(self.aviso)
 
         _, lay = self._caja("Salidas y variables")
-        self.t_vars = self._tabla(["Variable", "Modo", "Valor", "Contribuyen"])
+        # «Modo» (salida continua, memorizada) va en la ayuda de cada fila: en un panel de ancho fijo no cabían las cuatro columnas
+        self.t_vars = self._tabla(["Variable", "Modo", "Valor", "Etapas"])
+        self.t_vars.setColumnHidden(1, True)
+        self.t_vars.horizontalHeaderItem(3).setToolTip("Etapas cuyas acciones contribuyen a la salida")
+        self.t_vars.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        self.t_vars.setColumnWidth(3, 72)
         lay.addWidget(self.t_vars)
         self.c_temp, lay = self._caja("Temporizadores")
         self.t_temp = self._tabla(["Dónde", "Estado", "Lleva", "Preset"])
+        self.t_temp.setColumnHidden(1, True)  # «contando / vencido / parado» se lee en lo que lleva frente al preset, y va en la ayuda
+        self.t_temp.horizontalHeaderItem(2).setToolTip("Tiempo transcurrido")
+        self.t_temp.horizontalHeaderItem(3).setToolTip("Duración programada")
         lay.addWidget(self.t_temp)
         self.lado.addStretch(1)
 
@@ -754,7 +733,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         pag = QWidget()
         pag.setObjectName("panelVariables")
         pl = QVBoxLayout(pag)
-        pl.setContentsMargins(8, 8, 8, 8)  # el panel es estrecho: poco marco, para que quepa la tabla de variables
+        pl.setContentsMargins(estilo.E2, estilo.E2, estilo.E2, estilo.E2)  # el panel es estrecho: poco marco, para que quepa la tabla de variables
         self.l_herr = QLabel()
         self.l_herr.setWordWrap(True)
         self.l_herr.setTextFormat(Qt.TextFormat.RichText)
@@ -767,11 +746,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.variables = PanelVariables()
         caja_vars = QGroupBox("Variables")
         caja_vars.setObjectName("grupoVariables")
-        caja_vars.setStyleSheet("QGroupBox { font-size: 16px; font-weight: 600; color: #122849; }")
         cv = QVBoxLayout(caja_vars)
         cv.setContentsMargins(1, 1, 1, 1)
         cv.addWidget(self.variables)
-        self.variables.setMinimumHeight(140)
         self.l_resumen = QLabel()  # resumen accesible para la validación, sin bloque lateral
         self.l_resumen.hide()
         self.lista_diag = self.diagrama.lista_diagnosticos
@@ -851,18 +828,18 @@ class Ventana(ArchivosProyecto, QMainWindow):
         sb = self.statusBar()
         self.l_aviso = QLabel(AVISO)
         self.l_lect = QLabel()
-        self.l_lect.setStyleSheet(f"color: {COL['err']}")
+        self.l_lect.setStyleSheet(f"color: {estilo.AVISO}; font-weight: 600")
         self.l_reloj = QLabel()
-        self.l_reloj.setStyleSheet("font-weight: 600")
+        self.l_reloj.setStyleSheet(f"font-weight: 600; color: {estilo.TINTA}")
         sb.addWidget(self.l_aviso, 1)
         self.l_firma = QLabel()  # «Archivo sin firma»: discreto y permanente mientras el archivo abierto no tenga firma válida
-        self.l_firma.setStyleSheet(f"color: {COL['muted']}")
+        self.l_firma.setStyleSheet(f"color: {estilo.TINTA_2}")
         self.l_firma.hide()
         sb.addWidget(self.l_firma)
         self.aviso_version = QFrame()  # aviso discreto y descartable de versión nueva (no modal)
         self.aviso_version.setObjectName("avisoVersion")
-        self.aviso_version.setStyleSheet("QFrame#avisoVersion { background: #e8f5f3; border: 1px solid #a2d2cd; border-radius: 4px; } "
-                                         "QFrame#avisoVersion QPushButton { padding: 1px 8px; }")
+        self.aviso_version.setStyleSheet(f"QFrame#avisoVersion {{ background: {estilo.ACENTO_SUAVE}; border: 1px solid {estilo.ACENTO_BORDE}; border-radius: {estilo.R_S}px; }} "
+                                         "QFrame#avisoVersion QPushButton { padding: 1px 8px; min-height: 16px; }")
         av = QHBoxLayout(self.aviso_version)
         av.setContentsMargins(8, 1, 4, 1)
         self.l_version = QLabel()
@@ -888,7 +865,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         for accion, tipo in ((self.a_nuevo, "nuevo"), (self.a_abrir, "abrir"), (self.a_guardar, "guardar"),
                              (self.a_deshacer, "deshacer"), (self.a_rehacer, "rehacer"), (self.a_borrar, "borrar"),
                              (self.a_debajo, "debajo"), (self.a_ejecutar, "play"), (self.a_reiniciar, "reiniciar")):
-            accion.setIcon(_icono_barra(tipo))
+            accion.setIcon(_icono_barra(tipo, estilo.BLANCO if tipo == "play" else estilo.TINTA))
         self.tb_proyecto = QToolBar("Proyecto")
         self.tb_proyecto.setMovable(False)
         self.tb_proyecto.setIconSize(QSize(20, 20))
@@ -901,79 +878,20 @@ class Ventana(ArchivosProyecto, QMainWindow):
             boton.setText(texto)
             accion.changed.connect(lambda b=boton, t=texto: b.setText(t))
         self.addToolBar(self.tb_proyecto)
-        self.setStyleSheet("""
-            QWidget { font-family: "Segoe UI"; font-size: 12px; color: #132b46; }
-            QMainWindow, QDialog { background: #eef7f7; }
-            QWidget#panelDibujo, QWidget#panelElementos, QWidget#panelVariables,
-            QWidget#panelPropiedades { background: white; border: 1px solid #d4e7e8; border-radius: 7px; }
-            QLabel#tituloPanel { font-size: 16px; font-weight: 600; color: #122849; border: 0; }
-            QWidget#cabeceraPropiedades { background: #eaf6f5; border-radius: 4px; }
-            QLabel#tituloPropiedades { color: #127c80; font-size: 13px; font-weight: 600; background: transparent;
-                padding: 3px 0; }
-            QLabel#ayudaPropiedades { color: #657b8b; padding: 4px 8px; }
-            QMenuBar { background: white; padding: 2px 8px; border-bottom: 1px solid #e2eeee; }
-            QMenuBar::item { padding: 5px 10px; }
-            QMenuBar::item:selected, QMenu::item:selected { background: #e8f5f3; }
-            QMenu { background: white; border: 1px solid #cde2e3; padding: 4px; }
-            QMenu::item { padding: 6px 22px; }
-            QToolBar { background: white; border: 0; border-bottom: 1px solid #dcebec; spacing: 5px; padding: 3px 3px; }
-            QToolBar QToolButton { padding: 3px 7px; border: 1px solid transparent; border-radius: 2px; }
-            QToolButton#bibliotecaPlanos { padding-right:28px; }
-            QToolButton#bibliotecaPlanos::menu-indicator { image:url(:/grafconnect/desplegar.svg); subcontrol-origin:padding; subcontrol-position:center right; right:8px; width:12px; height:8px; }
-            QToolBar QToolButton:hover { background: #edf8f6; border-color: #c7e5e1; }
-            QToolBar QToolButton:checked { background: #d5e6e2; border-color: #82aaa2; color:#23483f; }
-            QToolBar#barraSimulacion QToolButton { color: #334b50; background: transparent; padding: 3px 10px; }
-            QToolBar#barraSimulacion QToolButton:hover { background: #d9efeb; }
-            QToolBar#barraConexion QToolButton { border: 1px solid #a2d2cd; background: white; color: #167d80; }
-            QLineEdit, QComboBox, QSpinBox { background: white; border: 1px solid #ccdfe5; border-radius: 4px;
-                padding: 4px 6px; selection-background-color: #258d88; }
-            QComboBox { padding-right:28px; min-height:18px; }
-            QComboBox::drop-down { subcontrol-origin:padding; subcontrol-position:top right; width:24px; border:0; background:transparent; }
-            QComboBox::down-arrow { image:url(:/grafconnect/desplegar.svg); width:12px; height:8px; }
-            QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPushButton:focus,
-            QToolButton:focus, QToolBar QToolButton:focus, QListWidget:focus, QGraphicsView:focus {
-                border: 1px dashed #132b46; }
-            QPushButton { background: white; border: 1px solid #cbdfe4; border-radius: 4px; padding: 4px 8px; }
-            QPushButton:hover { background: #edf8f6; border-color: #8fbfb8; }
-            QPushButton:disabled, QToolButton:disabled { color: #97a8b5; }
-            QGroupBox { background: white; border: 0; margin-top: 23px; }
-            QGroupBox::title { subcontrol-origin: margin; padding: 3px 5px; font-size: 14px; font-weight: 600; color: #147f80; }
-            QGroupBox#grupoVariables::title { color: #122849; font-size: 16px; }
-            QTableWidget, QListWidget { background: white; border: 0; gridline-color: #e4eff1;
-                selection-background-color: #e3f3f0; selection-color: #126a68; }
-            QListWidget#paletaElementos::item { padding-left: 7px; border: 0; }
-            QListWidget#paletaElementos QScrollBar:vertical { width: 7px; }  /* la paleta mide justo dos columnas de fichas */
-            QListWidget#paletaElementos::item:hover { background: #f0f8f7; }
-            QHeaderView::section { background: #eaf6f5; border: 0; padding: 6px 4px; color: #197d81; }
-            QScrollArea { border: 0; background: transparent; }
-            QScrollBar:horizontal { height: 12px; background: #dcebeb; margin: 0; border-radius: 6px; }
-            QScrollBar::handle:horizontal { background: #7fa7a8; min-width: 30px; border-radius: 5px; margin: 1px; }
-            QScrollBar::handle:horizontal:hover { background: #5e8e90; }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
-            QScrollBar:vertical { width: 12px; background: #dcebeb; margin: 0; border-radius: 6px; }
-            QScrollBar::handle:vertical { background: #7fa7a8; min-height: 30px; border-radius: 5px; margin: 1px; }
-            QScrollBar::handle:vertical:hover { background: #5e8e90; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
-            QSplitter::handle { background: #eef7f7; }
-            QStatusBar { background: #eef7f7; color: #637b8c; font-size: 11px; }
-        """)
+        self.setStyleSheet(estilo.hoja_global())
         self.tb_sim = QToolBar("Simulación")
         self.tb_sim.setObjectName("barraSimulacion")
         self.tb_sim.setMovable(False)
         self.tb_sim.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.tb_sim.setIconSize(QSize(20, 20))
         self.tb_sim.addAction(self.a_ejecutar)
-        self.tb_sim.addSeparator()
         self.tb_sim.addAction(self.a_reiniciar)
+        self.tb_sim.widgetForAction(self.a_ejecutar).setObjectName("botonPlay")  # el único botón primario de la barra
+        self.tb_sim.widgetForAction(self.a_reiniciar).setObjectName("botonReiniciar")
         self.luz_es = QToolButton()  # estado de la conexión externa (Modbus), a la vista mientras se simula
         self.luz_es.setObjectName("luzES")
         self.luz_es.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.luz_es.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.luz_es.setStyleSheet(
-            "QToolButton#luzES { border: 1px solid #b8c6c4; border-radius: 11px; background: #f4f7f7; color: #20343b; padding: 3px 10px; }"
-            "QToolButton#luzES:hover { background: #d7e1df; border-color: #8fa5a3; }"
-            "QToolButton#luzES[abierta=\"true\"] { background: white; border: 1px solid #20343b; font-weight: 600; }")
         self.luz_es.setProperty("abierta", False)
         self.luz_es.clicked.connect(lambda: self.mostrar_es())
         self.fila_pestanas.layout().addWidget(self.luz_es)  # al final de la fila de pestañas, no junto a Reiniciar
@@ -998,6 +916,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._fijar_ancho_boton_es()  # con la barra ya en la ventana: el botón lleva su hoja de estilo
         self._fijar_ancho_boton_play()
         self.tb_edit = QToolBar("Edición")
+        self.tb_edit.setObjectName("barraEdicion")
         self.tb_edit.setMovable(False)
         for a in (self.a_debajo,):
             self.tb_edit.addAction(a)
@@ -1006,9 +925,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         boton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         boton.setAccessibleName("Mostrar dependencias")
         boton.setStyleSheet("")  # hereda el estilo común de la barra
+        self.tb_edit.setIconSize(QSize(20, 20))
         self.addToolBar(self.tb_edit)
         self.tb_vista = QToolBar("Vista")
+        self.tb_vista.setObjectName("barraVista")
         self.tb_vista.setMovable(False)
+        self.tb_vista.setIconSize(QSize(20, 20))
         self.a_dependencias = self.tb_vista.addWidget(boton)
         self.a_dependencias.setVisible(True)
         self.a_dependencias.setEnabled(True)
@@ -1016,7 +938,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.addToolBar(self.tb_vista)
         self.tb_proyecto.hide()
         self.herramientas_grafcet=QWidget()
-        fila=QHBoxLayout(self.herramientas_grafcet);fila.setContentsMargins(0,0,0,0)
+        self.herramientas_grafcet.setObjectName("herramientasGrafcet")
+        self.herramientas_grafcet.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.herramientas_grafcet.setProperty("modo", "editar")  # la hoja global la tiñe de verde al simular
+        fila=QHBoxLayout(self.herramientas_grafcet);fila.setContentsMargins(estilo.E2,2,estilo.E2,2);fila.setSpacing(estilo.E2)
         for barra in (self.tb_sim,self.tb_edit,self.tb_vista):
             self.removeToolBar(barra);fila.addWidget(barra);barra.show()
         fila.addStretch(1)
@@ -1097,6 +1022,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         return {"izquierdo": self.a_izquierdo, "derecho": self.a_derecho, "inferior": self.a_inferior}[nombre]
 
     def _mostrar_panel(self, nombre: str, visible: bool, guardar: bool = True) -> None:
+        if guardar:  # lo pide el usuario (cabecera, pestaña, atajo, divisor): el modo compacto ya no lo mueve
+            self._manual_paneles[nombre] = True
+            self._auto_plegados.discard(nombre)
         editar = self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False)
         panel = self._plegables[nombre]
         anterior = panel.abierto
@@ -1159,10 +1087,20 @@ class Ventana(ArchivosProyecto, QMainWindow):
         t = QTableWidget(0, len(cols))
         t.setHorizontalHeaderLabels(cols)
         t.verticalHeader().setVisible(False)
+        t.verticalHeader().setDefaultSectionSize(estilo.ALTO_FILA)
         t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         t.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
-        t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        t.horizontalHeader().setStretchLastSection(True)
+        t.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # lo largo se elide (y va entero en la ayuda de la celda)
+        t.setTextElideMode(Qt.TextElideMode.ElideRight)
+        t.setShowGrid(False)
+        t.setAlternatingRowColors(True)
+        t.setStyleSheet(f"QTableWidget {{ font-size: {estilo.T_PEQUENA}px; }} QHeaderView::section {{ font-size: {estilo.T_PEQUENA}px; padding: 4px 4px; }}")
+        cab = t.horizontalHeader()
+        cab.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        cab.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        cab.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        cab.setStretchLastSection(False)
+        cab.setMinimumSectionSize(40)
         t.setMinimumHeight(120)
         return t
 
@@ -1506,9 +1444,41 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self._ejecutar(on)
         return self.modo == modo
 
+    def _poner_chip(self, modo: str, texto: str, ayuda: str = "") -> None:
+        """El chip de la cabecera del dibujo: el relleno y, sobre todo, el texto dicen en qué modo está el programa (no solo
+        el color). Solo toca la hoja de estilo si cambia, porque `refrescar` pasa por aquí en cada tic."""
+        if self.estado.text() != texto:
+            self.estado.setText(texto)
+        hoja = estilo.estilo_chip(modo)
+        if self.estado.styleSheet() != hoja:
+            self.estado.setStyleSheet(hoja)
+        self.estado.setToolTip(ayuda)
+        self.estado.setAccessibleName(texto.capitalize())
+
+    def _modo_visual(self) -> None:
+        """Franja del borde del dibujo y fila de herramientas: verdes al simular, azul tinta al editar (propiedad `modo`)."""
+        modo = "simular" if self.modo == "simular" else "editar"
+        for w in (getattr(self, "banda_modo", None), getattr(self, "herramientas_grafcet", None),
+                  getattr(self, "fila_pestanas", None)):
+            if w is not None:
+                estilo.poner(w, modo=modo)
+
+    def _fusionar_filas(self, fusionar: bool) -> None:
+        """Un cuarto de pantalla: las herramientas (Play, Reiniciar…) suben a la fila de las pestañas, entre ellas y la luz de
+        la conexión, y se gana una fila entera de alto para el dibujo."""
+        fila = self.herramientas_grafcet
+        if fusionar:
+            self.fila_pestanas.layout().insertWidget(1, fila)
+        else:
+            self.centralWidget().layout().insertWidget(1, fila)
+        for w in (fila, self.fila_pestanas):
+            estilo.poner(w, fusion=fusionar)
+
     def _poner_modo(self) -> None:
         """Alterna las herramientas sin perder tamaños de edición ni el encuadre manual."""
         self._dibujo_simulado = None
+        self._modo_visual()
+        self._plegar_laterales_compactos()
         editar = self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False)
         lateral = self._plegables["derecho"]
         ancho = (lateral.width() if lateral.abierto else self._tamanos_paneles["derecho"]) if getattr(self, "_anchos_puestos", False) else self.ancho_lateral
@@ -1604,13 +1574,44 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if editar and self._opciones_automaticas:
             QTimer.singleShot(0, self, self._dimensionar_opciones)
 
+    def _adaptar_tamano(self) -> None:
+        """Modo compacto automático, sin que el usuario toque nada: por debajo de `estilo.UMBRAL_ANCHO` (pantalla partida) el
+        panel de Variables se pliega solo al editar, y por debajo de `estilo.UMBRAL_ALTO` (un cuarto de pantalla) los márgenes se
+        estrechan y las herramientas suben a la fila de las pestañas. Lo que el usuario plegó o desplegó a mano se respeta, y al
+        agrandar la ventana vuelve lo que se plegó solo. No se cambia la hoja de estilo (aplicarla a toda la ventana tarda cerca
+        de un segundo): los controles miden lo mismo a todos los tamaños."""
+        nuevo = estilo.tamano_compacto(self.width(), self.height())
+        if nuevo != self._compacto:
+            bajo_antes = self._compacto[1]
+            self._compacto = nuevo
+            ancho, alto = nuevo
+            if alto != bajo_antes:
+                self._fusionar_filas(alto)
+            il = self.diagrama.parentWidget().layout()
+            il.setContentsMargins(*((estilo.E2, 6, estilo.E2, estilo.E1) if alto else self._margenes_dibujo))
+            self.diagrama.compactar(ancho, alto)
+        self._plegar_laterales_compactos()
+
+    def _plegar_laterales_compactos(self) -> None:
+        estrecho = self._compacto[0]
+        panel = self._plegables["derecho"]
+        editar = self.modo == "editar" and self.edicion is not None and not getattr(self, "solo_lectura", False)
+        if estrecho and editar and panel.abierto and not self._manual_paneles.get("derecho"):
+            self._mostrar_panel("derecho", False, guardar=False)
+            self._auto_plegados.add("derecho")
+        elif "derecho" in self._auto_plegados and not (estrecho and editar):
+            self._auto_plegados.discard("derecho")
+            self._mostrar_panel("derecho", True, guardar=False)
+
     def resizeEvent(self, event: Any) -> None:  # noqa: N802
         super().resizeEvent(event)
         if self.isVisible():
+            self._adaptar_tamano()
             self.recentrado.solicitar()
 
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
+        self._adaptar_tamano()
         if self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False) and not getattr(self, "_anchos_puestos", False):
             self._anchos_puestos = True  # con la ventana ya dimensionada, los dos paneles laterales con el mismo ancho
             self._anchos_laterales(self.ancho_lateral)
@@ -1653,14 +1654,16 @@ class Ventana(ArchivosProyecto, QMainWindow):
         diags = e.diagnosticos()
         marcados = e.marcados_de(diags)
         self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), marcados, e.parpadeo.activos())
-        self.estado.setText("ejemplo · solo lectura" if getattr(self,"solo_lectura",False) else "editando")
-        self.estado.setStyleSheet(f"color: {COL['accent']}; border: 1px solid {COL['accent']}; border-radius: 9px; "
-                                  "padding: 1px 9px")
+        if getattr(self, "solo_lectura", False):
+            self._poner_chip("lectura", "EJEMPLO · SOLO LECTURA", "Ejemplo de solo lectura: se puede simular; para editar, abra un proyecto o cree uno nuevo")
+        else:
+            self._poner_chip("editar", "EDICIÓN", "Modo edición: Play inicia la simulación")
         self.titulo.setText(f"{e.titulo}{' *' if e.ed.dirty else ''}")
         self.ayuda.setToolTip(self._ayuda if getattr(self,"solo_lectura",False) else AYUDA_EDICION[e.herramienta])
         self.ayuda.setText(self._ayuda if getattr(self,"solo_lectura",False) else e.mensaje or "Arrastre fichas desde la paleta; doble clic en un elemento para ver sus propiedades.")
         error = bool(e.mensaje) and not e.mensaje_info  # un aviso informativo no va en rojo
-        self.ayuda.setStyleSheet(f"color: {COL['err'] if error else COL['muted']}; font-weight: {600 if error else 400}")
+        self.ayuda.setStyleSheet(f"color: {estilo.ERROR if error else estilo.TINTA_2}; font-weight: {600 if error else 400}; "
+                                 f"font-size: {estilo.T_PEQUENA}px")
         if e.mensaje:
             self.statusBar().showMessage(e.mensaje, 9000)
         self.l_herr.setText(f"<b>{NOMBRE_HERRAMIENTA[e.herramienta]}</b>: {html.escape(AYUDA_EDICION[e.herramienta])}")
@@ -1941,7 +1944,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_ejecutar.setChecked(on)
         self.a_ejecutar.blockSignals(False)
         self.a_ejecutar.setText("Stop" if on else "Play")
-        self.a_ejecutar.setIcon(_icono_barra("stop" if on else "play"))
+        self.a_ejecutar.setIcon(_icono_barra("stop" if on else "play", estilo.BLANCO))
 
     def _ejecutar(self, on: bool) -> None:
         """Play (on) o Pausa: el único control de ejecución. Play compila lo editado y arranca siempre una sesión nueva desde
@@ -2430,9 +2433,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
         simulando = self.modo == "simular"  # al editar, el dibujo, el estado y el título son los de la edición
         if simulando:
             label, color = ESTADOS.get(S["status"], (S["status"], "muted"))
-            self.estado.setText(label)
-            self.estado.setStyleSheet(f"color: {COL[color]}; border: 1px solid {COL[color]}; border-radius: 9px; "
-                                      "padding: 1px 9px")
+            if S["status"] == "pausada-estable":
+                self._poner_chip("simular", "SIMULACIÓN EN CURSO", "Simulación en curso: Stop detiene y vuelve a editar")
+            else:
+                self._poner_chip({"err": "error", "virt": "aviso"}.get(color, "simular"),
+                                 f"SIMULACIÓN · {label.upper()}", f"Simulación: {label}")
             self.titulo.setText(M["title"])
             self.ayuda.setText(M["help"]);self.ayuda.setToolTip(M["help"])
         stable, rec = S["status"] == "pausada-estable", S["status"] == "pausada-recorrido"
@@ -2461,8 +2466,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 b.enclavado = False
             b.indicar(on)
             b.setText(f"{self.nombre(var)} = {1 if on else 0}")
-            b.setStyleSheet(f"background: {COL['accent_soft']}; border: 1px solid {COL['accent']}; color: #1d2330; "
-                            "padding: 5px 10px" if on else "padding: 5px 10px")
+            estilo.poner(b, activa=on)  # relleno y borde de la hoja global; además, el icono (punto) y el «= 1» del texto
         if simulando:
             self.l_reloj.setText(f"τ = {t_trunc(S['timeUs']) if 'timeUs' in S else '—'}"
                                  + (f" · próximo vencimiento: {S['nextEvent']}" if S.get("nextEvent") else ""))
@@ -2540,11 +2544,20 @@ class Ventana(ArchivosProyecto, QMainWindow):
         rows += [(self.nombre(k), "memorizada", str(v), "", "text") for k, v in (S.get("values") or {}).items()
                  if k not in M["inputs"] and k not in outs]
         self._filas(self.t_vars, rows)
+        for i, fila in enumerate(rows):  # el modo (columna oculta) va en la ayuda del nombre
+            item = self.t_vars.item(i, 0)
+            if item is not None and item.toolTip() != f"{fila[0]} · {fila[1]}":
+                item.setToolTip(f"{fila[0]} · {fila[1]}")
         temp = S.get("temporal") or {}
         self.c_temp.setVisible(bool(temp))
         self._filas(self.t_temp, [(t["where"], t["estado"], t["lleva"], t["preset"],
                                    "accent" if t["estado"] == "contando" else "ok" if t["estado"] == "vencido" else "muted")
-                                  for t in temp.values()], 1)
+                                  for t in temp.values()], 2)
+        for i, t in enumerate(temp.values()):  # el estado (columna oculta) va en la ayuda de la fila
+            for j in (0, 2, 3):
+                item = self.t_temp.item(i, j)
+                if item is not None and item.toolTip() != f"{t['where']}: {t['estado']}":
+                    item.setToolTip(f"{t['where']}: {t['estado']}")
 
     @staticmethod
     def _filas(t: QTableWidget, rows: list[tuple[str, ...]], col_color: int = 2) -> None:
@@ -2592,7 +2605,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             for n in self._paneles_traer:
                 self._plegables[n].hide();self.flechas[n].hide();self.pestanas[n].hide()
             self.diagrama.controlador=SeleccionParaHoja(self.edicion);self.diagrama.setAcceptDrops(False)
-            self._estilo_traer=self.diagrama.styleSheet();self.diagrama.setStyleSheet(self._estilo_traer+' QGraphicsView {border:2px solid #aa914c; background:#fffaf0;}')
+            self._estilo_traer=self.diagrama.styleSheet();self.diagrama.setStyleSheet(self._estilo_traer+' QGraphicsView {border:2px solid '+estilo.AVISO_BORDE+'; background:'+estilo.AVISO_FONDO+';}')
             self.estado.setText('seleccionando para Planos');self.ayuda.setText('Clic: cadena completa · Mayús+clic: añadir otra cadena · Ctrl+clic: añadir o quitar un elemento. Sin jerarquías inferiores automáticas.')
         else:
             self.diagrama.controlador=self.edicion if self.modo=='editar' else None;self.diagrama.setAcceptDrops(self.modo=='editar' and not getattr(self,'solo_lectura',False));self.diagrama.setStyleSheet(getattr(self,'_estilo_traer',''))
@@ -2690,22 +2703,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
     # -- indicador de la conexión externa -------------------------------------------------------
     def _luz_es(self, estado: str, mensaje: str = "") -> None:
         """Punto de color y texto breve en la barra de simulación: verde conectada, gris desconectada, rojo error."""
-        color, texto = {"conectado": ("#3f9d4a", "conectada"), "error": ("#d64545", "error"),
-                        "diagnostico": ("#d64545", "error")}.get(estado, ("#8a949c", "desconectada"))
-        punto = QPixmap(12, 12)
-        punto.fill(Qt.GlobalColor.transparent)
-        p = QPainter(punto)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setBrush(QColor(color))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.drawEllipse(1, 1, 10, 10)
-        p.end()
-        self.luz_es.setIcon(QIcon(punto))
-        self.luz_es.setIconSize(QSize(12, 12))
+        texto = {"conectado": "conectada", "error": "error", "diagnostico": "error"}.get(estado, "desconectada")
+        # la luz no depende solo del color: círculo con marca (conectada), círculo vacío (desconectada) o rombo con «!» (error)
+        self.luz_es.setIcon(QIcon(estilo.forma_luz(texto)))
+        self.luz_es.setIconSize(QSize(14, 14))
         self.luz_es.setText(f"E/S externas: {texto}")
         self.luz_es.setToolTip((mensaje + "\n" if mensaje else "") + "Abrir E/S externas")
         self.luz_es.setAccessibleName(f"E/S externas: {texto}")
-        self.luz_es.setProperty("estadoLuz", texto)
+        estilo.poner(self.luz_es, estadoLuz=texto)
 
     # -- actualizaciones -----------------------------------------------------------------------
     def _buscar_al_arrancar(self, on: bool) -> None:

@@ -19,6 +19,7 @@ from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QSizePolicy,
                                QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
+from . import estilo
 from .diagrama import COL
 from .edicion import Parpadeo
 
@@ -29,7 +30,7 @@ TIPOS = (({"kind": "bool"}, "Booleana"), ({"kind": "int"}, "Entera"), ({"kind": 
 COLUMNAS = ["Nombre", "Papel", "Tipo"]
 SIN_NOMBRE = "Hay una variable sin nombre: escríbale un nombre o quítela"
 NARANJA = "#ffd2ad"
-ESTILO_COMBO = "QComboBox { padding: 0px 1px 0px 3px; } QComboBox::drop-down { width: 11px; }"
+ESTILO_COMBO = f"QComboBox {{ padding: 0px 1px 0px 3px; min-height: 24px; font-size: {estilo.T_PEQUENA}px; }} QComboBox::drop-down {{ width: 14px; }}"
 
 
 def _clave_tipo(t: dict[str, Any]) -> tuple[Any, ...]:
@@ -133,25 +134,26 @@ class PanelVariables(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         self.tabla = _Tabla(0, len(COLUMNAS))
         self.tabla.suprimir.connect(self.quitar_seleccion)
-        self.tabla.setStyleSheet("QHeaderView::section { padding: 2px 3px; }")
-        self.fuente = QFont(self.tabla.font())  # letra pequeña: el panel es estrecho
-        self.fuente.setPixelSize(11)
+        self.tabla.setStyleSheet(f"QHeaderView::section {{ padding: 4px 4px; text-align: left; }} QTableWidget {{ font-size: {estilo.T_PEQUENA}px; }}")
+        self.fuente = QFont(self.tabla.font())  # letra algo menor: el panel es estrecho
+        self.fuente.setPixelSize(estilo.T_PEQUENA)
         self.tabla.setFont(self.fuente)
         self.tabla.setHorizontalHeaderLabels(COLUMNAS)
         self.tabla.verticalHeader().hide()
-        self.tabla.verticalHeader().setDefaultSectionSize(20)
+        self.tabla.verticalHeader().setDefaultSectionSize(estilo.ALTO_FILA)  # filas de 30 px: se acierta con el dedo
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabla.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         cab = self.tabla.horizontalHeader()
+        cab.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         cab.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # el nombre se lleva lo que sobra
         cab.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)  # Papel y Tipo, a su texto más largo (se fija abajo)
         cab.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         fm = QFontMetrics(self.fuente)
-        self.tabla.setColumnWidth(1, max(fm.horizontalAdvance(t) for _, t in PAPELES + (("", "Papel"),)) + 8)
-        self.tabla.setColumnWidth(2, max(fm.horizontalAdvance(t) for _, t in TIPOS + (({}, "Tipo"),)) + 8)
+        self.tabla.setColumnWidth(1, max(fm.horizontalAdvance(t) for _, t in PAPELES + (("", "Papel"),)) + 26)
+        self.tabla.setColumnWidth(2, max(fm.horizontalAdvance(t) for _, t in TIPOS + (({}, "Tipo"),)) + 26)
         cab.setMinimumSectionSize(20)
         self.tabla.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # los nombres largos se elidén; si ni así cabe, barra
-        self.tabla.setMinimumWidth(190)  # por debajo, el panel que la contiene se desplaza en vez de aplastar las columnas
+        self.tabla.setMinimumWidth(168)  # por debajo, el panel que la contiene se desplaza en vez de aplastar las columnas
         self.tabla.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.tabla.setItemDelegate(_DelegadoCombo(self))
         self.tabla.clicked.connect(self._clic)
@@ -162,10 +164,9 @@ class PanelVariables(QWidget):
         cont = QWidget()
         fila = QGridLayout(cont)
         fila.setContentsMargins(0, 0, 0, 0)
-        fila.setSpacing(3)
+        fila.setSpacing(estilo.E1)
         fila.setColumnStretch(0, 1)
         fila.setColumnStretch(1, 1)
-        fm = QFontMetrics(self.fuente)
         self.b_nuevas: dict[str, QPushButton] = {}
         for papel, texto, tip in (("input", "+ Entrada", "Nueva entrada"), ("output", "+ Salida", "Nueva salida"),
                                   ("internal", "+ Memoria", "Nueva memoria")):
@@ -176,10 +177,8 @@ class PanelVariables(QWidget):
         self.b_quitar = QPushButton("Eliminar")
         self.b_quitar.setToolTip("Solo si no se usa en ninguna receptividad ni acción")
         self.b_quitar.clicked.connect(self.quitar)
-        for i, b in enumerate((*self.b_nuevas.values(), self.b_quitar)):
-            b.setFont(self.fuente)
-            b.setMinimumWidth(fm.horizontalAdvance(b.text()) + 16)
-            b.setStyleSheet("QPushButton { padding: 4px 6px; min-width: 0px; }")
+        for i, b in enumerate((*self.b_nuevas.values(), self.b_quitar)):  # botones de la hoja global: 36 px de alto, texto entero
+            b.setMinimumWidth(b.fontMetrics().horizontalAdvance(b.text()) + 24)
             b.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
             fila.addWidget(b, i // 2, i % 2)
         lay.addWidget(cont)

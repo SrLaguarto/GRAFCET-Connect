@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QFormLayout,QPush
     QDialogButtonBox,QWidget,QScrollArea,QFontComboBox,QMessageBox,QColorDialog)
 from grafcet.laminas import CAMPOS
 from grafcet.plantillas import validar_plantilla
+from . import estilo
 
 ROTULOS={'titulo':'Título','proyecto':'Proyecto','autor':'Autor','centro':'Centro o empresa',
          'fecha':'Fecha','revision':'Revisión','escala':'Escala','hoja':'Hoja','libre':'Campo libre','comprobado':'Comprobado por','fecha_comprobado':'Fecha de comprobación','firma_autor':'Firma dibujado','firma_comprobado':'Firma comprobado','numero':'Número','sustituye':'Sustituye a','sustituido_por':'Sustituido por'}
@@ -120,7 +121,7 @@ class VistaPlantilla(QGraphicsView):
     def __init__(self,escena,cambiar):
         super().__init__(escena);self.zona=False;self.inicio=None;self.rectangulo=None;self.cambiar=cambiar
         self.setRenderHints(QPainter.RenderHint.Antialiasing|QPainter.RenderHint.TextAntialiasing)
-        self.setBackgroundBrush(QColor('#dcebe7'));self.setMinimumSize(430,300)
+        self.setBackgroundBrush(QColor(estilo.MESA));self.setMinimumSize(430,300)
     def resizeEvent(self,event):super().resizeEvent(event);self.fitInView(self.sceneRect().adjusted(-4,-4,4,4),Qt.AspectRatioMode.KeepAspectRatio)
     def mousePressEvent(self,event):
         if self.zona and event.button()==Qt.MouseButton.LeftButton:

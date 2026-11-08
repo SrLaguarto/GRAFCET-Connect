@@ -36,6 +36,7 @@ from grafcet.routing import TALLO_T
 from grafcet.expressions import is_event_positive
 from grafcet.view import norm
 
+from . import estilo
 from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
 from .paneles import PilaActual
@@ -204,22 +205,24 @@ class _DelegadoPaleta(QStyledItemDelegate):
         fuente = QFont(opcion.font)
         if not clave:
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor("#eaf6f5"))
-            p.drawRoundedRect(QRectF(r), 4, 4)
+            p.setBrush(QColor(estilo.SUPERFICIE_2))
+            p.drawRoundedRect(QRectF(r), estilo.R_S, estilo.R_S)
+            p.setBrush(QColor(estilo.ACENTO))  # el filete de acento a la izquierda de cada sección
+            p.drawRoundedRect(QRectF(r.left(), r.top() + 4, 3, r.height() - 8), 1.5, 1.5)
             fuente.setBold(True)
             p.setFont(fuente)
-            p.setPen(QColor("#167e80"))
-            p.drawText(r.adjusted(8, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, indice.data())
+            p.setPen(QColor(estilo.ACENTO))
+            p.drawText(r.adjusted(12, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, indice.data())
         else:
             if opcion.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver):
                 p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(QColor("#edf7f6"))
-                p.drawRoundedRect(QRectF(r), 4, 4)
+                p.setBrush(QColor(estilo.ACENTO_SUAVE if opcion.state & QStyle.StateFlag.State_Selected else estilo.HOVER))
+                p.drawRoundedRect(QRectF(r), estilo.R_S, estilo.R_S)
             icono = indice.data(Qt.ItemDataRole.DecorationRole)
             icono.paint(p, r.center().x() - 36, r.top() + 3, 72, 64)
-            fuente.setPixelSize(11)
+            fuente.setPixelSize(estilo.T_PEQUENA)
             p.setFont(fuente)
-            p.setPen(QColor("#172e4d"))
+            p.setPen(QColor(estilo.TINTA))
             p.drawText(QRectF(r.left() + 2, r.top() + 69, r.width() - 4, 27),
                        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, indice.data())
         p.restore()
@@ -257,8 +260,8 @@ class Paleta(QListWidget):
             cabecera = QListWidgetItem(titulo)
             cabecera.setFlags(Qt.ItemFlag.NoItemFlags)
             cabecera.setSizeHint(QSize(188, 28))
-            cabecera.setBackground(QColor("#e8f6f5"))
-            cabecera.setForeground(QColor("#137e80"))
+            cabecera.setBackground(QColor(estilo.SUPERFICIE_2))
+            cabecera.setForeground(QColor(estilo.ACENTO))
             f = cabecera.font()
             f.setBold(True)
             cabecera.setFont(f)
@@ -379,6 +382,11 @@ class FichaJerarquia(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
+        # Botones de acciones avanzadas (los mismos del botón derecho): más bajos que los de panel, para que varias filas quepan
+        # en una columna estrecha sin que el panel crezca (el menú contextual sigue ahí para quien necesite un objetivo mayor)
+        self.setStyleSheet(f"QPushButton {{ min-height: 20px; padding: 0 8px; font-size: {estilo.T_PEQUENA}px; }} "
+                           f"QCheckBox {{ min-height: 22px; font-size: {estilo.T_PEQUENA}px; }} "
+                           f"QPushButton:focus {{ border: 2px dashed {estilo.FOCO}; min-height: 18px; padding: 0 7px; }}")
         self.texto = QLabel()
         self.texto.setWordWrap(True)
         self.texto.setStyleSheet("font-weight: 600")
@@ -437,6 +445,8 @@ class PanelPropiedades(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # Campos de 32 px en el panel (el mínimo táctil): con 36 px la página de una etapa pediría más alto que la de una transición
+        self.setStyleSheet(estilo.campos_compactos())
         self.e: Any = None
         self.ident: str | None = None
         self._llenando = False
@@ -446,15 +456,15 @@ class PanelPropiedades(QWidget):
         self.parpadeo_crear = Parpadeo(self)  # «Crear las que faltan» parpadea si un nombre no vale
         self.parpadeo_crear.cambia.connect(self._pintar_crear)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(10, 4, 10, 4)
-        lay.setSpacing(2)
+        lay.setContentsMargins(10, 0, 10, 4)  # la cabecera (32 px) pega con el borde: el primer campo queda a 32 px del panel
+        lay.setSpacing(0)
         # Una sola fila de cabecera (P-IMP-118): el título, lo que programan los bloques (si no repite el título) y «Fijar»;
         # a la derecha queda libre el sitio del botón de plegar
         self.cabecera = QWidget()
         self.cabecera.setObjectName("cabeceraPropiedades")
         self.fila_cabecera = QHBoxLayout(self.cabecera)
-        self.fila_cabecera.setContentsMargins(8, 0, 30, 0)
-        self.fila_cabecera.setSpacing(10)
+        self.fila_cabecera.setContentsMargins(estilo.E2, 0, 40, 0)  # a la derecha, el sitio del botón de plegar (32 px)
+        self.fila_cabecera.setSpacing(estilo.E3)
         self.titulo = QLabel()
         self.titulo.setObjectName("tituloPropiedades")
         self.fila_cabecera.addWidget(self.titulo)
@@ -505,9 +515,13 @@ class PanelPropiedades(QWidget):
         self.t_fijar.setAutoRaise(True)
         self.t_fijar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.t_fijar.setToolTip("Mantiene abierto este panel. Sin fijar, se esconde al hacer clic fuera del elemento.")
-        self.t_fijar.setStyleSheet(f"QToolButton{{padding:1px 8px;border:1px solid transparent;border-radius:3px;}}"
-                                   f"QToolButton:hover{{border-color:{COL['accent']};}}"
-                                   f"QToolButton:checked{{background:{COL['accent']};color:white;border-color:{COL['accent']};}}")
+        self.t_fijar.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
+        self.t_fijar.setStyleSheet(f"QToolButton{{padding:0 12px;border:1px solid {estilo.BORDE_CONTROL};"
+                                   f"border-radius:{estilo.R_S}px;background:{estilo.SUPERFICIE};}}"
+                                   f"QToolButton:hover{{background:{estilo.HOVER};border-color:{estilo.TINTA_2};}}"
+                                   f"QToolButton:focus{{border:2px dashed {estilo.FOCO};padding:0 11px;}}"
+                                   f"QToolButton:checked{{background:{estilo.ACENTO};color:white;border-color:{estilo.ACENTO_OSCURO};font-weight:600;}}"
+                                   f"QToolButton:checked:focus{{border:2px dashed white;}}")
         self.fila_cabecera.addWidget(self.t_fijar)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
@@ -529,7 +543,7 @@ class PanelPropiedades(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(2)
         self.l_bloques = QLabel()
-        self.l_bloques.setStyleSheet(f"color: {COL['muted']}; background: transparent")
+        self.l_bloques.setStyleSheet(f"color: {estilo.TINTA_2}; background: transparent")
         self.fila_cabecera.addWidget(self.l_bloques)
         self.fila_cabecera.addStretch(1)
         self.prog = Programador(lambda: self.e.fuente_bloques() if self.e is not None else ({}, []), compacto=True)
@@ -612,7 +626,7 @@ class PanelPropiedades(QWidget):
         self.l_vacio = QLabel(self.TEXTO_VACIO)
         self.l_vacio.setWordWrap(True)
         self.l_vacio.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.l_vacio.setStyleSheet(f"color: {COL['muted']}")
+        self.l_vacio.setStyleSheet(f"color: {estilo.TINTA_2}")
         return self.l_vacio
 
     def _etapa(self) -> QWidget:

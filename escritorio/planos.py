@@ -3,6 +3,8 @@ from PySide6.QtCore import Qt,QSize,QTimer,QEvent,QPointF,QRect
 from PySide6.QtGui import QAction,QIcon,QPixmap,QPainter,QPen,QColor
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QToolBar,QToolButton,
     QSplitter,QListView,QListWidget,QListWidgetItem,QComboBox,QMenu,QMessageBox,QInputDialog,QDoubleSpinBox,QScrollArea,QFormLayout,QPushButton,QStyledItemDelegate,QStyle)
+from . import estilo
+from .bloques import FlowLayout
 from .laminas import DialogoLaminas
 
 _ACTUAL=object()
@@ -10,7 +12,7 @@ _ACTUAL=object()
 
 def icono_planos():
     pix=QPixmap(32,32);pix.fill(Qt.GlobalColor.transparent);p=QPainter(pix)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing);p.setPen(QPen(QColor('#147f80'),1.7))
+    p.setRenderHint(QPainter.RenderHint.Antialiasing);p.setPen(QPen(QColor(estilo.ACENTO),1.7))
     p.drawRect(6,3,21,26);p.drawRect(9,6,15,20);p.drawRect(14,21,10,5);p.drawLine(19,21,19,26);p.end()
     return QIcon(pix)
 
@@ -24,7 +26,7 @@ class MiniaturaHoja(QStyledItemDelegate):
 
     def paint(self,p,opcion,indice):
         p.save();r=opcion.rect
-        if opcion.state & QStyle.StateFlag.State_Selected:p.fillRect(r.adjusted(2,2,-2,-2),QColor('#e6f1ee'))
+        if opcion.state & QStyle.StateFlag.State_Selected:p.fillRect(r.adjusted(2,2,-2,-2),QColor(estilo.ACENTO_SUAVE))
         icono=indice.data(Qt.ItemDataRole.DecorationRole)
         if icono:icono.paint(p,QRect(r.center().x()-58,r.top()+8,116,82),Qt.AlignmentFlag.AlignCenter)
         p.setFont(opcion.font);p.setPen(opcion.palette.text().color())
@@ -44,12 +46,12 @@ class PaginaPlanos(QWidget):
         self.lista_timer=QTimer(self);self.lista_timer.setSingleShot(True);self.lista_timer.setInterval(0);self.lista_timer.timeout.connect(self.ajustar_lista)
         self.dimension_timer=QTimer(self);self.dimension_timer.setSingleShot(True);self.dimension_timer.setInterval(0);self.dimension_timer.timeout.connect(self.dimensionar)
         self.guardar_timer=QTimer(self);self.guardar_timer.setSingleShot(True);self.guardar_timer.setInterval(400);self.guardar_timer.timeout.connect(self.aplicar)
-        raiz=QVBoxLayout(self);raiz.setContentsMargins(8,8,8,8);raiz.setSpacing(5)
-        self.barra=QToolBar('Planos');self.barra.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon);raiz.addWidget(self.barra)
+        raiz=QVBoxLayout(self);raiz.setContentsMargins(estilo.E2,estilo.E2,estilo.E2,estilo.E2);raiz.setSpacing(estilo.E1)
+        barras=QWidget();flujo=FlowLayout(barras,estilo.E2);self.barra=QToolBar('Planos');self.barra.setObjectName('barraPlanos');self.barra.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon);flujo.addWidget(self.barra)
         self.a_hoja=self.barra.addAction('+ Añadir hoja',self.nueva_hoja)
         self.a_nueva=self.barra.addAction('Traer GRAFCET',self.traer)
         self.barra.addSeparator();self.a_centrar=self.barra.addAction('Centrar GRAFCET',lambda:self.editor and self.editor.centrar())
-        self.barra_hoja=self.barra;self.barra=QToolBar('Vista de la hoja');raiz.addWidget(self.barra)
+        self.barra_hoja=self.barra;self.barra=QToolBar('Vista de la hoja');self.barra.setObjectName('barraPlanos');flujo.addWidget(self.barra)
         self.barra.addWidget(QLabel('Zoom de pantalla '))
         self.barra.addAction('−',lambda:self.zoom(1/1.15));self.zoom_combo=QComboBox();self.zoom_combo.setMinimumWidth(130)
         self.zoom_combo.addItem('Ajustar hoja',None)
@@ -62,9 +64,9 @@ class PaginaPlanos(QWidget):
         self.b_plantilla=QToolButton();self.b_plantilla.setText('Biblioteca y opciones');self.b_plantilla.setObjectName('bibliotecaPlanos');self.b_plantilla.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);self.barra.addWidget(self.b_plantilla)
         self.a_exportar=self.barra_hoja.addAction('Exportar…',lambda:self.editor and self.editor.exportar())
         self.a_imprimir=self.barra_hoja.addAction('Imprimir…',lambda:self.editor and self.editor.imprimir())
-        self.barra_plantilla=QToolBar('Plantilla y textos');raiz.addWidget(self.barra_plantilla)
-        cab=QHBoxLayout();self.estado=QLabel('editando plano');self.estado.setStyleSheet('color:#326dcb; border:1px solid #326dcb; border-radius:8px; padding:1px 8px')
-        self.titulo=QLabel('Planos');self.titulo.setStyleSheet('color:#147f80;font-weight:600');cab.addWidget(self.estado);cab.addWidget(self.titulo,1);raiz.addLayout(cab)
+        self.barra_plantilla=QToolBar('Plantilla y textos');self.barra_plantilla.setObjectName('barraPlanos');flujo.addWidget(self.barra_plantilla);raiz.addWidget(barras)
+        cab=QHBoxLayout();self.estado=QLabel('EDICIÓN DE PLANO');self.estado.setStyleSheet(estilo.estilo_chip('editar'));self.estado.setFixedHeight(estilo.ALTO_CONTROL-6);self.estado.setObjectName('chipModo')
+        self.titulo=QLabel('Planos');self.titulo.setStyleSheet(f'color:{estilo.TINTA};font-weight:700;font-size:{estilo.T_TITULO}px');self.titulo.setMinimumHeight(estilo.ALTO_CONTROL);cab.setSpacing(estilo.E3);cab.addWidget(self.estado);cab.addWidget(self.titulo,1);raiz.addLayout(cab)
         self.divisor=QSplitter(Qt.Orientation.Horizontal);raiz.addWidget(self.divisor,1)
         lateral=QWidget();l=QVBoxLayout(lateral);l.setContentsMargins(0,0,3,0);l.addWidget(QLabel('Hojas'))
         b_hoja=QToolButton();b_hoja.setDefaultAction(self.a_hoja);self.b_hoja=b_hoja
@@ -141,8 +143,8 @@ class PaginaPlanos(QWidget):
         finally:self.cargando=False
         self.estilo_boton_hoja()
 
-    ACENTO_HOJA = '#147f80'  # el acento del tema Menta (el de los títulos de esta página)
-    ACENTO_HOJA_CLARO = '#8fcdce'
+    ACENTO_HOJA = estilo.ACENTO  # el acento de la interfaz (el de los títulos de esta página)
+    ACENTO_HOJA_CLARO = estilo.ACENTO_BORDE
 
     def estilo_boton_hoja(self, fase=True):
         """«+ Añadir hoja» es el botón principal (fondo de acento, texto blanco) mientras no hay ninguna hoja; con
@@ -155,7 +157,7 @@ class PaginaPlanos(QWidget):
         fondo = self.ACENTO_HOJA if fase else self.ACENTO_HOJA_CLARO
         self.b_hoja.setStyleSheet(
             f'QToolButton {{ background:{fondo}; color:white; font-weight:600; border:1px solid {self.ACENTO_HOJA}; '
-            'border-radius:5px; padding:5px 10px }')
+            f'border-radius:{estilo.R_S}px; padding:0 14px; min-height:{estilo.ALTO_CONTROL - 2}px }}')
 
     def parpadear_boton_hoja(self):
         """Al entrar en la pestaña sin hojas, el botón parpadea suavemente tres veces (alterna dos tonos del acento)."""
@@ -255,7 +257,7 @@ class PaginaPlanos(QWidget):
                 h=hojas.get(ident)
                 if h is None:continue
                 d=self.editor.documento if ident==self.hoja_id else DocumentoHoja(self.modelo_hoja(h),self.editor.estado,h['ajustes'],self.ventana.diagrama.dependencias)
-                pix=QPixmap(116,82);pix.fill(QColor('#e5e0d8'));p=QPainter(pix)
+                pix=QPixmap(116,82);pix.fill(QColor(estilo.MESA));p=QPainter(pix)
                 try:
                     escala=min(112/d.ancho,78/d.alto);p.translate((116-d.ancho*escala)/2,(82-d.alto*escala)/2);p.scale(escala,escala);d.pintar(p,0)
                 finally:p.end()
