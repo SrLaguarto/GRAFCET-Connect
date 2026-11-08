@@ -1,62 +1,89 @@
-# Propuestas pendientes (no implementadas)
+# Propuestas pendientes (no implementadas) y propuestas descartadas
 
 Cada punto se aparta de una decisión vigente (`docs/04_Decisiones_de_implementacion.md`) o de lo que fijan las pruebas, así
 que **no está en el código**. Se describe con su motivo y, cuando se puede, una maqueta o la cifra medida. Las cifras salen de
-`propuesta/herramientas/medir.py` y `contrastes.py`; las maquetas, de
-`python propuesta/herramientas/capturar.py --escenas maqueta-panel-bajo --tamanos cuarto --salida propuesta/capturas/maquetas`.
+`propuesta/herramientas/medir.py` y `contrastes.py`; **las maquetas son capturas de la ventana real, retocadas por script**
+(`python propuesta/herramientas/maquetas.py`, salida en `propuesta/capturas/maquetas/`): el script recoloca controles o fuerza un
+ajuste solo en la ventana que captura, sin tocar la interfaz.
 
-Qué ha cambiado desde la ronda 1: P5 (escala para proyector) pasa a ser «Modo aula» (P7) y se describe con su ajuste; P6 (zoom en
-la fila del título) **ya está aplicado** por debajo de 1000 px de ancho o 560 px de alto (`Diagrama.integrar_barra`), y queda
-pendiente solo a tamaño normal; P2 pierde urgencia (con las cuatro columnas a la vista en 218 px, las tablas caben); se añaden
-P8 (verde de «verdadero»), P9 (borde de la etapa activa), P10 (ancho de los paneles laterales) y P11 (tope proporcional de
-Propiedades).
+«Táctil» significa aquí el **panel táctil del portátil** (*touchpad*): hay teclado, dos dedos desplazan, el pellizco acerca y el
+toque con dos dedos es el clic derecho. No hay pantalla táctil que atender.
 
-## P1. Propiedades en un cuarto de pantalla: la paleta de operadores en una fila (apartaría P-IMP-128 / 118 / 120 / 93)
+Qué ha cambiado en la ronda 3: P2, P3 y P7 llevan maqueta; P7 («Modo aula») queda cubierta en parte por la escala que cambia sola a
+pantalla completa (ver abajo) y se reduce a lo que falta; se añade D1, la pulsación mantenida que se retiró (P-IMP-75).
+
+## Descartada
+
+### D1. Pulsación mantenida sobre una entrada para abrir el menú (se retiró de la rama; apartaba P-IMP-75)
+
+En la ronda 2 se añadió que mantener ≈ 500 ms una entrada de la simulación soltara el pulsador y abriera el menú contextual
+(«Convertir en interruptor / pulsador», NA/NC), con la idea de dar al dedo lo que el botón derecho da al ratón.
+
+**Motivo de descartarla.** Cambia lo que hace una entrada: **P-IMP-75** fija cada entrada booleana como un pulsador momentáneo
+(«presionar y soltar dan dos cambios») y la tarea central del aula —pulsar y mantener «marcha» mientras corre un temporizador de 3 s— deja de
+poder hacerse, porque a los 0,5 s el pulsador se suelta solo y sale un menú. Además el rótulo prometía «mantener: enclavar», y el menú no enclava.
+No hay pantalla táctil que lo justifique: con el panel táctil del portátil el toque con dos dedos ya es el clic derecho.
+
+**Estado.** Retirada del código. Mantener pulsado se comporta como en `main` (la entrada sigue a 1 y apretada mientras dure el clic); el rótulo bajo
+«Entradas» dice «Clic: pulsar · Ctrl+clic: enclavar · Clic derecho: tipo». `propuesta/herramientas/pulsacion.py` lo comprueba (1,5 s mantenido: valor 1,
+`down` verdadero, ningún menú) y se ejecuta igual contra `main`.
+
+## Pendientes
+
+### P1. Propiedades en un cuarto de pantalla: la paleta de operadores en una fila (apartaría P-IMP-128 / 118 / 120 / 93)
 
 **Problema.** Con una transición seleccionada, el panel inferior crece hasta ≈ 334 px para ver entera la paleta de operadores de
-la receptividad sin barra de desplazamiento. A 960×520 el dibujo se queda en una franja de ≈ 90 px de alto mientras el panel
-está abierto; a 640×520, igual (cifras en `medir.py propiedades`). Con lo aplicado (el dibujo se desplaza solo para que la
-transición elegida siga a la vista) se puede trabajar, pero se ve poco del grafcet.
+la receptividad sin barra de desplazamiento; a 960 px de ancho, las categorías de bloques pasan además a dos filas (todas visibles, ninguna cortada) y el
+panel pide unos 36 px más. A 960×520 el dibujo se queda en una franja muy baja mientras el panel está abierto (cifras en `medir.py propiedades`).
+Con lo aplicado (el dibujo se desplaza solo para que la transición elegida siga a la vista) se puede trabajar, pero se ve poco del grafcet.
 
 **Propuesta.** Por debajo de 560 px de alto, la paleta de operadores en una sola fila con desplazamiento horizontal y el panel
 con ≈ 190 px; el dibujo conserva la mitad del alto. Por encima de 560 px, todo igual.
 
-**Maqueta.** `capturas/maquetas/maqueta-panel-bajo-cuarto.png` (el panel a 190 px, tal como lo dejaría el usuario con el
+**Maqueta.** `capturas/maquetas/maqueta-p1-propiedades-cuarto.png` (el panel a 190 px, tal como lo dejaría el usuario con el
 divisor). **Motivo de no hacerlo:** P-IMP-93 fija el crecimiento a ≈ 334 px y las pruebas de `alto_opciones` lo comprueban.
 
-## P2. Panel de Entradas debajo del dibujo en pantalla partida (apartaría P-IMP-42 / 44 / 47 / 78)
+### P2. Panel de Entradas debajo del dibujo en pantalla partida (apartaría P-IMP-42 / 44 / 47 / 78)
 
-**Problema.** En simulación a 960×1040 el panel derecho (ancho fijo de 218 px) deja ≈ 700 px al dibujo. Con las tablas de cuatro
-columnas ya caben, así que es menos urgente que en la ronda 1.
+**Problema.** En simulación a 960×1040 el panel derecho (ancho fijo de 218 px) deja ≈ 700 px al dibujo, y las entradas con nombres largos compiten
+con las tablas por un panel muy estrecho.
 
-**Propuesta.** Por debajo de 1000 px de ancho, las entradas en una banda horizontal bajo el dibujo (botones en fila de 36 px)
-y salidas y temporizadores en pestañas de esa banda; el dibujo recupera ≈ 220 px. **Motivo de no hacerlo:** las decisiones
-fijan paneles laterales de ancho fijo y plegables del todo; este cambio mueve el panel de sitio.
+**Propuesta.** Por debajo de 1000 px de ancho, las entradas en una banda horizontal bajo el dibujo (botones en fila, de 190 px cada uno, con el nombre
+entero a la vista) y salidas y temporizadores en el panel de la derecha, que ya no reparte su alto con las entradas; la banda quita ≈ 50 px de alto al dibujo (se ve en la maqueta).
 
-## P3. Filas táctiles en la vista de E/S externas (apartaría P-IMP-63)
+**Maqueta.** `capturas/maquetas/maqueta-p2-entradas-en-banda-partida.png` (el script saca las entradas de su cuadro y las pone en una banda bajo el dibujo).
+**Motivo de no hacerlo:** las decisiones fijan paneles laterales de ancho fijo y plegables del todo; este cambio mueve las entradas de sitio.
 
-**Problema.** Los canales y las listas de variables miden 16 px de alto (`ALTO_FILA`): se arrastran con el ratón, pero con
-el dedo es difícil acertar. A 1366×768 caben 20 + 10 canales por lado sin desplazamiento (lo fija `test_SESP14`).
+### P3. Filas más altas en la vista de E/S para el panel táctil del portátil (apartaría P-IMP-63)
 
-**Propuesta.** Un modo «táctil» automático (filas de 28 px con desplazamiento) cuando el sistema avise de pantalla táctil, y
-asignación por toque (tocar la variable, tocar el canal) además del arrastre. **Motivo de no hacerlo:** P-IMP-63 pide el estilo
-plano y compacto y las pruebas fijan alturas y capacidad.
+**Problema.** Los canales y las listas de variables miden 16 px de alto (`ALTO_FILA`): con el ratón se arrastra bien, con el panel táctil del portátil
+acertar una fila de 16 px (y arrastrar una variable) exige más pulso. A 1366×768 se ven unas 31 filas de canales por columna antes de desplazarse (`capturas/despues/es-1366.png`); lo fijan `test_SESP14` y las demás pruebas de la vista de E/S.
 
-## P4. Pestañas plegadas de 32 px (lo fijan las pruebas, no una decisión)
+**Propuesta.** Un modo «cómodo» (filas de 28 px con desplazamiento en la vista de E/S) elegible o automático cuando el sistema avise de un dispositivo señalador
+de precisión baja, y asignación por clic (clic en la variable, clic en el canal) además del arrastre.
+
+**Maqueta.** `capturas/maquetas/maqueta-p3-es-filas-28px-1366.png`: cada columna de canales con filas de 28 px; se ven unas 18 filas por columna antes de
+desplazarse (hoy, unas 31). **Motivo de no hacerlo:** P-IMP-63 pide el estilo plano y compacto y las pruebas fijan alturas y capacidad.
+
+### P4. Pestañas plegadas de 32 px (lo fijan las pruebas, no una decisión)
 
 Las pestañas de los paneles plegados miden 26 px (`PanelPlegable.GROSOR_PESTANA`) y varias pruebas comprueban ese número
-(`SPAN02`, `SPAN04`…). Para un objetivo táctil de 32 px basta subir esa constante; las pruebas tendrían que cambiar. Es el único
+(`SPAN02`, `SPAN04`…). Para un objetivo de 32 px basta subir esa constante; las pruebas tendrían que cambiar. Es el único
 control interactivo visible de menos de 32 px que deja `medir.py alturas` (se exceptúa a propósito).
 
-## P7. «Modo aula»: escala de la interfaz para proyector (añade un ajuste)
+### P7. «Modo aula»: escala de la interfaz elegida a mano (añade un ajuste)
 
-**Propuesta.** Un ajuste «Tamaño de la interfaz» (normal / grande) en el menú Ajustes, que sube el texto base a 15 px y el
-secundario a 14 px, y los controles a 40 px. Para el proyector de un aula a 1366×768 basta «grande»; a partir de 1600 px de ancho
-podría proponerse solo. **Motivo de no hacerlo:** añade una entrada de menú y un ajuste persistente (no es solo aspecto), y las
-pruebas de ajuste (`SEDI122`, `SESP14`, la paleta de 218 px) miden con los tamaños actuales. La hoja global ya admite el cambio
-(`estilo.hoja_global` recibe los tokens), pero quedan hojas locales con tamaños propios: habría que revisarlas una a una.
+**Lo que ya cubre la rama.** La letra base (14 px en lugar de 13), los títulos (19 px), el chip (15 px), las cifras (14 px) y los controles (40 px) **suben solos**
+cuando la ventana mide 1600×900 o más, y vuelven al cruzar el umbral (`estilo.escala_para`, `Ventana._aplicar_escala`): un proyector a pantalla completa o un monitor grande
+ya se leen desde el fondo del aula. No añade ningún ajuste ni entrada de menú. Los menús no cambian.
 
-## P8. Verde de «verdadero» con 4,5:1 (`COL["true_text"]`; lo fija `SUIV02`)
+**Lo que falta.** Un proyector de **1366×768** (o un portátil de pantalla pequeña que se proyecta tal cual) queda por debajo del umbral y sigue en la escala normal. Hace falta un
+ajuste «Tamaño de la interfaz» (normal / grande) en el menú Ajustes que fuerce la escala grande a cualquier tamaño.
+
+**Maqueta.** `capturas/maquetas/maqueta-p7-modo-aula-1366.png`: la ventana de 1366×768 con la escala grande forzada. Lo que cabe se mantiene; lo que no cabe cede espacio al dibujo.
+**Motivo de no hacerlo:** añade una entrada de menú y un ajuste persistente (no es solo aspecto), y las pruebas de ajuste y de menús recorren los menús con los textos actuales.
+
+### P8. Verde de «verdadero» con 4,5:1 (`COL["true_text"]`; lo fija `SUIV02`)
 
 **Problema.** El texto y las barras de lo que es verdadero en la simulación (`COL["true_text"]`) usan el mismo `#40d641` que
 la etapa activa: sobre blanco son **1,92:1** (`contrastes.py`, última sección). **`test_SUIV02` exige
@@ -67,7 +94,7 @@ la etapa activa: sobre blanco son **1,92:1** (`contrastes.py`, última sección)
 El cambio ya se probó en la rama (SCOL06 y SCOL08 pasaban) y se **revirtió** porque rompe `SUIV02`, una prueba de `main`.
 **Motivo de no hacerlo:** el encargo prohíbe tocar `tests/`.
 
-## P9. Borde de la etapa activa con 3:1 (apartaría P-IMP-77)
+### P9. Borde de la etapa activa con 3:1 (apartaría P-IMP-77)
 
 **Problema.** El borde y el relleno de la etapa activa son `#40d641` y `#e4f9e4`: el borde sobre blanco da 1,92:1, por debajo de los
 3:1 de un elemento gráfico (WCAG 1.4.11). La etapa no depende solo del color (lleva un punto lleno y el texto «X1» en la tabla), pero con
@@ -77,17 +104,18 @@ mala luz de proyector el borde casi desaparece.
 para el trazo de transiciones y el texto. **Motivo de no hacerlo:** P-IMP-77 fija `#40d641` como color de la etapa activa y varias
 pruebas lo comparan (`COL["active"]`).
 
-## P10. Paneles laterales de 232 px (lo fija `SPAL05/06`)
+### P10. Paneles laterales de 232 px a 1366 y menos (lo fija `SPAL05/06`)
 
-**Problema.** Las pruebas de la paleta (`SPAL05`, `SPAL06`) fijan el ancho de los paneles laterales en 218 px. Con 232 px, la
-tabla de Variables y la de Salidas llevarían los nombres y el modo sin elidir («salida continua» en una línea).
+**Problema.** Las pruebas de la paleta (`SPAL05`, `SPAL06`) fijan el ancho del panel izquierdo en 218 px a 1366×768 y a 1000×600. En 218 px las tablas de la
+simulación llevan las cuatro columnas con sus cabeceras enteras («Variable», «Modo», «Valor», «Contribuyen»), pero la columna del nombre queda en ≈ 50 px y el nombre se elide
+por el medio (y sale entero en la línea de detalle de la barra de estado). A pantalla completa, donde las pruebas no miden 218, los paneles laterales ya miden 264 px.
 
-**Propuesta.** `ANCHO_LATERAL = 232`. Se probó en la rama y se revirtió al fallar `SPAL05` y `SPAL06`.
+**Propuesta.** `ANCHO_LATERAL = 232` (o 264 desde 1280 px de ancho). **Motivo de no hacerlo a ≤ 1366:** `SPAL05` y `SPAL06` comparan con 218.
 
-## P11. Tope proporcional de Propiedades en ventanas bajas (apartaría P-IMP-128 / 118 / 120 / 93)
+### P11. Tope proporcional de Propiedades en ventanas bajas (apartaría P-IMP-128 / 118 / 120 / 93)
 
 **Propuesta.** Que el panel inferior no pase del 55 % del alto de la ventana (con un mínimo para ver una fila de campos): a 768 px,
 ≈ 420 px, que no cambia nada; a 520 px, ≈ 286 px en lugar de ≈ 334 px. Sin tocar la paleta de operadores: lo que no quepa se
-desplaza dentro del panel. **Maqueta:** la de P1 (`maqueta-panel-bajo-cuarto.png`) enseña el mismo efecto con 190 px.
+desplaza dentro del panel. **Maqueta:** la de P1 (`maqueta-p1-propiedades-cuarto.png`) enseña el mismo efecto con 190 px.
 **Motivo de no hacerlo:** el alto que pide la receptividad lo fija P-IMP-93 y la prueba `SEDI122` comprueba que no haya
 controles cortados con ese alto.

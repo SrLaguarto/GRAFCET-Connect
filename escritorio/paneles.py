@@ -1,15 +1,61 @@
 """Paneles plegables por cabecera o divisor, sin controles encima del dibujo."""
-from PySide6.QtCore import QEvent, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QTextLayout, QTextOption
-from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QLayout, QSplitter, QSplitterHandle,
-                               QSizePolicy, QStackedWidget, QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtCore import QEvent, QPoint, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QTextLayout, QTextOption
+from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGroupBox, QHeaderView, QLabel, QLayout, QSplitter, QSplitterHandle,
+                               QSizePolicy, QStackedWidget, QStyle, QStyleOptionComboBox, QStyleOptionGroupBox, QStylePainter,
+                               QToolButton, QVBoxLayout, QWidget)
 
 from . import estilo
 
 
+LADO_MARCADOR = 9  # el cuadrado de etapa que abre cada título de sección
+
+
+def pintar_marcador(p: QPainter, x: float, centro_y: float, color: str = estilo.ACENTO) -> None:
+    """El cuadrado de la etapa vacía, del trazo de los iconos (1,75 px): el marcador de sección de todas las vistas."""
+    p.save()
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(QPen(QColor(color), 1.75, Qt.PenStyle.SolidLine, Qt.PenCapStyle.SquareCap, Qt.PenJoinStyle.MiterJoin))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawRect(x + .9, centro_y - LADO_MARCADOR / 2 + .9, LADO_MARCADOR - 1.8, LADO_MARCADOR - 1.8)
+    p.restore()
+
+
+class TituloSeccion(QLabel):
+    """El título de una sección (Elementos, Propiedades…) con el cuadrado de etapa delante: la misma marca en todas las vistas."""
+
+    def __init__(self, texto: str = "", x_marcador: int = 0) -> None:
+        super().__init__(texto)
+        self.x_marcador = x_marcador  # dónde empieza el cuadrado, además del margen izquierdo del título
+        self.setIndent(LADO_MARCADOR + 7)
+
+    def paintEvent(self, evento) -> None:  # noqa: N802
+        super().paintEvent(evento)
+        p = QPainter(self)
+        pintar_marcador(p, self.contentsMargins().left() + self.x_marcador, self.height() / 2)
+        p.end()
+
+
+class CajaSeccion(QGroupBox):
+    """Un `QGroupBox` cuyo título lleva delante el cuadrado de etapa (el hueco lo deja la hoja global: `[seccion="true"]::title`)."""
+
+    def __init__(self, titulo: str = "") -> None:
+        super().__init__(titulo)
+        self.setProperty("seccion", True)
+
+    def paintEvent(self, evento) -> None:  # noqa: N802
+        super().paintEvent(evento)
+        opcion = QStyleOptionGroupBox()
+        self.initStyleOption(opcion)
+        r = self.style().subControlRect(QStyle.ComplexControl.CC_GroupBox, opcion, QStyle.SubControl.SC_GroupBoxLabel, self)
+        p = QPainter(self)
+        pintar_marcador(p, r.left() - 16, r.center().y())  # (el rectángulo del título es el del texto: el hueco de 22 px queda a su izquierda)
+        p.end()
+
+
 class BandaModo(QWidget):
-    """La franja de color de lo alto de la tarjeta del dibujo (azul tinta al editar, verde al simular). Lleva, derivado de la
-    notación, un trazo de enlace con las barras cortas de las transiciones, en el tono claro del fondo."""
+    """La franja de color de lo alto de la tarjeta del dibujo (tinta al editar, verde al simular). Es un **enlace** de la notación:
+    un trazo que recorre la franja, la barra corta de una transición a intervalos y, al final, la punta de la flecha de evolución."""
 
     def paintEvent(self, evento) -> None:  # noqa: N802
         from PySide6.QtWidgets import QStyle, QStyleOption
@@ -17,25 +63,30 @@ class BandaModo(QWidget):
         opcion.initFrom(self)
         p = QPainter(self)
         self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opcion, p, self)
-        marca = QColor(255, 255, 255, 120)
-        p.setPen(marca)
-        p.drawLine(12, self.height() // 2, self.width() - 12, self.height() // 2)  # el enlace
+        centro = self.height() // 2
+        p.setPen(QColor(255, 255, 255, 110))
+        p.drawLine(12, centro, self.width() - 22, centro)  # el enlace
         lapiz = p.pen()
         lapiz.setWidth(2)
-        lapiz.setColor(QColor(255, 255, 255, 190))
+        lapiz.setColor(QColor(255, 255, 255, 200))
         p.setPen(lapiz)
-        for x in range(24, max(25, self.width() - 12), 96):
+        for x in range(36, max(37, self.width() - 40), 240):
             p.drawLine(x, 0, x, self.height())  # la barra de una transición
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(255, 255, 255, 230))
+        fin = self.width() - 10
+        p.drawPolygon([QPoint(fin - 8, centro - 3), QPoint(fin, centro), QPoint(fin - 8, centro + 3)])  # la flecha de evolución
         p.end()
-
 
 class EtiquetaElidida(QLabel):
     """Texto de una línea que, si no cabe, acaba en «…» y lleva el texto entero en su ayuda emergente. Nunca fuerza el ancho de
-    su fila: el mínimo es casi nulo y lo que pide (`sizeHint`) tiene un tope (`ancho_maximo`). `text()` devuelve el texto entero."""
+    su fila: el mínimo es casi nulo y lo que pide (`sizeHint`) tiene un tope (`ancho_maximo`). `text()` devuelve el texto entero.
+    `modo` es dónde se pone el «…» (por el final, o por el medio para nombres que se distinguen por su final)."""
 
-    def __init__(self, texto: str = "", ancho_maximo: int = 420) -> None:
+    def __init__(self, texto: str = "", ancho_maximo: int = 420, modo: Qt.TextElideMode = Qt.TextElideMode.ElideRight) -> None:
         super().__init__()
         self.ancho_maximo = ancho_maximo
+        self.modo = modo
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         if texto:
@@ -56,34 +107,75 @@ class EtiquetaElidida(QLabel):
         p = QPainter(self)
         p.setFont(self.font())
         p.setPen(self.palette().color(self.foregroundRole()))
-        texto = self.fontMetrics().elidedText(self.text(), Qt.TextElideMode.ElideRight, self.width())
+        texto = self.fontMetrics().elidedText(self.text(), self.modo, self.width())
         p.drawText(self.rect(), int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), texto)
         p.end()
 
 
 class ChipModo(EtiquetaElidida):
-    """El chip del modo (EDICIÓN, SIMULACIÓN…): texto en mayúsculas y, a la izquierda, un cuadrado que viene de la notación: la
-    etapa sin marcar al editar, la etapa activa (rellena) al simular. El relleno y el borde los pone la hoja de estilo;
-    `marcador` es «vacio» o «lleno»."""
+    """El chip del modo (EDICIÓN, SIMULACIÓN · ESTABLE…): texto en mayúsculas y, a la izquierda, un cuadrado que viene de la
+    notación: la etapa sin marcar al editar, la etapa activa (rellena) al simular. El relleno y el borde los pone la hoja de estilo;
+    `marcador` es «vacio» o «lleno».
+
+    **El estado nunca se pierde**: el chip no cede ancho (su política es fija) y pide lo que mide su texto más largo que cabe en
+    `tope`; el título del grafcet, que sí se elide, cede antes. Si ni así cabe, el chip cambia a un texto más corto con el mismo
+    estado (`variantes`, de la más larga a la más corta: «SIMULACIÓN · EN RECORRIDO (SITUACIÓN INESTABLE)», «SIMULACIÓN · EN
+    RECORRIDO», «SIM. · EN RECORRIDO», «EN RECORRIDO»): la ayuda emergente lleva siempre la descripción entera."""
+    MARCO = 26 + 14  # el cuadrado de la izquierda y el relleno de la derecha
 
     def __init__(self) -> None:
-        super().__init__(ancho_maximo=360)
+        super().__init__(ancho_maximo=1000)
         self.marcador = "vacio"
+        self.variantes: list[str] = []
+        self.tope = 10 ** 6  # lo más ancho que puede pedir el chip (lo fija la ventana según su ancho)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
-    def _fijar_minimo(self) -> None:
-        """El mínimo real es la primera palabra entera («EDICIÓN», «SIMULACIÓN»): el título cede antes que el chip."""
-        minimo = self.minimumSizeHint().width()
-        if minimo != self.minimumWidth():
-            self.setMinimumWidth(minimo)
+    @staticmethod
+    def _variantes(texto: str) -> list[str]:
+        """El texto y sus versiones más cortas con el mismo estado: sin lo que va entre paréntesis, con el modo abreviado y solo el
+        estado."""
+        partes = texto.split(" · ")
+        salida = [texto]
+        if len(partes) > 1:
+            estado = partes[-1]
+            corto = estado.split(" (")[0]
+            for v in (f"{partes[0]} · {corto}", f"{partes[0][:3]}. · {corto}", corto):
+                if v not in salida:
+                    salida.append(v)
+        return salida
+
+    def _ancho(self, texto: str) -> int:
+        return self.fontMetrics().horizontalAdvance(texto) + self.MARCO
+
+    def elegida(self, ancho: int | None = None) -> str:
+        """La variante más larga que cabe en `ancho` (por omisión, en el tope); si ninguna cabe, la más corta."""
+        limite = self.tope if ancho is None else ancho
+        for v in self.variantes or [self.text()]:
+            if self._ancho(v) <= limite:
+                return v
+        return (self.variantes or [self.text()])[-1]
+
+    def _reajustar(self) -> None:
+        if not self.variantes:
+            return
+        self.updateGeometry()  # (pide lo que mide su variante elegida; como mínimo, la más corta: nunca fija el ancho de la ventana)
+
+    def fijar_tope(self, tope: int) -> None:
+        if tope != self.tope:
+            self.tope = tope
+            self._reajustar()
 
     def setText(self, texto: str) -> None:  # noqa: N802
-        super().setText(texto)
-        self._fijar_minimo()
+        QLabel.setText(self, texto)
+        self.setToolTip("")
+        self.variantes = self._variantes(texto)
+        self._reajustar()
+        self.updateGeometry()
 
     def event(self, evento) -> bool:  # noqa: N802
         resultado = super().event(evento)
         if evento.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange, QEvent.Type.Polish, QEvent.Type.Show):
-            self._fijar_minimo()
+            self._reajustar()
         return resultado
 
     def fijar_marcador(self, marcador: str) -> None:
@@ -98,10 +190,7 @@ class ChipModo(EtiquetaElidida):
         p.setPen(self.palette().color(self.foregroundRole()))
         izquierda = 26
         libre = max(0, self.width() - izquierda - 12)
-        partes = self.text().split(" · ")
-        while len(partes) > 1 and self.fontMetrics().horizontalAdvance(" · ".join(partes)) > libre:
-            partes.pop()  # primero se cae lo secundario («· ESTABLE», «· SOLO LECTURA») entero, sin «…» a media palabra
-        texto = self.fontMetrics().elidedText(" · ".join(partes), Qt.TextElideMode.ElideRight, libre)
+        texto = self.fontMetrics().elidedText(self.elegida(self.width()), Qt.TextElideMode.ElideRight, libre)
         p.drawText(QRect(izquierda, 0, self.width() - izquierda, self.height()),
                    int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), texto)
         lado = 10
@@ -116,11 +205,50 @@ class ChipModo(EtiquetaElidida):
         p.end()
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(min(self.ancho_maximo, self.fontMetrics().horizontalAdvance(self.text()) + 26 + 14), self.height() or 26)
+        return QSize(self._ancho(self.elegida()), self.height() or 26)
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        palabra = self.text().split(" ")[0] if self.text() else ""  # al menos «SIMULACIÓN» o «EDICIÓN» enteras
-        return QSize(26 + self.fontMetrics().horizontalAdvance(palabra) + 14, self.height() or 26)
+        return QSize(self._ancho(self.variantes[-1] if self.variantes else self.text()), self.height() or 26)
+
+class ComboElidido(QComboBox):
+    """Un desplegable cuyo texto actual, si no cabe, acaba en «…» (por el medio, para conservar el final que distingue una opción de
+    otra) y lleva el texto entero en su ayuda emergente; la lista desplegada siempre lo enseña entero."""
+
+    def paintEvent(self, evento) -> None:  # noqa: N802
+        p = QStylePainter(self)
+        opcion = QStyleOptionComboBox()
+        self.initStyleOption(opcion)
+        p.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opcion)
+        campo = self.style().subControlRect(QStyle.ComplexControl.CC_ComboBox, opcion, QStyle.SubControl.SC_ComboBoxEditField, self)
+        texto = opcion.currentText
+        if self.toolTip() != texto:
+            self.setToolTip(texto)
+        opcion.currentText = self.fontMetrics().elidedText(texto, Qt.TextElideMode.ElideMiddle, max(24, campo.width() - 6))
+        p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opcion)
+
+
+class CabeceraCompacta(QHeaderView):
+    """Cabecera horizontal de las tablas estrechas de la simulación. La de Qt, con la hoja de estilo, reserva a cada lado un margen de
+    4 px más el relleno y corta la cabecera («Va…», «Contribu…») cuando la columna aún tiene sitio para ella: esta pinta el
+    texto a 4 px del borde (donde empieza el de las celdas) y solo lo elide si de verdad no cabe."""
+
+    def paintSection(self, p: QPainter, rect: QRect, indice: int) -> None:  # noqa: N802
+        if not rect.isValid():
+            return
+        p.save()
+        p.fillRect(rect, QColor(estilo.SUPERFICIE_2))
+        p.setPen(QColor(estilo.BORDE))
+        p.drawLine(rect.bottomLeft(), rect.bottomRight())
+        p.setPen(QColor(estilo.TINTA_2))
+        fuente = QFont(self.font())
+        fuente.setPixelSize(estilo.T_PEQUENA)  # la letra de las celdas de estas tablas
+        fuente.setBold(False)
+        p.setFont(fuente)
+        texto = str(self.model().headerData(indice, self.orientation(), Qt.ItemDataRole.DisplayRole) or "")
+        r = rect.adjusted(4, 0, -2, -1)
+        p.drawText(r, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+                   p.fontMetrics().elidedText(texto, Qt.TextElideMode.ElideRight, r.width()))
+        p.restore()
 
 
 class EtiquetaAyuda(QLabel):
@@ -248,8 +376,9 @@ class PestanaPanel(QToolButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.fillRect(self.rect(), QColor(estilo.ACENTO_SUAVE if self.underMouse() else estilo.SUPERFICIE_2))
-        p.setPen(QColor(estilo.BORDE_CONTROL if self.hasFocus() else estilo.BORDE));p.drawRect(self.rect().adjusted(0, 0, -1, -1))
-        if self.hasFocus():
+        teclado = self.hasFocus() and bool(self.property("tecl"))  # el anillo solo con el teclado (ver ventana._FocoTeclado)
+        p.setPen(QColor(estilo.BORDE_CONTROL if teclado else estilo.BORDE));p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        if teclado:
             borde = QColor(estilo.FOCO)
             borde.setAlpha(255)
             lapiz = p.pen()
@@ -293,8 +422,8 @@ class PanelPlegable(QWidget):
         self.cerrar.setFixedSize(32, 32)
         self.cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cerrar.setStyleSheet(f"QToolButton{{border:1px solid transparent;background:transparent;color:{estilo.ACENTO};font-size:16px;font-weight:700;border-radius:{estilo.R_S}px;}}"
-                                  f"QToolButton:hover{{background:{estilo.ACENTO_SUAVE};}}"
-                                  f"QToolButton:focus{{border:2px dashed {estilo.FOCO};}}")
+                                  f"QToolButton:hover{{background:{estilo.ACENTO_SUAVE};}}QToolButton:pressed{{background:{estilo.PULSADO};}}"
+                                  f"QToolButton[tecl=\"true\"]:focus{{border:2px dashed {estilo.FOCO};}}")
         self.cerrar.clicked.connect(self.alternar)
         contenido.installEventFilter(self)
         l = QVBoxLayout(self);l.setContentsMargins(0, 0, 0, 0);l.setSpacing(0)

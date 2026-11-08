@@ -15,7 +15,7 @@ from __future__ import annotations
 from string import Template
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
 
 # -- color ----------------------------------------------------------------------------------------------------------
 TINTA = "#16263a"          # texto principal (15,3:1 sobre blanco)
@@ -37,10 +37,10 @@ ACENTO_HOVER = "#0d8189"
 ACENTO_SUAVE = "#cfeee6"   # relleno de lo seleccionado o activo (menta; una prueba fija este tono en el icono marcado)
 ACENTO_BORDE = "#8fcdd1"
 
-EDICION = "#27415f"        # azul tinta: el programa está en edición (blanco encima: 10,5:1)
+EDICION = "#2f3b4a"        # tinta pizarra, neutra: el programa está en edición; no compite con el acento petróleo (blanco encima: 11,3:1)
 SIMULACION = "#157a35"     # verde máquina: simulación en marcha, el único verde de la interfaz (blanco encima: 5,4:1)
 SIMULACION_SUAVE = "#e3f4e8"
-SIMULACION_HOVER = "#1b8f40"
+SIMULACION_HOVER = "#0f6a2c"  # (blanco encima: 6,7:1)
 SIMULACION_BORDE = "#8cc9a0"
 
 OK = SIMULACION           # lo correcto y lo activo comparten el mismo verde
@@ -56,6 +56,11 @@ CONFIRMAR_BORDE = "#1d5048"
 CONFIRMAR_HOVER = "#1b5149"
 PARPADEO = "#2f8a91"       # el tono claro del parpadeo de «+ Añadir hoja»: blanco encima, 4,1:1
 
+TIPO_BOOL, TIPO_DECIMAL, TIPO_ENTERA, TIPO_CUALQUIERA = "#22a342", "#008add", "#d96a0c", "#6d837b"  # la barrita de tipo de variable (E/S)
+SENAL_TENUE, SENAL_ASIGNADA = "#cbd2d5", "#7c8a90"  # la barrita sin señal y asignada (3,5:1 sobre blanco con su contorno)
+RESALTADO = "#e8f5ef"      # fila de variable resaltada en E/S (una prueba fija este tono)
+ASIGNACION = "#c1e8dc"     # la zona de un canal donde caería la variable que se arrastra
+
 MESA = "#dfe5eb"           # el tablero sobre el que se ve una hoja de PLANOS o una plantilla (no es parte del dibujo)
 
 LUZ = {"conectada": SIMULACION, "desconectada": "#6f7f92", "error": "#c62828"}  # punto de la conexión externa
@@ -68,15 +73,38 @@ FUENTE_TITULO = "Bahnschrift"  # tipografía técnica de Windows para títulos, 
 FUENTE_MONO = "Consolas"      # cifras: tiempos, valores y porcentaje
 FAMILIA_TITULO = f'"{FUENTE_TITULO}", "{FUENTE}"'
 FAMILIA_MONO = f'"{FUENTE_MONO}", "Courier New"'
-T_BASE, T_PEQUENA, T_TITULO, T_SECCION, T_CHIP = 13, 12, 16, 14, 13
-ALTO_CONTROL = 36          # objetivo táctil principal (ideal 36-40)
-ALTO_CONTROL_COMPACTO = 32  # mínimo táctil, cuando falta alto
-ALTO_BARRA = 34            # botones de las barras de herramientas (el presupuesto de alto sobre el dibujo no admite 36)
-ALTO_BARRA_COMPACTA = 32
-ALTO_FILA = 30             # filas de tablas y listas
-ALTO_ENTRADA = 36          # botones de las entradas de la simulación
-ALTO_FILA_COMPACTA = 28
 ANCHO_BARRA = 12           # barras de desplazamiento
+
+# Dos escalas de letra y de controles que cambian solas con el tamaño de la ventana (`activar_escala`): la «normal» es la de siempre
+# (hasta 1366×768) y la «grande» sube la letra base a 14 px, los títulos, el chip y las cifras, y los controles a 40 px, para leer
+# desde el fondo del aula con el proyector (pantalla completa: 1600 px de ancho y 900 de alto, o más). Los menús no se tocan.
+ESCALAS = {
+    "normal": dict(T_BASE=13, T_PEQUENA=12, T_TITULO=16, T_SECCION=14, T_CHIP=13, T_CIFRA=12,
+                   ALTO_CONTROL=36, ALTO_CONTROL_COMPACTO=32, ALTO_BARRA=34, ALTO_BARRA_COMPACTA=32,
+                   ALTO_FILA=30, ALTO_ENTRADA=36, ALTO_FILA_COMPACTA=28),
+    "grande": dict(T_BASE=14, T_PEQUENA=13, T_TITULO=19, T_SECCION=16, T_CHIP=15, T_CIFRA=14,
+                   ALTO_CONTROL=40, ALTO_CONTROL_COMPACTO=36, ALTO_BARRA=40, ALTO_BARRA_COMPACTA=36,
+                   ALTO_FILA=34, ALTO_ENTRADA=40, ALTO_FILA_COMPACTA=32)}
+UMBRAL_GRANDE = (1600, 900)  # ancho y alto de la ventana a partir de los cuales rige la escala grande
+ESCALA = "normal"
+T_BASE = T_PEQUENA = T_TITULO = T_SECCION = T_CHIP = T_CIFRA = 0
+ALTO_CONTROL = ALTO_CONTROL_COMPACTO = ALTO_BARRA = ALTO_BARRA_COMPACTA = ALTO_FILA = ALTO_ENTRADA = ALTO_FILA_COMPACTA = 0
+
+
+def escala_para(ancho: int, alto: int) -> str:
+    """La escala que corresponde a una ventana de ese tamaño: «grande» desde `UMBRAL_GRANDE`, «normal» por debajo."""
+    return "grande" if ancho >= UMBRAL_GRANDE[0] and alto >= UMBRAL_GRANDE[1] else "normal"
+
+
+def activar_escala(nombre: str) -> None:
+    """Pone los tokens de letra y de alto de la escala `nombre` (los lee quien construye una hoja de estilo después de esto; las
+    hojas ya aplicadas las vuelve a generar la ventana, que es quien llama aquí al cruzar el umbral)."""
+    global ESCALA
+    ESCALA = nombre
+    globals().update(ESCALAS[nombre])
+
+
+activar_escala("normal")
 
 
 # -- modo compacto --------------------------------------------------------------------------------------------------
@@ -91,10 +119,14 @@ def tamano_compacto(ancho: int, alto: int) -> tuple[bool, bool]:
 
 
 # -- hoja de estilo global ------------------------------------------------------------------------------------------
-def _familia(selectores: str, alto: int, pad_h: int, extra: str = "", pad_extra: tuple[int, int] = (0, 0)) -> str:
+def _familia(selectores: str, alto: int, pad_h: int, extra: str = "", pad_extra: tuple[int, int] = (0, 0),
+             teclado: bool = False) -> str:
     """Un control de `alto` px con borde de 1 px y, con el foco, borde discontinuo de 2 px que no mueve nada: el relleno y el
-    alto de contenido compensan el borde que crece (y `pad_extra`, el hueco de una flecha, p. ej. de un desplegable)."""
-    selectores_foco = ", ".join(f"{s}:focus" for s in (x.strip() for x in selectores.split(",")))
+    alto de contenido compensan el borde que crece (y `pad_extra`, el hueco de una flecha, p. ej. de un desplegable). Con
+    `teclado`, el anillo solo sale si la última entrada fue del teclado (propiedad `tecl`, ver `FocoTeclado`); sin él, siempre
+    que haya foco (los campos de texto: se escribe en ellos)."""
+    sufijo = '[tecl="true"]:focus' if teclado else ":focus"
+    selectores_foco = ", ".join(f"{s}{sufijo}" for s in (x.strip() for x in selectores.split(",")))
     return (f"{selectores} {{ min-height:{alto - 2}px; padding:0 {pad_h + pad_extra[0]}px 0 {pad_h}px; {extra} }}\n"
             f"{selectores_foco} {{ border:2px dashed {FOCO}; min-height:{alto - 4}px; "
             f"padding:0 {pad_h - 1 + pad_extra[0]}px 0 {pad_h - 1}px; }}\n")
@@ -130,7 +162,7 @@ QTabBar#pestanasVistas::tab:selected { background:$superficie; color:$tinta; bor
 QTabBar#pestanasVistas[estrecha="true"]::tab { padding:${pad_tab}px 10px; margin-right:2px; }
 QTabBar#pestanasVistas::tab:hover:!selected { background:$hover; color:$tinta; }
 QTabBar#pestanasVistas::tab:disabled { color:$deshabilitado; }
-QTabBar#pestanasVistas::tab:selected:focus { border:2px dashed $foco; border-bottom:3px solid $acento; }
+QTabBar#pestanasVistas[tecl="true"]::tab:selected:focus { border:2px dashed $foco; border-bottom:3px solid $acento; }
 
 QWidget#bandaModo { background:$edicion; border-top-left-radius:${r_m}px; border-top-right-radius:${r_m}px; }
 QWidget#bandaModo[modo="simular"] { background:$simulacion; }
@@ -138,7 +170,7 @@ QToolButton#luzES { border:1px solid $borde_control; border-radius:${radio_pasti
     padding:0 14px 0 10px; min-height:${alto_pastilla}px; font-weight:400; }
 QToolButton#luzES:hover { background:$hover; border-color:$tinta_2; }
 QToolButton#luzES:pressed { background:$pulsado; }
-QToolButton#luzES:focus { border:2px dashed $foco; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; }
+QToolButton#luzES[tecl="true"]:focus { border:2px dashed $foco; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; }
 QToolButton#luzES[estadoLuz="conectada"] { border:1px solid $ok; }
 QToolButton#luzES[estadoLuz="error"] { background:$error_fondo; border:2px solid $error; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; }
 QToolButton#luzES[abierta="true"] { background:$blanco; border:2px solid $tinta; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; font-weight:700; }  /* P-IMP-126: fondo blanco, borde oscuro, negrita */
@@ -150,13 +182,13 @@ QToolBar QToolButton:hover { background:$hover; border-color:$borde; }
 QToolBar QToolButton:pressed { background:$pulsado; }
 QToolBar QToolButton:checked { background:$acento_suave; border-color:$acento; color:$tinta; }
 QToolBar QToolButton:disabled { color:$deshabilitado; background:transparent; border-color:transparent; }
-QToolBar QToolButton:focus { border:2px dashed $foco; min-height:${alto_tb_f}px; padding:0 11px; }
+QToolBar QToolButton[tecl="true"]:focus { border:2px dashed $foco; min-height:${alto_tb_f}px; padding:0 11px; }
 QToolBar::separator { width:1px; background:$borde; margin:6px 4px; }
 QToolBar#barraSimulacion QToolButton#botonReiniciar { background:$superficie; border:1px solid $borde_control; }
 QToolBar#barraSimulacion QToolButton#botonReiniciar:hover { background:$hover; }
 QToolBar#barraSimulacion QToolButton#botonReiniciar:pressed { background:$pulsado; }
 QToolBar#barraSimulacion QToolButton#botonReiniciar:disabled { border-color:$borde; }
-QToolBar#barraSimulacion QToolButton#botonReiniciar:focus { border:2px dashed $foco; }
+QToolBar#barraSimulacion QToolButton#botonReiniciar[tecl="true"]:focus { border:2px dashed $foco; }
 QToolBar#barraSimulacion QToolButton#botonPlay { font-family:$familia_titulo; background:$acento; color:$blanco; border:1px solid $acento_oscuro; font-weight:700;
     padding:0 18px 0 14px; min-width:92px; }
 QToolBar#barraSimulacion QToolButton#botonPlay:hover { background:$acento_hover; }
@@ -164,13 +196,13 @@ QToolBar#barraSimulacion QToolButton#botonPlay:pressed { background:$acento_oscu
 QToolBar#barraSimulacion QToolButton#botonPlay:checked { background:$simulacion; border-color:$simulacion; color:$blanco; }
 QToolBar#barraSimulacion QToolButton#botonPlay:checked:hover { background:$simulacion_hover; }
 QToolBar#barraSimulacion QToolButton#botonPlay:disabled { background:$pulsado; color:$deshabilitado; border-color:$borde; }
-QToolBar#barraSimulacion QToolButton#botonPlay:focus { border:3px dashed $foco_fuerte; padding:0 15px 0 11px; min-height:${alto_tb_f2}px; }
+QToolBar#barraSimulacion QToolButton#botonPlay[tecl="true"]:focus { border:3px dashed $foco_fuerte; padding:0 15px 0 11px; min-height:${alto_tb_f2}px; }
 QToolBar#barraEdicion QToolButton, QToolBar#barraVista QToolButton { background:$superficie; border:1px solid $borde_control; min-width:${alto_tb}px; padding:0 8px; }
 QToolBar#barraEdicion QToolButton:hover, QToolBar#barraVista QToolButton:hover { background:$hover; border-color:$tinta_2; }
 QToolBar#barraEdicion QToolButton:pressed, QToolBar#barraVista QToolButton:pressed { background:$pulsado; }
 QToolBar#barraEdicion QToolButton:checked, QToolBar#barraVista QToolButton:checked { background:$acento_suave; border:2px solid $acento; padding:0 7px; }
 QToolBar#barraEdicion QToolButton:disabled, QToolBar#barraVista QToolButton:disabled { background:$superficie_2; border-color:$borde; }
-QToolBar#barraEdicion QToolButton:focus, QToolBar#barraVista QToolButton:focus { border:2px dashed $foco; padding:0 7px; }
+QToolBar#barraEdicion QToolButton[tecl="true"]:focus, QToolBar#barraVista QToolButton[tecl="true"]:focus { border:2px dashed $foco; padding:0 7px; }
 QToolBar#barraPlanos { padding:2px 0; spacing:4px; }
 QToolBar#barraPlanos QToolButton { background:$superficie; border:1px solid $borde_control; padding:0 10px; }
 QToolBar#barraPlanos QToolButton#bibliotecaPlanos { padding:0 32px 0 10px; }
@@ -178,7 +210,7 @@ QToolBar#barraPlanos QToolButton:hover { background:$hover; border-color:$tinta_
 QToolBar#barraPlanos QToolButton:pressed { background:$pulsado; }
 QToolBar#barraPlanos QToolButton:checked { background:$acento_suave; border:2px solid $acento; padding:0 9px; }
 QToolBar#barraPlanos QToolButton:disabled { background:$superficie_2; border-color:$borde; }
-QToolBar#barraPlanos QToolButton:focus { border:2px dashed $foco; padding:0 9px; }
+QToolBar#barraPlanos QToolButton[tecl="true"]:focus { border:2px dashed $foco; padding:0 9px; }
 QToolBar#barraConexion QToolButton { border:1px solid $acento_borde; background:$superficie; color:$acento; }
 QToolButton#bibliotecaPlanos { padding-right:28px; }
 QToolButton#bibliotecaPlanos::menu-indicator { image:url(:/grafconnect/desplegar.svg); subcontrol-origin:padding; subcontrol-position:center right; right:8px; width:12px; height:8px; }
@@ -203,10 +235,10 @@ QPushButton:disabled { border-color:$borde; background:$superficie_2; }
 QPushButton[primario="true"] { background:$acento; color:$blanco; border-color:$acento_oscuro; font-weight:600; }
 QPushButton[primario="true"]:hover { background:$acento_hover; border-color:$acento_oscuro; }
 QPushButton[primario="true"]:pressed { background:$acento_oscuro; }
-QPushButton[primario="true"]:focus { border:2px dashed $blanco; }
+QPushButton[primario="true"][tecl="true"]:focus { border:2px dashed $blanco; }
 QPushButton[primario="true"]:disabled { background:$pulsado; color:$deshabilitado; border-color:$borde; }
 QPushButton[entrada="true"] { text-align:left; padding:0 10px; border:2px solid $borde_control; font-weight:600; min-height:${alto_entrada}px; }
-QPushButton[entrada="true"]:focus { border:2px dashed $foco; padding:0 10px; min-height:${alto_entrada}px; }
+QPushButton[entrada="true"][tecl="true"]:focus { border:2px dashed $foco; padding:0 10px; min-height:${alto_entrada}px; }
 QPushButton[entrada="true"][activa="true"] { background:$simulacion_suave; border:2px solid $simulacion; color:$tinta; }
 QPushButton[entrada="true"]:disabled { background:$superficie_2; color:$deshabilitado; }
 QPushButton[entrada="true"][activa="true"]:disabled { background:$simulacion_suave; border:2px solid $simulacion_borde; color:$tinta_2; }
@@ -214,9 +246,9 @@ QToolButton { border:1px solid transparent; border-radius:${r_s}px; background:t
 QToolButton:hover { background:$hover; }
 QToolButton:pressed { background:$pulsado; }
 QToolButton:checked { background:$acento_suave; border-color:$acento; }
-QToolButton:focus { border:2px dashed $foco; }
+QToolButton[tecl="true"]:focus { border:2px dashed $foco; }
 QCheckBox, QRadioButton { spacing:8px; min-height:${alto_menos}px; }
-QCheckBox:focus, QRadioButton:focus { border:2px dashed $foco; border-radius:${r_s}px; }
+QCheckBox[tecl="true"]:focus, QRadioButton[tecl="true"]:focus { border:2px dashed $foco; border-radius:${r_s}px; }
 /* el anillo discontinuo de listas, tablas y del dibujo solo con el teclado: la ventana pone tecl="true" al recibir el foco con Tab */
 QListWidget[tecl="true"]:focus, QTableWidget[tecl="true"]:focus, QTreeWidget[tecl="true"]:focus, QTextEdit:focus, QPlainTextEdit:focus { border:2px dashed $foco; }
 QGraphicsView[tecl="true"]:focus { border:2px dashed $foco; }
@@ -224,6 +256,7 @@ QGraphicsView { border:2px solid transparent; }
 
 QGroupBox { font-family:$familia_titulo; background:$superficie; border:0; margin-top:24px; font-size:${t_seccion}px; font-weight:600; }
 QGroupBox::title { subcontrol-origin:margin; padding:3px 6px; color:$acento; }
+QGroupBox[seccion="true"]::title { padding:3px 6px 3px 22px; }  /* el hueco del cuadrado de etapa (paneles.CajaSeccion) */
 QGroupBox#grupoVariables { font-size:${t_titulo}px; }
 QGroupBox#grupoVariables::title { color:$tinta; }
 QGroupBox QLabel, QGroupBox QPushButton, QGroupBox QTableWidget, QGroupBox QLineEdit, QGroupBox QComboBox, QGroupBox QCheckBox { font-family:"$fuente"; font-weight:400; font-size:${t_base}px; }
@@ -271,7 +304,7 @@ def hoja_global(compacto_alto: bool = False) -> str:
         pad_tab=3 if not compacto_alto else 2, pad_barra=2 if compacto_alto else 4, alto_menos=alto - 2, alto_menos4=alto - 4,
         alto_fila=ALTO_FILA_COMPACTA if compacto_alto else ALTO_FILA, ancho_barra=ANCHO_BARRA,
         familia_entradas=_familia("QLineEdit, QComboBox", alto, 8),
-        familia_botones=_familia("QPushButton", alto, 12),
+        familia_botones=_familia("QPushButton", alto, 12, teclado=True),
     )
     hoja = _PLANTILLA.substitute(**t)
     # el desplegable deja sitio a su flecha (la zona `drop-down`, de 24 px); se escribe aparte para que `padding` no se pierda
@@ -285,6 +318,15 @@ def campos_compactos(alto: int = ALTO_CONTROL_COMPACTO) -> str:
     return (f"QLineEdit, QComboBox {{ min-height:{alto - 2}px; padding:0 8px; }} "
             f"QLineEdit:focus, QComboBox:focus {{ border:2px dashed {FOCO}; min-height:{alto - 4}px; padding:0 7px; }} "
             f"QComboBox {{ padding-right:28px; }} QComboBox:focus {{ padding-right:27px; }}")
+
+
+def fuente(px: int | None = None, negrita: bool = False, titulo: bool = False, mono: bool = False) -> QFont:
+    """Una letra con la familia explícita de la interfaz y su tamaño en píxeles. Para medir texto antes de que el widget tenga la
+    letra de su hoja de estilo: `QFont()` da la de la plataforma, que puede ser otra (y el texto medido no sería el que se pinta)."""
+    f = QFont(FUENTE_MONO if mono else FUENTE_TITULO if titulo else FUENTE)
+    f.setPixelSize(px or T_BASE)
+    f.setBold(negrita)
+    return f
 
 
 # -- propiedades dinámicas ------------------------------------------------------------------------------------------
@@ -373,11 +415,7 @@ def icono(tipo: str, color: str = TINTA, grosor: float = 1.75, tam: int = 24) ->
     elif tipo == "dependencias":
         p.drawRect(QRectF(2, 9, 6, 6))
         p.drawRoundedRect(QRectF(15, 3, 8, 18), 1, 1)
-        pen = p.pen()
-        pen.setStyle(Qt.PenStyle.DotLine)
-        pen.setWidthF(1.4)
-        p.setPen(pen)
-        p.drawLine(QPointF(8, 9), QPointF(15, 3))
+        p.drawLine(QPointF(8, 9), QPointF(15, 3))  # (el mismo trazo de 1,75 px que el resto de iconos)
         p.drawLine(QPointF(8, 15), QPointF(15, 21))
     elif tipo == "reiniciar":
         arco, punta = _trazos_reinicio()

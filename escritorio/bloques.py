@@ -556,7 +556,9 @@ class Motor:
         self.fuente = fuente
         self.vars: dict[str, tuple[str, str]] = {}
         self.etapas: list[str] = []
-        self.f = QFont()
+        # La letra de las fichas lleva su familia explícita: con `QFont()` (la de la plataforma) se medía con una y se pintaba con
+        # otra (en el pintor, el dispositivo le pone la de la hoja de estilo) y el texto se salía del hexágono: «ʼin», «narch».
+        self.f = QFont(estilo.FUENTE)
         self.f.setPixelSize(12)
         self.fb = QFont(self.f)
         self.fb.setBold(True)
@@ -1662,6 +1664,7 @@ class Programador(QWidget):
     mismo programador en una ventana más grande, sincronizada con éste."""
 
     cambiado = Signal(str)
+    franja_cambiada = Signal()  # la franja de categorías cambió de alto (al cambiar de ancho): el panel que lo contiene puede necesitar más
     PALETA_MIN, PALETA_MAX = 110, 240  # la columna de bloques mide lo justo para el más ancho, entre estos límites
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], historial: bool = False,
@@ -1686,9 +1689,9 @@ class Programador(QWidget):
         lay.setSpacing(6)
         # Franja superior: categorías, con desplazamiento horizontal en paneles estrechos.
         carpetas = QWidget()
-        cl = QHBoxLayout(carpetas)
+        cl = FlowLayout(carpetas, 2)  # las categorías pasan a una segunda fila si no caben: ninguna queda cortada («Sal…»)
         cl.setContentsMargins(0, 0, 2, 0)
-        cl.setSpacing(2)
+        self._flujo_carpetas = cl
         self.categorias: dict[str, QPushButton] = {}
         for clave, titulo in self.lista_categorias:
             b = QPushButton(titulo)
@@ -1699,15 +1702,10 @@ class Programador(QWidget):
             b.setToolTip(titulo)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)  # objetivo táctil de 32 px
-            b.setStyleSheet(f"QPushButton {{ text-align: left; padding: 4px 10px; border: 1px solid transparent; "
-                            f"border-radius: {estilo.R_S}px; background: transparent; min-height: {estilo.ALTO_CONTROL_COMPACTO - 10}px; }}"
-                            f"QPushButton:hover {{ background: {estilo.HOVER}; }}"
-                            f"QPushButton:focus {{ border: 2px dashed {estilo.FOCO}; padding: 3px 9px; }}"
-                            f"QPushButton:checked {{ color: {estilo.TINTA}; background: {estilo.ACENTO_SUAVE}; border: 1px solid {estilo.ACENTO}; }}")
+            b.setStyleSheet(self._hoja_categoria())
             b.clicked.connect(lambda _=False, c=clave: self.elegir_categoria(c))
             cl.addWidget(b)
             self.categorias[clave] = b
-        cl.addStretch(1)
         self._sc_carpetas = _desplazable(carpetas)
         self._sc_carpetas.setObjectName("categoriasBloques")
         self._sc_carpetas.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: white; }")
@@ -1755,6 +1753,23 @@ class Programador(QWidget):
                 s.activated.connect(f)
         self.elegir_categoria("numero" if valor else "entrada")
 
+    @staticmethod
+    def _hoja_categoria() -> str:
+        return (f"QPushButton {{ text-align: left; padding: 4px 10px; border: 1px solid transparent; "
+                f"border-radius: {estilo.R_S}px; background: transparent; min-height: {estilo.ALTO_CONTROL_COMPACTO - 10}px; }}"
+                f"QPushButton:hover {{ background: {estilo.HOVER}; }}"
+                f"QPushButton:pressed {{ background: {estilo.PULSADO}; }}"
+                f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 3px 9px; }}"
+                f"QPushButton:checked {{ color: {estilo.TINTA}; background: {estilo.ACENTO_SUAVE}; border: 1px solid {estilo.ACENTO}; }}")
+
+    def escalar(self) -> None:
+        """Cambió la escala de letra y de controles: las categorías miden lo que su escala y la franja se reparte otra vez."""
+        for b in self.categorias.values():
+            b.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
+            b.setStyleSheet(self._hoja_categoria())
+        self._flujo_carpetas.invalidate()
+        self._ajustar_franja()
+
     def minimumSizeHint(self) -> QSize:  # noqa: N802
         return QSize(self._sc_paleta.width() + 180, 116 if self.compacto else 112)
 
@@ -1783,13 +1798,15 @@ class Programador(QWidget):
 
     def resizeEvent(self, event: Any) -> None:
         super().resizeEvent(event)
-        if self.compacto:
-            carpetas = self._sc_carpetas.widget()
-            ancho = carpetas.minimumSizeHint().width()
-            alto = carpetas.sizeHint().height()+2
-            if ancho > self._sc_carpetas.viewport().width():
-                alto += self._sc_carpetas.horizontalScrollBar().sizeHint().height()
-            self._sc_carpetas.setFixedHeight(max(30, alto))
+        self._ajustar_franja()
+
+    def _ajustar_franja(self) -> None:
+        # la franja de categorías mide lo que sus filas: una si caben todas, dos o más si no (nunca barra ni botón cortado)
+        ancho = max(self._sc_carpetas.viewport().width(), 60)
+        alto = max(30, self._flujo_carpetas.heightForWidth(ancho) + 4)
+        if alto != self._sc_carpetas.height():
+            self._sc_carpetas.setFixedHeight(alto)
+            self.franja_cambiada.emit()
 
     def refrescar(self) -> None:
         """Las variables o las etapas del modelo cambiaron (se creó, renombró, quitó o cambió de papel o tipo una

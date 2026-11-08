@@ -108,7 +108,15 @@ def escena_foco(w, app) -> None:
     _editable(w, app)
     w.edicion.seleccionar([_transicion(w)])
     _reposo(app)
-    w.tb_sim.widgetForAction(w.a_ejecutar).setFocus(Qt.FocusReason.TabFocusReason)
+    from PySide6.QtTest import QTest
+    w.activateWindow()
+    w.diagrama.setFocus(Qt.FocusReason.OtherFocusReason)
+    _reposo(app)
+    for _ in range(40):  # con Tab de verdad: sale el anillo
+        if app.focusWidget() is w.tb_sim.widgetForAction(w.a_ejecutar):
+            break
+        QTest.keyClick(app.focusWidget(), Qt.Key.Key_Tab, Qt.KeyboardModifier.ControlModifier if app.focusWidget() is w.diagrama else Qt.KeyboardModifier.NoModifier)
+        _reposo(app, 3)
     _reposo(app)
 
 
@@ -154,8 +162,7 @@ def capturar(tamano: str, escena: str, salida: Path) -> Path:
             else:
                 {"editor": escena_editor, "propiedades": escena_propiedades, "simulacion": escena_simulacion,
                  "es": escena_es, "foco": escena_foco, "maqueta-panel-bajo": escena_maqueta_panel_bajo}[escena](w, app)
-            if escena not in ("foco", "simulacion") and app.focusWidget() is not None:  # (quitar el foco al botón pulsado lo soltaría)
-                app.focusWidget().clearFocus()  # sin anillo de foco en las demás escenas: se ve el estado de reposo
+            # (sin `clearFocus()`: lo que se captura es lo que se ve; ningún anillo sin teclado lo comprueba `foco.py`)
             _reposo(app, 30)
             destino = salida / f"{escena}-{tamano}.png"
             w.grab().save(str(destino))

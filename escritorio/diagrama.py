@@ -1302,21 +1302,24 @@ CLAVE_DEPENDENCIAS = "dibujo/mostrar_dependencias"  # dónde recuerda QSettings 
 VISIBLE_MIN = 80     # px del dibujo que, como mínimo, siguen a la vista al desplazarse o alejar (nunca se pierde del todo)
 ESTILO_FLECHA = (f"QToolButton {{ background: rgba(255,255,255,235); border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_S}px; "
                  f"color: {estilo.TINTA}; font-size: 13px }} QToolButton:hover {{ background: {estilo.ACENTO_SUAVE} }}")
-ESTILO_BARRA_ZOOM = (
+def estilo_barra_zoom() -> str:
+    """La hoja de los controles del zoom con la escala de letra y de controles de ahora (`estilo.activar_escala`)."""
+    return (
     f"QFrame#barraZoom {{ background: rgba(255,255,255,242); border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_M}px }} "
-    f"QFrame#barraZoom QToolButton {{ border: 1px solid transparent; border-radius: {estilo.R_S}px; padding: 0 8px; min-height: 30px; "
-    f"min-width: 30px; font-size: 13px; font-weight: 600; color: {estilo.TINTA}; background: transparent }} "
-    f"QFrame#barraZoom QToolButton#pasoZoom {{ font-size: 20px; padding: 0 4px; }} "
+    f"QFrame#barraZoom QToolButton {{ border: 1px solid transparent; border-radius: {estilo.R_S}px; padding: 0 8px; min-height: {estilo.ALTO_CONTROL_COMPACTO - 2}px; "
+    f"min-width: {estilo.ALTO_CONTROL_COMPACTO - 2}px; font-size: {estilo.T_BASE}px; font-weight: 600; color: {estilo.TINTA}; background: transparent }} "
+    f"QFrame#barraZoom QToolButton#pasoZoom {{ font-size: {estilo.T_TITULO + 4}px; padding: 0 4px; }} "
     f"QFrame#barraZoom QToolButton:hover {{ background: {estilo.ACENTO_SUAVE}; border-color: {estilo.ACENTO_BORDE} }} "
     f"QFrame#barraZoom QToolButton:pressed {{ background: {estilo.PULSADO} }} "
     f"QFrame#barraZoom QToolButton:disabled {{ color: {estilo.DESHABILITADO}; background: transparent; border-color: transparent }} "
-    f"QFrame#barraZoom QToolButton:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 7px }} "
-    f"QFrame#barraZoom QToolButton#pasoZoom:focus {{ padding: 0 3px }} "
+    f"QFrame#barraZoom QToolButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 7px }} "
+    f"QFrame#barraZoom QToolButton#pasoZoom[tecl=\"true\"]:focus {{ padding: 0 3px }} "
     f"QFrame#barraZoom QLabel {{ border: none; min-width: 48px; color: {estilo.TINTA}; font-weight: 600; background: transparent; "
-    f"font-family: {estilo.FAMILIA_MONO} }} "
+    f"font-family: {estilo.FAMILIA_MONO}; font-size: {estilo.T_CIFRA}px }} "
     f"QFrame#barraZoom[compacta=\"true\"] QToolButton {{ min-width: 28px; padding: 0 2px }} "
-    f"QFrame#barraZoom[compacta=\"true\"] QToolButton:focus {{ padding: 0 1px }} "
+    f"QFrame#barraZoom[compacta=\"true\"] QToolButton[tecl=\"true\"]:focus {{ padding: 0 1px }} "
     f"QFrame#barraZoom[compacta=\"true\"] QLabel {{ min-width: 38px }}")
+ESTILO_BARRA_ZOOM = estilo_barra_zoom()
 
 
 class _BarraZoom(QFrame):
@@ -1376,7 +1379,7 @@ class VistaDiagrama(QGraphicsView):
         self.lista_diagnosticos.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.lista_diagnosticos.setStyleSheet(
             "QListWidget { background:transparent; border:0; font-size:13px; } "
-            f"QListWidget:focus {{ border:2px dashed {estilo.FOCO}; }} "
+            f"QListWidget[tecl=\"true\"]:focus {{ border:2px dashed {estilo.FOCO}; }} "
             f"QListWidget::item {{ background:rgba(255,255,255,235); color:{estilo.TINTA}; padding:2px; }}")
         self.lista_diagnosticos.hide()
         self.indicador_diagnosticos = QLabel(self)
@@ -1693,7 +1696,7 @@ class VistaDiagrama(QGraphicsView):
         ventana aloja «Mostrar dependencias» en su barra de herramientas."""
         self.barra = _BarraZoom(self)
         self.barra.setObjectName("barraZoom")
-        self.barra.setStyleSheet(ESTILO_BARRA_ZOOM)
+        self.barra.setStyleSheet(estilo_barra_zoom())
         lay = QHBoxLayout(self.barra)
         lay.setContentsMargins(4, 3, 4, 3)
         lay.setSpacing(2)
@@ -1737,6 +1740,13 @@ class VistaDiagrama(QGraphicsView):
         self.b_dependencias.hide()  # la ventana la aloja en la barra de herramientas
         self.compactar(False, False)
         self.barra.adjustSize()
+
+    def escalar(self) -> None:
+        """Cambió la escala de letra y de controles (pantalla completa o no): la barra del zoom vuelve a medirse con la suya."""
+        self.barra.setStyleSheet(estilo_barra_zoom())
+        self.barra.layout().invalidate()
+        self.barra.adjustSize()
+        self._colocar()
 
     def compactar(self, estrecho: bool, bajo: bool) -> None:
         """Ventana estrecha: «Centrar todo» y «Centrar selección» pasan a solo icono; baja: los controles se quedan en 32 px."""
@@ -1895,8 +1905,17 @@ class VistaDiagrama(QGraphicsView):
     def _barras(self) -> None:
         """Las barras de desplazamiento solo con zoom manual: al ajustar el dibujo cabe entero y no hay nada que mover."""
         politica = Qt.ScrollBarPolicy.ScrollBarAlwaysOn if self._manual else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        self.setHorizontalScrollBarPolicy(politica)  # fijas: así la vista no cambia de tamaño al desplazarse o acercar
-        self.setVerticalScrollBarPolicy(politica)
+        horizontal = vertical = politica  # fijas: así la vista no cambia de tamaño al desplazarse o acercar
+        if self._manual and self.controlador is not None and self._contenido is not None:
+            # Al editar, el zoom es siempre «manual» (el dibujo no se reencaja solo), pero una barra solo sirve si lo dibujado no cabe
+            # en esa dirección: se decide con el tamaño entero de la vista (no con el que deja la barra), así no oscila.
+            k = self.escala() or 1.0
+            marco = 2 * self.frameWidth()
+            on, off = Qt.ScrollBarPolicy.ScrollBarAlwaysOn, Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            horizontal = on if self._contenido.width() * k + MARGEN_AJUSTE > self.width() - marco else off
+            vertical = on if self._contenido.height() * k + MARGEN_AJUSTE > self.height() - marco else off
+        self.setHorizontalScrollBarPolicy(horizontal)
+        self.setVerticalScrollBarPolicy(vertical)
         self._colocar()
 
     def _al_origen(self) -> None:
@@ -1932,6 +1951,8 @@ class VistaDiagrama(QGraphicsView):
             self.ajustar()
         elif self._origen:
             self._al_origen()
+        if self._manual and self.controlador is not None:
+            self._barras()  # lo dibujado cambió: puede haber dejado de caber, o de sobrar la barra
 
     def guardar_encuadre(self) -> tuple:
         """Fija el zoom y un punto en coordenadas de pantalla durante un cambio de paneles/modo."""
@@ -2040,6 +2061,7 @@ class VistaDiagrama(QGraphicsView):
         if not self._manual:
             self.ajustar()
         else:
+            self._barras()  # (al editar, las barras dependen de lo que cabe en la vista)
             self._actualizar_escena()  # la vista cambia de tamaño y con ella los márgenes de la escena
             if self._origen:
                 self._al_origen()

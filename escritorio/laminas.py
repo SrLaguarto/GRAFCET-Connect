@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from PySide6.QtCore import Qt,QRectF,QRect,QSize,QSizeF,QMarginsF,QPointF,QByteArray,QBuffer,QIODevice,Signal
 from PySide6.QtGui import (QPainter,QPen,QColor,QFont,QPdfWriter,QPageSize,QPageLayout,QTextLayout,QTextOption)
 from PySide6.QtSvg import QSvgGenerator
+from .paneles import ComboElidido
 from PySide6.QtPrintSupport import QPrinter,QPrintDialog
 from PySide6.QtWidgets import (QWidget,QDialog,QVBoxLayout,QHBoxLayout,QFormLayout,QScrollArea,
     QComboBox,QDoubleSpinBox,QLineEdit,QCheckBox,QPushButton,QLabel,QFileDialog,QMessageBox,
@@ -297,7 +298,7 @@ class DocumentoHoja(DocumentoLaminas):
 
 class VistaLamina(QWidget):
     def __init__(self,parent=None):
-        super().__init__(parent);self.documento=None;self.indice=0;self.setMinimumSize(260,220);self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        super().__init__(parent);self.documento=None;self.indice=0;self.setMinimumSize(120,120);self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.colocar=lambda offset:None;self.arrastre=None;self.seleccionado=False;self.capa=0;self.elegir_capa=lambda i:None;self.eliminar_grafico=lambda:None;self.textos=None;self.nuevo_texto=False;self.zona=False;self.inicio_texto=None;self.inicio_zona=None
     def paintEvent(self,event):
         p=QPainter(self);p.fillRect(self.rect(),QColor(estilo.MESA))
@@ -401,7 +402,7 @@ class DialogoLaminas(QDialog):
         if integrado:
             form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows);scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         else:centro.addWidget(scroll)
-        self.predeterminadas=QComboBox();self.predeterminadas.addItem('Elegir plantilla…',None)
+        self.predeterminadas=ComboElidido();self.predeterminadas.addItem('Elegir plantilla…',None)
         self.predeterminadas.addItem('A4 vertical — predeterminada',('A4','vertical'));self.predeterminadas.addItem('A3 horizontal',('A3','horizontal'));self.predeterminadas.addItem('A3 vertical',('A3','vertical'))
         for f in ('A2','A1','A0'):
             for o in ('vertical','horizontal'):self.predeterminadas.addItem(f+' '+o,(f,o))
@@ -411,12 +412,12 @@ class DialogoLaminas(QDialog):
                 if archivo.parent.name not in ('A4_vertical','A3_horizontal','A3_vertical') or archivo.name!='plantilla.json':self.predeterminadas.addItem(archivo.stem,str(archivo))
         except OSError:pass
         form.addRow('Biblioteca de plantillas',self.predeterminadas)
-        self.formato=QComboBox();self.formato.addItems([*FORMATOS,'Personalizado']);self.formato.setCurrentText(self.ajustes['formato'])
-        self.orientacion=QComboBox();self.orientacion.addItem('Horizontal','horizontal');self.orientacion.addItem('Vertical','vertical');self.orientacion.setCurrentIndex(self.orientacion.findData(self.ajustes['orientacion']))
+        self.formato=ComboElidido();self.formato.addItems([*FORMATOS,'Personalizado']);self.formato.setCurrentText(self.ajustes['formato'])
+        self.orientacion=ComboElidido();self.orientacion.addItem('Horizontal','horizontal');self.orientacion.addItem('Vertical','vertical');self.orientacion.setCurrentIndex(self.orientacion.findData(self.ajustes['orientacion']))
         self.margen=QDoubleSpinBox();self.margen.setRange(5,40);self.margen.setSuffix(' mm');self.margen.setValue(self.ajustes['margen_mm']);self.margen.setEnabled(False);self.margen.setToolTip('Margen definido por la plantilla; no se modifica desde la hoja')
-        self.modo=QComboBox();self.modo.addItem('Ajustar a una hoja','ajustar');self.modo.addItem('Escala fija / mosaico','escala');self.modo.setCurrentIndex(self.modo.findData(self.ajustes['modo']))
+        self.modo=ComboElidido();self.modo.addItem('Ajustar a una hoja','ajustar');self.modo.addItem('Escala fija / mosaico','escala');self.modo.setCurrentIndex(self.modo.findData(self.ajustes['modo']))
         self.escala=QDoubleSpinBox();self.escala.setRange(.01,10000);self.escala.setDecimals(2);self.escala.setSingleStep(.1);self.escala.setToolTip('A 1:1 una etapa mide 11,64 mm. Bajar el denominador aumenta el dibujo; subirlo lo reduce.');self.escala.setPrefix('1 : ');self.escala.setValue(self.ajustes['escala'])
-        self.unidad=QComboBox();self.unidad.addItem('Elegir referencia…',None);self.unidad.addItem('96 ppp (44 u = 11,64 mm)',25.4/96);self.unidad.addItem('1 unidad = 1 mm',1.0)
+        self.unidad=ComboElidido();self.unidad.addItem('Elegir referencia…',None);self.unidad.addItem('96 ppp (44 u = 11,64 mm)',25.4/96);self.unidad.addItem('1 unidad = 1 mm',1.0)
         for i in range(self.unidad.count()):
             if self.unidad.itemData(i)==self.ajustes['unidad_mm']:self.unidad.setCurrentIndex(i)
         self.con_estado=QCheckBox('Incluir estado de simulación');self.con_estado.setEnabled(bool(estado));self.con_estado.setChecked(bool(estado) and self.ajustes['con_estado'])

@@ -37,6 +37,7 @@ from grafcet.expressions import is_event_positive
 from grafcet.view import norm
 
 from . import estilo
+from .paneles import TituloSeccion
 from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
 from .paneles import PilaActual
@@ -384,9 +385,7 @@ class FichaJerarquia(QWidget):
         lay.setSpacing(4)
         # Botones de acciones avanzadas (los mismos del botón derecho): más bajos que los de panel, para que varias filas quepan
         # en una columna estrecha sin que el panel crezca (el menú contextual sigue ahí para quien necesite un objetivo mayor)
-        self.setStyleSheet(f"QPushButton {{ min-height: 20px; padding: 0 8px; font-size: {estilo.T_PEQUENA}px; }} "
-                           f"QCheckBox {{ min-height: 22px; font-size: {estilo.T_PEQUENA}px; }} "
-                           f"QPushButton:focus {{ border: 2px dashed {estilo.FOCO}; min-height: 18px; padding: 0 7px; }}")
+        self.setStyleSheet(self._hoja())
         self.texto = QLabel()
         self.texto.setWordWrap(True)
         self.texto.setStyleSheet("font-weight: 600")
@@ -399,6 +398,15 @@ class FichaJerarquia(QWidget):
         for t in self.ORDEN:
             self._crear(t)
         self.hide()
+
+    @staticmethod
+    def _hoja() -> str:
+        return (f"QPushButton {{ min-height: 20px; padding: 0 8px; font-size: {estilo.T_PEQUENA}px; }} "
+                f"QCheckBox {{ min-height: 22px; font-size: {estilo.T_PEQUENA}px; }} "
+                f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; min-height: 18px; padding: 0 7px; }}")
+
+    def escalar(self) -> None:
+        self.setStyleSheet(self._hoja())
 
     def _crear(self, texto: str) -> QAbstractButton:
         b: QAbstractButton = QCheckBox(texto) if texto in self.CASILLAS else QPushButton(texto)
@@ -441,6 +449,23 @@ class FichaJerarquia(QWidget):
 
 class PanelPropiedades(QWidget):
     """Las opciones del elemento seleccionado, con campos editables (el panel «Opciones» de abajo)."""
+    ANCHO_MINIMO = 560  # lo más ancho que pide el panel a la ventana: con él abierto, la ventana baja a 640 px y vuelve
+
+    def escalar(self) -> None:
+        """Cambió la escala de letra y de controles (pantalla completa o no): campos, «Fijar», categorías y fichas se miden otra vez."""
+        self.setStyleSheet(estilo.campos_compactos())
+        self.t_fijar.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
+        for prog in (self.prog, getattr(self.accion, "prog", None)):
+            if prog is not None:
+                prog.escalar()
+        for ficha in (self.ficha_izq, self.ficha_etapa):
+            ficha.escalar()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        """El ancho mínimo no pasa de `ANCHO_MINIMO`: al abrirse (y mientras sus páginas aún no se han repartido) el panel llegó a
+        pedir 773 px y sacaba la ventana de su media pantalla sin que volviera. El alto sí es el de su contenido."""
+        tam = super().minimumSizeHint()
+        return QSize(min(tam.width(), self.ANCHO_MINIMO), tam.height())
 
     def __init__(self) -> None:
         super().__init__()
@@ -465,7 +490,7 @@ class PanelPropiedades(QWidget):
         self.fila_cabecera = QHBoxLayout(self.cabecera)
         self.fila_cabecera.setContentsMargins(estilo.E2, 0, 40, 0)  # a la derecha, el sitio del botón de plegar (32 px)
         self.fila_cabecera.setSpacing(estilo.E3)
-        self.titulo = QLabel()
+        self.titulo = TituloSeccion(x_marcador=4)
         self.titulo.setObjectName("tituloPropiedades")
         self.fila_cabecera.addWidget(self.titulo)
         lay.addWidget(self.cabecera)
@@ -519,9 +544,9 @@ class PanelPropiedades(QWidget):
         self.t_fijar.setStyleSheet(f"QToolButton{{padding:0 12px;border:1px solid {estilo.BORDE_CONTROL};"
                                    f"border-radius:{estilo.R_S}px;background:{estilo.SUPERFICIE};}}"
                                    f"QToolButton:hover{{background:{estilo.HOVER};border-color:{estilo.TINTA_2};}}"
-                                   f"QToolButton:focus{{border:2px dashed {estilo.FOCO};padding:0 11px;}}"
+                                   f"QToolButton[tecl=\"true\"]:focus{{border:2px dashed {estilo.FOCO};padding:0 11px;}}"
                                    f"QToolButton:checked{{background:{estilo.ACENTO};color:white;border-color:{estilo.ACENTO_OSCURO};font-weight:600;}}"
-                                   f"QToolButton:checked:focus{{border:2px dashed white;}}")
+                                   f"QToolButton:checked[tecl=\"true\"]:focus{{border:2px dashed white;}}")
         self.fila_cabecera.addWidget(self.t_fijar)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
@@ -575,7 +600,7 @@ class PanelPropiedades(QWidget):
         self.t_crear.clicked.connect(self._crear)
         g.addWidget(QLabel("Fórmula"), 0, 0)
         g.addWidget(self.t_texto, 0, 1)
-        self.t_estado.setMinimumWidth(QFontMetrics(self.t_estado.font()).horizontalAdvance("Receptividad correcta.")+8)
+        self.t_estado.setMinimumWidth(QFontMetrics(estilo.fuente()).horizontalAdvance("Receptividad") + 24)  # (la frase se parte en dos líneas si hace falta)
         self.t_estado.setMaximumWidth(260)
         self.t_texto.setMinimumWidth(80)
         g.addWidget(self.t_estado, 0, 2)

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxL
                                QStyledItemDelegate)
 
 from . import estilo
+from .paneles import TituloSeccion
 from conexion.adaptador import texto_numero
 from conexion.configuracion import ETIQUETA_CANAL, CONEXION_INICIAL, CANALES_INICIALES, Configuracion, Senal, normalizar_host
 
@@ -35,19 +36,25 @@ MIME_VARIABLE = "application/x-grafconnect-variable"
 # Aspecto. El color de la barrita es el del tipo; su viveza, el estado: tenue (canal sin asignar), tipo (asignado) y vivo
 # (la señal está activa). La leyenda de abajo explica los colores.
 FONDO = estilo.SUPERFICIE_2
-COLOR_TIPO = {"bool": "#22a342", "decimal": "#008add", "int": "#d96a0c"}
-COLOR_CUALQUIERA = "#6d837b"
+COLOR_TIPO = {"bool": estilo.TIPO_BOOL, "decimal": estilo.TIPO_DECIMAL, "int": estilo.TIPO_ENTERA}
+COLOR_CUALQUIERA = estilo.TIPO_CUALQUIERA
 LEYENDA = (("Bool", "bool"), ("Decimal", "decimal"), ("Entera", "int"), ("Cualquiera", None))
 NIVEL_TENUE, NIVEL_ASIGNADO, NIVEL_ACTIVO = .28, .62, 1.0
 ALTO_FILA = 16
 ALTO_VARIABLE = ALTO_FILA
 ANCHO_INTERIOR = 200  # la mitad del marco que cae dentro de él: indicador, nombre del canal y, en los registros, su valor
 ROL_COLOR, ROL_ASIGNADA, ROL_ACTIVO = (Qt.ItemDataRole.UserRole + n for n in (1, 2, 3))
-ESTILO_PANEL = f"""
+def estilo_panel() -> str:
+    """La hoja de la vista de E/S con la escala de letra de ahora (`estilo.activar_escala`)."""
+    return f"""
     QWidget#conexionES {{ background:{estilo.FONDO}; }}
     QWidget#conexionES, QWidget#conexionES QLabel, QWidget#conexionES QListWidget {{ font-size:{estilo.T_PEQUENA}px; }}
     QWidget#tarjetaES {{ background:white; border:1px solid {estilo.BORDE}; border-radius:{estilo.R_M}px; }}
     QWidget#tarjetaES QLabel {{ border:0; }}
+    QWidget#conexionES QLabel#canalES {{ color:{estilo.TINTA_2}; }}
+    QWidget#conexionES QLabel#asignacionES {{ color:{estilo.TINTA}; }}
+    QWidget#conexionES QLabel#asignacionES[aviso="true"] {{ color:{estilo.AVISO}; }}
+    QWidget#conexionES QLabel#valorES {{ color:{estilo.TINTA_2}; font-size:{estilo.T_PEQUENA}px; font-family:{estilo.FAMILIA_MONO}; }}
     QWidget#conexionES QLabel#tituloPLC {{ color:{estilo.ACENTO}; font-size:{estilo.T_SECCION}px; font-weight:600; padding:6px; }}
     QFrame#cabeceraES {{ background:{estilo.SUPERFICIE}; border:0; border-bottom:1px solid {estilo.BORDE}; }}
     QFrame#cabeceraES[estadoVisual="conectado"] {{ background:{estilo.SIMULACION_SUAVE}; border-bottom:2px solid {estilo.SIMULACION}; }}
@@ -56,11 +63,11 @@ ESTILO_PANEL = f"""
         border-radius:{estilo.R_S}px; min-height:{estilo.ALTO_CONTROL_COMPACTO - 2}px; font-size:{estilo.T_BASE}px; }}
     QFrame#cabeceraES QPushButton:hover {{ background:{estilo.HOVER}; border-color:{estilo.TINTA_2}; }}
     QFrame#cabeceraES QPushButton:pressed {{ background:{estilo.PULSADO}; }}
-    QFrame#cabeceraES QPushButton:focus {{ border:2px dashed {estilo.FOCO}; padding:0 13px; min-height:{estilo.ALTO_CONTROL_COMPACTO - 4}px; }}
+    QFrame#cabeceraES QPushButton[tecl="true"]:focus {{ border:2px dashed {estilo.FOCO}; padding:0 13px; min-height:{estilo.ALTO_CONTROL_COMPACTO - 4}px; }}
     QFrame#cabeceraES QPushButton:disabled {{ color:{estilo.DESHABILITADO}; background:{estilo.SUPERFICIE_2}; border-color:{estilo.BORDE}; }}
     QFrame#cabeceraES QPushButton[primario="true"] {{ background:{estilo.ACENTO}; color:white; border-color:{estilo.ACENTO_OSCURO}; font-weight:600; }}
     QFrame#cabeceraES QPushButton[primario="true"]:hover {{ background:{estilo.ACENTO_HOVER}; }}
-    QFrame#cabeceraES QPushButton[primario="true"]:focus {{ border:2px dashed white; }}
+    QFrame#cabeceraES QPushButton[primario="true"][tecl="true"]:focus {{ border:2px dashed white; }}
     QWidget#conexionES QLabel#tituloES {{ color:{estilo.TINTA}; font-size:{estilo.T_TITULO}px; font-weight:700; padding-left:4px; }}
     QWidget#cuerpoES, QFrame#pieES {{ background:transparent; }}
     QWidget#cuerpoES QLabel, QFrame#pieES QLabel {{ color:{estilo.TINTA_2}; background:transparent; }}
@@ -68,27 +75,30 @@ ESTILO_PANEL = f"""
     QWidget#conexionES QLabel#ayudaES, QWidget#conexionES QLabel#resumenES {{ color:{estilo.TINTA_2}; }}
     QFrame#moduloPLC {{ background:transparent; border:1px solid {estilo.BORDE_CONTROL}; }}
     QListWidget#listaES {{ background:transparent; border:0; outline:0; }}
-    QListWidget#listaES:focus {{ border:2px dashed {estilo.FOCO}; }}
+    QListWidget#listaES[tecl="true"]:focus {{ border:2px dashed {estilo.FOCO}; }}
     QScrollArea#scrollES {{ background:white; border:1px solid {estilo.BORDE}; border-radius:{estilo.R_M}px; }}
     QScrollArea#scrollES > QWidget > QWidget {{ background:white; }}
     QScrollArea#scrollCuerpoES, QScrollArea#scrollCuerpoES > QWidget > QWidget#cuerpoES {{ background:transparent; }}
-    QWidget#conexionES QScrollBar:vertical {{ background:{estilo.BORDE}; width:12px; margin:0; border-radius:6px; }}
-    QWidget#conexionES QScrollBar::handle:vertical {{ background:{estilo.BORDE_CONTROL}; border-radius:5px; margin:1px; min-height:36px; }}
-    QWidget#conexionES QScrollBar:horizontal {{ background:{estilo.BORDE}; height:12px; margin:0; border-radius:6px; }}
-    QWidget#conexionES QScrollBar::handle:horizontal {{ background:{estilo.BORDE_CONTROL}; border-radius:5px; margin:1px; min-width:36px; }}
+    QWidget#conexionES QScrollBar:vertical {{ background:{estilo.BORDE}; width:{estilo.ANCHO_BARRA}px; margin:0; border-radius:{estilo.ANCHO_BARRA // 2}px; }}
+    QWidget#conexionES QScrollBar::handle:vertical {{ background:{estilo.BORDE_CONTROL}; border-radius:{estilo.ANCHO_BARRA // 2 - 1}px; margin:1px; min-height:36px; }}
+    QWidget#conexionES QScrollBar:horizontal {{ background:{estilo.BORDE}; height:{estilo.ANCHO_BARRA}px; margin:0; border-radius:{estilo.ANCHO_BARRA // 2}px; }}
+    QWidget#conexionES QScrollBar::handle:horizontal {{ background:{estilo.BORDE_CONTROL}; border-radius:{estilo.ANCHO_BARRA // 2 - 1}px; margin:1px; min-width:36px; }}
     QWidget#conexionES QScrollBar::add-line, QWidget#conexionES QScrollBar::sub-line {{ height:0; width:0; }}
     QWidget#conexionES QScrollBar::add-page, QWidget#conexionES QScrollBar::sub-page {{ background:transparent; }}
     QPushButton#quitarES {{ background:transparent; color:{estilo.TINTA_2}; border:0; padding:0; font-size:14px; min-height:0; }}
     QPushButton#quitarES:hover {{ color:{estilo.ERROR}; }}
-    QPushButton#quitarES:focus {{ border:1px dashed {estilo.FOCO}; padding:0; }}
+    QPushButton#quitarES[tecl="true"]:focus {{ border:1px dashed {estilo.FOCO}; padding:0; }}
     QPushButton#quitarES:disabled {{ color:{estilo.DESHABILITADO}; background:transparent; }}
 """
+
+
+ESTILO_PANEL = estilo_panel()
 
 
 def mezclar(color, nivel):
     """El color sobre el fondo: nivel 1 es el color entero; menos, más apagado."""
     if nivel < NIVEL_ACTIVO:
-        return QColor("#cbd2d5" if nivel < NIVEL_ASIGNADO else "#7c8a90")  # (3,5:1 sobre blanco; la barrita lleva además un borde de 3,5:1)
+        return QColor(estilo.SENAL_TENUE if nivel < NIVEL_ASIGNADO else estilo.SENAL_ASIGNADA)  # (3,5:1 sobre blanco; la barrita lleva además un borde de 3,5:1)
     c, f = QColor(color).getRgb(), QColor(FONDO).getRgb()
     return QColor(*(round(f[i] + (c[i] - f[i]) * nivel) for i in range(3)))
 
@@ -185,15 +195,15 @@ def _pintar_variable(p, rect, texto, color, activa, derecha, resaltado=False):
     fuente = QFont(p.font()); fuente.setPixelSize(estilo.T_PEQUENA); p.setFont(fuente)
     fm = QFontMetrics(fuente)
     if resaltado:
-        p.fillRect(rect, QColor("#e8f5ef"))
+        p.fillRect(rect, QColor(estilo.RESALTADO))
     p.setPen(QColor(estilo.TINTA))
     tr = rect.adjusted(6, 0, -6, 0)
     p.drawText(tr, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-               fm.elidedText(texto, Qt.TextElideMode.ElideRight, tr.width()))
+               fm.elidedText(texto, Qt.TextElideMode.ElideMiddle, tr.width()))  # por el medio: conserva el final que distingue sensor_1 de sensor_2
 
 
 def figura_variable(texto, color, derecha, activa=False):
-    fuente = QFont(); fuente.setPixelSize(estilo.T_PEQUENA)
+    fuente = QFont(estilo.FUENTE); fuente.setPixelSize(estilo.T_PEQUENA)
     pm = QPixmap(QFontMetrics(fuente).horizontalAdvance(texto) + 18, ALTO_VARIABLE)
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm); p.setFont(fuente)
@@ -271,17 +281,17 @@ class TerminalES(QFrame):
         else:  # sin asignar: tenue, con el color propio del área (los registros admiten Decimal y Entera)
             self.led.fijar((COLOR_TIPO["decimal"], COLOR_TIPO["int"]) if analogica else (COLOR_TIPO["bool"],), NIVEL_TENUE)
         self.canal = QLabel(f"{ETIQUETA_CANAL[area]} {direccion}")
-        self.canal.setStyleSheet(f"color:{estilo.TINTA_2}")
+        self.canal.setObjectName("canalES")  # (su color, en la hoja del panel: una hoja por etiqueta costaba 3 de cada 88 filas)
         self.nombre = EtiquetaElidida(variable["name"] if variable else "",
                                       Qt.AlignmentFlag.AlignRight if entrada else Qt.AlignmentFlag.AlignLeft)
         self.nombre.setObjectName("asignacionES")  # lo que se agarra para mover la asignación a otro canal
-        self.nombre.setStyleSheet(f"color:{estilo.AVISO}" if aviso else f"color:{estilo.TINTA}")
+        self.nombre.setProperty("aviso", bool(aviso))  # ámbar si lleva aviso (hoja del panel: `QLabel#asignacionES[aviso="true"]`)
         self.marca = None
         if aviso:  # señal ámbar junto a la fila: no impide nada, solo avisa
             self.marca = self._crear_marca(aviso)
         self.nombre.setToolTip(self._ayuda_nombre(aviso))  # el nombre entero, aunque la etiqueta lo recorte con «…»
         self.valor = QLabel("—" if variable else "", self)
-        self.valor.setStyleSheet(f"color:{estilo.TINTA_2}; font-size:{estilo.T_PEQUENA}px; font-family:{estilo.FAMILIA_MONO}")
+        self.valor.setObjectName("valorES")  # cifra en la letra técnica, color y tamaño en la hoja del panel
         self.valor.setVisible(analogica)
         self.barrita_nombre = IndicadorES(6, 13)
         self.barrita_nombre.hide()  # el estado se muestra solo en el indicador del canal del PLC
@@ -359,7 +369,7 @@ class TerminalES(QFrame):
             self.marca.setToolTip(texto)
             self.marca.setVisible(bool(texto))
         self.nombre.setToolTip(self._ayuda_nombre(texto))
-        self.nombre.setStyleSheet(f"color:{estilo.AVISO}" if texto else f"color:{estilo.TINTA}")
+        estilo.poner(self.nombre, aviso=bool(texto))
 
     def mimeData(self):
         datos = QMimeData()
@@ -384,7 +394,7 @@ class TerminalES(QFrame):
     def paintEvent(self, evento):
         super().paintEvent(evento)
         if self._resaltado:
-            QPainter(self).fillRect(self.zona_asignacion(), QColor("#c1e8dc"))
+            QPainter(self).fillRect(self.zona_asignacion(), QColor(estilo.ASIGNACION))
 
     def enterEvent(self, evento):
         if self.b_quitar is not None and self.b_quitar.isEnabled():
@@ -711,6 +721,13 @@ class PanelES(QWidget):
     volver = Signal()
     estado_cambiado = Signal(str, str)  # (estado, mensaje): lo que enseña el indicador de la barra de simulación
 
+    def escalar(self) -> None:
+        """Cambió la escala de letra y de controles (pantalla completa o no): la letra y la hoja de la vista se ponen otra vez."""
+        fuente = QFont(self.font())
+        fuente.setPixelSize(estilo.T_PEQUENA)
+        self.setFont(fuente)
+        self.setStyleSheet(estilo_panel())
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("conexionES")
@@ -718,7 +735,7 @@ class PanelES(QWidget):
         fuente = QFont(self.font())
         fuente.setPixelSize(estilo.T_PEQUENA)  # letra algo menor: caben más canales
         self.setFont(fuente)
-        self.setStyleSheet(ESTILO_PANEL)
+        self.setStyleSheet(estilo_panel())
         self.doc = None
         self._cargando = True
         self.parametros_defecto = {}
@@ -818,7 +835,7 @@ class PanelES(QWidget):
             cl = QVBoxLayout(columna)
             cl.setContentsMargins(0, 0, 0, 0)
             cl.setSpacing(0)
-            etiqueta = QLabel("SENSORES" if rol == "input" else "ACTUADORES")
+            etiqueta = TituloSeccion("SENSORES" if rol == "input" else "ACTUADORES", 6)
             etiqueta.setObjectName("seccionES")
             etiqueta.setAlignment(Qt.AlignmentFlag.AlignLeft)
             etiqueta.setTextFormat(Qt.TextFormat.RichText)
@@ -873,7 +890,7 @@ class PanelES(QWidget):
             QHeaderView::section {{ background:{estilo.SUPERFICIE_2}; color:{estilo.TINTA_2}; padding:6px; border:0; font-weight:600; }}
             QPushButton {{ background:{estilo.SUPERFICIE}; color:{estilo.TINTA}; padding:6px 14px; border:1px solid {estilo.BORDE_CONTROL}; border-radius:{estilo.R_S}px; }}
             QPushButton:hover {{ background:{estilo.HOVER}; }}
-            QPushButton:focus {{ border:2px dashed {estilo.FOCO}; padding:5px 13px; }}
+            QPushButton[tecl="true"]:focus {{ border:2px dashed {estilo.FOCO}; padding:5px 13px; }}
             QPushButton:disabled {{ color:{estilo.DESHABILITADO}; }}
         """)
         ajustes = QVBoxLayout(self.dialogo_config)
@@ -1090,7 +1107,7 @@ class PanelES(QWidget):
         self.check.setText("✓" if conectado else "✕" if fallo else "●")
         self.check.setStyleSheet(f"background:{estilo.OK if conectado else estilo.ERROR if fallo else 'transparent'}; "
                                  f"color:{'white' if conectado or fallo else estilo.TINTA_3}; "
-                                 f"border-radius:8px; font-size:{estilo.T_PEQUENA}px; font-weight:600")
+                                 f"border-radius:{estilo.R_M}px; font-size:{estilo.T_PEQUENA}px; font-weight:600")
         self.check.setToolTip(mensaje)
         self.estado.setStyleSheet(f"color:{estilo.OK if conectado else estilo.ERROR if fallo else estilo.AVISO if self._hubo_conexion else estilo.TINTA_2}; font-weight:600")
         self.estado.setVisible(True)

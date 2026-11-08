@@ -1,9 +1,10 @@
 """Página de Planos integrada en la ventana: hojas, lienzo y propiedades."""
-from PySide6.QtCore import Qt,QSize,QTimer,QEvent,QPointF,QRect
+from PySide6.QtCore import Qt,QSize,QTimer,QEvent,QPointF,QRect,QRectF
 from PySide6.QtGui import QAction,QIcon,QPixmap,QPainter,QPen,QColor
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QToolBar,QToolButton,
     QSplitter,QListView,QListWidget,QListWidgetItem,QComboBox,QMenu,QMessageBox,QInputDialog,QDoubleSpinBox,QScrollArea,QFormLayout,QPushButton,QStyledItemDelegate,QStyle)
 from . import estilo
+from .paneles import TituloSeccion
 from .bloques import FlowLayout
 from .laminas import DialogoLaminas
 
@@ -46,7 +47,7 @@ class PaginaPlanos(QWidget):
         self.lista_timer=QTimer(self);self.lista_timer.setSingleShot(True);self.lista_timer.setInterval(0);self.lista_timer.timeout.connect(self.ajustar_lista)
         self.dimension_timer=QTimer(self);self.dimension_timer.setSingleShot(True);self.dimension_timer.setInterval(0);self.dimension_timer.timeout.connect(self.dimensionar)
         self.guardar_timer=QTimer(self);self.guardar_timer.setSingleShot(True);self.guardar_timer.setInterval(400);self.guardar_timer.timeout.connect(self.aplicar)
-        raiz=QVBoxLayout(self);raiz.setContentsMargins(estilo.E2,estilo.E2,estilo.E2,estilo.E2);raiz.setSpacing(estilo.E1)
+        raiz=QVBoxLayout(self);raiz.setContentsMargins(2*estilo.E2,2*estilo.E2,2*estilo.E2,2*estilo.E2);raiz.setSpacing(estilo.E1)  # (el contenido, dentro de la tarjeta de `paintEvent`)
         barras=QWidget();flujo=FlowLayout(barras,estilo.E2);self.barra=QToolBar('Planos');self.barra.setObjectName('barraPlanos');self.barra.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon);flujo.addWidget(self.barra)
         self.a_hoja=self.barra.addAction('+ Añadir hoja',self.nueva_hoja)
         self.a_nueva=self.barra.addAction('Traer GRAFCET',self.traer)
@@ -69,7 +70,7 @@ class PaginaPlanos(QWidget):
         cab=QHBoxLayout();self.estado=QLabel('EDICIÓN DE PLANO');self.estado.setStyleSheet(estilo.estilo_chip('editar'));self.estado.setFixedHeight(estilo.ALTO_CONTROL-6);self.estado.setObjectName('chipModo')
         self.titulo=QLabel('Planos');self.titulo.setStyleSheet(f'color:{estilo.TINTA};font-weight:700;font-size:{estilo.T_TITULO}px');self.titulo.setMinimumHeight(estilo.ALTO_CONTROL);cab.setSpacing(estilo.E3);cab.addWidget(self.estado);cab.addWidget(self.titulo,1);raiz.addLayout(cab)
         self.divisor=QSplitter(Qt.Orientation.Horizontal);raiz.addWidget(self.divisor,1)
-        lateral=QWidget();l=QVBoxLayout(lateral);l.setContentsMargins(0,0,3,0);l.addWidget(QLabel('Hojas'))
+        lateral=QWidget();l=QVBoxLayout(lateral);l.setContentsMargins(0,0,3,0);l.addWidget(TituloSeccion('Hojas'))
         b_hoja=QToolButton();b_hoja.setDefaultAction(self.a_hoja);self.b_hoja=b_hoja
         self.barra_hoja.removeAction(self.a_hoja)
         self.lista=QListWidget();self.lista.setViewMode(QListView.ViewMode.ListMode);self.lista.setItemDelegate(MiniaturaHoja(self.lista));self.lista.installEventFilter(self);self.lista.setFlow(QListView.Flow.TopToBottom);self.lista.setWrapping(False);self.lista.setMovement(QListView.Movement.Static);self.lista.setResizeMode(QListView.ResizeMode.Adjust);self.lista.setSpacing(0);self.lista.setIconSize(QSize(116,82));self.lista.setWordWrap(True);self.lista.setMinimumWidth(140);self.lista.setMaximumWidth(205);self.lista.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.lista.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);l.addWidget(self.lista);l.addWidget(b_hoja);l.addStretch(1)
@@ -78,6 +79,18 @@ class PaginaPlanos(QWidget):
         self.divisor.addWidget(self.cuerpo);self.divisor.setStretchFactor(0,0);self.divisor.setStretchFactor(1,1);self.divisor.setSizes([160,1100])
         self.lista.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.lista.customContextMenuRequested.connect(self.menu_hoja)
         self.lista.currentRowChanged.connect(self.elegir);self.actualizar_acciones()
+
+    def paintEvent(self,evento):
+        """PLANOS dentro de una tarjeta blanca de borde fino y esquinas redondeadas, como el dibujo, la paleta o el panel de E/S (con el
+        mismo margen de 8 px a los lados y abajo)."""
+        p=QPainter(self);p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(QPen(QColor(estilo.BORDE),1));p.setBrush(QColor(estilo.SUPERFICIE))
+        p.drawRoundedRect(QRectF(self.rect()).adjusted(estilo.E2+.5,.5,-estilo.E2-.5,-estilo.E2-.5),estilo.R_M,estilo.R_M);p.end()
+
+    def escalar(self):
+        """Cambió la escala de letra y de controles (pantalla completa o no): el chip y el título se miden otra vez."""
+        self.estado.setStyleSheet(estilo.estilo_chip('editar'));self.estado.setFixedHeight(estilo.ALTO_CONTROL-6)
+        self.titulo.setStyleSheet(f'color:{estilo.TINTA};font-weight:700;font-size:{estilo.T_TITULO}px');self.titulo.setMinimumHeight(estilo.ALTO_CONTROL)
 
     def compactar(self,on):
         """Ventana estrecha o baja: la hoja manda. Quedan «Traer GRAFCET» y el zoom en una sola fila, y lo secundario (centrar, exportar,
@@ -307,6 +320,8 @@ class PaginaPlanos(QWidget):
     def dimensionar(self):
         if not self.editor or not self.editor.documento:return
         d=self.editor.documento;v=self.editor.vista
+        pol=Qt.ScrollBarPolicy.ScrollBarAlwaysOff if self.automatico else Qt.ScrollBarPolicy.ScrollBarAsNeeded  # «Ajustar hoja»: la hoja cabe, sin barras
+        self.editor.area.setHorizontalScrollBarPolicy(pol);self.editor.area.setVerticalScrollBarPolicy(pol)
         if self.automatico:v.resize(self.editor.area.viewport().size())
         else:v.resize(round(d.ancho*96/25.4*self.factor_zoom)+24,round(d.alto*96/25.4*self.factor_zoom)+24)
         v.update()

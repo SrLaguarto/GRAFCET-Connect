@@ -11,7 +11,7 @@ Aprobado: ningún criterio por debajo de 8, media ≥ 8,5 y ningún defecto bloq
 | C3 | Coherencia | Un sistema de tokens (color, radio, espaciado, tipografía) aplicado igual en editor, simulación, PLANOS y E/S externas. Iconos del mismo trazo. |
 | C4 | Accesibilidad | Contraste WCAG AA (4,5:1 texto, 3:1 controles y bordes de foco); foco de teclado visible en todo control; todo se alcanza con teclado; el estado no se comunica solo por color. |
 | C5 | Densidad y respuesta al tamaño | A pantalla partida y a 1/4 el dibujo conserva el protagonismo, los paneles se pliegan o compactan sin cortar controles y sin barras de desplazamiento horizontales inútiles. Sin tocar nada al cambiar de tamaño. |
-| C6 | Uso táctil | Objetivos ≥ 32 px lógicos (ideal 40), separación ≥ 4 px; nada depende solo de pasar el ratón; dos dedos y pellizco siguen funcionando. |
+| C6 | Uso con panel táctil (touchpad del portátil) | Puntería menos precisa que con ratón: objetivos ≥ 32 px lógicos (ideal 40), separación ≥ 4 px; dos dedos desplazan, pellizco acerca, toque con dos dedos = clic derecho, y el teclado (Ctrl) está disponible. Ninguna información imprescindible solo en ayudas emergentes. No se cambian los gestos ya decididos (P-IMP-75, P-IMP-109). |
 | C7 | Estado de simulación | Edición frente a simulación inconfundible a 3 m: etapas activas, entradas pulsadas/enclavadas, temporizadores. |
 | C8 | Originalidad y acabado | Identidad propia, sin parecerse a un producto concreto; detalle cuidado (alineaciones, ritmo de 4/8 px, estados hover/pulsado/deshabilitado). |
 | C9 | Uso real en clase | Profesorado proyectando y alumnado en portátil con el enunciado al lado: tareas típicas (abrir ejemplo, dibujar, Play, pulsar entradas, ver traza, conectar E/S) con menos pasos o igual. |

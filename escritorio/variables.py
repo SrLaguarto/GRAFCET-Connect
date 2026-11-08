@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHeaderView, QLabel
                                QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from . import estilo
+from .paneles import CabeceraCompacta
 from .diagrama import COL
 from .edicion import Parpadeo
 
@@ -30,7 +31,11 @@ TIPOS = (({"kind": "bool"}, "Booleana"), ({"kind": "int"}, "Entera"), ({"kind": 
 COLUMNAS = ["Nombre", "Papel", "Tipo"]
 SIN_NOMBRE = "Hay una variable sin nombre: escríbale un nombre o quítela"
 NARANJA = "#ffd2ad"
-ESTILO_COMBO = f"QComboBox {{ padding: 0px 1px 0px 3px; min-height: 24px; font-size: {estilo.T_PEQUENA}px; }} QComboBox::drop-down {{ width: 14px; }}"
+def estilo_combo() -> str:
+    return f"QComboBox {{ padding: 0px 1px 0px 3px; min-height: 24px; font-size: {estilo.T_PEQUENA}px; }} QComboBox::drop-down {{ width: 14px; }}"
+
+
+ESTILO_COMBO = estilo_combo()
 
 
 def _clave_tipo(t: dict[str, Any]) -> tuple[Any, ...]:
@@ -60,7 +65,7 @@ class _DelegadoCombo(QStyledItemDelegate):
         r, c = index.row(), index.column()
         cb = QComboBox(parent)
         cb.setFont(self.panel.fuente)
-        cb.setStyleSheet(ESTILO_COMBO)
+        cb.setStyleSheet(estilo_combo())
         actual = self.panel.dato_actual(r, c)
         for dato, texto in self.panel.opciones(r, c):
             cb.addItem(texto, dato)
@@ -118,7 +123,17 @@ def _igual(a: Any, b: Any) -> bool:
     return a == b
 
 
+class _Aviso(QLabel):
+    """El aviso de debajo de la tabla: solo se ve (y solo ocupa alto) cuando tiene texto."""
+
+    def setText(self, texto: str) -> None:  # noqa: N802
+        super().setText(texto)
+        self.setVisible(bool(texto))
+
+
 class PanelVariables(QWidget):
+    detalle = Signal(str)  # la línea de detalle de la fila actual (nombre entero, papel y tipo): la ventana la pone en su barra de estado
+
     def __init__(self) -> None:
         super().__init__()
         self.e: Any = None
@@ -133,14 +148,15 @@ class PanelVariables(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self.tabla = _Tabla(0, len(COLUMNAS))
+        self.tabla.setHorizontalHeader(CabeceraCompacta(Qt.Orientation.Horizontal, self.tabla))  # (su texto, sin márgenes de más: «Nombre» entero)
         self.tabla.suprimir.connect(self.quitar_seleccion)
-        self.tabla.setStyleSheet(f"QHeaderView::section {{ padding: 4px 4px; text-align: left; }} QTableWidget {{ font-size: {estilo.T_PEQUENA}px; }}")
-        self.fuente = QFont(self.tabla.font())  # letra algo menor: el panel es estrecho
-        self.fuente.setPixelSize(estilo.T_PEQUENA)
+        self.tabla.setStyleSheet(self._hoja_tabla())
+        self.fuente = QFont(estilo.FUENTE)  # (con la familia explícita: al medir, la tabla aún no tiene la letra de la hoja de estilo)
+        self.fuente.setPixelSize(estilo.T_PEQUENA)  # letra algo menor: el panel es estrecho
         self.tabla.setFont(self.fuente)
         self.tabla.setHorizontalHeaderLabels(COLUMNAS)
         self.tabla.verticalHeader().hide()
-        self.tabla.verticalHeader().setDefaultSectionSize(estilo.ALTO_FILA)  # filas de 30 px: se acierta con el dedo
+        self.tabla.verticalHeader().setDefaultSectionSize(self._alto_fila())  # filas de 26 px (30 a pantalla completa): caben cinco con sus botones a 1366×768 y Propiedades abierto
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabla.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         cab = self.tabla.horizontalHeader()
@@ -149,19 +165,21 @@ class PanelVariables(QWidget):
         cab.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)  # Papel y Tipo, a su texto más largo (se fija abajo)
         cab.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         fm = QFontMetrics(self.fuente)
-        self.tabla.setColumnWidth(1, max(fm.horizontalAdvance(t) for _, t in PAPELES + (("", "Papel"),)) + 26)
-        self.tabla.setColumnWidth(2, max(fm.horizontalAdvance(t) for _, t in TIPOS + (({}, "Tipo"),)) + 26)
+        self.tabla.setColumnWidth(1, max(fm.horizontalAdvance(t) for _, t in PAPELES + (("", "Papel"),)) + 20)
+        self.tabla.setColumnWidth(2, max(fm.horizontalAdvance(t) for _, t in TIPOS + (({}, "Tipo"),)) + 20)
         cab.setMinimumSectionSize(20)
         self.tabla.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # los nombres largos se elidén; si ni así cabe, barra
         self.tabla.setMinimumWidth(168)  # por debajo, el panel que la contiene se desplaza en vez de aplastar las columnas
-        self.tabla.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.tabla.setTextElideMode(Qt.TextElideMode.ElideMiddle)  # un nombre largo conserva su final, que es lo que lo distingue
         self.tabla.setItemDelegate(_DelegadoCombo(self))
         self.tabla.clicked.connect(self._clic)
         self.tabla.setMinimumHeight(24)
         self.tabla.itemChanged.connect(self._editado)
+        self.tabla.currentCellChanged.connect(lambda fila, *_: self._detallar(fila))
         self.tabla.horizontalHeader().geometriesChanged.connect(self._ajustar_tabla)
         lay.addWidget(self.tabla)
-        cont = QWidget()
+        cont = self.cont = QWidget()
+        cont.setStyleSheet(self._hoja_botones())
         fila = QGridLayout(cont)
         fila.setContentsMargins(0, 0, 0, 0)
         fila.setSpacing(estilo.E1)
@@ -178,14 +196,50 @@ class PanelVariables(QWidget):
         self.b_quitar.setToolTip("Solo si no se usa en ninguna receptividad ni acción")
         self.b_quitar.clicked.connect(self.quitar)
         for i, b in enumerate((*self.b_nuevas.values(), self.b_quitar)):  # botones de la hoja global: 36 px de alto, texto entero
-            b.setMinimumWidth(b.fontMetrics().horizontalAdvance(b.text()) + 24)
+            b.setMinimumWidth(self._ancho_boton(b.text()))
             b.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
             fila.addWidget(b, i // 2, i % 2)
         lay.addWidget(cont)
-        self.msg = QLabel()
+        self.msg = _Aviso()  # sin texto no ocupa alto: así con Propiedades abierto a 1366×768 el panel no necesita barra por fuera
         self.msg.setWordWrap(True)
+        self.msg.hide()
         lay.addWidget(self.msg)
         lay.addStretch(1)
+
+    @staticmethod
+    def _alto_fila() -> int:
+        return estilo.ALTO_FILA_COMPACTA - 2
+
+    @staticmethod
+    def _hoja_botones() -> str:
+        """Los botones de este panel miden 32 px (36 a pantalla completa): con Propiedades abierto, a 1366×768, el panel de
+        Variables no tiene alto para los de 36 de la hoja global y se le pondría una barra de desplazamiento por fuera."""
+        alto = estilo.ALTO_CONTROL_COMPACTO
+        return (f"QPushButton {{ min-height: {alto - 2}px; }} "
+                f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; min-height: {alto - 4}px; padding: 0 11px; }}")
+
+    @staticmethod
+    def _hoja_tabla() -> str:
+        return f"QHeaderView::section {{ padding: 4px 4px; text-align: left; }} QTableWidget {{ font-size: {estilo.T_PEQUENA}px; }}"
+
+    def escalar(self) -> None:
+        """Cambió la escala de letra y de controles: la tabla (letra, alto de fila, columnas) y los botones se miden otra vez."""
+        self.tabla.setStyleSheet(self._hoja_tabla())
+        self.fuente.setPixelSize(estilo.T_PEQUENA)
+        self.tabla.setFont(self.fuente)
+        self.tabla.verticalHeader().setDefaultSectionSize(self._alto_fila())
+        self.cont.setStyleSheet(self._hoja_botones())
+        fm = QFontMetrics(self.fuente)
+        self.tabla.setColumnWidth(1, max(fm.horizontalAdvance(t) for _, t in PAPELES + (("", "Papel"),)) + 20)
+        self.tabla.setColumnWidth(2, max(fm.horizontalAdvance(t) for _, t in TIPOS + (({}, "Tipo"),)) + 20)
+        for b in (*self.b_nuevas.values(), self.b_quitar):
+            b.setMinimumWidth(self._ancho_boton(b.text()))
+        self._ajustar_tabla()
+
+    @staticmethod
+    def _ancho_boton(texto: str) -> int:
+        """Lo que mide un botón de la hoja global con ese texto (su letra explícita, no la de la plataforma) y su relleno."""
+        return QFontMetrics(estilo.fuente()).horizontalAdvance(texto) + 24
 
     # -- la tabla ---------------------------------------------------------------------------------
     @staticmethod
@@ -223,6 +277,14 @@ class PanelVariables(QWidget):
             self.tabla.selectRow([f["id"] for f in self._filas].index(actual))
         self._ajustar_tabla()
         self._pintar()
+
+    def _detallar(self, fila: int) -> None:
+        """Con una fila elegida (con el ratón o con las flechas), su nombre entero, papel y tipo: así un nombre elidido se lee sin
+        pasar el ratón por encima."""
+        if 0 <= fila < len(self._filas) and self._filas[fila]["id"] is not None and self.tabla.item(fila, 0) is not None:
+            self.detalle.emit(" · ".join(self.tabla.item(fila, c).text() for c in range(3)))
+        else:
+            self.detalle.emit("")
 
     def _ajustar_tabla(self):
         alto = min(320, self.tabla.horizontalHeader().height()

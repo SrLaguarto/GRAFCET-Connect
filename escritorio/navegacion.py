@@ -70,7 +70,7 @@ class Navegacion(QFrame):
             boton.setFixedSize(estilo.ALTO_CONTROL_COMPACTO, estilo.ALTO_CONTROL_COMPACTO)  # objetivos táctiles de 32 px
             boton.setStyleSheet(f'QToolButton {{ font-size: 16px; font-weight: 600; border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_S}px; background: {estilo.SUPERFICIE}; }} '
                                 f'QToolButton:hover {{ background: {estilo.HOVER}; }} QToolButton:disabled {{ color: {estilo.DESHABILITADO}; border-color: {estilo.BORDE}; }} '
-                                f'QToolButton:focus {{ border: 2px dashed {estilo.FOCO}; }}')
+                                f'QToolButton[tecl="true"]:focus {{ border: 2px dashed {estilo.FOCO}; }}')
         fila.addWidget(self.buscador)
         self.aviso_corto=QToolButton(); self.aviso_corto.setToolTip('Ver filtro y lista de elementos'); fila.addWidget(self.aviso_corto)
         self.aviso_corto.clicked.connect(self.abrir_opciones)

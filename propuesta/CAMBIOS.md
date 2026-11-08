@@ -1,108 +1,96 @@
-# Propuesta de diseño de GRAFCET Connect: cambios aplicados (rondas 1 y 2)
+# Propuesta de diseño de GRAFCET Connect: cambios aplicados (rondas 1, 2 y 3)
 
 Solo aspecto, organización y usabilidad. No se toca `grafcet/`, ni el simulador, ni la semántica GRAFCET, ni rótulos de menús,
 pestañas o textos que fijan las pruebas, ni `tests/`. Lo que se aparta de una decisión vigente o de una prueba queda en
 `PROPUESTAS_PENDIENTES.md` y **no** está implementado. «Basado en IEC 60848»: no se declara conformidad.
 
-**Cada cifra de este documento sale de un script de `propuesta/herramientas/`**: `medir.py` (franjas, alturas, letras, ancho,
-teclado, contraste sobre los píxeles de la ventana, propiedades, literales), `contrastes.py` (53 parejas de tokens) y
-`correr_pruebas.py` (suite por módulos). Las cifras de `medir.py` son las de la última pasada, a 1920×1080, 960×1040, 960×520,
-1366×768, 640×800 y 640×520, con el ejemplo «temporizada» abierto para editar o en Play.
+**Cada cifra de este documento sale de un script de `propuesta/herramientas/`**: `medir.py` (franjas, alturas, letras, ancho, teclado,
+contraste sobre los píxeles de la ventana, propiedades, literales, ventana a 640, tablas, nombres largos, chip, fichas, reloj, escala,
+PLANOS), `foco.py` (anillo de foco), `pulsacion.py` (mantener pulsada una entrada), `contrastes.py` (58 parejas de tokens) y
+`correr_pruebas.py` (suite por módulos). Las cifras de `medir.py` son las de la última pasada, a 1920×1080, 960×1040, 960×520, 1366×768,
+640×800 y 640×520, con el ejemplo «temporizada» abierto para editar o en Play. Un clic de ratón no da foco a los botones y todo se
+comprueba con el ratón y con el teclado; el «panel táctil» es el del portátil (dos dedos desplazan, pellizco acerca, toque con dos dedos
+es clic derecho): no hay pantalla táctil que atender.
 
-Criterios: C1 jerarquía, C2 legibilidad, C3 coherencia, C4 accesibilidad, C5 densidad y tamaño, C6 táctil, C7 estado de
-simulación, C8 originalidad y acabado, C9 uso en clase.
+Criterios: C1 jerarquía, C2 legibilidad, C3 coherencia, C4 accesibilidad, C5 densidad y tamaño, C6 uso del panel táctil y objetivos,
+C7 estado de simulación, C8 originalidad y acabado, C9 uso en clase.
 
 ## 1. Identidad y sistema de estilo (`escritorio/estilo.py`)
 
-**Idea.** Tinta azul marino sobre papel gris frío; un acento petróleo para lo accionable (Play, selección, sección); verde
-«máquina en marcha» reservado a la simulación; azul tinta para la edición. El dibujo (`diagrama.COL`) no se toca en colores:
-negro sobre blanco, etapa activa `#40d641`, selección en azul, ámbar para avisos y rojo solo para errores.
+**Idea.** Tinta pizarra sobre papel gris frío; **un solo acento** petróleo para lo accionable (Play, pestaña activa, títulos de sección);
+verde «máquina en marcha» reservado a la simulación; la edición, en tinta neutra (ya no compite con el petróleo). El dibujo
+(`diagrama.COL`) no se toca en colores: negro sobre blanco, etapa activa `#40d641`, selección en azul, ámbar para avisos y rojo solo
+para errores.
 
 | Token | Valor | Uso |
 |---|---|---|
-| `TINTA` / `TINTA_2` / `TINTA_3` | `#16263a` / `#4a5b6e` / `#5b6b7d` | texto principal, secundario, ayudas (15,3 / 7,0 / 5,5:1 sobre blanco) |
+| `TINTA` / `TINTA_2` / `TINTA_3` | `#16263a` / `#4a5b6e` / `#5b6b7d` | texto principal, secundario, ayudas |
 | `FONDO` / `SUPERFICIE` / `SUPERFICIE_2` | `#eef2f6` / `#fff` / `#f6f8fb` | ventana, tarjetas, cabeceras |
 | `BORDE` / `BORDE_CONTROL` | `#cdd6e0` / `#7b8a9c` | separadores / borde de control (3,5:1) |
-| `ACENTO` (+ `_OSCURO`, `_HOVER`, `_SUAVE`, `_BORDE`) | `#0b6e75` … `#cfeee6` | un acento por zona (blanco encima: 6,0:1) |
-| `EDICION` / `SIMULACION` (+ `_SUAVE`, `_HOVER`) | `#27415f` / `#157a35` | chip, franja y fila de herramientas por modo (blanco encima: 10,5 / 5,4:1) |
-| `PARPADEO` | `#2f8a91` | tono claro del parpadeo de «+ Añadir hoja» (blanco encima: 4,1:1) |
+| `ACENTO` (+ `_OSCURO`, `_HOVER`, `_SUAVE`, `_BORDE`) | `#0b6e75` … `#cfeee6` | el acento |
+| `EDICION` | `#2f3b4a` | chip y franja del modo edición (tinta neutra; blanco encima 11,4:1) |
+| `SIMULACION` (+ `_SUAVE`, `_HOVER`) | `#157a35` / `#e3f4e8` / `#0f6a2c` | chip, franja y fila de herramientas al simular (hover: 6,7:1 con blanco) |
 | `FOCO` / `FOCO_FUERTE` | `TINTA` / `#000000` | anillo discontinuo de 2 px; de 3 px en Play/Stop |
 | Ritmo / radios | `E1..E6` = 4, 8, 12, 16, 24; `R_S/M/L` = 4, 8, 12 | espaciado y esquinas |
-| Tipografía | `FUENTE` Segoe UI 13 px base, 12 secundaria, 14 sección, 16 título; `FUENTE_TITULO` Bahnschrift (reserva Segoe UI); `FUENTE_MONO` Consolas | Bahnschrift en títulos, rótulos de sección, chip y pestañas; Consolas en cifras (tiempos, valores, % de zoom) |
-| Alturas | `ALTO_CONTROL` 36, `ALTO_BARRA` 34, `ALTO_CONTROL_COMPACTO` 32, `ALTO_FILA` 30 | objetivos táctiles |
+| Tipografía | `FUENTE` Segoe UI; `FUENTE_TITULO` Bahnschrift; `FUENTE_MONO` Consolas | Bahnschrift en títulos, chip y pestañas; Consolas en cifras (valores, tiempos, % de zoom, reloj) |
+| Escalas | `ESCALAS["normal"]` / `["grande"]` | ver §3.8: letra base 13 / 14 px, controles 34-36 / 40 px |
+| Tipo de variable (E/S) | `TIPO_BOOL/DECIMAL/ENTERA/CUALQUIERA`, `SENAL_TENUE/ASIGNADA`, `RESALTADO`, `ASIGNACION` | los literales que quedaban en `entradas_salidas.py` |
 
-`estilo.hoja_global()` genera la hoja de la ventana a partir de los tokens y conserva las cadenas que fijan las pruebas
-(`width: 12px`, `dashed`, `QComboBox::drop-down`, `width:24px`, `desplegar.svg`, `#e36209`, `#1f6feb`, `#ffd2ad`, `#cfeee6`,
-`#e8f5ef`). `estilo.icono()` dibuja los iconos con un único trazo de 1,75 px y extremos redondeados; `estilo.icono_grafcet()`,
-`estilo.forma_luz()` y `ChipModo` (paneles.py) traen la notación a la interfaz: el cuadrado del chip es la etapa vacía al editar y la
-etapa activa (rellena) al simular, y la franja de modo del borde del dibujo lleva los segmentos de una cadena de transiciones.
-La rejilla de puntos del editor ya existía (`diagrama.py`, `#e3e6ec`) y no se ha tocado.
+`estilo.hoja_global()` genera la hoja de la ventana a partir de los tokens y conserva las cadenas que fijan las pruebas (`width: 12px`,
+`dashed`, `QComboBox::drop-down`, `width:24px`, `desplegar.svg`, `#e36209`, `#1f6feb`, `#ffd2ad`, `#cfeee6`, `#e8f5ef`).
+`estilo.fuente()` da una letra con la familia explícita (véase §3.2).
 
-**Literales de color** (`medir.py literales`): 113 `#rrggbb`/`#rgb` en `escritorio/*.py`, de los que 35 son las definiciones de
-`estilo.py`; en ficheros de interfaz quedan 9 (`entradas_salidas.py` 8: los tres tipos de variable, `#cbd2d5`/`#7c8a90` de la
-barrita sin señal y `#e8f5ef` que fija una prueba; `variables.py` 1) y el resto son colores del documento (`diagrama`, `bloques`,
-`edicion`, `anotaciones`, plantillas de plano). `ventana.py`, `paneles.py`, `acciones.py`, `leyenda.py`, `planos.py`, `propiedades.py`
-y `navegacion.py`: 0. Ningún `font-size` escrito a mano baja de 12 px.
+**Literales de color** (`medir.py literales`): 113 `#rrggbb`/`#rgb` en `escritorio/*.py`, de los que 43 son las definiciones de
+`estilo.py`; en ficheros de interfaz queda **1** (`variables.py`, `#ffd2ad`, que fija una prueba) y el resto son colores del documento
+(`diagrama`, `bloques`, `edicion`, `anotaciones`, plantillas de plano). `entradas_salidas.py`: 0 (antes 8). Ningún `font-size` escrito a
+mano baja de 12 px (`font-size de menos de 12 px escritos a mano`: ninguno).
 
-## 2. Cambios de la ronda 2 (los 13 puntos del árbitro)
+## 2. Cambios de la ronda 3 (los 12 puntos del coordinador)
 
-| Punto | Qué | Cifra medida |
+| Punto | Qué | Cifra medida (script) |
 |---|---|---|
-| 1 | `correr_pruebas.py`: un proceso por módulo con tiempo máximo (1800 s; 120 s las pruebas aparte), `SPAG18` aislada, resumen ran/fallos/errores/omitidas, raíz como argumento, paralelismo por defecto 2 | suite en la sección 5 |
-| 2 | **Luz de E/S «abierta»** (P-IMP-126): fondo blanco, borde de 2 px de `TINTA`, negrita; conserva la forma por estado (círculo con marca, círculo vacío, rombo con «!») | `medir.py contraste`: abierta 15,3:1 con `abierta=True` |
-| 3 | Tabla de salidas con las columnas **Variable · Modo · Valor · Contribuyen** y la de temporizadores **Dónde · Estado · Lleva · Preset**, las cuatro a la vista en el ancho de 218 px; el chip distingue los estados de `ESTADOS` | cabeceras completas a 1366 y a 640 (`capturas/despues/simulacion-*`) |
-| 4 | Título del grafcet elidido (`EtiquetaElidida`, tope 380 px) y chip con su primera palabra entera como mínimo; ningún texto variable ensancha la ventana | mínimo de la ventana con un título de 113 caracteres y nombres de variable de 69 y 56: 598 px (1366) y 602 px (640×520), igual que con nombres cortos |
-| 5 | La ventana llega a 640×520 sin cortar nada; los paneles laterales se pliegan solos (anchura < 1000: Variables al editar; altura < 560: las herramientas suben a la fila de las pestañas) y se respeta lo plegado a mano (`_manual_paneles`) | mínimo del ancho: 602 (editar), 593 (simular), 593 (E/S) a 640×520 |
-| 6 | Tamaños pequeños: barra de zoom en la fila del título (`integrar_barra`), sin tapar el dibujo; simulación sin barras anidadas con la fila de temporizadores a la vista; PLANOS con «Más ▾» en una fila y «Margen» entero (el panel derecho y sus páginas llenan los 232 px); entradas de uno en uno si el nombre no cabe en media fila | 640×520: dibujo 348×343 desde y = 114; Propiedades abierto: panel 278 px, dibujo 91 px, la transición elegida queda a la vista (`medir.py propiedades`) |
-| 7 | Teclado y foco: ninguna tabla atrapa Tab, botones `TabFocus` (el anillo solo sale al navegar con teclado), foco inicial en el dibujo sin anillo, sin recuadro nativo en la entrada con foco, Intro activa como Espacio, Play con anillo de 3 px | `medir.py teclado`: 17 paradas a 1366 y 12 a 640×520; 17 de 17 y 12 de 12 controles se activan con Espacio e Intro; anillo de Play 3,50:1 contra su relleno y 21,0:1 contra el fondo |
-| 8 | Contrastes: «+ Añadir hoja» y barras de E/S ≥ 3:1 (el tono entero de las barras de tipo y el de la barrita sin señal se oscurecieron: `#d96a0c`, `#7c8a90`) | parpadeo 6,00:1 / 4,07:1 en píxeles; barra de canal 3,52:1 en píxeles; `contrastes.py` 53/53 |
-| 9 | Nombres largos de entrada: se elide el nombre, nunca « = 0 / = 1» (`_BotonEntrada.paintEvent`) | `marcha = 1` se ve entero a 640×520 |
-| 10 | Táctil: pulsación larga de ≈ 500 ms en una entrada abre el menú contextual; ayuda «Clic: pulsar · Ctrl+clic o mantener: enclavar»; los botones de la barra ganan texto cuando hay sitio; objetivos ≥ 32 px | ningún botón, desplegable o campo visible de menos de 32 px, salvo las pestañas plegadas de 26 px; categorías de bloques 32 px; «Fijar» 32 px; entrada de simulación 38 px |
-| 11 | Nada por debajo de 12 px; «Salida N» nunca cortada | menor letra efectiva: 12 px (13 en PLANOS y a 640 px); «Salida 0…11» enteras a 640 (`es-minima`) |
-| 12 | Colores, radios y tamaños de letra salen de `estilo.py`; una sola familia de verde para «activo»; ritmo de 4 y 8; el panel Elementos alineado con la barra de herramientas | literales: ver sección 1 |
-| 13 | Identidad propia: Bahnschrift, Consolas para cifras, motivo derivado de la notación (cuadrado del chip, franja de modo), rejilla de puntos del editor (la de siempre) y estados hover, pulsado y deshabilitado en la hoja global | sección 1 |
-| 14 | Este documento y sus scripts | — |
+| 1 | **Se retira la pulsación mantenida** de las entradas (`_BotonEntrada` vuelve a ser el de `main`: sin temporizador ni menú a los 500 ms). Rótulo bajo «Entradas»: «Clic: pulsar · Ctrl+clic: enclavar · Clic derecho: tipo»; la ayuda de cada entrada dice «Botón derecho: cambiar tipo». Queda como propuesta descartada D1 | `pulsacion.py`: mantenido 1,5 s → valor 1, `down` verdadero y ningún menú, igual que en `main` (se ejecuta contra las dos copias: 12 de 12 comprobaciones OK en la rama y 10 de 10 en `main`, que no tiene el rótulo bajo «Entradas»); clic derecho abre el menú; Ctrl+clic enclava |
+| 2 | **Foco, de raíz.** `ventana._FocoTeclado` (filtro de aplicación) recuerda si la última entrada fue del teclado (Tab, flechas, Espacio, Intro, Esc…) o del ratón (clic, rueda, toque): el control con el foco lleva la propiedad `tecl` solo con el teclado y la hoja global y las locales pintan el anillo con `[tecl="true"]:focus`. Ningún parche por botón; los campos de texto conservan su foco siempre visible. Las entradas de simulación ya muestran su anillo (se quitó el `State_HasFocus` que anulaba la regla). `capturar.py` ya no llama a `clearFocus()` y la escena `foco` llega a Play con Tab de verdad | `foco.py` (17 pasos con ratón a 1366 y a 640×520: arranque, abrir el ejemplo, clic en la luz de E/S y volver con «←», PLANOS y vuelta, clic en el dibujo, abrir Propiedades, zoom, plegar y desplegar Variables, Play, pulsar una entrada, luz de E/S en Play, Stop): **0 anillos** por estado y por píxeles (el control con el foco se pinta igual con y sin foco). Con Tab: 26 paradas en edición con Propiedades abierto y 15 en simulación (21 y 15 a 640×520), **todas con anillo**, contraste del anillo contra lo que tapa ≥ 3,5:1 (Play: 3,50:1 contra su relleno y 21,0:1 contra el fondo); un clic de ratón lo quita. `medir.py teclado`: 19 paradas a 1920 y a 1366, 12 a 640×520; 17 de 17 y 12 de 12 controles se activan con Espacio e Intro; foco inicial en el dibujo sin anillo |
+| 3 | **Recortes heredados.** *Fichas de la receptividad* («marcha», «fin»…): la causa era que `bloques.Motor` medía el texto con `QFont()` (la letra de la plataforma) y lo pintaba con la de la hoja de estilo; ahora la familia es explícita. *Categorías de bloques*: pasan a una segunda fila (o tercera) si no caben, ninguna cortada («Sal…»). *Combo de la biblioteca de PLANOS*: `paneles.ComboElidido` (elide por el medio con «…» y lleva el texto entero en su ayuda). *Reloj de la barra de estado*: el ancho solo crece (`_poner_reloj`). *Hoja de PLANOS* en «Ajustar hoja»: sin barras. *Dibujo*: las barras solo aparecen si lo dibujado no cabe en esa dirección (al editar) | `medir.py fichas`: 34 fichas de texto pintadas en las 8 categorías, **0 recortadas**, a los seis tamaños; categorías fuera de su franja: ninguna; filas de categorías: 1 (1366 y 1920), 2 (960×1040 y 960×520), 3 (640); sin barra de desplazamiento. `medir.py planos`: sin barras en los seis tamaños y el combo, `ComboElidido` con la ayuda igual a su texto (elidido a 210 px: «A4 vertica…eterminada»). `medir.py reloj`: 5 tiempos hasta «1234,56 s» sin ningún texto cortado. `medir.py franjas`: barras del dibujo al editar: ninguna a los seis tamaños (cabe a lo ancho y a lo alto) |
+| 4 | **Nombres largos distinguibles.** Se elide por el medio («sensor_fin…_carrera_2») en las entradas de la simulación (`_BotonEntrada.paintEvent`), la tabla de Variables, las tablas de estado y las listas de E/S. El nombre entero sale en una **línea de detalle** de la barra de estado cuando la entrada tiene el foco o la fila de una tabla está elegida (`Ventana._detalle_del_foco`, `PanelVariables.detalle`), sin pasar el ratón | `medir.py largos`: cuatro entradas «sensor_final_de_carrera_cinta_transportadora_N» se ven distintas; con el foco en la 3.ª, la línea de detalle dice «sensor_final_de_carrera_cinta_transportadora_3 = 0 · entrada»; al elegir una variable: «…_2 · Entrada · Booleana». Las listas de E/S elidan por el medio pero no tienen línea de detalle (solo ayuda emergente) |
+| 5 | **Chip de modo**: el estado nunca se pierde. El chip no cede ancho (el título se limita en `_ajustar_cabecera`) y elige entre variantes del mismo estado según el sitio («SIMULACIÓN · EN RECORRIDO (SITUACIÓN INESTABLE)», «…EN RECORRIDO», «SIM. · EN RECORRIDO», «EN RECORRIDO»); la ayuda emergente lleva la descripción entera. «seleccionando para Planos» es ahora un chip («SELECCIONANDO · para Planos») | `medir.py chip` con un título de 113 caracteres, a 1920, 1366, 960×1040, 960×520, 683, 640×800 y 640×520, en simulación estable, en recorrido y en solo lectura: **el estado se ve entero en los 21 casos**; el título cede hasta 24 px a 683 y 640 |
+| 6 | **Propiedades y anchura.** Con Propiedades abierto la ventana baja a 640 y a 683 y vuelve; nada la fija a 773 (el panel pedía un mínimo transitorio de 773 px: `PanelPropiedades.minimumSizeHint` lo limita a 560 y la fila de pestañas ya no fija el mínimo). «Reiniciar» pasa a solo icono cuando no cabe (`_vigilar_barra`, además del umbral de 760). Con Propiedades a 1366, el panel de Variables no necesita barra por fuera (el aviso vacío ya no ocupa alto, filas de 26 px y botones de 32 px) | `medir.py ventana640`: 640×800, 683×768 y 640×520: ancho con Propiedades = ancho pedido, mínimo 602 con y sin ellas, «Reiniciar» dentro de su barra, y tras cerrarlas y pedir otra vez el mismo ancho; **960×520 → 640×520 en una sola petición: 640×520** (antes 687). `medir.py propiedades` a 1366: barra exterior de Variables: **no**; «+ Entrada», «+ Salida», «+ Memoria» y «Eliminar» enteros dentro de su panel (32 px de alto) |
+| 7 | **Tablas de simulación.** Cabeceras pintadas por `paneles.CabeceraCompacta` (a 4 px del borde, donde empieza el texto de las celdas; sin el margen de más de Qt, que cortaba «Va…», «Contribu…»); se quita el relleno negativo; «Modo» se ve como «continua» / «memoria» (la celda conserva «salida continua» / «memorizada» y las lleva en su ayuda: `_DelegadoAbreviado`); las cifras (valor, lleva, preset) en Consolas; «Contribuyen» muestra lo de `main` (el identificador o el nombre que dé el modelo), elidido por el medio | `medir.py tablas`: las ocho cabeceras (cuatro de cada tabla) enteras y **alineadas** con el texto de su primera celda (±2 px, el hueco lateral de cada letra); «Modo»: se ve «continua, memoria», la celda dice «salida continua, memorizada» |
+| 8 | **Legibilidad a 3 m.** A partir de 1600×900 la letra base pasa de 13 a 14 px, la pequeña de 12 a 13, los títulos de 16 a 19, el chip de 13 a 15, las cifras de 12 a 14, y los controles de 34-36 a 40 px; los paneles laterales de 218 a 264 px (las tablas llevan así sus columnas); por debajo, lo de siempre. Solo se reaplica al cruzar el umbral (`Ventana._aplicar_escala`). No añade ajustes ni entradas de menú | `medir.py escala`: 1366×768 → letra 13, Play 34, título 16, reloj 12, laterales 218; 1920×1080 → letra 14, Play 40, «Fijar» 36, título 19, reloj 14, laterales 264; 1599×1080 y 1920×899 → normal; vuelta a 1366×768 → normal. Alturas a 1920: Play/Reiniciar/luz/«Añadir debajo» 40, zoom 39, entradas de simulación 42; a 1366: 34/35/38. Las pruebas que usan 2000×1000 y 2500×1400 pasan (§4) |
+| 9 | **Coherencia y acabado.** Un solo acento en la cabecera; PLANOS dentro de una tarjeta (`PaginaPlanos.paintEvent`) como las demás vistas; literales de E/S a tokens; el icono «dependencias» con el trazo de 1,75 px del resto; «seleccionando para Planos» con estilo de chip; blanco sobre el hover de simulación 6,7:1; `contrastes.py` con las etiquetas de hoy | `contrastes.py`: **58 de 58 parejas** cumplen (blanco sobre hover de simulación 6,73:1, sobre hover del acento 4,65:1, sobre el acento pulsado 8,89:1); `medir.py contraste`: chip EDICIÓN 11,38:1, chip SIMULACIÓN y Stop 5,43:1, Play 6,00:1, entrada 15,3:1, ayuda 6,97:1, barra de canal de E/S 3,52:1 |
+| 10 | **Identidad** (sobria, técnica, sin imitar nada). El **cuadrado de la etapa** abre cada título de sección en todas las vistas (Elementos, Variables, Entradas, Salidas y variables, Temporizadores, Traza, Propiedades, Hojas, Sensores/Actuadores): `paneles.TituloSeccion` y `CajaSeccion`. La **franja de modo** es un enlace de la notación: trazo continuo, barras de transición a intervalos y la punta de la flecha de evolución al final (`BandaModo`). La tipografía técnica en cifras, valores, chips y títulos. Estados hover, pulsado y deshabilitado en todos los botones (categorías de bloques y botón de plegar ya llevan el pulsado). Ritmo de 4/8 en márgenes y alturas | Ver las capturas de `capturas/despues/` (completa y 1366); `medir.py alturas`: ningún botón, desplegable o campo visible de menos de 32 px a los seis tamaños (salvo las pestañas plegadas de 26 px, P4) |
+| 11 | **Propuestas pendientes**: maqueta de P2, P3 y P7 (generadas por `maquetas.py` sobre la ventana real), P1 con la suya, y la pulsación mantenida retirada como D1 con su motivo (P-IMP-75). P7 queda reducida a lo que falta tras el punto 8 | `capturas/maquetas/` (4 PNG) |
+| 12 | Este documento y sus scripts; `medir.py` incluye el caso Propiedades a 640 (`ventana640`) | — |
 
-### Detalles que conviene saber
+### Letra efectiva (`medir.py letras`)
+A 1366 y menos: 12 px como mínimo en todas las vistas. A pantalla completa: 13 px en las vistas del editor, la simulación y las propiedades (12 en E/S, que conserva
+sus filas de 16 px por P-IMP-63) y 14 en PLANOS.
 
-- **Alto de las franjas** (`medir.py franjas`): menú 25, fila de pestañas 34 (42 fusionada con las herramientas), herramientas 42. El
-  dibujo empieza en y = 139 a 1366×768 y a 1920×1080 (el límite de la prueba es 140), 148 a 960 y 640 px con 1040 y 800 de alto, y
-  114 con la fila fusionada (960×520 y 640×520).
-- **Alto de los controles** (`medir.py alturas`): Play/Stop, Reiniciar y luz de E/S 34; zoom 35; «+ Entrada» y «Eliminar» 36.
-- **Cabecera de la tabla** de simulación: la hoja de la tabla usa `padding: 4px -6px 4px 0px` en la sección (el margen propio de la
-  cabecera ya separa el texto del borde izquierdo) para que «Contribuyen» quepa en 218 px; el texto largo de las celdas se elide con «…» y
-  va entero en la ayuda de la celda.
-- **En un cuarto de pantalla** el panel de simulación baja los títulos de caja de 24 a 20 px y quita el margen inferior, para que
-  se vea la fila de temporizadores sin desplazarse; la fila de las pestañas junta barras con 4 px de separación.
-- **El ancho lateral sigue en 218 px** (`SPAL05`/`SPAL06`, ver `PROPUESTAS_PENDIENTES.md` P10) y **el verde de «verdadero» del
-  lienzo sigue en `#40d641`** (`SUIV02`, P8): son los dos puntos del encargo que no se pueden aplicar sin tocar pruebas.
+## 3. Detalles que conviene saber
 
-## 3. Adaptación al tamaño, sin tocar nada
+- **Causa de las fichas recortadas.** En el entorno de pruebas (plataforma `offscreen`) la letra por defecto de Qt es «Sans Serif» y se resuelve en una condensada; el
+  texto de las fichas se medía con esa y se pintaba con Segoe UI. En Windows con la plataforma normal la letra por defecto ya era Segoe UI y no se notaba. Se ha puesto la
+  familia explícita (`estilo.fuente()`, `bloques.Motor`, `variables.py`, `entradas_salidas.py`) en todo lo que mide texto antes de que el widget tenga la letra de su hoja.
+- **Foco.** Una hoja local manda sobre la global aunque tenga menos especificidad, así que cada hoja local que pinta un anillo lleva su propio `[tecl="true"]:focus`
+  (zoom, categorías de bloques, «Fijar», fichas de jerarquía, E/S, aviso de PLANOS, pestañas de panel). El anillo de las pestañas plegadas se pinta a mano con la misma regla.
+- **Coste de los filtros.** La aplicación pasa unas 15 000 veces por sus filtros de eventos al reconstruir la vista de E/S (`cargar_ejemplo`), y
+  `test_SFIO31` (que espera a una planta simulada con un margen de 500 ms) es sensible a ese tiempo. Por eso hay **un solo filtro** de aplicación (`_FocoTeclado`, que
+  también suelta las entradas enclavadas al soltar Ctrl, como hacía `_ControlPulsadores`) con salida inmediata para los eventos que no le importan, y las 88 filas de
+  canales de E/S ya no llevan cada una tres hojas de estilo (colores y cifra pasan a la hoja del panel, por nombre de objeto). Medido con `cargar_ejemplo`
+  (vista de E/S incluida): ≈ 220–250 ms en la rama frente a ≈ 270–320 ms en `main`.
+- **Alto de las franjas** (`medir.py franjas`): el dibujo empieza en y = 139 a 1366×768 (el límite de la prueba es 140), 148 a 960×1040, 114 a 960×520 y 640×520 (la
+  fila de herramientas sube a la de las pestañas) y 157 a 1920×1080 (controles de 40 px). Ancho mínimo de la ventana: 598 (1366), 602 (960 y 640), 697 (pantalla completa).
+- **Ancho mínimo con nombres largos** (`medir.py ancho`): el mismo con nombres cortos y con un título de 113 caracteres y variables de 69 y 56: 598 a 1366 y 602 a 640×520.
+- **El ancho lateral sigue en 218 px** hasta 1366 (`SPAL05`/`SPAL06`, P10); a pantalla completa es de 264.
+- **Lo que no se hizo.** La línea de detalle no cubre las listas de E/S (elidan por el medio, con ayuda emergente); PLANOS conserva sus nueve botones del mismo peso;
+  el verde de «verdadero» del lienzo sigue en `#40d641` (P8: lo fija `SUIV02`); el borde de la etapa activa también (P9, P-IMP-77).
+- **Ruido de teardown.** Al destruir una ventana con una hoja de PLANOS, `plantillas.py` imprime en stderr una traza («Internal C++ object (TextoPlantilla) already deleted»);
+  ocurre igual en `main` y no afecta a nada de lo medido.
 
-`Ventana._adaptar_tamano()` se ejecuta al mostrar y al redimensionar:
+## 4. Pruebas
 
-- **Por debajo de 1000 px de ancho**: el panel de Variables se pliega solo al editar; «Centrar todo» y «Centrar selección» pasan a icono y
-  la barra de zoom sube a la cabecera. Por debajo de 760 px, «Reiniciar» es solo icono, la luz dice «E/S: …» y las pestañas se estrechan.
-- **Por debajo de 560 px de alto**: las herramientas suben a la fila de las pestañas, se estrechan los márgenes y el dibujo gana una fila.
-- **Lo plegado a mano se respeta**; solo lo plegado solo se vuelve a abrir al agrandar la ventana o al pulsar Play. Nada se guarda.
-- No se cambia la hoja de estilo al cruzar un umbral (aplicarla a toda la ventana tarda cerca de un segundo).
-- A 1366×768 y 1000×600 el comportamiento es el de siempre (las pruebas lo fijan).
-
-## 4. Herramientas (`propuesta/herramientas/`)
-
-- `capturar.py`: escenas `editor`, `propiedades`, `simulacion`, `planos`, `es` y `foco` a seis tamaños (los cuatro de siempre más
-  `estrecha` 640×800 y `minima` 640×520) en `propuesta/capturas/despues/` (36 imágenes); `GRAFCET_RAIZ=<otra copia>` captura `main`
-  con las mismas escenas. La maqueta de P1 sale con `--escenas maqueta-panel-bajo`.
-- `medir.py`: las ocho mediciones de la cabecera, también a un tamaño o a un grupo (`medir.py teclado ancho --tamanos minima`).
-- `contrastes.py`: 53 parejas de tokens, con el verde de «verdadero» actual y el propuesto aparte.
-- `correr_pruebas.py`: suite por módulos (`--raiz`, `--paralelo`, `--modulos`, `--json`), sin escribir en el repositorio.
-
-## 5. Pruebas
-
-Suite por módulos (`correr_pruebas.py --paralelo 3`, plataforma `offscreen`, sobre una copia del árbol de trabajo con `tests/` sin
-tocar): **ran 1079, fallos 3, errores 0, omitidas 7**, que es el mismo total que da una copia de `main`. Los tres fallos son los
-que **también dan en `main`**: `test_SEDI266` (el alto de una etiqueta de la prueba), `test_SRCT01` (solo al correr su módulo
-entero; pasa a solas) y `test_SFIO31` (tiempo de espera; pasa a solas). `test_SPAG18` (importar un PDF real) se cuelga igual
-en `main` y en la rama, y la suite lo corre aparte con 120 s; `test_plantillas` omite 6 pruebas y `test_plantillas_tecnicas` 1,
-como en `main`. Con mucha carga fallan además, por tiempo, `SMOD05`, `SFIO49` y `SFIO60`; por eso el paralelismo por defecto es 2.
-`test_editor_escritorio` tarda ≈ 15 minutos (174 pruebas con ventana).
+Suite por módulos (`correr_pruebas.py --paralelo 2`, plataforma `offscreen`, sobre una copia del árbol de trabajo con `tests/` sin tocar, ejecutada sobre el código
+definitivo): **ran 1079 · fallos 1 · errores 1 · omitidas 7**, con `test_SPAG18` agotando su tiempo (se corre aparte, 120 s). Es el mismo total que da `main` (ran 1079 · fallos 3 · errores 1 ·
+omitidas 7, con el mismo `test_SPAG18` colgado). El único fallo es `test_SEDI266` (el alto de una etiqueta de la prueba), que **también falla en `main`**; el error es `test_SPKG` (falta el
+paquete de transferencia fuera del repositorio: entorno, en las dos). `test_SRCT01` y `test_SFIO31`, que en `main` fallan al correr su módulo entero por tiempo (y pasan a solas), pasan en la rama:
+no hay ninguna prueba que falle en la rama y pase en `main`. No se ha tocado ninguna prueba. Las comprobaciones propias (`foco.py`, `pulsacion.py`, `medir.py`, `contrastes.py`) no forman parte de la suite.

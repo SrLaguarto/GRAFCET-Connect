@@ -87,7 +87,12 @@ PAREJAS = [
     ("FOCO_FUERTE", "SIMULACION", 3.0, "anillo de foco de Stop contra su relleno"),
     ("FOCO_FUERTE", "ACENTO", 3.0, "anillo de foco de Play contra su relleno"),
     ("FOCO_FUERTE", "FONDO", 3.0, "anillo de foco de Play/Stop contra la barra"),
-    ("BLANCO", "SIMULACION_HOVER", 3.0, "Stop con el ratón encima (texto grande en negrita)"),
+    ("BLANCO", "SIMULACION_HOVER", 4.5, "Stop con el ratón encima (texto blanco)"),
+    ("BLANCO", "ACENTO_HOVER", 4.5, "Play y botones primarios con el ratón encima"),
+    ("BLANCO", "ACENTO_OSCURO", 4.5, "Play y botones primarios pulsados"),
+    ("TINTA", "HOVER", 4.5, "texto de un control con el ratón encima"),
+    ("TINTA", "PULSADO", 4.5, "texto de un control pulsado"),
+    ("TINTA_2", "HOVER", 4.5, "texto secundario de un control con el ratón encima"),
     ("BLANCO", "CONFIRMAR", 4.5, "confirmar la selección de hoja"),
     ("BARRA_ES_BOOL", "BLANCO", 3.0, "barra de nivel de una E/S booleana sobre su tarjeta"),
     ("BARRA_ES_DECIMAL", "BLANCO", 3.0, "barra de nivel de una E/S decimal sobre su tarjeta"),
@@ -110,13 +115,16 @@ def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     t = tokens()
-    t["LUZ_CONECTADA"], t["LUZ_DESCONECTADA"], t["LUZ_ERROR"] = "#17803d", "#6f7f92", "#c62828"
-    t["BLANCO"] = "#ffffff"
-    es = (RAIZ / "escritorio" / "entradas_salidas.py").read_text(encoding="utf-8")
     import re
-    tipos = re.search(r"COLOR_TIPO = \{([^}]*)\}", es).group(1)
-    t["BARRA_ES_BOOL"], t["BARRA_ES_DECIMAL"], t["BARRA_ES_INT"] = re.findall(r"\"(#[0-9a-fA-F]{6})\"", tipos)
-    t["BARRA_ES_BORDE"] = "#7c8a90"
+    estilo = (RAIZ / "escritorio" / "estilo.py").read_text(encoding="utf-8")
+    luz = re.search(r"LUZ = \{([^}]*)\}", estilo).group(1)  # la luz de conexión: conectada es el verde de la simulación
+    t["LUZ_CONECTADA"] = t["SIMULACION"]
+    t["LUZ_DESCONECTADA"] = re.search(r"\"desconectada\": \"(#[0-9a-fA-F]{6})\"", luz).group(1)
+    t["LUZ_ERROR"] = re.search(r"\"error\": \"(#[0-9a-fA-F]{6})\"", luz).group(1)
+    t["BLANCO"] = "#ffffff"
+    tipos = re.search(r"TIPO_BOOL, TIPO_DECIMAL, TIPO_ENTERA, TIPO_CUALQUIERA = (.*)", estilo).group(1)
+    t["BARRA_ES_BOOL"], t["BARRA_ES_DECIMAL"], t["BARRA_ES_INT"], _ = re.findall(r"\"(#[0-9a-fA-F]{6})\"", tipos)
+    t["BARRA_ES_BORDE"] = re.search(r"SENAL_TENUE, SENAL_ASIGNADA = \"#[0-9a-fA-F]{6}\", \"(#[0-9a-fA-F]{6})\"", estilo).group(1)
     fallos = 0
     print(f"{'primer plano':<18}{'fondo':<18}{'ratio':>7}  {'mín.':>5}  uso")
     for fg, bg, minimo, uso in PAREJAS:
