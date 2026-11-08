@@ -559,7 +559,7 @@ class DialogoLaminas(QDialog):
         if self.editor_textos:
             viejo=self.editor_textos;self.propiedades.removeWidget(viejo.panel_propiedades);viejo.panel_propiedades.deleteLater();viejo.deleteLater()
         t=EditorPlantilla(self.plantilla,self.documento.campos(0) if self.documento else {k:w.text() for k,w in self.campos.items()},self,solo_texto=True)
-        t.hide();t.vista.hide();scroll=t.layout().itemAt(0).widget();t.layout().removeWidget(scroll);t.panel_propiedades=scroll;scroll.setFixedWidth(286)
+        t.hide();t.vista.hide();scroll=t.layout().itemAt(0).widget();t.layout().removeWidget(scroll);t.panel_propiedades=scroll;scroll.setFixedWidth(self.propiedades.width()-4 if self.propiedades.width()<290 else 286)
         self.propiedades.addWidget(scroll);self.editor_textos=t;self.vista.textos=t
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);scroll.widget().layout().setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows);t.nuevo.hide()
         t.fuente.setMinimumContentsLength(8);t.fuente.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon);t.fuente.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Fixed)

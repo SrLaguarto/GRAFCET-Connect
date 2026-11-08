@@ -35,7 +35,9 @@ RAIZ = Path(os.environ.get("GRAFCET_RAIZ") or Path(__file__).resolve().parents[2
 sys.path.insert(0, str(RAIZ))
 os.chdir(RAIZ)
 
-TAMANOS = {"completa": (1920, 1080), "partida": (960, 1040), "cuarto": (960, 520), "1366": (1366, 768)}
+TAMANOS = {"completa": (1920, 1080), "partida": (960, 1040), "cuarto": (960, 520), "1366": (1366, 768),
+           "estrecha": (640, 800), "minima": (640, 520)}  # media pantalla de un portátil de 1280×800 al 150 %, y esa misma anchura a 1/4 de alto
+PRINCIPALES = ("completa", "partida", "cuarto", "1366")
 ESCENAS = ("editor", "propiedades", "simulacion", "planos", "es", "foco")
 EXTRAS = ("maqueta-panel-bajo",)  # no se capturan por defecto: ver PROPUESTAS_PENDIENTES.md
 EJEMPLO = "temporizada"
@@ -145,6 +147,8 @@ def capturar(tamano: str, escena: str, salida: Path) -> Path:
             w.resize(ancho, alto)
             w.show()
             _reposo(app)
+            w.resize(ancho, alto)  # (al mostrarse, el mínimo de la ventana aún era el de antes de adaptarse al tamaño)
+            _reposo(app)
             if escena == "planos":
                 escena_planos(w, app, tmp)
             else:
@@ -178,7 +182,7 @@ def capturar(tamano: str, escena: str, salida: Path) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--tamanos", nargs="+", choices=list(TAMANOS), default=list(TAMANOS))
+    ap.add_argument("--tamanos", nargs="+", choices=list(TAMANOS), default=list(TAMANOS), help="por defecto, los seis")
     ap.add_argument("--escenas", nargs="+", choices=ESCENAS + EXTRAS, default=list(ESCENAS))
     ap.add_argument("--salida", type=Path, default=Path(__file__).resolve().parents[1] / "capturas" / "despues")
     args = ap.parse_args(argv)

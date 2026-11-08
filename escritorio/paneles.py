@@ -1,10 +1,126 @@
 """Paneles plegables por cabecera o divisor, sin controles encima del dibujo."""
 from PySide6.QtCore import QEvent, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QTextLayout, QTextOption
-from PySide6.QtWidgets import (QApplication, QLabel, QLayout, QSplitter, QSplitterHandle,
+from PySide6.QtWidgets import (QApplication, QFrame, QLabel, QLayout, QSplitter, QSplitterHandle,
                                QSizePolicy, QStackedWidget, QToolButton, QVBoxLayout, QWidget)
 
 from . import estilo
+
+
+class BandaModo(QWidget):
+    """La franja de color de lo alto de la tarjeta del dibujo (azul tinta al editar, verde al simular). Lleva, derivado de la
+    notación, un trazo de enlace con las barras cortas de las transiciones, en el tono claro del fondo."""
+
+    def paintEvent(self, evento) -> None:  # noqa: N802
+        from PySide6.QtWidgets import QStyle, QStyleOption
+        opcion = QStyleOption()
+        opcion.initFrom(self)
+        p = QPainter(self)
+        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opcion, p, self)
+        marca = QColor(255, 255, 255, 120)
+        p.setPen(marca)
+        p.drawLine(12, self.height() // 2, self.width() - 12, self.height() // 2)  # el enlace
+        lapiz = p.pen()
+        lapiz.setWidth(2)
+        lapiz.setColor(QColor(255, 255, 255, 190))
+        p.setPen(lapiz)
+        for x in range(24, max(25, self.width() - 12), 96):
+            p.drawLine(x, 0, x, self.height())  # la barra de una transición
+        p.end()
+
+
+class EtiquetaElidida(QLabel):
+    """Texto de una línea que, si no cabe, acaba en «…» y lleva el texto entero en su ayuda emergente. Nunca fuerza el ancho de
+    su fila: el mínimo es casi nulo y lo que pide (`sizeHint`) tiene un tope (`ancho_maximo`). `text()` devuelve el texto entero."""
+
+    def __init__(self, texto: str = "", ancho_maximo: int = 420) -> None:
+        super().__init__()
+        self.ancho_maximo = ancho_maximo
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        if texto:
+            self.setText(texto)
+
+    def setText(self, texto: str) -> None:  # noqa: N802
+        super().setText(texto)
+        self.setToolTip(texto)
+        self.updateGeometry()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(min(self.ancho_maximo, self.fontMetrics().horizontalAdvance(self.text()) + 4), super().sizeHint().height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(24, super().minimumSizeHint().height())
+
+    def paintEvent(self, evento) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setFont(self.font())
+        p.setPen(self.palette().color(self.foregroundRole()))
+        texto = self.fontMetrics().elidedText(self.text(), Qt.TextElideMode.ElideRight, self.width())
+        p.drawText(self.rect(), int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), texto)
+        p.end()
+
+
+class ChipModo(EtiquetaElidida):
+    """El chip del modo (EDICIÓN, SIMULACIÓN…): texto en mayúsculas y, a la izquierda, un cuadrado que viene de la notación: la
+    etapa sin marcar al editar, la etapa activa (rellena) al simular. El relleno y el borde los pone la hoja de estilo;
+    `marcador` es «vacio» o «lleno»."""
+
+    def __init__(self) -> None:
+        super().__init__(ancho_maximo=360)
+        self.marcador = "vacio"
+
+    def _fijar_minimo(self) -> None:
+        """El mínimo real es la primera palabra entera («EDICIÓN», «SIMULACIÓN»): el título cede antes que el chip."""
+        minimo = self.minimumSizeHint().width()
+        if minimo != self.minimumWidth():
+            self.setMinimumWidth(minimo)
+
+    def setText(self, texto: str) -> None:  # noqa: N802
+        super().setText(texto)
+        self._fijar_minimo()
+
+    def event(self, evento) -> bool:  # noqa: N802
+        resultado = super().event(evento)
+        if evento.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange, QEvent.Type.Polish, QEvent.Type.Show):
+            self._fijar_minimo()
+        return resultado
+
+    def fijar_marcador(self, marcador: str) -> None:
+        if marcador != self.marcador:
+            self.marcador = marcador
+            self.update()
+
+    def paintEvent(self, evento) -> None:  # noqa: N802
+        QFrame.paintEvent(self, evento)  # el relleno, el borde y el radio de la hoja de estilo
+        p = QPainter(self)
+        p.setFont(self.font())
+        p.setPen(self.palette().color(self.foregroundRole()))
+        izquierda = 26
+        libre = max(0, self.width() - izquierda - 12)
+        partes = self.text().split(" · ")
+        while len(partes) > 1 and self.fontMetrics().horizontalAdvance(" · ".join(partes)) > libre:
+            partes.pop()  # primero se cae lo secundario («· ESTABLE», «· SOLO LECTURA») entero, sin «…» a media palabra
+        texto = self.fontMetrics().elidedText(" · ".join(partes), Qt.TextElideMode.ElideRight, libre)
+        p.drawText(QRect(izquierda, 0, self.width() - izquierda, self.height()),
+                   int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), texto)
+        lado = 10
+        y = (self.height() - lado) // 2
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        lapiz = p.pen()
+        lapiz.setWidth(2)
+        p.setPen(lapiz)
+        if self.marcador == "lleno":
+            p.setBrush(self.palette().color(self.foregroundRole()))
+        p.drawRect(QRect(11, y, lado - 1, lado - 1))
+        p.end()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(min(self.ancho_maximo, self.fontMetrics().horizontalAdvance(self.text()) + 26 + 14), self.height() or 26)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        palabra = self.text().split(" ")[0] if self.text() else ""  # al menos «SIMULACIÓN» o «EDICIÓN» enteras
+        return QSize(26 + self.fontMetrics().horizontalAdvance(palabra) + 14, self.height() or 26)
 
 
 class EtiquetaAyuda(QLabel):
@@ -44,13 +160,13 @@ class EtiquetaAyuda(QLabel):
 
     def heightForWidth(self, ancho: int) -> int:  # noqa: N802
         n = max(1, min(self.lineas, len(self._renglones(ancho)))) if self.text() else 1
-        return n * self.fontMetrics().lineSpacing() + 2
+        return n * self.fontMetrics().lineSpacing()  # dos líneas de 12 px caben en 32 px: la cabecera no cambia de alto al simular
 
     def sizeHint(self) -> QSize:  # noqa: N802
         return QSize(200, self.heightForWidth(max(200, self.width())))
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        return QSize(0, self.fontMetrics().lineSpacing() + 2)
+        return QSize(0, self.fontMetrics().lineSpacing())
 
     def paintEvent(self, evento) -> None:  # noqa: N802
         texto, ancho = self.text(), self.width()

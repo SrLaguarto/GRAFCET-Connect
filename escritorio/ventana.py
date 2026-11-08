@@ -18,14 +18,15 @@ from math import ceil
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal, QEvent, QElapsedTimer, QSettings, Qt, QTimer, QSize, QRectF, QPointF, QUrl
+from PySide6.QtCore import QObject, Signal, QEvent, QElapsedTimer, QSettings, Qt, QTimer, QSize, QRectF, QPointF, QPoint, QUrl
 from PySide6.QtGui import (QDesktopServices, QCursor, QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter,
-                           QPainterPath, QPen, QPixmap)
+                           QPainterPath, QPen, QPixmap, QFont, QFontMetrics)
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
                                QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QRadioButton,
                                QScrollArea, QSplitter, QStackedWidget, QTabBar, QTableWidget, QTableWidgetItem,
-                               QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle, QMenu, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
+                               QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle, QMenu, QTextEdit, QPlainTextEdit, QAbstractSpinBox,
+                               QSizePolicy, QStylePainter, QStyleOptionButton, QAbstractButton, QAbstractScrollArea)
 
 from . import recursos_ui  # Registra los iconos vectoriales incorporados.
 from . import estilo
@@ -48,7 +49,7 @@ from .leyenda import Leyenda
 from .recentrado import Recentrado
 from .mensajes import amable, motivo_parada, partir
 from .alto_opciones import agrandar_para_transicion
-from .paneles import PanelPlegable, DivisorPlegable, PilaActual, EtiquetaAyuda
+from .paneles import PanelPlegable, DivisorPlegable, PilaActual, EtiquetaAyuda, EtiquetaElidida, ChipModo, BandaModo
 from .variables import PanelVariables
 from .entradas_salidas import CONEXION_INICIAL, PanelES
 from conexion.configuracion import ARCHIVO, CANALES_INICIALES, Configuracion, aviso_host, normalizar_host
@@ -234,7 +235,7 @@ class AcercaDe(QDialog):
         icono = QLabel()
         icono.setPixmap(QIcon(str(ICONO_PROGRAMA)).pixmap(64, 64))
         cab.addWidget(icono)
-        titulo = QLabel(f"<span style='font-size:20px; font-weight:600; color:{self.ACENTO}'>{TITULO}</span><br>"
+        titulo = QLabel(f"<span style='font-size:{estilo.T_TITULO + 4}px; font-weight:600; color:{self.ACENTO}'>{TITULO}</span><br>"
                         f"Versión {VERSION}{' · versión de desarrollo' if sello.DESARROLLO else ''}<br>"
                         "Editor y simulador GRAFCET · Basado en IEC 60848")
         cab.addWidget(titulo, 1)
@@ -251,7 +252,7 @@ class AcercaDe(QDialog):
         lay.addWidget(self.l_fallos)
         self.b_fallo = QPushButton("Comunicar un fallo")
         self.b_fallo.setStyleSheet(f"QPushButton {{ background: {self.ACENTO}; color: white; font-weight: 600; "
-                                   "border: 0; border-radius: 5px; padding: 6px 14px }")
+                                   f"border: 0; border-radius: {estilo.R_S}px; padding: 6px 14px }}")
         self.b_fallo.clicked.connect(lambda: self.abrir(URL_FALLOS))
         fila = QHBoxLayout()
         fila.addWidget(self.b_fallo)
@@ -284,17 +285,75 @@ def _icono_barra(tipo: str, color: str = estilo.TINTA) -> QIcon:
 
 class _BotonEntrada(QPushButton):
     """El estado marcado sigue el valor de la entrada, no el automatismo checkable de Qt. Pulsada, enclavada o conmutada
-    se distingue por la forma del icono (anillo, punto, candado, interruptor), por el texto («= 1») y por el relleno."""
+    se distingue por la forma del icono (anillo, punto, candado, interruptor), por el texto («= 1») y por el relleno.
+    Un nombre largo se elide con «…» (el nombre entero va en la ayuda) y nunca el « = 0 / = 1» ni el ancho de la ventana.
+    Con el dedo no hay Ctrl: mantener pulsado ≈ 500 ms abre el mismo menú que el botón derecho (interruptor, NA/NC)."""
+    PULSACION_LARGA_MS = 500
+
     def __init__(self) -> None:
         super().__init__()
         self.setCheckable(True)
         self.setProperty("entrada", True)
         self.control = self.enclavado = self.liberar = self.interruptor = self.nc = False
-        self.setMinimumHeight(estilo.ALTO_CONTROL + 4)
+        self.ayuda_base = ""
+        self.setMinimumHeight(estilo.ALTO_ENTRADA)
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)  # el anillo de foco solo aparece al navegar con el teclado
+        self._largo = QTimer(self)
+        self._largo.setSingleShot(True)
+        self._largo.setInterval(self.PULSACION_LARGA_MS)
+        self._largo.timeout.connect(self._pulsacion_larga)
+        self._origen = QPoint()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(160, estilo.ALTO_ENTRADA)
+
+    def setText(self, texto: str) -> None:  # noqa: N802
+        super().setText(texto)
+        nombre = texto.rpartition(" = ")[0] or texto
+        self.setToolTip(f"{nombre}\n{self.ayuda_base}" if self.ayuda_base else nombre)
 
     def mousePressEvent(self, event: Any) -> None:  # noqa: N802
         self.control = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
         super().mousePressEvent(event)
+        if event.button() == Qt.MouseButton.LeftButton and self.isEnabled():
+            self._origen = event.position().toPoint()
+            self._largo.start()
+
+    def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802
+        if (event.position().toPoint() - self._origen).manhattanLength() > QApplication.startDragDistance():
+            self._largo.stop()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802
+        self._largo.stop()
+        super().mouseReleaseEvent(event)
+
+    def _pulsacion_larga(self) -> None:
+        if not self.isDown():
+            return
+        self.setDown(False)  # suelta lo que hizo el pulsado (la ventana restaura el reposo con `released`)
+        self.released.emit()
+        self.customContextMenuRequested.emit(self._origen)
+
+    def paintEvent(self, event: Any) -> None:  # noqa: N802
+        painter = QStylePainter(self)
+        opcion = QStyleOptionButton()
+        self.initStyleOption(opcion)
+        opcion.state &= ~QStyle.StateFlag.State_HasFocus  # el anillo lo pone la hoja de estilo, no el recuadro nativo
+        nombre, separador, valor = opcion.text.rpartition(" = ")
+        if separador:
+            fm = self.fontMetrics()
+            disponible = self.width() - 2 * 10 - 2 * 2 - opcion.iconSize.width() - 8 - fm.horizontalAdvance(" = " + valor)
+            opcion.text = fm.elidedText(nombre, Qt.TextElideMode.ElideRight, max(24, disponible)) + " = " + valor
+        painter.drawControl(QStyle.ControlElement.CE_PushButton, opcion)
+
+    def ancho_natural(self, texto: str | None = None) -> int:
+        """Lo que mide el botón con el texto entero (en negrita, como lo pone la entrada activa)."""
+        fuente = QFont(self.font())
+        fuente.setBold(True)
+        return 2 * 10 + 2 * 2 + self.iconSize().width() + 8 + QFontMetrics(fuente).horizontalAdvance(self.text() if texto is None else texto)
 
     def indicar(self, on: bool) -> None:
         estado = (self.interruptor, self.enclavado, on)
@@ -306,7 +365,7 @@ class _BotonEntrada(QPushButton):
         pm.fill(Qt.GlobalColor.transparent)
         p = QPainter(pm)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = QColor(estilo.ACENTO if on else estilo.TINTA_3)
+        color = QColor(estilo.SIMULACION if on else estilo.TINTA_3)
         p.setPen(QPen(color, 1.6))
         if self.interruptor:
             p.drawRoundedRect(QRectF(1, 4, 20, 12), 6, 6)
@@ -314,7 +373,7 @@ class _BotonEntrada(QPushButton):
             p.drawEllipse(QPointF(15 if on else 7, 10), 3.4, 3.4)
         elif self.enclavado:
             p.drawArc(QRectF(7, 1, 8, 12), 0, 180 * 16)
-            p.setBrush(QColor(estilo.ACENTO_SUAVE))
+            p.setBrush(QColor(estilo.SIMULACION_SUAVE))
             p.drawRoundedRect(QRectF(5, 8, 12, 9), 1.5, 1.5)
             p.drawLine(11, 11, 11, 14)
         else:
@@ -336,8 +395,32 @@ class _AjustaBanda(QObject):
 
     def eventFilter(self, objeto: Any, evento: Any) -> bool:  # noqa: N802
         if evento.type() in (QEvent.Type.Resize, QEvent.Type.Show):
-            self.banda.setGeometry(1, 1, max(0, self.tarjeta.width() - 2), 5)
+            self.banda.setGeometry(1, 0, max(0, self.tarjeta.width() - 2), 4)
             self.banda.raise_()
+        return False
+
+
+class _FocoTeclado(QObject):
+    """Un filtro por aplicación para el teclado: (1) el anillo discontinuo de las listas, las tablas y el dibujo solo se pinta si
+    el foco llegó con Tab (la hoja global lo pide con la propiedad `tecl`), no con un clic ni al arrancar; (2) un botón con el
+    foco se activa también con Intro, como con Espacio; (3) los botones de la ventana no toman el foco con el ratón."""
+    TECLADO = (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason, Qt.FocusReason.ShortcutFocusReason)
+
+    def eventFilter(self, objeto: Any, evento: Any) -> bool:  # noqa: N802
+        tipo = evento.type()
+        if tipo == QEvent.Type.FocusIn and isinstance(objeto, QAbstractScrollArea):
+            estilo.poner(objeto, tecl=evento.reason() in self.TECLADO)
+        elif tipo == QEvent.Type.FocusOut and isinstance(objeto, QAbstractScrollArea):
+            estilo.poner(objeto, tecl=False)
+        elif (tipo == QEvent.Type.KeyPress and evento.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+              and not evento.modifiers() and isinstance(objeto, (QPushButton, QToolButton)) and objeto.hasFocus()
+              and objeto.isEnabled() and isinstance(objeto.window(), Ventana)):
+            objeto.animateClick()
+            return True
+        elif (tipo == QEvent.Type.Show and isinstance(objeto, (QPushButton, QToolButton))
+              and objeto.focusPolicy() in (Qt.FocusPolicy.StrongFocus, Qt.FocusPolicy.NoFocus) and not objeto.isCheckable()
+              and isinstance(objeto.window(), Ventana)):
+            objeto.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         return False
 
 
@@ -388,6 +471,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.reloj = QElapsedTimer()
         self.edicion: Edicion | None = None
         self._alturas = dict(ALTO_INFERIOR)
+        self._muy_estrecho = False
         self._compacto = (False, False)  # (estrecho, bajo): lo fija el tamaño de la ventana (estilo.tamano_compacto)
         self._manual_paneles: dict[str, bool] = {}  # paneles que el usuario ha plegado o desplegado a mano: no se tocan solos
         self._auto_plegados: set[str] = set()  # paneles que el modo compacto ha plegado solo (y volverá a abrir)
@@ -421,6 +505,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if not hasattr(app, "_control_pulsadores"):
             app._control_pulsadores = _ControlPulsadores(app)
             app.installEventFilter(app._control_pulsadores)
+        if not hasattr(app, "_foco_teclado"):
+            app._foco_teclado = _FocoTeclado(app)
+            app.installEventFilter(app._foco_teclado)
         self.panel_es = PanelES()
         self._parametros_recordados = self._leer_parametros_recordados()
         self._conexion_recordada = tuple(self._parametros_recordados[k] for k in ("host", "puerto", "unidad"))
@@ -453,8 +540,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
             f'QWidget#avisoSeleccionPlanos QPushButton {{background:white; color:{estilo.TINTA}; border:1px solid {estilo.BORDE_CONTROL}; padding:0 14px; border-radius:{estilo.R_S}px; min-height:{estilo.ALTO_CONTROL - 2}px;}} '
             f'QWidget#avisoSeleccionPlanos QPushButton:hover {{background:{estilo.HOVER}; border-color:{estilo.TINTA};}} '
             f'QWidget#avisoSeleccionPlanos QPushButton:focus {{border:2px dashed {estilo.FOCO}; padding:0 13px; min-height:{estilo.ALTO_CONTROL - 4}px;}} '
-            f'QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja {{background:{estilo.CONFIRMAR}; color:white; border-color:#1d5048; font-weight:600;}} '
-            'QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja:hover {background:#1b5149;} '
+            f'QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja {{background:{estilo.CONFIRMAR}; color:white; border-color:{estilo.CONFIRMAR_BORDE}; font-weight:600;}} '
+            f'QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja:hover {{background:{estilo.CONFIRMAR_HOVER};}} '
             'QWidget#avisoSeleccionPlanos QPushButton#confirmarSeleccionHoja:focus {border:2px dashed white;}')
         fila=QHBoxLayout(self.aviso_traer);fila.setContentsMargins(12,estilo.E2,12,estilo.E2);fila.setSpacing(estilo.E2);fila.addWidget(QLabel('PLANOS · Selecciona el GRAFCET para la hoja'))
         self.b_confirmar_traer=QPushButton('Añadir selección a la hoja');self.b_confirmar_traer.setObjectName('confirmarSeleccionHoja');fila.addWidget(self.b_confirmar_traer);cancelar=QPushButton('Cancelar');fila.addWidget(cancelar);fila.addStretch(1)
@@ -480,6 +567,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         for nombre in ("izquierdo","derecho","inferior"):
             self._mostrar_panel(nombre, nombre != "inferior" or self._inferior_al_arrancar, guardar=False)
         self._accesibilidad()
+        self._configurar_foco()
+        self._foco_inicial = False
 
     # -- construcción ---------------------------------------------------------------------------
     def _accion(self, texto: str, slot: Any, atajo: str | list[str] | None = None, marcable: bool = False) -> QAction:
@@ -639,30 +728,34 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _caja(self, titulo: str) -> tuple[QGroupBox, QVBoxLayout]:
         box = QGroupBox(titulo)
         lay = QVBoxLayout(box)
+        lay.setContentsMargins(0, 0, 0, estilo.E1)
+        lay.setSpacing(estilo.E1)
         self.lado.addWidget(box)
+        self._cajas_lado = getattr(self, "_cajas_lado", []) + [box]
         return box, lay
 
     def _interfaz(self) -> None:
         izq = QWidget()
         izq.setObjectName("panelDibujo")
         il = QVBoxLayout(izq)
-        il.setContentsMargins(estilo.E3 - 2, 6, estilo.E3 - 2, estilo.E2)
+        il.setContentsMargins(estilo.E2, estilo.E1, estilo.E2, estilo.E2)
         il.setSpacing(2)
-        self._margenes_dibujo = (estilo.E3 - 2, 6, estilo.E3 - 2, estilo.E2)
+        self._margenes_dibujo = (estilo.E2, estilo.E1, estilo.E2, estilo.E2)
         # Franja de color de lo alto de la tarjeta del dibujo: azul tinta al editar, verde al simular (no ocupa sitio)
-        self.banda_modo = QWidget(izq)
+        self.banda_modo = BandaModo(izq)
         self.banda_modo.setObjectName("bandaModo")
         self.banda_modo.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.banda_modo.setFixedHeight(5)
+        self.banda_modo.setFixedHeight(4)
         self.banda_modo.setProperty("modo", "editar")
         self.banda_modo.setAccessibleName("Modo")
         izq.installEventFilter(_AjustaBanda(izq, self.banda_modo))
         cab = QHBoxLayout()
-        cab.setSpacing(estilo.E3)
-        self.estado = QLabel()
+        cab.setSpacing(estilo.E2)
+        self._cab = cab
+        self.estado = ChipModo()
         self.estado.setObjectName("chipModo")
-        self.titulo = QLabel()
-        self.titulo.setStyleSheet(f"font-size: {estilo.T_TITULO}px; font-weight: 700; color: {estilo.TINTA}")
+        self.titulo = EtiquetaElidida(ancho_maximo=380)  # el nombre del grafcet se elide con «…»: nunca ensancha la ventana
+        self.titulo.setStyleSheet(f"font-family: {estilo.FAMILIA_TITULO}; font-size: {estilo.T_TITULO}px; font-weight: 700; color: {estilo.TINTA}")
         cab.addWidget(self.estado)
         cab.addWidget(self.titulo)
         il.addLayout(cab)
@@ -693,6 +786,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
         der = QWidget()
         self.lado = QVBoxLayout(der)
+        self.lado.setContentsMargins(estilo.E1, estilo.E1, estilo.E1, estilo.E1)
+        self.lado.setSpacing(estilo.E1)
         self.diag = QLabel()
         self.diag.setWordWrap(True)
         self.diag.setTextFormat(Qt.TextFormat.RichText)
@@ -701,24 +796,26 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.lado.addWidget(self.diag)
 
         _, lay = self._caja("Entradas")
+        self.l_ayuda_entradas = QLabel("Clic: pulsar · Ctrl+clic o mantener: enclavar")  # con el dedo no hay Ctrl: mantener abre el menú
+        self.l_ayuda_entradas.setWordWrap(True)
+        self.l_ayuda_entradas.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px; font-weight: 400")
+        lay.addWidget(self.l_ayuda_entradas)
         self.rejilla = QGridLayout()
         lay.addLayout(self.rejilla)
         self.aviso = QLabel()
         self.aviso.setWordWrap(True)
         self.aviso.setStyleSheet(f"color: {estilo.ERROR}")
+        self.aviso.setVisible(False)  # sin texto no ocupa alto (se enseña solo cuando hay algo que avisar)
         lay.addWidget(self.aviso)
 
         _, lay = self._caja("Salidas y variables")
-        # «Modo» (salida continua, memorizada) va en la ayuda de cada fila: en un panel de ancho fijo no cabían las cuatro columnas
-        self.t_vars = self._tabla(["Variable", "Modo", "Valor", "Etapas"])
-        self.t_vars.setColumnHidden(1, True)
+        # Las cuatro columnas a la vista: el ancho del panel es fijo, así que «Modo» se parte en dos líneas, lo largo se elide con
+        # «…» (y va entero en la ayuda de la celda) y la tabla mide lo que sus filas: sin barras de desplazamiento anidadas
+        self.t_vars = self._tabla(["Variable", "Modo", "Valor", "Contribuyen"], (50, 58, 31, None))
         self.t_vars.horizontalHeaderItem(3).setToolTip("Etapas cuyas acciones contribuyen a la salida")
-        self.t_vars.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
-        self.t_vars.setColumnWidth(3, 72)
         lay.addWidget(self.t_vars)
         self.c_temp, lay = self._caja("Temporizadores")
-        self.t_temp = self._tabla(["Dónde", "Estado", "Lleva", "Preset"])
-        self.t_temp.setColumnHidden(1, True)  # «contando / vencido / parado» se lee en lo que lleva frente al preset, y va en la ayuda
+        self.t_temp = self._tabla(["Dónde", "Estado", "Lleva", "Preset"], (None, 59, 37, 38))
         self.t_temp.horizontalHeaderItem(2).setToolTip("Tiempo transcurrido")
         self.t_temp.horizontalHeaderItem(3).setToolTip("Duración programada")
         lay.addWidget(self.t_temp)
@@ -816,6 +913,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.vsplit.setCollapsible(0, False)
         self.vsplit.setCollapsible(1, False)  # el panel inferior se pliega con su flecha, no arrastrando: nunca por debajo de lo que pide
         self.vsplit.setHandleWidth(8)
+        self.split_izquierdo.setContentsMargins(estilo.E2, 0, estilo.E2, 0)  # los paneles de arriba, alineados con la barra de herramientas (el inferior va de borde a borde)
         self._opciones_automaticas = True
         self._seleccion_alto: tuple[str, tuple[str, ...]] | None = None  # qué selección comprobó ya el alto del panel
         self.vsplit.splitterMoved.connect(lambda *_: setattr(self, "_opciones_automaticas", False))
@@ -830,7 +928,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.l_lect = QLabel()
         self.l_lect.setStyleSheet(f"color: {estilo.AVISO}; font-weight: 600")
         self.l_reloj = QLabel()
-        self.l_reloj.setStyleSheet(f"font-weight: 600; color: {estilo.TINTA}")
+        self.l_reloj.setStyleSheet(f"font-weight: 600; color: {estilo.TINTA}; font-family: {estilo.FAMILIA_MONO}")
         sb.addWidget(self.l_aviso, 1)
         self.l_firma = QLabel()  # «Archivo sin firma»: discreto y permanente mientras el archivo abierto no tenga firma válida
         self.l_firma.setStyleSheet(f"color: {estilo.TINTA_2}")
@@ -922,10 +1020,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.tb_edit.addAction(a)
         boton = self.diagrama.b_dependencias
         boton.setIcon(_icono_barra("dependencias"))
-        boton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        boton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)  # con texto cuando hay sitio (_textos_en_barras)
         boton.setAccessibleName("Mostrar dependencias")
         boton.setStyleSheet("")  # hereda el estilo común de la barra
         self.tb_edit.setIconSize(QSize(20, 20))
+        self.tb_edit.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.a_debajo.setIconText("Añadir debajo")  # el texto del botón, sin el atajo que acompaña al del menú
         self.addToolBar(self.tb_edit)
         self.tb_vista = QToolBar("Vista")
         self.tb_vista.setObjectName("barraVista")
@@ -941,7 +1041,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.herramientas_grafcet.setObjectName("herramientasGrafcet")
         self.herramientas_grafcet.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.herramientas_grafcet.setProperty("modo", "editar")  # la hoja global la tiñe de verde al simular
-        fila=QHBoxLayout(self.herramientas_grafcet);fila.setContentsMargins(estilo.E2,2,estilo.E2,2);fila.setSpacing(estilo.E2)
+        fila=QHBoxLayout(self.herramientas_grafcet);fila.setContentsMargins(estilo.E2,estilo.E1,estilo.E2,estilo.E1);fila.setSpacing(estilo.E2)
         for barra in (self.tb_sim,self.tb_edit,self.tb_vista):
             self.removeToolBar(barra);fila.addWidget(barra);barra.show()
         fila.addStretch(1)
@@ -983,6 +1083,17 @@ class Ventana(ArchivosProyecto, QMainWindow):
             return
         self._mostrar_panel("inferior", True)
         agrandar_para_transicion(self)
+        QTimer.singleShot(0, self, self._ver_seleccion)
+        QTimer.singleShot(80, self, self._ver_seleccion)
+
+    def _ver_seleccion(self) -> None:
+        """Al abrir las Propiedades el dibujo pierde alto: si lo seleccionado queda tapado, se desplaza el dibujo hasta verlo
+        (sin tocar el zoom ni la selección)."""
+        if self.edicion is None or self.modo != "editar" or not self.diagrama.isVisible():
+            return
+        caja = self.diagrama._caja_seleccion()
+        if caja is not None:
+            self.diagrama.ensureVisible(caja, 24, 24)
 
     def _fijado(self) -> bool:
         return self.props.t_fijar.isChecked()
@@ -1083,26 +1194,50 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._mostrar_panel(nombre, False)
 
     @staticmethod
-    def _tabla(cols: list[str]) -> QTableWidget:
+    def _tabla(cols: list[str], anchos: tuple[int | None, ...] | None = None) -> QTableWidget:
+        """Tabla de estado del panel derecho. `anchos`: el de cada columna (None: la que se lleva lo que sobra). Texto de 12 px,
+        sin barras de desplazamiento propias (`ajustar_tabla` le da el alto de sus filas), el texto largo se parte en dos líneas
+        o se elide con «…» y va entero en la ayuda de la celda."""
         t = QTableWidget(0, len(cols))
         t.setHorizontalHeaderLabels(cols)
         t.verticalHeader().setVisible(False)
         t.verticalHeader().setDefaultSectionSize(estilo.ALTO_FILA)
+        t.verticalHeader().setMinimumSectionSize(estilo.ALTO_FILA_COMPACTA)
+        t.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         t.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
-        t.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # lo largo se elide (y va entero en la ayuda de la celda)
+        t.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        t.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         t.setTextElideMode(Qt.TextElideMode.ElideRight)
+        t.setWordWrap(True)
+        t.setTabKeyNavigation(False)  # el Tab sale de la tabla, no salta de celda en celda
         t.setShowGrid(False)
         t.setAlternatingRowColors(True)
-        t.setStyleSheet(f"QTableWidget {{ font-size: {estilo.T_PEQUENA}px; }} QHeaderView::section {{ font-size: {estilo.T_PEQUENA}px; padding: 4px 4px; }}")
+        t.setStyleSheet(f"QTableWidget {{ font-size: {estilo.T_PEQUENA}px; border: 0; }} "
+                        f"QHeaderView::section {{ font-size: {estilo.T_PEQUENA}px; font-weight: 400; padding: 4px -6px 4px 0px; }} "  # (el margen propio de la cabecera ya separa el texto del borde izquierdo)
+                        f"QTableWidget::item {{ padding: 0 1px; }}")
         cab = t.horizontalHeader()
         cab.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cab.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        cab.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         cab.setStretchLastSection(False)
-        cab.setMinimumSectionSize(40)
-        t.setMinimumHeight(120)
+        cab.setMinimumSectionSize(24)
+        cab.setTextElideMode(Qt.TextElideMode.ElideRight)
+        for i, ancho in enumerate(anchos or (None,) * len(cols)):
+            if ancho is None:
+                cab.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+            else:
+                cab.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
+                cab.resizeSection(i, ancho)
+        t.setMinimumHeight(0)
         return t
+
+    @staticmethod
+    def ajustar_tabla(t: QTableWidget) -> None:
+        """La tabla mide la cabecera más sus filas (con el alto que pide el texto partido): así no necesita barra propia y el
+        panel, si hace falta, se desplaza una sola vez."""
+        t.resizeRowsToContents()
+        alto = t.horizontalHeader().height() + sum(t.rowHeight(r) for r in range(t.rowCount())) + 2 * t.frameWidth() + 4
+        if t.height() != alto or t.minimumHeight() != alto:
+            t.setFixedHeight(alto)
 
     # -- fuentes: ejemplo o modelo guardado ------------------------------------------------------------
     def cargar_ejemplo(self, key: str) -> None:
@@ -1454,6 +1589,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.estado.setStyleSheet(hoja)
         self.estado.setToolTip(ayuda)
         self.estado.setAccessibleName(texto.capitalize())
+        self.estado.fijar_marcador("vacio" if modo in ("editar", "lectura") else "lleno")
 
     def _modo_visual(self) -> None:
         """Franja del borde del dibujo y fila de herramientas: verdes al simular, azul tinta al editar (propiedad `modo`)."""
@@ -1471,6 +1607,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.fila_pestanas.layout().insertWidget(1, fila)
         else:
             self.centralWidget().layout().insertWidget(1, fila)
+        fila.layout().setContentsMargins(0 if fusionar else estilo.E2, estilo.E1, 0 if fusionar else estilo.E2, estilo.E1)
+        fila.layout().setSpacing(estilo.E1 if fusionar else estilo.E2)  # en la fila de las pestañas cada píxel cuenta: caben las cuatro barras
         for w in (fila, self.fila_pestanas):
             estilo.poner(w, fusion=fusionar)
 
@@ -1588,9 +1726,74 @@ class Ventana(ArchivosProyecto, QMainWindow):
             if alto != bajo_antes:
                 self._fusionar_filas(alto)
             il = self.diagrama.parentWidget().layout()
-            il.setContentsMargins(*((estilo.E2, 6, estilo.E2, estilo.E1) if alto else self._margenes_dibujo))
+            il.setContentsMargins(*((estilo.E2, estilo.E1, estilo.E2, estilo.E1) if alto else self._margenes_dibujo))
+            self._textos_en_barras(not ancho)
+            self._reflujo_entradas()
+            self._densidad_lateral()
             self.diagrama.compactar(ancho, alto)
+            self.diagrama.integrar_barra(self._cab if (ancho or alto) else None)  # los controles del zoom, en la cabecera
+            self.panel_planos.compactar(ancho or alto)
+        muy = self.width() < estilo.UMBRAL_MUY_ESTRECHO
+        if muy != self._muy_estrecho:  # media pantalla: la fila de arriba tiene que caber en 640 px
+            self._muy_estrecho = muy
+            self.tb_sim.widgetForAction(self.a_reiniciar).setToolButtonStyle(
+                Qt.ToolButtonStyle.ToolButtonIconOnly if muy else Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            self.tb_sim.layout().invalidate()  # (la barra guarda lo que medían sus botones: sin esto «Reiniciar» se queda en el desbordamiento)
+            self.tb_sim.updateGeometry()
+            self.tb_sim.setMinimumWidth(0)
+            QTimer.singleShot(0, self._remedir_barra_simulacion)
+            estilo.poner(self.pestanas_vistas, estrecha=muy)
+            for i in (0, 1):  # QTabBar guarda el tamaño de sus pestañas: cambiar el texto lo obliga a medirlas otra vez
+                texto = self.pestanas_vistas.tabText(i)
+                self.pestanas_vistas.setTabText(i, texto + " ")
+                self.pestanas_vistas.setTabText(i, texto)
+            self._luz_es(*self._ultima_luz)
         self._plegar_laterales_compactos()
+
+    def _remedir_barra_simulacion(self) -> None:
+        """Tras cambiar «Reiniciar» a solo icono, la barra de Play pide lo que mide ahora y su fila se vuelve a repartir."""
+        for objeto in (self.tb_sim, self.herramientas_grafcet, self.fila_pestanas):
+            lay = objeto.layout()
+            if lay is not None:
+                lay.invalidate()
+                lay.activate()
+        self.tb_sim.resize(self.tb_sim.sizeHint().width(), self.tb_sim.height())
+
+    def _textos_en_barras(self, con_texto: bool) -> None:
+        """«Añadir debajo» y «Mostrar dependencias» llevan texto cuando hay sitio y solo icono (con su ayuda) en pantalla partida."""
+        forma = Qt.ToolButtonStyle.ToolButtonTextBesideIcon if con_texto else Qt.ToolButtonStyle.ToolButtonIconOnly
+        self.tb_edit.setToolButtonStyle(forma)
+        self.tb_vista.setToolButtonStyle(forma)
+        self.diagrama.b_dependencias.setToolButtonStyle(forma)
+
+    def _configurar_foco(self) -> None:
+        """Los botones se alcanzan con Tab y no toman el foco con el ratón (así el anillo solo sale al navegar con teclado); el
+        orden va de arriba abajo y de izquierda a derecha, y al arrancar el foco está en el dibujo."""
+        for b in self.findChildren(QAbstractButton):
+            if not b.isCheckable() and b.focusPolicy() in (Qt.FocusPolicy.StrongFocus, Qt.FocusPolicy.NoFocus):
+                b.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        for tabla in self.findChildren(QTableWidget):
+            tabla.setTabKeyNavigation(False)
+        play = self.tb_sim.widgetForAction(self.a_ejecutar)
+        if play is not None:
+            play.setFocusPolicy(Qt.FocusPolicy.TabFocus)  # (es un botón de dos estados: el bucle de arriba lo salta)
+        for zona in self.findChildren(QScrollArea):  # una zona de desplazamiento no es una parada de Tab: sus controles sí
+            if zona.focusPolicy() == Qt.FocusPolicy.StrongFocus:
+                zona.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._orden_tab()
+
+    def _orden_tab(self) -> None:
+        d = self.diagrama
+        entradas = list(getattr(self, "botones", {}).values())
+        cadena = [self.pestanas_vistas, self.luz_es, self.tb_sim.widgetForAction(self.a_ejecutar),
+                  self.tb_sim.widgetForAction(self.a_reiniciar), self.tb_edit.widgetForAction(self.a_debajo), d.b_dependencias,
+                  self.flechas["izquierdo"], self.paleta, d, d.b_menos, d.b_mas, d.b_ajustar, d.b_seleccion,
+                  self.flechas["derecho"], *entradas, self.variables.tabla, *self.variables.b_nuevas.values(),
+                  self.variables.b_quitar, self.pestanas["izquierdo"], self.pestanas["derecho"], self.flechas["inferior"],
+                  self.pestanas["inferior"], self.props.t_fijar]
+        cadena = [w for w in cadena if w is not None]
+        for a, b in zip(cadena, cadena[1:]):
+            QWidget.setTabOrder(a, b)
 
     def _plegar_laterales_compactos(self) -> None:
         estrecho = self._compacto[0]
@@ -1612,6 +1815,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
         self._adaptar_tamano()
+        if not self._foco_inicial:  # al arrancar, el foco va al dibujo (sin anillo: no llegó con Tab)
+            self._foco_inicial = True
+            self.diagrama.setFocus(Qt.FocusReason.OtherFocusReason)
         if self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False) and not getattr(self, "_anchos_puestos", False):
             self._anchos_puestos = True  # con la ventana ya dimensionada, los dos paneles laterales con el mismo ancho
             self._anchos_laterales(self.ancho_lateral)
@@ -1806,20 +2012,24 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _act(self, op: str, **body: Any) -> None:
         if self.modbus.activo:
             self.aviso.setText("Con E/S externas use Play/Stop; desconecte para depurar manualmente")
+            self.aviso.setVisible(True)
             return
         if self.v is None:
             return
         try:
             self.v.act(op, body)
             self.aviso.setText("")
+            self.aviso.setVisible(False)
         except ERRORES as exc:
             self.aviso.setText(f"No disponible: {exc}")
+            self.aviso.setVisible(True)
         self.refrescar()
 
     def _entradas(self) -> None:
         while self.rejilla.count():
             w = self.rejilla.takeAt(0).widget()
             if w is not None:
+                w.hide()  # hasta que se borre, no se ve (si no, asoma tras los nuevos al cambiar la disposición)
                 w.deleteLater()
         self.botones, self.campos = {}, {}
         numeric = self.v.model.get("numericInputs", {})
@@ -1855,11 +2065,40 @@ class Ventana(ArchivosProyecto, QMainWindow):
             fila += 1
         if not self.v.model["inputs"]:
             self.rejilla.addWidget(QLabel("Sin entradas"), 0, 0)
+        self._reflujo_entradas()
+        self._densidad_lateral()
+        QTimer.singleShot(0, self._reflujo_entradas)  # (otra vez con la hoja de estilo ya aplicada: la letra puede medir distinto)
+        if hasattr(self, "pestanas") and hasattr(self, "props"):
+            self._orden_tab()
+
+    def _reflujo_entradas(self) -> None:
+        """Con poca altura (un cuarto de pantalla) las entradas booleanas van de dos en dos: así caben también las tablas."""
+        botones = [self.rejilla.itemAt(i).widget() for i in range(self.rejilla.count())]
+        if not botones or not all(isinstance(b, _BotonEntrada) for b in botones):
+            return
+        por_fila = 2 if self._compacto[1] else 1
+        if por_fila == 2:  # de dos en dos solo si los nombres caben enteros en media fila (si no, uno por fila y la tabla se desplaza)
+            mitad = (self.ancho_lateral - 2 * estilo.E1 - estilo.ANCHO_BARRA - estilo.E1) // 2
+            if any(b.ancho_natural(f"{self.nombre(v)} = 0") > mitad for v, b in self.botones.items() if isinstance(b, _BotonEntrada)):
+                por_fila = 1
+        for b in botones:
+            self.rejilla.removeWidget(b)
+        for i, b in enumerate(botones):
+            self.rejilla.addWidget(b, i // por_fila, (i % por_fila) * (4 // por_fila), 1, 4 // por_fila)
+
+    def _densidad_lateral(self) -> None:
+        """En un cuarto de pantalla el panel de simulación gana alto (títulos de caja 4 px más bajos y sin margen inferior) para que se
+        vea también la fila de temporizadores sin desplazarse."""
+        bajo = self._compacto[1]
+        for caja in getattr(self, "_cajas_lado", []):
+            caja.setStyleSheet(f"QGroupBox {{ margin-top: {estilo.E1 * 5}px; }}" if bajo else "")
+            caja.layout().setContentsMargins(0, 0, 0, 0 if bajo else estilo.E1)
 
     @staticmethod
     def _ayuda_entrada(b: _BotonEntrada) -> None:
-        b.setToolTip(("NC: reposo 1, accionado 0 · " if b.nc else "NA: reposo 0, accionado 1 · ") + ("Interruptor: clic para conmutar · Botón derecho: cambiar tipo" if b.interruptor else
-                     "Pulsador momentáneo: presionar invierte el reposo, soltar lo restaura · Ctrl+clic: enclavar mientras se mantiene Ctrl (otro clic libera) · Botón derecho: cambiar tipo"))
+        b.ayuda_base = (("NC: reposo 1, accionado 0 · " if b.nc else "NA: reposo 0, accionado 1 · ") + ("Interruptor: clic para conmutar · Botón derecho o mantener pulsado: cambiar tipo" if b.interruptor else
+                     "Pulsador momentáneo: presionar invierte el reposo, soltar lo restaura · Ctrl+clic: enclavar mientras se mantiene Ctrl (otro clic libera) · Botón derecho o mantener pulsado: cambiar tipo"))
+        b.setToolTip(b.ayuda_base)
 
     def _cambiar_tipo_entrada(self, var: str, interruptor: bool) -> None:
         self._tipos_entrada[self._proyecto, var] = interruptor
@@ -2433,11 +2672,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         simulando = self.modo == "simular"  # al editar, el dibujo, el estado y el título son los de la edición
         if simulando:
             label, color = ESTADOS.get(S["status"], (S["status"], "muted"))
-            if S["status"] == "pausada-estable":
-                self._poner_chip("simular", "SIMULACIÓN EN CURSO", "Simulación en curso: Stop detiene y vuelve a editar")
-            else:
-                self._poner_chip({"err": "error", "virt": "aviso"}.get(color, "simular"),
-                                 f"SIMULACIÓN · {label.upper()}", f"Simulación: {label}")
+            # el estado del motor se dice con las mismas palabras de siempre (estable, en recorrido…), en mayúsculas
+            self._poner_chip({"err": "error", "virt": "aviso"}.get(color, "simular"), f"SIMULACIÓN · {label.upper()}",
+                             f"Simulación en curso, {label}. Stop detiene y vuelve a editar")
             self.titulo.setText(M["title"])
             self.ayuda.setText(M["help"]);self.ayuda.setToolTip(M["help"])
         stable, rec = S["status"] == "pausada-estable", S["status"] == "pausada-recorrido"
@@ -2544,20 +2781,13 @@ class Ventana(ArchivosProyecto, QMainWindow):
         rows += [(self.nombre(k), "memorizada", str(v), "", "text") for k, v in (S.get("values") or {}).items()
                  if k not in M["inputs"] and k not in outs]
         self._filas(self.t_vars, rows)
-        for i, fila in enumerate(rows):  # el modo (columna oculta) va en la ayuda del nombre
-            item = self.t_vars.item(i, 0)
-            if item is not None and item.toolTip() != f"{fila[0]} · {fila[1]}":
-                item.setToolTip(f"{fila[0]} · {fila[1]}")
         temp = S.get("temporal") or {}
         self.c_temp.setVisible(bool(temp))
         self._filas(self.t_temp, [(t["where"], t["estado"], t["lleva"], t["preset"],
-                                   "accent" if t["estado"] == "contando" else "ok" if t["estado"] == "vencido" else "muted")
-                                  for t in temp.values()], 2)
-        for i, t in enumerate(temp.values()):  # el estado (columna oculta) va en la ayuda de la fila
-            for j in (0, 2, 3):
-                item = self.t_temp.item(i, j)
-                if item is not None and item.toolTip() != f"{t['where']}: {t['estado']}":
-                    item.setToolTip(f"{t['where']}: {t['estado']}")
+                                   "readout" if t["estado"] == "contando" else "ok" if t["estado"] == "vencido" else "muted")
+                                  for t in temp.values()], 1)
+        self.ajustar_tabla(self.t_vars)
+        self.ajustar_tabla(self.t_temp)
 
     @staticmethod
     def _filas(t: QTableWidget, rows: list[tuple[str, ...]], col_color: int = 2) -> None:
@@ -2703,11 +2933,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
     # -- indicador de la conexión externa -------------------------------------------------------
     def _luz_es(self, estado: str, mensaje: str = "") -> None:
         """Punto de color y texto breve en la barra de simulación: verde conectada, gris desconectada, rojo error."""
+        self._ultima_luz = (estado, mensaje)
         texto = {"conectado": "conectada", "error": "error", "diagnostico": "error"}.get(estado, "desconectada")
         # la luz no depende solo del color: círculo con marca (conectada), círculo vacío (desconectada) o rombo con «!» (error)
         self.luz_es.setIcon(QIcon(estilo.forma_luz(texto)))
         self.luz_es.setIconSize(QSize(14, 14))
-        self.luz_es.setText(f"E/S externas: {texto}")
+        self.luz_es.setText(f"{'E/S' if getattr(self, '_muy_estrecho', False) else 'E/S externas'}: {texto}")  # media pantalla: una palabra menos
         self.luz_es.setToolTip((mensaje + "\n" if mensaje else "") + "Abrir E/S externas")
         self.luz_es.setAccessibleName(f"E/S externas: {texto}")
         estilo.poner(self.luz_es, estadoLuz=texto)

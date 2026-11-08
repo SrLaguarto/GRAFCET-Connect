@@ -27,6 +27,7 @@ from PySide6.QtGui import QColor, QPainter, QPen, QFont, QTextDocument
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
                                QPushButton, QVBoxLayout, QWidget, QStylePainter, QStyleOptionComboBox, QStyleOptionFrame, QStyle)
 
+from . import estilo
 from .bloques import COLORES, Programador
 from .diagrama import COL, _html
 from .edicion import CONTINUAS, DISPARADOR, Edicion, Parpadeo
@@ -35,8 +36,8 @@ from .variables import nombre_tipo
 SIN_VARIABLES = "(sin variables: créelas en la tabla de variables)"  # la lista de variables, si no hay ninguna que valga
 ALTO_SELECTOR = 62  # alto del selector de variable (dibujado como una caja de acción); nada debe dejarlo por debajo
 ESTILO_FICHA = (f"QPushButton {{ background: {COLORES['comparacion']}; color: white; font-weight: 600; border: 2px solid "
-                f"transparent; border-radius: 9px; padding: 5px 22px; }}"
-                "QPushButton:checked { border: 3px solid #FFD43B; }")
+                f"transparent; border-radius: {estilo.R_M}px; padding: 4px 24px; }}"
+                f"QPushButton:checked {{ border: 3px solid {estilo.AVISO_BORDE}; }}")
 
 
 class CajaFormula(QLineEdit):
@@ -132,7 +133,7 @@ class PanelAccion(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self.b_etapa = QLabel()  # solo informa de la etapa de la acción; no lleva a ninguna parte
-        self.b_etapa.setStyleSheet("color: gray")
+        self.b_etapa.setStyleSheet(f"color: {estilo.TINTA_2}")
         lay.addWidget(self.b_etapa, 0, Qt.AlignmentFlag.AlignLeft)
         self.frase = QLabel()
         self.frase.setWordWrap(True)

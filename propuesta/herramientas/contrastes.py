@@ -81,7 +81,28 @@ PAREJAS = [
     ("LUZ_CONECTADA", "SUPERFICIE", 3.0, "luz de conexión: conectada"),
     ("LUZ_DESCONECTADA", "SUPERFICIE", 3.0, "luz de conexión: desconectada"),
     ("LUZ_ERROR", "SUPERFICIE", 3.0, "luz de conexión: error"),
+    ("BLANCO", "PARPADEO", 3.0, "«+ Añadir hoja»: texto sobre el tono claro del parpadeo"),
+    ("PARPADEO", "SUPERFICIE", 3.0, "«+ Añadir hoja»: el tono claro del parpadeo sobre la tarjeta"),
+    ("BLANCO", "ACENTO", 4.5, "«+ Añadir hoja»: texto sobre el tono oscuro del parpadeo"),
+    ("FOCO_FUERTE", "SIMULACION", 3.0, "anillo de foco de Stop contra su relleno"),
+    ("FOCO_FUERTE", "ACENTO", 3.0, "anillo de foco de Play contra su relleno"),
+    ("FOCO_FUERTE", "FONDO", 3.0, "anillo de foco de Play/Stop contra la barra"),
+    ("BLANCO", "SIMULACION_HOVER", 3.0, "Stop con el ratón encima (texto grande en negrita)"),
+    ("BLANCO", "CONFIRMAR", 4.5, "confirmar la selección de hoja"),
+    ("BARRA_ES_BOOL", "BLANCO", 3.0, "barra de nivel de una E/S booleana sobre su tarjeta"),
+    ("BARRA_ES_DECIMAL", "BLANCO", 3.0, "barra de nivel de una E/S decimal sobre su tarjeta"),
+    ("BARRA_ES_INT", "BLANCO", 3.0, "barra de nivel de una E/S entera sobre su tarjeta"),
+    ("BARRA_ES_BORDE", "BLANCO", 3.0, "barrita de las E/S asignadas sin señal, sobre su tarjeta"),
+    ("BARRA_ES_BOOL", "SUPERFICIE_2", 3.0, "barra de nivel booleana sobre el fondo del panel"),
+    ("BARRA_ES_DECIMAL", "SUPERFICIE_2", 3.0, "barra de nivel decimal sobre el fondo del panel"),
+    ("BARRA_ES_INT", "SUPERFICIE_2", 3.0, "barra de nivel entera sobre el fondo del panel"),
+    ("BARRA_ES_BORDE", "SUPERFICIE_2", 3.0, "barrita asignada sin señal, sobre el fondo del panel"),
+    ("BORDE_CONTROL", "SUPERFICIE_2", 3.0, "contorno de toda barrita de nivel sobre el fondo del panel"),
 ]
+
+# Reservado para lo que hay que decidir fuera del código: el verde de «verdadero» del lienzo (COL["true_text"]).
+# SUIV02 fija COL["true_text"] == COL["active"] (#40d641), así que el valor oscuro no se aplica; se mide aquí el actual y el propuesto.
+VERDE_VERDADERO = {"actual (#40d641, el de COL[\"active\"])": "#40d641", "propuesto (#18771a)": "#18771a"}
 EXENTAS = [("DESHABILITADO", "SUPERFICIE", "texto deshabilitado (exento)"), ("DESHABILITADO", "SUPERFICIE_2", "idem sobre fondo hundido")]
 
 
@@ -90,6 +111,12 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     t = tokens()
     t["LUZ_CONECTADA"], t["LUZ_DESCONECTADA"], t["LUZ_ERROR"] = "#17803d", "#6f7f92", "#c62828"
+    t["BLANCO"] = "#ffffff"
+    es = (RAIZ / "escritorio" / "entradas_salidas.py").read_text(encoding="utf-8")
+    import re
+    tipos = re.search(r"COLOR_TIPO = \{([^}]*)\}", es).group(1)
+    t["BARRA_ES_BOOL"], t["BARRA_ES_DECIMAL"], t["BARRA_ES_INT"] = re.findall(r"\"(#[0-9a-fA-F]{6})\"", tipos)
+    t["BARRA_ES_BORDE"] = "#7c8a90"
     fallos = 0
     print(f"{'primer plano':<18}{'fondo':<18}{'ratio':>7}  {'mín.':>5}  uso")
     for fg, bg, minimo, uso in PAREJAS:
@@ -100,6 +127,9 @@ def main() -> int:
     print("\nExentas (deshabilitado):")
     for fg, bg, uso in EXENTAS:
         print(f"{fg:<18}{bg:<18}{contraste(t[fg], t[bg]):>7.2f}  {uso}")
+    print("\nVerde de «verdadero» del lienzo sobre blanco (texto: 4,5:1 exigido por el encargo; no se aplica, ver PROPUESTAS_PENDIENTES):")
+    for nombre, c in VERDE_VERDADERO.items():
+        print(f"{nombre:<44}{contraste(c, '#ffffff'):>7.2f}:1")
     print(f"\n{len(PAREJAS) - fallos}/{len(PAREJAS)} parejas cumplen")
     return 1 if fallos else 0
 

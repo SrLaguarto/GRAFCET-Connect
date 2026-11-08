@@ -52,7 +52,7 @@ class PaginaPlanos(QWidget):
         self.a_nueva=self.barra.addAction('Traer GRAFCET',self.traer)
         self.barra.addSeparator();self.a_centrar=self.barra.addAction('Centrar GRAFCET',lambda:self.editor and self.editor.centrar())
         self.barra_hoja=self.barra;self.barra=QToolBar('Vista de la hoja');self.barra.setObjectName('barraPlanos');flujo.addWidget(self.barra)
-        self.barra.addWidget(QLabel('Zoom de pantalla '))
+        self.l_zoom_pantalla=QLabel('Zoom de pantalla ');self.acc_zoom_etiqueta=self.barra.addWidget(self.l_zoom_pantalla)
         self.barra.addAction('−',lambda:self.zoom(1/1.15));self.zoom_combo=QComboBox();self.zoom_combo.setMinimumWidth(130)
         self.zoom_combo.addItem('Ajustar hoja',None)
         for n in (50,75,100,125,150,200):self.zoom_combo.addItem(str(n)+' %',n/100)
@@ -61,7 +61,8 @@ class PaginaPlanos(QWidget):
         form.addRow(QLabel('GRAFCET seleccionado'))
         self.tamano=QDoubleSpinBox();self.tamano.setRange(50,200);self.tamano.setSingleStep(10);self.tamano.setDecimals(0);self.tamano.setSuffix(' %');self.tamano.setValue(100);self.tamano.setToolTip('Tamaño impreso (50–200 %), independiente del zoom');self.tamano.valueChanged.connect(self.cambiar_tamano);form.addRow('Tamaño',self.tamano)
         self.b_eliminar_grafico=QPushButton('Eliminar del plano');self.b_eliminar_grafico.clicked.connect(self.eliminar_grafico);form.addRow(self.b_eliminar_grafico)
-        self.b_plantilla=QToolButton();self.b_plantilla.setText('Biblioteca y opciones');self.b_plantilla.setObjectName('bibliotecaPlanos');self.b_plantilla.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);self.barra.addWidget(self.b_plantilla)
+        self.b_plantilla=QToolButton();self.b_plantilla.setText('Biblioteca y opciones');self.b_plantilla.setObjectName('bibliotecaPlanos');self.b_plantilla.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);self.acc_biblioteca=self.barra.addWidget(self.b_plantilla)
+        self.compacto=False;self.b_mas=QToolButton();self.b_mas.setText('Más');self.b_mas.setObjectName('bibliotecaPlanos');self.b_mas.setToolTip('Centrar, exportar, imprimir, biblioteca y plantilla');self.b_mas.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup);self.menu_mas=QMenu(self.b_mas);self.b_mas.setMenu(self.menu_mas);self.menu_mas.aboutToShow.connect(self._rellenar_mas);self.acc_mas=self.barra.addWidget(self.b_mas);self.acc_mas.setVisible(False)
         self.a_exportar=self.barra_hoja.addAction('Exportar…',lambda:self.editor and self.editor.exportar())
         self.a_imprimir=self.barra_hoja.addAction('Imprimir…',lambda:self.editor and self.editor.imprimir())
         self.barra_plantilla=QToolBar('Plantilla y textos');self.barra_plantilla.setObjectName('barraPlanos');flujo.addWidget(self.barra_plantilla);raiz.addWidget(barras)
@@ -77,6 +78,34 @@ class PaginaPlanos(QWidget):
         self.divisor.addWidget(self.cuerpo);self.divisor.setStretchFactor(0,0);self.divisor.setStretchFactor(1,1);self.divisor.setSizes([160,1100])
         self.lista.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.lista.customContextMenuRequested.connect(self.menu_hoja)
         self.lista.currentRowChanged.connect(self.elegir);self.actualizar_acciones()
+
+    def compactar(self,on):
+        """Ventana estrecha o baja: la hoja manda. Quedan «Traer GRAFCET» y el zoom en una sola fila, y lo secundario (centrar, exportar,
+        imprimir, biblioteca y las órdenes de la plantilla) pasa a un botón «Más ▾» con un menú."""
+        on=bool(on)
+        if on!=self.compacto:
+            self.compacto=on;self._aplicar_compacto()
+
+    def _aplicar_compacto(self):
+        on=self.compacto
+        for a in (self.a_centrar,self.a_exportar,self.a_imprimir):a.setVisible(not on)
+        self.acc_zoom_etiqueta.setVisible(not on);self.acc_biblioteca.setVisible(not on);self.acc_mas.setVisible(on)
+        self.barra_plantilla.setVisible(self.editor is not None and not on)
+        self.scroll_hojas.setMinimumWidth(112 if on else 150);self.scroll_hojas.setMaximumWidth(150 if on else 215)
+        if self.editor is not None:
+            pila=self.editor.propiedades;pila.setFixedWidth(232 if on else 290)
+            for i in range(pila.count()):pila.widget(i).setFixedWidth(228 if on else 286)  # (cada página llena la pila: si no, se corta por la derecha)
+
+    def _rellenar_mas(self):
+        m=self.menu_mas;m.clear()
+        for a in (self.a_centrar,self.a_exportar,self.a_imprimir):  # (sus botones de la barra están ocultos: el menú lleva copias)
+            copia=m.addAction(a.text(),a.trigger);copia.setEnabled(a.isEnabled())
+        if self.editor is not None:
+            m.addSeparator()
+            for a in self.barra_plantilla.actions():m.addAction(a)
+        biblioteca=self.b_plantilla.menu()
+        if biblioteca is not None and biblioteca.actions():
+            biblioteca.setTitle('Biblioteca de plantillas');m.addSeparator();m.addMenu(biblioteca)
 
     def liberar_editor(self):
         if self.editor:
@@ -144,7 +173,7 @@ class PaginaPlanos(QWidget):
         self.estilo_boton_hoja()
 
     ACENTO_HOJA = estilo.ACENTO  # el acento de la interfaz (el de los títulos de esta página)
-    ACENTO_HOJA_CLARO = estilo.ACENTO_BORDE
+    ACENTO_HOJA_CLARO = estilo.PARPADEO
 
     def estilo_boton_hoja(self, fase=True):
         """«+ Añadir hoja» es el botón principal (fondo de acento, texto blanco) mientras no hay ninguna hoja; con
@@ -211,7 +240,7 @@ class PaginaPlanos(QWidget):
             self.a_texto=self.barra_plantilla.addAction('Añadir texto',self.editor.anadir_texto)
             biblioteca=QMenu(self.b_plantilla)
             for a in self.editor.menu_plantilla.actions()[4:]:biblioteca.addAction(a)
-            self.b_plantilla.setMenu(biblioteca);self.navegacion();self.actualizar_titulo();self.actualizar_acciones();self.miniatura(True)
+            self.b_plantilla.setMenu(biblioteca);self.navegacion();self.actualizar_titulo();self.actualizar_acciones();self.miniatura(True);self._aplicar_compacto()
             self.dimension_timer.start()
         except (ValueError,OSError,RuntimeError,StopIteration) as exc:
             self.vacio.setText(str(exc));self.vacio.show();self.actualizar_acciones()
@@ -241,7 +270,7 @@ class PaginaPlanos(QWidget):
 
     def actualizar_acciones(self):
         e=self.ventana.edicion;ed=self.editor
-        self.a_hoja.setEnabled(e is not None);self.barra_plantilla.setVisible(ed is not None)
+        self.a_hoja.setEnabled(e is not None);self.barra_plantilla.setVisible(ed is not None and not self.compacto)
         self.a_nueva.setEnabled(ed is not None and self.ventana.modo=='editar');self.tamano.setEnabled(ed is not None and bool(self.graficos))
         for a,b in ((self.a_exportar,'b_exportar'),(self.a_imprimir,'b_imprimir'),(self.a_centrar,'b_centrar')):a.setEnabled(ed is not None and getattr(ed,b).isEnabled())
         self.b_plantilla.setEnabled(ed is not None)

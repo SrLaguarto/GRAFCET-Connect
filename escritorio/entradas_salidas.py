@@ -35,7 +35,7 @@ MIME_VARIABLE = "application/x-grafconnect-variable"
 # Aspecto. El color de la barrita es el del tipo; su viveza, el estado: tenue (canal sin asignar), tipo (asignado) y vivo
 # (la señal está activa). La leyenda de abajo explica los colores.
 FONDO = estilo.SUPERFICIE_2
-COLOR_TIPO = {"bool": "#22a342", "decimal": "#008add", "int": "#e57912"}
+COLOR_TIPO = {"bool": "#22a342", "decimal": "#008add", "int": "#d96a0c"}
 COLOR_CUALQUIERA = "#6d837b"
 LEYENDA = (("Bool", "bool"), ("Decimal", "decimal"), ("Entera", "int"), ("Cualquiera", None))
 NIVEL_TENUE, NIVEL_ASIGNADO, NIVEL_ACTIVO = .28, .62, 1.0
@@ -88,7 +88,7 @@ ESTILO_PANEL = f"""
 def mezclar(color, nivel):
     """El color sobre el fondo: nivel 1 es el color entero; menos, más apagado."""
     if nivel < NIVEL_ACTIVO:
-        return QColor("#cbd2d5" if nivel < NIVEL_ASIGNADO else "#919da3")
+        return QColor("#cbd2d5" if nivel < NIVEL_ASIGNADO else "#7c8a90")  # (3,5:1 sobre blanco; la barrita lleva además un borde de 3,5:1)
     c, f = QColor(color).getRgb(), QColor(FONDO).getRgb()
     return QColor(*(round(f[i] + (c[i] - f[i]) * nivel) for i in range(3)))
 
@@ -162,6 +162,8 @@ class IndicadorES(QWidget):
         for i, c in enumerate(self.colores):
             y0, y1 = i * self.height() // n, (i + 1) * self.height() // n
             p.fillRect(0, y0, self.width(), y1 - y0, mezclar(c, self.nivel))
+        p.setPen(QColor(estilo.BORDE_CONTROL))  # el contorno cumple los 3:1 que no cumplen los tonos tenues sobre blanco
+        p.drawRect(0, 0, self.width() - 1, self.height() - 1)
 
 
 class EtiquetaElidida(QLabel):
@@ -279,7 +281,7 @@ class TerminalES(QFrame):
             self.marca = self._crear_marca(aviso)
         self.nombre.setToolTip(self._ayuda_nombre(aviso))  # el nombre entero, aunque la etiqueta lo recorte con «…»
         self.valor = QLabel("—" if variable else "", self)
-        self.valor.setStyleSheet(f"color:{estilo.TINTA_2}; font-size:11px")
+        self.valor.setStyleSheet(f"color:{estilo.TINTA_2}; font-size:{estilo.T_PEQUENA}px; font-family:{estilo.FAMILIA_MONO}")
         self.valor.setVisible(analogica)
         self.barrita_nombre = IndicadorES(6, 13)
         self.barrita_nombre.hide()  # el estado se muestra solo en el indicador del canal del PLC
@@ -771,7 +773,7 @@ class PanelES(QWidget):
         self.check = QLabel("●")
         self.check.setFixedSize(16, 16)
         self.check.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.check.setStyleSheet(f"color:{estilo.TINTA_3}; font-size:10px")
+        self.check.setStyleSheet(f"color:{estilo.TINTA_3}; font-size:{estilo.T_PEQUENA}px")
         fe.addWidget(self.check, 0, Qt.AlignmentFlag.AlignTop)
         self.estado = EstadoConexion()
         self.estado.setText("Desconectado")
@@ -790,9 +792,10 @@ class PanelES(QWidget):
         # Cuerpo: sensores | marco del servidor con sus canales | actuadores
         cuerpo = QWidget()
         cuerpo.setObjectName("cuerpoES")
-        zona = QHBoxLayout(cuerpo)
-        zona.setContentsMargins(8, 6, 8, 4)
+        zona = QGridLayout(cuerpo)
+        zona.setContentsMargins(estilo.E2, 6, estilo.E2, estilo.E1)
         zona.setSpacing(6)
+        self._zona = zona
         self.lienzo = LienzoPLC()
         self.modulo = self.lienzo.marco
         self.destino = self.lienzo.destino
@@ -823,9 +826,9 @@ class PanelES(QWidget):
             cl.addWidget(lista, 1)
             self.cuentas[rol] = etiqueta
             columnas.append(columna)
-        zona.addWidget(columnas[0], 1)
-        zona.addWidget(scroll, 3)
-        zona.addWidget(columnas[1], 1)
+        self._partes = (columnas[0], scroll, columnas[1])
+        self._estrecho = None
+        self._disponer(False)
         # con la ventana pequeña el cuerpo entero se desplaza (barras cuando hacen falta) en vez de cortarse
         self.scroll_cuerpo = QScrollArea()
         self.scroll_cuerpo.setObjectName("scrollCuerpoES")
@@ -848,7 +851,8 @@ class PanelES(QWidget):
             pl.addWidget(QLabel(texto))
             pl.addSpacing(12)
         self.ayuda_vacio.setParent(pie)
-        self.ayuda_vacio.setWordWrap(False)
+        self.ayuda_vacio.setWordWrap(True)  # a media pantalla se parte en dos líneas: no fija el ancho mínimo de la ventana
+        self.ayuda_vacio.setMinimumWidth(0)
         self.ayuda_vacio.setAlignment(Qt.AlignmentFlag.AlignCenter)
         pl.addWidget(self.ayuda_vacio, 1)
         self.ayuda_vacio.show()
@@ -965,6 +969,46 @@ class PanelES(QWidget):
             widget.valueChanged.connect(self._config_editada)
         self._cargando = False
 
+    UMBRAL_ESTRECHO = 900
+
+    def _disponer(self, estrecho: bool) -> None:
+        """Ancho: sensores | marco del PLC | actuadores. Estrecho (media pantalla): sensores y actuadores lado a lado arriba, con
+        poca altura, y el marco del PLC debajo a todo el ancho, para que ningún nombre de canal («Salida numérica 11») se corte."""
+        if estrecho == self._estrecho:
+            return
+        self._estrecho = estrecho
+        sensores, scroll, actuadores = self._partes
+        for w in self._partes:
+            self._zona.removeWidget(w)
+        for c in range(3):
+            self._zona.setColumnStretch(c, 0)
+        for f in range(2):
+            self._zona.setRowStretch(f, 0)
+        if estrecho:
+            self._zona.addWidget(sensores, 0, 0)
+            self._zona.addWidget(actuadores, 0, 1)
+            self._zona.addWidget(scroll, 1, 0, 1, 2)
+            self._zona.setColumnStretch(0, 1)
+            self._zona.setColumnStretch(1, 1)
+            self._zona.setRowStretch(1, 1)
+            for w in (sensores, actuadores):
+                w.setMinimumWidth(0)
+                w.setMaximumHeight(150)
+        else:
+            self._zona.addWidget(sensores, 0, 0)
+            self._zona.addWidget(scroll, 0, 1)
+            self._zona.addWidget(actuadores, 0, 2)
+            self._zona.setColumnStretch(0, 1)
+            self._zona.setColumnStretch(1, 3)
+            self._zona.setColumnStretch(2, 1)
+            for w in (sensores, actuadores):
+                w.setMinimumWidth(144)
+                w.setMaximumHeight(16777215)
+
+    def resizeEvent(self, evento):  # noqa: N802
+        super().resizeEvent(evento)
+        self._disponer(self.width() < self.UMBRAL_ESTRECHO)
+
     def restablecer_canales(self):
         self._cargando=True
         for area,rango in CANALES_INICIALES.items():
@@ -1046,7 +1090,7 @@ class PanelES(QWidget):
         self.check.setText("✓" if conectado else "✕" if fallo else "●")
         self.check.setStyleSheet(f"background:{estilo.OK if conectado else estilo.ERROR if fallo else 'transparent'}; "
                                  f"color:{'white' if conectado or fallo else estilo.TINTA_3}; "
-                                 f"border-radius:8px; font-size:{'11px' if conectado or fallo else '10px'}; font-weight:600")
+                                 f"border-radius:8px; font-size:{estilo.T_PEQUENA}px; font-weight:600")
         self.check.setToolTip(mensaje)
         self.estado.setStyleSheet(f"color:{estilo.OK if conectado else estilo.ERROR if fallo else estilo.AVISO if self._hubo_conexion else estilo.TINTA_2}; font-weight:600")
         self.estado.setVisible(True)
@@ -1323,7 +1367,7 @@ class PanelES(QWidget):
         self.lista_salidas.clear()
         asignadas = {s.variable: f"{ETIQUETA_CANAL[s.area]} {s.direccion}" for s in c.senales}
         for rol, titulo in (("input", "SENSORES"), ("output", "ACTUADORES")):
-            self.cuentas[rol].setText(f"{titulo} <span style='color:{estilo.TINTA_2}; font-size:11px'>{sum(v['role'] == rol for v in self.variables)}</span>")
+            self.cuentas[rol].setText(f"{titulo} <span style='color:{estilo.TINTA_2}; font-size:{estilo.T_PEQUENA}px'>{sum(v['role'] == rol for v in self.variables)}</span>")
         for v in self.variables:
             item = QListWidgetItem(v["name"])
             item.setSizeHint(QSize(0, ALTO_VARIABLE))

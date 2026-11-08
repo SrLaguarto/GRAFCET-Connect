@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QGraphicsScene, QH
 from grafcet.builder import M
 from grafcet.view import Vista
 
+from . import estilo
 from .diagrama import COL, SX, dibujar
 
 ESCALA = 0.9  # tamaño de las miniaturas respecto al dibujo
@@ -285,7 +286,7 @@ def _fila(entrada: Entrada) -> QWidget:
     pm = dibujo(entrada)
     if pm is not None:
         imagen.setPixmap(pm)
-        imagen.setStyleSheet(f"background: {COL['panel']}; border: 1px solid #d0d5e0; border-radius: 4px")
+        imagen.setStyleSheet(f"background: {COL['panel']}; border: 1px solid {estilo.BORDE}; border-radius: {estilo.R_S}px")
     lay.addWidget(imagen, 0, Qt.AlignmentFlag.AlignTop)
     texto = QLabel(f"<b>{entrada.titulo}</b><br>{entrada.frase}")
     texto.setWordWrap(True)

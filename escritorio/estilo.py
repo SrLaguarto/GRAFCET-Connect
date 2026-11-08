@@ -38,39 +38,50 @@ ACENTO_SUAVE = "#cfeee6"   # relleno de lo seleccionado o activo (menta; una pru
 ACENTO_BORDE = "#8fcdd1"
 
 EDICION = "#27415f"        # azul tinta: el programa está en edición (blanco encima: 10,5:1)
-SIMULACION = "#157a35"     # verde máquina: simulación en marcha (blanco encima: 5,4:1)
+SIMULACION = "#157a35"     # verde máquina: simulación en marcha, el único verde de la interfaz (blanco encima: 5,4:1)
 SIMULACION_SUAVE = "#e3f4e8"
+SIMULACION_HOVER = "#1b8f40"
 SIMULACION_BORDE = "#8cc9a0"
 
-OK = "#17803d"
+OK = SIMULACION           # lo correcto y lo activo comparten el mismo verde
 AVISO = "#8a5a00"          # texto ámbar sobre fondo claro (5,4:1)
 AVISO_FONDO = "#fff4d6"
 AVISO_BORDE = "#e3b74a"
 ERROR = "#c62828"          # solo errores (el mismo del dibujo)
 ERROR_FONDO = "#fdecea"
 FOCO = TINTA               # el foco de teclado: trazo discontinuo de 2 px
+FOCO_FUERTE = "#000000"    # el foco de un botón relleno (Play/Stop): 3 px, 3:1 o más contra el relleno y contra el fondo
 CONFIRMAR = "#27665c"      # botón de confirmar de la franja de selección de PLANOS (P-IMP planos)
+CONFIRMAR_BORDE = "#1d5048"
+CONFIRMAR_HOVER = "#1b5149"
+PARPADEO = "#2f8a91"       # el tono claro del parpadeo de «+ Añadir hoja»: blanco encima, 4,1:1
 
 MESA = "#dfe5eb"           # el tablero sobre el que se ve una hoja de PLANOS o una plantilla (no es parte del dibujo)
 
-LUZ = {"conectada": "#17803d", "desconectada": "#6f7f92", "error": "#c62828"}  # punto de la conexión externa
+LUZ = {"conectada": SIMULACION, "desconectada": "#6f7f92", "error": "#c62828"}  # punto de la conexión externa
 
 # -- espaciado (ritmo de 4 y 8), radios, tipografía, alturas -------------------------------------------------------
 E1, E2, E3, E4, E6 = 4, 8, 12, 16, 24
 R_S, R_M, R_L = 4, 8, 12
 FUENTE = "Segoe UI"
+FUENTE_TITULO = "Bahnschrift"  # tipografía técnica de Windows para títulos, rótulos de sección y chip (reserva: Segoe UI)
+FUENTE_MONO = "Consolas"      # cifras: tiempos, valores y porcentaje
+FAMILIA_TITULO = f'"{FUENTE_TITULO}", "{FUENTE}"'
+FAMILIA_MONO = f'"{FUENTE_MONO}", "Courier New"'
 T_BASE, T_PEQUENA, T_TITULO, T_SECCION, T_CHIP = 13, 12, 16, 14, 13
 ALTO_CONTROL = 36          # objetivo táctil principal (ideal 36-40)
 ALTO_CONTROL_COMPACTO = 32  # mínimo táctil, cuando falta alto
 ALTO_BARRA = 34            # botones de las barras de herramientas (el presupuesto de alto sobre el dibujo no admite 36)
 ALTO_BARRA_COMPACTA = 32
 ALTO_FILA = 30             # filas de tablas y listas
+ALTO_ENTRADA = 36          # botones de las entradas de la simulación
 ALTO_FILA_COMPACTA = 28
 ANCHO_BARRA = 12           # barras de desplazamiento
 
 
 # -- modo compacto --------------------------------------------------------------------------------------------------
 UMBRAL_ANCHO = 1000  # por debajo: pantalla partida (los paneles laterales se compactan)
+UMBRAL_MUY_ESTRECHO = 760  # por debajo (media pantalla): Reiniciar solo icono y pestañas más justas
 UMBRAL_ALTO = 560    # por debajo: un cuarto de pantalla (se estrechan cabeceras y márgenes)
 
 
@@ -95,9 +106,9 @@ QMainWindow, QDialog { background:$fondo; }
 QToolTip { background:$tinta; color:$blanco; border:0; padding:6px 8px; }
 QWidget#panelDibujo, QWidget#panelElementos, QWidget#panelVariables,
 QWidget#panelPropiedades { background:$superficie; border:1px solid $borde; border-radius:${r_m}px; }
-QLabel#tituloPanel { font-size:${t_titulo}px; font-weight:600; color:$tinta; border:0; }
+QLabel#tituloPanel { font-family:$familia_titulo; font-size:${t_titulo}px; font-weight:600; color:$tinta; border:0; }
 QWidget#cabeceraPropiedades { background:$superficie_2; border-radius:${r_s}px; }
-QLabel#tituloPropiedades { color:$acento; font-size:${t_seccion}px; font-weight:600; background:transparent; padding:3px 0; }
+QLabel#tituloPropiedades { font-family:$familia_titulo; color:$acento; font-size:${t_seccion}px; font-weight:600; background:transparent; padding:3px 0; }
 QLabel#ayudaPropiedades { color:$tinta_3; padding:4px 8px; }
 
 QMenuBar { background:$superficie; padding:0 8px; border-bottom:1px solid $borde; }
@@ -113,9 +124,10 @@ QWidget#filaPestanas[fusion="true"] { border-bottom:1px solid $borde; }
 QWidget#filaPestanas[fusion="true"][modo="simular"] { background:$simulacion_suave; border-bottom:3px solid $simulacion; }
 QWidget#herramientasGrafcet[fusion="true"], QWidget#herramientasGrafcet[fusion="true"][modo="simular"] { background:transparent; border:0; }
 QTabBar#pestanasVistas { background:transparent; border:0; }
-QTabBar#pestanasVistas::tab { padding:${pad_tab}px 20px; margin:4px 4px 0 0; background:transparent;
+QTabBar#pestanasVistas::tab { font-family:$familia_titulo; padding:${pad_tab}px 20px; margin:4px 4px 0 0; background:transparent;
     color:$tinta_2; border:2px solid transparent; border-bottom:3px solid transparent; font-weight:600; border-top-left-radius:${r_m}px; border-top-right-radius:${r_m}px; }
 QTabBar#pestanasVistas::tab:selected { background:$superficie; color:$tinta; border-bottom:3px solid $acento; }
+QTabBar#pestanasVistas[estrecha="true"]::tab { padding:${pad_tab}px 10px; margin-right:2px; }
 QTabBar#pestanasVistas::tab:hover:!selected { background:$hover; color:$tinta; }
 QTabBar#pestanasVistas::tab:disabled { color:$deshabilitado; }
 QTabBar#pestanasVistas::tab:selected:focus { border:2px dashed $foco; border-bottom:3px solid $acento; }
@@ -123,13 +135,13 @@ QTabBar#pestanasVistas::tab:selected:focus { border:2px dashed $foco; border-bot
 QWidget#bandaModo { background:$edicion; border-top-left-radius:${r_m}px; border-top-right-radius:${r_m}px; }
 QWidget#bandaModo[modo="simular"] { background:$simulacion; }
 QToolButton#luzES { border:1px solid $borde_control; border-radius:${radio_pastilla}px; background:$superficie; color:$tinta;
-    padding:0 14px 0 10px; min-height:${alto_pastilla}px; font-weight:600; }
+    padding:0 14px 0 10px; min-height:${alto_pastilla}px; font-weight:400; }
 QToolButton#luzES:hover { background:$hover; border-color:$tinta_2; }
 QToolButton#luzES:pressed { background:$pulsado; }
 QToolButton#luzES:focus { border:2px dashed $foco; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; }
 QToolButton#luzES[estadoLuz="conectada"] { border:1px solid $ok; }
 QToolButton#luzES[estadoLuz="error"] { background:$error_fondo; border:2px solid $error; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; }
-QToolButton#luzES[abierta="true"] { background:$acento_suave; border:2px solid $acento; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; }
+QToolButton#luzES[abierta="true"] { background:$blanco; border:2px solid $tinta; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; font-weight:700; }  /* P-IMP-126: fondo blanco, borde oscuro, negrita */
 QWidget#herramientasGrafcet { background:$superficie; border-bottom:1px solid $borde; }
 QWidget#herramientasGrafcet[modo="simular"] { background:$simulacion_suave; border-bottom:3px solid $simulacion; }
 QToolBar { background:transparent; border:0; spacing:8px; padding:0; margin:0; }
@@ -145,13 +157,14 @@ QToolBar#barraSimulacion QToolButton#botonReiniciar:hover { background:$hover; }
 QToolBar#barraSimulacion QToolButton#botonReiniciar:pressed { background:$pulsado; }
 QToolBar#barraSimulacion QToolButton#botonReiniciar:disabled { border-color:$borde; }
 QToolBar#barraSimulacion QToolButton#botonReiniciar:focus { border:2px dashed $foco; }
-QToolBar#barraSimulacion QToolButton#botonPlay { background:$acento; color:$blanco; border:1px solid $acento_oscuro; font-weight:700;
+QToolBar#barraSimulacion QToolButton#botonPlay { font-family:$familia_titulo; background:$acento; color:$blanco; border:1px solid $acento_oscuro; font-weight:700;
     padding:0 18px 0 14px; min-width:92px; }
 QToolBar#barraSimulacion QToolButton#botonPlay:hover { background:$acento_hover; }
 QToolBar#barraSimulacion QToolButton#botonPlay:pressed { background:$acento_oscuro; }
-QToolBar#barraSimulacion QToolButton#botonPlay:checked { background:$tinta; border-color:$tinta; color:$blanco; }
+QToolBar#barraSimulacion QToolButton#botonPlay:checked { background:$simulacion; border-color:$simulacion; color:$blanco; }
+QToolBar#barraSimulacion QToolButton#botonPlay:checked:hover { background:$simulacion_hover; }
 QToolBar#barraSimulacion QToolButton#botonPlay:disabled { background:$pulsado; color:$deshabilitado; border-color:$borde; }
-QToolBar#barraSimulacion QToolButton#botonPlay:focus { border:2px dashed $blanco; padding:0 17px 0 13px; }
+QToolBar#barraSimulacion QToolButton#botonPlay:focus { border:3px dashed $foco_fuerte; padding:0 15px 0 11px; min-height:${alto_tb_f2}px; }
 QToolBar#barraEdicion QToolButton, QToolBar#barraVista QToolButton { background:$superficie; border:1px solid $borde_control; min-width:${alto_tb}px; padding:0 8px; }
 QToolBar#barraEdicion QToolButton:hover, QToolBar#barraVista QToolButton:hover { background:$hover; border-color:$tinta_2; }
 QToolBar#barraEdicion QToolButton:pressed, QToolBar#barraVista QToolButton:pressed { background:$pulsado; }
@@ -192,10 +205,11 @@ QPushButton[primario="true"]:hover { background:$acento_hover; border-color:$ace
 QPushButton[primario="true"]:pressed { background:$acento_oscuro; }
 QPushButton[primario="true"]:focus { border:2px dashed $blanco; }
 QPushButton[primario="true"]:disabled { background:$pulsado; color:$deshabilitado; border-color:$borde; }
-QPushButton[entrada="true"] { text-align:left; padding-left:12px; font-weight:600; }
-QPushButton[entrada="true"][activa="true"] { background:$acento_suave; border:2px solid $acento; color:$tinta; }
+QPushButton[entrada="true"] { text-align:left; padding:0 10px; border:2px solid $borde_control; font-weight:600; min-height:${alto_entrada}px; }
+QPushButton[entrada="true"]:focus { border:2px dashed $foco; padding:0 10px; min-height:${alto_entrada}px; }
+QPushButton[entrada="true"][activa="true"] { background:$simulacion_suave; border:2px solid $simulacion; color:$tinta; }
 QPushButton[entrada="true"]:disabled { background:$superficie_2; color:$deshabilitado; }
-QPushButton[entrada="true"][activa="true"]:disabled { background:$acento_suave; border:2px solid $acento_borde; color:$tinta_2; }
+QPushButton[entrada="true"][activa="true"]:disabled { background:$simulacion_suave; border:2px solid $simulacion_borde; color:$tinta_2; }
 QToolButton { border:1px solid transparent; border-radius:${r_s}px; background:transparent; }
 QToolButton:hover { background:$hover; }
 QToolButton:pressed { background:$pulsado; }
@@ -203,15 +217,16 @@ QToolButton:checked { background:$acento_suave; border-color:$acento; }
 QToolButton:focus { border:2px dashed $foco; }
 QCheckBox, QRadioButton { spacing:8px; min-height:${alto_menos}px; }
 QCheckBox:focus, QRadioButton:focus { border:2px dashed $foco; border-radius:${r_s}px; }
-QListWidget:focus, QTableWidget:focus, QTreeWidget:focus, QTextEdit:focus, QPlainTextEdit:focus { border:2px dashed $foco; }
-QGraphicsView:focus { border:2px dashed $foco; }
+/* el anillo discontinuo de listas, tablas y del dibujo solo con el teclado: la ventana pone tecl="true" al recibir el foco con Tab */
+QListWidget[tecl="true"]:focus, QTableWidget[tecl="true"]:focus, QTreeWidget[tecl="true"]:focus, QTextEdit:focus, QPlainTextEdit:focus { border:2px dashed $foco; }
+QGraphicsView[tecl="true"]:focus { border:2px dashed $foco; }
 QGraphicsView { border:2px solid transparent; }
 
-QGroupBox { background:$superficie; border:0; margin-top:26px; font-size:${t_seccion}px; font-weight:600; }
+QGroupBox { font-family:$familia_titulo; background:$superficie; border:0; margin-top:24px; font-size:${t_seccion}px; font-weight:600; }
 QGroupBox::title { subcontrol-origin:margin; padding:3px 6px; color:$acento; }
 QGroupBox#grupoVariables { font-size:${t_titulo}px; }
 QGroupBox#grupoVariables::title { color:$tinta; }
-QGroupBox QLabel, QGroupBox QPushButton, QGroupBox QTableWidget, QGroupBox QLineEdit, QGroupBox QComboBox, QGroupBox QCheckBox { font-weight:400; font-size:${t_base}px; }
+QGroupBox QLabel, QGroupBox QPushButton, QGroupBox QTableWidget, QGroupBox QLineEdit, QGroupBox QComboBox, QGroupBox QCheckBox { font-family:"$fuente"; font-weight:400; font-size:${t_base}px; }
 QTableWidget, QListWidget, QTreeWidget { background:$superficie; border:2px solid transparent; gridline-color:$borde; alternate-background-color:$superficie_2;
     selection-background-color:$acento_suave; selection-color:$tinta; outline:0; }
 QListWidget#paletaElementos::item { padding-left:7px; border:0; }
@@ -219,6 +234,7 @@ QListWidget#paletaElementos::item:hover { background:$hover; }
 QListWidget#paletaElementos QScrollBar:vertical { width: 9px; }  /* la paleta mide justo dos columnas de fichas */
 QHeaderView::section { background:$superficie_2; border:0; border-bottom:1px solid $borde; padding:6px 6px; color:$tinta_2; font-weight:600; }
 QScrollArea { border:0; background:transparent; }
+QScrollArea > QWidget > QWidget { background:$fondo; }  /* el contenido de un área desplazable, con el fondo de la ventana (no el gris de Qt) */
 QScrollBar:horizontal { height: ${ancho_barra}px; background:$borde; margin:0; border-radius:6px; }
 QScrollBar::handle:horizontal { background:$borde_control; min-width:36px; border-radius:5px; margin:1px; }
 QScrollBar::handle:horizontal:hover { background:$tinta_2; }
@@ -249,6 +265,7 @@ def hoja_global(compacto_alto: bool = False) -> str:
         pulsado=PULSADO, acento=ACENTO, acento_oscuro=ACENTO_OSCURO, acento_hover=ACENTO_HOVER, acento_suave=ACENTO_SUAVE,
         acento_borde=ACENTO_BORDE, simulacion=SIMULACION, simulacion_suave=SIMULACION_SUAVE, foco=FOCO,
         r_s=R_S, r_m=R_M, fondo_pestanas=FONDO, edicion=EDICION, ok=OK, error=ERROR, error_fondo=ERROR_FONDO,
+        familia_titulo=FAMILIA_TITULO, foco_fuerte=FOCO_FUERTE, simulacion_hover=SIMULACION_HOVER, simulacion_borde=SIMULACION_BORDE, alto_entrada=ALTO_ENTRADA - 2, alto_tb_f2=alto_tb - 9,
         radio_pastilla=alto_tb // 2, alto_pastilla=alto_tb - 5, alto_pastilla_foco=alto_tb - 7, alto_tb=alto_tb, alto_tb_c=alto_tb - 5, alto_tb_f=alto_tb - 7,
         pad_menu=3 if compacto_alto else 4, pad_item=6 if compacto_alto else 8,
         pad_tab=3 if not compacto_alto else 2, pad_barra=2 if compacto_alto else 4, alto_menos=alto - 2, alto_menos4=alto - 4,
@@ -457,5 +474,5 @@ def estilo_chip(modo: str) -> str:
     relleno, texto = {"simular": (SIMULACION, BLANCO), "editar": (EDICION, BLANCO),
                       "lectura": (TINTA_2, BLANCO), "aviso": (AVISO_FONDO, AVISO), "error": (ERROR, BLANCO)}.get(modo, (TINTA_2, BLANCO))
     borde = AVISO_BORDE if modo == "aviso" else relleno
-    return (f"background:{relleno}; color:{texto}; border:1px solid {borde}; border-radius:{R_L}px; padding:2px 12px; "
-            f"font-size:{T_CHIP}px; font-weight:700; letter-spacing:.5px")
+    return (f"background:{relleno}; color:{texto}; border:1px solid {borde}; border-radius:{R_S}px; "
+            f"font-family:{FAMILIA_TITULO}; font-size:{T_CHIP}px; font-weight:700")

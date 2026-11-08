@@ -1700,7 +1700,7 @@ class Programador(QWidget):
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)  # objetivo táctil de 32 px
             b.setStyleSheet(f"QPushButton {{ text-align: left; padding: 4px 10px; border: 1px solid transparent; "
-                            f"border-radius: {estilo.R_S}px; background: transparent; min-height: 0px; }}"
+                            f"border-radius: {estilo.R_S}px; background: transparent; min-height: {estilo.ALTO_CONTROL_COMPACTO - 10}px; }}"
                             f"QPushButton:hover {{ background: {estilo.HOVER}; }}"
                             f"QPushButton:focus {{ border: 2px dashed {estilo.FOCO}; padding: 3px 9px; }}"
                             f"QPushButton:checked {{ color: {estilo.TINTA}; background: {estilo.ACENTO_SUAVE}; border: 1px solid {estilo.ACENTO}; }}")

@@ -1312,7 +1312,11 @@ ESTILO_BARRA_ZOOM = (
     f"QFrame#barraZoom QToolButton:disabled {{ color: {estilo.DESHABILITADO}; background: transparent; border-color: transparent }} "
     f"QFrame#barraZoom QToolButton:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 7px }} "
     f"QFrame#barraZoom QToolButton#pasoZoom:focus {{ padding: 0 3px }} "
-    f"QFrame#barraZoom QLabel {{ border: none; min-width: 48px; color: {estilo.TINTA}; font-weight: 600; background: transparent }}")
+    f"QFrame#barraZoom QLabel {{ border: none; min-width: 48px; color: {estilo.TINTA}; font-weight: 600; background: transparent; "
+    f"font-family: {estilo.FAMILIA_MONO} }} "
+    f"QFrame#barraZoom[compacta=\"true\"] QToolButton {{ min-width: 28px; padding: 0 2px }} "
+    f"QFrame#barraZoom[compacta=\"true\"] QToolButton:focus {{ padding: 0 1px }} "
+    f"QFrame#barraZoom[compacta=\"true\"] QLabel {{ min-width: 38px }}")
 
 
 class _BarraZoom(QFrame):
@@ -1360,6 +1364,7 @@ class VistaDiagrama(QGraphicsView):
         self._manual = False
         self._contenido: QRectF | None = None  # lo dibujado, sin márgenes (None si no hay nada)
         self._bordes: list[tuple[QWidget, str]] = []
+        self.barra_integrada = False  # los controles del zoom van en la cabecera de la ventana (integrar_barra), no encima del dibujo
         self.dependencias = False  # se dibujan los trazos discontinuos de las dependencias (macroetapa-expansión, encapsulante-recinto)
         self.ajustes: QSettings | None = None  # dónde se recuerda; sin él, los `ajustes` de la ventana que contiene la vista
         self._dependencias_leidas = False
@@ -1735,12 +1740,33 @@ class VistaDiagrama(QGraphicsView):
 
     def compactar(self, estrecho: bool, bajo: bool) -> None:
         """Ventana estrecha: «Centrar todo» y «Centrar selección» pasan a solo icono; baja: los controles se quedan en 32 px."""
-        estilo_boton = Qt.ToolButtonStyle.ToolButtonIconOnly if estrecho else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        estilo_boton = Qt.ToolButtonStyle.ToolButtonIconOnly if (estrecho or bajo) else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         for b in (self.b_ajustar, self.b_seleccion):
             b.setToolButtonStyle(estilo_boton)
+        estilo.poner(self.barra, compacta=bool(estrecho or bajo))
+        self.barra.layout().setContentsMargins(*((2, 2, 2, 2) if (estrecho or bajo) else (4, 3, 4, 3)))
+        self.barra.layout().setSpacing(0 if (estrecho or bajo) else 2)
         self.barra.layout().invalidate()
         self.barra.adjustSize()
         self._colocar()
+
+    def integrar_barra(self, diseno: Any = None) -> None:
+        """Con `diseno` (un QBoxLayout de la cabecera de la ventana), los controles del zoom se mueven allí y dejan de flotar
+        sobre el dibujo (ni lo tapan ni reservan su franja al centrar todo); con None, vuelven a flotar arriba a la derecha.
+        La ventana lo pide con la ventana estrecha o baja."""
+        if diseno is not None and not self.barra_integrada:
+            diseno.addWidget(self.barra)
+            self.barra_integrada = True
+        elif diseno is None and self.barra_integrada:
+            self.barra.setParent(self)
+            self.barra_integrada = False
+        else:
+            return
+        self.barra.show()
+        self.barra.adjustSize()
+        self._colocar()
+        if not self._manual:
+            self.ajustar()
 
     def _ajustes(self) -> QSettings | None:
         """Dónde se recuerda el estado de las dependencias: los `ajustes` propios o, si no hay, los de la ventana que contiene
@@ -1782,7 +1808,10 @@ class VistaDiagrama(QGraphicsView):
         w, h = self.width(), self.height()
         sb = self.verticalScrollBar().width() if self.verticalScrollBar().isVisible() else 0
         sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
-        self.barra.move(w - self.barra.width() - sb - 8, 8)
+        if not self.barra_integrada:
+            self.barra.move(w - self.barra.width() - sb - 8, 8)
+        bx, bw, bb = ((w - 252 - sb - 8, 252, 2) if self.barra_integrada else
+                      (self.barra.x(), self.barra.width(), self.barra.geometry().bottom()))
         for b, lugar in self._bordes:
             if lugar == "izquierda":
                 b.move(0, (h - b.height()) // 2)
@@ -1791,10 +1820,11 @@ class VistaDiagrama(QGraphicsView):
             else:
                 b.move((w - b.width()) // 2, h - b.height() - sh)
             b.raise_()
-        self.barra.raise_()
+        if not self.barra_integrada:
+            self.barra.raise_()
         if hasattr(self, "lista_diagnosticos"):
             lista = self.lista_diagnosticos
-            ancho = max(80, self.barra.width() - 48)
+            ancho = max(80, bw - 48)
             lista.setFixedWidth(ancho)
             for i in range(lista.count()):
                 item = lista.item(i)
@@ -1805,8 +1835,8 @@ class VistaDiagrama(QGraphicsView):
             lista.doItemsLayout()
             alto = min(max(30, h // 3), sum(max(20, lista.sizeHintForRow(i)) for i in range(lista.count())) + 4)
             lista.setFixedHeight(alto)
-            lista.move(self.barra.x() + 48, self.barra.geometry().bottom() + 6)
-            self.indicador_diagnosticos.setGeometry(self.barra.x(),lista.y(),40,40)
+            lista.move(bx + 48, bb + 6)
+            self.indicador_diagnosticos.setGeometry(bx,lista.y(),40,40)
             region = QRegion()
             for i in range(lista.count()):
                 r = lista.visualItemRect(lista.item(i))
@@ -1968,7 +1998,7 @@ class VistaDiagrama(QGraphicsView):
         if r is None or r.width() <= 0 or r.height() <= 0:
             return
         vw, vh = self.viewport().width(), self.viewport().height()
-        arriba = MARGEN_AJUSTE + (self.barra.height() if reservar_barra else 0)
+        arriba = MARGEN_AJUSTE + (self.barra.height() if reservar_barra and not self.barra_integrada else 0)
         k = min(max(vw - 2 * MARGEN_AJUSTE, 1) / r.width(), max(vh - arriba - MARGEN_AJUSTE, 1) / r.height(), ZOOM_AJUSTE_MAX)
         self.resetTransform()
         self.scale(k, k)
