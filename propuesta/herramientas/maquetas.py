@@ -130,6 +130,7 @@ def maqueta_p7(salida: Path) -> Path:
         if boton is not None:
             QTest.mouseRelease(boton, Qt.MouseButton.LeftButton)
         w._aplicar_escala("grande")  # a mano: por tamaño, a 1366×768 rige la normal
+        w._poner_ancho_lateral(w._ancho_lateral_base + 46)  # y los paneles laterales de pantalla completa (por tamaño, a 1366 miden 218 px)
         capturar._reposo(app, 60)
         w.refrescar()
         capturar._reposo(app, 20)

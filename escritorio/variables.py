@@ -14,13 +14,15 @@ from __future__ import annotations
 
 from typing import Any
 
+import re
+
 from PySide6.QtCore import QEvent, QTimer, Qt, Signal, QSize
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QSizePolicy,
-                               QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QSizePolicy,
+                               QStyle, QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from . import estilo
-from .paneles import CabeceraCompacta
+from .paneles import CabeceraCompacta, ContextoNombres
 from .diagrama import COL
 from .edicion import Parpadeo
 
@@ -42,6 +44,24 @@ def _clave_tipo(t: dict[str, Any]) -> tuple[Any, ...]:
     return (t.get("kind"), str(t.get("scale")) if t.get("kind") == "decimal" else None)
 
 
+ABREVIATURAS_PAPEL = {"Entrada": "Entr.", "Salida": "Sal.", "Memoria": "Mem."}
+
+
+def abreviar_papel(texto: str) -> str:
+    """El papel en pocas letras, sin dudas («Entr.», «Sal.», «Mem.»): la columna deja casi todo el ancho al nombre. La celda conserva el texto entero."""
+    return ABREVIATURAS_PAPEL.get(texto, texto)
+
+
+def abreviar_tipo(texto: str) -> str:
+    """El tipo en pocas letras («Bool.», «Entera», «Dec. 2» por «Decimal (2)», «Dur.»). La celda conserva el texto entero y lo lleva en su ayuda."""
+    if texto == "Booleana":
+        return "Bool."
+    if texto == "Duración":
+        return "Dur."
+    m = re.fullmatch(r"Decimal \((\d+)\)", texto)
+    return f"Dec. {m.group(1)}" if m else texto
+
+
 def nombre_tipo(t: dict[str, Any]) -> str:
     """El tipo en palabras: los que se ofrecen, y «Decimal (3)», «Duración»… los de un fichero antiguo."""
     for tt, texto in TIPOS:
@@ -59,6 +79,19 @@ class _DelegadoCombo(QStyledItemDelegate):
         super().__init__(panel.tabla)
         self.panel = panel
 
+    def initStyleOption(self, option: Any, index: Any) -> None:  # noqa: N802
+        """Lo que se ve en la celda: el nombre elidido sin que dos se lean igual (`ContextoNombres`), y el papel y el tipo abreviados
+        (la celda sigue teniendo el texto entero: lo leen las pruebas y la ayuda emergente)."""
+        super().initStyleOption(option, index)
+        if not option.text:
+            return
+        if index.column() == 0:
+            margen = 2 * (QApplication.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1)
+            option.text = self.panel.contexto.elidir(option.text, QFontMetrics(option.font), option.rect.width() - margen - 1)
+            option.textElideMode = Qt.TextElideMode.ElideNone
+        else:
+            option.text = (abreviar_papel if index.column() == 1 else abreviar_tipo)(option.text)
+
     def createEditor(self, parent: QWidget, option: Any, index: Any) -> QWidget:  # noqa: N802
         if index.column() == 0:
             return super().createEditor(parent, option, index)
@@ -69,6 +102,7 @@ class _DelegadoCombo(QStyledItemDelegate):
         actual = self.panel.dato_actual(r, c)
         for dato, texto in self.panel.opciones(r, c):
             cb.addItem(texto, dato)
+        cb.view().setMinimumWidth(max(QFontMetrics(self.panel.fuente).horizontalAdvance(cb.itemText(i)) for i in range(cb.count())) + 36)  # la lista enseña el texto entero aunque la celda sea estrecha
         cb.setCurrentIndex(max(0, next((i for i in range(cb.count()) if _igual(cb.itemData(i), actual)), 0)))
 
         def elegido(_: int = 0) -> None:
@@ -143,6 +177,7 @@ class PanelVariables(QWidget):
         self._n = 0
         self._clave = ""
         self._llenando = False
+        self.contexto = ContextoNombres()  # los nombres de la tabla: se elidén sin que dos se lean igual
         self.parpadeo = Parpadeo(self)  # la fila que parpadea en naranja tras un error
         self.parpadeo.cambia.connect(self._pintar)
         lay = QVBoxLayout(self)
@@ -161,17 +196,18 @@ class PanelVariables(QWidget):
         self.tabla.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         cab = self.tabla.horizontalHeader()
         cab.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cab.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # el nombre se lleva lo que sobra
-        cab.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)  # Papel y Tipo, a su texto más largo (se fija abajo)
+        cab.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # el nombre se lleva lo que sobra: es la columna que se lee
+        cab.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)  # Papel y Tipo, abreviados («Entr.», «Bool.»): lo justo (se fija abajo)
         cab.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-        fm = QFontMetrics(self.fuente)
-        self.tabla.setColumnWidth(1, max(fm.horizontalAdvance(t) for _, t in PAPELES + (("", "Papel"),)) + 20)
-        self.tabla.setColumnWidth(2, max(fm.horizontalAdvance(t) for _, t in TIPOS + (({}, "Tipo"),)) + 20)
+        self._anchos_columnas()
         cab.setMinimumSectionSize(20)
         self.tabla.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # los nombres largos se elidén; si ni así cabe, barra
         self.tabla.setMinimumWidth(168)  # por debajo, el panel que la contiene se desplaza en vez de aplastar las columnas
-        self.tabla.setTextElideMode(Qt.TextElideMode.ElideMiddle)  # un nombre largo conserva su final, que es lo que lo distingue
+        self.tabla.setTextElideMode(Qt.TextElideMode.ElideMiddle)  # (el delegado ya elide el nombre conservando lo que lo distingue)
         self.tabla.setItemDelegate(_DelegadoCombo(self))
+        self.tabla.setMouseTracking(True)  # pasar el ratón por una fila pone su nombre entero en la línea de detalle
+        self.tabla.entered.connect(lambda indice: self._detallar(indice.row()))
+        self.tabla.viewport().installEventFilter(self)
         self.tabla.clicked.connect(self._clic)
         self.tabla.setMinimumHeight(24)
         self.tabla.itemChanged.connect(self._editado)
@@ -220,7 +256,23 @@ class PanelVariables(QWidget):
 
     @staticmethod
     def _hoja_tabla() -> str:
-        return f"QHeaderView::section {{ padding: 4px 4px; text-align: left; }} QTableWidget {{ font-size: {estilo.T_PEQUENA}px; }}"
+        # (sin marco propio: los 4 px del marco transparente de la hoja global son del nombre; el anillo de foco sale con el teclado)
+        return (f"QHeaderView::section {{ padding: 4px 4px; text-align: left; }} QTableWidget {{ font-size: {estilo.T_PEQUENA}px; border: 0; }} "
+                f"QTableWidget[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; }}")
+
+    def _anchos_columnas(self) -> None:
+        """Papel y Tipo miden lo que su abreviatura más larga o su cabecera: el nombre se queda con el resto (a 1366 con barra, más que en
+        `main`)."""
+        fm = QFontMetrics(self.fuente)
+        papel = max([fm.horizontalAdvance(abreviar_papel(t)) + 10 for _, t in PAPELES] + [fm.horizontalAdvance("Papel") + 8])
+        tipo = max([fm.horizontalAdvance(abreviar_tipo(t)) + 10 for _, t in TIPOS] + [fm.horizontalAdvance("Tipo") + 8])
+        self.tabla.setColumnWidth(1, papel)
+        self.tabla.setColumnWidth(2, tipo)
+
+    def eventFilter(self, objeto: Any, evento: Any) -> bool:  # noqa: N802
+        if objeto is self.tabla.viewport() and evento.type() == QEvent.Type.Leave:
+            self._detallar(self.tabla.currentRow())  # el ratón se va: vuelve el detalle de la fila elegida (o nada)
+        return False
 
     def escalar(self) -> None:
         """Cambió la escala de letra y de controles: la tabla (letra, alto de fila, columnas) y los botones se miden otra vez."""
@@ -229,9 +281,8 @@ class PanelVariables(QWidget):
         self.tabla.setFont(self.fuente)
         self.tabla.verticalHeader().setDefaultSectionSize(self._alto_fila())
         self.cont.setStyleSheet(self._hoja_botones())
-        fm = QFontMetrics(self.fuente)
-        self.tabla.setColumnWidth(1, max(fm.horizontalAdvance(t) for _, t in PAPELES + (("", "Papel"),)) + 20)
-        self.tabla.setColumnWidth(2, max(fm.horizontalAdvance(t) for _, t in TIPOS + (({}, "Tipo"),)) + 20)
+        self._anchos_columnas()
+        self.contexto._cache.clear()
         for b in (*self.b_nuevas.values(), self.b_quitar):
             b.setMinimumWidth(self._ancho_boton(b.text()))
         self._ajustar_tabla()
@@ -262,6 +313,7 @@ class PanelVariables(QWidget):
         self._clave = clave
         actual = self._filas[self.tabla.currentRow()]["id"] if 0 <= self.tabla.currentRow() < len(self._filas) else None
         self._llenando = True
+        self.contexto.fijar([v["name"] for v in vs])
         self._filas = [{"id": v["id"], "papel": v["role"], "tipo": v["type"], "n": 0} for v in vs] + self._pend
         self.tabla.setRowCount(len(self._filas))
         for r, f in enumerate(self._filas):
@@ -270,7 +322,7 @@ class PanelVariables(QWidget):
             self.tabla.item(r, 0).setToolTip(nombre)  # el nombre entero, aunque la celda lo elida
             for c in (1, 2):
                 it = QTableWidgetItem(self.texto(r, c))
-                it.setToolTip("Clic para cambiarlo")
+                it.setToolTip(f"{it.text()} · clic para cambiarlo")  # (la celda lo enseña abreviado: aquí va entero)
                 self.tabla.setItem(r, c, it)
         self._llenando = False
         if actual is not None and actual in [f["id"] for f in self._filas]:

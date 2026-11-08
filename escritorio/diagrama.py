@@ -1308,7 +1308,7 @@ def estilo_barra_zoom() -> str:
     f"QFrame#barraZoom {{ background: rgba(255,255,255,242); border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_M}px }} "
     f"QFrame#barraZoom QToolButton {{ border: 1px solid transparent; border-radius: {estilo.R_S}px; padding: 0 8px; min-height: {estilo.ALTO_CONTROL_COMPACTO - 2}px; "
     f"min-width: {estilo.ALTO_CONTROL_COMPACTO - 2}px; font-size: {estilo.T_BASE}px; font-weight: 600; color: {estilo.TINTA}; background: transparent }} "
-    f"QFrame#barraZoom QToolButton#pasoZoom {{ font-size: {estilo.T_TITULO + 4}px; padding: 0 4px; }} "
+    f"QFrame#barraZoom QToolButton#pasoZoom {{ font-size: {estilo.T_TITULO}px; padding: 0 4px; }} "  # (más grande, la «+» y la «−» hacían la barra más alta que sus botones)
     f"QFrame#barraZoom QToolButton:hover {{ background: {estilo.ACENTO_SUAVE}; border-color: {estilo.ACENTO_BORDE} }} "
     f"QFrame#barraZoom QToolButton:pressed {{ background: {estilo.PULSADO} }} "
     f"QFrame#barraZoom QToolButton:disabled {{ color: {estilo.DESHABILITADO}; background: transparent; border-color: transparent }} "
@@ -1753,12 +1753,19 @@ class VistaDiagrama(QGraphicsView):
         estilo_boton = Qt.ToolButtonStyle.ToolButtonIconOnly if (estrecho or bajo) else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         for b in (self.b_ajustar, self.b_seleccion):
             b.setToolButtonStyle(estilo_boton)
-        estilo.poner(self.barra, compacta=bool(estrecho or bajo))
-        self.barra.layout().setContentsMargins(*((2, 2, 2, 2) if (estrecho or bajo) else (4, 3, 4, 3)))
-        self.barra.layout().setSpacing(0 if (estrecho or bajo) else 2)
+        self._compacta = bool(estrecho or bajo)
+        estilo.poner(self.barra, compacta=self._compacta)
+        self._margenes_barra()
+        self.barra.layout().setSpacing(0 if self._compacta else 2)
         self.barra.layout().invalidate()
         self.barra.adjustSize()
         self._colocar()
+
+    def _margenes_barra(self) -> None:
+        """Los márgenes del recuadro: apretados si es compacto y, integrado en la cabecera, también arriba y abajo (así sube lo mínimo la
+        fila del título y el dibujo conserva su alto)."""
+        self.barra.layout().setContentsMargins(*((2, 2, 2, 2) if getattr(self, "_compacta", False) else
+                                                 (4, 1, 4, 1) if self.barra_integrada else (4, 3, 4, 3)))
 
     def integrar_barra(self, diseno: Any = None) -> None:
         """Con `diseno` (un QBoxLayout de la cabecera de la ventana), los controles del zoom se mueven allí y dejan de flotar
@@ -1772,6 +1779,8 @@ class VistaDiagrama(QGraphicsView):
             self.barra_integrada = False
         else:
             return
+        self._margenes_barra()
+        self.barra.layout().invalidate()
         self.barra.show()
         self.barra.adjustSize()
         self._colocar()
@@ -1982,6 +1991,13 @@ class VistaDiagrama(QGraphicsView):
         self._origen = False
         self._barras()
         self._encajar(self._base(), reservar_barra=True)
+        if self._manual and self.controlador is not None:
+            # al editar, las barras se decidieron con el zoom de antes: con el nuevo puede sobrar una (al pasar de una ventana grande a una
+            # pequeña quedaba una barra vertical inútil hasta el siguiente Play/Stop) o hacer falta otra; se revisan y, si cambian, se reencaja
+            antes = (self.horizontalScrollBarPolicy(), self.verticalScrollBarPolicy())
+            self._barras()
+            if (self.horizontalScrollBarPolicy(), self.verticalScrollBarPolicy()) != antes:
+                self._encajar(self._base(), reservar_barra=True)
 
     def _caja_seleccion(self) -> QRectF | None:
         """El rectángulo de la selección del controlador (`caja_seleccion`, con las cajas de lo seleccionado), o None si no hay

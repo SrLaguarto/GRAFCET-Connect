@@ -11,6 +11,9 @@ toque con dos dedos es el clic derecho. No hay pantalla táctil que atender.
 
 Qué ha cambiado en la ronda 3: P2, P3 y P7 llevan maqueta; P7 («Modo aula») queda cubierta en parte por la escala que cambia sola a
 pantalla completa (ver abajo) y se reduce a lo que falta; se añade D1, la pulsación mantenida que se retiró (P-IMP-75).
+Qué ha cambiado en la ronda 4: P7 explica con cifras qué cubre la escala automática y qué no (proyectores de 1366×768 y de 1280×720/800);
+P3 y P10 cuentan lo que la rama ya hace sin tocar lo que fijan las pruebas (la vista de E/S sube de tamaño a pantalla completa; la columna
+del nombre de Variables ya no se aplasta).
 
 ## Descartada
 
@@ -59,6 +62,9 @@ entero a la vista) y salidas y temporizadores en el panel de la derecha, que ya 
 **Problema.** Los canales y las listas de variables miden 16 px de alto (`ALTO_FILA`): con el ratón se arrastra bien, con el panel táctil del portátil
 acertar una fila de 16 px (y arrastrar una variable) exige más pulso. A 1366×768 se ven unas 31 filas de canales por columna antes de desplazarse (`capturas/despues/es-1366.png`); lo fijan `test_SESP14` y las demás pruebas de la vista de E/S.
 
+**Lo que ya hace la rama.** A pantalla completa (≥ 1600×900) la vista de E/S sube a letra de 14 px y filas de 18 px (el alto de fila que fijan
+las pruebas, 16 px, rige por debajo de ese tamaño: `ALTO_FILA`, `SESP06`, `SFIO33`).
+
 **Propuesta.** Un modo «cómodo» (filas de 28 px con desplazamiento en la vista de E/S) elegible o automático cuando el sistema avise de un dispositivo señalador
 de precisión baja, y asignación por clic (clic en la variable, clic en el canal) además del arrastre.
 
@@ -73,15 +79,29 @@ control interactivo visible de menos de 32 px que deja `medir.py alturas` (se ex
 
 ### P7. «Modo aula»: escala de la interfaz elegida a mano (añade un ajuste)
 
-**Lo que ya cubre la rama.** La letra base (14 px en lugar de 13), los títulos (19 px), el chip (15 px), las cifras (14 px) y los controles (40 px) **suben solos**
-cuando la ventana mide 1600×900 o más, y vuelven al cruzar el umbral (`estilo.escala_para`, `Ventana._aplicar_escala`): un proyector a pantalla completa o un monitor grande
-ya se leen desde el fondo del aula. No añade ningún ajuste ni entrada de menú. Los menús no cambian.
+**Lo que ya cubre la rama (sin añadir ningún ajuste ni entrada de menú).** A partir de **1600×900** (un proyector o un monitor a pantalla
+completa: 1920×1080, 1600×900, 2560×1440…) la interfaz sube sola de escala (`estilo.escala_para`, `Ventana._aplicar_escala`): letra base de 14 px
+(13 en la normal), letra pequeña de 13 (12), títulos de 19 (16), chip de 15 (13), cifras de 14 (12), controles de 40 px (34-36) y la **vista de
+E/S** con letra de 14 px y filas de 18 px (12 y 16 en la normal). Los paneles laterales pasan de 218 a 264 px poco a poco entre 1366 y 1600 px
+de ancho, para que las tablas de la simulación lleven sus cuatro columnas sin que el dibujo dé un salto al cruzar el umbral. Cruzar el umbral
+cuesta unos 100 ms (`arbitro_r3/umbral.py`) porque la vista de E/S y Propiedades se ponen al día cuando se muestran, no al cruzar.
 
-**Lo que falta.** Un proyector de **1366×768** (o un portátil de pantalla pequeña que se proyecta tal cual) queda por debajo del umbral y sigue en la escala normal. Hace falta un
-ajuste «Tamaño de la interfaz» (normal / grande) en el menú Ajustes que fuerce la escala grande a cualquier tamaño.
+**Lo que falta: el proyector de 1366×768 y de 1280×720 / 1280×800.** Esas resoluciones quedan por debajo del umbral (de ancho, de alto o de
+los dos) y siguen en la escala normal: letra base de 13 px (12 en las tablas y en E/S) y controles de 34-36 px. Se leen peor desde el fondo
+del aula que a 1920×1080, y la rama no puede subirlas sola por tamaño: a 1366×768 las pruebas fijan el dibujo antes de los 140 px de alto
+(`minimumSizeHint().height() <= 564`) y los paneles laterales de 218 px (`SPAL05`, `SPAL06`), y la escala grande no cabe en ese presupuesto
+(controles de 40 px: el dibujo empezaría hacia los 160 px; paneles de 264 px: ≈ 92 px menos de dibujo). Bajar el umbral a 1366×768 o a
+1280×720 rompería esas pruebas; elegirla a mano, no.
 
-**Maqueta.** `capturas/maquetas/maqueta-p7-modo-aula-1366.png`: la ventana de 1366×768 con la escala grande forzada. Lo que cabe se mantiene; lo que no cabe cede espacio al dibujo.
-**Motivo de no hacerlo:** añade una entrada de menú y un ajuste persistente (no es solo aspecto), y las pruebas de ajuste y de menús recorren los menús con los textos actuales.
+**Propuesta.** Un ajuste «Tamaño de la interfaz» (normal / grande) en el menú Ajustes que fuerce la escala grande a cualquier tamaño y se
+recuerde. Con ella, el profesorado que proyecta a 1366×768 o a 1280×720 la elige una vez; por tamaño nada cambia, y las pruebas, que no
+la tocan, siguen en la normal. A 1366×768 con la escala grande forzada se pierden ≈ 20 px de alto y ≈ 92 px de ancho de dibujo; las tablas
+caben, y la vista de E/S se desplaza (como hoy a 1366×768).
+
+**Maqueta.** `capturas/maquetas/maqueta-p7-modo-aula-1366.png`: la ventana de 1366×768 con la escala grande forzada (letra, controles y paneles
+laterales como a pantalla completa). Lo que cabe se mantiene; lo que no cabe cede espacio al dibujo.
+**Motivo de no hacerlo:** añade una entrada de menú y un ajuste persistente (no es solo aspecto), y las pruebas de ajustes y de menús
+recorren los menús con los textos actuales.
 
 ### P8. Verde de «verdadero» con 4,5:1 (`COL["true_text"]`; lo fija `SUIV02`)
 
@@ -109,6 +129,10 @@ pruebas lo comparan (`COL["active"]`).
 **Problema.** Las pruebas de la paleta (`SPAL05`, `SPAL06`) fijan el ancho del panel izquierdo en 218 px a 1366×768 y a 1000×600. En 218 px las tablas de la
 simulación llevan las cuatro columnas con sus cabeceras enteras («Variable», «Modo», «Valor», «Contribuyen»), pero la columna del nombre queda en ≈ 50 px y el nombre se elide
 por el medio (y sale entero en la línea de detalle de la barra de estado). A pantalla completa, donde las pruebas no miden 218, los paneles laterales ya miden 264 px.
+
+**Lo que ya hace la rama.** La columna del nombre de Variables ya no se aplasta: «Papel» y «Tipo» se dibujan abreviados («Entr.», «Sal.», «Mem.»;
+«Bool.», «Entera», «Dec. 2»: la celda conserva el texto entero y lo lleva en su ayuda) y el nombre se queda con el resto (105 px con barra a 1366,
+frente a 103 de `main` y 38-50 de la ronda 3). Entre 1366 y 1600 px de ancho los paneles laterales crecen poco a poco hasta 264 px.
 
 **Propuesta.** `ANCHO_LATERAL = 232` (o 264 desde 1280 px de ancho). **Motivo de no hacerlo a ≤ 1366:** `SPAL05` y `SPAL06` comparan con 218.
 

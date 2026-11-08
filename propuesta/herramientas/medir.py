@@ -23,7 +23,11 @@ Mediciones:
 - `chip`      el estado del chip de modo no se pierde a ningún ancho (y el título cede antes).
 - `fichas`    fichas de la receptividad y categorías de bloques: ninguna recortada.
 - `reloj`     el reloj de la barra de estado no pierde caracteres al crecer τ.
-- `escala`    letra base y alto de controles a 1366 y a pantalla completa (la escala cambia sola al cruzar 1600×900).
+- `escala`    letra base y alto de controles a 1366 y a pantalla completa (la escala cambia sola al cruzar 1600×900); la vista de E/S a 14 px y
+              filas de 18 px a pantalla completa (12 y 16 por debajo).
+- `cruce`     cruzar 1600×900 en caliente: lo que tarda cada cruce, sin hueco muerto ni barras inútiles tras redimensionar, sin salto del dibujo.
+- `zoom`      con Propiedades abierto y el dibujo bajo, los controles del zoom van en la cabecera; con el dibujo alto, flotan.
+- `variables` el panel de Variables: ancho de cada columna (la del nombre no se aplasta) y lo que se ve de «Papel» y «Tipo».
 - `planos`    PLANOS dentro de una tarjeta, sin barras en «Ajustar hoja» y con el desplegable de la biblioteca elidido y con ayuda.
 Los contrastes de las parejas de tokens (sin ventana) los comprueba `contrastes.py`.
 """
@@ -713,12 +717,122 @@ def escala(_tamano: str = "") -> dict:
                            "alto de Play (px)": play.height(), "alto del campo de «Etiqueta» o de «Fijar» (px)": w.props.t_fijar.height(),
                            "letra del título (px)": w.titulo.fontInfo().pixelSize(), "letra del reloj (px)": w.l_reloj.fontInfo().pixelSize(),
                            "ancho de los paneles laterales (px)": w.ancho_lateral}
+    out["vista de E/S a 1366×768"] = _es_escala("1366")
+    out["vista de E/S a 1920×1080"] = _es_escala("completa")
     return out
+
+
+def _es_escala(tamano: str) -> dict:
+    """La vista de E/S a un tamaño: letra, alto de fila y si la vista necesita desplazarse."""
+    from PySide6.QtWidgets import QApplication, QScrollArea
+    with Ventana(tamano, "es") as w:
+        p = w.panel_es
+        t = next(iter(p.terminales.values()))
+        letras = {t.canal.fontInfo().pixelSize(), t.nombre.fontInfo().pixelSize(), p.lista_entradas.fontInfo().pixelSize()}
+        scroll = p.findChild(QScrollArea, "scrollES")
+        return {"escala": w._escala, "letra de canales, nombres y listas (px)": sorted(letras), "alto de las filas de canales (px)": t.height(),
+                "alto de las filas de las listas (px)": p.lista_entradas.visualItemRect(p.lista_entradas.item(0)).height(),
+                "canales": len(p.terminales), "la vista se desplaza (barra vertical)": scroll.verticalScrollBar().isVisible()}
+
+
+def cruce(_tamano: str = "") -> dict:
+    """Cruzar el umbral de 1600×900 (y salir) en caliente: cada cruce tarda lo que dice (con 40 vueltas de eventos), el dibujo no deja un
+    hueco muerto ni una barra inútil al volver a un tamaño pequeño (mide lo mismo que en una ventana que arranca a ese tamaño) y no da un
+    salto de ancho al cruzar."""
+    import time
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    out: dict = {}
+
+    def dibujo(w) -> dict:
+        d = w.diagrama
+        return {"dibujo": f"{d.width()}×{d.height()}", "barra vertical y horizontal": (d.verticalScrollBar().isVisible(), d.horizontalScrollBar().isVisible()),
+                "paneles laterales": (w.dock.width(), w.derecho.width())}
+    with Ventana("1366", "editor") as w:
+        app = QApplication.instance()
+        tiempos = {}
+        for x, y in ((1600, 900), (1599, 900), (1600, 900), (1920, 1080), (640, 520), (1920, 1080), (1366, 768)):
+            t0 = time.perf_counter()
+            w.resize(x, y)
+            capturar._reposo(app, 40)
+            tiempos[f"{x}×{y}"] = f"{(time.perf_counter() - t0) * 1000:.0f} ms (escala {w._escala}, dibujo {w.diagrama.width()}×{w.diagrama.height()})"
+            tiempos[f"{x}×{y} · reloj (mínimo, px)"] = w.l_reloj.minimumWidth()
+        out["cada cruce, en orden (la ronda 3 tardaba 688–723 ms)"] = tiempos
+        w.resize(1599, 900)
+        capturar._reposo(app, 40)
+        a = w.diagrama.width()
+        w.resize(1600, 900)
+        capturar._reposo(app, 40)
+        out["ancho del dibujo a 1599×900 y a 1600×900 (sin salto)"] = (a, w.diagrama.width())
+    for ini, fin in (((1920, 1080), (1366, 768)), ((1920, 1080), (960, 1040))):
+        with Ventana("completa", "editor") as w:
+            app = QApplication.instance()
+            w.resize(*fin)
+            capturar._reposo(app, 40)
+            QTest.qWait(300)  # (el dibujo vuelve a encajar con un temporizador: `Recentrado`)
+            caliente = dibujo(w)
+        etiqueta = "1366" if fin == (1366, 768) else "partida"
+        with Ventana(etiqueta, "editor") as w:
+            QTest.qWait(300)
+            directo = dibujo(w)
+        out[f"{ini[0]}×{ini[1]} → {fin[0]}×{fin[1]} en caliente frente a una ventana que arranca a ese tamaño"] = {
+            "en caliente": caliente, "arrancando ahí": directo, "iguales (sin hueco muerto)": caliente == directo}
+    return out
+
+
+def zoom(tamano: str) -> dict:
+    """Los controles del zoom flotan sobre el dibujo salvo en una ventana estrecha o baja y cuando el dibujo útil mide menos de 360 px
+    (con Propiedades abierto): entonces van en la fila del título."""
+    out: dict = {}
+    for escena in ("editor", "propiedades"):
+        with Ventana(tamano, escena) as w:
+            d = w.diagrama
+            out[escena] = {"alto del dibujo (px)": d.height(), "zoom en la cabecera": d.barra_integrada,
+                           "el recuadro del zoom flota sobre el dibujo": bool(d.barra.parent() is d and d.barra.isVisible())}
+    return out
+
+
+def variables(tamano: str) -> dict:
+    """El panel de Variables (al editar): la columna del nombre mide, con y sin barra vertical, lo que en `main` (115 y 103 px) o más; «Papel»
+    y «Tipo» se ven abreviados y la celda conserva el texto entero."""
+    from PySide6.QtWidgets import QApplication
+    out: dict = {}
+    with Ventana(tamano, "editor") as w:
+        app = QApplication.instance()
+        w._mostrar_panel("derecho", True)
+        capturar._reposo(app, 30)
+        t = w.variables.tabla
+
+        def estado() -> dict:
+            return {"columnas (nombre, papel, tipo)": [t.columnWidth(j) for j in range(3)], "ancho útil de la tabla": t.viewport().width(),
+                    "barra vertical": t.verticalScrollBar().isVisible()}
+        out["sin barra"] = estado()
+        for i in range(12):
+            w.edicion.ed.add_variable(f"sensor_final_carrera_cilindro_{i:02d}_avance", "input", {"kind": "bool"})
+        w.edicion.cambia()
+        w.refrescar_edicion()
+        capturar._reposo(app, 40)
+        out["con barra (12 variables más)"] = estado()
+        out["«Papel» y «Tipo»: lo que se ve / lo que dice la celda"] = sorted({(variables_abrev(t, r, 1), t.item(r, 1).text()) for r in range(t.rowCount())}
+                                                                           | {(variables_abrev(t, r, 2), t.item(r, 2).text()) for r in range(t.rowCount())})
+    return out
+
+
+def variables_abrev(tabla, fila: int, columna: int) -> str:
+    from PySide6.QtWidgets import QStyleOptionViewItem
+    indice = tabla.model().index(fila, columna)
+    opcion = QStyleOptionViewItem()
+    opcion.initFrom(tabla.viewport())
+    opcion.rect = tabla.visualRect(indice)
+    opcion.font = tabla.font()
+    tabla.itemDelegate().initStyleOption(opcion, indice)
+    return opcion.text
 
 
 MEDICIONES = {"franjas": franjas, "alturas": alturas, "letras": letras, "ancho": ancho, "teclado": teclado, "contraste": contraste,
               "propiedades": propiedades, "literales": literales, "ventana640": ventana640, "tablas": tablas, "largos": largos,
-              "chip": chip, "fichas": fichas, "reloj": reloj, "escala": escala, "planos": planos}
+              "chip": chip, "fichas": fichas, "reloj": reloj, "escala": escala, "cruce": cruce, "zoom": zoom, "variables": variables,
+              "planos": planos}
 
 
 def main() -> int:
@@ -735,7 +849,7 @@ def main() -> int:
         for t in a.tamanos:
             if m in ("teclado", "contraste", "ancho") and t not in ("1366", "minima", "completa"):
                 continue  # estas se miden a los tamaños de referencia (el más habitual y el más pequeño)
-            if m in ("literales", "ventana640", "chip", "escala") and t != a.tamanos[0]:
+            if m in ("literales", "ventana640", "chip", "escala", "cruce") and t != a.tamanos[0]:
                 continue  # no dependen del tamaño que se pida (crean sus propias ventanas)
             try:
                 todo[m][t] = MEDICIONES[m](t)

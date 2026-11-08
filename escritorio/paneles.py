@@ -1,9 +1,9 @@
 """Paneles plegables por cabecera o divisor, sin controles encima del dibujo."""
-from PySide6.QtCore import QEvent, QPoint, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QTextLayout, QTextOption
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QTextLayout, QTextOption
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGroupBox, QHeaderView, QLabel, QLayout, QSplitter, QSplitterHandle,
-                               QSizePolicy, QStackedWidget, QStyle, QStyleOptionComboBox, QStyleOptionGroupBox, QStylePainter,
-                               QToolButton, QVBoxLayout, QWidget)
+                               QSizePolicy, QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionComboBox, QStyleOptionGroupBox,
+                               QStyleOptionToolButton, QStylePainter, QToolButton, QVBoxLayout, QWidget)
 
 from . import estilo
 
@@ -54,28 +54,22 @@ class CajaSeccion(QGroupBox):
 
 
 class BandaModo(QWidget):
-    """La franja de color de lo alto de la tarjeta del dibujo (tinta al editar, verde al simular). Es un **enlace** de la notación:
-    un trazo que recorre la franja, la barra corta de una transición a intervalos y, al final, la punta de la flecha de evolución."""
+    """La franja de color de lo alto de la tarjeta del dibujo (tinta al editar, verde al simular). Se lee como un **enlace** de la
+    notación y no como una regla: un solo trazo, **una** barra de transición cerca del origen y, al final, la punta de la flecha de
+    evolución. La ventana la sitúa dentro de las esquinas redondeadas de la tarjeta (`_AjustaBanda`): su remate no sobresale."""
+
+    PUNTA = 12  # lo que mide la punta de la flecha de evolución, al final del enlace
 
     def paintEvent(self, evento) -> None:  # noqa: N802
-        from PySide6.QtWidgets import QStyle, QStyleOption
-        opcion = QStyleOption()
-        opcion.initFrom(self)
         p = QPainter(self)
-        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opcion, p, self)
-        centro = self.height() // 2
-        p.setPen(QColor(255, 255, 255, 110))
-        p.drawLine(12, centro, self.width() - 22, centro)  # el enlace
-        lapiz = p.pen()
-        lapiz.setWidth(2)
-        lapiz.setColor(QColor(255, 255, 255, 200))
-        p.setPen(lapiz)
-        for x in range(36, max(37, self.width() - 40), 240):
-            p.drawLine(x, 0, x, self.height())  # la barra de una transición
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(255, 255, 255, 230))
-        fin = self.width() - 10
-        p.drawPolygon([QPoint(fin - 8, centro - 3), QPoint(fin, centro), QPoint(fin - 8, centro + 3)])  # la flecha de evolución
+        p.setBrush(QColor(estilo.SIMULACION if self.property("modo") == "simular" else estilo.EDICION))
+        punta = min(self.PUNTA, max(0, w // 2))
+        p.drawPolygon([QPointF(0, 0), QPointF(w - punta, 0), QPointF(w, h / 2), QPointF(w - punta, h), QPointF(0, h)])  # el enlace, que acaba en flecha
+        p.setBrush(QColor(estilo.SUPERFICIE))
+        p.drawRect(QRectF(34, 0, 3, h))  # la barra de la transición: un hueco que corta el enlace
         p.end()
 
 class EtiquetaElidida(QLabel):
@@ -417,11 +411,11 @@ class PanelPlegable(QWidget):
         self.pestana.tirar.connect(self._seguir_tiron)
         self.pestana.soltar.connect(self._terminar_tiron)
         self._origen_tiron = None
-        self.cerrar = QToolButton(contenido)
+        self.cerrar = BotonPlegar(contenido)  # (el chevron lo dibuja `BotonPlegar`; su texto «◂ ▸ ▴ ▾» es el de siempre)
         self.cerrar.setAutoRaise(True)
         self.cerrar.setFixedSize(32, 32)
         self.cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.cerrar.setStyleSheet(f"QToolButton{{border:1px solid transparent;background:transparent;color:{estilo.ACENTO};font-size:16px;font-weight:700;border-radius:{estilo.R_S}px;}}"
+        self.cerrar.setStyleSheet(f"QToolButton{{border:1px solid transparent;background:transparent;color:{estilo.ACENTO};border-radius:{estilo.R_S}px;}}"
                                   f"QToolButton:hover{{background:{estilo.ACENTO_SUAVE};}}QToolButton:pressed{{background:{estilo.PULSADO};}}"
                                   f"QToolButton[tecl=\"true\"]:focus{{border:2px dashed {estilo.FOCO};}}")
         self.cerrar.clicked.connect(self.alternar)
@@ -530,3 +524,252 @@ class DivisorPlegable(QSplitter):
 
     def configurar(self, tirador, nombre, indice, panel):
         self.reglas[tirador] = (nombre, indice, panel)
+
+
+# -- nombres largos que se siguen distinguiendo ---------------------------------------------------------------------------
+SEPARADORES = "_-. /:"  # donde un nombre se parte en palabras (sensor_final_carrera_10_avance)
+
+
+def _comun(a: str, b: str) -> int:
+    """Cuántos caracteres iguales tienen `a` y `b` al principio."""
+    n, i = min(len(a), len(b)), 0
+    while i < n and a[i] == b[i]:
+        i += 1
+    return i
+
+
+class ContextoNombres:
+    """Los nombres de **una misma lista** (las entradas de la simulación, las filas de una tabla, los canales de un lado de E/S…), para
+    acortarlos sin que dos acaben leyéndose igual.
+
+    Un nombre largo que se elide por el medio o por el final pierde justo lo que lo distingue de sus hermanos
+    («sensor_final_carrera_cilindro_10_avance» y «…_20_avance» acaban ambos en «sensor_f…0_avance»). Aquí se mira con qué vecino se
+    parece más: lo que comparten al principio y al final (en palabras enteras) es lo que se quita, y se conserva el trozo que
+    los distingue con su contexto: «…_10_avance» frente a «…_20_avance». Un nombre que cabe se ve entero; una lista de un solo
+    nombre no tiene con quién compararse y se elide por el medio, como siempre."""
+
+    def __init__(self, nombres=()) -> None:
+        self._nombres: tuple[str, ...] = ()
+        self._p: dict[str, int] = {}
+        self._q: dict[str, int] = {}
+        self._cache: dict[tuple, str] = {}
+        self.fijar(nombres)
+
+    def fijar(self, nombres) -> bool:
+        """Pone los nombres de la lista; devuelve si eran otros que antes."""
+        unicos = tuple(sorted({n for n in nombres if n}))
+        if unicos == self._nombres:
+            return False
+        self._nombres, self._cache = unicos, {}
+        p = dict.fromkeys(unicos, 0)  # lo que cada nombre comparte, al principio, con su vecino más parecido
+        q = dict.fromkeys(unicos, 0)  # y al final
+        for a, b in zip(unicos, unicos[1:]):
+            c = _comun(a, b)
+            p[a], p[b] = max(p[a], c), max(p[b], c)
+        inversos = sorted(n[::-1] for n in unicos)
+        for a, b in zip(inversos, inversos[1:]):
+            c = _comun(a, b)
+            a, b = a[::-1], b[::-1]
+            q[a], q[b] = max(q[a], c), max(q[b], c)
+        self._p, self._q = p, q
+        return True
+
+    @property
+    def nombres(self) -> tuple[str, ...]:
+        return self._nombres
+
+    def _ventana(self, n: str) -> tuple[int, int]:
+        """El trozo de `n` que lo distingue de sus hermanos, ampliado a palabras enteras: [a, b)."""
+        largo = len(n)
+        p, q = self._p[n], largo - self._q[n]
+        a = 0
+        for i in range(min(min(p, q), largo) - 1, -1, -1):
+            if n[i] in SEPARADORES:
+                a = i
+                break
+        b = largo
+        for i in range(max(p, q), largo):
+            if n[i] in SEPARADORES:
+                b = i
+                break
+        return a, b
+
+    def elidir(self, nombre: str, fm: QFontMetrics, ancho: int) -> str:
+        """`nombre` para un hueco de `ancho` px con la letra de `fm`: entero si cabe y, si no, con «…» donde sobra, sin perder lo que lo
+        distingue de los demás nombres de la lista."""
+        clave = (nombre, ancho, fm.horizontalAdvance("Wmi_.0 "))
+        texto = self._cache.get(clave)
+        if texto is None:
+            texto = self._cache[clave] = self._elidir(nombre, fm, max(ancho, 12))
+        return texto
+
+    def _elidir(self, n: str, fm: QFontMetrics, ancho: int) -> str:
+        ancho_de = fm.horizontalAdvance
+        if ancho_de(n) <= ancho:
+            return n
+        if len(self._nombres) < 2 or n not in self._p:
+            return fm.elidedText(n, Qt.TextElideMode.ElideMiddle, ancho)
+        largo = len(n)
+        a, b = self._ventana(n)
+        if a > 0 and ancho_de("…" + n[a:]) <= ancho:  # lo común del principio se quita y se enseña tanto del final como quepa
+            s = a
+            for i in range(a - 1, 0, -1):
+                if n[i] in SEPARADORES:
+                    if ancho_de("…" + n[i:]) > ancho:
+                        break
+                    s = i
+            if ancho_de("…" + n[s:]) < 0.6 * ancho:  # queda mucho hueco (p. ej. «…_1»): se amplía letra a letra, para dar contexto
+                while s > 1 and ancho_de("…" + n[s - 1:]) <= ancho:
+                    s -= 1
+            return "…" + n[s:]
+        previo = "…" if a > 0 else ""
+
+        def ventana(fin: int) -> str:
+            return previo + n[a:fin] + ("…" if fin < largo else "")
+
+        if ancho_de(ventana(b)) <= ancho:  # lo que distingue cabe, pero no el final entero: se enseña hasta donde quepa
+            fin = b
+            for i in range(b + 1, largo):
+                if n[i] in SEPARADORES:
+                    if ancho_de(ventana(i)) > ancho:
+                        break
+                    fin = i
+            return ventana(fin)
+        return previo + fm.elidedText(n[a:b], Qt.TextElideMode.ElideMiddle, max(12, ancho - ancho_de(previo)))
+
+    def etiquetas(self, fm: QFontMetrics, ancho: int) -> dict[str, str]:
+        """Cómo se ve cada nombre de la lista en un hueco de `ancho` px."""
+        return {n: self.elidir(n, fm, ancho) for n in self._nombres}
+
+
+class DelegadoNombres(QStyledItemDelegate):
+    """Una columna de una tabla cuyo texto son nombres de una misma lista: los pinta con `ContextoNombres` (nunca dos iguales).
+    La celda sigue teniendo el nombre entero (y lo lleva su ayuda emergente); solo se pinta más corto."""
+
+    def __init__(self, padre, columnas=(0,)) -> None:
+        super().__init__(padre)
+        self.contexto = ContextoNombres()
+        self.columnas = frozenset(columnas)
+
+    def fijar(self, nombres) -> None:
+        self.contexto.fijar(nombres)
+
+    def initStyleOption(self, option, index) -> None:  # noqa: N802
+        super().initStyleOption(option, index)
+        if index.column() in self.columnas and option.text:
+            margen = 2 * (QApplication.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1)
+            option.text = self.contexto.elidir(option.text, QFontMetrics(option.font), option.rect.width() - margen - 1)
+            option.textElideMode = Qt.TextElideMode.ElideNone  # (ya cabe: Qt no vuelve a cortarlo)
+
+    def texto_visible(self, tabla, fila: int, columna: int) -> str:
+        """Lo que se ve ahora en esa celda de `tabla` (para comprobarlo sin mirar píxeles)."""
+        from PySide6.QtWidgets import QStyleOptionViewItem
+        indice = tabla.model().index(fila, columna)
+        opcion = QStyleOptionViewItem()
+        opcion.initFrom(tabla.viewport())
+        opcion.rect = tabla.visualRect(indice)
+        opcion.font = tabla.font()
+        self.initStyleOption(opcion, indice)
+        return opcion.text
+
+
+class EtiquetaGrupos(QLabel):
+    """Una frase hecha de grupos unidos por « · » («Clic: pulsar · Ctrl+clic: enclavar · Clic derecho: tipo»): si no cabe en una
+    línea se parte **entre** grupos, nunca por dentro de uno. Un grupo corto es indivisible; uno largo (un aviso, un mensaje de error)
+    se parte por palabras, como un texto normal. Pide lo que mide la frase en una línea y no menos que su grupo más ancho."""
+    SEP = " · "
+    ATOMICO = 36  # un grupo de hasta tantos caracteres no se parte por dentro (si cabe en el ancho)
+
+    def __init__(self, texto: str = "", ancho_maximo: int = 10 ** 6) -> None:
+        super().__init__()
+        self.ancho_maximo = ancho_maximo
+        self._grupos: list[str] = []
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.setWordWrap(True)  # (para que el diseño pregunte por el alto según el ancho)
+        if texto:
+            self.setText(texto)
+
+    def setText(self, texto: str) -> None:  # noqa: N802
+        super().setText(texto)
+        import re
+        self._grupos = [g for g in re.split(r"\s+·\s+", texto.strip()) if g]
+        self.updateGeometry()
+        self.update()
+
+    def _lineas(self, ancho: int) -> list[str]:
+        ancho_de = self.fontMetrics().horizontalAdvance
+        lineas: list[str] = []
+        actual = ""
+        for g in self._grupos:
+            candidata = f"{actual}{self.SEP}{g}" if actual else g
+            if ancho_de(candidata) <= ancho:
+                actual = candidata
+                continue
+            if actual:
+                lineas.append(actual)
+                actual = ""
+            if ancho_de(g) <= ancho:
+                actual = g
+                continue
+            for palabra in g.split(" "):  # un grupo largo: por palabras
+                candidata = f"{actual} {palabra}" if actual else palabra
+                if not actual or ancho_de(candidata) <= ancho:
+                    actual = candidata
+                else:
+                    lineas.append(actual)
+                    actual = palabra
+        if actual:
+            lineas.append(actual)
+        return lineas
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, ancho: int) -> int:  # noqa: N802
+        return max(1, len(self._lineas(max(20, ancho)))) * self.fontMetrics().lineSpacing() + 2
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        ancho = min(self.ancho_maximo, self.fontMetrics().horizontalAdvance(self.SEP.join(self._grupos)) + 2)
+        return QSize(ancho, self.heightForWidth(ancho))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        fm = self.fontMetrics()
+        ancho = 0
+        for g in self._grupos:
+            ancho = max(ancho, fm.horizontalAdvance(g) if len(g) <= self.ATOMICO else max((fm.horizontalAdvance(w) for w in g.split(" ")), default=0))
+        return QSize(min(ancho + 2, self.ancho_maximo), fm.lineSpacing() + 2)
+
+    def paintEvent(self, evento) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setFont(self.font())
+        p.setPen(self.palette().color(self.foregroundRole()))
+        alto = self.fontMetrics().lineSpacing()
+        for i, linea in enumerate(self._lineas(self.width())):
+            p.drawText(QRect(0, 1 + i * alto, self.width(), alto), int(self.alignment()) or int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), linea)
+        p.end()
+
+
+class BotonPlegar(QToolButton):
+    """El botón que pliega o despliega un panel. Su texto es el de siempre («◂ ▸ ▴ ▾»: es lo que lo identifica) pero lo que se ve es un
+    chevron de trazo, de 14 px de alto, centrado en un objetivo de 32 px: el glifo de texto no pasaba de 6 px."""
+
+    def paintEvent(self, evento) -> None:  # noqa: N802
+        p = QStylePainter(self)
+        opcion = QStyleOptionToolButton()
+        self.initStyleOption(opcion)
+        opcion.text = ""
+        p.drawComplexControl(QStyle.ComplexControl.CC_ToolButton, opcion)  # fondo, borde y anillo de foco de la hoja de estilo
+        dx, dy = {"◂": (-1, 0), "▸": (1, 0), "▴": (0, -1), "▾": (0, 1)}.get(self.text(), (0, 0))
+        if not (dx or dy):
+            return
+        color = QColor(self.palette().color(self.foregroundRole()))
+        if not self.isEnabled():
+            color = QColor(estilo.DESHABILITADO)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(QPen(color, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        cx, cy, largo, ancho = self.width() / 2, self.height() / 2, 7.0, 3.5  # el chevron mide 14 × 7 px
+        punta = QPointF(cx + dx * ancho, cy + dy * ancho)
+        trazo = QPainterPath(QPointF(cx - dx * ancho + dy * largo, cy - dy * ancho + dx * largo))
+        trazo.lineTo(punta)
+        trazo.lineTo(QPointF(cx - dx * ancho - dy * largo, cy - dy * ancho - dx * largo))
+        p.drawPath(trazo)

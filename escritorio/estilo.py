@@ -81,14 +81,18 @@ ANCHO_BARRA = 12           # barras de desplazamiento
 ESCALAS = {
     "normal": dict(T_BASE=13, T_PEQUENA=12, T_TITULO=16, T_SECCION=14, T_CHIP=13, T_CIFRA=12,
                    ALTO_CONTROL=36, ALTO_CONTROL_COMPACTO=32, ALTO_BARRA=34, ALTO_BARRA_COMPACTA=32,
-                   ALTO_FILA=30, ALTO_ENTRADA=36, ALTO_FILA_COMPACTA=28),
+                   ALTO_FILA=30, ALTO_ENTRADA=36, ALTO_FILA_COMPACTA=28,
+                   T_ES=12, ALTO_FILA_ES=16, ANCHO_INTERIOR_ES=200),  # (vista de E/S: filas planas y compactas, P-IMP-63)
     "grande": dict(T_BASE=14, T_PEQUENA=13, T_TITULO=19, T_SECCION=16, T_CHIP=15, T_CIFRA=14,
                    ALTO_CONTROL=40, ALTO_CONTROL_COMPACTO=36, ALTO_BARRA=40, ALTO_BARRA_COMPACTA=36,
-                   ALTO_FILA=34, ALTO_ENTRADA=40, ALTO_FILA_COMPACTA=32)}
+                   ALTO_FILA=34, ALTO_ENTRADA=40, ALTO_FILA_COMPACTA=32,
+                   T_ES=14, ALTO_FILA_ES=18, ANCHO_INTERIOR_ES=236)}
 UMBRAL_GRANDE = (1600, 900)  # ancho y alto de la ventana a partir de los cuales rige la escala grande
 ESCALA = "normal"
 T_BASE = T_PEQUENA = T_TITULO = T_SECCION = T_CHIP = T_CIFRA = 0
 ALTO_CONTROL = ALTO_CONTROL_COMPACTO = ALTO_BARRA = ALTO_BARRA_COMPACTA = ALTO_FILA = ALTO_ENTRADA = ALTO_FILA_COMPACTA = 0
+T_ES = ALTO_FILA_ES = ANCHO_INTERIOR_ES = 0
+ALTO_DIBUJO_ZOOM = 360  # por debajo de este alto de dibujo útil, los controles del zoom van en la fila del título y no flotan sobre él
 
 
 def escala_para(ancho: int, alto: int) -> str:
@@ -164,8 +168,7 @@ QTabBar#pestanasVistas::tab:hover:!selected { background:$hover; color:$tinta; }
 QTabBar#pestanasVistas::tab:disabled { color:$deshabilitado; }
 QTabBar#pestanasVistas[tecl="true"]::tab:selected:focus { border:2px dashed $foco; border-bottom:3px solid $acento; }
 
-QWidget#bandaModo { background:$edicion; border-top-left-radius:${r_m}px; border-top-right-radius:${r_m}px; }
-QWidget#bandaModo[modo="simular"] { background:$simulacion; }
+QWidget#bandaModo { background:transparent; }  /* (el enlace lo pinta `paneles.BandaModo`, con `edicion` o `simulacion` según su propiedad `modo`) */
 QToolButton#luzES { border:1px solid $borde_control; border-radius:${radio_pastilla}px; background:$superficie; color:$tinta;
     padding:0 14px 0 10px; min-height:${alto_pastilla}px; font-weight:400; }
 QToolButton#luzES:hover { background:$hover; border-color:$tinta_2; }

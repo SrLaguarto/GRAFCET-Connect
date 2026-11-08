@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxL
                                QStyledItemDelegate)
 
 from . import estilo
-from .paneles import TituloSeccion
+from .paneles import ContextoNombres, EtiquetaGrupos, TituloSeccion
 from conexion.adaptador import texto_numero
 from conexion.configuracion import ETIQUETA_CANAL, CONEXION_INICIAL, CANALES_INICIALES, Configuracion, Senal, normalizar_host
 
@@ -40,38 +40,40 @@ COLOR_TIPO = {"bool": estilo.TIPO_BOOL, "decimal": estilo.TIPO_DECIMAL, "int": e
 COLOR_CUALQUIERA = estilo.TIPO_CUALQUIERA
 LEYENDA = (("Bool", "bool"), ("Decimal", "decimal"), ("Entera", "int"), ("Cualquiera", None))
 NIVEL_TENUE, NIVEL_ASIGNADO, NIVEL_ACTIVO = .28, .62, 1.0
-ALTO_FILA = 16
+ALTO_FILA = 16  # (a la escala normal; a pantalla completa la vista sube de tamaño: `PanelES.alto_fila`, ver `PanelES.escalar`)
 ALTO_VARIABLE = ALTO_FILA
 ANCHO_INTERIOR = 200  # la mitad del marco que cae dentro de él: indicador, nombre del canal y, en los registros, su valor
 ROL_COLOR, ROL_ASIGNADA, ROL_ACTIVO = (Qt.ItemDataRole.UserRole + n for n in (1, 2, 3))
-def estilo_panel() -> str:
-    """La hoja de la vista de E/S con la escala de letra de ahora (`estilo.activar_escala`)."""
+def estilo_panel(escala: str = "normal") -> str:
+    """La hoja de la vista de E/S con la letra de la escala `escala` (`estilo.ESCALAS`): las filas y los nombres de canal suben de 12 a 14 px
+    a pantalla completa, como el resto de la interfaz."""
+    e = estilo.ESCALAS[escala]
     return f"""
     QWidget#conexionES {{ background:{estilo.FONDO}; }}
-    QWidget#conexionES, QWidget#conexionES QLabel, QWidget#conexionES QListWidget {{ font-size:{estilo.T_PEQUENA}px; }}
+    QWidget#conexionES, QWidget#conexionES QLabel, QWidget#conexionES QListWidget {{ font-size:{e["T_ES"]}px; }}
     QWidget#tarjetaES {{ background:white; border:1px solid {estilo.BORDE}; border-radius:{estilo.R_M}px; }}
     QWidget#tarjetaES QLabel {{ border:0; }}
     QWidget#conexionES QLabel#canalES {{ color:{estilo.TINTA_2}; }}
     QWidget#conexionES QLabel#asignacionES {{ color:{estilo.TINTA}; }}
     QWidget#conexionES QLabel#asignacionES[aviso="true"] {{ color:{estilo.AVISO}; }}
-    QWidget#conexionES QLabel#valorES {{ color:{estilo.TINTA_2}; font-size:{estilo.T_PEQUENA}px; font-family:{estilo.FAMILIA_MONO}; }}
-    QWidget#conexionES QLabel#tituloPLC {{ color:{estilo.ACENTO}; font-size:{estilo.T_SECCION}px; font-weight:600; padding:6px; }}
+    QWidget#conexionES QLabel#valorES {{ color:{estilo.TINTA_2}; font-size:{e["T_ES"]}px; font-family:{estilo.FAMILIA_MONO}; }}
+    QWidget#conexionES QLabel#tituloPLC {{ color:{estilo.ACENTO}; font-family:{estilo.FAMILIA_TITULO}; font-size:{e["T_SECCION"]}px; font-weight:600; padding:6px; }}
     QFrame#cabeceraES {{ background:{estilo.SUPERFICIE}; border:0; border-bottom:1px solid {estilo.BORDE}; }}
     QFrame#cabeceraES[estadoVisual="conectado"] {{ background:{estilo.SIMULACION_SUAVE}; border-bottom:2px solid {estilo.SIMULACION}; }}
     QFrame#cabeceraES QWidget {{ background:transparent; }}
     QFrame#cabeceraES QPushButton {{ background:{estilo.SUPERFICIE}; color:{estilo.TINTA}; border:1px solid {estilo.BORDE_CONTROL}; padding:0 14px;
-        border-radius:{estilo.R_S}px; min-height:{estilo.ALTO_CONTROL_COMPACTO - 2}px; font-size:{estilo.T_BASE}px; }}
+        border-radius:{estilo.R_S}px; min-height:{e["ALTO_CONTROL_COMPACTO"] - 2}px; font-size:{e["T_BASE"]}px; }}
     QFrame#cabeceraES QPushButton:hover {{ background:{estilo.HOVER}; border-color:{estilo.TINTA_2}; }}
     QFrame#cabeceraES QPushButton:pressed {{ background:{estilo.PULSADO}; }}
-    QFrame#cabeceraES QPushButton[tecl="true"]:focus {{ border:2px dashed {estilo.FOCO}; padding:0 13px; min-height:{estilo.ALTO_CONTROL_COMPACTO - 4}px; }}
+    QFrame#cabeceraES QPushButton[tecl="true"]:focus {{ border:2px dashed {estilo.FOCO}; padding:0 13px; min-height:{e["ALTO_CONTROL_COMPACTO"] - 4}px; }}
     QFrame#cabeceraES QPushButton:disabled {{ color:{estilo.DESHABILITADO}; background:{estilo.SUPERFICIE_2}; border-color:{estilo.BORDE}; }}
     QFrame#cabeceraES QPushButton[primario="true"] {{ background:{estilo.ACENTO}; color:white; border-color:{estilo.ACENTO_OSCURO}; font-weight:600; }}
     QFrame#cabeceraES QPushButton[primario="true"]:hover {{ background:{estilo.ACENTO_HOVER}; }}
     QFrame#cabeceraES QPushButton[primario="true"][tecl="true"]:focus {{ border:2px dashed white; }}
-    QWidget#conexionES QLabel#tituloES {{ color:{estilo.TINTA}; font-size:{estilo.T_TITULO}px; font-weight:700; padding-left:4px; }}
+    QWidget#conexionES QLabel#tituloES {{ color:{estilo.TINTA}; font-size:{e["T_TITULO"]}px; font-weight:700; padding-left:4px; }}
     QWidget#cuerpoES, QFrame#pieES {{ background:transparent; }}
     QWidget#cuerpoES QLabel, QFrame#pieES QLabel {{ color:{estilo.TINTA_2}; background:transparent; }}
-    QWidget#conexionES QLabel#seccionES {{ color:{estilo.TINTA}; font-size:{estilo.T_SECCION}px; font-weight:600; padding:6px; }}
+    QWidget#conexionES QLabel#seccionES {{ color:{estilo.ACENTO}; font-family:{estilo.FAMILIA_TITULO}; font-size:{e["T_SECCION"]}px; font-weight:600; padding:6px; }}  /* como los títulos de sección del resto: tipo de título, acento, sin mayúsculas */
     QWidget#conexionES QLabel#ayudaES, QWidget#conexionES QLabel#resumenES {{ color:{estilo.TINTA_2}; }}
     QFrame#moduloPLC {{ background:transparent; border:1px solid {estilo.BORDE_CONTROL}; }}
     QListWidget#listaES {{ background:transparent; border:0; outline:0; }}
@@ -183,31 +185,42 @@ class EtiquetaElidida(QLabel):
         super().__init__(texto)
         self.setAlignment(alineacion | Qt.AlignmentFlag.AlignVCenter)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.contexto = None  # los nombres de su lista: el recorte no confunde dos (`ContextoNombres`); sin él, se corta por el final
+
+    def texto_visible(self):
+        fm = QFontMetrics(self.font())
+        if self.contexto is None:
+            return fm.elidedText(self.text(), Qt.TextElideMode.ElideRight, self.width())
+        return self.contexto.elidir(self.text(), fm, self.width())
 
     def paintEvent(self, _evento):
         p = QPainter(self)
         p.setPen(self.palette().windowText().color())
-        elidido = QFontMetrics(self.font()).elidedText(self.text(), Qt.TextElideMode.ElideRight, self.width())
-        p.drawText(self.rect(), int(self.alignment()), elidido)
+        p.setFont(self.font())
+        p.drawText(self.rect(), int(self.alignment()), self.texto_visible())
 
 
-def _pintar_variable(p, rect, texto, color, activa, derecha, resaltado=False):
-    fuente = QFont(p.font()); fuente.setPixelSize(estilo.T_PEQUENA); p.setFont(fuente)
+def _pintar_variable(p, rect, texto, color, activa, derecha, resaltado=False, letra=None, contexto=None):
+    fuente = QFont(p.font()); fuente.setPixelSize(letra or ESCALAS_ES["normal"]); p.setFont(fuente)
     fm = QFontMetrics(fuente)
     if resaltado:
         p.fillRect(rect, QColor(estilo.RESALTADO))
     p.setPen(QColor(estilo.TINTA))
     tr = rect.adjusted(6, 0, -6, 0)
-    p.drawText(tr, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-               fm.elidedText(texto, Qt.TextElideMode.ElideMiddle, tr.width()))  # por el medio: conserva el final que distingue sensor_1 de sensor_2
+    # un nombre largo conserva lo que lo distingue de los demás de su lista (sensor_…_10_avance frente a sensor_…_20_avance)
+    visible = contexto.elidir(texto, fm, tr.width()) if contexto is not None else fm.elidedText(texto, Qt.TextElideMode.ElideMiddle, tr.width())
+    p.drawText(tr, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, visible)
 
 
-def figura_variable(texto, color, derecha, activa=False):
-    fuente = QFont(estilo.FUENTE); fuente.setPixelSize(estilo.T_PEQUENA)
-    pm = QPixmap(QFontMetrics(fuente).horizontalAdvance(texto) + 18, ALTO_VARIABLE)
+ESCALAS_ES = {"normal": estilo.ESCALAS["normal"]["T_ES"], "grande": estilo.ESCALAS["grande"]["T_ES"]}  # letra de las filas, por escala
+
+
+def figura_variable(texto, color, derecha, activa=False, letra=None, alto=None):
+    fuente = QFont(estilo.FUENTE); fuente.setPixelSize(letra or ESCALAS_ES["normal"])
+    pm = QPixmap(QFontMetrics(fuente).horizontalAdvance(texto) + 18, alto or ALTO_VARIABLE)
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm); p.setFont(fuente)
-    _pintar_variable(p, pm.rect(), texto, color, activa, derecha, False); p.end()
+    _pintar_variable(p, pm.rect(), texto, color, activa, derecha, False, letra); p.end()
     return pm
 
 
@@ -218,20 +231,31 @@ class DelegadoVariable(QStyledItemDelegate):
         self.derecha = barra_a_la_derecha
 
     def sizeHint(self, _opcion, _indice):
-        return QSize(0, ALTO_VARIABLE)
+        return QSize(0, getattr(self.parent(), "alto", ALTO_VARIABLE))
 
     def paint(self, p, opcion, indice):
         p.save()
+        lista = self.parent()
         _pintar_variable(p, opcion.rect.adjusted(4,1,-4,-1), indice.data() or "", indice.data(ROL_COLOR),
                          indice.data(ROL_ACTIVO), self.derecha,
-                         bool(opcion.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver)))
+                         bool(opcion.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver)),
+                         getattr(lista, "letra", None), getattr(lista, "contexto", None))
         p.restore()
+
+    def texto_visible(self, indice, ancho):
+        """Lo que se ve de esa fila de la lista con `ancho` px de fila (para comprobarlo sin mirar píxeles)."""
+        lista = self.parent()
+        fuente = QFont(estilo.FUENTE)
+        fuente.setPixelSize(getattr(lista, "letra", None) or ESCALAS_ES["normal"])
+        return lista.contexto.elidir(indice.data() or "", QFontMetrics(fuente), ancho - 8 - 12)
 
 
 class ListaVariables(QListWidget):
     def __init__(self, lado="entrada"):
         super().__init__()
         self.setObjectName("listaES")
+        self.letra, self.alto = ESCALAS_ES["normal"], ALTO_VARIABLE  # la letra y el alto de fila de la escala de ahora (`PanelES.escalar`)
+        self.contexto = ContextoNombres()  # los nombres de la lista, para que el recorte no confunda dos
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
@@ -248,7 +272,7 @@ class ListaVariables(QListWidget):
             return
         drag = QDrag(self)
         drag.setMimeData(self.mimeData([it]))
-        figura = figura_variable(it.text(), it.data(ROL_COLOR), self.itemDelegate().derecha, it.data(ROL_ACTIVO))
+        figura = figura_variable(it.text(), it.data(ROL_COLOR), self.itemDelegate().derecha, it.data(ROL_ACTIVO), self.letra, self.alto)
         drag.setPixmap(figura)
         drag.setHotSpot(figura.rect().center())
         drag.exec(Qt.DropAction.CopyAction)
@@ -272,7 +296,8 @@ class TerminalES(QFrame):
         self._resaltado = False
         self.setAcceptDrops(not panel.bloqueado)
         self.setObjectName("senalPLC")
-        self.setFixedHeight(ALTO_FILA)
+        alto = getattr(panel, "alto_fila", ALTO_FILA)  # (el de la escala de ahora: 16 px, y 20 a pantalla completa)
+        self.setFixedHeight(alto)
         entrada = area in ("discrete", "input-register")
         analogica = area in ("input-register", "holding")
         self.led = IndicadorES()
@@ -285,6 +310,7 @@ class TerminalES(QFrame):
         self.nombre = EtiquetaElidida(variable["name"] if variable else "",
                                       Qt.AlignmentFlag.AlignRight if entrada else Qt.AlignmentFlag.AlignLeft)
         self.nombre.setObjectName("asignacionES")  # lo que se agarra para mover la asignación a otro canal
+        self.nombre.contexto = panel.contexto_de(area)  # (los nombres de ese lado: dos canales no se leen igual aunque el recorte coma)
         self.nombre.setProperty("aviso", bool(aviso))  # ámbar si lleva aviso (hoja del panel: `QLabel#asignacionES[aviso="true"]`)
         self.marca = None
         if aviso:  # señal ámbar junto a la fila: no impide nada, solo avisa
@@ -297,7 +323,7 @@ class TerminalES(QFrame):
         self.barrita_nombre.hide()  # el estado se muestra solo en el indicador del canal del PLC
         interior = QWidget()
         self.interior = interior
-        interior.setFixedWidth(ANCHO_INTERIOR)
+        interior.setFixedWidth(getattr(panel, "ancho_interior", ANCHO_INTERIOR))
         il = QHBoxLayout(interior)
         il.setContentsMargins(3, 0, 3, 0)
         il.setSpacing(6)
@@ -317,7 +343,7 @@ class TerminalES(QFrame):
         if variable:
             self.b_quitar = QPushButton("×")
             self.b_quitar.setObjectName("quitarES")
-            self.b_quitar.setFixedSize(18, ALTO_FILA - 2)
+            self.b_quitar.setFixedSize(18, alto - 2)
             self.b_quitar.setToolTip("Desconecta para desasignar" if panel.bloqueado else "Desasignar esta señal")
             self.b_quitar.setEnabled(not panel.bloqueado)
             self.b_quitar.clicked.connect(lambda: panel.quitar(variable["id"]))
@@ -396,16 +422,24 @@ class TerminalES(QFrame):
         if self._resaltado:
             QPainter(self).fillRect(self.zona_asignacion(), QColor(estilo.ASIGNACION))
 
+    def detalle(self):
+        """Lo que cuenta la línea de detalle de la ventana al pasar por la fila: el nombre entero, el canal y el tipo."""
+        if not self.variable:
+            return ""
+        return f"{self.variable['name']} · {self.canal.text()} · {TIPOS[self.variable['type']['kind']]}"
+
     def enterEvent(self, evento):
         if self.b_quitar is not None and self.b_quitar.isEnabled():
             self.b_quitar.show()
         self.update()
+        self.panel.detalle.emit(self.detalle())
         super().enterEvent(evento)
 
     def leaveEvent(self, evento):
         if self.b_quitar is not None:
             self.b_quitar.hide()
         self.update()
+        self.panel.detalle.emit("")
         super().leaveEvent(evento)
 
     def mousePressEvent(self, evento):
@@ -476,6 +510,7 @@ class LienzoPLC(QWidget):
     def __init__(self):
         super().__init__()
         self.setObjectName("lienzoES")
+        self.ancho_interior = ANCHO_INTERIOR
         rejilla = QGridLayout(self)
         rejilla.setContentsMargins(0, 2, 0, 2)
         rejilla.setSpacing(0)
@@ -484,7 +519,7 @@ class LienzoPLC(QWidget):
         rejilla.addWidget(titulo, 0, 0, 1, 2)
         self.destino = QLabel()
         self.destino.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.destino.setFixedSize(2 * ANCHO_INTERIOR, 36)
+        self.destino.setFixedSize(2 * self.ancho_interior, 36)
         self.izq, self.der = QWidget(), QWidget()
         self.fila_izq, self.fila_der = QVBoxLayout(self.izq), QVBoxLayout(self.der)
         for f in (self.fila_izq, self.fila_der):
@@ -506,7 +541,14 @@ class LienzoPLC(QWidget):
         self.marco = QFrame(self)
         self.marco.setObjectName("moduloPLC")
         self.marco.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.setMinimumWidth(2 * ANCHO_INTERIOR + 120)
+        self.setMinimumWidth(2 * self.ancho_interior + 120)
+
+    def fijar_interior(self, ancho):
+        """El ancho de la mitad del marco que cae dentro de él (más ancho con la letra grande)."""
+        self.ancho_interior = ancho
+        self.destino.setFixedSize(2 * ancho, 36)
+        self.setMinimumWidth(2 * ancho + 120)
+        self._colocar_marco()
 
     def event(self, evento):  # noqa: N802
         resultado = super().event(evento)
@@ -516,7 +558,7 @@ class LienzoPLC(QWidget):
 
     def _colocar_marco(self):
         g, d, c = self.izq.geometry(), self.der.geometry(), self.destino.geometry()
-        x0, x1 = g.right() + 1 - ANCHO_INTERIOR, d.left() + ANCHO_INTERIOR
+        x0, x1 = g.right() + 1 - self.ancho_interior, d.left() + self.ancho_interior
         y1 = max(g.bottom() if self.fila_izq.count() else 0, d.bottom() if self.fila_der.count() else 0, c.bottom()) + 5
         self.marco.setGeometry(x0, c.top(), x1 - x0, y1 - c.top())
         self.marco.raise_()
@@ -720,20 +762,37 @@ class PanelES(QWidget):
     abrir_prueba = Signal()
     volver = Signal()
     estado_cambiado = Signal(str, str)  # (estado, mensaje): lo que enseña el indicador de la barra de simulación
+    detalle = Signal(str)  # el nombre entero (y canal, tipo) de la fila que señala el puntero: la ventana lo pone en su barra de estado
 
-    def escalar(self) -> None:
-        """Cambió la escala de letra y de controles (pantalla completa o no): la letra y la hoja de la vista se ponen otra vez."""
+    def escalar(self, hoja_ventana: str = "", escala: str = "normal") -> None:
+        """Pone la vista a la escala `escala` (pantalla completa o no): la hoja (la de la ventana para esa escala, si hay, y la propia), la
+        letra, el alto de las filas y el ancho de lo que cae dentro del marco. Las filas se rehacen con su alto nuevo. La ventana lo llama
+        al mostrar la vista (no al cruzar el umbral): son más de mil widgets. Sin argumentos, la escala normal."""
+        e = estilo.ESCALAS[escala]
+        letra_vieja = self.letra
+        self.escala, self.alto_fila, self.ancho_interior, self.letra = escala, e["ALTO_FILA_ES"], e["ANCHO_INTERIOR_ES"], e["T_ES"]
+        self.check.setStyleSheet(self.check.styleSheet().replace(f"font-size:{letra_vieja}px", f"font-size:{self.letra}px"))
         fuente = QFont(self.font())
-        fuente.setPixelSize(estilo.T_PEQUENA)
+        fuente.setPixelSize(self.letra)
         self.setFont(fuente)
-        self.setStyleSheet(estilo_panel())
+        self.setStyleSheet(hoja_ventana + estilo_panel(escala))
+        self.lienzo.fijar_interior(self.ancho_interior)
+        for lista in (self.lista_entradas, self.lista_salidas):
+            lista.letra, lista.alto = self.letra, self.alto_fila
+        self.contexto_izq.fijar(()); self.contexto_der.fijar(())  # (se rehacen con las filas)
+        if self.doc is not None:
+            self._dibujar()
+            self.mostrar_valores(self._ultimos_valores)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("conexionES")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.escala, self.alto_fila, self.ancho_interior, self.letra = "normal", ALTO_FILA, ANCHO_INTERIOR, ESCALAS_ES["normal"]
+        self.contexto_izq, self.contexto_der = ContextoNombres(), ContextoNombres()  # los nombres asignados a cada lado del PLC
+        self._ultimos_valores = {}
         fuente = QFont(self.font())
-        fuente.setPixelSize(estilo.T_PEQUENA)  # letra algo menor: caben más canales
+        fuente.setPixelSize(self.letra)  # letra algo menor: caben más canales
         self.setFont(fuente)
         self.setStyleSheet(estilo_panel())
         self.doc = None
@@ -790,7 +849,7 @@ class PanelES(QWidget):
         self.check = QLabel("●")
         self.check.setFixedSize(16, 16)
         self.check.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.check.setStyleSheet(f"color:{estilo.TINTA_3}; font-size:{estilo.T_PEQUENA}px")
+        self.check.setStyleSheet(f"color:{estilo.TINTA_3}; font-size:{self.letra}px")
         fe.addWidget(self.check, 0, Qt.AlignmentFlag.AlignTop)
         self.estado = EstadoConexion()
         self.estado.setText("Desconectado")
@@ -835,15 +894,18 @@ class PanelES(QWidget):
             cl = QVBoxLayout(columna)
             cl.setContentsMargins(0, 0, 0, 0)
             cl.setSpacing(0)
-            etiqueta = TituloSeccion("SENSORES" if rol == "input" else "ACTUADORES", 6)
+            etiqueta = TituloSeccion("Sensores" if rol == "input" else "Actuadores", 6)
             etiqueta.setObjectName("seccionES")
-            etiqueta.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            etiqueta.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)  # (con el centrado vertical, el cuadrado queda a la altura del texto)
             etiqueta.setTextFormat(Qt.TextFormat.RichText)
             cl.addWidget(etiqueta)
             cl.addWidget(lista, 1)
             self.cuentas[rol] = etiqueta
             columnas.append(columna)
         self._partes = (columnas[0], scroll, columnas[1])
+        for lista in (self.lista_entradas, self.lista_salidas):  # el nombre entero de la variable, al pasar el ratón, en la barra de estado
+            lista.entered.connect(lambda indice, lista=lista: self.detalle.emit((lista.item(indice.row()).toolTip() or "").replace("\n", " · ")))
+            lista.viewport().installEventFilter(self)
         self._estrecho = None
         self._disponer(False)
         # con la ventana pequeña el cuerpo entero se desplaza (barras cuando hacen falta) en vez de cortarse
@@ -873,8 +935,8 @@ class PanelES(QWidget):
         self.ayuda_vacio.setAlignment(Qt.AlignmentFlag.AlignCenter)
         pl.addWidget(self.ayuda_vacio, 1)
         self.ayuda_vacio.show()
-        self.resumen = QLabel()
-        self.resumen.setWordWrap(True)
+        self.resumen = EtiquetaGrupos()  # «0/44 entradas asignadas · 0/44 salidas asignadas»: se parte entre los dos grupos, no dentro de uno
+        self.resumen.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.resumen.setObjectName("resumenES")
         pl.addWidget(self.resumen)
         raiz.addWidget(pie)
@@ -986,6 +1048,15 @@ class PanelES(QWidget):
             widget.valueChanged.connect(self._config_editada)
         self._cargando = False
 
+    def eventFilter(self, objeto, evento):  # noqa: N802
+        if evento.type() == QEvent.Type.Leave and objeto in (self.lista_entradas.viewport(), self.lista_salidas.viewport()):
+            self.detalle.emit("")
+        return super().eventFilter(objeto, evento)
+
+    def contexto_de(self, area):
+        """Los nombres asignados al lado del PLC al que pertenece el canal de `area` (sensores a la izquierda, actuadores a la derecha)."""
+        return self.contexto_izq if area in ("discrete", "input-register") else self.contexto_der
+
     UMBRAL_ESTRECHO = 900
 
     def _disponer(self, estrecho: bool) -> None:
@@ -1024,7 +1095,9 @@ class PanelES(QWidget):
 
     def resizeEvent(self, evento):  # noqa: N802
         super().resizeEvent(evento)
-        self._disponer(self.width() < self.UMBRAL_ESTRECHO)
+        estrecho = self.width() < self.UMBRAL_ESTRECHO
+        self._disponer(estrecho)
+        self.resumen.setMaximumWidth(210 if estrecho else 16777215)  # media pantalla: «0/44 entradas asignadas» y «0/44 salidas asignadas» en dos líneas, no en una larga que deja la ayuda en cuatro
 
     def restablecer_canales(self):
         self._cargando=True
@@ -1107,7 +1180,7 @@ class PanelES(QWidget):
         self.check.setText("✓" if conectado else "✕" if fallo else "●")
         self.check.setStyleSheet(f"background:{estilo.OK if conectado else estilo.ERROR if fallo else 'transparent'}; "
                                  f"color:{'white' if conectado or fallo else estilo.TINTA_3}; "
-                                 f"border-radius:{estilo.R_M}px; font-size:{estilo.T_PEQUENA}px; font-weight:600")
+                                 f"border-radius:{estilo.R_M}px; font-size:{self.letra}px; font-weight:600")
         self.check.setToolTip(mensaje)
         self.estado.setStyleSheet(f"color:{estilo.OK if conectado else estilo.ERROR if fallo else estilo.AVISO if self._hubo_conexion else estilo.TINTA_2}; font-weight:600")
         self.estado.setVisible(True)
@@ -1377,17 +1450,24 @@ class PanelES(QWidget):
             while fila.count():
                 item = fila.takeAt(0)
                 if item.widget():
-                    item.widget().hide()
-                    item.widget().deleteLater()
+                    viejo = item.widget()
+                    viejo.hide()
+                    viejo.setParent(None)  # (fuera del árbol de la ventana ya: hasta que se borre de verdad, no hay que repasarlo cada vez que cambia la hoja)
+                    viejo.deleteLater()
         variables = {v["id"]: v for v in self.variables}
         self.lista_entradas.clear()
         self.lista_salidas.clear()
         asignadas = {s.variable: f"{ETIQUETA_CANAL[s.area]} {s.direccion}" for s in c.senales}
-        for rol, titulo in (("input", "SENSORES"), ("output", "ACTUADORES")):
-            self.cuentas[rol].setText(f"{titulo} <span style='color:{estilo.TINTA_2}; font-size:{estilo.T_PEQUENA}px'>{sum(v['role'] == rol for v in self.variables)}</span>")
+        for rol, titulo in (("input", "Sensores"), ("output", "Actuadores")):
+            self.cuentas[rol].setText(f"{titulo} <span style='color:{estilo.TINTA_2}; font-size:{self.letra}px; font-weight:400'>{sum(v['role'] == rol for v in self.variables)}</span>")
+        # los nombres de cada lista y de cada lado del PLC: el recorte de un nombre largo conserva lo que lo distingue de los demás
+        self.lista_entradas.contexto.fijar([v["name"] for v in self.variables if v["role"] == "input"])
+        self.lista_salidas.contexto.fijar([v["name"] for v in self.variables if v["role"] == "output"])
+        self.contexto_izq.fijar([variables[s.variable]["name"] for s in c.senales if s.variable in variables and s.area in ("discrete", "input-register")])
+        self.contexto_der.fijar([variables[s.variable]["name"] for s in c.senales if s.variable in variables and s.area in ("coil", "holding")])
         for v in self.variables:
             item = QListWidgetItem(v["name"])
-            item.setSizeHint(QSize(0, ALTO_VARIABLE))
+            item.setSizeHint(QSize(0, self.alto_fila))
             item.setData(Qt.ItemDataRole.UserRole, v["id"])
             item.setData(ROL_COLOR, color_tipo(v))
             item.setData(ROL_ASIGNADA, v["id"] in asignadas)
@@ -1412,7 +1492,7 @@ class PanelES(QWidget):
             if numerica:
                 hueco = digitales - len(direcciones_area["discrete" if entrada else "coil"])
                 if hueco:
-                    fila.addSpacing(hueco * ALTO_FILA)
+                    fila.addSpacing(hueco * self.alto_fila)
             for direccion in sorted(direcciones):
                 s = mapa.get((area, direccion))
                 v = variables.get(s.variable) if s else None
@@ -1452,6 +1532,7 @@ class PanelES(QWidget):
             terminal.fijar_redondeo(aviso_redondeo(*dato) if dato else "")
 
     def mostrar_valores(self, valores):
+        self._ultimos_valores = valores
         def activo(valor):
             try:
                 return bool(Fraction(valor)) if isinstance(valor, str) else bool(valor)

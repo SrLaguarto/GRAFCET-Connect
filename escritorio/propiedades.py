@@ -37,7 +37,7 @@ from grafcet.expressions import is_event_positive
 from grafcet.view import norm
 
 from . import estilo
-from .paneles import TituloSeccion
+from .paneles import EtiquetaGrupos, TituloSeccion
 from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
 from .paneles import PilaActual
@@ -451,9 +451,10 @@ class PanelPropiedades(QWidget):
     """Las opciones del elemento seleccionado, con campos editables (el panel «Opciones» de abajo)."""
     ANCHO_MINIMO = 560  # lo más ancho que pide el panel a la ventana: con él abierto, la ventana baja a 640 px y vuelve
 
-    def escalar(self) -> None:
-        """Cambió la escala de letra y de controles (pantalla completa o no): campos, «Fijar», categorías y fichas se miden otra vez."""
-        self.setStyleSheet(estilo.campos_compactos())
+    def escalar(self, hoja_ventana: str = "") -> None:
+        """Cambió la escala de letra y de controles (pantalla completa o no): la hoja (la de la ventana para esa escala, si hay, y la de los
+        campos compactos), «Fijar», categorías y fichas se miden otra vez. La ventana lo llama al abrir el panel."""
+        self.setStyleSheet(hoja_ventana + estilo.campos_compactos())
         self.t_fijar.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
         for prog in (self.prog, getattr(self.accion, "prog", None)):
             if prog is not None:
@@ -593,16 +594,14 @@ class PanelPropiedades(QWidget):
         self.t_dibujo.setTextFormat(Qt.TextFormat.RichText)
         self.t_vista.hide()
         self.t_dibujo.hide()
-        self.t_estado = QLabel()
-        self.t_estado.setWordWrap(True)
+        self.t_estado = EtiquetaGrupos(ancho_maximo=260)  # «Receptividad correcta.» nunca se parte; un mensaje largo se parte por palabras
         self.t_crear = QPushButton("Crear las que faltan")
         self.t_crear.setToolTip("Declarar como entradas booleanas las variables que se usan y no existen")
         self.t_crear.clicked.connect(self._crear)
         g.addWidget(QLabel("Fórmula"), 0, 0)
         g.addWidget(self.t_texto, 0, 1)
-        self.t_estado.setMinimumWidth(QFontMetrics(estilo.fuente()).horizontalAdvance("Receptividad") + 24)  # (la frase se parte en dos líneas si hace falta)
         self.t_estado.setMaximumWidth(260)
-        self.t_texto.setMinimumWidth(80)
+        self.t_texto.setMinimumWidth(48)  # (la vista previa cede antes que el estado: «Receptividad correcta.» no se parte ni se corta, ni a 640 px)
         g.addWidget(self.t_estado, 0, 2)
         g.addWidget(self.t_crear, 0, 3)
         for columna, control in ((4, self.prog.ampliar), (5, self.prog.papelera)):
