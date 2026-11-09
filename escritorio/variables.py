@@ -19,12 +19,14 @@ import re
 from PySide6.QtCore import QEvent, QTimer, Qt, Signal, QSize
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QSizePolicy,
-                               QStyle, QStyledItemDelegate, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+                               QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from . import estilo
-from .paneles import CabeceraCompacta, ContextoNombres
+from .paneles import AIRE_LINEAS, CabeceraCompacta, ContextoNombres, ReparteColumnas, SALTO
 from .diagrama import COL
 from .edicion import Parpadeo
+
+NOMBRE_MIN = 96  # lo menos que mide la columna del nombre a cualquier tamaño: «Papel» y «Tipo» se abrevian (o se desplaza la tabla) antes de que baje de ahí
 
 PAPELES = (("input", "Entrada"), ("output", "Salida"), ("internal", "Memoria"))
 # Los tipos que se ofrecen. Un fichero antiguo puede traer otros (decimal de 1 o 3 decimales, duración): se muestran con
@@ -80,17 +82,33 @@ class _DelegadoCombo(QStyledItemDelegate):
         self.panel = panel
 
     def initStyleOption(self, option: Any, index: Any) -> None:  # noqa: N802
-        """Lo que se ve en la celda: el nombre elidido sin que dos se lean igual (`ContextoNombres`), y el papel y el tipo abreviados
-        (la celda sigue teniendo el texto entero: lo leen las pruebas y la ayuda emergente)."""
+        """Lo que se ve en la celda: el **nombre entero**, partido por los «_» en las líneas que haga falta (`ContextoNombres.lineas`: la fila
+        crece lo necesario), y el papel y el tipo en palabras donde caben y abreviados donde no (la celda sigue teniendo el texto entero:
+        lo leen las pruebas y la ayuda emergente)."""
         super().initStyleOption(option, index)
         if not option.text:
             return
         if index.column() == 0:
-            margen = 2 * (QApplication.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1)
-            option.text = self.panel.contexto.elidir(option.text, QFontMetrics(option.font), option.rect.width() - margen - 1)
+            margen = 2 * (QApplication.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1) + 2
+            option.text = SALTO.join(self.panel.contexto.lineas(option.text, QFontMetrics(option.font), option.rect.width() - margen))
             option.textElideMode = Qt.TextElideMode.ElideNone
-        else:
+            option.features &= ~QStyleOptionViewItem.ViewItemFeature.WrapText  # (las líneas son las de arriba)
+        elif not self.panel.completo:
             option.text = (abreviar_papel if index.column() == 1 else abreviar_tipo)(option.text)
+
+    def sizeHint(self, option: Any, index: Any) -> QSize:  # noqa: N802
+        """Una línea: el alto de fila de siempre (26 px, 30 a pantalla completa); un nombre partido en varias, lo que miden sus líneas más un poco
+        de aire arriba y abajo (varias líneas seguidas no se pegan a las de al lado)."""
+        tam = super().sizeHint(option, index)
+        alto = self.panel._alto_fila()
+        if index.column() == 0:
+            opcion = QStyleOptionViewItem(option)
+            self.initStyleOption(opcion, index)
+            lineas = opcion.text.count(SALTO) + 1
+            if lineas > 1:
+                alto = max(alto, lineas * QFontMetrics(opcion.font).lineSpacing() + 2 * AIRE_LINEAS + 2)
+        tam.setHeight(alto)
+        return tam
 
     def createEditor(self, parent: QWidget, option: Any, index: Any) -> QWidget:  # noqa: N802
         if index.column() == 0:
@@ -177,7 +195,8 @@ class PanelVariables(QWidget):
         self._n = 0
         self._clave = ""
         self._llenando = False
-        self.contexto = ContextoNombres()  # los nombres de la tabla: se elidén sin que dos se lean igual
+        self.contexto = ContextoNombres()  # los nombres de la tabla: partidos por los «_», nunca dos que se lean igual
+        self.completo = False  # «Papel» y «Tipo» en palabras (hay sitio con el nombre en sus 96 px) o abreviados («Entr.», «Bool.»): `ReparteColumnas`
         self.parpadeo = Parpadeo(self)  # la fila que parpadea en naranja tras un error
         self.parpadeo.cambia.connect(self._pintar)
         lay = QVBoxLayout(self)
@@ -192,12 +211,13 @@ class PanelVariables(QWidget):
         self.tabla.setHorizontalHeaderLabels(COLUMNAS)
         self.tabla.verticalHeader().hide()
         self.tabla.verticalHeader().setDefaultSectionSize(self._alto_fila())  # filas de 26 px (30 a pantalla completa): caben cinco con sus botones a 1366×768 y Propiedades abierto
+        self.tabla.verticalHeader().setMinimumSectionSize(self._alto_fila())  # (un nombre partido en dos o tres líneas hace crecer su fila: `_alturas_filas`)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tabla.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         cab = self.tabla.horizontalHeader()
         cab.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        cab.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # el nombre se lleva lo que sobra: es la columna que se lee
-        cab.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)  # Papel y Tipo, abreviados («Entr.», «Bool.»): lo justo (se fija abajo)
+        cab.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # el nombre se lleva lo que sobra (`ReparteColumnas` le da, como poco, sus 96 px)
+        cab.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)  # Papel y Tipo, enteros o abreviados («Entr.», «Bool.»): lo justo (se fija abajo)
         cab.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         self._anchos_columnas()
         cab.setMinimumSectionSize(20)
@@ -213,6 +233,9 @@ class PanelVariables(QWidget):
         self.tabla.itemChanged.connect(self._editado)
         self.tabla.currentCellChanged.connect(lambda fila, *_: self._detallar(fila))
         self.tabla.horizontalHeader().geometriesChanged.connect(self._ajustar_tabla)
+        self.ancho_nominal = 0  # el ancho útil de la tabla con el panel como se abre (lo pone la ventana con el ancho de sus paneles laterales); 0: el de ahora
+        self.reparto = ReparteColumnas(self.tabla, 0, NOMBRE_MIN, self._planes, self._elegir_plan, self._ajustar_tabla,
+                                       lambda: self.ancho_nominal or self.tabla.viewport().width())
         lay.addWidget(self.tabla)
         cont = self.cont = QWidget()
         cont.setStyleSheet(self._hoja_botones())
@@ -260,14 +283,38 @@ class PanelVariables(QWidget):
         return (f"QHeaderView::section {{ padding: 4px 4px; text-align: left; }} QTableWidget {{ font-size: {estilo.T_PEQUENA}px; border: 0; }} "
                 f"QTableWidget[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; }}")
 
-    def _anchos_columnas(self) -> None:
-        """Papel y Tipo miden lo que su abreviatura más larga o su cabecera: el nombre se queda con el resto (a 1366 con barra, más que en
-        `main`)."""
+    def _planes(self) -> list[dict[str, Any]]:
+        """Los dos repartos de las columnas, del más completo al más compacto: «Papel» y «Tipo» en palabras («Entrada», «Booleana»: miden lo que su
+        texto más largo o su cabecera) y abreviados («Entr.», «Bool.»). El nombre manda: `ReparteColumnas` elige el primero que le deja
+        sus 96 px, así que las palabras enteras salen donde caben (a pantalla completa, o con el panel ensanchado) y las abreviaturas donde no."""
         fm = QFontMetrics(self.fuente)
-        papel = max([fm.horizontalAdvance(abreviar_papel(t)) + 10 for _, t in PAPELES] + [fm.horizontalAdvance("Papel") + 8])
-        tipo = max([fm.horizontalAdvance(abreviar_tipo(t)) + 10 for _, t in TIPOS] + [fm.horizontalAdvance("Tipo") + 8])
-        self.tabla.setColumnWidth(1, papel)
-        self.tabla.setColumnWidth(2, tipo)
+
+        def ancho(textos: list[str], cabecera: str, forma: Any) -> int:  # (el texto más los 3 px de margen de la celda a cada lado, y 2 px de holgura)
+            return max([fm.horizontalAdvance(forma(t)) + 8 for t in textos] + [fm.horizontalAdvance(cabecera) + 8])
+        papeles, tipos = [t for _, t in PAPELES], [t for _, t in TIPOS]
+        return [{"anchos": {1: ancho(papeles, "Papel", str), 2: ancho(tipos, "Tipo", str)}, "completo": True},
+                {"anchos": {1: ancho(papeles, "Papel", abreviar_papel), 2: ancho(tipos, "Tipo", abreviar_tipo)}, "completo": False}]
+
+    def _elegir_plan(self, plan: dict[str, Any]) -> None:
+        self.completo = plan["completo"]
+
+    def fijar_ancho_nominal(self, ancho_panel: int) -> None:
+        """El ancho de los paneles laterales (lo da la ventana): con él se decide si «Papel» y «Tipo» van en palabras (a pantalla completa) o
+        abreviados; ensanchar el panel a mano solo da más ancho al nombre."""
+        nuevo = max(0, ancho_panel - 30)  # (los márgenes del panel, el marco de la tabla y su barra vertical)
+        if nuevo != self.ancho_nominal:
+            self.ancho_nominal = nuevo
+            self.reparto.aplicar()
+
+    def _anchos_columnas(self) -> None:
+        """Papel y Tipo, al principio y al cambiar la letra: los anchos de las abreviaturas (que es lo que cabe a 1366) y, si ya se ha repartido el
+        ancho de la tabla, el reparto de verdad."""
+        anchos = self._planes()[1]["anchos"]
+        self.tabla.setColumnWidth(1, anchos[1])
+        self.tabla.setColumnWidth(2, anchos[2])
+        reparto = getattr(self, "reparto", None)
+        if reparto is not None:
+            reparto.aplicar()
 
     def eventFilter(self, objeto: Any, evento: Any) -> bool:  # noqa: N802
         if objeto is self.tabla.viewport() and evento.type() == QEvent.Type.Leave:
@@ -280,6 +327,7 @@ class PanelVariables(QWidget):
         self.fuente.setPixelSize(estilo.T_PEQUENA)
         self.tabla.setFont(self.fuente)
         self.tabla.verticalHeader().setDefaultSectionSize(self._alto_fila())
+        self.tabla.verticalHeader().setMinimumSectionSize(self._alto_fila())
         self.cont.setStyleSheet(self._hoja_botones())
         self._anchos_columnas()
         self.contexto._cache.clear()
@@ -338,7 +386,21 @@ class PanelVariables(QWidget):
         else:
             self.detalle.emit("")
 
+    def _alturas_filas(self) -> None:
+        """Cada fila mide su alto de siempre (26 px, 30 a pantalla completa) y, si su nombre va partido en varias líneas, lo que miden sus líneas más un
+        poco de aire: con otro ancho de columna, otra vez."""
+        t, d = self.tabla, self.tabla.itemDelegate()
+        opcion = QStyleOptionViewItem()
+        opcion.initFrom(t.viewport())
+        opcion.font = t.font()
+        opcion.rect.setSize(QSize(t.columnWidth(0) - (1 if t.showGrid() else 0), self._alto_fila()))  # (la celda mide 1 px menos que la columna: la línea de la rejilla)
+        for r in range(t.rowCount()):
+            alto = d.sizeHint(opcion, t.model().index(r, 0)).height()
+            if t.rowHeight(r) != alto:
+                t.setRowHeight(r, alto)
+
     def _ajustar_tabla(self):
+        self._alturas_filas()
         alto = min(320, self.tabla.horizontalHeader().height()
                    + sum(self.tabla.rowHeight(r) for r in range(self.tabla.rowCount()))
                    + 2 * self.tabla.frameWidth()

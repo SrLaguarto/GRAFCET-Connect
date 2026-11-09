@@ -50,7 +50,8 @@ from .recentrado import Recentrado
 from .mensajes import amable, motivo_parada, partir
 from .alto_opciones import agrandar_para_transicion
 from .paneles import (PanelPlegable, DivisorPlegable, PilaActual, EtiquetaAyuda, EtiquetaElidida, ChipModo, BandaModo,
-                      CajaSeccion, TituloSeccion, CabeceraCompacta, ContextoNombres, DelegadoNombres, EtiquetaGrupos)
+                      CajaSeccion, TituloSeccion, CabeceraCompacta, ContextoNombres, DelegadoNombres, EtiquetaGrupos, ReparteColumnas,
+                      partir_nombre, LINEAS_NOMBRE)
 from .variables import PanelVariables
 from .entradas_salidas import CONEXION_INICIAL, PanelES
 from conexion.configuracion import ARCHIVO, CANALES_INICIALES, Configuracion, aviso_host, normalizar_host
@@ -61,6 +62,9 @@ URL_CODIGO = "https://github.com/SrLaguarto/GRAFCET-Connect"  # dónde está el 
 URL_FALLOS = "https://github.com/SrLaguarto/GRAFCET-Connect/issues"  # dónde se comunica un fallo o una sugerencia
 ICONO_PROGRAMA = Path(__file__).resolve().parent / "recursos" / "grafcet_connect.ico"
 ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
+NOMBRE_MIN_TABLA = 96  # la columna del nombre de las tablas (estado de la simulación) mide al menos esto a cualquier tamaño: las demás se compactan antes
+ANCHO_TITULO_UTIL = 150  # cabecera del dibujo: lo que mide, como poco, el título del grafcet para que se reconozca (antes de ceder sitio al zoom con palabras)
+ANCHO_AYUDA_UTIL = 200  # y lo que pide la ayuda de debajo del título para leerse en dos líneas (con menos, se queda en el botón «Ayuda ▾»)
 ALTO_INFERIOR = {"simular": 220, "editar": 240}  # altura inicial del panel inferior: la traza, o las opciones de lo seleccionado
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
 AYUDA_EDICION = {
@@ -287,10 +291,11 @@ def _icono_barra(tipo: str, color: str = estilo.TINTA) -> QIcon:
 class _BotonEntrada(QPushButton):
     """El estado marcado sigue el valor de la entrada, no el automatismo checkable de Qt. Pulsada, enclavada o conmutada
     se distingue por la forma del icono (anillo, punto, candado, interruptor), por el texto («= 1») y por el relleno.
-    Un nombre largo se elide por el medio con «…» (así se conserva el final, que es lo que distingue «sensor_fin_carrera_1» de
-    «…_2»), nunca el « = 0 / = 1» ni el ancho de la ventana; el nombre entero va en la ayuda y, con el foco, con el puntero encima o
-    al pulsarla, en la línea de detalle de la ventana. Mantener pulsado se comporta como siempre (P-IMP-75): la entrada sigue a 1
-    mientras dure. El foco es el de siempre: un clic lo da (y Espacio repite la pulsación); el anillo solo se ve con el teclado."""
+    Un nombre largo **se lee entero**: se parte por los «_» en dos o tres líneas (`ContextoNombres.lineas`) y el botón crece lo que
+    haga falta, con « = 0 / = 1» pegado a la última línea; solo si ni en tres líneas cabe se elide por el medio. Nunca cambia el ancho de
+    la ventana; el nombre entero va también en la ayuda y, con el foco, con el puntero encima o al pulsarla, en la línea de detalle. Mantener
+    pulsado se comporta como siempre (P-IMP-75): la entrada sigue a 1 mientras dure. El foco es el de siempre: un clic lo da (y Espacio
+    repite la pulsación); el anillo solo se ve con el teclado."""
     sobre = Signal(bool)  # el puntero entra (True) o sale (False): la línea de detalle dice el nombre entero
 
     def __init__(self) -> None:
@@ -319,21 +324,45 @@ class _BotonEntrada(QPushButton):
         texto = self.text()
         return texto.rpartition(" = ")[0] or texto
 
-    def texto_visible(self) -> str:
-        """El texto que se ve ahora en el botón (el nombre elidido y « = valor»)."""
+    def _ancho_texto(self) -> int:
+        """Lo que queda para el texto: el botón menos el relleno (10 px a cada lado), el borde (2) y el icono con su hueco."""
+        return max(24, self.width() - 2 * 10 - 2 * 2 - self.iconSize().width() - 8)
+
+    def lineas_visibles(self) -> list[str]:
+        """El texto del botón en sus líneas: el **nombre entero**, partido por los «_» en las líneas que haga falta (hasta tres; solo si ni así
+        cabe se elide por el medio) y, pegado al final de la última, « = valor»."""
         nombre, separador, valor = self.text().rpartition(" = ")
         if not separador:
-            return self.text()
-        fm = self.fontMetrics()
-        disponible = max(24, self.width() - 2 * 10 - 2 * 2 - self.iconSize().width() - 8 - fm.horizontalAdvance(" = " + valor))
-        elidido = (self.contexto.elidir(nombre, fm, disponible) if self.contexto is not None
-                   else fm.elidedText(nombre, Qt.TextElideMode.ElideMiddle, disponible))
-        return elidido + " = " + valor
+            return [self.text()]
+        sufijo = " = " + valor
+        if self.contexto is not None:
+            return self.contexto.lineas(nombre, self.fontMetrics(), self._ancho_texto(), LINEAS_NOMBRE, sufijo)
+        return partir_nombre(nombre, self.fontMetrics(), self._ancho_texto(), sufijo)[:LINEAS_NOMBRE]
+
+    def texto_visible(self) -> str:
+        """El texto que se ve ahora en el botón (el nombre partido en sus líneas, separadas por «\\n», y « = valor»)."""
+        return "\n".join(self.lineas_visibles())
+
+    def ajustar_alto(self) -> None:
+        """El botón mide lo que sus líneas: con una, el alto de siempre; con el nombre partido en dos o tres, una línea más por cada una (la
+        fila crece lo necesario y el nombre se lee entero)."""
+        n = len(self.lineas_visibles()) if self.width() >= 40 else 1
+        alto = estilo.ALTO_ENTRADA + 2 + (n - 1) * self.fontMetrics().lineSpacing()
+        if n == 1:
+            self.setMinimumHeight(estilo.ALTO_ENTRADA)
+            self.setMaximumHeight(16777215)
+        elif self.minimumHeight() != alto or self.maximumHeight() != alto:
+            self.setFixedHeight(alto)
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self.ajustar_alto()
 
     def setText(self, texto: str) -> None:  # noqa: N802
         super().setText(texto)
         nombre = self.nombre_completo()
         self.setToolTip(f"{nombre}\n{self.ayuda_base}" if self.ayuda_base else nombre)
+        self.ajustar_alto()
 
     def mousePressEvent(self, event: Any) -> None:  # noqa: N802
         self.control = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
@@ -343,13 +372,8 @@ class _BotonEntrada(QPushButton):
         opcion = QStyleOptionButton()
         self.initStyleOption(opcion)
         # (con el foco, la hoja de estilo pinta el anillo `[tecl="true"]:focus`: aquí no se toca el estado del foco)
-        nombre, separador, valor = opcion.text.rpartition(" = ")
-        if separador:
-            fm = self.fontMetrics()
-            disponible = max(24, self.width() - 2 * 10 - 2 * 2 - opcion.iconSize.width() - 8 - fm.horizontalAdvance(" = " + valor))
-            elidido = (self.contexto.elidir(nombre, fm, disponible) if self.contexto is not None
-                       else fm.elidedText(nombre, Qt.TextElideMode.ElideMiddle, disponible))
-            opcion.text = elidido + " = " + valor
+        if " = " in opcion.text:
+            opcion.text = self.texto_visible()
         painter.drawControl(QStyle.ControlElement.CE_PushButton, opcion)
 
     def ancho_natural(self, texto: str | None = None) -> int:
@@ -419,15 +443,18 @@ class _SalidaRaton(QObject):
 
 class _DelegadoAbreviado(QStyledItemDelegate):
     """Enseña un texto corto en lugar del entero («continua» por «salida continua», «memoria» por «memorizada»): la celda sigue
-    teniendo el texto entero (y lo lleva en su ayuda y en la línea de detalle), solo se pinta más corto para que la columna se lea."""
+    teniendo el texto entero (y lo lleva en su ayuda y en la línea de detalle), solo se pinta más corto para que la columna se lea.
+    Con `corto` (la tabla no tiene sitio ni para la primera abreviatura) se pinta la más corta: «cont.», «mem.»."""
 
-    def __init__(self, abreviaturas: dict[str, str], padre: QObject) -> None:
+    def __init__(self, abreviaturas: dict[str, str], padre: QObject, cortas: dict[str, str] | None = None) -> None:
         super().__init__(padre)
         self.abreviaturas = abreviaturas
+        self.cortas = cortas or abreviaturas
+        self.corto = False
 
     def displayText(self, valor: Any, locale: Any) -> str:  # noqa: N802
         texto = str(valor)
-        return self.abreviaturas.get(texto, texto)
+        return (self.cortas if self.corto else self.abreviaturas).get(texto, texto)
 
 
 class _AjustaCabecera(QObject):
@@ -844,6 +871,25 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.ayuda = EtiquetaAyuda(2)
         self.ayuda.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px")
         cab.addWidget(self.ayuda,1)
+        # Una ayuda que no cabe en sus dos líneas no se corta a media frase sin más: un botón visible («más ▾») la despliega entera en su
+        # propia fila bajo la cabecera (y «menos ▴» la recoge). Con tan poco sitio que ni dos líneas caben, el botón dice «Ayuda ▾».
+        self.b_ayuda = QToolButton()
+        self.b_ayuda.setObjectName("masAyuda")
+        self.b_ayuda.setText("más ▾")
+        self.b_ayuda.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.b_ayuda.setToolTip("Leer la ayuda entera")
+        self.b_ayuda.setAccessibleName("Ayuda del dibujo")
+        self.b_ayuda.clicked.connect(self._alternar_ayuda)
+        self.b_ayuda.hide()
+        cab.addWidget(self.b_ayuda)
+        cab.setAlignment(self.b_ayuda, Qt.AlignmentFlag.AlignVCenter)
+        self.ayuda_larga = QLabel()  # la ayuda entera, a todo el ancho de la tarjeta (solo desplegada)
+        self.ayuda_larga.setObjectName("ayudaLarga")
+        self.ayuda_larga.setWordWrap(True)
+        self.ayuda_larga.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.ayuda_larga.hide()
+        self._ayuda_abierta = False
+        self._estilo_ayuda()
         self.diagrama = VistaDiagrama()
         self.recentrado = Recentrado(lambda: self.diagrama.ajustar(), self)
         self.navegacion = Navegacion(self.diagrama)
@@ -853,6 +899,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         cab.setAlignment(self.estado, Qt.AlignmentFlag.AlignVCenter)
         ver_navegacion = self._accion("Navegación y filtros…", self.navegacion.abrir_opciones)
         next(a.menu() for a in self.menuBar().actions() if a.text()=="&Ver").addAction(ver_navegacion)
+        il.addWidget(self.ayuda_larga)
         il.addWidget(self.diagrama, 1)
         # Panel inferior: al simular, la traza; al editar, las opciones de lo seleccionado
         self.traza = QListWidget()
@@ -862,6 +909,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.props = PanelPropiedades()
         self.props.setObjectName("panelPropiedades")
         self.props.prog.franja_cambiada.connect(lambda: agrandar_para_transicion(self))  # las categorías pasan a dos filas: el panel crece lo justo
+        self.props.alto_cambiado.connect(lambda: QTimer.singleShot(0, lambda: agrandar_para_transicion(self)))  # (y si el estado de la fórmula baja a su línea)
         self.inferior = PilaActual()
         self.inferior.addWidget(caja_traza)
         self.inferior.addWidget(self.props)
@@ -891,14 +939,17 @@ class Ventana(ArchivosProyecto, QMainWindow):
         lay.addWidget(self.aviso)
 
         _, lay = self._caja("Salidas y variables")
-        # Las cuatro columnas a la vista: el ancho del panel es fijo, así que «Modo» se parte en dos líneas, lo largo se elide con
-        # «…» (y va entero en la ayuda de la celda) y la tabla mide lo que sus filas: sin barras de desplazamiento anidadas
+        # Las columnas a la vista: el ancho del panel es fijo, así que **manda la del nombre** (≥ 96 px, `ReparteColumnas`): las demás se
+        # abrevian o se esconden antes de que baje de ahí («Modo» pasa a «cont.»/«mem.» o se esconde; «Estado» se pinta bajo el nombre),
+        # los nombres se parten por los «_» en las líneas que hagan falta y la tabla mide lo que sus filas: sin barras anidadas
         self.t_vars = self._tabla(["Variable", "Modo", "Valor", "Contribuyen"], (None, 46, 32, 70))
         self.t_vars.horizontalHeaderItem(1).setToolTip("Salida continua o memorizada")
-        self.t_vars.setItemDelegateForColumn(1, _DelegadoAbreviado({"salida continua": "continua", "memorizada": "memoria"}, self.t_vars))
+        self.t_vars.setItemDelegateForColumn(1, _DelegadoAbreviado({"salida continua": "continua", "memorizada": "memoria"}, self.t_vars,
+                                                                   {"salida continua": "cont.", "memorizada": "mem."}))
         self.t_vars.horizontalHeaderItem(3).setToolTip(
             "Acciones que contribuyen a la salida, con el nombre que les da el modelo (la etapa o, si no lo tienen, su identificador a.etapa.salida.n)")
-        self._del_vars = (DelegadoNombres(self.t_vars, (0,)), DelegadoNombres(self.t_vars, (3,)))  # nombres elididos sin que dos se lean igual
+        self.t_vars.horizontalHeader().abreviaturas = {"Contribuyen": "Contrib."}
+        self._del_vars = (DelegadoNombres(self.t_vars, (0,)), DelegadoNombres(self.t_vars, (3,)))  # nombres partidos sin que dos se lean igual
         self.t_vars.setItemDelegateForColumn(0, self._del_vars[0])
         self.t_vars.setItemDelegateForColumn(3, self._del_vars[1])
         lay.addWidget(self.t_vars)
@@ -907,10 +958,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.t_temp = self._tabla(["Dónde", "Estado", "Lleva", "Preset"], (None, 54, 36, 42))
         self.t_temp.horizontalHeaderItem(2).setToolTip("Tiempo transcurrido")
         self.t_temp.horizontalHeaderItem(3).setToolTip("Duración programada")
-        self._del_temp = DelegadoNombres(self.t_temp, (0,))
+        self._del_temp = DelegadoNombres(self.t_temp, (0,), secundaria=1)  # (el estado, bajo el nombre, cuando su columna no cabe)
         self.t_temp.setItemDelegateForColumn(0, self._del_temp)
         lay.addWidget(self.t_temp)
         self.t_temp.currentCellChanged.connect(self._detalle_del_foco)
+        self._reparto = (ReparteColumnas(self.t_vars, 0, NOMBRE_MIN_TABLA, self._planes_vars, self._elegir_plan_vars,
+                                         lambda: self.ajustar_tabla(self.t_vars)),
+                         ReparteColumnas(self.t_temp, 0, NOMBRE_MIN_TABLA, self._planes_temp, None,
+                                         lambda: self.ajustar_tabla(self.t_temp)))
         self._salida_raton = _SalidaRaton(self, lambda: self._sobre_fila(None, -1))
         for tabla in (self.t_vars, self.t_temp):  # el nombre entero también al pasar el ratón por la fila
             tabla.setMouseTracking(True)
@@ -978,6 +1033,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         # lo que hace falta para que la tabla de variables deje ver los nombres), el mismo en el panel izquierdo y en el
         # izquierdo fijo; el derecho puede ampliarse y ambos se pueden plegar
         self.ancho_lateral = self._ancho_lateral_base = max(self.dock.minimumSizeHint().width(), ANCHO_LATERAL)
+        self.variables.fijar_ancho_nominal(self.ancho_lateral)
         self.dock.setFixedWidth(self.ancho_lateral)
         self.dock.hide()
         # Arriba, el panel izquierdo (solo al editar), el dibujo y el panel derecho; abajo, a todo el ancho de la ventana, el
@@ -1276,6 +1332,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.flechas[nombre].setToolTip(f"{'Plegar' if visible else 'Desplegar'} el panel {nombre}")
         if guardar:
             self.ajustes.setValue(f"paneles/{nombre}", visible)
+        if nombre == "inferior":
+            self._zoom_diferido()  # (con Propiedades abierto, el zoom va en la cabecera)
 
     def _minimo_panel(self, nombre):
         if nombre != "inferior":
@@ -1846,32 +1904,54 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.titulo.setStyleSheet(f"font-family: {estilo.FAMILIA_TITULO}; font-size: {estilo.T_TITULO}px; font-weight: 700; color: {estilo.TINTA}")
         self.ayuda.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px")
         self.l_ayuda_entradas.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px; font-weight: 400")
+        self._estilo_ayuda()
         self.l_reloj.setStyleSheet(f"font-weight: 600; color: {estilo.TINTA}; font-family: {estilo.FAMILIA_MONO}; font-size: {estilo.T_CIFRA}px")
         self.estado.setFixedHeight(estilo.ALTO_BARRA - 8)
         self.titulo.setMinimumHeight(estilo.ALTO_CONTROL_COMPACTO)
         for b in self.botones.values():
             if isinstance(b, _BotonEntrada):
-                b.setMinimumHeight(estilo.ALTO_ENTRADA)
+                b.ajustar_alto()  # (el alto de una línea de la escala de ahora, o el de sus líneas si el nombre va partido)
         hoja = (f"QTableWidget {{ font-size: {estilo.T_PEQUENA}px; border: 0; }} "
                 f"QTableWidget[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; }} "
                 f"QHeaderView::section {{ font-size: {estilo.T_PEQUENA}px; font-weight: 400; padding: 4px 0; }} "
                 f"QTableWidget::item {{ padding: 0; }}")
-        fm = QFontMetrics(estilo.fuente(estilo.T_PEQUENA))
-        # cada columna mide lo que su cabecera o su celda más ancha de ejemplo (la mayor) más el relleno de la cabecera (3 + 2 px) y
-        # 3 px de margen: ninguna cabecera se corta («Va…», «Contribu…»); el nombre se lleva lo que sobra
-        muestras = {self.t_vars: (None, ("continua", "memoria"), ("OFF",), ("a.E1.motor.0",)),
-                    self.t_temp: (None, ("contando",), ("12,5 s",), ("12,5 s",))}
-        for t, ejemplos in muestras.items():
+        for t in (self.t_vars, self.t_temp):
             t.setStyleSheet(hoja)
             t.verticalHeader().setDefaultSectionSize(estilo.ALTO_FILA)
             t.verticalHeader().setMinimumSectionSize(estilo.ALTO_FILA_COMPACTA)
-            cab = t.horizontalHeader()
-            for i, e in enumerate(ejemplos):
-                if e is None:
-                    continue
-                cabecera = t.horizontalHeaderItem(i).text()
-                celdas = () if (t is self.t_vars and i == 3) else e  # «Contribuyen» se elide: su ancho lo da la cabecera
-                cab.resizeSection(i, max(fm.horizontalAdvance(x) for x in (cabecera, *celdas)) + 7)
+        for reparto in self._reparto:  # (con la letra de ahora, las columnas se miden otra vez)
+            reparto.aplicar()
+
+    @staticmethod
+    def _medidas_tabla() -> tuple[QFontMetrics, QFontMetrics, Any]:
+        """La letra de las celdas de estado, la de las cifras y lo que mide una cabecera (su texto, a 4 px del borde, más 2 px de holgura)."""
+        fm = QFontMetrics(estilo.fuente(estilo.T_PEQUENA))
+        return fm, QFontMetrics(estilo.fuente(estilo.T_CIFRA, mono=True)), lambda texto: fm.horizontalAdvance(texto) + 6
+
+    def _planes_vars(self) -> list[dict[str, Any]]:
+        """Los repartos de «Salidas y variables», de más a menos completo (el nombre manda: ver `ReparteColumnas`): todo entero; «Modo» abreviado
+        («cont.», «mem.»); sin «Modo» (su texto sigue en la línea de detalle y en la ayuda); y, por último, la cabecera «Contrib.»."""
+        fm, cifras, cab = self._medidas_tabla()
+        valor = max(cab("Valor"), cifras.horizontalAdvance("False") + 8)  # (una memoria booleana sin salida enseña «False»: que no se corte)
+        contribuyen, corta = cab("Contribuyen"), cab("Contrib.")
+        modo_corto = max(cab("Modo"), fm.horizontalAdvance("cont.") + 7, fm.horizontalAdvance("mem.") + 7)
+        modo = max(cab("Modo"), fm.horizontalAdvance("continua") + 7, fm.horizontalAdvance("memoria") + 7)
+        return [{"anchos": {1: modo, 2: valor, 3: contribuyen}, "modo_corto": False},
+                {"anchos": {1: modo_corto, 2: valor, 3: contribuyen}, "modo_corto": True},
+                {"anchos": {1: 0, 2: valor, 3: contribuyen}, "modo_corto": True},
+                {"anchos": {1: 0, 2: valor, 3: corta}, "modo_corto": True}]
+
+    def _elegir_plan_vars(self, plan: dict[str, Any]) -> None:
+        self.t_vars.itemDelegateForColumn(1).corto = plan["modo_corto"]
+
+    def _planes_temp(self) -> list[dict[str, Any]]:
+        """Los repartos de «Temporizadores»: con «Estado» al lado o, si el nombre no tendría sus 96 px, bajo el nombre (`DelegadoNombres`)."""
+        fm, cifras, cab = self._medidas_tabla()
+        tiempo = cifras.horizontalAdvance("12,5 s") + 8
+        lleva, preset = max(cab("Lleva"), tiempo), max(cab("Preset"), tiempo)
+        estado = max(cab("Estado"), fm.horizontalAdvance("contando") + 7)
+        return [{"anchos": {1: estado, 2: lleva, 3: preset}}, {"anchos": {1: 0, 2: lleva, 3: preset}}]
+
     def _aplicar_escala(self, nombre: str) -> None:
         """Al cruzar el umbral de pantalla completa (`estilo.UMBRAL_GRANDE`) o volver por debajo: la letra base pasa de 13 a 14 px,
         los títulos, el chip y las cifras crecen y los controles miden 40 px; por debajo de ese tamaño, lo de siempre. Solo se
@@ -1910,9 +1990,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _ancho_lateral_para(self, ancho_ventana: int) -> int:
         """Los paneles laterales ganan ancho con la letra grande (así las tablas de la simulación llevan sus cuatro columnas con las
         cabeceras enteras), pero **poco a poco**: de los 218 px que fijan las pruebas de la paleta a 1366 de ancho, hasta los 264 px de la
-        pantalla completa a 1600. Así, al cruzar el umbral de 1600×900 el dibujo no da un salto de casi 100 px de ancho."""
+        pantalla completa a 1600 (y 300 px a 1920×1080, donde sobra sitio). Así, al cruzar el umbral de 1600×900 el dibujo no da un salto
+        de casi 100 px de ancho."""
         t = min(1.0, max(0.0, (ancho_ventana - 1366) / (estilo.UMBRAL_GRANDE[0] - 1366)))
-        return self._ancho_lateral_base + round(46 * t)
+        mas = min(1.0, max(0.0, (ancho_ventana - estilo.UMBRAL_GRANDE[0]) / 320))  # y de 264 a 300 px entre 1600 y 1920: con la letra grande las
+        return self._ancho_lateral_base + round(46 * t) + round(36 * mas)           # tablas de estado llevan sus cuatro columnas enteras
 
     def _poner_ancho_lateral(self, nuevo: int) -> None:
         """Pone el ancho de los dos paneles laterales (el del divisor también: si no, queda un hueco muerto a su lado). Lo que el usuario
@@ -1920,6 +2002,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if nuevo == self.ancho_lateral:
             return
         viejo, self.ancho_lateral = self.ancho_lateral, nuevo
+        self.variables.fijar_ancho_nominal(nuevo)  # (con él se decide si «Papel» y «Tipo» van en palabras o abreviados)
         self.dock.setFixedWidth(nuevo)
         for n in ("izquierdo", "derecho"):
             if self._tamanos_paneles[n] == viejo:
@@ -1950,21 +2033,33 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self._zoom_pendiente = True
             QTimer.singleShot(0, self, self._ajustar_zoom)
 
+    def _props_alto(self, mantener: bool) -> bool:
+        """¿Está abierto el panel de Propiedades con su panel alto (al editar)? La receptividad de una transición pide ≈ 340 px y deja el dibujo
+        en la mitad del alto de la ventana a cualquier tamaño; el panel de una etapa (≈ 180 px) deja el dibujo alto. Con histéresis: seguir
+        integrado pide algo menos que integrarse."""
+        return (self.modo == "editar" and not self.inferior.isHidden()
+                and self.inferior.height() >= estilo.ALTO_PROPS_ZOOM - (40 if mantener else 0))
+
     def _ajustar_zoom(self) -> None:
         """Los controles del zoom flotan arriba a la derecha del dibujo, salvo en una ventana estrecha o baja (siempre van en la cabecera) y
-        cuando el dibujo útil es poco alto (con Propiedades abierto a 1366×768 queda en unos 250 px): ahí se integran en la fila del
-        título y el chip y no tapan la zona por la que el dibujo se desplaza para enseñar lo elegido. Con histéresis, para que integrar la
-        barra (que sube un poco la cabecera) no la haga volver."""
+        cuando el dibujo útil queda bajo: **con Propiedades abierto y su panel alto, a cualquier tamaño de ventana** (1366, 1440, 1920…: el
+        dibujo se queda en la mitad del alto y el recuadro dejaría de flotar sobre la zona por la que el dibujo se desplaza para enseñar lo
+        elegido), o con un dibujo de menos de `ALTO_DIBUJO_ZOOM`: entonces se integran en la fila del título y el chip. Con el panel bajo de
+        una etapa el dibujo sigue alto y el recuadro flota como siempre (y, al esconder el panel, el dibujo no salta). En la cabecera se
+        compacta a solo iconos y el porcentaje cuando faltan palabras de sitio (`_ajustar_cabecera`). Con histéresis, para que integrar
+        la barra (que sube un poco la cabecera) no la haga volver."""
         self._zoom_pendiente = False
         d = self.diagrama
-        forzado = self._compacto[0] or self._compacto[1]
-        if forzado:
+        sp = self._cab.spacing()
+        # (el chip, un título mínimo y el zoom con solo iconos tienen que caber en la cabecera; si no —los paneles laterales aún abiertos en una
+        # ventana de media pantalla, un instante antes de plegarse—, el recuadro flota sobre el dibujo y nunca pisa al chip)
+        cabe = d.parentWidget().width() - 2 * estilo.E2 >= self.estado.minimumSizeHint().width() + 24 + d.ancho_barra(True) + 3 * sp
+        if self._compacto[0] or self._compacto[1]:
             quiere = True
-        elif d.barra_integrada:
-            quiere = d.height() < estilo.ALTO_DIBUJO_ZOOM + 60
         else:
-            quiere = d.height() < estilo.ALTO_DIBUJO_ZOOM
-        d.integrar_barra(self._cab if quiere else None)
+            quiere = (d.height() < estilo.ALTO_DIBUJO_ZOOM + (60 if d.barra_integrada else 0)) or self._props_alto(d.barra_integrada)
+        d.integrar_barra(self._cab if quiere and cabe else None)
+        self._ajustar_cabecera()
 
     def _adaptar_tamano(self) -> None:
         """Modo compacto automático, sin que el usuario toque nada: por debajo de `estilo.UMBRAL_ANCHO` (pantalla partida) el
@@ -2008,17 +2103,72 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._plegar_laterales_compactos()
 
     def _ajustar_cabecera(self) -> None:
-        """El título del grafcet se lleva solo lo que sobra en la cabecera del dibujo (con un mínimo de 24 px): el chip, el zoom integrado
-        y el buscador conservan el suyo, y la ayuda de debajo del título queda con unos 48 px como mínimo."""
+        """Reparte la cabecera del dibujo. Manda el estado (el chip no cede) y, con él, el título del grafcet (cede hasta 24 px, pero antes que
+        la ayuda); el zoom integrado lleva sus palabras solo si caben junto a un título y una ayuda útiles y, si no, solo iconos y el
+        porcentaje. La ayuda de debajo del título se lee en dos líneas; si no caben, acaba en «…» con un botón visible («más ▾») que la
+        despliega entera en su propia fila; con muy poco sitio se queda en el botón («Ayuda ▾») y, sin sitio ni para él, se esconde:
+        es lo secundario y nunca se corta a media frase sin dar salida."""
         cab = self._cab
-        ancho = self.diagrama.parentWidget().width() - 2 * estilo.E2
+        d = self.diagrama
+        sp = cab.spacing()
+        ancho = d.parentWidget().width() - 2 * estilo.E2
         usado = 0
-        for w in (self.estado, self.navegacion, self.diagrama.barra if self.diagrama.barra_integrada else None):
-            if w is not None and w.isVisibleTo(self):
-                usado += w.sizeHint().width() + cab.spacing()
-        libre = max(24, ancho - usado - 48 - 2 * cab.spacing())
-        if self.titulo.maximumWidth() != libre:
-            self.titulo.setMaximumWidth(libre)
+        for w in (self.estado, self.navegacion):
+            if w.isVisibleTo(self):
+                usado += w.sizeHint().width() + sp
+        if d.barra_integrada:  # el zoom, con sus palabras si caben junto al título y la ayuda y, si no, solo con iconos y el porcentaje
+            para_zoom = ancho - usado - ANCHO_TITULO_UTIL - ANCHO_AYUDA_UTIL - 3 * sp
+            d.solo_iconos(para_zoom < d.ancho_barra(False) + (40 if d._solo_iconos else 0))
+            usado += d.barra.sizeHint().width() + sp
+        texto = self.ayuda.text()
+        if texto != getattr(self, "_texto_ayuda", None):  # otra ayuda: la desplegada se recoge (la misma de siempre, como al simular, no)
+            self._texto_ayuda, self._ayuda_abierta = texto, False
+        libre = max(24, ancho - usado - 2 * sp)  # para el título, la ayuda y su botón
+        natural = self.titulo.sizeHint().width()
+        boton = QFontMetrics(estilo.fuente(estilo.T_PEQUENA, negrita=True)).horizontalAdvance("Ayuda ▾") + 12 + 2 + sp
+        abierta = self._ayuda_abierta and bool(texto)
+        # (el título, entero si cabe, va antes que la ayuda: esta pide sus 200 px para leerse en dos líneas)
+        if abierta:  # la ayuda va entera en su fila: el título tiene casi todo el sitio
+            titulo_max, hay_ayuda, letrero = min(natural, max(24, libre - boton)), False, "menos ▴"
+        elif libre >= natural + ANCHO_AYUDA_UTIL and not self.ayuda.truncada(libre - natural):
+            titulo_max, hay_ayuda, letrero = natural, True, ""  # la ayuda cabe en sus dos líneas
+        elif libre - boton >= natural + ANCHO_AYUDA_UTIL:
+            titulo_max, hay_ayuda, letrero = natural, True, "más ▾"  # no cabe entera: dos líneas que acaban en «…» y el botón
+        elif texto and libre - boton >= 24:
+            titulo_max, hay_ayuda, letrero = min(natural, libre - boton), False, "Ayuda ▾"  # sin sitio para leerla en la fila: solo el botón
+        else:
+            titulo_max, hay_ayuda, letrero = min(natural, libre), False, ""  # ni el botón cabe: se esconde lo secundario
+        if self.titulo.maximumWidth() != titulo_max:
+            self.titulo.setMaximumWidth(titulo_max)
+        self.ayuda.mostrar_texto = hay_ayuda
+        self.ayuda.update()
+        if letrero:
+            if self.b_ayuda.text() != letrero:
+                self.b_ayuda.setText(letrero)
+                self.b_ayuda.setToolTip("Recoger la ayuda" if abierta else "Leer la ayuda entera")
+        if self.b_ayuda.isVisibleTo(self) != bool(letrero):
+            self.b_ayuda.setVisible(bool(letrero))
+        if abierta and self.ayuda_larga.text() != texto:
+            self.ayuda_larga.setText(texto)
+        if self.ayuda_larga.isVisibleTo(self) != abierta:
+            self.ayuda_larga.setVisible(abierta)
+
+    def _alternar_ayuda(self) -> None:
+        """«más ▾» / «menos ▴» / «Ayuda ▾»: despliega la ayuda entera bajo la cabecera, o la recoge."""
+        self._ayuda_abierta = not self._ayuda_abierta
+        self._ajustar_cabecera()
+
+    def _estilo_ayuda(self) -> None:
+        """La hoja del botón «más ▾» de la ayuda y la de su fila desplegada (con la letra y el alto de control de la escala de ahora)."""
+        alto = estilo.ALTO_CONTROL_COMPACTO
+        self.b_ayuda.setFixedHeight(alto)
+        self.b_ayuda.setStyleSheet(
+            f"QToolButton#masAyuda {{ color: {estilo.ACENTO}; font-size: {estilo.T_PEQUENA}px; font-weight: 600; padding: 0 6px; min-height: {alto - 2}px; }} "
+            f"QToolButton#masAyuda:hover {{ background: {estilo.ACENTO_SUAVE}; }} "
+            f"QToolButton#masAyuda[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 5px; min-height: {alto - 4}px; }}")
+        self.ayuda_larga.setStyleSheet(
+            f"QLabel#ayudaLarga {{ color: {estilo.TINTA}; background: {estilo.SUPERFICIE_2}; border: 1px solid {estilo.BORDE}; "
+            f"border-radius: {estilo.R_S}px; padding: 6px 10px; font-size: {estilo.T_PEQUENA}px; }}")
 
     def _detallar(self, texto: str) -> None:
         """La línea de detalle de la barra de estado: el nombre entero de lo que tiene el foco o está elegido (vacía, se esconde)."""
@@ -2034,8 +2184,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _detalle_fila(tabla: QTableWidget, fila: int) -> str:
         if not 0 <= fila < tabla.rowCount():
             return ""
-        return " · ".join(str(tabla.item(fila, c).data(Qt.ItemDataRole.UserRole) or tabla.item(fila, c).text())
-                          for c in range(tabla.columnCount()) if tabla.item(fila, c) is not None)
+        partes = (str(tabla.item(fila, c).data(Qt.ItemDataRole.UserRole) or tabla.item(fila, c).text())
+                  for c in range(tabla.columnCount()) if tabla.item(fila, c) is not None)
+        return " · ".join(p for p in partes if p)  # (un campo vacío no deja un « · » colgando al final)
 
     def _sobre_entrada(self, b: _BotonEntrada, dentro: bool) -> None:
         """El puntero entra en una entrada de la simulación o sale de ella: la línea de detalle dice su nombre entero."""
@@ -2131,7 +2282,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         entradas = list(getattr(self, "botones", {}).values())
         cadena = [self.pestanas_vistas, self.luz_es, self.tb_sim.widgetForAction(self.a_ejecutar),
                   self.tb_sim.widgetForAction(self.a_reiniciar), self.tb_edit.widgetForAction(self.a_debajo), d.b_dependencias,
-                  self.flechas["izquierdo"], self.paleta, d, d.b_menos, d.b_mas, d.b_ajustar, d.b_seleccion,
+                  self.flechas["izquierdo"], self.paleta, d, self.b_ayuda, d.b_menos, d.b_mas, d.b_ajustar, d.b_seleccion,
                   self.flechas["derecho"], *entradas, self.variables.tabla, *self.variables.b_nuevas.values(),
                   self.variables.b_quitar, self.pestanas["izquierdo"], self.pestanas["derecho"], self.flechas["inferior"],
                   self.pestanas["inferior"], self.props.t_fijar]

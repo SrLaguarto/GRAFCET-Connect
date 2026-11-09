@@ -1324,7 +1324,14 @@ ESTILO_BARRA_ZOOM = estilo_barra_zoom()
 
 class _BarraZoom(QFrame):
     """El recuadro de los controles del zoom: se vuelve a medir cuando cambian la hoja de estilo, la letra o el contenido
-    (si no, quedaba tan estrecho como con la letra por defecto y los botones mostraban «Cent…todo»)."""
+    (si no, quedaba tan estrecho como con la letra por defecto y los botones mostraban «Cent…todo»).
+    Integrado en la cabecera de la ventana **no cuenta para su ancho mínimo** (`integrada`): la ventana decide si caben sus palabras, y si
+    ni los iconos caben vuelve a flotar sobre el dibujo; nunca impide que la ventana baje a media pantalla."""
+    integrada = False
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        tam = super().minimumSizeHint()
+        return QSize(0, tam.height()) if self.integrada else tam
 
     def event(self, e: QEvent) -> bool:  # noqa: N802
         resultado = super().event(e)
@@ -1368,6 +1375,9 @@ class VistaDiagrama(QGraphicsView):
         self._contenido: QRectF | None = None  # lo dibujado, sin márgenes (None si no hay nada)
         self._bordes: list[tuple[QWidget, str]] = []
         self.barra_integrada = False  # los controles del zoom van en la cabecera de la ventana (integrar_barra), no encima del dibujo
+        self._solo_iconos = False  # con los controles en la cabecera y poco sitio: solo iconos y el porcentaje (`solo_iconos`)
+        self._estrecho = self._bajo = False  # lo último que pidió `compactar`
+        self._anchos_barra: dict[tuple[bool, str], int] = {}  # lo que mide el recuadro del zoom con solo iconos o con texto, por escala
         self.dependencias = False  # se dibujan los trazos discontinuos de las dependencias (macroetapa-expansión, encapsulante-recinto)
         self.ajustes: QSettings | None = None  # dónde se recuerda; sin él, los `ajustes` de la ventana que contiene la vista
         self._dependencias_leidas = False
@@ -1749,17 +1759,47 @@ class VistaDiagrama(QGraphicsView):
         self._colocar()
 
     def compactar(self, estrecho: bool, bajo: bool) -> None:
-        """Ventana estrecha: «Centrar todo» y «Centrar selección» pasan a solo icono; baja: los controles se quedan en 32 px."""
-        estilo_boton = Qt.ToolButtonStyle.ToolButtonIconOnly if (estrecho or bajo) else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-        for b in (self.b_ajustar, self.b_seleccion):
-            b.setToolButtonStyle(estilo_boton)
-        self._compacta = bool(estrecho or bajo)
-        estilo.poner(self.barra, compacta=self._compacta)
-        self._margenes_barra()
-        self.barra.layout().setSpacing(0 if self._compacta else 2)
+        """Ventana estrecha: «Centrar todo» y «Centrar selección» pasan a solo icono; baja: los controles se quedan en 32 px. Con los
+        controles en la cabecera y sin sitio para sus palabras (`solo_iconos`), también solo el icono, con su ayuda."""
+        self._estrecho, self._bajo = bool(estrecho), bool(bajo)
+        self._estilo_barra(self._estrecho or self._bajo or self._solo_iconos)
         self.barra.layout().invalidate()
         self.barra.adjustSize()
         self._colocar()
+
+    def _estilo_barra(self, iconos: bool) -> None:
+        """Los botones de «Centrar» con su texto o solo con su icono, y el recuadro con sus márgenes normales o los compactos."""
+        estilo_boton = Qt.ToolButtonStyle.ToolButtonIconOnly if iconos else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        for b in (self.b_ajustar, self.b_seleccion):
+            b.setToolButtonStyle(estilo_boton)
+        self._compacta = iconos
+        estilo.poner(self.barra, compacta=iconos)
+        for hijo in self.barra.findChildren(QWidget):  # (la regla `[compacta="true"] QToolButton` mira a un ascendiente: cada hijo vuelve a aplicarla)
+            estilo.repulir(hijo)
+        self._margenes_barra()
+        self.barra.layout().setSpacing(0 if iconos else 2)
+
+    def solo_iconos(self, on: bool) -> None:
+        """Con los controles del zoom en la cabecera y poco sitio: solo iconos y el porcentaje (cada botón con su ayuda). Así el recuadro mide
+        lo justo (≈ 160 px) y **nunca impone ancho** a la ventana: con las palabras pedía 242 px más y la ventana no bajaba de 848 px."""
+        if bool(on) != self._solo_iconos:
+            self._solo_iconos = bool(on)
+            self.compactar(self._estrecho, self._bajo)
+
+    def ancho_barra(self, iconos: bool) -> int:
+        """Lo que mide el recuadro del zoom con solo iconos o con las palabras de «Centrar todo» y «Centrar selección» (se mide una vez por
+        escala: la ventana lo usa para decidir si caben en la cabecera)."""
+        clave = (iconos, estilo.ESCALA)
+        if clave not in self._anchos_barra:
+            ahora = self._compacta
+            self._estilo_barra(iconos)
+            self.barra.layout().invalidate()
+            self.barra.layout().activate()
+            self._anchos_barra[clave] = self.barra.layout().totalSizeHint().width()
+            self._estilo_barra(ahora)
+            self.barra.layout().invalidate()
+            self.barra.layout().activate()
+        return self._anchos_barra[clave]
 
     def _margenes_barra(self) -> None:
         """Los márgenes del recuadro: apretados si es compacto y, integrado en la cabecera, también arriba y abajo (así sube lo mínimo la
@@ -1773,10 +1813,11 @@ class VistaDiagrama(QGraphicsView):
         La ventana lo pide con la ventana estrecha o baja."""
         if diseno is not None and not self.barra_integrada:
             diseno.addWidget(self.barra)
-            self.barra_integrada = True
+            self.barra_integrada = self.barra.integrada = True
         elif diseno is None and self.barra_integrada:
             self.barra.setParent(self)
-            self.barra_integrada = False
+            self.barra_integrada = self.barra.integrada = False
+            self.solo_iconos(False)  # (flotando sobre el dibujo vuelve a llevar sus palabras)
         else:
             return
         self._margenes_barra()

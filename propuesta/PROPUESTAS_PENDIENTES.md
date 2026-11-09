@@ -1,7 +1,8 @@
 # Propuestas pendientes (no implementadas) y propuestas descartadas
 
 Cada punto se aparta de una decisión vigente (`docs/04_Decisiones_de_implementacion.md`) o de lo que fijan las pruebas, así
-que **no está en el código**. Se describe con su motivo y, cuando se puede, una maqueta o la cifra medida. Las cifras salen de
+que **no está en el código** (salvo P12 y P13, dos apartamientos *menores* de la forma de una tabla que sí están aplicados y se
+documentan aquí con su motivo). Se describe con su motivo y, cuando se puede, una maqueta o la cifra medida. Las cifras salen de
 `propuesta/herramientas/medir.py` y `contrastes.py`; **las maquetas son capturas de la ventana real, retocadas por script**
 (`python propuesta/herramientas/maquetas.py`, salida en `propuesta/capturas/maquetas/`): el script recoloca controles o fuerza un
 ajuste solo en la ventana que captura, sin tocar la interfaz.
@@ -14,6 +15,9 @@ pantalla completa (ver abajo) y se reduce a lo que falta; se añade D1, la pulsa
 Qué ha cambiado en la ronda 4: P7 explica con cifras qué cubre la escala automática y qué no (proyectores de 1366×768 y de 1280×720/800);
 P3 y P10 cuentan lo que la rama ya hace sin tocar lo que fijan las pruebas (la vista de E/S sube de tamaño a pantalla completa; la columna
 del nombre de Variables ya no se aplasta).
+Qué ha cambiado en la ronda 5: se añade **P12** («Papel» y «Tipo» abreviados en el panel de Variables de 218 px: apartamiento menor de P-IMP-42, que
+pedía el árbitro) y **P13** (las columnas que ceden ante el nombre en las tablas de estado de la simulación); P10 recoge que a 1920×1080 los paneles
+laterales llegan a 300 px y que la columna del nombre ya mide ≥ 96 px a cualquier tamaño.
 
 ## Descartada
 
@@ -83,7 +87,7 @@ control interactivo visible de menos de 32 px que deja `medir.py alturas` (se ex
 completa: 1920×1080, 1600×900, 2560×1440…) la interfaz sube sola de escala (`estilo.escala_para`, `Ventana._aplicar_escala`): letra base de 14 px
 (13 en la normal), letra pequeña de 13 (12), títulos de 19 (16), chip de 15 (13), cifras de 14 (12), controles de 40 px (34-36) y la **vista de
 E/S** con letra de 14 px y filas de 18 px (12 y 16 en la normal). Los paneles laterales pasan de 218 a 264 px poco a poco entre 1366 y 1600 px
-de ancho, para que las tablas de la simulación lleven sus cuatro columnas sin que el dibujo dé un salto al cruzar el umbral. Cruzar el umbral
+de ancho (y a 300 px a 1920), para que las tablas de la simulación lleven sus cuatro columnas sin que el dibujo dé un salto al cruzar el umbral. Cruzar el umbral
 cuesta unos 100 ms (`arbitro_r3/umbral.py`) porque la vista de E/S y Propiedades se ponen al día cuando se muestran, no al cruzar.
 
 **Lo que falta: el proyector de 1366×768 y de 1280×720 / 1280×800.** Esas resoluciones quedan por debajo del umbral (de ancho, de alto o de
@@ -124,17 +128,19 @@ mala luz de proyector el borde casi desaparece.
 para el trazo de transiciones y el texto. **Motivo de no hacerlo:** P-IMP-77 fija `#40d641` como color de la etapa activa y varias
 pruebas lo comparan (`COL["active"]`).
 
-### P10. Paneles laterales de 232 px a 1366 y menos (lo fija `SPAL05/06`)
+### P10. Paneles laterales de ≈ 270 px a 1366 y menos (lo fija `SPAL05/06`)
 
 **Problema.** Las pruebas de la paleta (`SPAL05`, `SPAL06`) fijan el ancho del panel izquierdo en 218 px a 1366×768 y a 1000×600. En 218 px las tablas de la
-simulación llevan las cuatro columnas con sus cabeceras enteras («Variable», «Modo», «Valor», «Contribuyen»), pero la columna del nombre queda en ≈ 50 px y el nombre se elide
-por el medio (y sale entero en la línea de detalle de la barra de estado). A pantalla completa, donde las pruebas no miden 218, los paneles laterales ya miden 264 px.
+simulación no llevan las cuatro columnas con el nombre en sus 96 px: «Modo» cede su columna, «Estado» pasa bajo el nombre y «Papel» y «Tipo» van abreviados
+(P12 y P13). A pantalla completa, donde las pruebas no miden 218, los paneles laterales ya miden 264 px (a 1600) y 300 px (a 1920).
 
-**Lo que ya hace la rama.** La columna del nombre de Variables ya no se aplasta: «Papel» y «Tipo» se dibujan abreviados («Entr.», «Sal.», «Mem.»;
-«Bool.», «Entera», «Dec. 2»: la celda conserva el texto entero y lo lleva en su ayuda) y el nombre se queda con el resto (105 px con barra a 1366,
-frente a 103 de `main` y 38-50 de la ronda 3). Entre 1366 y 1600 px de ancho los paneles laterales crecen poco a poco hasta 264 px.
+**Lo que ya hace la rama.** La columna del nombre de las tablas (Variables y las de estado de la simulación) **manda y mide al menos ≈ 96 px a cualquier
+tamaño** (`paneles.ReparteColumnas`): las demás columnas se abrevian o se esconden antes de que baje de ahí (ver P12 y P13) y el nombre, si no cabe en una
+línea, se parte por los «_» en dos o tres. Entre 1366 y 1600 px de ancho los paneles laterales crecen poco a poco hasta 264 px y, entre 1600 y 1920, hasta
+**300 px** (a pantalla completa sobra sitio: ahí las tablas llevan sus cuatro columnas con las palabras enteras).
 
-**Propuesta.** `ANCHO_LATERAL = 232` (o 264 desde 1280 px de ancho). **Motivo de no hacerlo a ≤ 1366:** `SPAL05` y `SPAL06` comparan con 218.
+**Propuesta.** `ANCHO_LATERAL = 270` desde 1280 px de ancho (con él, «Papel» y «Tipo» enteros y las cuatro columnas de las tablas de estado también a 1366).
+**Motivo de no hacerlo a ≤ 1366:** `SPAL05` y `SPAL06` comparan con 218.
 
 ### P11. Tope proporcional de Propiedades en ventanas bajas (apartaría P-IMP-128 / 118 / 120 / 93)
 
@@ -143,3 +149,30 @@ frente a 103 de `main` y 38-50 de la ronda 3). Entre 1366 y 1600 px de ancho los
 desplaza dentro del panel. **Maqueta:** la de P1 (`maqueta-p1-propiedades-cuarto.png`) enseña el mismo efecto con 190 px.
 **Motivo de no hacerlo:** el alto que pide la receptividad lo fija P-IMP-93 y la prueba `SEDI122` comprueba que no haya
 controles cortados con ese alto.
+
+### P12. «Papel» y «Tipo» abreviados en el panel de Variables de 218 px (apartamiento menor de P-IMP-42)
+
+**Qué dice la decisión.** P-IMP-42: «Papel y Tipo se ven como texto y, al pulsar la celda, aparece su lista desplegable»; los paneles laterales (188–216 px)
+«caben» con ello.
+
+**Qué hace la rama (`variables.PanelVariables._planes`, con `paneles.ReparteColumnas`).** El texto entero donde cabe **con el nombre en sus 96 px**: a pantalla
+completa (el panel mide 300 px a 1920×1080) «Entrada», «Salida», «Memoria» y «Booleana», «Entera», «Decimal (2)»; con los paneles de 218 px (1366×768 y menos,
+pantalla partida, un cuarto de pantalla y media pantalla) se pintan abreviados: «Entr.», «Sal.», «Mem.» y «Bool.», «Entera», «Dec. 2». La celda conserva el
+texto entero (lo leen las pruebas), lo lleva su ayuda («Booleana · clic para cambiarlo») y la línea de detalle, y la lista desplegable de la celda lo enseña
+entero. El reparto lo decide el ancho de los paneles tal como se abren, no el arrastre del divisor: `test_SPAN03` fija que ensanchar el panel solo da ancho al
+nombre y deja «Papel» y «Tipo» como estaban.
+
+**Motivo.** El panel de 218 px deja 188–200 px a la tabla. Con «Papel» y «Tipo» enteros (≈ 58 + 73 px) el nombre se quedaba en ≈ 57 px, que es lo que hacía
+ilegibles los nombres en la ronda 3 (38–50 px); con 96 px como mínimo para el nombre solo caben las abreviaturas (38 + 41 px). El árbitro de la ronda 4 lo anotó
+(R2, observación). **Para que fueran enteros también a 1366:** paneles laterales de ≥ 262 px (ver P10: lo impiden `SPAL05` y `SPAL06`).
+
+### P13. «Modo» y «Estado» ceden su columna al nombre en las tablas de estado de la simulación con el panel de 218 px
+
+**Qué hace la rama (`ventana.Ventana._planes_vars` y `_planes_temp`).** Con 218 px (198–210 px útiles) caben el nombre en sus 96 px, «Valor» y «Contribuyen»;
+**«Modo»** (continua / memoria) no tiene columna: su texto va en la ayuda de la celda y en la línea de detalle de la barra de estado («luz · salida continua · OFF»).
+**«Estado»** de «Temporizadores» (parado / contando / vencido) se pinta **bajo el nombre**, con su color. A partir de ≈ 250 px útiles (a 1920×1080 el panel mide
+300 px) las cuatro columnas, con «Modo» abreviado («cont.», «mem.») y, con ≈ 275 px o más, entero («continua», «memoria»).
+
+**Motivo.** Con el nombre de ≥ 96 px, las otras tres columnas de «Salidas y variables» (≈ 54 + 43 + 71 px) no caben en 198 px; el árbitro de la ronda 4 propuso
+precisamente abreviar «Modo» o llevar «Contribuyen» a la línea de detalle. Se prefirió quitar «Modo» (lo que menos dice: el alumnado ve el nombre, el valor y qué
+etapa lleva la salida) y conservar «Contribuyen». **Alternativa:** un panel de simulación de ≥ 270 px también a 1366 (P10), o una línea secundaria bajo cada nombre con «continua · a.E1.motor.0».

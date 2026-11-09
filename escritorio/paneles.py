@@ -1,9 +1,11 @@
 """Paneles plegables por cabecera o divisor, sin controles encima del dibujo."""
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QTextLayout, QTextOption
+from typing import Any
+
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QTextLayout, QTextOption
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGroupBox, QHeaderView, QLabel, QLayout, QSplitter, QSplitterHandle,
                                QSizePolicy, QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionComboBox, QStyleOptionGroupBox,
-                               QStyleOptionToolButton, QStylePainter, QToolButton, QVBoxLayout, QWidget)
+                               QStyleOptionToolButton, QStyleOptionViewItem, QStylePainter, QToolButton, QVBoxLayout, QWidget)
 
 from . import estilo
 
@@ -224,7 +226,12 @@ class ComboElidido(QComboBox):
 class CabeceraCompacta(QHeaderView):
     """Cabecera horizontal de las tablas estrechas de la simulación. La de Qt, con la hoja de estilo, reserva a cada lado un margen de
     4 px más el relleno y corta la cabecera («Va…», «Contribu…») cuando la columna aún tiene sitio para ella: esta pinta el
-    texto a 4 px del borde (donde empieza el de las celdas) y solo lo elide si de verdad no cabe."""
+    texto a 4 px del borde (donde empieza el de las celdas) y solo lo elide si de verdad no cabe. `abreviaturas` da la forma corta de una
+    cabecera para cuando su columna no tiene sitio para la entera («Contribuyen» → «Contrib.»): mejor una abreviatura que un corte."""
+
+    def __init__(self, orientacion, padre=None) -> None:
+        super().__init__(orientacion, padre)
+        self.abreviaturas: dict[str, str] = {}
 
     def paintSection(self, p: QPainter, rect: QRect, indice: int) -> None:  # noqa: N802
         if not rect.isValid():
@@ -240,6 +247,8 @@ class CabeceraCompacta(QHeaderView):
         p.setFont(fuente)
         texto = str(self.model().headerData(indice, self.orientation(), Qt.ItemDataRole.DisplayRole) or "")
         r = rect.adjusted(4, 0, -2, -1)
+        if p.fontMetrics().horizontalAdvance(texto) > r.width():
+            texto = self.abreviaturas.get(texto, texto)
         p.drawText(r, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
                    p.fontMetrics().elidedText(texto, Qt.TextElideMode.ElideRight, r.width()))
         p.restore()
@@ -252,6 +261,7 @@ class EtiquetaAyuda(QLabel):
     def __init__(self, lineas: int = 2) -> None:
         super().__init__()
         self.lineas = lineas
+        self.mostrar_texto = True  # la ventana lo apaga cuando el texto se enseña en otro sitio (la fila de la ayuda desplegada) o no hay sitio
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
@@ -260,6 +270,11 @@ class EtiquetaAyuda(QLabel):
             self.lineas = lineas
             self.updateGeometry()
             self.update()
+
+    def truncada(self, ancho: int | None = None) -> bool:
+        """¿Necesita más de `lineas` líneas con ese ancho (por omisión, el de ahora)? Entonces su última línea acaba en «…» y la ventana
+        ofrece, junto a ella, desplegarla entera con un botón visible («más ▾»)."""
+        return bool(self.text()) and len(self._renglones(self.width() if ancho is None else ancho)) > self.lineas
 
     def _renglones(self, ancho: int) -> list[tuple[int, int]]:
         capa = QTextLayout(self.text(), self.font())
@@ -292,7 +307,7 @@ class EtiquetaAyuda(QLabel):
 
     def paintEvent(self, evento) -> None:  # noqa: N802
         texto, ancho = self.text(), self.width()
-        if not texto or ancho < 20:
+        if not texto or ancho < 20 or not self.mostrar_texto:
             return
         p = QPainter(self)
         p.setFont(self.font())
@@ -538,21 +553,138 @@ def _comun(a: str, b: str) -> int:
     return i
 
 
-class ContextoNombres:
-    """Los nombres de **una misma lista** (las entradas de la simulación, las filas de una tabla, los canales de un lado de E/S…), para
-    acortarlos sin que dos acaben leyéndose igual.
+# -- un nombre largo se parte en varias líneas, no se come ---------------------------------------------------------------
+LINEAS_NOMBRE = 3  # un nombre se enseña en hasta tantas líneas; solo si ni así cabe se elide por el medio, conservando el final
+MIN_SIGNIFICATIVOS = 6  # lo menos que ha de quedar de un nombre largo al elidirlo: letras y cifras (nunca «…_…e»)
+SALTO = " "  # el salto de línea del texto de una celda de tabla (Qt cambia «\n» por él al leer la celda, pero no el que se pone a mano en la opción)
+AIRE_LINEAS = 3  # px de aire arriba y abajo de una celda de varias líneas
 
-    Un nombre largo que se elide por el medio o por el final pierde justo lo que lo distingue de sus hermanos
-    («sensor_final_carrera_cilindro_10_avance» y «…_20_avance» acaban ambos en «sensor_f…0_avance»). Aquí se mira con qué vecino se
-    parece más: lo que comparten al principio y al final (en palabras enteras) es lo que se quita, y se conserva el trozo que
-    los distingue con su contexto: «…_10_avance» frente a «…_20_avance». Un nombre que cabe se ve entero; una lista de un solo
-    nombre no tiene con quién compararse y se elide por el medio, como siempre."""
+
+def _ancho_de(fm: QFontMetrics, texto: str) -> int:
+    """Lo que mide `texto` en una línea (los espacios del final no cuentan: no se ven)."""
+    return fm.horizontalAdvance(texto.rstrip())
+
+
+def _trozos(nombre: str) -> list[str]:
+    """Las piezas de un nombre: cada una acaba donde se puede cortar la línea (tras «_», «-», «.», «:», «/» o un espacio), de modo que
+    el separador se queda al final de su línea y el nombre se lee entero: «final_carrera_» / «cilindro_A_avance»."""
+    piezas, actual = [], ""
+    for c in nombre:
+        actual += c
+        if c in SEPARADORES:
+            piezas.append(actual)
+            actual = ""
+    if actual:
+        piezas.append(actual)
+    return piezas
+
+
+def _frontera(s: str, i: int) -> bool:
+    """¿Se puede cortar `s` entre el carácter i-1 y el i, sin separador? De minúscula a mayúscula («cilindroA»), de letra a cifra (o al
+    revés) o de una sigla a una palabra («XMLParser» → «XML|Parser»)."""
+    a, b = s[i - 1], s[i]
+    if a.islower() and b.isupper():
+        return True
+    if (a.isalpha() and b.isdigit()) or (a.isdigit() and b.isalpha()):
+        return True
+    return a.isupper() and b.isupper() and i + 1 < len(s) and s[i + 1].islower()
+
+
+def _subdividir(pieza: str, fm: QFontMetrics, ancho: int) -> list[str]:
+    """Una pieza más ancha que la línea: se parte entre mayúsculas y minúsculas o entre letras y cifras («FinalCarrera2» → «Final», «Carrera»,
+    «2») y, si aun así no cabe, por caracteres (el último recurso: una línea nunca es más ancha que el hueco)."""
+    if _ancho_de(fm, pieza) <= ancho:
+        return [pieza]
+    partes, ini = [], 0
+    for i in [i for i in range(1, len(pieza)) if _frontera(pieza, i)] + [len(pieza)]:
+        partes.append(pieza[ini:i])
+        ini = i
+    salida: list[str] = []
+    for parte in partes:
+        if _ancho_de(fm, parte) <= ancho:
+            salida.append(parte)
+            continue
+        actual = ""
+        for c in parte:
+            if actual and _ancho_de(fm, actual + c) > ancho:
+                salida.append(actual)
+                actual = c
+            else:
+                actual += c
+        if actual:
+            salida.append(actual)
+    return salida
+
+
+def _empaquetar(piezas: list[str], fm: QFontMetrics, ancho: int) -> list[str]:
+    """Las piezas en el menor número de líneas de `ancho` px y, con ese número, la más ancha lo menos posible: «final_carrera_» /
+    «cilindro_A_avance» en lugar de «final_carrera_cilindro_» / «A_avance»."""
+    n = len(piezas)
+    voraz: list[str] = []
+    i = 0
+    while i < n:
+        j = i + 1
+        while j < n and _ancho_de(fm, "".join(piezas[i:j + 1])) <= ancho:
+            j += 1
+        voraz.append("".join(piezas[i:j]))
+        i = j
+    k = len(voraz)
+    if k <= 1 or n > 48:
+        return voraz
+    ancho_ij = {}
+
+    def w(i: int, j: int) -> int:
+        if (i, j) not in ancho_ij:
+            ancho_ij[i, j] = _ancho_de(fm, "".join(piezas[i:j]))
+        return ancho_ij[i, j]
+    inf = 10 ** 9
+    mejor = [[inf] * (k + 1) for _ in range(n + 1)]
+    corte = [[0] * (k + 1) for _ in range(n + 1)]
+    mejor[0][0] = 0
+    for m in range(1, k + 1):
+        for j in range(m, n + 1):
+            for i in range(m - 1, j):
+                if mejor[i][m - 1] >= inf or w(i, j) > ancho:
+                    continue
+                v = max(mejor[i][m - 1], w(i, j))
+                if v < mejor[j][m]:
+                    mejor[j][m], corte[j][m] = v, i
+    if mejor[n][k] >= inf:
+        return voraz
+    lineas, j = [], n
+    for m in range(k, 0, -1):
+        i = corte[j][m]
+        lineas.append("".join(piezas[i:j]))
+        j = i
+    return lineas[::-1]
+
+
+def partir_nombre(nombre: str, fm: QFontMetrics, ancho: int, sufijo: str = "") -> list[str]:
+    """Las líneas en que se parte `nombre` para un hueco de `ancho` px: por los «_» (y «-», «.», espacios…) y, si no los hay, por las
+    mayúsculas y las cifras; el nombre queda **entero** (sin «…»). `sufijo` (« = 0» de una entrada) va pegado al final de la última línea."""
+    ancho = max(ancho, 2 * fm.horizontalAdvance("W"))
+    piezas = [p for pieza in _trozos(nombre) for p in _subdividir(pieza, fm, ancho)] or [""]
+    piezas[-1] += sufijo
+    return [linea.rstrip() for linea in _empaquetar(piezas, fm, ancho)]
+
+
+class ContextoNombres:
+    """Los nombres de **una misma lista** (las entradas de la simulación, las filas de una tabla, los canales de un lado de E/S…).
+
+    **Donde la fila puede crecer** (las entradas de la simulación, las tablas de estado y la de Variables) un nombre largo **no se elide**: `lineas`
+    lo parte por los «_» (o por mayúsculas y cifras) en dos o tres líneas y se lee entero («final_carrera_» / «cilindro_A_avance»).
+
+    **Donde la fila es plana** (las listas y los canales de la vista de E/S, de 16 px, P-IMP-63) `elidir` lo acorta a una línea sin que dos nombres
+    acaben leyéndose igual: lo normal es «…» y **el final más largo que cabe**, empezando en una palabra («…00_avance», «…A_retroceso»), y solo si con ello
+    dos se leyeran igual, el trozo que los distingue con su contexto («…_10_avance» frente a «…_20_avance»). Nunca queda menos de
+    `MIN_SIGNIFICATIVOS` letras y cifras si el hueco da para ello. Un nombre que cabe se ve entero; una lista de un solo nombre no tiene con quién
+    compararse y se elide por el medio, como siempre."""
 
     def __init__(self, nombres=()) -> None:
         self._nombres: tuple[str, ...] = ()
         self._p: dict[str, int] = {}
         self._q: dict[str, int] = {}
-        self._cache: dict[tuple, str] = {}
+        self._cache: dict[tuple, Any] = {}
         self.fijar(nombres)
 
     def fijar(self, nombres) -> bool:
@@ -603,12 +735,36 @@ class ContextoNombres:
             texto = self._cache[clave] = self._elidir(nombre, fm, max(ancho, 12))
         return texto
 
+    def _por_cola(self, fm: QFontMetrics, ancho: int) -> dict[str, str] | None:
+        """Cada nombre de la lista con «…» y **su final más largo que cabe** en `ancho` px, empezando donde empieza una palabra (si esa cola
+        tiene menos de `MIN_SIGNIFICATIVOS` letras y cifras, empezando donde convenga: «…dor_paro» antes que «…paro»). Es lo que se lee mejor
+        en una línea de una lista (un sensor «…00_avance», «…A_retroceso»); si con ello dos nombres de la lista se leyeran igual, `None`."""
+        clave = ("cola", ancho, fm.horizontalAdvance("Wmi_.0 "))
+        if clave in self._cache:
+            return self._cache[clave]
+        ancho_de = fm.horizontalAdvance
+        etiquetas: dict[str, str] = {}
+        for n in self._nombres:
+            if ancho_de(n) <= ancho:
+                etiquetas[n] = n
+                continue
+            colas = [i for i in range(1, len(n)) if ancho_de("…" + n[i:]) <= ancho]  # (desde donde caben)
+            palabras = [i for i in colas if n[i - 1] in SEPARADORES and sum(c.isalnum() for c in n[i:]) >= MIN_SIGNIFICATIVOS]
+            etiquetas[n] = "…" + n[(palabras or colas or [len(n) - 1])[0]:]
+        valores = list(etiquetas.values())
+        resultado = etiquetas if len(set(valores)) == len(valores) else None
+        self._cache[clave] = resultado
+        return resultado
+
     def _elidir(self, n: str, fm: QFontMetrics, ancho: int) -> str:
         ancho_de = fm.horizontalAdvance
         if ancho_de(n) <= ancho:
             return n
         if len(self._nombres) < 2 or n not in self._p:
             return fm.elidedText(n, Qt.TextElideMode.ElideMiddle, ancho)
+        por_cola = self._por_cola(fm, ancho)
+        if por_cola is not None:  # lo normal: el final de cada nombre, que es lo que los distingue (y se lee)
+            return por_cola[n]
         largo = len(n)
         a, b = self._ventana(n)
         if a > 0 and ancho_de("…" + n[a:]) <= ancho:  # lo común del principio se quita y se enseña tanto del final como quepa
@@ -623,6 +779,8 @@ class ContextoNombres:
                     s -= 1
             return "…" + n[s:]
         previo = "…" if a > 0 else ""
+        if a > 0 and a + 1 < b and n[a] in SEPARADORES:  # (la ventana empieza en la palabra que distingue, no en su separador)
+            a += 1
 
         def ventana(fin: int) -> str:
             return previo + n[a:fin] + ("…" if fin < largo else "")
@@ -634,43 +792,199 @@ class ContextoNombres:
                     if ancho_de(ventana(i)) > ancho:
                         break
                     fin = i
+            while fin < largo and ancho_de(ventana(fin + 1)) <= ancho:  # y, con lo que sobre, letra a letra: «…00_avan…», no «…_00…»
+                fin += 1
             return ventana(fin)
-        return previo + fm.elidedText(n[a:b], Qt.TextElideMode.ElideMiddle, max(12, ancho - ancho_de(previo)))
+        fin = a  # ni lo que distingue cabe entero: se enseña su principio, hasta donde quepa («…A_retro…» frente a «…B_retro…»)
+        while fin < largo and ancho_de(ventana(fin + 1)) <= ancho:
+            fin += 1
+        return ventana(max(fin, min(a + 1, largo)))
 
     def etiquetas(self, fm: QFontMetrics, ancho: int) -> dict[str, str]:
         """Cómo se ve cada nombre de la lista en un hueco de `ancho` px."""
         return {n: self.elidir(n, fm, ancho) for n in self._nombres}
 
+    def lineas(self, nombre: str, fm: QFontMetrics, ancho: int, max_lineas: int = LINEAS_NOMBRE, sufijo: str = "") -> list[str]:
+        """Las líneas con que se enseña `nombre` en un hueco de `ancho` px de ancho: **entero**, partido por los «_» (o por las mayúsculas
+        y las cifras) en las líneas que haga falta, hasta `max_lineas`; la fila crece en lo que necesite. Solo si ni partido cabe (más
+        de `max_lineas` líneas) se elide por el medio conservando lo que lo distingue de los demás nombres de la lista y el final.
+        `sufijo` va pegado al final de la última línea (« = 0» de una entrada)."""
+        clave = ("lineas", nombre, sufijo, ancho, max_lineas, fm.horizontalAdvance("Wmi_.0 "))
+        lineas = self._cache.get(clave)
+        if lineas is None:
+            lineas = self._cache[clave] = tuple(self._lineas(nombre, fm, max(ancho, 24), max_lineas, sufijo))
+        return list(lineas)
+
+    def _por_medio(self, fm: QFontMetrics, ancho: int) -> dict[str, str] | None:
+        """Cada nombre elidido **por el medio** (el principio, «…» y el final) para un hueco de `ancho` px; `None` si dos de la lista se leyeran igual."""
+        clave = ("medio", ancho, fm.horizontalAdvance("Wmi_.0 "))
+        if clave not in self._cache:
+            etiquetas = {n: fm.elidedText(n, Qt.TextElideMode.ElideMiddle, ancho) for n in self._nombres}
+            self._cache[clave] = etiquetas if len(set(etiquetas.values())) == len(etiquetas) else None
+        return self._cache[clave]
+
+    def _lineas(self, n: str, fm: QFontMetrics, ancho: int, max_lineas: int, sufijo: str) -> list[str]:
+        lineas = partir_nombre(n, fm, ancho, sufijo)
+        if len(lineas) <= max_lineas:
+            return lineas
+        total = ancho * max_lineas
+        for factor in (0.9, 0.8, 0.7, 0.6, 0.5, 0.4):  # el nombre se elide por el medio, conservando el final, hasta que quepa en las líneas
+            presupuesto = int(total * factor)
+            medio = self._por_medio(fm, presupuesto) if n in self._p else None
+            texto = medio[n] if medio is not None else self._elidir(n, fm, presupuesto)  # (si con ello dos se leyeran igual: lo que los distingue)
+            lineas = partir_nombre(texto, fm, ancho, sufijo)
+            if len(lineas) <= max_lineas:
+                return lineas
+        return partir_nombre(fm.elidedText(n, Qt.TextElideMode.ElideMiddle, ancho), fm, ancho, sufijo)[:max_lineas]
+
 
 class DelegadoNombres(QStyledItemDelegate):
-    """Una columna de una tabla cuyo texto son nombres de una misma lista: los pinta con `ContextoNombres` (nunca dos iguales).
-    La celda sigue teniendo el nombre entero (y lo lleva su ayuda emergente); solo se pinta más corto."""
+    """Una columna de una tabla cuyo texto son nombres de una misma lista: los enseña **enteros**, partidos por los «_» en las líneas que
+    haga falta (`ContextoNombres.lineas`), y la fila crece lo necesario: nunca se come un nombre y dos nombres nunca se leen igual. La celda
+    sigue teniendo el nombre entero (y lo lleva su ayuda emergente); solo se pinta partido.
 
-    def __init__(self, padre, columnas=(0,)) -> None:
+    `secundaria` es una columna que, **mientras está oculta** porque la tabla no tiene sitio para ella, se enseña como una línea más bajo el
+    nombre de la primera columna del delegado, con su propio color: «contando» o «vencido» no se pierden cuando el nombre se lleva el ancho."""
+
+    def __init__(self, padre, columnas=(0,), lineas: int = LINEAS_NOMBRE, secundaria: int | None = None) -> None:
         super().__init__(padre)
         self.contexto = ContextoNombres()
         self.columnas = frozenset(columnas)
+        self.max_lineas = lineas
+        self.secundaria = secundaria
 
     def fijar(self, nombres) -> None:
         self.contexto.fijar(nombres)
 
+    @staticmethod
+    def _margen() -> int:
+        """Lo que resta Qt al ancho de la celda para el texto (a cada lado) más 2 px de holgura: la línea nunca se parte otra vez."""
+        return 2 * (QApplication.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1) + 2
+
     def initStyleOption(self, option, index) -> None:  # noqa: N802
         super().initStyleOption(option, index)
         if index.column() in self.columnas and option.text:
-            margen = 2 * (QApplication.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1)
-            option.text = self.contexto.elidir(option.text, QFontMetrics(option.font), option.rect.width() - margen - 1)
+            fm = QFontMetrics(option.font)
+            option.text = SALTO.join(self.contexto.lineas(option.text, fm, option.rect.width() - self._margen(), self.max_lineas))
             option.textElideMode = Qt.TextElideMode.ElideNone  # (ya cabe: Qt no vuelve a cortarlo)
+            option.features &= ~QStyleOptionViewItem.ViewItemFeature.WrapText  # ni a partirlo: las líneas son las de arriba
+
+    def _extra(self, index) -> str:
+        """El texto de la columna secundaria bajo el nombre, si esta columna está oculta (y esta es la primera del delegado)."""
+        if self.secundaria is None or index.column() != min(self.columnas):
+            return ""
+        tabla = self.parent()
+        if not tabla.isColumnHidden(self.secundaria):
+            return ""
+        item = tabla.item(index.row(), self.secundaria)
+        return item.text() if item is not None else ""
+
+    def sizeHint(self, option, index) -> QSize:  # noqa: N802
+        tam = super().sizeHint(option, index)
+        opcion = QStyleOptionViewItem(option)
+        self.initStyleOption(opcion, index)
+        lineas = opcion.text.count(SALTO) + 1 if index.column() in self.columnas else 1
+        if self._extra(index):
+            lineas += 1
+            tam.setHeight(tam.height() + QFontMetrics(option.font).lineSpacing())
+        if lineas > 1:
+            tam.setHeight(tam.height() + 2 * AIRE_LINEAS)  # (un poco de aire arriba y abajo: dos o tres líneas seguidas no se pegan a las de al lado)
+        return tam
+
+    def paint(self, p, option, index) -> None:
+        extra = self._extra(index)
+        if not extra:
+            super().paint(p, option, index)
+            return
+        opcion = QStyleOptionViewItem(option)
+        self.initStyleOption(opcion, index)
+        texto, opcion.text = opcion.text.replace(SALTO, "\n"), ""
+        widget = opcion.widget
+        (widget.style() if widget is not None else QApplication.style()).drawControl(QStyle.ControlElement.CE_ItemViewItem, opcion, p, widget)
+        fm = QFontMetrics(opcion.font)
+        paso, lineas = fm.lineSpacing(), texto.count("\n") + 1
+        hueco = self._margen() // 2
+        r = opcion.rect.adjusted(hueco, 0, -hueco, 0)
+        y = r.top() + max(0, (r.height() - (lineas + 1) * paso) // 2)
+        elegida = bool(opcion.state & QStyle.StateFlag.State_Selected)
+        item = self.parent().item(index.row(), self.secundaria)
+        p.save()
+        p.setFont(opcion.font)
+        p.setPen(opcion.palette.color(QPalette.ColorRole.HighlightedText if elegida else QPalette.ColorRole.Text))
+        p.drawText(QRect(r.left(), y, r.width(), lineas * paso), int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop), texto)
+        if item is not None and not elegida:
+            p.setPen(item.foreground().color())
+        p.drawText(QRect(r.left(), y + lineas * paso, r.width(), paso), int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
+                   fm.elidedText(extra, Qt.TextElideMode.ElideRight, r.width()))
+        p.restore()
 
     def texto_visible(self, tabla, fila: int, columna: int) -> str:
-        """Lo que se ve ahora en esa celda de `tabla` (para comprobarlo sin mirar píxeles)."""
-        from PySide6.QtWidgets import QStyleOptionViewItem
+        """Lo que se ve ahora en esa celda de `tabla` (para comprobarlo sin mirar píxeles): el nombre en sus líneas, separadas por «\\n»."""
         indice = tabla.model().index(fila, columna)
         opcion = QStyleOptionViewItem()
         opcion.initFrom(tabla.viewport())
         opcion.rect = tabla.visualRect(indice)
         opcion.font = tabla.font()
         self.initStyleOption(opcion, indice)
-        return opcion.text
+        return opcion.text.replace(SALTO, "\n")
+
+
+class ReparteColumnas(QObject):
+    """El reparto del ancho de una tabla de nombres: **la columna del nombre manda** y mide al menos `minimo` px (≈ 96) a cualquier tamaño;
+    las demás se compactan (se abrevian, se pintan en letra de cifras, se esconden) antes de que el nombre baje de ahí. Si ni así cabe,
+    el nombre se queda en su mínimo y la tabla se desplaza a los lados (donde tenga barra): nunca un nombre ilegible.
+
+    `planes()` da los repartos posibles de la más completa a la más compacta (se vuelve a pedir cada vez, con la letra de ahora): cada uno
+    es un diccionario `{"anchos": {columna: px o 0 si se esconde}, …}`; se elige el primero en que sobra `minimo` para el nombre, o el último.
+    `al_elegir(plan)` pone al día lo que depende del plan (abreviaturas que dibuja un delegado…) y `despues()` lo que depende del ancho
+    (el alto de las filas). `ancho_plan()` es, si se da, el ancho con el que se **elige** el plan (el del panel tal como se abre, y no el de
+    ahora): ensanchar el panel a mano da su ancho al nombre sin cambiar el reparto de las demás columnas."""
+
+    def __init__(self, tabla, nombre: int, minimo: int, planes, al_elegir=None, despues=None, ancho_plan=None) -> None:
+        super().__init__(tabla)
+        self.tabla, self.nombre, self.minimo, self.planes = tabla, nombre, minimo, planes
+        self.al_elegir, self.despues, self.ancho_plan = al_elegir, despues, ancho_plan
+        self.plan: dict | None = None
+        tabla.viewport().installEventFilter(self)
+
+    def eventFilter(self, objeto, evento) -> bool:  # noqa: N802
+        if evento.type() == QEvent.Type.Resize and objeto is self.tabla.viewport():
+            self.aplicar()
+        return False
+
+    def aplicar(self) -> dict | None:
+        t = self.tabla
+        ancho = t.viewport().width()
+        if ancho < 40:  # (aún sin repartir: ya llegará el cambio de tamaño)
+            return None
+        opciones = self.planes()
+        elegido = opciones[-1]
+        para_elegir = self.ancho_plan() if self.ancho_plan is not None else ancho
+        for plan in opciones:
+            if para_elegir - sum(plan["anchos"].values()) >= self.minimo:
+                elegido = plan
+                break
+        cab = t.horizontalHeader()
+        fijo = 0
+        for col, px in elegido["anchos"].items():
+            t.setColumnHidden(col, px == 0)
+            if px:
+                cab.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
+                if cab.sectionSize(col) != px:
+                    cab.resizeSection(col, px)
+                fijo += px
+        cab.setSectionResizeMode(self.nombre, QHeaderView.ResizeMode.Fixed)
+        propio = max(self.minimo, ancho - fijo)
+        if cab.sectionSize(self.nombre) != propio:
+            cab.resizeSection(self.nombre, propio)
+        self.plan = elegido
+        if self.al_elegir is not None:
+            self.al_elegir(elegido)
+        if self.despues is not None:
+            self.despues()
+        cab.viewport().update()
+        t.viewport().update()
+        return elegido
 
 
 class EtiquetaGrupos(QLabel):

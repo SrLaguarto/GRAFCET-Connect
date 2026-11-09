@@ -16,6 +16,8 @@ Guarda `propuesta/capturas/despues/<escena>-<tamaño>.png` (o en `--salida`). Ta
 - `planos`       la pestaña PLANOS con una hoja que lleva el grafcet.
 - `es`           la vista de E/S externas.
 - `foco`         (extra) el foco de teclado en Play, para ver el anillo discontinuo de 2 px.
+- `nombres-edicion`, `nombres-simulacion`   (no se capturan por defecto: `--escenas nombres-simulacion`) la tabla de Variables y, en Play, las entradas, las tablas
+                 de estado y los temporizadores con los nombres largos de una práctica de neumática (`final_carrera_cilindro_A_avance`…).
 
 Funciona sin pantalla (plataforma Qt `offscreen`) y no escribe en la carpeta de documentos del usuario ni en su
 configuración: usa una configuración y carpetas temporales.
@@ -39,8 +41,12 @@ TAMANOS = {"completa": (1920, 1080), "partida": (960, 1040), "cuarto": (960, 520
            "estrecha": (640, 800), "minima": (640, 520)}  # media pantalla de un portátil de 1280×800 al 150 %, y esa misma anchura a 1/4 de alto
 PRINCIPALES = ("completa", "partida", "cuarto", "1366")
 ESCENAS = ("editor", "propiedades", "simulacion", "planos", "es", "foco")
-EXTRAS = ("maqueta-panel-bajo",)  # no se capturan por defecto: ver PROPUESTAS_PENDIENTES.md
-EJEMPLO = "temporizada"
+EXTRAS = ("maqueta-panel-bajo", "nombres-edicion", "nombres-simulacion")  # no se capturan por defecto (la maqueta: ver PROPUESTAS_PENDIENTES.md; los
+EJEMPLO = "temporizada"                                                   # nombres: las listas con los nombres largos de un aula de neumática)
+NOMBRES_AULA = (["pulsador_marcha", "pulsador_paro", "seta_emergencia", "sensor_pieza_cinta", "detector_inductivo_metal"]
+                + [f"final_carrera_cilindro_{c}_{s}" for c in "ABC" for s in ("avance", "retroceso")],
+                ["motor_cinta_transportadora", "piloto_marcha", "piloto_averia"]
+                + [f"electrovalvula_cilindro_{c}_{s}" for c in "ABC" for s in ("avance", "retroceso")])
 
 
 def _reposo(app, veces: int = 20) -> None:
@@ -90,6 +96,35 @@ def escena_simulacion(w, app) -> None:
     QTest.mousePress(boton, Qt.MouseButton.LeftButton)  # la entrada queda pulsada mientras se captura
     _reposo(app, 30)
     w._captura_boton = boton
+
+
+def _nombres_de_aula(w, app) -> None:
+    """El ejemplo editable con los nombres de entradas y salidas de una práctica de neumática (cilindros A, B y C con avance y retroceso)."""
+    _editable(w, app)
+    for n in NOMBRES_AULA[0]:
+        w.edicion.ed.add_variable(n, "input", {"kind": "bool"})
+    for n in NOMBRES_AULA[1]:
+        w.edicion.ed.add_variable(n, "output", {"kind": "bool"})
+    w.edicion.cambia()
+    w.refrescar_edicion()
+    _reposo(app, 30)
+
+
+def escena_nombres_edicion(w, app) -> None:
+    """La tabla de Variables al editar, con nombres largos de aula (el panel derecho abierto)."""
+    _nombres_de_aula(w, app)
+    w._mostrar_panel("derecho", True)
+    _reposo(app, 30)
+
+
+def escena_nombres_simulacion(w, app) -> None:
+    """Entradas, «Salidas y variables» y «Temporizadores» en Play, con nombres largos de aula."""
+    _nombres_de_aula(w, app)
+    w.a_ejecutar.setChecked(True)
+    w.rt.stop()
+    _reposo(app, 40)
+    w.diagrama.ajustar()
+    _reposo(app, 30)
 
 
 def escena_maqueta_panel_bajo(w, app) -> None:
@@ -161,7 +196,8 @@ def capturar(tamano: str, escena: str, salida: Path) -> Path:
                 escena_planos(w, app, tmp)
             else:
                 {"editor": escena_editor, "propiedades": escena_propiedades, "simulacion": escena_simulacion,
-                 "es": escena_es, "foco": escena_foco, "maqueta-panel-bajo": escena_maqueta_panel_bajo}[escena](w, app)
+                 "es": escena_es, "foco": escena_foco, "maqueta-panel-bajo": escena_maqueta_panel_bajo,
+                 "nombres-edicion": escena_nombres_edicion, "nombres-simulacion": escena_nombres_simulacion}[escena](w, app)
             # (sin `clearFocus()`: lo que se captura es lo que se ve; ningún anillo sin teclado lo comprueba `foco.py`)
             _reposo(app, 30)
             destino = salida / f"{escena}-{tamano}.png"

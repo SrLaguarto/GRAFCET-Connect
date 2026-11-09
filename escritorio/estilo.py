@@ -93,6 +93,7 @@ T_BASE = T_PEQUENA = T_TITULO = T_SECCION = T_CHIP = T_CIFRA = 0
 ALTO_CONTROL = ALTO_CONTROL_COMPACTO = ALTO_BARRA = ALTO_BARRA_COMPACTA = ALTO_FILA = ALTO_ENTRADA = ALTO_FILA_COMPACTA = 0
 T_ES = ALTO_FILA_ES = ANCHO_INTERIOR_ES = 0
 ALTO_DIBUJO_ZOOM = 360  # por debajo de este alto de dibujo útil, los controles del zoom van en la fila del título y no flotan sobre él
+ALTO_PROPS_ZOOM = 260  # y con Propiedades abierto y su panel al menos así de alto (el de una transición pide ≈ 340 px; el de una etapa, ≈ 180)
 
 
 def escala_para(ancho: int, alto: int) -> str:

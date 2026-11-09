@@ -26,7 +26,7 @@ import html
 import re
 from typing import Any, Callable
 
-from PySide6.QtCore import QMimeData, QPoint, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QMimeData, QObject, QPoint, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QFormLayout, QGridLayout, QHBoxLayout, QLabel,
                                QLineEdit, QListView, QListWidget, QListWidgetItem, QPushButton, QSizePolicy,
@@ -447,9 +447,23 @@ class FichaJerarquia(QWidget):
         return [t for t, b in self.botones.items() if not b.isHidden()]
 
 
+class _DisponeEstado(QObject):
+    """Avisa al panel de que la fila de la fórmula cambió de ancho o de contenido: puede que el estado deba bajar a su línea (o volver)."""
+
+    def __init__(self, panel: "PanelPropiedades") -> None:
+        super().__init__(panel)
+        self.panel = panel
+
+    def eventFilter(self, objeto: QObject, evento: QEvent) -> bool:  # noqa: N802
+        if evento.type() in (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.LayoutRequest):
+            self.panel._disponer_estado()
+        return False
+
+
 class PanelPropiedades(QWidget):
     """Las opciones del elemento seleccionado, con campos editables (el panel «Opciones» de abajo)."""
     ANCHO_MINIMO = 560  # lo más ancho que pide el panel a la ventana: con él abierto, la ventana baja a 640 px y vuelve
+    alto_cambiado = Signal()  # el panel pide más o menos alto (el estado de la fórmula baja a su línea o vuelve a su lado)
 
     def escalar(self, hoja_ventana: str = "") -> None:
         """Cambió la escala de letra y de controles (pantalla completa o no): la hoja (la de la ventana para esa escala, si hay, y la de los
@@ -598,19 +612,49 @@ class PanelPropiedades(QWidget):
         self.t_crear = QPushButton("Crear las que faltan")
         self.t_crear.setToolTip("Declarar como entradas booleanas las variables que se usan y no existen")
         self.t_crear.clicked.connect(self._crear)
-        g.addWidget(QLabel("Fórmula"), 0, 0)
+        self._l_formula = QLabel("Fórmula")
+        g.addWidget(self._l_formula, 0, 0)
         g.addWidget(self.t_texto, 0, 1)
         self.t_estado.setMaximumWidth(260)
-        self.t_texto.setMinimumWidth(48)  # (la vista previa cede antes que el estado: «Receptividad correcta.» no se parte ni se corta, ni a 640 px)
+        self.t_texto.setMinimumWidth(48)
         g.addWidget(self.t_estado, 0, 2)
         g.addWidget(self.t_crear, 0, 3)
         for columna, control in ((4, self.prog.ampliar), (5, self.prog.papelera)):
             self.prog.pie.removeWidget(control)
             g.addWidget(control, 0, columna)
         g.setColumnStretch(1, 1)
+        self._rejilla_formula, self._estado_abajo = g, False
+        self._dispone_estado = _DisponeEstado(self)  # (el campo de la fórmula manda: si el estado no cabe a su lado, baja a su propia línea)
+        self.caja_formula.installEventFilter(self._dispone_estado)
         lay.addWidget(self.caja_formula)
         self._ver_bloques(None)
         return w
+
+    FORMULA_MIN = 200  # lo que mide, como poco, el campo de la fórmula con el estado a su lado; si no queda, el estado baja a su propia línea
+
+    def _disponer_estado(self) -> None:
+        """La fórmula es lo que se escribe y se lee: tiene prioridad de ancho sobre el estado («Receptividad correcta.»). Con sitio, el
+        estado va a su lado, en la misma fila; sin él (media pantalla), **baja a su propia línea bajo el campo**, entero y sin partirse, y el
+        campo se queda con todo el ancho que dejaba el estado. Con histéresis, para que el cambio no vaya y vuelva."""
+        g, ancho = self._rejilla_formula, self.caja_formula.width()
+        if ancho < 120:
+            return
+        sep = max(g.horizontalSpacing(), 6)
+        fijos = [c for c in (self._l_formula, self.t_crear, self.prog.ampliar, self.prog.papelera) if not c.isHidden()]
+        sitio = ancho - sum(c.sizeHint().width() for c in fijos) - sep * (len(fijos) + 1) - self.t_estado.sizeHint().width()
+        abajo = sitio < self.FORMULA_MIN + (40 if self._estado_abajo else 0)
+        if abajo == self._estado_abajo:
+            return
+        self._estado_abajo = abajo
+        g.removeWidget(self.t_estado)
+        if abajo:
+            g.addWidget(self.t_estado, 1, 1, 1, 5)
+            self.t_estado.setMaximumWidth(16777215)
+        else:
+            g.addWidget(self.t_estado, 0, 2)
+            self.t_estado.setMaximumWidth(260)
+        self.caja_formula.updateGeometry()
+        self.alto_cambiado.emit()  # (el panel pide una línea más o una menos: la ventana le da el alto)
 
     def _ver_bloques(self, titulo: str | None) -> None:
         """El programador de la transición o de la acción (condición o evento), o nada si no hay que programar."""

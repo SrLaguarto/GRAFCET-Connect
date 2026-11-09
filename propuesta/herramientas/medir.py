@@ -17,8 +17,12 @@ Mediciones:
 - `propiedades` con una transición elegida y Propiedades abierto: alto del panel, alto del dibujo y si lo elegido se ve (P-IMP-93).
 - `literales` colores y tamaños de letra escritos a mano en `escritorio/*.py` (no abre la ventana).
 - `ventana640` con Propiedades abierto la ventana baja a 640 px (y 683) y vuelve; «Reiniciar» sigue en su barra; 960×520 → 640×520 en una
-              sola petición; el ancho mínimo con y sin Propiedades.
-- `tablas`    tablas de la simulación: cabeceras enteras y alineadas con su columna, «Modo» legible, «Contribuyen» como en `main`.
+              sola petición; el ancho mínimo con y sin Propiedades. **Falla** si el ancho real no es el pedido, con Propiedades abierto
+              (desde 1366×768 y desde pantalla completa) y tras cerrarlo.
+- `formula`   el campo «Fórmula» de Propiedades: ≥ 130 px a 683 y ≥ 87 px a 640, con «Receptividad correcta.» entera en una línea (a su lado o
+              bajo el campo). **Falla** si no.
+- `tablas`    tablas de la simulación: cabeceras enteras y alineadas con su columna, «Modo» legible, «Contribuyen» como en `main`, columna del nombre
+              ≥ 96 px (las columnas ocultas por falta de sitio se anotan). **Falla** si una cabecera se corta o el nombre baja de 96 px.
 - `largos`    nombres largos de entradas y variables: se distinguen, y el nombre entero sale en la línea de detalle con el foco.
 - `chip`      el estado del chip de modo no se pierde a ningún ancho (y el título cede antes).
 - `fichas`    fichas de la receptividad y categorías de bloques: ninguna recortada.
@@ -26,8 +30,9 @@ Mediciones:
 - `escala`    letra base y alto de controles a 1366 y a pantalla completa (la escala cambia sola al cruzar 1600×900); la vista de E/S a 14 px y
               filas de 18 px a pantalla completa (12 y 16 por debajo).
 - `cruce`     cruzar 1600×900 en caliente: lo que tarda cada cruce, sin hueco muerto ni barras inútiles tras redimensionar, sin salto del dibujo.
-- `zoom`      con Propiedades abierto y el dibujo bajo, los controles del zoom van en la cabecera; con el dibujo alto, flotan.
-- `variables` el panel de Variables: ancho de cada columna (la del nombre no se aplasta) y lo que se ve de «Papel» y «Tipo».
+- `zoom`      con Propiedades abierto (panel alto) o el dibujo bajo, los controles del zoom van en la cabecera (con sus palabras si caben, solo iconos si no);
+              con el dibujo alto y sin Propiedades, flotan. **Falla** si con Propiedades abierto flotan (también a 1440×900).
+- `variables` el panel de Variables: ancho de cada columna (la del nombre ≥ 96 px, **falla** si baja) y lo que se ve de «Papel» y «Tipo».
 - `planos`    PLANOS dentro de una tarjeta, sin barras en «Ajustar hoja» y con el desplegable de la biblioteca elidido y con ayuda.
 Los contrastes de las parejas de tokens (sin ventana) los comprueba `contrastes.py`.
 """
@@ -449,6 +454,40 @@ def propiedades(tamano: str) -> dict:
                 **_variables_con_propiedades(w)}
 
 
+def formula(_tamano: str = "") -> dict:
+    """El campo «Fórmula» del panel de Propiedades: la fórmula es lo que se escribe y se lee, así que tiene prioridad de ancho sobre el mensaje de
+    estado: **≥ 130 px a 683** y **≥ 87 px a 640**. «Receptividad correcta.» va a su lado si cabe y, si no, en su propia línea bajo el campo, entero
+    y sin partirse. (La ronda 4 dejaba 97 px a 683 y 54 px a 640 para que el mensaje no se partiera.)"""
+    from PySide6.QtWidgets import QApplication
+    out: dict = {}
+    fallos: list[str] = []
+    minimos = {683: 130, 640: 87}
+    for inicio, pedido in (("1366", (683, 768)), ("1366", (640, 520)), ("estrecha", (640, 800)), ("cuarto", (640, 520)), ("1366", (1366, 768)),
+                           ("completa", (1920, 1080))):
+        with Ventana(inicio, "editor") as w:
+            app = QApplication.instance()
+            t = w.edicion.M["transitions"][0]["id"]
+            w.edicion.seleccionar([t])
+            capturar._reposo(app, 10)
+            w._abrir_opciones()
+            capturar._reposo(app, 40)
+            w.resize(*pedido)
+            capturar._reposo(app, 60)
+            p = w.props
+            lineas = p.t_estado._lineas(p.t_estado.width())  # (las líneas en que pinta el mensaje con el ancho que tiene)
+            abajo = p.t_estado.geometry().y() > p.t_texto.geometry().bottom() - 4
+            clave = f"{pedido[0]}×{pedido[1]} (desde {inicio})"
+            out[clave] = {"ancho de la ventana": w.width(), "ancho del campo «Fórmula»": p.t_texto.width(), "el estado va bajo el campo": abajo,
+                          "estado": p.t_estado.text(), "ancho del estado": p.t_estado.width(), "líneas del estado": len(lineas),
+                          "el estado cabe entero en una línea": len(lineas) == 1}
+            if pedido[0] in minimos and p.t_texto.width() < minimos[pedido[0]]:
+                fallos.append(f"{clave}: «Fórmula» mide {p.t_texto.width()} px, menos de {minimos[pedido[0]]}")
+            if not out[clave]["el estado cabe entero en una línea"]:
+                fallos.append(f"{clave}: «{p.t_estado.text()}» se parte en {len(lineas)} líneas con {p.t_estado.width()} px")
+    out["FALLOS"] = fallos
+    return out
+
+
 def literales(_tamano: str = "") -> dict:
     """Colores `#rrggbb`/`#rgb` y tamaños de letra escritos a mano en `escritorio/*.py`, por fichero (no necesita ventana).
     El dibujo (`diagrama`, `edicion`, `anotaciones`), los bloques, las plantillas de plano y los tipos de variable de E/S llevan
@@ -506,6 +545,42 @@ def ventana640(_tamano: str = "") -> dict:
         w.resize(640, 520)  # una sola petición, en caliente
         capturar._reposo(app, 40)
         out["960×520 → 640×520 en una petición"] = {"ancho": w.width(), "alto": w.height()}
+    fallos = [f"{clave}: ancho con Propiedades {d['ancho con Propiedades']} y tras cerrar {d['ancho tras cerrar y pedir otra vez']} (pedido {clave.split('×')[0]})"
+              for clave, d in out.items() if "ancho con Propiedades" in d
+              and (d["ancho con Propiedades"] != int(clave.split("×")[0]) or d["ancho tras cerrar y pedir otra vez"] != int(clave.split("×")[0]))]
+    if out["960×520 → 640×520 en una petición"]["ancho"] != 640:
+        fallos.append("960×520 → 640×520: el ancho real no es el pedido")
+    # Propiedades abierto desde la ventana de siempre (1366×768 y pantalla completa) y la ventana se encaja en media pantalla (683) y en 640: el ancho
+    # real tiene que ser el pedido (el zoom integrado en la cabecera subía el mínimo de la ventana a 848 px) y volver exactamente al ancho pedido
+    # al cerrar Propiedades (la ronda 4 se quedaba en 644)
+    # (desde pantalla completa solo a su mitad, 960: con la letra grande el mínimo es 777 y no hay mitad de 683 en un monitor de 1920)
+    for inicio, tam, pedidos in (("1366", "1366×768", ((683, 768), (640, 800), (640, 520))), ("completa", "1920×1080", ((960, 1040),))):
+        for pedido in pedidos:
+            with Ventana(inicio, "editor") as w:
+                app = QApplication.instance()
+                t = w.edicion.M["transitions"][0]["id"]
+                w.edicion.seleccionar([t])
+                capturar._reposo(app, 10)
+                w._abrir_opciones()
+                capturar._reposo(app, 50)
+                minimo = w.minimumSizeHint().width()
+                w.resize(*pedido)
+                capturar._reposo(app, 50)
+                con_props = (w.width(), w.height())
+                w.edicion.seleccionar([])
+                capturar._reposo(app, 10)
+                w._ocultar_sin_fijar()
+                capturar._reposo(app, 30)
+                w.resize(*pedido)
+                capturar._reposo(app, 40)
+                clave = f"desde {tam} con Propiedades abierto → {pedido[0]}×{pedido[1]}"
+                out[clave] = {"mínimo antes de pedirlo": minimo, "ventana con Propiedades": f"{con_props[0]}×{con_props[1]}",
+                              "ancho tras cerrar Propiedades y pedir otra vez": w.width()}
+                if con_props[0] != pedido[0]:
+                    fallos.append(f"{clave}: con Propiedades abierto el ancho real es {con_props[0]}, no {pedido[0]}")
+                if w.width() != pedido[0]:
+                    fallos.append(f"{clave}: tras cerrar Propiedades el ancho es {w.width()}, no {pedido[0]}")
+    out["FALLOS"] = fallos
     return out
 
 
@@ -514,6 +589,7 @@ def tablas(tamano: str) -> dict:
     from PySide6.QtCore import QPoint, QRect
     from PySide6.QtWidgets import QApplication
     out: dict = {}
+    fallos: list[str] = []
     with Ventana(tamano, "simulacion") as w:
         app = QApplication.instance()
         w.a_ejecutar.setChecked(True)
@@ -529,6 +605,9 @@ def tablas(tamano: str) -> dict:
             cols = []
             for i in range(t.columnCount()):
                 texto = t.horizontalHeaderItem(i).text()
+                if t.isColumnHidden(i):  # (no hay sitio para ella con el nombre en sus 96 px: su texto va en la ayuda, la línea de detalle o bajo el nombre)
+                    cols.append({"columna": texto, "oculta": True})
+                    continue
                 x0, ancho = cab.sectionViewportPosition(i), cab.sectionSize(i)
                 alto_cab = cab.height()
 
@@ -546,23 +625,31 @@ def tablas(tamano: str) -> dict:
                     c_x = primer_oscuro(y_fila + 2, y_fila + max(t.rowHeight(filas[0]) - 2, 3))
                 else:
                     c_x = None
+                entera = fm.horizontalAdvance(texto) + 6 <= ancho  # el texto más 4 px a la izquierda y 2 a la derecha
+                corta = getattr(cab, "abreviaturas", {}).get(texto)
                 cols.append({"columna": texto, "ancho de columna": ancho, "ancho del texto de la cabecera": fm.horizontalAdvance(texto),
-                             "cabecera entera": fm.horizontalAdvance(texto) + 6 <= ancho,  # el texto más 4 px a la izquierda y 2 a la derecha "inicio del texto cabecera (px)": h_x,
-                             "inicio del texto de la primera celda (px)": c_x,
+                             "cabecera entera": entera, "cabecera abreviada a propósito": None if entera else corta,
+                             "inicio del texto de la primera celda (px)": c_x, "inicio del texto de la cabecera (px)": h_x,
                              "alineados (±2 px: el hueco lateral propio de cada letra)": None if h_x is None or c_x is None else abs(h_x - c_x) <= 2})
+                if not entera and not (corta and fm.horizontalAdvance(corta) + 6 <= ancho):
+                    fallos.append(f"{nombre}: la cabecera «{texto}» se corta en su columna de {ancho} px")
             out[nombre] = cols
+            if t.columnWidth(0) < 96:
+                fallos.append(f"{nombre}: la columna del nombre mide {t.columnWidth(0)} px, menos de 96")
         delegado = w.t_vars.itemDelegateForColumn(1)
         out["texto de «Modo» que se ve"] = sorted({delegado.displayText(w.t_vars.item(r, 1).text(), w.t_vars.locale()) for r in range(w.t_vars.rowCount())})
         out["texto de «Modo» de la celda (el entero, como en main)"] = sorted({w.t_vars.item(r, 1).text() for r in range(w.t_vars.rowCount())})
         out["«Modo» entero en la ayuda"] = sorted({w.t_vars.item(r, 1).toolTip() for r in range(w.t_vars.rowCount())})
         out["«Contribuyen» (el contenido es el de `main`: identificador de la acción)"] = [w.t_vars.item(r, 3).toolTip() for r in range(w.t_vars.rowCount())]
         out["ancho del panel de la simulación"] = w.derecho.width()
+    out["FALLOS"] = fallos
     return out
 
 
 def largos(tamano: str) -> dict:
-    """Nombres largos que solo difieren al final: los botones de entrada se distinguen entre sí, el nombre entero sale en la línea de
-    detalle con el foco (y no hace falta el ratón), y la tabla de variables elide por el medio."""
+    """Nombres largos que solo difieren al final: los botones de entrada se distinguen entre sí (el nombre, partido por los «_», se lee entero),
+    el nombre entero sale también en la línea de detalle con el foco (y no hace falta el ratón), y la tabla de variables enseña cada nombre
+    entero, partido en líneas."""
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
@@ -595,10 +682,12 @@ def largos(tamano: str) -> dict:
         w.a_ejecutar.setChecked(False)
         capturar._reposo(app, 30)
         tabla = w.variables.tabla
-        elide = tabla.textElideMode() == Qt.TextElideMode.ElideMiddle
-        out["tabla de variables elide por el medio"] = bool(elide)
         w._mostrar_panel("derecho", True)
         capturar._reposo(app, 20)
+        largas = {tabla.item(r, 0).text(): variables_abrev(tabla, r, 0) for r in range(tabla.rowCount())
+                  if tabla.item(r, 0).text().startswith("sensor_final")}
+        out["tabla de variables: los nombres largos se enseñan enteros (partidos por los «_» en líneas)"] = bool(
+            largas and all(visto.replace("\n", "") == entero for entero, visto in largas.items()))
         fila = next((i for i in range(tabla.rowCount()) if tabla.item(i, 0).text() == nombres[1]), None)
         tabla.setCurrentCell(fila, 0)
         capturar._reposo(app, 20)
@@ -781,14 +870,31 @@ def cruce(_tamano: str = "") -> dict:
 
 
 def zoom(tamano: str) -> dict:
-    """Los controles del zoom flotan sobre el dibujo salvo en una ventana estrecha o baja y cuando el dibujo útil mide menos de 360 px
-    (con Propiedades abierto): entonces van en la fila del título."""
+    """Los controles del zoom flotan sobre el dibujo salvo en una ventana estrecha o baja y **con Propiedades abierto, a cualquier tamaño**: entonces
+    van en la fila del título (con sus palabras si caben junto al título y la ayuda y, si no, solo iconos y el porcentaje) y nunca fijan el
+    ancho mínimo de la ventana. Con Propiedades abierto el recuadro no puede flotar sobre el dibujo."""
     out: dict = {}
+    fallos: list[str] = []
     for escena in ("editor", "propiedades"):
         with Ventana(tamano, escena) as w:
             d = w.diagrama
+            flota = bool(d.barra.parent() is d and d.barra.isVisible())
             out[escena] = {"alto del dibujo (px)": d.height(), "zoom en la cabecera": d.barra_integrada,
-                           "el recuadro del zoom flota sobre el dibujo": bool(d.barra.parent() is d and d.barra.isVisible())}
+                           "el recuadro del zoom flota sobre el dibujo": flota, "solo iconos": d._solo_iconos,
+                           "ancho del recuadro": d.barra.width(), "mínimo de la ventana": w.minimumSizeHint().width()}
+            if escena == "propiedades" and (flota or not d.barra_integrada):
+                fallos.append(f"{tamano}: con Propiedades abierto el zoom flota sobre el dibujo")
+    if tamano == "completa":  # (1440×900, el portátil grande: el dibujo con Propiedades mide 374 px y el zoom flotaba sobre él en la ronda 4)
+        from PySide6.QtWidgets import QApplication
+        with Ventana("completa", "propiedades") as w:
+            w.resize(1440, 900)
+            capturar._reposo(QApplication.instance(), 60)
+            d = w.diagrama
+            out["1440×900 con Propiedades"] = {"alto del dibujo (px)": d.height(), "zoom en la cabecera": d.barra_integrada, "solo iconos": d._solo_iconos,
+                                              "ancho del recuadro": d.barra.width(), "mínimo de la ventana": w.minimumSizeHint().width()}
+            if not d.barra_integrada:
+                fallos.append("1440×900: con Propiedades abierto el zoom flota sobre el dibujo")
+    out["FALLOS"] = fallos
     return out
 
 
@@ -803,9 +909,13 @@ def variables(tamano: str) -> dict:
         capturar._reposo(app, 30)
         t = w.variables.tabla
 
+        fallos: list[str] = []
+
         def estado() -> dict:
+            if t.columnWidth(0) < 96:
+                fallos.append(f"{tamano}: la columna del nombre mide {t.columnWidth(0)} px, menos de 96")
             return {"columnas (nombre, papel, tipo)": [t.columnWidth(j) for j in range(3)], "ancho útil de la tabla": t.viewport().width(),
-                    "barra vertical": t.verticalScrollBar().isVisible()}
+                    "barra vertical": t.verticalScrollBar().isVisible(), "«Papel» y «Tipo» en palabras (hay sitio con el nombre en sus 96 px)": w.variables.completo}
         out["sin barra"] = estado()
         for i in range(12):
             w.edicion.ed.add_variable(f"sensor_final_carrera_cilindro_{i:02d}_avance", "input", {"kind": "bool"})
@@ -815,6 +925,9 @@ def variables(tamano: str) -> dict:
         out["con barra (12 variables más)"] = estado()
         out["«Papel» y «Tipo»: lo que se ve / lo que dice la celda"] = sorted({(variables_abrev(t, r, 1), t.item(r, 1).text()) for r in range(t.rowCount())}
                                                                            | {(variables_abrev(t, r, 2), t.item(r, 2).text()) for r in range(t.rowCount())})
+        out["nombres: filas con el nombre partido en varias líneas / alto de la fila más alta"] = (
+            sum(1 for r in range(t.rowCount()) if "\n" in variables_abrev(t, r, 0)), max(t.rowHeight(r) for r in range(t.rowCount())))
+        out["FALLOS"] = fallos
     return out
 
 
@@ -826,11 +939,11 @@ def variables_abrev(tabla, fila: int, columna: int) -> str:
     opcion.rect = tabla.visualRect(indice)
     opcion.font = tabla.font()
     tabla.itemDelegate().initStyleOption(opcion, indice)
-    return opcion.text
+    return opcion.text.replace(" ", "\n")  # (Qt separa las líneas de una celda con U+2028)
 
 
 MEDICIONES = {"franjas": franjas, "alturas": alturas, "letras": letras, "ancho": ancho, "teclado": teclado, "contraste": contraste,
-              "propiedades": propiedades, "literales": literales, "ventana640": ventana640, "tablas": tablas, "largos": largos,
+              "propiedades": propiedades, "formula": formula, "literales": literales, "ventana640": ventana640, "tablas": tablas, "largos": largos,
               "chip": chip, "fichas": fichas, "reloj": reloj, "escala": escala, "cruce": cruce, "zoom": zoom, "variables": variables,
               "planos": planos}
 
@@ -849,7 +962,7 @@ def main() -> int:
         for t in a.tamanos:
             if m in ("teclado", "contraste", "ancho") and t not in ("1366", "minima", "completa"):
                 continue  # estas se miden a los tamaños de referencia (el más habitual y el más pequeño)
-            if m in ("literales", "ventana640", "chip", "escala", "cruce") and t != a.tamanos[0]:
+            if m in ("literales", "ventana640", "chip", "escala", "cruce", "formula") and t != a.tamanos[0]:
                 continue  # no dependen del tamaño que se pida (crean sus propias ventanas)
             try:
                 todo[m][t] = MEDICIONES[m](t)
@@ -859,7 +972,28 @@ def main() -> int:
             print(json.dumps(todo[m][t], ensure_ascii=False, indent=1))
     if a.json:
         a.json.write_text(json.dumps(todo, ensure_ascii=False, indent=1), encoding="utf-8")
-    return 0
+    fallos = _fallos(todo)
+    if fallos:
+        print("\nFALLOS:")
+        for f in fallos:
+            print("  - " + f)
+    else:
+        print("\nSin fallos (las mediciones que comprueban algo lo dicen en su clave «FALLOS»).")
+    return 1 if fallos else 0
+
+
+def _fallos(datos, ruta: str = "") -> list[str]:
+    """Todas las claves «FALLOS» no vacías de lo medido (una medición que comprueba algo, no solo mide, las lleva)."""
+    salida: list[str] = []
+    if isinstance(datos, dict):
+        for clave, valor in datos.items():
+            if clave == "FALLOS" and isinstance(valor, list):
+                salida += [f"{ruta.strip(' /')}: {x}" for x in valor]
+            else:
+                salida += _fallos(valor, f"{ruta}/{clave}")
+    elif isinstance(datos, str) and ruta.count("/") == 2 and ("Error:" in datos or "Exception" in datos):
+        salida.append(f"{ruta.strip(' /')}: {datos}")  # (una medición que se rompió)
+    return salida
 
 
 if __name__ == "__main__":
