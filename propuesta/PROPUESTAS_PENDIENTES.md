@@ -107,6 +107,8 @@ laterales como a pantalla completa). Lo que cabe se mantiene; lo que no cabe ced
 **Motivo de no hacerlo:** añade una entrada de menú y un ajuste persistente (no es solo aspecto), y las pruebas de ajustes y de menús
 recorren los menús con los textos actuales.
 
+**Apartamiento.** Lo que ya hace la rama a partir de 1600×900 (paneles laterales de 264 px, y de 300 px a 1920) se aparta de P-IMP-42 («los anchos salen de la paleta: 188–216»). Se documenta aquí; P7 no añade otro apartamiento.
+
 ### P8. Verde de «verdadero» con 4,5:1 (`COL["true_text"]`; lo fija `SUIV02`)
 
 **Problema.** El texto y las barras de lo que es verdadero en la simulación (`COL["true_text"]`) usan el mismo `#40d641` que
@@ -142,6 +144,8 @@ línea, se parte por los «_» en dos o tres. Entre 1366 y 1600 px de ancho los 
 **Propuesta.** `ANCHO_LATERAL = 270` desde 1280 px de ancho (con él, «Papel» y «Tipo» enteros y las cuatro columnas de las tablas de estado también a 1366).
 **Motivo de no hacerlo a ≤ 1366:** `SPAL05` y `SPAL06` comparan con 218.
 
+**Apartamiento.** Los paneles laterales de 264 px (a 1600) y de 300 px (a 1920) se apartan de P-IMP-42 («los anchos salen de la paleta: 188–216»). P10 propone además 270 px desde 1280 px de ancho, que se apartaría de la misma decisión y de `SPAL05`/`SPAL06`.
+
 ### P11. Tope proporcional de Propiedades en ventanas bajas (apartaría P-IMP-128 / 118 / 120 / 93)
 
 **Propuesta.** Que el panel inferior no pase del 55 % del alto de la ventana (con un mínimo para ver una fila de campos): a 768 px,
@@ -169,10 +173,30 @@ ilegibles los nombres en la ronda 3 (38–50 px); con 96 px como mínimo para el
 ### P13. «Modo» y «Estado» ceden su columna al nombre en las tablas de estado de la simulación con el panel de 218 px
 
 **Qué hace la rama (`ventana.Ventana._planes_vars` y `_planes_temp`).** Con 218 px (198–210 px útiles) caben el nombre en sus 96 px, «Valor» y «Contribuyen»;
-**«Modo»** (continua / memoria) no tiene columna: su texto va en la ayuda de la celda y en la línea de detalle de la barra de estado («luz · salida continua · OFF»).
+**«Modo»** (continua / memoria) no tiene columna: por debajo de unos 1680 px de ancho la columna «Modo» de «Salidas y variables» se oculta y solo se ve en la línea de detalle de la barra de estado al pasar el puntero o elegir la fila («luz · salida continua · OFF»).
+
+**Apartamiento.** P13 se aparta de P-IMP-30 (tabla de «Temporizadores»: «dónde, estado, lleva, preset»), porque «Estado» pasa bajo el nombre. Se documenta aquí y en `CAMBIOS.md` (§2 ter, N1 b).
+
+**Veredicto final.** La parte de «Modo» oculto no se acepta tal cual: es el defecto F1 (ver al final de este documento).
 **«Estado»** de «Temporizadores» (parado / contando / vencido) se pinta **bajo el nombre**, con su color. A partir de ≈ 250 px útiles (a 1920×1080 el panel mide
 300 px) las cuatro columnas, con «Modo» abreviado («cont.», «mem.») y, con ≈ 275 px o más, entero («continua», «memoria»).
 
 **Motivo.** Con el nombre de ≥ 96 px, las otras tres columnas de «Salidas y variables» (≈ 54 + 43 + 71 px) no caben en 198 px; el árbitro de la ronda 4 propuso
 precisamente abreviar «Modo» o llevar «Contribuyen» a la línea de detalle. Se prefirió quitar «Modo» (lo que menos dice: el alumnado ve el nombre, el valor y qué
 etapa lleva la salida) y conservar «Contribuyen». **Alternativa:** un panel de simulación de ≥ 270 px también a 1366 (P10), o una línea secundaria bajo cada nombre con «continua · a.E1.motor.0».
+
+## Defectos abiertos tras el veredicto final
+
+Fuente: `VEREDICTO_ARBITRO.md` (ronda 5, nota 8,06, no aprobado por poco, sin bloqueantes). Por prioridad.
+
+- **F1 («Modo» oculto en «Salidas y variables»). Primero a corregir.** Por debajo de unos 1680 px de ancho la columna «Modo» desaparece sin rastro, y «salida continua / memorizada» solo se ve en la línea de detalle. Solución: mostrar «salida continua» o «memorizada» bajo el nombre, como ya se hace con el «Estado» de los temporizadores (`DelegadoNombres` con `secundaria`). Es la que más sube la nota (C9 +0,5).
+- **F2 (salidas bajo el pliegue con muchas entradas).** Con 10 entradas o más, «Salidas y variables» queda fuera de la vista a 1366. Solución: que la caja «Entradas» se pueda plegar desde su título, o reservar a «Salidas y variables» un alto mínimo visible.
+- **F3 (foco invisible en PLANOS).** «+ Añadir hoja», el lienzo de la hoja y sus áreas de desplazamiento reciben el foco sin anillo. Solución: darles el mismo anillo de teclado que al resto de paradas de PLANOS, o quitarles el foco.
+- **F4 (chevron sobre la primera entrada).** Al desplazar el panel derecho, el botón de plegar (32×32) tapa parte de la primera entrada y un clic ahí pliega el panel. Solución: reservar un margen o colocar el chevron fuera del área de las entradas.
+- **F5 (etiquetas de canales cortadas).** En partida y cuarto las etiquetas de E/S (71 y 65 px) se cortan a media palabra, y el combo de plantillas de PLANOS sale como «A4 vertica…eterminada» en cuarto. Solución: usar el ancho libre del marco del PLC para las etiquetas y dar al combo más anchura o elidirlo en otro punto.
+- **F6 (mínimo a pantalla completa).** Desde 1920×1080 no se consigue bajar a 683 o 640 px en una sola petición (llega a 769). Anotación. Solución: revisar el mínimo de ancho de los paneles laterales a pantalla completa.
+- **F7 (cruce del umbral de 1600×900 más lento).** 270–490 ms frente a 215–350 ms en la ronda 4. Anotación. Solución: reducir el coste de reaplicar la escala al cruzar el umbral.
+- **F8 (título recortado en ventanas estrechas).** «Secuen…» a 683 con Propiedades y «S…» a 640. Anotación. Solución: dar prioridad al título frente al chip o a la ayuda cuando no quepan los tres.
+- **F9 (líneas de más).** A 1920, los nombres de «Salidas y variables» ocupan 3 líneas por repartirse las cuatro columnas, y «Contribuyen» sale en 3 líneas cuando el panel lleva barra. Solución: repartir las columnas para que los nombres ocupen como mucho 2 líneas.
+- **F10 (barras anidadas en cuarto).** Variables lleva la barra de la tabla y la del panel, una al lado de la otra. Solución: dejar una sola barra.
+- **F11 (documentación).** Citas que faltan (P-IMP-30 en P13; P-IMP-42 en P7 y P10) y la frase inexacta sobre «la ayuda de la celda». Solución: ya aplicada en este mismo documento y en `CAMBIOS.md`.

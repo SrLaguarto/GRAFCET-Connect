@@ -1,0 +1,142 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Propuesta de diseño GRAFCET Connect</title>
+<style>
+:root{--tinta:#16263a;--tinta2:#4a5b6e;--fondo:#eef2f6;--sup:#fff;--borde:#cdd6e0;--acento:#0b6e75;--acento-s:#cfeee6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--tinta:#e6edf5;--tinta2:#aab7c6;--fondo:#121a24;--sup:#1b2633;--borde:#34445a;--acento:#5fd0d8;--acento-s:#183a3d}}
+:root[data-theme="dark"]{--tinta:#e6edf5;--tinta2:#aab7c6;--fondo:#121a24;--sup:#1b2633;--borde:#34445a;--acento:#5fd0d8;--acento-s:#183a3d}
+body{margin:0;background:var(--fondo);color:var(--tinta);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+header,main{max-width:1200px;margin:0 auto;padding:0 16px}
+header{padding-top:24px}
+h1{font-size:26px;margin:0 0 8px}
+h2{font-size:21px;margin:32px 0 6px;color:var(--acento);border-bottom:1px solid var(--borde);padding-bottom:4px}
+h3{font-size:15px;margin:18px 0 8px;color:var(--tinta2)}
+nav.escenas{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+nav.escenas a{padding:6px 10px;border:1px solid var(--borde);border-radius:6px;background:var(--sup);color:var(--tinta);text-decoration:none}
+nav.escenas a:hover,nav.escenas a:focus{border-color:var(--acento);background:var(--acento-s);outline:2px dashed var(--tinta)}
+.controles{display:flex;align-items:center;gap:10px;margin:12px 0}
+select{font:inherit;padding:6px;border:1px solid var(--borde);border-radius:6px;background:var(--sup);color:var(--tinta)}
+.par{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+figure{margin:0;background:var(--sup);border:1px solid var(--borde);border-radius:6px;padding:8px;min-width:0}
+figure img{display:block;width:100%;height:auto;border:1px solid var(--borde)}
+figcaption{font-size:13px;color:var(--tinta2);margin-bottom:6px}
+.nota{font-size:14px;color:var(--tinta2);font-style:italic;margin:24px 8px}
+.maquetas{display:grid;grid-template-columns:1fr;gap:12px}
+footer{margin:40px 0 24px;font-size:13px;color:var(--tinta2)}
+@media (max-width:760px){.par{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Propuesta de diseño de GRAFCET Connect</h1>
+  <p>Comparación de capturas «antes» (main) y «después» (propuesta) por escena y tamaño de ventana. Basado en IEC 60848; no se declara conformidad. Véanse <code>CAMBIOS.md</code>, <code>PROPUESTAS_PENDIENTES.md</code> y <code>VEREDICTO_ARBITRO.md</code>. Nota final del árbitro: 8,06, no aprobado por poco.</p>
+  <nav class="escenas">
+      <a href="#editor">Editor</a>
+      <a href="#simulacion">Simulación</a>
+      <a href="#propiedades">Propiedades</a>
+      <a href="#es">Entradas y salidas (E/S)</a>
+      <a href="#planos">Planos</a>
+      <a href="#foco">Foco de teclado</a>
+      <a href="#nombres-edicion">Nombres largos en edición</a>
+      <a href="#nombres-simulacion">Nombres largos en simulación</a>
+  </nav>
+  <div class="controles">
+    <label for="tam">Tamaño:</label>
+    <select id="tam">
+        <option value="todos">Todos</option>
+        <option value="completa">Completa 1920×1080</option>
+        <option value="partida">Partida 960×1040</option>
+        <option value="cuarto">Cuarto 960×520</option>
+        <option value="1366">1366×768</option>
+        <option value="estrecha">Estrecha 640×800</option>
+        <option value="minima">Mínima 640×520</option>
+    </select>
+  </div>
+</header>
+<main>
+<section id="editor"><h2>Editor</h2><p>Edición del dibujo, con la barra de herramientas y el panel de elementos.</p>
+<div class="fila" data-tam="completa"><h3>Completa 1920×1080</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/editor-completa.png" alt="Antes: Editor, Completa 1920×1080"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/editor-completa.png" alt="Después: Editor, Completa 1920×1080"></figure></div></div>
+<div class="fila" data-tam="partida"><h3>Partida 960×1040</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/editor-partida.png" alt="Antes: Editor, Partida 960×1040"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/editor-partida.png" alt="Después: Editor, Partida 960×1040"></figure></div></div>
+<div class="fila" data-tam="cuarto"><h3>Cuarto 960×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/editor-cuarto.png" alt="Antes: Editor, Cuarto 960×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/editor-cuarto.png" alt="Después: Editor, Cuarto 960×520"></figure></div></div>
+<div class="fila" data-tam="1366"><h3>1366×768</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/editor-1366.png" alt="Antes: Editor, 1366×768"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/editor-1366.png" alt="Después: Editor, 1366×768"></figure></div></div>
+<div class="fila" data-tam="estrecha"><h3>Estrecha 640×800</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/editor-estrecha.png" alt="Antes: Editor, Estrecha 640×800"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/editor-estrecha.png" alt="Después: Editor, Estrecha 640×800"></figure></div></div>
+<div class="fila" data-tam="minima"><h3>Mínima 640×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/editor-minima.png" alt="Antes: Editor, Mínima 640×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/editor-minima.png" alt="Después: Editor, Mínima 640×520"></figure></div></div></section>
+<section id="simulacion"><h2>Simulación</h2><p>Entradas, etapas activas y tablas de salidas y temporizadores durante Play.</p>
+<div class="fila" data-tam="completa"><h3>Completa 1920×1080</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/simulacion-completa.png" alt="Antes: Simulación, Completa 1920×1080"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/simulacion-completa.png" alt="Después: Simulación, Completa 1920×1080"></figure></div></div>
+<div class="fila" data-tam="partida"><h3>Partida 960×1040</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/simulacion-partida.png" alt="Antes: Simulación, Partida 960×1040"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/simulacion-partida.png" alt="Después: Simulación, Partida 960×1040"></figure></div></div>
+<div class="fila" data-tam="cuarto"><h3>Cuarto 960×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/simulacion-cuarto.png" alt="Antes: Simulación, Cuarto 960×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/simulacion-cuarto.png" alt="Después: Simulación, Cuarto 960×520"></figure></div></div>
+<div class="fila" data-tam="1366"><h3>1366×768</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/simulacion-1366.png" alt="Antes: Simulación, 1366×768"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/simulacion-1366.png" alt="Después: Simulación, 1366×768"></figure></div></div>
+<div class="fila" data-tam="estrecha"><h3>Estrecha 640×800</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/simulacion-estrecha.png" alt="Antes: Simulación, Estrecha 640×800"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/simulacion-estrecha.png" alt="Después: Simulación, Estrecha 640×800"></figure></div></div>
+<div class="fila" data-tam="minima"><h3>Mínima 640×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/simulacion-minima.png" alt="Antes: Simulación, Mínima 640×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/simulacion-minima.png" alt="Después: Simulación, Mínima 640×520"></figure></div></div></section>
+<section id="propiedades"><h2>Propiedades</h2><p>Panel de propiedades abierto con una transición o una etapa elegida.</p>
+<div class="fila" data-tam="completa"><h3>Completa 1920×1080</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/propiedades-completa.png" alt="Antes: Propiedades, Completa 1920×1080"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/propiedades-completa.png" alt="Después: Propiedades, Completa 1920×1080"></figure></div></div>
+<div class="fila" data-tam="partida"><h3>Partida 960×1040</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/propiedades-partida.png" alt="Antes: Propiedades, Partida 960×1040"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/propiedades-partida.png" alt="Después: Propiedades, Partida 960×1040"></figure></div></div>
+<div class="fila" data-tam="cuarto"><h3>Cuarto 960×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/propiedades-cuarto.png" alt="Antes: Propiedades, Cuarto 960×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/propiedades-cuarto.png" alt="Después: Propiedades, Cuarto 960×520"></figure></div></div>
+<div class="fila" data-tam="1366"><h3>1366×768</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/propiedades-1366.png" alt="Antes: Propiedades, 1366×768"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/propiedades-1366.png" alt="Después: Propiedades, 1366×768"></figure></div></div>
+<div class="fila" data-tam="estrecha"><h3>Estrecha 640×800</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/propiedades-estrecha.png" alt="Antes: Propiedades, Estrecha 640×800"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/propiedades-estrecha.png" alt="Después: Propiedades, Estrecha 640×800"></figure></div></div>
+<div class="fila" data-tam="minima"><h3>Mínima 640×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/propiedades-minima.png" alt="Antes: Propiedades, Mínima 640×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/propiedades-minima.png" alt="Después: Propiedades, Mínima 640×520"></figure></div></div></section>
+<section id="es"><h2>Entradas y salidas (E/S)</h2><p>Vista de canales del PLC y listas de sensores y actuadores.</p>
+<div class="fila" data-tam="completa"><h3>Completa 1920×1080</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/es-completa.png" alt="Antes: Entradas y salidas (E/S), Completa 1920×1080"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/es-completa.png" alt="Después: Entradas y salidas (E/S), Completa 1920×1080"></figure></div></div>
+<div class="fila" data-tam="partida"><h3>Partida 960×1040</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/es-partida.png" alt="Antes: Entradas y salidas (E/S), Partida 960×1040"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/es-partida.png" alt="Después: Entradas y salidas (E/S), Partida 960×1040"></figure></div></div>
+<div class="fila" data-tam="cuarto"><h3>Cuarto 960×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/es-cuarto.png" alt="Antes: Entradas y salidas (E/S), Cuarto 960×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/es-cuarto.png" alt="Después: Entradas y salidas (E/S), Cuarto 960×520"></figure></div></div>
+<div class="fila" data-tam="1366"><h3>1366×768</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/es-1366.png" alt="Antes: Entradas y salidas (E/S), 1366×768"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/es-1366.png" alt="Después: Entradas y salidas (E/S), 1366×768"></figure></div></div>
+<div class="fila" data-tam="estrecha"><h3>Estrecha 640×800</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/es-estrecha.png" alt="Antes: Entradas y salidas (E/S), Estrecha 640×800"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/es-estrecha.png" alt="Después: Entradas y salidas (E/S), Estrecha 640×800"></figure></div></div>
+<div class="fila" data-tam="minima"><h3>Mínima 640×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/es-minima.png" alt="Antes: Entradas y salidas (E/S), Mínima 640×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/es-minima.png" alt="Después: Entradas y salidas (E/S), Mínima 640×520"></figure></div></div></section>
+<section id="planos"><h2>Planos</h2><p>Vista de PLANOS con la biblioteca de plantillas y las hojas.</p>
+<div class="fila" data-tam="completa"><h3>Completa 1920×1080</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/planos-completa.png" alt="Antes: Planos, Completa 1920×1080"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/planos-completa.png" alt="Después: Planos, Completa 1920×1080"></figure></div></div>
+<div class="fila" data-tam="partida"><h3>Partida 960×1040</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/planos-partida.png" alt="Antes: Planos, Partida 960×1040"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/planos-partida.png" alt="Después: Planos, Partida 960×1040"></figure></div></div>
+<div class="fila" data-tam="cuarto"><h3>Cuarto 960×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/planos-cuarto.png" alt="Antes: Planos, Cuarto 960×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/planos-cuarto.png" alt="Después: Planos, Cuarto 960×520"></figure></div></div>
+<div class="fila" data-tam="1366"><h3>1366×768</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/planos-1366.png" alt="Antes: Planos, 1366×768"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/planos-1366.png" alt="Después: Planos, 1366×768"></figure></div></div>
+<div class="fila" data-tam="estrecha"><h3>Estrecha 640×800</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/planos-estrecha.png" alt="Antes: Planos, Estrecha 640×800"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/planos-estrecha.png" alt="Después: Planos, Estrecha 640×800"></figure></div></div>
+<div class="fila" data-tam="minima"><h3>Mínima 640×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/planos-minima.png" alt="Antes: Planos, Mínima 640×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/planos-minima.png" alt="Después: Planos, Mínima 640×520"></figure></div></div></section>
+<section id="foco"><h2>Foco de teclado</h2><p>Escena con el anillo de foco visible al navegar con Tab.</p>
+<div class="fila" data-tam="completa"><h3>Completa 1920×1080</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/foco-completa.png" alt="Antes: Foco de teclado, Completa 1920×1080"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/foco-completa.png" alt="Después: Foco de teclado, Completa 1920×1080"></figure></div></div>
+<div class="fila" data-tam="partida"><h3>Partida 960×1040</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/foco-partida.png" alt="Antes: Foco de teclado, Partida 960×1040"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/foco-partida.png" alt="Después: Foco de teclado, Partida 960×1040"></figure></div></div>
+<div class="fila" data-tam="cuarto"><h3>Cuarto 960×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/foco-cuarto.png" alt="Antes: Foco de teclado, Cuarto 960×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/foco-cuarto.png" alt="Después: Foco de teclado, Cuarto 960×520"></figure></div></div>
+<div class="fila" data-tam="1366"><h3>1366×768</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/foco-1366.png" alt="Antes: Foco de teclado, 1366×768"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/foco-1366.png" alt="Después: Foco de teclado, 1366×768"></figure></div></div>
+<div class="fila" data-tam="estrecha"><h3>Estrecha 640×800</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/foco-estrecha.png" alt="Antes: Foco de teclado, Estrecha 640×800"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/foco-estrecha.png" alt="Después: Foco de teclado, Estrecha 640×800"></figure></div></div>
+<div class="fila" data-tam="minima"><h3>Mínima 640×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><img loading="lazy" src="capturas/antes/foco-minima.png" alt="Antes: Foco de teclado, Mínima 640×520"></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/foco-minima.png" alt="Después: Foco de teclado, Mínima 640×520"></figure></div></div></section>
+<section id="nombres-edicion"><h2>Nombres largos en edición</h2><p>Nombres de aula reales en Variables y Entradas (solo propuesta; no hay captura de partida).</p>
+<div class="fila" data-tam="completa"><h3>Completa 1920×1080</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-edicion-completa.png" alt="Después: Nombres largos en edición, Completa 1920×1080"></figure></div></div>
+<div class="fila" data-tam="partida"><h3>Partida 960×1040</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-edicion-partida.png" alt="Después: Nombres largos en edición, Partida 960×1040"></figure></div></div>
+<div class="fila" data-tam="cuarto"><h3>Cuarto 960×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-edicion-cuarto.png" alt="Después: Nombres largos en edición, Cuarto 960×520"></figure></div></div>
+<div class="fila" data-tam="1366"><h3>1366×768</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-edicion-1366.png" alt="Después: Nombres largos en edición, 1366×768"></figure></div></div>
+<div class="fila" data-tam="estrecha"><h3>Estrecha 640×800</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-edicion-estrecha.png" alt="Después: Nombres largos en edición, Estrecha 640×800"></figure></div></div>
+<div class="fila" data-tam="minima"><h3>Mínima 640×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-edicion-minima.png" alt="Después: Nombres largos en edición, Mínima 640×520"></figure></div></div></section>
+<section id="nombres-simulacion"><h2>Nombres largos en simulación</h2><p>Nombres de aula reales en las tablas de estado durante Play (solo propuesta).</p>
+<div class="fila" data-tam="completa"><h3>Completa 1920×1080</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-simulacion-completa.png" alt="Después: Nombres largos en simulación, Completa 1920×1080"></figure></div></div>
+<div class="fila" data-tam="partida"><h3>Partida 960×1040</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-simulacion-partida.png" alt="Después: Nombres largos en simulación, Partida 960×1040"></figure></div></div>
+<div class="fila" data-tam="cuarto"><h3>Cuarto 960×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-simulacion-cuarto.png" alt="Después: Nombres largos en simulación, Cuarto 960×520"></figure></div></div>
+<div class="fila" data-tam="1366"><h3>1366×768</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-simulacion-1366.png" alt="Después: Nombres largos en simulación, 1366×768"></figure></div></div>
+<div class="fila" data-tam="estrecha"><h3>Estrecha 640×800</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-simulacion-estrecha.png" alt="Después: Nombres largos en simulación, Estrecha 640×800"></figure></div></div>
+<div class="fila" data-tam="minima"><h3>Mínima 640×520</h3><div class="par"><figure><figcaption>Antes (main)</figcaption><p class="nota">Sin captura «antes» para esta escena.</p></figure><figure><figcaption>Después (propuesta)</figcaption><img loading="lazy" src="capturas/despues/nombres-simulacion-minima.png" alt="Después: Nombres largos en simulación, Mínima 640×520"></figure></div></div></section>
+<section id="maquetas">
+  <h2>Maquetas de propuestas pendientes</h2>
+  <p>Capturas de la ventana real retocadas por script (<code>herramientas/maquetas.py</code>). No están implementadas.</p>
+  <div class="maquetas">
+<figure><img loading="lazy" src="capturas/maquetas/maqueta-p1-propiedades-cuarto.png" alt="P1. Paleta de operadores en una fila con Propiedades en cuarto de pantalla (no implementada)."><figcaption>P1. Paleta de operadores en una fila con Propiedades en cuarto de pantalla (no implementada).</figcaption></figure>
+<figure><img loading="lazy" src="capturas/maquetas/maqueta-p2-entradas-en-banda-partida.png" alt="P2. Entradas en una banda bajo el dibujo en pantalla partida (no se acepta tal cual)."><figcaption>P2. Entradas en una banda bajo el dibujo en pantalla partida (no se acepta tal cual).</figcaption></figure>
+<figure><img loading="lazy" src="capturas/maquetas/maqueta-p3-es-filas-28px-1366.png" alt="P3. Vista de E/S con filas de 28 px a 1366×768 (modo cómodo, opcional)."><figcaption>P3. Vista de E/S con filas de 28 px a 1366×768 (modo cómodo, opcional).</figcaption></figure>
+<figure><img loading="lazy" src="capturas/maquetas/maqueta-p7-modo-aula-1366.png" alt="P7. «Modo aula»: escala grande forzada a 1366×768 (elegida a mano)."><figcaption>P7. «Modo aula»: escala grande forzada a 1366×768 (elegida a mano).</figcaption></figure>
+  </div>
+</section>
+</main>
+<footer>Carpeta <code>propuesta/</code>. Véase <code>LEEME.md</code> para el diff y las herramientas de medición.</footer>
+<script>
+(function(){
+  var sel=document.getElementById('tam');
+  function aplicar(){
+    var v=sel.value;
+    var filas=document.querySelectorAll('.fila');
+    for(var i=0;i<filas.length;i++){
+      filas[i].hidden = (v!=='todos' && filas[i].getAttribute('data-tam')!==v);
+    }
+  }
+  sel.addEventListener('change',aplicar);
+})();
+</script>
+</body>
+</html>
