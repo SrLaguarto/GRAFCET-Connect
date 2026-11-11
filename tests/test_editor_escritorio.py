@@ -2740,17 +2740,18 @@ class Interfaz(unittest.TestCase):
         w.show()
         self.app.processEvents()
         minimo, maximo = w.ancho_lateral, 16777215
+        derecho = w.ancho_derecho  # (el derecho mide más desde 1280 px de ancho de ventana: P10)
         pal = w.paleta
         self.assertGreaterEqual(minimo, 2 * pal.gridSize().width() + 2 * pal.frameWidth() + 2, "caben las dos columnas")
         self.assertGreaterEqual(minimo, pal.ancho_minimo())
         self.assertEqual((w.dock.minimumWidth(), w.dock.maximumWidth()), (minimo, minimo))
-        self.assertEqual((w.derecho.minimumWidth(), w.derecho.maximumWidth()), (minimo, maximo))
-        self.assertEqual((w.dock.width(),w.derecho.width()),(minimo,minimo))
+        self.assertEqual((w.derecho.minimumWidth(), w.derecho.maximumWidth()), (derecho, maximo))
+        self.assertEqual((w.dock.width(),w.derecho.width()),(minimo,derecho))
         self.assertTrue(w.split.handle(1).isEnabled(), "divisor habilitado también al editar")
         w.split.moveSplitter(w.split.width() - 400, 1)  # el panel derecho se puede estirar
         self.app.processEvents()
         self.assertEqual(w.dock.width(), minimo)
-        self.assertGreater(w.derecho.width(), minimo)
+        self.assertGreater(w.derecho.width(), derecho)
         r = [pal.visualItemRect(pal.item(i)) for i in range(pal.count())]
         self.assertEqual((pal.count(), len({x.y() for x in r})), (20, 13))
         self.assertEqual(len({x.x() for x in r}), 2, "dos columnas por sección")
@@ -2762,7 +2763,7 @@ class Interfaz(unittest.TestCase):
             e.seleccionar(sel)
             self.app.processEvents()
             self.assertLessEqual(w.props.minimumSizeHint().width(), w.inferior.width(), sel)
-        self.assertLessEqual(w.derecho.widget(1).widget().minimumSizeHint().width(), minimo)
+        self.assertLessEqual(w.derecho.widget(1).widget().minimumSizeHint().width(), derecho)
         # plegar y desplegar siguen funcionando
         w.flechas["izquierdo"].click()
         self.assertTrue(w.dock.isHidden())
@@ -2771,10 +2772,10 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(w.dock.width(), minimo)
         # al simular conserva el ancho de edición y permite mover su divisor
         self.assertTrue(w.cambiar_modo("simular"))
-        self.assertEqual((w.derecho.minimumWidth(), w.derecho.maximumWidth()), (minimo, 16777215))
+        self.assertEqual((w.derecho.minimumWidth(), w.derecho.maximumWidth()), (derecho, 16777215))
         self.assertTrue(w.split.handle(1).isEnabled())
         self.assertTrue(w.cambiar_modo("editar"))
-        self.assertEqual((w.derecho.minimumWidth(), w.derecho.maximumWidth()), (minimo, maximo))
+        self.assertEqual((w.derecho.minimumWidth(), w.derecho.maximumWidth()), (derecho, maximo))
 
     def test_SEDI79_tabla_de_variables_nombre_papel_tipo(self):
         """REQ-EDT-07: la tabla tiene solo Nombre, Papel y Tipo; se ofrecen Booleana, Entera y Decimal con 2 decimales;
@@ -4688,7 +4689,7 @@ class Interfaz(unittest.TestCase):
             w.flechas["izquierdo"].click()
             w.flechas["derecho"].click()
             QApplication.processEvents()
-            self.assertEqual((w.dock.width(), w.derecho.width()), (w.ancho_lateral, w.ancho_lateral))
+            self.assertEqual((w.dock.width(), w.derecho.width()), (w.ancho_lateral, w.ancho_derecho))
             self.assertEqual((w.inferior.geometry(), w.vsplit.sizes()), antes)
         # altura: el divisor la mueve y hay un mínimo que deja ver los programadores
         minimo = w.props.minimumSizeHint().height()

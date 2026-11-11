@@ -7,7 +7,7 @@ Una barrita de color indica el tipo de la variable (Bool, Decimal, Entera, Cualq
 from dataclasses import replace
 import json
 import copy
-from PySide6.QtCore import Signal, Qt, QMimeData, QSize, QRect, QEvent, QRegularExpression, QTimer
+from PySide6.QtCore import Signal, Qt, QMimeData, QObject, QSize, QRect, QEvent, QRegularExpression, QTimer
 from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPixmap, QRegularExpressionValidator
 from fractions import Fraction
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout,
@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxL
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
                                QDialog, QDialogButtonBox, QListWidget, QListWidgetItem,
                                QAbstractItemView, QMenu, QApplication, QGridLayout, QStyle,
-                               QStyledItemDelegate)
+                               QStyledItemDelegate, QScrollBar)
 
 from . import estilo
 from .paneles import ContextoNombres, EtiquetaGrupos, TituloSeccion
@@ -251,6 +251,8 @@ class DelegadoVariable(QStyledItemDelegate):
 
 
 class ListaVariables(QListWidget):
+    elegida = Signal(str)  # el ID de la variable donde se hizo clic (asignar con dos clics: variable y canal)
+
     def __init__(self, lado="entrada"):
         super().__init__()
         self.setObjectName("listaES")
@@ -265,6 +267,13 @@ class ListaVariables(QListWidget):
         self.setSpacing(0)
         self.setMouseTracking(True)
         self.setItemDelegate(DelegadoVariable(self, lado == "entrada"))
+
+    def mouseReleaseEvent(self, evento):  # noqa: N802
+        super().mouseReleaseEvent(evento)
+        if evento.button() == Qt.MouseButton.LeftButton:
+            item = self.itemAt(evento.position().toPoint())
+            if item is not None:
+                self.elegida.emit(item.data(Qt.ItemDataRole.UserRole))
 
     def startDrag(self, actions):
         it = self.currentItem()
@@ -284,6 +293,29 @@ class ListaVariables(QListWidget):
         return datos
 
 
+class _FiltroEleccion(QObject):
+    """Mientras hay algo elegido con un clic (variable o canal), vigila la aplicación: Esc o un clic fuera de las variables y los canales
+    cancelan la elección."""
+
+    def __init__(self, panel):
+        super().__init__(panel)
+        self.panel = panel
+
+    def eventFilter(self, objeto, evento):  # noqa: N802
+        tipo = evento.type()
+        if tipo == QEvent.Type.KeyPress and evento.key() == Qt.Key.Key_Escape and self.panel.isVisible():
+            # solo si la ventana activa es la del panel y no hay un menú ni un diálogo modal encima: Esc es suyo
+            if (QApplication.activePopupWidget() is None and QApplication.activeModalWidget() is None
+                    and QApplication.activeWindow() is self.panel.window()):
+                self.panel.cancelar_eleccion()
+                return True
+            return False
+        if tipo == QEvent.Type.MouseButtonPress and evento.button() == Qt.MouseButton.LeftButton:
+            if not self.panel._es_de_la_eleccion(objeto, evento.position().toPoint()):  # (el receptor es el widget bajo el puntero)
+                self.panel.cancelar_eleccion()
+        return False
+
+
 class TerminalES(QFrame):
     """Un canal: el lateral exterior al PLC es la zona donde soltar una variable. Dentro del marco, el indicador y el nombre del canal
     (y el valor, en los registros); fuera, a su lado, el nombre de la variable asignada y, al pasar el ratón, «×»."""
@@ -294,6 +326,7 @@ class TerminalES(QFrame):
         self.aviso = aviso
         self._inicio_arrastre = None
         self._resaltado = False
+        self._elegido = getattr(panel, "_eleccion", None) == ("canal", area, direccion)  # el canal elegido con un clic (a la espera de la variable)
         self.setAcceptDrops(not panel.bloqueado)
         self.setObjectName("senalPLC")
         alto = getattr(panel, "alto_fila", ALTO_FILA)  # (el de la escala de ahora: 16 px, y 20 a pantalla completa)
@@ -370,7 +403,7 @@ class TerminalES(QFrame):
                 l.addWidget(self.marca)
             if self.b_quitar:
                 l.addWidget(self.b_quitar)
-        self.setToolTip(f"{AREAS[area]} · dirección {direccion}\nArrastra una variable. Botón derecho para quitar o configurar.")
+        self.setToolTip(f"{AREAS[area]} · dirección {direccion}\nArrastra una variable, o haz clic en ella y en este canal. Botón derecho para quitar o configurar.")
 
     def _ayuda_nombre(self, aviso=""):
         """Ayuda de la etiqueta del nombre: el nombre entero (la etiqueta lo recorta) y, si lo hay, el aviso."""
@@ -410,6 +443,12 @@ class TerminalES(QFrame):
         self._resaltado = on
         self.update()
 
+    def fijar_elegido(self, on):
+        """Lo marca como el canal elegido con un clic (la misma zona que resalta al arrastrar una variable encima)."""
+        if on != self._elegido:
+            self._elegido = on
+            self.update()
+
     def zona_asignacion(self):
         """Solo el lateral fuera del PLC: izquierda para sensores, derecha para actuadores."""
         r = self.interior.geometry()
@@ -419,8 +458,12 @@ class TerminalES(QFrame):
 
     def paintEvent(self, evento):
         super().paintEvent(evento)
-        if self._resaltado:
-            QPainter(self).fillRect(self.zona_asignacion(), QColor(estilo.ASIGNACION))
+        if self._resaltado or self._elegido:
+            p = QPainter(self)
+            p.fillRect(self.zona_asignacion(), QColor(estilo.ASIGNACION))
+            if self._elegido:
+                p.setPen(QColor(estilo.ACENTO))
+                p.drawRect(self.zona_asignacion().adjusted(0, 0, -1, -1))
 
     def detalle(self):
         """Lo que cuenta la línea de detalle de la ventana al pasar por la fila: el nombre entero, el canal y el tipo."""
@@ -445,7 +488,17 @@ class TerminalES(QFrame):
     def mousePressEvent(self, evento):
         if evento.button() == Qt.MouseButton.LeftButton:
             self._inicio_arrastre = evento.position().toPoint()
+            evento.accept()  # (el clic en un canal es de él: no llega al fondo)
+            return
         super().mousePressEvent(evento)
+
+    def mouseReleaseEvent(self, evento):  # noqa: N802
+        """Un clic (sin arrastre) en el canal: lo elige o, con una variable elegida, se la asigna (igual que soltarla encima)."""
+        inicio, self._inicio_arrastre = self._inicio_arrastre, None
+        if (evento.button() == Qt.MouseButton.LeftButton and inicio is not None and not self.panel.bloqueado
+                and (evento.position().toPoint() - inicio).manhattanLength() < QApplication.startDragDistance()):
+            self.panel.clic_canal(self.area, self.direccion)
+        super().mouseReleaseEvent(evento)
 
     def mouseMoveEvent(self, evento):
         if self.panel.bloqueado or self.variable is None or self._inicio_arrastre is None:
@@ -907,6 +960,11 @@ class PanelES(QWidget):
         for lista in (self.lista_entradas, self.lista_salidas):  # el nombre entero de la variable, al pasar el ratón, en la barra de estado
             lista.entered.connect(lambda indice, lista=lista: self.detalle.emit((lista.item(indice.row()).toolTip() or "").replace("\n", " · ")))
             lista.viewport().installEventFilter(self)
+        # asignar con dos clics, además de arrastrar: variable y canal (o canal y variable); Esc o un clic en vacío cancela
+        self._eleccion = None  # ("variable", id) o ("canal", área, dirección)
+        self._filtro_eleccion = _FiltroEleccion(self)
+        for lista in (self.lista_entradas, self.lista_salidas):
+            lista.elegida.connect(self._clic_variable)
         self._estrecho = None
         self._disponer(False)
         # con la ventana pequeña el cuerpo entero se desplaza (barras cuando hacen falta) en vez de cortarse
@@ -1054,6 +1112,67 @@ class PanelES(QWidget):
             self.detalle.emit("")
         return super().eventFilter(objeto, evento)
 
+    # -- asignar con dos clics (P3a): las mismas reglas (`admite`) y el mismo deshacer (`asignar`) que al soltar
+    def eleccion(self):
+        return self._eleccion
+
+    def _clic_variable(self, vid):
+        if self.bloqueado:
+            return
+        e = self._eleccion
+        if e is not None and e[0] == "canal" and self.admite(vid, e[1]):
+            self.cancelar_eleccion()
+            self.asignar(vid, e[1], e[2])
+            return
+        self._poner_eleccion(("variable", vid))
+
+    def clic_canal(self, area, direccion):
+        if self.bloqueado:
+            return
+        e = self._eleccion
+        if e is not None and e[0] == "variable":
+            if self.admite(e[1], area):  # (con una variable incompatible no pasa nada: sigue elegida)
+                self.cancelar_eleccion()
+                self.asignar(e[1], area, direccion)
+            return
+        self._poner_eleccion(None if e == ("canal", area, direccion) else ("canal", area, direccion))
+
+    def cancelar_eleccion(self):
+        self._poner_eleccion(None)
+
+    def _poner_eleccion(self, eleccion):
+        antes, self._eleccion = self._eleccion, eleccion
+        if (antes is None) != (eleccion is None):
+            if eleccion is None:
+                QApplication.instance().removeEventFilter(self._filtro_eleccion)
+            else:
+                QApplication.instance().installEventFilter(self._filtro_eleccion)
+        self._pintar_eleccion()
+
+    def _pintar_eleccion(self):
+        for lista in (self.lista_entradas, self.lista_salidas):
+            lista.clearSelection()
+            lista.setCurrentItem(None)
+        e = self._eleccion
+        if e is not None and e[0] == "variable":
+            item = self.indicadores_listas.get(e[1])
+            if item is not None:
+                item.setSelected(True)
+        for (area, direccion), terminal in self.terminales.items():
+            terminal.fijar_elegido(e == ("canal", area, direccion))
+
+    def _es_de_la_eleccion(self, w, pos):
+        """Si un clic en `w` (en `pos`, coordenadas de `w`) es de lo que se elige con clics (una variable de las listas, un canal) o de una
+        barra de desplazamiento: no cancela."""
+        while w is not None:
+            if isinstance(w, (TerminalES, QScrollBar)):
+                return True
+            lista = w.parentWidget()
+            if isinstance(lista, ListaVariables) and w is lista.viewport():
+                return lista.itemAt(pos) is not None
+            w = lista
+        return False
+
     def contexto_de(self, area):
         """Los nombres asignados al lado del PLC al que pertenece el canal de `area` (sensores a la izquierda, actuadores a la derecha)."""
         return self.contexto_izq if area in ("discrete", "input-register") else self.contexto_der
@@ -1093,11 +1212,39 @@ class PanelES(QWidget):
             for w in (sensores, actuadores):
                 w.setMinimumWidth(144)
                 w.setMaximumHeight(16777215)
+        self._repartir_zona()
+
+    def _repartir_zona(self):
+        """F5: con poco ancho (media pantalla y un cuarto) el mapa del PLC se lleva más que las listas, que ya se leen elididas con lo que las
+        distingue: las etiquetas de los canales, que se cortaban a media palabra, ganan sitio."""
+        if getattr(self, "_estrecho", True):
+            return
+        pocos = self.width() < 1200
+        self._zona.setColumnStretch(0, 1)
+        self._zona.setColumnStretch(1, 5 if pocos else 3)
+        self._zona.setColumnStretch(2, 1)
+
+    def _interior_para(self, ancho):
+        """F5: la mitad del marco que cae dentro de él mide lo que necesita (indicador, nombre del canal más largo y el valor de un registro) y
+        no más: lo que sobra de los 200 px de la escala normal pasa a la etiqueta de la variable asignada. Nunca más que el de la escala."""
+        fm = QFontMetrics(self.font())
+        canal = max(fm.horizontalAdvance(f"{t} 999") for t in ETIQUETA_CANAL.values())
+        necesario = 3 + 4 + 6 + canal + 6 + fm.horizontalAdvance("-327,68") + 3 + 4  # (márgenes, indicador, hueco, canal, hueco, valor y holgura)
+        base = estilo.ESCALAS[self.escala]["ANCHO_INTERIOR_ES"]
+        return base if ancho >= 1200 else min(base, necesario)
 
     def resizeEvent(self, evento):  # noqa: N802
         super().resizeEvent(evento)
         estrecho = self.width() < self.UMBRAL_ESTRECHO
         self._disponer(estrecho)
+        self._repartir_zona()
+        interior = self._interior_para(self.width())
+        if interior != self.ancho_interior:
+            self.ancho_interior = interior
+            self.lienzo.fijar_interior(interior)
+            if self.doc is not None:
+                self._dibujar()
+                self.mostrar_valores(self._ultimos_valores)
         self.resumen.setMaximumWidth(210 if estrecho else 16777215)  # media pantalla: «0/44 entradas asignadas» y «0/44 salidas asignadas» en dos líneas, no en una larga que deja la ayuda en cuatro
 
     def restablecer_canales(self):
@@ -1517,6 +1664,11 @@ class PanelES(QWidget):
                 avisos.append(f"«{variables[s.variable]['name']}»: {texto}")
         self.avisos_escala = "; ".join(avisos)
         self._pintar_redondeos()
+        if self._eleccion is not None and self._eleccion[0] == "variable":  # (las listas se rehacen: la elegida sigue marcada)
+            if self._eleccion[1] in self.indicadores_listas:
+                self._pintar_eleccion()
+            else:
+                self.cancelar_eleccion()
         self.pista_canales = f"Sin canales en {', '.join(vacias)}: sube su cantidad en Configuración" if vacias else ""
         self._pintar_nota()
 

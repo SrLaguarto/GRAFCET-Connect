@@ -19,6 +19,10 @@ Qué ha cambiado en la ronda 5: se añade **P12** («Papel» y «Tipo» abreviad
 pedía el árbitro) y **P13** (las columnas que ceden ante el nombre en las tablas de estado de la simulación); P10 recoge que a 1920×1080 los paneles
 laterales llegan a 300 px y que la columna del nombre ya mide ≥ 96 px a cualquier tamaño.
 
+## Decisión del responsable (rama de rediseño aprobada)
+
+**Aplicadas en el código** (ya no son propuestas pendientes; se apartan de lo que decían P-IMP-93, SPAL05/06 y las pruebas de pestañas, que se han ajustado): **P1** (por debajo de 560 px de alto, la paleta de operadores en una fila con desplazamiento horizontal: `Programador.modo_fila`), **P3a** (asignar con dos clics en la vista de E/S: `PanelES.clic_canal`, `ListaVariables.elegida`), **P4** (pestañas plegadas de 32 px), **P10** para el panel **derecho** (270 px desde 1280 px de ancho de ventana: `ventana.ANCHO_DERECHO`; el izquierdo no cambia) y **P11** (el panel inferior no pasa del 55 % del alto de la ventana: `alto_opciones.tope_alto`). **Rechazada:** P13 (ver abajo). **No se aplican:** P2, P3b (filas de 28 px), P7, P8 y P9.
+
 ## Descartada
 
 ### D1. Pulsación mantenida sobre una entrada para abrir el menú (se retiró de la rama; apartaba P-IMP-75)
@@ -173,17 +177,21 @@ ilegibles los nombres en la ronda 3 (38–50 px); con 96 px como mínimo para el
 ### P13. «Modo» y «Estado» ceden su columna al nombre en las tablas de estado de la simulación con el panel de 218 px
 
 **Qué hace la rama (`ventana.Ventana._planes_vars` y `_planes_temp`).** Con 218 px (198–210 px útiles) caben el nombre en sus 96 px, «Valor» y «Contribuyen»;
-**«Modo»** (continua / memoria) no tiene columna: por debajo de unos 1680 px de ancho la columna «Modo» de «Salidas y variables» se oculta y solo se ve en la línea de detalle de la barra de estado al pasar el puntero o elegir la fila («luz · salida continua · OFF»).
+**«Modo»** (continua / memoria) se abrevia («cont.», «mem.»), pero no se esconde (corregido: antes se ocultaba por debajo de unos 1680 px y solo se veía en la línea de detalle de la barra de estado, no en la ayuda de la celda, que no existe para una columna oculta).
 
 **Apartamiento.** P13 se aparta de P-IMP-30 (tabla de «Temporizadores»: «dónde, estado, lleva, preset»), porque «Estado» pasa bajo el nombre. Se documenta aquí y en `CAMBIOS.md` (§2 ter, N1 b).
 
-**Veredicto final.** La parte de «Modo» oculto no se acepta tal cual: es el defecto F1 (ver al final de este documento).
+**Veredicto final y decisión del responsable.** P13 **rechazada**: ninguna columna de las tablas de estado se esconde ni se mete bajo el nombre. «Temporizadores» vuelve a llevar la columna «Estado» (P-IMP-30) y «Salidas y variables» la columna «Modo» siempre visible (cierra F1); con el panel estrecho se abrevian («cont.», «mem.»; «par.», «cont.», «venc.») y el nombre se parte en líneas.
 **«Estado»** de «Temporizadores» (parado / contando / vencido) se pinta **bajo el nombre**, con su color. A partir de ≈ 250 px útiles (a 1920×1080 el panel mide
 300 px) las cuatro columnas, con «Modo» abreviado («cont.», «mem.») y, con ≈ 275 px o más, entero («continua», «memoria»).
 
 **Motivo.** Con el nombre de ≥ 96 px, las otras tres columnas de «Salidas y variables» (≈ 54 + 43 + 71 px) no caben en 198 px; el árbitro de la ronda 4 propuso
 precisamente abreviar «Modo» o llevar «Contribuyen» a la línea de detalle. Se prefirió quitar «Modo» (lo que menos dice: el alumnado ve el nombre, el valor y qué
 etapa lleva la salida) y conservar «Contribuyen». **Alternativa:** un panel de simulación de ≥ 270 px también a 1366 (P10), o una línea secundaria bajo cada nombre con «continua · a.E1.motor.0».
+
+## Estado de los defectos F2 a F10 (rama de rediseño, tras la decisión del responsable)
+
+Corregidos y cubiertos por `tests/test_defectos_rediseno.py`: **F2** (la caja «Entradas» se desplaza por dentro, con un alto máximo que deja ver al menos cuatro filas de «Salidas y variables»: `ventana._alto_entradas`), **F3** (anillo de teclado en el lienzo de la hoja de PLANOS y las áreas de desplazamiento que no usan el teclado, sin foco), **F4** (el botón de plegar del panel derecho va en una fila de título propia, «Simulación»), **F5** (con poco ancho, la mitad del marco del PLC mide lo que necesita y el mapa se lleva más que las listas; el desplegable de plantillas se recorta por el final), **F6** (con la escala grande el mínimo de la ventana es el de siempre: 683 y 640 px a la primera), **F7** (histéresis de 40 px en el umbral de 1600×900 y PLANOS se pone al día al mostrarse), **F8** (el título conserva unos 10 caracteres: ceden antes la ayuda y el zoom integrado), **F9** (los nombres de «Salidas y variables» ocupan dos líneas como mucho cuando algún reparto lo permite) y **F10** (una sola barra vertical en Variables a un cuarto de pantalla). **F1** cerrado con la decisión sobre P13.
 
 ## Defectos abiertos tras el veredicto final
 

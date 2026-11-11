@@ -12,7 +12,7 @@ Qué hace
 - Simula los ejemplos (menú Ejemplos) y los proyectos guardados (Proyecto > Abrir…): un archivo .grafnet.
 - Dibuja el grafcet con la notación de la norma y muestra la evolución: etapas activas e inestables,
   transiciones validadas y franqueables, acciones, salidas, variables, temporizadores y traza.
-- Entradas con un clic (las numéricas se escriben). Al abrir un ejemplo o un modelo, el programa queda en Pausa, sin estado, que
+- Entradas con un clic (las numéricas se escriben); bajo «Entradas» hay un rótulo con los gestos: «Clic: pulsar · Ctrl+clic: enclavar · Clic derecho: tipo». Al abrir un ejemplo o un modelo, el programa queda en Pausa, sin estado, que
   es el modo de edición. Play (Ejecutar, F5) compila lo editado y simula en tiempo real, como un autómata: cada
   retardo es un temporizador: sobre la duración de su receptividad (o de la condición o evento de una acción) se ve el tiempo transcurrido («0,5 s») mientras cuenta, y «3 s ✓» al vencer. Pausa (F5 de nuevo) detiene y
   vuelve a editar y deja todo a 0 hasta el siguiente Play (sin etapas activas ni temporizadores); cada Play empieza desde la situación inicial. Barra de herramientas: Ejecutar/Pausa
@@ -23,6 +23,7 @@ Qué hace
   («Ajustes de simulación no habituales»).
 - Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J). Al simular, el
   panel inferior muestra la traza.
+- Paneles laterales: crecen con la letra grande. El derecho (Variables y Diagnósticos) mide 270 px desde 1280 px de ancho de ventana y 218 por debajo; a 1600 mide 270 px y a 1920, 300. La letra grande se activa sola desde 1600×900, con 40 px de histéresis para no cambiar al borde del umbral; el izquierdo llega a 264 px a 1600 y a 300 a 1920.
 - Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), la rueda del ratón (sola o con Ctrl; anclada al puntero), Ctrl+= y Ctrl+−; Mayús+rueda desplaza en horizontal y el gesto de dos dedos de un panel táctil, en los dos ejes; el pellizco del panel táctil hace zoom; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Al cambiar el tamaño de la ventana principal, el dibujo se vuelve a encajar y centrar como «Centrar todo», tras 200 ms; plegar paneles no lo dispara. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
 - Proyecto > Guardar (Ctrl+S) o Guardar como… (Ctrl+Mayús+S): guarda el proyecto con su dibujo en un archivo .grafnet, para abrirlo después.
 - Proyecto > Propiedades del archivo…: autor (se puede cambiar; por defecto, el usuario de Windows), fechas de creación y de última edición, versiones de GRAFCET Connect con que se creó y se guardó por última vez, versión del formato y sello del archivo. Muestra también los datos de este programa (versión, distribución o desarrollo, y fecha de instalación). Los archivos anteriores a la 1.0 muestran «desconocida (archivo anterior a la 1.0)» en fechas y versiones.
@@ -30,7 +31,7 @@ Qué hace
 - Editor de un grafcet secuencial (Proyecto > Nuevo proyecto, o editar en Pausa cualquier modelo abierto): paleta a la
   izquierda, con la etapa, la transición, la simultaneidad y la acción (las fichas se arrastran al dibujo; sin herramienta, el ratón
   selecciona, mueve y enlaza). Puntos de unión arriba y abajo (al acercar el puntero se marcan y de ellos sale el
-  enlace). Panel de Opciones abajo, con la configuración de lo seleccionado (ver más abajo). Al seleccionar una transición, si el panel es más bajo de lo necesario, se agranda hasta ver todos los operadores de la receptividad (≈334 px con la paleta actual); si usted lo ha agrandado, se respeta su altura. Mover con rejilla,
+  enlace). Panel de Opciones abajo, con la configuración de lo seleccionado (ver más abajo). Al seleccionar una transición, si el panel es más bajo de lo necesario, se agranda hasta ver todos los operadores de la receptividad (≈334 px con la paleta actual), sin pasar del 55 % del alto de la ventana (lo que no cabe se desplaza dentro); por debajo de 560 px de alto, los operadores van en una sola fila con desplazamiento horizontal. Si usted lo ha agrandado, se respeta su altura. Mover con rejilla,
   borrar, deshacer y rehacer (Ctrl+Z, Ctrl+Y), «Añadir debajo» (Ctrl+Intro) y panel de diagnósticos.
   Los enlaces se seleccionan con un clic (se pueden quitar o volver a enlazar; el sentido sale del trazo, y de
   abajo arriba lleva flecha). La simultaneidad (doble trazo) es una barra de la paleta que se suelta en el dibujo,
@@ -44,6 +45,7 @@ Qué hace
 - Ayuda > Leyenda del dibujo: ventana no modal y desplazable, por secciones (Etapas, Transiciones, Acciones, Jerarquía y forzado, Temporizadores, Ratón y teclado). Cada entrada tiene una miniatura dibujada con el propio código de dibujo, con sus colores reales.
 - Ayuda > Acerca de GRAFCET Connect…: versión, licencia GPL-3.0 y licencia comercial bajo petición, enlace al código y el botón «Comunicar un fallo»,
   que abre las Issues de GitHub (https://github.com/SrLaguarto/GRAFCET-Connect/issues).
+- Con Tab, el control activo muestra un anillo de foco. El anillo solo aparece al navegar con el teclado, no con un clic.
 - Los avisos no muestran códigos internos y usan vocabulario GRAFCET. El detalle técnico y la «Referencia: código» van en la ayuda emergente de cada aviso. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular».
 
 
@@ -433,7 +435,7 @@ En modo Editar:
 E/S externas (simulador de procesos por Modbus) y botón conmutador (P-IMP-63)
 
 - A E/S se entra con la luz «E/S externas: …» del extremo derecho de la fila de pestañas (ya no hay pestaña propia): un clic la abre y la luz queda resaltada mientras se ve; las pestañas GRAFCET y PLANOS vuelven. El botón «E/S externas» abre el panel de E/S. Mientras se ve, el botón está marcado y dice «Vista GRAFCET» (con un icono de etapa, transición y etapa); pulsado, vuelve al dibujo. La flecha ← hace lo mismo. Ninguna de las dos desconecta la conexión. Tiene un ancho fijo, el del texto más largo, así que la barra no se mueve al alternar.
-- El panel tiene a la izquierda la lista SENSORES y a la derecha la lista ACTUADORES: arrastre cada variable a un canal de su lado. En el centro, un marco con la cabecera «(IP:puerto)» y «Esclavo ID:n»: a su izquierda, los canales Input e Input Reg; a su derecha, Coil y Holding Reg. El nombre de la variable asignada aparece fuera del marco, pegado a él. Al arrastrar, se resalta la fila entera.
+- El panel tiene a la izquierda la lista SENSORES y a la derecha la lista ACTUADORES: arrastre cada variable a un canal de su lado, o haga dos clics: primero la variable y luego el canal, en cualquier orden. Esc o un clic en vacío cancelan. En el centro, un marco con la cabecera «(IP:puerto)» y «Esclavo ID:n»: a su izquierda, los canales Input e Input Reg; a su derecha, Coil y Holding Reg. El nombre de la variable asignada aparece fuera del marco, pegado a él. Al arrastrar, se resalta la fila entera.
 - Cada canal tiene un indicador: tenue si no tiene variable, del color de su tipo si la tiene, y más vivo si la señal está activa. Bool es verde, Decimal azul, Entera naranja y Cualquiera blanco. El resumen de abajo cuenta «x/y entradas asignadas · x/y salidas asignadas».
 - Para quitar una asignación, pase el ratón por ella y pulse la «×», que solo aparece al pasar el ratón (con la conexión activa, antes pulse «Desconectar / editar»). También puede usar el menú contextual del canal.
 - «+ Canales» ya no existe: los campos de offset y cantidad de I/Q/AI/AQ están en Configuración, en «Canales del servidor». Un proyecto sin mapa propio abre con 32 canales digitales y 12 numéricos; no hereda las cantidades de canales de preferencias anteriores.

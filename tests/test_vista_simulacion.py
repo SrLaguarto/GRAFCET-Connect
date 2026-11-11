@@ -131,7 +131,7 @@ class VistaSimulacion(BaseQt):
     def test_SMOD10_variables_texto_mas_margenes_cabe_sin_ensanchar_panel(self):
         """REQ-EDT-07, REQ-EDT-09: se conserva la corrección anterior, con dos columnas y espacio para texto y relleno."""
         w,d=self.preparar();p=w.variables
-        self.assertEqual(w.derecho.width(),w.ancho_lateral)
+        self.assertEqual(w.derecho.width(),w.ancho_derecho)
         for b in (*p.b_nuevas.values(),p.b_quitar):
             self.assertGreaterEqual(b.width(),b.fontMetrics().horizontalAdvance(b.text())+16)
 
@@ -157,7 +157,7 @@ class VistaSimulacion(BaseQt):
     def test_SMOD13_entradas_booleanas_y_numericas_caben_en_el_ancho_conservado(self):
         """REQ-SIM-03, REQ-EDT-09: conservar el ancho derecho no recorta pulsadores, interruptores ni edición numérica."""
         w,d=self.preparar();w.edicion.nueva_variable("nivel","input",{"kind":"decimal","scale":2})
-        self.ejecutar(w,True);self.assertEqual(w.derecho.width(),w.ancho_lateral)
+        self.ejecutar(w,True);self.assertEqual(w.derecho.width(),w.ancho_derecho)
         limite=w.scroll.viewport().mapToGlobal(w.scroll.viewport().rect().topRight()).x()
         for b in [*w.botones.values(),*w.campos.values()]:
             self.assertLessEqual(b.mapToGlobal(b.rect().topRight()).x(),limite)

@@ -287,7 +287,6 @@ class Paleta(QListWidget):
         if ancho == getattr(self, "_ancho_celdas", None):
             return
         self._ancho_celdas = ancho
-        repintar = self.updatesEnabled()
         self.setUpdatesEnabled(False)
         try:
             for i in range(self.count()):
@@ -297,7 +296,7 @@ class Paleta(QListWidget):
                     it.setSizeHint(tam)
             self.doItemsLayout()
         finally:
-            self.setUpdatesEnabled(repintar)
+            self.setUpdatesEnabled(True)  # (siempre a cierto: si se guardara lo de antes y la ventana lo tenía en falso, la paleta se quedaba sin pintar)
 
     def resizeEvent(self, evento: Any) -> None:  # noqa: N802
         super().resizeEvent(evento)
@@ -447,6 +446,19 @@ class FichaJerarquia(QWidget):
         return [t for t, b in self.botones.items() if not b.isHidden()]
 
 
+class _UbicaCategorias(QObject):
+    """Cuando cambia el ancho de la cabecera del panel, vuelve a decidir si las categorías de bloques caben en ella."""
+
+    def __init__(self, panel: "PanelPropiedades") -> None:
+        super().__init__(panel)
+        self.panel = panel
+
+    def eventFilter(self, objeto: QObject, evento: QEvent) -> bool:  # noqa: N802
+        if evento.type() in (QEvent.Type.Resize, QEvent.Type.Show):
+            self.panel._ubicar_categorias()
+        return False
+
+
 class _DisponeEstado(QObject):
     """Avisa al panel de que la fila de la fórmula cambió de ancho o de contenido: puede que el estado deba bajar a su línea (o volver)."""
 
@@ -475,6 +487,7 @@ class PanelPropiedades(QWidget):
                 prog.escalar()
         for ficha in (self.ficha_izq, self.ficha_etapa):
             ficha.escalar()
+        self._ubicar_categorias()
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
         """El ancho mínimo no pasa de `ANCHO_MINIMO`: al abrirse (y mientras sus páginas aún no se han repartido) el panel llegó a
@@ -509,8 +522,12 @@ class PanelPropiedades(QWidget):
         self.titulo.setObjectName("tituloPropiedades")
         self.fila_cabecera.addWidget(self.titulo)
         lay.addWidget(self.cabecera)
+        self.cabecera.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)  # (la cabecera, siempre arriba y del mismo alto)
         self.vacio = QLabel(self.TEXTO_VACIO)
         self.vacio.setObjectName("ayudaPropiedades")
+        self.vacio.setWordWrap(True)
+        self.vacio.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)  # (el mensaje, justo bajo la cabecera)
+        self.vacio.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         lay.addWidget(self.vacio)
         self.cuerpo = QWidget()
         cuerpo = QHBoxLayout(self.cuerpo)
@@ -563,9 +580,30 @@ class PanelPropiedades(QWidget):
                                    f"QToolButton:checked{{background:{estilo.ACENTO};color:white;border-color:{estilo.ACENTO_OSCURO};font-weight:600;}}"
                                    f"QToolButton:checked[tecl=\"true\"]:focus{{border:2px dashed white;}}")
         self.fila_cabecera.addWidget(self.t_fijar)
+        self._ubica_categorias = _UbicaCategorias(self)  # (las categorías de bloques, en la fila de la cabecera si caben)
+        self.cabecera.installEventFilter(self._ubica_categorias)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
+
+    # -- categorías de bloques en la cabecera -------------------------------------------------------
+    def _ubicar_categorias(self) -> None:
+        """Con una transición, las categorías del programador van en la fila de la cabecera, entre el título (que ocupa la columna de campos) y
+        «Fijar»: empiezan donde empiezan la paleta y el área, y el panel gana una fila de alto. Si no caben en esa fila, o en otra página, vuelven a
+        su fila propia sobre la paleta (donde, en un panel estrecho, pasan a dos filas). Siempre en una sola línea, sin cortarse."""
+        prog, e3, e2 = self.prog, estilo.E3, estilo.E2
+        ancho_titulo = ANCHO_COLUMNA + 14 - e2 - e3  # la columna de campos más el hueco hasta la paleta, menos lo que ya pone la fila
+        natural = prog.ancho_categorias()
+        disponible = self.cabecera.width() - e2 - ancho_titulo - e3 - (self.t_fijar.sizeHint().width() + e3) - 40 - e3
+        quiere = (self.pagina == "transicion" and self.cabecera.width() > 0 and natural <= disponible
+                  and self.titulo.sizeHint().width() <= ancho_titulo)
+        if quiere:
+            self.titulo.setFixedWidth(ancho_titulo)
+            prog.categorias_en_cabecera(self.fila_cabecera, 1)
+        else:
+            prog.categorias_en_cabecera(None)
+            self.titulo.setMinimumWidth(0)
+            self.titulo.setMaximumWidth(16777215)
 
     # -- páginas -----------------------------------------------------------------------------------
     def _programacion(self) -> QWidget:
@@ -909,6 +947,7 @@ class PanelPropiedades(QWidget):
         self.cuerpo.setVisible(kind is not None)
         self.vacio.setVisible(kind is None)
         self.pagina = kind or "vacio"  # qué opciones se muestran: etapa, transicion, accion, enlace, barra o vacio
+        self._ubicar_categorias()
         etapa_a = e.nombres.get(e.etapa_accion(aid), "") if kind == "accion" else ""
         titulo = {"etapa": f"Etapa {e.nombres.get(vivo)}", "transicion": f"Transición {e.nombres.get(vivo)}",
                   "enlace": f"Enlace {e.nombre(vivo)}" if vivo else "", "barra": e.nombre(vivo) if vivo else "",

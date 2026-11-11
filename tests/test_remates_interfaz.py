@@ -72,7 +72,7 @@ class Remates(BaseQt):
         self.assertNotIn("Diagnósticos",[b.title() for b in w.derecho.findChildren(QGroupBox)])
         tid,_=e.ed.add_transition("g","",label="t2",at=(100,200));e.cambia();QApplication.processEvents()
         self.assertTrue(d.indicador_diagnosticos.isVisible());self.assertIs(w.lista_diag.parent(),d)
-        self.assertGreater(w.lista_diag.y(),d.barra.geometry().bottom())
+        self.assertTrue(d.barra_integrada);self.assertLess(w.lista_diag.y(),12)  # (el zoom, en la cabecera: el aviso va siempre en su sitio)
         i=next(i for i in range(w.lista_diag.count()) if w.lista_diag.item(i).data(Qt.ItemDataRole.UserRole)==tid)
         self.assertIn("t2",w.lista_diag.item(i).text());self.assertNotIn(tid,w.lista_diag.item(i).text())
         QTest.mouseClick(w.lista_diag.viewport(),Qt.MouseButton.LeftButton,pos=w.lista_diag.visualItemRect(w.lista_diag.item(i)).center())

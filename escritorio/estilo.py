@@ -96,9 +96,14 @@ ALTO_DIBUJO_ZOOM = 360  # por debajo de este alto de dibujo útil, los controles
 ALTO_PROPS_ZOOM = 260  # y con Propiedades abierto y su panel al menos así de alto (el de una transición pide ≈ 340 px; el de una etapa, ≈ 180)
 
 
-def escala_para(ancho: int, alto: int) -> str:
-    """La escala que corresponde a una ventana de ese tamaño: «grande» desde `UMBRAL_GRANDE`, «normal» por debajo."""
-    return "grande" if ancho >= UMBRAL_GRANDE[0] and alto >= UMBRAL_GRANDE[1] else "normal"
+HISTERESIS_ESCALA = 40  # px: ya en la escala grande, no se vuelve a la normal hasta bajar tanto del umbral (arrastrar el borde justo por él no la reaplica una y otra vez)
+
+
+def escala_para(ancho: int, alto: int, actual: str | None = None) -> str:
+    """La escala que corresponde a una ventana de ese tamaño: «grande» desde `UMBRAL_GRANDE`, «normal» por debajo. Con `actual` («grande»),
+    la escala grande se conserva hasta `HISTERESIS_ESCALA` px por debajo del umbral."""
+    margen = HISTERESIS_ESCALA if actual == "grande" else 0
+    return "grande" if ancho >= UMBRAL_GRANDE[0] - margen and alto >= UMBRAL_GRANDE[1] - margen else "normal"
 
 
 def activar_escala(nombre: str) -> None:

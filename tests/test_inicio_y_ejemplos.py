@@ -59,7 +59,7 @@ class InicioInterfaz(BaseQt):
         self.assertFalse(w.edicion.M['steps']);self.assertFalse(w.edicion.ed.dirty)
         self.assertTrue(w._plegables['izquierdo'].abierto);self.assertTrue(w._plegables['derecho'].abierto)
         self.assertFalse(w._plegables['inferior'].abierto)
-        self.assertAlmostEqual(w._plegables['derecho'].width(),w.ancho_lateral,delta=2)
+        self.assertAlmostEqual(w._plegables['derecho'].width(),w.ancho_derecho,delta=2)
         self.assertLess(abs(w.ayuda.mapTo(w,w.ayuda.rect().center()).y()-w.titulo.mapTo(w,w.titulo.rect().center()).y()),4)
         self.assertGreater(w.ayuda.mapTo(w,w.ayuda.rect().topLeft()).x(),w.titulo.mapTo(w,w.titulo.rect().topRight()).x())
 

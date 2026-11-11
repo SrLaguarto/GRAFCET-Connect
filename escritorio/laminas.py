@@ -301,6 +301,10 @@ class VistaLamina(QWidget):
         super().__init__(parent);self.documento=None;self.indice=0;self.setMinimumSize(120,120);self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.colocar=lambda offset:None;self.arrastre=None;self.seleccionado=False;self.capa=0;self.elegir_capa=lambda i:None;self.eliminar_grafico=lambda:None;self.textos=None;self.nuevo_texto=False;self.zona=False;self.inicio_texto=None;self.inicio_zona=None
     def paintEvent(self,event):
+        self._pintar_hoja()
+        if self.hasFocus() and self.property('tecl')==True:  # el anillo de foco de teclado, como el de los demás controles (`FocoTeclado`)
+            p=QPainter(self);p.setPen(QPen(QColor(estilo.FOCO),2,Qt.PenStyle.DashLine));p.setBrush(Qt.BrushStyle.NoBrush);p.drawRect(self.rect().adjusted(1,1,-1,-1));p.end()
+    def _pintar_hoja(self):
         p=QPainter(self);p.fillRect(self.rect(),QColor(estilo.MESA))
         d=self.documento
         if d is None:return
@@ -398,7 +402,7 @@ class DialogoLaminas(QDialog):
         menu.addAction('Guardar plantilla en biblioteca…',self.guardar_en_biblioteca)
         menu.addAction('Restaurar plantilla predeterminada…',self.restaurar_predeterminada)
         centro=QHBoxLayout();raiz.addLayout(centro,1)
-        scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setFixedWidth(286 if integrado else 300);panel=QWidget();form=QFormLayout(panel);self.form_hoja=form;scroll.setWidget(panel)
+        scroll=QScrollArea();scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus);scroll.setWidgetResizable(True);scroll.setFixedWidth(286 if integrado else 300);panel=QWidget();form=QFormLayout(panel);self.form_hoja=form;scroll.setWidget(panel)
         if integrado:
             form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows);scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         else:centro.addWidget(scroll)
@@ -430,7 +434,7 @@ class DialogoLaminas(QDialog):
         self.guardar_ajustes=QPushButton('Aplicar al proyecto');form.addRow(self.guardar_ajustes)
         self.vista=VistaLamina();self.vista.colocar=self.colocar
         if integrado:
-            self.area=QScrollArea();self.area.setWidgetResizable(False);self.area.setAlignment(Qt.AlignmentFlag.AlignCenter);self.area.setWidget(self.vista);centro.addWidget(self.area,1);self.propiedades=QStackedWidget();self.propiedades.setFixedWidth(290);self.propiedades.addWidget(scroll);centro.addWidget(self.propiedades)
+            self.area=QScrollArea();self.area.setFocusPolicy(Qt.FocusPolicy.NoFocus);self.area.setWidgetResizable(False);self.area.setAlignment(Qt.AlignmentFlag.AlignCenter);self.area.setWidget(self.vista);centro.addWidget(self.area,1);self.propiedades=QStackedWidget();self.propiedades.setFixedWidth(290);self.propiedades.addWidget(scroll);centro.addWidget(self.propiedades)
         else:centro.addWidget(self.vista,1)
         nav=QHBoxLayout();raiz.addLayout(nav);self.anterior=QPushButton('← Anterior');self.siguiente=QPushButton('Siguiente →');self.pagina=QLabel()
         self.b_centrar=QPushButton('Centrar GRAFCET');nav.addWidget(self.b_centrar);self.b_centrar.clicked.connect(self.centrar)

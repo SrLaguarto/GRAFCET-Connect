@@ -1870,8 +1870,8 @@ class VistaDiagrama(QGraphicsView):
         sh = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
         if not self.barra_integrada:
             self.barra.move(w - self.barra.width() - sb - 8, 8)
-        bx, bw, bb = ((w - 252 - sb - 8, 252, 2) if self.barra_integrada else
-                      (self.barra.x(), self.barra.width(), self.barra.geometry().bottom()))
+        bx, bw, bb = w - 252 - self.verticalScrollBar().sizeHint().width() - 8, 252, 2  # (reserva siempre el ancho de la barra, se vea o no)
+        # el aviso va siempre en el mismo sitio y con el mismo ancho, esté donde esté el zoom
         for b, lugar in self._bordes:
             if lugar == "izquierda":
                 b.move(0, (h - b.height()) // 2)

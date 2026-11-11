@@ -219,7 +219,9 @@ class ComboElidido(QComboBox):
         texto = opcion.currentText
         if self.toolTip() != texto:
             self.setToolTip(texto)
-        opcion.currentText = self.fontMetrics().elidedText(texto, Qt.TextElideMode.ElideMiddle, max(24, campo.width() - 6))
+        # (con « — » —«A4 vertical — predeterminada»— lo que distingue está al principio: «A4 vertical — pre…», no «A4 vertica…eterminada»)
+        modo = Qt.TextElideMode.ElideRight if " — " in texto else Qt.TextElideMode.ElideMiddle
+        opcion.currentText = self.fontMetrics().elidedText(texto, modo, max(24, campo.width() - 6))
         p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opcion)
 
 
@@ -247,8 +249,8 @@ class CabeceraCompacta(QHeaderView):
         p.setFont(fuente)
         texto = str(self.model().headerData(indice, self.orientation(), Qt.ItemDataRole.DisplayRole) or "")
         r = rect.adjusted(4, 0, -2, -1)
-        if p.fontMetrics().horizontalAdvance(texto) > r.width():
-            texto = self.abreviaturas.get(texto, texto)
+        while p.fontMetrics().horizontalAdvance(texto) > r.width() and texto in self.abreviaturas:  # (la forma corta, y la más corta aún)
+            texto = self.abreviaturas[texto]
         p.drawText(r, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
                    p.fontMetrics().elidedText(texto, Qt.TextElideMode.ElideRight, r.width()))
         p.restore()
@@ -413,12 +415,13 @@ class PestanaPanel(QToolButton):
 class PanelPlegable(QWidget):
     alternar = Signal()
     desplegar = Signal(int)
-    GROSOR_PESTANA = 26
+    GROSOR_PESTANA = 32
 
     def __init__(self, contenido, nombre, posicion, minimo):
         super().__init__()
         self.contenido, self.posicion = contenido, posicion
         self.minimo = minimo
+        self.maximo = None  # () -> px: lo más ancho del panel izquierdo abierto (si es mayor que su mínimo); sin él, su mínimo
         self.abierto = True
         self.pestana = PestanaPanel(nombre, posicion != "inferior")
         self.pestana.clicked.connect(self.alternar)
@@ -474,7 +477,10 @@ class PanelPlegable(QWidget):
             self.setMinimumHeight(valor);self.setMaximumHeight(16777215 if abierto else valor)
         else:
             self.setMinimumWidth(valor)
-            self.setMaximumWidth(valor if not abierto or self.posicion == "izquierdo" else 16777215)
+            tope = valor if not abierto or self.posicion == "izquierdo" else 16777215
+            if abierto and self.posicion == "izquierdo" and self.maximo is not None:
+                tope = max(valor, self.maximo())
+            self.setMaximumWidth(tope)
         self.updateGeometry();self._situar_cierre()
 
     def eventFilter(self, objeto, evento):
@@ -841,17 +847,13 @@ class ContextoNombres:
 class DelegadoNombres(QStyledItemDelegate):
     """Una columna de una tabla cuyo texto son nombres de una misma lista: los enseña **enteros**, partidos por los «_» en las líneas que
     haga falta (`ContextoNombres.lineas`), y la fila crece lo necesario: nunca se come un nombre y dos nombres nunca se leen igual. La celda
-    sigue teniendo el nombre entero (y lo lleva su ayuda emergente); solo se pinta partido.
+    sigue teniendo el nombre entero (y lo lleva su ayuda emergente); solo se pinta partido."""
 
-    `secundaria` es una columna que, **mientras está oculta** porque la tabla no tiene sitio para ella, se enseña como una línea más bajo el
-    nombre de la primera columna del delegado, con su propio color: «contando» o «vencido» no se pierden cuando el nombre se lleva el ancho."""
-
-    def __init__(self, padre, columnas=(0,), lineas: int = LINEAS_NOMBRE, secundaria: int | None = None) -> None:
+    def __init__(self, padre, columnas=(0,), lineas: int = LINEAS_NOMBRE) -> None:
         super().__init__(padre)
         self.contexto = ContextoNombres()
         self.columnas = frozenset(columnas)
         self.max_lineas = lineas
-        self.secundaria = secundaria
 
     def fijar(self, nombres) -> None:
         self.contexto.fijar(nombres)
@@ -869,54 +871,41 @@ class DelegadoNombres(QStyledItemDelegate):
             option.textElideMode = Qt.TextElideMode.ElideNone  # (ya cabe: Qt no vuelve a cortarlo)
             option.features &= ~QStyleOptionViewItem.ViewItemFeature.WrapText  # ni a partirlo: las líneas son las de arriba
 
-    def _extra(self, index) -> str:
-        """El texto de la columna secundaria bajo el nombre, si esta columna está oculta (y esta es la primera del delegado)."""
-        if self.secundaria is None or index.column() != min(self.columnas):
-            return ""
-        tabla = self.parent()
-        if not tabla.isColumnHidden(self.secundaria):
-            return ""
-        item = tabla.item(index.row(), self.secundaria)
-        return item.text() if item is not None else ""
-
     def sizeHint(self, option, index) -> QSize:  # noqa: N802
         tam = super().sizeHint(option, index)
         opcion = QStyleOptionViewItem(option)
         self.initStyleOption(opcion, index)
         lineas = opcion.text.count(SALTO) + 1 if index.column() in self.columnas else 1
-        if self._extra(index):
-            lineas += 1
-            tam.setHeight(tam.height() + QFontMetrics(option.font).lineSpacing())
         if lineas > 1:
             tam.setHeight(tam.height() + 2 * AIRE_LINEAS)  # (un poco de aire arriba y abajo: dos o tres líneas seguidas no se pegan a las de al lado)
         return tam
 
-    def paint(self, p, option, index) -> None:
-        extra = self._extra(index)
-        if not extra:
-            super().paint(p, option, index)
-            return
-        opcion = QStyleOptionViewItem(option)
-        self.initStyleOption(opcion, index)
-        texto, opcion.text = opcion.text.replace(SALTO, "\n"), ""
-        widget = opcion.widget
-        (widget.style() if widget is not None else QApplication.style()).drawControl(QStyle.ControlElement.CE_ItemViewItem, opcion, p, widget)
-        fm = QFontMetrics(opcion.font)
-        paso, lineas = fm.lineSpacing(), texto.count("\n") + 1
-        hueco = self._margen() // 2
-        r = opcion.rect.adjusted(hueco, 0, -hueco, 0)
-        y = r.top() + max(0, (r.height() - (lineas + 1) * paso) // 2)
-        elegida = bool(opcion.state & QStyle.StateFlag.State_Selected)
-        item = self.parent().item(index.row(), self.secundaria)
-        p.save()
-        p.setFont(opcion.font)
-        p.setPen(opcion.palette.color(QPalette.ColorRole.HighlightedText if elegida else QPalette.ColorRole.Text))
-        p.drawText(QRect(r.left(), y, r.width(), lineas * paso), int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop), texto)
-        if item is not None and not elegida:
-            p.setPen(item.foreground().color())
-        p.drawText(QRect(r.left(), y + lineas * paso, r.width(), paso), int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-                   fm.elidedText(extra, Qt.TextElideMode.ElideRight, r.width()))
-        p.restore()
+    def ancho_para(self, lineas: int, fm: QFontMetrics) -> int:
+        """El ancho de columna con el que **todos** los nombres de la lista caben en `lineas` líneas (0 si no hay nombres): lo que
+        `ReparteColumnas` busca para el nombre antes de dar ancho a las demás columnas."""
+        nombres = tuple(getattr(self.contexto, "_nombres", ()))
+        if not nombres:
+            return 0
+        clave = (lineas, nombres, fm.horizontalAdvance("Wmi_.0 "))
+        previo = getattr(self, "_ancho_para", None)
+        if previo is not None and previo[0] == clave:
+            return previo[1]
+        ancho = self._ancho_para = (clave, self._buscar_ancho(lineas, fm, nombres))
+        return ancho[1]
+
+    def _buscar_ancho(self, lineas: int, fm: QFontMetrics, nombres: tuple[str, ...]) -> int:
+        margen = self._margen()
+        cabe = lambda w: all(len(partir_nombre(n, fm, w - margen)) <= lineas for n in nombres)  # noqa: E731
+        bajo, alto = 40, 420
+        if not cabe(alto):
+            return alto
+        while alto - bajo > 1:
+            medio = (bajo + alto) // 2
+            if cabe(medio):
+                alto = medio
+            else:
+                bajo = medio
+        return alto
 
     def texto_visible(self, tabla, fila: int, columna: int) -> str:
         """Lo que se ve ahora en esa celda de `tabla` (para comprobarlo sin mirar píxeles): el nombre en sus líneas, separadas por «\\n»."""
@@ -940,10 +929,12 @@ class ReparteColumnas(QObject):
     (el alto de las filas). `ancho_plan()` es, si se da, el ancho con el que se **elige** el plan (el del panel tal como se abre, y no el de
     ahora): ensanchar el panel a mano da su ancho al nombre sin cambiar el reparto de las demás columnas."""
 
-    def __init__(self, tabla, nombre: int, minimo: int, planes, al_elegir=None, despues=None, ancho_plan=None) -> None:
+    def __init__(self, tabla, nombre: int, minimo: int, planes, al_elegir=None, despues=None, ancho_plan=None, ideal=None) -> None:
         super().__init__(tabla)
         self.tabla, self.nombre, self.minimo, self.planes = tabla, nombre, minimo, planes
         self.al_elegir, self.despues, self.ancho_plan = al_elegir, despues, ancho_plan
+        self.minimo_apretado = max(minimo - 12, 24)  # lo menos que mide el nombre en el último reparto (84 px con el mínimo de 96)
+        self.ideal = ideal  # () -> px: el ancho con el que los nombres caben en dos líneas (se prefiere, si algún reparto lo da)
         self.plan: dict | None = None
         tabla.viewport().installEventFilter(self)
 
@@ -960,8 +951,9 @@ class ReparteColumnas(QObject):
         opciones = self.planes()
         elegido = opciones[-1]
         para_elegir = self.ancho_plan() if self.ancho_plan is not None else ancho
+        querido = max(self.minimo, self.ideal() if self.ideal is not None else 0)
         for plan in opciones:
-            if para_elegir - sum(plan["anchos"].values()) >= self.minimo:
+            if para_elegir - sum(plan["anchos"].values()) >= querido:
                 elegido = plan
                 break
         cab = t.horizontalHeader()
@@ -974,7 +966,7 @@ class ReparteColumnas(QObject):
                     cab.resizeSection(col, px)
                 fijo += px
         cab.setSectionResizeMode(self.nombre, QHeaderView.ResizeMode.Fixed)
-        propio = max(self.minimo, ancho - fijo)
+        propio = max(self.minimo_apretado if elegido is opciones[-1] else self.minimo, ancho - fijo)  # (el último reparto, el más compacto, deja al nombre un poco menos: así nunca hay barra a los lados)
         if cab.sectionSize(self.nombre) != propio:
             cab.resizeSection(self.nombre, propio)
         self.plan = elegido
@@ -1011,6 +1003,7 @@ class EtiquetaGrupos(QLabel):
         self.update()
 
     def _lineas(self, ancho: int) -> list[str]:
+        ancho -= 4  # (holgura: con una barra que sale o entra, un ancho justo de más recortaba la frase por la derecha)
         ancho_de = self.fontMetrics().horizontalAdvance
         lineas: list[str] = []
         actual = ""

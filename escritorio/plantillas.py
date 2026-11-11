@@ -144,7 +144,7 @@ class EditorPlantilla(QDialog):
     def __init__(self,plantilla,campos,parent=None,solo_texto=False):
         super().__init__(parent);self.setWindowTitle('Editar plantilla · textos y zona de dibujo');self.resize(1280,740)
         self.plantilla=validar_plantilla(plantilla);self.campos=dict(campos);self.ocupado=False;self.actual=None;self.color_actual='#000000';self.solo_texto=solo_texto
-        raiz=QHBoxLayout(self);scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setFixedWidth(330)
+        raiz=QHBoxLayout(self);scroll=QScrollArea();scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus);scroll.setWidgetResizable(True);scroll.setFixedWidth(330)
         panel=QWidget();form=QFormLayout(panel);scroll.setWidget(panel);raiz.addWidget(scroll)
         self.lista=QListWidget();self.lista.setMaximumHeight(140);form.addRow('Textos de la plantilla',self.lista)
         botones=QHBoxLayout();self.nuevo=QPushButton('Añadir texto');self.borrar=QPushButton('Eliminar')

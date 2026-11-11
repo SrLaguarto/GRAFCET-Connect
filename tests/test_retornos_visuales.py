@@ -161,8 +161,8 @@ class Incidencias(BaseQt):
         d=w.diagrama
         for ancho in (1366,1000):
             w.resize(ancho,768);QTest.qWait(20)
-            self.assertEqual(d.indicador_diagnosticos.x(),d.barra.x())
-            self.assertEqual(d.lista_diagnosticos.x(),d.barra.x()+48)
+            self.assertEqual(d.indicador_diagnosticos.x(),d.width()-252-d.verticalScrollBar().sizeHint().width()-8)  # (siempre en el mismo sitio y con el mismo ancho)
+            self.assertEqual(d.lista_diagnosticos.x(),d.indicador_diagnosticos.x()+48)
         imagen=d.indicador_diagnosticos.pixmap().toImage()
         self.assertEqual(imagen.pixelColor(20,30).name(),"#ffffff")
         self.assertEqual(imagen.pixelColor(21,30).name(),"#ffffff")

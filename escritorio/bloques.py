@@ -22,7 +22,7 @@ from typing import Any, Callable
 from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (QColor, QCursor, QDrag, QFont, QFontMetricsF, QKeySequence, QPainter, QPainterPath, QPen,
                            QPixmap, QPolygonF, QShortcut)
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit, QMenu, QPushButton, QScrollArea,
+from PySide6.QtWidgets import (QBoxLayout, QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit, QMenu, QPushButton, QScrollArea,
                                QSizePolicy, QToolTip, QVBoxLayout, QWidget, QWidgetItem)
 
 from grafcet.expressions import CMP, FUNCS_EXPR, FUNCS_REF, KEYWORDS, ParseError, _Parser, parse, render
@@ -1225,13 +1225,14 @@ class PaletaBloques(_Superficie):
         self.valor = valor  # las categorías de un valor numérico (número, variables, operadores)
         self.clave = "numero" if valor else "entrada"
         self.columna = columna  # uno debajo de otro (el programador); si no, uno tras otro, pasando de línea
+        self.una_fila = False  # uno tras otro sin pasar de línea (el programador en una ventana baja: el área se desplaza a los lados)
         self.cargar(self.clave)
 
     def _maqueta(self, ancho: float) -> tuple[list[tuple[_Caja, float, float]], float]:
         x, y, lh, out = float(MARGEN), float(MARGEN), 0.0, []
         for i, n in enumerate(self._raices):
             c = self.motor.caja(n, (i,), min(self.motor.natural(n, (i,)), ancho - 2 * MARGEN))
-            if x > MARGEN and (self.columna or x + c.w > ancho - MARGEN):
+            if x > MARGEN and (self.columna or (not self.una_fila and x + c.w > ancho - MARGEN)):
                 x, y, lh = float(MARGEN), y + lh + GAP * 2, 0.0
             out.append((c, x, y))
             x += c.w + GAP * 2
@@ -1680,13 +1681,15 @@ class Programador(QWidget):
         self._rehecho: list[Any] = []
         self._espejo: Programador | None = None
         self._ventana: QWidget | None = None
+        self.cat_en_cabecera = False  # las categorías van en la fila de cabecera del panel que contiene al programador (`categorias_en_cabecera`)
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
         raiz.setSpacing(5)
-        lay = QHBoxLayout()
-        lay.setContentsMargins(0, 0, 0, 0)
+        lay = QBoxLayout(QBoxLayout.Direction.LeftToRight)  # (la paleta a la izquierda; en ventanas bajas, encima: `modo_fila`)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
+        self._lay_cuerpo = lay
+        self.en_fila = False
         # Franja superior: categorías, con desplazamiento horizontal en paneles estrechos.
         carpetas = QWidget()
         cl = FlowLayout(carpetas, 2)  # las categorías pasan a una segunda fila si no caben: ninguna queda cortada («Sal…»)
@@ -1712,6 +1715,7 @@ class Programador(QWidget):
         self._sc_carpetas.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._sc_carpetas.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._sc_carpetas.setFixedHeight(48)  # los botones de 32 px y, debajo, la barra de desplazamiento de 12
+        self._raiz = raiz
         raiz.addWidget(self._sc_carpetas)
         raiz.addLayout(lay, 1)
         # columna 2: los bloques de la categoría elegida
@@ -1771,7 +1775,27 @@ class Programador(QWidget):
         self._ajustar_franja()
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        return QSize(self._sc_paleta.width() + 180, 116 if self.compacto else 112)
+        return QSize((180 if self.en_fila else self._sc_paleta.width() + 180), 116 if self.compacto else 112)
+
+    def modo_fila(self, fila: bool) -> None:
+        """Con la ventana baja (P1) la paleta de bloques va **en una sola fila** sobre el área, con desplazamiento horizontal, en vez de en
+        una columna a su izquierda: el panel necesita así mucho menos alto. `en_fila` dice cuál está activo."""
+        if fila == self.en_fila:
+            return
+        self.en_fila = fila
+        self._lay_cuerpo.setDirection(QBoxLayout.Direction.TopToBottom if fila else QBoxLayout.Direction.LeftToRight)
+        self.paleta.columna, self.paleta.una_fila = not fila, fila
+        self._sc_paleta.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded if fila else Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._sc_paleta.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff if fila else Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        if not fila:
+            self._sc_paleta.setMinimumHeight(0)
+            self._sc_paleta.setMaximumHeight(16777215)
+            self.paleta.setMinimumWidth(80)
+            self._sc_paleta.setMinimumWidth(0)
+            self._sc_paleta.setMaximumWidth(16777215)
+        self._cargar_paleta(self.paleta.clave)
+        self.updateGeometry()
+        self.franja_cambiada.emit()
 
     # -- paleta
     def _cargar_paleta(self, clave: str) -> None:
@@ -1779,6 +1803,14 @@ class Programador(QWidget):
         self.paleta.cargar(clave)
         m = self.paleta.motor
         natural = max([m.natural(n, (i,)) for i, n in enumerate(self.paleta._raices)] or [0])
+        if self.en_fila:  # una fila: el ancho es el de todos los bloques juntos (la paleta se desplaza a los lados) y el alto, el de una fila más la barra
+            self.paleta.invalidar()
+            self.paleta.setMinimumWidth(int(self.paleta.ancho_necesario(10 ** 5)))
+            alto = self.paleta.heightForWidth(10 ** 5) + self._sc_paleta.horizontalScrollBar().sizeHint().height()
+            if self._sc_paleta.minimumHeight() != alto:
+                self._sc_paleta.setFixedHeight(alto)
+                self.franja_cambiada.emit()
+            return
         self._sc_paleta.setFixedWidth(int(min(max(natural + 2 * MARGEN + 16, self.PALETA_MIN), self.PALETA_MAX)))
 
     def elegir_categoria(self, clave: str) -> None:
@@ -1800,7 +1832,41 @@ class Programador(QWidget):
         super().resizeEvent(event)
         self._ajustar_franja()
 
+    def ancho_categorias(self) -> int:
+        """Lo que miden todas las categorías en una sola fila."""
+        botones = list(self.categorias.values())
+        return sum(b.sizeHint().width() for b in botones) + self._flujo_carpetas.spacing() * (len(botones) - 1) + 4
+
+    def categorias_en_cabecera(self, destino: QBoxLayout | None, posicion: int = 1) -> None:
+        """Con `destino` (la fila de cabecera de un panel), las categorías van **en esa fila**, en una sola línea y sin barra, y el programador
+        se queda con la paleta y el área; con `None` vuelven a su fila propia sobre la paleta (donde pasan a dos filas si no caben)."""
+        if (destino is not None) == self.cat_en_cabecera:
+            if destino is not None:
+                self._sc_carpetas.setFixedWidth(self.ancho_categorias())
+            return
+        self.cat_en_cabecera = destino is not None
+        sc = self._sc_carpetas
+        if destino is not None:
+            self._raiz.removeWidget(sc)
+            destino.insertWidget(posicion, sc)
+            sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            sc.setFixedSize(self.ancho_categorias(), estilo.ALTO_CONTROL_COMPACTO)
+        else:
+            sc.parentWidget().layout().removeWidget(sc)
+            self._raiz.insertWidget(0, sc)
+            sc.setMinimumWidth(0)
+            sc.setMaximumWidth(16777215)
+            sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        sc.show()
+        self._flujo_carpetas.invalidate()
+        self._ajustar_franja()
+        self.updateGeometry()
+        self.franja_cambiada.emit()
+
     def _ajustar_franja(self) -> None:
+        if self.cat_en_cabecera:  # en la cabecera: una fila de 32 px y del ancho de todas las categorías
+            self._sc_carpetas.setFixedSize(self.ancho_categorias(), estilo.ALTO_CONTROL_COMPACTO)
+            return
         # la franja de categorías mide lo que sus filas: una si caben todas, dos o más si no (nunca barra ni botón cortado)
         ancho = max(self._sc_carpetas.viewport().width(), 60)
         alto = max(30, self._flujo_carpetas.heightForWidth(ancho) + 4)

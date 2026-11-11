@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
 
 from . import recursos_ui  # Registra los iconos vectoriales incorporados.
 from . import estilo
+from .laminas import VistaLamina
 from .estilo import _trazos_reinicio  # noqa: F401  (las pruebas lo leen desde aquí)
 from . import propiedades_archivo
 from . import actualizaciones
@@ -61,6 +62,8 @@ TITULO = "GRAFCET Connect"
 URL_CODIGO = "https://github.com/SrLaguarto/GRAFCET-Connect"  # dónde está el código (diálogo «Acerca de»)
 URL_FALLOS = "https://github.com/SrLaguarto/GRAFCET-Connect/issues"  # dónde se comunica un fallo o una sugerencia
 ICONO_PROGRAMA = Path(__file__).resolve().parent / "recursos" / "grafcet_connect.ico"
+ANCHO_DERECHO = 270  # el panel derecho desde UMBRAL_DERECHO px de ancho de ventana (P10: «Papel» y «Tipo» enteros, tablas de estado con sus cuatro columnas)
+UMBRAL_DERECHO = 1280
 ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
 NOMBRE_MIN_TABLA = 96  # la columna del nombre de las tablas (estado de la simulación) mide al menos esto a cualquier tamaño: las demás se compactan antes
 ANCHO_TITULO_UTIL = 150  # cabecera del dibujo: lo que mide, como poco, el título del grafcet para que se reconozca (antes de ceder sitio al zoom con palabras)
@@ -441,6 +444,20 @@ class _SalidaRaton(QObject):
         return False
 
 
+class _VigilaAlto(QObject):
+    """Llama a `fn` cada vez que cambia el tamaño de `objetivo`."""
+
+    def __init__(self, objetivo: QWidget, fn: Callable[[], None]) -> None:
+        super().__init__(objetivo)
+        self.fn = fn
+        objetivo.installEventFilter(self)
+
+    def eventFilter(self, objeto: Any, evento: Any) -> bool:  # noqa: N802
+        if evento.type() == QEvent.Type.Resize:
+            self.fn()
+        return False
+
+
 class _DelegadoAbreviado(QStyledItemDelegate):
     """Enseña un texto corto en lugar del entero («continua» por «salida continua», «memoria» por «memorizada»): la celda sigue
     teniendo el texto entero (y lo lleva en su ayuda y en la línea de detalle), solo se pinta más corto para que la columna se lea.
@@ -491,7 +508,7 @@ class _FocoTeclado(QObject):
                         Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape))
     PUNTERO = (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick, QEvent.Type.Wheel, QEvent.Type.TouchBegin,
                QEvent.Type.TabletPress)
-    CON_ANILLO = (QAbstractButton, QTabBar, QAbstractScrollArea)  # los controles cuyo anillo depende del teclado
+    CON_ANILLO = (QAbstractButton, QTabBar, QAbstractScrollArea, VistaLamina)  # los controles cuyo anillo depende del teclado
 
     def __init__(self, padre: QObject | None = None) -> None:
         super().__init__(padre)
@@ -676,7 +693,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         # grandes) va en las partes de la ventana, y en la vista de E/S solo cuando se muestra: así cruzar 1600×900 no repasa los más de mil
         # widgets de las filas de E/S (era lo que congelaba la interfaz ≈ 700 ms). El que está más cerca manda sobre el de la ventana.
         self._destinos_hoja = [self.menuBar(), self.statusBar(), self.fila_pestanas, self.herramientas_grafcet, self.split_izquierdo,
-                               self.inferior.widget(0), self.panel_planos]  # (la vista de E/S y Propiedades, al mostrarlas; el aviso de PLANOS lleva su hoja propia)
+                               self.inferior.widget(0)]  # (la vista de E/S, Propiedades y PLANOS, al mostrarlas; el aviso de PLANOS lleva su hoja propia)
+        self._planos_pendiente = False
 
     # -- construcción ---------------------------------------------------------------------------
     def _accion(self, texto: str, slot: Any, atajo: str | list[str] | None = None, marcable: bool = False) -> QAction:
@@ -909,7 +927,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.props = PanelPropiedades()
         self.props.setObjectName("panelPropiedades")
         self.props.prog.franja_cambiada.connect(lambda: agrandar_para_transicion(self))  # las categorías pasan a dos filas: el panel crece lo justo
-        self.props.alto_cambiado.connect(lambda: QTimer.singleShot(0, lambda: agrandar_para_transicion(self)))  # (y si el estado de la fórmula baja a su línea)
+        self.props.alto_cambiado.connect(lambda: QTimer.singleShot(0, self, lambda: agrandar_para_transicion(self)))  # (y si el estado de la fórmula baja a su línea)
         self.inferior = PilaActual()
         self.inferior.addWidget(caja_traza)
         self.inferior.addWidget(self.props)
@@ -930,8 +948,21 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.l_ayuda_entradas = EtiquetaGrupos("Clic: pulsar · Ctrl+clic: enclavar · Clic derecho: tipo")  # (se parte entre acciones, nunca por dentro de una; en el panel táctil del portátil, el toque con dos dedos es el clic derecho)
         self.l_ayuda_entradas.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px; font-weight: 400")
         lay.addWidget(self.l_ayuda_entradas)
-        self.rejilla = QGridLayout()
-        lay.addLayout(self.rejilla)
+        # Las entradas se desplazan por dentro de su caja, con un alto máximo (`_alto_entradas`) que deja ver al menos cuatro filas de
+        # «Salidas y variables»: con muchas entradas, las salidas no quedan fuera de la vista
+        self.cont_rejilla = QWidget()
+        self.rejilla = QGridLayout(self.cont_rejilla)
+        self.rejilla.setContentsMargins(0, 0, 0, 0)
+        self.sc_entradas = QScrollArea()
+        self.sc_entradas.setObjectName("scrollEntradas")
+        self.sc_entradas.setWidgetResizable(True)
+        self.sc_entradas.setFrameShape(QFrame.Shape.NoFrame)
+        self.sc_entradas.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.sc_entradas.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.sc_entradas.setWidget(self.cont_rejilla)
+        self.sc_entradas.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # (se desplaza con la rueda y la barra; sus botones ya reciben el foco)
+        self.sc_entradas.setStyleSheet("QScrollArea#scrollEntradas, QScrollArea#scrollEntradas > QWidget > QWidget { background: transparent; }")
+        lay.addWidget(self.sc_entradas)
         self.aviso = QLabel()
         self.aviso.setWordWrap(True)
         self.aviso.setStyleSheet(f"color: {estilo.ERROR}")
@@ -940,7 +971,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
         _, lay = self._caja("Salidas y variables")
         # Las columnas a la vista: el ancho del panel es fijo, así que **manda la del nombre** (≥ 96 px, `ReparteColumnas`): las demás se
-        # abrevian o se esconden antes de que baje de ahí («Modo» pasa a «cont.»/«mem.» o se esconde; «Estado» se pinta bajo el nombre),
+        # abrevian antes de que baje de ahí («Modo» pasa a «cont.»/«mem.»; «Estado», a «par.»/«cont.»/«venc.»), **ninguna desaparece**,
         # los nombres se parten por los «_» en las líneas que hagan falta y la tabla mide lo que sus filas: sin barras anidadas
         self.t_vars = self._tabla(["Variable", "Modo", "Valor", "Contribuyen"], (None, 46, 32, 70))
         self.t_vars.horizontalHeaderItem(1).setToolTip("Salida continua o memorizada")
@@ -948,8 +979,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
                                                                    {"salida continua": "cont.", "memorizada": "mem."}))
         self.t_vars.horizontalHeaderItem(3).setToolTip(
             "Acciones que contribuyen a la salida, con el nombre que les da el modelo (la etapa o, si no lo tienen, su identificador a.etapa.salida.n)")
-        self.t_vars.horizontalHeader().abreviaturas = {"Contribuyen": "Contrib."}
-        self._del_vars = (DelegadoNombres(self.t_vars, (0,)), DelegadoNombres(self.t_vars, (3,)))  # nombres partidos sin que dos se lean igual
+        self.t_vars.horizontalHeader().abreviaturas = {"Contribuyen": "Contrib.", "Contrib.": "Contr."}
+        self._del_vars = (DelegadoNombres(self.t_vars, (0,)), DelegadoNombres(self.t_vars, (3,), lineas=2))  # nombres partidos sin que dos se lean igual
         self.t_vars.setItemDelegateForColumn(0, self._del_vars[0])
         self.t_vars.setItemDelegateForColumn(3, self._del_vars[1])
         lay.addWidget(self.t_vars)
@@ -958,14 +989,16 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.t_temp = self._tabla(["Dónde", "Estado", "Lleva", "Preset"], (None, 54, 36, 42))
         self.t_temp.horizontalHeaderItem(2).setToolTip("Tiempo transcurrido")
         self.t_temp.horizontalHeaderItem(3).setToolTip("Duración programada")
-        self._del_temp = DelegadoNombres(self.t_temp, (0,), secundaria=1)  # (el estado, bajo el nombre, cuando su columna no cabe)
+        self.t_temp.setItemDelegateForColumn(1, _DelegadoAbreviado({}, self.t_temp, {"parado": "par.", "contando": "cont.", "vencido": "venc."}))
+        self.t_temp.horizontalHeader().abreviaturas = {"Estado": "Est."}
+        self._del_temp = DelegadoNombres(self.t_temp, (0,))
         self.t_temp.setItemDelegateForColumn(0, self._del_temp)
         lay.addWidget(self.t_temp)
         self.t_temp.currentCellChanged.connect(self._detalle_del_foco)
         self._reparto = (ReparteColumnas(self.t_vars, 0, NOMBRE_MIN_TABLA, self._planes_vars, self._elegir_plan_vars,
-                                         lambda: self.ajustar_tabla(self.t_vars)),
-                         ReparteColumnas(self.t_temp, 0, NOMBRE_MIN_TABLA, self._planes_temp, None,
-                                         lambda: self.ajustar_tabla(self.t_temp)))
+                                         lambda: self.ajustar_tabla(self.t_vars), ideal=lambda: self._del_vars[0].ancho_para(2, self.t_vars.fontMetrics())),
+                         ReparteColumnas(self.t_temp, 0, NOMBRE_MIN_TABLA, self._planes_temp, self._elegir_plan_temp,
+                                         lambda: self.ajustar_tabla(self.t_temp), ideal=lambda: self._del_temp.ancho_para(2, self.t_temp.fontMetrics())))
         self._salida_raton = _SalidaRaton(self, lambda: self._sobre_fila(None, -1))
         for tabla in (self.t_vars, self.t_temp):  # el nombre entero también al pasar el ratón por la fila
             tabla.setMouseTracking(True)
@@ -977,6 +1010,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.scroll.setWidgetResizable(True)
         self.scroll.setWidget(der)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # con la ventana pequeña, también se desplaza a los lados
+        self._vigila_alto = _VigilaAlto(self.scroll.viewport(), self._alto_entradas)  # (el alto máximo de las entradas sigue al del panel)
         self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         # Página de edición: la herramienta, la selección y los diagnósticos (REQ-EDT-09)
         pag = QWidget()
@@ -1006,7 +1040,18 @@ class Ventana(ArchivosProyecto, QMainWindow):
         pl.addWidget(caja_vars)
         pl.addStretch(1)
         self.derecho = PilaActual()
-        self.derecho.addWidget(self.scroll)
+        # F4: el botón de plegar (32 px) va en una fila de título propia sobre las tablas: al desplazar el panel ya no tapa la primera entrada
+        pagina_sim = QWidget()
+        psl = QVBoxLayout(pagina_sim)
+        psl.setContentsMargins(0, 0, 0, 0)
+        psl.setSpacing(0)
+        self.titulo_sim = TituloSeccion("Simulación")
+        self.titulo_sim.setObjectName("tituloPanel")
+        self.titulo_sim.setContentsMargins(estilo.E2, 0, 40, 0)  # (a la derecha, el sitio del botón de plegar)
+        self.titulo_sim.setFixedHeight(36)
+        psl.addWidget(self.titulo_sim)
+        psl.addWidget(self.scroll, 1)
+        self.derecho.addWidget(pagina_sim)
         pag_scroll = QScrollArea()  # si no cabe, se desplaza en alto y en ancho
         pag_scroll.setWidgetResizable(True)
         pag_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -1014,6 +1059,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         pag_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         pag_scroll.setWidget(pag)
         self.derecho.addWidget(pag_scroll)
+        self._pag_scroll, self._caja_vars = pag_scroll, caja_vars
+        self._vigila_pagina = _VigilaAlto(pag_scroll.viewport(), self._alto_tabla_variables)
         self.derecho.setMinimumWidth(300)  # al simular; al editar, el mismo margen de ancho que el panel izquierdo
         # Izquierda: la paleta (una sola lista de fichas); solo al editar. Las opciones de lo seleccionado van abajo.
         self.paleta = Paleta()
@@ -1033,7 +1080,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         # lo que hace falta para que la tabla de variables deje ver los nombres), el mismo en el panel izquierdo y en el
         # izquierdo fijo; el derecho puede ampliarse y ambos se pueden plegar
         self.ancho_lateral = self._ancho_lateral_base = max(self.dock.minimumSizeHint().width(), ANCHO_LATERAL)
-        self.variables.fijar_ancho_nominal(self.ancho_lateral)
+        self.ancho_derecho = self.ancho_lateral  # el del panel derecho: desde `UMBRAL_DERECHO` de ancho de ventana mide `ANCHO_DERECHO` (P10)
+        self.variables.fijar_ancho_nominal(self.ancho_derecho)
         self.dock.setFixedWidth(self.ancho_lateral)
         self.dock.hide()
         # Arriba, el panel izquierdo (solo al editar), el dibujo y el panel derecho; abajo, a todo el ancho de la ventana, el
@@ -1042,7 +1090,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
                           for n, c, titulo in (("izquierdo", self.dock, "Elementos"),
                                                ("derecho", self.derecho, "Variables"),
                                                ("inferior", self.inferior, "Propiedades"))}
-        self._tamanos_paneles = {"izquierdo": self.ancho_lateral, "derecho": self.ancho_lateral, "inferior": ALTO_INFERIOR["editar"]}
+        self._plegables["izquierdo"].maximo = lambda: self.ancho_lateral
+        self._tamanos_paneles = {"izquierdo": self.ancho_lateral, "derecho": self.ancho_derecho, "inferior": ALTO_INFERIOR["editar"]}
         self.split = DivisorPlegable(Qt.Orientation.Horizontal)
         self.split.addWidget(izq)
         self.split.addWidget(self._plegables["derecho"])
@@ -1050,6 +1099,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.split.setStretchFactor(0, 1)
         self.split.setStretchFactor(1, 0)
         self.split.setHandleWidth(8)
+        self._derecho_a_mano = False  # el usuario movió el divisor: su ancho no se vuelve a tocar al cambiar de tamaño la ventana
+        self.split.splitterMoved.connect(lambda *_: setattr(self, "_derecho_a_mano", True))
         self.split.setSizes([880, 460])
         self.split_izquierdo = DivisorPlegable(Qt.Orientation.Horizontal)
         self.split_izquierdo.addWidget(self._plegables["izquierdo"])
@@ -1315,6 +1366,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
                                       "inferior": "Propiedades" if editar else "Traza"}[nombre])
         if visible != anterior:
             tamano = max(self._minimo_panel(nombre), self._tamanos_paneles[nombre]) if visible else panel.GROSOR_PESTANA
+            if visible and nombre == "izquierdo":
+                tamano = self.ancho_lateral  # (el izquierdo mide siempre su ancho, aunque con la escala grande pueda estrecharse hasta la base)
             if nombre == "derecho":
                 total = sum(self.split.sizes());self.split.setSizes([max(100,total-tamano),tamano])
             elif nombre == "inferior":
@@ -1337,7 +1390,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _minimo_panel(self, nombre):
         if nombre != "inferior":
-            return self.ancho_lateral
+            return self._ancho_minimo_lateral(nombre)
         if self.modo == "editar":
             minimo = max(76 if self.props.pagina == "vacio" else 160, self.props.minimumSizeHint().height())
             if self.props.pagina == "accion":
@@ -1793,7 +1846,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._plegar_laterales_compactos()
         editar = self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False)
         lateral = self._plegables["derecho"]
-        ancho = (lateral.width() if lateral.abierto else self._tamanos_paneles["derecho"]) if getattr(self, "_anchos_puestos", False) else self.ancho_lateral
+        ancho = (lateral.width() if lateral.abierto else self._tamanos_paneles["derecho"]) if getattr(self, "_anchos_puestos", False) else self.ancho_derecho
         guardado = getattr(self, "_paneles_edicion", None)
         if not editar and guardado is None:
             self._paneles_edicion = {"izquierdo": self.a_izquierdo.isChecked(),
@@ -1846,8 +1899,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _anchos_laterales(self, ancho: int | None = None) -> None:
         panel = self._plegables["derecho"]
-        ancho = max(self.ancho_lateral, panel.width() if ancho is None else ancho) if panel.abierto else panel.GROSOR_PESTANA
-        self.derecho.setMinimumWidth(self.ancho_lateral)
+        ancho = max(self.ancho_derecho, panel.width() if ancho is None else ancho) if panel.abierto else panel.GROSOR_PESTANA
+        self.derecho.setMinimumWidth(self._ancho_minimo_lateral("derecho"))
         self.derecho.setMaximumWidth(16777215)
         self.split.handle(1).setEnabled(True)
         total = self.split.width() - self.split.handleWidth()
@@ -1930,7 +1983,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _planes_vars(self) -> list[dict[str, Any]]:
         """Los repartos de «Salidas y variables», de más a menos completo (el nombre manda: ver `ReparteColumnas`): todo entero; «Modo» abreviado
-        («cont.», «mem.»); sin «Modo» (su texto sigue en la línea de detalle y en la ayuda); y, por último, la cabecera «Contrib.»."""
+        («cont.», «mem.»); y, por último, la cabecera «Contrib.». **Ninguna columna se esconde** (P13 rechazada)."""
         fm, cifras, cab = self._medidas_tabla()
         valor = max(cab("Valor"), cifras.horizontalAdvance("False") + 8)  # (una memoria booleana sin salida enseña «False»: que no se corte)
         contribuyen, corta = cab("Contribuyen"), cab("Contrib.")
@@ -1938,19 +1991,30 @@ class Ventana(ArchivosProyecto, QMainWindow):
         modo = max(cab("Modo"), fm.horizontalAdvance("continua") + 7, fm.horizontalAdvance("memoria") + 7)
         return [{"anchos": {1: modo, 2: valor, 3: contribuyen}, "modo_corto": False},
                 {"anchos": {1: modo_corto, 2: valor, 3: contribuyen}, "modo_corto": True},
-                {"anchos": {1: 0, 2: valor, 3: contribuyen}, "modo_corto": True},
-                {"anchos": {1: 0, 2: valor, 3: corta}, "modo_corto": True}]
+                {"anchos": {1: modo_corto, 2: valor, 3: corta}, "modo_corto": True},
+                # el más apretado (panel de 218 px con barra vertical): sin barra a los lados, con el nombre en unos 90 px
+                {"anchos": {1: max(cab("Modo") - 2, fm.horizontalAdvance("mem.") + 5), 2: max(cifras.horizontalAdvance("False") + 4, cab("Valor") - 2),
+                            3: fm.horizontalAdvance("Contr.") + 3}, "modo_corto": True, "apretado": True}]
 
     def _elegir_plan_vars(self, plan: dict[str, Any]) -> None:
         self.t_vars.itemDelegateForColumn(1).corto = plan["modo_corto"]
 
     def _planes_temp(self) -> list[dict[str, Any]]:
-        """Los repartos de «Temporizadores»: con «Estado» al lado o, si el nombre no tendría sus 96 px, bajo el nombre (`DelegadoNombres`)."""
+        """Los repartos de «Temporizadores» (P-IMP-30: dónde, estado, lleva, preset): «Estado» entero («parado», «contando», «vencido») o
+        abreviado («par.», «cont.», «venc.», con su color) y, por último, la cabecera «Est.». **Ninguna columna se esconde.**"""
         fm, cifras, cab = self._medidas_tabla()
         tiempo = cifras.horizontalAdvance("12,5 s") + 8
         lleva, preset = max(cab("Lleva"), tiempo), max(cab("Preset"), tiempo)
         estado = max(cab("Estado"), fm.horizontalAdvance("contando") + 7)
-        return [{"anchos": {1: estado, 2: lleva, 3: preset}}, {"anchos": {1: 0, 2: lleva, 3: preset}}]
+        corto = max(cab("Est."), *(fm.horizontalAdvance(t) + 7 for t in ("par.", "cont.", "venc.")))
+        return [{"anchos": {1: estado, 2: lleva, 3: preset}, "corto": False},
+                {"anchos": {1: max(cab("Estado"), corto), 2: lleva, 3: preset}, "corto": True},
+                {"anchos": {1: corto, 2: lleva, 3: preset}, "corto": True},
+                {"anchos": {1: corto, 2: max(cab("Lleva") - 2, cifras.horizontalAdvance("0,0 s") + 4), 3: max(cab("Preset") - 2, cifras.horizontalAdvance("0,0 s") + 4)},
+                 "corto": True, "apretado": True}]
+
+    def _elegir_plan_temp(self, plan: dict[str, Any]) -> None:
+        self.t_temp.itemDelegateForColumn(1).corto = plan["corto"]
 
     def _aplicar_escala(self, nombre: str) -> None:
         """Al cruzar el umbral de pantalla completa (`estilo.UMBRAL_GRANDE`) o volver por debajo: la letra base pasa de 13 a 14 px,
@@ -1958,17 +2022,27 @@ class Ventana(ArchivosProyecto, QMainWindow):
         repite al cruzar el umbral (la hoja entera tarda cerca de un segundo en aplicarse). Los menús conservan su aspecto."""
         if nombre == self._escala:
             return
+        # (sin `setUpdatesEnabled(False)` aquí: no ahorraba nada y dejaba sin repintar, para siempre, a los hijos que se ponen en
+        # `updatesEnabled` = falso por dentro, como la paleta de Elementos, que se quedaba vacía al cruzar el umbral)
+        self._cambiar_escala(nombre)
+
+    def _cambiar_escala(self, nombre: str) -> None:
         self._escala = nombre
+        self._alto_cabecera = 0
+        self._ancho_forzado = 0  # (la letra cambia: `_vigilar_barra` vuelve a medir si «Reiniciar» cabe con texto)
         estilo.activar_escala(nombre)
         self._hoja_escala = estilo.hoja_global() if nombre == "grande" else ""
         for destino in self._destinos_hoja:  # (solo lo que cambia: la hoja de la ventana no se toca)
             destino.setStyleSheet(self._hoja_escala)
+        self._planos_pendiente = True  # PLANOS (oculta casi siempre, ≈ 10 ms) se pone al día cuando se muestra
+        if self.paginas_es.currentIndex() == 2:
+            self._escala_planos()
         self._es_pendiente = self._props_pendiente = True  # E/S y Propiedades se ponen al día cuando se muestran
         if self.paginas_es.currentIndex() == 1:
             self._escala_es()
         if self._plegables["inferior"].abierto:
             self._escala_props()
-        self._poner_ancho_lateral(self._ancho_lateral_para(self.width()))  # (por si el ancho no cambió pero la letra sí)
+        self._poner_ancho_lateral(self._ancho_lateral_para(self.width()), self._ancho_derecho_para(self.width()))  # (por si el ancho no cambió pero la letra sí)
         self._estilos_locales()
         self._ancho_reloj = 0  # el reloj vuelve a medir lo que su texto (otra letra, otro ancho)
         self.l_reloj.setMinimumWidth(0)
@@ -1996,25 +2070,52 @@ class Ventana(ArchivosProyecto, QMainWindow):
         mas = min(1.0, max(0.0, (ancho_ventana - estilo.UMBRAL_GRANDE[0]) / 320))  # y de 264 a 300 px entre 1600 y 1920: con la letra grande las
         return self._ancho_lateral_base + round(46 * t) + round(36 * mas)           # tablas de estado llevan sus cuatro columnas enteras
 
-    def _poner_ancho_lateral(self, nuevo: int) -> None:
-        """Pone el ancho de los dos paneles laterales (el del divisor también: si no, queda un hueco muerto a su lado). Lo que el usuario
-        ensanchó a mano no se toca."""
-        if nuevo == self.ancho_lateral:
+    def _ancho_minimo_lateral(self, nombre: str) -> int:
+        """Lo que mide, como poco, un panel lateral. Con la escala normal es su ancho; con la grande (donde los paneles son más anchos) solo la base:
+        así el mínimo de la ventana es el de siempre y bajar de 1920 a 683 o 640 px de ancho cabe **en una sola petición** (F6: antes se quedaba en
+        769 hasta que los paneles se estrechaban)."""
+        nominal = self.ancho_derecho if nombre == "derecho" else self.ancho_lateral
+        return min(nominal, self._ancho_lateral_base) if self._escala == "grande" else nominal
+
+    def _fijar_dock(self, ancho: int) -> None:
+        """El panel izquierdo mide `ancho` (fijo); con la escala grande puede estrecharse hasta la base (ver `_ancho_minimo_lateral`)."""
+        self.dock.setMinimumWidth(self._ancho_minimo_lateral("izquierdo"))
+        self.dock.setMaximumWidth(ancho)
+
+    def _ancho_derecho_para(self, ancho_ventana: int) -> int:
+        """El panel derecho (Variables, o las tablas de la simulación, que conserva el ancho al pulsar Play) mide `ANCHO_DERECHO` desde
+        `UMBRAL_DERECHO` px de ancho de ventana: con él «Papel» y «Tipo» salen enteros y las tablas de estado llevan sus cuatro columnas
+        (P10). Por debajo, el de siempre; a pantalla completa, lo que ya hacía la rama (`_ancho_lateral_para`) si es más."""
+        base = self._ancho_lateral_para(ancho_ventana)
+        return max(base, ANCHO_DERECHO) if ancho_ventana >= UMBRAL_DERECHO else base
+
+    def _poner_ancho_lateral(self, nuevo: int, derecho: int | None = None) -> None:
+        """Pone el ancho de los dos paneles laterales (`nuevo` el del izquierdo y, sin `derecho`, el del derecho también; el del divisor
+        también: si no, queda un hueco muerto a su lado). Lo que el usuario ensanchó a mano no se toca."""
+        derecho = nuevo if derecho is None else derecho
+        if nuevo == self.ancho_lateral and derecho == self.ancho_derecho:
             return
         viejo, self.ancho_lateral = self.ancho_lateral, nuevo
-        self.variables.fijar_ancho_nominal(nuevo)  # (con él se decide si «Papel» y «Tipo» van en palabras o abreviados)
-        self.dock.setFixedWidth(nuevo)
-        for n in ("izquierdo", "derecho"):
-            if self._tamanos_paneles[n] == viejo:
-                self._tamanos_paneles[n] = nuevo
+        viejo_d, self.ancho_derecho = self.ancho_derecho, derecho
+        self.variables.fijar_ancho_nominal(derecho)  # (con él se decide si «Papel» y «Tipo» van en palabras o abreviados)
+        self._fijar_dock(nuevo)
+        for n, antes, ahora in (("izquierdo", viejo, nuevo), ("derecho", viejo_d, derecho)):
+            if self._tamanos_paneles[n] == antes:
+                self._tamanos_paneles[n] = ahora
             self._plegables[n].mostrar(self._plegables[n].abierto)
         izq = self._plegables["izquierdo"]
         if izq.abierto and not izq.isHidden():
             total = sum(self.split_izquierdo.sizes())
             self.split_izquierdo.setSizes([nuevo, max(100, total - nuevo)])
-        self.derecho.setMinimumWidth(nuevo)
-        derecho = self._plegables["derecho"]
-        self._anchos_laterales(nuevo if derecho.abierto and derecho.width() == viejo else None)
+        self.derecho.setMinimumWidth(self._ancho_minimo_lateral("derecho"))
+        der = self._plegables["derecho"]
+        self._anchos_laterales(derecho if der.abierto and (der.width() == viejo_d or not self._derecho_a_mano) else None)
+
+    def _escala_planos(self) -> None:
+        """PLANOS lleva la hoja de la escala de ahora; se hace al mostrarla (cruzar el umbral no repasa una página que no se ve)."""
+        if self._planos_pendiente:
+            self._planos_pendiente = False
+            self.panel_planos.setStyleSheet(self._hoja_escala)
 
     def _escala_es(self) -> None:
         """La vista de E/S lleva la escala de ahora (hoja, letra y alto de fila). Se hace al mostrarla: son más de mil widgets."""
@@ -2053,12 +2154,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
         sp = self._cab.spacing()
         # (el chip, un título mínimo y el zoom con solo iconos tienen que caber en la cabecera; si no —los paneles laterales aún abiertos en una
         # ventana de media pantalla, un instante antes de plegarse—, el recuadro flota sobre el dibujo y nunca pisa al chip)
-        cabe = d.parentWidget().width() - 2 * estilo.E2 >= self.estado.minimumSizeHint().width() + 24 + d.ancho_barra(True) + 3 * sp
-        if self._compacto[0] or self._compacto[1]:
-            quiere = True
-        else:
-            quiere = (d.height() < estilo.ALTO_DIBUJO_ZOOM + (60 if d.barra_integrada else 0)) or self._props_alto(d.barra_integrada)
-        d.integrar_barra(self._cab if quiere and cabe else None)
+        cabe = d.parentWidget().width() - 2 * estilo.E2 >= self.estado.minimumSizeHint().width() + self.titulo.fontMetrics().horizontalAdvance("0" * 10) + d.ancho_barra(True) + 3 * sp  # (el título conserva ~10 caracteres: si no, el zoom se queda sobre el dibujo)
+        # La zona de edición está fija: el zoom va **siempre** en la cabecera (con palabras si caben y solo iconos si no), a cualquier tamaño y con
+        # Propiedades cerrado o abierto; solo flota si ni los iconos caben en la fila (a ese tamaño, siempre). La fila mide siempre lo mismo
+        # (lo que el recuadro del zoom), así que el dibujo empieza siempre a la misma altura y el aviso de simulación detenida no se mueve.
+        d.integrar_barra(self._cab if cabe else None)
+        # (la fila mide lo del recuadro más alto que ha tenido —al editar y al simular lleva controles distintos—, flotando con 2 px menos de margen)
+        self._alto_cabecera = max(getattr(self, "_alto_cabecera", 0), estilo.ALTO_CONTROL_COMPACTO, d.barra.sizeHint().height() - (0 if d.barra_integrada else 4))
+        self.titulo.setMinimumHeight(self._alto_cabecera)
         self._ajustar_cabecera()
 
     def _adaptar_tamano(self) -> None:
@@ -2067,8 +2170,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         estrechan y las herramientas suben a la fila de las pestañas. Lo que el usuario plegó o desplegó a mano se respeta, y al
         agrandar la ventana vuelve lo que se plegó solo. No se cambia la hoja de estilo (aplicarla a toda la ventana tarda cerca
         de un segundo): los controles miden lo mismo a todos los tamaños."""
-        self._aplicar_escala(estilo.escala_para(self.width(), self.height()))
-        self._poner_ancho_lateral(self._ancho_lateral_para(self.width()))
+        self._aplicar_escala(estilo.escala_para(self.width(), self.height(), self._escala))
+        self._poner_ancho_lateral(self._ancho_lateral_para(self.width()), self._ancho_derecho_para(self.width()))
         nuevo = estilo.tamano_compacto(self.width(), self.height())
         if nuevo != self._compacto:
             bajo_antes = self._compacto[1]
@@ -2076,6 +2179,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             ancho, alto = nuevo
             if alto != bajo_antes:
                 self._fusionar_filas(alto)
+                self.props.prog.modo_fila(alto)  # P1: la paleta de operadores en una fila (el panel pide ≈ 190 px y no 334)
             il = self.diagrama.parentWidget().layout()
             il.setContentsMargins(*((estilo.E2, estilo.E1, estilo.E2, estilo.E1) if alto else self._margenes_dibujo))
             self._textos_en_barras(not ancho)
@@ -2084,7 +2188,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.diagrama.compactar(ancho, alto)
             self._ajustar_zoom()  # los controles del zoom, en la cabecera (en estrecho o bajo, y con poco dibujo)
             self.panel_planos.compactar(ancho or alto)
-        self.estado.fijar_tope(int(self.width() * 0.55))  # el chip de modo pide hasta el 55 % del ancho: el título cede antes que el estado
+        self._ajustar_cabecera()  # (el chip de modo pide hasta el 55 % del ancho, y deja al título unos 10 caracteres: el título cede antes que el estado)
         muy = self.width() < max(estilo.UMBRAL_MUY_ESTRECHO, self._ancho_forzado)
         if muy != self._muy_estrecho:  # media pantalla: la fila de arriba tiene que caber en 640 px
             self._muy_estrecho = muy
@@ -2093,7 +2197,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.tb_sim.layout().invalidate()  # (la barra guarda lo que medían sus botones: sin esto «Reiniciar» se queda en el desbordamiento)
             self.tb_sim.updateGeometry()
             self.tb_sim.setMinimumWidth(0)
-            QTimer.singleShot(0, self._remedir_barra_simulacion)
+            QTimer.singleShot(0, self, self._remedir_barra_simulacion)
             estilo.poner(self.pestanas_vistas, estrecha=muy)
             for i in (0, 1):  # QTabBar guarda el tamaño de sus pestañas: cambiar el texto lo obliga a medirlas otra vez
                 texto = self.pestanas_vistas.tabText(i)
@@ -2112,6 +2216,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
         d = self.diagrama
         sp = cab.spacing()
         ancho = d.parentWidget().width() - 2 * estilo.E2
+        # F8: el título conserva al menos unos 10 caracteres antes de que el chip pase a su variante más corta (el estado nunca se pierde: la más
+        # corta es solo el estado); lo que ocupan los demás controles (navegación y zoom, este con solo iconos) se descuenta del tope del chip
+        otros = (self.navegacion.sizeHint().width() + sp if self.navegacion.isVisibleTo(self) else 0)             + (d.ancho_barra(True) + sp if d.barra_integrada else 0)
+        minimo_titulo = self.titulo.fontMetrics().horizontalAdvance("0" * 10) + sp
+        self.estado.fijar_tope(max(min(int(self.width() * 0.55), ancho - otros - minimo_titulo - 2 * sp), 60))
         usado = 0
         for w in (self.estado, self.navegacion):
             if w.isVisibleTo(self):
@@ -2129,12 +2238,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         abierta = self._ayuda_abierta and bool(texto)
         # (el título, entero si cabe, va antes que la ayuda: esta pide sus 200 px para leerse en dos líneas)
         if abierta:  # la ayuda va entera en su fila: el título tiene casi todo el sitio
-            titulo_max, hay_ayuda, letrero = min(natural, max(24, libre - boton)), False, "menos ▴"
+            titulo_max, hay_ayuda, letrero = min(natural, max(24, minimo_titulo, libre - boton)), False, "menos ▴"
         elif libre >= natural + ANCHO_AYUDA_UTIL and not self.ayuda.truncada(libre - natural):
             titulo_max, hay_ayuda, letrero = natural, True, ""  # la ayuda cabe en sus dos líneas
         elif libre - boton >= natural + ANCHO_AYUDA_UTIL:
             titulo_max, hay_ayuda, letrero = natural, True, "más ▾"  # no cabe entera: dos líneas que acaban en «…» y el botón
-        elif texto and libre - boton >= 24:
+        elif texto and libre - boton >= max(24, minimo_titulo):  # (el botón solo si el título conserva sus ~10 caracteres: la ayuda cede antes)
             titulo_max, hay_ayuda, letrero = min(natural, libre - boton), False, "Ayuda ▾"  # sin sitio para leerla en la fila: solo el botón
         else:
             titulo_max, hay_ayuda, letrero = min(natural, libre), False, ""  # ni el botón cabe: se esconde lo secundario
@@ -2316,7 +2425,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.diagrama.setFocus(Qt.FocusReason.OtherFocusReason)
         if self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False) and not getattr(self, "_anchos_puestos", False):
             self._anchos_puestos = True  # con la ventana ya dimensionada, los dos paneles laterales con el mismo ancho
-            self._anchos_laterales(self.ancho_lateral)
+            self._anchos_laterales(self.ancho_derecho)
             self._alto_inferior(True)
 
     def _no_simulable(self) -> None:
@@ -2570,7 +2679,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.rejilla.addWidget(QLabel("Sin entradas"), 0, 0)
         self._reflujo_entradas()
         self._densidad_lateral()
-        QTimer.singleShot(0, self._reflujo_entradas)  # (otra vez con la hoja de estilo ya aplicada: la letra puede medir distinto)
+        QTimer.singleShot(0, self, self._reflujo_entradas)  # (otra vez con la hoja de estilo ya aplicada: la letra puede medir distinto)
         if hasattr(self, "pestanas") and hasattr(self, "props"):
             self._orden_tab()
 
@@ -2581,13 +2690,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
             return
         por_fila = 2 if self._compacto[1] else 1
         if por_fila == 2:  # de dos en dos solo si los nombres caben enteros en media fila (si no, uno por fila y la tabla se desplaza)
-            mitad = (self.ancho_lateral - 2 * estilo.E1 - estilo.ANCHO_BARRA - estilo.E1) // 2
+            mitad = (self.ancho_derecho - 2 * estilo.E1 - estilo.ANCHO_BARRA - estilo.E1) // 2
             if any(b.ancho_natural(f"{self.nombre(v)} = 0") > mitad for v, b in self.botones.items() if isinstance(b, _BotonEntrada)):
                 por_fila = 1
         for b in botones:
             self.rejilla.removeWidget(b)
         for i, b in enumerate(botones):
             self.rejilla.addWidget(b, i // por_fila, (i % por_fila) * (4 // por_fila), 1, 4 // por_fila)
+        self._alto_entradas()
 
     def _densidad_lateral(self) -> None:
         """En un cuarto de pantalla el panel de simulación gana alto (títulos de caja 4 px más bajos y sin margen inferior) para que se
@@ -3052,6 +3162,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if self.paginas_es.currentIndex()==2 and destino!=2:self.panel_planos.aplicar()
         if destino == 1:
             self._escala_es()
+        if destino==2:
+            self._escala_planos()
         if destino==2 and refrescar_planos:
             self.panel_planos.mostrar()
             self.panel_planos.parpadear_boton_hoja()
@@ -3291,14 +3403,67 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._filas(self.t_vars, rows, cifras=(2,))
         self._del_vars[0].fijar(self._textos_columna(self.t_vars, 0))
         self._del_vars[1].fijar(self._textos_columna(self.t_vars, 3))
+        self._reparto[0].aplicar()  # (con los nombres de ahora: el reparto busca que quepan en dos líneas)
         temp = S.get("temporal") or {}
         self.c_temp.setVisible(bool(temp))
         self._filas(self.t_temp, [(t["where"], t["estado"], t["lleva"], t["preset"],
                                    "readout" if t["estado"] == "contando" else "ok" if t["estado"] == "vencido" else "muted")
                                   for t in temp.values()], 1, cifras=(2, 3))
         self._del_temp.fijar(self._textos_columna(self.t_temp, 0))
+        self._reparto[1].aplicar()
         self.ajustar_tabla(self.t_vars)
         self.ajustar_tabla(self.t_temp)
+        self._alto_entradas()
+
+    def _alto_tabla_variables(self) -> None:
+        """F10: la tabla de Variables mide, como mucho, lo que deja el panel (menos lo demás de la página): así se desplaza ella y no la
+        página (antes, en un cuarto de pantalla, había dos barras verticales una al lado de otra)."""
+        pagina, caja, tabla = self._pag_scroll, self._caja_vars, self.variables.tabla
+        alto = pagina.height() - 2 * pagina.frameWidth()
+        if alto <= 0 or not caja.isVisibleTo(pagina):
+            return
+        resto = caja.y() + (caja.height() - tabla.height()) + estilo.E2  # (lo de arriba, lo del marco de la caja, el botón y el margen de abajo)
+        self.variables.fijar_alto_maximo(alto - resto)
+
+    def _alto_entradas(self) -> None:
+        """F2: la caja «Entradas» mide lo que sus botones, salvo que así no dejara ver, bajo ella, al menos cuatro filas (o todas, si hay
+        menos) de «Salidas y variables»: entonces se desplaza por dentro, con ese alto máximo."""
+        sc = self.sc_entradas
+        vista = self.scroll.height() - 2 * self.scroll.frameWidth()  # (sin descontar la barra horizontal, que aparece y desaparece según el alto: oscilaría)
+        if vista <= 0 or getattr(self, "_ajustando_entradas", False):
+            return
+        self._ajustando_entradas = True
+        try:
+            self._poner_alto_entradas(sc, vista)
+        finally:
+            self._ajustando_entradas = False
+
+    def _poner_alto_entradas(self, sc: QScrollArea, vista: int) -> None:
+        self.ajustar_tabla(self.t_vars)  # (con sus filas al día: el alto de la tabla y el de sus filas han de concordar)
+        self.ajustar_tabla(self.t_temp)
+        lay = self.cont_rejilla.layout()
+        ancho_ref = self.scroll.width() - 2 * self.scroll.frameWidth()  # (el del panel sin su barra: con ella oscilaría; no se mide el visor)
+        natural = max(lay.totalHeightForWidth(max(ancho_ref - 2 * estilo.E1, 60)), lay.sizeHint().height())
+        t = self.t_vars
+        visibles = min(t.rowCount(), 4)
+        de_las_filas = (t.horizontalHeader().height() + sum(t.rowHeight(r) for r in range(visibles)) + 2 * t.frameWidth() + 4) if t.rowCount() else t.height()
+        # «lo demás» del panel: el alto de las cajas «Entradas» (sin el desplazable) y «Salidas y variables» (con solo las filas que se han de ver),
+        # el aviso de diagnóstico si se ve y los márgenes, calculado a un ancho de referencia (no de la geometría repartida, que llega tarde, ni
+        # de lo que pide el diseño con una barra a un lado: las dos hacían oscilar el alto)
+        ancho_caja = ancho_ref - 2 * estilo.E1
+        entradas, salidas = self._cajas_lado[0], self._cajas_lado[1]
+
+        def alto_caja(caja: QGroupBox) -> int:
+            m, lay_caja = caja.contentsMargins(), caja.layout()
+            dentro = lay_caja.totalHeightForWidth(ancho_caja - m.left() - m.right()) if lay_caja.hasHeightForWidth() else lay_caja.totalSizeHint().height()
+            return m.top() + m.bottom() + dentro
+        cajas = [alto_caja(entradas) - sc.height(), alto_caja(salidas) - (t.height() - de_las_filas)]
+        if self.diag.isVisibleTo(self):
+            cajas.insert(0, self.diag.heightForWidth(ancho_caja))
+        resto = sum(cajas) + (len(cajas) - 1) * self.lado.spacing() + 2 * estilo.E1
+        tope = max(vista - resto, 3 * estilo.ALTO_CONTROL_COMPACTO)  # (nunca menos de unos tres botones)
+        alto = min(natural, tope)
+        sc.setFixedHeight(alto)
 
     @staticmethod
     def _textos_columna(t: QTableWidget, c: int) -> list[str]:
@@ -3551,7 +3716,10 @@ def main(argv: list[str] | None = None) -> int:
         w.cargar_ejemplo(args.ejemplo)
     if args.modelo and not w.abrir_ruta(Path(args.modelo)):
         return 1 if args.captura else 0
-    w.show()
+    if args.captura:
+        w.show()  # (la captura de comprobación conserva el tamaño de siempre)
+    else:
+        w.showMaximized()  # la aplicación arranca siempre maximizada; al restaurar, la ventana se comporta como siempre
     if (not args.captura and not os.environ.get(actualizaciones.VARIABLE_SIN_ACTUALIZAR)
             and actualizaciones.al_arrancar_activo(w.ajustes)):
         QTimer.singleShot(1500, w.buscar_actualizaciones)  # con la ventana ya a la vista; en un hilo, sin bloquear

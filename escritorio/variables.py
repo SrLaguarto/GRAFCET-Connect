@@ -280,7 +280,10 @@ class PanelVariables(QWidget):
     @staticmethod
     def _hoja_tabla() -> str:
         # (sin marco propio: los 4 px del marco transparente de la hoja global son del nombre; el anillo de foco sale con el teclado)
+        # (el editor de una celda —el nombre, la lista de papel o de tipo— no pasa del alto de su fila: con los 32 px de la hoja global se salía por abajo y,
+        # en la última fila, el visor de la tabla le cortaba el marco de foco)
         return (f"QHeaderView::section {{ padding: 4px 4px; text-align: left; }} QTableWidget {{ font-size: {estilo.T_PEQUENA}px; border: 0; }} "
+                f"QTableWidget QLineEdit, QTableWidget QComboBox {{ min-height: 0; padding-top: 0; padding-bottom: 0; }} "
                 f"QTableWidget[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; }}")
 
     def _planes(self) -> list[dict[str, Any]]:
@@ -399,9 +402,19 @@ class PanelVariables(QWidget):
             if t.rowHeight(r) != alto:
                 t.setRowHeight(r, alto)
 
+    alto_maximo = 320  # lo más alto que mide la tabla (con más filas, se desplaza ella); la ventana lo baja si el panel es bajo (`fijar_alto_maximo`)
+
+    def fijar_alto_maximo(self, px: int) -> None:
+        """F10: con el panel bajo, la tabla mide como mucho lo que deja el panel: ella se desplaza y el panel no (una sola barra vertical).
+        Nunca menos de unas tres filas ni más de 320 px."""
+        nuevo = max(min(px, 320), 3 * self._alto_fila() + self.tabla.horizontalHeader().height() + 2 * self.tabla.frameWidth())
+        if nuevo != self.alto_maximo:
+            self.alto_maximo = nuevo
+            self._ajustar_tabla()
+
     def _ajustar_tabla(self):
         self._alturas_filas()
-        alto = min(320, self.tabla.horizontalHeader().height()
+        alto = min(self.alto_maximo, self.tabla.horizontalHeader().height()
                    + sum(self.tabla.rowHeight(r) for r in range(self.tabla.rowCount()))
                    + 2 * self.tabla.frameWidth()
                    + (self.tabla.horizontalScrollBar().height() if self.tabla.horizontalScrollBar().isVisible() else 0))

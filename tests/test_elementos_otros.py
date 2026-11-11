@@ -72,7 +72,7 @@ class OtrosInterfaz(BaseQt):
             self.assertFalse(w._panel(nombre).isHidden(),nombre)
             dimension=w._panel(nombre).height() if nombre=='inferior' else w._panel(nombre).width()
             self.assertAlmostEqual(dimension,w._minimo_panel(nombre),delta=2)
-        for nombre,delta,esperado in (('derecho',QPoint(-310,0),336),('inferior',QPoint(0,-250),276)):
+        for nombre,delta,esperado in (('derecho',QPoint(-310,0),342),('inferior',QPoint(0,-250),282)):
             w._mostrar_panel(nombre,False);QApplication.processEvents();self.arrastrar(w.pestanas[nombre],delta)
             dimension=w._panel(nombre).height() if nombre=='inferior' else w._panel(nombre).width()
             self.assertAlmostEqual(dimension,esperado,delta=2)
