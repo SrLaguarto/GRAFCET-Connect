@@ -47,6 +47,8 @@ Qué hace
   que abre las Issues de GitHub (https://github.com/SrLaguarto/GRAFCET-Connect/issues).
 - Con Tab, el control activo muestra un anillo de foco. El anillo solo aparece al navegar con el teclado, no con un clic.
 - Los avisos no muestran códigos internos y usan vocabulario GRAFCET. El detalle técnico y la «Referencia: código» van en la ayuda emergente de cada aviso. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular».
+- Los avisos del dibujo aparecen plegados: el triángulo a la izquierda y, a su lado, el resumen («2 errores», «1 error · 2 avisos»). Un clic (o Espacio) despliega la lista; el aviso ocupa siempre el mismo sitio.
+- Propiedades: el título dice el tipo de lo elegido («Propiedades · Etapa», «· Transición», «· Acción»…), sin su nombre. La etiqueta de una etapa admite como mucho 4 caracteres al escribirla; un archivo con nombres más largos se abre igual.
 
 
 Selección, salto y repetición (corrección del paso 3, P-IMP-33)

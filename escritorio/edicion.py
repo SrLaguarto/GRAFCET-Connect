@@ -41,6 +41,7 @@ from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, RADIO_ANCLA, REJILLA
                        icono_accion, posiciones)
 
 HERRAMIENTAS = ("seleccionar",)  # el ratón selecciona, mueve y enlaza; los elementos nuevos solo se colocan arrastrándolos
+MAX_ETIQUETA_ETAPA = 4  # lo más largo que se escribe en la etiqueta de una etapa: más no cabe en su cuadro (lo ya guardado con más se abre igual)
 DY = 60  # distancia vertical estándar: tres pasos de rejilla entre etapa y transición
 IMAN = 40  # a qué distancia horizontal (dos pasos de rejilla) un elemento movido se alinea con uno enlazado
 RADIO_UNION = 8  # a qué distancia (px al 100 %) dos puntos de unión libres compatibles se unen solos al soltar un elemento
@@ -4366,7 +4367,10 @@ class Edicion(QObject):
         return out
 
     def renombrar(self, ident: str, nuevo: str) -> str | None:
-        """Cambia la etiqueta de una etapa o transición; devuelve el motivo si no se pudo."""
+        """Cambia la etiqueta de una etapa o transición; devuelve el motivo si no se pudo. La de una etapa admite `MAX_ETIQUETA_ETAPA` caracteres
+        (más no cabe en su cuadro); lo ya guardado con más se abre y se dibuja como siempre."""
+        if len(nuevo) > MAX_ETIQUETA_ETAPA and any(s["id"] == ident for s in self.ed.model["steps"]):
+            return f"El nombre de una etapa admite {MAX_ETIQUETA_ETAPA} caracteres como máximo; más no cabe en su cuadro."
         try:
             self.ed.rename(ident, nuevo, repetida=True)  # un número repetido se admite como borrador (P-IMP-118)
         except DiagnosticError as exc:

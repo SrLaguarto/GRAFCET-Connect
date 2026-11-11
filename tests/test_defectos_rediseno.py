@@ -435,6 +435,37 @@ class Defectos(BaseQt):
             w.hide()
         self.assertLess(altos[(1366, 768)], 330, "con las categorías en la cabecera el panel gana una fila (antes ≈ 334 px)")
 
+    def test_SRED25_ningun_panel_tapa_el_borde_de_otro(self):
+        """REQ-EDT-09: con Propiedades abierto (y plegado), el borde de las tarjetas de arriba —Elementos, el dibujo y Variables— y el de
+        Propiedades se ve entero en el `grab()` de la ventana: los píxeles de sus cuatro lados son del color del borde, a escala normal y grande."""
+        for ancho, alto in ((1366, 768), (2000, 1250)):
+            w, e = self.vacio()
+            ids = self.cadena(e)
+            w.resize(ancho, alto)
+            w.show()
+            e.seleccionar([ids[1]])
+            w._abrir_opciones()
+            for _ in range(6):
+                QApplication.processEvents()
+            for abierto in (True, False):
+                w._mostrar_panel("inferior", abierto)
+                for _ in range(6):
+                    QApplication.processEvents()
+                imagen = w.grab().toImage()
+                tarjetas = [("Elementos", w.dock), ("dibujo", w.diagrama.parentWidget()), ("Variables", w.derecho.widget(1).widget())]
+                if abierto:
+                    tarjetas.append(("Propiedades", w.props))
+                for nombre, t in tarjetas:
+                    r = QRect(t.mapTo(w, QPoint(0, 0)), t.size())
+                    if t.window() is not w or not t.isVisible():
+                        continue
+                    cx, cy = r.left() + r.width() // 2, r.top() + r.height() // 2
+                    for lado, (x, y) in (("arriba", (cx, r.top())), ("abajo", (cx, r.bottom())), ("izquierda", (r.left(), cy)), ("derecha", (r.right(), cy))):
+                        if nombre == "dibujo" and lado == "arriba":
+                            continue  # (el borde de arriba del dibujo lo lleva la franja de modo, a propósito)
+                        self.assertEqual(imagen.pixelColor(x, y).name(), estilo.BORDE, (ancho, alto, abierto, nombre, lado, x, y))
+            w.hide()
+
 
 if __name__ == "__main__":
     unittest.main()

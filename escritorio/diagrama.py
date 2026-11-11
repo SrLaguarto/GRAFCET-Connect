@@ -24,7 +24,7 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, QSetti
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, QPainter, QPainterPath, QPen,
                            QPixmap, QRegion)
 from PySide6.QtWidgets import (QApplication, QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QListWidget, QHBoxLayout, QLabel,
-                               QMenu, QProxyStyle, QStyle, QToolButton, QWidget)
+                               QMenu, QProxyStyle, QPushButton, QStyle, QToolButton, QWidget)
 
 from . import estilo
 
@@ -1411,6 +1411,20 @@ class VistaDiagrama(QGraphicsView):
         self.indicador_diagnosticos.setStyleSheet("background:transparent; padding:0; margin:0; border:0")
         self.indicador_diagnosticos.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.indicador_diagnosticos.hide()
+        # El resumen plegado («2 errores», «1 aviso», «Simulación detenida · 1 error») junto al triángulo; un clic (o Espacio) despliega la lista debajo
+        self.diagnosticos_abiertos = False
+        self.resumen_diagnosticos = QPushButton(self)
+        self.resumen_diagnosticos.setObjectName("resumenDiagnosticos")
+        self.resumen_diagnosticos.setCheckable(True)
+        self.resumen_diagnosticos.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.resumen_diagnosticos.setAccessibleName("Resumen de incidencias")
+        self.resumen_diagnosticos.setStyleSheet(
+            f"QPushButton#resumenDiagnosticos {{ background:rgba(255,255,255,235); color:{estilo.TINTA}; border:1px solid {estilo.BORDE_CONTROL}; "
+            f"border-radius:{estilo.R_S}px; padding:0 8px; text-align:left; font-size:13px; min-height:0; }} "
+            f"QPushButton#resumenDiagnosticos:hover {{ background:{estilo.HOVER}; }} "
+            f"QPushButton#resumenDiagnosticos[tecl=\"true\"]:focus {{ border:2px dashed {estilo.FOCO}; padding:0 7px; }}")
+        self.resumen_diagnosticos.clicked.connect(self.desplegar_diagnosticos)
+        self.resumen_diagnosticos.hide()
         self.controlador: Any = None  # al editar: recibe prensar / mover / soltar / doble con puntos del dibujo
         self.rejilla = False
         self.area_minima: QRectF | None = None
@@ -1895,8 +1909,11 @@ class VistaDiagrama(QGraphicsView):
             lista.doItemsLayout()
             alto = min(max(30, h // 3), sum(max(20, lista.sizeHintForRow(i)) for i in range(lista.count())) + 4)
             lista.setFixedHeight(alto)
-            lista.move(bx + 48, bb + 6)
-            self.indicador_diagnosticos.setGeometry(bx,lista.y(),40,40)
+            y0 = bb + 6
+            boton = self.resumen_diagnosticos
+            boton.setGeometry(bx + 48, y0 + 5, ancho, 30)
+            lista.move(bx + 48, y0 + 38)
+            self.indicador_diagnosticos.setGeometry(bx, y0, 40, 40)
             region = QRegion()
             for i in range(lista.count()):
                 r = lista.visualItemRect(lista.item(i))
@@ -1907,12 +1924,26 @@ class VistaDiagrama(QGraphicsView):
                 region |= QRegion(lista.verticalScrollBar().geometry())
             lista.setMask(region)
             lista.raise_()
+            boton.raise_()
             self.indicador_diagnosticos.raise_()
 
-    def actualizar_diagnosticos(self, visible: bool) -> None:
-        self.lista_diagnosticos.setVisible(visible)
+    def actualizar_diagnosticos(self, visible: bool, resumen: str = "") -> None:
+        """Muestra u oculta los avisos de arriba a la derecha: el triángulo y, a su lado, `resumen` plegado con su flecha; la lista de mensajes,
+        debajo, solo si está desplegada (si lo estaba y llega otro aviso, sigue desplegada; si desaparecen todos, se oculta todo y vuelve a plegada)."""
+        if not visible:
+            self.diagnosticos_abiertos = False
+        self.resumen_diagnosticos.setChecked(self.diagnosticos_abiertos)
+        self.resumen_diagnosticos.setText(f"{resumen}  {'▾' if self.diagnosticos_abiertos else '▸'}")
+        self.resumen_diagnosticos.setToolTip(resumen + (" · clic para plegar la lista" if self.diagnosticos_abiertos else " · clic para ver los mensajes"))
+        self.lista_diagnosticos.setVisible(visible and self.diagnosticos_abiertos)
+        self.resumen_diagnosticos.setVisible(visible)
         self.indicador_diagnosticos.setVisible(visible)
         self._colocar()
+
+    def desplegar_diagnosticos(self, abierto: bool) -> None:
+        """Despliega o pliega la lista de mensajes bajo el resumen."""
+        self.diagnosticos_abiertos = bool(abierto)
+        self.actualizar_diagnosticos(self.resumen_diagnosticos.isVisible(), self.resumen_diagnosticos.text().rsplit("  ", 1)[0])
 
     def escala(self) -> float:
         return self.transform().m11()

@@ -120,6 +120,8 @@ class Acabados(BaseQt):
         e.ed.add_transition("g","",label="t2",at=(100,200));e.cambia();QTest.qWait(20)
         icono=d.indicador_diagnosticos;lista=d.lista_diagnosticos
         self.assertFalse(icono.pixmap().isNull());self.assertEqual(icono.width(),40)
-        self.assertTrue(d.barra_integrada,"el zoom va en la cabecera");self.assertEqual(icono.y(),lista.y());self.assertLess(icono.geometry().right(),lista.x())
+        self.assertTrue(d.barra_integrada,"el zoom va en la cabecera");self.assertFalse(lista.isVisible(),"por defecto, plegado")
+        resumen=d.resumen_diagnosticos;self.assertTrue(resumen.isVisible());self.assertRegex(resumen.text(),r"[0-9]+ errores?");self.assertLess(icono.geometry().right(),resumen.x())
+        d.desplegar_diagnosticos(True);QTest.qWait(10);self.assertTrue(lista.isVisible());self.assertGreater(lista.y(),resumen.y());self.assertLess(icono.geometry().right(),lista.x())
         self.assertLess(icono.y(),12,"el aviso va siempre en el mismo sitio, arriba a la derecha del dibujo")
         self.assertFalse(lista.mask().contains(QPoint(lista.width()-1,lista.height()-1)))

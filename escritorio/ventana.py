@@ -62,6 +62,7 @@ TITULO = "GRAFCET Connect"
 URL_CODIGO = "https://github.com/SrLaguarto/GRAFCET-Connect"  # dónde está el código (diálogo «Acerca de»)
 URL_FALLOS = "https://github.com/SrLaguarto/GRAFCET-Connect/issues"  # dónde se comunica un fallo o una sugerencia
 ICONO_PROGRAMA = Path(__file__).resolve().parent / "recursos" / "grafcet_connect.ico"
+HUECO_FRANJA = 4  # px entre la franja de modo (4 px de alto, arriba del recuadro del dibujo) y la fila de cabecera
 ANCHO_DERECHO = 270  # el panel derecho desde UMBRAL_DERECHO px de ancho de ventana (P10: «Papel» y «Tipo» enteros, tablas de estado con sus cuatro columnas)
 UMBRAL_DERECHO = 1280
 ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
@@ -864,9 +865,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         izq = QWidget()
         izq.setObjectName("panelDibujo")
         il = QVBoxLayout(izq)
-        il.setContentsMargins(estilo.E2, estilo.E1, estilo.E2, estilo.E2)
+        il.setContentsMargins(estilo.E2, estilo.E1 + HUECO_FRANJA, estilo.E2, estilo.E2)  # (un hueco bajo la franja de modo: el zoom y el chip no la tocan)
         il.setSpacing(2)
-        self._margenes_dibujo = (estilo.E2, estilo.E1, estilo.E2, estilo.E2)
+        self._margenes_dibujo = (estilo.E2, estilo.E1 + HUECO_FRANJA, estilo.E2, estilo.E2)
         # Franja de color de lo alto de la tarjeta del dibujo: azul tinta al editar, verde al simular (no ocupa sitio)
         self.banda_modo = BandaModo(izq)
         self.banda_modo.setObjectName("bandaModo")
@@ -1070,7 +1071,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.dock = QWidget()  # panel izquierdo: solo a la altura del dibujo, no del panel inferior
         self.dock.setObjectName("panelElementos")
         vl = QVBoxLayout(self.dock)
-        vl.setContentsMargins(0, 0, 0, 0)
+        vl.setContentsMargins(1, 1, 1, 3)  # (dentro del borde de la tarjeta: ni la paleta ni el título lo tapan; abajo 3 px por la esquina redonda)
         titulo_elementos = TituloSeccion("Elementos")
         titulo_elementos.setObjectName("tituloPanel")
         titulo_elementos.setContentsMargins(12, 10, 8, 6)
@@ -2181,7 +2182,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 self._fusionar_filas(alto)
                 self.props.prog.modo_fila(alto)  # P1: la paleta de operadores en una fila (el panel pide ≈ 190 px y no 334)
             il = self.diagrama.parentWidget().layout()
-            il.setContentsMargins(*((estilo.E2, estilo.E1, estilo.E2, estilo.E1) if alto else self._margenes_dibujo))
+            il.setContentsMargins(*((estilo.E2, estilo.E1 + HUECO_FRANJA, estilo.E2, estilo.E1) if alto else self._margenes_dibujo))
             self._textos_en_barras(not ancho)
             self._reflujo_entradas()
             self._densidad_lateral()
@@ -2525,7 +2526,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
             item.setForeground(QColor(COL["text"]))
             self.lista_diag.addItem(item)
         hay_detalle = self.lista_diag.count() > 0
-        self.diagrama.actualizar_diagnosticos(hay_detalle)
+        errores, avisos = len(bloq) + (1 if self._avisos_ejecucion else 0), len(diags) - len(bloq)
+        partes = [f"{n} {'error' if n == 1 else 'errores'}" for n in (errores,) if n] + [f"{n} {'aviso' if n == 1 else 'avisos'}" for n in (avisos,) if n]
+        resumen = " · ".join(([ "Simulación detenida"] if self._avisos_ejecucion else []) + partes)
+        self.diagrama.actualizar_diagnosticos(hay_detalle, resumen)
         self._titulo_ventana()
         if self.destino_traer:self._sincronizar_boton_es()
         if hasattr(self, "panel_es"):  # las variables pueden haber cambiado: el panel de E/S las sigue (o avisa, si hay conexión)

@@ -831,27 +831,28 @@ class PanelesMasCompactos(BaseQt):
         """REQ-EDT-09: el título, «Fijar» y lo demás de la cabecera comparten fila; el primer control queda a menos de
         32 px del borde del panel, la paleta de bloques de una transición también, y el dibujo empieza antes de los 140 px."""
         w, e, y = self.preparar()
-        self.assertLessEqual(y(w.diagrama), 150, "antes, 157 (con el zoom siempre en la cabecera)")
+        self.assertLessEqual(y(w.diagrama), 156, "antes, 157 (con el zoom siempre en la cabecera y un hueco bajo la franja)")
         etapa = [s["id"] for s in e.M["steps"] if s["label"] == "1"][0]
         e.seleccionar([etapa])
         for _ in range(6):
             QApplication.processEvents()
         arriba = y(w.inferior)
-        self.assertLessEqual(y(w.props.s_etiqueta) - arriba, 32, "antes, 40")
+        self.assertLessEqual(y(w.props.s_etiqueta) - arriba, 33, "antes, 40 (con 1 px de borde de la tarjeta sobre la cabecera)")
         e.seleccionar([e.M["transitions"][0]["id"]])
         for _ in range(8):
             QApplication.processEvents()
         self.assertEqual(w.props.pagina, "transicion")
         arriba = y(w.inferior)
-        self.assertLessEqual(y(w.props.prog) - arriba, 32, "antes, 65: dos filas de cabecera")
+        self.assertLessEqual(y(w.props.prog) - arriba, 33, "antes, 65: dos filas de cabecera")
         self.assertTrue(w.props.t_fijar.isVisible())
         self.assertAlmostEqual(y(w.props.t_fijar) + w.props.t_fijar.height() / 2, y(w.props.titulo) + w.props.titulo.height() / 2,
                                delta=4, msg="«Fijar» va en la fila del título")
         self.assertFalse(w.props.l_bloques.isVisible(), "no repite el título")
         self.assertIn("t", w.props.l_bloques.text())  # (el texto sigue, para quien lo lea)
 
-    def test_SAUC20_la_cabecera_de_una_accion_enseña_su_condicion_en_la_misma_fila(self):
-        """REQ-EDT-09: en una acción con condición, lo que programan los bloques se dice en la fila del título."""
+    def test_SAUC20_la_cabecera_de_una_accion_enseña_su_condicion_sobre_el_area_de_bloques(self):
+        """REQ-EDT-09: en una acción con condición, el título dice solo «Acción» y lo que programan los bloques se dice sobre el área de bloques
+        (no en la cabecera, para que las categorías suban a su fila)."""
         w, e, y = self.preparar()
         sid = [s["id"] for s in e.M["steps"] if s["label"] == "1"][0]
         e.pedir_accion = lambda *a: None
@@ -862,7 +863,8 @@ class PanelesMasCompactos(BaseQt):
         self.assertEqual(w.props.pagina, "accion")
         self.assertIn("Condición de la acción", w.props.l_bloques.text())
         self.assertTrue(w.props.l_bloques.isVisible())
-        self.assertAlmostEqual(y(w.props.l_bloques), y(w.props.titulo), delta=6)
+        self.assertEqual(w.props.titulo.text(), "Propiedades · Acción")
+        self.assertGreater(y(w.props.l_bloques), y(w.props.titulo) + w.props.titulo.height() - 2)
 
 
 

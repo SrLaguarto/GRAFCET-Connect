@@ -310,6 +310,15 @@ def _duracion(m: dict[str, Any]) -> str | None:
     return "" if us == 0 else _dur_usuario(us)
 
 
+def etapa_visible(n: str | None) -> str | None:
+    """Cómo se ve una ficha de etapa: «X1», «X0fsd»… En el árbol una etapa que no es «X<número>» va como `active(`0fsd`)`, que es lo que
+    entiende el analizador pero no lo que se lee en la fórmula ni en el dibujo."""
+    if n is None:
+        return None
+    mo = re.fullmatch(r"active\(`(.+)`\)|active\(([^\W\d]\w*(?:\.\w+)?)\)", n)
+    return "X" + (mo.group(1) or mo.group(2)) if mo else n
+
+
 def _desde_significado(m: dict[str, Any], variables: dict[str, tuple[str, str]], etapas: list[str]) -> dict[str, Any] | None:
     op = m["operator"]
     hijo = lambda o: _desde_significado(o, variables, etapas)  # noqa: E731
@@ -575,10 +584,11 @@ class Motor:
     # -- qué lleva cada bloque
     def elementos(self, n: dict[str, Any]) -> list[tuple]:
         k = n["k"]
+        visible = etapa_visible(n["n"]) if k == "etapa" else n.get("n")  # (una etapa se ve «X1», «X0fsd», como en la fórmula y en el dibujo)
         if k in ("var", "etapa", "vnum") and self.fijo and n["n"]:
-            return [("txt", "", n["n"])]
+            return [("txt", "", visible)]
         if k in ("var", "etapa"):
-            return [("drop", "n", n["n"] or "elegir")]
+            return [("drop", "n", visible or "elegir")]
         if k == "const":
             return [("txt", "", str(n["v"]))]
         if k in ("y", "o"):
@@ -1011,7 +1021,7 @@ class _Superficie(QWidget):
         self.motor.reiniciar()
         v, k = self.motor.vars, n["k"]
         if k == "etapa":
-            return [(x, x) for x in dict.fromkeys(self.motor.etapas)]
+            return [(etapa_visible(x), x) for x in dict.fromkeys(self.motor.etapas)]
         if clave == "op":
             return [(OP_VISIBLE[o], o) for o in OPERADORES_CMP]
         if k in ("cmp", "vnum"):
@@ -1821,7 +1831,7 @@ class Programador(QWidget):
         """(texto, valor) de lo que ofrece un desplegable de la paleta: variables booleanas de un papel, o etapas."""
         variables, etapas = self.fuente()
         if cajon == "etapa":
-            return [(x, x) for x in dict.fromkeys(etapas)]
+            return [(etapa_visible(x), x) for x in dict.fromkeys(etapas)]
         return [(n, n) for n, (r, t) in variables.items() if r == PAPEL[cajon] and t == "bool"]
 
     def showEvent(self, event: Any) -> None:  # noqa: N802

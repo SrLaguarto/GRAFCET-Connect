@@ -130,8 +130,8 @@ class NavegacionTeclado(BaseQt):
         self.assertEqual(next(s['x'] for s in e.M['steps'] if s['id']=='1'),x)
         v.setFocus(); e.seleccionar(['1']); self.tecla(v,Qt.Key.Key_Return)
         self.assertIs(QApplication.focusWidget(),w.props.s_etiqueta)
-        QTest.keyClicks(w.props.s_etiqueta,'Nueva'); self.tecla(w.props.s_etiqueta,Qt.Key.Key_Tab)
-        self.assertEqual(next(s['label'] for s in e.M['steps'] if s['id']=='1'),'Nueva')
+        QTest.keyClicks(w.props.s_etiqueta,'Nuev'); self.tecla(w.props.s_etiqueta,Qt.Key.Key_Tab)
+        self.assertEqual(next(s['label'] for s in e.M['steps'] if s['id']=='1'),'Nuev')
 
     def test_SACC03_supr_borra_y_respeta_el_campo_de_texto(self):
         """REQ-EDT-13: Supr en el dibujo borra; dentro de una etiqueta solo edita el texto."""

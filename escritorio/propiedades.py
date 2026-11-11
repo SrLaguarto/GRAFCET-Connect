@@ -45,6 +45,7 @@ from .diagrama import ACT_MIN, COL, H, MARK, TB, VACIO_H, VACIO_W, _html
 from .edicion import COLOCACIONES, CONTINUAS, Parpadeo
 
 NARANJA = COL["glow"]
+from .edicion import MAX_ETIQUETA_ETAPA  # noqa: E402
 ANCHO_COLUMNA = 230  # la columna estrecha de campos del panel de opciones
 NOMBRES = {"etapa": "Etapa", "transicion": "Transición", "simultaneidad": "Simultaneidad", "accion:continua": "Acción",
            "macroetapa": "Macroetapa", "encapsulante": "Encapsulante", "parcial": "Grafcet parcial", "forzado": "Forzado"}
@@ -312,7 +313,7 @@ class Paleta(QListWidget):
 
     def ancho_minimo(self) -> int:
         """Ancho para icono, nombre y barra vertical, sin desplazamiento horizontal."""
-        return 218
+        return 216  # (+ 1 px de borde de la tarjeta a cada lado = 218, el ancho del panel)
 
     def alto_filas(self, filas: int) -> int:
         """El alto de `filas` filas de fichas, con el marco."""
@@ -454,7 +455,7 @@ class _UbicaCategorias(QObject):
         self.panel = panel
 
     def eventFilter(self, objeto: QObject, evento: QEvent) -> bool:  # noqa: N802
-        if evento.type() in (QEvent.Type.Resize, QEvent.Type.Show):
+        if evento.type() in (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.Hide, QEvent.Type.Move):
             self.panel._ubicar_categorias()
         return False
 
@@ -509,7 +510,7 @@ class PanelPropiedades(QWidget):
         self.parpadeo_crear = Parpadeo(self)  # «Crear las que faltan» parpadea si un nombre no vale
         self.parpadeo_crear.cambia.connect(self._pintar_crear)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(10, 0, 10, 4)  # la cabecera (32 px) pega con el borde: el primer campo queda a 32 px del panel
+        lay.setContentsMargins(10, 1, 10, 4)  # (1 px arriba: dentro del borde de la tarjeta, que la cabecera no tapa)  la cabecera (32 px) pega con el borde: el primer campo queda a 32 px del panel
         lay.setSpacing(0)
         # Una sola fila de cabecera (P-IMP-118): el título, lo que programan los bloques (si no repite el título) y «Fijar»;
         # a la derecha queda libre el sitio del botón de plegar
@@ -581,27 +582,52 @@ class PanelPropiedades(QWidget):
                                    f"QToolButton:checked[tecl=\"true\"]:focus{{border:2px dashed white;}}")
         self.fila_cabecera.addWidget(self.t_fijar)
         self._ubica_categorias = _UbicaCategorias(self)  # (las categorías de bloques, en la fila de la cabecera si caben)
-        self.cabecera.installEventFilter(self._ubica_categorias)
+        for objeto in (self.cabecera, self.cuerpo, self.pagina_bloques, self.accion.caja_valor, self.accion.caja_numerica):
+            objeto.installEventFilter(self._ubica_categorias)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
 
     # -- categorías de bloques en la cabecera -------------------------------------------------------
+    def _programador_en_cabecera(self) -> Programador | None:
+        """El programador cuyas categorías suben a la fila de la cabecera: el de la receptividad (transición), el de la condición o el evento de
+        una acción y, si una acción solo tiene el del valor, ese."""
+        if self.pagina == "transicion":
+            return self.prog
+        if self.pagina == "accion":
+            if self.pagina_bloques.isVisibleTo(self):
+                return self.prog
+            if self.accion.caja_valor.isVisibleTo(self) and self.accion.caja_numerica.isVisibleTo(self):
+                return self.accion.prog
+        return None
+
     def _ubicar_categorias(self) -> None:
-        """Con una transición, las categorías del programador van en la fila de la cabecera, entre el título (que ocupa la columna de campos) y
-        «Fijar»: empiezan donde empiezan la paleta y el área, y el panel gana una fila de alto. Si no caben en esa fila, o en otra página, vuelven a
-        su fila propia sobre la paleta (donde, en un panel estrecho, pasan a dos filas). Siempre en una sola línea, sin cortarse."""
-        prog, e3, e2 = self.prog, estilo.E3, estilo.E2
-        ancho_titulo = ANCHO_COLUMNA + 14 - e2 - e3  # la columna de campos más el hueco hasta la paleta, menos lo que ya pone la fila
-        natural = prog.ancho_categorias()
+        """Las categorías del programador por bloques (el de una transición, o el que se vea en una acción) van en la fila de la cabecera, entre el
+        título (que ocupa la columna de campos, o hasta donde empieza la paleta) y «Fijar»: empiezan donde empiezan la paleta y el área, y el panel
+        gana una fila de alto. Si no caben en esa fila, o en otra página, vuelven a su fila propia sobre la paleta (donde, en un panel estrecho,
+        pasan a dos filas). Siempre en una sola línea, sin cortarse. En las páginas con columna de campos el título mide lo que esa columna."""
+        e3, e2 = estilo.E3, estilo.E2
+        elegido = self._programador_en_cabecera()
+        columna = ANCHO_COLUMNA + 14 - e2 - e3  # la columna de campos más el hueco hasta la paleta, menos lo que ya pone la fila
+        ancho_titulo = columna
+        if elegido is self.accion.prog or (elegido is self.prog and self.pagina == "accion"):
+            # el título llega hasta donde empieza el área de ese programador (en una acción, tras la columna de campos y, si lo hay, el valor)
+            contenedor = self.accion.caja_valor if elegido is self.accion.prog else self.pagina_bloques
+            x = contenedor.mapTo(self, QPoint(0, 0)).x() - self.cabecera.x()  # (a coordenadas de la cabecera, que no es antecesora del contenedor)
+            if contenedor.isVisibleTo(self) and e2 + e3 + 60 < x < self.cabecera.width():
+                ancho_titulo = x - e2 - e3
         disponible = self.cabecera.width() - e2 - ancho_titulo - e3 - (self.t_fijar.sizeHint().width() + e3) - 40 - e3
-        quiere = (self.pagina == "transicion" and self.cabecera.width() > 0 and natural <= disponible
-                  and self.titulo.sizeHint().width() <= ancho_titulo)
-        if quiere:
+        natural = self.titulo.fontMetrics().horizontalAdvance(self.titulo.text()) + self.titulo.indent() + 8  # (no `sizeHint`: con ancho fijo da ese)
+        titulo_cabe = natural <= ancho_titulo
+        for prog in (self.prog, self.accion.prog):
+            quiere = (prog is elegido and self.cabecera.width() > 0 and prog.ancho_categorias() <= disponible and titulo_cabe)
+            if quiere:
+                prog.categorias_en_cabecera(self.fila_cabecera, 1)
+            else:
+                prog.categorias_en_cabecera(None)
+        if (elegido is not None and elegido.cat_en_cabecera) or (self.izq.isVisibleTo(self) and titulo_cabe):
             self.titulo.setFixedWidth(ancho_titulo)
-            prog.categorias_en_cabecera(self.fila_cabecera, 1)
         else:
-            prog.categorias_en_cabecera(None)
             self.titulo.setMinimumWidth(0)
             self.titulo.setMaximumWidth(16777215)
 
@@ -620,9 +646,11 @@ class PanelPropiedades(QWidget):
         lay = QVBoxLayout(self.pagina_bloques)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(2)
-        self.l_bloques = QLabel()
+        self.l_bloques = QLabel()  # qué se edita («Condición de la acción Q (etapa 1)»): sobre el área de bloques, no en la cabecera
         self.l_bloques.setStyleSheet(f"color: {estilo.TINTA_2}; background: transparent")
-        self.fila_cabecera.addWidget(self.l_bloques)
+        self.l_bloques.setWordWrap(True)
+        self.l_bloques.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        lay.addWidget(self.l_bloques)
         self.fila_cabecera.addStretch(1)
         self.prog = Programador(lambda: self.e.fuente_bloques() if self.e is not None else ({}, []), compacto=True)
         self.prog.cambiado.connect(self._desde_bloques)
@@ -739,6 +767,7 @@ class PanelPropiedades(QWidget):
         w = QWidget()
         f = _formulario(w)
         self.s_etiqueta = QLineEdit()
+        self.s_etiqueta.setMaxLength(MAX_ETIQUETA_ETAPA)  # más no cabe en el cuadro de la etapa
         self.s_etiqueta.editingFinished.connect(lambda: self._renombrar(self.s_etiqueta))
         self.s_tipo = _desplegable()
         self.s_tipo.addItem("Normal", False)
@@ -922,7 +951,7 @@ class PanelPropiedades(QWidget):
             self._mostrado=("anotacion",vivo);self.ident=vivo;self.pagina="anotacion"
             self._objetivo=None;self._anterior=None;self._ver_bloques(None)
             self.accion.caja_valor.hide();self.cuerpo.show();self.vacio.hide();self.izq.hide()
-            self.der.setCurrentIndex(5);self.der.show();self.msg.clear()
+            self.der.setCurrentIndex(5);self.der.show();self.msg.clear();self._ubicar_categorias()
             self.titulo.setText("Propiedades · "+("Texto" if n["kind"]=="text" else "Imagen"))
             self.nota_resumen.setText(n.get("text","") if n["kind"]=="text" else n.get("name","Imagen"))
             self.nota_editar.setText("Editar texto…" if n["kind"]=="text" else "Cambiar imagen…")
@@ -947,14 +976,12 @@ class PanelPropiedades(QWidget):
         self.cuerpo.setVisible(kind is not None)
         self.vacio.setVisible(kind is None)
         self.pagina = kind or "vacio"  # qué opciones se muestran: etapa, transicion, accion, enlace, barra o vacio
-        self._ubicar_categorias()
-        etapa_a = e.nombres.get(e.etapa_accion(aid), "") if kind == "accion" else ""
-        titulo = {"etapa": f"Etapa {e.nombres.get(vivo)}", "transicion": f"Transición {e.nombres.get(vivo)}",
-                  "enlace": f"Enlace {e.nombre(vivo)}" if vivo else "", "barra": e.nombre(vivo) if vivo else "",
-                  "macro": f"Macroetapa {e.nombres.get(vivo)}",
+        # el título dice solo el tipo («Propiedades · Transición»): el nombre ya se ve en el dibujo y se edita en el campo «Etiqueta»
+        titulo = {"etapa": "Etapa", "transicion": "Transición", "enlace": "Enlace" if vivo else "", "barra": "Barra" if vivo else "",
+                  "macro": "Macroetapa",
                   "orden": "Orden de forzado" + (" sin completar" if e.es_orden_suelta(vivo) else ""),
-                  "marco": e.nombre(vivo) if vivo else "",
-                  "accion": f"Acción {(e.datos_accion(aid)['variable'] or '?') if aid else ''}" + (f" · etapa {etapa_a}" if etapa_a else " · suelta"),
+                  "marco": "Parcial" if vivo else "",
+                  "accion": "Acción",
                   None: "" if len(sel) < 2 else f"{len(sel)} elementos seleccionados"}[kind] if e is not None else ""
         self.titulo.setText(f"Propiedades · {titulo}" if titulo else "Propiedades")
         self.izq.setCurrentIndex({None: 0, "etapa": 1, "transicion": 2, "accion": 3, "enlace": 0, "barra": 0, "macro": 4,
@@ -1052,6 +1079,7 @@ class PanelPropiedades(QWidget):
             self.der.setCurrentIndex(0)
         self.msg.setText("")
         self.msg.hide()
+        self._ubicar_categorias()
 
     @staticmethod
     def _poner(campo: QLineEdit, texto: str) -> None:
