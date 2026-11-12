@@ -4,11 +4,11 @@ import unittest
 from test_editor_cadenas import BaseQt, QT
 
 if QT:
-    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtCore import QPointF, QRectF, Qt
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QComboBox
     from escritorio import estilo
-    from escritorio.diagrama import MAS_PROPIEDADES
+    from escritorio.diagrama import MARCADORES_SELECTOR
 
 
 @unittest.skipUnless(QT, "Falta PySide6")
@@ -39,30 +39,68 @@ class SelectorAccion(BaseQt):
             QApplication.processEvents()
         return caja, w.diagrama._selector
 
-    def test_SSEL01_doble_clic_en_una_continua_abre_el_desplegable_sobre_la_accion(self):
-        """REQ-ACT-01, REQ-EDT-09: doble clic en una acción continua abre, sin Propiedades, un desplegable sobre su rectángulo (ancho mínimo el suyo,
-        alto del token, ya abierto) que solo ofrece salidas booleanas y luego memorias booleanas, sin cabeceras ni tipo, con el papel «(S)» o
-        «(M)»; un separador y «Más propiedades…». Sin variable, el cuadro cerrado muestra «Elija la variable…» sin que sea una opción."""
+    def test_SSEL01_doble_clic_en_una_continua_abre_el_desplegable_dentro_de_la_accion(self):
+        """REQ-ACT-01, REQ-EDT-09: doble clic en una acción continua abre, sin Propiedades, un desplegable dentro de su rectángulo (ancho a lo sumo
+        el interior de la caja, alto del token, ya abierto) que solo ofrece salidas booleanas y luego memorias booleanas, sin cabeceras ni tipo,
+        con el papel «(S)» o «(M)»; sin separador ni «Más propiedades…». Sin variable, el cuadro cerrado muestra un marcador que no es opción."""
         w, e, did = self.preparar()
         caja, cb = self.doble(w, e, did)
         self.assertIsNotNone(cb, e.datos_accion(did))
         self.assertEqual(self.pedidas, [], "no se abre Propiedades")
         self.assertEqual(cb.accessibleName(), "Variable de la acción")
-        self.assertGreaterEqual(cb.width(), round(caja["rect"][2] * w.diagrama.escala()) - 1)
+        esc = w.diagrama.escala()
+        self.assertLessEqual(cb.width(), round(caja["rect"][2] * esc) - 2, "dentro de la caja: nunca más ancho que su interior")
         self.assertEqual(cb.height(), estilo.ALTO_CONTROL)
         self.assertTrue(cb.view().isVisible(), "ya desplegado")
-        textos = [cb.itemText(i) for i in range(cb.count()) if cb.itemData(i) != MAS_PROPIEDADES and cb.itemText(i)]
+        textos = [cb.itemText(i) for i in range(cb.count()) if cb.itemText(i)]
         self.assertEqual(textos, ["motor  (S)", "luz  (S)", "aux  (M)"], "salidas booleanas y luego memorias booleanas; sin la entera ni la entrada")
-        self.assertEqual([cb.itemData(i) for i in range(3)], ["motor", "luz", "aux"])
-        self.assertEqual((cb.currentIndex(), cb.placeholderText()), (-1, "Elija la variable…"))
-        self.assertNotIn("Elija la variable…", [cb.itemText(i) for i in range(cb.count())])
-        self.assertEqual(cb.itemText(cb.count() - 1), "Más propiedades…")
-        self.assertEqual(cb.itemText(cb.count() - 2), "")  # (el separador)
-        sep = cb.count() - 2
-        self.assertFalse(cb.model().item(sep).isSelectable() or cb.model().item(sep).isEnabled(), "el separador no se elige")
-        self.assertLessEqual(cb.view().sizeHintForRow(sep), 8, "una línea fina, no una fila entera")
-        self.assertLessEqual(cb.view().window().width(), cb.width() + 4, "la lista mide lo que el cuadro (los nombres caben)")
+        self.assertEqual([cb.itemData(i) for i in range(cb.count())], ["motor", "luz", "aux"], "ni separador ni «Más propiedades…»")
+        self.assertEqual((cb.currentIndex(), cb.placeholderText()), (-1, cb.placeholderText()))
+        self.assertIn(cb.placeholderText(), MARCADORES_SELECTOR)
+        self.assertNotIn(cb.placeholderText(), [cb.itemText(i) for i in range(cb.count())])
         self.assertGreaterEqual(cb.view().window().width(), cb.width() - 4)
+
+    def test_SSEL05_el_marcador_cabe_entero_con_el_ancho_por_defecto_de_una_accion_a_las_dos_escalas(self):
+        """REQ-EDT-09: con el ancho por defecto de una acción (80 px a 100 %) y a las dos escalas de la interfaz (normal y grande), el marcador del
+        cuadro cerrado se lee entero (su texto cabe entre la sangría y la flecha) y el cuadro no sobresale de la caja; con zoom grande sale el texto
+        completo «Elija la variable…»."""
+        from PySide6.QtGui import QFontMetrics
+        for ancho, alto in ((1360, 860), (2000, 1250)):
+            w, e, did = self.preparar()
+            w.resize(ancho, alto)
+            for _ in range(6):
+                QApplication.processEvents()
+            for zoom in (None, 1.5, 2.5):
+                w.diagrama.cerrar_selector()
+                if zoom:
+                    w.diagrama.zoom(zoom)
+                    for _ in range(3):
+                        QApplication.processEvents()
+                caja, cb = self.doble(w, e, did)
+                r = w.diagrama.mapFromScene(QRectF(*caja["rect"])).boundingRect()
+                self.assertGreaterEqual(cb.geometry().left(), r.left(), (ancho, zoom))
+                self.assertLessEqual(cb.geometry().right(), r.right(), (ancho, zoom))
+                marcador = cb.placeholderText()
+                self.assertLessEqual(QFontMetrics(cb.font()).horizontalAdvance(marcador), cb.width() - 6 - 18 - 2, (ancho, zoom, marcador))
+                if zoom == 2.5:
+                    self.assertEqual(marcador, "Elija la variable…")
+            w.diagrama.cerrar_selector()
+
+    def test_SSEL06_un_nombre_que_no_cabe_se_acorta_y_la_ayuda_emergente_lo_da_entero(self):
+        """REQ-EDT-09: con una variable de nombre largo, el cuadro cerrado (más estrecho que la caja) lo muestra acortado con «…» sin cortarlo a
+        medias y su ayuda emergente da el nombre entero; la lista desplegada se ensancha lo justo para leerlo."""
+        w, e, did = self.preparar()
+        e.nueva_variable("valvula_de_llenado_del_deposito_principal", "output")
+        e.elegir_variable_accion(did, "valvula_de_llenado_del_deposito_principal")
+        w.diagrama.zoom(0.5)  # (la caja crece con el nombre; alejando, queda más estrecha que él)
+        for _ in range(4):
+            QApplication.processEvents()
+        caja, cb = self.doble(w, e, w.diagrama.cajas_acciones[0]["id"])
+        self.assertLess(cb.width(), cb.fontMetrics().horizontalAdvance("valvula_de_llenado_del_deposito_principal"))
+        self.assertIn("valvula_de_llenado_del_deposito_principal", cb.toolTip())
+        img = cb.grab().toImage()
+        self.assertGreater(img.width(), 0)
+        self.assertGreaterEqual(cb.view().window().width(), cb.view().sizeHintForColumn(0), "la lista da sitio al nombre entero")
 
     def test_SSEL01b_con_variable_el_cuadro_la_muestra_y_sin_ninguna_valida_hay_una_linea_desactivada(self):
         """REQ-ACT-01: con variable en la acción, el cuadro cerrado muestra la actual; sin salidas ni memorias booleanas, una línea desactivada."""
@@ -120,30 +158,16 @@ class SelectorAccion(BaseQt):
         self.assertIsNone(w.diagrama._selector)
         self.assertEqual((len(e.ed.undo_stack), e.datos_accion(did)["variable"]), (n, ""))
 
-    def test_SSEL04_mas_propiedades_abre_propiedades_y_una_condicionada_sigue_abriendolas(self):
-        """REQ-ACT-01: «Más propiedades…» cierra el desplegable y abre el panel de Propiedades (inferior) con esa acción, aunque estuviera plegado;
-        el doble clic en una acción condicionada abre Propiedades sin desplegable."""
+    def test_SSEL04_una_condicionada_sigue_abriendo_propiedades_y_la_continua_no_ofrece_mas_propiedades(self):
+        """REQ-ACT-01: el doble clic en una acción condicionada abre Propiedades sin desplegable; en la continua solo se elige la variable (el
+        desplegable no lleva «Más propiedades…»; el resto se edita en Propiedades con el panel inferior)."""
         w, e, did = self.preparar()
-        e.pedir_accion = lambda sid, aid: w.editar_accion(sid, aid, e.pedido_explicito)  # lo real, no el espía
-        if w._plegables["inferior"].abierto:
-            w._plegables["inferior"].mostrar(False)
-        for _ in range(3):
-            QApplication.processEvents()
-        self.assertFalse(w._plegables["inferior"].abierto)
         caja, cb = self.doble(w, e, did)
-        cb.activated.emit(cb.count() - 1)
-        for _ in range(4):
-            QApplication.processEvents()
-        self.assertIsNone(w.diagrama._selector)
-        self.assertTrue(w._plegables["inferior"].abierto, "el panel inferior se despliega")
-        self.assertTrue(w.props.isVisible())
-        self.assertEqual((e.accion, e.ver_accion), (did, True))
-        self.assertTrue(w.props.accion.isVisible(), "muestra las opciones de la acción")
+        self.assertNotIn("Más propiedades…", [cb.itemText(i) for i in range(cb.count())])
+        w.diagrama.cerrar_selector()
         d = dict(e.datos_accion(did), variable="motor", tipo="condicionada", condicion="marcha")
         self.assertIsNone(e.cambiar_accion(did, d))
         self.pedidas.clear()
-        self.pedidas.clear()
-        e.pedir_accion = lambda sid, aid: self.pedidas.append((sid, aid))
         caja, cb = self.doble(w, e, did)
         self.assertIsNone(cb)
         self.assertEqual(len(self.pedidas), 1)

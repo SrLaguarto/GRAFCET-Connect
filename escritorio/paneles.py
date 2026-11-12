@@ -83,6 +83,7 @@ class EtiquetaElidida(QLabel):
         super().__init__()
         self.ancho_maximo = ancho_maximo
         self.modo = modo
+        self.minimo = 24  # lo que pide como mínimo a su fila (la cabecera del dibujo lo baja: así la ventana puede ser media pantalla)
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         if texto:
@@ -97,7 +98,7 @@ class EtiquetaElidida(QLabel):
         return QSize(min(self.ancho_maximo, self.fontMetrics().horizontalAdvance(self.text()) + 4), super().sizeHint().height())
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        return QSize(24, super().minimumSizeHint().height())
+        return QSize(self.minimo, super().minimumSizeHint().height())
 
     def paintEvent(self, evento) -> None:  # noqa: N802
         p = QPainter(self)

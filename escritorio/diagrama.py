@@ -24,7 +24,8 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, QSetti
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, QPainter, QPainterPath, QPen,
                            QPalette, QPixmap, QRegion)
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QListWidget, QHBoxLayout, QLabel,
-                               QMenu, QProxyStyle, QPushButton, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QToolButton, QWidget)
+                               QMenu, QProxyStyle, QPushButton, QStyle, QStyledItemDelegate, QStyleOptionComboBox, QStyleOptionViewItem, QStylePainter,
+                               QToolButton, QWidget)
 
 from . import estilo
 
@@ -1340,7 +1341,8 @@ class _BarraZoom(QFrame):
         return resultado
 
 
-MAS_PROPIEDADES = "@mas-propiedades"  # el dato de la última opción del desplegable sobre una acción
+MARCADORES_SELECTOR = ("Elija la variable…", "Elija variable…", "Variable…", "…")  # el marcador del desplegable sin variable: el primero que cabe
+SELECTOR_PAD_IZQ, SELECTOR_FLECHA = 6, 18  # sangría del texto y ancho de la zona de la flecha del desplegable sobre la acción (más justos que los de un campo)
 
 
 class _OpcionConPapel(QStyledItemDelegate):
@@ -1387,6 +1389,16 @@ class SelectorAccion(QComboBox):
     perder el foco; `cerrado` avisa de ello para quitarlo."""
     cerrado = Signal()
     _reclamado = False
+
+    def paintEvent(self, ev: Any) -> None:  # noqa: N802
+        """Como un desplegable normal, pero lo que no cabe se acorta con «…» (la ayuda emergente da el nombre entero) y no se corta a medias."""
+        p = QStylePainter(self)
+        opt = QStyleOptionComboBox()
+        self.initStyleOption(opt)
+        p.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opt)
+        campo = self.style().subControlRect(QStyle.ComplexControl.CC_ComboBox, opt, QStyle.SubControl.SC_ComboBoxEditField, self)
+        opt.currentText = self.fontMetrics().elidedText(opt.currentText, Qt.TextElideMode.ElideRight, max(0, campo.width() - 4))
+        p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opt)
 
     def hidePopup(self) -> None:  # noqa: N802
         super().hidePopup()
@@ -1446,9 +1458,11 @@ class VistaDiagrama(QGraphicsView):
         self.ajustes: QSettings | None = None  # dónde se recuerda; sin él, los `ajustes` de la ventana que contiene la vista
         self._dependencias_leidas = False
         self._ultimo: tuple[Any, ...] | None = None  # lo último que se dibujó: lo repinta el botón de dependencias
+        self._ajuste_pendiente = False  # se encajó el dibujo antes de que la vista se mostrara (con su tamaño final): al mostrarse o al primer cambio de tamaño se encaja de nuevo
         self._encuadrando: QRectF | None = None  # lo que acaba de encuadrarse, hasta que la ventana termina de recolocarse
         self._barra_zoom()
         self.lista_diagnosticos = QListWidget(self)
+        self.lista_diagnosticos.setObjectName("listaDiagnosticos")
         self.lista_diagnosticos.setWordWrap(True)
         self.lista_diagnosticos.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.lista_diagnosticos.setStyleSheet(
@@ -1457,6 +1471,7 @@ class VistaDiagrama(QGraphicsView):
             f"QListWidget::item {{ background:rgba(255,255,255,235); color:{estilo.TINTA}; padding:2px; }}")
         self.lista_diagnosticos.hide()
         self.indicador_diagnosticos = QLabel(self)
+        self.indicador_diagnosticos.setObjectName("indicadorDiagnosticos")
         self.indicador_diagnosticos.setAccessibleName("Incidencias")
         pm = QPixmap(40,40);pm.fill(Qt.GlobalColor.transparent)
         pintor = QPainter(pm);pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -1482,11 +1497,7 @@ class VistaDiagrama(QGraphicsView):
         self.resumen_diagnosticos.setCheckable(True)
         self.resumen_diagnosticos.setCursor(Qt.CursorShape.PointingHandCursor)
         self.resumen_diagnosticos.setAccessibleName("Resumen de incidencias")
-        self.resumen_diagnosticos.setStyleSheet(
-            f"QPushButton#resumenDiagnosticos {{ background:rgba(255,255,255,235); color:{estilo.TINTA}; border:1px solid {estilo.BORDE_CONTROL}; "
-            f"border-radius:{estilo.R_S}px; padding:0 8px; text-align:left; font-size:13px; min-height:0; }} "
-            f"QPushButton#resumenDiagnosticos:hover {{ background:{estilo.HOVER}; }} "
-            f"QPushButton#resumenDiagnosticos[tecl=\"true\"]:focus {{ border:2px dashed {estilo.FOCO}; padding:0 7px; }}")
+        self._estilo_resumen(estilo.AVISO)
         self.resumen_diagnosticos.clicked.connect(self.desplegar_diagnosticos)
         self.resumen_diagnosticos.hide()
         self.controlador: Any = None  # al editar: recibe prensar / mover / soltar / doble con puntos del dibujo
@@ -1974,9 +1985,10 @@ class VistaDiagrama(QGraphicsView):
             lista.doItemsLayout()
             alto = min(max(30, h // 3), sum(max(20, lista.sizeHintForRow(i)) for i in range(lista.count())) + 4)
             lista.setFixedHeight(alto)
-            y0 = bb + 6
+            y0 = bb + 6 if self.barra_integrada else self.barra.y() + self.barra.height() + 2  # (con el zoom flotando arriba a la derecha, el aviso va debajo: nunca se pisan)
             boton = self.resumen_diagnosticos
-            boton.setGeometry(bx + 48, y0 + 5, ancho, 30)
+            alto_boton = estilo.ALTO_CONTROL_COMPACTO  # C1: el alto de un control, centrado con el triángulo (de 40 px)
+            boton.setGeometry(bx + (8 if getattr(self, "vacio_diagnosticos", False) else 48), y0 + (40 - alto_boton) // 2, ancho, alto_boton)
             lista.move(bx + 48, y0 + 38)
             self.indicador_diagnosticos.setGeometry(bx, y0, 40, 40)
             region = QRegion()
@@ -1992,23 +2004,44 @@ class VistaDiagrama(QGraphicsView):
             boton.raise_()
             self.indicador_diagnosticos.raise_()
 
-    def actualizar_diagnosticos(self, visible: bool, resumen: str = "") -> None:
+    def _estilo_resumen(self, color: str) -> None:
+        """El resumen de incidencias es un enlace: sin recuadro ni fondo (tampoco al pasar el puntero ni al pulsar), con el texto y la flecha del
+        color del aviso (el ámbar oscuro, o el rojo de error si hay errores). Con Tab, el anillo de foco de siempre."""
+        if getattr(self, "_color_resumen", None) == color:
+            return
+        self._color_resumen = color
+        self.resumen_diagnosticos.setStyleSheet(
+            f"QPushButton#resumenDiagnosticos {{ background:transparent; color:{color}; border:0; padding:0 8px; text-align:left; "
+            f"font-size:13px; font-weight:600; min-height:0; }} "
+            f"QPushButton#resumenDiagnosticos:hover, QPushButton#resumenDiagnosticos:pressed, QPushButton#resumenDiagnosticos:checked "
+            f"{{ background:transparent; color:{color}; }} "
+            f"QPushButton#resumenDiagnosticos[tecl=\"true\"]:focus {{ border:2px dashed {estilo.FOCO}; padding:0 6px; }}")
+
+    def actualizar_diagnosticos(self, visible: bool, resumen: str = "", vacio: bool = False) -> None:
         """Muestra u oculta los avisos de arriba a la derecha: el triángulo y, a su lado, `resumen` plegado con su flecha; la lista de mensajes,
         debajo, solo si está desplegada (si lo estaba y llega otro aviso, sigue desplegada; si desaparecen todos, se oculta todo y vuelve a plegada)."""
-        if not visible:
+        if not visible or vacio:
             self.diagnosticos_abiertos = False
+        self.vacio_diagnosticos = bool(visible and vacio)
         self.resumen_diagnosticos.setChecked(self.diagnosticos_abiertos)
-        self.resumen_diagnosticos.setText(f"{resumen}  {'▾' if self.diagnosticos_abiertos else '▸'}")
-        self.resumen_diagnosticos.setToolTip(resumen + (" · clic para plegar la lista" if self.diagnosticos_abiertos else " · clic para ver los mensajes"))
-        self.lista_diagnosticos.setVisible(visible and self.diagnosticos_abiertos)
+        if vacio:  # «Mostrar errores» marcado y nada que avisar: «Sin errores» en tono neutro, sin triángulo ni flecha
+            self._estilo_resumen(estilo.TINTA_2)
+            self.resumen_diagnosticos.setText("Sin errores")
+            self.resumen_diagnosticos.setToolTip("No hay errores ni avisos")
+        else:
+            self._estilo_resumen(estilo.ERROR if "error" in resumen.lower() else estilo.AVISO)
+            self.resumen_diagnosticos.setText(f"{resumen}  {'▾' if self.diagnosticos_abiertos else '▸'}")
+            self.resumen_diagnosticos.setToolTip(resumen + (" · clic para plegar la lista" if self.diagnosticos_abiertos else " · clic para ver los mensajes"))
+        self.lista_diagnosticos.setVisible(visible and not vacio and self.diagnosticos_abiertos)
         self.resumen_diagnosticos.setVisible(visible)
-        self.indicador_diagnosticos.setVisible(visible)
+        self.resumen_diagnosticos.setEnabled(not vacio)
+        self.indicador_diagnosticos.setVisible(visible and not vacio)
         self._colocar()
 
     def desplegar_diagnosticos(self, abierto: bool) -> None:
         """Despliega o pliega la lista de mensajes bajo el resumen."""
         self.diagnosticos_abiertos = bool(abierto)
-        self.actualizar_diagnosticos(self.resumen_diagnosticos.isVisible(), self.resumen_diagnosticos.text().rsplit("  ", 1)[0])
+        self.actualizar_diagnosticos(self.resumen_diagnosticos.isVisible(), self.resumen_diagnosticos.text().rsplit("  ", 1)[0], getattr(self, "vacio_diagnosticos", False))
 
     def escala(self) -> float:
         return self.transform().m11()
@@ -2033,14 +2066,14 @@ class VistaDiagrama(QGraphicsView):
         """Lo que hay que mantener a la vista: lo dibujado o, si no hay nada, el área mínima de edición."""
         return self._contenido if self._contenido is not None else self.area_minima
 
-    def _actualizar_escena(self) -> None:
+    def _actualizar_escena(self, esquina: QPointF | None = None) -> None:
         """La escena es lo dibujado con, a cada lado, lo que cabe en la vista menos `VISIBLE_MIN` px (en unidades del
         dibujo, al zoom actual): así se puede anclar el zoom en cualquier punto y desplazarse hasta el borde sin perder
         del todo el dibujo. Lo que se ve no se mueve aunque la escena cambie de tamaño."""
         base = self._base()
         if base is None:
             return
-        esquina = self._a_escena(QPointF(0, 0))
+        esquina = esquina if esquina is not None else self._a_escena(QPointF(0, 0))
         k = self.escala() or 1.0
         vw, vh = self.viewport().width(), self.viewport().height()
         mx, my = max(vw - VISIBLE_MIN, vw // 2) / k, max(vh - VISIBLE_MIN, vh // 2) / k
@@ -2126,6 +2159,7 @@ class VistaDiagrama(QGraphicsView):
         ajustarse solo con cada cambio de tamaño del dibujo."""
         self._manual = self.controlador is not None  # al editar, el zoom no se recoloca solo
         self._origen = False
+        self._ajuste_pendiente = not self.isVisible()
         self._barras()
         self._encajar(self._base(), reservar_barra=True)
         if self._manual and self.controlador is not None:
@@ -2196,31 +2230,42 @@ class VistaDiagrama(QGraphicsView):
         self._situar(p, c)
         self._notificar()
 
-    def abrir_selector(self, rect: Any, opciones: list[tuple[Any, ...]], actual: str, al_elegir: Any, al_mas: Any) -> None:
+    def abrir_selector(self, rect: Any, opciones: list[tuple[Any, ...]], actual: str, al_elegir: Any) -> None:
         """Un desplegable abierto sobre el rectángulo `rect` (x, y, ancho, alto del dibujo) con las `opciones` (texto, dato, habilitada[, papel: se
-        pinta a la derecha]), un separador y «Más propiedades…». Cerrado muestra la variable actual o, si no hay, «Elija la variable…» (no es una opción). Elegir una llama a `al_elegir(dato)` y cierra; «Más propiedades…», a `al_mas()`. Esc, un clic fuera, desplazar
-        o hacer zoom lo cierran sin cambiar nada."""
+        pinta a la derecha]). Va **dentro** de la caja de la acción: mide a lo sumo su ancho interior a la escala de la vista (lo que pide su opción
+        más larga, si cabe); un nombre que no cabe se acorta con «…» y su ayuda emergente lo da entero. Cerrado muestra la variable actual o, si no
+        hay, el marcador «Elija la variable…» (no es una opción; con poco sitio, uno más corto, ver `MARCADORES_SELECTOR`). Elegir una llama a
+        `al_elegir(dato)` y cierra. Esc, un clic fuera, desplazar o hacer zoom lo cierran sin cambiar nada."""
         self.cerrar_selector()
         x, y, w, h = rect
         r = self.mapFromScene(QRectF(x, y, w, h)).boundingRect()
         cb = SelectorAccion(self.viewport())
         cb.setAccessibleName("Variable de la acción")
-        cb.setToolTip("Variable de la acción")
         cb.setItemDelegate(_OpcionConPapel(cb))
         for texto, dato, habilitada, *papel in opciones:
             cb.addItem(texto, dato)
+            cb.setItemData(cb.count() - 1, texto, Qt.ItemDataRole.ToolTipRole)
             if papel and papel[0]:
                 cb.setItemData(cb.count() - 1, papel[0], Qt.ItemDataRole.UserRole + 1)
             if not habilitada:
                 cb.model().item(cb.count() - 1).setEnabled(False)
-        cb.insertSeparator(cb.count())
-        cb.addItem("Más propiedades…", MAS_PROPIEDADES)
-        cb.setPlaceholderText(actual or "Elija la variable…")
-        cb.setCurrentIndex(cb.findData(actual) if actual else -1)
-        cb.setMinimumWidth(r.width())
+        cb.setStyleSheet(f"QComboBox {{ padding:0 2px 0 {SELECTOR_PAD_IZQ}px; }} QComboBox:focus {{ padding:0 1px 0 {SELECTOR_PAD_IZQ - 1}px; }} "
+                         f"QComboBox::drop-down {{ width:{SELECTOR_FLECHA}px; }}")
         cb.setFixedHeight(estilo.ALTO_CONTROL)
-        ancho = max(r.width(), cb.sizeHint().width())
-        cb.setGeometry(r.left(), r.center().y() - estilo.ALTO_CONTROL // 2, ancho, estilo.ALTO_CONTROL)
+        margen = max(2, round(2 * self.escala()))  # (el trazo de la caja)
+        interior = max(SELECTOR_FLECHA, r.width() - 2 * margen)
+        fm = cb.fontMetrics()
+        util = interior - SELECTOR_PAD_IZQ - SELECTOR_FLECHA - 4  # (borde y foco)
+        marcador = next((m for m in MARCADORES_SELECTOR if fm.horizontalAdvance(m) <= util), MARCADORES_SELECTOR[-1])
+        cb.setPlaceholderText(actual or marcador)
+        cb.setCurrentIndex(cb.findData(actual) if actual else -1)
+        texto_actual = cb.currentText() if actual else ""
+        pide = max([fm.horizontalAdvance(cb.itemText(i)) for i in range(cb.count())] + [0 if actual else fm.horizontalAdvance(marcador)]) + SELECTOR_PAD_IZQ + SELECTOR_FLECHA + 4
+        cb.setMinimumWidth(0)
+        ancho = max(SELECTOR_FLECHA, min(interior, pide))
+        cb.setToolTip(texto_actual if texto_actual and fm.horizontalAdvance(texto_actual) > ancho - SELECTOR_PAD_IZQ - SELECTOR_FLECHA - 4
+                      else "Variable de la acción")
+        cb.setGeometry(r.left() + margen, r.center().y() - estilo.ALTO_CONTROL // 2, ancho, estilo.ALTO_CONTROL)
         necesario = cb.view().sizeHintForColumn(0) + 24  # (la lista mide lo que el cuadro, salvo que un nombre no quepa)
         if necesario > ancho:
             cb.view().setMinimumWidth(necesario)
@@ -2228,9 +2273,7 @@ class VistaDiagrama(QGraphicsView):
         def elegido(i: int) -> None:
             dato = cb.itemData(i)
             self.cerrar_selector()
-            if dato == MAS_PROPIEDADES:
-                al_mas()
-            elif dato:
+            if dato:
                 al_elegir(dato)
         cb.activated.connect(elegido)
         cb.cerrado.connect(self.cerrar_selector)
@@ -2261,18 +2304,24 @@ class VistaDiagrama(QGraphicsView):
     def showEvent(self, event: Any) -> None:  # noqa: N802
         """Al mostrarse (ya dentro de su ventana) lee el estado guardado de las dependencias, si no lo había leído, y repinta."""
         super().showEvent(event)
+        if self._ajuste_pendiente:
+            self.ajustar()
         antes = self.dependencias
         self._leer_dependencias()
         if self.dependencias != antes and self._ultimo is not None:
             self.mostrar(*self._ultimo)
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802
+        """Cambiar el tamaño de la vista no recentra ni reencaja: el dibujo queda anclado arriba a la izquierda (mismo zoom y mismo punto del
+        dibujo en la esquina de la vista; al agrandar, más sitio a la derecha y abajo; al encoger, se recorta por ahí); es lo que pasa al editar
+        y con zoom manual al simular. Solo «Centrar todo», abrir un ejemplo o un proyecto, y encuadrar encajan. (Lo que se encajó antes de mostrarse la vista, sí se encaja de nuevo con su tamaño final.)"""
+        esquina = self._a_escena(QPointF(0, 0))  # (antes de que Qt recoloque las barras con el tamaño nuevo)
         super().resizeEvent(event)
-        if not self._manual:
-            self.ajustar()
+        if (self._ajuste_pendiente and self.isVisible()) or not self._manual:
+            self.ajustar()  # (sin zoom manual al simular, la vista se reencaja con la ventana, como siempre: REQ-SIM-03)
         else:
-            self._barras()  # (al editar, las barras dependen de lo que cabe en la vista)
-            self._actualizar_escena()  # la vista cambia de tamaño y con ella los márgenes de la escena
+            self._barras()  # (las barras dependen de lo que cabe en la vista)
+            self._actualizar_escena(esquina)  # la vista cambia de tamaño y con ella los márgenes de la escena
             if self._origen:
                 self._al_origen()
             elif self._encuadrando is not None:  # recién encuadrado: se vuelve a encajar con el tamaño que ha quedado

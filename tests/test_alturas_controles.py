@@ -239,10 +239,10 @@ class Alturas(BaseQt):
 
     def test_SALC07_barra_de_edicion_orden_ayudas_y_anchura(self):
         """REQ-EDT-01, REQ-EDT-11: tras Play y Reiniciar, una sola fila: | Deshacer · Rehacer | Cortar · Copiar · Pegar · Borrar | Añadir debajo ·
-        Dependencias; los seis primeros solo icono con el atajo en la ayuda; cabe a 1366×768 sin cortar nada; al simular quedan desactivados."""
+        Dependencias · Errores; los seis primeros solo icono con el atajo en la ayuda; cabe a 1366×768 sin cortar nada; al simular quedan desactivados."""
         w, e, ids = self._preparar(1366, 768)
         acciones = list(w.tb_edit.actions())
-        esperado = ["|", w.a_deshacer, w.a_rehacer, "|", w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar, "|", w.a_debajo, w.a_dependencias]
+        esperado = ["|", w.a_deshacer, w.a_rehacer, "|", w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar, "|", w.a_debajo, w.a_dependencias, w.a_errores]
         self.assertEqual([("|" if a.isSeparator() else a) for a in acciones], esperado)
         for a, atajo in ((w.a_deshacer, "Ctrl+Z"), (w.a_rehacer, "Ctrl+Y"), (w.a_cortar, "Ctrl+X"), (w.a_copiar, "Ctrl+C"),
                          (w.a_pegar, "Ctrl+V"), (w.a_borrar, "Supr")):
@@ -272,6 +272,7 @@ class Alturas(BaseQt):
         for a in (w.a_deshacer, w.a_rehacer, w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar, w.a_debajo):
             self.assertTrue(w.tb_edit.widgetForAction(a).isVisible() and not w.tb_edit.widgetForAction(a).isEnabled(), a.text())
         self.assertTrue(w.diagrama.b_dependencias.isVisible() and w.diagrama.b_dependencias.isEnabled())
+        self.assertTrue(w.b_errores.isVisible() and not w.b_errores.isEnabled(), "«Mostrar errores» se desactiva al simular, como los demás de edición")
         w.hide()
 
     def test_SALC08_barra_de_edicion_cabe_en_pantalla_partida(self):

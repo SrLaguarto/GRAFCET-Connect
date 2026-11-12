@@ -573,6 +573,7 @@ class LienzoPLC(QWidget):
         rejilla.setSpacing(0)
         titulo = QLabel("PLC · Modbus TCP")
         titulo.setObjectName("tituloPLC")
+        titulo.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)  # T2: centrado sobre el marco, que va centrado
         titulo.setContentsMargins(0, 0, 0, 8)  # (el marco empieza por debajo del título, con un margen normal)
         rejilla.addWidget(titulo, 0, 0, 1, 2)
         # La cabecera del marco: con la conexión parada, los controles de la IP, el puerto y el esclavo (`edicion_destino`, los mismos widgets que
@@ -1147,8 +1148,9 @@ class PanelES(QWidget):
         self.ayuda_canales.setStyleSheet(f"color:{estilo.TINTA_2}; font-size:12px")
         configuracion.addWidget(self.ayuda_canales)
         self.b_avanzado = QPushButton("Asignaciones y ajustes avanzados  ›")
-        self.b_avanzado.setStyleSheet(f"text-align:left; margin-top:12px; background:transparent; color:{estilo.TINTA_2}; border:0")
+        self.b_avanzado.setStyleSheet(f"text-align:left; background:transparent; color:{estilo.TINTA_2}; border:1px solid transparent")  # (el borde transparente deja el alto de control)
         self.b_avanzado.clicked.connect(self._alternar_avanzado)
+        configuracion.addSpacing(12)  # (el hueco sobre el botón, fuera de él: su alto es el del control)
         configuracion.addWidget(self.b_avanzado)
         self.avanzado = QWidget()
         avanzado = QVBoxLayout(self.avanzado)
@@ -1452,6 +1454,11 @@ class PanelES(QWidget):
         self.dialogo_config.resize(1050 if mostrar else 640, 680 if mostrar else 380)
         if mostrar:
             self._anchos_controles()
+            # TB3: la tabla cabe sin barra horizontal si la ventana tiene sitio (a menos ancho, se desplaza y no se corta ninguna columna)
+            pide = sum(self.tabla.columnWidth(c) for c in range(self.tabla.columnCount()) if not self.tabla.isColumnHidden(c)) + self.tabla.verticalHeader().width() + 2 * self.tabla.frameWidth()
+            hueco = self.dialogo_config.width() - self.tabla.viewport().width() - 2 * self.tabla.frameWidth() if self.tabla.viewport().width() else 80
+            libre = max(1050, self.window().width() - 40)
+            self.dialogo_config.resize(min(libre, max(1050, pide + max(hueco, 60))), 680)
 
     def _cerrar_configuracion(self):
         self.dialogo_config.close()

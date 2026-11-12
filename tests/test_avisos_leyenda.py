@@ -1,4 +1,4 @@
-"""Leyenda con miniaturas, alto mínimo del panel de una transición, avisos entendibles y recentrado al redimensionar."""
+"""Leyenda con miniaturas, alto mínimo del panel de una transición, avisos entendibles y dibujo anclado al redimensionar."""
 import unittest
 from unittest import mock
 
@@ -11,7 +11,6 @@ if QT:
     from escritorio import leyenda
     from escritorio.alto_opciones import alto_minimo_transicion
 from escritorio.mensajes import amable, motivo_parada, partir
-from escritorio.recentrado import RETARDO_MS
 
 SECCIONES = ("Etapas", "Transiciones", "Acciones", "Jerarquía y forzado", "Temporizadores", "Ratón y teclado")
 
@@ -147,26 +146,40 @@ class Interfaz(BaseQt):
         QApplication.processEvents()
         self.assertEqual(w.vsplit.sizes()[1], grande)
 
-    def test_SRCT01_cambiar_el_tamaño_de_la_ventana_recentra_tras_el_retardo(self):
-        """REQ-EDT-09: al redimensionar la ventana, un temporizador de disparo único llama a «Centrar todo»; plegar un
-        panel no lo dispara."""
+    def test_SRCT01_cambiar_el_tamaño_de_la_ventana_no_recentra_y_ancla_arriba_a_la_izquierda(self):
+        """REQ-EDT-09: al cambiar el tamaño de la ventana (agrandar, encoger, plegar un panel) el dibujo conserva su zoom y el mismo punto del dibujo
+        en la esquina superior izquierda de la vista, pasado un tiempo largo (nada lo recentra después); «Centrar todo» sigue encajándolo. Al
+        editar y al simular con el zoom a mano. Sin depender de temporizadores: se espera más que cualquier retardo antiguo."""
+        from PySide6.QtCore import QPointF
         w, e = self.vacio()
+        self.cadena(e)
         self.addCleanup(w.hide)
         w.resize(1200, 700)
         w.show()
-        QApplication.processEvents()
-        w.recentrado.temporizador.stop()
-        self.assertTrue(w.recentrado.temporizador.isSingleShot())
-        self.assertEqual(w.recentrado.temporizador.interval(), RETARDO_MS)
+        for _ in range(6):
+            QApplication.processEvents()
+        d = w.diagrama
+        self.assertFalse(hasattr(w, "recentrado"), "ya no hay temporizador de recentrado")
+        d.zoom(1.37)
+        d.horizontalScrollBar().setValue(d.horizontalScrollBar().value() + 40)
+        for _ in range(4):
+            QApplication.processEvents()
+        antes = (d.escala(), d._a_escena(QPointF(0, 0)))
+        for ancho, alto in ((1500, 900), (900, 600), (1100, 650)):
+            w.resize(ancho, alto)
+            for _ in range(6):
+                QApplication.processEvents()
+            QTest.qWait(300)
+            self.assertAlmostEqual(d.escala(), antes[0], places=6, msg=(ancho, alto, "mismo zoom"))
+            esquina = d._a_escena(QPointF(0, 0))
+            self.assertLess(abs(esquina.x() - antes[1].x()) + abs(esquina.y() - antes[1].y()), 1.5, (ancho, alto, esquina, antes[1]))
         w._mostrar_panel("derecho", False)
-        QApplication.processEvents()
-        self.assertFalse(w.recentrado.temporizador.isActive(), "plegar un panel no recentra")
-        w.resize(900, 600)
-        QApplication.processEvents()
-        self.assertTrue(w.recentrado.temporizador.isActive())
-        with mock.patch.object(w.diagrama, "ajustar") as ajustar:
-            QTest.qWait(RETARDO_MS + 150)
-            self.assertEqual(ajustar.call_count, 1)
+        for _ in range(6):
+            QApplication.processEvents()
+        QTest.qWait(300)
+        self.assertAlmostEqual(d.escala(), antes[0], places=6, msg="plegar un panel tampoco cambia el zoom")
+        d.ajustar()
+        self.assertNotAlmostEqual(d.escala(), antes[0], places=3, msg="«Centrar todo» sigue encajando")
 
 
 if __name__ == "__main__":

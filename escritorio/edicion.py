@@ -2634,12 +2634,11 @@ class Edicion(QObject):
         return out or [("Ninguna", "", False, "")]
 
     def desplegar_variable(self, caja: dict[str, Any]) -> None:
-        """Doble clic en una acción continua: un desplegable sobre su rectángulo con las variables que puede escribir y, al final, «Más propiedades…»."""
-        aid, sid = caja["id"], caja["etapa"] or None
+        """Doble clic en una acción continua: un desplegable dentro de su rectángulo con las variables que puede escribir (solo se elige la variable; el resto, en Propiedades)."""
+        aid = caja["id"]
         d = self.datos_accion(aid)
         self.diagrama.abrir_selector(caja["rect"], self.opciones_variable_accion(aid), d["variable"],
-                                     lambda nombre: self.elegir_variable_accion(aid, nombre),
-                                     lambda: self.explicito(self.pedir_accion, sid, aid))  # (la orden llega tras cerrar: sigue siendo una petición del usuario)
+                                     lambda nombre: self.elegir_variable_accion(aid, nombre))
 
     def elegir_variable_accion(self, aid: str, nombre: str) -> None:
         """Se eligió una variable en el desplegable de la acción: el mismo cambio que en Propiedades (una operación de deshacer)."""

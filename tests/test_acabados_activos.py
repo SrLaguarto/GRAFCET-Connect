@@ -118,6 +118,7 @@ class Acabados(BaseQt):
         """REQ-EDT-09: icono rojo junto al texto, debajo del zoom, manteniendo clic en diagnóstico y espacios transparentes."""
         w,e=self.editor();d=w.diagrama;self.assertFalse(d.indicador_diagnosticos.isVisible())
         e.ed.add_transition("g","",label="t2",at=(100,200));e.cambia();QTest.qWait(20)
+        self.assertFalse(d.indicador_diagnosticos.isVisible(),"al editar no sale por sí solo");w.b_errores.setChecked(True);QTest.qWait(20)
         icono=d.indicador_diagnosticos;lista=d.lista_diagnosticos
         self.assertFalse(icono.pixmap().isNull());self.assertEqual(icono.width(),40)
         self.assertTrue(d.barra_integrada,"el zoom va en la cabecera");self.assertFalse(lista.isVisible(),"por defecto, plegado")

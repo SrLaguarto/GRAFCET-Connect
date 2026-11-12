@@ -70,7 +70,7 @@ class Remates(BaseQt):
         w,e=self.editor();d=w.diagrama
         self.assertFalse(d.indicador_diagnosticos.isVisible());self.assertFalse(w.lista_diag.isVisible())
         self.assertNotIn("Diagnósticos",[b.title() for b in w.derecho.findChildren(QGroupBox)])
-        tid,_=e.ed.add_transition("g","",label="t2",at=(100,200));e.cambia();QApplication.processEvents()
+        tid,_=e.ed.add_transition("g","",label="t2",at=(100,200));e.cambia();w.b_errores.setChecked(True);QApplication.processEvents()
         self.assertTrue(d.indicador_diagnosticos.isVisible());self.assertIs(w.lista_diag.parent(),d)
         self.assertTrue(d.barra_integrada);d.desplegar_diagnosticos(True);QApplication.processEvents();self.assertLess(d.resumen_diagnosticos.y(),16)  # (el zoom, en la cabecera: el aviso va siempre en su sitio, plegado por defecto)
         self.assertGreater(w.lista_diag.y(),d.resumen_diagnosticos.y())

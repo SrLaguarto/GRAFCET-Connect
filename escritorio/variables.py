@@ -266,7 +266,7 @@ class PanelVariables(QWidget):
         self._anchos_columnas()
         cab.setMinimumSectionSize(20)
         self.tabla.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # los nombres largos se elidén; si ni así cabe, barra
-        self.tabla.setMinimumWidth(168)  # por debajo, el panel que la contiene se desplaza en vez de aplastar las columnas
+        self.tabla.setMinimumWidth(154)  # por debajo, el panel que la contiene se desplaza en vez de aplastar las columnas
         self.tabla.setTextElideMode(Qt.TextElideMode.ElideMiddle)  # (el delegado ya elide el nombre conservando lo que lo distingue)
         self.tabla.setItemDelegate(_DelegadoCombo(self))
         self.tabla.setMouseTracking(True)  # pasar el ratón por una fila pone su nombre entero en la línea de detalle

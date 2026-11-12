@@ -15,7 +15,8 @@ Origen: decisión del responsable del 12-nov-2026, tras varias rondas de retoque
   borde y el contenido queda al menos 1 px.
 - **M4. Margen interior común.** Dentro de una caja con borde (Elementos, Variables, Propiedades, Hojas, Sensores, PLC,
   Actuadores, Configuración), el contenido empieza a E2 (8 px) del borde izquierdo y termina a E2 del derecho. Todas las cajas
-  del mismo nivel usan el mismo margen.
+  del mismo nivel usan el mismo margen. Excepción anotada: las cajas del panel de simulación (Entradas, Salidas y variables,
+  Traza) llevan sus tablas de borde a borde, porque con el margen no caben sus cuatro columnas en el ancho mínimo del panel.
 
 ## 2. Títulos de sección
 

@@ -44,10 +44,9 @@ from grafcet.view import Vista, auto_layout, layout_from_presentation, t_trunc
 
 from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion, aviso_valores_iniciales, quitar_valores_iniciales, sin_codigos
-from .propiedades import PanelPropiedades, Paleta
+from .propiedades import FichaJerarquia, PanelPropiedades, Paleta
 from .navegacion import Navegacion
 from .leyenda import Leyenda
-from .recentrado import Recentrado
 from .mensajes import amable, motivo_parada, partir
 from .alto_opciones import agrandar_para_transicion
 from .paneles import (PanelPlegable, DivisorPlegable, PilaActual, EtiquetaAyuda, EtiquetaElidida, ChipModo, BandaModo,
@@ -68,6 +67,8 @@ UMBRAL_DERECHO = 1280
 ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
 NOMBRE_MIN_TABLA = 96  # la columna del nombre de las tablas (estado de la simulación) mide al menos esto a cualquier tamaño: las demás se compactan antes
 ANCHO_TITULO_UTIL = 150  # cabecera del dibujo: lo que mide, como poco, el título del grafcet para que se reconozca (antes de ceder sitio al zoom con palabras)
+ARRIBA_CAJA = 1  # margen superior del contenido de una sección: con el hueco del título deja E2 entre el título y lo primero (T3)
+ARRIBA_VARIABLES = 4  # (el título de Variables es más grande)
 ANCHO_AYUDA_UTIL = 200  # y lo que pide la ayuda de debajo del título para leerse en dos líneas (con menos, se queda en el botón «Ayuda ▾»)
 ALTO_INFERIOR = {"simular": 220, "editar": 240}  # altura inicial del panel inferior: la traza, o las opciones de lo seleccionado
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
@@ -261,7 +262,7 @@ class AcercaDe(QDialog):
         lay.addWidget(self.l_fallos)
         self.b_fallo = QPushButton("Comunicar un fallo")
         self.b_fallo.setStyleSheet(f"QPushButton {{ background: {self.ACENTO}; color: white; font-weight: 600; "
-                                   f"border: 0; border-radius: {estilo.R_S}px; padding: 6px 14px }}")
+                                   f"border: 1px solid transparent; border-radius: {estilo.R_S}px; padding: 0 14px }}")  # (el borde transparente deja el alto de control de la hoja global)
         self.b_fallo.clicked.connect(lambda: self.abrir(URL_FALLOS))
         fila = QHBoxLayout()
         fila.addWidget(self.b_fallo)
@@ -290,6 +291,18 @@ def _icono_grafcet() -> QIcon:
 def _icono_barra(tipo: str, color: str = estilo.TINTA) -> QIcon:
     """Iconos de línea propios para los controles de la aplicación (no son notación GRAFCET); de un solo trazo (estilo.py)."""
     return estilo.icono(tipo, color)
+
+
+class _BotonAyuda(QToolButton):
+    """El enlace «Ayuda ▾» de la cabecera del dibujo: pide su ancho natural pero no fija el mínimo de la ventana (si no hay sitio, `_ajustar_cabecera`
+    lo esconde antes que cortarlo; así la ventana sigue cabiendo en media pantalla)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)  # (con «Minimum», el mínimo del diseño sería su `sizeHint`)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(0, super().minimumSizeHint().height())
 
 
 class _BotonEntrada(QPushButton):
@@ -485,8 +498,7 @@ class _AjustaCabecera(QObject):
     def eventFilter(self, objeto: Any, evento: Any) -> bool:  # noqa: N802
         if evento.type() in (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.LayoutRequest):
             self.ventana._ajustar_cabecera()
-            if evento.type() == QEvent.Type.Resize:
-                self.ventana._zoom_diferido()  # (el alto del dibujo cambió: puede que el zoom deba ir en la cabecera)
+            self.ventana._zoom_diferido()  # (el alto del dibujo cambió, o se abrió el buscador: puede que el zoom deba ir en la cabecera o flotar)
         return False
 
 
@@ -613,6 +625,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._transicion_ui = False  # Play/Pausa en curso: los cambios que él mismo provoca no lo repiten
         self._aviso_inestable_sesion = None  # sesión de la que ya se avisó (un solo aviso por episodio)
         self._popup_inestable = None
+        self._errores_auto = False  # «Mostrar errores» lo marcó un Play fallido (no el usuario)
         self._avisos_ejecucion: list[tuple[str, str]] = []  # por qué se paró el motor (texto, ayuda): entre los avisos al editar
         self._ayuda = ""  # ayuda del ejemplo o modelo abierto, para mostrarla al simular lo que aún no se ha editado
         self._proyecto: Any = None  # qué proyecto hay abierto (los ID de modelo no lo distinguen: todos los ejemplos son «m»)
@@ -855,7 +868,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _caja(self, titulo: str) -> tuple[QGroupBox, QVBoxLayout]:
         box = CajaSeccion(titulo)
         lay = QVBoxLayout(box)
-        lay.setContentsMargins(0, 0, 0, estilo.E1)
+        lay.setContentsMargins(0, ARRIBA_CAJA, 0, estilo.E1)  # T3: E2 entre el título y lo primero; las tablas de la simulación van de borde a borde (a 218 px no caben sus cuatro columnas con más margen: SRED13)
         lay.setSpacing(estilo.E1)
         self.lado.addWidget(box)
         self._cajas_lado = getattr(self, "_cajas_lado", []) + [box]
@@ -884,6 +897,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.estado.setObjectName("chipModo")
         self.titulo = EtiquetaElidida(ancho_maximo=380)  # el nombre del grafcet se elide con «…»: nunca ensancha la ventana
         self.titulo.setStyleSheet(f"font-family: {estilo.FAMILIA_TITULO}; font-size: {estilo.T_TITULO}px; font-weight: 700; color: {estilo.TINTA}")
+        self.titulo.minimo = 8  # (el botón «Ayuda ▾» va siempre en la cabecera: el título cede hasta casi nada para que la ventana quepa en media pantalla)
         cab.addWidget(self.estado)
         cab.addWidget(self.titulo)
         il.addLayout(cab)
@@ -891,8 +905,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.ayuda.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px")
         cab.addWidget(self.ayuda,1)
         # Una ayuda que no cabe en sus dos líneas no se corta a media frase sin más: un botón visible («más ▾») la despliega entera en su
-        # propia fila bajo la cabecera (y «menos ▴» la recoge). Con tan poco sitio que ni dos líneas caben, el botón dice «Ayuda ▾».
-        self.b_ayuda = QToolButton()
+        # propia fila bajo la cabecera (y «Ayuda ▴» la recoge). La ayuda habitual va siempre tras el botón «Ayuda ▾».
+        self.b_ayuda = _BotonAyuda()
         self.b_ayuda.setObjectName("masAyuda")
         self.b_ayuda.setText("más ▾")
         self.b_ayuda.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -910,7 +924,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._ayuda_abierta = False
         self._estilo_ayuda()
         self.diagrama = VistaDiagrama()
-        self.recentrado = Recentrado(lambda: self.diagrama.ajustar(), self)
         self.navegacion = Navegacion(self.diagrama)
         cab.addWidget(self.navegacion)
         self.estado.setFixedHeight(estilo.ALTO_BARRA - 8)  # el chip de modo; la fila mide lo del buscador, para que no salte al abrirlo
@@ -928,6 +941,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.props = PanelPropiedades()
         self.props.setObjectName("panelPropiedades")
         self.props.prog.franja_cambiada.connect(lambda: agrandar_para_transicion(self))  # las categorías pasan a dos filas: el panel crece lo justo
+        for ficha in self.props.findChildren(FichaJerarquia):  # (la ficha de jerarquía en más filas: el panel crece)
+            ficha.alto_cambiado.connect(lambda: QTimer.singleShot(0, self, self._dimensionar_opciones))
         self.props.alto_cambiado.connect(lambda: QTimer.singleShot(0, self, lambda: agrandar_para_transicion(self)))  # (y si el estado de la fórmula baja a su línea)
         self.inferior = PilaActual()
         self.inferior.addWidget(caja_traza)
@@ -1032,7 +1047,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         caja_vars = CajaSeccion("Variables")
         caja_vars.setObjectName("grupoVariables")
         cv = QVBoxLayout(caja_vars)
-        cv.setContentsMargins(1, 1, 1, 1)
+        cv.setContentsMargins(estilo.E2, ARRIBA_VARIABLES, estilo.E2, estilo.E1)  # M4 y T3
         cv.addWidget(self.variables)
         self.l_resumen = QLabel()  # resumen accesible para la validación, sin bloque lateral
         self.l_resumen.hide()
@@ -1257,6 +1272,18 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_dependencias.setVisible(True)
         self.a_dependencias.setEnabled(True)
         boton.show()
+        # «Mostrar errores»: conmutador del aviso de diagnósticos de la cabecera del dibujo (se ve y se actualiza en vivo al editar)
+        self.b_errores = QToolButton()
+        self.b_errores.setText("Mostrar errores")
+        self.b_errores.setCheckable(True)
+        self.b_errores.setIcon(_icono_barra("aviso"))
+        self.b_errores.setToolTip("Mostrar los errores y avisos del grafcet")
+        self.b_errores.setAccessibleName("Mostrar errores")
+        self.b_errores.toggled.connect(self._alternar_errores)
+        self._errores_auto = False  # lo marcó un Play fallido (y se desmarca solo al desaparecer los errores), no el usuario
+        self.a_errores = self.tb_edit.addWidget(self.b_errores)
+        self._a_errores = (self.a_errores,)
+        self.a_errores.setVisible(True)
         self._textos_en_barras(True)
         self.addToolBar(self.tb_edit)
         self.tb_proyecto.hide()
@@ -1538,6 +1565,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._marcar_play(False)
         self._aviso_inestable_sesion = None
         self._avisos_ejecucion = []
+        if self._errores_auto:
+            self._marcar_errores(False, False)  # (lo marcó un Play fallido: otra fuente, otro aviso; lo que marcó el usuario se queda)
         f = self.fuente
         try:
             if f["tipo"] == "ejemplo":
@@ -1608,9 +1637,13 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if self._variables_sin_nombre():
             return False
         e = self.edicion
-        if any(d["blocks"] for d in e.diagnosticos()):
+        diags = e.diagnosticos()
+        if any(d["blocks"] for d in diags):
+            self._armar_avisos(True)  # Play fallido: el aviso aparece desplegado con la lista
             self._no_simulable()
             return False
+        if diags:
+            self._armar_avisos(False)  # solo avisos que no bloquean: se simula y el aviso queda plegado
         ayuda = self._ayuda if self._ayuda and not e.ed.undo_stack else "Simulación del grafcet."
         nueva = Vista(e.ed.model["id"], e.titulo, ayuda, lambda: (copy.deepcopy(e.ed.model), e.layout()), self.options,
                       presentation=e.ed.presentation)
@@ -1693,7 +1726,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         return [("Pegar", (lambda: self._portapapeles_accion("pegar", punto)) if self._portapapeles is not None else None)]
 
     def _acciones_edicion(self, on: bool) -> None:
-        for a in (*self.a_herr.values(), self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo, self.a_girar_izq, self.a_girar_der):
+        for a in (*self.a_herr.values(), self.a_deshacer, self.a_rehacer, self.a_borrar, self.a_debajo, *self._a_errores, self.a_girar_izq, self.a_girar_der):
             a.setEnabled(on)
         self._actualizar_portapapeles()
 
@@ -1769,6 +1802,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _establecer_edicion(self, e: Edicion) -> None:
         self.solo_lectura = False
+        if self._errores_auto:
+            self._marcar_errores(False, False)
         self._variables_es_vistas = {v["id"] for v in e.ed.model["variables"]}
         self._auto_es_pendientes = set()
         self.destino_traer=None;self.aviso_traer.hide()
@@ -1964,6 +1999,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.ayuda.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px")
         self.l_ayuda_entradas.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px; font-weight: 400")
         self._estilo_ayuda()
+        self.navegacion.escalar()
         self.l_reloj.setStyleSheet(f"font-weight: 600; color: {estilo.TINTA}; font-family: {estilo.FAMILIA_MONO}; font-size: {estilo.T_CIFRA}px")
         self.estado.setFixedHeight(estilo.ALTO_BARRA - 8)
         self.titulo.setMinimumHeight(estilo.ALTO_CONTROL_COMPACTO)
@@ -2160,7 +2196,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         sp = self._cab.spacing()
         # (el chip, un título mínimo y el zoom con solo iconos tienen que caber en la cabecera; si no —los paneles laterales aún abiertos en una
         # ventana de media pantalla, un instante antes de plegarse—, el recuadro flota sobre el dibujo y nunca pisa al chip)
-        cabe = d.parentWidget().width() - 2 * estilo.E2 >= self.estado.minimumSizeHint().width() + self.titulo.fontMetrics().horizontalAdvance("0" * 10) + d.ancho_barra(True) + 3 * sp  # (el título conserva ~10 caracteres: si no, el zoom se queda sobre el dibujo)
+        nav = self.navegacion.sizeHint().width() + sp if self.navegacion.isVisibleTo(self) else 0  # (el buscador abierto también pide su sitio en la fila)
+        cabe = d.parentWidget().width() - 2 * estilo.E2 >= self.estado.minimumSizeHint().width() + self.titulo.fontMetrics().horizontalAdvance("0" * 10) + d.ancho_barra(True) + nav + 3 * sp  # (el título conserva ~10 caracteres: si no, el zoom se queda sobre el dibujo)
         # La zona de edición está fija: el zoom va **siempre** en la cabecera (con palabras si caben y solo iconos si no), a cualquier tamaño y con
         # Propiedades cerrado o abierto; solo flota si ni los iconos caben en la fila (a ese tamaño, siempre). La fila mide siempre lo mismo
         # (lo que el recuadro del zoom), así que el dibujo empieza siempre a la misma altura y el aviso de simulación detenida no se mueve.
@@ -2188,12 +2225,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 self.props.prog.modo_fila(alto)  # P1: la paleta de operadores en una fila (el panel pide ≈ 190 px y no 334)
             il = self.diagrama.parentWidget().layout()
             il.setContentsMargins(*((estilo.E2, estilo.E1 + HUECO_FRANJA, estilo.E2, estilo.E1) if alto else self._margenes_dibujo))
-            self._textos_en_barras(not ancho)
             self._reflujo_entradas()
             self._densidad_lateral()
             self.diagrama.compactar(ancho, alto)
             self._ajustar_zoom()  # los controles del zoom, en la cabecera (en estrecho o bajo, y con poco dibujo)
             self.panel_planos.compactar(ancho or alto)
+        self._repartir_textos_barra()
         self._ajustar_cabecera()  # (el chip de modo pide hasta el 55 % del ancho, y deja al título unos 10 caracteres: el título cede antes que el estado)
         muy = self.width() < max(estilo.UMBRAL_MUY_ESTRECHO, self._ancho_forzado)
         if muy != self._muy_estrecho:  # media pantalla: la fila de arriba tiene que caber en 640 px
@@ -2242,15 +2279,20 @@ class Ventana(ArchivosProyecto, QMainWindow):
         natural = self.titulo.sizeHint().width()
         boton = QFontMetrics(estilo.fuente(estilo.T_PEQUENA, negrita=True)).horizontalAdvance("Ayuda ▾") + 12 + 2 + sp
         abierta = self._ayuda_abierta and bool(texto)
-        # (el título, entero si cabe, va antes que la ayuda: esta pide sus 200 px para leerse en dos líneas)
-        if abierta:  # la ayuda va entera en su fila: el título tiene casi todo el sitio
-            titulo_max, hay_ayuda, letrero = min(natural, max(24, minimo_titulo, libre - boton)), False, "menos ▴"
+        # El texto habitual de ayuda va siempre detrás del botón «Ayuda ▾» (a todos los tamaños); solo un mensaje de error (en rojo) se lee
+        # en la fila mientras cabe, porque no se puede esconder lo que dice que algo ha fallado
+        error = bool(texto) and estilo.ERROR in self.ayuda.styleSheet()
+        letra = "Ayuda ▴" if abierta else "Ayuda ▾"
+        if abierta or not error:
+            titulo_max, hay_ayuda, letrero = min(natural, max(24, minimo_titulo, libre - boton)), False, letra
+            if not texto:
+                titulo_max, letrero = min(natural, libre), ""
         elif libre >= natural + ANCHO_AYUDA_UTIL and not self.ayuda.truncada(libre - natural):
-            titulo_max, hay_ayuda, letrero = natural, True, ""  # la ayuda cabe en sus dos líneas
+            titulo_max, hay_ayuda, letrero = natural, True, ""  # el mensaje cabe en sus dos líneas
         elif libre - boton >= natural + ANCHO_AYUDA_UTIL:
-            titulo_max, hay_ayuda, letrero = natural, True, "más ▾"  # no cabe entera: dos líneas que acaban en «…» y el botón
-        elif texto and libre - boton >= max(24, minimo_titulo):  # (el botón solo si el título conserva sus ~10 caracteres: la ayuda cede antes)
-            titulo_max, hay_ayuda, letrero = min(natural, libre - boton), False, "Ayuda ▾"  # sin sitio para leerla en la fila: solo el botón
+            titulo_max, hay_ayuda, letrero = natural, True, "más ▾"  # no cabe entero: dos líneas que acaban en «…» y el botón
+        elif libre - boton >= max(24, minimo_titulo):
+            titulo_max, hay_ayuda, letrero = min(natural, libre - boton), False, "Ayuda ▾"
         else:
             titulo_max, hay_ayuda, letrero = min(natural, libre), False, ""  # ni el botón cabe: se esconde lo secundario
         if self.titulo.maximumWidth() != titulo_max:
@@ -2269,7 +2311,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.ayuda_larga.setVisible(abierta)
 
     def _alternar_ayuda(self) -> None:
-        """«más ▾» / «menos ▴» / «Ayuda ▾»: despliega la ayuda entera bajo la cabecera, o la recoge."""
+        """«más ▾» / «Ayuda ▾» / «Ayuda ▴»: despliega la ayuda entera bajo la cabecera, o la recoge."""
         self._ayuda_abierta = not self._ayuda_abierta
         self._ajustar_cabecera()
 
@@ -2278,9 +2320,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         alto = estilo.ALTO_CONTROL_COMPACTO
         self.b_ayuda.setFixedHeight(alto)
         self.b_ayuda.setStyleSheet(
-            f"QToolButton#masAyuda {{ color: {estilo.ACENTO}; font-size: {estilo.T_PEQUENA}px; font-weight: 600; padding: 0 6px; min-height: {alto - 2}px; }} "
+            f"QToolButton#masAyuda {{ color: {estilo.ACENTO}; font-size: {estilo.T_PEQUENA}px; font-weight: 600; padding: 0 4px; min-height: {alto - 2}px; }} "
             f"QToolButton#masAyuda:hover {{ background: {estilo.ACENTO_SUAVE}; }} "
-            f"QToolButton#masAyuda[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 5px; min-height: {alto - 4}px; }}")
+            f"QToolButton#masAyuda[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 3px; min-height: {alto - 4}px; }}")
         self.ayuda_larga.setStyleSheet(
             f"QLabel#ayudaLarga {{ color: {estilo.TINTA}; background: {estilo.SUPERFICIE_2}; border: 1px solid {estilo.BORDE}; "
             f"border-radius: {estilo.R_S}px; padding: 6px 10px; font-size: {estilo.T_PEQUENA}px; }}")
@@ -2369,11 +2411,37 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 lay.activate()
         self.tb_sim.resize(self.tb_sim.sizeHint().width(), self.tb_sim.height())
 
+    def _ancho_barra_edicion(self, con_texto: bool) -> int:
+        """Lo que pide la barra de edición con las palabras de sus botones o solo con iconos (se mide una vez por escala)."""
+        cache = self.__dict__.setdefault("_anchos_edicion", {})
+        clave = (con_texto, estilo.ESCALA)
+        if clave not in cache:
+            self._textos_en_barras(con_texto)
+            self.tb_edit.layout().invalidate()
+            self.tb_edit.layout().activate()
+            cache[clave] = self.tb_edit.sizeHint().width()
+        return cache[clave]
+
+    def _repartir_textos_barra(self) -> None:
+        """B2: las palabras de «Añadir debajo», «Mostrar dependencias» y «Mostrar errores» solo van si la fila de herramientas las aguanta junto a la
+        barra de Play (si no, solo icono con su ayuda: se oculta antes el texto que el botón). En pantalla partida, siempre solo icono."""
+        ancho, alto = self._compacto
+        con = False
+        if not ancho:
+            libre = (self.herramientas_grafcet.width() if self.herramientas_grafcet.isVisible() else self.width()) - 4 * estilo.E2
+            con = alto or self._ancho_barra_edicion(True) + self.tb_sim.sizeHint().width() <= libre
+        antes = getattr(self, "_texto_en_barra", None)
+        self._texto_en_barra = con
+        self._textos_en_barras(con)
+        if antes is not None and antes != con:
+            self.tb_edit.layout().invalidate()
+            self.tb_edit.updateGeometry()
+
     def _textos_en_barras(self, con_texto: bool) -> None:
         """«Añadir debajo» y «Mostrar dependencias» llevan texto cuando hay sitio y solo icono (con su ayuda) en pantalla partida; el resto
         de botones de la barra de edición son siempre de solo icono."""
         forma = Qt.ToolButtonStyle.ToolButtonTextBesideIcon if con_texto else Qt.ToolButtonStyle.ToolButtonIconOnly
-        for a in (self.a_debajo, self.a_dependencias):
+        for a in (self.a_debajo, self.a_dependencias, self.a_errores):
             w = self.tb_edit.widgetForAction(a)
             if w is not None:
                 w.setToolButtonStyle(forma)
@@ -2400,7 +2468,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         entradas = list(getattr(self, "botones", {}).values())
         cadena = [self.pestanas_vistas, self.luz_es, self.tb_sim.widgetForAction(self.a_ejecutar),
                   self.tb_sim.widgetForAction(self.a_reiniciar),
-                  *(self.tb_edit.widgetForAction(a) for a in (*self._acciones_solo_icono, self.a_debajo)), d.b_dependencias,
+                  *(self.tb_edit.widgetForAction(a) for a in (*self._acciones_solo_icono, self.a_debajo)), d.b_dependencias, self.b_errores,
                   self.flechas["izquierdo"], self.paleta, d, self.b_ayuda, d.b_menos, d.b_mas, d.b_ajustar, d.b_seleccion,
                   self.flechas["derecho"], *entradas, self.variables.tabla, *self.variables.b_nuevas.values(),
                   self.variables.b_quitar, self.pestanas["izquierdo"], self.pestanas["derecho"], self.flechas["inferior"],
@@ -2424,7 +2492,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         super().resizeEvent(event)
         if self.isVisible():
             self._adaptar_tamano()
-            self.recentrado.solicitar()
             QTimer.singleShot(0, self, self._vigilar_barra)
 
     def showEvent(self, event: Any) -> None:  # noqa: N802
@@ -2440,6 +2507,30 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self._anchos_puestos = True  # con la ventana ya dimensionada, los dos paneles laterales con el mismo ancho
             self._anchos_laterales(self.ancho_derecho)
             self._alto_inferior(True)
+
+    def _alternar_errores(self, on: bool) -> None:
+        """El usuario marca o desmarca «Mostrar errores»: el aviso de la cabecera del dibujo se ve y se actualiza en vivo, o no se ve al editar."""
+        self._errores_auto = False
+        if not on:
+            self.diagrama.diagnosticos_abiertos = False
+        self.refrescar_edicion()
+
+    def _marcar_errores(self, on: bool, auto: bool) -> None:
+        """Marca o desmarca «Mostrar errores» sin pasar por el gesto del usuario (`auto`: lo hace un Play fallido, y se desmarca solo)."""
+        self.b_errores.blockSignals(True)
+        self.b_errores.setChecked(on)
+        self.b_errores.blockSignals(False)
+        self._errores_auto = on and auto
+
+    def _armar_avisos(self, abrir: bool) -> None:
+        """Un Play que no simula (errores que lo impiden) o que para por un diagnóstico marca «Mostrar errores» y despliega el aviso con su lista
+        (`abrir`); con solo avisos que no bloquean, lo marca y el aviso queda plegado. Si el botón ya lo había marcado el usuario, sigue siendo suyo."""
+        if not self.b_errores.isChecked():
+            self._marcar_errores(True, True)
+        if abrir:
+            self.diagrama.diagnosticos_abiertos = True
+        if self.modo == "editar":
+            self.refrescar_edicion()
 
     def _no_simulable(self) -> None:
         lineas = self.edicion.resumen(self.edicion.diagnosticos())
@@ -2541,7 +2632,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         errores, avisos = len(bloq) + (1 if self._avisos_ejecucion else 0), len(diags) - len(bloq)
         partes = [f"{n} {'error' if n == 1 else 'errores'}" for n in (errores,) if n] + [f"{n} {'aviso' if n == 1 else 'avisos'}" for n in (avisos,) if n]
         resumen = " · ".join(([ "Simulación detenida"] if self._avisos_ejecucion else []) + partes)
-        self.diagrama.actualizar_diagnosticos(hay_detalle, resumen)
+        if not hay_detalle and self._errores_auto and self.b_errores.isChecked():
+            self._marcar_errores(False, False)  # lo marcó un Play fallido y ya no queda nada: se desmarca solo
+        if self.b_errores.isChecked():
+            self.diagrama.actualizar_diagnosticos(True, resumen if hay_detalle else "", vacio=not hay_detalle)
+        else:
+            self.diagrama.actualizar_diagnosticos(False)
         self._titulo_ventana()
         if self.destino_traer:self._sincronizar_boton_es()
         if hasattr(self, "panel_es"):  # las variables pueden haber cambiado: el panel de E/S las sigue (o avisa, si hay conexión)
@@ -2721,7 +2817,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         bajo = self._compacto[1]
         for caja in getattr(self, "_cajas_lado", []):
             caja.setStyleSheet(f"QGroupBox {{ margin-top: {estilo.E1 * 5}px; }}" if bajo else "")
-            caja.layout().setContentsMargins(0, 0, 0, 0 if bajo else estilo.E1)
+            caja.layout().setContentsMargins(0, ARRIBA_CAJA, 0, 0 if bajo else estilo.E1)
 
     @staticmethod
     def _ayuda_entrada(b: _BotonEntrada) -> None:
@@ -2896,6 +2992,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         evoluciones = [r for r in vista.s.trace.records if r["kind"] == "evolucion"]
         motivos = motivo_parada(d["code"], d["message"], evoluciones, vista.names) if d else []
         self._avisos_ejecucion = motivos
+        if motivos:
+            self._armar_avisos(True)
         if inestable:
             if self._aviso_inestable_sesion is not vista.s:
                 self._aviso_inestable_sesion = vista.s
@@ -3234,7 +3332,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_planos.setToolTip("Volver al GRAFCET" if planos else "Editar planos, plantillas y cajetín")
         self.a_ejecutar.setEnabled(not(es or planos or pendiente));self.a_reiniciar.setEnabled(not(es or planos or pendiente))
         editar=self.modo=="editar" and not planos and not pendiente and not getattr(self,"solo_lectura",False)
-        for a in (*self.a_herr.values(),self.a_debajo,self.a_girar_izq,self.a_girar_der):a.setEnabled(editar)
+        for a in (*self.a_herr.values(),self.a_debajo,*getattr(self,"_a_errores",()),self.a_girar_izq,self.a_girar_der):a.setEnabled(editar)
         e=self.edicion
         self.a_deshacer.setEnabled(not pendiente and (editar or planos) and e is not None and bool(e.ed.undo_stack));self.a_rehacer.setEnabled(not pendiente and (editar or planos) and e is not None and bool(e.ed.redo_stack));self.a_borrar.setEnabled(editar and e is not None and bool(e.sel))
         self.a_dependencias.setEnabled(not planos) if hasattr(self,"a_dependencias") else None

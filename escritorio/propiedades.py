@@ -377,6 +377,7 @@ class FichaJerarquia(QWidget):
              "Encuadrar la macroetapa", "Forzar un parcial…", "Configurar orden de forzado…", "Editar orden de forzado…",
              "Quitar orden de forzado")  # el mismo orden que el botón derecho
     CASILLAS = ("Etapa", "Encapsulante", "Macroetapa", "Enlace de activación")  # los tres primeros: «Tipo de etapa»
+    alto_cambiado = Signal()  # la caja de botones pide otro alto (más o menos filas al ancho de ahora): el panel de Propiedades se redimensiona
 
     def __init__(self) -> None:
         super().__init__()
@@ -398,6 +399,20 @@ class FichaJerarquia(QWidget):
         for t in self.ORDEN:
             self._crear(t)
         self.hide()
+
+    def resizeEvent(self, evento: QEvent) -> None:  # noqa: N802
+        """La caja de botones pide el alto de sus filas al ancho que tiene de verdad (el panel no propaga la altura según el ancho: con los botones
+        en más filas de las que le tocaban, el último quedaba cortado)."""
+        super().resizeEvent(evento)
+        ancho = self.caja.width()
+        if ancho > 0 and not self.caja.isHidden():
+            alto = self.flujo.heightForWidth(ancho)
+            if self.caja.minimumHeight() != alto:
+                self.caja.setMinimumHeight(alto)
+                self.setMinimumHeight((self.texto.heightForWidth(self.width()) + self.layout().spacing() if not self.texto.isHidden() else 0) + alto)  # (la ficha lo pide entero al panel)
+                self.layout().invalidate()
+                self.updateGeometry()
+                self.alto_cambiado.emit()
 
     @staticmethod
     def _hoja() -> str:

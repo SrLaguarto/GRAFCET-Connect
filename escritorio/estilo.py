@@ -206,12 +206,12 @@ QToolBar#barraSimulacion QToolButton#botonPlay:checked { background:$simulacion;
 QToolBar#barraSimulacion QToolButton#botonPlay:checked:hover { background:$simulacion_hover; }
 QToolBar#barraSimulacion QToolButton#botonPlay:disabled { background:$pulsado; color:$deshabilitado; border-color:$borde; }
 QToolBar#barraSimulacion QToolButton#botonPlay[tecl="true"]:focus { border:3px dashed $foco_fuerte; padding:0 14px; min-height:${alto_tb_f2}px; }
-QToolBar#barraEdicion QToolButton, QToolBar#barraVista QToolButton { background:$superficie; border:1px solid $borde_control; min-width:${alto_tb}px; padding:0 8px; }
+QToolBar#barraEdicion QToolButton, QToolBar#barraVista QToolButton { background:$superficie; border:1px solid $borde_control; min-width:${alto_tb}px; padding:0 5px; }  /* (B2: a media pantalla, con todos los botones de solo icono, la fila de herramientas cabe en 683 px) */
 QToolBar#barraEdicion QToolButton:hover, QToolBar#barraVista QToolButton:hover { background:$hover; border-color:$tinta_2; }
 QToolBar#barraEdicion QToolButton:pressed, QToolBar#barraVista QToolButton:pressed { background:$pulsado; }
-QToolBar#barraEdicion QToolButton:checked, QToolBar#barraVista QToolButton:checked { background:$acento_suave; border:2px solid $acento; padding:0 7px; }
+QToolBar#barraEdicion QToolButton:checked, QToolBar#barraVista QToolButton:checked { background:$acento_suave; border:2px solid $acento; padding:0 4px; }
 QToolBar#barraEdicion QToolButton:disabled, QToolBar#barraVista QToolButton:disabled { background:$superficie_2; border-color:$borde; }
-QToolBar#barraEdicion QToolButton[tecl="true"]:focus, QToolBar#barraVista QToolButton[tecl="true"]:focus { border:2px dashed $foco; padding:0 7px; }
+QToolBar#barraEdicion QToolButton[tecl="true"]:focus, QToolBar#barraVista QToolButton[tecl="true"]:focus { border:2px dashed $foco; padding:0 4px; }
 QToolBar#barraPlanos { padding:2px 0; spacing:4px; }
 QToolBar#barraPlanos QToolButton { background:$superficie; border:1px solid $borde_control; padding:0 10px; }
 QToolBar#barraPlanos QToolButton#bibliotecaPlanos { padding:0 32px 0 10px; }
@@ -427,6 +427,14 @@ def _trazos_reinicio() -> tuple[QPainterPath, QPainterPath]:
     return arco, punta
 
 
+def _triangulo_aviso() -> QPainterPath:
+    t = QPainterPath(QPointF(12, 3.8))
+    t.lineTo(21.2, 19.8)
+    t.lineTo(2.8, 19.8)
+    t.closeSubpath()
+    return t
+
+
 def icono(tipo: str, color: str = TINTA, grosor: float = 1.75, tam: int = 24) -> QIcon:
     """Iconos de línea propios (no son notación GRAFCET). Se dibujan a 2× para que no se pixelen."""
     pm = QPixmap(tam * 2, tam * 2)
@@ -459,6 +467,10 @@ def icono(tipo: str, color: str = TINTA, grosor: float = 1.75, tam: int = 24) ->
         p.drawLine(QPointF(8, 9), QPointF(15, 3))
         p.drawLine(QPointF(8, 15), QPointF(15, 21))
         p.setPen(trazo)
+    elif tipo == "aviso":  # el triángulo de aviso, con el trazo de los demás
+        p.drawPath(_triangulo_aviso())
+        p.drawLine(QPointF(12, 9.5), QPointF(12, 14.2))
+        p.drawPoint(QPointF(12, 17.4))
     elif tipo == "reiniciar":
         arco, punta = _trazos_reinicio()
         p.drawPath(arco)

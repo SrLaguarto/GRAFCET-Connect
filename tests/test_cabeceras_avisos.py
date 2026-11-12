@@ -90,6 +90,7 @@ class CabecerasYAvisos(BaseQt):
         w.show()
         e.ed.add_transition("g", "", label="t9", at=(100, 500))
         e.cambia()
+        w.b_errores.setChecked(True)  # (el aviso no sale por sí solo al editar: lo pide «Mostrar errores»)
         for _ in range(4):
             QApplication.processEvents()
         d = w.diagrama

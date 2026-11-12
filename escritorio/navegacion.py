@@ -102,6 +102,12 @@ class Navegacion(QFrame):
             self.parcial.setCurrentIndex(max(0, self.parcial.findData(anterior))); self.parcial.blockSignals(False); self._partes = firma
         self._listar(); self.filtrar()
 
+    def escalar(self):
+        """Con la escala de ahora (pantalla completa o no): el campo de búsqueda y sus botones miden el alto de control compacto."""
+        self.buscar.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
+        for boton in (self.anterior, self.siguiente, self.cerrar):
+            boton.setFixedSize(estilo.ALTO_CONTROL_COMPACTO, estilo.ALTO_CONTROL_COMPACTO)
+
     def abrir(self):
         self.show(); self.buscador.show(); self.buscar.setFocus(); self.buscar.selectAll()
 
