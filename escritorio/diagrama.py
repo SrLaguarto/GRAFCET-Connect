@@ -660,7 +660,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     roles = _colores_elementos(M, S)
     _marcos(pt, M, pos, dependencias, roles)
     tmp = _temporizadores(S)
-    marcadas = {i for i in (sel or set()) if i.startswith("accion:")} | {f"parpadeo:{i}" for i in (naranja or ())}
+    marcadas = {i for i in (sel or set()) if i.startswith(("accion:", "parte:"))} | {f"parpadeo:{i}" for i in (naranja or ())}
     link = pt.pen("text")
     for t in M["transitions"]:
         pt.parcial = t.get("partial") or "g"
@@ -1147,13 +1147,24 @@ def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[st
     pt.rect(ax, top, w, 2 * H, outer, Z_STEP + (0.005 if on else -0.02), "active_soft" if on else "panel",
             ("Orden de forzado sin completar: no se simula" if force else "Acción sin completar: no se simula") if borrador
             else None)
+    marca = None  # lo que ocupa la marca de la condición o del evento (el trazo, la banderita y el texto): a lo que se une su ventana en Propiedades
+    if a["kind"] == "continuous" and a.get("cond"):
+        marca = (ax + 10, top - 18, 7 + _Pintor.ancho(a["cond"], 13) + 4, 18)
+    elif a.get("trigger") == "event":
+        marca = (ax + 3, top - 22, 14 + _Pintor.ancho(a.get("event"), 13) + 4, 22)
     if cajas is not None and (not force or borrador):  # (una orden sin completar se mueve y se une como una acción suelta)
         cajas.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H), "borrador": borrador, "suelta": suelta,
-                      "grupo": grupo, "cabeza": cabeza or a["id"], "forzado": force})
+                      "grupo": grupo, "cabeza": cabeza or a["id"], "forzado": force, "marca": marca})
     if ordenes is not None and force and not borrador:  # una orden de forzado no es una acción, pero se selecciona y tiene su menú
         ordenes.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H)})
     if f"accion:{a.get('id')}" in marcadas:
         pt.rect(ax - 3, top - 3, w + 6, 2 * H + 6, pt.pen("accent", 1.6, (5, 3)), Z_EDIT)
+    for parte in ("condicion", "evento"):  # la parte que se edita ahora en Propiedades (la ventana de la condición o del evento, o su zona del panel)
+        if marca is not None and f"parte:{a.get('id')}:{parte}" in marcadas:
+            pt.rect(marca[0] - 2, marca[1] - 2, marca[2] + 4, marca[3] + 4, None, Z_STEP - 0.01, "accent_soft", radius=3)  # (el fondo, tras el texto)
+            pt.rect(marca[0] - 2, marca[1] - 2, marca[2] + 4, marca[3] + 4, pt.pen("accent", 2.2), Z_EDIT, radius=3)
+    if f"parte:{a.get('id')}:accion" in marcadas:
+        pt.rect(ax - 4, top - 4, w + 8, 2 * H + 8, pt.pen("accent", 3.2), Z_EDIT, radius=2)
     if f"parpadeo:{a.get('id')}" in marcadas:  # parpadeo naranja de un error
         pt.rect(ax - 4, top - 4, w + 8, 2 * H + 8, pt.pen("glow", 3.5), Z_EDIT + 0.5)
     if force:  # orden de forzado: rectángulo doble
@@ -1490,6 +1501,7 @@ class VistaDiagrama(QGraphicsView):
     como si se agarrara ese punto, al editar y al simular, sin seleccionar ni editar nada: la vista queda en zoom manual."""
 
     zoomCambiado = Signal(float)
+    vista_cambiada = Signal()  # lo que se ve cambió (zoom, desplazamiento, tamaño o dibujo nuevo): las ventanas flotantes de Propiedades se recolocan junto a su elemento
 
     def __init__(self) -> None:
         super().__init__()
@@ -1600,12 +1612,16 @@ class VistaDiagrama(QGraphicsView):
         ident = c.sel[-1]
         if any(t['id'] == ident for t in c.M['transitions']):
             c.pedir_condicion(ident)
-            if hasattr(self.window(), 'props'): self.window().props.prog.setFocus()
+            if hasattr(self.window(), 'props_activo'): self.window().props_activo().prog.setFocus()
         elif any(s['id'] == ident for s in c.M['steps']): c.pedir_etiqueta(ident)
         elif any(a['id'] == ident for a in c.ed.model['actions']) or c._es_borrador(ident):
             sid = next((s["id"] for s in c.M["steps"] if any(a["id"] == ident for a in s.get("actions", []))), None)
+            caja = c.accion_en_id(ident) if hasattr(c, "accion_en_id") else None
+            if caja is not None and c.datos_accion(ident)["tipo"] == "continua" and hasattr(self, "abrir_selector"):
+                c.seleccionar([ident]); c.desplegar_variable(caja)  # una continua: la variable se elige en el desplegable sobre ella (también con el teclado)
+                return
             c.pedir_accion(sid, ident)
-            if hasattr(self.window(), "props"): self.window().props.accion.variable.setFocus()
+            if hasattr(self.window(), "props_activo"): self.window().props_activo().accion.variable.setFocus()
         else:
             c.seleccionar([ident]); c.diagrama.window()._abrir_opciones()
 
@@ -2101,6 +2117,7 @@ class VistaDiagrama(QGraphicsView):
     def _notificar(self) -> None:
         self.l_zoom.setText(f"{round(self.escala() * 100)} %")
         self.zoomCambiado.emit(self.escala())
+        self.vista_cambiada.emit()
 
     def _a_escena(self, c: QPointF) -> QPointF:
         """El punto de la escena que está en el punto `c` de la vista (sin redondear a píxeles)."""
@@ -2184,6 +2201,7 @@ class VistaDiagrama(QGraphicsView):
             self._al_origen()
         if self._manual and self.controlador is not None:
             self._barras()  # lo dibujado cambió: puede haber dejado de caber, o de sobrar la barra
+        self.vista_cambiada.emit()
 
     def guardar_encuadre(self) -> tuple:
         """Fija el zoom y un punto en coordenadas de pantalla durante un cambio de paneles/modo."""
@@ -2347,6 +2365,7 @@ class VistaDiagrama(QGraphicsView):
         if getattr(self, "_selector", None) is not None:
             self.cerrar_selector()  # (el desplegable va sobre la acción: si el dibujo se mueve, se cierra)
         super().scrollContentsBy(dx, dy)
+        self.vista_cambiada.emit()
 
     def acercar(self) -> None:
         self.zoom(ZOOM_PASO)
@@ -2380,6 +2399,7 @@ class VistaDiagrama(QGraphicsView):
             elif self._encuadrando is not None:  # recién encuadrado: se vuelve a encajar con el tamaño que ha quedado
                 self._encajar(self._encuadrando)
         self._colocar()
+        self.vista_cambiada.emit()
 
     def wheelEvent(self, event: Any) -> None:  # noqa: N802
         """Ctrl + rueda acerca o aleja anclado al puntero, y el pellizco de un panel táctil también; la rueda sola desplaza en

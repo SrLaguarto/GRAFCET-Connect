@@ -32,6 +32,8 @@ EXCEPCIONES: list[tuple[str, str, str]] = [
     ("C1", "QPushButton#[Encuadrar", "los botones de la ficha de jerarquía son más bajos (20 px) a propósito: varias filas en una columna estrecha sin que crezca el panel (comentario de `FichaJerarquia`)"),
     ("C1", "QPushButton#[Renombrar", "los botones de la ficha de jerarquía son más bajos (20 px) a propósito: varias filas en una columna estrecha sin que crezca el panel (comentario de `FichaJerarquia`)"),
     ("C5", "_SpinConfiguracion", "la dirección de la tabla avanzada ocupa su celda entera (TB1) y la columna la fija la cabecera «Dirección (base 0)», más ancha que 5 cifras y flechas"),
+    ("C1", "QPushButton#[1]", "las fichas «1» y «0» del valor de una acción memorizada (`ESTILO_FICHA`, con su borde de 3 px al marcarse) son más altas que el token a propósito: son el valor que se elige (pantalla «flot_accion_evento»)"),
+    ("C1", "QPushButton#[0]", "ídem: la ficha «0» del valor de una acción memorizada"),
     ("M4", "«Entradas»", "las cajas de la columna de simulación (Entradas, Salidas y variables) llevan sus tablas de borde a borde: a 218 px de panel no caben las cuatro columnas con 16 px más de margen (SRED13); la guía M4 no las lista"),
     ("M4", "«Salidas y variables»", "ídem: la tabla de estado va de borde a borde del panel de simulación (SRED13)"),
     ("M4", "«Traza»", "ídem: la lista de la traza va de borde a borde"),
@@ -50,7 +52,9 @@ FLOTANTES: list[tuple[str, str, str]] = [
     ("BotonPlegar", "QWidget", "el tirador de plegado flota en la esquina de la cabecera del panel"),
     ("BotonPlegar", "PanelPropiedades", "el tirador de plegado flota en la esquina de la cabecera del panel"),
 ]
-NOMBRES_FLOTANTES = {"barraZoom", "resumenDiagnosticos", "moduloPLC", "listaDiagnosticos", "indicadorDiagnosticos", "BotonPlegar"}
+NOMBRES_FLOTANTES = {"barraZoom", "resumenDiagnosticos", "moduloPLC", "listaDiagnosticos", "indicadorDiagnosticos", "BotonPlegar",
+                     "ventanaFlotante", "enlacesFlotantes"}  # (las ventanas de Propiedades flotante y la capa transparente de sus líneas de puntos, hijas de la vista del dibujo)
+CAPAS = {"enlacesFlotantes"}  # capas transparentes sin ratón: cubren el dibujo a propósito y no cuentan en el solape de flotantes entre sí
 
 
 def permitida(regla: str, texto: str) -> bool:
@@ -115,7 +119,7 @@ def regla_M2(raiz):
         for i, a in enumerate(flot):  # (los flotantes declarados tampoco se pisan entre sí: el zoom y el aviso de diagnósticos)
             for b in flot[i + 1:]:
                 r = a.geometry().intersected(b.geometry())
-                if r.width() > 1 and r.height() > 1 and a.objectName() in NOMBRES_FLOTANTES - {"BotonPlegar"} and b.objectName() in NOMBRES_FLOTANTES - {"BotonPlegar"}:
+                if r.width() > 1 and r.height() > 1 and a.objectName() in NOMBRES_FLOTANTES - {"BotonPlegar"} - CAPAS and b.objectName() in NOMBRES_FLOTANTES - {"BotonPlegar"} - CAPAS:
                     out.append(f"flotantes entre sí en {type(p).__name__}: {_desc(a)}{a.geometry().getRect()} x {_desc(b)}{b.geometry().getRect()}")
     return out
 

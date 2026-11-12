@@ -1824,42 +1824,6 @@ class Interfaz(unittest.TestCase):
         cond.deshacer()
         self.assertEqual(cond.texto(), "paro")
 
-    def test_SEDI55_ventana_ampliada_sincronizada(self):
-        """REQ-EDT-02: «⤢ Ampliar» abre el programador en una ventana propia, no modal, con el mismo texto; los cambios de
-        una se ven en la otra y se aplican igual al modelo."""
-        from escritorio import bloques
-        w = self.w
-        e, ids, ts = self.secuencial()
-        e.seleccionar([ts["t1"]])
-        prog = w.props.prog
-        prog.poner("marcha AND NOT paro")
-        v = prog.ampliar_ventana()
-        self.assertFalse(v.isModal())
-        self.assertIs(prog.ampliar_ventana(), v, "una sola ventana")
-        g = v.programador
-        self.assertEqual((g.texto(), g.ampliar.isHidden()), ("marcha AND NOT paro", True))
-        g.lienzo.soltar(("b", "a"), bloques.var("marcha", "input"))  # en la ventana: se aplica al modelo
-        self.assertEqual((prog.texto(), e.texto_condicion(ts["t1"])), ("marcha AND NOT marcha",) * 2)
-        n = len(e.ed.undo_stack)
-        prog.lienzo.quitar(("b",))  # en el panel: se ve en la ventana
-        self.assertEqual((g.texto(), e.texto_condicion(ts["t1"]), len(e.ed.undo_stack)), ("marcha AND ?",) * 2 + (n + 1,))
-        g.lienzo.soltar(("b",), g.lienzo.arbol["a"], origen=("a",))  # mover dentro de la ventana
-        self.assertEqual((prog.texto(), g.texto()), ("? AND marcha",) * 2)
-        e.deshacer()  # el deshacer del editor, y el texto vuelve a las dos
-        self.assertEqual((prog.texto(), g.texto()), ("marcha AND ?",) * 2)
-        g.al_deshacer()  # Ctrl+Z en la ventana: el deshacer del editor
-        self.assertEqual((prog.texto(), g.texto()), ("marcha AND NOT marcha",) * 2)
-        prog.poner("↑paro")  # un texto nuevo, en las dos
-        self.assertEqual(g.texto(), "↑paro")
-        g.poner("marcha AND")  # y el aviso, también
-        self.assertFalse(prog.aviso.isHidden())
-        v.close()
-        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
-        QApplication.processEvents()
-        self.assertIsNone(prog._ventana)
-        self.assertIsNot(prog.ampliar_ventana(), v)
-        prog._ventana.close()
-
     def test_SEDI59_panel_de_opciones_abajo_sin_pestanas(self):
         """REQ-EDT-02: el panel inferior, al editar, es un único panel «Opciones» (sin pestañas) con la receptividad de la
         transición seleccionada; al simular muestra la traza; hay dos programadores (el de la receptividad o la condición y
@@ -1948,7 +1912,7 @@ class Interfaz(unittest.TestCase):
         aid = e.acciones(ids["1"])[0]["id"]
         w.editar_accion(ids["1"], aid)  # «Editar…»: la acción, en el panel
         self.assertFalse(w.inferior.isHidden())
-        self.assertEqual((w.props.pagina, w.props.accion.aid), ("accion", aid))
+        self.assertEqual((w.props.pagina, w.props.continua, w.props.accion.aid), ("vacio", True, aid), "una continua: solo la frase")
 
     def test_SEDI62_ficha_accion_en_la_paleta(self):
         """REQ-ACT-01, REQ-EDT-02: la paleta ofrece la ficha «Acción» (continua) con su figura (el lado izquierdo, bajo
@@ -1992,11 +1956,9 @@ class Interfaz(unittest.TestCase):
         e.seleccionar([ts["t1"]])
         prog = self.w.props.prog
         prog.poner("marcha AND paro OR marcha")
-        v = prog.ampliar_ventana()
-        for p in (prog, v.programador):  # área y ventana ampliada: el motor da la categoría de cada bloque
+        for p in (prog,):  # el área: el motor da la categoría de cada bloque
             self.assertEqual((p.lienzo.motor.categoria(p.lienzo.arbol), p.lienzo.motor.categoria(p.lienzo.arbol["a"])),
                              ("o", "y"))
-        v.close()
 
 
     # -- ronda P-IMP-41: arrastre de las paletas, variables al día, lazo y acciones sueltas ---------------------------
@@ -2097,16 +2059,13 @@ class Interfaz(unittest.TestCase):
         e.nueva_variable("Q05", "output", {"kind": "bool"})  # lo que hace «Nueva variable» del panel Variables
         self.assertEqual(prog.paleta.bloques()[0]["n"], "Q05", "la paleta se llena en el acto")
         self.assertEqual(prog.opciones("salida"), [("Q05", "Q05")])
-        v = prog.ampliar_ventana()
-        g = v.programador
         e.nueva_variable("Q06", "output", {"kind": "bool"})
-        self.assertEqual(g.opciones("salida"), [("Q05", "Q05"), ("Q06", "Q06")])
-        self.assertEqual([b["n"] for b in g.paleta.bloques()], ["Q05", "Q06"], "una ficha por salida")
+        self.assertEqual(prog.opciones("salida"), [("Q05", "Q05"), ("Q06", "Q06")])
+        self.assertEqual([b["n"] for b in prog.paleta.bloques()], ["Q05", "Q06"], "una ficha por salida")
         # renombrar y cambiar de papel (panel Variables)
         vid = next(x["id"] for x in e.ed.model["variables"] if x["name"] == "Q05")
         self.assertIsNone(e.cambiar_variable(vid, nombre="Motor"))
         self.assertEqual(prog.opciones("salida"), [("Motor", "Motor"), ("Q06", "Q06")])
-        self.assertEqual(g.opciones("salida"), [("Motor", "Motor"), ("Q06", "Q06")])
         self.assertIsNone(e.cambiar_variable(vid, role="internal"))
         self.assertEqual(prog.opciones("salida"), [("Q06", "Q06")])
         self.assertEqual(prog.opciones("interna"), [("Motor", "Motor")])
@@ -2116,13 +2075,10 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(prog.lienzo.motor.categoria(prog.lienzo.arbol), "interna")
         self.assertIsNone(e.cambiar_variable(vid, role="output"))
         self.assertEqual(prog.lienzo.motor.categoria(prog.lienzo.arbol), "salida", "el área, al día sin tocar la fórmula")
-        self.assertEqual(g.lienzo.motor.categoria(g.lienzo.arbol), "salida")
         e.poner_condicion(ts["t1"], "marcha")
         # quitar
         self.assertIsNone(e.quitar_variable(next(x["id"] for x in e.ed.model["variables"] if x["name"] == "Q06")))
         self.assertEqual(prog.opciones("salida"), [("Motor", "Motor")])
-        self.assertEqual(g.opciones("salida"), [("Motor", "Motor")])
-        v.close()
         # «Crear las que faltan»
         prog.elegir_categoria("entrada")
         w.props.t_texto.setText("nueva_in AND marcha")
@@ -3592,7 +3548,7 @@ class Interfaz(unittest.TestCase):
         a1 = e.acciones(s1)[0]["id"]
         # una continua no se programa
         self.panel_accion(s1, a1)
-        self.assertEqual((p.pagina, p.objetivo_bloques(), prog.isVisible()), ("accion", None, False))
+        self.assertEqual((p.pagina, p.continua, p.objetivo_bloques(), prog.isVisible()), ("vacio", True, None, False))
         # a condicionada: borrador con «?»; sus bloques, vacíos
         e.tipo_accion(a1, "condicionada")
         (b,) = e.ed.draft_actions()
@@ -4620,17 +4576,17 @@ class Interfaz(unittest.TestCase):
         self.assertFalse(p.s_acciones.isVisible());self.assertFalse(p.der.isVisible())
         self.assertLess(p.izq.x(),20,"los campos conservados quedan a la izquierda")
         w.editar_accion(ids["1"],e.acciones(ids["1"])[0]["id"])
-        self.assertEqual(p.pagina, "accion")
+        self.assertEqual((p.pagina, p.continua), ("vacio", True), "una continua no lleva campos: solo la frase (encargo 12)")
         self.assertEqual(p.accion.b_etapa.text(), "Etapa 1", "solo informa de la etapa: no es un botón")
         from PySide6.QtWidgets import QPushButton
         self.assertNotIsInstance(p.accion.b_etapa, QPushButton)
-        self.assertEqual(p.pagina, "accion")
+        self.assertEqual(p.pagina, "vacio")
         e.seleccionar([ids["1"]])  # otra vez la etapa (la etiqueta no lleva a ella)
         QApplication.processEvents()
         self.assertEqual(p.pagina, "etapa")
         n = len(e.ed.draft_actions())
         e.colocar("accion:continua",QPointF(850,600))  # la paleta conserva la creación y las propiedades de acción
-        self.assertEqual((len(e.ed.draft_actions()), p.pagina), (n + 1, "accion"))
+        self.assertEqual((len(e.ed.draft_actions()), p.pagina, p.continua), (n + 1, "vacio", True))
         e.seleccionar([ts["t1"]])
         QApplication.processEvents()
         self.assertEqual(p.pagina, "transicion")
@@ -4709,7 +4665,7 @@ class Interfaz(unittest.TestCase):
 
     def test_SEDI122_opciones_sin_controles_cortados_ni_solapes(self):
         """REQ-EDT-09, REQ-EDT-02: con una acción por evento (programador del valor y del evento a la vez) y con una
-        transición, a 2000×1000 y a 1366×768, todos los controles del panel de opciones (Escribir a mano, Ampliar, papelera,
+        transición, a 2000×1000 y a 1366×768, todos los controles del panel de opciones (Escribir a mano, papelera,
         botones) quedan dentro del panel y de la ventana, y el programador del valor y el del evento no se solapan."""
         from PySide6.QtWidgets import QAbstractButton
         w = self.w
@@ -5090,7 +5046,7 @@ class Interfaz(unittest.TestCase):
         from escritorio.bloques import Programador, texto_a_arbol_valor
         from PySide6.QtCore import QRectF
         vars_ = {"CT": ("internal", "int"), "N5": ("internal", "int")}
-        prog = Programador(lambda: (vars_, []), ampliable=False, valor=True)
+        prog = Programador(lambda: (vars_, []), valor=True)
         t = "((CT - 5 + N5) * 1 / 1) + 1"
         arbol = texto_a_arbol_valor(t, vars_, [])
         prog.lienzo.poner_arbol(arbol)

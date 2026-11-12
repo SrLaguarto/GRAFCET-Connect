@@ -210,7 +210,7 @@ class PanelAccion(QWidget):
         nl = QVBoxLayout(self.caja_numerica)
         nl.setContentsMargins(0, 0, 0, 0)
         self.prog = Programador(lambda: (self._variables(), self.e.fuente_bloques()[1] if self.e is not None else []),
-                                ampliable=False, valor=True)
+                                valor=True)
         self.prog.cambiado.connect(self._desde_bloques)
         self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()  # Ctrl+Z deshace la operación
         self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()

@@ -325,8 +325,12 @@ piezas, en lugar de escribirlo.
   derecha, el área de trabajo, con la fórmula dibujada en una línea si cabe.
 - Debajo del área: la fórmula en texto, «Escrito» (el texto que ha quedado guardado), «Se dibuja» (cómo se verá en el
   dibujo de la norma) y «Crear las que faltan» (declara como entradas booleanas las variables que se usan y no
-  existen). En la última fila, el aviso, «⤢ Ampliar» (abre el programador en una ventana más grande, sincronizada) y
-  la papelera.
+  existen). En la última fila, el aviso y la papelera («⤢ Ampliar» se retiró en P-IMP-144: para más sitio, Ver → Propiedades: flotante).
+- Ver → «Propiedades: abajo» / «Propiedades: flotante». En flotante, las propiedades se editan en una ventana junto al elemento,
+  unida a él con líneas de puntos (como una lupa); en una acción condicionada o por evento salen dos, «Condición» (o «Evento»)
+  unida a su marca y «Acción» unida al rectángulo. Las ventanas se colocan solas y se recolocan al hacer zoom o desplazar.
+  Con la barra abajo, la parte de la acción que se edita se resalta en el dibujo. Una acción continua no abre Propiedades:
+  su variable se elige con doble clic (o Intro) sobre ella.
 - Bloques ya puestos: cada bloque del área tiene su ▾ para cambiar de elemento (otra etapa, otra variable).
 - Fórmula en texto: no se edita (no hay casilla «Escribir a mano»); la fórmula se arma solo con bloques y el cuadro la
   muestra con la notación del dibujo: ↑ y ↓ para los flancos, NOT como sobrerrayado, · y +, y X3 para las etapas. Si el

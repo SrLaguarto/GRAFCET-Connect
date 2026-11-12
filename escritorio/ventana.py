@@ -45,6 +45,7 @@ from grafcet.view import Vista, auto_layout, layout_from_presentation, t_trunc
 from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion, aviso_valores_iniciales, quitar_valores_iniciales, sin_codigos
 from .propiedades import FichaJerarquia, PanelPropiedades, Paleta
+from .flotantes import GestorFlotantes
 from .navegacion import Navegacion
 from .leyenda import Leyenda
 from .mensajes import amable, motivo_parada, partir
@@ -796,6 +797,16 @@ class Ventana(ArchivosProyecto, QMainWindow):
         ver.addAction(self.a_izquierdo)
         ver.addAction(self.a_derecho)
         ver.addAction(self.a_inferior)
+        # Dónde se editan las propiedades del elemento: en la barra inferior (lo de siempre) o en una ventana flotante junto a él (`flotantes.py`)
+        self.modo_propiedades = "flotante" if self.ajustes.value("paneles/propiedades", "abajo") == "flotante" else "abajo"
+        self.g_props = QActionGroup(self)
+        self.a_props = {}
+        for modo, texto in (("abajo", "Propiedades: a&bajo"), ("flotante", "Propiedades: &flotante")):
+            a = self._accion(texto, lambda on, m=modo: on and self._cambiar_modo_propiedades(m), None, True)
+            a.setChecked(modo == self.modo_propiedades)
+            self.g_props.addAction(a)
+            ver.addAction(a)
+            self.a_props[modo] = a
         ver.addSeparator()
         ver.addAction(self._accion("&Acercar", lambda: self.diagrama.acercar(), ["Ctrl+=", "Ctrl++"]))
         ver.addAction(self._accion("A&lejar", lambda: self.diagrama.alejar(), "Ctrl+-"))
@@ -947,6 +958,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.inferior = PilaActual()
         self.inferior.addWidget(caja_traza)
         self.inferior.addWidget(self.props)
+        self.flot = GestorFlotantes(self)  # las propiedades flotantes (se crean al usarlas)
+        QApplication.instance().focusChanged.connect(self._foco_propiedades)
         self._leyenda: QDialog | None = None
 
         der = QWidget()
@@ -1327,13 +1340,61 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _abrir_opciones(self, explicito: bool = True) -> None:
         """Despliega el panel inferior (las opciones de lo seleccionado) si estaba plegado, pero solo cuando el usuario lo
         pide (doble clic, Intro, «Editar…»). En otro caso (P-IMP-118) un panel plegado se queda plegado."""
-        panel = self._plegables["inferior"]
-        if not explicito and not panel.abierto:
+        if not explicito and not self._props_abiertas():
             return
         self._mostrar_panel("inferior", True)
+        if self.flot.activo():
+            return  # (las ventanas flotantes se colocan solas junto al elemento)
         agrandar_para_transicion(self)
         QTimer.singleShot(0, self, self._ver_seleccion)
         QTimer.singleShot(80, self, self._ver_seleccion)
+
+    def _props_abiertas(self) -> bool:
+        """¿Están abiertas las propiedades? La barra inferior, o las ventanas flotantes (Ver > «Propiedades: flotante»)."""
+        return self.a_inferior.isChecked() if self.flot.activo() else self._plegables["inferior"].abierto
+
+    def props_activo(self) -> PanelPropiedades:
+        """El panel de propiedades que se está usando: el de la barra inferior o el de las ventanas flotantes."""
+        return self.flot.panel if self.flot.activo() and self.flot.panel is not None else self.props
+
+    def _cambiar_modo_propiedades(self, modo: str) -> None:
+        """Ver > «Propiedades: abajo» o «Propiedades: flotante»: se recuerda, y lo abierto pasa de un sitio al otro."""
+        if modo == self.modo_propiedades:
+            return
+        abierto = self.a_inferior.isChecked()
+        self.ajustes.setValue("paneles/propiedades", modo)
+        self.flot.ocultar()
+        panel = self._plegables["inferior"]
+        if modo == "flotante":
+            self.modo_propiedades = "abajo"
+            self._mostrar_panel("inferior", False, guardar=False)  # (se pliega la barra: al volver, se abre desde cero)
+            self.modo_propiedades = modo
+            self._mostrar_panel("inferior", abierto, guardar=False)
+        else:
+            self.modo_propiedades = modo
+            panel.show()
+            self._mostrar_panel("inferior", abierto, guardar=False)
+        for m, a in self.a_props.items():
+            a.blockSignals(True)
+            a.setChecked(m == modo)
+            a.blockSignals(False)
+        if self.edicion is not None and self.modo == "editar":
+            self.refrescar_edicion()
+
+    def _foco_propiedades(self, antes: Any, ahora: Any) -> None:
+        """Con la barra inferior, al editar una acción condicionada o por evento se resalta en el dibujo lo que se está editando: su condición (o
+        evento), si el foco está en los bloques, o su rectángulo, si está en el resto del panel."""
+        e, p = self.edicion, self.props
+        if e is None or self.modo_propiedades != "abajo" or ahora is None or p.objetivo_bloques() is None:
+            return
+        zona = p.zona_de(ahora)
+        if zona is None:
+            return
+        objetivo = p.objetivo_bloques()
+        parte = (objetivo[1], objetivo[2] if zona == "bloques" else "accion")
+        if e.parte_editada != parte:
+            e.parte_editada = parte
+            self._redibujar_edicion()
 
     def _ver_seleccion(self) -> None:
         """Al abrir las Propiedades el dibujo pierde alto: si lo seleccionado queda tapado, se desplaza el dibujo hasta verlo
@@ -1355,7 +1416,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         """Pulsar o soltar el ratón en el dibujo (`antes` y `despues`: lo seleccionado y la acción señalada, `Edicion.clave_panel`).
         Con el panel de opciones abierto y sin fijar, un gesto que lo deja vacío o en otro elemento lo esconde al momento, sin
         estados intermedios; sobre el mismo elemento, no. Un panel que no mostraba nada se limita a actualizarse."""
-        if (self.modo != "editar" or getattr(self, "solo_lectura", False) or not self._plegables["inferior"].abierto
+        if (self.modo != "editar" or getattr(self, "solo_lectura", False) or not self._props_abiertas()
                 or self._fijado()):
             return
         mismo = despues == antes and bool(despues[0])
@@ -1367,6 +1428,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         """Esconde el panel de opciones sin que el dibujo salte: el punto de la escena de su esquina superior izquierda
         sigue en el mismo sitio de la pantalla."""
         d = self.diagrama
+        if self.flot.activo():  # (las ventanas flotantes no cambian el tamaño del dibujo)
+            self._mostrar_panel("inferior", False)
+            return
         punto = d.mapToScene(0, 0)
         self._mostrar_panel("inferior", False)
 
@@ -1385,9 +1449,24 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if guardar:  # lo pide el usuario (cabecera, pestaña, atajo, divisor): el modo compacto ya no lo mueve
             self._manual_paneles[nombre] = True
             self._auto_plegados.discard(nombre)
+        if nombre == "inferior" and self.flot.activo():  # propiedades flotantes: la barra inferior no se usa; ventanas sobre el dibujo
+            accion = self.a_inferior
+            if accion.isChecked() != visible:
+                accion.blockSignals(True)
+                accion.setChecked(visible)
+                accion.blockSignals(False)
+            if guardar:
+                self.ajustes.setValue("paneles/inferior", visible)
+            self._plegables["inferior"].hide()
+            if not visible and self.edicion is not None:
+                self.edicion.parte_editada = None
+            self.flot.actualizar()
+            return
         editar = self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False)
         panel = self._plegables[nombre]
         anterior = panel.abierto
+        if nombre == "inferior" and not visible and self.edicion is not None and self.edicion.parte_editada is not None:
+            self.edicion.parte_editada = None
         if visible and nombre == "inferior":
             self._escala_props()
         if anterior and not visible:
@@ -1932,6 +2011,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self._mostrar_panel(n, self._accion_panel(n).isChecked(), guardar=False)
         self.diagrama.modo_edicion(editar, self.edicion if editar else None,
                                    conservar=getattr(self, "_encuadre_modo", None) is not None)
+        if not editar:
+            self.flot.ocultar()
         if editar:
             self.refrescar_edicion()
         elif self.v is not None:
@@ -2594,15 +2675,21 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.l_sel.setText(("Selección: " + ", ".join(sel)) if sel else "Nada seleccionado.")
         self._poner_reloj(f"{len(e.M['steps'])} etapas · {len(e.M['transitions'])} transiciones")
         self.a_herr[e.herramienta].setChecked(True)
-        self.props.mostrar(e)
-        pagina = (self.props.pagina, self.props.minimumSizeHint().height())
-        if pagina != getattr(self, "_pagina_opciones", None):
-            self._pagina_opciones = pagina
-            QTimer.singleShot(0, self, self._dimensionar_opciones)
-        seleccion = (self.props.pagina, tuple(e.sel))
-        if seleccion != self._seleccion_alto:
-            self._seleccion_alto = seleccion
-            QTimer.singleShot(0, self, lambda: agrandar_para_transicion(self))
+        if self.flot.activo():
+            self.flot.actualizar()
+        else:
+            self.props.mostrar(e)
+            objetivo = self.props.objetivo_bloques()
+            if e.parte_editada is not None and (objetivo is None or objetivo[1] != e.parte_editada[0]):
+                e.parte_editada = None  # (ya no se edita esa acción)
+            pagina = (self.props.pagina, self.props.minimumSizeHint().height())
+            if pagina != getattr(self, "_pagina_opciones", None):
+                self._pagina_opciones = pagina
+                QTimer.singleShot(0, self, self._dimensionar_opciones)
+            seleccion = (self.props.pagina, tuple(e.sel))
+            if seleccion != self._seleccion_alto:
+                self._seleccion_alto = seleccion
+                QTimer.singleShot(0, self, lambda: agrandar_para_transicion(self))
         self.variables.mostrar(e)
         planos=hasattr(self,"paginas_es") and self.paginas_es.currentIndex()==2
         self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
@@ -2693,9 +2780,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         """Doble clic en una etapa: despliega las opciones y lleva el cursor a su etiqueta."""
         self.edicion.seleccionar([ident])
         self._abrir_opciones(explicito)
-        if self._plegables["inferior"].abierto:
-            self.props.s_etiqueta.setFocus()
-            self.props.s_etiqueta.selectAll()
+        if self._props_abiertas():
+            self.props_activo().s_etiqueta.setFocus()
+            self.props_activo().s_etiqueta.selectAll()
 
     def leyenda(self) -> None:
         """«Ayuda > Leyenda del dibujo»: una ventana propia (no modal) con lo que significa cada trazo y color."""

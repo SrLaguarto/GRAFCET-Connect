@@ -137,20 +137,16 @@ class RedisenoVisual(BaseQt):
         self.assertEqual(set(ts[t0]["postRefs"]),set(etapas));self.assertEqual(set(ts[t1]["preRefs"]),set(etapas))
         self.assertTrue(all(b["kind"]=="Y" for b in e.ed.bars()))
 
-    def test_SVIS15_carpetas_por_uso_en_panel_y_ventana_ampliada(self):
-        """REQ-EDT-02, REQ-EDT-07: el orden por uso es idéntico y cada carpeta sigue cargando sus bloques en ambos editores."""
+    def test_SVIS15_carpetas_por_uso_en_panel(self):
+        """REQ-EDT-02, REQ-EDT-07: el orden por uso es el de siempre y cada carpeta sigue cargando sus bloques."""
         w,e=self.vacio();p=w.props.prog
         claves=["entrada","etapa","interna","operador","tiempo","comparacion","salida","constante"]
         titulos=["Entradas","Etapas (X)","Memorias","Operadores","Temporizadores","Comparaciones","Salidas","Constantes"]
-        v=p.ampliar_ventana()
-        try:
-            for prog in (p,v.programador):
-                self.assertEqual(list(prog.categorias),claves)
-                self.assertEqual([b.text() for b in prog.categorias.values()],titulos)
-                for clave in claves:
-                    prog.categorias[clave].click()
-                    self.assertEqual(prog.paleta.clave,clave)
-                    self.assertTrue(prog.categorias[clave].isChecked())
-                    self.assertEqual(sum(b.isChecked() for b in prog.categorias.values()),1)
-        finally:
-            v.close()
+        for prog in (p,):
+            self.assertEqual(list(prog.categorias),claves)
+            self.assertEqual([b.text() for b in prog.categorias.values()],titulos)
+            for clave in claves:
+                prog.categorias[clave].click()
+                self.assertEqual(prog.paleta.clave,clave)
+                self.assertTrue(prog.categorias[clave].isChecked())
+                self.assertEqual(sum(b.isChecked() for b in prog.categorias.values()),1)

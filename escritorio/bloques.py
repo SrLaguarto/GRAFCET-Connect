@@ -1674,18 +1674,17 @@ def _desplazable(w: QWidget, ancho: int | None = None) -> QScrollArea:
 class Programador(QWidget):
     """Programador por bloques: categorías en una franja horizontal desplazable; debajo, los bloques de la categoría elegida
     en una columna arrastrable y, a su derecha, el
-    área de trabajo con la fórmula (en línea si cabe) con el aviso, «⤢ Ampliar» y la papelera. `fuente()` devuelve las
+    área de trabajo con la fórmula (en línea si cabe) con el aviso y la papelera. `fuente()` devuelve las
     variables {nombre: (papel, tipo)} y las etapas (en notación X) del modelo en curso. `cambiado(texto)` se emite en
     cada cambio hecho con bloques (no al llamar a `poner`). Con `historial`, Ctrl+Z y Ctrl+Mayús+Z deshacen y rehacen
-    los cambios de bloques; sin él, el deshacer lo pone quien lo usa (`al_deshacer`, `al_rehacer`). «⤢ Ampliar» abre el
-    mismo programador en una ventana más grande, sincronizada con éste."""
+    los cambios de bloques; sin él, el deshacer lo pone quien lo usa (`al_deshacer`, `al_rehacer`)."""
 
     cambiado = Signal(str)
     franja_cambiada = Signal()  # la franja de categorías cambió de alto (al cambiar de ancho): el panel que lo contiene puede necesitar más
     PALETA_MIN, PALETA_MAX = 110, 240  # la columna de bloques mide lo justo para el más ancho, entre estos límites
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], historial: bool = False,
-                 ampliable: bool = True, grupo: str | None = None, valor: bool = False, compacto: bool = False) -> None:
+                 grupo: str | None = None, valor: bool = False, compacto: bool = False) -> None:
         super().__init__()
         self.fuente, self.historial, self.valor = fuente, historial, valor
         self.compacto = compacto
@@ -1695,8 +1694,6 @@ class Programador(QWidget):
         self.al_rehacer: Callable[[], Any] | None = None
         self._pila: list[Any] = []
         self._rehecho: list[Any] = []
-        self._espejo: Programador | None = None
-        self._ventana: QWidget | None = None
         self.cat_en_cabecera = False  # las categorías van en la fila de cabecera del panel que contiene al programador (`categorias_en_cabecera`)
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
@@ -1738,7 +1735,7 @@ class Programador(QWidget):
         self.paleta = PaletaBloques(fuente, self.grupo, columna=True, valor=valor)
         self._sc_paleta = _desplazable(self.paleta)
         lay.addWidget(self._sc_paleta)
-        # columna 3: el área de trabajo y, debajo, el aviso, «Ampliar» y la papelera
+        # columna 3: el área de trabajo y, debajo, el aviso y la papelera
         derecha = QVBoxLayout()
         derecha.setSpacing(4)
         self.lienzo = AreaBloques(fuente, self.grupo, valor)
@@ -1755,11 +1752,6 @@ class Programador(QWidget):
         self.aviso.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)  # no impone su ancho
         pie.addWidget(self.aviso, 1)
         pie.addStretch(1)
-        self.ampliar = QPushButton("⤢ Ampliar")
-        self.ampliar.setToolTip("Abrir el programador en una ventana más grande (sigue sincronizado con éste)")
-        self.ampliar.clicked.connect(self.ampliar_ventana)
-        self.ampliar.setVisible(ampliable)
-        pie.addWidget(self.ampliar)
         self.papelera = Papelera(self._a_la_papelera)
         pie.addWidget(self.papelera)
         derecha.addLayout(pie)
@@ -1899,10 +1891,6 @@ class Programador(QWidget):
         self._firma = firma
         self._cargar_paleta(self.paleta.clave)
         self.lienzo.invalidar()
-        if self._espejo is not None:
-            self._espejo._firma = firma
-            self._espejo._cargar_paleta(self._espejo.paleta.clave)
-            self._espejo.lienzo.invalidar()
 
     # -- texto <-> bloques
     def texto(self) -> str:
@@ -1916,10 +1904,6 @@ class Programador(QWidget):
         self._firma = repr((variables, etapas))
         self._cargar_paleta(self.paleta.clave)
         self.lienzo.invalidar()
-        if self._espejo is not None:
-            self._espejo._firma = self._firma
-            self._espejo._cargar_paleta(self._espejo.paleta.clave)
-            self._espejo.lienzo.invalidar()
         try:
             if normalizar_espacios(texto) == self.texto():
                 nuevo_ = self.lienzo.arbol
@@ -1939,17 +1923,9 @@ class Programador(QWidget):
 
     def _fijar_arbol(self, arbol: dict[str, Any] | None) -> None:
         self.lienzo.poner_arbol(arbol)
-        if self._espejo is not None:
-            self._espejo._recibir(arbol, self.aviso.text())
-
-    def _recibir(self, arbol: dict[str, Any] | None, aviso: str) -> None:
-        self.lienzo.poner_arbol(arbol)
-        self._poner_aviso(aviso)
 
     def _avisar(self, texto: str) -> None:
         self._poner_aviso(texto)
-        if self._espejo is not None:
-            self._espejo._poner_aviso(texto)
 
     def _poner_aviso(self, texto: str) -> None:
         self.aviso.setText(texto)
@@ -1960,8 +1936,6 @@ class Programador(QWidget):
             self._pila.append(self.lienzo.previo)
             self._rehecho.clear()
         self._avisar("")
-        if self._espejo is not None:
-            self._espejo._recibir(self.lienzo.arbol, "")
         self.cambiado.emit(self.texto())
 
     def colocar(self, nodo: dict[str, Any]) -> bool:
@@ -1997,44 +1971,3 @@ class Programador(QWidget):
     def _a_la_papelera(self, datos: dict[str, Any]) -> None:
         if datos.get("origen") is not None and datos.get("grupo") == self.grupo:
             self.lienzo.quitar(tuple(datos["origen"]))
-
-    # -- ventana ampliada
-    def ampliar_ventana(self) -> QWidget:
-        """Abre (o trae al frente) el programador en una ventana propia, no modal y sincronizada con éste."""
-        if self._ventana is not None:
-            self._ventana.show()
-            self._ventana.raise_()
-            self._ventana.activateWindow()
-            return self._ventana
-        v = QWidget(self.window(), Qt.WindowType.Window)
-        v.setWindowTitle("Programador de bloques")
-        v.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        v.resize(980, 600)
-        lay = QVBoxLayout(v)
-        grande = Programador(self.fuente, ampliable=False, grupo=self.grupo, valor=self.valor)
-        grande.lienzo.modificado.connect(lambda: self._cambio_en_ventana(grande))  # se aplica igual que uno del panel
-        grande.al_deshacer, grande.al_rehacer = self.deshacer, self.rehacer
-        lay.addWidget(grande)
-        for atajo, f in (("Ctrl+Z", self.deshacer), ("Ctrl+Shift+Z", self.rehacer), ("Ctrl+Y", self.rehacer)):
-            QShortcut(QKeySequence(atajo), v).activated.connect(f)
-        grande.lienzo.poner_arbol(self.lienzo.arbol)
-        grande._poner_aviso(self.aviso.text())
-        grande.elegir_categoria(self.paleta.clave)
-        self._espejo, grande._espejo = grande, self
-        v.programador = grande  # type: ignore[attr-defined]
-        v.destroyed.connect(self._cerrada)
-        self._ventana = v
-        v.show()
-        return v
-
-    def _cambio_en_ventana(self, grande: Programador) -> None:
-        """Un cambio hecho en la ventana ampliada (su árbol ya llegó aquí): historial, aviso y `cambiado`, como si se
-        hubiera hecho en este programador."""
-        if self.historial:
-            self._pila.append(grande.lienzo.previo)
-            self._rehecho.clear()
-        self._avisar("")
-        self.cambiado.emit(self.texto())
-
-    def _cerrada(self, *_: Any) -> None:
-        self._ventana, self._espejo = None, None

@@ -81,9 +81,9 @@ class Paneles(BaseQt):
         self.assertEqual(w.props.t_texto.text(),formula)
 
     def test_SPAN05_formula_estado_y_controles_en_una_fila_sin_vista_previa(self):
-        """REQ-EDT-02, REQ-EDT-09: fórmula, estado, ampliar y papelera comparten fila; ya no hay «Vista previa» (sí «Fijar») y la fórmula no se edita a mano."""
+        """REQ-EDT-02, REQ-EDT-09: fórmula, estado y papelera comparten fila; ya no hay «Vista previa» (sí «Fijar») y la fórmula no se edita a mano."""
         w,e=self.preparar();p=w.props
-        centros=[c.mapTo(p,c.rect().center()).y() for c in (p.t_texto,p.t_estado,p.prog.ampliar,p.prog.papelera)]
+        centros=[c.mapTo(p,c.rect().center()).y() for c in (p.t_texto,p.t_estado,p.prog.papelera)]
         self.assertLessEqual(max(centros)-min(centros),3)
         self.assertTrue(p.t_texto.isReadOnly());self.assertTrue(p.t_fijar.isVisible())
         self.assertFalse(hasattr(p,"t_previa"));self.assertFalse(hasattr(p,"detalles_bloques"))
@@ -91,17 +91,12 @@ class Paneles(BaseQt):
         self.assertIn("a",p.t_vista.text())
         p._desde_bloques("a AND NOT b")
         self.assertEqual(e.texto_usuario("t"),"a AND NOT b")
-        QTest.mouseClick(p.prog.ampliar,Qt.MouseButton.LeftButton);QApplication.processEvents()
-        ventana=p.prog._ventana
-        try:
-            self.assertTrue(ventana.isVisible());self.assertEqual(p.prog._espejo.texto(),p.prog.texto())
-        finally:ventana.close()
 
     def test_SPAN06_editor_compacto_util_a_1000_y_categorias_accesibles(self):
         """REQ-EDT-09: a 1000×600 los controles no se cortan, y las categorías largas conservan su desplazamiento."""
         w,e=self.preparar(1000,600);p=w.props
         self.assertLessEqual(w.minimumSizeHint().height(),600)
-        for c in (p.t_texto,p.t_estado,p.prog.ampliar,p.prog.papelera):
+        for c in (p.t_texto,p.t_estado,p.prog.papelera):
             r=c.rect();esquina=c.mapTo(p,r.bottomRight())
             self.assertLessEqual(esquina.x(),p.width());self.assertLessEqual(esquina.y(),p.height())
         self.assertGreater(p.prog.lienzo.parentWidget().height(),40)

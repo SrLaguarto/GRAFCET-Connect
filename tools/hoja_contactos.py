@@ -129,6 +129,38 @@ def _con_seleccion(que: str) -> Callable[[Contexto], None]:
     return preparar
 
 
+def _flotante(que: str) -> Callable[[Contexto], None]:
+    """Propiedades flotante (Ver > «Propiedades: flotante»): ventana sobre el dibujo junto al elemento, con sus líneas de puntos."""
+    def preparar(c: Contexto) -> None:
+        _edicion(c)
+        e, w = c.e, c.w
+        w._cambiar_modo_propiedades("flotante")
+        sid = c.ids["etapas"][1 if que == "continua" else 2]
+        if que == "continua":  # con la ventana de una etapa abierta y fijada, se selecciona una acción continua
+            e.seleccionar([c.ids["etapas"][0]])
+            w._abrir_opciones()
+            w.props.t_fijar.setChecked(True)
+        if que == "evento":
+            e.poner_accion(sid, {"tipo": "evento", "variable": "aux", "valor": "1", "evento": "↑marcha"})
+        if que in ("condicionada", "evento", "continua"):
+            tipo = {"condicionada": "condicionada", "evento": "evento", "continua": "continua"}[que]
+            aid = next(a["id"] for a in e.ed.model["actions"] if e.datos_accion(a["id"])["tipo"] == tipo)
+            e.accion, e.ver_accion, e.sel = aid, True, [sid]
+            e.cambiado.emit()
+        else:
+            e.seleccionar([c.ids["etapas"][0]] if que == "etapa" else [c.ids["transiciones"][0]])
+        w._abrir_opciones()
+        _bombear(10)
+    return preparar
+
+
+def _resaltado(c: Contexto) -> None:
+    """Barra inferior con una acción condicionada: la condición se resalta en el dibujo mientras el foco está en los bloques."""
+    _con_seleccion("accion")(c)
+    c.w.props.prog.lienzo.setFocus()
+    _bombear(10)
+
+
 def _props_plegado(c: Contexto) -> None:
     _edicion(c)
     c.e.seleccionar([c.ids["etapas"][0]])
@@ -235,6 +267,12 @@ PANTALLAS: list[tuple[str, Callable[[Contexto], None]]] = [
     ("props_etapa", _con_seleccion("etapa")),
     ("props_transicion", _con_seleccion("transicion")),
     ("props_accion_condicionada", _con_seleccion("accion")),
+    ("props_accion_resaltada", _resaltado),
+    ("flot_etapa", _flotante("etapa")),
+    ("flot_transicion", _flotante("transicion")),
+    ("flot_accion_condicionada", _flotante("condicionada")),
+    ("flot_accion_evento", _flotante("evento")),
+    ("flot_accion_continua", _flotante("continua")),
     ("props_macroetapa", _con_seleccion("macroetapa")),
     ("props_varios", _con_seleccion("varios")),
     ("props_plegado", _props_plegado),

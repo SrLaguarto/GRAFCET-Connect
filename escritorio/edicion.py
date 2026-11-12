@@ -219,6 +219,7 @@ class Edicion(QObject):
         self.flecha = "flow"
         self.accion: str | None = None  # la acción señalada de la etapa seleccionada (clic en su caja)
         self.ver_accion = False  # las opciones muestran la acción señalada de la etapa (no la etapa): clic en su caja, Editar…
+        self.parte_editada: tuple[str, str] | None = None  # (acción, «condicion», «evento» o «accion»): lo que se edita ahora en Propiedades; se resalta en el dibujo
         self.lazo: dict[str, Any] | None = None  # rectángulo de selección que se está trazando desde un hueco
         self.menu_marcadas: set[str] = set()     # opciones del último menú que van marcadas (el tipo actual de una acción)
         self.menu_desmarcadas: set[str] = set()  # opciones del último menú que son casillas sin marcar (enlace de activación)
@@ -2097,7 +2098,10 @@ class Edicion(QObject):
         seleccion = set(self.sel)
         if señalada and self._accion_para_quitar():
             seleccion.discard(etapa[self.accion])
-        return seleccion | {f"accion:{i}" for i in (señalada | (set(self.sel) & set(etapa)))}
+        marcas = {f"accion:{i}" for i in (señalada | (set(self.sel) & set(etapa)))}
+        if self.parte_editada is not None and self.parte_editada[0] == self.accion_activa():
+            marcas.add(f"parte:{self.parte_editada[0]}:{self.parte_editada[1]}")
+        return seleccion | marcas
 
     def _parcial_borrador(self, b: dict[str, Any]) -> str:
         """El parcial en cuyo ámbito se leen los textos de un borrador: el de su etapa (el raíz, si está suelto)."""
@@ -2748,6 +2752,10 @@ class Edicion(QObject):
         for papel, letra in (("output", "S"), ("internal", "M")):
             out += [(f"{n}  ({letra})", n, True, letra) for n, (p, tipo) in v.items() if p == papel and tipo == "bool"]
         return out or [("Ninguna", "", False, "")]
+
+    def accion_en_id(self, aid: str) -> dict[str, Any] | None:
+        """La caja dibujada de la acción `aid` (como `accion_en`), o None si no está dibujada."""
+        return next((c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["id"] == aid), None)
 
     def desplegar_variable(self, caja: dict[str, Any]) -> None:
         """Doble clic en una acción continua: un desplegable dentro de su rectángulo con las variables que puede escribir (solo se elige la variable; el resto, en Propiedades)."""
@@ -4204,20 +4212,22 @@ class Edicion(QObject):
         return did
 
     # -- el rectángulo de lo seleccionado, para «Centrar selección» (REQ-EDT-02) ------------------------------------
-    def caja_seleccion(self) -> QRectF | None:
+    def caja_seleccion(self, ids: list[str] | None = None) -> QRectF | None:
         """El rectángulo del dibujo que ocupa lo seleccionado (`sel`), con las cajas de cada elemento y un margen: la etapa, la
         macroetapa o la transición (con su texto) y, de una etapa, sus acciones y órdenes; una barra, una acción, una orden, el
         marco de un parcial, el recorrido de un enlace, el enlace de una etapa con sus acciones y un enlace en borrador. None si
-        no hay nada seleccionado que esté dibujado. Es lo que encuadra «Centrar selección» (`VistaDiagrama.centrar_seleccion`)."""
+        no hay nada seleccionado que esté dibujado. Es lo que encuadra «Centrar selección» (`VistaDiagrama.centrar_seleccion`).
+        Con `ids`, la de esos elementos en vez de la selección."""
+        elegidos = self.sel if ids is None else ids
         M, pos = self.M, posiciones(self.M)
         trans = orientaciones(M)
         acciones = {c["id"]: c for c in getattr(self.diagrama, "cajas_acciones", None) or []}
         ordenes = {c["id"]: c for c in getattr(self.diagrama, "cajas_ordenes", None) or []}
         marcos, rutas = cajas_parciales(M), {e["id"]: e["pts"] for e in enlaces(M)}
         uniones = {u["id"]: [q for tramo in u["trazos"] for q in tramo] for u in getattr(self.diagrama, "uniones_acciones", None) or []}
-        textos = self._textos_transiciones() if any(i in trans for i in self.sel) else []
+        textos = self._textos_transiciones() if any(i in trans for i in elegidos) else []
         puntos: list[QRectF] = []
-        for ident in self.sel:
+        for ident in elegidos:
             if n := self.anotacion(ident):
                 puntos.append(rect_anotacion(n))
             elif ident in pos:
@@ -4242,6 +4252,35 @@ class Edicion(QObject):
         x0, y0 = min(r.left() for r in puntos), min(r.top() for r in puntos)
         x1, y1 = max(r.right() for r in puntos), max(r.bottom() for r in puntos)
         return QRectF(x0, y0, x1 - x0, y1 - y0).adjusted(-12, -12, 12, 12)
+
+    def zonas_propiedades(self, ident: str | None, programable: tuple[str, str] | None = None) -> dict[str, QRectF]:
+        """A qué partes del dibujo se unen las ventanas de Propiedades (modo flotante), cada una con su rectángulo del dibujo: «elemento» (la etapa,
+        solo su figura; la transición, con sus textos; otro elemento, lo que ocupa) o, de una acción condicionada o por evento (`programable`, lo que da
+        `accion_programable`), «condicion» (o «evento»: su marca, con el trazo y la banderita) y «accion» (su rectángulo). Vacío si no está dibujado."""
+        if programable is not None:
+            caja = next((c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["id"] == programable[0]), None)
+            if caja is None:
+                return {}
+            x, y, w, h = caja["rect"]
+            marca = QRectF(*caja["marca"]) if caja.get("marca") else QRectF(x + 3, y - 20, 36, 20)
+            return {programable[1]: marca.adjusted(-2, -2, 2, 2), "accion": QRectF(x, y, w, h).adjusted(-3, -3, 3, 3)}
+        if not ident:
+            return {}
+        pos = posiciones(self.M)
+        if ident in pos:
+            x, y = pos[ident]
+            trans = orientaciones(self.M)
+            if ident in trans:  # el trazo y los textos de la transición (etiqueta y receptividad)
+                caja = caja_barra(trans[ident], x, y)
+                for r, tid in self._textos_transiciones():
+                    if tid == ident:
+                        caja = caja.united(r)
+                return {"elemento": caja.adjusted(-3, -3, 3, 3)}
+            return {"elemento": QRectF(x - H, y - H, 2 * H, 2 * H).adjusted(-3, -3, 3, 3)}
+        caja = next((QRectF(*c["rect"]) for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["id"] == ident), None)
+        if caja is None:
+            caja = self.caja_seleccion([ident])
+        return {"elemento": caja} if caja is not None else {}
 
     # -- equidistanciar alturas: la distancia estándar entre niveles, mayor donde las acciones lo piden -----------------
     def _posiciones_modelo(self) -> dict[str, tuple[float, float]]:

@@ -10,7 +10,10 @@ zonas: a la izquierda una columna estrecha con los campos y a la derecha lo anch
 - Etapa: etiqueta, tipo, comentario y colocación de las acciones; a la derecha, la lista de sus acciones y sus botones.
 - Acción: frase, variable (y límite de una acción antigua) a la izquierda (`PanelAccion`; el tipo se cambia con botón
   derecho sobre la acción); a la derecha el
-  programador del valor de una memorizada y, si es condicionada o por evento, el de su condición o su evento.
+  programador del valor de una memorizada y, si es condicionada o por evento, el de su condición o su evento. Una acción continua no
+  lleva campos aquí: solo la frase que manda a hacer doble clic sobre ella (`FRASE_CONTINUA`; la variable se elige en el desplegable
+  sobre la acción). El mismo panel (`flotante=True`, sin cabecera) sirve a las ventanas de Ver > «Propiedades: flotante»
+  (`flotantes.py`), donde el programador de la condición o del evento va en su propia ventana (`_llevar_bloques`).
 - Macroetapa, recinto (su marco), expansión, grafcet parcial suelto y orden de forzado (también la que aún no está completa): una
   ficha compacta (`FichaJerarquia`) con su descripción y los mismos botones que el botón derecho (Encuadrar la expansión,
   Renombrar…, Encuadrar la encapsulante, Configurar, Editar o Quitar la orden…; el doble clic en una orden la edita); una
@@ -512,8 +515,14 @@ class PanelPropiedades(QWidget):
         tam = super().minimumSizeHint()
         return QSize(min(tam.width(), self.ANCHO_MINIMO), tam.height())
 
-    def __init__(self) -> None:
+    FRASE_CONTINUA = "Haz doble clic sobre la acción continua para desplegar las variables disponibles."
+
+    def __init__(self, flotante: bool = False) -> None:
         super().__init__()
+        self.flotante = flotante  # en una ventana flotante (`flotantes.py`): sin cabecera propia, y la condición o el evento de una acción pueden ir en otra ventana
+        self.continua = False  # lo que se muestra es una acción continua: solo la frase (se elige la variable con doble clic sobre ella)
+        self._bloques_fuera = False  # el programador de la condición o el evento está en la otra ventana (`destino_bloques`)
+        self.destino_bloques: QVBoxLayout | None = None
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         # Campos de 32 px en el panel (el mínimo táctil): con 36 px la página de una etapa pediría más alto que la de una transición
         self.setStyleSheet(estilo.campos_compactos())
@@ -604,6 +613,31 @@ class PanelPropiedades(QWidget):
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
+        if flotante:
+            self.cabecera.hide()  # (el título, «Fijar» y cerrar los pone la ventana flotante)
+
+    def zona_de(self, w: QWidget | None) -> str | None:
+        """En qué zona de la página de una acción está el widget `w` (el que tiene el foco): «bloques» (la condición o el evento) o «accion» (lo
+        demás: variable, valor…); None si no está en ninguna."""
+        if w is None:
+            return None
+        if self.pagina_bloques.isAncestorOf(w):
+            return "bloques"
+        if self.izq.isAncestorOf(w) or self.accion.caja_valor.isAncestorOf(w):
+            return "accion"
+        return None
+
+    def _llevar_bloques(self, fuera: bool) -> None:
+        """En una ventana flotante, el programador de la condición o del evento de una acción va en su propia ventana (`destino_bloques`); en los
+        demás casos vuelve a su sitio, a la derecha de la página."""
+        fuera = fuera and self.destino_bloques is not None
+        if fuera == self._bloques_fuera:
+            return
+        self._bloques_fuera = fuera
+        if fuera:
+            self.destino_bloques.addWidget(self.pagina_bloques)
+        else:
+            self._hl_prog.insertWidget(1, self.pagina_bloques, 3)
 
     # -- categorías de bloques en la cabecera -------------------------------------------------------
     def _programador_en_cabecera(self) -> Programador | None:
@@ -623,6 +657,10 @@ class PanelPropiedades(QWidget):
         título (que ocupa la columna de campos, o hasta donde empieza la paleta) y «Fijar»: empiezan donde empiezan la paleta y el área, y el panel
         gana una fila de alto. Si no caben en esa fila, o en otra página, vuelven a su fila propia sobre la paleta (donde, en un panel estrecho,
         pasan a dos filas). Siempre en una sola línea, sin cortarse. En las páginas con columna de campos el título mide lo que esa columna."""
+        if self.flotante:  # (sin cabecera: las categorías van en su fila, sobre la paleta)
+            for prog in (self.prog, self.accion.prog):
+                prog.categorias_en_cabecera(None)
+            return
         e3, e2 = estilo.E3, estilo.E2
         elegido = self._programador_en_cabecera()
         columna = ANCHO_COLUMNA + 14 - e2 - e3  # la columna de campos más el hueco hasta la paleta, menos lo que ya pone la fila
@@ -655,6 +693,7 @@ class PanelPropiedades(QWidget):
         acción, con su texto, cómo se escribe, cómo se dibuja y «Crear las que faltan»."""
         w = QWidget()
         hl = QHBoxLayout(w)
+        self._hl_prog = hl
         hl.setContentsMargins(0, 0, 0, 0)
         hl.setSpacing(10)
         hl.addWidget(self.accion.caja_valor, 1)
@@ -671,7 +710,7 @@ class PanelPropiedades(QWidget):
         self.fila_cabecera.addStretch(1)
         self.prog = Programador(lambda: self.e.fuente_bloques() if self.e is not None else ({}, []), compacto=True)
         self.prog.cambiado.connect(self._desde_bloques)
-        self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()  # Ctrl+Z en la ventana ampliada
+        self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()
         self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()
         lay.addWidget(self.prog, 1)
         # Debajo del área, toda la receptividad: el texto de la fórmula (solo se ve, con la notación del dibujo), cómo
@@ -702,9 +741,8 @@ class PanelPropiedades(QWidget):
         self.t_texto.setMinimumWidth(48)
         g.addWidget(self.t_estado, 0, 2)
         g.addWidget(self.t_crear, 0, 3)
-        for columna, control in ((4, self.prog.ampliar), (5, self.prog.papelera)):
-            self.prog.pie.removeWidget(control)
-            g.addWidget(control, 0, columna)
+        self.prog.pie.removeWidget(self.prog.papelera)
+        g.addWidget(self.prog.papelera, 0, 4)
         g.setColumnStretch(1, 1)
         self._rejilla_formula, self._estado_abajo = g, False
         self._dispone_estado = _DisponeEstado(self)  # (el campo de la fórmula manda: si el estado no cabe a su lado, baja a su propia línea)
@@ -723,7 +761,7 @@ class PanelPropiedades(QWidget):
         if ancho < 120:
             return
         sep = max(g.horizontalSpacing(), 6)
-        fijos = [c for c in (self._l_formula, self.t_crear, self.prog.ampliar, self.prog.papelera) if not c.isHidden()]
+        fijos = [c for c in (self._l_formula, self.t_crear, self.prog.papelera) if not c.isHidden()]
         sitio = ancho - sum(c.sizeHint().width() for c in fijos) - sep * (len(fijos) + 1) - self.t_estado.sizeHint().width()
         abajo = sitio < self.FORMULA_MIN + (40 if self._estado_abajo else 0)
         if abajo == self._estado_abajo:
@@ -731,7 +769,7 @@ class PanelPropiedades(QWidget):
         self._estado_abajo = abajo
         g.removeWidget(self.t_estado)
         if abajo:
-            g.addWidget(self.t_estado, 1, 1, 1, 5)
+            g.addWidget(self.t_estado, 1, 1, 1, 4)
             self.t_estado.setMaximumWidth(16777215)
         else:
             g.addWidget(self.t_estado, 0, 2)
@@ -973,7 +1011,28 @@ class PanelPropiedades(QWidget):
             self.nota_resumen.setText(n.get("text","") if n["kind"]=="text" else n.get("name","Imagen"))
             self.nota_editar.setText("Editar texto…" if n["kind"]=="text" else "Cambiar imagen…")
             return
+        self.continua = False
         aid = e.accion_activa() if e is not None else None
+        if aid and e.datos_accion(aid)["tipo"] == "continua":  # una acción continua no se edita aquí: se despliega su variable con doble clic sobre ella
+            for campo in (self.s_etiqueta, self.s_comentario, self.t_etiqueta, self.t_comentario):
+                campo.blockSignals(True)
+                campo.clearFocus()
+                campo.blockSignals(False)
+            self.continua, self._mostrado, self.ident, self.pagina = True, ("accion", aid), aid, "vacio"
+            self.accion.mostrar(e, aid)  # (oculto, pero al día: sigue a la acción cuando cambia de borrador a acción del modelo)
+            self._objetivo = self._anterior = None
+            self._llevar_bloques(False)
+            self._ver_bloques(None)
+            self.accion.caja_valor.hide()
+            self.cuerpo.hide()
+            self.izq.hide()
+            self.vacio.setText(self.FRASE_CONTINUA)
+            self.l_vacio.setText(self.FRASE_CONTINUA)
+            self.vacio.show()
+            self.titulo.setText("Propiedades · Acción")
+            self.msg.hide()
+            self._ubicar_categorias()
+            return
         kind = ("accion" if aid else
                 "enlace" if "|" in vivo else
                 "barra" if any(b["id"] == vivo for b in e.M.get("bars", [])) else
@@ -1012,6 +1071,7 @@ class PanelPropiedades(QWidget):
         self.vacio.setText(self.l_vacio.text())
         acc = e.accion_programable() if e is not None else None
         self._objetivo = (("transicion", vivo) if kind == "transicion" else ("accion", *acc) if acc and kind == "accion" else None)
+        self._llevar_bloques(kind == "accion" and self._objetivo is not None)
         self._ver_bloques(None if self._objetivo is None else
                           f"Receptividad de la transición {e.nombres.get(vivo, vivo)}" if kind == "transicion" else
                           e.titulo_accion(acc[0], acc[1]))
@@ -1019,10 +1079,6 @@ class PanelPropiedades(QWidget):
             self.accion.mostrar(e, aid)
             memorizada = self.accion.clave_tipo not in CONTINUAS
             self.der.setCurrentIndex(2 if (memorizada or self._objetivo is not None) else 0)
-            if not (memorizada or self._objetivo is not None):
-                self.l_vacio.setText("Acción continua: vale 1 mientras la etapa está activa, y no lleva nada más. Cambie el tipo "
-                                     "(botón derecho sobre la acción, «Tipo de acción») para añadirle una condición, o para que "
-                                     "asigne un valor.")
         else:
             self.accion.caja_valor.setVisible(False)
         if self._objetivo is not None:
@@ -1031,7 +1087,7 @@ class PanelPropiedades(QWidget):
             self.prog.poner(guardado)
             self._previsualizar()
         self._anterior = self._objetivo
-        self.der.setVisible(kind != "etapa")
+        self.der.setVisible(kind != "etapa" and not (kind == "accion" and self._bloques_fuera and not memorizada))
         if kind == "etapa":
             s = next(s for s in e.M["steps"] if s["id"] == vivo)
             self._poner(self.s_etiqueta, s["label"])
