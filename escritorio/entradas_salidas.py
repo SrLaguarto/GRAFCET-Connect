@@ -304,6 +304,8 @@ class _FiltroEleccion(QObject):
         self.panel = panel
 
     def eventFilter(self, objeto, evento):  # noqa: N802
+        if not isinstance(objeto, QWidget):  # (el filtro ve los eventos de todo: también los de ratón de un QWindow, de los arrastres…)
+            return False
         tipo = evento.type()
         if tipo == QEvent.Type.KeyPress and evento.key() == Qt.Key.Key_Escape and self.panel.isVisible():
             # solo si la ventana activa es la del panel y no hay un menú ni un diálogo modal encima: Esc es suyo
@@ -571,6 +573,7 @@ class LienzoPLC(QWidget):
         rejilla.setSpacing(0)
         titulo = QLabel("PLC · Modbus TCP")
         titulo.setObjectName("tituloPLC")
+        titulo.setContentsMargins(0, 0, 0, 8)  # (el marco empieza por debajo del título, con un margen normal)
         rejilla.addWidget(titulo, 0, 0, 1, 2)
         # La cabecera del marco: con la conexión parada, los controles de la IP, el puerto y el esclavo (`edicion_destino`, los mismos widgets que
         # Configuración); con ella activa o sin proyecto, el texto de solo lectura (`destino`). Las dos páginas miden lo mismo: el marco no cambia.
@@ -592,8 +595,8 @@ class LienzoPLC(QWidget):
         self.unidad.setRange(0, 255)
         self.unidad.setAccessibleName("Esclavo ID")
         self.unidad.setToolTip("El ID de unidad configurado en el servidor Modbus; normalmente 1.")
-        self.puerto.setFixedWidth(92)
-        self.unidad.setFixedWidth(92)
+        self.puerto.fijar_digitos(5)
+        self.unidad.fijar_digitos(3)
         for elementos in ((QLabel("IP"), self.ip, QLabel(":"), self.puerto), (QLabel("Esclavo ID"), self.unidad)):
             fila = QHBoxLayout()
             fila.setContentsMargins(0, 0, 0, 0)
@@ -647,10 +650,10 @@ class LienzoPLC(QWidget):
         return resultado
 
     def _colocar_marco(self):
-        g, d, c = self.izq.geometry(), self.der.geometry(), self.destino.geometry()
+        g, d, c = self.izq.geometry(), self.der.geometry(), self.cabecera_marco.geometry()  # (la cabecera del marco, no el texto de dentro: su geometría es la de su página)
         x0, x1 = g.right() + 1 - self.ancho_interior, d.left() + self.ancho_interior
         y1 = max(g.bottom() if self.fila_izq.count() else 0, d.bottom() if self.fila_der.count() else 0, c.bottom()) + 5
-        self.marco.setGeometry(x0, c.top(), x1 - x0, y1 - c.top())
+        self.marco.setGeometry(x0, c.top() - 4, x1 - x0, y1 - c.top() + 4)  # (4 px de aire entre el borde y la cabecera)
         self.marco.raise_()
 
 
@@ -694,7 +697,40 @@ class _SinRueda:
 
 
 class _SpinConfiguracion(_SinRueda, QSpinBox):
-    pass
+    _digitos = 0
+
+    def fijar_digitos(self, digitos):
+        """Ancho justo para `digitos` cifras y las flechas (se recalcula si cambia la letra)."""
+        self._digitos = digitos
+        self._medir()
+
+    def _medir(self):
+        if self._digitos:
+            self.setFixedWidth(self.fontMetrics().horizontalAdvance("0" * self._digitos) + 40)
+
+    def changeEvent(self, evento):  # noqa: N802
+        super().changeEvent(evento)
+        if evento.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange) and self._digitos:
+            self._medir()
+
+
+class _CasillaCentrada(QWidget):
+    """La casilla «Usar» centrada en su celda; con la interfaz de la casilla (`isChecked`, `setChecked`, `toggled`) que usa la tabla."""
+    toggled = Signal(bool)
+
+    def __init__(self):
+        super().__init__()
+        self.casilla = QCheckBox()
+        self.casilla.toggled.connect(self.toggled)
+        caja = QHBoxLayout(self)
+        caja.setContentsMargins(0, 0, 0, 0)
+        caja.addWidget(self.casilla, 0, Qt.AlignmentFlag.AlignCenter)
+
+    def isChecked(self):  # noqa: N802
+        return self.casilla.isChecked()
+
+    def setChecked(self, valor):  # noqa: N802
+        self.casilla.setChecked(valor)
 
 
 class _ComboConfiguracion(_SinRueda, QComboBox):
@@ -868,7 +904,7 @@ class PanelES(QWidget):
         self.setFont(fuente)
         self.setStyleSheet(hoja_ventana + estilo_panel(escala))
         self.fila_alta.setFixedHeight(e["ALTO_CONTROL_COMPACTO"] + 8)
-        self.b_volver.setFixedSize(e["ALTO_CONTROL_COMPACTO"] + 2, e["ALTO_CONTROL_COMPACTO"])
+        self.b_volver.setFixedHeight(e["ALTO_CONTROL_COMPACTO"])
         self._filas_tabla(escala)
         self.lienzo.fijar_interior(self.ancho_interior, e["ALTO_CONTROL"])
         for lista in (self.lista_entradas, self.lista_salidas):
@@ -929,10 +965,11 @@ class PanelES(QWidget):
         cabecera = QHBoxLayout(fila_alta)
         cabecera.setContentsMargins(estilo.E3, 0, estilo.E3, 0)
         cabecera.setSpacing(estilo.E2)
-        self.b_volver = QPushButton("←")
-        self.b_volver.setFixedSize(estilo.ALTO_CONTROL_COMPACTO + 2, estilo.ALTO_CONTROL_COMPACTO)
-        self.b_volver.setToolTip("Volver al GRAFCET")
-        self.b_volver.setStyleSheet("font-size:18px; padding:0")
+        self.b_volver = QPushButton("Volver")  # de la familia de los botones de la barra: icono de flecha del mismo trazo y borde como «Reiniciar» (hoja de `cabeceraES`)
+        self.b_volver.setIcon(estilo.icono("volver", estilo.TINTA, tam=20))
+        self.b_volver.setIconSize(QSize(20, 20))
+        self.b_volver.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
+        self.b_volver.setToolTip("Volver al dibujo GRAFCET")
         self.b_volver.clicked.connect(self.volver)
         cabecera.addWidget(self.b_volver)
         titulo = QLabel("Asignación de E/S")
@@ -1007,6 +1044,7 @@ class PanelES(QWidget):
         # asignar con dos clics, además de arrastrar: variable y canal (o canal y variable); Esc o un clic en vacío cancela
         self._eleccion = None  # ("variable", id) o ("canal", área, dirección)
         self._filtro_eleccion = _FiltroEleccion(self)
+        self._filtro_puesto = False
         for lista in (self.lista_entradas, self.lista_salidas):
             lista.elegida.connect(self._clic_variable)
         self._estrecho = None
@@ -1072,8 +1110,8 @@ class PanelES(QWidget):
         self.timeout = _SpinConfiguracion()
         self.timeout.setRange(10, 10000)
         self.timeout.setSuffix(" ms")
-        self.puerto.setFixedWidth(110)
-        self.unidad.setFixedWidth(110)
+        self.puerto.fijar_digitos(5)
+        self.unidad.fijar_digitos(3)
         self.host.setToolTip("Copia la dirección del software que actúa como servidor Modbus. Debe coincidir con el servidor activo.")
         self.unidad.setToolTip("El ID de unidad configurado en el servidor Modbus; normalmente 1.")
         for texto, widget in (("IP (Host)", self.host), ("Puerto", self.puerto), ("Esclavo ID", self.unidad)):
@@ -1120,7 +1158,7 @@ class PanelES(QWidget):
         tiempos.addRow("Tiempo de espera", self.timeout)
         avanzado.addLayout(tiempos)
         self.tabla = QTableWidget(0, 8)
-        self.tabla.setHorizontalHeaderLabels(["Usar", "Variable", "Papel", "Tipo", "Área", "Dirección (base 0)", "Formato", "Escala"])
+        self.tabla.setHorizontalHeaderLabels(["Usar", "Variable", "Papel", "Tipo", "Área", "Dirección\n(base 0)", "Formato", "Escala"])
         self.tabla.horizontalHeader().setStretchLastSection(True)
         self.tabla.setMinimumHeight(150)
         self._filas_tabla()
@@ -1186,12 +1224,26 @@ class PanelES(QWidget):
 
     def _poner_eleccion(self, eleccion):
         antes, self._eleccion = self._eleccion, eleccion
-        if (antes is None) != (eleccion is None):
-            if eleccion is None:
-                QApplication.instance().removeEventFilter(self._filtro_eleccion)
-            else:
-                QApplication.instance().installEventFilter(self._filtro_eleccion)
+        self._vigilar_eleccion()
         self._pintar_eleccion()
+
+    def _vigilar_eleccion(self):
+        """El filtro de la aplicación solo está puesto con una elección pendiente y la vista de E/S a la vista."""
+        app = QApplication.instance()
+        quiere = self._eleccion is not None and self.isVisible()
+        if quiere and not self._filtro_puesto:
+            app.installEventFilter(self._filtro_eleccion)
+        elif not quiere and self._filtro_puesto:
+            app.removeEventFilter(self._filtro_eleccion)
+        self._filtro_puesto = quiere
+
+    def hideEvent(self, evento):  # noqa: N802
+        super().hideEvent(evento)
+        self._vigilar_eleccion()
+
+    def showEvent(self, evento):  # noqa: N802
+        super().showEvent(evento)
+        self._vigilar_eleccion()
 
     def _pintar_eleccion(self):
         for lista in (self.lista_entradas, self.lista_salidas):
@@ -1211,7 +1263,7 @@ class PanelES(QWidget):
         while w is not None:
             if isinstance(w, (TerminalES, QScrollBar)):
                 return True
-            lista = w.parentWidget()
+            lista = w.parentWidget() if isinstance(w, QWidget) else None
             if isinstance(lista, ListaVariables) and w is lista.viewport():
                 return lista.itemAt(pos) is not None
             w = lista
@@ -1574,7 +1626,7 @@ class PanelES(QWidget):
         for fila, v in enumerate(self.variables):
             s = mapa.get(v["id"])
             digital = v["type"]["kind"] == "bool"
-            usar = QCheckBox()
+            usar = _CasillaCentrada()
             usar.setChecked(s is not None)
             usar.setEnabled(v["type"]["kind"] in ("bool", "int", "decimal"))
             self.tabla.setCellWidget(fila, 0, usar)
@@ -1587,10 +1639,14 @@ class PanelES(QWidget):
             for clave in areas_variable(v):
                 area.addItem(AREAS[clave], clave)
             area.setCurrentIndex(area.findData(s.area) if s else 0)
+            area.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)  # (más estrecha: elide; el desplegable abierto, entero)
+            area.setMinimumContentsLength(14)
+            area.view().setMinimumWidth(max(QFontMetrics(area.font()).horizontalAdvance(t) for t in AREAS.values()) + 40)
             area.setToolTip("Entradas para sensores y salidas para actuadores. Copia la asignación del servidor Modbus.")
             self.tabla.setCellWidget(fila, 4, area)
             direccion = _SpinConfiguracion()
             direccion.setRange(0, 65535)
+            direccion.fijar_digitos(5)
             propuestas = ocupadas[area.currentData()]
             propuesta = next((n for n in range(65536) if n not in propuestas), 0)
             direccion.setValue(s.direccion if s else propuesta)

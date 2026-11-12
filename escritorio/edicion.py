@@ -1876,6 +1876,8 @@ class Edicion(QObject):
         if caja:  # doble clic en una acción: se edita (una orden sin completar, con el diálogo de la orden)
             if caja.get("forzado"):
                 self.configurar_orden(caja["id"])
+            elif self.datos_accion(caja["id"])["tipo"] == "continua" and hasattr(self.diagrama, "abrir_selector"):
+                self.desplegar_variable(caja)  # una continua (sin condición, evento ni asignación): solo falta su variable, y se elige sobre la propia acción
             else:
                 self.pedir_accion(caja["etapa"] or None, caja["id"])
             return True
@@ -2615,6 +2617,32 @@ class Edicion(QObject):
         return {"tipo": {"activation": "activacion", "deactivation": "desactivacion", "event": "evento"}[trig["kind"]],
                 "variable": nombre, "valor": valor, "evento": self._texto(trig.get("expressionRef"))}
 
+    def opciones_variable_accion(self, aid: str) -> list[tuple[str, Any, bool]]:
+        """Las opciones del campo de variable de la acción `aid` (las mismas que en Propiedades: `acciones.opciones_variable`)."""
+        from .acciones import opciones_variable
+        v = self.fuente_bloques()[0]
+        d = self.datos_accion(aid)
+        ofrecidas = [n for n, (papel, tipo) in v.items() if papel != "input" and (tipo == "bool" or d["tipo"] not in CONTINUAS)]
+        return opciones_variable(v, ofrecidas, d["variable"] if d["variable"] in v else "")
+
+    def desplegar_variable(self, caja: dict[str, Any]) -> None:
+        """Doble clic en una acción continua: un desplegable sobre su rectángulo con las variables que puede escribir y, al final, «Más propiedades…»."""
+        aid, sid = caja["id"], caja["etapa"] or None
+        d = self.datos_accion(aid)
+        self.diagrama.abrir_selector(caja["rect"], self.opciones_variable_accion(aid), d["variable"],
+                                     lambda nombre: self.elegir_variable_accion(aid, nombre), lambda: self.pedir_accion(sid, aid))
+
+    def elegir_variable_accion(self, aid: str, nombre: str) -> None:
+        """Se eligió una variable en el desplegable de la acción: el mismo cambio que en Propiedades (una operación de deshacer)."""
+        d = dict(self.datos_accion(aid))
+        if d["variable"] == nombre:
+            return
+        d["variable"] = nombre
+        motivo = self.cambiar_accion(aid, d)
+        if motivo:
+            self.mensaje = motivo
+            self.cambiado.emit()
+
     @staticmethod
     def resumen_accion(d: dict[str, str]) -> str:
         """Una línea para la lista de acciones de la etapa."""
@@ -3134,6 +3162,32 @@ class Edicion(QObject):
                 raise DiagnosticError(Diagnostic("D-FORMATO", f"nombre inválido: de 1 a {MAX_LABEL} caracteres"))
             self.ed.add_variable(nombre, papel, tipo or {"kind": "bool"})
         return self._atomico("crear variable", hacer)
+
+    def motivo_variable_nueva(self, nombre: str) -> str | None:
+        """Por qué `nombre` no puede ser el de una variable nueva (no válido o ya existe); None si sirve."""
+        if not nombre.strip():
+            return "Falta el nombre."
+        motivo = self.motivo_nombre(nombre)
+        if motivo:
+            return motivo
+        if not valid_label(nombre):
+            return f"nombre inválido: de 1 a {MAX_LABEL} caracteres"
+        if any(label_key(v["name"]) == label_key(nombre) for v in self.ed.model["variables"]):
+            return f"variable «{nombre}» ya existe en el ámbito"
+        return None
+
+    def nuevas_variables(self, filas: list[tuple[str, str, dict[str, Any]]]) -> list[str | None]:
+        """Crea varias variables (nombre, papel, tipo) como una sola operación de deshacer (pegar desde una hoja de cálculo). Las que no
+        sirven (nombre no válido o repetido, también entre ellas) no se crean; devuelve, por fila, su motivo o None si se creó."""
+        motivos: list[str | None] = [None] * len(filas)
+
+        def hacer() -> None:
+            for i, (nombre, papel, tipo) in enumerate(filas):
+                motivos[i] = self.motivo_variable_nueva(nombre)
+                if motivos[i] is None:
+                    self.ed.add_variable(nombre, papel, dict(tipo))
+        motivo = self._atomico("pegar variables", hacer)
+        return motivos if motivo is None else [motivo] * len(filas)
 
     def cambiar_variable(self, vid: str, nombre: str | None = None, **cambios: Any) -> str | None:
         """Cambia nombre (y el texto de sus usos), papel, tipo, unidad o valor inicial, en una sola operación."""

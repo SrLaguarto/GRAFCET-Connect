@@ -15,10 +15,11 @@ from __future__ import annotations
 from typing import Any
 
 import re
+import unicodedata
 
 from PySide6.QtCore import QEvent, QTimer, Qt, Signal, QSize
-from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics
-from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QSizePolicy,
+from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QKeySequence
+from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QMenu, QSizePolicy,
                                QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from . import estilo
@@ -35,6 +36,32 @@ TIPOS = (({"kind": "bool"}, "Booleana"), ({"kind": "int"}, "Entera"), ({"kind": 
 COLUMNAS = ["Nombre", "Papel", "Tipo"]
 SIN_NOMBRE = "Hay una variable sin nombre: escríbale un nombre o quítela"
 NARANJA = "#ffd2ad"
+ROJO_SUAVE = "#fbdcdc"  # el fondo de la celda con un error al pegar (con el texto en rojo)
+MARCADOR = "nueva variable…"  # el texto gris de la fila en blanco del final
+PAPELES_TEXTO = {"entrada": "input", "e": "input", "salida": "output", "s": "output", "memoria": "internal", "m": "internal"}
+TIPOS_TEXTO = {"booleana": {"kind": "bool"}, "bool": {"kind": "bool"}, "entera": {"kind": "int"}, "decimal": {"kind": "decimal", "scale": 2}}
+
+
+def _normal(texto: str) -> str:
+    """Para reconocer lo pegado: sin tildes, sin mayúsculas y sin espacios de más."""
+    sin = "".join(c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn")
+    return " ".join(sin.casefold().split())
+
+
+def parsear_pegado(texto: str) -> list[list[str]]:
+    """Lo pegado de una hoja de cálculo: una lista por fila con sus celdas (separadas por tabuladores o, si no hay, por «;»). Se ignoran las filas
+    vacías y la cabecera («Nombre / Papel / Tipo»)."""
+    filas = []
+    for linea in texto.splitlines():
+        sep = "\t" if "\t" in linea else ";" if ";" in linea else None
+        celdas = [c.strip().strip('"').strip() for c in (linea.split(sep) if sep else [linea])]
+        if any(celdas):
+            filas.append(celdas)
+    if filas:
+        c = [_normal(x) for x in filas[0]]
+        if c[0] == "nombre" and all(x in (y, "") for x, y in zip(c[1:], ("papel", "tipo"))):
+            filas.pop(0)
+    return filas
 def estilo_combo() -> str:
     return f"QComboBox {{ padding: 0px 1px 0px 3px; min-height: 0; font-size: {estilo.T_PEQUENA}px; }} QComboBox::drop-down {{ width: 14px; }}"
 
@@ -87,6 +114,10 @@ class _DelegadoCombo(QStyledItemDelegate):
         lo leen las pruebas y la ayuda emergente)."""
         super().initStyleOption(option, index)
         if not option.text:
+            if index.column() == 0 and 0 <= index.row() < len(self.panel._filas) and self.panel._filas[index.row()].get("blanca"):
+                option.text = MARCADOR  # (la fila en blanco del final: su texto de ayuda, en gris)
+                option.palette.setColor(option.palette.ColorRole.Text, QColor(estilo.TINTA_2))
+                option.palette.setColor(option.palette.ColorRole.HighlightedText, QColor(estilo.TINTA_2))
             return
         if index.column() == 0:
             margen = 2 * (QApplication.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1) + 2
@@ -148,6 +179,10 @@ class _Tabla(QTableWidget):
     con el editor de una celda abierto, Supr es del editor (borra texto)."""
 
     suprimir = Signal()
+    pegar = Signal()
+
+    def _es_pegar(self, ev: Any) -> bool:
+        return ev.matches(QKeySequence.StandardKey.Paste) and self.state() != QAbstractItemView.State.EditingState
 
     def _es_supr(self, ev: Any) -> bool:
         solo = (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.KeypadModifier)  # el Supr del teclado numérico lleva el segundo
@@ -156,7 +191,7 @@ class _Tabla(QTableWidget):
 
     def event(self, ev: Any) -> bool:  # noqa: N802
         # Supr es también el atajo «Borrar la selección» de la ventana (el dibujo): con el foco aquí es de la tabla
-        if ev.type() == QEvent.Type.ShortcutOverride and self._es_supr(ev):
+        if ev.type() == QEvent.Type.ShortcutOverride and (self._es_supr(ev) or self._es_pegar(ev)):  # (Ctrl+V es también el pegar del dibujo)
             ev.accept()
             return True
         return super().event(ev)
@@ -165,6 +200,10 @@ class _Tabla(QTableWidget):
         if self._es_supr(ev):
             ev.accept()
             self.suprimir.emit()
+            return
+        if self._es_pegar(ev):
+            ev.accept()
+            self.pegar.emit()
             return
         super().keyPressEvent(ev)
 
@@ -190,9 +229,10 @@ class PanelVariables(QWidget):
         super().__init__()
         self.e: Any = None
         self._e_vista: Any = None
-        self._filas: list[dict[str, Any]] = []  # una por fila: {id, papel, tipo, n}; id es None en las que no tienen nombre
-        self._pend: list[dict[str, Any]] = []   # las filas sin nombre (solo de la interfaz)
+        self._filas: list[dict[str, Any]] = []  # una por fila: {id, papel, tipo, n, …}; id es None en las que no tienen nombre
+        self._pend: list[dict[str, Any]] = []   # las filas sin nombre o con errores al pegar (solo de la interfaz)
         self._n = 0
+        self._blanca = self._fila_nueva(blanca=True)  # la fila en blanco del final (con «nueva variable…»): no cuenta como variable ni como fila pendiente
         self._clave = ""
         self._llenando = False
         self._rechazado = False  # el último nombre confirmado se rechazó (`_confirmar_edicion`)
@@ -205,6 +245,9 @@ class PanelVariables(QWidget):
         self.tabla = _Tabla(0, len(COLUMNAS))
         self.tabla.setHorizontalHeader(CabeceraCompacta(Qt.Orientation.Horizontal, self.tabla))  # (su texto, sin márgenes de más: «Nombre» entero)
         self.tabla.suprimir.connect(self.quitar_seleccion)
+        self.tabla.pegar.connect(self.pegar_portapapeles)
+        self.tabla.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tabla.customContextMenuRequested.connect(self._menu_tabla)
         self.tabla.setStyleSheet(self._hoja_tabla())
         self.fuente = QFont(estilo.FUENTE)  # (con la familia explícita: al medir, la tabla aún no tiene la letra de la hoja de estilo)
         self.fuente.setPixelSize(estilo.T_PEQUENA)  # letra algo menor: el panel es estrecho
@@ -357,23 +400,24 @@ class PanelVariables(QWidget):
         if e is None or self.tabla.state() == QAbstractItemView.State.EditingState:
             return
         vs = e.variables()
+        blanca = [self._blanca] if self.isEnabled() else []  # (al simular, el panel está desactivado y no enseña la fila en blanco)
         clave = repr([(v["id"], v["name"], v["role"], v["type"]) for v in vs]
-                     + [(f["n"], f["papel"], f["tipo"]) for f in self._pend])
+                     + [(f["n"], f["papel"], f["tipo"], f["nombre"], f["txt"], f["err"]) for f in self._pend + blanca])
         if clave == self._clave:  # nada cambió: no se rehace la tabla (se hace en cada clic del dibujo)
             return
         self._clave = clave
         actual = self._filas[self.tabla.currentRow()]["id"] if 0 <= self.tabla.currentRow() < len(self._filas) else None
         self._llenando = True
         self.contexto.fijar([v["name"] for v in vs])
-        self._filas = [{"id": v["id"], "papel": v["role"], "tipo": v["type"], "n": 0} for v in vs] + self._pend
+        self._filas = [{"id": v["id"], "papel": v["role"], "tipo": v["type"], "n": 0} for v in vs] + self._pend + blanca
         self.tabla.setRowCount(len(self._filas))
         for r, f in enumerate(self._filas):
-            nombre = next((v["name"] for v in vs if v["id"] == f["id"]), "")
+            nombre = next((v["name"] for v in vs if v["id"] == f["id"]), f.get("nombre", ""))
             self.tabla.setItem(r, 0, QTableWidgetItem(nombre))
-            self.tabla.item(r, 0).setToolTip(nombre)  # el nombre entero, aunque la celda lo elida
+            self.tabla.item(r, 0).setToolTip(f.get("err", {}).get(0) or ("Escriba un nombre para crear una variable" if f.get("blanca") else nombre))  # el nombre entero, aunque la celda lo elida
             for c in (1, 2):
                 it = QTableWidgetItem(self.texto(r, c))
-                it.setToolTip(f"{it.text()} · clic para cambiarlo")  # (la celda lo enseña abreviado: aquí va entero)
+                it.setToolTip(f.get("err", {}).get(c) or f"{it.text()} · clic para cambiarlo")  # (la celda lo enseña abreviado: aquí va entero)
                 self.tabla.setItem(r, c, it)
         self._llenando = False
         if actual is not None and actual in [f["id"] for f in self._filas]:
@@ -426,6 +470,8 @@ class PanelVariables(QWidget):
     def texto(self, r: int, c: int) -> str:
         """Lo que se ve en la celda de la fila r: el papel o el tipo en palabras."""
         f = self._filas[r]
+        if c in f.get("err", {}) and c in f.get("txt", {}):  # (un papel o un tipo pegado que no se reconoce: se ve tal cual, en rojo)
+            return f["txt"][c]
         return dict(PAPELES).get(f["papel"], f["papel"]) if c == 1 else nombre_tipo(f["tipo"])
 
     def dato_actual(self, r: int, c: int) -> Any:
@@ -455,7 +501,7 @@ class PanelVariables(QWidget):
         self._diferir(self._reconstruir)
 
     def _clic(self, index: Any) -> None:
-        if index.column() in (1, 2):
+        if index.column() in (1, 2) or (index.column() == 0 and 0 <= index.row() < len(self._filas) and self._filas[index.row()].get("blanca")):
             self.tabla.editItem(self.tabla.item(index.row(), index.column()))
 
     # -- parpadeo ---------------------------------------------------------------------------------
@@ -474,7 +520,9 @@ class PanelVariables(QWidget):
             for c in range(3):
                 it = self.tabla.item(r, c)
                 if it is not None:
-                    it.setBackground(QBrush(QColor(NARANJA)) if on else QBrush())
+                    malo = c in f.get("err", {})
+                    it.setBackground(QBrush(QColor(NARANJA)) if on else QBrush(QColor(ROJO_SUAVE)) if malo else QBrush())
+                    it.setForeground(QBrush(QColor(COL["err"])) if malo else QBrush())
         self._llenando = False
 
     # -- cambios ------------------------------------------------------------------------------------
@@ -500,7 +548,9 @@ class PanelVariables(QWidget):
     def _cambiar(self, f: dict[str, Any], **cambios: Any) -> None:
         if f["id"] is None:  # sin nombre: solo se recuerda para cuando se cree
             f["papel"] = cambios.get("role", f["papel"])
+            f["err"].pop(1, None)
             self._clave = ""
+            self._intentar_pegada(f)
             return
         self._resultado(self.e.cambiar_variable(f["id"], **cambios), f)
 
@@ -509,7 +559,9 @@ class PanelVariables(QWidget):
             return  # el que ya tiene (también el de un fichero antiguo)
         if f["id"] is None:
             f["tipo"] = dict(tipo)
+            f["err"].pop(2, None)
             self._clave = ""
+            self._intentar_pegada(f)
             return
         # al cambiar de tipo, el valor inicial vuelve a 0 (cambiar_variable lo hace siempre)
         self._resultado(self.e.cambiar_variable(f["id"], type=dict(tipo)), f)
@@ -521,16 +573,31 @@ class PanelVariables(QWidget):
         if f["id"] is not None:
             self._resultado(self.e.cambiar_variable(f["id"], nombre=texto), f)
             return
+        if f.get("pegada"):  # una fila pegada con errores: se corrige su nombre y, si ya no tiene ninguno, se crea
+            f["nombre"] = texto
+            f["err"].pop(0, None)
+            self._clave = ""
+            self._intentar_pegada(f)
+            self._diferir(self._reconstruir)
+            return
         if not texto:  # sigue sin nombre
             return
-        pos = self._pend.index(f)
-        self._pend.remove(f)  # se crea en el modelo: deja de ser una fila de la interfaz
+        blanca = f.get("blanca")
+        if blanca:
+            self._blanca = self._fila_nueva(blanca=True)  # (la de ahora se crea; otra en blanco queda debajo)
+        else:
+            pos = self._pend.index(f)
+            self._pend.remove(f)  # se crea en el modelo: deja de ser una fila de la interfaz
         motivo = self.e.nueva_variable(texto, f["papel"], dict(f["tipo"]))
         if motivo is None:
             f["id"] = next(v["id"] for v in self.e.ed.model["variables"] if v["name"] == texto)
             self._resultado(None)
+            self._diferir(self._reconstruir)
             return
-        self._pend.insert(pos, f)
+        if blanca:
+            self._blanca = f
+        else:
+            self._pend.insert(pos, f)
         self._rechazado = True
         self.msg.setText(motivo)
         self.msg.setStyleSheet(f"color: {COL['err']}")
@@ -568,16 +635,16 @@ class PanelVariables(QWidget):
         que se escribe un nombre válido."""
         if self._confirmar_edicion():
             return  # el nombre escrito se rechazó: se ve el motivo y la fila vuelve a quedar en blanco con el cursor (como al pulsar Intro); no se añade otra
-        self._n += 1
-        f = {"id": None, "papel": papel, "tipo": {"kind": "bool"}, "n": self._n}
+        f = self._fila_nueva(papel)
         self._pend.append(f)
         self.msg.setText("")
         self.msg.setStyleSheet("")
         self._reconstruir()
-        self.tabla.selectRow(self.tabla.rowCount() - 1)
+        r = self._filas.index(f)  # (la fila en blanco queda debajo)
+        self.tabla.selectRow(r)
         if self.isVisible():  # se escribe el nombre directamente
             self.tabla.setFocus()
-            self.tabla.editItem(self.tabla.item(self.tabla.rowCount() - 1, 0))
+            self.tabla.editItem(self.tabla.item(r, 0))
 
     def quitar(self) -> None:
         """El botón «Quitar»: la variable de la fila actual."""
@@ -599,6 +666,8 @@ class PanelVariables(QWidget):
         rechazadas: list[tuple[dict[str, Any], str]] = []
         sin_nombre = False
         for f in filas:
+            if f.get("blanca"):
+                continue
             if f["id"] is None:  # sin nombre: no está en el modelo, solo se quita la fila
                 self._pend.remove(f)
                 sin_nombre = True
@@ -614,6 +683,81 @@ class PanelVariables(QWidget):
             self._resultado(None)
         if sin_nombre:
             self._reconstruir()
+
+    def _fila_nueva(self, papel: str = "input", blanca: bool = False) -> dict[str, Any]:
+        """Una fila de la interfaz (sin variable en el modelo): booleana y, por omisión, entrada. `nombre` y `txt` (papel o tipo pegados que no se
+        reconocen) son lo que se ve en sus celdas; `err`, el motivo de cada celda con un error (0 nombre, 1 papel, 2 tipo)."""
+        self._n += 1
+        return {"id": None, "papel": papel, "tipo": {"kind": "bool"}, "n": self._n, "nombre": "", "txt": {}, "err": {}, "blanca": blanca, "pegada": False}
+
+    def changeEvent(self, ev: Any) -> None:  # noqa: N802
+        super().changeEvent(ev)
+        if ev.type() == QEvent.Type.EnabledChange and self.e is not None:
+            self._reconstruir()  # (al simular, sin la fila en blanco)
+
+    # -- pegar desde una hoja de cálculo ------------------------------------------------------------
+    def _menu_tabla(self, pos: Any) -> None:
+        menu = QMenu(self.tabla)
+        pegar = menu.addAction("Pegar variables")
+        pegar.setEnabled(self.e is not None and self.isEnabled() and bool(QApplication.clipboard().text().strip()))
+        pegar.triggered.connect(self.pegar_portapapeles)
+        menu.exec(self.tabla.viewport().mapToGlobal(pos))
+
+    def pegar_portapapeles(self) -> str:
+        return self.pegar_texto(QApplication.clipboard().text())
+
+    def pegar_texto(self, texto: str) -> str:
+        """Crea una variable por fila del texto pegado (`Nombre[, Papel[, Tipo]]`, separados por tabuladores o «;») en un solo paso de deshacer. Las
+        filas con algún error quedan en la tabla, con la celda en rojo y su motivo en la ayuda, hasta que se corrijan. Devuelve el resumen."""
+        if self.e is None or not self.isEnabled():
+            return ""
+        self._confirmar_edicion()
+        filas = parsear_pegado(texto)
+        if not filas:
+            return ""
+        datos = []
+        for celdas in filas:
+            celdas = (celdas + ["", ""])[:3]
+            f = self._fila_nueva()
+            f["pegada"], f["nombre"] = True, celdas[0]
+            for c, bruto, tabla, por_defecto, que, ayuda in (
+                    (1, celdas[1], PAPELES_TEXTO, "input", "Papel", "Use Entrada, Salida o Memoria."),
+                    (2, celdas[2], TIPOS_TEXTO, {"kind": "bool"}, "Tipo", "Use Booleana, Entera o Decimal.")):
+                valor = por_defecto
+                if bruto and _normal(bruto) in tabla:
+                    valor = tabla[_normal(bruto)]
+                elif bruto:
+                    f["txt"][c] = bruto
+                    f["err"][c] = f"{que} no reconocido: «{bruto}». {ayuda}"
+                f["papel" if c == 1 else "tipo"] = valor
+            datos.append(f)
+        validas = [f for f in datos if not f["err"]]
+        motivos = iter(self.e.nuevas_variables([(f["nombre"], f["papel"], f["tipo"]) for f in validas]))
+        for f in datos:
+            motivo = next(motivos) if f in validas else self.e.motivo_variable_nueva(f["nombre"])
+            if motivo:
+                f["err"][0] = motivo
+        con_errores = [f for f in datos if f["err"]]
+        self._pend.extend(con_errores)
+        n, c, e = len(datos), len(datos) - len(con_errores), len(con_errores)
+        resumen = (f"{n} fila{'s' if n != 1 else ''} pegada{'s' if n != 1 else ''}: {c} creada{'s' if c != 1 else ''}"
+                   + (f", {e} con errores (en rojo)" if e else ""))
+        self.msg.setText(resumen)
+        self.msg.setStyleSheet("")
+        self._reconstruir()
+        if con_errores:
+            self.tabla.scrollToItem(self.tabla.item(self._filas.index(con_errores[0]), 0))
+        return resumen
+
+    def _intentar_pegada(self, f: dict[str, Any]) -> None:
+        """Una fila pegada con errores se crea en cuanto ya no tiene ninguno."""
+        if not f.get("pegada") or f["err"] or f not in self._pend:
+            return
+        motivo = self.e.nueva_variable(f["nombre"], f["papel"], dict(f["tipo"])) if f["nombre"] else "Falta el nombre."
+        if motivo:
+            f["err"][0] = motivo
+            return
+        self._pend.remove(f)
 
     def sin_nombre(self) -> int:
         """Cuántas filas siguen sin nombre."""

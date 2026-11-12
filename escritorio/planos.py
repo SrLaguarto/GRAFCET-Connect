@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt,QSize,QTimer,QEvent,QPointF,QRect,QRectF
 from PySide6.QtGui import QAction,QIcon,QPixmap,QPainter,QPen,QColor
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QToolBar,QToolButton,
-    QSplitter,QListView,QListWidget,QListWidgetItem,QComboBox,QMenu,QMessageBox,QInputDialog,QDoubleSpinBox,QScrollArea,QFormLayout,QPushButton,QStyledItemDelegate,QStyle)
+    QSplitter,QListView,QListWidget,QListWidgetItem,QComboBox,QMenu,QMessageBox,QInputDialog,QDoubleSpinBox,QScrollArea,QFormLayout,QPushButton,QStyledItemDelegate,QStyle,QSizePolicy)
 from . import estilo
 from .paneles import TituloSeccion
 from .bloques import FlowLayout
@@ -70,8 +70,8 @@ class PaginaPlanos(QWidget):
         cab=QHBoxLayout();self.estado=QLabel('EDICIÓN DE PLANO');self.estado.setStyleSheet(estilo.estilo_chip('editar'));self.estado.setFixedHeight(estilo.ALTO_CONTROL-6);self.estado.setObjectName('chipModo')
         self.titulo=QLabel('Planos');self.titulo.setStyleSheet(f'color:{estilo.TINTA};font-weight:700;font-size:{estilo.T_TITULO}px');self.titulo.setMinimumHeight(estilo.ALTO_CONTROL);cab.setSpacing(estilo.E3);cab.addWidget(self.estado);cab.addWidget(self.titulo,1);raiz.addLayout(cab)
         self.divisor=QSplitter(Qt.Orientation.Horizontal);raiz.addWidget(self.divisor,1)
-        lateral=QWidget();l=QVBoxLayout(lateral);l.setContentsMargins(0,0,3,0);l.addWidget(TituloSeccion('Hojas'))
-        b_hoja=QToolButton();b_hoja.setDefaultAction(self.a_hoja);self.b_hoja=b_hoja
+        lateral=QWidget();l=QVBoxLayout(lateral);l.setContentsMargins(0,4,3,0);l.setSpacing(estilo.E2);titulo_hojas=TituloSeccion('Hojas');titulo_hojas.setMinimumHeight(estilo.ALTO_CONTROL-6);titulo_hojas.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Fixed);l.addWidget(titulo_hojas)
+        b_hoja=QToolButton();b_hoja.setDefaultAction(self.a_hoja);self.b_hoja=b_hoja;b_hoja.setMinimumHeight(estilo.ALTO_CONTROL);b_hoja.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Fixed)
         self.barra_hoja.removeAction(self.a_hoja)
         self.lista=QListWidget();self.lista.setViewMode(QListView.ViewMode.ListMode);self.lista.setItemDelegate(MiniaturaHoja(self.lista));self.lista.installEventFilter(self);self.lista.setFlow(QListView.Flow.TopToBottom);self.lista.setWrapping(False);self.lista.setMovement(QListView.Movement.Static);self.lista.setResizeMode(QListView.ResizeMode.Adjust);self.lista.setSpacing(0);self.lista.setIconSize(QSize(116,82));self.lista.setWordWrap(True);self.lista.setMinimumWidth(140);self.lista.setMaximumWidth(205);self.lista.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.lista.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);l.addWidget(self.lista);l.addWidget(b_hoja);l.addStretch(1)
         self.scroll_hojas=QScrollArea();self.scroll_hojas.setFocusPolicy(Qt.FocusPolicy.NoFocus);self.scroll_hojas.setWidgetResizable(True);self.scroll_hojas.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.scroll_hojas.setMinimumWidth(150);self.scroll_hojas.setMaximumWidth(215);self.scroll_hojas.setWidget(lateral);self.divisor.addWidget(self.scroll_hojas);self.cuerpo=QWidget();self.layout_editor=QVBoxLayout(self.cuerpo);self.layout_editor.setContentsMargins(0,0,0,0)
@@ -339,6 +339,7 @@ class PaginaPlanos(QWidget):
                 dx,dy=desplazamiento_rueda(event);a=self.editor.area;h,v=a.horizontalScrollBar(),a.verticalScrollBar();h.setValue(h.value()-dx);v.setValue(v.value()-dy);return True
             factor=factor_zoom_rueda(event)
             if factor==1.0:return True
+            if self.editor.documento is None:return True  # (sin hoja cargada no hay punto que conservar)
             area=self.editor.area;vista=self.editor.vista;local=event.position()
             if obj is area.viewport():local=local-vista.pos()
             punto=vista.punto_hoja(local);pantalla=local+vista.pos()
@@ -351,7 +352,7 @@ class PaginaPlanos(QWidget):
             self.zoom(max(.2,1+event.value()));return True  # el pellizco de un panel táctil (macOS, Linux)
         if event.type()==QEvent.Type.MouseButtonPress and event.button()==Qt.MouseButton.LeftButton and obj is self.editor.vista:
             vista=self.editor.vista;t=vista.textos
-            if t and (vista.nuevo_texto or (vista.zona and t.b_zona.isChecked()) or any(i.contains(i.mapFromScene(vista.punto_hoja(event.position()))) for i in t.items)):return False
+            if t and vista.documento is not None and (vista.nuevo_texto or (vista.zona and t.b_zona.isChecked()) or any(i.contains(i.mapFromScene(vista.punto_hoja(event.position()))) for i in t.items)):return False
         if event.type()==QEvent.Type.MouseButtonPress and (event.button()==Qt.MouseButton.MiddleButton or (event.button()==Qt.MouseButton.LeftButton and (not self.editor.documento or not any(c.destino(0).contains(self.editor.vista.punto_hoja(event.position())) for c in self.editor.documento.capas)))):
             if event.button()==Qt.MouseButton.LeftButton and self.editor.vista.textos:self.editor.vista.textos.elegir(-1);self.editor.vista.seleccionado=False;self.editor.vista.update()
             a=self.editor.area;self.pan=(event.globalPosition(),a.horizontalScrollBar().value(),a.verticalScrollBar().value());self.editor.vista.setCursor(Qt.CursorShape.ClosedHandCursor);return True

@@ -1520,7 +1520,7 @@ class Interfaz(unittest.TestCase):
         for nombre, papel, tipo in (("I00", "input", "bool"), ("I01", "input", "bool"), ("I02", "input", "bool"),
                                     ("Q00", "output", "bool"), ("Q01", "output", "bool"), ("CT", "internal", "int")):
             pv.nueva()
-            fila = pv.tabla.rowCount() - 1
+            fila = pv.tabla.rowCount() - 2  # (la fila en blanco del final queda debajo)
             pv.tabla.item(fila, 0).setText(nombre)  # como al escribir en la tabla
             for col, valor in ((1, papel), (2, {"kind": tipo})):
                 pv.elegir(fila, col, valor)  # lo que hace el desplegable de la celda
@@ -1600,7 +1600,7 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         pv = w.variables
         nombres = [pv.tabla.item(r, 0).text() for r in range(pv.tabla.rowCount())]
-        self.assertEqual(nombres, ["marcha", "paro"])
+        self.assertEqual(nombres, ["marcha", "paro", ""], "y la fila en blanco del final")
         self.assertEqual(pv.tabla.columnCount(), 3, "Nombre, Papel y Tipo")
         pv.tabla.item(0, 0).setText("Marcha")
         self.assertEqual(e.texto_condicion(ts["t1"]), "Marcha", "el renombrado llega a la receptividad")
@@ -2835,7 +2835,7 @@ class Interfaz(unittest.TestCase):
         e, pv = w.edicion, w.variables
         n = len(e.ed.undo_stack)
         pv.nueva()
-        self.assertEqual((pv.tabla.rowCount(), pv.tabla.item(0, 0).text(), pv.sin_nombre()), (1, "", 1))
+        self.assertEqual((pv.tabla.rowCount(), pv.tabla.item(0, 0).text(), pv.sin_nombre()), (2, "", 1), "la fila nueva y, debajo, la en blanco")
         self.assertEqual((e.ed.model["variables"], len(e.ed.undo_stack)), ([], n), "no está en el modelo")
         # no válido: demasiado largo
         pv.tabla.item(0, 0).setText("x" * 300)
@@ -2857,7 +2857,7 @@ class Interfaz(unittest.TestCase):
         e.rehacer()
         # repetido
         pv.nueva()
-        self.assertEqual(pv.tabla.rowCount(), 2)
+        self.assertEqual(pv.tabla.rowCount(), 3)
         pv.tabla.item(1, 0).setText("Cuenta")
         self.assertEqual((len(e.ed.model["variables"]), pv.tabla.item(1, 0).text(), pv.sin_nombre()), (1, "", 1))
         self.assertIn("ya existe", pv.msg.text().lower())
@@ -2876,12 +2876,12 @@ class Interfaz(unittest.TestCase):
         n = len(e.ed.undo_stack)
         pv.tabla.selectRow(1)
         pv.quitar()
-        self.assertEqual((pv.tabla.rowCount(), pv.sin_nombre(), len(e.ed.undo_stack)), (1, 0, n))
+        self.assertEqual((pv.tabla.rowCount(), pv.sin_nombre(), len(e.ed.undo_stack)), (2, 0, n))
         # al empezar otra edición, las filas sin nombre de la anterior no pasan
         pv.nueva()
         w.edicion.ed.dirty = False
         w.nuevo()
-        self.assertEqual((w.variables.sin_nombre(), w.variables.tabla.rowCount()), (0, 0))
+        self.assertEqual((w.variables.sin_nombre(), w.variables.tabla.rowCount()), (0, 1), "solo la fila en blanco")
 
     def test_SEDI81_parpadeo_naranja_en_los_errores(self):
         """REQ-EDT-09: un rechazo, un intento de simular con errores, un clic en Diagnósticos (también en el aviso de un
@@ -2954,9 +2954,9 @@ class Interfaz(unittest.TestCase):
         pv.avisar_sin_nombre()
         (clave,) = pv.parpadeo.ids
         self.assertTrue(clave.startswith("sin-nombre:"))
-        self.assertEqual(pv.tabla.item(pv.tabla.rowCount() - 1, 0).background().color().name(), "#ffd2ad")
+        self.assertEqual(pv.tabla.item(pv.tabla.rowCount() - 2, 0).background().color().name(), "#ffd2ad")
         pv.parpadeo.paso()
-        self.assertNotEqual(pv.tabla.item(pv.tabla.rowCount() - 1, 0).background().color().name(), "#ffd2ad")
+        self.assertNotEqual(pv.tabla.item(pv.tabla.rowCount() - 2, 0).background().color().name(), "#ffd2ad")
         # un nombre repetido en una fila existente: parpadea esa fila
         e.nueva_variable("zz")
         pv.tabla.item(0, 0).setText("zz")
@@ -3944,7 +3944,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(pv.b_quitar.text(), "Eliminar")
         for papel, nombre in (("input", "Ent"), ("output", "Sal"), ("internal", "Mem")):
             pv.b_nuevas[papel].click()
-            fila = pv.tabla.rowCount() - 1
+            fila = pv.tabla.rowCount() - 2  # (la fila en blanco del final queda debajo)
             self.assertEqual((pv.tabla.item(fila, 0).text(), pv.tabla.item(fila, 1).text(), pv.tabla.item(fila, 2).text()),
                              ("", dict(PAPELES_V)[papel], "Booleana"))
             pv.tabla.item(fila, 0).setText(nombre)
@@ -3983,7 +3983,7 @@ class Interfaz(unittest.TestCase):
             n = len(e.ed.undo_stack)
             QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
             self.assertEqual([v["name"] for v in e.ed.model["variables"]], ["a", "c"])
-            self.assertEqual((len(e.ed.undo_stack), pv.tabla.rowCount(), pv.msg.text()), (n + 1, 2, ""))
+            self.assertEqual((len(e.ed.undo_stack), pv.tabla.rowCount(), pv.msg.text()), (n + 1, 3, ""), "dos variables y la fila en blanco")
             pregunta.assert_not_called()
             aviso.assert_not_called()
             # sin ninguna fila seleccionada no quita nada
@@ -4087,9 +4087,9 @@ class Interfaz(unittest.TestCase):
         pv.nueva()
         self.assertEqual(pv.sin_nombre(), 1)
         pv.tabla.setFocus()
-        pv.tabla.selectRow(pv.tabla.rowCount() - 1)
+        pv.tabla.selectRow(pv.tabla.rowCount() - 2)  # (la fila en blanco del final queda debajo)
         QTest.keyClick(pv.tabla, Qt.Key.Key_Delete)
-        self.assertEqual((pv.sin_nombre(), pv.tabla.rowCount(), len(e.ed.undo_stack)), (0, 2, n))
+        self.assertEqual((pv.sin_nombre(), pv.tabla.rowCount(), len(e.ed.undo_stack)), (0, 3, n))
         self.assertEqual(pv.msg.text(), "")
 
     def test_SEDI264_supr_solo_actua_al_editar(self):
@@ -4790,7 +4790,7 @@ class Interfaz(unittest.TestCase):
         d = self.anadir_accion(ids["1"], "activacion")
         pv = w.variables
         pv.nueva("output")
-        fila = pv.tabla.rowCount() - 1
+        fila = pv.tabla.rowCount() - 2  # (la fila en blanco del final queda debajo)
         pv.tabla.item(fila, 0).setText("Nueva")
         self.assertIn("Nueva", d.ofrecidas())
         self.assertTrue(any(d.variable.itemData(i) == "Nueva" for i in range(d.variable.count())), "en el desplegable, al momento")
@@ -4806,7 +4806,7 @@ class Interfaz(unittest.TestCase):
         self.assertIsNone(e.cambiar_variable(vid, role="internal"))
         self.assertIn("Otra", d.ofrecidas())
         pv.nueva("output")
-        pv.tabla.item(pv.tabla.rowCount() - 1, 0).setText("Q7")
+        pv.tabla.item(pv.tabla.rowCount() - 2, 0).setText("Q7")
         self.assertIn("Q7", d.ofrecidas())
         self.poner_tipo(d, "continua")
         self.assertNotIn("Otra", d.ofrecidas(), "una continua solo escribe booleanas")

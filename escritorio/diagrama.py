@@ -23,7 +23,7 @@ from grafcet.routing import NORMAL, SENTIDO, TALLO_T, enlaces, orientacion, punt
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, QPainter, QPainterPath, QPen,
                            QPixmap, QRegion)
-from PySide6.QtWidgets import (QApplication, QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QListWidget, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QListWidget, QHBoxLayout, QLabel,
                                QMenu, QProxyStyle, QPushButton, QStyle, QToolButton, QWidget)
 
 from . import estilo
@@ -1345,6 +1345,36 @@ class _BarraZoom(QFrame):
         return resultado
 
 
+MAS_PROPIEDADES = "@mas-propiedades"  # el dato de la última opción del desplegable sobre una acción
+
+
+class SelectorAccion(QComboBox):
+    """El desplegable que sale sobre una acción del dibujo (doble clic en una continua). Se cierra solo al elegir, con Esc, con un clic fuera o al
+    perder el foco; `cerrado` avisa de ello para quitarlo."""
+    cerrado = Signal()
+    _reclamado = False
+
+    def hidePopup(self) -> None:  # noqa: N802
+        super().hidePopup()
+        QTimer.singleShot(0, self.cerrado.emit)
+
+    def keyPressEvent(self, ev: Any) -> None:  # noqa: N802
+        if ev.key() == Qt.Key.Key_Escape:
+            ev.accept()
+            self.cerrado.emit()
+            return
+        super().keyPressEvent(ev)
+
+    def focusOutEvent(self, ev: Any) -> None:  # noqa: N802
+        super().focusOutEvent(ev)
+        r = ev.reason()
+        if r in (Qt.FocusReason.MouseFocusReason, Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason, Qt.FocusReason.ActiveWindowFocusReason):
+            QTimer.singleShot(0, self.cerrado.emit)  # (un clic en otro sitio, Tab o cambiar de ventana)
+        elif r == Qt.FocusReason.OtherFocusReason and not self._reclamado:  # el dibujo repinta y se queda el foco: se recupera una vez
+            self._reclamado = True
+            QTimer.singleShot(0, lambda: self.setFocus(Qt.FocusReason.OtherFocusReason) if self.isVisible() else None)
+
+
 class VistaDiagrama(QGraphicsView):
     """Vista del dibujo. Se ajusta a la ventana hasta que se hace zoom; desde entonces el zoom se mantiene al
     refrescar y solo «Centrar todo» (`ajustar`: Ctrl+0, o el doble clic al simular) vuelve a encajar y centrar todo lo
@@ -1485,6 +1515,7 @@ class VistaDiagrama(QGraphicsView):
     def modo_edicion(self, on: bool, controlador: Any = None, conservar: bool = False) -> None:
         """Al editar: sin arrastre de mano, rejilla, el zoom manual y un dibujo que no se recoloca al añadir elementos (la
         vista conserva lo que se ve aunque la escena cambie de tamaño); al simular, el comportamiento de siempre."""
+        self.cerrar_selector()
         self.controlador = controlador if on else None
         self.rejilla = on
         self.area_minima = QRectF(0, 0, 1100, 760) if on else None  # solo da la zona de un dibujo vacío y el origen al abrir
@@ -2119,6 +2150,7 @@ class VistaDiagrama(QGraphicsView):
     def zoom(self, factor: float, ancla: QPointF | None = None) -> None:
         """Zoom manual: queda fijo hasta «Centrar todo» o doble clic. El punto de la vista `ancla` (por defecto el
         centro) no se mueve: el que tiene debajo del dibujo sigue debajo."""
+        self.cerrar_selector()
         k = min(max(self.escala() * factor, ZOOM_MIN), ZOOM_MAX) / self.escala()
         self._manual = True
         self._origen = False
@@ -2129,6 +2161,56 @@ class VistaDiagrama(QGraphicsView):
         self._actualizar_escena()
         self._situar(p, c)
         self._notificar()
+
+    def abrir_selector(self, rect: Any, opciones: list[tuple[str, Any, bool]], actual: str, al_elegir: Any, al_mas: Any) -> None:
+        """Un desplegable abierto sobre el rectángulo `rect` (x, y, ancho, alto del dibujo) con las `opciones` (texto, dato, habilitada), un
+        separador y «Más propiedades…». Elegir una llama a `al_elegir(dato)` y cierra; «Más propiedades…», a `al_mas()`. Esc, un clic fuera, desplazar
+        o hacer zoom lo cierran sin cambiar nada."""
+        self.cerrar_selector()
+        x, y, w, h = rect
+        r = self.mapFromScene(QRectF(x, y, w, h)).boundingRect()
+        cb = SelectorAccion(self.viewport())
+        cb.setAccessibleName("Variable de la acción")
+        cb.setToolTip("Variable de la acción")
+        for texto, dato, habilitada in opciones:
+            cb.addItem(texto, dato)
+            if not habilitada:
+                cb.model().item(cb.count() - 1).setEnabled(False)
+        cb.insertSeparator(cb.count())
+        cb.addItem("Más propiedades…", MAS_PROPIEDADES)
+        cb.setCurrentIndex(max(0, cb.findData(actual)) if actual else 0)
+        cb.setMinimumWidth(r.width())
+        cb.setFixedHeight(estilo.ALTO_CONTROL)
+        ancho = max(r.width(), cb.sizeHint().width())
+        cb.setGeometry(r.left(), r.center().y() - estilo.ALTO_CONTROL // 2, ancho, estilo.ALTO_CONTROL)
+        cb.view().setMinimumWidth(cb.view().sizeHintForColumn(0) + 36)
+
+        def elegido(i: int) -> None:
+            dato = cb.itemData(i)
+            self.cerrar_selector()
+            if dato == MAS_PROPIEDADES:
+                al_mas()
+            elif dato:
+                al_elegir(dato)
+        cb.activated.connect(elegido)
+        cb.cerrado.connect(self.cerrar_selector)
+        self._selector = cb
+        cb.show()
+        cb.raise_()
+        cb.setFocus(Qt.FocusReason.OtherFocusReason)
+        QTimer.singleShot(0, lambda: cb.showPopup() if self._selector is cb and cb.isVisible() else None)
+
+    def cerrar_selector(self) -> None:
+        """Quita el desplegable de la acción, si hay uno."""
+        cb, self._selector = getattr(self, "_selector", None), None
+        if cb is not None:
+            cb.hide()
+            cb.deleteLater()
+
+    def scrollContentsBy(self, dx: int, dy: int) -> None:  # noqa: N802
+        if getattr(self, "_selector", None) is not None:
+            self.cerrar_selector()  # (el desplegable va sobre la acción: si el dibujo se mueve, se cierra)
+        super().scrollContentsBy(dx, dy)
 
     def acercar(self) -> None:
         self.zoom(ZOOM_PASO)

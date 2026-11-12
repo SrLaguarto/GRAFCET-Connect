@@ -30,16 +30,31 @@ def _guardar(texto: str):
         return None
 
 
+_mostrando = False  # el aviso es modal y atiende eventos: un error en ráfaga (o durante el aviso) no abre otro
+
+
+def _resumen(valor, maximo=200):
+    """La última línea útil del error, acortada."""
+    lineas = [x.strip() for x in str(valor).splitlines() if x.strip()]
+    texto = lineas[-1] if lineas else type(valor).__name__
+    return texto if len(texto) <= maximo else texto[:maximo - 1].rstrip() + "…"
+
+
 def _avisar(tipo, valor, rastro):
+    global _mostrando
     texto = "".join(traceback.format_exception(tipo, valor, rastro))
     if sys.stderr is not None:
         sys.stderr.write(texto)
     ruta = _guardar(texto)
-    if QApplication.instance() is None:
+    if QApplication.instance() is None or _mostrando:
         return
     donde = f"\n\nEl detalle se ha guardado en:\n{ruta}" if ruta else ""
-    QMessageBox.warning(None, "GRAFCET Connect", "No se ha podido completar la orden por un error inesperado: "
-                        f"{valor}{donde}\n\nPuede comunicarlo en GitHub (Ayuda > Acerca de > Comunicar un fallo).")
+    _mostrando = True
+    try:
+        QMessageBox.warning(None, "GRAFCET Connect", "No se ha podido completar la orden por un error inesperado: "
+                            f"{_resumen(valor)}{donde}\n\nPuede comunicarlo en GitHub (Ayuda > Acerca de > Comunicar un fallo).")
+    finally:
+        _mostrando = False
 
 
 def instalar():

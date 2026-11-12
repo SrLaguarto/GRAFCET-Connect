@@ -320,7 +320,9 @@ class VistaLamina(QWidget):
         if self.seleccionado:
             p.setPen(QPen(QColor('#326dcb'),1/escala,Qt.PenStyle.DashLine));p.setBrush(Qt.BrushStyle.NoBrush);p.drawRect(d.capas[self.capa].destino(0) if hasattr(d,'capas') and d.capas else d.destino(self.indice))
     def punto_hoja(self,punto):
-        d=self.documento;escala=min((self.width()-24)/d.ancho,(self.height()-24)/d.alto)
+        d=self.documento
+        if d is None:return QPointF(-1e9,-1e9)  # (sin hoja cargada: un punto fuera de cualquier cosa)
+        escala=min((self.width()-24)/d.ancho,(self.height()-24)/d.alto)
         return QPointF((punto.x()-(self.width()-d.ancho*escala)/2)/escala,(punto.y()-(self.height()-d.alto*escala)/2)/escala)
     def mousePressEvent(self,event):
         d=self.documento
@@ -345,6 +347,8 @@ class VistaLamina(QWidget):
                 self.arrastre=(p,capa.destino(0),list(capa.ajustes['offset_mm']));self.setCursor(Qt.CursorShape.ClosedHandCursor);return
         super().mousePressEvent(event)
     def mouseMoveEvent(self,event):
+        if self.documento is None:
+            self.inicio_zona=self.inicio_texto=self.arrastre=None;super().mouseMoveEvent(event);return  # (la hoja cambió bajo un arrastre)
         if self.inicio_zona:self.inicio_zona=(self.inicio_zona[0],self.punto_hoja(event.position()));self.update();return
         if self.inicio_texto:
             p,x,y=self.inicio_texto;delta=self.punto_hoja(event.position())-p;t=self.textos.actual
@@ -359,6 +363,8 @@ class VistaLamina(QWidget):
             d.ajustes['offset_mm']=[offset[0]+delta.x(),offset[1]+delta.y()];self.update();return
         super().mouseMoveEvent(event)
     def mouseReleaseEvent(self,event):
+        if self.documento is None:
+            self.inicio_zona=self.inicio_texto=self.arrastre=None;super().mouseReleaseEvent(event);return
         if self.inicio_zona:
             self.mouseMoveEvent(event);r=QRectF(*self.inicio_zona).normalized().intersected(QRectF(0,0,self.documento.ancho,self.documento.alto));self.inicio_zona=None
             if r.width()>=5 and r.height()>=5:self.textos.poner_zona(list(r.getRect()))

@@ -1238,6 +1238,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.tb_edit.setIconSize(QSize(20, 20))
         self.tb_edit.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self._acciones_solo_icono = []
+        self.tb_edit.addSeparator()  # entre Reiniciar y Deshacer
         for grupo in ((self.a_deshacer, "Deshacer", "Ctrl+Z"), (self.a_rehacer, "Rehacer", "Ctrl+Y")),                      ((self.a_cortar, "Cortar", "Ctrl+X"), (self.a_copiar, "Copiar", "Ctrl+C"), (self.a_pegar, "Pegar", "Ctrl+V"),
                       (self.a_borrar, "Borrar la selección", "Supr")):
             for a, nombre, atajo in grupo:
@@ -2428,6 +2429,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
+        if not getattr(self, "_play_medido", False):
+            self._play_medido = True
+            self._fijar_ancho_boton_play()  # (ya con la hoja de estilo aplicada: la letra del botón es la que se ve)
         self._adaptar_tamano()
         if not self._foco_inicial:  # al arrancar, el foco va al dibujo (sin anillo: no llegó con Tab)
             self._foco_inicial = True
@@ -2809,6 +2813,18 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_ejecutar.blockSignals(False)
         self.a_ejecutar.setText("Stop" if on else "Play")
         self.a_ejecutar.setIcon(_icono_barra("stop" if on else "play", estilo.BLANCO))
+        self._centrar_play(on)
+
+    def _centrar_play(self, on: bool) -> None:
+        """El botón mide siempre lo del más ancho de sus dos estados y su contenido (icono y texto) se pinta pegado a la izquierda: lo que sobra en el
+        estado más corto se reparte como relleno a los dos lados, para que quede centrado (con foco también: allí el borde es dos puntos más grueso)."""
+        boton = self.tb_sim.widgetForAction(self.a_ejecutar) if hasattr(self, "tb_sim") else None
+        relleno = getattr(self, "_relleno_play", {}).get(on)
+        if boton is None or relleno is None:
+            return
+        izq, der = relleno
+        boton.setStyleSheet(f"QToolButton#botonPlay {{ padding: 0 {der}px 0 {izq}px; }}"
+                            f"QToolButton#botonPlay[tecl=\"true\"]:focus {{ padding: 0 {max(0, der - 2)}px 0 {max(0, izq - 2)}px; }}")
 
     def _ejecutar(self, on: bool) -> None:
         """Play (on) o Pausa: el único control de ejecución. Play compila lo editado y arranca siempre una sesión nueva desde
@@ -3233,14 +3249,33 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_es.setIcon(self._iconos_es[1 if es else 0])
 
     def _fijar_ancho_boton_play(self) -> None:
+        """El botón de Play mide lo del más ancho de sus dos estados (Play, Stop) y su contenido va centrado en los dos (`_centrar_play`). El ancho sale
+        de medir cada estado sin relleno extra."""
         boton = self.tb_sim.widgetForAction(self.a_ejecutar)
         inicial = self.a_ejecutar.isChecked()
-        anchos = []
+        self._relleno_play = {}
+        boton.setStyleSheet("")
+        contenido = {}
         for on in (False, True):
             self._marcar_play(on)
-            anchos.append(boton.sizeHint().width())
+            contenido[on] = boton.sizeHint().width() - 2 - 2 * 16  # (el contenido: sin el borde ni el relleno de la hoja global)
+        ancho = max(max(contenido.values()) + 2 * 16 + 2, 92)
+        self._relleno_play = {on: ((ancho - 2 - c) // 2, ancho - 2 - c - (ancho - 2 - c) // 2) for on, c in contenido.items()}
+        boton.setFixedWidth(ancho)
+        boton.resize(ancho, boton.height())
+        if boton.isVisible():  # lo que se ve (el icono y las letras tienen márgenes propios): se afina para que la tinta quede centrada
+            habilitada = self.a_ejecutar.isEnabled()
+            self.a_ejecutar.setEnabled(True)
+            for on in (False, True):
+                self._marcar_play(on)
+                img = boton.grab().toImage()
+                blancos = [x for x in range(img.width()) if any(min(c.red(), c.green(), c.blue()) > 200 for c in (img.pixelColor(x, y) for y in range(img.height())))]
+                if blancos:
+                    mover = ((img.width() - 1 - blancos[-1]) - blancos[0]) // 2  # (lo que sobra a la derecha menos lo de la izquierda: hacia la derecha si es positivo)
+                    izq, der = self._relleno_play[on]
+                    self._relleno_play[on] = (max(0, izq + mover), max(0, der - mover))
+            self.a_ejecutar.setEnabled(habilitada)
         self._marcar_play(inicial)
-        boton.setFixedWidth(max(anchos))
 
     def _fijar_ancho_boton_es(self) -> None:
         """El botón mide siempre lo del más ancho de sus dos estados (texto e icono): al alternar entre «E/S externas» y «Vista

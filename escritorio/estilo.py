@@ -199,13 +199,13 @@ QToolBar#barraSimulacion QToolButton#botonReiniciar:pressed { background:$pulsad
 QToolBar#barraSimulacion QToolButton#botonReiniciar:disabled { border-color:$borde; }
 QToolBar#barraSimulacion QToolButton#botonReiniciar[tecl="true"]:focus { border:2px dashed $foco; }
 QToolBar#barraSimulacion QToolButton#botonPlay { font-family:$familia_titulo; background:$acento; color:$blanco; border:1px solid $acento_oscuro; font-weight:700;
-    padding:0 18px 0 14px; min-width:92px; }
+    padding:0 16px; }
 QToolBar#barraSimulacion QToolButton#botonPlay:hover { background:$acento_hover; }
 QToolBar#barraSimulacion QToolButton#botonPlay:pressed { background:$acento_oscuro; }
 QToolBar#barraSimulacion QToolButton#botonPlay:checked { background:$simulacion; border-color:$simulacion; color:$blanco; }
 QToolBar#barraSimulacion QToolButton#botonPlay:checked:hover { background:$simulacion_hover; }
 QToolBar#barraSimulacion QToolButton#botonPlay:disabled { background:$pulsado; color:$deshabilitado; border-color:$borde; }
-QToolBar#barraSimulacion QToolButton#botonPlay[tecl="true"]:focus { border:3px dashed $foco_fuerte; padding:0 15px 0 11px; min-height:${alto_tb_f2}px; }
+QToolBar#barraSimulacion QToolButton#botonPlay[tecl="true"]:focus { border:3px dashed $foco_fuerte; padding:0 14px; min-height:${alto_tb_f2}px; }
 QToolBar#barraEdicion QToolButton, QToolBar#barraVista QToolButton { background:$superficie; border:1px solid $borde_control; min-width:${alto_tb}px; padding:0 8px; }
 QToolBar#barraEdicion QToolButton:hover, QToolBar#barraVista QToolButton:hover { background:$hover; border-color:$tinta_2; }
 QToolBar#barraEdicion QToolButton:pressed, QToolBar#barraVista QToolButton:pressed { background:$pulsado; }
@@ -385,6 +385,7 @@ _TRAZOS = {
                 [(7, 21), (7, 14), (17, 14), (17, 21)]],
     "borrar": [[(4, 6), (20, 6)], [(8, 6), (8, 3), (16, 3), (16, 6)], [(6, 6), (7, 21), (17, 21), (18, 6)],
                [(10, 10), (10, 17)], [(14, 10), (14, 17)]],
+    "volver": [[(20, 12), (4, 12)], [(10, 6), (4, 12), (10, 18)]],
     "deshacer": [[(8, 4), (3, 9), (8, 14)], [(3, 9), (13, 9), (18, 11), (20, 15), (18, 20)]],
     "rehacer": [[(16, 4), (21, 9), (16, 14)], [(21, 9), (11, 9), (6, 11), (4, 15), (6, 20)]],
     # tijeras: dos hojas que se cruzan (las anillas se dibujan en `icono`), dos hojas de papel solapadas y un portapapeles con su pinza
@@ -449,8 +450,15 @@ def icono(tipo: str, color: str = TINTA, grosor: float = 1.75, tam: int = 24) ->
     elif tipo == "dependencias":
         p.drawRect(QRectF(2, 9, 6, 6))
         p.drawRoundedRect(QRectF(15, 3, 8, 18), 1, 1)
-        p.drawLine(QPointF(8, 9), QPointF(15, 3))  # (el mismo trazo de 1,75 px que el resto de iconos)
+        trazo = p.pen()
+        union = QPen(trazo)  # las uniones del cuadrado con el rectángulo: punteadas y más finas que el resto del trazo
+        union.setWidthF(1.0)
+        union.setCapStyle(Qt.PenCapStyle.FlatCap)
+        union.setDashPattern([1.0, 1.5])
+        p.setPen(union)
+        p.drawLine(QPointF(8, 9), QPointF(15, 3))
         p.drawLine(QPointF(8, 15), QPointF(15, 21))
+        p.setPen(trazo)
     elif tipo == "reiniciar":
         arco, punta = _trazos_reinicio()
         p.drawPath(arco)

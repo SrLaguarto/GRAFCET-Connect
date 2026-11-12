@@ -40,6 +40,24 @@ ESTILO_FICHA = (f"QPushButton {{ background: {COLORES['comparacion']}; color: wh
                 f"QPushButton:checked {{ border: 3px solid {estilo.AVISO_BORDE}; }}")
 
 
+
+def opciones_variable(v: dict[str, tuple[str, str]], ofrecidas: list[str], elegida: str) -> list[tuple[str, Any, bool]]:
+    """Lo que lista el campo de variable de una acción (el de Propiedades y el desplegable sobre la acción del dibujo): (texto, dato, habilitado).
+    Salidas y luego Memorias (con su tipo) y la variable elegida aunque no valga para este tipo (se avisa). Nada elegido: «Elija…» o, si no hay
+    ninguna que ofrecer, a dónde ir a crearlas."""
+    out: list[tuple[str, Any, bool]] = []
+    if not elegida:
+        out.append(("Elija la variable…" if ofrecidas else SIN_VARIABLES, "", bool(ofrecidas)))
+    for papel, titulo in (("output", "Salidas"), ("internal", "Memorias")):
+        nombres = [n for n in ofrecidas if v[n][0] == papel]
+        if nombres:
+            out.append((titulo, None, False))
+        for n in nombres:
+            out.append((f"   {n}  ({nombre_tipo({'kind': v[n][1]})})", n, True))
+    if elegida and elegida not in ofrecidas:  # una entrada, o no booleana en una continua
+        out.append((f"{elegida}  (no se puede escribir aquí)", elegida, True))
+    return out
+
 class CajaFormula(QLineEdit):
     """El cuadro de texto de una fórmula (la receptividad de una transición, la condición, el evento o el valor de una acción).
     No se edita (la fórmula se arma con bloques): si se interpreta, se ve con la notación del dibujo (↑ y ↓, la negación como
@@ -266,19 +284,10 @@ class PanelAccion(QWidget):
         c = self.variable
         c.blockSignals(True)
         c.clear()
-        if not self._elegida:  # nada elegido: «Elija…», o, si no hay ninguna que ofrecer, a dónde ir a crearlas
-            c.addItem("Elija la variable…" if ofrecidas else SIN_VARIABLES, "")
-            if not ofrecidas:
-                c.model().item(0).setEnabled(False)
-        for papel, titulo in (("output", "Salidas"), ("internal", "Memorias")):
-            nombres = [n for n in ofrecidas if v[n][0] == papel]
-            if nombres:
-                c.addItem(titulo, None)
+        for texto, dato, habilitado in opciones_variable(v, ofrecidas, self._elegida):
+            c.addItem(texto, dato)
+            if not habilitado:
                 c.model().item(c.count() - 1).setEnabled(False)
-            for n in nombres:
-                c.addItem(f"   {n}  ({nombre_tipo({'kind': v[n][1]})})", n)
-        if self._elegida and self._elegida not in ofrecidas:  # una entrada, o no booleana en una continua
-            c.addItem(f"{self._elegida}  (no se puede escribir aquí)", self._elegida)
         c.setCurrentIndex(max(0, c.findData(self._elegida)))
         c.blockSignals(False)
 

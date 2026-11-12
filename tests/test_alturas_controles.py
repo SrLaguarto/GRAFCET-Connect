@@ -44,6 +44,24 @@ def desbordes(ventana, tolerancia=0):
     return fuera
 
 
+def solapes(ventana, permitidos=()):
+    """Los hermanos visibles de un mismo layout que se solapan (más de 1 px en cada eje). `permitidos`: pares de nombres de clase u objectName que se
+    pintan a propósito uno sobre otro (hoy ninguno)."""
+    res = []
+    for p in [ventana, *ventana.findChildren(QWidget)]:
+        lay = p.layout()
+        if lay is None or not p.isVisible():
+            continue
+        ws = [lay.itemAt(i).widget() for i in range(lay.count())]
+        ws = [w for w in ws if w is not None and w.isVisible() and w.width() > 0 and w.height() > 0 and not w.isWindow()]
+        for i, a in enumerate(ws):
+            for b in ws[i + 1:]:
+                r = a.geometry().intersected(b.geometry())
+                if r.width() > 1 and r.height() > 1 and not ({type(a).__name__, a.objectName()} & set(permitidos) and {type(b).__name__, b.objectName()} & set(permitidos)):
+                    res.append((type(p).__name__, p.objectName(), (type(a).__name__, a.objectName(), a.geometry().getRect()), (type(b).__name__, b.objectName(), b.geometry().getRect())))
+    return res
+
+
 @unittest.skipUnless(QT, "requiere PySide6")
 class Alturas(BaseQt):
     def setUp(self):
@@ -206,7 +224,7 @@ class Alturas(BaseQt):
             self._bombear(4)
             self.assertEqual(v.tabla.rowCount(), inicio + 1 + k, f"pulsación {k}: una fila más, a la vista")
             self.assertEqual(v.tabla.state(), QAbstractItemView.State.EditingState, "el cursor está en el nombre de la fila nueva")
-            self.assertEqual(v.tabla.currentRow(), v.tabla.rowCount() - 1)
+            self.assertEqual(v.tabla.currentRow(), v.tabla.rowCount() - 2)  # (la fila en blanco del final queda debajo)
             self.assertTrue(v.tabla.indexWidget(v.tabla.currentIndex()).isVisible())
         self.assertIn("sensor_nuevo", [x["name"] for x in e.variables()], "el nombre escrito se confirmó")
         self.assertEqual(v.sin_nombre(), 3)
@@ -220,11 +238,11 @@ class Alturas(BaseQt):
         w.hide()
 
     def test_SALC07_barra_de_edicion_orden_ayudas_y_anchura(self):
-        """REQ-EDT-01, REQ-EDT-11: tras Play y Reiniciar, una sola fila: Deshacer · Rehacer | Cortar · Copiar · Pegar · Borrar | Añadir debajo ·
+        """REQ-EDT-01, REQ-EDT-11: tras Play y Reiniciar, una sola fila: | Deshacer · Rehacer | Cortar · Copiar · Pegar · Borrar | Añadir debajo ·
         Dependencias; los seis primeros solo icono con el atajo en la ayuda; cabe a 1366×768 sin cortar nada; al simular quedan desactivados."""
         w, e, ids = self._preparar(1366, 768)
         acciones = list(w.tb_edit.actions())
-        esperado = [w.a_deshacer, w.a_rehacer, "|", w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar, "|", w.a_debajo, w.a_dependencias]
+        esperado = ["|", w.a_deshacer, w.a_rehacer, "|", w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar, "|", w.a_debajo, w.a_dependencias]
         self.assertEqual([("|" if a.isSeparator() else a) for a in acciones], esperado)
         for a, atajo in ((w.a_deshacer, "Ctrl+Z"), (w.a_rehacer, "Ctrl+Y"), (w.a_cortar, "Ctrl+X"), (w.a_copiar, "Ctrl+C"),
                          (w.a_pegar, "Ctrl+V"), (w.a_borrar, "Supr")):
@@ -345,6 +363,46 @@ class Alturas(BaseQt):
         self._bombear(4)
         self.assertIs(l.cabecera_marco.currentWidget(), l.edicion_destino)
         w.hide()
+
+    def test_SALC11_ningun_hermano_visible_se_solapa_en_planos_y_en_es(self):
+        """REQ-EDT-09, REQ-UX-01: en GRAFCET, PLANOS (sin hoja y con una) y la vista de E/S (desconectada y conectada), a 1366×768 y 2000×1250, ningún
+        hermano visible de un mismo layout se solapa con otro, y nada sobresale de su contenedor; el marco de E/S empieza por debajo de la cabecera."""
+        from escritorio.carpetas import predeterminada
+        from grafcet.laminas import ajustes_lamina
+        for ancho, alto in TAMANOS:
+            w, e, ids = self._preparar(ancho, alto)
+            barra = w.pestanas_vistas
+            vistas = []
+            QTest.mouseClick(barra, Qt.MouseButton.LeftButton, pos=barra.tabRect(1).center())
+            self._bombear(8)
+            vistas.append("planos sin hoja")
+            self.assertEqual(solapes(w), [], (ancho, alto, "planos sin hoja"))
+            self.assertEqual(desbordes(w, 0), [], (ancho, alto, "planos sin hoja"))
+            plan = e.ed.add_sheet_plan("Plano de pruebas")
+            ident = e.ed.add_plan_page(plan, ajustes_lamina({"plantilla": predeterminada()}))
+            e.ed.set_page_graphics(ident, [{"refs": [ids[0]], "porcentaje": 100., "offset_mm": [0., 0.]}])
+            e.cambia()
+            QTest.mouseClick(barra, Qt.MouseButton.LeftButton, pos=barra.tabRect(0).center())
+            QTest.mouseClick(barra, Qt.MouseButton.LeftButton, pos=barra.tabRect(1).center())
+            self._bombear(10)
+            self.assertEqual(w.panel_planos.lista.count(), 1)
+            self.assertEqual(solapes(w), [], (ancho, alto, "planos con hoja"))
+            self.assertEqual(desbordes(w, 0), [], (ancho, alto, "planos con hoja"))
+            w.mostrar_es()
+            self._bombear(8)
+            self.assertEqual(solapes(w), [], (ancho, alto, "E/S desconectada"))
+            self.assertEqual(desbordes(w, 0), [], (ancho, alto, "E/S desconectada"))
+            lienzo = w.panel_es.lienzo
+            self.assertGreaterEqual(lienzo.marco.y(), lienzo.cabecera_marco.y() - 4)
+            titulo = lienzo.findChild(QWidget, "tituloPLC")
+            texto = titulo.geometry().bottom() - titulo.contentsMargins().bottom()  # (el título lleva un margen inferior)
+            self.assertGreaterEqual(lienzo.marco.y() - texto, 4, "el marco empieza por debajo del título de la sección, con aire")
+            w.panel_es.mostrar_estado("conectado", "Conectado")
+            self._bombear(8)
+            self.assertEqual(solapes(w), [], (ancho, alto, "E/S conectada"))
+            self.assertEqual(desbordes(w, 0), [], (ancho, alto, "E/S conectada"))
+            self.assertGreaterEqual(lienzo.marco.y() - texto, 4)
+            w.hide()
 
 
 if __name__ == "__main__":
