@@ -1422,11 +1422,20 @@ class PanelES(QWidget):
         return max(e["ALTO_FILA"], e["ALTO_CONTROL"])
 
     def _anchos_controles(self):
-        """Las columnas de controles miden lo que su control (`resizeColumnsToContents` solo cuenta texto): el área se lee entera."""
-        for col in (4, 5, 6):
-            anchos = [self.tabla.cellWidget(f, col).sizeHint().width() for f in range(self.tabla.rowCount())]
-            if anchos:
-                self.tabla.setColumnWidth(col, max(self.tabla.columnWidth(col), max(anchos)))
+        """Cada columna de controles mide lo que pide su control o su cabecera, lo que sea mayor, y el control ocupa la celda entera:
+        el área y el formato se leen enteros y la dirección mide lo justo para 5 cifras y sus flechas. «Escala» se queda el resto."""
+        cab = self.tabla.horizontalHeader()
+        fm = self.tabla.fontMetrics()
+        for col in (0, 1, 2, 3, 4, 5, 6):
+            pide = [cab.sectionSizeFromContents(col).width()]
+            if col in (1, 2, 3):  # texto: con la letra que se ve ahora (no la de cuando se llenó la tabla)
+                pide += [fm.horizontalAdvance(self.tabla.item(f, col).text()) + 16 for f in range(self.tabla.rowCount())
+                         if self.tabla.item(f, col) is not None]
+            elif col == 5:
+                pide.append(self.tabla.fontMetrics().horizontalAdvance("0" * 5) + 44)  # cinco cifras, márgenes y flechas
+            elif col != 0:
+                pide += [self.tabla.cellWidget(f, col).sizeHint().width() for f in range(self.tabla.rowCount())]
+            self.tabla.setColumnWidth(col, max(pide))
 
     def _filas_tabla(self, escala=None):
         alto = self._alto_fila_tabla(escala)
@@ -1639,14 +1648,11 @@ class PanelES(QWidget):
             for clave in areas_variable(v):
                 area.addItem(AREAS[clave], clave)
             area.setCurrentIndex(area.findData(s.area) if s else 0)
-            area.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)  # (más estrecha: elide; el desplegable abierto, entero)
-            area.setMinimumContentsLength(14)
-            area.view().setMinimumWidth(max(QFontMetrics(area.font()).horizontalAdvance(t) for t in AREAS.values()) + 40)
+            area.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)  # el texto del área se lee entero
             area.setToolTip("Entradas para sensores y salidas para actuadores. Copia la asignación del servidor Modbus.")
             self.tabla.setCellWidget(fila, 4, area)
             direccion = _SpinConfiguracion()
-            direccion.setRange(0, 65535)
-            direccion.fijar_digitos(5)
+            direccion.setRange(0, 65535)  # (ocupa su celda: la columna mide lo justo, `_anchos_controles`)
             propuestas = ocupadas[area.currentData()]
             propuesta = next((n for n in range(65536) if n not in propuestas), 0)
             direccion.setValue(s.direccion if s else propuesta)

@@ -54,8 +54,8 @@ class BarraYTablaES(BaseQt):
         return p
 
     def test_SBAR02_tabla_avanzada_casilla_centrada_y_columnas_justas(self):
-        """REQ-SIM-03: la casilla «Usar» queda centrada en su columna, «Dirección» es estrecha (cabecera en dos líneas) y a 2000 px de pantalla se ven todas
-        las columnas, con «Escala», sin barra horizontal."""
+        """REQ-SIM-03: la casilla «Usar» queda centrada en su columna; «Área» y «Formato» se leen enteros; «Dirección» es estrecha (cabecera en dos
+        líneas) y su campo ocupa la celda, sin hueco; a 2000 px de pantalla se ven todas las columnas, con «Escala», sin barra horizontal."""
         p = self.panel()
         t = p.tabla
         casilla = t.cellWidget(0, 0).casilla
@@ -63,11 +63,12 @@ class BarraYTablaES(BaseQt):
         self.assertLessEqual(abs(centro - (t.columnViewportPosition(0) + t.columnWidth(0) // 2)), 2)
         self.assertEqual(t.horizontalHeaderItem(5).text(), "Dirección\n(base 0)")
         self.assertLessEqual(t.columnWidth(5), 130)
-        self.assertLess(t.columnWidth(4), 230)
+        self.assertGreaterEqual(t.cellWidget(0, 5).width(), t.columnWidth(5) - 4, "el campo de la dirección ocupa su celda")
+        for col in (4, 6):
+            control = t.cellWidget(0, col)
+            self.assertGreaterEqual(t.columnWidth(col), control.sizeHint().width(), "el texto del desplegable se lee entero")
         self.assertFalse(t.horizontalScrollBar().isVisible())
         self.assertGreater(t.columnWidth(7), 60, "Escala se ve")
-        area = t.cellWidget(0, 4)
-        self.assertGreater(area.view().minimumWidth(), area.width(), "el desplegable abierto enseña el texto entero")
 
     def test_SBAR03_puerto_y_esclavo_estrechos_y_el_marco_no_cambia_de_ancho(self):
         """REQ-SIM-03: Puerto (5 cifras) y Esclavo ID (3 cifras) más estrechos en la cabecera del marco y en Configuración; el marco mide lo mismo con
