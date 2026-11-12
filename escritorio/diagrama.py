@@ -25,7 +25,7 @@ from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, 
                            QPalette, QPixmap, QRegion)
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QListWidget, QHBoxLayout, QLabel,
                                QMenu, QProxyStyle, QPushButton, QStyle, QStyledItemDelegate, QStyleOptionComboBox, QStyleOptionViewItem, QStylePainter,
-                               QToolButton, QWidget)
+                               QToolButton, QToolTip, QWidget)
 
 from . import estilo
 
@@ -1342,6 +1342,7 @@ class _BarraZoom(QFrame):
 
 
 MARCADORES_SELECTOR = ("Elija la variable…", "Elija variable…", "Variable…", "…")  # el marcador del desplegable sin variable: el primero que cabe
+MARGEN_OPCION, HUECO_PAPEL = 8, 6  # margen interior de cada opción del desplegable y espacio entre el nombre y su papel
 SELECTOR_PAD_IZQ, SELECTOR_FLECHA = 6, 18  # sangría del texto y ancho de la zona de la flecha del desplegable sobre la acción (más justos que los de un campo)
 
 
@@ -1355,7 +1356,28 @@ class _OpcionConPapel(QStyledItemDelegate):
     def sizeHint(self, option: Any, index: Any) -> QSize:  # noqa: N802
         if self._separador(index):
             return QSize(option.rect.width(), 7)  # una línea fina con poco margen, no una fila entera
-        return super().sizeHint(option, index)
+        tam = super().sizeHint(option, index)
+        return QSize(0, tam.height())  # (sin ancho propio: la lista mide lo que el cuadro, y el nombre se acorta con «…»)
+
+    @staticmethod
+    def _nombre_y_papel(index: Any) -> tuple[str, str]:
+        return index.data(Qt.ItemDataRole.DisplayRole).rsplit("  (", 1)[0], index.data(Qt.ItemDataRole.UserRole + 1) or ""
+
+    @staticmethod
+    def _hueco_nombre(fm: Any, rect: Any, papel: str) -> int:
+        """Lo que queda para el nombre en una fila: su ancho menos el margen de cada lado y el papel «(S)» con un espacio."""
+        return rect.width() - 2 * MARGEN_OPCION - (fm.horizontalAdvance(f"({papel})") + HUECO_PAPEL if papel else 0)
+
+    def helpEvent(self, event: Any, view: Any, option: Any, index: Any) -> bool:  # noqa: N802
+        """La ayuda emergente solo sale si el nombre está acortado, y entonces lo da entero."""
+        nombre, papel = self._nombre_y_papel(index)
+        if event.type() == QEvent.Type.ToolTip and papel and not self._separador(index):
+            if option.fontMetrics.horizontalAdvance(nombre) > self._hueco_nombre(option.fontMetrics, option.rect, papel):
+                QToolTip.showText(event.globalPos(), nombre, view)
+            else:
+                QToolTip.hideText()
+            return True
+        return super().helpEvent(event, view, option, index)
 
     def paint(self, painter: Any, option: Any, index: Any) -> None:
         if self._separador(index):
@@ -1374,13 +1396,17 @@ class _OpcionConPapel(QStyledItemDelegate):
         opt.text = ""
         estilo_ = opt.widget.style() if opt.widget else QApplication.style()
         estilo_.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
-        r = opt.rect.adjusted(8, 0, -8, 0)
+        r = opt.rect.adjusted(MARGEN_OPCION, 0, -MARGEN_OPCION, 0)
         painter.save()
+        painter.setFont(opt.font)
         painter.setPen(opt.palette.color(QPalette.ColorGroup.Normal if index.flags() & Qt.ItemFlag.ItemIsEnabled else QPalette.ColorGroup.Disabled,
                                          QPalette.ColorRole.HighlightedText if opt.state & QStyle.StateFlag.State_Selected else QPalette.ColorRole.Text))
-        nombre = index.data(Qt.ItemDataRole.DisplayRole).rsplit("  (", 1)[0]
+        nombre, _ = self._nombre_y_papel(index)
+        nombre = opt.fontMetrics.elidedText(nombre, Qt.TextElideMode.ElideRight, max(0, self._hueco_nombre(opt.fontMetrics, opt.rect, papel)))
         painter.drawText(r, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, nombre)
-        painter.drawText(r, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, f"({papel})")
+        x = r.left() + opt.fontMetrics.horizontalAdvance(nombre) + HUECO_PAPEL  # el papel justo tras el nombre (sin columna a la derecha)
+        painter.drawText(QRect(x, r.top(), max(0, r.right() - x + 1), r.height()), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                         f"({papel})")
         painter.restore()
 
 
@@ -1396,9 +1422,35 @@ class SelectorAccion(QComboBox):
         opt = QStyleOptionComboBox()
         self.initStyleOption(opt)
         p.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opt)
+        if self.currentIndex() < 0 and self.placeholderText():  # (el marcador: Qt lo pone en su propio `paintEvent`, no en `initStyleOption`)
+            opt.currentText = self.placeholderText()
+            opt.palette.setBrush(QPalette.ColorRole.ButtonText, opt.palette.placeholderText())
         campo = self.style().subControlRect(QStyle.ComplexControl.CC_ComboBox, opt, QStyle.SubControl.SC_ComboBoxEditField, self)
         opt.currentText = self.fontMetrics().elidedText(opt.currentText, Qt.TextElideMode.ElideRight, max(0, campo.width() - 4))
         p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opt)
+
+    def ancho_lista(self) -> int:
+        """El ancho de la lista desplegada: el del cuadro, o lo justo para la opción más larga (nombre, hueco y «(S)»/«(M)», con su margen) si
+        no cabe en él. Nunca reserva huecos: con nombres cortos mide lo que el cuadro."""
+        fm = self.view().fontMetrics()
+        pide = 0
+        for i in range(self.count()):
+            nombre, papel = _OpcionConPapel._nombre_y_papel(self.model().index(i, 0))
+            if nombre:
+                pide = max(pide, fm.horizontalAdvance(nombre) + 2 * MARGEN_OPCION
+                           + (fm.horizontalAdvance(f"({papel})") + HUECO_PAPEL if papel else 0))
+        barra = self.view().verticalScrollBar()
+        extra = barra.sizeHint().width() if self.count() > self.maxVisibleItems() else 0
+        return max(self.width(), pide + extra + 2 * self.view().frameWidth() + 2)
+
+    def showPopup(self) -> None:  # noqa: N802
+        """La lista desplegada empieza donde el cuadro y mide lo que él, salvo que un nombre no quepa: entonces lo justo para el más largo
+        (decisión del responsable, 12-nov-2026)."""
+        super().showPopup()
+        marco = self.view().parentWidget()
+        if marco is not None and marco.isWindow():
+            marco.setFixedWidth(self.ancho_lista())
+            marco.move(self.mapToGlobal(QPoint(0, 0)).x(), marco.y())
 
     def hidePopup(self) -> None:  # noqa: N802
         super().hidePopup()
@@ -2244,7 +2296,6 @@ class VistaDiagrama(QGraphicsView):
         cb.setItemDelegate(_OpcionConPapel(cb))
         for texto, dato, habilitada, *papel in opciones:
             cb.addItem(texto, dato)
-            cb.setItemData(cb.count() - 1, texto, Qt.ItemDataRole.ToolTipRole)
             if papel and papel[0]:
                 cb.setItemData(cb.count() - 1, papel[0], Qt.ItemDataRole.UserRole + 1)
             if not habilitada:
@@ -2252,8 +2303,10 @@ class VistaDiagrama(QGraphicsView):
         cb.setStyleSheet(f"QComboBox {{ padding:0 2px 0 {SELECTOR_PAD_IZQ}px; }} QComboBox:focus {{ padding:0 1px 0 {SELECTOR_PAD_IZQ - 1}px; }} "
                          f"QComboBox::drop-down {{ width:{SELECTOR_FLECHA}px; }}")
         cb.setFixedHeight(estilo.ALTO_CONTROL)
-        margen = max(2, round(2 * self.escala()))  # (el trazo de la caja)
-        interior = max(SELECTOR_FLECHA, r.width() - 2 * margen)
+        # El cuadro sigue a la acción a la escala de la vista, pero nunca mide menos que ella a zoom 100 %: alejando se queda de ese ancho (sobresale de la
+        # acción, alineado a su izquierda) para poder leerse. La letra es siempre la de la interfaz.
+        margen = max(2, round(2 * max(self.escala(), 1.0)))  # (el trazo de la caja)
+        interior = max(SELECTOR_FLECHA, round(w * max(self.escala(), 1.0)) - 2 * margen)
         fm = cb.fontMetrics()
         util = interior - SELECTOR_PAD_IZQ - SELECTOR_FLECHA - 4  # (borde y foco)
         marcador = next((m for m in MARCADORES_SELECTOR if fm.horizontalAdvance(m) <= util), MARCADORES_SELECTOR[-1])
@@ -2266,9 +2319,9 @@ class VistaDiagrama(QGraphicsView):
         cb.setToolTip(texto_actual if texto_actual and fm.horizontalAdvance(texto_actual) > ancho - SELECTOR_PAD_IZQ - SELECTOR_FLECHA - 4
                       else "Variable de la acción")
         cb.setGeometry(r.left() + margen, r.center().y() - estilo.ALTO_CONTROL // 2, ancho, estilo.ALTO_CONTROL)
-        necesario = cb.view().sizeHintForColumn(0) + 24  # (la lista mide lo que el cuadro, salvo que un nombre no quepa)
-        if necesario > ancho:
-            cb.view().setMinimumWidth(necesario)
+        cb.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        cb.setMinimumContentsLength(1)
+        cb.view().setMinimumWidth(0)  # (la lista mide lo que el cuadro: `showPopup`; el nombre largo se acorta con «…» y su ayuda lo da entero)
 
         def elegido(i: int) -> None:
             dato = cb.itemData(i)

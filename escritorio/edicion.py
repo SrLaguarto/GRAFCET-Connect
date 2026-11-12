@@ -65,6 +65,8 @@ COLOCACIONES = (("fila", "En fila, pegadas"), ("fila-separada", "En fila, separa
 PARPADEO_MS, PARPADEO_PASOS = 250, 6  # tres parpadeos en 1,5 s: encendido al empezar y en los pasos 2 y 4
 MARGEN_SOLAPE = 8  # un elemento no se coloca a menos de esto de la caja de otro (en unidades del dibujo)
 MSG_SOLAPE = "No se puede poner encima de otro elemento"
+MSG_ACCION_SUELTA = ("Acción suelta: arrástrela hasta una etapa (desde el punto de unión de su izquierda) para unirla, "
+                     "o péguela al lado de otra acción.")
 MSG_SOLAPE_PARCIAL = "Un grafcet parcial nuevo no se pone encima de otro elemento ni de otro marco: suéltelo en un hueco"
 MSG_ENCIMA = "Las acciones quedan encima de otro elemento: apártelo"  # aviso (no error): no se pudo abrir hueco
 DESPLAZA_MAX = 600  # lo más que se desplaza a la derecha lo que estorba a las acciones de una etapa (P-IMP-48)
@@ -277,6 +279,18 @@ class Edicion(QObject):
     def informar(self, texto: str) -> None:
         """Un aviso informativo (no un error): se muestra sin el rojo de los rechazos."""
         self._mensaje, self.mensaje_info = sin_codigos(self.sin_internos(texto)), True
+
+    def texto_estado(self) -> tuple[str, bool]:
+        """Lo que dice la barra de estado ahora: el mensaje de la última operación (con `mensaje_info`: informativo, no un error) y, si no
+        hay ninguno, el de lo seleccionado, **calculado del estado de ahora** y no al cambiar la selección: una acción suelta dice cómo
+        unirla mientras siga suelta (al unirla el texto se va y, al deshacer, vuelve)."""
+        if self._mensaje:
+            return self._mensaje, self.mensaje_info
+        if len(self.sel) == 1:
+            b = next((x for x in self.ed.draft_actions() if x["id"] == self.sel[0]), None)
+            if b is not None and b.get("tipo") != "forzado" and not b.get("etapa"):
+                return MSG_ACCION_SUELTA, True
+        return "", False
 
     def _nombres_vivos(self) -> dict[str, str]:
         """El nombre visible de cada elemento del modelo tal como está ahora (no como se dibujó por última vez), con el de los
@@ -791,9 +805,7 @@ class Edicion(QObject):
             self._tras_pegar([did], *destino[0])
         else:
             self.sel, self.accion = [did], None
-            self.informar(MSG_ORDEN_SUELTA if tipo == "forzado" else
-                          "Acción suelta: arrástrela hasta una etapa (desde el punto de unión de su izquierda) para unirla, "
-                          "o péguela al lado de otra acción.")
+            self.informar(MSG_ORDEN_SUELTA if tipo == "forzado" else MSG_ACCION_SUELTA)
             self.cambiado.emit()
         return did
 
@@ -4536,13 +4548,22 @@ class Edicion(QObject):
         if not self.ed.undo_stack:
             return None
         label = self.ed.undo()
+        self._seleccion_suelta()
         self.cambia()
         return label
+
+    def _seleccion_suelta(self) -> None:
+        """Tras deshacer o rehacer, si la acción señalada ha quedado suelta (se deshizo su unión a la etapa), lo seleccionado es ella, como
+        al soltarla: así vuelve a decir cómo unirla (`texto_estado`)."""
+        if self.accion is not None and any(b["id"] == self.accion and not b.get("etapa") and b.get("tipo") != "forzado"
+                                           for b in self.ed.draft_actions()):
+            self.sel, self.accion = [self.accion], None
 
     def rehacer(self) -> str | None:
         if not self.ed.redo_stack:
             return None
         label = self.ed.redo()
+        self._seleccion_suelta()
         self.cambia()
         return label
 

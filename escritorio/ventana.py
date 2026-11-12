@@ -2102,6 +2102,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._fijar_ancho_boton_play()
         self.tb_sim.layout().invalidate()
         QTimer.singleShot(0, self, self._remedir_barra_simulacion)
+        # La hoja nueva cambia lo que miden los controles, y Qt reparte las cajas en la vuelta siguiente del bucle de eventos: hasta
+        # entonces el dibujo se veía en un sitio y, al repartirse, saltaba unos píxeles («flotando»). Se reparten aquí, en este pintado.
+        QApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
 
     def _ancho_lateral_para(self, ancho_ventana: int) -> int:
         """Los paneles laterales ganan ancho con la letra grande (así las tablas de la simulación llevan sus cuatro columnas con las
@@ -2511,8 +2514,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _alternar_errores(self, on: bool) -> None:
         """El usuario marca o desmarca «Mostrar errores»: el aviso de la cabecera del dibujo se ve y se actualiza en vivo, o no se ve al editar."""
         self._errores_auto = False
-        if not on:
-            self.diagrama.diagnosticos_abiertos = False
+        self.diagrama.diagnosticos_abiertos = on  # (al marcar, la lista sale desplegada; «N errores ▾» la pliega; al desmarcar y volver a marcar, otra vez desplegada)
         self.refrescar_edicion()
 
     def _marcar_errores(self, on: bool, auto: bool) -> None:
@@ -2575,12 +2577,18 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self._poner_chip("editar", "EDICIÓN", "Modo edición: Play inicia la simulación")
         self.titulo.setText(f"{e.titulo}{' *' if e.ed.dirty else ''}")
         self.ayuda.setToolTip(self._ayuda if getattr(self,"solo_lectura",False) else AYUDA_EDICION[e.herramienta])
-        self.ayuda.setText(self._ayuda if getattr(self,"solo_lectura",False) else e.mensaje or "Arrastre fichas desde la paleta; doble clic en un elemento para ver sus propiedades.")
-        error = bool(e.mensaje) and not e.mensaje_info  # un aviso informativo no va en rojo
+        mensaje, info = e.texto_estado()
+        self.ayuda.setText(self._ayuda if getattr(self,"solo_lectura",False) else mensaje or "Arrastre fichas desde la paleta; doble clic en un elemento para ver sus propiedades.")
+        error = bool(mensaje) and not info  # un aviso informativo no va en rojo
         self.ayuda.setStyleSheet(f"color: {estilo.ERROR if error else estilo.TINTA_2}; font-weight: {600 if error else 400}; "
                                  f"font-size: {estilo.T_PEQUENA}px")
-        if e.mensaje:
-            self.statusBar().showMessage(e.mensaje, 9000)
+        # (la barra de estado sigue al texto de ahora: se retira cuando el mensaje que puso esta vista ya no es el vigente, no a los 9 s)
+        barra, puesto = self.statusBar(), getattr(self, "_texto_estado_edicion", "")
+        if mensaje:
+            barra.showMessage(mensaje, 9000)
+        elif puesto and barra.currentMessage() == puesto:
+            barra.clearMessage()
+        self._texto_estado_edicion = mensaje
         self.l_herr.setText(f"<b>{NOMBRE_HERRAMIENTA[e.herramienta]}</b>: {html.escape(AYUDA_EDICION[e.herramienta])}")
         sel = [e.nombre(i) for i in e.sel]
         self.l_sel.setText(("Selección: " + ", ".join(sel)) if sel else "Nada seleccionado.")

@@ -53,7 +53,8 @@ def solapes(ventana, permitidos=()):
         if lay is None or not p.isVisible():
             continue
         ws = [lay.itemAt(i).widget() for i in range(lay.count())]
-        ws = [w for w in ws if w is not None and w.isVisible() and w.width() > 0 and w.height() > 0 and not w.isWindow()]
+        # (isinstance: con un hijo recién destruido, PySide puede devolver el envoltorio de otro objeto en su lugar; pasó una vez en la suite)
+        ws = [w for w in ws if isinstance(w, QWidget) and w.isVisible() and w.width() > 0 and w.height() > 0 and not w.isWindow()]
         for i, a in enumerate(ws):
             for b in ws[i + 1:]:
                 r = a.geometry().intersected(b.geometry())

@@ -70,6 +70,24 @@ class MostrarErrores(BaseQt):
         self.bombear()
         self.assertFalse(self._aviso_visible(w))
 
+    def test_SERR09_al_marcar_el_boton_la_lista_sale_desplegada_y_el_enlace_la_pliega(self):
+        """REQ-EDT-09: al marcar «Mostrar errores» la lista de mensajes aparece desplegada («N errores ▾»); el enlace la pliega; al desmarcar y volver
+        a marcar, otra vez desplegada."""
+        w, e = self.preparar()
+        self._error(e)
+        d = w.diagrama
+        for _ in range(2):
+            w.b_errores.click()
+            self.bombear()
+            self.assertTrue(d.lista_diagnosticos.isVisible() and d.resumen_diagnosticos.text().endswith("▾"), d.resumen_diagnosticos.text())
+            d.resumen_diagnosticos.click()
+            self.bombear()
+            self.assertFalse(d.lista_diagnosticos.isVisible())
+            self.assertTrue(d.resumen_diagnosticos.text().endswith("▸"))
+            w.b_errores.click()  # desmarca
+            self.bombear()
+            self.assertFalse(self._aviso_visible(w))
+
     def test_SERR02_play_con_errores_no_simula_marca_el_boton_y_despliega_la_lista(self):
         """REQ-EDT-09, REQ-SIM-03: Play con errores que impiden simular no simula, marca el botón y el aviso aparece desplegado con la lista."""
         w, e = self.preparar()

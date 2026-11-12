@@ -97,8 +97,10 @@ class CabecerasYAvisos(BaseQt):
         b = d.resumen_diagnosticos
         self.assertTrue(d.indicador_diagnosticos.isVisible() and b.isVisible())
         self.assertRegex(b.text(), r"[0-9]+ errores?")
-        self.assertFalse(d.lista_diagnosticos.isVisible(), "por defecto, plegado")
+        self.assertTrue(d.lista_diagnosticos.isVisible(), "al marcar el botón, desplegada")
         self.assertLess(d.indicador_diagnosticos.geometry().right(), b.x())
+        b.click()  # (la pliega)
+        self.assertFalse(d.lista_diagnosticos.isVisible())
         b.click()
         self.assertTrue(d.lista_diagnosticos.isVisible() and d.lista_diagnosticos.count() >= 1)
         e.ed.add_transition("g", "", label="t10", at=(100, 600))

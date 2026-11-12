@@ -96,11 +96,67 @@ class SelectorAccion(BaseQt):
         for _ in range(4):
             QApplication.processEvents()
         caja, cb = self.doble(w, e, w.diagrama.cajas_acciones[0]["id"])
-        self.assertLess(cb.width(), cb.fontMetrics().horizontalAdvance("valvula_de_llenado_del_deposito_principal"))
-        self.assertIn("valvula_de_llenado_del_deposito_principal", cb.toolTip())
+        # (alejando, el cuadro mide lo que la acción a 100 % —que crece con el nombre—, no menos: el nombre se lee entero y no hace falta ayuda)
+        self.assertGreaterEqual(cb.width(), cb.fontMetrics().horizontalAdvance("valvula_de_llenado_del_deposito_principal"))
         img = cb.grab().toImage()
         self.assertGreater(img.width(), 0)
-        self.assertGreaterEqual(cb.view().window().width(), cb.view().sizeHintForColumn(0), "la lista da sitio al nombre entero")
+        self.assertLessEqual(abs(cb.view().window().width() - cb.width()), 2, "la lista mide lo que el cuadro")
+
+    def test_SSEL07_la_lista_mide_el_cuadro_o_lo_justo_para_el_nombre_mas_largo_y_el_marcador_se_ve(self):
+        """REQ-EDT-09: con un nombre corto («fe») y uno largo, a zoom 50 %, 100 % y 160 %, el cuadro nunca mide más que el interior de la acción
+        (ni menos que a 100 %); la lista mide lo que el cuadro o, si un nombre no cabe en él, lo justo para el más largo con su papel (decisión del
+        responsable del 12-nov-2026): todos los nombres se leen enteros, sin «…» ni ayuda emergente; con la acción sin variable se pinta el marcador."""
+        from PySide6.QtCore import QEvent, QPoint
+        from PySide6.QtGui import QHelpEvent
+        from unittest import mock
+        from PySide6.QtWidgets import QStyleOptionViewItem
+        w, e, did = self.preparar()
+        w.resize(2000, 1250)
+        largo = "fehgdgjfgjxyzxyz"
+        e.nueva_variable("fe", "output")
+        e.nueva_variable(largo, "output")
+        for _ in range(6):
+            QApplication.processEvents()
+        base = None
+        for zoom in (0.5, 1.0, 1.6):
+            w.diagrama.cerrar_selector()
+            w.diagrama.zoom(zoom / w.diagrama.escala())
+            for _ in range(3):
+                QApplication.processEvents()
+            caja, cb = self.doble(w, e, did)
+            self.assertAlmostEqual(w.diagrama.escala(), zoom, places=2)
+            marco = cb.view().parentWidget()
+            fm = cb.view().fontMetrics()
+            pide = fm.horizontalAdvance(largo) + fm.horizontalAdvance("(S)") + 2 * 8 + 12
+            self.assertGreaterEqual(marco.width(), cb.width(), zoom)
+            self.assertLessEqual(marco.width(), max(cb.width(), pide) + 8, (zoom, "sin huecos: lo justo"))
+            interior = round(caja["rect"][2] * max(zoom, 1.0)) - 2 * max(2, round(2 * max(zoom, 1.0)))
+            self.assertLessEqual(cb.width(), interior, zoom)
+            if zoom == 1.0:
+                base = cb.width()
+            elif zoom == 0.5:
+                self.assertGreaterEqual(cb.width(), min(interior, cb.width()) - 2, "alejando, nunca menos que a 100 %")
+            # el marcador se pinta (la acción no tiene variable)
+            con = cb.grab().toImage()
+            cb.setPlaceholderText("")
+            sin = cb.grab().toImage()
+            self.assertNotEqual(con, sin, "marcador visible")
+            cb.setPlaceholderText(" ")
+            vista, d = cb.view(), cb.view().itemDelegate()
+            for i in range(cb.count()):
+                nombre = cb.itemData(i)
+                rect = vista.visualRect(vista.model().index(i, 0))
+                self.assertLessEqual(abs(rect.width() - marco.width()), 6, (zoom, nombre))
+                opt = QStyleOptionViewItem()
+                opt.rect, opt.font = rect, vista.font()
+                opt.fontMetrics = vista.fontMetrics()
+                with mock.patch("escritorio.diagrama.QToolTip.showText") as ayuda:
+                    d.helpEvent(QHelpEvent(QEvent.Type.ToolTip, QPoint(5, 5), QPoint(5, 5)), vista, opt, vista.model().index(i, 0))
+                if nombre in (largo, "fe"):
+                    ayuda.assert_not_called()
+                    self.assertLessEqual(opt.fontMetrics.horizontalAdvance(nombre), d._hueco_nombre(opt.fontMetrics, rect, "S"), (zoom, nombre))
+            w.diagrama.cerrar_selector()
+        self.assertIsNotNone(base)
 
     def test_SSEL01b_con_variable_el_cuadro_la_muestra_y_sin_ninguna_valida_hay_una_linea_desactivada(self):
         """REQ-ACT-01: con variable en la acción, el cuadro cerrado muestra la actual; sin salidas ni memorias booleanas, una línea desactivada."""
