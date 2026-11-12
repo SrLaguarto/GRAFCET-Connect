@@ -3787,7 +3787,7 @@ class Interfaz(unittest.TestCase):
         for n in ("AND", "and", "Or", "NOT", "true", "False", "rise", "FALL", "active", "activePartial", "activeMacro",
                   "elapsed", "delay", "DELAY"):
             self.assertEqual(e.motivo_nombre(n), f'"{n}" no puede ser nombre de variable: es una palabra de las fórmulas', n)
-        for n in ("a-b", "a+b", "(x)", "1M-1", "1_", "1_2", "1.5a", "a b-c", "mi var!"):
+        for n in ("a*b", "a/b", "(x)", "1-2", "1_", "1_2", "1.5a", "a b/c", "mi var!"):  # («+» y «-» se admiten dentro: test_nombres_con_signos)
             self.assertIn("debe empezar por una letra o _", e.motivo_nombre(n), n)
         for n in ("2", "10", "1.5", "1,5"):  # solo un número: no es un nombre
             self.assertIn("es solo un número", e.motivo_nombre(n), n)
@@ -3796,7 +3796,7 @@ class Interfaz(unittest.TestCase):
         for n in ("X1", "X12"):
             self.assertIn("se confundiría con la actividad de la etapa", e.motivo_nombre(n), n)
         for n in ("marcha", "Q00", "x1", "Xmarcha", "Motor_1", "I0.1", "andar", "Sí", "XX1", "_",
-                  "1M1", "2S3", "1M2", "10M", "1S", "2s3", "1X2", "9_b"):  # con cifra delante, si lleva alguna letra (P-IMP-46)
+                  "1M1", "2S3", "1M2", "10M", "1S", "2s3", "1X2", "9_b", "a-b", "1M-1"):  # con cifra delante, si lleva alguna letra (P-IMP-46)
             self.assertIsNone(e.motivo_nombre(n), n)
         # la tabla de variables: mensaje, parpadeo y la fila vuelve a quedar en blanco
         pv = w.variables

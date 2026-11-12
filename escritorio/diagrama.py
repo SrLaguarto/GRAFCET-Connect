@@ -650,8 +650,8 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     nombre = M.get("names", {}).get  # los ID internos nunca se muestran: etapas, parciales y macroetapas, por su nombre
     pos = {s["id"]: (s["x"] + SX, s["y"]) for s in M["steps"]}
     pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
-    if not pos and not M["transitions"] and not M.get("draftActions"):
-        return cajas
+    if not pos and not M["transitions"] and not M.get("draftActions") and not any(c.get("vacio") for c in M.get("partials") or []):
+        return cajas  # (un grafcet parcial recién soltado, con su marco vacío, es lo único que puede haber que dibujar)
     # Enlace ascendente: por la izquierda del parcial de la transición, no de todo el dibujo
     situation, virtual = set(S.get("situation") or []), set(S.get("virtual") or [])
     unstable, cleared = set(S.get("unstable") or []), set(S.get("lastCleared") or [])

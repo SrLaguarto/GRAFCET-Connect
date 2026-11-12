@@ -126,7 +126,7 @@ class VariablesPegar(BaseQt):
     def test_SVAR06_nombre_repetido_o_no_valido_queda_en_rojo_y_se_corrige_escribiendo(self):
         """REQ-EDT-07: un nombre repetido o no válido deja la celda del nombre en rojo con el motivo del núcleo; al escribir otro, se crea."""
         pv = self.pv
-        pv.pegar_texto("A\tEntrada\tBooleana\nA\tSalida\nmal-nombre\nB\n")
+        pv.pegar_texto("A\tEntrada\tBooleana\nA\tSalida\nmal*nombre\nB\n")
         QApplication.processEvents()
         self.assertEqual([x[0] for x in self.nombres()], ["A", "B"])
         self.assertEqual(pv.msg.text(), "4 filas pegadas: 2 creadas, 2 con errores (en rojo)")

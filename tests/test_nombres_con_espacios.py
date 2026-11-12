@@ -79,7 +79,7 @@ class NombresConEspacios(BaseQt):
             self.assertIsNone(m(n), n)
         for n in ("a  b", " a", "a ", "  ", "a   b", "Marcha  motor"):
             self.assertIn("espacio", m(n) or "", repr(n))
-        for n in ("a-b", "a b-c", "(x) y", "a+ b", "a\tb", "a b", "a, b", "a `b`", "mi var!"):
+        for n in ("a*b", "a/b c", "(x) y", "a* b", "a\tb", "a b", "a, b", "a `b`", "mi var!"):
             self.assertIn("no puede ser nombre de variable", m(n) or "", repr(n))
         self.assertIn("debe empezar", m("1 2") or "", "cifras separadas por un espacio: sin letra")
         self.assertIn("palabra de las fórmulas", m("AND") or "")

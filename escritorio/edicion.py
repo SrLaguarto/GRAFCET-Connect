@@ -1043,7 +1043,7 @@ class Edicion(QObject):
             self.arrastre = self._arrastre_tramo(ident, p)
         elif pos:
             self.arrastre = {"id": ident, "dx": p.x() - pos[0], "dy": p.y() - pos[1], "x": pos[0] - SX, "y": pos[1],
-                             "movido": False}
+                             "x0": pos[0] - SX, "y0": pos[1], "movido": False}
         elif b:
             self.arrastre = {"id": ident, "tipo": "barra", "dx": p.x() - (b["x"] + SX), "dy": p.y() - b["y"],
                              "x": b["x"], "y": b["y"], "movido": False}
@@ -1181,7 +1181,7 @@ class Edicion(QObject):
                 self.reconstruir()
                 self.redibujar.emit()
             if a["movido"]:
-                self._marcar_solape(a)
+                self._marcar_solape(None if self._marcar_marco_destino(a, p) else a)
             return True
         if a:
             x, y = self._modelo(QPointF(p.x() - a["dx"], p.y() - a["dy"]))
@@ -1191,7 +1191,7 @@ class Edicion(QObject):
                 self.reconstruir()
                 self.redibujar.emit()
             if a["movido"]:
-                self._marcar_solape(a)
+                self._marcar_solape(None if self._marcar_marco_destino(a, p) else a)
             return True
         if self.lazo:
             lz = self.lazo
@@ -1245,10 +1245,15 @@ class Edicion(QObject):
             return True
         if self.arrastre:
             a, self.arrastre = self.arrastre, None
+            if self.diagrama is not None and hasattr(self.diagrama, "marcar_destino"):
+                self.diagrama.marcar_destino(None)
             if a.get("tipo") in ("anotacion","tamano_anotacion"):
                 if a["movido"]:
                     self.ed.update_annotation(a["id"],**{k:a[k] for k in ("x","y","width","height") if k in a})
                 self.cambia();return True
+            if a["movido"] and (destino := self._marco_destino_arrastre(a, p)):
+                self._marcar_solape(None)
+                return self._soltar_en_marco(a, destino)
             if a.get("tipo") == "grupo":
                 return self._soltar_grupo(a)
             if a.get("tipo") == "borrador" and self.diagrama is not None:
@@ -1625,6 +1630,89 @@ class Edicion(QObject):
         return {"id": ident, "tipo": "grupo", "ids": list(inicio), "inicio": inicio, "tipos": tipos, "start": p,
                 "dx": p.x() - (x0 + SX), "dy": p.y() - y0, "x": x0, "y": y0, "x0": x0, "y0": y0, "movido": False,
                 "pendiente": pendiente, "marcos": list(ids & {q["id"] for q in self.M["partials"]})}
+
+    # -- arrastrar a otro marco: pasa a pertenecer a él, como cortar y pegar dentro --------------------------------------
+    def _semanticos_arrastre(self, a: dict[str, Any]) -> list[str]:
+        """Las etapas, transiciones y macroetapas que lleva un arrastre simple o de grupo (las barras, las acciones sueltas y los
+        textos no tienen parcial; las acciones unidas van con su etapa)."""
+        if a.get("tipo") == "grupo":
+            ids = [i for i in a["ids"] if a["tipos"].get(i) == "nodo"]
+        elif a.get("tipo") is None:
+            ids = [a["id"]]
+        else:
+            return []
+        pos = posiciones(self.M)
+        return [i for i in ids if i in pos]
+
+    def _marco_destino_arrastre(self, a: dict[str, Any], p: QPointF) -> str | None:
+        """El parcial a cuyo marco pasaría lo que se arrastra si se soltara con el puntero en `p`: el más pequeño de los marcos que
+        contienen el puntero (sin margen), si es el de un grafcet parcial o el recinto de una encapsulante (no el raíz ni una
+        expansión), no es de lo que se arrastra (ni está dentro de ello) y alguno de los elementos que se arrastran es de otro
+        parcial. None si no: se mueve como siempre (en un hueco, dentro del mismo marco, o llevando marcos enteros)."""
+        if a.get("tipo") not in (None, "grupo") or a.get("marcos") or not a.get("movido"):
+            return None
+        ids = self._semanticos_arrastre(a)
+        if not ids:
+            return None
+        dentro = [((b["x1"] - b["x0"]) * (b["y1"] - b["y0"]), pid) for pid, b in cajas_parciales(self.M).items()
+                  if pid != self.raiz and b["x0"] <= p.x() <= b["x1"] and b["y0"] <= p.y() <= b["y1"]]
+        if not dentro:
+            return None
+        destino = min(dentro)[1]
+        if (self.ed.partial_roles().get(destino, {}).get("kind") not in ("root", "enclosure")
+                or all(self.parcial_de(i) == destino for i in ids)):
+            return None
+        modelo, propios, contenidos = self.ed.model, set(ids), set()
+        while True:  # lo que se arrastra no cabe en un recinto o una expansión suyos (ni en lo que hay dentro)
+            antes = (set(propios), set(contenidos))
+            contenidos.update(x["partialRef"] for x in modelo["hierarchy"]["enclosures"] if x["ownerStepRef"] in propios)
+            contenidos.update(x["partialRef"] for x in modelo["hierarchy"]["expansions"] if x["ownerMacroRef"] in propios)
+            contenidos.update(q["id"] for q in modelo["partials"] if q.get("ownerRef") in contenidos)
+            for coll in ("steps", "transitions"):
+                propios.update(x["id"] for x in modelo[coll] if x["partialRef"] in contenidos)
+            if (propios, contenidos) == antes:
+                break
+        return None if destino in contenidos else destino
+
+    def _marcar_marco_destino(self, a: dict[str, Any], p: QPointF) -> str | None:
+        """Mientras se arrastra: recuadra el marco donde pasaría a estar lo que se suelta (`_marco_destino_arrastre`); lo quita si
+        no hay. Devuelve ese parcial."""
+        destino = self._marco_destino_arrastre(a, p)
+        if self.diagrama is not None and hasattr(self.diagrama, "marcar_destino"):
+            self.diagrama.marcar_destino(cajas_parciales(self.M).get(destino) if destino else None)
+        return destino
+
+    def _soltar_en_marco(self, a: dict[str, Any], destino: str) -> bool:
+        """Termina el arrastre de elementos a otro marco: los mismos pasos que cortar y pegar dentro de él (`copiar_fragmento`,
+        `borrar`, `pegar_fragmento`: enlaces que cruzan el borde, nombres repetidos, etapa inicial… como allí), pegados donde se
+        sueltan (con el desplazamiento del arrastre), en una sola operación de deshacer. Si algo falla, todo vuelve como estaba."""
+        ids = list(a["ids"]) if a.get("tipo") == "grupo" else [a["id"]]
+        dx, dy = a["x"] - a["x0"], a["y"] - a["y0"]
+        n, rehacer, sucio = len(self.ed.undo_stack), list(self.ed.redo_stack), self.ed.dirty
+        previo = (list(self.sel), self.accion, self.ver_accion)
+        with self.ed.group("mover a otro marco"):
+            frag = self.copiar_fragmento(ids)
+            x0, y0 = self._esquina_fragmento(frag)
+            self.sel, self.accion = list(ids), None
+            hecho = self.borrar() and self.pegar_fragmento(frag, QPointF(x0 + dx + SX, y0 + dy), destino)
+        if not hecho:
+            while len(self.ed.undo_stack) > n:
+                self.ed.undo()
+            self.ed.redo_stack[:] = rehacer
+            self.ed.dirty = sucio
+            self.sel, self.accion, self.ver_accion = previo
+            self.reconstruir()
+            self.cambiado.emit()
+        return True
+
+    @staticmethod
+    def _esquina_fragmento(frag: Fragment) -> tuple[float, float]:
+        """La esquina (x mínima, y mínima, en el modelo) de lo que copia un fragmento: la que `Editor.paste` lleva a `at`."""
+        pts = [(float(x["x"]), float(x["y"])) for x in frag.layouts]
+        pts += [(float(x["x"]), float(x["y"])) for k in ("barras", "draftActions") for x in frag.presentation.get(k, [])
+                if not x.get("etapa")]
+        pts += [(float(x["x"]), float(x["y"])) for x in frag.presentation.get("notes", []) if x.get("kind") in ("text", "image")]
+        return (min(x for x, _ in pts), min(y for _, y in pts)) if pts else (0.0, 0.0)
 
     def _marcos_grupo(self, a: dict[str, Any]) -> list[QRectF]:
         """Dónde quedan, en el dibujo, los marcos vacíos que se mueven con el grupo (con su nombre debajo)."""
@@ -2781,11 +2869,12 @@ class Edicion(QObject):
             return (f'"{nombre}" no puede ser nombre de variable: lleva espacios al principio o al final, o dos espacios '
                     "seguidos; solo se admite un espacio entre palabras")
         palabras = nombre.split(" ")
-        if not ((re.fullmatch(r"[^\W\d]\w*(?:\.\w+)?", palabras[0])
-                 or re.fullmatch(r"\d\w*", palabras[0]) and re.search(r"[^\W\d_]", nombre))
-                and all(re.fullmatch(r"\w+(?:\.\w+)?", p) for p in palabras[1:])):
+        # («+» y «-» se admiten dentro de las palabras, salvo la primera letra del nombre: neumática, «A+», «1V1-14»)
+        if not ((re.fullmatch(r"[^\W\d][\w+-]*(?:\.\w+)?", palabras[0])
+                 or re.fullmatch(r"\d[\w+-]*", palabras[0]) and re.search(r"[^\W\d_]", nombre))
+                and all(re.fullmatch(r"[\w+-]*\w[\w+-]*(?:\.\w+)?", p) for p in palabras[1:])):
             return (f'"{nombre}" no puede ser nombre de variable: debe empezar por una letra o _ (o por una cifra, si lleva '
-                    "alguna letra, como 1M1) y no llevar símbolos; entre palabras solo un espacio")
+                    "alguna letra, como 1M1) y no llevar más símbolos que + y -; entre palabras solo un espacio")
         if re.fullmatch(r"X\d+", nombre.replace(" ", "")):
             return (f'"{nombre}" no puede ser nombre de variable: se confundiría con la actividad de la etapa '
                     f'{nombre.replace(" ", "")[1:]}')
@@ -4355,12 +4444,13 @@ class Edicion(QObject):
                 d["x"], d["y"] = str(x - SX), str(y + h / 2)
         return frag
 
-    def pegar_fragmento(self, frag: Fragment, punto: QPointF) -> bool:
-        """Pega en la posición libre de rejilla más cercana al puntero, en una sola operación de deshacer."""
+    def pegar_fragmento(self, frag: Fragment, punto: QPointF, parcial: str | None = None) -> bool:
+        """Pega en la posición libre de rejilla más cercana al puntero, en una sola operación de deshacer. Es del parcial en cuyo
+        marco cae el punto, salvo que se diga `parcial` (arrastrar elementos a otro marco, `_soltar_en_marco`)."""
         previo = (list(self.sel), self.accion, self.ver_accion, self.ed.dirty)
         nuevos: dict[str, str] = {}
         def pegar() -> None:
-            nuevos.update(self.ed.paste(frag, self.parcial_en(punto), at=(ajustar(punto.x() - SX), ajustar(punto.y()))))
+            nuevos.update(self.ed.paste(frag, parcial or self.parcial_en(punto), at=(ajustar(punto.x() - SX), ajustar(punto.y()))))
             self.reconstruir()
             propios = set(nuevos.values())
             base = {i: xy for i, xy in layout_from_presentation(self.ed.presentation).items() if i in propios}
