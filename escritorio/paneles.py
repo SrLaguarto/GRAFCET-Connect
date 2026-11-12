@@ -19,7 +19,7 @@ def pintar_marcador(p: QPainter, x: float, centro_y: float, color: str = estilo.
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.setPen(QPen(QColor(color), 1.75, Qt.PenStyle.SolidLine, Qt.PenCapStyle.SquareCap, Qt.PenJoinStyle.MiterJoin))
     p.setBrush(Qt.BrushStyle.NoBrush)
-    p.drawRect(x + .9, centro_y - LADO_MARCADOR / 2 + .9, LADO_MARCADOR - 1.8, LADO_MARCADOR - 1.8)
+    p.drawRect(QRectF(x + .9, centro_y - LADO_MARCADOR / 2 + .9, LADO_MARCADOR - 1.8, LADO_MARCADOR - 1.8))  # (QRectF: con números sueltos Qt trunca a enteros y se recorta el borde izquierdo)
     p.restore()
 
 

@@ -925,6 +925,51 @@ class MoverVarios(BaseQt):
         self.assertEqual(e.ed.link_styles()[entre]["route"], {"laneX": "40", "exitY": "100", "entryY": "130"})
 
 
+    def test_SEDI330_a_mitad_del_arrastre_los_enlaces_siguen_a_lo_que_se_mueve(self):
+        """REQ-EDT-02, REQ-EDT-14: arrastrando con el ratón una selección con el enlace de retorno de ruta manual (dentro o fuera de la
+        selección), a mitad del arrastre el retorno ya va desplazado con las etapas, como queda al soltar; con un extremo fuera se
+        recalcula en vivo; lo que se guarda al soltar es lo mismo."""
+        from PySide6.QtCore import QPoint
+        from PySide6.QtTest import QTest
+        from grafcet.routing import enlaces
+        w, e = self.vacio()
+        ids = self.cadena(e)
+        e.conectar(ids[3], ids[0])  # bucle de dos etapas: el retorno sube por un lado hasta la etapa inicial
+        w.resize(1100, 850)
+        w.show()
+        self.app.processEvents()
+        retorno = next(r["id"] for r in enlaces(e.M) if r["rol"] == "post" and len(r["pts"]) == 6)
+        e.ed.set_link_style(retorno, {"route": {"laneX": "-90", "exitY": "330", "entryY": "10"}})
+        e.cambia()
+        d = w.diagrama
+
+        def pts():
+            return [tuple(map(float, q)) for q in next(r for r in enlaces(e.M) if r["id"] == retorno)["pts"]]
+
+        def vista(c):
+            return d.viewport().mapFromGlobal(d.viewport().mapToGlobal(d.viewportTransform().map(c).toPoint()))
+
+        for dentro in (True, False):
+            for seleccion in ("todo", "una_etapa"):
+                e.sel = list(ids) + ([retorno] if dentro else [])
+                if seleccion == "una_etapa":
+                    e.sel = [ids[2], ids[3]] + ([retorno] if dentro else [])
+                antes, estilos = pts(), copy.deepcopy(e.ed.link_styles())
+                p0 = centro(e.M, ids[2])
+                QTest.mousePress(d.viewport(), Qt.MouseButton.LeftButton, pos=vista(p0))
+                QTest.mouseMove(d.viewport(), vista(p0 + QPointF(20, 10)))
+                QTest.mouseMove(d.viewport(), vista(p0 + QPointF(60, 40)))
+                self.assertEqual(e.arrastre["tipo"], "grupo")
+                medio = pts()
+                self.assertEqual(e.ed.link_styles(), estilos, "a mitad del arrastre no se ha guardado nada")
+                if seleccion == "todo":
+                    self.assertEqual(medio, [(x + 60, y + 40) for x, y in antes], "el retorno con todo: se traslada entero")
+                QTest.mouseRelease(d.viewport(), Qt.MouseButton.LeftButton, pos=vista(p0 + QPointF(60, 40)))
+                self.assertEqual(pts(), medio, "al soltar queda como se veía a mitad del arrastre")
+                e.deshacer()
+                self.assertEqual(pts(), antes)
+
+
 @unittest.skipUnless(QT, "PySide6 no está instalado")
 class EquidistanciarEnElDibujo(BaseQt):
     OPCION = "Equidistanciar alturas de la cadena"

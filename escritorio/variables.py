@@ -37,7 +37,7 @@ COLUMNAS = ["Nombre", "Papel", "Tipo"]
 SIN_NOMBRE = "Hay una variable sin nombre: escríbale un nombre o quítela"
 NARANJA = "#ffd2ad"
 ROJO_SUAVE = "#fbdcdc"  # el fondo de la celda con un error al pegar (con el texto en rojo)
-MARCADOR = "nueva variable…"  # el texto gris de la fila en blanco del final
+MARCADOR = "nueva variable…"  # el texto gris de la fila de muestra (solo con la tabla vacía)
 PAPELES_TEXTO = {"entrada": "input", "e": "input", "salida": "output", "s": "output", "memoria": "internal", "m": "internal"}
 TIPOS_TEXTO = {"booleana": {"kind": "bool"}, "bool": {"kind": "bool"}, "entera": {"kind": "int"}, "decimal": {"kind": "decimal", "scale": 2}}
 
@@ -400,7 +400,9 @@ class PanelVariables(QWidget):
         if e is None or self.tabla.state() == QAbstractItemView.State.EditingState:
             return
         vs = e.variables()
-        blanca = [self._blanca] if self.isEnabled() else []  # (al simular, el panel está desactivado y no enseña la fila en blanco)
+        # La fila en blanco es solo una muestra para la primera variable: con la tabla vacía (sin variables ni filas pendientes) y al
+        # editar. Al crearse la primera o pulsar «+ Entrada/Salida/Memoria» se sustituye, y vuelve si se borra todo.
+        blanca = [self._blanca] if self.isEnabled() and not vs and not self._pend else []
         clave = repr([(v["id"], v["name"], v["role"], v["type"]) for v in vs]
                      + [(f["n"], f["papel"], f["tipo"], f["nombre"], f["txt"], f["err"]) for f in self._pend + blanca])
         if clave == self._clave:  # nada cambió: no se rehace la tabla (se hace en cada clic del dibujo)
@@ -584,7 +586,7 @@ class PanelVariables(QWidget):
             return
         blanca = f.get("blanca")
         if blanca:
-            self._blanca = self._fila_nueva(blanca=True)  # (la de ahora se crea; otra en blanco queda debajo)
+            self._blanca = self._fila_nueva(blanca=True)  # (la de ahora se crea; la muestra no vuelve mientras haya variables)
         else:
             pos = self._pend.index(f)
             self._pend.remove(f)  # se crea en el modelo: deja de ser una fila de la interfaz
@@ -640,7 +642,7 @@ class PanelVariables(QWidget):
         self.msg.setText("")
         self.msg.setStyleSheet("")
         self._reconstruir()
-        r = self._filas.index(f)  # (la fila en blanco queda debajo)
+        r = self._filas.index(f)
         self.tabla.selectRow(r)
         if self.isVisible():  # se escribe el nombre directamente
             self.tabla.setFocus()

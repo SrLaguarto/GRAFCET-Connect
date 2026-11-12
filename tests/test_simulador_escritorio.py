@@ -531,10 +531,10 @@ class Ventana(unittest.TestCase):
         self.assertLess(d.escala(), k)
         d.b_ajustar.click()
         self.assertAlmostEqual(d.escala(), base, places=6)
-        # La rueda del ratón, con o sin Ctrl, acerca y aleja
+        # Ctrl + rueda acerca y aleja
         from PySide6.QtCore import QPoint, QPointF, Qt
         from PySide6.QtGui import QWheelEvent
-        for mod in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ControlModifier):
+        for mod in (Qt.KeyboardModifier.ControlModifier,):
             antes = d.escala()
             for delta, sentido in ((120, 1), (-120, -1)):
                 ev = QWheelEvent(QPointF(100, 100), d.mapToGlobal(QPointF(100, 100)), QPoint(0, 0), QPoint(0, delta),

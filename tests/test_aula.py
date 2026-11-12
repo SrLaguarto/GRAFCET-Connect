@@ -268,9 +268,28 @@ class RuedaYTactil(BaseQt):
         QApplication.sendEvent(d.viewport(), ev)
         QApplication.processEvents()
 
+    def test_SAUL17b_las_tres_combinaciones_de_rueda(self):
+        """REQ-EDT-02, REQ-SIM-03: rueda sola = desplaza en vertical; Ctrl+rueda = zoom; Mayús+rueda = horizontal."""
+        w, d = self.vista_manual()
+        h, v = d.horizontalScrollBar(), d.verticalScrollBar()
+        v.setValue(v.maximum() // 2)
+        h.setValue(h.maximum() // 2)
+        v0, h0, k0 = v.value(), h.value(), d.escala()
+        self.rueda(d, (0, -120))
+        self.assertEqual((h.value(), d.escala()), (h0, k0))
+        self.assertEqual(v.value(), v0 + 60)
+        self.rueda(d, (0, 120), mod=Qt.KeyboardModifier.ControlModifier)
+        self.assertGreater(d.escala(), k0)
+        v.setValue(v.maximum() // 2)
+        h.setValue(h.maximum() // 2)
+        v1, h1, k1 = v.value(), h.value(), d.escala()
+        self.rueda(d, (0, -120), mod=Qt.KeyboardModifier.ShiftModifier)
+        self.assertEqual((v.value(), d.escala()), (v1, k1))
+        self.assertEqual(h.value(), h1 + 60)
+
     def test_SAUL17_rueda_y_ctrl_rueda_hacen_zoom_mayus_y_dos_dedos_desplazan(self):
-        """REQ-EDT-02, REQ-SIM-03: la rueda del ratón sola y Ctrl+rueda hacen zoom anclado al puntero; Mayús+rueda desplaza en
-        horizontal; dos dedos de un panel táctil (pixelDelta o fase de desplazamiento) desplazan en los dos ejes; el pellizco
+        """REQ-EDT-02, REQ-SIM-03: solo Ctrl+rueda hace zoom anclado al puntero; la rueda sola desplaza en vertical y Mayús+rueda
+        en horizontal; dos dedos de un panel táctil (pixelDelta o fase de desplazamiento) desplazan en los dos ejes; el pellizco
         nativo también hace zoom."""
         w, d = self.vista_manual()
         k = d.escala()
@@ -282,12 +301,15 @@ class RuedaYTactil(BaseQt):
         v.setValue(v.maximum() // 2)
         h.setValue(h.maximum() // 2)
         v0, h0, k0 = v.value(), h.value(), d.escala()
-        self.rueda(d, (0, 120))  # la rueda del ratón sola: zoom, como siempre
-        self.assertGreater(d.escala(), k0)
+        self.rueda(d, (0, 120), mod=Qt.KeyboardModifier.ControlModifier)
         self.assertAlmostEqual(d.escala(), k0 * 1.15, places=6)
-        self.rueda(d, (0, -120))
+        self.rueda(d, (0, -120), mod=Qt.KeyboardModifier.ControlModifier)
         self.assertAlmostEqual(d.escala(), k0, places=6)
         self.assertEqual((v.value(), h.value()), (v0, h0), "el zoom anclado no mueve las barras con el puntero en el centro")
+        self.rueda(d, (0, 120))  # la rueda sola desplaza en vertical: hacia arriba, el contenido baja (la barra sube)
+        self.assertEqual((d.escala(), h.value()), (k0, h0))
+        self.assertLess(v.value(), v0)
+        v.setValue(v0)
         self.rueda(d, (0, -120), mod=Qt.KeyboardModifier.ShiftModifier)  # Mayús: horizontal
         self.assertGreater(h.value(), h0)
         self.assertEqual((v.value(), d.escala()), (v0, k0))

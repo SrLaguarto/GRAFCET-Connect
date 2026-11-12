@@ -232,8 +232,8 @@ SECCIONES: tuple[tuple[str, tuple[Entrada, ...]], ...] = (
     )),
     ("Ratón y teclado", (
         Entrada("Ver el estado", "Pase el ratón por una etapa o una transición para ver su estado."),
-        Entrada("Acercar y alejar", "La rueda del ratón (con o sin Ctrl) o el pellizco del panel táctil hacen zoom "
-                "alrededor del puntero. Mayús + rueda desplaza en horizontal; con dos dedos del panel táctil, en los dos ejes. "
+        Entrada("Acercar y alejar", "Ctrl + rueda del ratón o el pellizco del panel táctil hacen zoom "
+                "alrededor del puntero. La rueda sola desplaza el dibujo arriba y abajo; Mayús + rueda, en horizontal; con dos dedos del panel táctil, en los dos ejes. "
                 "También se mueve arrastrándolo con el botón central."),
         Entrada("Encajar el dibujo", "«Centrar todo» (Ctrl+0) lo encaja entero; al simular, el doble clic también."),
         Entrada("Editar", "Doble clic en un elemento abre sus opciones abajo. Supr borra; Ctrl+Z y Ctrl+Y "

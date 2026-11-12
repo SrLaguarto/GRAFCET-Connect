@@ -55,7 +55,7 @@ class Remates(BaseQt):
         w,e=self.editor();p=w.variables
         for i in range(2):e.ed.add_variable("p"+str(i),"input",{"kind":"bool"})
         e.cambia();QTest.qWait(20)
-        natural=p.tabla.horizontalHeader().height()+sum(p.tabla.rowHeight(i) for i in range(3))+2*p.tabla.frameWidth()  # (dos variables y la fila en blanco del final)
+        natural=p.tabla.horizontalHeader().height()+sum(p.tabla.rowHeight(i) for i in range(2))+2*p.tabla.frameWidth()
         self.assertEqual(p.tabla.height(),natural)
         botones=list(p.b_nuevas.values())+[p.b_quitar]
         self.assertLessEqual(botones[0].parentWidget().y()-p.tabla.geometry().bottom(),10)

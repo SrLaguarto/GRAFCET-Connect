@@ -224,7 +224,7 @@ class Alturas(BaseQt):
             self._bombear(4)
             self.assertEqual(v.tabla.rowCount(), inicio + 1 + k, f"pulsación {k}: una fila más, a la vista")
             self.assertEqual(v.tabla.state(), QAbstractItemView.State.EditingState, "el cursor está en el nombre de la fila nueva")
-            self.assertEqual(v.tabla.currentRow(), v.tabla.rowCount() - 2)  # (la fila en blanco del final queda debajo)
+            self.assertEqual(v.tabla.currentRow(), v.tabla.rowCount() - 1)
             self.assertTrue(v.tabla.indexWidget(v.tabla.currentIndex()).isVisible())
         self.assertIn("sensor_nuevo", [x["name"] for x in e.variables()], "el nombre escrito se confirmó")
         self.assertEqual(v.sin_nombre(), 3)

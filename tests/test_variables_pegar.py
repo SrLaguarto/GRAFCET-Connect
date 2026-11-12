@@ -28,8 +28,8 @@ class VariablesPegar(BaseQt):
     def fila(self, nombre):
         return next(r for r, f in enumerate(self.pv._filas) if self.pv.tabla.item(r, 0).text() == nombre)
 
-    def test_SVAR01_la_tabla_termina_con_una_fila_en_blanco_que_crea_la_variable(self):
-        """REQ-EDT-07: la fila en blanco del final (con «nueva variable…» en gris) crea la variable al escribir un nombre, y deja otra debajo."""
+    def test_SVAR01_la_fila_de_muestra_solo_con_la_tabla_vacia_crea_la_variable_y_no_deja_otra(self):
+        """REQ-EDT-07: con la tabla vacía hay una fila de muestra («nueva variable…» en gris) que crea la variable al escribir un nombre; no queda otra en blanco."""
         pv = self.pv
         self.assertEqual((pv.tabla.rowCount(), pv.tabla.item(0, 0).text(), pv._filas[0]["blanca"]), (1, "", True))
         self.assertEqual(MARCADOR, "nueva variable…")
@@ -38,24 +38,24 @@ class VariablesPegar(BaseQt):
         QApplication.processEvents()
         self.assertEqual(self.nombres(), [("Marcha", "input", "bool")])
         self.assertEqual(len(self.e.ed.undo_stack), n + 1)
-        self.assertEqual((pv.tabla.rowCount(), pv.tabla.item(1, 0).text(), pv._filas[1]["blanca"]), (2, "", True))
-        pv.tabla.item(1, 0).setText("Paro")
-        QApplication.processEvents()
-        self.assertEqual([x[0] for x in self.nombres()], ["Marcha", "Paro"])
-        self.assertEqual(pv.tabla.rowCount(), 3)
+        self.assertEqual((pv.tabla.rowCount(), [f.get("blanca") for f in pv._filas]), (1, [None]), "ya no hay muestra debajo")
+        pv.nueva()
+        self.assertEqual((pv.tabla.rowCount(), pv.sin_nombre()), (2, 1), "con variables, solo la fila nueva")
+        self.assertFalse(any(f.get("blanca") for f in pv._filas))
 
-    def test_SVAR02_la_fila_en_blanco_no_cuenta_ni_se_guarda_ni_sale_al_simular(self):
-        """REQ-EDT-07: la fila en blanco no es una variable ni una fila pendiente (no impide guardar ni simular) y desaparece con el panel desactivado."""
+    def test_SVAR02_la_muestra_no_cuenta_la_sustituyen_los_botones_y_vuelve_al_borrar_todo(self):
+        """REQ-EDT-07: la muestra no es variable ni fila pendiente; «+ Salida» la sustituye (no queda ni encima ni debajo); vuelve al borrar todo y no sale al simular."""
         pv = self.pv
         self.assertEqual((self.e.ed.model["variables"], pv.sin_nombre(), self.w._variables_sin_nombre()), ([], 0, False))
-        pv.nueva("output")  # los botones «+ Entrada / + Salida / + Memoria» siguen añadiendo una fila (que sí cuenta)
-        self.assertEqual((pv.sin_nombre(), pv.tabla.rowCount(), pv._filas[0]["papel"], pv._filas[1]["blanca"]), (1, 2, "output", True))
+        pv.nueva("output")
+        self.assertEqual((pv.sin_nombre(), pv.tabla.rowCount(), pv._filas[0]["papel"], pv._filas[0].get("blanca")), (1, 1, "output", False))
+        self.assertEqual(pv.tabla.item(0, 1).text(), pv.texto(0, 1))
         pv._confirmar_edicion()  # (con el cursor en el nombre, la tabla no se rehace)
         pv.tabla.selectRow(0)
         pv.quitar_seleccion()
-        self.assertEqual((pv.sin_nombre(), pv.tabla.rowCount()), (0, 1))
+        self.assertEqual((pv.sin_nombre(), pv.tabla.rowCount(), pv._filas[0]["blanca"]), (0, 1, True), "sin nada, vuelve la muestra")
         pv.tabla.selectRow(0)
-        pv.quitar_seleccion()  # (la fila en blanco no se quita)
+        pv.quitar_seleccion()  # (la muestra no se quita)
         self.assertEqual(pv.tabla.rowCount(), 1)
         pv.setEnabled(False)
         QApplication.processEvents()
@@ -63,6 +63,15 @@ class VariablesPegar(BaseQt):
         pv.setEnabled(True)
         QApplication.processEvents()
         self.assertEqual(pv.tabla.rowCount(), 1)
+        # con una variable creada y luego borrada, la muestra vuelve también
+        pv.tabla.item(0, 0).setText("A")
+        QApplication.processEvents()
+        self.assertEqual(pv.tabla.rowCount(), 1)
+        self.assertFalse(pv._filas[0].get("blanca"))
+        pv.tabla.selectRow(0)
+        pv.quitar_seleccion()
+        QApplication.processEvents()
+        self.assertEqual((self.nombres(), pv.tabla.rowCount(), pv._filas[0]["blanca"]), ([], 1, True))
 
     def test_SVAR03_pegar_el_ejemplo_crea_dos_y_deja_la_tercera_en_rojo_con_sus_motivos(self):
         """REQ-EDT-07: dos filas válidas se crean; la tercera («SalIdo», «Buleano») queda pendiente con Papel y Tipo en rojo, ayuda con el motivo y resumen."""
@@ -83,7 +92,8 @@ class VariablesPegar(BaseQt):
         self.assertEqual(t.item(r, 1).foreground().color().name(), "#c62828")
         self.assertIn("Papel no reconocido: «SalIdo». Use Entrada, Salida o Memoria.", t.item(r, 1).toolTip())
         self.assertIn("Tipo no reconocido: «Buleano»", t.item(r, 2).toolTip())
-        self.assertEqual((pv.sin_nombre(), pv._filas[-1]["blanca"]), (1, True))
+        self.assertEqual(pv.sin_nombre(), 1)
+        self.assertFalse(any(f.get("blanca") for f in pv._filas), "con variables, sin muestra")
         self.e.deshacer() if hasattr(self.e, "deshacer") else self.w.historial_plano(False)
         QApplication.processEvents()
         self.assertEqual(self.nombres(), [])
@@ -111,7 +121,7 @@ class VariablesPegar(BaseQt):
         pv.elegir(r, 2, {"kind": "int"})
         QApplication.processEvents()
         self.assertEqual(self.nombres()[-1], ("Error", "output", "int"))
-        self.assertEqual((pv.sin_nombre(), pv.tabla.rowCount()), (0, 4))
+        self.assertEqual((pv.sin_nombre(), pv.tabla.rowCount()), (0, 3))
 
     def test_SVAR06_nombre_repetido_o_no_valido_queda_en_rojo_y_se_corrige_escribiendo(self):
         """REQ-EDT-07: un nombre repetido o no válido deja la celda del nombre en rojo con el motivo del núcleo; al escribir otro, se crea."""
@@ -151,3 +161,16 @@ class VariablesPegar(BaseQt):
         QTest.keyClick(editor, Qt.Key.Key_V, Qt.KeyboardModifier.ControlModifier)
         self.assertEqual(editor.text(), "Texto")
         self.assertEqual(len(self.nombres()), 2)
+
+    def test_SVAR08_pegar_con_muestra_visible_la_sustituye_y_con_variables_sigue_funcionando(self):
+        """REQ-EDT-07: las filas pegadas con la tabla vacía sustituyen a la muestra; con variables ya existentes también se pega, sin muestra."""
+        pv = self.pv
+        self.assertTrue(pv._filas[0]["blanca"])
+        pv.pegar_texto("Uno\tEntrada\tBooleana\nMal\tSalIdo\n")
+        QApplication.processEvents()
+        self.assertEqual(self.nombres(), [("Uno", "input", "bool")])
+        self.assertEqual((pv.tabla.rowCount(), [f.get("blanca") for f in pv._filas]), (2, [None, False]))
+        pv.pegar_texto("Dos\tSalida\tBooleana")
+        QApplication.processEvents()
+        self.assertEqual([x[0] for x in self.nombres()], ["Uno", "Dos"])
+        self.assertFalse(any(f.get("blanca") for f in pv._filas))

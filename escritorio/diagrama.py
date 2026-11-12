@@ -22,9 +22,9 @@ from grafcet.routing import NORMAL, SENTIDO, TALLO_T, enlaces, orientacion, punt
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, QPainter, QPainterPath, QPen,
-                           QPixmap, QRegion)
+                           QPalette, QPixmap, QRegion)
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QListWidget, QHBoxLayout, QLabel,
-                               QMenu, QProxyStyle, QPushButton, QStyle, QToolButton, QWidget)
+                               QMenu, QProxyStyle, QPushButton, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QToolButton, QWidget)
 
 from . import estilo
 
@@ -1261,20 +1261,15 @@ PASO_RUEDA = 60   # px que desplaza un giro de rueda (120 unidades de `angleDelt
 
 
 def modo_rueda(event: Any) -> str:
-    """Qué hace un evento de rueda: «zoom» o «desplaza». Ctrl + rueda hace zoom (también el pellizco de un panel táctil de
-    Windows, que llega así); el gesto de dos dedos de un panel táctil (`pixelDelta` o fase de desplazamiento) desplaza en los dos
-    ejes; Mayús + rueda desplaza en horizontal; la rueda de un ratón sola hace zoom, anclado al puntero."""
-    if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-        return "zoom"
-    if not event.pixelDelta().isNull() or event.phase() != Qt.ScrollPhase.NoScrollPhase:
-        return "desplaza"
-    return "desplaza" if event.modifiers() & Qt.KeyboardModifier.ShiftModifier else "zoom"
+    """Qué hace un evento de rueda: «zoom» o «desplaza». Solo Ctrl + rueda hace zoom (también el pellizco de un panel táctil de
+    Windows, que llega así); la rueda sola desplaza en vertical, Mayús + rueda en horizontal y el gesto de dos dedos de un panel
+    táctil, en los dos ejes."""
+    return "zoom" if event.modifiers() & Qt.KeyboardModifier.ControlModifier else "desplaza"
 
 
 def factor_zoom_rueda(event: Any) -> float:
     """El factor de zoom de un giro de rueda. Con Ctrl (o el pellizco de un panel táctil de Windows): `ZOOM_PASO` por cada 120
-    unidades de `angleDelta`, así que los giros finos acercan o alejan en proporción. Con la rueda sola: un paso por giro, en el
-    sentido del giro. 1 si no hay giro."""
+    unidades de `angleDelta`, así que los giros finos acercan o alejan en proporción. 1 si no hay giro."""
     ang = event.angleDelta()
     d = ang.y() or ang.x()
     if not d:
@@ -1346,6 +1341,45 @@ class _BarraZoom(QFrame):
 
 
 MAS_PROPIEDADES = "@mas-propiedades"  # el dato de la última opción del desplegable sobre una acción
+
+
+class _OpcionConPapel(QStyledItemDelegate):
+    """Las opciones del desplegable sobre una acción: el nombre a la izquierda y su papel («S», «M») entre paréntesis a la derecha."""
+
+    @staticmethod
+    def _separador(index: Any) -> bool:
+        return index.data(Qt.ItemDataRole.AccessibleDescriptionRole) == "separator"
+
+    def sizeHint(self, option: Any, index: Any) -> QSize:  # noqa: N802
+        if self._separador(index):
+            return QSize(option.rect.width(), 7)  # una línea fina con poco margen, no una fila entera
+        return super().sizeHint(option, index)
+
+    def paint(self, painter: Any, option: Any, index: Any) -> None:
+        if self._separador(index):
+            painter.save()
+            painter.setPen(QColor(estilo.BORDE_CONTROL))
+            y = option.rect.center().y()
+            painter.drawLine(option.rect.left() + 6, y, option.rect.right() - 6, y)
+            painter.restore()
+            return
+        papel = index.data(Qt.ItemDataRole.UserRole + 1)
+        if not papel:
+            super().paint(painter, option, index)
+            return
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        opt.text = ""
+        estilo_ = opt.widget.style() if opt.widget else QApplication.style()
+        estilo_.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
+        r = opt.rect.adjusted(8, 0, -8, 0)
+        painter.save()
+        painter.setPen(opt.palette.color(QPalette.ColorGroup.Normal if index.flags() & Qt.ItemFlag.ItemIsEnabled else QPalette.ColorGroup.Disabled,
+                                         QPalette.ColorRole.HighlightedText if opt.state & QStyle.StateFlag.State_Selected else QPalette.ColorRole.Text))
+        nombre = index.data(Qt.ItemDataRole.DisplayRole).rsplit("  (", 1)[0]
+        painter.drawText(r, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, nombre)
+        painter.drawText(r, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, f"({papel})")
+        painter.restore()
 
 
 class SelectorAccion(QComboBox):
@@ -2162,9 +2196,9 @@ class VistaDiagrama(QGraphicsView):
         self._situar(p, c)
         self._notificar()
 
-    def abrir_selector(self, rect: Any, opciones: list[tuple[str, Any, bool]], actual: str, al_elegir: Any, al_mas: Any) -> None:
-        """Un desplegable abierto sobre el rectángulo `rect` (x, y, ancho, alto del dibujo) con las `opciones` (texto, dato, habilitada), un
-        separador y «Más propiedades…». Elegir una llama a `al_elegir(dato)` y cierra; «Más propiedades…», a `al_mas()`. Esc, un clic fuera, desplazar
+    def abrir_selector(self, rect: Any, opciones: list[tuple[Any, ...]], actual: str, al_elegir: Any, al_mas: Any) -> None:
+        """Un desplegable abierto sobre el rectángulo `rect` (x, y, ancho, alto del dibujo) con las `opciones` (texto, dato, habilitada[, papel: se
+        pinta a la derecha]), un separador y «Más propiedades…». Cerrado muestra la variable actual o, si no hay, «Elija la variable…» (no es una opción). Elegir una llama a `al_elegir(dato)` y cierra; «Más propiedades…», a `al_mas()`. Esc, un clic fuera, desplazar
         o hacer zoom lo cierran sin cambiar nada."""
         self.cerrar_selector()
         x, y, w, h = rect
@@ -2172,18 +2206,24 @@ class VistaDiagrama(QGraphicsView):
         cb = SelectorAccion(self.viewport())
         cb.setAccessibleName("Variable de la acción")
         cb.setToolTip("Variable de la acción")
-        for texto, dato, habilitada in opciones:
+        cb.setItemDelegate(_OpcionConPapel(cb))
+        for texto, dato, habilitada, *papel in opciones:
             cb.addItem(texto, dato)
+            if papel and papel[0]:
+                cb.setItemData(cb.count() - 1, papel[0], Qt.ItemDataRole.UserRole + 1)
             if not habilitada:
                 cb.model().item(cb.count() - 1).setEnabled(False)
         cb.insertSeparator(cb.count())
         cb.addItem("Más propiedades…", MAS_PROPIEDADES)
-        cb.setCurrentIndex(max(0, cb.findData(actual)) if actual else 0)
+        cb.setPlaceholderText(actual or "Elija la variable…")
+        cb.setCurrentIndex(cb.findData(actual) if actual else -1)
         cb.setMinimumWidth(r.width())
         cb.setFixedHeight(estilo.ALTO_CONTROL)
         ancho = max(r.width(), cb.sizeHint().width())
         cb.setGeometry(r.left(), r.center().y() - estilo.ALTO_CONTROL // 2, ancho, estilo.ALTO_CONTROL)
-        cb.view().setMinimumWidth(cb.view().sizeHintForColumn(0) + 36)
+        necesario = cb.view().sizeHintForColumn(0) + 24  # (la lista mide lo que el cuadro, salvo que un nombre no quepa)
+        if necesario > ancho:
+            cb.view().setMinimumWidth(necesario)
 
         def elegido(i: int) -> None:
             dato = cb.itemData(i)
@@ -2240,8 +2280,8 @@ class VistaDiagrama(QGraphicsView):
         self._colocar()
 
     def wheelEvent(self, event: Any) -> None:  # noqa: N802
-        """La rueda del ratón (sola o con Ctrl) acerca o aleja anclada al puntero, y el pellizco de un panel táctil también;
-        Mayús + rueda desplaza en horizontal y el gesto de dos dedos de un panel táctil, en los dos ejes (`modo_rueda`)."""
+        """Ctrl + rueda acerca o aleja anclado al puntero, y el pellizco de un panel táctil también; la rueda sola desplaza en
+        vertical, Mayús + rueda en horizontal y el gesto de dos dedos de un panel táctil, en los dos ejes (`modo_rueda`)."""
         self._origen = False
         if modo_rueda(event) == "zoom":
             if (f := factor_zoom_rueda(event)) != 1.0:

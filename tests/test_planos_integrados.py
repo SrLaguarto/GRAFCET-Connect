@@ -132,10 +132,10 @@ class PlanosIntegrados(BaseQt):
         e.ed.undo();self.assertEqual(e.ed.sheet_links()[0]['grafcets'][0]['porcentaje'],200);e.ed.redo();self.assertEqual(e.ed.sheet_links()[0]['grafcets'][0]['porcentaje'],100)
 
     def test_SPAG13_rueda_sin_ctrl_y_arrastre_central_desplazan_vista(self):
-        """REQ-EDT-11: rueda sin Ctrl y botón central navegan como en el dibujo principal sin mover lo impreso."""
+        """REQ-EDT-11: Ctrl + rueda (zoom) y botón central navegan como en el dibujo principal sin mover lo impreso."""
         from escritorio.diagrama import ZOOM_PASO
         w,e,s=self.preparar();self.crear_hoja(e,[s]);p=self.pulsar_planos();p.zoom_combo.setCurrentIndex(p.zoom_combo.findData(2.));QApplication.processEvents();v=p.editor.vista;antes=copy.deepcopy(p.graficos)
-        pos=QPointF(200,200);anclado=v.punto_hoja(pos);pantalla=pos+v.pos();evento=QWheelEvent(pos,QPointF(v.mapToGlobal(pos.toPoint())),QPoint(),QPoint(0,120),Qt.MouseButton.NoButton,Qt.KeyboardModifier.NoModifier,Qt.ScrollPhase.NoScrollPhase,False)
+        pos=QPointF(200,200);anclado=v.punto_hoja(pos);pantalla=pos+v.pos();evento=QWheelEvent(pos,QPointF(v.mapToGlobal(pos.toPoint())),QPoint(),QPoint(0,120),Qt.MouseButton.NoButton,Qt.KeyboardModifier.ControlModifier,Qt.ScrollPhase.NoScrollPhase,False)
         QApplication.sendEvent(v,evento);self.assertAlmostEqual(p.factor_zoom,2*ZOOM_PASO);QApplication.processEvents();despues=v.punto_hoja(pantalla-v.pos());self.assertAlmostEqual(anclado.x(),despues.x(),delta=.3);self.assertAlmostEqual(anclado.y(),despues.y(),delta=.3);a=p.editor.area;a.verticalScrollBar().setValue(100);valor=a.verticalScrollBar().value()
         QTest.mousePress(v,Qt.MouseButton.MiddleButton,pos=QPoint(200,200));QTest.mouseMove(v,QPoint(200,150));QTest.mouseRelease(v,Qt.MouseButton.MiddleButton,pos=QPoint(200,150));self.assertGreater(a.verticalScrollBar().value(),valor);self.assertEqual(p.graficos,antes)
 

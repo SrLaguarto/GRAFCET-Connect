@@ -583,6 +583,11 @@ class Edicion(QObject):
         styles = copy.deepcopy(self.ed.link_styles())
         if self.arrastre and self.arrastre.get("tipo") in ("flecha", "tramo"):
             styles[self.arrastre["id"]] = self.arrastre["style"]
+        elif self.arrastre and self.arrastre.get("tipo") == "grupo":
+            # los enlaces con sus dos extremos en lo que se mueve llevan su recorrido manual (alturas y carril absolutos) con
+            # ellos, como se guardará al soltar; los de un extremo solo se recalculan con la posición nueva
+            a = self.arrastre
+            styles.update(self._rutas_con_grupo(set(a["ids"]), a["x"] - a["x0"], a["y"] - a["y0"]))
         return styles
 
     def ajustar_flecha(self, **cambios: Any) -> None:
@@ -2617,20 +2622,24 @@ class Edicion(QObject):
         return {"tipo": {"activation": "activacion", "deactivation": "desactivacion", "event": "evento"}[trig["kind"]],
                 "variable": nombre, "valor": valor, "evento": self._texto(trig.get("expressionRef"))}
 
-    def opciones_variable_accion(self, aid: str) -> list[tuple[str, Any, bool]]:
-        """Las opciones del campo de variable de la acción `aid` (las mismas que en Propiedades: `acciones.opciones_variable`)."""
-        from .acciones import opciones_variable
+    def opciones_variable_accion(self, aid: str) -> list[tuple[str, Any, bool, str]]:
+        """Las opciones del desplegable sobre una acción continua (texto, dato, habilitada, papel): solo lo que puede escribir una continua,
+        las salidas booleanas y luego las memorias booleanas (cada grupo en el orden de la tabla de variables), sin cabeceras. El texto es
+        «nombre  (S)» o «nombre  (M)»; el desplegable pinta el papel a la derecha. Sin ninguna, «Ninguna» desactivada. (Propiedades no usa esto:
+        ofrece `acciones.opciones_variable`.)"""
         v = self.fuente_bloques()[0]
-        d = self.datos_accion(aid)
-        ofrecidas = [n for n, (papel, tipo) in v.items() if papel != "input" and (tipo == "bool" or d["tipo"] not in CONTINUAS)]
-        return opciones_variable(v, ofrecidas, d["variable"] if d["variable"] in v else "")
+        out: list[tuple[str, Any, bool, str]] = []
+        for papel, letra in (("output", "S"), ("internal", "M")):
+            out += [(f"{n}  ({letra})", n, True, letra) for n, (p, tipo) in v.items() if p == papel and tipo == "bool"]
+        return out or [("Ninguna", "", False, "")]
 
     def desplegar_variable(self, caja: dict[str, Any]) -> None:
         """Doble clic en una acción continua: un desplegable sobre su rectángulo con las variables que puede escribir y, al final, «Más propiedades…»."""
         aid, sid = caja["id"], caja["etapa"] or None
         d = self.datos_accion(aid)
         self.diagrama.abrir_selector(caja["rect"], self.opciones_variable_accion(aid), d["variable"],
-                                     lambda nombre: self.elegir_variable_accion(aid, nombre), lambda: self.pedir_accion(sid, aid))
+                                     lambda nombre: self.elegir_variable_accion(aid, nombre),
+                                     lambda: self.explicito(self.pedir_accion, sid, aid))  # (la orden llega tras cerrar: sigue siendo una petición del usuario)
 
     def elegir_variable_accion(self, aid: str, nombre: str) -> None:
         """Se eligió una variable en el desplegable de la acción: el mismo cambio que en Propiedades (una operación de deshacer)."""

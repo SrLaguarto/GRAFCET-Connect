@@ -374,7 +374,7 @@ class Zoom(unittest.TestCase):
     def visible(self):
         return self.d.mapToScene(self.d.viewport().rect()).boundingRect()
 
-    def rueda(self, pos, delta, mod=Qt.KeyboardModifier.NoModifier):
+    def rueda(self, pos, delta, mod=Qt.KeyboardModifier.ControlModifier):  # (el zoom es Ctrl + rueda)
         p = QPointF(*pos)
         ev = QWheelEvent(p, self.d.viewport().mapToGlobal(p), QPoint(0, 0), QPoint(0, delta), Qt.MouseButton.NoButton,
                          mod, Qt.ScrollPhase.NoScrollPhase, False)
@@ -385,7 +385,7 @@ class Zoom(unittest.TestCase):
         return self.d._a_escena(QPointF(*pos))
 
     def test_SEDI213_la_rueda_hace_zoom_anclada_al_puntero(self):
-        """REQ-SIM-03, REQ-EDT-02: con la rueda, el punto del dibujo que está bajo el cursor se queda bajo el cursor (a menos
+        """REQ-SIM-03, REQ-EDT-02: con Ctrl + rueda, el punto del dibujo que está bajo el cursor se queda bajo el cursor (a menos
         de 1 px), también cuando el dibujo cabe sin barras de desplazamiento, en cualquier esquina y acercando o alejando."""
         d = self.d
         self.assertEqual(d.horizontalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAlwaysOff, "al ajustar no hay barras")
