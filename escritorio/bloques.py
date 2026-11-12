@@ -239,6 +239,12 @@ def normalizar_duracion(texto: str) -> str | None:
     return "" if float(m.group(1).replace(",", ".")) == 0 else re.sub(r"\s+", "", t)
 
 
+def sin_comillas(texto: str) -> str:
+    """El texto de una fórmula tal como se lee, sin las comillas invertidas con que el núcleo escribe un nombre que no es una
+    palabra simple (`Marcha motor`, `1M1`): el usuario no las ve ni las teclea."""
+    return re.sub(r"`([^`]*)`", r"\1", texto or "")
+
+
 def _citar(nombre: str) -> str:
     return nombre if _SIMPLE.fullmatch(nombre) and nombre not in _RESERVADAS else f"`{nombre}`"
 

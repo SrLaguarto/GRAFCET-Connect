@@ -33,7 +33,7 @@ from grafcet.view import (Vista, display_names, force_situation, norm, layout_fr
                          substitute)
 
 from .mensajes import amable, correccion_amable
-from .bloques import _dur_usuario, normalizar_duracion
+from .bloques import _dur_usuario, normalizar_duracion, sin_comillas
 from .anotaciones import en as anotacion_en, rect as rect_anotacion, importar_imagen, editar_texto
 from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, RADIO_ANCLA, REJILLA, SX, TB, VACIO_H, VACIO_W, _distancia, _extra,
                        _geometria_acciones, _Pintor, ancla_en, anclas, barra, caja_barra, cajas_parciales, elemento_en, enlaces,
@@ -87,6 +87,21 @@ INTERNO = re.compile(r"(?<![\w-])[a-z]-[0-9a-f]{32}(?![\w-])")  # el ID que crea
 _CODIGO = r"(?:[DUH]-[A-Z0-9][A-Z0-9-]*|REQ-[A-Z]+-[0-9]+|P-IMP-[0-9]+)"
 CODIGOS = re.compile(rf"\s*\({_CODIGO}(?:\s*[,;]\s*{_CODIGO})*\)|\b{_CODIGO}\s*:\s*|\s*\b{_CODIGO}\b"
                      r"|\s*\[[a-z]+(?:[.-][a-z0-9]+)+\]")  # códigos internos y etiquetas de capacidad
+
+
+def quitar_comillas_vista(M: dict[str, Any]) -> None:
+    """Lo que se dibuja de una fórmula que no se interpreta (a medias, con un «?») es su texto del núcleo: sin las comillas
+    invertidas de los nombres con espacios, que el usuario no ve ni teclea."""
+    def segmentos(lista: Any) -> None:
+        for seg in lista or []:
+            if isinstance(seg, dict) and isinstance(seg.get("t"), str) and "`" in seg["t"]:
+                seg["t"] = sin_comillas(seg["t"])
+    for t in M.get("transitions", []):
+        segmentos(t.get("cond"))
+    for s in M.get("steps", []):
+        for a in s.get("actions", []):
+            for campo in ("text", "cond", "event"):
+                segmentos(a.get(campo))
 
 
 def sin_codigos(texto: str) -> str:
@@ -308,10 +323,10 @@ class Edicion(QObject):
         los elementos y aquí se cambian por sus nombres (los de la última vista dibujada; el ID interno que falte, por el del
         modelo de ahora, y el que ya no existe se llama «un elemento»). Solo para lo que trae ID del núcleo: sustituye palabras
         enteras, así que un texto de la aplicación (que no los trae) no debe pasar por aquí; esos interpolan el nombre en origen
-        (`_nom`)."""
+        (`_nom`). Quita las comillas invertidas de los nombres con espacios, que el usuario no ve."""
         if not texto:
             return texto
-        return amable(sin_codigos(self.sin_internos(substitute(texto, getattr(self, "nombres", {})))))
+        return amable(sin_codigos(self.sin_internos(sin_comillas(substitute(texto, getattr(self, "nombres", {}))))))
 
     def sin_internos(self, texto: str) -> str:
         """Lo último que se hace con un mensaje antes de enseñarlo: cada ID interno que haya quedado en él (el que crea el
@@ -389,6 +404,7 @@ class Edicion(QObject):
                            draft_actions=self._borradores(), action_layouts=ed.action_layouts(),
                            comments=ed.comments(), orientations=ed.transition_orientations())
         self.M = self.vista.model
+        quitar_comillas_vista(self.M)
         self.M["annotations"] = self.ed.annotations()
         if self.arrastre:
             a = self.arrastre
@@ -469,7 +485,7 @@ class Edicion(QObject):
             mensaje, correccion = self.sust(d.message), self.sust(correccion_amable(d.code, d.correction))
             evento = next((a for a in self.ed.model["actions"] if a.get("trigger", {}).get("kind") == "event" and d.element in (a["id"],a["trigger"].get("expressionRef"))), None)
             if d.code == "D-TIPO-EVENTO" and evento:
-                texto = self.texto_accion(evento["id"], "evento")
+                texto = sin_comillas(self.texto_accion(evento["id"], "evento"))
                 mensaje = (f"Acción por evento de {self._nom(evento['targetRef'])} en la etapa {self._nom(evento['stepRef'])}: "
                            f"el disparador «{texto}» debe ser un evento, no solo una condición booleana.")
                 correccion = "Elija el evento que deba disparar la acción: flanco de subida (↑) o de bajada (↓) de la variable."
@@ -536,7 +552,7 @@ class Edicion(QObject):
         texto = re.search(r"«(.*)»", mensaje)
         if "sin significado" in mensaje and (texto is None or not texto.group(1).strip()):
             return f"{que} está vacía"
-        return f"{que} no es válida" + (f": «{texto.group(1)}»" if texto and texto.group(1).strip() else "")
+        return f"{que} no es válida" + (f": «{sin_comillas(texto.group(1))}»" if texto and texto.group(1).strip() else "")
 
     def dibujable(self, elemento: str | None) -> str | None:
         """El elemento del dibujo al que se refiere un diagnóstico (una receptividad, la transición que la usa)."""
@@ -2035,8 +2051,8 @@ class Edicion(QObject):
         try:
             meaning, diag = self.ed._make_expr(self.ed.model, self._n(texto), None)
         except Exception:  # noqa: BLE001 - un texto a medias no debe romper el dibujo
-            return [{"t": texto}]
-        return [{"t": texto}] if diag is not None else norm(meaning["meaning"], top, nombres)
+            return [{"t": sin_comillas(texto)}]
+        return [{"t": sin_comillas(texto)}] if diag is not None else norm(meaning["meaning"], top, nombres)
 
     def _borradores(self) -> list[dict[str, Any]]:
         """Los borradores como los dibuja Vista (con el arrastre en curso aplicado), en el orden de su etapa o su grupo: lo
@@ -2670,11 +2686,11 @@ class Edicion(QObject):
         if d["tipo"] in CONTINUAS:
             lim = f" hasta {d.get('limite') or '?'}" if d["tipo"] == "limitada" else ""
             if d["tipo"] == "condicionada" or d.get("condicion"):
-                return var + f"   si {d.get('condicion') or '?'}" + lim
+                return var + f"   si {sin_comillas(d.get('condicion')) or '?'}" + lim
             return var + "   (continua)" + lim
         cuando = {"activacion": "al activar ↑", "desactivacion": "al desactivar ↓",
-                  "evento": f"con {d.get('evento') or '?'}"}[d["tipo"]]
-        return f"{var} := {d.get('valor') or '?'}   ({cuando})"
+                  "evento": f"con {sin_comillas(d.get('evento')) or '?'}"}[d["tipo"]]
+        return f"{var} := {sin_comillas(d.get('valor')) or '?'}   ({cuando})"
 
     def acciones(self, sid: str) -> list[dict[str, str]]:
         """Las acciones de la etapa: las del modelo y, al final, las unidas a ella que aún no están completas."""
@@ -2745,12 +2761,15 @@ class Edicion(QObject):
 
     @staticmethod
     def motivo_nombre(nombre: str) -> str | None:
-        """Por qué un nombre no puede ser el de una variable en la interfaz: no se podría escribir en una fórmula (palabra
-        reservada, espacios o símbolos, solo cifras o parecido a una duración) o se confundiría con la actividad de una
-        etapa (X1). None si sirve. Un nombre que empieza por cifra (1M1, 2S3: nomenclatura industrial) vale si lleva alguna
-        letra; en las fórmulas se escribe entre comillas invertidas (`1M1`), como cualquier nombre que no sea una palabra
-        simple, y el resto de la interfaz lo muestra sin ellas (P-IMP-46). El núcleo sigue admitiendo cualquier nombre
-        entre comillas invertidas, en ficheros antiguos."""
+        """Por qué un nombre no puede ser el de una variable en la interfaz: se confundiría en una fórmula (palabra
+        reservada, símbolos, solo cifras o parecido a una duración) o con la actividad de una etapa (X1). None si sirve.
+        Un nombre puede llevar espacios **interiores** simples entre palabras («Marcha motor», «Fin de carrera 1»): no
+        empieza ni acaba en espacio (quien confirma el nombre lo recorta antes) ni lleva dos espacios seguidos (se rechaza,
+        no se reduce, para que lo que se ve sea lo que se guarda). Un nombre que empieza por cifra (1M1, 2S3: nomenclatura
+        industrial) vale si lleva alguna letra. En las fórmulas que arman los bloques el núcleo escribe entre comillas
+        invertidas (`1M1`, `Marcha motor`) todo nombre que no es una palabra simple, y el resto de la interfaz las oculta
+        (P-IMP-46); el usuario no las ve ni las teclea. El núcleo sigue admitiendo cualquier nombre entre comillas
+        invertidas, en ficheros antiguos."""
         if nombre.strip().lower() in RESERVADAS:
             return f'"{nombre}" no puede ser nombre de variable: es una palabra de las fórmulas'
         if re.fullmatch(r"\d+(?:[.,]\d+)?\s*(?:us|µs|μs|ms|s)", nombre):
@@ -2758,12 +2777,22 @@ class Edicion(QObject):
                     "añada alguna letra más, como 1S2")
         if re.fullmatch(r"\d+(?:[.,]\d+)?", nombre):
             return f'"{nombre}" no puede ser nombre de variable: es solo un número; añada alguna letra, como 1M1'
-        if not (re.fullmatch(r"[^\W\d]\w*(?:\.\w+)?", nombre)
-                or re.fullmatch(r"\d\w*", nombre) and re.search(r"[^\W\d_]", nombre)):
+        if nombre != nombre.strip() or "  " in nombre:
+            return (f'"{nombre}" no puede ser nombre de variable: lleva espacios al principio o al final, o dos espacios '
+                    "seguidos; solo se admite un espacio entre palabras")
+        palabras = nombre.split(" ")
+        if not ((re.fullmatch(r"[^\W\d]\w*(?:\.\w+)?", palabras[0])
+                 or re.fullmatch(r"\d\w*", palabras[0]) and re.search(r"[^\W\d_]", nombre))
+                and all(re.fullmatch(r"\w+(?:\.\w+)?", p) for p in palabras[1:])):
             return (f'"{nombre}" no puede ser nombre de variable: debe empezar por una letra o _ (o por una cifra, si lleva '
-                    "alguna letra, como 1M1) y no llevar espacios ni símbolos")
-        if re.fullmatch(r"X\d+", nombre):
-            return f'"{nombre}" no puede ser nombre de variable: se confundiría con la actividad de la etapa {nombre[1:]}'
+                    "alguna letra, como 1M1) y no llevar símbolos; entre palabras solo un espacio")
+        if re.fullmatch(r"X\d+", nombre.replace(" ", "")):
+            return (f'"{nombre}" no puede ser nombre de variable: se confundiría con la actividad de la etapa '
+                    f'{nombre.replace(" ", "")[1:]}')
+        # (el núcleo lee una palabra «X…» como la actividad de una etapa aunque esté entre comillas invertidas)
+        if len(palabras) > 1 and any(re.fullmatch(r"X\w+", p) for p in palabras):
+            return (f'"{nombre}" no puede ser nombre de variable: una de sus palabras empieza por X y se confundiría con '
+                    "la actividad de una etapa (X1…)")
         return None
 
     def poner_accion(self, sid: str | None, d: dict[str, str], aid: str | None = None,
@@ -3173,7 +3202,10 @@ class Edicion(QObject):
                 for v in m["variables"]]
 
     def nueva_variable(self, nombre: str, papel: str = "input", tipo: dict[str, Any] | None = None) -> str | None:
-        """Crea una variable (una operación de deshacer); devuelve el motivo si el nombre no es válido o está repetido."""
+        """Crea una variable (una operación de deshacer); devuelve el motivo si el nombre no es válido o está repetido. Los
+        espacios del principio y del final del nombre se recortan."""
+        nombre = nombre.strip()
+
         def hacer() -> None:
             motivo = self.motivo_nombre(nombre) if nombre.strip() else None
             if motivo:
@@ -3184,8 +3216,10 @@ class Edicion(QObject):
         return self._atomico("crear variable", hacer)
 
     def motivo_variable_nueva(self, nombre: str) -> str | None:
-        """Por qué `nombre` no puede ser el de una variable nueva (no válido o ya existe); None si sirve."""
-        if not nombre.strip():
+        """Por qué `nombre` no puede ser el de una variable nueva (no válido o ya existe); None si sirve. Se juzga el nombre
+        recortado (`nuevas_variables` y la tabla lo crean con él)."""
+        nombre = nombre.strip()
+        if not nombre:
             return "Falta el nombre."
         motivo = self.motivo_nombre(nombre)
         if motivo:
@@ -3203,6 +3237,7 @@ class Edicion(QObject):
 
         def hacer() -> None:
             for i, (nombre, papel, tipo) in enumerate(filas):
+                nombre = nombre.strip()
                 motivos[i] = self.motivo_variable_nueva(nombre)
                 if motivos[i] is None:
                     self.ed.add_variable(nombre, papel, dict(tipo))
@@ -3212,6 +3247,7 @@ class Edicion(QObject):
     def cambiar_variable(self, vid: str, nombre: str | None = None, **cambios: Any) -> str | None:
         """Cambia nombre (y el texto de sus usos), papel, tipo, unidad o valor inicial, en una sola operación."""
         v = next(x for x in self.ed.model["variables"] if x["id"] == vid)
+        nombre = nombre.strip() if nombre is not None else None
 
         def hacer() -> None:
             if nombre is not None and nombre != v["name"]:

@@ -38,7 +38,7 @@ class VariableDeEtapaSinSubindice(unittest.TestCase):
         self.assertEqual(sig, [{"t": "X3"}])
         if QT:
             sc, _ = dibujo(v)
-            self.assertNotIn("vertical-align:sub", texto(sc, "p·X3").toHtml())
+            self.assertNotIn("vertical-align:sub", texto(sc, "p · X3").toHtml())
 
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")

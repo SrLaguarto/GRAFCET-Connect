@@ -61,7 +61,7 @@ class DistanciasReferenciasInterfaz(BaseQt):
         w._establecer_edicion(e);w.resize(1366,768);w.show();e.seleccionar([b]);w.diagrama.setFocus();QApplication.processEvents()
         QTest.keyClick(w.diagrama,Qt.Key.Key_Delete);QApplication.processEvents();self.assertNotIn(b,{s['id'] for s in e.ed.model['steps']})
         textos=[i.toPlainText() for i in w.diagrama.scene().items() if isinstance(i,QGraphicsTextItem)]
-        self.assertNotIn(b,''.join(textos));self.assertIn('3s/X1·X1',textos)
+        self.assertNotIn(b,''.join(textos));self.assertIn('3s/X1 · X1',textos)
         self.assertIn('D-REF',{d['code'] for d in e.diagnosticos()})
         dom=dibujar_con_js(e.M,{})
         self.assertNotIn(b,str(dom))

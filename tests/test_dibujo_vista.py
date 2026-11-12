@@ -120,7 +120,7 @@ class Negado(unittest.TestCase):
         sobrerrayado."""
         m, lay = modelo_negado()
         sc, _ = dibujo(vista(m, lay))
-        t = texto(sc, "marcha·paro")
+        t = texto(sc, "marcha · paro")
         # La barra de «paro»: de donde empieza «paro» hasta donde acaba el texto, a la altura del borde de arriba del texto
         ancho_paro = dg._Pintor.ancho([{"t": "paro"}], 14)
         barra = next(b for b in barras_negado(sc) if abs(b.line().y1() - t.pos().y()) < 0.01
@@ -139,14 +139,14 @@ class Negado(unittest.TestCase):
         barra, y la hay en la receptividad, en la condición de una acción y en su evento."""
         m, lay = modelo_negado()
         sc, _ = dibujo(vista(m, lay))
-        u = texto(sc, "p·q·XA")  # NOT (p AND q) AND NOT X(A): dos tramos, p·q y XA
+        u = texto(sc, "p · q · XA")  # NOT (p AND q) AND NOT X(A): dos tramos, p · q y XA
         cerca = [b for b in barras_negado(sc) if abs(b.line().y1() - u.pos().y()) < 0.01 and
                  u.pos().x() - 0.1 <= b.line().x1() <= u.pos().x() + u.boundingRect().width()]
         self.assertEqual(len(cerca), 2, "una barra por tramo, no una por segmento")
         cerca.sort(key=lambda b: b.line().x1())
         self.assertAlmostEqual(cerca[0].line().x1(), u.pos().x(), delta=0.01)
         self.assertAlmostEqual(cerca[0].line().x2() - cerca[0].line().x1(), dg._Pintor.ancho(
-            [{"t": "p"}, {"t": "·"}, {"t": "q"}], 14), delta=1.0)
+            [{"t": "p"}, {"t": " · "}, {"t": "q"}], 14), delta=1.0)
         self.assertAlmostEqual(cerca[1].line().x2(), u.pos().x() + u.boundingRect().width(), delta=1.5)
         cond = texto(sc, "q")  # la condición de la acción de B, escrita con 13 px
         self.assertTrue(any(abs(b.line().y1() - cond.pos().y()) < 0.01 for b in barras_negado(sc)))
@@ -233,12 +233,12 @@ class DibujoTemporizador(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def test_SEDI207_el_tiempo_transcurrido_va_alineado_encima_de_la_duracion(self):
-        """REQ-SIM-03, REQ-TMP-01: en la receptividad «ok·3s/XB» el «1,00 s» se alinea con el inicio del «3s», justo
+        """REQ-SIM-03, REQ-TMP-01: en la receptividad «ok · 3s/XB» el «1,00 s» se alinea con el inicio del «3s», justo
         sobre la línea de arriba del texto; al vencer, «3,00 s ✓» en el mismo sitio y en otro color; antes de empezar, nada."""
         m, lay = modelo_temporizado()
         v = corriendo(m, lay)
         sc, _ = dibujo(v)
-        cond = texto(sc, "ok·3s/XB")
+        cond = texto(sc, "ok · 3s/XB")
         etiqueta = texto(sc, "1,00 s")
         segs = v.model["transitions"][1]["cond"]
         lim = dg._Pintor.limites(segs, 14)
@@ -270,7 +270,7 @@ class DibujoTemporizador(unittest.TestCase):
         for t in S["temporal"].values():
             t["token"] = "9s"
         sc, _ = dibujo(v, S)
-        cond, etiqueta = texto(sc, "ok·3s/XB"), texto(sc, "1,00 s")
+        cond, etiqueta = texto(sc, "ok · 3s/XB"), texto(sc, "1,00 s")
         self.assertAlmostEqual(etiqueta.pos().x(), cond.pos().x(), delta=.01)
 
     def test_SEDI209_el_tiempo_transcurrido_no_pisa_la_barra_de_la_transicion_ni_el_texto(self):
@@ -284,7 +284,7 @@ class DibujoTemporizador(unittest.TestCase):
         self.assertFalse(r.intersects(QRectF(tx - dg.TB, ty - 1.5, 2 * dg.TB, 3)), "no toca el trazo de la transición")
         self.assertFalse(r.intersects(QRectF(tx - 1, ty - 40, 2, 80)), "ni el enlace vertical que la cruza")
         self.assertFalse(r.intersects(texto(sc, "(t2)").sceneBoundingRect()))
-        cond = texto(sc, "ok·3s/XB")
+        cond = texto(sc, "ok · 3s/XB")
         self.assertLessEqual(r.bottom() - cond.pos().y(), 4, "el cuadro de la etiqueta apenas entra en el del texto")
         com = next(it for it in textos(sc) if it.toPlainText().startswith("“"))
         self.assertGreater(com.pos().x(), max(r.right(), cond.pos().x() + cond.boundingRect().width()))
@@ -301,7 +301,7 @@ class DibujoTemporizador(unittest.TestCase):
         v.act("avanzar", {"us": 500_000})
         sc, cajas = dibujo(v)
         a_cond, a_evento = v.model["steps"][1]["actions"]
-        for plano, segs, dur in (("2s/q", a_cond["cond"], "2s"), ("↑r·1s/q", a_evento["event"], "1s")):
+        for plano, segs, dur in (("2s/q", a_cond["cond"], "2s"), ("↑r · 1s/q", a_evento["event"], "1s")):
             cond = texto(sc, plano)
             lim = dg._Pintor.limites(segs, 13)
             i = [s["t"] for s in segs].index(dur)

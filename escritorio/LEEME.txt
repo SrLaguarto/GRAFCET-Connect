@@ -51,6 +51,7 @@ Qué hace
 - Propiedades: el título dice el tipo de lo elegido («Propiedades · Etapa», «· Transición», «· Acción»…), sin su nombre. La etiqueta de una etapa admite como mucho 4 caracteres al escribirla; un archivo con nombres más largos se abre igual.
 - Barra de edición, tras Play y Reiniciar: Deshacer, Rehacer, Cortar, Copiar, Pegar y Borrar (solo icono; la ayuda emergente dice el atajo), «Añadir debajo» y «Mostrar dependencias». Fuera de la edición, desactivados.
 - Vista de E/S externas: desconectado, la IP, el puerto y el esclavo se cambian en la cabecera del marco, sin abrir Configuración (son los mismos valores).
+- Nombres de variable: pueden llevar espacios entre palabras («Marcha motor», «Fin de carrera 1»), uno solo entre cada dos; no pueden parecer la actividad de una etapa («X1», «X 1»).
 - Variables (al editar): con la tabla vacía se ve una fila de muestra («nueva variable…»); escribir un nombre en ella crea una entrada booleana, y «+ Entrada/Salida/Memoria» ocupa su sitio. Ctrl+V pega una tabla copiada de una hoja de cálculo (Nombre, Papel, Tipo; p. ej. «Marcha · Entrada · Booleana»): las filas correctas se crean y las que tienen un error quedan en rojo, con el motivo al pasar el ratón, hasta corregirlas.
 - Doble clic en una acción continua (al editar): un desplegable sobre la propia acción para elegir su variable (salidas y memorias booleanas, con (S) o (M)).
 

@@ -75,7 +75,7 @@ class VerdadVisual(unittest.TestCase):
         self.assertNotEqual(cs[-1],dg.COL["true_text"])
         self.assertTrue(all(dg.COL["true_text"] not in colores(it) for it in textos(sc) if ":=" in it.toPlainText()))
         for it in textos(sc):
-            if it.toPlainText() in ("[Potenc ≥ 5]","↑paro·[Potenc ≥ 5]"):
+            if it.toPlainText() in ("[Potenc ≥ 5]","↑paro · [Potenc ≥ 5]"):
                 self.assertEqual(colores(it)[-len("[Potenc ≥ 5]"):],[dg.COL["true_text"]]*len("[Potenc ≥ 5]"))
         sc0,_=dibujo(v,{})
         self.assertNotIn(dg.COL["true_text"],colores(texto(sc0,plano)))
@@ -133,7 +133,7 @@ class VerdadVisual(unittest.TestCase):
             plano="".join(s["t"] for s in v.model["transitions"][0]["cond"])
             t=texto(sc,plano); cs=colores(t)
             self.assertEqual(cs[0]==dg.COL["true_text"],valor)
-            self.assertEqual(cs[2]==dg.COL["true_text"],not valor)
+            self.assertEqual(cs[plano.index(" · ")+3]==dg.COL["true_text"],not valor)  # (la p negada, tras «p · »)
             self.assertNotEqual(cs[plano.index("XA")],dg.COL["true_text"])
             self.assertEqual(cs[plano.index("XB")],dg.COL["true_text"])
             self.assertEqual(colores(texto(sc,"p"))==[dg.COL["true_text"]],not valor)

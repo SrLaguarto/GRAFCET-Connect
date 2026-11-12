@@ -20,6 +20,7 @@ cada cambio del modelo (el panel se rellena con cada `cambiado` de la edición).
 """
 from __future__ import annotations
 
+from html import escape as _escapar
 from typing import Any, Callable
 
 from PySide6.QtCore import Qt, QRect, QRectF
@@ -28,7 +29,7 @@ from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFormLayout, QHBoxLayout
                                QPushButton, QVBoxLayout, QWidget, QStylePainter, QStyleOptionComboBox, QStyleOptionFrame, QStyle)
 
 from . import estilo
-from .bloques import COLORES, Programador
+from .bloques import COLORES, Programador, sin_comillas
 from .diagrama import COL, _html
 from .edicion import CONTINUAS, DISPARADOR, Edicion, Parpadeo
 from .variables import nombre_tipo
@@ -81,6 +82,8 @@ class CajaFormula(QLineEdit):
 
     def paintEvent(self, evento) -> None:  # noqa: N802
         html = self.html_mostrado()
+        if html is None and "`" in self.text():  # a medias o sin interpretar: el texto, sin las comillas de los nombres con espacios
+            html = _escapar(sin_comillas(self.text()))
         if html is None:
             super().paintEvent(evento)
             return

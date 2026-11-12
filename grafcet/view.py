@@ -164,7 +164,7 @@ def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = Non
     elif op in _CMP:
         out = [_seg("[")] + lado(0) + [_seg(f" {_CMP[op]} ")] + lado(1) + [_seg("]")]
     else:
-        out = lado(0) + [_seg({"and": "·", "or": " + ", **_ARITH}[op])] + lado(1)
+        out = lado(0) + [_seg({"and": " · ", "or": " + ", **_ARITH}[op])] + lado(1)
     if key is not None and (op in (*_CMP, "delay", "ref", "active", "activePartial", "activeMacro", "rise", "fall")
                             or op == "lit" and m["literal"]["type"] == "bool"):
         out = [dict(s, eval=[*s.get("eval", []), key]) for s in out]
@@ -419,7 +419,7 @@ class Vista:
         limite = norm(m, False, self.names, f"@limit:{a['id']}")
         if base is not None and c is not None and c["mode"] == "executable" and c["meaning"]["operator"] == "or":
             base = _paren(base)
-        return limite if base is None else base + [_seg("·")] + limite
+        return limite if base is None else base + [_seg(" · ")] + limite
 
     def _verdades(self, eventos: dict[str, bool] | None = None) -> dict[str, bool]:
         """Lectura pura de los nodos con el mismo entorno efectivo que Session.observe()."""

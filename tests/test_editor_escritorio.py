@@ -2674,10 +2674,10 @@ class Interfaz(unittest.TestCase):
         self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "limitada", "variable": "Q00", "limite": "3s",
                                                     "condicion": "marcha OR paro"}, aid))
         a = e.M["steps"][1]["actions"][0]
-        self.assertEqual("".join(s["t"] for s in a["cond"]), "(marcha + paro)·3s/X1")
+        self.assertEqual("".join(s["t"] for s in a["cond"]), "(marcha + paro) · 3s/X1")
         self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "limitada", "variable": "Q00", "limite": "3s",
                                                     "condicion": "marcha"}, aid))
-        self.assertEqual("".join(s["t"] for s in e.M["steps"][1]["actions"][0]["cond"]), "marcha·3s/X1")
+        self.assertEqual("".join(s["t"] for s in e.M["steps"][1]["actions"][0]["cond"]), "marcha · 3s/X1")
         self.assertTrue(e.ed.validate().can_simulate)
         # el banco usa la misma condición de la vista para toda acción continua
         js = (ROOT / "tools" / "dibujo.js").read_text(encoding="utf-8")
@@ -3779,7 +3779,7 @@ class Interfaz(unittest.TestCase):
 
     def test_SEDI96_nombres_de_variable_reservados(self):
         """REQ-EDT-07, REQ-EDT-09: en la interfaz se rechaza, con mensaje y parpadeo, un nombre de variable que no se puede
-        escribir en una fórmula (palabra reservada sin distinguir mayúsculas, espacios o símbolos, no empieza por letra ni
+        escribir en una fórmula (palabra reservada sin distinguir mayúsculas, símbolos, no empieza por letra ni
         por cifra con alguna letra como 1M1, solo cifras, parecido a una duración como 2s, o confundible con una etapa
         como X1); vale en la tabla de variables y en «Crear las que faltan»; el núcleo no cambia."""
         w = self.w
@@ -3787,7 +3787,7 @@ class Interfaz(unittest.TestCase):
         for n in ("AND", "and", "Or", "NOT", "true", "False", "rise", "FALL", "active", "activePartial", "activeMacro",
                   "elapsed", "delay", "DELAY"):
             self.assertEqual(e.motivo_nombre(n), f'"{n}" no puede ser nombre de variable: es una palabra de las fórmulas', n)
-        for n in ("mi var", "a-b", "a+b", "(x)", "1 M1", "1M-1", "1_", "1_2", "1.5a"):
+        for n in ("a-b", "a+b", "(x)", "1M-1", "1_", "1_2", "1.5a", "a b-c", "mi var!"):
             self.assertIn("debe empezar por una letra o _", e.motivo_nombre(n), n)
         for n in ("2", "10", "1.5", "1,5"):  # solo un número: no es un nombre
             self.assertIn("es solo un número", e.motivo_nombre(n), n)
@@ -3819,7 +3819,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.cambiar_variable(v["id"], nombre="OR"), '"OR" no puede ser nombre de variable: es una palabra de las fórmulas')
         self.assertEqual(next(x for x in e.ed.model["variables"] if x["id"] == v["id"])["name"], "Sensor")
         self.assertIsNone(e.cambiar_variable(v["id"], nombre="Sensor"), "el mismo nombre no se vuelve a comprobar")
-        self.assertIn("no puede ser nombre", e.nueva_variable("Mi variable") or "")
+        self.assertIn("no puede ser nombre", e.nueva_variable("Mi variable!") or "")
         # «Crear las que faltan» en una receptividad
         e.seleccionar([ts["t1"]])
         res = e.poner_condicion(ts["t1"], "`AND` AND marcha", crear=True)
@@ -4395,7 +4395,7 @@ class Interfaz(unittest.TestCase):
         self.assertFalse(d.caja_valor.isHidden() or p.pagina_bloques.isHidden(), "valor y evento, a la vez")
         d = self.panel_accion(s1, co)
         self.assertEqual((p.objetivo_bloques(), p.prog.texto()), (("accion", co, "condicion"), "marcha AND paro"))
-        self.assertIn("marcha·paro", p.t_dibujo.text(), "con el dibujo de la norma")
+        self.assertIn("marcha · paro", p.t_dibujo.text().replace("&nbsp;", " "), "con el dibujo de la norma")
 
     def test_SEDI107_comentarios_en_la_presentacion_guardar_deshacer_y_borrar(self):
         """REQ-DAT-01, REQ-EDT-14: el comentario de una etapa o transición se guarda en `presentation.notes`
