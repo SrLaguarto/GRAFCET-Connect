@@ -482,6 +482,7 @@ class PanelPropiedades(QWidget):
         """Cambió la escala de letra y de controles (pantalla completa o no): la hoja (la de la ventana para esa escala, si hay, y la de los
         campos compactos), «Fijar», categorías y fichas se miden otra vez. La ventana lo llama al abrir el panel."""
         self.setStyleSheet(hoja_ventana + estilo.campos_compactos())
+        self.cabecera.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 4)
         self.t_fijar.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
         for prog in (self.prog, getattr(self.accion, "prog", None)):
             if prog is not None:
@@ -517,7 +518,8 @@ class PanelPropiedades(QWidget):
         self.cabecera = QWidget()
         self.cabecera.setObjectName("cabeceraPropiedades")
         self.fila_cabecera = QHBoxLayout(self.cabecera)
-        self.fila_cabecera.setContentsMargins(estilo.E2, 0, 40, 0)  # a la derecha, el sitio del botón de plegar (32 px)
+        self.fila_cabecera.setContentsMargins(estilo.E2, 2, 40, 2)  # a la derecha, el sitio del botón de plegar (32 px); 2 px arriba y abajo: ni las categorías ni «Fijar» tocan el borde de la franja
+        self.cabecera.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 4)
         self.fila_cabecera.setSpacing(estilo.E3)
         self.titulo = TituloSeccion(x_marcador=4)
         self.titulo.setObjectName("tituloPropiedades")
@@ -532,7 +534,7 @@ class PanelPropiedades(QWidget):
         lay.addWidget(self.vacio)
         self.cuerpo = QWidget()
         cuerpo = QHBoxLayout(self.cuerpo)
-        cuerpo.setContentsMargins(0, 0, 0, 0)
+        cuerpo.setContentsMargins(0, 2, 0, 0)  # el primer campo empieza por debajo de la franja del título
         cuerpo.setSpacing(14)
         lay.addWidget(self.cuerpo, 1)
         # Izquierda, la columna estrecha de campos; derecha, lo ancho (lista de acciones, programadores, enlace, barra)

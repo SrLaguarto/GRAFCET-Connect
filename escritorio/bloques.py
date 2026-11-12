@@ -1724,7 +1724,7 @@ class Programador(QWidget):
         self._sc_carpetas.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: white; }")
         self._sc_carpetas.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._sc_carpetas.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._sc_carpetas.setFixedHeight(48)  # los botones de 32 px y, debajo, la barra de desplazamiento de 12
+        self._sc_carpetas.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 16)  # los botones y, debajo, la barra de desplazamiento de 12
         self._raiz = raiz
         raiz.addWidget(self._sc_carpetas)
         raiz.addLayout(lay, 1)
@@ -1769,11 +1769,11 @@ class Programador(QWidget):
 
     @staticmethod
     def _hoja_categoria() -> str:
-        return (f"QPushButton {{ text-align: left; padding: 4px 10px; border: 1px solid transparent; "
-                f"border-radius: {estilo.R_S}px; background: transparent; min-height: {estilo.ALTO_CONTROL_COMPACTO - 10}px; }}"
+        return (f"QPushButton {{ text-align: left; padding: 0 10px; border: 1px solid transparent; "
+                f"border-radius: {estilo.R_S}px; background: transparent; min-height: {estilo.ALTO_CONTROL_COMPACTO - 2}px; }}"
                 f"QPushButton:hover {{ background: {estilo.HOVER}; }}"
                 f"QPushButton:pressed {{ background: {estilo.PULSADO}; }}"
-                f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 3px 9px; }}"
+                f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 9px; min-height: {estilo.ALTO_CONTROL_COMPACTO - 4}px; }}"
                 f"QPushButton:checked {{ color: {estilo.TINTA}; background: {estilo.ACENTO_SUAVE}; border: 1px solid {estilo.ACENTO}; }}")
 
     def escalar(self) -> None:

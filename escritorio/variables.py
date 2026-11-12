@@ -18,7 +18,7 @@ import re
 
 from PySide6.QtCore import QEvent, QTimer, Qt, Signal, QSize
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QSizePolicy,
+from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QSizePolicy,
                                QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from . import estilo
@@ -36,7 +36,7 @@ COLUMNAS = ["Nombre", "Papel", "Tipo"]
 SIN_NOMBRE = "Hay una variable sin nombre: escríbale un nombre o quítela"
 NARANJA = "#ffd2ad"
 def estilo_combo() -> str:
-    return f"QComboBox {{ padding: 0px 1px 0px 3px; min-height: 24px; font-size: {estilo.T_PEQUENA}px; }} QComboBox::drop-down {{ width: 14px; }}"
+    return f"QComboBox {{ padding: 0px 1px 0px 3px; min-height: 0; font-size: {estilo.T_PEQUENA}px; }} QComboBox::drop-down {{ width: 14px; }}"
 
 
 ESTILO_COMBO = estilo_combo()
@@ -195,6 +195,7 @@ class PanelVariables(QWidget):
         self._n = 0
         self._clave = ""
         self._llenando = False
+        self._rechazado = False  # el último nombre confirmado se rechazó (`_confirmar_edicion`)
         self.contexto = ContextoNombres()  # los nombres de la tabla: partidos por los «_», nunca dos que se lean igual
         self.completo = False  # «Papel» y «Tipo» en palabras (hay sitio con el nombre en sus 96 px) o abreviados («Entr.», «Bool.»): `ReparteColumnas`
         self.parpadeo = Parpadeo(self)  # la fila que parpadea en naranja tras un error
@@ -271,8 +272,8 @@ class PanelVariables(QWidget):
 
     @staticmethod
     def _hoja_botones() -> str:
-        """Los botones de este panel miden 32 px (36 a pantalla completa): con Propiedades abierto, a 1366×768, el panel de
-        Variables no tiene alto para los de 36 de la hoja global y se le pondría una barra de desplazamiento por fuera."""
+        """Los botones de este panel miden `ALTO_CONTROL_COMPACTO` (26 px, 28 a pantalla completa): con Propiedades abierto, a 1366×768, el panel
+        de Variables no tiene alto para los de la hoja global y se le pondría una barra de desplazamiento por fuera."""
         alto = estilo.ALTO_CONTROL_COMPACTO
         return (f"QPushButton {{ min-height: {alto - 2}px; }} "
                 f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; min-height: {alto - 4}px; padding: 0 11px; }}")
@@ -280,10 +281,9 @@ class PanelVariables(QWidget):
     @staticmethod
     def _hoja_tabla() -> str:
         # (sin marco propio: los 4 px del marco transparente de la hoja global son del nombre; el anillo de foco sale con el teclado)
-        # (el editor de una celda —el nombre, la lista de papel o de tipo— no pasa del alto de su fila: con los 32 px de la hoja global se salía por abajo y,
-        # en la última fila, el visor de la tabla le cortaba el marco de foco)
+        # (el editor de una celda —el nombre, la lista de papel o de tipo— no pasa del alto de su fila: lo garantiza la regla de la hoja global
+        # para los controles dentro de vistas de elementos)
         return (f"QHeaderView::section {{ padding: 4px 4px; text-align: left; }} QTableWidget {{ font-size: {estilo.T_PEQUENA}px; border: 0; }} "
-                f"QTableWidget QLineEdit, QTableWidget QComboBox {{ min-height: 0; padding-top: 0; padding-bottom: 0; }} "
                 f"QTableWidget[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; }}")
 
     def _planes(self) -> list[dict[str, Any]]:
@@ -531,6 +531,7 @@ class PanelVariables(QWidget):
             self._resultado(None)
             return
         self._pend.insert(pos, f)
+        self._rechazado = True
         self.msg.setText(motivo)
         self.msg.setStyleSheet(f"color: {COL['err']}")
         self.parpadear(f)
@@ -548,9 +549,25 @@ class PanelVariables(QWidget):
             self.tabla.editItem(self.tabla.item(r, 0))
 
     # -- botones y comprobaciones ----------------------------------------------------------------------
+    def _confirmar_edicion(self) -> bool:
+        """Con una celda en edición (los botones no toman el foco con el ratón, así que el editor sigue abierto al pulsarlos), la confirma como
+        si se pulsara Intro: si es el nombre de una fila nueva y es válido, se crea la variable; si no, se muestra el motivo. Devuelve True si se
+        rechazó el nombre. Sin esto la tabla no se rehacía mientras había un editor abierto (`mostrar`) y las filas nuevas no se veían."""
+        if self.tabla.state() != QAbstractItemView.State.EditingState:
+            return False
+        editor = self.tabla.indexWidget(self.tabla.currentIndex())
+        if editor is None:
+            return False
+        self._rechazado = False
+        self.tabla.commitData(editor)
+        self.tabla.closeEditor(editor, QAbstractItemDelegate.EndEditHint.NoHint)
+        return self._rechazado
+
     def nueva(self, papel: str = "input") -> None:
         """Una fila sin nombre (booleana, con el papel dado: entrada por omisión), con el cursor en el nombre; la variable no existe en el modelo hasta
         que se escribe un nombre válido."""
+        if self._confirmar_edicion():
+            return  # el nombre escrito se rechazó: se ve el motivo y la fila vuelve a quedar en blanco con el cursor (como al pulsar Intro); no se añade otra
         self._n += 1
         f = {"id": None, "papel": papel, "tipo": {"kind": "bool"}, "n": self._n}
         self._pend.append(f)

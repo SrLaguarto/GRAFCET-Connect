@@ -50,7 +50,7 @@ class RedisenoVisual(BaseQt):
         w.show()
         self.app.processEvents()
         b = w.diagrama.b_dependencias
-        self.assertIs(b.parent(), w.tb_vista)
+        self.assertIs(b.parent(), w.tb_edit)
         self.assertTrue(b.isVisible())
         b.click()
         self.assertTrue(w.diagrama.dependencias)

@@ -1178,7 +1178,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _barra_herramientas(self) -> None:
         for accion, tipo in ((self.a_nuevo, "nuevo"), (self.a_abrir, "abrir"), (self.a_guardar, "guardar"),
                              (self.a_deshacer, "deshacer"), (self.a_rehacer, "rehacer"), (self.a_borrar, "borrar"),
-                             (self.a_debajo, "debajo"), (self.a_ejecutar, "play"), (self.a_reiniciar, "reiniciar")):
+                             (self.a_debajo, "debajo"), (self.a_cortar, "cortar"), (self.a_copiar, "copiar"),
+                             (self.a_pegar, "pegar"), (self.a_ejecutar, "play"), (self.a_reiniciar, "reiniciar")):
             accion.setIcon(_icono_barra(tipo, estilo.BLANCO if tipo == "play" else estilo.TINTA))
         self.tb_proyecto = QToolBar("Proyecto")
         self.tb_proyecto.setMovable(False)
@@ -1229,40 +1230,44 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.tb_conexion.hide()
         self._fijar_ancho_boton_es()  # con la barra ya en la ventana: el botón lleva su hoja de estilo
         self._fijar_ancho_boton_play()
+        # Una sola barra de edición a continuación de Play y Reiniciar: Deshacer · Rehacer | Cortar · Copiar · Pegar · Borrar | Añadir debajo · Dependencias.
+        # Deshacer a Borrar (desactivados fuera de la edición, con la habilitación de sus acciones), solo icono con su ayuda y atajo; «Añadir debajo» y «Dependencias» con texto cuando hay sitio (`_textos_en_barras`).
         self.tb_edit = QToolBar("Edición")
         self.tb_edit.setObjectName("barraEdicion")
         self.tb_edit.setMovable(False)
-        for a in (self.a_debajo,):
-            self.tb_edit.addAction(a)
+        self.tb_edit.setIconSize(QSize(20, 20))
+        self.tb_edit.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self._acciones_solo_icono = []
+        for grupo in ((self.a_deshacer, "Deshacer", "Ctrl+Z"), (self.a_rehacer, "Rehacer", "Ctrl+Y")),                      ((self.a_cortar, "Cortar", "Ctrl+X"), (self.a_copiar, "Copiar", "Ctrl+C"), (self.a_pegar, "Pegar", "Ctrl+V"),
+                      (self.a_borrar, "Borrar la selección", "Supr")):
+            for a, nombre, atajo in grupo:
+                a.setToolTip(f"{nombre} ({atajo})")
+                self.tb_edit.addAction(a)
+                self.tb_edit.widgetForAction(a).setAccessibleName(nombre)
+                self._acciones_solo_icono.append(a)
+            self.tb_edit.addSeparator()
+        self.tb_edit.addAction(self.a_debajo)
+        self.a_debajo.setIconText("Añadir debajo")  # el texto del botón, sin el atajo que acompaña al del menú
         boton = self.diagrama.b_dependencias
         boton.setIcon(_icono_barra("dependencias"))
-        boton.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)  # con texto cuando hay sitio (_textos_en_barras)
         boton.setAccessibleName("Mostrar dependencias")
         boton.setStyleSheet("")  # hereda el estilo común de la barra
-        self.tb_edit.setIconSize(QSize(20, 20))
-        self.tb_edit.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.a_debajo.setIconText("Añadir debajo")  # el texto del botón, sin el atajo que acompaña al del menú
-        self.addToolBar(self.tb_edit)
-        self.tb_vista = QToolBar("Vista")
-        self.tb_vista.setObjectName("barraVista")
-        self.tb_vista.setMovable(False)
-        self.tb_vista.setIconSize(QSize(20, 20))
-        self.a_dependencias = self.tb_vista.addWidget(boton)
+        self.a_dependencias = self.tb_edit.addWidget(boton)  # (al simular, los botones de edición siguen ahí, desactivados)
         self.a_dependencias.setVisible(True)
         self.a_dependencias.setEnabled(True)
         boton.show()
-        self.addToolBar(self.tb_vista)
+        self._textos_en_barras(True)
+        self.addToolBar(self.tb_edit)
         self.tb_proyecto.hide()
         self.herramientas_grafcet=QWidget()
         self.herramientas_grafcet.setObjectName("herramientasGrafcet")
         self.herramientas_grafcet.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.herramientas_grafcet.setProperty("modo", "editar")  # la hoja global la tiñe de verde al simular
         fila=QHBoxLayout(self.herramientas_grafcet);fila.setContentsMargins(estilo.E2,estilo.E1,estilo.E2,estilo.E1);fila.setSpacing(estilo.E2)
-        for barra in (self.tb_sim,self.tb_edit,self.tb_vista):
+        for barra in (self.tb_sim,self.tb_edit):
             self.removeToolBar(barra);fila.addWidget(barra);barra.show()
         fila.addStretch(1)
         self.centralWidget().layout().insertWidget(1,self.herramientas_grafcet)
-        self.tb_edit.hide()
         self._acciones_edicion(False)
 
     def _paneles(self) -> None:
@@ -1853,7 +1858,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self._paneles_edicion = {"izquierdo": self.a_izquierdo.isChecked(),
                                     "inferior": self.a_inferior.isChecked() and self._fijado(),  # sin fijar, vuelve plegado
                                     "tamanos": self.vsplit.sizes() if self.isVisible() else None}
-        self.tb_edit.setVisible(editar)
         self.variables.setEnabled(editar)
         self.props.setEnabled(editar); self.paleta.setEnabled(editar)
         for accion in (self.a_guardar,self.a_guardar_como,self.a_enviar_lamina,self.a_exportar): accion.setEnabled(not getattr(self,"solo_lectura",False))
@@ -2365,10 +2369,13 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.tb_sim.resize(self.tb_sim.sizeHint().width(), self.tb_sim.height())
 
     def _textos_en_barras(self, con_texto: bool) -> None:
-        """«Añadir debajo» y «Mostrar dependencias» llevan texto cuando hay sitio y solo icono (con su ayuda) en pantalla partida."""
+        """«Añadir debajo» y «Mostrar dependencias» llevan texto cuando hay sitio y solo icono (con su ayuda) en pantalla partida; el resto
+        de botones de la barra de edición son siempre de solo icono."""
         forma = Qt.ToolButtonStyle.ToolButtonTextBesideIcon if con_texto else Qt.ToolButtonStyle.ToolButtonIconOnly
-        self.tb_edit.setToolButtonStyle(forma)
-        self.tb_vista.setToolButtonStyle(forma)
+        for a in (self.a_debajo, self.a_dependencias):
+            w = self.tb_edit.widgetForAction(a)
+            if w is not None:
+                w.setToolButtonStyle(forma)
         self.diagrama.b_dependencias.setToolButtonStyle(forma)
 
     def _configurar_foco(self) -> None:
@@ -2391,7 +2398,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         d = self.diagrama
         entradas = list(getattr(self, "botones", {}).values())
         cadena = [self.pestanas_vistas, self.luz_es, self.tb_sim.widgetForAction(self.a_ejecutar),
-                  self.tb_sim.widgetForAction(self.a_reiniciar), self.tb_edit.widgetForAction(self.a_debajo), d.b_dependencias,
+                  self.tb_sim.widgetForAction(self.a_reiniciar),
+                  *(self.tb_edit.widgetForAction(a) for a in (*self._acciones_solo_icono, self.a_debajo)), d.b_dependencias,
                   self.flechas["izquierdo"], self.paleta, d, self.b_ayuda, d.b_menos, d.b_mas, d.b_ajustar, d.b_seleccion,
                   self.flechas["derecho"], *entradas, self.variables.tabla, *self.variables.b_nuevas.values(),
                   self.variables.b_quitar, self.pestanas["izquierdo"], self.pestanas["derecho"], self.flechas["inferior"],
@@ -3204,7 +3212,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.luz_es.setProperty("abierta",indice==1);self.luz_es.style().unpolish(self.luz_es);self.luz_es.style().polish(self.luz_es)  # activa mientras se ve E/S
             pendiente=self.destino_traer is not None and self.destino_traer[0] is self.edicion
             self.aviso_traer.setVisible(indice==0 and pendiente)
-        if hasattr(self,'tb_edit'):self.tb_edit.setVisible(indice==0 and self.modo=='editar' and not getattr(self,'solo_lectura',False))
         if hasattr(self,"herramientas_grafcet"):self.herramientas_grafcet.setVisible(indice==0 and not pendiente)
         planos=self.paginas_es.currentIndex()==2
         self.a_planos.blockSignals(True);self.a_planos.setChecked(planos);self.a_planos.blockSignals(False)

@@ -76,16 +76,16 @@ FAMILIA_MONO = f'"{FUENTE_MONO}", "Courier New"'
 ANCHO_BARRA = 12           # barras de desplazamiento
 
 # Dos escalas de letra y de controles que cambian solas con el tamaño de la ventana (`activar_escala`): la «normal» es la de siempre
-# (hasta 1366×768) y la «grande» sube la letra base a 14 px, los títulos, el chip y las cifras, y los controles a 40 px, para leer
+# (hasta 1366×768) y la «grande» sube la letra base a 14 px, los títulos, el chip y las cifras, y los controles a 32 px (28 en la escala normal), para leer
 # desde el fondo del aula con el proyector (pantalla completa: 1600 px de ancho y 900 de alto, o más). Los menús no se tocan.
 ESCALAS = {
     "normal": dict(T_BASE=13, T_PEQUENA=12, T_TITULO=16, T_SECCION=14, T_CHIP=13, T_CIFRA=12,
-                   ALTO_CONTROL=36, ALTO_CONTROL_COMPACTO=32, ALTO_BARRA=34, ALTO_BARRA_COMPACTA=32,
-                   ALTO_FILA=30, ALTO_ENTRADA=36, ALTO_FILA_COMPACTA=28,
+                   ALTO_CONTROL=28, ALTO_CONTROL_COMPACTO=26, ALTO_BARRA=30, ALTO_BARRA_COMPACTA=28,
+                   ALTO_FILA=30, ALTO_ENTRADA=32, ALTO_FILA_COMPACTA=28,
                    T_ES=12, ALTO_FILA_ES=16, ANCHO_INTERIOR_ES=200),  # (vista de E/S: filas planas y compactas, P-IMP-63)
     "grande": dict(T_BASE=14, T_PEQUENA=13, T_TITULO=19, T_SECCION=16, T_CHIP=15, T_CIFRA=14,
-                   ALTO_CONTROL=40, ALTO_CONTROL_COMPACTO=36, ALTO_BARRA=40, ALTO_BARRA_COMPACTA=36,
-                   ALTO_FILA=34, ALTO_ENTRADA=40, ALTO_FILA_COMPACTA=32,
+                   ALTO_CONTROL=32, ALTO_CONTROL_COMPACTO=28, ALTO_BARRA=34, ALTO_BARRA_COMPACTA=32,
+                   ALTO_FILA=34, ALTO_ENTRADA=36, ALTO_FILA_COMPACTA=32,
                    T_ES=14, ALTO_FILA_ES=18, ANCHO_INTERIOR_ES=236)}
 UMBRAL_GRANDE = (1600, 900)  # ancho y alto de la ventana a partir de los cuales rige la escala grande
 ESCALA = "normal"
@@ -229,6 +229,20 @@ QLineEdit, QComboBox { background:$superficie; border:1px solid $borde_control; 
 QLineEdit:disabled, QComboBox:disabled { background:$superficie_2; border-color:$borde; color:$deshabilitado; }
 QLineEdit[readOnly="true"] { background:$superficie_2; }
 $familia_entradas
+QSpinBox, QDoubleSpinBox { background:$superficie; border:1px solid $borde_control; border-radius:${r_s}px;
+    selection-background-color:$acento; selection-color:$blanco; }
+QSpinBox:disabled, QDoubleSpinBox:disabled { background:$superficie_2; border-color:$borde; color:$deshabilitado; }
+$familia_spin
+QSpinBox, QDoubleSpinBox { max-height:${alto_menos}px; }  /* (la altura que pide el propio spinbox es mayor que su mínimo: sin esto mide 3 px más que los demás controles) */
+QSpinBox:focus, QDoubleSpinBox:focus { max-height:${alto_menos4}px; }
+QSpinBox::up-button, QDoubleSpinBox::up-button { subcontrol-origin:border; subcontrol-position:top right; width:18px; border:0; background:transparent; }
+QSpinBox::down-button, QDoubleSpinBox::down-button { subcontrol-origin:border; subcontrol-position:bottom right; width:18px; border:0; background:transparent; }
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover, QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover { background:$hover; }
+QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed, QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed { background:$pulsado; }
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image:url(:/grafconnect/subir.svg); width:8px; height:5px; }
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image:url(:/grafconnect/desplegar.svg); width:8px; height:5px; }
+QSpinBox::up-arrow:disabled, QSpinBox::down-arrow:disabled, QDoubleSpinBox::up-arrow:disabled, QDoubleSpinBox::down-arrow:disabled { image:none; }
+QAbstractSpinBox QLineEdit, QAbstractSpinBox QLineEdit:focus { border:0; background:transparent; min-height:0; padding:0; margin:0; }
 QComboBox::drop-down { subcontrol-origin:padding; subcontrol-position:top right; width:24px; border:0; background:transparent; }
 QComboBox::down-arrow { image:url(:/grafconnect/desplegar.svg); width:12px; height:8px; }
 QComboBox QAbstractItemView { background:$superficie; border:1px solid $borde_control; selection-background-color:$acento_suave; selection-color:$tinta; outline:0; }
@@ -292,6 +306,10 @@ QStatusBar { background:$fondo; color:$tinta_2; font-size:${t_pequena}px; }
 QStatusBar::item { border:0; }
 QProgressBar { border:1px solid $borde_control; border-radius:${r_s}px; background:$superficie; text-align:center; }
 QProgressBar::chunk { background:$acento; }
+/* controles dentro de una tabla, lista o árbol (celdas con `setCellWidget` y editores de delegado): miden lo que la fila, sin alto mínimo propio */
+QAbstractItemView QLineEdit, QAbstractItemView QComboBox, QAbstractItemView QAbstractSpinBox,
+QAbstractItemView QLineEdit:focus, QAbstractItemView QComboBox:focus, QAbstractItemView QAbstractSpinBox:focus { min-height:0; padding-top:0; padding-bottom:0; border-radius:0; }
+QAbstractItemView QAbstractSpinBox QLineEdit { border:0; min-height:0; padding:0; }
 """)
 
 
@@ -314,6 +332,7 @@ def hoja_global(compacto_alto: bool = False) -> str:
         alto_fila=ALTO_FILA_COMPACTA if compacto_alto else ALTO_FILA, ancho_barra=ANCHO_BARRA,
         familia_entradas=_familia("QLineEdit, QComboBox", alto, 8),
         familia_botones=_familia("QPushButton", alto, 12, teclado=True),
+        familia_spin=_familia("QSpinBox, QDoubleSpinBox", alto, 8, pad_extra=(18, 0)),
     )
     hoja = _PLANTILLA.substitute(**t)
     # el desplegable deja sitio a su flecha (la zona `drop-down`, de 24 px); se escribe aparte para que `padding` no se pierda
@@ -321,9 +340,10 @@ def hoja_global(compacto_alto: bool = False) -> str:
     return hoja
 
 
-def campos_compactos(alto: int = ALTO_CONTROL_COMPACTO) -> str:
-    """Hoja local para paneles con poco alto: campos de texto y desplegables de `alto` px (32, el mínimo táctil) en lugar de los
-    36 de la hoja global, con el mismo foco discontinuo de 2 px sin que nada se mueva."""
+def campos_compactos(alto: int | None = None) -> str:
+    """Hoja local para paneles con poco alto: campos de texto y desplegables de `alto` px (por defecto, `ALTO_CONTROL_COMPACTO` de la
+    escala activa) en lugar de los de la hoja global, con el mismo foco discontinuo de 2 px sin que nada se mueva."""
+    alto = ALTO_CONTROL_COMPACTO if alto is None else alto
     return (f"QLineEdit, QComboBox {{ min-height:{alto - 2}px; padding:0 8px; }} "
             f"QLineEdit:focus, QComboBox:focus {{ border:2px dashed {FOCO}; min-height:{alto - 4}px; padding:0 7px; }} "
             f"QComboBox {{ padding-right:28px; }} QComboBox:focus {{ padding-right:27px; }}")
@@ -367,6 +387,11 @@ _TRAZOS = {
                [(10, 10), (10, 17)], [(14, 10), (14, 17)]],
     "deshacer": [[(8, 4), (3, 9), (8, 14)], [(3, 9), (13, 9), (18, 11), (20, 15), (18, 20)]],
     "rehacer": [[(16, 4), (21, 9), (16, 14)], [(21, 9), (11, 9), (6, 11), (4, 15), (6, 20)]],
+    # tijeras: dos hojas que se cruzan (las anillas se dibujan en `icono`), dos hojas de papel solapadas y un portapapeles con su pinza
+    "cortar": [[(8.6, 14.6), (19, 3)], [(15.4, 14.6), (5, 3)]],
+    "copiar": [[(9, 8), (20, 8), (20, 21), (9, 21), (9, 8)], [(15, 8), (15, 3), (4, 3), (4, 16), (9, 16)]],
+    "pegar": [[(9, 5), (6, 5), (5, 6), (5, 21), (19, 21), (19, 6), (18, 5), (15, 5)], [(9, 3), (15, 3), (15, 7), (9, 7), (9, 3)],
+              [(8, 12), (16, 12)], [(8, 16), (14, 16)]],
     "debajo": [[(6, 4), (18, 4)], [(12, 8), (12, 21)], [(7, 16), (12, 21), (17, 16)]],
     "pausa": [[(8, 5), (8, 19)], [(16, 5), (16, 19)]],
     "conexion": [[(3, 5), (10, 5), (10, 11), (3, 11), (3, 5)], [(14, 13), (21, 13), (21, 20), (14, 20), (14, 13)],
@@ -433,6 +458,9 @@ def icono(tipo: str, color: str = TINTA, grosor: float = 1.75, tam: int = 24) ->
     elif tipo == "centrar":
         p.drawEllipse(QPointF(12, 12), 5, 5)
         p.drawEllipse(QPointF(12, 12), .6, .6)
+    elif tipo == "cortar":
+        p.drawEllipse(QPointF(6.5, 18), 3, 3)
+        p.drawEllipse(QPointF(17.5, 18), 3, 3)
     elif tipo == "planos":
         p.drawRect(QRectF(5, 2.5, 14, 19))
         p.drawRect(QRectF(7.5, 5, 9, 14))

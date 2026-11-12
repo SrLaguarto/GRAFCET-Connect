@@ -10,7 +10,7 @@ import copy
 from PySide6.QtCore import Signal, Qt, QMimeData, QObject, QSize, QRect, QEvent, QRegularExpression, QTimer
 from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPixmap, QRegularExpressionValidator
 from fractions import Fraction
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QStackedWidget, QFrame, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox, QSizePolicy,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
                                QDialog, QDialogButtonBox, QListWidget, QListWidgetItem,
@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxL
 from . import estilo
 from .paneles import ContextoNombres, EtiquetaGrupos, TituloSeccion
 from conexion.adaptador import texto_numero
-from conexion.configuracion import ETIQUETA_CANAL, CONEXION_INICIAL, CANALES_INICIALES, Configuracion, Senal, normalizar_host
+from conexion.configuracion import ETIQUETA_CANAL, CONEXION_INICIAL, CANALES_INICIALES, Configuracion, Senal, es_ipv4, normalizar_host
 
 AREAS = {"discrete": "Entradas digitales (Discrete Inputs)",
          "coil": "Salidas digitales (Coils)",
@@ -71,6 +71,8 @@ def estilo_panel(escala: str = "normal") -> str:
     QFrame#cabeceraES QPushButton[primario="true"]:hover {{ background:{estilo.ACENTO_HOVER}; }}
     QFrame#cabeceraES QPushButton[primario="true"][tecl="true"]:focus {{ border:2px dashed white; }}
     QWidget#conexionES QLabel#tituloES {{ color:{estilo.TINTA}; font-size:{e["T_TITULO"]}px; font-weight:700; padding-left:4px; }}
+    QWidget#conexionES QLineEdit[invalido="true"] {{ border:1px solid {estilo.ERROR}; }}
+    QWidget#conexionES QLineEdit[invalido="true"]:focus {{ border:2px dashed {estilo.ERROR}; }}
     QWidget#cuerpoES, QFrame#pieES {{ background:transparent; }}
     QWidget#cuerpoES QLabel, QFrame#pieES QLabel {{ color:{estilo.TINTA_2}; background:transparent; }}
     QWidget#conexionES QLabel#seccionES {{ color:{estilo.ACENTO}; font-family:{estilo.FAMILIA_TITULO}; font-size:{e["T_SECCION"]}px; font-weight:600; padding:6px; }}  /* como los títulos de sección del resto: tipo de título, acento, sin mayúsculas */
@@ -570,9 +572,39 @@ class LienzoPLC(QWidget):
         titulo = QLabel("PLC · Modbus TCP")
         titulo.setObjectName("tituloPLC")
         rejilla.addWidget(titulo, 0, 0, 1, 2)
+        # La cabecera del marco: con la conexión parada, los controles de la IP, el puerto y el esclavo (`edicion_destino`, los mismos widgets que
+        # Configuración); con ella activa o sin proyecto, el texto de solo lectura (`destino`). Las dos páginas miden lo mismo: el marco no cambia.
+        self.cabecera_marco = QStackedWidget()
         self.destino = QLabel()
         self.destino.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.destino.setFixedSize(2 * self.ancho_interior, 36)
+        self.cabecera_marco.addWidget(self.destino)
+        self.edicion_destino = QWidget()
+        ed = QVBoxLayout(self.edicion_destino)
+        ed.setContentsMargins(0, 0, 0, 0)
+        ed.setSpacing(4)
+        self.ip = CampoIPv4(relleno=False)
+        self.ip.setAccessibleName("IP del servidor")
+        self.puerto = _SpinConfiguracion()
+        self.puerto.setRange(1, 65535)
+        self.puerto.setAccessibleName("Puerto")
+        self.puerto.setToolTip("Puerto del servidor Modbus; normalmente 502.")
+        self.unidad = _SpinConfiguracion()
+        self.unidad.setRange(0, 255)
+        self.unidad.setAccessibleName("Esclavo ID")
+        self.unidad.setToolTip("El ID de unidad configurado en el servidor Modbus; normalmente 1.")
+        self.puerto.setFixedWidth(92)
+        self.unidad.setFixedWidth(92)
+        for elementos in ((QLabel("IP"), self.ip, QLabel(":"), self.puerto), (QLabel("Esclavo ID"), self.unidad)):
+            fila = QHBoxLayout()
+            fila.setContentsMargins(0, 0, 0, 0)
+            fila.setSpacing(6)
+            fila.addStretch(1)
+            for e in elementos:
+                fila.addWidget(e)
+            fila.addStretch(1)
+            ed.addLayout(fila)
+        self.cabecera_marco.addWidget(self.edicion_destino)
+        self.fijar_alto_cabecera(estilo.ALTO_CONTROL)
         self.izq, self.der = QWidget(), QWidget()
         self.fila_izq, self.fila_der = QVBoxLayout(self.izq), QVBoxLayout(self.der)
         for f in (self.fila_izq, self.fila_der):
@@ -584,7 +616,7 @@ class LienzoPLC(QWidget):
         self.ayuda.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.ayuda.setContentsMargins(0, 0, 0, 0)
         self.ayuda.setMinimumHeight(20)
-        rejilla.addWidget(self.destino, 1, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
+        rejilla.addWidget(self.cabecera_marco, 1, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
         rejilla.addWidget(self.izq, 2, 0, Qt.AlignmentFlag.AlignTop)
         rejilla.addWidget(self.der, 2, 1, Qt.AlignmentFlag.AlignTop)
         self.ayuda.hide()  # las instrucciones siguen en los tooltips de los canales
@@ -596,10 +628,15 @@ class LienzoPLC(QWidget):
         self.marco.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setMinimumWidth(2 * self.ancho_interior + 120)
 
-    def fijar_interior(self, ancho):
+    def fijar_alto_cabecera(self, alto_control):
+        """La cabecera del marco mide dos filas de controles de `alto_control` px (con o sin controles: el marco no se mueve al conectar)."""
+        self._alto_cabecera = max(36, 2 * alto_control + 6)
+        self.cabecera_marco.setFixedSize(2 * self.ancho_interior, self._alto_cabecera)
+
+    def fijar_interior(self, ancho, alto_control=None):
         """El ancho de la mitad del marco que cae dentro de él (más ancho con la letra grande)."""
         self.ancho_interior = ancho
-        self.destino.setFixedSize(2 * ancho, 36)
+        self.fijar_alto_cabecera(alto_control if alto_control is not None else (self._alto_cabecera - 6) // 2)
         self.setMinimumWidth(2 * ancho + 120)
         self._colocar_marco()
 
@@ -675,7 +712,7 @@ class _Octeto(QLineEdit):
         self.setFixedWidth(46)
         self.setMaxLength(15)  # lo que cabe al pegar una IP entera; al teclear nunca pasa de 3
         self.setValidator(QRegularExpressionValidator(QRegularExpression(r"[0-9.]*"), self))
-        self.setStyleSheet("padding: 4px 2px")
+        self.setStyleSheet("QLineEdit { padding: 0 2px; } QLineEdit:focus { padding: 0 1px; }")
         self.textEdited.connect(self._editado)
 
     def _editado(self, texto):
@@ -731,7 +768,7 @@ class CampoIPv4(QWidget):
     editingFinished = Signal()
     NOMBRES = ("primer", "segundo", "tercer", "cuarto")
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, relleno=True):
         super().__init__(parent)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -747,7 +784,8 @@ class CampoIPv4(QWidget):
             caja.returnPressed.connect(self._intro)
             lay.addWidget(caja)
             self.cajas.append(caja)
-        lay.addStretch(1)
+        if relleno:  # (sin él, el campo mide solo lo que sus cajas: para centrarlo en una fila)
+            lay.addStretch(1)
         for anterior, caja in zip(self.cajas, self.cajas[1:]):
             self.setTabOrder(anterior, caja)
         self.setFocusProxy(self.cajas[0])
@@ -829,7 +867,10 @@ class PanelES(QWidget):
         fuente.setPixelSize(self.letra)
         self.setFont(fuente)
         self.setStyleSheet(hoja_ventana + estilo_panel(escala))
-        self.lienzo.fijar_interior(self.ancho_interior)
+        self.fila_alta.setFixedHeight(e["ALTO_CONTROL_COMPACTO"] + 8)
+        self.b_volver.setFixedSize(e["ALTO_CONTROL_COMPACTO"] + 2, e["ALTO_CONTROL_COMPACTO"])
+        self._filas_tabla(escala)
+        self.lienzo.fijar_interior(self.ancho_interior, e["ALTO_CONTROL"])
         for lista in (self.lista_entradas, self.lista_salidas):
             lista.letra, lista.alto = self.letra, self.alto_fila
         self.contexto_izq.fijar(()); self.contexto_der.fijar(())  # (se rehacen con las filas)
@@ -868,6 +909,8 @@ class PanelES(QWidget):
         self.indicadores_listas = {}
         self.terminales = {}
         self.bloqueado = False
+        self.conectado = False
+        self._copiando_marco = False
         self.extras = {a: set() for a in AREAS}
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
@@ -881,12 +924,13 @@ class PanelES(QWidget):
         cabeza.setContentsMargins(0, 0, 0, 0)
         cabeza.setSpacing(0)
         fila_alta = QWidget()
-        fila_alta.setFixedHeight(estilo.ALTO_CONTROL + 8)
+        self.fila_alta = fila_alta
+        fila_alta.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 8)  # los botones de la cabecera miden `ALTO_CONTROL_COMPACTO` (hoja `estilo_panel`)
         cabecera = QHBoxLayout(fila_alta)
         cabecera.setContentsMargins(estilo.E3, 0, estilo.E3, 0)
         cabecera.setSpacing(estilo.E2)
         self.b_volver = QPushButton("←")
-        self.b_volver.setFixedSize(estilo.ALTO_CONTROL, estilo.ALTO_CONTROL - 2)
+        self.b_volver.setFixedSize(estilo.ALTO_CONTROL_COMPACTO + 2, estilo.ALTO_CONTROL_COMPACTO)
         self.b_volver.setToolTip("Volver al GRAFCET")
         self.b_volver.setStyleSheet("font-size:18px; padding:0")
         self.b_volver.clicked.connect(self.volver)
@@ -1005,14 +1049,8 @@ class PanelES(QWidget):
         self.dialogo_config.setStyleSheet(f"""
             QDialog {{ background:{estilo.FONDO}; color:{estilo.TINTA}; }}
             QLabel, QCheckBox {{ color:{estilo.TINTA}; }}
-            QLineEdit, QSpinBox, QComboBox {{ background:{estilo.SUPERFICIE}; color:{estilo.TINTA}; border:1px solid {estilo.BORDE_CONTROL}; border-radius:{estilo.R_S}px; padding:5px; }}
-            QLineEdit:focus, QSpinBox:focus, QComboBox:focus {{ border:2px dashed {estilo.FOCO}; padding:4px; }}
             QTableWidget {{ background:{estilo.SUPERFICIE}; color:{estilo.TINTA}; gridline-color:{estilo.BORDE}; }}
             QHeaderView::section {{ background:{estilo.SUPERFICIE_2}; color:{estilo.TINTA_2}; padding:6px; border:0; font-weight:600; }}
-            QPushButton {{ background:{estilo.SUPERFICIE}; color:{estilo.TINTA}; padding:6px 14px; border:1px solid {estilo.BORDE_CONTROL}; border-radius:{estilo.R_S}px; }}
-            QPushButton:hover {{ background:{estilo.HOVER}; }}
-            QPushButton[tecl="true"]:focus {{ border:2px dashed {estilo.FOCO}; padding:5px 13px; }}
-            QPushButton:disabled {{ color:{estilo.DESHABILITADO}; }}
         """)
         ajustes = QVBoxLayout(self.dialogo_config)
         self.config_widget = QWidget()
@@ -1085,6 +1123,7 @@ class PanelES(QWidget):
         self.tabla.setHorizontalHeaderLabels(["Usar", "Variable", "Papel", "Tipo", "Área", "Dirección (base 0)", "Formato", "Escala"])
         self.tabla.horizontalHeader().setStretchLastSection(True)
         self.tabla.setMinimumHeight(150)
+        self._filas_tabla()
         avanzado.addWidget(self.tabla)
         configuracion.addWidget(self.avanzado)
         self.avanzado.hide()
@@ -1105,6 +1144,11 @@ class PanelES(QWidget):
         self.host.editingFinished.connect(self._config_editada)
         for widget in (self.puerto, self.unidad, self.periodo, self.timeout):
             widget.valueChanged.connect(self._config_editada)
+        # Los controles de la cabecera del marco (IP, puerto y esclavo) escriben en los de Configuración (la única fuente de verdad) y vuelven a
+        # copiarse de ellos: lo que se cambie en un sitio se ve en el otro y se aplica y guarda igual (`_config_editada`).
+        self.lienzo.ip.editingFinished.connect(self._desde_marco)
+        self.lienzo.puerto.valueChanged.connect(self._desde_marco)
+        self.lienzo.unidad.valueChanged.connect(self._desde_marco)
         self._cargando = False
 
     def eventFilter(self, objeto, evento):  # noqa: N802
@@ -1259,6 +1303,52 @@ class PanelES(QWidget):
     def _config_editada(self, *args):
         if not self._cargando and not self.bloqueado and self.doc is not None:
             self._aplicar()
+        self._sincronizar_marco()
+
+    def _desde_marco(self, *args):
+        """Se cambió la IP, el puerto o el esclavo en la cabecera del marco: pasan a los campos de Configuración y se aplican como si se hubieran
+        escrito allí (un valor no válido no se aplica y se marca)."""
+        if self._cargando or self.bloqueado or self.conectado or self.doc is None or self._copiando_marco:
+            return
+        self._copiando_marco = True
+        try:
+            for destino, origen in zip(self.host.cajas, self.lienzo.ip.cajas):
+                destino.setText(origen.text())
+                destino._previo = origen.text()
+            for destino, origen in ((self.puerto, self.lienzo.puerto), (self.unidad, self.lienzo.unidad)):
+                if destino.value() != origen.value():
+                    destino.blockSignals(True)
+                    destino.setValue(origen.value())
+                    destino.blockSignals(False)
+        finally:
+            self._copiando_marco = False
+        self._config_editada()
+
+    def _sincronizar_marco(self):
+        """Los controles de la cabecera del marco muestran lo mismo que los de Configuración (cuando no coincide, porque se cambió allí o al
+        cargar el proyecto) y la IP se marca si no es válida. Con la conexión activa o sin proyecto, la cabecera es el texto de solo lectura."""
+        if self._copiando_marco:
+            return
+        self._copiando_marco = True
+        try:
+            ip = self.lienzo.ip
+            for destino, origen in zip(ip.cajas, self.host.cajas):
+                if destino.text() != origen.text():
+                    destino.setText(origen.text())
+                    destino._previo = origen.text()
+            for destino, origen in ((self.lienzo.puerto, self.puerto), (self.lienzo.unidad, self.unidad)):
+                if destino.value() != origen.value():
+                    destino.blockSignals(True)
+                    destino.setValue(origen.value())
+                    destino.blockSignals(False)
+            invalida = not es_ipv4(self.host.text())
+            for caja in ip.cajas:
+                if caja.property("invalido") != invalida:
+                    estilo.poner(caja, invalido=invalida)
+            self.lienzo.cabecera_marco.setCurrentWidget(self.lienzo.edicion_destino if self.doc is not None and not self.conectado and not self.bloqueado
+                                                        else self.lienzo.destino)
+        finally:
+            self._copiando_marco = False
 
     def _escala(self, area, direccion):
         return "1" if area in ("discrete", "coil") else self.escalas_base.get(f"{area}:{direccion}", "100")
@@ -1266,16 +1356,41 @@ class PanelES(QWidget):
     def abrir_configuracion(self):
         self.dialogo_config.show()
         self.dialogo_config.raise_()
+        self._anchos_controles()  # (con el diálogo ya pulido: la letra y la hoja de estilo son las que se ven)
 
     def _marcar_canales(self):
         self.canales_editados = True
         self._config_editada()
+
+    @staticmethod
+    def _alto_fila_tabla(escala=None):
+        """El alto de las filas de la tabla avanzada: el del control (y no menos que una fila de lista), para que los desplegables y los campos
+        de sus celdas (`setCellWidget`) midan lo que la fila y su texto se lea entero."""
+        e = estilo.ESCALAS[escala] if escala else estilo.ESCALAS[estilo.ESCALA]
+        return max(e["ALTO_FILA"], e["ALTO_CONTROL"])
+
+    def _anchos_controles(self):
+        """Las columnas de controles miden lo que su control (`resizeColumnsToContents` solo cuenta texto): el área se lee entera."""
+        for col in (4, 5, 6):
+            anchos = [self.tabla.cellWidget(f, col).sizeHint().width() for f in range(self.tabla.rowCount())]
+            if anchos:
+                self.tabla.setColumnWidth(col, max(self.tabla.columnWidth(col), max(anchos)))
+
+    def _filas_tabla(self, escala=None):
+        alto = self._alto_fila_tabla(escala)
+        cab = self.tabla.verticalHeader()
+        cab.setDefaultSectionSize(alto)
+        cab.setMinimumSectionSize(alto)
+        for fila in range(self.tabla.rowCount()):
+            self.tabla.setRowHeight(fila, alto)
 
     def _alternar_avanzado(self):
         mostrar = self.avanzado.isHidden()
         self.avanzado.setVisible(mostrar)
         self.b_avanzado.setText("Asignaciones y ajustes avanzados  ⌄" if mostrar else "Asignaciones y ajustes avanzados  ›")
         self.dialogo_config.resize(1050 if mostrar else 640, 680 if mostrar else 380)
+        if mostrar:
+            self._anchos_controles()
 
     def _cerrar_configuracion(self):
         self.dialogo_config.close()
@@ -1455,6 +1570,7 @@ class PanelES(QWidget):
         mapa = {s.variable: s for s in c.senales}
         ocupadas = {area: {s.direccion for s in c.senales if s.area == area} for area in AREAS}
         self.tabla.setRowCount(len(self.variables))
+        self._filas_tabla()
         for fila, v in enumerate(self.variables):
             s = mapa.get(v["id"])
             digital = v["type"]["kind"] == "bool"
@@ -1497,12 +1613,14 @@ class PanelES(QWidget):
             formato.currentIndexChanged.connect(self._config_editada)
             escala.editingFinished.connect(self._config_editada)
         self.tabla.resizeColumnsToContents()
+        self._anchos_controles()
         self.firma_modelo = self.firma(doc)
         self.pendiente = False
         aviso_nuevo=f"Asignaciones quitadas: {'; '.join(quitadas)}" if quitadas else ""
         self.aviso=" · ".join(x for x in (aviso_previo,aviso_nuevo) if x)
         self._dibujar()
         self._cargando = False
+        self._sincronizar_marco()
         return quitadas
 
     def actualizar(self, doc):
@@ -1734,3 +1852,4 @@ class PanelES(QWidget):
         for b in (self.b_conectar,):
             b.setEnabled(not on)
         self.b_desconectar.setEnabled(on)
+        self._sincronizar_marco()

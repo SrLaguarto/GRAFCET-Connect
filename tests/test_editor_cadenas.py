@@ -1849,7 +1849,7 @@ class EncuadrarYDependencias(BaseQt):
         lay = d.barra.layout()
         self.assertEqual([lay.itemAt(i).widget() for i in range(lay.count())],
                          [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion], "controles de zoom sin dependencias")
-        self.assertIs(b.parent(), w.tb_vista)
+        self.assertIs(b.parent(), w.tb_edit)
         self.assertTrue(b.isVisible())
         self.assertIn("dependencias", b.toolTip())
         # en edición: una macroetapa con su expansión y una encapsulante con su recinto

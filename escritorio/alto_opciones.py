@@ -42,6 +42,8 @@ def alto_minimo_transicion(props: PanelPropiedades) -> int:
     else:
         paleta = alto_operadores()
     extra = max(0, franja + paleta - ALTO_BASE_PROGRAMADOR)
+    caja = props.caja_formula  # la fila «Fórmula» pide más que su mínimo (el estado de la receptividad ocupa dos líneas): se cuenta lo que pide
+    extra += max(0, caja.sizeHint().height() - caja.minimumSizeHint().height())
     return props.minimumSizeHint().height() + extra
 
 
