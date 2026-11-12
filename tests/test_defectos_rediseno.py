@@ -141,6 +141,7 @@ class Defectos(BaseQt):
         w.show()
         QApplication.processEvents()
         self.assertEqual(w._escala, "grande")
+        self.pasar_arranque(w)
         original = type(w)._cambiar_escala
         with mock.patch.object(type(w), "_cambiar_escala", autospec=True, side_effect=original) as cambio:
             for ancho in (1598, 1605, 1596, 1602, 1580, 1610):
@@ -151,6 +152,8 @@ class Defectos(BaseQt):
             w._ancho_forzado = 500
             w.resize(1500, 950)
             QApplication.processEvents()
+            self.assertEqual(w._escala, "grande", "la escala nueva se aplica al acabar la ráfaga, no en el acto")
+            self.asentar_escala(w)
             self.assertEqual(w._escala, "normal")
             self.assertEqual(cambio.call_count, 1)
         self.assertEqual(w._ancho_forzado, 0, "al cambiar de escala se vuelve a medir «Reiniciar» (R2)")

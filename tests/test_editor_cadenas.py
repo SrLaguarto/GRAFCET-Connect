@@ -603,6 +603,23 @@ class BaseQt(unittest.TestCase):
         e.pedir_texto = lambda titulo, etiqueta, actual: actual
         return w, e
 
+    def asentar_escala(self, w):
+        """Espera a que acabe la ráfaga de cambios de tamaño: la escala de la ventana se aplica una vez, al final (P-IMP-145)."""
+        from PySide6.QtCore import QElapsedTimer
+        reloj = QElapsedTimer()
+        reloj.start()
+        while w._espera_escala.isActive() and reloj.elapsed() < 3000:
+            QApplication.processEvents()
+        QApplication.processEvents()
+
+    def pasar_arranque(self, w):
+        """Espera a que acabe el primer instante tras mostrarse la ventana, en el que la escala se aplica sin esperas (P-IMP-145)."""
+        from PySide6.QtCore import QElapsedTimer
+        reloj = QElapsedTimer()
+        reloj.start()
+        while w._arrancando and reloj.elapsed() < 3000:
+            QApplication.processEvents()
+
     def soltar_ficha(self, tipo, p):
         """Suelta una ficha de la paleta en el punto p del dibujo (el evento que genera Qt al terminar el arrastre)."""
         mime = QMimeData()

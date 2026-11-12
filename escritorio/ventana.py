@@ -72,6 +72,8 @@ ARRIBA_CAJA = 1  # margen superior del contenido de una sección: con el hueco d
 ARRIBA_VARIABLES = 4  # (el título de Variables es más grande)
 ANCHO_AYUDA_UTIL = 200  # y lo que pide la ayuda de debajo del título para leerse en dos líneas (con menos, se queda en el botón «Ayuda ▾»)
 ALTO_INFERIOR = {"simular": 220, "editar": 240}  # altura inicial del panel inferior: la traza, o las opciones de lo seleccionado
+ESPERA_ESCALA = 120  # ms sin cambios de tamaño de la ventana antes de aplicar la escala nueva (una sola vez por ráfaga de `resizeEvent`)
+ESPERA_ARRANQUE = 600  # ms desde el primer `show` en los que la escala se aplica sin esperar (la ventana se maximiza al arrancar)
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
 AYUDA_EDICION = {
     "seleccionar": "Clic selecciona un elemento (doble clic o Intro abre sus opciones abajo); arrastrarlo lo mueve (a la "
@@ -605,6 +607,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.reloj = QElapsedTimer()
         self.edicion: Edicion | None = None
         self._alturas = dict(ALTO_INFERIOR)
+        self._arrancando = False  # el primer instante tras mostrarse la ventana por primera vez: la escala se aplica sin esperas
+        self._arranque_hecho = False
+        self._escala_lista = False  # verdadero solo mientras se aplica la escala que esperaba el final de la ráfaga de cambios de tamaño
+        self._espera_escala = QTimer(self)
+        self._espera_escala.setSingleShot(True)
+        self._espera_escala.timeout.connect(self._escala_tras_la_rafaga)
         self._escala = "normal"  # la escala de letra y de controles de ahora (estilo.escala_para): cambia sola con el tamaño
         estilo.activar_escala("normal")
         self._muy_estrecho = False
@@ -2139,6 +2147,28 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _elegir_plan_temp(self, plan: dict[str, Any]) -> None:
         self.t_temp.itemDelegateForColumn(1).corto = plan["corto"]
 
+    def _escala_de_la_ventana(self) -> None:
+        """La escala que pide el tamaño de ahora. Con la ventana a la vista, el cambio no se hace en cada `resizeEvent`: una animación
+        de Windows (Aero Snap) o arrastrar el borde mandan varios seguidos, y reaplicar la hoja de estilo en cada uno hacía «bailar» el
+        dibujo. Se espera a que se calmen (`ESPERA_ESCALA` ms sin nuevos cambios de tamaño) y se aplica **una sola vez**, con el tamaño
+        final; mientras tanto se conserva la escala anterior. Antes de mostrarse la ventana, en el primer instante tras mostrarse (hasta que se maximiza, sin que se vea el salto) y al terminar la
+        espera, se aplica al momento."""
+        deseada = estilo.escala_para(self.width(), self.height(), self._escala)
+        if not self.isVisible() or self._escala_lista or self._arrancando:
+            self._espera_escala.stop()
+            self._aplicar_escala(deseada)
+        elif deseada == self._escala:
+            self._espera_escala.stop()  # (la ráfaga ha vuelto a la escala de ahora: no hay nada que cambiar)
+        else:
+            self._espera_escala.start(ESPERA_ESCALA)  # (se reinicia con cada evento de la ráfaga)
+
+    def _escala_tras_la_rafaga(self) -> None:
+        self._escala_lista = True
+        try:
+            self._adaptar_tamano()
+        finally:
+            self._escala_lista = False
+
     def _aplicar_escala(self, nombre: str) -> None:
         """Al cruzar el umbral de pantalla completa (`estilo.UMBRAL_GRANDE`) o volver por debajo: la letra base pasa de 13 a 14 px,
         los títulos, el chip y las cifras crecen y los controles miden 40 px; por debajo de ese tamaño, lo de siempre. Solo se
@@ -2297,7 +2327,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         estrechan y las herramientas suben a la fila de las pestañas. Lo que el usuario plegó o desplegó a mano se respeta, y al
         agrandar la ventana vuelve lo que se plegó solo. No se cambia la hoja de estilo (aplicarla a toda la ventana tarda cerca
         de un segundo): los controles miden lo mismo a todos los tamaños."""
-        self._aplicar_escala(estilo.escala_para(self.width(), self.height(), self._escala))
+        self._escala_de_la_ventana()
         self._poner_ancho_lateral(self._ancho_lateral_para(self.width()), self._ancho_derecho_para(self.width()))
         nuevo = estilo.tamano_compacto(self.width(), self.height())
         if nuevo != self._compacto:
@@ -2583,7 +2613,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if not getattr(self, "_play_medido", False):
             self._play_medido = True
             self._fijar_ancho_boton_play()  # (ya con la hoja de estilo aplicada: la letra del botón es la que se ve)
-        self._adaptar_tamano()
+        if not self._arranque_hecho:
+            self._arranque_hecho = self._arrancando = True
+            QTimer.singleShot(ESPERA_ARRANQUE, self, lambda: setattr(self, "_arrancando", False))
+        self._escala_tras_la_rafaga()  # (al mostrarse, la escala del tamaño de ahora y sin esperas)
         if not self._foco_inicial:  # al arrancar, el foco va al dibujo (sin anillo: no llegó con Tab)
             self._foco_inicial = True
             self.diagrama.setFocus(Qt.FocusReason.OtherFocusReason)
@@ -3958,7 +3991,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.captura:
         w.show()  # (la captura de comprobación conserva el tamaño de siempre)
     else:
-        w.showMaximized()  # la aplicación arranca siempre maximizada; al restaurar, la ventana se comporta como siempre
+        # La aplicación arranca siempre maximizada; al restaurar, la ventana se comporta como siempre. En Windows el
+        # sistema muestra un instante la ventana con su tamaño normal antes de maximizarla (el «amago» de ventana
+        # pequeña): se abre transparente y se hace opaca cuando ya está maximizada.
+        w.setWindowOpacity(0.0)
+        w.showMaximized()
+        QTimer.singleShot(0, w, lambda: w.setWindowOpacity(1.0))
     if (not args.captura and not os.environ.get(actualizaciones.VARIABLE_SIN_ACTUALIZAR)
             and actualizaciones.al_arrancar_activo(w.ajustes)):
         QTimer.singleShot(1500, w.buscar_actualizaciones)  # con la ventana ya a la vista; en un hilo, sin bloquear
