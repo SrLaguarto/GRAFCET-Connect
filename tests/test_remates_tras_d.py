@@ -136,7 +136,7 @@ class RematesTrasD(BaseQt):
     def test_SREM206_relleno_interior_de_los_dos_selectores(self):
         w, e, p, aid = self.preparar("evento")
         opcion, campo = p.accion.variable.rectangulo_texto()
-        self.assertGreaterEqual(campo.left() - 26, estilo.E2)
+        self.assertGreaterEqual(campo.left() - opcion.rect.left(), estilo.E2, "el texto, a E2 del borde del desplegable, no del de la caja")
         with mock.patch.object(SelectorAccion, "showPopup"):
             w.diagrama.abrir_selector((100, 100, 100, 44), [("aux", "aux", True)], "aux", lambda _: None)
             QApplication.processEvents()

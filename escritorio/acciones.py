@@ -37,6 +37,7 @@ from .paneles import EtiquetaElidida
 from .remates_propiedades import FilaValor
 
 SIN_VARIABLES = "(sin variables: créelas en la tabla de variables)"  # la lista de variables, si no hay ninguna que valga
+TIPO_CORTO = {"bool": "Bool", "int": "Ent", "decimal": "Dec", "duration": "Dur"}  # el tipo en la lista de variables de la acción
 ALTO_SELECTOR = 62  # alto del selector de variable (dibujado como una caja de acción); nada debe dejarlo por debajo
 ESTILO_FICHA = (f"QPushButton {{ background: {COLORES['comparacion']}; color: white; font-weight: 600; border: 2px solid "
                 f"transparent; border-radius: {estilo.R_M}px; padding: 4px 24px; }}"
@@ -55,8 +56,9 @@ def opciones_variable(v: dict[str, tuple[str, str]], ofrecidas: list[str], elegi
         nombres = [n for n in ofrecidas if v[n][0] == papel]
         if nombres:
             out.append((titulo, None, False))
-        for n in nombres:
-            out.append((f"   {n}  ({nombre_tipo({'kind': v[n][1]})})", n, True))
+        for n in nombres:  # el tipo, en corto: «Bool», «Ent», «Dec» (decisión del responsable, 13-nov-2026)
+            tipo = TIPO_CORTO.get(v[n][1]) or nombre_tipo({"kind": v[n][1]})
+            out.append((f"   {n}  ({tipo})", n, True))
     if elegida and elegida not in ofrecidas:  # una entrada, o no booleana en una continua
         out.append((f"{elegida}  (no se puede escribir aquí)", elegida, True))
     return out
@@ -118,7 +120,7 @@ class _ComboVariable(QComboBox):
         opcion.frame = False
         campo = self.style().subControlRect(
             QStyle.ComplexControl.CC_ComboBox, opcion, QStyle.SubControl.SC_ComboBoxEditField, self)
-        campo.setLeft(max(campo.left(), 26 + estilo.E2))
+        campo.setLeft(max(campo.left(), opcion.rect.left() + estilo.E2))  # (el texto, a E2 del borde del propio desplegable)
         return opcion, campo
 
     def paintEvent(self, _evento):
@@ -139,6 +141,19 @@ class _ComboVariable(QComboBox):
         p.drawText(campo, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, corto)
         if corto != texto:
             self.setToolTip(texto)
+
+    def ancho_lista(self) -> int:
+        """Lo que mide la lista desplegada: el ancho del desplegable o, si alguna opción no cabe, lo justo para la más larga (su
+        texto, el margen de la vista y la barra de desplazamiento): nada sale recortado con «…»."""
+        vista = self.view()
+        fm = vista.fontMetrics()
+        texto = max((fm.horizontalAdvance(self.itemText(i)) for i in range(self.count())), default=0)
+        extra = 2 * estilo.E3 + vista.verticalScrollBar().sizeHint().width() + 2 * vista.frameWidth()
+        return max(self.width(), texto + extra)
+
+    def showPopup(self) -> None:  # noqa: N802
+        self.view().setMinimumWidth(self.ancho_lista())
+        super().showPopup()
 
     def currentText(self) -> str:  # noqa: N802
         d = self.currentData()

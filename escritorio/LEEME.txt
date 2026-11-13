@@ -32,7 +32,7 @@ Qué hace
   izquierda, con la etapa, la transición, la simultaneidad y la acción (las fichas se arrastran al dibujo; sin herramienta, el ratón
   selecciona, mueve y enlaza). Puntos de unión arriba y abajo (al acercar el puntero se marcan y de ellos sale el
   enlace). Panel de Opciones abajo, con la configuración de lo seleccionado (ver más abajo). Al seleccionar una transición, si el panel es más bajo de lo necesario, se agranda hasta ver todos los operadores de la receptividad (≈334 px con la paleta actual), sin pasar del 55 % del alto de la ventana (lo que no cabe se desplaza dentro); por debajo de 560 px de alto, los operadores van en una sola fila con desplazamiento horizontal. Si usted lo ha agrandado, se respeta su altura. Mover con rejilla,
-  borrar, deshacer y rehacer (Ctrl+Z, Ctrl+Y), «Añadir debajo» (Ctrl+Intro) y panel de diagnósticos.
+  borrar, deshacer y rehacer (Ctrl+Z, Ctrl+Y), «Añadir debajo» (menú Edición, Ctrl+Intro) y panel de diagnósticos.
   Los enlaces se seleccionan con un clic (se pueden quitar o volver a enlazar; el sentido sale del trazo, y de
   abajo arriba lleva flecha). La simultaneidad (doble trazo) es una barra de la paleta que se suelta en el dibujo,
   se enlaza con etapas y transiciones y se ensancha estirando de sus extremos. Las alternativas se construyen con
@@ -49,7 +49,9 @@ Qué hace
 - Los avisos no muestran códigos internos y usan vocabulario GRAFCET. El detalle técnico y la «Referencia: código» van en la ayuda emergente de cada aviso. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular».
 - Errores y avisos del grafcet: botón «Mostrar errores» de la barra de edición. Marcado, el aviso se ve sobre el dibujo (triángulo y resumen, «2 errores», «1 error · 2 avisos»; un clic o Espacio despliega la lista); desmarcado, no se ve al editar. Al marcarlo, la lista sale desplegada (el resumen la pliega). Un Play que no puede simular lo marca y despliega la lista, y se desmarca solo al corregirlo todo.
 - Propiedades: el título dice el tipo de lo elegido («Propiedades · Etapa», «· Transición», «· Acción»…), sin su nombre. La etiqueta de una etapa admite como mucho 4 caracteres al escribirla; un archivo con nombres más largos se abre igual.
-- Barra de edición, tras Play y Reiniciar: Deshacer, Rehacer, Cortar, Copiar, Pegar y Borrar (solo icono; la ayuda emergente dice el atajo), «Añadir debajo» y «Mostrar dependencias». Fuera de la edición, desactivados.
+- Barra de edición, tras Play y Reiniciar: Deshacer, Rehacer, Cortar, Copiar, Pegar y Borrar (solo icono; la ayuda emergente dice el atajo), «Mostrar dependencias» y «Mostrar errores». Fuera de la edición, desactivados. «Añadir debajo» ya no está en la barra: sigue en el menú Edición y con Ctrl+Intro. Al simular, la barra no cambia de color: el modo lo dicen la franja verde bajo la barra y la etiqueta de la fila de pestañas.
+- Modo: la fila de las pestañas (GRAFCET, PLANOS) muestra, centrada, una etiqueta de estado con un punto de color, «EDICIÓN» o «SIMULACIÓN · …» (no es un botón). El nombre del grafcet está en la barra de título de la ventana.
+- Barra de favoritos, encima del dibujo (al editar): los elementos de la paleta en pequeño, con dibujo propio. Se arrastran al dibujo como las fichas de la paleta (un clic no hace nada); la ayuda emergente dice «Favoritos: <nombre>». Botón derecho sobre la barra: casillas para elegir qué elementos se ven; arrastrando un icono dentro de la barra se cambia el orden; las dos cosas se recuerdan. Por defecto: Etapa inicial, Etapa, Transición, Simultaneidad, las cinco acciones, Forzado, Macroetapa, Encapsulante y Grafcet parcial. Si no caben, sale «»» con los que faltan (también se arrastran desde ahí). Al simular, la barra se oculta.
 - Vista de E/S externas: desconectado, la IP, el puerto y el esclavo se cambian en la cabecera del marco, sin abrir Configuración (son los mismos valores).
 - Nombres de variable: pueden llevar espacios entre palabras («Marcha motor», «Fin de carrera 1»), uno solo entre cada dos, y los signos + y - («A+», «A-», «1V1-14»); no pueden parecer la actividad de una etapa («X1», «X 1»).
 - Variables (al editar): con la tabla vacía se ve una fila de muestra («nueva variable…»); escribir un nombre en ella crea una entrada booleana, y «+ Entrada/Salida/Memoria» ocupa su sitio. Ctrl+V pega una tabla copiada de una hoja de cálculo (Nombre, Papel, Tipo; p. ej. «Marcha · Entrada · Booleana»): las filas correctas se crean y las que tienen un error quedan en rojo, con el motivo al pasar el ratón, hasta corregirlas.
@@ -317,11 +319,12 @@ piezas, en lugar de escribirlo.
 - Dónde está: en el panel de Opciones, a la derecha de los datos de la transición o de la acción. Al seleccionar una
   transición, o hacer doble clic en ella, el panel muestra su receptividad. Al seleccionar una acción condicionada o
   por evento, muestra su condición o su evento, con un título como «Condición de la acción Q01 (etapa 0)».
-- Cómo se ve: a la izquierda, una columna con ocho carpetas, cada una con un círculo de su color y su nombre:
-  Operadores, Constantes, Entradas, Salidas, Etapas (X), Memorias, Comparaciones y Temporizadores. «Constantes» trae las fichas «1» (verdadero) y «0» (falso), que antes quedaban fuera de la vista, entre los operadores. En el centro, las fichas de la
-  carpeta elegida: una ficha por cada elemento que existe, en orden (las etapas por número, las variables por nombre).
-  Si son muchas, la columna tiene desplazamiento vertical. Sin elementos, la carpeta muestra un bloque vacío. Cada
-  ficha se arrastra al área con ese elemento ya elegido: por ejemplo, la ficha «X1» de Etapas (X) es la etapa 1. A la
+- Cómo se ve: arriba, cinco pestañas con un círculo de color: Variables, Operadores, Temporizadores, Comparaciones y
+  Constantes. «Variables» junta, con un subtítulo por grupo y en este orden, las Entradas, las Etapas, las Memorias y las
+  Salidas: una ficha por cada elemento que existe (las etapas por número, las variables por nombre); un grupo sin elementos
+  no se muestra y, si no hay ninguno, un aviso dice cómo crearlos. Con más de 12 fichas aparece «Filtrar…», que busca por
+  nombre sin distinguir mayúsculas ni acentos. «Constantes» trae las fichas «1» (verdadero) y «0» (falso). Cada
+  ficha se arrastra al área con ese elemento ya elegido: por ejemplo, la ficha «X1» de las etapas es la etapa 1. A la
   derecha, el área de trabajo, con la fórmula dibujada en una línea si cabe.
 - Debajo del área: la fórmula en texto, «Escrito» (el texto que ha quedado guardado), «Se dibuja» (cómo se verá en el
   dibujo de la norma) y «Crear las que faltan» (declara como entradas booleanas las variables que se usan y no
