@@ -175,7 +175,8 @@ class PlanosIntegrados(BaseQt):
             self.assertFalse(w.tb_proyecto.isVisible());self.assertFalse(w.tb_conexion.isVisible())
             self.assertGreaterEqual(w.herramientas_grafcet.y(),w.pestanas_vistas.geometry().bottom())
             self.assertTrue(w.tb_sim.isVisible());self.assertEqual([a for a in w.tb_edit.actions() if not a.isSeparator() and a not in (w.a_dependencias, w.a_errores)],
-                                                              [w.a_deshacer,w.a_rehacer,w.a_cortar,w.a_copiar,w.a_pegar,w.a_borrar,w.a_debajo])
+                                                              [w.a_deshacer, w.a_rehacer, w.a_cortar, w.a_copiar,
+                                                               w.a_pegar, w.a_borrar])
             for pagina in ('planos',True):
                 w._mostrar_pagina(pagina);QApplication.processEvents();self.assertFalse(w.herramientas_grafcet.isVisible())
             w._mostrar_pagina(False)

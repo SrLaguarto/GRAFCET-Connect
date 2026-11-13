@@ -98,19 +98,20 @@ class Defectos(BaseQt):
         self.assertFalse(r_boton.intersects(r_area), (r_boton, r_area))
         self.assertEqual(w.titulo_sim.text(), "Simulación")
 
-    def test_SRED10_el_titulo_conserva_diez_caracteres_y_el_estado_no_se_pierde(self):
-        """REQ-EDT-09 (F8): en ventanas estrechas el título del grafcet conserva al menos unos 10 caracteres (la ayuda y el zoom ceden
-        antes) y el chip siempre dice el estado."""
+    def test_SRED10_nombre_en_titulo_nativo_y_estado_en_pestanas(self):
+        """Encargo D: el nombre queda en la ventana y el estado conserva su texto en pantallas estrechas."""
         w, e = self.vacio()
-        w.titulo.setText("Secuencia con temporización")
+        self.assertIn(e.titulo, w.windowTitle())
+        self.assertFalse(hasattr(w, "titulo"))
         for ancho in (900, 683, 640):
             w.resize(ancho, 520)
             w.show()
             for _ in range(3):
                 QApplication.processEvents()
-            diez = w.titulo.fontMetrics().horizontalAdvance("0" * 10)
-            self.assertGreaterEqual(w.titulo.width(), diez, ancho)
             self.assertIn("EDICIÓN", w.estado.elegida())
+            self.assertIs(w.estado.parentWidget(), w.fila_pestanas)
+            self.assertGreater(w.estado.x(), w.pestanas_vistas.geometry().right())
+            self.assertLess(w.estado.geometry().right(), w.luz_es.x())
 
     def test_SRED11_variables_a_un_cuarto_de_pantalla_lleva_una_sola_barra_vertical(self):
         """REQ-EDT-07, REQ-EDT-09 (F10): con muchas variables en un panel bajo, se desplaza la tabla o el panel, no los dos a la vez."""

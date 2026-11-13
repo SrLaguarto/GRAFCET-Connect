@@ -35,7 +35,10 @@ class GrafnetInterfaz(BaseQt):
         w,e=self.preparar();destino=Path(self.tmp.name)/'atajo.grafnet';w.diagrama.setFocus()
         with patch('escritorio.archivos.QFileDialog.getSaveFileName',return_value=(str(destino),'')):
             QTest.keyClick(w.diagrama,Qt.Key.Key_S,Qt.KeyboardModifier.ControlModifier)
-        self.assertTrue(destino.is_file());self.assertIn(destino.name,w.windowTitle());self.assertNotIn(' *',w.windowTitle());self.assertNotIn(' *',w.titulo.text())
+        self.assertTrue(destino.is_file())
+        self.assertIn(destino.name, w.windowTitle())
+        self.assertNotIn(' *', w.windowTitle())
+        self.assertFalse(hasattr(w, 'titulo'))
         e.ed.update_annotation(e.ed.annotations()[0]['id'],text='Cambiado');e.cambia();self.assertIn(' *',w.windowTitle())
         copia=Path(self.tmp.name)/'otra.grafnet'
         with patch('escritorio.archivos.QFileDialog.getSaveFileName',return_value=(str(copia),'')):

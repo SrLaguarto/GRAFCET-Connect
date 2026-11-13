@@ -163,7 +163,6 @@ QMenu::separator { height:1px; background:$borde; margin:4px 8px; }
 
 QWidget#filaPestanas { background:$fondo_pestanas; }
 QWidget#filaPestanas[fusion="true"] { border-bottom:1px solid $borde; }
-QWidget#filaPestanas[fusion="true"][modo="simular"] { background:$simulacion_suave; border-bottom:3px solid $simulacion; }
 QWidget#herramientasGrafcet[fusion="true"], QWidget#herramientasGrafcet[fusion="true"][modo="simular"] { background:transparent; border:0; }
 QTabBar#pestanasVistas { background:transparent; border:0; }
 QTabBar#pestanasVistas::tab { font-family:$familia_titulo; padding:${pad_tab}px 20px; margin:4px 4px 0 0; background:transparent;
@@ -184,7 +183,6 @@ QToolButton#luzES[estadoLuz="conectada"] { border:1px solid $ok; }
 QToolButton#luzES[estadoLuz="error"] { background:$error_fondo; border:2px solid $error; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; }
 QToolButton#luzES[abierta="true"] { background:$blanco; border:2px solid $tinta; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; font-weight:700; }  /* P-IMP-126: fondo blanco, borde oscuro, negrita */
 QWidget#herramientasGrafcet { background:$superficie; border-bottom:1px solid $borde; }
-QWidget#herramientasGrafcet[modo="simular"] { background:$simulacion_suave; border-bottom:3px solid $simulacion; }
 QToolBar { background:transparent; border:0; spacing:8px; padding:0; margin:0; }
 QToolBar QToolButton { min-height:${alto_tb_c}px; padding:0 12px; border:1px solid transparent; border-radius:${r_s}px; color:$tinta; background:transparent; }
 QToolBar QToolButton:hover { background:$hover; border-color:$borde; }

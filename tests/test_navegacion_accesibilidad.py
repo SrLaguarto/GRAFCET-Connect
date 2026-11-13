@@ -72,7 +72,8 @@ class NavegacionTeclado(BaseQt):
         alto=w.diagrama.height()
         self.tecla(w.diagrama,Qt.Key.Key_F,Qt.KeyboardModifier.ControlModifier)
         self.assertTrue(n.isVisible()); self.assertLess(abs(w.diagrama.height()-alto),3)
-        self.assertLessEqual(abs(n.mapTo(w,n.rect().topLeft()).y()-w.titulo.mapTo(w,w.titulo.rect().topLeft()).y()),12)
+        self.assertLessEqual(abs(n.mapTo(w, n.rect().topLeft()).y()
+                                 - w.favoritos.mapTo(w, w.favoritos.rect().topLeft()).y()), 12)
         QTest.keyClicks(n.buscar,'Lejana'); self.assertEqual(n.contador.text(),'1/1'); self.assertTrue(n.lista.isHidden())
         self.tecla(n.buscar,Qt.Key.Key_Escape); self.assertTrue(n.isHidden()); self.assertIs(QApplication.focusWidget(),w.diagrama)
 

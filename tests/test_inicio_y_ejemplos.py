@@ -60,8 +60,10 @@ class InicioInterfaz(BaseQt):
         self.assertTrue(w._plegables['izquierdo'].abierto);self.assertTrue(w._plegables['derecho'].abierto)
         self.assertFalse(w._plegables['inferior'].abierto)
         self.assertAlmostEqual(w._plegables['derecho'].width(),w.ancho_derecho,delta=2)
-        self.assertLess(abs(w.ayuda.mapTo(w,w.ayuda.rect().center()).y()-w.titulo.mapTo(w,w.titulo.rect().center()).y()),4)
-        self.assertGreater(w.ayuda.mapTo(w,w.ayuda.rect().topLeft()).x(),w.titulo.mapTo(w,w.titulo.rect().topRight()).x())
+        self.assertLess(abs(w.ayuda.mapTo(w, w.ayuda.rect().center()).y()
+                            - w.favoritos.mapTo(w, w.favoritos.rect().center()).y()), 4)
+        self.assertGreater(w.ayuda.mapTo(w, w.ayuda.rect().topLeft()).x(),
+                           w.favoritos.mapTo(w, w.favoritos.rect().topRight()).x())
 
     def test_SIEJ03_ejemplo_solo_lectura_incluso_tras_play_stop(self):
         """REQ-EDT-05, REQ-SIM-01: los ejemplos permiten simular e imprimir, sin editar ni guardar copias editables."""

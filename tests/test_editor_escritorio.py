@@ -2054,14 +2054,16 @@ class Interfaz(unittest.TestCase):
         w.show()
         e.seleccionar([ts["t1"]])
         prog = w.props.prog
-        prog.elegir_categoria("salida")
-        self.assertIsNone(prog.paleta.bloques()[0]["n"], "sin salidas, el bloque se ofrece vacío")
+        prog.elegir_categoria("variables")
+        def salidas():
+            return [b for b in prog.paleta.bloques() if b.get("papel") == "output"]
+        self.assertEqual(salidas(), [], "sin salidas, el grupo no se ofrece")
         e.nueva_variable("Q05", "output", {"kind": "bool"})  # lo que hace «Nueva variable» del panel Variables
-        self.assertEqual(prog.paleta.bloques()[0]["n"], "Q05", "la paleta se llena en el acto")
+        self.assertEqual(salidas()[0]["n"], "Q05", "la paleta se llena en el acto")
         self.assertEqual(prog.opciones("salida"), [("Q05", "Q05")])
         e.nueva_variable("Q06", "output", {"kind": "bool"})
         self.assertEqual(prog.opciones("salida"), [("Q05", "Q05"), ("Q06", "Q06")])
-        self.assertEqual([b["n"] for b in prog.paleta.bloques()], ["Q05", "Q06"], "una ficha por salida")
+        self.assertEqual([b["n"] for b in salidas()], ["Q05", "Q06"], "una ficha por salida")
         # renombrar y cambiar de papel (panel Variables)
         vid = next(x["id"] for x in e.ed.model["variables"] if x["name"] == "Q05")
         self.assertIsNone(e.cambiar_variable(vid, nombre="Motor"))
@@ -2080,7 +2082,7 @@ class Interfaz(unittest.TestCase):
         self.assertIsNone(e.quitar_variable(next(x["id"] for x in e.ed.model["variables"] if x["name"] == "Q06")))
         self.assertEqual(prog.opciones("salida"), [("Motor", "Motor")])
         # «Crear las que faltan»
-        prog.elegir_categoria("entrada")
+        prog.elegir_categoria("variables")
         w.props.t_texto.setText("nueva_in AND marcha")
         w.props._previsualizar()
         self.assertFalse(w.props.t_crear.isHidden())
@@ -2088,17 +2090,17 @@ class Interfaz(unittest.TestCase):
         self.assertIn(("nueva_in", "nueva_in"), prog.opciones("entrada"))
 
     def test_SEDI67_carpetas_en_su_orden_y_temporizadores(self):
-        """REQ-EDT-02: las carpetas del programador van en este orden: Entradas, Etapas (X), Memorias, Operadores,
-        Temporizadores, Comparaciones, Salidas, Constantes; la categoría «Tiempo» se llama «Temporizadores»."""
+        """REQ-EDT-02: Variables, Operadores, Temporizadores, Comparaciones y Constantes, en ese orden;
+        la categoría «Tiempo» se llama «Temporizadores»."""
         from escritorio.bloques import CATEGORIAS, Programador
         e, ids, ts = self.secuencial()
-        textos = ["Entradas", "Etapas (X)", "Memorias", "Operadores", "Temporizadores", "Comparaciones", "Salidas", "Constantes"]
+        textos = ["Variables", "Operadores", "Temporizadores", "Comparaciones", "Constantes"]
         self.assertEqual([t for _, t in CATEGORIAS], textos)
         prog = self.w.props.prog
         self.assertEqual([b.text() for b in prog.categorias.values()], textos)
         self.assertNotIn("Tiempo", [b.text() for b in prog.categorias.values()])
         self.assertEqual(prog.categorias["tiempo"].text(), "Temporizadores")
-        self.assertEqual(prog.paleta.clave, "entrada")
+        self.assertEqual(prog.paleta.clave, "variables")
 
     def test_SEDI68_receptividad_en_el_panel_con_texto_de_solo_lectura(self):
         """REQ-EDT-02: toda la receptividad está a la derecha del panel de opciones (texto de la fórmula, «Escrito», «Se
@@ -4496,7 +4498,7 @@ class Interfaz(unittest.TestCase):
     def test_SEDI111_paleta_de_bloques_una_ficha_por_elemento(self):
         """REQ-EDT-02, REQ-EDT-07: en Entradas, Salidas, Etapas, Memorias (y Variables del valor) hay una ficha por cada
         elemento que existe, en orden (etapas por número, variables por nombre), sin desplegable y ya elegida, con
-        desplazamiento si no caben; sin elementos, el bloque vacío de siempre; se actualiza al crear, renombrar o quitar;
+        desplazamiento si no caben; sin elementos, un único mensaje; se actualiza al crear, renombrar o quitar;
         los bloques ya puestos en el área conservan su ▾."""
         from escritorio import bloques
         w = self.w
@@ -4510,40 +4512,43 @@ class Interfaz(unittest.TestCase):
         w._abrir_opciones()
         e.seleccionar([ts["t1"]])
         prog = w.props.prog
-        prog.elegir_categoria("etapa")
+        prog.elegir_categoria("variables")
+        def fichas(papel):
+            return [b for b in prog.paleta.bloques() if b["k"] == "etapa" and papel == "etapa"
+                    or b.get("papel") == papel]
         etiquetas = sorted((s["label"] for s in e.M["steps"]), key=int)
-        self.assertEqual([b["n"] for b in prog.paleta.bloques()], [f"X{n}" for n in etiquetas], "por número: X2 antes que X10")
+        self.assertEqual([b["n"] for b in fichas("etapa")], [f"X{n}" for n in etiquetas],
+                         "por número: X2 antes que X10")
         self.assertFalse([x for x in prog.paleta._piezas if x[1] == "drop"], "sin desplegable")
         for n in range(11, 41):
             e.poner_etapa(QPointF(900, 20 * n))
-        prog.elegir_categoria("etapa")
+        prog.elegir_categoria("variables")
         w.props.prog.paleta.invalidar()
         QApplication.processEvents()
         self.assertGreater(prog._sc_paleta.verticalScrollBar().maximum(), 0, "con muchas fichas, desplazamiento vertical")
-        prog.elegir_categoria("salida")
-        self.assertEqual([b["n"] for b in prog.paleta.bloques()], ["alfa", "zeta"], "por nombre")
-        prog.elegir_categoria("entrada")
-        self.assertEqual([b["n"] for b in prog.paleta.bloques()], ["I2", "I10", "marcha", "paro"])
+        prog.elegir_categoria("variables")
+        self.assertEqual([b["n"] for b in fichas("output")], ["alfa", "zeta"], "por nombre")
+        prog.elegir_categoria("variables")
+        self.assertEqual([b["n"] for b in fichas("input")], ["I2", "I10", "marcha", "paro"])
         # cada ficha se arrastra con su elemento ya elegido (el área conserva el desplegable)
-        prog.lienzo.soltar((), prog.paleta.bloques()[2])
+        prog.lienzo.soltar((), fichas("input")[2])
         self.assertEqual(prog.texto(), "marcha")
         prog.lienzo.invalidar()
         prog.lienzo._calcular(300)
         self.assertTrue([x for x in prog.lienzo._piezas if x[1] == "drop"], "los bloques puestos conservan su ▾")
         # al día en el acto
         e.nueva_variable("Q9", "output")
-        prog.elegir_categoria("salida")
-        self.assertEqual([b["n"] for b in prog.paleta.bloques()], ["alfa", "Q9", "zeta"])
+        prog.elegir_categoria("variables")
+        self.assertEqual([b["n"] for b in fichas("output")], ["alfa", "Q9", "zeta"])
         vid = next(v["id"] for v in e.ed.model["variables"] if v["name"] == "Q9")
         self.assertIsNone(e.cambiar_variable(vid, nombre="Bomba"))
-        self.assertEqual([b["n"] for b in prog.paleta.bloques()], ["alfa", "Bomba", "zeta"])
+        self.assertEqual([b["n"] for b in fichas("output")], ["alfa", "Bomba", "zeta"])
         self.assertIsNone(e.quitar_variable(vid))
-        self.assertEqual([b["n"] for b in prog.paleta.bloques()], ["alfa", "zeta"])
-        # sin elementos, el bloque vacío
+        self.assertEqual([b["n"] for b in fichas("output")], ["alfa", "zeta"])
+        # Sin elementos: un único aviso, sin fichas vacías.
         vacio = bloques.Programador(lambda: ({}, []))
-        for c in ("entrada", "salida", "interna", "etapa"):
-            vacio.elegir_categoria(c)
-            self.assertEqual([b["n"] for b in vacio.paleta.bloques()], [None], c)
+        self.assertEqual(vacio.paleta.bloques(), [])
+        self.assertFalse(vacio.paleta.mensaje.isHidden())
         # variables numéricas del valor: una ficha por variable
         e.nueva_variable("CT", "internal", {"kind": "int"})
         e.nueva_variable("AA", "output", {"kind": "int"})
@@ -7736,13 +7741,13 @@ class Bloques(unittest.TestCase):
         self.assertEqual(p.texto(), "CT + 1 > 3")
 
     def test_SEDI54_paleta_por_categorias(self):
-        """REQ-EDT-02, REQ-EDT-07: la paleta tiene ocho categorías con su color (las constantes 1 y 0, en la suya); las memorias
+        """REQ-EDT-02, REQ-EDT-07: cinco categorías con su color (las constantes 1 y 0, en la suya); las memorias
         son las variables de papel «internal»; sus desplegables se llenan con las variables y etapas del modelo."""
         from escritorio.bloques import CATEGORIAS, COLORES, PAPEL
         p = self.prog()
-        self.assertEqual([t for _, t in CATEGORIAS], ["Entradas", "Etapas (X)", "Memorias", "Operadores", "Temporizadores",
-                                                      "Comparaciones", "Salidas", "Constantes"])
-        self.assertEqual(len({COLORES[c] for c, _ in CATEGORIAS}), 8, "colores distintos")
+        self.assertEqual([t for _, t in CATEGORIAS],
+                         ["Variables", "Operadores", "Temporizadores", "Comparaciones", "Constantes"])
+        self.assertEqual(len({COLORES[c] for c, _ in CATEGORIAS if c != "variables"}), 4)
         self.assertEqual(PAPEL["interna"], "internal")
         self.assertEqual([b.toolTip() for b in p.categorias.values()], [t for _, t in CATEGORIAS])
         # una ficha por elemento (etapas por número, variables por nombre), ya elegido; las comparaciones, un bloque
@@ -7751,9 +7756,10 @@ class Bloques(unittest.TestCase):
                     "interna": [("var", "M1", "internal")],
                     "etapa": [("etapa", "X0", None), ("etapa", "X1", None), ("etapa", "active(Inicio)", None)],
                     "comparacion": [("cmp", "CT", None)]}
-        for clave, fichas in esperado.items():
+        combinado = sum((esperado[c] for c in ("entrada", "etapa", "interna", "salida")), [])
+        for clave, fichas in (("variables", combinado), ("comparacion", esperado["comparacion"])):
             p.elegir_categoria(clave)
-            self.assertEqual([(b["k"], b["n"], b.get("papel")) for b in p.paleta.bloques()], fichas, clave)
+            self.assertEqual([(b["k"], b["n"], b.get("papel")) for b in p.paleta.bloques()], fichas)
             self.assertTrue(p.categorias[clave].isChecked())
         p.elegir_categoria("operador")
         self.assertEqual([b["k"] for b in p.paleta.bloques()], ["y", "o", "no", "par", "sube", "baja"],
@@ -7765,27 +7771,25 @@ class Bloques(unittest.TestCase):
         self.assertEqual(p.opciones("interna"), [("M1", "M1")], "las memorias booleanas")
         self.assertEqual(p.opciones("etapa"), [("X0", "X0"), ("X1", "X1"), ("XInicio", "active(Inicio)")], "se ve «XInicio»; lo que se guarda es active(Inicio)")
         # las fichas de elementos no llevan desplegable (▾); lo escrito en el temporizador se conserva
-        p.elegir_categoria("entrada")
+        p.elegir_categoria("variables")
         self.assertFalse([x for x in p.paleta._piezas if x[1] == "drop"])
         p.elegir_categoria("tiempo")
         p.paleta.editar_campo((0,), "t1", "1s")
         p.elegir_categoria("tiempo")
         self.assertEqual(p.paleta.bloques()[0]["t1"], "1s")
-        # sin variables de un tipo, el bloque se ofrece vacío
+        # Sin variables ni etapas: sin fichas vacías.
         from escritorio.bloques import Programador
         vacio = Programador(lambda: ({}, []))
-        vacio.elegir_categoria("interna")
-        self.assertIsNone(vacio.paleta.bloques()[0]["n"])
-        vacio.lienzo.soltar(None, vacio.paleta.bloques()[0])
-        self.assertEqual(vacio.texto(), "?")
+        self.assertEqual(vacio.paleta.bloques(), [])
         # el modelo cambia (se crea una memoria): la paleta se llena otra vez
         self.VARS = {**self.VARS, "M2": ("internal", "bool")}
-        p.elegir_categoria("interna")
+        p.elegir_categoria("variables")
         self.assertEqual(p.opciones("interna"), [("M1", "M1"), ("M2", "M2")])
-        self.assertEqual([b["n"] for b in p.paleta.bloques()], ["M1", "M2"], "la paleta se llena otra vez")
+        memorias = [b["n"] for b in p.paleta.bloques() if b.get("papel") == "internal"]
+        self.assertEqual(memorias, ["M1", "M2"], "la paleta se llena otra vez")
 
     def test_SEDI64_categorias_horizontales_y_bloques_en_columna(self):
-        """REQ-EDT-02: categorías en una franja horizontal (las ocho, con su color), debajo la columna de
+        """REQ-EDT-02: categorías en una franja horizontal (las cinco, con su color), debajo la columna de
         bloques de la categoría elegida (uno debajo de otro) y, ocupando el resto, el área de trabajo con la papelera."""
         from PySide6.QtWidgets import QPushButton
         p = self.prog()
@@ -7793,7 +7797,7 @@ class Bloques(unittest.TestCase):
         p.show()
         QApplication.processEvents()
         bs = list(p.categorias.values())
-        self.assertEqual(len(bs), 8)
+        self.assertEqual(len(bs), 5)
         self.assertTrue(all(isinstance(b, QPushButton) and not b.icon().isNull() for b in bs))
         pos = [b.mapTo(p, b.rect().topLeft()) for b in bs]
         self.assertEqual(len({q.y() for q in pos}), 1, "categorías en una franja horizontal")

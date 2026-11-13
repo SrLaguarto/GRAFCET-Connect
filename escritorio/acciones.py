@@ -33,6 +33,8 @@ from .bloques import COLORES, Programador, sin_comillas
 from .diagrama import COL, _html
 from .edicion import CONTINUAS, DISPARADOR, Edicion, Parpadeo
 from .variables import nombre_tipo
+from .paneles import EtiquetaElidida
+from .remates_propiedades import FilaValor
 
 SIN_VARIABLES = "(sin variables: créelas en la tabla de variables)"  # la lista de variables, si no hay ninguna que valga
 ALTO_SELECTOR = 62  # alto del selector de variable (dibujado como una caja de acción); nada debe dejarlo por debajo
@@ -109,20 +111,34 @@ class _ComboVariable(QComboBox):
         super().__init__()
         self.al_poner: Callable[[str], None] | None = None
 
+    def rectangulo_texto(self):
+        opcion = QStyleOptionComboBox()
+        self.initStyleOption(opcion)
+        opcion.rect = QRect(26 + estilo.E2, 11, max(20, self.width() - 34 - estilo.E2), self.height() - 22)
+        opcion.frame = False
+        campo = self.style().subControlRect(
+            QStyle.ComplexControl.CC_ComboBox, opcion, QStyle.SubControl.SC_ComboBoxEditField, self)
+        campo.setLeft(max(campo.left(), 26 + estilo.E2))
+        return opcion, campo
+
     def paintEvent(self, _evento):
         p = QStylePainter(self)
         p.setRenderHint(p.RenderHint.Antialiasing)
-        caja = QRectF(26, 7, max(40,self.width()-28), self.height()-14)
-        p.setPen(QPen(QColor(COL["text"]),1.6))
+        caja = QRectF(26, 7, max(40, self.width() - 28), self.height() - 14)
+        p.setPen(QPen(QColor(COL["text"]), 1.6))
         p.setBrush(QColor(COL["glow"] if self.property("parpadeando") else COL["panel"]))
-        p.drawLine(0,self.height()//2,26,self.height()//2)
+        p.drawLine(0, self.height() // 2, 26, self.height() // 2)
         p.drawRect(caja)
-        opcion = QStyleOptionComboBox();self.initStyleOption(opcion)
-        opcion.rect = QRect(32,11,max(20,self.width()-40),self.height()-22)
-        opcion.frame = False
-        opcion.currentText = self.currentData() or "?"
-        p.drawComplexControl(QStyle.ComplexControl.CC_ComboBox,opcion)
-        p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel,opcion)
+        opcion, campo = self.rectangulo_texto()
+        texto = self.currentData() or "?"
+        opcion.currentText = ""
+        p.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opcion)
+        p.setFont(self.font())
+        p.setPen(QColor(estilo.TINTA))
+        corto = self.fontMetrics().elidedText(texto, Qt.TextElideMode.ElideRight, campo.width())
+        p.drawText(campo, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, corto)
+        if corto != texto:
+            self.setToolTip(texto)
 
     def currentText(self) -> str:  # noqa: N802
         d = self.currentData()
@@ -175,7 +191,10 @@ class PanelAccion(QWidget):
         self.variable.setMinimumContentsLength(8)
         self.variable.al_poner = self.poner_variable
         self.variable.activated.connect(self._elegir_variable)
-        f.addRow("Variable", self.variable)
+        self.fila_variable = QWidget()
+        self.disposicion_variable = FilaValor(self.fila_variable)
+        self.disposicion_variable.addWidget(self.variable)
+        f.addRow("Variable", self.fila_variable)
         self.l_limite = QLabel("Límite de tiempo (3s, 500ms…)")
         self.limite = QLineEdit()
         self.limite.setPlaceholderText("3s")
@@ -192,7 +211,8 @@ class PanelAccion(QWidget):
         self.caja_fichas = QWidget()
         fl = QHBoxLayout(self.caja_fichas)
         fl.setContentsMargins(0, 0, 0, 0)
-        self.l_fichas = QLabel("? :=")  # «Q :=»: la variable de la acción
+        fl.setSpacing(estilo.E2)
+        self.l_fichas = EtiquetaElidida("? :=", ancho_maximo=230)  # «Q :=»: la variable de la acción
         fl.addWidget(self.l_fichas)
         self.grupo_fichas = QButtonGroup(self)
         self.fichas: dict[str, QPushButton] = {}
@@ -205,7 +225,7 @@ class PanelAccion(QWidget):
             self.fichas[v] = b
             fl.addWidget(b)
         fl.addStretch(1)
-        vl.addWidget(self.caja_fichas)
+        self.disposicion_variable.addWidget(self.caja_fichas)
         self.caja_numerica = QWidget()
         nl = QVBoxLayout(self.caja_numerica)
         nl.setContentsMargins(0, 0, 0, 0)
@@ -310,6 +330,7 @@ class PanelAccion(QWidget):
         self.caja_valor.setVisible(not continua)
         booleana = self._tipo_variable() == "bool"
         self.caja_fichas.setVisible(not continua and booleana)
+        self.caja_valor.setMaximumWidth(0 if booleana else 16777215)
         self.caja_numerica.setVisible(not continua and not booleana)
         self.prog.refrescar()
         self._previsualizar()

@@ -5,7 +5,7 @@ from pathlib import Path
 from test_editor_cadenas import BaseQt,QT
 from grafcet.builder import M
 if QT:
-    from PySide6.QtCore import Qt,QPoint,QEvent
+    from PySide6.QtCore import QEvent, QPoint, QRect, Qt
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
     from escritorio.edicion import Edicion
@@ -81,9 +81,12 @@ class Paneles(BaseQt):
         self.assertEqual(w.props.t_texto.text(),formula)
 
     def test_SPAN05_formula_estado_y_controles_en_una_fila_sin_vista_previa(self):
-        """REQ-EDT-02, REQ-EDT-09: fórmula, estado y papelera comparten fila; ya no hay «Vista previa» (sí «Fijar») y la fórmula no se edita a mano."""
+        """REQ-EDT-02, REQ-EDT-09: fórmula y papelera comparten fila, con el estado debajo;
+        sin «Vista previa» (sí «Fijar») ni edición manual de la fórmula."""
         w,e=self.preparar();p=w.props
-        centros=[c.mapTo(p,c.rect().center()).y() for c in (p.t_texto,p.t_estado,p.prog.papelera)]
+        centros = [c.mapTo(p, c.rect().center()).y() for c in (p.t_texto, p.prog.papelera)]
+        self.assertGreater(p.t_estado.y(), p.t_texto.geometry().bottom())
+        self.assertEqual(p.t_estado.x(), p.t_texto.x())
         self.assertLessEqual(max(centros)-min(centros),3)
         self.assertTrue(p.t_texto.isReadOnly());self.assertTrue(p.t_fijar.isVisible())
         self.assertFalse(hasattr(p,"t_previa"));self.assertFalse(hasattr(p,"detalles_bloques"))
@@ -100,8 +103,15 @@ class Paneles(BaseQt):
             r=c.rect();esquina=c.mapTo(p,r.bottomRight())
             self.assertLessEqual(esquina.x(),p.width());self.assertLessEqual(esquina.y(),p.height())
         self.assertGreater(p.prog.lienzo.parentWidget().height(),40)
-        self.assertEqual(len(p.prog.categorias),8)
-        self.assertEqual(p.prog._sc_carpetas.horizontalScrollBarPolicy(),Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.assertEqual(len(p.prog.categorias), 5)
+        politica = (Qt.ScrollBarPolicy.ScrollBarAlwaysOff if p.prog.cat_en_cabecera
+                    else Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.assertEqual(p.prog._sc_carpetas.horizontalScrollBarPolicy(), politica)
+        zona = p.prog._sc_carpetas.viewport()
+        for boton in p.prog.categorias.values():
+            self.assertTrue(boton.isVisible())
+            caja = QRect(boton.mapTo(zona, QPoint()), boton.size())
+            self.assertTrue(zona.rect().contains(caja), boton.text())
 
     def test_SPAN07_preferencias_de_plegado_se_recuperan_en_otra_ventana(self):
         """REQ-EDT-09: se registra el plegado; una ventana nueva abre los laterales y mantiene propiedades plegadas."""

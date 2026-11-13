@@ -71,7 +71,7 @@ class CabecerasYAvisos(BaseQt):
         from grafcet.notation import x_etapa
         etapas = [x_etapa("0fsd"), x_etapa("a b"), "X1", x_etapa("Inicio")]
         prog = Programador(lambda: ({}, etapas))
-        prog.elegir_categoria("etapa")
+        prog.elegir_categoria("variables")
         visibles = [prog.paleta.motor.elementos(n)[0][2] for n in prog.paleta.bloques()]
         self.assertEqual(sorted(visibles), sorted(["X0fsd", "Xa b", "X1", "XInicio"]))
         self.assertEqual([t for t, _ in prog.opciones("etapa")], ["X0fsd", "Xa b", "X1", "XInicio"])
@@ -126,7 +126,8 @@ class CabecerasYAvisos(BaseQt):
             QApplication.processEvents()
         tarjeta = w.diagrama.parentWidget()
         franja = w.banda_modo.geometry().bottom()
-        for objeto in (w.diagrama.barra, w.estado, w.titulo):
+        self.assertIs(w.estado.parentWidget(), w.fila_pestanas)
+        for objeto in (w.diagrama.barra, w.favoritos):
             self.assertGreaterEqual(objeto.mapTo(tarjeta, QPoint(0, 0)).y() - franja - 1, 4, type(objeto).__name__)
 
 

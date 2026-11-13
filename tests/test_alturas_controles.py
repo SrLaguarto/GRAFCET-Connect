@@ -157,7 +157,7 @@ class Alturas(BaseQt):
         finally:
             estilo.activar_escala(anterior)
         w, e, ids = self._preparar(1366, 768)
-        for a in (w.a_deshacer, w.a_debajo):
+        for a in (w.a_deshacer, w.a_dependencias):
             self.assertLessEqual(abs(w.tb_edit.widgetForAction(a).height() - estilo.ALTO_BARRA), 2)
         w.hide()
 
@@ -239,11 +239,12 @@ class Alturas(BaseQt):
         w.hide()
 
     def test_SALC07_barra_de_edicion_orden_ayudas_y_anchura(self):
-        """REQ-EDT-01, REQ-EDT-11: tras Play y Reiniciar, una sola fila: | Deshacer · Rehacer | Cortar · Copiar · Pegar · Borrar | Añadir debajo ·
-        Dependencias · Errores; los seis primeros solo icono con el atajo en la ayuda; cabe a 1366×768 sin cortar nada; al simular quedan desactivados."""
+        """REQ-EDT-01, REQ-EDT-11: Play y Reiniciar preceden a los seis botones de edición, Dependencias y Errores;
+        los seis primeros solo llevan icono y atajo en la ayuda. Cabe a 1366×768; al simular se desactivan."""
         w, e, ids = self._preparar(1366, 768)
         acciones = list(w.tb_edit.actions())
-        esperado = ["|", w.a_deshacer, w.a_rehacer, "|", w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar, "|", w.a_debajo, w.a_dependencias, w.a_errores]
+        esperado = ["|", w.a_deshacer, w.a_rehacer, "|", w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar,
+                    "|", w.a_dependencias, w.a_errores]
         self.assertEqual([("|" if a.isSeparator() else a) for a in acciones], esperado)
         for a, atajo in ((w.a_deshacer, "Ctrl+Z"), (w.a_rehacer, "Ctrl+Y"), (w.a_cortar, "Ctrl+X"), (w.a_copiar, "Ctrl+C"),
                          (w.a_pegar, "Ctrl+V"), (w.a_borrar, "Supr")):
@@ -252,7 +253,8 @@ class Alturas(BaseQt):
             self.assertEqual(boton.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonIconOnly)
             self.assertFalse(a.icon().isNull(), a.text())
             self.assertTrue(boton.isVisible())
-        self.assertEqual(w.tb_edit.widgetForAction(w.a_debajo).toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        forma = w.tb_edit.widgetForAction(w.a_dependencias).toolButtonStyle()
+        self.assertEqual(forma, Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.assertIs(w.diagrama.b_dependencias.parent(), w.tb_edit)
         self.assertLessEqual(w.tb_edit.geometry().right(), w.herramientas_grafcet.width())
         self.assertEqual(desbordes(w, 0), [])
@@ -270,15 +272,15 @@ class Alturas(BaseQt):
         # en simulación siguen ahí, desactivados, y Dependencias sigue activo
         self.assertTrue(w.cambiar_modo("simular"))
         self._bombear(6)
-        for a in (w.a_deshacer, w.a_rehacer, w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar, w.a_debajo):
+        for a in (w.a_deshacer, w.a_rehacer, w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar):
             self.assertTrue(w.tb_edit.widgetForAction(a).isVisible() and not w.tb_edit.widgetForAction(a).isEnabled(), a.text())
         self.assertTrue(w.diagrama.b_dependencias.isVisible() and w.diagrama.b_dependencias.isEnabled())
         self.assertTrue(w.b_errores.isVisible() and not w.b_errores.isEnabled(), "«Mostrar errores» se desactiva al simular, como los demás de edición")
         w.hide()
 
     def test_SALC08_barra_de_edicion_cabe_en_pantalla_partida(self):
-        """REQ-EDT-11: a 1000×600 y 800×600 la barra de edición cabe en la fila (el texto de «Añadir debajo» y «Dependencias» se oculta antes
-        que cualquier botón)."""
+        """REQ-EDT-11: a 1000×600 y 800×600 la barra cabe: Dependencias y Errores pierden el texto
+        antes de ocultar cualquier botón."""
         for ancho, alto in ((1000, 600), (800, 600)):
             w, e, ids = self._preparar(ancho, alto)
             self._bombear(6)

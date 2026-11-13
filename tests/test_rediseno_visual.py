@@ -140,8 +140,8 @@ class RedisenoVisual(BaseQt):
     def test_SVIS15_carpetas_por_uso_en_panel(self):
         """REQ-EDT-02, REQ-EDT-07: el orden por uso es el de siempre y cada carpeta sigue cargando sus bloques."""
         w,e=self.vacio();p=w.props.prog
-        claves=["entrada","etapa","interna","operador","tiempo","comparacion","salida","constante"]
-        titulos=["Entradas","Etapas (X)","Memorias","Operadores","Temporizadores","Comparaciones","Salidas","Constantes"]
+        claves = ["variables", "operador", "tiempo", "comparacion", "constante"]
+        titulos = ["Variables", "Operadores", "Temporizadores", "Comparaciones", "Constantes"]
         for prog in (p,):
             self.assertEqual(list(prog.categorias),claves)
             self.assertEqual([b.text() for b in prog.categorias.values()],titulos)

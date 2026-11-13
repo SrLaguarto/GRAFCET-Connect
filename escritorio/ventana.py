@@ -50,7 +50,7 @@ from .navegacion import Navegacion
 from .leyenda import Leyenda
 from .mensajes import amable, motivo_parada, partir
 from .alto_opciones import agrandar_para_transicion
-from .paneles import (PanelPlegable, DivisorPlegable, PilaActual, EtiquetaAyuda, EtiquetaElidida, ChipModo, BandaModo,
+from .paneles import (PanelPlegable, DivisorPlegable, PilaActual, EtiquetaAyuda, EtiquetaElidida, BandaModo,
                       CajaSeccion, TituloSeccion, CabeceraCompacta, ContextoNombres, DelegadoNombres, EtiquetaGrupos, ReparteColumnas,
                       partir_nombre, LINEAS_NOMBRE)
 from .variables import PanelVariables
@@ -67,7 +67,6 @@ ANCHO_DERECHO = 270  # el panel derecho desde UMBRAL_DERECHO px de ancho de vent
 UMBRAL_DERECHO = 1280
 ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
 NOMBRE_MIN_TABLA = 96  # la columna del nombre de las tablas (estado de la simulación) mide al menos esto a cualquier tamaño: las demás se compactan antes
-ANCHO_TITULO_UTIL = 150  # cabecera del dibujo: lo que mide, como poco, el título del grafcet para que se reconozca (antes de ceder sitio al zoom con palabras)
 ARRIBA_CAJA = 1  # margen superior del contenido de una sección: con el hueco del título deja E2 entre el título y lo primero (T3)
 ARRIBA_VARIABLES = 4  # (el título de Variables es más grande)
 ANCHO_AYUDA_UTIL = 200  # y lo que pide la ayuda de debajo del título para leerse en dos líneas (con menos, se queda en el botón «Ayuda ▾»)
@@ -492,8 +491,7 @@ class _DelegadoAbreviado(QStyledItemDelegate):
 
 
 class _AjustaCabecera(QObject):
-    """Mantiene el título del grafcet dentro del sitio que dejan el chip de modo (que no cede: lleva el estado), los controles del
-    zoom y el buscador: el título es lo que cede primero y se elide con «…»."""
+    """Reparte favoritos, ayuda, zoom y buscador cuando cambia la tarjeta del dibujo."""
     def __init__(self, tarjeta: QWidget, ventana: Any) -> None:
         super().__init__(tarjeta)
         self.tarjeta, self.ventana = tarjeta, ventana
@@ -621,6 +619,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._manual_paneles: dict[str, bool] = {}  # paneles que el usuario ha plegado o desplegado a mano: no se tocan solos
         self._auto_plegados: set[str] = set()  # paneles que el modo compacto ha plegado solo (y volverá a abrir)
         self.modo = "editar"  # solo cambia con Play (simular) y Pausa (editar)
+        self.solo_lectura = False
         self._respuesta_modbus = _RespuestaModbus(self)
         self._respuesta_modbus.lista.connect(self._tick, Qt.ConnectionType.QueuedConnection)
         self.modbus = Coordinador(self._respuesta_modbus.notificar)
@@ -642,6 +641,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._n_nuevos = 0
         self._tipos_entrada: dict[tuple[Any, str], bool] = {}
         self._bajo_raton: Any = None  # lo que tiene el puntero encima y la línea de detalle cuenta: una entrada, o (tabla, fila)
+        self._alto_cabecera = 0
         self._zoom_pendiente = False  # hay una revisión (diferida) de dónde van los controles del zoom
         self._hoja_escala = ""  # la hoja de la escala grande que llevan las partes de la ventana ("" en la normal)
         self._es_pendiente = self._props_pendiente = False  # E/S y Propiedades aún llevan la escala de antes (se ponen al mostrarlos)
@@ -912,13 +912,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         cab = QHBoxLayout()
         cab.setSpacing(estilo.E2)
         self._cab = cab
-        self.estado = ChipModo()
-        self.estado.setObjectName("chipModo")
-        self.titulo = EtiquetaElidida(ancho_maximo=380)  # el nombre del grafcet se elide con «…»: nunca ensancha la ventana
-        self.titulo.setStyleSheet(f"font-family: {estilo.FAMILIA_TITULO}; font-size: {estilo.T_TITULO}px; font-weight: 700; color: {estilo.TINTA}")
-        self.titulo.minimo = 8  # (el botón «Ayuda ▾» va siempre en la cabecera: el título cede hasta casi nada para que la ventana quepa en media pantalla)
-        cab.addWidget(self.estado)
-        cab.addWidget(self.titulo)
+        from .cabecera_favoritos import EstadoModo
+        self.estado = EstadoModo()
         il.addLayout(cab)
         self.ayuda = EtiquetaAyuda(2)
         self.ayuda.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px")
@@ -945,9 +940,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.diagrama = VistaDiagrama()
         self.navegacion = Navegacion(self.diagrama)
         cab.addWidget(self.navegacion)
-        self.estado.setFixedHeight(estilo.ALTO_BARRA - 8)  # el chip de modo; la fila mide lo del buscador, para que no salte al abrirlo
-        self.titulo.setMinimumHeight(estilo.ALTO_CONTROL_COMPACTO)  # la fila mide lo que el buscador (32 px): no salta al abrirlo
-        cab.setAlignment(self.estado, Qt.AlignmentFlag.AlignVCenter)
         ver_navegacion = self._accion("Navegación y filtros…", self.navegacion.abrir_opciones)
         next(a.menu() for a in self.menuBar().actions() if a.text()=="&Ver").addAction(ver_navegacion)
         il.addWidget(self.ayuda_larga)
@@ -1101,6 +1093,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.derecho.setMinimumWidth(300)  # al simular; al editar, el mismo margen de ancho que el panel izquierdo
         # Izquierda: la paleta (una sola lista de fichas); solo al editar. Las opciones de lo seleccionado van abajo.
         self.paleta = Paleta()
+        from .favoritos import BarraFavoritos
+        from .cabecera_favoritos import CabeceraFavoritos
+        self.favoritos = BarraFavoritos(self.ajustes, self.paleta)
+        self._cab.insertWidget(0, self.favoritos)
+        self._cabecera_favoritos = CabeceraFavoritos(self)
+        self.favoritos.contenido_cambiado.connect(self._ajustar_cabecera)
         self.paleta.setMinimumWidth(self.paleta.ancho_minimo())  # las dos columnas de fichas, sin cortarse
         self.paleta.ayuda.connect(self._ayuda_ficha)  # un clic en una ficha solo muestra su ayuda
         self.paleta.escala = self.diagrama.escala
@@ -1245,7 +1243,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.luz_es.setCursor(Qt.CursorShape.PointingHandCursor)
         self.luz_es.setProperty("abierta", False)
         self.luz_es.clicked.connect(lambda: self.mostrar_es())
-        self.fila_pestanas.layout().addWidget(self.luz_es)  # al final de la fila de pestañas, no junto a Reiniciar
+        self.fila_pestanas.layout().addWidget(self.luz_es)
+        from .cabecera_favoritos import UbicaModo
+        self._ubica_modo = UbicaModo(self.estado, self.fila_pestanas, self.pestanas_vistas, self.luz_es)
         self._luz_es("desconectado", "")
         self.addToolBar(self.tb_sim)
         self.tb_conexion = QToolBar("Conexión")
@@ -1266,8 +1266,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.tb_conexion.hide()
         self._fijar_ancho_boton_es()  # con la barra ya en la ventana: el botón lleva su hoja de estilo
         self._fijar_ancho_boton_play()
-        # Una sola barra de edición a continuación de Play y Reiniciar: Deshacer · Rehacer | Cortar · Copiar · Pegar · Borrar | Añadir debajo · Dependencias.
-        # Deshacer a Borrar (desactivados fuera de la edición, con la habilitación de sus acciones), solo icono con su ayuda y atajo; «Añadir debajo» y «Dependencias» con texto cuando hay sitio (`_textos_en_barras`).
+        # Tras Play y Reiniciar: Deshacer · Rehacer | Cortar · Copiar · Pegar · Borrar | Dependencias · Errores.
+        # De Deshacer a Borrar, solo icono y atajo; Dependencias y Errores llevan texto cuando hay sitio.
         self.tb_edit = QToolBar("Edición")
         self.tb_edit.setObjectName("barraEdicion")
         self.tb_edit.setMovable(False)
@@ -1283,8 +1283,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 self.tb_edit.widgetForAction(a).setAccessibleName(nombre)
                 self._acciones_solo_icono.append(a)
             self.tb_edit.addSeparator()
-        self.tb_edit.addAction(self.a_debajo)
-        self.a_debajo.setIconText("Añadir debajo")  # el texto del botón, sin el atajo que acompaña al del menú
         boton = self.diagrama.b_dependencias
         boton.setIcon(_icono_barra("dependencias"))
         boton.setAccessibleName("Mostrar dependencias")
@@ -1933,17 +1931,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
         return self.modo == modo
 
     def _poner_chip(self, modo: str, texto: str, ayuda: str = "") -> None:
-        """El chip de la cabecera del dibujo: el relleno y, sobre todo, el texto dicen en qué modo está el programa (no solo
-        el color). Solo toca la hoja de estilo si cambia, porque `refrescar` pasa por aquí en cada tic."""
-        if self.estado.text() != texto:
-            self.estado.setText(texto)
-        hoja = estilo.estilo_chip(modo)
-        if self.estado.styleSheet() != hoja:
-            self.estado.setStyleSheet(hoja)
-        self.estado.setToolTip(ayuda)
-        self.estado.setAccessibleName(texto.capitalize())
-        self.estado.fijar_marcador("vacio" if modo in ("editar", "lectura") else "lleno")
-        self._ajustar_cabecera()  # (el chip pide lo que mide su texto de ahora: el título cede lo que haga falta)
+        """Actualiza la etiqueta de estado de la fila de pestañas."""
+        self.estado.poner(modo, texto, ayuda)
+        self._ubica_modo.ajustar()
+        self._ajustar_cabecera()
 
     def _modo_visual(self) -> None:
         """Franja del borde del dibujo y fila de herramientas: verdes al simular, azul tinta al editar (propiedad `modo`)."""
@@ -2084,14 +2075,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _estilos_locales(self) -> None:
         """Lo que la ventana escribe a mano con las letras y los alto de control de la escala de ahora (títulos, ayudas, reloj,
         tablas, entradas…): se genera en la construcción y otra vez al cruzar el umbral de pantalla completa."""
-        self.titulo.setStyleSheet(f"font-family: {estilo.FAMILIA_TITULO}; font-size: {estilo.T_TITULO}px; font-weight: 700; color: {estilo.TINTA}")
         self.ayuda.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px")
         self.l_ayuda_entradas.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px; font-weight: 400")
         self._estilo_ayuda()
         self.navegacion.escalar()
         self.l_reloj.setStyleSheet(f"font-weight: 600; color: {estilo.TINTA}; font-family: {estilo.FAMILIA_MONO}; font-size: {estilo.T_CIFRA}px")
-        self.estado.setFixedHeight(estilo.ALTO_BARRA - 8)
-        self.titulo.setMinimumHeight(estilo.ALTO_CONTROL_COMPACTO)
+        self.estado.escalar()
         for b in self.botones.values():
             if isinstance(b, _BotonEntrada):
                 b.ajustar_alto()  # (el alto de una línea de la escala de ahora, o el de sus líneas si el nombre va partido)
@@ -2298,28 +2287,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 and self.inferior.height() >= estilo.ALTO_PROPS_ZOOM - (40 if mantener else 0))
 
     def _ajustar_zoom(self) -> None:
-        """Los controles del zoom flotan arriba a la derecha del dibujo, salvo en una ventana estrecha o baja (siempre van en la cabecera) y
-        cuando el dibujo útil queda bajo: **con Propiedades abierto y su panel alto, a cualquier tamaño de ventana** (1366, 1440, 1920…: el
-        dibujo se queda en la mitad del alto y el recuadro dejaría de flotar sobre la zona por la que el dibujo se desplaza para enseñar lo
-        elegido), o con un dibujo de menos de `ALTO_DIBUJO_ZOOM`: entonces se integran en la fila del título y el chip. Con el panel bajo de
-        una etapa el dibujo sigue alto y el recuadro flota como siempre (y, al esconder el panel, el dibujo no salta). En la cabecera se
-        compacta a solo iconos y el porcentaje cuando faltan palabras de sitio (`_ajustar_cabecera`). Con histéresis, para que integrar
-        la barra (que sube un poco la cabecera) no la haga volver."""
-        self._zoom_pendiente = False
-        d = self.diagrama
-        sp = self._cab.spacing()
-        # (el chip, un título mínimo y el zoom con solo iconos tienen que caber en la cabecera; si no —los paneles laterales aún abiertos en una
-        # ventana de media pantalla, un instante antes de plegarse—, el recuadro flota sobre el dibujo y nunca pisa al chip)
-        nav = self.navegacion.sizeHint().width() + sp if self.navegacion.isVisibleTo(self) else 0  # (el buscador abierto también pide su sitio en la fila)
-        cabe = d.parentWidget().width() - 2 * estilo.E2 >= self.estado.minimumSizeHint().width() + self.titulo.fontMetrics().horizontalAdvance("0" * 10) + d.ancho_barra(True) + nav + 3 * sp  # (el título conserva ~10 caracteres: si no, el zoom se queda sobre el dibujo)
-        # La zona de edición está fija: el zoom va **siempre** en la cabecera (con palabras si caben y solo iconos si no), a cualquier tamaño y con
-        # Propiedades cerrado o abierto; solo flota si ni los iconos caben en la fila (a ese tamaño, siempre). La fila mide siempre lo mismo
-        # (lo que el recuadro del zoom), así que el dibujo empieza siempre a la misma altura y el aviso de simulación detenida no se mueve.
-        d.integrar_barra(self._cab if cabe else None)
-        # (la fila mide lo del recuadro más alto que ha tenido —al editar y al simular lleva controles distintos—, flotando con 2 px menos de margen)
-        self._alto_cabecera = max(getattr(self, "_alto_cabecera", 0), estilo.ALTO_CONTROL_COMPACTO, d.barra.sizeHint().height() - (0 if d.barra_integrada else 4))
-        self.titulo.setMinimumHeight(self._alto_cabecera)
-        self._ajustar_cabecera()
+        self._cabecera_favoritos.integrar_zoom()
 
     def _adaptar_tamano(self) -> None:
         """Modo compacto automático, sin que el usuario toque nada: por debajo de `estilo.UMBRAL_ANCHO` (pantalla partida) el
@@ -2364,65 +2332,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._plegar_laterales_compactos()
 
     def _ajustar_cabecera(self) -> None:
-        """Reparte la cabecera del dibujo. Manda el estado (el chip no cede) y, con él, el título del grafcet (cede hasta 24 px, pero antes que
-        la ayuda); el zoom integrado lleva sus palabras solo si caben junto a un título y una ayuda útiles y, si no, solo iconos y el
-        porcentaje. La ayuda de debajo del título se lee en dos líneas; si no caben, acaba en «…» con un botón visible («más ▾») que la
-        despliega entera en su propia fila; con muy poco sitio se queda en el botón («Ayuda ▾») y, sin sitio ni para él, se esconde:
-        es lo secundario y nunca se corta a media frase sin dar salida."""
-        cab = self._cab
-        d = self.diagrama
-        sp = cab.spacing()
-        ancho = d.parentWidget().width() - 2 * estilo.E2
-        # F8: el título conserva al menos unos 10 caracteres antes de que el chip pase a su variante más corta (el estado nunca se pierde: la más
-        # corta es solo el estado); lo que ocupan los demás controles (navegación y zoom, este con solo iconos) se descuenta del tope del chip
-        otros = (self.navegacion.sizeHint().width() + sp if self.navegacion.isVisibleTo(self) else 0)             + (d.ancho_barra(True) + sp if d.barra_integrada else 0)
-        minimo_titulo = self.titulo.fontMetrics().horizontalAdvance("0" * 10) + sp
-        self.estado.fijar_tope(max(min(int(self.width() * 0.55), ancho - otros - minimo_titulo - 2 * sp), 60))
-        usado = 0
-        for w in (self.estado, self.navegacion):
-            if w.isVisibleTo(self):
-                usado += w.sizeHint().width() + sp
-        if d.barra_integrada:  # el zoom, con sus palabras si caben junto al título y la ayuda y, si no, solo con iconos y el porcentaje
-            para_zoom = ancho - usado - ANCHO_TITULO_UTIL - ANCHO_AYUDA_UTIL - 3 * sp
-            d.solo_iconos(para_zoom < d.ancho_barra(False) + (40 if d._solo_iconos else 0))
-            usado += d.barra.sizeHint().width() + sp
-        texto = self.ayuda.text()
-        if texto != getattr(self, "_texto_ayuda", None):  # otra ayuda: la desplegada se recoge (la misma de siempre, como al simular, no)
-            self._texto_ayuda, self._ayuda_abierta = texto, False
-        libre = max(24, ancho - usado - 2 * sp)  # para el título, la ayuda y su botón
-        natural = self.titulo.sizeHint().width()
-        boton = QFontMetrics(estilo.fuente(estilo.T_PEQUENA, negrita=True)).horizontalAdvance("Ayuda ▾") + 12 + 2 + sp
-        abierta = self._ayuda_abierta and bool(texto)
-        # El texto habitual de ayuda va siempre detrás del botón «Ayuda ▾» (a todos los tamaños); solo un mensaje de error (en rojo) se lee
-        # en la fila mientras cabe, porque no se puede esconder lo que dice que algo ha fallado
-        error = bool(texto) and estilo.ERROR in self.ayuda.styleSheet()
-        letra = "Ayuda ▴" if abierta else "Ayuda ▾"
-        if abierta or not error:
-            titulo_max, hay_ayuda, letrero = min(natural, max(24, minimo_titulo, libre - boton)), False, letra
-            if not texto:
-                titulo_max, letrero = min(natural, libre), ""
-        elif libre >= natural + ANCHO_AYUDA_UTIL and not self.ayuda.truncada(libre - natural):
-            titulo_max, hay_ayuda, letrero = natural, True, ""  # el mensaje cabe en sus dos líneas
-        elif libre - boton >= natural + ANCHO_AYUDA_UTIL:
-            titulo_max, hay_ayuda, letrero = natural, True, "más ▾"  # no cabe entero: dos líneas que acaban en «…» y el botón
-        elif libre - boton >= max(24, minimo_titulo):
-            titulo_max, hay_ayuda, letrero = min(natural, libre - boton), False, "Ayuda ▾"
-        else:
-            titulo_max, hay_ayuda, letrero = min(natural, libre), False, ""  # ni el botón cabe: se esconde lo secundario
-        if self.titulo.maximumWidth() != titulo_max:
-            self.titulo.setMaximumWidth(titulo_max)
-        self.ayuda.mostrar_texto = hay_ayuda
-        self.ayuda.update()
-        if letrero:
-            if self.b_ayuda.text() != letrero:
-                self.b_ayuda.setText(letrero)
-                self.b_ayuda.setToolTip("Recoger la ayuda" if abierta else "Leer la ayuda entera")
-        if self.b_ayuda.isVisibleTo(self) != bool(letrero):
-            self.b_ayuda.setVisible(bool(letrero))
-        if abierta and self.ayuda_larga.text() != texto:
-            self.ayuda_larga.setText(texto)
-        if self.ayuda_larga.isVisibleTo(self) != abierta:
-            self.ayuda_larga.setVisible(abierta)
+        self._cabecera_favoritos.ajustar()
 
     def _alternar_ayuda(self) -> None:
         """«más ▾» / «Ayuda ▾» / «Ayuda ▴»: despliega la ayuda entera bajo la cabecera, o la recoge."""
@@ -2537,8 +2447,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         return cache[clave]
 
     def _repartir_textos_barra(self) -> None:
-        """B2: las palabras de «Añadir debajo», «Mostrar dependencias» y «Mostrar errores» solo van si la fila de herramientas las aguanta junto a la
-        barra de Play (si no, solo icono con su ayuda: se oculta antes el texto que el botón). En pantalla partida, siempre solo icono."""
+        """B2: Dependencias y Errores llevan palabras si caben junto a Play.
+        Si falta sitio, y siempre en pantalla partida, conservan el icono y la ayuda."""
         ancho, alto = self._compacto
         con = False
         if not ancho:
@@ -2552,10 +2462,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.tb_edit.updateGeometry()
 
     def _textos_en_barras(self, con_texto: bool) -> None:
-        """«Añadir debajo» y «Mostrar dependencias» llevan texto cuando hay sitio y solo icono (con su ayuda) en pantalla partida; el resto
-        de botones de la barra de edición son siempre de solo icono."""
+        """Dependencias y Errores llevan texto cuando cabe; en pantalla partida, solo icono y ayuda.
+        Los restantes botones de edición son siempre de solo icono."""
         forma = Qt.ToolButtonStyle.ToolButtonTextBesideIcon if con_texto else Qt.ToolButtonStyle.ToolButtonIconOnly
-        for a in (self.a_debajo, self.a_dependencias, self.a_errores):
+        for a in (self.a_dependencias, self.a_errores):
             w = self.tb_edit.widgetForAction(a)
             if w is not None:
                 w.setToolButtonStyle(forma)
@@ -2582,7 +2492,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         entradas = list(getattr(self, "botones", {}).values())
         cadena = [self.pestanas_vistas, self.luz_es, self.tb_sim.widgetForAction(self.a_ejecutar),
                   self.tb_sim.widgetForAction(self.a_reiniciar),
-                  *(self.tb_edit.widgetForAction(a) for a in (*self._acciones_solo_icono, self.a_debajo)), d.b_dependencias, self.b_errores,
+                  *(self.tb_edit.widgetForAction(a) for a in self._acciones_solo_icono),
+                  d.b_dependencias, self.b_errores,
                   self.flechas["izquierdo"], self.paleta, d, self.b_ayuda, d.b_menos, d.b_mas, d.b_ajustar, d.b_seleccion,
                   self.flechas["derecho"], *entradas, self.variables.tabla, *self.variables.b_nuevas.values(),
                   self.variables.b_quitar, self.pestanas["izquierdo"], self.pestanas["derecho"], self.flechas["inferior"],
@@ -2689,7 +2600,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self._poner_chip("lectura", "EJEMPLO · SOLO LECTURA", "Ejemplo de solo lectura: se puede simular; para editar, abra un proyecto o cree uno nuevo")
         else:
             self._poner_chip("editar", "EDICIÓN", "Modo edición: Play inicia la simulación")
-        self.titulo.setText(f"{e.titulo}{' *' if e.ed.dirty else ''}")
         self.ayuda.setToolTip(self._ayuda if getattr(self,"solo_lectura",False) else AYUDA_EDICION[e.herramienta])
         mensaje, info = e.texto_estado()
         self.ayuda.setText(self._ayuda if getattr(self,"solo_lectura",False) else mensaje or "Arrastre fichas desde la paleta; doble clic en un elemento para ver sus propiedades.")
@@ -3565,7 +3475,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
             # el estado del motor se dice con las mismas palabras de siempre (estable, en recorrido…), en mayúsculas
             self._poner_chip({"err": "error", "virt": "aviso"}.get(color, "simular"), f"SIMULACIÓN · {label.upper()}",
                              f"Simulación en curso, {label}. Stop detiene y vuelve a editar")
-            self.titulo.setText(M["title"])
             self.ayuda.setText(M["help"]);self.ayuda.setToolTip(M["help"])
         stable, rec = S["status"] == "pausada-estable", S["status"] == "pausada-recorrido"
         self._diagnostico(S, rec)

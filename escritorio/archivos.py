@@ -49,7 +49,6 @@ class ArchivosProyecto:
         self._adoptar_archivo(e,archivo)
         e.ed.dirty=False
         self._recordar_parametros(config);self._titulo_ventana()
-        if self.modo=="editar":self.titulo.setText(e.titulo)
         self.statusBar().showMessage(f'Proyecto guardado en {destino}',10000)
         return True
 

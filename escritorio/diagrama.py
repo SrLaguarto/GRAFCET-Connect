@@ -1360,7 +1360,8 @@ class _BarraZoom(QFrame):
 
 MARCADORES_SELECTOR = ("Elija la variable…", "Elija variable…", "Variable…", "…")  # el marcador del desplegable sin variable: el primero que cabe
 MARGEN_OPCION, HUECO_PAPEL = 8, 6  # margen interior de cada opción del desplegable y espacio entre el nombre y su papel
-SELECTOR_PAD_IZQ, SELECTOR_FLECHA = 6, 18  # sangría del texto y ancho de la zona de la flecha del desplegable sobre la acción (más justos que los de un campo)
+# Sangría del texto y zona de la flecha del desplegable sobre la acción.
+SELECTOR_PAD_IZQ, SELECTOR_FLECHA = estilo.E2, 18
 
 
 class _OpcionConPapel(QStyledItemDelegate):

@@ -43,6 +43,7 @@ from . import estilo
 from .paneles import EtiquetaGrupos, TituloSeccion
 from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
+from .remates_propiedades import AvisoFormula, RematesAccion
 from .paneles import PilaActual
 from .diagrama import ACT_MIN, COL, H, MARK, TB, VACIO_H, VACIO_W, _html
 from .edicion import COLOCACIONES, CONTINUAS, Parpadeo
@@ -335,9 +336,17 @@ class Paleta(QListWidget):
         it = self.currentItem()
         if it is None or not it.data(Qt.ItemDataRole.UserRole):
             return
-        drag = QDrag(self)
-        drag.setMimeData(self.mimeData([it]))
-        pm, punto = figura(it.data(Qt.ItemDataRole.UserRole), self.escala(), self.devicePixelRatioF())
+        self.arrastrar_elemento(it.data(Qt.ItemDataRole.UserRole))
+
+    def arrastrar_elemento(self, clave: str, origen: QWidget | None = None) -> None:
+        """La ficha y sus favoritos comparten MIME, escala, vista previa y punto de colocación."""
+        items = [self.item(i) for i in range(self.count())
+                 if self.item(i).data(Qt.ItemDataRole.UserRole) == clave]
+        if not items:
+            return
+        drag = QDrag(origen if origen is not None else self)
+        drag.setMimeData(self.mimeData(items))
+        pm, punto = figura(clave, self.escala(), self.devicePixelRatioF())
         drag.setPixmap(pm)
         drag.setHotSpot(punto)
         drag.exec(Qt.DropAction.CopyAction)
@@ -478,19 +487,6 @@ class _UbicaCategorias(QObject):
         return False
 
 
-class _DisponeEstado(QObject):
-    """Avisa al panel de que la fila de la fórmula cambió de ancho o de contenido: puede que el estado deba bajar a su línea (o volver)."""
-
-    def __init__(self, panel: "PanelPropiedades") -> None:
-        super().__init__(panel)
-        self.panel = panel
-
-    def eventFilter(self, objeto: QObject, evento: QEvent) -> bool:  # noqa: N802
-        if evento.type() in (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.LayoutRequest):
-            self.panel._disponer_estado()
-        return False
-
-
 class PanelPropiedades(QWidget):
     """Las opciones del elemento seleccionado, con campos editables (el panel «Opciones» de abajo)."""
     ANCHO_MINIMO = 560  # lo más ancho que pide el panel a la ventana: con él abierto, la ventana baja a 640 px y vuelve
@@ -514,6 +510,13 @@ class PanelPropiedades(QWidget):
         pedir 773 px y sacaba la ventana de su media pantalla sin que volviera. El alto sí es el de su contenido."""
         tam = super().minimumSizeHint()
         return QSize(min(tam.width(), self.ANCHO_MINIMO), tam.height())
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        tam = super().sizeHint()
+        if self.pagina == "accion":
+            # Aire preferido sobre la altura estricta de los campos, sin elevar el mínimo ni forzar desplazamiento.
+            tam.setHeight(tam.height() + estilo.E2)
+        return tam
 
     FRASE_CONTINUA = "Haz doble clic sobre la acción continua para desplegar las variables disponibles."
 
@@ -569,6 +572,7 @@ class PanelPropiedades(QWidget):
         self.izq.addWidget(self._transicion())  # 2
         self.accion = PanelAccion()  # 3
         self.izq.addWidget(self.accion)
+        self._remates_accion = RematesAccion(self, lay, ANCHO_COLUMNA)
         self.ficha_izq = FichaJerarquia()  # 4: macroetapa, recinto, expansión u orden de forzado
         pagina = QWidget()
         lh = QVBoxLayout(pagina)
@@ -718,7 +722,7 @@ class PanelPropiedades(QWidget):
         self.caja_formula = QWidget()
         g = QGridLayout(self.caja_formula)
         g.setContentsMargins(0, 0, 0, 0)
-        g.setVerticalSpacing(2)
+        g.setVerticalSpacing(estilo.E1)
         self.t_texto = CajaFormula()  # no se edita: se ve con la notación del dibujo y la arman los bloques
         self.t_texto.formato = self._formato_formula
         self.t_texto.setPlaceholderText("la fórmula se arma con bloques")
@@ -730,52 +734,23 @@ class PanelPropiedades(QWidget):
         self.t_dibujo.setTextFormat(Qt.TextFormat.RichText)
         self.t_vista.hide()
         self.t_dibujo.hide()
-        self.t_estado = EtiquetaGrupos(ancho_maximo=260)  # «Receptividad correcta.» nunca se parte; un mensaje largo se parte por palabras
+        self.t_estado = AvisoFormula()
         self.t_crear = QPushButton("Crear las que faltan")
         self.t_crear.setToolTip("Declarar como entradas booleanas las variables que se usan y no existen")
         self.t_crear.clicked.connect(self._crear)
         self._l_formula = QLabel("Fórmula")
         g.addWidget(self._l_formula, 0, 0)
         g.addWidget(self.t_texto, 0, 1)
-        self.t_estado.setMaximumWidth(260)
         self.t_texto.setMinimumWidth(48)
-        g.addWidget(self.t_estado, 0, 2)
-        g.addWidget(self.t_crear, 0, 3)
+        g.addWidget(self.t_estado, 1, 1, 1, 3)
+        g.addWidget(self.t_crear, 0, 2)
         self.prog.pie.removeWidget(self.prog.papelera)
-        g.addWidget(self.prog.papelera, 0, 4)
+        g.addWidget(self.prog.papelera, 0, 3, Qt.AlignmentFlag.AlignVCenter)
         g.setColumnStretch(1, 1)
-        self._rejilla_formula, self._estado_abajo = g, False
-        self._dispone_estado = _DisponeEstado(self)  # (el campo de la fórmula manda: si el estado no cabe a su lado, baja a su propia línea)
-        self.caja_formula.installEventFilter(self._dispone_estado)
+        self._rejilla_formula, self._estado_abajo = g, True
         lay.addWidget(self.caja_formula)
         self._ver_bloques(None)
         return w
-
-    FORMULA_MIN = 200  # lo que mide, como poco, el campo de la fórmula con el estado a su lado; si no queda, el estado baja a su propia línea
-
-    def _disponer_estado(self) -> None:
-        """La fórmula es lo que se escribe y se lee: tiene prioridad de ancho sobre el estado («Receptividad correcta.»). Con sitio, el
-        estado va a su lado, en la misma fila; sin él (media pantalla), **baja a su propia línea bajo el campo**, entero y sin partirse, y el
-        campo se queda con todo el ancho que dejaba el estado. Con histéresis, para que el cambio no vaya y vuelva."""
-        g, ancho = self._rejilla_formula, self.caja_formula.width()
-        if ancho < 120:
-            return
-        sep = max(g.horizontalSpacing(), 6)
-        fijos = [c for c in (self._l_formula, self.t_crear, self.prog.papelera) if not c.isHidden()]
-        sitio = ancho - sum(c.sizeHint().width() for c in fijos) - sep * (len(fijos) + 1) - self.t_estado.sizeHint().width()
-        abajo = sitio < self.FORMULA_MIN + (40 if self._estado_abajo else 0)
-        if abajo == self._estado_abajo:
-            return
-        self._estado_abajo = abajo
-        g.removeWidget(self.t_estado)
-        if abajo:
-            g.addWidget(self.t_estado, 1, 1, 1, 4)
-            self.t_estado.setMaximumWidth(16777215)
-        else:
-            g.addWidget(self.t_estado, 0, 2)
-            self.t_estado.setMaximumWidth(260)
-        self.caja_formula.updateGeometry()
-        self.alto_cambiado.emit()  # (el panel pide una línea más o una menos: la ventana le da el alto)
 
     def _ver_bloques(self, titulo: str | None) -> None:
         """El programador de la transición o de la acción (condición o evento), o nada si no hay que programar."""
@@ -1000,6 +975,8 @@ class PanelPropiedades(QWidget):
             self.prog.refrescar()  # las variables pudieron cambiar (panel Variables, panel de la acción, «Crear las que faltan»)
         sel = e.sel if e is not None else []
         vivo = sel[0] if len(sel) == 1 else None
+        accion = e.accion_activa() if e is not None else None
+        self.prog.seleccionar_elemento((vivo, accion))
         if e is not None and (n := e.anotacion(vivo)):
             for campo in (self.s_etiqueta,self.s_comentario,self.t_etiqueta,self.t_comentario):
                 campo.blockSignals(True);campo.clearFocus();campo.blockSignals(False)
@@ -1010,6 +987,7 @@ class PanelPropiedades(QWidget):
             self.titulo.setText("Propiedades · "+("Texto" if n["kind"]=="text" else "Imagen"))
             self.nota_resumen.setText(n.get("text","") if n["kind"]=="text" else n.get("name","Imagen"))
             self.nota_editar.setText("Editar texto…" if n["kind"]=="text" else "Cambiar imagen…")
+            self._remates_accion.mostrar(False)
             return
         self.continua = False
         aid = e.accion_activa() if e is not None else None
@@ -1031,6 +1009,7 @@ class PanelPropiedades(QWidget):
             self.vacio.show()
             self.titulo.setText("Propiedades · Acción")
             self.msg.hide()
+            self._remates_accion.mostrar(False)
             self._ubicar_categorias()
             return
         kind = ("accion" if aid else
@@ -1152,6 +1131,7 @@ class PanelPropiedades(QWidget):
             self.der.setCurrentIndex(0)
         self.msg.setText("")
         self.msg.hide()
+        self._remates_accion.mostrar(kind == "accion")
         self._ubicar_categorias()
 
     @staticmethod

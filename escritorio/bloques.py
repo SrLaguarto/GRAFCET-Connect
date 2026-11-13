@@ -528,8 +528,8 @@ COLORES = {"entrada": "#278B87", "salida": "#43845E", "interna": "#B27A39", "eta
            "operador": "#486078", "comparacion": "#398C9E", "tiempo": "#A38636", "texto": "#6B7280", "error": "#C0392B",
            "y": "#5F7F0B", "o": "#B83DBA",  # «y» (oliva) y «o» (fucsia): operadores, pero cada uno con su color
            "constante": "#8A5A44"}  # las fichas 1 (verdadero) y 0 (falso): su propia carpeta, no se pierden entre los operadores
-CATEGORIAS = (("entrada", "Entradas"), ("etapa", "Etapas (X)"), ("interna", "Memorias"), ("operador", "Operadores"),
-              ("tiempo", "Temporizadores"), ("comparacion", "Comparaciones"), ("salida", "Salidas"), ("constante", "Constantes"))
+CATEGORIAS = (("variables", "Variables"), ("operador", "Operadores"), ("tiempo", "Temporizadores"),
+              ("comparacion", "Comparaciones"), ("constante", "Constantes"))
 CATEGORIAS_VALOR = (("numero", "Número"), ("vnum", "Variables"), ("aritm", "Operadores"))  # modo «valor»
 _PAPEL_CAT = {"input": "entrada", "output": "salida", "internal": "interna"}
 PADX, PADX_PILA, PADV, GAP, FILA = 10, 7, 3, 4, 3  # relleno lateral y vertical de un bloque, hueco entre piezas y entre filas
@@ -1688,6 +1688,7 @@ class Programador(QWidget):
         super().__init__()
         self.fuente, self.historial, self.valor = fuente, historial, valor
         self.compacto = compacto
+        self._elemento_seleccionado = None
         self.lista_categorias = CATEGORIAS_VALOR if valor else CATEGORIAS
         self.grupo = grupo or f"programador-{id(self)}"
         self.al_deshacer: Callable[[], Any] | None = None
@@ -1705,7 +1706,8 @@ class Programador(QWidget):
         self.en_fila = False
         # Franja superior: categorías, con desplazamiento horizontal en paneles estrechos.
         carpetas = QWidget()
-        cl = FlowLayout(carpetas, 2)  # las categorías pasan a una segunda fila si no caben: ninguna queda cortada («Sal…»)
+        from .remates_propiedades import FlujoCategorias
+        cl = FlowLayout(carpetas, 2) if valor else FlujoCategorias(carpetas, 2)
         cl.setContentsMargins(0, 0, 2, 0)
         self._flujo_carpetas = cl
         self.categorias: dict[str, QPushButton] = {}
@@ -1713,7 +1715,9 @@ class Programador(QWidget):
             b = QPushButton(titulo)
             b.setCheckable(True)
             b.setAutoExclusive(True)
-            b.setIcon(_circulo(COLORES[{"numero": "comparacion", "vnum": "interna", "aritm": "operador"}.get(clave, clave)]))
+            categoria_color = {"numero": "comparacion", "vnum": "interna", "aritm": "operador"}.get(clave, clave)
+            color = estilo.TINTA_2 if clave == "variables" else COLORES[categoria_color]
+            b.setIcon(_circulo(color))
             b.setIconSize(QSize(10, 10))
             b.setToolTip(titulo)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1732,9 +1736,15 @@ class Programador(QWidget):
         raiz.addWidget(self._sc_carpetas)
         raiz.addLayout(lay, 1)
         # columna 2: los bloques de la categoría elegida
-        self.paleta = PaletaBloques(fuente, self.grupo, columna=True, valor=valor)
+        if valor:
+            self.paleta = PaletaBloques(fuente, self.grupo, columna=True, valor=True)
+        else:
+            from .paleta_variables import PaletaVariables
+            self.paleta = PaletaVariables(fuente, self.grupo, columna=True)
         self._sc_paleta = _desplazable(self.paleta)
         lay.addWidget(self._sc_paleta)
+        if not valor:
+            self.paleta.geometria_cambiada.connect(self._medir_paleta)
         # columna 3: el área de trabajo y, debajo, el aviso y la papelera
         derecha = QVBoxLayout()
         derecha.setSpacing(4)
@@ -1763,7 +1773,7 @@ class Programador(QWidget):
                 s = QShortcut(QKeySequence(atajo), self)
                 s.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
                 s.activated.connect(f)
-        self.elegir_categoria("numero" if valor else "entrada")
+        self.elegir_categoria("numero" if valor else "variables")
 
     @staticmethod
     def _hoja_categoria() -> str:
@@ -1784,6 +1794,12 @@ class Programador(QWidget):
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
         return QSize((180 if self.en_fila else self._sc_paleta.width() + 180), 116 if self.compacto else 112)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        natural = super().sizeHint()
+        if self.valor:
+            return natural
+        return QSize(natural.width(), self.minimumSizeHint().height())
 
     def modo_fila(self, fila: bool) -> None:
         """Con la ventana baja (P1) la paleta de bloques va **en una sola fila** sobre el área, con desplazamiento horizontal, en vez de en
@@ -1809,12 +1825,18 @@ class Programador(QWidget):
     def _cargar_paleta(self, clave: str) -> None:
         """Pone los bloques de la categoría y ajusta la columna a su bloque más ancho (más el margen y la barra)."""
         self.paleta.cargar(clave)
+        self._medir_paleta()
+
+    def _medir_paleta(self) -> None:
         m = self.paleta.motor
         natural = max([m.natural(n, (i,)) for i, n in enumerate(self.paleta._raices)] or [0])
         if self.en_fila:  # una fila: el ancho es el de todos los bloques juntos (la paleta se desplaza a los lados) y el alto, el de una fila más la barra
             self.paleta.invalidar()
             self.paleta.setMinimumWidth(int(self.paleta.ancho_necesario(10 ** 5)))
-            alto = self.paleta.heightForWidth(10 ** 5) + self._sc_paleta.horizontalScrollBar().sizeHint().height()
+            ancho = 10 ** 5
+            if not self.valor and self.paleta.clave == "variables" and not self.paleta.bloques():
+                ancho = max(80, self._sc_paleta.viewport().width())
+            alto = self.paleta.heightForWidth(ancho) + self._sc_paleta.horizontalScrollBar().sizeHint().height()
             if self._sc_paleta.minimumHeight() != alto:
                 self._sc_paleta.setFixedHeight(alto)
                 self.franja_cambiada.emit()
@@ -1824,6 +1846,13 @@ class Programador(QWidget):
     def elegir_categoria(self, clave: str) -> None:
         self.categorias[clave].setChecked(True)
         self._cargar_paleta(clave)
+
+    def seleccionar_elemento(self, identificador) -> None:
+        """Vacía la búsqueda al cambiar de elemento, aunque su fórmula coincida."""
+        if identificador != self._elemento_seleccionado:
+            self._elemento_seleccionado = identificador
+            if not self.valor:
+                self.paleta.filtro.clear()
 
     def opciones(self, cajon: str) -> list[tuple[str, str]]:
         """(texto, valor) de lo que ofrece un desplegable de la paleta: variables booleanas de un papel, o etapas."""
