@@ -47,8 +47,9 @@ Qué hace
   que abre las Issues de GitHub (https://github.com/SrLaguarto/GRAFCET-Connect/issues).
 - Con Tab, el control activo muestra un anillo de foco. El anillo solo aparece al navegar con el teclado, no con un clic.
 - Los avisos no muestran códigos internos y usan vocabulario GRAFCET. El detalle técnico y la «Referencia: código» van en la ayuda emergente de cada aviso. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular».
-- Lista de variables de la acción (Propiedades): Salidas y Memorias, cada una con su tipo en corto («Bool», «Ent», «Dec»); la lista
-  se ensancha lo que haga falta para leer el nombre más largo.
+- Lista de variables de la acción (Propiedades): Salidas y Memorias, cada una con su tipo en corto («Bool», «Ent», «Dec»); la caja
+  y la lista miden lo que pide el nombre más largo (con un tope). Sin variable elegida, la acción memorizada o por evento
+  muestra «? :=» con 1 y 0 desactivados; el programador de valor solo sale si la variable es numérica.
 - Errores y avisos del grafcet: botón «Mostrar errores» de la barra de edición. Marcado, el aviso se ve sobre el dibujo (triángulo y resumen, «2 errores», «1 error · 2 avisos»; un clic o Espacio despliega la lista); desmarcado, no se ve al editar. Al marcarlo, la lista sale desplegada (el resumen la pliega). Un Play que no puede simular lo marca y despliega la lista, y se desmarca solo al corregirlo todo.
 - Propiedades: el título dice el tipo de lo elegido («Propiedades · Etapa», «· Transición», «· Acción»…), sin su nombre. La etiqueta de una etapa admite como mucho 4 caracteres al escribirla; un archivo con nombres más largos se abre igual.
 - Barra de edición, tras Play y Reiniciar: Deshacer, Rehacer, Cortar, Copiar, Pegar y Borrar (solo icono; la ayuda emergente dice el atajo), «Mostrar dependencias» y «Mostrar errores». Fuera de la edición, desactivados. «Añadir debajo» ya no está en la barra: sigue en el menú Edición y con Ctrl+Intro. Al simular, la barra no cambia de color: el modo lo dicen la franja verde bajo la barra y la etiqueta de la fila de pestañas.
@@ -334,9 +335,10 @@ piezas, en lugar de escribirlo.
   existen). En la última fila, el aviso y la papelera («⤢ Ampliar» se retiró en P-IMP-144: para más sitio, Ver ▸ Panel de opciones ▸ Flotante).
 - Ver ▸ «Panel de opciones» ▸ «Flotante» (por defecto) o «Abajo»: dos opciones excluyentes, y se recuerda la elegida. En flotante, las propiedades se editan en una sola ventana centrada
   sobre la aplicación (puede tapar los paneles laterales), con título y ✕: a la izquierda, el elemento ampliado como bajo una
-  lupa (hasta el 125 %, se actualiza al editar); a la derecha, sus paneles, unidos a su parte del elemento con líneas de puntos.
-  En una acción condicionada o por evento hay dos paneles: «Condición» (o «Evento») arriba y «Acción» debajo, unidos a su parte
-  con líneas de puntos (con un solo panel no hay líneas). La ventana no se mueve al hacer zoom, desplazar o mover el elemento;
+  lupa (hasta el 125 %, se actualiza al editar); a la derecha, sus paneles. Mientras está abierta, lo de detrás no responde.
+  En una acción condicionada o por evento hay dos paneles: «Condición» (o «Evento») arriba y «Acción» debajo; cada parte del
+  elemento ampliado y su panel comparten un color (la marca de la condición, turquesa, como la franja de «Condición»; la caja de
+  la acción, gris, como la franja de «Acción»). Una transición o una etapa abren una ventana a la medida de su contenido. La ventana no se mueve al hacer zoom, desplazar o mover el elemento;
   si el contenido no cabe, se desplaza por dentro. Esc la cierra (si hay un desplegable abierto, el primer Esc cierra el
   desplegable). En la ventana no hay fila «Fórmula», ni aviso de «correcta», ni frase de la acción (la lupa ya los enseña): si la
   fórmula tiene un error, sale una línea roja bajo los bloques; la papelera está a la derecha de las pestañas del formulador.
@@ -412,7 +414,8 @@ a ese parcial (con un margen de una etapa a la derecha y abajo); moverlo a otro 
 dibujo.
 
 - Macroetapa: al soltar la ficha se crea la macroetapa (M1, M2…) con su expansión a la derecha: un parcial con una etapa
-  de entrada (E1, E2…) y una de salida (S1, S2…), unidas a la macroetapa (con «Mostrar dependencias» activado, por trazos discontinuos). La expansión no lleva
+  de entrada (E1, E2…) y una de salida (S1, S2…) (su nombre sigue al de la macroetapa: al renombrar M1 a M13, desde
+  Propiedades o con «Renombrar…», pasan a E13 y S13; E y S no se renombran sueltas), unidas a la macroetapa (con «Mostrar dependencias» activado, por trazos discontinuos). La expansión no lleva
   ruta interior: se rellena soltando etapas y transiciones dentro de su zona. Botón derecho: «Encuadrar la expansión» y
   «Renombrar…». El doble clic en la macroetapa encuadra la expansión.
 - Encapsulante y tipo de etapa: se arrastra la ficha, o se elige en el botón derecho de una etapa, submenú «Tipo de etapa»

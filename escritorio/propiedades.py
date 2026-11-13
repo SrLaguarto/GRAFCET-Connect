@@ -54,28 +54,27 @@ ANCHO_COLUMNA = 230  # la columna estrecha de campos del panel de opciones
 NOMBRES = {"etapa": "Etapa", "transicion": "Transición", "simultaneidad": "Simultaneidad", "accion:continua": "Acción",
            "macroetapa": "Macroetapa", "encapsulante": "Encapsulante", "parcial": "Grafcet parcial", "forzado": "Forzado"}
 AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: arrástrela al dibujo",
-          "simultaneidad": "Barra de simultaneidad (doble trazo, Y): une varias etapas a una transición, o una transición "
-                           "a varias etapas. Se ensancha estirando de sus extremos. Las alternativas (O) no son un elemento: "
-                           "se construyen con el ratón enlazando una etapa con una segunda transición, o arrastrando a un enlace.",
+          "simultaneidad": "Barra de simultaneidad: une varias etapas a una transición, o una transición "
+                           "a varias etapas. Se ensancha estirando de sus extremos.",
           "accion:continua": "Acción continua: se cumple mientras la etapa está activa. Arrástrela al dibujo (queda suelta, con «?»); "
                              "se une a una etapa arrastrando desde su punto de unión de la izquierda hasta la etapa, o pegándola al "
                              "lado de otra acción. Para otro tipo (condicionada, al activar, al desactivar, por evento), botón "
                              "derecho sobre la acción, «Tipo de acción»",
-          "macroetapa": "Macroetapa (divisiones arriba y abajo): arrástrela al dibujo y crea la macroetapa con su expansión, "
+          "macroetapa": "Macroetapa: arrástrela al dibujo y crea la macroetapa con su expansión, "
                         "con la etapa de entrada y la de salida a su derecha. Suelte etapas y transiciones dentro de la "
                         "expansión para rellenarla; botón derecho en la macroetapa, «Encuadrar la expansión», para verla "
                         "(«Mostrar dependencias», en la barra de herramientas, dibuja los trazos que la unen a la macroetapa)",
-          "encapsulante": "Etapa encapsulante (esquinas cortadas): arrástrela al dibujo, o convierta una etapa con el botón "
+          "encapsulante": "Etapa encapsulante: arrástrela al dibujo, o convierta una etapa con el botón "
                           "derecho, «Tipo de etapa». Botón derecho en la encapsulante, «Añadir recinto…», crea un "
                           "recinto; se rellena soltando "
                           "etapas dentro de su marco, y «Enlace de activación» en una de ellas la marca (*); «Encuadrar el "
                           "recinto» lo muestra",
-          "parcial": "Grafcet parcial (marco redondeado con «G»): arrástrelo a un hueco del dibujo y crea un grafcet parcial "
+          "parcial": "Grafcet parcial: arrástrelo a un hueco del dibujo y crea un grafcet parcial "
                      "vacío, con nombre propio (G1, G2…) y un marco vacío. Suelte etapas y transiciones dentro de su marco "
                      "para rellenarlo; «Renombrar…» (botón derecho o doble clic en su marco) le cambia el nombre, y una orden "
                      "de forzado («Forzado») de una etapa de otro parcial puede forzarlo. No se pone encima de otro "
                      "elemento ni de otro marco",
-          "forzado": "Orden de forzado (rectángulo doble «G{ }»): arrástrela al dibujo como una acción; queda suelta («G?{?}») y "
+          "forzado": "Orden de forzado: arrástrela al dibujo como una acción; queda suelta («G?{?}») y "
                      "no se simula. Doble clic en ella (o su panel de opciones) abre el diálogo para elegir el parcial al que "
                      "fuerza, la forma (explícita, la situación actual, vacía o inicial) y, si es explícita, sus etapas. Se une "
                      "a una etapa arrastrando desde su punto de unión de la izquierda hasta la etapa (o desde el lado derecho de "
@@ -95,7 +94,7 @@ NOMBRES.update({"etapa_inicial": "Etapa inicial", "accion:continua": "Continua",
 AYUDAS["etapa_inicial"] = "Etapa inicial: arrástrela al dibujo. Se crea con el doble cuadrado de etapa inicial."
 for t in ("continua", "condicionada", "activacion", "desactivacion", "evento"):
     AYUDAS["accion:" + t] = ("Acción " + NOMBRES["accion:" + t].lower() + ": arrástrela al dibujo; "
-                            "únala a una etapa desde su punto de unión y configúrela con doble clic o en Propiedades.")
+                            "únala a una etapa desde su punto de unión y configúrela con doble clic.")
 NOMBRES.update({"texto":"Texto", "imagen":"Imagen"})
 AYUDAS.update({"texto":"Cuadro de texto: arrástrelo al dibujo. Doble clic para elegir texto, fuente, tamaño y color. Estire su esquina para cambiar el cuadro.",
                "imagen":"Imagen PNG o JPG: arrástrela al dibujo y elija un archivo. Estire su esquina para cambiar el tamaño conservando sus proporciones."})
@@ -577,6 +576,15 @@ class PanelPropiedades(QWidget):
         pagina = QWidget()
         lh = QVBoxLayout(pagina)
         lh.setContentsMargins(0, 0, 0, 0)
+        self.m_etiqueta = QLineEdit()
+        self.m_etiqueta.setAccessibleName("Nombre de la macroetapa")
+        self.m_etiqueta.editingFinished.connect(lambda: self._renombrar(self.m_etiqueta))
+        self.m_formulario = QWidget()
+        mf = QFormLayout(self.m_formulario)
+        mf.setContentsMargins(0, 0, 0, 0)
+        mf.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        mf.addRow("Etiqueta", self.m_etiqueta)
+        lh.addWidget(self.m_formulario)
         lh.addWidget(self.ficha_izq)
         lh.addStretch(1)
         self.izq.addWidget(pagina)
@@ -999,7 +1007,8 @@ class PanelPropiedades(QWidget):
         self.continua = False
         aid = e.accion_activa() if e is not None else None
         if aid and e.datos_accion(aid)["tipo"] == "continua":  # una acción continua no se edita aquí: se despliega su variable con doble clic sobre ella
-            for campo in (self.s_etiqueta, self.s_comentario, self.t_etiqueta, self.t_comentario):
+            for campo in (self.s_etiqueta, self.s_comentario, self.t_etiqueta, self.t_comentario,
+                          self.m_etiqueta):
                 campo.blockSignals(True)
                 campo.clearFocus()
                 campo.blockSignals(False)
@@ -1029,12 +1038,16 @@ class PanelPropiedades(QWidget):
                 "marco" if any(q["id"] == vivo for q in e.M["partials"]) else None) if (vivo or aid) else None
         ident = aid if kind == "accion" else vivo if kind else None
         if (kind, ident) != (getattr(self, "_mostrado", None)):  # otro elemento: lo escrito sin confirmar se descarta
-            for campo in (self.s_etiqueta, self.s_comentario, self.t_etiqueta, self.t_comentario):
+            for campo in (self.s_etiqueta, self.s_comentario, self.t_etiqueta, self.t_comentario,
+                          self.m_etiqueta):
                 campo.blockSignals(True)
                 campo.clearFocus()
                 campo.blockSignals(False)
         self._mostrado = (kind, ident)
         self.ident = ident
+        self.m_formulario.setVisible(kind == "macro")
+        if kind == "macro":
+            self._poner(self.m_etiqueta, e.nombres[vivo])
         self.cuerpo.setVisible(kind is not None)
         self.vacio.setVisible(kind is None)
         self.pagina = kind or "vacio"  # qué opciones se muestran: etapa, transicion, accion, enlace, barra o vacio
@@ -1077,6 +1090,11 @@ class PanelPropiedades(QWidget):
         if kind == "etapa":
             s = next(s for s in e.M["steps"] if s["id"] == vivo)
             self._poner(self.s_etiqueta, s["label"])
+            especial = bool(rol := next((x for x in e.ed.model["hierarchy"]["expansions"]
+                                        if vivo in (x["entryRef"], x["exitRef"])), None))
+            self.s_etiqueta.setReadOnly(especial)
+            self.s_etiqueta.setToolTip(f"Sigue el nombre de la macroetapa {e.nombres[rol['ownerMacroRef']]}"
+                                      if especial else "")
             self._poner(self.s_comentario, e.comentario(vivo))
             self.s_tipo.setCurrentIndex(1 if s["initial"] else 0)
             rol = e.ed.partial_roles().get(e.parcial_de(vivo))
@@ -1156,7 +1174,12 @@ class PanelPropiedades(QWidget):
         if self.ident is None or self.e.sel != [self.ident] or self.ident not in self.e.nombres \
                 or campo.text().strip() == self.e.nombres.get(self.ident):
             return  # (el editingFinished puede llegar tarde: el elemento ya no es el mostrado, o ya no existe)
-        motivo = self.e.renombrar(self.ident, campo.text().strip())
+        if campo.isReadOnly():
+            return
+        if campo is self.m_etiqueta:
+            motivo = self.e.cambiar_nombre_macro(self.ident, campo.text().strip())
+        else:
+            motivo = self.e.renombrar(self.ident, campo.text().strip())
         if motivo:
             self.msg.setText(motivo)
             self.msg.show()

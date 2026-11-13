@@ -116,7 +116,6 @@ class RematesAccion(QObject):
             panel.accion.layout().removeWidget(etiqueta)
             lay.addWidget(etiqueta)
         panel.accion.frase.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        panel.accion.variable.setMaximumWidth(ancho_columna)
         raiz.insertWidget(raiz.indexOf(panel.cuerpo), self.cabecera)
         self.cabecera.hide()
         panel.cuerpo.installEventFilter(self)
@@ -129,8 +128,11 @@ class RematesAccion(QObject):
     def _columna(self):
         p = self.panel
         ancho = self.ancho_columna
+        if self.activa:
+            ancho = max(ancho, p.accion.variable.width())
         if self.activa and not p.accion.caja_fichas.isHidden():
-            pide = p.accion.variable.sizeHint().width() + p.accion.caja_fichas.sizeHint().width() + estilo.E2
+            selector = max(p.accion.variable.width(), p.accion.variable.sizeHint().width())
+            pide = selector + p.accion.caja_fichas.sizeHint().width() + estilo.E2
             ancho = max(ancho, pide)
         ancho = min(ancho, max(self.ancho_columna, p.cuerpo.width()))
         if p.izq.width() != ancho:

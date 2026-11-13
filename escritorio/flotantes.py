@@ -6,18 +6,29 @@ from typing import Any
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QTransform
 from PySide6.QtWidgets import (
-    QApplication,
+    QApplication, QLabel,
     QBoxLayout, QFrame, QHBoxLayout, QLayout, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
 from . import estilo
 from .diagrama import COL, Z_EDIT, caja_barra, orientaciones, posiciones
-from .paneles import TituloSeccion
+from .paneles import TituloSeccion, pintar_marcador
 from .propiedades import ANCHO_COLUMNA, PanelPropiedades
 
 AMPLIACION_MAXIMA = 1.25
 MEDIO_TRAZO = 0.8  # la mitad del trazo de 1,6 px de las cajas del dibujo
+SENAL_CONDICION = estilo.ACENTO
+SENAL_ACCION = estilo.TINTA_2
+ALFA_RESALTADO = 0.18
+
 MARCO = 1  # el borde de la ventana: el layout empieza dentro de él
+
+EVENTOS_FONDO = {
+    QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease, QEvent.Type.MouseButtonDblClick,
+    QEvent.Type.Wheel, QEvent.Type.ContextMenu, QEvent.Type.KeyPress, QEvent.Type.KeyRelease,
+    QEvent.Type.Shortcut, QEvent.Type.ShortcutOverride, QEvent.Type.DragEnter, QEvent.Type.DragMove,
+    QEvent.Type.Drop, QEvent.Type.TouchBegin, QEvent.Type.TouchUpdate, QEvent.Type.TouchEnd,
+}
 
 
 class Lupa(QWidget):
@@ -27,6 +38,7 @@ class Lupa(QWidget):
         super().__init__()
         self.vista = vista
         self.origen = QRectF()
+        self.senales: list[tuple[QRectF, str]] = []
         self.recorte: list[QRectF] = []  # rectángulos de la escena que se pintan; vacío: todo lo que cae en `origen`
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -75,10 +87,39 @@ class Lupa(QWidget):
                     zona = zona.united(trozo)
                 p.setClipPath(zona)
             escena.render(p, destino, self.origen, Qt.AspectRatioMode.IgnoreAspectRatio)
+            # El resaltado de cada parte, después del dibujo y multiplicando: el fondo blanco de la caja se tiñe (antes lo tapaba y
+            # solo asomaba un halo por fuera) y los trazos y el texto siguen negros. La marca, con un poco de holgura; la caja, justa.
+            p.setClipping(False)
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
+            p.setPen(Qt.PenStyle.NoPen)
+            for rectangulo, color in self.senales:
+                relleno = QColor(color)
+                relleno.setAlphaF(ALFA_RESALTADO)
+                p.setBrush(relleno)
+                zona = self.transformar().mapRect(rectangulo)
+                if color == SENAL_ACCION:
+                    p.drawRect(zona)
+                else:
+                    p.drawRoundedRect(zona.adjusted(-estilo.E1, -estilo.E1, estilo.E1, estilo.E1), estilo.R_M, estilo.R_M)
+            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         finally:
             for item in ocultos:
                 item.show()
             p.end()
+
+
+class TituloSenal(TituloSeccion):
+    """El cuadrado identifica la misma parte que la franja y el resaltado de la lupa."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.senal = estilo.ACENTO
+
+    def paintEvent(self, evento: Any) -> None:  # noqa: N802
+        QLabel.paintEvent(self, evento)
+        p = QPainter(self)
+        pintar_marcador(p, self.contentsMargins().left() + self.x_marcador, self.height() / 2, self.senal)
+        p.end()
 
 
 class PanelInterior(QFrame):
@@ -91,7 +132,8 @@ class PanelInterior(QFrame):
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(estilo.E3, estilo.E3, estilo.E3, estilo.E3)  # (más el borde de 1 px de la hoja)
         raiz.setSpacing(estilo.E2)  # T3
-        self.titulo = TituloSeccion()
+        self.senal: str | None = None
+        self.titulo = TituloSenal()
         self.titulo.setObjectName("tituloPropiedades")
         raiz.addWidget(self.titulo)
         self.scroll = QScrollArea()
@@ -108,6 +150,19 @@ class PanelInterior(QFrame):
         self.lay_cuerpo.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
         self.scroll.setWidget(self.cuerpo)
         self.setMinimumSize(0, 0)
+
+    def indicar_parte(self, color: str | None) -> None:
+        self.senal = color
+        self.titulo.senal = color or estilo.ACENTO
+        self.titulo.update()
+        self.update()
+
+    def paintEvent(self, evento: Any) -> None:  # noqa: N802
+        super().paintEvent(evento)
+        if self.senal is not None:
+            p = QPainter(self)
+            p.fillRect(QRect(1, estilo.R_M, 3, max(0, self.height() - 2 * estilo.R_M)), QColor(self.senal))
+            p.end()
 
     def alto_necesario(self, justo: bool = False) -> int:
         """Altura del contenido al ancho real, incluido el pie de fórmula y la cabecera. `justo`: lo que pide el contenido en su mínimo (la
@@ -128,7 +183,8 @@ class VentanaFlotante(QFrame):
     cerrar_pedido = Signal()
 
     def __init__(self, padre: QWidget, vista: QWidget) -> None:
-        super().__init__(padre)
+        super().__init__(padre, Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setWindowModality(Qt.WindowModality.WindowModal)
         self.setObjectName("ventanaFlotante")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
@@ -166,7 +222,7 @@ class VentanaFlotante(QFrame):
         self.cuerpo = QWidget()
         fila_cuerpo = QHBoxLayout(self.cuerpo)
         fila_cuerpo.setContentsMargins(estilo.E4 - MARCO, estilo.E4, estilo.E4 - MARCO, estilo.E4 - MARCO)
-        fila_cuerpo.setSpacing(estilo.E6)  # el hueco por el que cruzan las líneas de puntos
+        fila_cuerpo.setSpacing(estilo.E6)
         self.lupa = Lupa(vista)
         fila_cuerpo.addWidget(self.lupa)
         self.columna = QWidget()
@@ -179,34 +235,11 @@ class VentanaFlotante(QFrame):
         paneles.addWidget(self.accion, 1)
         fila_cuerpo.addWidget(self.columna, 1)
         raiz.addWidget(self.cuerpo, 1)
-        self.enlaces = _Enlaces(self.cuerpo)
         self.hide()
 
     def escalar(self) -> None:
         self.cabecera.setFixedHeight(estilo.ALTO_CONTROL + 2 * estilo.E2)
         self.b_cerrar.setFixedSize(estilo.ALTO_CONTROL, estilo.ALTO_CONTROL)
-
-
-class _Enlaces(QFrame):
-    """Una línea por parte del elemento ampliado, hasta el borde de su panel."""
-
-    def __init__(self, padre: QWidget) -> None:
-        super().__init__(padre)
-        self.setObjectName("enlacesFlotantes")
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.pares: list[tuple[QRectF, QRectF]] = []
-        self.inicios: list[QPointF] = []  # dónde sale cada línea (en coordenadas del cuerpo)
-        self.finales: list[QPointF] = []  # dónde acaba cada línea: en el borde izquierdo de su tarjeta
-
-    def paintEvent(self, evento: Any) -> None:  # noqa: N802
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        lapiz = QPen(QColor(COL["accent"]), 1.2)
-        lapiz.setDashPattern([5 / 1.2, 4 / 1.2])
-        p.setPen(lapiz)
-        for inicio, fin in zip(self.inicios, self.finales):
-            p.drawLine(inicio, fin)
-        p.end()
 
 
 class GestorFlotantes(QObject):
@@ -219,7 +252,6 @@ class GestorFlotantes(QObject):
         self.superficie = None
         self.panel: PanelPropiedades | None = None
         self.principal: VentanaFlotante | None = None
-        self.enlaces: _Enlaces | None = None
         self.geometrias: dict[str, QRect] = {}
         self._escala = None
         self._colocando = False
@@ -236,7 +268,6 @@ class GestorFlotantes(QObject):
         self.panel = PanelPropiedades(flotante=True)
         self.panel.setObjectName("panelPropiedadesFlotante")
         self.principal = VentanaFlotante(self.superficie, self.vista)
-        self.enlaces = self.principal.enlaces
         self.principal.accion.lay_cuerpo.addWidget(self.panel)
         self.panel.destino_bloques = self.principal.condicion.lay_cuerpo
         self.principal.cerrar_pedido.connect(lambda: self.w._mostrar_panel("inferior", False))
@@ -275,14 +306,16 @@ class GestorFlotantes(QObject):
         """¿Tiene el foco algo a medias que Esc cancela (el campo abierto sobre una pieza de los bloques, el desplegable sobre el dibujo)?"""
         return foco is not None and (hasattr(foco, "cancelado") or hasattr(foco, "cerrado"))
 
-    def _esc(self, evento: Any) -> bool:
+    def _esc(self, evento: Any, receptor: QObject) -> bool:
         """Esc con la ventana abierta: si hay un desplegable abierto, o un campo con algo que Esc cancela, o el foco está en otra ventana, lo
         suyo primero; si no, cierra la ventana (también con el foco en el dibujo: sin deseleccionar a la vez)."""
         if QApplication.activePopupWidget() is not None:
             return False
         foco = QApplication.focusWidget()
-        if foco is not None and foco.window() is not self.w:
-            return False
+        if foco is not None and foco.window() not in (self.w, self.principal):
+            if not isinstance(receptor, QWidget) or receptor.window() not in (self.w, self.principal):
+                return False
+            foco = receptor  # el foco global puede seguir en el contenedor del popup que acaba de cerrarse
         if self._cancela_con_esc(foco):
             return False
         if evento.type() == QEvent.Type.ShortcutOverride:
@@ -309,6 +342,8 @@ class GestorFlotantes(QObject):
         dividida = p._bloques_fuera
         v.titulo.setText(p.titulo.text())
         v.condicion.setVisible(dividida)
+        v.condicion.indicar_parte(SENAL_CONDICION if dividida else None)
+        v.accion.indicar_parte(SENAL_ACCION if dividida else None)
         v.accion.titulo.setText("Acción" if dividida else p.titulo.text().removeprefix("Propiedades · "))
         if dividida:
             evento = p.objetivo_bloques()[2] == "evento"
@@ -320,22 +355,45 @@ class GestorFlotantes(QObject):
         self.colocar()
         QTimer.singleShot(0, self.colocar)
 
+    def _bloquear_fondo(self, objeto: QObject, evento: Any) -> bool:
+        """También rechaza eventos enviados directamente, que eluden la modalidad nativa de Qt."""
+        if evento.type() not in EVENTOS_FONDO or not self.hay_ventanas():
+            return False
+        actual = objeto
+        while actual is not None:
+            if actual is self.principal:
+                return False
+            actual = actual.parent()
+        actual = objeto
+        while actual is not None and actual is not self.w:
+            actual = actual.parent()
+        if actual is None:
+            return False
+        evento.accept()
+        return True
+
     def eventFilter(self, objeto: QObject, evento: Any) -> bool:  # noqa: N802
         tipo = evento.type()
+        if objeto is self.w and tipo in (QEvent.Type.Hide, QEvent.Type.Close):
+            self.ocultar()
+            return False
         if self._vigilando and not self.principal.isVisible():  # (la ventana se cerró, o su aplicación: deja de vigilar)
             self._vigilar(False)
         if tipo in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress):
-            if (evento.key() == Qt.Key.Key_Escape and not evento.modifiers() and self.hay_ventanas() and self._esc(evento)):
+            es_esc = evento.key() == Qt.Key.Key_Escape and not evento.modifiers()
+            if es_esc and self.hay_ventanas() and self._esc(evento, objeto):
                 return True
-            return False
-        if tipo in (QEvent.Type.Resize, QEvent.Type.Move) and (objeto is self.superficie or objeto is self.w.paginas_es):
+            return self._bloquear_fondo(objeto, evento)
+        if self._bloquear_fondo(objeto, evento):
+            return True
+        if tipo in (QEvent.Type.Resize, QEvent.Type.Move) and objeto in (self.w, self.superficie, self.w.paginas_es):
             self.colocar()  # (el filtro de la aplicación, mientras la ventana está abierta, ve todos los objetos)
         return False
 
     def _area(self) -> QRect:
         """Toda el área de trabajo de la aplicación, incluidas las columnas laterales."""
         pagina = self.w.paginas_es
-        return QRect(pagina.mapTo(self.superficie, QPoint()), pagina.size())
+        return QRect(pagina.mapToGlobal(QPoint()), pagina.size())
 
     def _zonas(self) -> list[tuple[PanelInterior, QRectF]]:
         e, p, v = self.w.edicion, self.panel, self.principal
@@ -377,18 +435,21 @@ class GestorFlotantes(QObject):
             self._tamano = QSize(ancho, min(alto, disponible.height()))
 
     def _alto_formuladores(self, disponible: QRect) -> int:
-        """Todo el alto libre para los bloques de una condición, un evento o una receptividad; con un valor numérico de por medio, la mitad."""
-        p, v = self.panel, self.principal
+        """Un panel: alto de contenido acotado; condición/evento: área alta, repartida con el valor numérico."""
+        p = self.panel
         previa = min(12 * estilo.E4, max(8 * estilo.E4, disponible.width() // 6))
         vertical = disponible.width() - previa - 5 * estilo.E4 < 36 * estilo.E4
         numerica = p.accion.caja_numerica.isVisibleTo(p)
         cantidad = 2 if p._bloques_fuera and numerica else 1
-        if not numerica:  # transición, condición o evento: los bloques ven el máximo de variables (sin la fila «Fórmula» ni la frase sobra alto)
+        if not p._bloques_fuera:
+            filas = 11 if estilo.ESCALA == "grande" else 9
+            contenido = max(p.minimumSizeHint().height(), (filas + 2) * estilo.ALTO_CONTROL)
+            tope = max(1, disponible.height() - estilo.E6)
+            return min(tope, contenido + self._marco_ventana() + self._marco_tarjeta())
+        if not numerica:
             return disponible.height()
         fijos = self._marco_ventana() + cantidad * (self._marco_tarjeta() + 2 * estilo.E3)
-        if p._bloques_fuera and not numerica:
-            fijos += p.sizeHint().height() + 4 * estilo.E2
-        elif vertical and p.izq.isVisibleTo(p):
+        if vertical and p.izq.isVisibleTo(p):
             fijos += p.izq.sizeHint().height() + estilo.E3
         minimo = fijos + cantidad * 8 * estilo.E4
         alto = max(minimo, (disponible.height() + fijos) // 2)
@@ -404,8 +465,11 @@ class GestorFlotantes(QObject):
         p.cuerpo.layout().setDirection(direccion)
         p.cuerpo.layout().setSpacing(estilo.E3)
         p.layout().setContentsMargins(0, 0, 0, 0)
-        p.izq.setMinimumWidth(0 if vertical else ANCHO_COLUMNA)
-        p.izq.setMaximumWidth(16777215 if vertical else ANCHO_COLUMNA)
+        ancho_campos = max(ANCHO_COLUMNA, p.accion.variable.width()) if p.pagina == "accion" else ANCHO_COLUMNA
+        if p.pagina == "accion" and not p.accion.caja_fichas.isHidden():
+            ancho_campos = max(ancho_campos, p.accion.disposicion_variable.sizeHint().width())
+        p.izq.setMinimumWidth(0 if vertical else ancho_campos)
+        p.izq.setMaximumWidth(16777215 if vertical else ancho_campos)
         p.izq.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         p.cuerpo.layout().setAlignment(p.izq, Qt.AlignmentFlag.AlignTop)
         p.cuerpo.layout().setStretch(0, 0)
@@ -490,8 +554,19 @@ class GestorFlotantes(QObject):
             sitios.append(QRectF(z.right() - 1, y - grosor, origen.right() - z.right() + 1, 2 * grosor))
         return sitios
 
+    def _senales_lupa(self) -> None:
+        v, p = self.principal, self.panel
+        v.lupa.senales = []
+        if p._bloques_fuera:
+            caja = self.w.edicion.accion_en_id(p.ident)
+            if caja is not None:
+                if caja.get("marca"):
+                    v.lupa.senales.append((QRectF(*caja["marca"]), SENAL_CONDICION))
+                v.lupa.senales.append((QRectF(*caja["rect"]), SENAL_ACCION))
+        v.lupa.update()
+
     def colocar(self) -> None:
-        if self.principal is None or self._colocando or not self.principal.isVisible():
+        if self.principal is None or self._colocando or not self.principal.isVisible() or self.w.edicion is None:
             return
         self._colocando = True
         try:
@@ -512,26 +587,7 @@ class GestorFlotantes(QObject):
             v.lupa.origen = self._origen_lupa(zonas)
             v.lupa.recorte = self._recorte(v.lupa.origen)
             v.lupa.update()
-            self.enlaces.setGeometry(v.cuerpo.rect())
-            self.enlaces.pares = []
-            self.enlaces.finales = []
-            self.enlaces.inicios = []
-            caja = self.w.edicion.accion_en_id(self.panel.ident) if self.panel._bloques_fuera else None
-            for panel, r in (zonas if len(zonas) == 2 else []):  # (las líneas de puntos, solo con dos paneles: condición o evento, y acción)
-                parte = v.lupa.transformar().mapRect(r).translated(v.lupa.pos())
-                destino = QRectF(panel.rect()).translated(panel.mapTo(v.cuerpo, panel.rect().topLeft()))
-                self.enlaces.pares.append((parte, destino))
-                if panel is v.condicion and caja is not None and caja.get("marca"):  # sale de la esquina superior izquierda de la marca
-                    esquina = v.lupa.transformar().map(QPointF(*caja["marca"][:2])) + QPointF(v.lupa.pos())
-                    self.enlaces.inicios.append(esquina)
-                else:
-                    self.enlaces.inicios.append(QPointF(parte.right(), parte.center().y()))
-                # termina sobre el borde izquierdo de la tarjeta, a la altura de su título (sin entrar en las esquinas redondeadas)
-                y = panel.titulo.mapTo(v.cuerpo, panel.titulo.rect().center()).y()
-                y = min(max(y, destino.top() + estilo.R_M), destino.bottom() - estilo.R_M)
-                self.enlaces.finales.append(QPointF(destino.left(), y))
-            self.enlaces.raise_()
-            self.enlaces.update()
+            self._senales_lupa()
             v.raise_()
         finally:
             self._colocando = False

@@ -23,7 +23,7 @@ from __future__ import annotations
 from html import escape as _escapar
 from typing import Any, Callable
 
-from PySide6.QtCore import Qt, QRect, QRectF
+from PySide6.QtCore import QEvent, Qt, QRect, QRectF
 from PySide6.QtGui import QColor, QPainter, QPen, QFont, QTextDocument
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
                                QPushButton, QVBoxLayout, QWidget, QStylePainter, QStyleOptionComboBox, QStyleOptionFrame, QStyle)
@@ -36,12 +36,16 @@ from .variables import nombre_tipo
 from .paneles import EtiquetaElidida
 from .remates_propiedades import FilaValor
 
+ANCHO_MAX_VARIABLE = 260
+
 SIN_VARIABLES = "(sin variables: créelas en la tabla de variables)"  # la lista de variables, si no hay ninguna que valga
 TIPO_CORTO = {"bool": "Bool", "int": "Ent", "decimal": "Dec", "duration": "Dur"}  # el tipo en la lista de variables de la acción
 ALTO_SELECTOR = 62  # alto del selector de variable (dibujado como una caja de acción); nada debe dejarlo por debajo
 ESTILO_FICHA = (f"QPushButton {{ background: {COLORES['comparacion']}; color: white; font-weight: 600; border: 2px solid "
                 f"transparent; border-radius: {estilo.R_M}px; padding: 4px 24px; }}"
-                f"QPushButton:checked {{ border: 3px solid {estilo.AVISO_BORDE}; }}")
+                f"QPushButton:checked {{ border: 3px solid {estilo.AVISO_BORDE}; }}"
+                f"QPushButton:disabled {{ background: {estilo.FONDO}; color: {estilo.DESHABILITADO}; "
+                f"border: 2px solid {estilo.BORDE}; }}")
 
 
 
@@ -113,6 +117,11 @@ class _ComboVariable(QComboBox):
         super().__init__()
         self.al_poner: Callable[[str], None] | None = None
 
+    def changeEvent(self, evento) -> None:  # noqa: N802
+        super().changeEvent(evento)
+        if evento.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange) and self.count():
+            self.ajustar_ancho()
+
     def rectangulo_texto(self):
         opcion = QStyleOptionComboBox()
         self.initStyleOption(opcion)
@@ -143,13 +152,23 @@ class _ComboVariable(QComboBox):
             self.setToolTip(texto)
 
     def ancho_lista(self) -> int:
-        """Lo que mide la lista desplegada: el ancho del desplegable o, si alguna opción no cabe, lo justo para la más larga (su
-        texto, el margen de la vista y la barra de desplazamiento): nada sale recortado con «…»."""
+        """La lista conserva el ancho de la caja si cabe, o crece para leer las opciones enteras."""
         vista = self.view()
-        fm = vista.fontMetrics()
-        texto = max((fm.horizontalAdvance(self.itemText(i)) for i in range(self.count())), default=0)
+        texto = max((vista.fontMetrics().horizontalAdvance(self.itemText(i)) for i in range(self.count())), default=0)
         extra = 2 * estilo.E3 + vista.verticalScrollBar().sizeHint().width() + 2 * vista.frameWidth()
         return max(self.width(), texto + extra)
+
+    def ajustar_ancho(self) -> None:
+        """Reserva el nombre, el tipo de la lista, la flecha y los márgenes; la caja tiene tope de 260 px."""
+        texto = max((self.view().fontMetrics().horizontalAdvance(self.itemText(i))
+                     for i in range(self.count())), default=0)
+        extra_lista = 2 * estilo.E3 + self.view().verticalScrollBar().sizeHint().width() + 2 * self.view().frameWidth()
+        nombre = max((self.fontMetrics().horizontalAdvance(self.itemData(i))
+                      for i in range(self.count())
+                      if isinstance(self.itemData(i), str) and self.itemData(i)), default=0)
+        extra_caja = 26 + 4 * estilo.E2 + estilo.ALTO_CONTROL
+        self.setFixedWidth(min(ANCHO_MAX_VARIABLE, max(120, texto + extra_lista, nombre + extra_caja)))
+        self.updateGeometry()
 
     def showPopup(self) -> None:  # noqa: N802
         self.view().setMinimumWidth(self.ancho_lista())
@@ -328,6 +347,7 @@ class PanelAccion(QWidget):
                 c.model().item(c.count() - 1).setEnabled(False)
         c.setCurrentIndex(max(0, c.findData(self._elegida)))
         c.blockSignals(False)
+        c.ajustar_ancho()
 
     def _tipo_variable(self) -> str:
         """El tipo (bool, int…) de la variable elegida; vacío si no hay."""
@@ -343,7 +363,10 @@ class PanelAccion(QWidget):
         for etiqueta in (self.l_valor, self.l_fichas):
             etiqueta.setText(f"{self._elegida or '?'} :=")
         self.caja_valor.setVisible(not continua)
-        booleana = self._tipo_variable() == "bool"
+        booleana = self._tipo_variable() in ("", "bool")
+        for boton in self.fichas.values():
+            boton.setEnabled(bool(self._elegida))
+            boton.setToolTip("" if self._elegida else "Elija primero la variable de la acción")
         self.caja_fichas.setVisible(not continua and booleana)
         self.caja_valor.setMaximumWidth(0 if booleana else 16777215)
         self.caja_numerica.setVisible(not continua and not booleana)

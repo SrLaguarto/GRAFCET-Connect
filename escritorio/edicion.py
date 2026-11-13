@@ -3758,32 +3758,47 @@ class Edicion(QObject):
             f"Recintos de la encapsulante {self._nom(sid)}: {', '.join(self._nom(r) for r in recintos)}"
         return bool(recintos) and self.encuadrar(recintos, nom)
 
-    def renombrar_macro(self, mid: str) -> str | None:
-        """«Renombrar…» en una macroetapa: pide el nombre y cambia el de la macroetapa y, si se llamaba igual que ella (lo que
-        pone la ficha «Macroetapa»), el de su expansión, para que el nombre siga único; el texto de las fórmulas que la usan
-        se actualiza (`rename`). Una sola operación de deshacer. Devuelve el nuevo nombre, o None."""
+    def renombrar_macro(self, mid: str, nuevo: str | None = None) -> str | None:
+        """Pide o aplica el nombre de la macroetapa, su expansión y sus E/S, en una sola operación."""
         mac = next((x for x in self.ed.model["hierarchy"]["macros"] if x["id"] == mid), None)
         if mac is None:
             return None
         actual = mac["label"]
-        nuevo = self.pedir_texto("Renombrar la macroetapa", f"Nuevo nombre de la macroetapa {actual}:", actual)
+        if nuevo is None:
+            nuevo = self.pedir_texto("Renombrar la macroetapa", f"Nuevo nombre de la macroetapa {actual}:", actual)
         if nuevo is None or nuevo.strip() == actual:
             return None
         nuevo = nuevo.strip()
-
-        def hacer() -> None:
-            info = self.ed.macro_info(mid)
-            con_ella = next(p["label"] for p in self.ed.model["partials"] if p["id"] == info.partial) == actual
-            self.ed.rename(mid, nuevo)
-            if con_ella:
-                self.ed.rename(info.partial, nuevo)
-        motivo = self._atomico("renombrar la macroetapa", hacer)
+        motivo = self.cambiar_nombre_macro(mid, nuevo)
         if motivo:
             self.rechazar(motivo, mid)
-            self.cambiado.emit()
             return None
-        self.cambiado.emit()
         return nuevo
+
+    def cambiar_nombre_macro(self, mid: str, nuevo: str) -> str | None:
+        """Renombra M y solo las E/S que seguían su sufijo; un rechazo conserva íntegro el documento."""
+        mac = next(x for x in self.ed.model["hierarchy"]["macros"] if x["id"] == mid)
+        actual = mac["label"]
+        info = self.ed.macro_info(mid)
+        sufijo = actual.removeprefix("M")
+        nuevo_sufijo = nuevo.removeprefix("M")
+        arrastradas = []
+        for sid, prefijo in ((info.entry, "E"), (info.exit, "S")):
+            etapa = next(s for s in self.ed.model["steps"] if s["id"] == sid)
+            if etapa["label"] == prefijo + sufijo:
+                arrastradas.append((sid, prefijo + nuevo_sufijo))
+        con_ella = next(p["label"] for p in self.ed.model["partials"] if p["id"] == info.partial) == actual
+
+        def hacer() -> None:
+            self.ed.rename(mid, nuevo)
+            for sid, nombre in arrastradas:
+                self.ed.rename(sid, nombre)
+            if con_ella:
+                self.ed.rename(info.partial, nuevo)
+
+        motivo = self._atomico("renombrar la macroetapa", hacer)
+        self.cambiado.emit()
+        return motivo
 
     # -- la ficha de jerarquía: lo que el botón derecho y el panel de opciones ofrecen de un mismo elemento ---------------
     def acciones_jerarquia(self, ident: str) -> list[tuple[str, Callable[[], Any], bool | None]]:

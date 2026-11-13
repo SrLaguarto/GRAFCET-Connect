@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 try:
     from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSettings, Qt
     from PySide6.QtGui import QWheelEvent
-    from PySide6.QtWidgets import QApplication, QPushButton, QToolButton
+    from PySide6.QtWidgets import QApplication, QPushButton, QToolButton, QWidget
     from tools import hoja_contactos as HC
     from escritorio import bloques, estilo
     from escritorio.flotantes import AMPLIACION_MAXIMA, VentanaFlotante
@@ -52,7 +52,7 @@ class PropiedadesFlotante(unittest.TestCase):
         return [v for v in self.w.findChildren(VentanaFlotante) if v.isVisible()]
 
     def comprobar_colocacion(self, numero):
-        """Centrada, con margen de 24 px y, con dos paneles, una línea por panel desde su parte ampliada (con uno solo, ninguna)."""
+        """Centrada, con margen de 24 px, recorte propio y sin la antigua capa de líneas."""
         f = self.w.flot
         v = f.principal
         area = f._area()
@@ -60,15 +60,9 @@ class PropiedadesFlotante(unittest.TestCase):
         self.assertTrue(area.adjusted(24, 24, -24, -24).contains(v.geometry()))
         self.assertLessEqual(abs(v.geometry().center().x() - area.center().x()), 1)
         self.assertLessEqual(abs(v.geometry().center().y() - area.center().y()), 1)
-        self.assertTrue(f.enlaces.isVisible())
-        zonas = f._zonas()
-        self.assertEqual(len(f.enlaces.pares), numero)
-        for (panel, original), (parte, destino) in zip(zonas, f.enlaces.pares):
-            esperado = v.lupa.transformar().mapRect(original).translated(v.lupa.pos())
-            self.assertEqual(parte, esperado)
+        self.assertFalse(v.findChildren(QWidget, "enlacesFlotantes"))
+        for panel, original in f._zonas():
             self.assertTrue(v.lupa.origen.contains(original))
-            self.assertEqual(destino.topLeft().toPoint(), panel.mapTo(v.cuerpo, QPoint()))
-            self.assertLess(parte.right(), destino.left())
 
     # -- SPFL01
     def test_SPFL01_modo_en_ver_y_persistencia(self):
@@ -104,7 +98,8 @@ class PropiedadesFlotante(unittest.TestCase):
         self.assertTrue(self.w.props.parent() is not None)
         self.assertFalse(self.w._plegables["inferior"].isVisible(), "la barra inferior no se usa")
         self.comprobar_colocacion(0)
-        self.assertFalse(v.isWindow())
+        self.assertTrue(v.isWindow())
+        self.assertEqual(v.windowModality(), Qt.WindowModality.WindowModal)
 
     def test_SPFL03_doble_clic_en_transicion_abre_ventana_unida(self):
         """REQ-EDT-02: doble clic en una transición (flotante): ventana con la receptividad (programador por bloques),
@@ -227,8 +222,8 @@ class PropiedadesFlotante(unittest.TestCase):
 
     # -- SPFL09
     def test_SPFL09_fijar_y_cerrar(self):
-        """REQ-EDT-02: sin «Fijar», un clic en otro elemento cierra la ventana; con «Fijar» sigue y muestra el elemento
-        nuevo; «✕» la cierra."""
+        """REQ-EDT-02: un cambio programático de selección actualiza el estado fijado; «✕» cierra.
+        La interacción del usuario con el fondo está bloqueada por la modalidad (SPF101)."""
         s0, t0 = self.ids["etapas"][0], self.ids["transiciones"][0]
         self.abrir([s0])
         self.assertEqual(len(self.ventanas()), 1)
@@ -542,26 +537,18 @@ class PropiedadesFlotante(unittest.TestCase):
                 self.assertEqual(grises, 0, "ningún fondo gris anidado dentro de la tarjeta")
             self.assertEqual(fondos, {estilo.SUPERFICIE_2}, "el mismo fondo en todas las tarjetas")
 
-    def test_SPFL25_lupa_con_marco_hueco_y_lineas_hasta_la_tarjeta(self):
-        """REQ-EDT-09: la lupa es una tarjeta con borde, el hueco hasta las tarjetas es E5 (24 px) y cada línea de
-        puntos acaba sobre el borde izquierdo de su tarjeta, nunca en el vacío."""
+    def test_SPFL25_lupa_con_marco_hueco_y_senales_de_tarjeta(self):
+        """REQ-EDT-09: la lupa conserva borde y hueco E6; las señales sustituyen a las líneas."""
         for c, v in self.casos():
             f = c.w.flot
             imagen = v.lupa.grab().toImage()
             self.assertEqual(self.color(imagen, 0, v.lupa.height() // 2), estilo.BORDE)
             self.assertEqual(self.color(imagen, estilo.E1, v.lupa.height() // 2), estilo.SUPERFICIE)
             self.assertEqual(v.columna.geometry().left() - v.lupa.geometry().right() - 1, estilo.E6)
-            zonas = f._zonas()
-            self.assertEqual(len(f.enlaces.finales), len(zonas) if len(zonas) == 2 else 0)
-            for (tarjeta, _), (parte, destino), fin in zip(zonas, f.enlaces.pares, f.enlaces.finales):
-                izq = tarjeta.mapTo(v.cuerpo, QPoint()).x()
-                alto = tarjeta.mapTo(v.cuerpo, QPoint()).y()
-                self.assertLessEqual(abs(fin.x() - izq), 1, "acaba en el borde izquierdo de la tarjeta")
-                self.assertTrue(alto <= fin.y() <= alto + tarjeta.height(), "dentro del alto de la tarjeta")
-                titulo = tarjeta.titulo.mapTo(v.cuerpo, tarjeta.titulo.rect().center()).y()
-                self.assertLessEqual(abs(fin.y() - titulo), 1, "a la altura de la línea del título")
-                self.assertLess(parte.right(), fin.x())
-                self.assertTrue(v.lupa.geometry().contains(parte.toRect().center()), "sale de la parte ampliada")
+            self.assertFalse(v.findChildren(QWidget, "enlacesFlotantes"))
+            if v.condicion.isVisible():
+                self.assertEqual([color for _, color in v.lupa.senales],
+                                 [v.condicion.senal, v.accion.senal])
 
     def test_SPFL26_ningun_texto_recortado(self):
         """REQ-EDT-02: el texto de cada etiqueta y botón visible cabe en su ancho, o acaba en «…» con ayuda emergente."""
@@ -613,25 +600,12 @@ class PropiedadesFlotante(unittest.TestCase):
                 oscuros = [px for px in range(int(r.left() - 2)) if imagen.pixelColor(px, int(r.center().y())).lightness() < 100]
                 self.assertTrue(oscuros, "el trazo de unión de la primera acción se ve")
 
-    def test_SPFL28_linea_de_condicion_sale_de_la_esquina_de_la_marca(self):
-        """REQ-EDT-09: la línea de la condición o del evento sale de la esquina superior izquierda de la marca ampliada
-        y no cruza el texto de la marca ni la caja."""
+    def test_SPFL28_senales_de_condicion_y_accion_coinciden_con_sus_partes(self):
+        """REQ-EDT-09: cada resaltado de la lupa corresponde al rectángulo real y al color de su tarjeta."""
         for c, v in self.casos(("evento", "condicionada")):
-            f = c.w.flot
-            caja = c.e.accion_en_id(f.panel.ident)
-            t = v.lupa.transformar()
-            marca = t.mapRect(QRectF(*caja["marca"])).translated(QPointF(v.lupa.pos()))
-            ini, fin = f.enlaces.inicios[0], f.enlaces.finales[0]
-            self.assertLessEqual(abs(ini.x() - marca.left()), 1)
-            self.assertLessEqual(abs(ini.y() - marca.top()), 1)
-            x, y, w, h = caja["rect"]
-            cajaw = t.mapRect(QRectF(x, y, w, h)).translated(QPointF(v.lupa.pos()))
-            for rect in (marca.adjusted(2, 2, -2, -2), cajaw.adjusted(2, 2, -2, -2)):
-                for i in range(1, 200):
-                    p = ini + (fin - ini) * (i / 200)
-                    self.assertFalse(rect.contains(p), ("la línea cruza el elemento", p, rect))
-            accion = f.enlaces.inicios[1]
-            self.assertLessEqual(abs(accion.x() - cajaw.right()), 6, "la de la acción sigue saliendo de su borde derecho")
+            caja = c.e.accion_en_id(c.w.flot.panel.ident)
+            self.assertEqual(v.lupa.senales, [(QRectF(*caja["marca"]), v.condicion.senal),
+                                             (QRectF(*caja["rect"]), v.accion.senal)])
 
     # -- encargo 18: ventana más limpia (sin fila Fórmula, aviso ni frase), más alto para los bloques, grupos plegables, lupa recortada y Esc
     def con_entradas(self, c, n=8):
@@ -705,7 +679,7 @@ class PropiedadesFlotante(unittest.TestCase):
 
     def test_SPFL31_area_de_bloques_alta_y_sin_desplazamiento_evitable(self):
         """REQ-EDT-02: el área de bloques de la ventana flotante ve al menos 6 fichas de variables a 1366×768 y el doble aproximadamente a
-        2000×1250, y las tarjetas no se desplazan."""
+        2000×1250 con dos paneles; la transición limita el alto. Las tarjetas no se desplazan."""
         vistas = {}
         for ancho, alto in ((1366, 768), (2000, 1250)):
             for tipo in ("condicionada", "evento", "transicion"):
@@ -724,14 +698,17 @@ class PropiedadesFlotante(unittest.TestCase):
                     c.cerrar()
         for tipo in ("condicionada", "evento", "transicion"):
             self.assertGreaterEqual(vistas[(1366, tipo)], 6, vistas)
-            self.assertGreaterEqual(vistas[(2000, tipo)], int(vistas[(1366, tipo)] * 1.6), vistas)
+            if tipo == "transicion":
+                self.assertLessEqual(vistas[(1366, tipo)], 10, vistas)
+                self.assertGreater(vistas[(2000, tipo)], vistas[(1366, tipo)], vistas)
+            else:
+                self.assertGreaterEqual(vistas[(2000, tipo)], int(vistas[(1366, tipo)] * 1.6), vistas)
 
-    def test_SPFL32_lineas_de_puntos_solo_con_dos_paneles(self):
-        """REQ-EDT-09: sin línea de puntos en etapa, transición ni acciones de un solo panel; dos líneas en condicionada y evento."""
+    def test_SPFL32_sin_lineas_y_senales_solo_con_dos_paneles(self):
+        """REQ-EDT-09: no hay líneas; las dos señales solo aparecen con condición o evento."""
         for c, v in self.casos(("etapa", "transicion", "activacion", "condicionada", "evento")):
-            esperadas = 2 if v.condicion.isVisible() else 0
-            f = c.w.flot
-            self.assertEqual((len(f.enlaces.pares), len(f.enlaces.finales), len(f.enlaces.inicios)), (esperadas,) * 3)
+            self.assertFalse(v.findChildren(QWidget, "enlacesFlotantes"))
+            self.assertEqual(len(v.lupa.senales), 2 if v.condicion.isVisible() else 0)
 
     def mover_etapa(self, c, ident, y):
         for s in c.e.ed.model["steps"]:

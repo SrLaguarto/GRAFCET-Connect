@@ -6788,7 +6788,8 @@ class Interfaz(unittest.TestCase):
         e.pedir_texto = lambda *args: "Lavado"
         izq.botones["Renombrar…"].click()
         self.assertEqual(e.nombres[mid], "Lavado")
-        self.assertEqual(izq.texto.text(), "Macroetapa Lavado · expansión Lavado · entrada E1 · salida S1")
+        self.assertEqual(izq.texto.text(),
+                         "Macroetapa Lavado · expansión Lavado · entrada ELavado · salida SLavado")  # F5
         e.seleccionar([fid])
         e.pedir_forzado = lambda datos: {"destino": r, "forma": "empty", "etapas": []}
         izq.botones["Editar orden de forzado…"].click()
