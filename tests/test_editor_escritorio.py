@@ -305,6 +305,7 @@ class Interfaz(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         from escritorio.ventana import Ventana
         self.w = Ventana(QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat))
+        self.w._cambiar_modo_propiedades("abajo")  # (estas pruebas dan por hecha la barra inferior; el defecto es «flotante»)
 
     def tearDown(self):
         self.w.a_ejecutar.setChecked(False)

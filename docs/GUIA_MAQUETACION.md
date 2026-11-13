@@ -32,7 +32,9 @@ Origen: decisión del responsable del 12-nov-2026, tras varias rondas de retoque
   con el anillo de foco. Dentro de tablas y listas miden lo que la fila.
 - **C2. El texto cabe.** El texto de un botón, etiqueta, desplegable o celda se lee entero dentro de su caja. Si no puede
   caber, se acorta con «…» y la ayuda emergente lo da entero; nunca se corta a medias.
-- **C3. Contenido centrado.** El icono y el texto de un botón van centrados en él (también los de ancho fijo, como Play).
+- **C3. Contenido centrado.** El icono y el texto de un botón van centrados en él (también los de ancho fijo, como Play):
+  la diferencia entre el hueco izquierdo y el derecho de su contenido no pasa de 2 px. Lo garantiza `escritorio/estilo_botones.py`
+  para los botones de herramientas y lo comprueba SAUD19.
 - **C4. Botón ancho centrado.** Un botón que ocupa el ancho de su caja (p. ej. «+ Añadir hoja») deja el mismo margen a izquierda
   y derecha (M4), ±1 px.
 - **C5. Ancho justo para cifras.** Un campo numérico mide lo que pide su mayor valor más las flechas (puerto, 5 cifras;

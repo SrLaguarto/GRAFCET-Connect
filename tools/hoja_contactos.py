@@ -77,6 +77,7 @@ class Contexto:
         from escritorio.ventana import Ventana
         self.tmp = tempfile.TemporaryDirectory()
         self.w = Ventana(QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat))
+        self.w._cambiar_modo_propiedades("abajo")  # (las pantallas parten de la barra inferior; el defecto del programa es «flotante»)
         self.w.nuevo()
         self.e = self.w.edicion
         self.e.ed.dirty = False

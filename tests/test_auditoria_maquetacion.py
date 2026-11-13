@@ -533,5 +533,58 @@ class Auditoria(unittest.TestCase):
             self.assertTrue(a and b and len(motivo) > 15, (a, b))
 
 
+# Botones cuyo contenido no va centrado a propósito (guía C3): clase -> motivo.
+SIN_CENTRAR: dict[str, str] = {
+    "_BotonEntrada": "la entrada de la simulación alinea a la izquierda su icono de estado y su nombre, como las filas de una lista (varias líneas si el nombre es largo)",
+}
+
+
+@unittest.skipUnless(QT, "requiere PySide6")
+class CentradoBotones(unittest.TestCase):
+    """Guía C3: el icono y el texto de un botón van centrados en él (también los de ancho fijo), en cualquier plataforma de estilo."""
+
+    @staticmethod
+    def huecos(boton, ventana):
+        """Hueco entre el borde del botón y la tinta de su contenido, a izquierda y derecha, sobre la imagen de la ventana ya compuesta
+        (el fondo es el color interior del botón, sin su borde: se toma por dentro, bajo el borde)."""
+        img = ventana.copy(QRect(boton.mapTo(boton.window(), QPoint(0, 0)), boton.size()))
+        ancho, alto = img.width(), img.height()
+        fondo = img.pixelColor(ancho // 2, 3)
+
+        def tinta(c):
+            return abs(c.red() - fondo.red()) + abs(c.green() - fondo.green()) + abs(c.blue() - fondo.blue()) > 60
+
+        xs = [x for x in range(3, ancho - 3) if any(tinta(img.pixelColor(x, y)) for y in range(alto // 4, alto - alto // 4))]
+        return (xs[0], ancho - 1 - xs[-1]) if xs else None
+
+    def test_SAUD19_C3_contenido_de_los_botones_centrado(self):
+        """REQ-UX-01 (guía C3): en Edición y en Simulación, a los tres tamaños, la tinta del contenido de cada botón visible con texto o icono
+        (de 24 px de ancho o más) queda centrada: |hueco izquierdo - hueco derecho| <= 2 px."""
+        HC.aplicacion()
+        malos = []
+        medidos = 0
+        for ancho, alto in TAMANOS:
+            for nombre, c in HC.recorrer(ancho, alto, ["edicion", "simulacion"]):
+                ventana = c.w.grab().toImage()
+                for b in c.w.findChildren(QAbstractButton):
+                    if not b.isVisible() or b.width() < 24 or not (b.text() or not b.icon().isNull()):
+                        continue
+                    if type(b).__name__ in SIN_CENTRAR:
+                        continue
+                    h = self.huecos(b, ventana)
+                    if h is None:
+                        continue
+                    medidos += 1
+                    if abs(h[0] - h[1]) > 2:
+                        malos.append(f"{ancho}×{alto} · {nombre}: {type(b).__name__}#{b.objectName()} «{b.text()}» {h[0]}/{h[1]}")
+        self.assertGreater(medidos, 60)
+        self.assertEqual(malos, [], f"{len(malos)} botones sin centrar\n" + "\n".join(malos[:40]))
+
+    def test_SAUD20_las_excepciones_de_centrado_llevan_motivo(self):
+        """REQ-UX-01: cada excepción de C3 lleva su motivo."""
+        for clase, motivo in SIN_CENTRAR.items():
+            self.assertTrue(clase and len(motivo) > 15, clase)
+
+
 if __name__ == "__main__":
     unittest.main()

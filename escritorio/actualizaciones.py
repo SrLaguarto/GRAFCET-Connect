@@ -4,8 +4,9 @@ La consulta va en un hilo aparte (nunca bloquea la interfaz), con 5 s de espera 
 con el agente «GRAFCET-Connect/<versión>»: ningún dato personal ni del proyecto. Si falla por cualquier motivo (sin Internet,
 proxy, límite de peticiones, JSON roto), en el arranque no se hace nada; la comprobación manual sí informa.
 
-Ajustes (QSettings): `actualizaciones/al_arrancar` (bool, por defecto sí) y `actualizaciones/ignorada` (la última versión que
-el usuario descartó con «Ahora no»; en el arranque no se vuelve a avisar de ella).
+Ajustes (QSettings): `actualizaciones/al_arrancar` (bool, por defecto sí). El aviso (`aviso_version.DialogoVersionNueva`) vuelve a salir
+en cada arranque mientras haya versión nueva: «Ahora no» no guarda nada. `actualizaciones/ignorada` es de una versión anterior; el
+arranque ya no la consulta (`ignorada` e `ignorar` quedan por compatibilidad).
 
 El acceso a la red es inyectable (`obtener(url, agente, espera) -> str`) para que las pruebas no toquen Internet. El arranque
 no consulta si la variable de entorno GRAFCONNECT_SIN_ACTUALIZAR tiene algún valor, ni con --captura ni con las opciones

@@ -76,6 +76,7 @@ class AjustesYAvisos(BaseQt):
         self.w.edicion = None
         self.w.deleteLater()
         self.w = Ventana(QSettings(str(ruta), QSettings.Format.IniFormat))
+        self.w._cambiar_modo_propiedades("abajo")  # (estas pruebas dan por hecha la barra inferior; el defecto es «flotante»)
         d = self.w._leer_parametros_recordados()
         self.assertEqual((d["host"], d["canales"]), ("10.0.0.7", CANALES_INICIALES))
         w, p = test_pulido_es.PulidoES.modelo(self)
