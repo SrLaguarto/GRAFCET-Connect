@@ -175,13 +175,13 @@ QTabBar#pestanasVistas[tecl="true"]::tab:selected:focus { border:2px dashed $foc
 
 QWidget#bandaModo { background:transparent; }  /* (el enlace lo pinta `paneles.BandaModo`, con `edicion` o `simulacion` según su propiedad `modo`) */
 QToolButton#luzES { border:1px solid $borde_control; border-radius:${radio_pastilla}px; background:$superficie; color:$tinta;
-    padding:0 14px 0 10px; min-height:${alto_pastilla}px; font-weight:400; }
+    padding:0 12px; min-height:${alto_pastilla}px; font-weight:400; }
 QToolButton#luzES:hover { background:$hover; border-color:$tinta_2; }
 QToolButton#luzES:pressed { background:$pulsado; }
-QToolButton#luzES[tecl="true"]:focus { border:2px dashed $foco; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; }
+QToolButton#luzES[tecl="true"]:focus { border:2px dashed $foco; padding:0 11px; min-height:${alto_pastilla_foco}px; }
 QToolButton#luzES[estadoLuz="conectada"] { border:1px solid $ok; }
-QToolButton#luzES[estadoLuz="error"] { background:$error_fondo; border:2px solid $error; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; }
-QToolButton#luzES[abierta="true"] { background:$blanco; border:2px solid $tinta; padding:0 13px 0 9px; min-height:${alto_pastilla_foco}px; font-weight:700; }  /* P-IMP-126: fondo blanco, borde oscuro, negrita */
+QToolButton#luzES[estadoLuz="error"] { background:$error_fondo; border:2px solid $error; padding:0 11px; min-height:${alto_pastilla_foco}px; }
+QToolButton#luzES[abierta="true"] { background:$blanco; border:2px solid $tinta; padding:0 11px; min-height:${alto_pastilla_foco}px; font-weight:700; }  /* P-IMP-126: fondo blanco, borde oscuro, negrita */
 QWidget#herramientasGrafcet { background:$superficie; border-bottom:1px solid $borde; }
 QToolBar { background:transparent; border:0; spacing:8px; padding:0; margin:0; }
 QToolBar QToolButton { min-height:${alto_tb_c}px; padding:0 12px; border:1px solid transparent; border-radius:${r_s}px; color:$tinta; background:transparent; }

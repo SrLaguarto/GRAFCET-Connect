@@ -66,7 +66,7 @@ Descargue el instalador de la última versión: [GRAFCET-Connect-setup.exe](http
 - **Requisitos:** Windows 10 o Windows 11 de 64 bits. No necesita conexión a internet para funcionar.
 - **Instalación:** por defecto se instala en Archivos de programa, lo que pide permisos de administrador. Si no los tiene, el instalador ofrece instalarlo solo para su usuario. Crea el acceso en el menú Inicio, ofrece un acceso en el escritorio (desmarcado por defecto) y asocia los archivos `.grafnet` (marcado por defecto).
 - **Aviso de Windows:** la primera vez puede aparecer «Windows protegió su PC», porque el programa no lleva firma digital de código. Pulse «Más información» y después «Ejecutar de todas formas». Esto ocurre también con el instalador.
-- **Actualizaciones:** al arrancar, el programa consulta en segundo plano si hay una versión nueva publicada en GitHub y avisa en la barra de estado, con «Descargar» o «Ahora no». Se desactiva en **Ajustes > Buscar actualizaciones al arrancar**. Sin conexión no hace nada, y no descarga ni instala nada. **Ayuda > Buscar actualizaciones…** comprueba a mano.
+- **Actualizaciones:** al arrancar, el programa consulta en segundo plano si hay una versión nueva publicada en GitHub y lo avisa con una ventana con «Descargar» y «Ahora no»; «Ahora no» solo la cierra, y vuelve a salir en cada arranque hasta que se actualice. Se desactiva en **Ajustes > Buscar actualizaciones al arrancar**. Sin conexión no hace nada, y no descarga ni instala nada. **Ayuda > Buscar actualizaciones…** comprueba a mano.
 - **Desinstalación:** desde Configuración > Aplicaciones.
 
 ## Primeros pasos

@@ -30,10 +30,12 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
 
 from . import recursos_ui  # Registra los iconos vectoriales incorporados.
 from . import estilo
+from . import estilo_botones
 from .laminas import VistaLamina
 from .estilo import _trazos_reinicio  # noqa: F401  (las pruebas lo leen desde aquí)
 from . import propiedades_archivo
 from . import actualizaciones
+from .aviso_version import DialogoVersionNueva
 from grafcet.diagnostics import DiagnosticError
 from grafcet.engine import Session
 from grafcet.examples import EJEMPLOS
@@ -587,6 +589,7 @@ class _RespuestaModbus(QObject):
 
 class Ventana(ArchivosProyecto, QMainWindow):
     def __init__(self, ajustes: QSettings | None = None, obtener=None) -> None:
+        estilo_botones.instalar()  # (iconos y textos de los botones de herramientas, centrados; una sola vez)
         super().__init__()
         self.setWindowTitle(TITULO)
         self.resize(1360, 860)
@@ -702,6 +705,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._paneles()
         self.panel_es.estado_cambiado.connect(self._luz_es)
         self._version_nueva: actualizaciones.Resultado | None = None
+        self._dialogo_version: DialogoVersionNueva | None = None
         self.comprobador = actualizaciones.Comprobador(self, obtener)
         self.comprobador.resultado.connect(self._resultado_actualizacion)
         self.nuevo()
@@ -805,15 +809,16 @@ class Ventana(ArchivosProyecto, QMainWindow):
         ver.addAction(self.a_izquierdo)
         ver.addAction(self.a_derecho)
         ver.addAction(self.a_inferior)
-        # Dónde se editan las propiedades del elemento: en la barra inferior (lo de siempre) o en una ventana flotante junto a él (`flotantes.py`)
-        self.modo_propiedades = "flotante" if self.ajustes.value("paneles/propiedades", "abajo") == "flotante" else "abajo"
-        self.g_props = QActionGroup(self)
+        # Dónde se editan las propiedades del elemento: en una ventana flotante (por defecto) o en la barra inferior (`flotantes.py`)
+        self.modo_propiedades = "abajo" if self.ajustes.value("paneles/propiedades", "flotante") == "abajo" else "flotante"
+        self.g_props = QActionGroup(self)  # (exclusivo: una sola marcada y marcar la marcada no la desmarca)
         self.a_props = {}
-        for modo, texto in (("abajo", "Propiedades: a&bajo"), ("flotante", "Propiedades: &flotante")):
+        self.m_props = ver.addMenu("Panel de &opciones")
+        for modo, texto in (("flotante", "&Flotante"), ("abajo", "&Abajo")):
             a = self._accion(texto, lambda on, m=modo: on and self._cambiar_modo_propiedades(m), None, True)
             a.setChecked(modo == self.modo_propiedades)
             self.g_props.addAction(a)
-            ver.addAction(a)
+            self.m_props.addAction(a)
             self.a_props[modo] = a
         ver.addSeparator()
         ver.addAction(self._accion("&Acercar", lambda: self.diagrama.acercar(), ["Ctrl+=", "Ctrl++"]))
@@ -1184,26 +1189,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.l_firma.setStyleSheet(f"color: {estilo.TINTA_2}")
         self.l_firma.hide()
         sb.addWidget(self.l_firma)
-        self.aviso_version = QFrame()  # aviso discreto y descartable de versión nueva (no modal)
-        self.aviso_version.setObjectName("avisoVersion")
-        self.aviso_version.setStyleSheet(f"QFrame#avisoVersion {{ background: {estilo.ACENTO_SUAVE}; border: 1px solid {estilo.ACENTO_BORDE}; border-radius: {estilo.R_S}px; }} "
-                                         "QFrame#avisoVersion QPushButton { padding: 1px 8px; min-height: 16px; }")
-        av = QHBoxLayout(self.aviso_version)
-        av.setContentsMargins(8, 1, 4, 1)
-        self.l_version = QLabel()
-        av.addWidget(self.l_version)
-        self.b_descargar = QPushButton("Descargar")
-        self.b_descargar.clicked.connect(self._descargar_version)
-        self.b_ahora_no = QPushButton("Ahora no")
-        self.b_ahora_no.clicked.connect(self._descartar_version)
-        av.addWidget(self.b_descargar)
-        av.addWidget(self.b_ahora_no)
-        self.aviso_version.setFixedHeight(20)  # no más alto que la barra de estado: al mostrarse no debe cambiar su altura
-        self.b_descargar.setFixedHeight(18)
-        self.b_ahora_no.setFixedHeight(18)
-        av.setContentsMargins(8, 0, 4, 0)
-        self.aviso_version.hide()
-        sb.addWidget(self.aviso_version)
         # el mensaje temporal sustituye al texto fijo mientras dura (si no, se dibujan uno encima del otro)
         sb.messageChanged.connect(lambda texto: self.l_aviso.setVisible(not texto))
         sb.addPermanentWidget(self.l_lect)
@@ -1356,7 +1341,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         QTimer.singleShot(80, self, self._ver_seleccion)
 
     def _props_abiertas(self) -> bool:
-        """¿Están abiertas las propiedades? La barra inferior, o las ventanas flotantes (Ver > «Propiedades: flotante»)."""
+        """¿Están abiertas las propiedades? La barra inferior, o las ventanas flotantes (Ver ▸ Panel de opciones ▸ Flotante)."""
         return self.a_inferior.isChecked() if self.flot.activo() else self._plegables["inferior"].abierto
 
     def props_activo(self) -> PanelPropiedades:
@@ -1364,7 +1349,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         return self.flot.panel if self.flot.activo() and self.flot.panel is not None else self.props
 
     def _cambiar_modo_propiedades(self, modo: str) -> None:
-        """Ver > «Propiedades: abajo» o «Propiedades: flotante»: se recuerda, y lo abierto pasa de un sitio al otro."""
+        """Ver ▸ Panel de opciones ▸ Flotante o Abajo: se recuerda, y lo abierto pasa de un sitio al otro."""
         if modo == self.modo_propiedades:
             return
         abierto = self.a_inferior.isChecked()
@@ -3825,33 +3810,23 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _resultado_actualizacion(self, manual: bool, r: actualizaciones.Resultado) -> None:
         if r.estado == "nueva":
-            if manual:
-                self.aviso_version.hide()
-                caja = QMessageBox(QMessageBox.Icon.Information, TITULO,
-                                   f"Hay una versión nueva de GRAFCET Connect ({r.version}). Esta es la {APP_VERSION}.", parent=self)
-                descargar = caja.addButton("Descargar", QMessageBox.ButtonRole.AcceptRole)
-                caja.addButton("Cerrar", QMessageBox.ButtonRole.RejectRole)
-                caja.exec()
-                if caja.clickedButton() is descargar:
-                    QDesktopServices.openUrl(QUrl(actualizaciones.url_segura(r.url)))
-            elif actualizaciones.ignorada(self.ajustes) != r.version:
-                self._version_nueva = r
-                self.l_version.setText(f"Hay una versión nueva de GRAFCET Connect ({r.version}).")
-                self.aviso_version.show()
+            self._avisar_version_nueva(r)  # al arrancar y a mano, el mismo diálogo (no se guarda nada al descartarlo)
         elif manual:
             texto = ("Ya tiene la última versión de GRAFCET Connect." if r.estado == "al_dia" else
                      "No se ha podido comprobar: sin conexión o sin respuesta del servidor.")
             QMessageBox.information(self, TITULO, texto)
 
-    def _descargar_version(self) -> None:
-        if self._version_nueva:
-            QDesktopServices.openUrl(QUrl(actualizaciones.url_segura(self._version_nueva.url)))
-        self.aviso_version.hide()
-
-    def _descartar_version(self) -> None:
-        if self._version_nueva:
-            actualizaciones.ignorar(self.ajustes, self._version_nueva.version)
-        self.aviso_version.hide()
+    def _avisar_version_nueva(self, r: actualizaciones.Resultado, intentos: int = 40) -> None:
+        """Abre el diálogo de versión nueva sobre la ventana, ya visible; si aún no lo está (el arranque), espera un poco."""
+        if self._dialogo_version is not None and self._dialogo_version.isVisible():
+            return
+        if not self.isVisible():
+            if intentos > 0:
+                QTimer.singleShot(250, self, lambda: self._avisar_version_nueva(r, intentos - 1))
+            return
+        self._version_nueva = r
+        self._dialogo_version = DialogoVersionNueva(self, APP_VERSION, r.version, r.url, ICONO_PROGRAMA)
+        self._dialogo_version.open()  # (no bloquea: es modal solo para esta ventana)
 
 
 def main(argv: list[str] | None = None) -> int:

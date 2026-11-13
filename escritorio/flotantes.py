@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QTransform
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QTransform
 from PySide6.QtWidgets import (
     QBoxLayout, QFrame, QHBoxLayout, QLayout, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
@@ -15,6 +15,8 @@ from .paneles import TituloSeccion
 from .propiedades import ANCHO_COLUMNA, PanelPropiedades
 
 AMPLIACION_MAXIMA = 1.25
+MEDIO_TRAZO = 0.8  # la mitad del trazo de 1,6 px de las cajas del dibujo
+MARCO = 1  # el borde de la ventana: el layout empieza dentro de él
 
 
 class Lupa(QWidget):
@@ -24,6 +26,7 @@ class Lupa(QWidget):
         super().__init__()
         self.vista = vista
         self.origen = QRectF()
+        self.recorte: list[QRectF] = []  # rectángulos de la escena que se pintan; vacío: todo lo que cae en `origen`
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -46,6 +49,12 @@ class Lupa(QWidget):
         return t
 
     def paintEvent(self, evento: Any) -> None:  # noqa: N802
+        marco = QPainter(self)  # la tarjeta de la vista previa: fondo suave, borde de 1 px y radio R_M, como las de los paneles
+        marco.setRenderHint(QPainter.RenderHint.Antialiasing)
+        marco.setPen(QPen(QColor(estilo.BORDE), 1))
+        marco.setBrush(QColor(estilo.SUPERFICIE))
+        marco.drawRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5), estilo.R_M, estilo.R_M)
+        marco.end()
         if self.origen.isEmpty():
             return
         escena = self.vista.scene()
@@ -56,6 +65,14 @@ class Lupa(QWidget):
             for item in ocultos:
                 item.hide()
             destino = self.transformar().mapRect(self.origen)
+            if self.recorte:  # solo el elemento: nada de las cajas vecinas que caen en el encuadre
+                t = self.transformar()
+                zona = QPainterPath()  # (la unión en un solo contorno: con rectángulos sueltos y bordes suavizados se vería una costura)
+                for r in self.recorte:
+                    trozo = QPainterPath()
+                    trozo.addRect(t.mapRect(r))
+                    zona = zona.united(trozo)
+                p.setClipPath(zona)
             escena.render(p, destino, self.origen, Qt.AspectRatioMode.IgnoreAspectRatio)
         finally:
             for item in ocultos:
@@ -64,22 +81,26 @@ class Lupa(QWidget):
 
 
 class PanelInterior(QFrame):
-    """Título y contenido desplazable: el mínimo del editor nunca agranda la ventana."""
+    """Una tarjeta: título dentro, arriba, y contenido desplazable. El mínimo del editor nunca agranda la ventana."""
 
     def __init__(self) -> None:
         super().__init__()
+        self.setObjectName("tarjetaFlotante")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(estilo.E2, estilo.E2, estilo.E2, estilo.E2)
-        raiz.setSpacing(estilo.E2)
+        raiz.setContentsMargins(estilo.E3, estilo.E3, estilo.E3, estilo.E3)  # (más el borde de 1 px de la hoja)
+        raiz.setSpacing(estilo.E2)  # T3
         self.titulo = TituloSeccion()
         self.titulo.setObjectName("tituloPropiedades")
         raiz.addWidget(self.titulo)
         self.scroll = QScrollArea()
+        self.scroll.setObjectName("scrollTarjeta")
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setWidgetResizable(True)
         self.scroll.setMinimumSize(0, 0)
         raiz.addWidget(self.scroll, 1)
         self.cuerpo = QWidget()
+        self.cuerpo.setObjectName("cuerpoTarjeta")
         self.lay_cuerpo = QVBoxLayout(self.cuerpo)
         self.lay_cuerpo.setContentsMargins(0, 0, 0, 0)
         self.lay_cuerpo.setSpacing(0)
@@ -96,7 +117,7 @@ class PanelInterior(QFrame):
             contenido = max(contenido, self.lay_cuerpo.totalHeightForWidth(ancho))
         margenes = self.layout().contentsMargins()
         cabecera = self.titulo.sizeHint().height() + self.layout().spacing()
-        return contenido + cabecera + margenes.top() + margenes.bottom() + estilo.E1
+        return contenido + cabecera + margenes.top() + margenes.bottom() + estilo.E1 + 2  # (+2: el borde)
 
 
 class VentanaFlotante(QFrame):
@@ -111,16 +132,22 @@ class VentanaFlotante(QFrame):
         self.setStyleSheet(
             f"QFrame#ventanaFlotante {{ background: {estilo.SUPERFICIE}; "
             f"border: 1px solid {estilo.ACENTO}; border-radius: {estilo.R_M}px; }}"
+            f"QFrame#lineaCabecera {{ background: {estilo.BORDE}; border: 0; border-radius: 0; }}"
+            f"QFrame#tarjetaFlotante {{ background: {estilo.SUPERFICIE_2}; "
+            f"border: 1px solid {estilo.BORDE}; border-radius: {estilo.R_M}px; }}"
+            # dentro de una tarjeta no queda otro fondo gris: el área desplazable y los subpaneles de Propiedades son transparentes
+            f"QScrollArea#scrollTarjeta, QWidget#cuerpoTarjeta {{ background: transparent; }}"
         )
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(estilo.E2, estilo.E2, estilo.E2, estilo.E2)
-        raiz.setSpacing(estilo.E2)
+        raiz.setContentsMargins(0, 0, 0, 0)
+        raiz.setSpacing(0)
         self.cabecera = QWidget()
+        self.cabecera.setObjectName("cabeceraFlotante")
         fila = QHBoxLayout(self.cabecera)
-        fila.setContentsMargins(0, 0, 0, 0)
+        fila.setContentsMargins(estilo.E4 - MARCO, estilo.E2, estilo.E2, estilo.E2)
         fila.setSpacing(estilo.E2)
-        self.titulo = TituloSeccion(x_marcador=estilo.E1)
-        self.titulo.setObjectName("tituloPropiedades")
+        self.titulo = TituloSeccion()
+        self.titulo.setObjectName("tituloPanel")  # el título de sección normal de la aplicación
         fila.addWidget(self.titulo, 1)
         self.b_cerrar = QToolButton()
         self.b_cerrar.setText("✕")
@@ -128,12 +155,16 @@ class VentanaFlotante(QFrame):
         self.b_cerrar.setToolTip("Cerrar")
         self.b_cerrar.setAccessibleName("Cerrar la ventana de propiedades")
         self.b_cerrar.clicked.connect(self.cerrar_pedido)
-        fila.addWidget(self.b_cerrar)
+        fila.addWidget(self.b_cerrar, 0, Qt.AlignmentFlag.AlignVCenter)
         raiz.addWidget(self.cabecera)
+        self.linea = QFrame()
+        self.linea.setObjectName("lineaCabecera")
+        self.linea.setFixedHeight(1)
+        raiz.addWidget(self.linea)
         self.cuerpo = QWidget()
         fila_cuerpo = QHBoxLayout(self.cuerpo)
-        fila_cuerpo.setContentsMargins(0, 0, 0, 0)
-        fila_cuerpo.setSpacing(estilo.E6)
+        fila_cuerpo.setContentsMargins(estilo.E4 - MARCO, estilo.E4, estilo.E4 - MARCO, estilo.E4 - MARCO)
+        fila_cuerpo.setSpacing(estilo.E6)  # el hueco por el que cruzan las líneas de puntos
         self.lupa = Lupa(vista)
         fila_cuerpo.addWidget(self.lupa)
         self.columna = QWidget()
@@ -150,7 +181,7 @@ class VentanaFlotante(QFrame):
         self.hide()
 
     def escalar(self) -> None:
-        self.cabecera.setFixedHeight(estilo.ALTO_CONTROL)
+        self.cabecera.setFixedHeight(estilo.ALTO_CONTROL + 2 * estilo.E2)
         self.b_cerrar.setFixedSize(estilo.ALTO_CONTROL, estilo.ALTO_CONTROL)
 
 
@@ -162,6 +193,8 @@ class _Enlaces(QFrame):
         self.setObjectName("enlacesFlotantes")
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.pares: list[tuple[QRectF, QRectF]] = []
+        self.inicios: list[QPointF] = []  # dónde sale cada línea (en coordenadas del cuerpo)
+        self.finales: list[QPointF] = []  # dónde acaba cada línea: en el borde izquierdo de su tarjeta
 
     def paintEvent(self, evento: Any) -> None:  # noqa: N802
         p = QPainter(self)
@@ -169,8 +202,8 @@ class _Enlaces(QFrame):
         lapiz = QPen(QColor(COL["accent"]), 1.2)
         lapiz.setDashPattern([5 / 1.2, 4 / 1.2])
         p.setPen(lapiz)
-        for parte, panel in self.pares:
-            p.drawLine(QPointF(parte.right(), parte.center().y()), QPointF(panel.left(), panel.center().y()))
+        for inicio, fin in zip(self.inicios, self.finales):
+            p.drawLine(inicio, fin)
         p.end()
 
 
@@ -272,6 +305,16 @@ class GestorFlotantes(QObject):
         z = e.zonas_propiedades(p.ident)
         return [(v.accion, z["elemento"])] if z else []
 
+    def _marco_ventana(self) -> int:
+        """Lo que la ventana gasta sin contar las tarjetas: cabecera, su línea, márgenes del cuerpo y borde."""
+        v = self.principal
+        return v.cabecera.height() + 1 + 2 * estilo.E4 + 2 * MARCO
+
+    def _marco_tarjeta(self) -> int:
+        """Lo que una tarjeta gasta sin contar su contenido: borde, márgenes y título con su hueco."""
+        t = self.principal.accion.titulo.sizeHint().height()
+        return t + estilo.E2 + 2 * estilo.E3 + 2
+
     def _dimensionar(self, area: QRect) -> None:
         v = self.principal
         margen = max(2 * estilo.E6, area.width() // (16 * estilo.E2) * estilo.E2)
@@ -289,7 +332,7 @@ class GestorFlotantes(QObject):
             if self.panel.der.isVisibleTo(self.panel):
                 campos += self.panel.der.sizeHint().height() + estilo.E3
             contenido = max(self.panel.sizeHint().height(), campos)
-            alto = contenido + v.cabecera.height() + 8 * estilo.E2
+            alto = contenido + self._marco_ventana() + self._marco_tarjeta() + estilo.E1
             self._tamano = QSize(ancho, min(alto, disponible.height()))
 
     def _alto_formuladores(self, disponible: QRect) -> int:
@@ -299,7 +342,7 @@ class GestorFlotantes(QObject):
         vertical = disponible.width() - previa - 5 * estilo.E4 < 36 * estilo.E4
         numerica = p.accion.caja_numerica.isVisibleTo(p)
         cantidad = 2 if p._bloques_fuera and numerica else 1
-        fijos = v.cabecera.height() + cantidad * 10 * estilo.E2
+        fijos = self._marco_ventana() + cantidad * (self._marco_tarjeta() + 2 * estilo.E3)
         if p._bloques_fuera and not numerica:
             fijos += p.sizeHint().height() + 4 * estilo.E2
         elif vertical and p.izq.isVisibleTo(p):
@@ -364,6 +407,19 @@ class GestorFlotantes(QObject):
             origen = origen.united(QRectF(*caja["marca"]))
         return origen.adjusted(-estilo.E2, -estilo.E2, estilo.E2, estilo.E2)
 
+    def _recorte(self, origen: QRectF) -> list[QRectF]:
+        """Lo que pinta la lupa de una acción: su caja, su marca y, si es la primera unida a la etapa, el trazo de unión."""
+        caja = self.w.edicion.accion_en_id(self.panel.ident)
+        if caja is None:
+            return []
+        x, y, w, h = caja["rect"]
+        sitios = [QRectF(x, y, w, h).adjusted(-MEDIO_TRAZO, -MEDIO_TRAZO, MEDIO_TRAZO, MEDIO_TRAZO)]  # hasta el borde exterior del trazo
+        if caja.get("marca"):
+            sitios.append(QRectF(*caja["marca"]).adjusted(-1, -1, 1, 1))
+        if not caja.get("suelta") and caja.get("cabeza") == caja["id"]:
+            sitios.append(QRectF(origen.left(), y + h / 2 - 2, x - origen.left() + MEDIO_TRAZO, 4))
+        return sitios
+
     def colocar(self) -> None:
         if self.principal is None or self._colocando or not self.principal.isVisible():
             return
@@ -384,13 +440,26 @@ class GestorFlotantes(QObject):
             self.geometrias = {"principal": QRect(v.geometry())}
             zonas = self._zonas()
             v.lupa.origen = self._origen_lupa(zonas)
+            v.lupa.recorte = self._recorte(v.lupa.origen)
             v.lupa.update()
             self.enlaces.setGeometry(v.cuerpo.rect())
             self.enlaces.pares = []
+            self.enlaces.finales = []
+            self.enlaces.inicios = []
+            caja = self.w.edicion.accion_en_id(self.panel.ident) if self.panel._bloques_fuera else None
             for panel, r in zonas:
                 parte = v.lupa.transformar().mapRect(r).translated(v.lupa.pos())
                 destino = QRectF(panel.rect()).translated(panel.mapTo(v.cuerpo, panel.rect().topLeft()))
                 self.enlaces.pares.append((parte, destino))
+                if panel is v.condicion and caja is not None and caja.get("marca"):  # sale de la esquina superior izquierda de la marca
+                    esquina = v.lupa.transformar().map(QPointF(*caja["marca"][:2])) + QPointF(v.lupa.pos())
+                    self.enlaces.inicios.append(esquina)
+                else:
+                    self.enlaces.inicios.append(QPointF(parte.right(), parte.center().y()))
+                # termina sobre el borde izquierdo de la tarjeta, a la altura de su título (sin entrar en las esquinas redondeadas)
+                y = panel.titulo.mapTo(v.cuerpo, panel.titulo.rect().center()).y()
+                y = min(max(y, destino.top() + estilo.R_M), destino.bottom() - estilo.R_M)
+                self.enlaces.finales.append(QPointF(destino.left(), y))
             self.enlaces.raise_()
             self.enlaces.update()
             v.raise_()

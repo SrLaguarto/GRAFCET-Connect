@@ -12,7 +12,7 @@ zonas: a la izquierda una columna estrecha con los campos y a la derecha lo anch
   derecho sobre la acción); a la derecha el
   programador del valor de una memorizada y, si es condicionada o por evento, el de su condición o su evento. Una acción continua no
   lleva campos aquí: solo la frase que manda a hacer doble clic sobre ella (`FRASE_CONTINUA`; la variable se elige en el desplegable
-  sobre la acción). El mismo panel (`flotante=True`, sin cabecera) sirve a las ventanas de Ver > «Propiedades: flotante»
+  sobre la acción). El mismo panel (`flotante=True`, sin cabecera) sirve a las ventanas de Ver ▸ Panel de opciones ▸ Flotante
   (`flotantes.py`), donde el programador de la condición o del evento va en su propia ventana (`_llevar_bloques`).
 - Macroetapa, recinto (su marco), expansión, grafcet parcial suelto y orden de forzado (también la que aún no está completa): una
   ficha compacta (`FichaJerarquia`) con su descripción y los mismos botones que el botón derecho (Encuadrar la expansión,

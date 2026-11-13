@@ -13,7 +13,7 @@ try:
     from PySide6.QtGui import QWheelEvent
     from PySide6.QtWidgets import QApplication, QPushButton, QToolButton
     from tools import hoja_contactos as HC
-    from escritorio import bloques
+    from escritorio import bloques, estilo
     from escritorio.flotantes import AMPLIACION_MAXIMA, VentanaFlotante
     from escritorio.propiedades import PanelPropiedades
     QT = True
@@ -72,11 +72,11 @@ class PropiedadesFlotante(unittest.TestCase):
 
     # -- SPFL01
     def test_SPFL01_modo_en_ver_y_persistencia(self):
-        """REQ-EDT-02: Ver tiene «Propiedades: abajo» y «Propiedades: flotante», excluyentes, y la elección se
+        """REQ-EDT-02: Ver ▸ Panel de opciones tiene «Flotante» y «Abajo», excluyentes, y la elección se
         recuerda."""
         w = self.w
         self.assertEqual({m: a.text().replace("&", "") for m, a in w.a_props.items()},
-                         {"abajo": "Propiedades: abajo", "flotante": "Propiedades: flotante"})
+                         {"flotante": "Flotante", "abajo": "Abajo"})
         self.assertTrue(w.a_props["flotante"].isChecked() and not w.a_props["abajo"].isChecked())
         w.a_props["abajo"].trigger()
         self.assertEqual((w.modo_propiedades, w.a_props["flotante"].isChecked()), ("abajo", False))
@@ -466,6 +466,172 @@ class PropiedadesFlotante(unittest.TestCase):
                             self.assertTrue(scroll.viewport().rect().contains(rectangulo))
                     finally:
                         c.cerrar()
+
+    # -- presentación (SPFL23 en adelante): tarjetas, márgenes, cabecera y lupa
+    TAMANOS = ((960, 1032), (1366, 768), (2000, 1250))
+    CASOS = ("etapa", "transicion", "condicionada", "evento", "activacion")
+
+    def casos(self, tipos=None):
+        """Un contexto con la ventana abierta por cada tamaño y caso; lo cierra al terminar cada uno."""
+        for ancho, alto in self.TAMANOS:
+            for tipo in tipos or self.CASOS:
+                c = HC.Contexto(ancho, alto)
+                try:
+                    HC._flotante(tipo)(c)
+                    f = c.w.flot
+                    self.assertTrue(f.principal.isVisible(), (ancho, alto, tipo))
+                    with self.subTest(tamano=(ancho, alto), tipo=tipo):
+                        yield c, f.principal
+                finally:
+                    c.cerrar()
+
+    @staticmethod
+    def tarjetas(v):
+        return [t for t in (v.condicion, v.accion) if t.isVisible()]
+
+    @staticmethod
+    def color(imagen, x, y):
+        return imagen.pixelColor(x, y).name()
+
+    def test_SPFL23_margenes_de_la_ventana_y_cabecera(self):
+        """REQ-EDT-02: el cuerpo empieza a E4 de los cuatro bordes de la ventana (bajo la línea de la cabecera, también);
+        la cabecera mide ALTO_CONTROL + 2·E2, con el título de sección normal, el ✕ a la derecha y una línea de 1 px
+        de color BORDE debajo."""
+        for c, v in self.casos():
+            lupa, columna = v.lupa.geometry(), v.columna.geometry()
+            izq = v.cuerpo.mapTo(v, lupa.topLeft()).x()
+            der = v.width() - v.cuerpo.mapTo(v, columna.topRight()).x() - 1
+            abajo = v.height() - v.cuerpo.mapTo(v, lupa.bottomLeft()).y() - 1
+            arriba = v.cuerpo.mapTo(v, lupa.topLeft()).y() - (v.linea.geometry().bottom() + 1)
+            self.assertEqual([izq, der, abajo, arriba], [estilo.E4] * 4)
+            self.assertEqual(v.cabecera.height(), estilo.ALTO_CONTROL + 2 * estilo.E2)
+            self.assertEqual(v.titulo.objectName(), "tituloPanel", "título de sección normal, no reducido")
+            self.assertTrue(v.linea.isVisible() and v.linea.height() == 1)
+            self.assertEqual(v.linea.geometry().top(), v.cabecera.geometry().bottom() + 1)
+            self.assertLessEqual(abs(v.linea.width() - (v.width() - 2)), 1, "de lado a lado")
+            imagen = v.grab().toImage()
+            y = v.linea.geometry().center().y()
+            self.assertEqual(self.color(imagen, v.width() // 2, y), estilo.BORDE)
+            centro_cab = v.cabecera.geometry().center().y()
+            self.assertLessEqual(abs(v.b_cerrar.geometry().center().y() - centro_cab), 1, "✕ centrada en vertical")
+            self.assertLessEqual(abs(v.titulo.geometry().center().y() - centro_cab), 1)
+            self.assertGreater(v.b_cerrar.geometry().left(), v.width() // 2, "✕ a la derecha")
+            self.assertLessEqual(v.cabecera.width() - v.b_cerrar.geometry().right() - 1, estilo.E2 + 1)
+
+    def test_SPFL24_tarjetas_iguales_con_margen_interior_y_titulo_dentro(self):
+        """REQ-EDT-02: cada panel es una tarjeta con un único fondo igual en todas, margen interior ≥ E3, el título
+        dentro arriba con E2 debajo y ningún fondo gris anidado."""
+        from PySide6.QtWidgets import QWidget
+        for c, v in self.casos():
+            fondos = set()
+            for t in self.tarjetas(v):
+                hijos = [h for h in t.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly) if h.isVisible()]
+                self.assertTrue(hijos)
+                for h in hijos:
+                    g = h.geometry()
+                    self.assertGreaterEqual(min(g.left(), g.top(), t.width() - g.right() - 1, t.height() - g.bottom() - 1),
+                                            estilo.E3, (t.objectName(), h.objectName() or type(h).__name__))
+                self.assertTrue(t.rect().contains(t.titulo.geometry()), "el título va dentro de la tarjeta")
+                self.assertEqual(t.scroll.geometry().top() - t.titulo.geometry().bottom() - 1, estilo.E2)
+                self.assertLess(t.titulo.geometry().top(), t.height() // 3)
+                imagen = t.grab().toImage()
+                fondos.add(self.color(imagen, estilo.E1, t.height() // 2))
+                self.assertEqual(self.color(imagen, t.width() // 2, 0), estilo.BORDE, "borde de 1 px")
+                grises = sum(imagen.pixelColor(x, y).name() == estilo.FONDO
+                             for x in range(0, imagen.width(), 2) for y in range(0, imagen.height(), 2))
+                self.assertEqual(grises, 0, "ningún fondo gris anidado dentro de la tarjeta")
+            self.assertEqual(fondos, {estilo.SUPERFICIE_2}, "el mismo fondo en todas las tarjetas")
+
+    def test_SPFL25_lupa_con_marco_hueco_y_lineas_hasta_la_tarjeta(self):
+        """REQ-EDT-09: la lupa es una tarjeta con borde, el hueco hasta las tarjetas es E5 (24 px) y cada línea de
+        puntos acaba sobre el borde izquierdo de su tarjeta, nunca en el vacío."""
+        for c, v in self.casos():
+            f = c.w.flot
+            imagen = v.lupa.grab().toImage()
+            self.assertEqual(self.color(imagen, 0, v.lupa.height() // 2), estilo.BORDE)
+            self.assertEqual(self.color(imagen, estilo.E1, v.lupa.height() // 2), estilo.SUPERFICIE)
+            self.assertEqual(v.columna.geometry().left() - v.lupa.geometry().right() - 1, estilo.E6)
+            zonas = f._zonas()
+            self.assertEqual(len(f.enlaces.finales), len(zonas))
+            for (tarjeta, _), (parte, destino), fin in zip(zonas, f.enlaces.pares, f.enlaces.finales):
+                izq = tarjeta.mapTo(v.cuerpo, QPoint()).x()
+                alto = tarjeta.mapTo(v.cuerpo, QPoint()).y()
+                self.assertLessEqual(abs(fin.x() - izq), 1, "acaba en el borde izquierdo de la tarjeta")
+                self.assertTrue(alto <= fin.y() <= alto + tarjeta.height(), "dentro del alto de la tarjeta")
+                titulo = tarjeta.titulo.mapTo(v.cuerpo, tarjeta.titulo.rect().center()).y()
+                self.assertLessEqual(abs(fin.y() - titulo), 1, "a la altura de la línea del título")
+                self.assertLess(parte.right(), fin.x())
+                self.assertTrue(v.lupa.geometry().contains(parte.toRect().center()), "sale de la parte ampliada")
+
+    def test_SPFL26_ningun_texto_recortado(self):
+        """REQ-EDT-02: el texto de cada etiqueta y botón visible cabe en su ancho, o acaba en «…» con ayuda emergente."""
+        from PySide6.QtWidgets import QAbstractButton, QLabel
+        for c, v in self.casos():
+            for w in v.findChildren(QLabel) + v.findChildren(QAbstractButton):
+                if not w.isVisible() or w.parent() is v.lupa:
+                    continue
+                texto = w.text().replace("&", "")
+                if not texto or isinstance(w, QLabel) and w.wordWrap():
+                    continue
+                ancho = w.fontMetrics().horizontalAdvance(texto)
+                cabe = ancho <= w.width()
+                elidido = "…" in texto and bool(w.toolTip())
+                self.assertTrue(cabe or elidido, (type(w).__name__, texto, ancho, w.width()))
+
+    def test_SPFL27_lupa_solo_dibuja_el_elemento_seleccionado(self):
+        """REQ-EDT-09: la lupa recorta el dibujo a la caja de la acción, su marca y, si es la primera unida a la etapa,
+        su trazo de unión: ningún trazo de las cajas vecinas a su izquierda."""
+        for c, v in self.casos(("evento", "condicionada")):
+            f = c.w.flot
+            caja = c.e.accion_en_id(f.panel.ident)
+            primera = caja["cabeza"] == caja["id"] and not caja["suelta"]
+            t = v.lupa.transformar()
+            x, y, w, h = caja["rect"]
+            r = t.mapRect(QRectF(x, y, w, h))
+            imagen = v.lupa.grab().toImage()
+            esc = t.m11()
+            medio = 0.8 * esc  # mitad del trazo de la caja
+            izq, der = int(r.left() - medio), int(r.right() + medio) + 1  # los píxeles de más allá del borde exterior (el que lo cruza queda dentro)
+            for py in range(imagen.height()):
+                for px in range(izq):
+                    if imagen.pixelColor(px, py).lightness() < 100:
+                        unido = primera and abs(py - r.center().y()) <= 2 * esc + 2
+                        self.assertTrue(unido, ("trazo ajeno a la izquierda de la caja", px, py))
+            for py in range(int(r.top() - medio), int(r.bottom() + medio) + 1):  # en las filas de sus líneas de arriba y abajo
+                for px in range(der, imagen.width()):
+                    self.assertGreaterEqual(imagen.pixelColor(px, py).lightness(), 100, ("rebaba a la derecha de la caja", px, py))
+                for px in range(max(izq - 3, 0), izq):
+                    if abs(py - r.center().y()) > 2 * esc + 2:
+                        self.assertGreaterEqual(imagen.pixelColor(px, py).lightness(), 100, ("rebaba a la izquierda de la caja", px, py))
+            for px in (int(r.left() + 2), int(r.right() - 2)):  # los cuatro bordes de la caja se ven enteros (no recortados a medias)
+                self.assertLess(imagen.pixelColor(px, int(r.top())).lightness(), 100, "línea de arriba entera")
+                self.assertLess(imagen.pixelColor(px, int(r.bottom())).lightness(), 100, "línea de abajo entera")
+            for py in (int(r.top() + 3), int(r.bottom() - 3)):
+                self.assertLess(imagen.pixelColor(int(r.left()), py).lightness(), 100, "borde izquierdo entero")
+                self.assertLess(imagen.pixelColor(int(r.right()), py).lightness(), 100, "borde derecho entero")
+            if primera:
+                oscuros = [px for px in range(int(r.left() - 2)) if imagen.pixelColor(px, int(r.center().y())).lightness() < 100]
+                self.assertTrue(oscuros, "el trazo de unión de la primera acción se ve")
+
+    def test_SPFL28_linea_de_condicion_sale_de_la_esquina_de_la_marca(self):
+        """REQ-EDT-09: la línea de la condición o del evento sale de la esquina superior izquierda de la marca ampliada
+        y no cruza el texto de la marca ni la caja."""
+        for c, v in self.casos(("evento", "condicionada")):
+            f = c.w.flot
+            caja = c.e.accion_en_id(f.panel.ident)
+            t = v.lupa.transformar()
+            marca = t.mapRect(QRectF(*caja["marca"])).translated(QPointF(v.lupa.pos()))
+            ini, fin = f.enlaces.inicios[0], f.enlaces.finales[0]
+            self.assertLessEqual(abs(ini.x() - marca.left()), 1)
+            self.assertLessEqual(abs(ini.y() - marca.top()), 1)
+            x, y, w, h = caja["rect"]
+            cajaw = t.mapRect(QRectF(x, y, w, h)).translated(QPointF(v.lupa.pos()))
+            for rect in (marca.adjusted(2, 2, -2, -2), cajaw.adjusted(2, 2, -2, -2)):
+                for i in range(1, 200):
+                    p = ini + (fin - ini) * (i / 200)
+                    self.assertFalse(rect.contains(p), ("la línea cruza el elemento", p, rect))
+            accion = f.enlaces.inicios[1]
+            self.assertLessEqual(abs(accion.x() - cajaw.right()), 6, "la de la acción sigue saliendo de su borde derecho")
 
 
 if __name__ == "__main__":

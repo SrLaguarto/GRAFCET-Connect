@@ -325,8 +325,8 @@ piezas, en lugar de escribirlo.
   derecha, el área de trabajo, con la fórmula dibujada en una línea si cabe.
 - Debajo del área: la fórmula en texto, «Escrito» (el texto que ha quedado guardado), «Se dibuja» (cómo se verá en el
   dibujo de la norma) y «Crear las que faltan» (declara como entradas booleanas las variables que se usan y no
-  existen). En la última fila, el aviso y la papelera («⤢ Ampliar» se retiró en P-IMP-144: para más sitio, Ver → Propiedades: flotante).
-- Ver → «Propiedades: abajo» / «Propiedades: flotante». En flotante, las propiedades se editan en una sola ventana centrada
+  existen). En la última fila, el aviso y la papelera («⤢ Ampliar» se retiró en P-IMP-144: para más sitio, Ver ▸ Panel de opciones ▸ Flotante).
+- Ver ▸ «Panel de opciones» ▸ «Flotante» (por defecto) o «Abajo»: dos opciones excluyentes, y se recuerda la elegida. En flotante, las propiedades se editan en una sola ventana centrada
   sobre la aplicación (puede tapar los paneles laterales), con título y ✕: a la izquierda, el elemento ampliado como bajo una
   lupa (hasta el 125 %, se actualiza al editar); a la derecha, sus paneles, unidos a su parte del elemento con líneas de puntos.
   En una acción condicionada o por evento hay dos paneles: «Condición» (o «Evento») arriba y «Acción» debajo. La ventana no se

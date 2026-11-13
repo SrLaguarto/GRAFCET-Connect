@@ -61,7 +61,7 @@ P-IMP-41. Además dejó anotado:
 
 ## Limitaciones conocidas del programador (P-IMP-39)
 
-- Con más de unos 8 niveles apilados a 200 px, el área puede recortar; se usa el modo «Propiedades: flotante» del menú Ver («⤢ Ampliar» se retiró en P-IMP-144).
+- Con más de unos 8 niveles apilados a 200 px, el área puede recortar; se usa Ver ▸ Panel de opciones ▸ Flotante («⤢ Ampliar» se retiró en P-IMP-144).
 - El arrastre real con ratón no se prueba sin pantalla: hace falta una prueba manual del responsable.
 
 ## Entorno del contenedor en la nube

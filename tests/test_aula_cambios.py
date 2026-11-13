@@ -112,6 +112,7 @@ class PanelInferiorFijarYEsconder(BaseQt):
         a.sync()
         from escritorio.ventana import Ventana
         v = Ventana(QSettings(str(ini), QSettings.Format.IniFormat))
+        v._cambiar_modo_propiedades("abajo")  # (estas pruebas dan por hecha la barra inferior; el defecto es «flotante»)
         self.otras.append(v)
         return v
 

@@ -314,29 +314,28 @@ class AvisoVersion(unittest.TestCase):
         self.w.deleteLater()
         self.tmp.cleanup()
 
-    def test_SACT04_aviso_no_modal_y_ahora_no_se_recuerda(self):
-        """REQ-SIM-03: una versión nueva se avisa sin ventana modal; «Ahora no» la recuerda y no se repite en el arranque."""
+    def test_SACT04_aviso_emergente_y_ahora_no_no_se_recuerda(self):
+        """REQ-SIM-03: una versión nueva se avisa con un diálogo (abierto sin bloquear); «Ahora no» no guarda nada y vuelve a salir."""
         w = self.w
         w.show()
-        self.assertTrue(w.aviso_version.isHidden())
+        self.assertIsNone(w._dialogo_version)
         w.buscar_actualizaciones()
-        self.assertFalse(w.aviso_version.isHidden())
-        self.assertIn("999.0.0", w.l_version.text())
-        w.b_ahora_no.click()
-        self.assertTrue(w.aviso_version.isHidden())
-        self.assertEqual(w.ajustes.value("actualizaciones/ignorada"), "999.0.0")
-        w.buscar_actualizaciones()  # el mismo arranque: no se vuelve a mostrar
-        self.assertTrue(w.aviso_version.isHidden())
-        self.respuesta = _json("v999.0.1")  # una versión posterior sí
-        w.buscar_actualizaciones()
-        self.assertFalse(w.aviso_version.isHidden())
+        d = w._dialogo_version
+        self.assertTrue(d.isVisible())
+        self.assertEqual(d.l_disponible.text(), "999.0.0")
+        d.b_ahora_no.click()
+        self.assertFalse(d.isVisible())
+        self.assertIsNone(w.ajustes.value("actualizaciones/ignorada"))
+        w.buscar_actualizaciones()  # sigue habiendo versión nueva: vuelve a salir
+        self.assertTrue(w._dialogo_version.isVisible())
+        w._dialogo_version.reject()
 
     def test_SACT05_fallo_en_el_arranque_no_dice_nada(self):
         """REQ-SIM-03: en el arranque, un fallo de red no muestra aviso ni mensaje."""
         self.respuesta = OSError("sin conexión")
         self.w.show()
         self.w.buscar_actualizaciones()
-        self.assertTrue(self.w.aviso_version.isHidden())
+        self.assertIsNone(self.w._dialogo_version)
         self.assertEqual(self.w.statusBar().currentMessage(), "")
 
     def test_SACT06_comprobacion_manual_informa_siempre(self):
@@ -420,12 +419,11 @@ class AvisoVersion(unittest.TestCase):
         for mala in ("https://evil.example/https://github.com/SrLaguarto/GRAFCET-Connect/", "http://github.com/SrLaguarto/GRAFCET-Connect/x",
                      "https://github.com/SrLaguarto/GRAFCET-Connect", "https://github.com/otro/GRAFCET-Connect/x", "file:///c:/x", "", None):
             self.assertEqual(actualizaciones.url_segura(mala), ultima, mala)
+        from escritorio.aviso_version import DialogoVersionNueva
         abiertas = []
-        with mock.patch("escritorio.ventana.QDesktopServices.openUrl", side_effect=lambda u: abiertas.append(u.toString())):
-            self.w._version_nueva = Resultado("nueva", "9", "https://evil.example/x")
-            self.w._descargar_version()
-            self.w._version_nueva = Resultado("nueva", "9", ok)
-            self.w._descargar_version()
+        for url in ("https://evil.example/x", ok):
+            d = DialogoVersionNueva(None, "1.0.0", "9", url, abrir=abiertas.append)
+            d.descargar()
         self.assertEqual(abiertas, [ultima, ok])
 
 
