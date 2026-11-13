@@ -174,5 +174,97 @@ class PaletaVariables(unittest.TestCase):
         self.assertLessEqual(p.paleta.height(), p._sc_paleta.viewport().height())
 
 
+    # -- grupos plegables (encargo 18)
+    def con_ajustes(self):
+        """Una paleta con unos ajustes propios (en un .ini temporal); los restablece al terminar."""
+        import tempfile
+        from PySide6.QtCore import QSettings
+        from escritorio.paleta_variables import PaletaVariables as PV
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        ajustes = QSettings(str(Path(tmp.name) / "a.ini"), QSettings.Format.IniFormat)
+        anterior = PV.ajustes
+        PV.ajustes = ajustes
+        self.addCleanup(setattr, PV, "ajustes", anterior)
+        return ajustes
+
+    VARS = {"I1": ("input", "bool"), "I2": ("input", "bool"), "M": ("internal", "bool"), "Q": ("output", "bool")}
+
+    def titulos(self, p):
+        from escritorio.paleta_variables import TituloGrupo
+        return {t.papel: t for t in p.paleta.findChildren(TituloGrupo) if not t.isHidden()}
+
+    def test_SPVU10_subtitulos_con_triangulo_y_clic_que_pliega_y_recuerda(self):
+        """REQ-EDT-02: cada subtítulo es un botón con triángulo del color del papel; un clic pliega o despliega su grupo y se recuerda."""
+        from escritorio.paleta_variables import CLAVE_PLEGADOS
+        ajustes = self.con_ajustes()
+        p = self.programador(self.VARS, ["X1"])
+        p.resize(500, 300)
+        p.show()
+        QApplication.processEvents()
+        t = self.titulos(p)
+        self.assertEqual(list(t), ["entrada", "etapa", "interna", "salida"])
+        self.assertFalse(any(b.plegado for b in t.values()), "por defecto, todos desplegados")
+        antes = [n["n"] for n in p.paleta.bloques()]
+        self.assertEqual(antes, ["I1", "I2", "X1", "M", "Q"])
+        t["entrada"].click()
+        QApplication.processEvents()
+        self.assertTrue(t["entrada"].plegado and not t["etapa"].plegado)
+        self.assertEqual([n["n"] for n in p.paleta.bloques()], ["X1", "M", "Q"])
+        self.assertEqual(ajustes.value(CLAVE_PLEGADOS), "entrada")
+        imagen = t["entrada"].grab().toImage()  # el triángulo, con el color del papel (▸ plegado)
+        color = bloques.COLORES["entrada"].lower()
+        self.assertTrue(any(imagen.pixelColor(x, y).name() == color for x in range(0, 10) for y in range(imagen.height())))
+        otra = self.programador(self.VARS, ["X1"])  # otra paleta (la barra o la flotante): lo recuerda y lo comparte
+        self.assertEqual([n["n"] for n in otra.paleta.bloques()], ["X1", "M", "Q"])
+        t["entrada"].click()
+        QApplication.processEvents()
+        self.assertEqual([n["n"] for n in otra.paleta.bloques()], ["I1", "I2", "X1", "M", "Q"], "la otra paleta lo sigue")
+        self.assertEqual(ajustes.value(CLAVE_PLEGADOS), "")
+
+    def test_SPVU11_subtitulos_accesibles_con_teclado(self):
+        """REQ-EDT-02: se llega al subtítulo con Tab y Espacio o Intro lo pliega o lo despliega."""
+        from PySide6.QtTest import QTest
+        self.con_ajustes()
+        p = self.programador(self.VARS, ["X1"])
+        p.resize(500, 300)
+        p.show()
+        QApplication.processEvents()
+        t = self.titulos(p)["salida"]
+        self.assertTrue(bool(t.focusPolicy() & Qt.FocusPolicy.TabFocus))
+        t.setFocus(Qt.FocusReason.TabFocusReason)
+        self.assertTrue(t.hasFocus())
+        QTest.keyClick(t, Qt.Key.Key_Space)
+        self.assertTrue(t.plegado)
+        QTest.keyClick(t, Qt.Key.Key_Return)
+        self.assertFalse(t.plegado)
+        QTest.keyClick(t, Qt.Key.Key_Enter)
+        self.assertTrue(t.plegado)
+        self.assertIn("plegado", t.accessibleName())
+
+    def test_SPVU12_con_filtro_los_grupos_con_coincidencias_se_ven_y_al_borrarlo_vuelven(self):
+        """REQ-EDT-02: con el filtro escrito, los grupos con coincidencias se muestran desplegados aunque estén plegados; al borrarlo,
+        vuelven a su estado."""
+        self.con_ajustes()
+        variables = {f"I{i}": ("input", "bool") for i in range(11)}
+        variables.update({"M1": ("internal", "bool"), "Q1": ("output", "bool"), "Q2": ("output", "bool")})
+        p = self.programador(variables)
+        p.resize(500, 400)
+        p.show()
+        QApplication.processEvents()
+        self.titulos(p)["entrada"].click()
+        self.titulos(p)["salida"].click()
+        QApplication.processEvents()
+        self.assertEqual([n["n"] for n in p.paleta.bloques()], ["M1"])
+        p.paleta.filtro.setText("q")
+        QApplication.processEvents()
+        self.assertEqual([n["n"] for n in p.paleta.bloques()], ["Q1", "Q2"], "el grupo plegado con coincidencias se ve")
+        self.assertFalse(self.titulos(p)["salida"].plegado)
+        p.paleta.filtro.setText("")
+        QApplication.processEvents()
+        self.assertEqual([n["n"] for n in p.paleta.bloques()], ["M1"], "al borrar el filtro vuelve a su estado")
+        self.assertTrue(self.titulos(p)["salida"].plegado)
+
+
 if __name__ == "__main__":
     unittest.main()

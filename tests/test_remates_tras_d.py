@@ -86,7 +86,7 @@ class RematesTrasD(BaseQt):
             w.cambiar_modo("editar")
 
     def test_SREM203_aviso_en_linea_bajo_formula_y_papelera_centrada(self):
-        for flotante in (False, True):
+        for flotante in (False,):  # (la ventana flotante ya no tiene fila «Fórmula» ni aviso fijo, y la papelera va junto a las categorías: SPFL29 y SPFL30)
             w, e, p, aid = self.preparar(flotante=flotante)
             estado, campo, papelera = p.t_estado, p.t_texto, p.prog.papelera
             self.assertFalse(estado.wordWrap())
@@ -102,7 +102,7 @@ class RematesTrasD(BaseQt):
             self.assertTrue(elidido.endswith("…"))
 
     def test_SREM204_frase_usa_el_ancho_completo(self):
-        for flotante in (False, True):
+        for flotante in (False,):  # (la ventana flotante ya no lleva la frase de la acción: SPFL29)
             w, e, p, aid = self.preparar("evento", flotante)
             frase = p.accion.frase
             self.assertGreater(frase.width(), 300)

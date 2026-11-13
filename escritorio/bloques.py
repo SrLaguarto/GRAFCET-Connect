@@ -1874,6 +1874,21 @@ class Programador(QWidget):
         botones = list(self.categorias.values())
         return sum(b.sizeHint().width() for b in botones) + self._flujo_carpetas.spacing() * (len(botones) - 1) + 4
 
+    def papelera_arriba(self) -> None:
+        """La papelera pasa del pie del área a la derecha de la fila de categorías (la ventana flotante: el pie se quita y el alto es para los
+        bloques). No vuelve: cada programador lo pide una vez, al crearse."""
+        if getattr(self, "_fila_cat", None) is not None:
+            return
+        self._raiz.removeWidget(self._sc_carpetas)
+        fila = QHBoxLayout()
+        fila.setContentsMargins(0, 0, 0, 0)
+        fila.setSpacing(estilo.E2)
+        fila.addWidget(self._sc_carpetas, 1)
+        self.pie.removeWidget(self.papelera)
+        fila.addWidget(self.papelera, 0, Qt.AlignmentFlag.AlignTop)
+        self._raiz.insertLayout(0, fila)
+        self._fila_cat = fila
+
     def categorias_en_cabecera(self, destino: QBoxLayout | None, posicion: int = 1) -> None:
         """Con `destino` (la fila de cabecera de un panel), las categorías van **en esa fila**, en una sola línea y sin barra, y el programador
         se queda con la paleta y el área; con `None` vuelven a su fila propia sobre la paleta (donde pasan a dos filas si no caben)."""

@@ -52,7 +52,7 @@ class PropiedadesFlotante(unittest.TestCase):
         return [v for v in self.w.findChildren(VentanaFlotante) if v.isVisible()]
 
     def comprobar_colocacion(self, numero):
-        """Centrada, con margen de 24 px y una línea por panel desde su parte ampliada."""
+        """Centrada, con margen de 24 px y, con dos paneles, una línea por panel desde su parte ampliada (con uno solo, ninguna)."""
         f = self.w.flot
         v = f.principal
         area = f._area()
@@ -93,7 +93,7 @@ class PropiedadesFlotante(unittest.TestCase):
 
     # -- SPFL02 / SPFL03
     def test_SPFL02_doble_clic_en_etapa_abre_ventana_unida(self):
-        """REQ-EDT-02, REQ-EDT-09: doble clic en una etapa (flotante): una ventana centrada con una línea interior."""
+        """REQ-EDT-02, REQ-EDT-09: doble clic en una etapa (flotante): una ventana centrada, sin línea de puntos (un solo panel)."""
         sid = self.ids["etapas"][0]
         zona = self.e.zonas_propiedades(sid)["elemento"]
         self.e.doble(zona.center())
@@ -103,12 +103,12 @@ class PropiedadesFlotante(unittest.TestCase):
         self.assertTrue(self.w.flot.panel.s_etiqueta.isVisible())
         self.assertTrue(self.w.props.parent() is not None)
         self.assertFalse(self.w._plegables["inferior"].isVisible(), "la barra inferior no se usa")
-        self.comprobar_colocacion(1)
+        self.comprobar_colocacion(0)
         self.assertFalse(v.isWindow())
 
     def test_SPFL03_doble_clic_en_transicion_abre_ventana_unida(self):
         """REQ-EDT-02: doble clic en una transición (flotante): ventana con la receptividad (programador por bloques),
-        con lupa y línea interior."""
+        con lupa y sin línea de puntos."""
         tid = self.ids["transiciones"][0]
         zona = self.e.zonas_propiedades(tid)["elemento"]
         self.e.doble(zona.center())
@@ -117,7 +117,7 @@ class PropiedadesFlotante(unittest.TestCase):
         p = self.w.flot.panel
         self.assertEqual(v.titulo.text(), "Propiedades · Transición")
         self.assertTrue(p.prog.isVisible() and p.t_etiqueta.isVisible())
-        self.comprobar_colocacion(1)
+        self.comprobar_colocacion(0)
         p._desde_bloques("paro")
         self.assertEqual(self.e.texto_usuario(tid), "paro", "lo que se edita llega al dibujo al momento")
 
@@ -129,7 +129,7 @@ class PropiedadesFlotante(unittest.TestCase):
             HC._bombear(12)
             self.w._escala_tras_la_rafaga()
             HC._bombear(10)
-            self.comprobar_colocacion(1)
+            self.comprobar_colocacion(0)
             v = self.w.flot.principal
             self.assertFalse([b for b in v.findChildren(QToolButton) if b.isVisible() and b.text() == "Fijar"])
 
@@ -171,7 +171,7 @@ class PropiedadesFlotante(unittest.TestCase):
             cambio()
             HC._bombear(8)
             self.assertEqual(self.w.flot.principal.geometry(), antes)
-            self.comprobar_colocacion(1)
+            self.comprobar_colocacion(0)
 
     # -- SPFL07 / SPFL08
     def test_SPFL07_condicionada_dos_paneles(self):
@@ -552,7 +552,7 @@ class PropiedadesFlotante(unittest.TestCase):
             self.assertEqual(self.color(imagen, estilo.E1, v.lupa.height() // 2), estilo.SUPERFICIE)
             self.assertEqual(v.columna.geometry().left() - v.lupa.geometry().right() - 1, estilo.E6)
             zonas = f._zonas()
-            self.assertEqual(len(f.enlaces.finales), len(zonas))
+            self.assertEqual(len(f.enlaces.finales), len(zonas) if len(zonas) == 2 else 0)
             for (tarjeta, _), (parte, destino), fin in zip(zonas, f.enlaces.pares, f.enlaces.finales):
                 izq = tarjeta.mapTo(v.cuerpo, QPoint()).x()
                 alto = tarjeta.mapTo(v.cuerpo, QPoint()).y()
@@ -632,6 +632,226 @@ class PropiedadesFlotante(unittest.TestCase):
                     self.assertFalse(rect.contains(p), ("la línea cruza el elemento", p, rect))
             accion = f.enlaces.inicios[1]
             self.assertLessEqual(abs(accion.x() - cajaw.right()), 6, "la de la acción sigue saliendo de su borde derecho")
+
+    # -- encargo 18: ventana más limpia (sin fila Fórmula, aviso ni frase), más alto para los bloques, grupos plegables, lupa recortada y Esc
+    def con_entradas(self, c, n=8):
+        for i in range(n):
+            c.e.nueva_variable(f"sen{i}", "input", None)
+
+    def test_SPFL29_flotante_sin_formula_ni_aviso_ni_frase_y_la_barra_igual(self):
+        """REQ-EDT-02: en la ventana flotante no hay fila «Fórmula», ni aviso de «correcta», ni la frase de la acción; en la barra inferior
+        todo sigue."""
+        for c, v in self.casos(("condicionada", "evento", "transicion")):
+            p = c.w.flot.panel
+            self.assertFalse(p._l_formula.isVisible() or p.t_texto.isVisible(), "sin la fila Fórmula")
+            self.assertFalse(p.t_estado.isVisible(), "sin el aviso de fórmula correcta")
+            self.assertFalse(p.accion.frase.isVisible(), "sin la frase de la acción")
+            self.assertTrue(p.prog.papelera.isVisible())
+        c = HC.Contexto(1366, 768)
+        try:
+            HC._con_seleccion("accion")(c)
+            p = c.w.props
+            self.assertTrue(p._l_formula.isVisible() and p.t_texto.isVisible() and p.t_estado.isVisible() and p.accion.frase.isVisible())
+            self.assertIn("correcta", p.t_estado.text())
+            self.assertTrue(p.accion.frase.text())
+            self.assertIs(p.prog.papelera.parentWidget(), p.caja_formula, "la papelera, en la fila de la fórmula")
+        finally:
+            c.cerrar()
+
+    def test_SPFL30_error_de_formula_una_linea_roja_y_papelera_que_borra(self):
+        """REQ-EDT-02: con la fórmula errónea sale una línea roja de una línea bajo el área de bloques; la papelera, junto a las categorías,
+        borra la fórmula."""
+        from escritorio.diagrama import COL
+        for ancho, alto in ((1366, 768), (2000, 1250)):
+            with self.subTest(tamano=(ancho, alto)):
+                c = HC.Contexto(ancho, alto)
+                try:
+                    HC._flotante("evento")(c)
+                    f = c.w.flot
+                    p = f.panel
+                    aid = self.accion_de(c, "evento")
+                    self.assertFalse(p.t_estado.isVisible(), "correcto: nada")
+                    c.e.poner_texto_accion(aid, "evento", "3s/?")
+                    HC._bombear(12)
+                    e = p.t_estado
+                    self.assertTrue(e.isVisible())
+                    self.assertTrue(e.text().startswith("Error de sintaxis"))
+                    self.assertIn(COL["err"], e.styleSheet())
+                    self.assertLessEqual(e.height(), e.fontMetrics().height() + 4, "una sola línea")
+                    if e.texto_visible() != " ".join(e.text().splitlines()):
+                        self.assertIn("…", e.texto_visible())
+                        self.assertTrue(e.toolTip(), "el texto entero, en la ayuda emergente")
+                    self.assertGreaterEqual(e.mapTo(p, QPoint()).y(), p.prog.mapTo(p, QPoint()).y() + p.prog.height() - 2, "bajo el área")
+                    aid = p.objetivo_bloques()[1]  # (con un evento a medias la acción puede cambiar de identidad)
+                    c.e.poner_texto_accion(aid, "evento", "↑marcha")
+                    HC._bombear(12)
+                    aid = p.objetivo_bloques()[1]
+                    self.assertFalse(p.t_estado.isVisible())
+                    # la papelera: junto a las categorías, no en el pie
+                    pap = p.prog.papelera
+                    self.assertTrue(pap.isVisible() and pap.toolTip())
+                    self.assertLess(pap.mapTo(p.prog, QPoint()).y() + pap.height(), p.prog.lienzo.mapTo(p.prog, QPoint()).y() + 2)
+                    self.assertGreater(pap.mapTo(p.prog, QPoint()).x(), p.prog.width() // 2)
+                    self.assertTrue(p.prog.texto())
+                    pap.al_soltar({"origen": (0,), "grupo": p.prog.grupo})
+                    HC._bombear(8)
+                    self.assertEqual(p.prog.texto(), "", "la papelera borró la fórmula")
+                finally:
+                    c.cerrar()
+
+    @staticmethod
+    def accion_de(c, tipo):
+        return next(a["id"] for a in c.e.ed.model["actions"] if c.e.datos_accion(a["id"])["tipo"] == tipo)
+
+    def test_SPFL31_area_de_bloques_alta_y_sin_desplazamiento_evitable(self):
+        """REQ-EDT-02: el área de bloques de la ventana flotante ve al menos 6 fichas de variables a 1366×768 y el doble aproximadamente a
+        2000×1250, y las tarjetas no se desplazan."""
+        vistas = {}
+        for ancho, alto in ((1366, 768), (2000, 1250)):
+            for tipo in ("condicionada", "evento", "transicion"):
+                c = HC.Contexto(ancho, alto)
+                try:
+                    self.con_entradas(c, 12)
+                    HC._flotante(tipo)(c)
+                    f = c.w.flot
+                    paleta = f.panel.prog.paleta
+                    visor = f.panel.prog._sc_paleta.viewport().height()
+                    fichas = sum(1 for caja, x, y in paleta._cajas if y + caja.h <= visor)
+                    vistas[(ancho, tipo)] = fichas
+                    for tarjeta in (t for t in (f.principal.condicion, f.principal.accion) if t.isVisible()):
+                        self.assertEqual(tarjeta.scroll.verticalScrollBar().maximum(), 0, (ancho, tipo, tarjeta.titulo.text()))
+                finally:
+                    c.cerrar()
+        for tipo in ("condicionada", "evento", "transicion"):
+            self.assertGreaterEqual(vistas[(1366, tipo)], 6, vistas)
+            self.assertGreaterEqual(vistas[(2000, tipo)], int(vistas[(1366, tipo)] * 1.6), vistas)
+
+    def test_SPFL32_lineas_de_puntos_solo_con_dos_paneles(self):
+        """REQ-EDT-09: sin línea de puntos en etapa, transición ni acciones de un solo panel; dos líneas en condicionada y evento."""
+        for c, v in self.casos(("etapa", "transicion", "activacion", "condicionada", "evento")):
+            esperadas = 2 if v.condicion.isVisible() else 0
+            f = c.w.flot
+            self.assertEqual((len(f.enlaces.pares), len(f.enlaces.finales), len(f.enlaces.inicios)), (esperadas,) * 3)
+
+    def mover_etapa(self, c, ident, y):
+        for s in c.e.ed.model["steps"]:
+            if s["id"] == ident:
+                s["y"] = y
+        c.e.cambiado.emit()
+
+    def test_SPFL33_lupa_de_transicion_y_etapa_sin_trozos_vecinos(self):
+        """REQ-EDT-09: la lupa de una transición dibuja su trazo, su barra y su texto con los muñones del enlace, sin la etapa de debajo (ni
+        de arriba); la de una etapa, su caja y sus muñones."""
+        from escritorio.diagrama import posiciones
+        for caso in ("transicion", "etapa"):
+            c = HC.Contexto(1366, 768)
+            try:
+                HC._edicion(c)
+                c.w._cambiar_modo_propiedades("flotante")
+                tid, e = c.ids["transiciones"][0], c.e
+                z0 = e.zonas_propiedades(tid)["elemento"]
+                self.mover_etapa(c, c.ids["etapas"][1], int(z0.bottom() + 3 + 22))  # la etapa de debajo casi pegada a la zona de la transición
+                self.mover_etapa(c, c.ids["etapas"][0], int(z0.top() - 3 - 22))  # y la de arriba también
+                HC._bombear(6)
+                e.seleccionar([tid if caso == "transicion" else c.ids["etapas"][1]])
+                c.w._abrir_opciones()
+                HC._bombear(12)
+                v = c.w.flot.principal
+                ident = c.w.flot.panel.ident
+                zona = e.zonas_propiedades(ident)["elemento"]
+                t = v.lupa.transformar()
+                esc = t.m11()
+                zr = t.mapRect(zona)
+                xc = t.map(QPointF(*posiciones(e.M)[ident])).x()
+                imagen = v.lupa.grab().toImage()
+                ancho_muñon = 2 * esc + 2
+                for y in range(imagen.height()):
+                    if zr.top() - 2 <= y <= zr.bottom() + 2:
+                        continue
+                    for x in range(4, imagen.width() - 4):
+                        if abs(x - xc) <= ancho_muñon:
+                            continue
+                        if caso == "etapa" and zr.center().y() - ancho_muñon <= y <= zr.center().y() + ancho_muñon and x > zr.right():
+                            continue  # el muñón del enlace a la acción
+                        self.assertGreaterEqual(imagen.pixelColor(x, y).lightness(), 100, (caso, "trozo ajeno", x, y))
+                oscuros = [x for x in range(imagen.width()) if imagen.pixelColor(x, int(zr.center().y())).lightness() < 100]
+                self.assertTrue(oscuros, "el propio elemento se ve")
+            finally:
+                c.cerrar()
+
+    def test_SPFL34_esc_cierra_la_ventana(self):
+        """REQ-EDT-02: con la ventana abierta, Esc la cierra, con el foco en ella o en el dibujo (sin deseleccionar); con un desplegable
+        abierto, el primer Esc solo lo cierra."""
+        from PySide6.QtTest import QTest
+        sid = self.ids["etapas"][0]
+        self.abrir([sid])
+        f = self.w.flot
+        f.panel.s_etiqueta.setFocus()
+        HC._bombear(4)
+        QTest.keyClick(f.panel.s_etiqueta, Qt.Key.Key_Escape)
+        HC._bombear(6)
+        self.assertEqual(self.ventanas(), [], "Esc con el foco en la ventana")
+        self.abrir([sid])
+        self.assertEqual(len(self.ventanas()), 1)
+        self.w.diagrama.setFocus()
+        HC._bombear(4)
+        QTest.keyClick(self.w.diagrama.viewport(), Qt.Key.Key_Escape)
+        HC._bombear(6)
+        self.assertEqual(self.ventanas(), [], "Esc con el foco en el dibujo")
+        self.assertIn(sid, self.e.sel, "no deselecciona a la vez")
+        self.abrir([sid])
+        combo = f.panel.s_tipo
+        combo.setFocus()
+        combo.showPopup()
+        HC._bombear(6)
+        popup = QApplication.activePopupWidget()
+        self.assertIsNotNone(popup, "desplegable abierto")
+        QTest.keyClick(popup, Qt.Key.Key_Escape)
+        HC._bombear(6)
+        self.assertEqual(len(self.ventanas()), 1, "el primer Esc solo cierra el desplegable")
+        self.assertIsNone(QApplication.activePopupWidget())
+        combo.setFocus()
+        QTest.keyClick(combo, Qt.Key.Key_Escape)
+        HC._bombear(6)
+        self.assertEqual(self.ventanas(), [], "el siguiente cierra la ventana")
+
+    def test_SPFL35_grupos_plegables_en_la_barra_y_en_la_flotante(self):
+        """REQ-EDT-02: los subtítulos de la paleta de variables plegan su grupo con clic y con el teclado, se recuerdan y se comparten entre la
+        barra inferior y la ventana flotante."""
+        from PySide6.QtTest import QTest
+        from escritorio.paleta_variables import CLAVE_PLEGADOS, TituloGrupo
+        for modo in ("abajo", "flotante"):
+            with self.subTest(modo=modo):
+                c = HC.Contexto(1366, 768)
+                try:
+                    (HC._flotante("condicionada") if modo == "flotante" else HC._con_seleccion("accion"))(c)
+                    self.con_entradas(c, 3)
+                    HC._bombear(10)
+                    panel = c.w.flot.panel if modo == "flotante" else c.w.props
+                    otro = c.w.props if modo == "flotante" else c.w.flot.panel if c.w.flot.panel is not None else None
+                    paleta = panel.prog.paleta
+                    titulos = {t.papel: t for t in paleta.findChildren(TituloGrupo) if t.isVisible()}
+                    self.assertIn("entrada", titulos)
+                    self.assertFalse(titulos["entrada"].plegado, "por defecto, desplegados")
+                    antes = len(paleta.bloques())
+                    titulos["entrada"].click()
+                    HC._bombear(4)
+                    self.assertTrue(titulos["entrada"].plegado)
+                    self.assertLess(len(paleta.bloques()), antes)
+                    self.assertEqual(c.w.ajustes.value(CLAVE_PLEGADOS), "entrada")
+                    if otro is not None:
+                        self.assertTrue(any(g[0] == "entrada" and g[3] == 0 for g in otro.prog.paleta.grupos), "el otro control lo sigue")
+                    titulos["entrada"].setFocus(Qt.FocusReason.TabFocusReason)
+                    QTest.keyClick(titulos["entrada"], Qt.Key.Key_Space)
+                    HC._bombear(4)
+                    self.assertFalse(titulos["entrada"].plegado)
+                    QTest.keyClick(titulos["entrada"], Qt.Key.Key_Return)
+                    HC._bombear(4)
+                    self.assertTrue(titulos["entrada"].plegado)
+                    self.assertEqual(c.w.ajustes.value(CLAVE_PLEGADOS), "entrada")
+                    titulos["entrada"].click()  # desplegado otra vez, para el siguiente modo
+                finally:
+                    c.cerrar()
 
 
 if __name__ == "__main__":

@@ -4190,7 +4190,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((textos[1], textos[5]), ("Salidas", "Memorias"))
         self.assertNotIn("Nueva variable…", textos)
         self.assertFalse(hasattr(d, "nueva_variable"), "ni método ni diálogo para crear variables desde la acción")
-        self.assertIn("Booleana", textos[2])
+        self.assertIn("(Bool)", textos[2], "el tipo, en corto (P-IMP-154)")
         self.assertFalse(d.variable.model().item(1).isEnabled(), "los rótulos no se eligen")
         self.poner_tipo(d, "condicionada")
         self.assertEqual(d.ofrecidas(), ["Q00", "Q01", "Q02", "M1"])
@@ -4198,7 +4198,7 @@ class Interfaz(unittest.TestCase):
             self.poner_tipo(d, tipo)
             self.assertEqual(d.ofrecidas(), ["Q00", "Q01", "Q02", "CT", "M1"], tipo)
             self.assertNotIn("I02", d.ofrecidas())
-        self.assertTrue(any("Entera" in d.variable.itemText(i) and d.variable.itemData(i) == "CT"
+        self.assertTrue(any("(Ent)" in d.variable.itemText(i) and d.variable.itemData(i) == "CT"
                             for i in range(d.variable.count())), "con su tipo")
         # una variable creada en la tabla aparece enseguida en la lista y se elige como cualquier otra
         d.poner_variable("CT")

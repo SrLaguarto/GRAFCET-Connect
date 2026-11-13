@@ -3,28 +3,78 @@ from __future__ import annotations
 
 import re
 import unicodedata
+import weakref
 
-from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetricsF
-from PySide6.QtWidgets import QLabel, QLineEdit
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen, QPolygonF
+from PySide6.QtWidgets import QAbstractButton, QLabel, QLineEdit
 
 from . import estilo
 from .bloques import COLORES, PAPEL, PaletaBloques, etapa_visible, nuevo, var
 
 GRUPOS = (("entrada", "Entradas"), ("etapa", "Etapas"), ("interna", "Memorias"), ("salida", "Salidas"))
 MENSAJE_VACIO = "No hay variables ni etapas. Créelas en el panel Variables o añada etapas al dibujo."
+CLAVE_PLEGADOS = "formulador/plegados"  # los grupos plegados, por su papel («entrada,salida»): lo comparten todas las paletas
 
 
 def sin_acentos(texto: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", texto.casefold()) if not unicodedata.combining(c))
 
 
+class TituloGrupo(QAbstractButton):
+    """El subtítulo de un grupo de la paleta («▾ Entradas»): un clic, Espacio o Intro lo pliega o lo despliega. El triángulo lleva el color
+    del papel; con el teclado (Tab) se ve el foco."""
+
+    def __init__(self, papel, paleta):
+        super().__init__(paleta)
+        self.papel, self.paleta, self.plegado = papel, paleta, False
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def keyPressEvent(self, evento):  # noqa: N802
+        if evento.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.click()
+            return
+        super().keyPressEvent(evento)
+
+    def sizeHint(self):  # noqa: N802
+        medidas = QFontMetricsF(self.paleta._fuente_titulo())
+        return QSize(int(medidas.horizontalAdvance(self.text())) + estilo.E4 + estilo.E2, int(medidas.height()))
+
+    def paintEvent(self, evento):  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        cy = self.height() / 2
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(COLORES[self.papel]))
+        if self.plegado:  # ▸
+            p.drawPolygon(QPolygonF([QPointF(1, cy - 4), QPointF(1, cy + 4), QPointF(7, cy)]))
+        else:  # ▾
+            p.drawPolygon(QPolygonF([QPointF(0, cy - 3), QPointF(8, cy - 3), QPointF(4, cy + 3)]))
+        p.setFont(self.paleta._fuente_titulo())
+        p.setPen(QColor(estilo.TINTA_2))
+        p.drawText(QRectF(estilo.E4, 0, self.width() - estilo.E4, self.height()),
+                   int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), self.text())
+        if self.hasFocus():
+            p.setPen(QPen(QColor(estilo.FOCO), 2, Qt.PenStyle.DashLine))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(QRectF(self.rect()).adjusted(1, 1, -1, -1))
+        p.end()
+
+
 class PaletaVariables(PaletaBloques):
     geometria_cambiada = Signal()
+    ajustes = None  # los ajustes de la aplicación (`QSettings`), que pone la ventana: ahí se recuerdan los grupos plegados
+    _instancias = weakref.WeakSet()
 
     def __init__(self, fuente, grupo="", columna=False):
-        self.grupos = []
+        self._ajustes = type(self).ajustes
+        self._plegados_locales = set()  # sin ajustes (una paleta suelta): solo en esta paleta
+        self._botones_titulo = {}
+        self._efectivos = set()  # los plegados que de verdad lo están ahora (con filtro escrito, los grupos con coincidencias se ven)
         self._titulos = []
+        type(self)._instancias.add(self)
+        self.grupos = []
         self._todos = []
         self._ancho_titulos = 0
         self.filtro = None
@@ -39,6 +89,51 @@ class PaletaVariables(PaletaBloques):
         self.mensaje.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.mensaje.setStyleSheet(f"color: {estilo.TINTA_2}; background: transparent; border: none;")
         self.cargar("variables")
+
+    # -- grupos plegables
+    def plegados(self):
+        if self._ajustes is None:
+            return set(self._plegados_locales)
+        valor = self._ajustes.value(CLAVE_PLEGADOS, "")
+        if isinstance(valor, (list, tuple)):
+            valor = ",".join(str(v) for v in valor)
+        return {p for p in str(valor or "").split(",") if p in {g for g, _ in GRUPOS}}
+
+    def alternar(self, papel):
+        """Pliega o despliega un grupo y lo recuerda; las demás paletas de la misma aplicación lo siguen."""
+        nuevos = self.plegados() ^ {papel}
+        if self._ajustes is None:
+            self._plegados_locales = nuevos
+        else:
+            self._ajustes.setValue(CLAVE_PLEGADOS, ",".join(g for g, _ in GRUPOS if g in nuevos))
+            self._ajustes.sync()
+        for otra in list(type(self)._instancias):
+            if otra is self or (self._ajustes is not None and otra._ajustes is self._ajustes):
+                otra._filtrar()
+
+    def _colocar_titulos(self):
+        activos = set()
+        for papel, titulo, rect in self._titulos:
+            boton = self._botones_titulo.get(papel)
+            if boton is None:
+                boton = self._botones_titulo[papel] = TituloGrupo(papel, self)
+                boton.clicked.connect(lambda _=False, p=papel: self.alternar(p))
+            boton.setText(titulo)
+            boton.plegado = papel in self._efectivos
+            boton.setAccessibleName(f"{titulo}: {'plegado' if boton.plegado else 'desplegado'}")
+            boton.setGeometry(rect.toRect())
+            boton.show()
+            boton.update()
+            activos.add(papel)
+        for papel, boton in self._botones_titulo.items():
+            if papel not in activos:
+                boton.hide()
+
+    def _calcular(self, ancho):
+        super()._calcular(ancho)
+        if self.clave != "variables":
+            self._titulos = []
+        self._colocar_titulos()
 
     def cargar(self, clave):
         if clave != "variables":
@@ -79,11 +174,15 @@ class PaletaVariables(PaletaBloques):
             texto = sin_acentos(self.filtro.text())
         self.grupos = []
         self._raices = []
+        self._efectivos = set() if texto else self.plegados()
         for papel, titulo, nodos in self._todos:
             def nombre_visible(nodo):
                 return etapa_visible(nodo["n"]) if nodo["k"] == "etapa" else nodo["n"]
             visibles = [n for n in nodos if texto in sin_acentos(nombre_visible(n))]
             if visibles:
+                if papel in self._efectivos:  # plegado: el título sigue, sin fichas
+                    self.grupos.append((papel, titulo, len(self._raices), 0))
+                    continue
                 self.grupos.append((papel, titulo, len(self._raices), len(visibles)))
                 self._raices.extend(visibles)
         if self.mensaje is not None:
@@ -154,13 +253,4 @@ class PaletaVariables(PaletaBloques):
             self.geometria_cambiada.emit()
 
     def _extra(self, pintor):
-        if self.clave != "variables":
-            return
-        pintor.setFont(self._fuente_titulo())
-        for papel, titulo, rect in self._titulos:
-            pintor.setPen(Qt.PenStyle.NoPen)
-            pintor.setBrush(QColor(COLORES[papel]))
-            pintor.drawEllipse(QRectF(rect.x(), rect.center().y() - 3, 6, 6))
-            pintor.setPen(QColor(estilo.TINTA_2))
-            texto = rect.adjusted(estilo.E4, 0, 0, 0)
-            pintor.drawText(texto, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, titulo)
+        return  # los subtítulos son botones (`TituloGrupo`), no se pintan aquí

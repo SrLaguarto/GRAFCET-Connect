@@ -4,7 +4,7 @@ from typing import Any
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPalette, QPen, QTextLayout, QTextOption
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGroupBox, QHeaderView, QLabel, QLayout, QSplitter, QSplitterHandle,
-                               QSizePolicy, QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionComboBox, QStyleOptionGroupBox,
+                               QSizePolicy, QStackedLayout, QStackedWidget, QStyle, QStyledItemDelegate, QStyleOptionComboBox, QStyleOptionGroupBox,
                                QStyleOptionToolButton, QStyleOptionViewItem, QStylePainter, QToolButton, QVBoxLayout, QWidget)
 
 from . import estilo
@@ -342,6 +342,59 @@ class PilaActual(QStackedWidget):
         return w.sizeHint() if w is not None else QSize(0, 0)
 
     def minimumSizeHint(self):
+        w = self.currentWidget()
+        return w.minimumSizeHint() if w is not None else QSize(0, 0)
+
+
+class _PilaLayout(QStackedLayout):
+    """Una pila cuyo alto para un ancho es el de la página que se ve (Qt, en cambio, toma el mayor de todas las páginas)."""
+
+    def hasHeightForWidth(self):  # noqa: N802
+        w = self.currentWidget()
+        return w is not None and w.hasHeightForWidth()
+
+    def heightForWidth(self, ancho):  # noqa: N802
+        w = self.currentWidget()
+        if w is None:
+            return -1
+        padre = self.parentWidget()
+        ancho = max(padre.minimumWidth(), min(ancho, padre.maximumWidth()))  # (Qt no recorta el ancho que pregunta)
+        return w.heightForWidth(ancho) if w.hasHeightForWidth() else w.sizeHint().height()
+
+
+class PilaActualSolo(QWidget):
+    """Como `PilaActual` (el mínimo lo da la página que se usa) pero también el alto para un ancho: lo usa la ventana flotante, donde las
+    páginas de otros elementos no deben inflar la tarjeta. Solo la parte de `QStackedWidget` que usa Propiedades."""
+
+    def __init__(self):
+        super().__init__()
+        self._pila = _PilaLayout(self)
+        self._pila.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+        self._pila.currentChanged.connect(lambda _: self.updateGeometry())
+
+    def addWidget(self, w):  # noqa: N802
+        return self._pila.addWidget(w)
+
+    def widget(self, i):
+        return self._pila.widget(i)
+
+    def count(self):
+        return self._pila.count()
+
+    def currentWidget(self):  # noqa: N802
+        return self._pila.currentWidget()
+
+    def currentIndex(self):  # noqa: N802
+        return self._pila.currentIndex()
+
+    def setCurrentIndex(self, i):  # noqa: N802
+        self._pila.setCurrentIndex(i)
+
+    def sizeHint(self):  # noqa: N802
+        w = self.currentWidget()
+        return w.sizeHint() if w is not None else QSize(0, 0)
+
+    def minimumSizeHint(self):  # noqa: N802
         w = self.currentWidget()
         return w.minimumSizeHint() if w is not None else QSize(0, 0)
 

@@ -44,7 +44,7 @@ from .paneles import EtiquetaGrupos, TituloSeccion
 from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
 from .remates_propiedades import AvisoFormula, RematesAccion
-from .paneles import PilaActual
+from .paneles import PilaActual, PilaActualSolo
 from .diagrama import ACT_MIN, COL, H, MARK, TB, VACIO_H, VACIO_W, _html
 from .edicion import COLOCACIONES, CONTINUAS, Parpadeo
 
@@ -565,7 +565,7 @@ class PanelPropiedades(QWidget):
         cuerpo.setSpacing(14)
         lay.addWidget(self.cuerpo, 1)
         # Izquierda, la columna estrecha de campos; derecha, lo ancho (lista de acciones, programadores, enlace, barra)
-        self.izq = PilaActual()
+        self.izq = PilaActualSolo() if flotante else PilaActual()  # (flotante: el alto de la página que se ve, no el de la mayor)
         self.izq.setFixedWidth(ANCHO_COLUMNA)
         self.izq.addWidget(QWidget())  # 0: nada que mostrar en la columna
         self.izq.addWidget(self._etapa())  # 1
@@ -581,7 +581,7 @@ class PanelPropiedades(QWidget):
         lh.addStretch(1)
         self.izq.addWidget(pagina)
         cuerpo.addWidget(self.izq)
-        self.der = PilaActual()
+        self.der = PilaActualSolo() if flotante else PilaActual()
         self.der.addWidget(self._vacio())  # 0
         self.der.addWidget(self._lista_acciones())  # 1
         self.der.addWidget(self._programacion())  # 2
@@ -619,6 +619,13 @@ class PanelPropiedades(QWidget):
         lay.addWidget(self.msg)
         if flotante:
             self.cabecera.hide()  # (el título, «Fijar» y cerrar los pone la ventana flotante)
+            # La lupa ya enseña la fórmula dibujada: sin la fila «Fórmula», sin el aviso de «correcta» ni la frase de la acción. La papelera
+            # sube a la fila de categorías (no roba alto); un error de la fórmula sí sale, en una línea roja bajo el área de bloques.
+            self._l_formula.hide()
+            self.t_texto.hide()
+            self.t_estado.hide()
+            self.accion.frase.hide()
+            self.prog.papelera_arriba()
 
     def zona_de(self, w: QWidget | None) -> str | None:
         """En qué zona de la página de una acción está el widget `w` (el que tiene el foco): «bloques» (la condición o el evento) o «accion» (lo
@@ -1158,6 +1165,14 @@ class PanelPropiedades(QWidget):
 
     # -- receptividad ------------------------------------------------------------------------------
     def _previsualizar(self) -> None:
+        self._previsualizar_texto()
+        if self.flotante:  # solo se ve lo que no está bien (rojo o naranja); «correcta» y «vacía» (gris) no
+            malo = self.t_estado.styleSheet() in (f"color: {COL['err']}", f"color: {NARANJA}") and bool(self.t_estado.text())
+            if malo != self.t_estado.isVisibleTo(self.caja_formula):
+                self.t_estado.setVisible(malo)
+                self.alto_cambiado.emit()
+
+    def _previsualizar_texto(self) -> None:
         e, o, texto = self.e, self._objetivo, self.t_texto.text().strip()
         if e is None or o is None:
             return
@@ -1217,6 +1232,8 @@ class PanelPropiedades(QWidget):
         if motivo:  # un nombre que no se puede escribir en una fórmula: mensaje y parpadeo
             self.t_estado.setText(motivo)
             self.t_estado.setStyleSheet(f"color: {COL['err']}")
+            if self.flotante:
+                self.t_estado.show()
             self.parpadeo_crear.iniciar({"crear"})
 
     def _pintar_crear(self) -> None:

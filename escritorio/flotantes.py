@@ -6,11 +6,12 @@ from typing import Any
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QTransform
 from PySide6.QtWidgets import (
+    QApplication,
     QBoxLayout, QFrame, QHBoxLayout, QLayout, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
 from . import estilo
-from .diagrama import COL, Z_EDIT
+from .diagrama import COL, Z_EDIT, caja_barra, orientaciones, posiciones
 from .paneles import TituloSeccion
 from .propiedades import ANCHO_COLUMNA, PanelPropiedades
 
@@ -108,12 +109,13 @@ class PanelInterior(QFrame):
         self.scroll.setWidget(self.cuerpo)
         self.setMinimumSize(0, 0)
 
-    def alto_necesario(self) -> int:
-        """Altura del contenido al ancho real, incluido el pie de fórmula y la cabecera."""
+    def alto_necesario(self, justo: bool = False) -> int:
+        """Altura del contenido al ancho real, incluido el pie de fórmula y la cabecera. `justo`: lo que pide el contenido en su mínimo (la
+        tarjeta de una acción sin valor numérico: sin sumar el alto de las demás páginas del panel)."""
         self.lay_cuerpo.invalidate()
         ancho = max(1, self.scroll.viewport().width())
-        contenido = max(self.cuerpo.sizeHint().height(), self.cuerpo.minimumSizeHint().height())
-        if self.lay_cuerpo.hasHeightForWidth():
+        contenido = self.cuerpo.minimumSizeHint().height() if justo else max(self.cuerpo.sizeHint().height(), self.cuerpo.minimumSizeHint().height())
+        if self.lay_cuerpo.hasHeightForWidth() and not justo:
             contenido = max(contenido, self.lay_cuerpo.totalHeightForWidth(ancho))
         margenes = self.layout().contentsMargins()
         cabecera = self.titulo.sizeHint().height() + self.layout().spacing()
@@ -221,6 +223,7 @@ class GestorFlotantes(QObject):
         self.geometrias: dict[str, QRect] = {}
         self._escala = None
         self._colocando = False
+        self._vigilando = False
         self._tamano = QSize()
 
     def _crear(self) -> None:
@@ -257,6 +260,36 @@ class GestorFlotantes(QObject):
         if self.principal is not None:
             self.principal.hide()
         self.geometrias = {}
+        self._vigilar(False)
+
+    def _vigilar(self, on: bool) -> None:
+        """Mientras la ventana está abierta, la aplicación nos pasa las teclas Esc (antes que a nadie): la cierran, como su ✕."""
+        app = QApplication.instance()
+        if app is None or on == self._vigilando:
+            return
+        self._vigilando = on
+        (app.installEventFilter if on else app.removeEventFilter)(self)
+
+    @staticmethod
+    def _cancela_con_esc(foco: Any) -> bool:
+        """¿Tiene el foco algo a medias que Esc cancela (el campo abierto sobre una pieza de los bloques, el desplegable sobre el dibujo)?"""
+        return foco is not None and (hasattr(foco, "cancelado") or hasattr(foco, "cerrado"))
+
+    def _esc(self, evento: Any) -> bool:
+        """Esc con la ventana abierta: si hay un desplegable abierto, o un campo con algo que Esc cancela, o el foco está en otra ventana, lo
+        suyo primero; si no, cierra la ventana (también con el foco en el dibujo: sin deseleccionar a la vez)."""
+        if QApplication.activePopupWidget() is not None:
+            return False
+        foco = QApplication.focusWidget()
+        if foco is not None and foco.window() is not self.w:
+            return False
+        if self._cancela_con_esc(foco):
+            return False
+        if evento.type() == QEvent.Type.ShortcutOverride:
+            evento.accept()  # (el atajo de Esc de la ventana, que deselecciona, no salta: llega la tecla)
+        else:
+            self.w._mostrar_panel("inferior", False)
+        return True
 
     def actualizar(self) -> None:
         w = self.w
@@ -283,12 +316,20 @@ class GestorFlotantes(QObject):
             v.condicion.titulo.setText("Evento" if evento else "Condición")
             p.l_bloques.hide()
         v.show()
+        self._vigilar(True)
         self.colocar()
         QTimer.singleShot(0, self.colocar)
 
     def eventFilter(self, objeto: QObject, evento: Any) -> bool:  # noqa: N802
-        if evento.type() in (QEvent.Type.Resize, QEvent.Type.Move):
-            self.colocar()
+        tipo = evento.type()
+        if self._vigilando and not self.principal.isVisible():  # (la ventana se cerró, o su aplicación: deja de vigilar)
+            self._vigilar(False)
+        if tipo in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress):
+            if (evento.key() == Qt.Key.Key_Escape and not evento.modifiers() and self.hay_ventanas() and self._esc(evento)):
+                return True
+            return False
+        if tipo in (QEvent.Type.Resize, QEvent.Type.Move) and (objeto is self.superficie or objeto is self.w.paginas_es):
+            self.colocar()  # (el filtro de la aplicación, mientras la ventana está abierta, ve todos los objetos)
         return False
 
     def _area(self) -> QRect:
@@ -336,12 +377,14 @@ class GestorFlotantes(QObject):
             self._tamano = QSize(ancho, min(alto, disponible.height()))
 
     def _alto_formuladores(self, disponible: QRect) -> int:
-        """Reduce a la mitad el espacio de bloques, conservando los campos y un área útil mínima."""
+        """Todo el alto libre para los bloques de una condición, un evento o una receptividad; con un valor numérico de por medio, la mitad."""
         p, v = self.panel, self.principal
         previa = min(12 * estilo.E4, max(8 * estilo.E4, disponible.width() // 6))
         vertical = disponible.width() - previa - 5 * estilo.E4 < 36 * estilo.E4
         numerica = p.accion.caja_numerica.isVisibleTo(p)
         cantidad = 2 if p._bloques_fuera and numerica else 1
+        if not numerica:  # transición, condición o evento: los bloques ven el máximo de variables (sin la fila «Fórmula» ni la frase sobra alto)
+            return disponible.height()
         fijos = self._marco_ventana() + cantidad * (self._marco_tarjeta() + 2 * estilo.E3)
         if p._bloques_fuera and not numerica:
             fijos += p.sizeHint().height() + 4 * estilo.E2
@@ -379,7 +422,7 @@ class GestorFlotantes(QObject):
         if not p._bloques_fuera:
             return
         superior = v.condicion.alto_necesario()
-        inferior = v.accion.alto_necesario()
+        inferior = v.accion.alto_necesario(justo=not p.accion.caja_numerica.isVisibleTo(p))
         separacion = v.columna.layout().spacing()
         requerido = superior + inferior + separacion
         falta = max(0, requerido - v.columna.height())
@@ -409,15 +452,42 @@ class GestorFlotantes(QObject):
 
     def _recorte(self, origen: QRectF) -> list[QRectF]:
         """Lo que pinta la lupa de una acción: su caja, su marca y, si es la primera unida a la etapa, el trazo de unión."""
-        caja = self.w.edicion.accion_en_id(self.panel.ident)
+        e = self.w.edicion
+        caja = e.accion_en_id(self.panel.ident)
         if caja is None:
-            return []
+            return self._recorte_elemento(e, origen)
         x, y, w, h = caja["rect"]
         sitios = [QRectF(x, y, w, h).adjusted(-MEDIO_TRAZO, -MEDIO_TRAZO, MEDIO_TRAZO, MEDIO_TRAZO)]  # hasta el borde exterior del trazo
         if caja.get("marca"):
             sitios.append(QRectF(*caja["marca"]).adjusted(-1, -1, 1, 1))
         if not caja.get("suelta") and caja.get("cabeza") == caja["id"]:
             sitios.append(QRectF(origen.left(), y + h / 2 - 2, x - origen.left() + MEDIO_TRAZO, 4))
+        return sitios
+
+    def _recorte_elemento(self, e: Any, origen: QRectF) -> list[QRectF]:
+        """Lo que pinta la lupa de una transición (su trazo, su barra y sus textos) o de una etapa (su caja): con los muñones del enlace hasta
+        el borde del encuadre, y nada de las etapas, transiciones o acciones vecinas. Otros elementos, sin recorte."""
+        ident = self.panel.ident
+        z = e.zonas_propiedades(ident).get("elemento")
+        pos = posiciones(e.M)
+        if z is None or ident not in pos:
+            return []
+        x, y = pos[ident]
+        grosor = 2.0  # (el trazo del enlace: 1,6 px, con holgura)
+        sitios = [QRectF(z)]
+        trans = orientaciones(e.M)
+        vertical = True  # el enlace va arriba y abajo
+        if ident in trans:
+            barra = caja_barra(trans[ident], x, y)
+            vertical = barra.width() > barra.height()
+        if vertical:
+            sitios.append(QRectF(x - grosor, origen.top(), 2 * grosor, z.top() - origen.top() + 1))
+            sitios.append(QRectF(x - grosor, z.bottom() - 1, 2 * grosor, origen.bottom() - z.bottom() + 1))
+        else:
+            sitios.append(QRectF(origen.left(), y - grosor, z.left() - origen.left() + 1, 2 * grosor))
+            sitios.append(QRectF(z.right() - 1, y - grosor, origen.right() - z.right() + 1, 2 * grosor))
+        if ident not in trans:  # la etapa puede llevar su enlace a la acción: un muñón corto a su derecha
+            sitios.append(QRectF(z.right() - 1, y - grosor, origen.right() - z.right() + 1, 2 * grosor))
         return sitios
 
     def colocar(self) -> None:
@@ -447,7 +517,7 @@ class GestorFlotantes(QObject):
             self.enlaces.finales = []
             self.enlaces.inicios = []
             caja = self.w.edicion.accion_en_id(self.panel.ident) if self.panel._bloques_fuera else None
-            for panel, r in zonas:
+            for panel, r in (zonas if len(zonas) == 2 else []):  # (las líneas de puntos, solo con dos paneles: condición o evento, y acción)
                 parte = v.lupa.transformar().mapRect(r).translated(v.lupa.pos())
                 destino = QRectF(panel.rect()).translated(panel.mapTo(v.cuerpo, panel.rect().topLeft()))
                 self.enlaces.pares.append((parte, destino))

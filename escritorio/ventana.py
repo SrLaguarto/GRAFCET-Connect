@@ -48,6 +48,7 @@ from .diagrama import COL, VistaDiagrama, imagen
 from .edicion import HERRAMIENTAS, Edicion, aviso_valores_iniciales, quitar_valores_iniciales, sin_codigos
 from .propiedades import FichaJerarquia, PanelPropiedades, Paleta
 from .flotantes import GestorFlotantes
+from .paleta_variables import PaletaVariables
 from .navegacion import Navegacion
 from .leyenda import Leyenda
 from .mensajes import amable, motivo_parada, partir
@@ -595,6 +596,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.resize(1360, 860)
         # Preferencias de la interfaz (paneles plegados) en un .ini del usuario, sin tocar el registro
         self.ajustes = ajustes or QSettings(QSettings.Format.IniFormat, QSettings.Scope.UserScope, "GRAFCET", "Simulador")
+        PaletaVariables.ajustes = self.ajustes  # (los grupos plegados de la paleta de variables se recuerdan en estos ajustes)
         self.options = normalize_options(None)  # por defecto: decisiones del responsable y, lo abierto, detener
         self.fuente: dict[str, Any] = {}
         self.v: Vista | None = None
@@ -1376,12 +1378,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         """Con la barra inferior, al editar una acción condicionada o por evento se resalta en el dibujo lo que se está editando: su condición (o
         evento), si el foco está en los bloques, o su rectángulo, si está en el resto del panel."""
         e, p = self.edicion, self.props
-        if e is None or self.modo_propiedades != "abajo" or ahora is None or p.objetivo_bloques() is None:
-            return
+        objetivo = p.objetivo_bloques()
+        if e is None or self.modo_propiedades != "abajo" or ahora is None or objetivo is None or objetivo[0] != "accion":
+            return  # (solo las acciones condicionadas o por evento tienen dos partes; una transición no)
         zona = p.zona_de(ahora)
         if zona is None:
             return
-        objetivo = p.objetivo_bloques()
         parte = (objetivo[1], objetivo[2] if zona == "bloques" else "accion")
         if e.parte_editada != parte:
             e.parte_editada = parte
