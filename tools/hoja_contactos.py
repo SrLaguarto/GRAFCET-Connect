@@ -130,7 +130,7 @@ def _con_seleccion(que: str) -> Callable[[Contexto], None]:
 
 
 def _flotante(que: str) -> Callable[[Contexto], None]:
-    """Propiedades flotante (Ver > «Propiedades: flotante»): ventana sobre el dibujo junto al elemento, con sus líneas de puntos."""
+    """Propiedades sobre el área de trabajo completa, con una vista previa del elemento."""
     def preparar(c: Contexto) -> None:
         _edicion(c)
         e, w = c.e, c.w
@@ -140,10 +140,16 @@ def _flotante(que: str) -> Callable[[Contexto], None]:
             e.seleccionar([c.ids["etapas"][0]])
             w._abrir_opciones()
             w.props.t_fijar.setChecked(True)
-        if que == "evento":
-            e.poner_accion(sid, {"tipo": "evento", "variable": "aux", "valor": "1", "evento": "↑marcha"})
-        if que in ("condicionada", "evento", "continua"):
-            tipo = {"condicionada": "condicionada", "evento": "evento", "continua": "continua"}[que]
+        nuevas = ("evento", "activacion", "desactivacion", "activacion_numerica", "evento_numerico")
+        if que in nuevas:
+            tipo = que.split("_")[0]
+            numerica = "_" in que
+            variable = "CT" if numerica else "aux"
+            if numerica:
+                e.nueva_variable(variable, "internal", {"kind": "int"})
+            e.poner_accion(sid, {"tipo": tipo, "variable": variable, "valor": "1", "evento": "↑marcha"})
+        if que in ("condicionada", "continua", *nuevas):
+            tipo = que.split("_")[0]
             aid = next(a["id"] for a in e.ed.model["actions"] if e.datos_accion(a["id"])["tipo"] == tipo)
             e.accion, e.ver_accion, e.sel = aid, True, [sid]
             e.cambiado.emit()
@@ -272,6 +278,10 @@ PANTALLAS: list[tuple[str, Callable[[Contexto], None]]] = [
     ("flot_transicion", _flotante("transicion")),
     ("flot_accion_condicionada", _flotante("condicionada")),
     ("flot_accion_evento", _flotante("evento")),
+    ("flot_al_activar", _flotante("activacion")),
+    ("flot_al_desactivar", _flotante("desactivacion")),
+    ("flot_activar_valor", _flotante("activacion_numerica")),
+    ("flot_evento_valor", _flotante("evento_numerico")),
     ("flot_accion_continua", _flotante("continua")),
     ("props_macroetapa", _con_seleccion("macroetapa")),
     ("props_varios", _con_seleccion("varios")),

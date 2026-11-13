@@ -18,6 +18,8 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from .anclaje import AnclajeVentana
+
 from grafcet.routing import NORMAL, SENTIDO, TALLO_T, enlaces, orientacion, punto_t
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, QSettings, Qt, QTimer, Signal
@@ -1147,11 +1149,15 @@ def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[st
     pt.rect(ax, top, w, 2 * H, outer, Z_STEP + (0.005 if on else -0.02), "active_soft" if on else "panel",
             ("Orden de forzado sin completar: no se simula" if force else "Acción sin completar: no se simula") if borrador
             else None)
-    marca = None  # lo que ocupa la marca de la condición o del evento (el trazo, la banderita y el texto): a lo que se une su ventana en Propiedades
+    marca = None  # Marca completa de la acción: condición, evento o flecha de activación/desactivación.
     if a["kind"] == "continuous" and a.get("cond"):
         marca = (ax + 10, top - 18, 7 + _Pintor.ancho(a["cond"], 13) + 4, 18)
     elif a.get("trigger") == "event":
         marca = (ax + 3, top - 22, 14 + _Pintor.ancho(a.get("event"), 13) + 4, 22)
+    elif a.get("trigger") == "activation":
+        marca = (ax + 7, top - 20, 10, 20)
+    elif a.get("trigger") == "deactivation":
+        marca = (ax + 7, bottom, 10, 20)
     if cajas is not None and (not force or borrador):  # (una orden sin completar se mueve y se une como una acción suelta)
         cajas.append({"id": a["id"], "etapa": etapa, "rect": (ax, top, w, 2 * H), "borrador": borrador, "suelta": suelta,
                       "grupo": grupo, "cabeza": cabeza or a["id"], "forzado": force, "marca": marca})
@@ -1505,6 +1511,7 @@ class VistaDiagrama(QGraphicsView):
 
     def __init__(self) -> None:
         super().__init__()
+        self.anclaje = None
         self.setScene(QGraphicsScene(self))
         self.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         self.setBackgroundBrush(QColor(COL["panel"]))
@@ -1584,6 +1591,8 @@ class VistaDiagrama(QGraphicsView):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName("Dibujo del GRAFCET")
         self.setAccessibleDescription("Tab y Mayús+Tab recorren elementos; flechas mueven; Intro edita; Esc deselecciona. Ctrl+Tab sale hacia los controles.")
+
+        self.anclaje = AnclajeVentana(self)
 
     def focusNextPrevChild(self, siguiente):
         if self.hasFocus() and self.navegacion and not QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier:
@@ -2115,6 +2124,8 @@ class VistaDiagrama(QGraphicsView):
         return self.transform().m11()
 
     def _notificar(self) -> None:
+        if self.anclaje is not None:
+            self.anclaje.registrar()
         self.l_zoom.setText(f"{round(self.escala() * 100)} %")
         self.zoomCambiado.emit(self.escala())
         self.vista_cambiada.emit()
@@ -2383,21 +2394,29 @@ class VistaDiagrama(QGraphicsView):
         if self.dependencias != antes and self._ultimo is not None:
             self.mostrar(*self._ultimo)
 
+        self.anclaje.conectar()
+
     def resizeEvent(self, event: Any) -> None:  # noqa: N802
-        """Cambiar el tamaño de la vista no recentra ni reencaja: el dibujo queda anclado arriba a la izquierda (mismo zoom y mismo punto del
-        dibujo en la esquina de la vista; al agrandar, más sitio a la derecha y abajo; al encoger, se recorta por ahí); es lo que pasa al editar
-        y con zoom manual al simular. Solo «Centrar todo», abrir un ejemplo o un proyecto, y encuadrar encajan. (Lo que se encajó antes de mostrarse la vista, sí se encaja de nuevo con su tamaño final.)"""
-        esquina = self._a_escena(QPointF(0, 0))  # (antes de que Qt recoloque las barras con el tamaño nuevo)
-        super().resizeEvent(event)
-        if (self._ajuste_pendiente and self.isVisible()) or not self._manual:
-            self.ajustar()  # (sin zoom manual al simular, la vista se reencaja con la ventana, como siempre: REQ-SIM-03)
-        else:
-            self._barras()  # (las barras dependen de lo que cabe en la vista)
-            self._actualizar_escena(esquina)  # la vista cambia de tamaño y con ella los márgenes de la escena
-            if self._origen:
-                self._al_origen()
-            elif self._encuadrando is not None:  # recién encuadrado: se vuelve a encajar con el tamaño que ha quedado
-                self._encajar(self._encuadrando)
+        """Con zoom manual conserva el punto respecto a la ventana, incluso si la vista cambia de origen."""
+        anclaje = self.anclaje
+        corrigiendo = anclaje.corrigiendo if anclaje is not None else False
+        if anclaje is not None:
+            anclaje.corrigiendo = True
+        try:
+            esquina = self._a_escena(QPointF())
+            super().resizeEvent(event)
+            if (self._ajuste_pendiente and self.isVisible()) or not self._manual:
+                self.ajustar()  # REQ-SIM-03: sin zoom manual se sigue reencajando.
+            else:
+                self._barras()
+                self._actualizar_escena(esquina)
+                if self._encuadrando is not None:
+                    self._encajar(self._encuadrando)
+        finally:
+            if anclaje is not None:
+                anclaje.corrigiendo = corrigiendo
+                if not corrigiendo:
+                    anclaje.restaurar(forzar=True)
         self._colocar()
         self.vista_cambiada.emit()
 

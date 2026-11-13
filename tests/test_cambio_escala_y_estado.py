@@ -60,7 +60,8 @@ class CambioEscalaYEstado(BaseQt):
         self.assertFalse(w._arrancando)
         original = type(w)._cambiar_escala
         with mock.patch.object(type(w), "_cambiar_escala", autospec=True, side_effect=original) as cambio:
-            antes = w.diagrama.mapFromScene(0, 0).toTuple()  # (en la vista: el dibujo queda anclado arriba a la izquierda)
+            d = w.diagrama
+            antes = d.viewport().mapTo(w, d.mapFromScene(0, 0)).toTuple()
             for ancho in (1300, 1900, 1200, 1800, 1100, 1000):
                 w.resize(ancho, 1250)
                 QApplication.processEvents()
@@ -76,7 +77,10 @@ class CambioEscalaYEstado(BaseQt):
             while reloj.elapsed() < 500:
                 QApplication.processEvents()
                 self.assertEqual(w.diagrama.viewport().mapTo(w, w.diagrama.mapFromScene(0, 0)).toTuple(), fin)
-            self.assertEqual(w.diagrama.mapFromScene(0, 0).toTuple(), antes, "el dibujo sigue anclado en su vista tras la ráfaga")
+            self.assertEqual(
+                d.viewport().mapTo(w, d.mapFromScene(0, 0)).toTuple(), antes,
+                "el dibujo sigue anclado en la ventana tras la ráfaga",
+            )
         w.resize(1000, 1250)
         w.resize(1000, 1260)
         self.assertFalse(w._espera_escala.isActive(), "sin cruzar el umbral no queda nada pendiente")
