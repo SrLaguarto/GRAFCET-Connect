@@ -964,7 +964,7 @@ class PanelES(QWidget):
         self.fila_alta = fila_alta
         fila_alta.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 8)  # los botones de la cabecera miden `ALTO_CONTROL_COMPACTO` (hoja `estilo_panel`)
         cabecera = QHBoxLayout(fila_alta)
-        cabecera.setContentsMargins(estilo.E3, 0, estilo.E3, 0)
+        cabecera.setContentsMargins(estilo.E2, 0, estilo.E2, 0)
         cabecera.setSpacing(estilo.E2)
         self.b_volver = QPushButton("Volver")  # de la familia de los botones de la barra: icono de flecha del mismo trazo y borde como «Reiniciar» (hoja de `cabeceraES`)
         self.b_volver.setIcon(estilo.icono("volver", estilo.TINTA, tam=20))
@@ -995,7 +995,9 @@ class PanelES(QWidget):
         self.tiempos.hide()
         fe.addWidget(self.tiempos)
         cabeza.addWidget(fila_alta)
-        cabeza.addWidget(fila_estado)
+        self.fila_estado = fila_estado
+        fila_estado.setParent(banda)
+        fila_estado.hide()
         self.b_configuracion = QPushButton("Configuración")
         self.b_configuracion.setToolTip("Servidor Modbus, cantidad de canales y asignaciones")
         self.b_configuracion.clicked.connect(self.abrir_configuracion)

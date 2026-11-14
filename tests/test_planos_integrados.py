@@ -118,7 +118,14 @@ class PlanosIntegrados(BaseQt):
         """REQ-DAT-02, REQ-EDT-11: cada plano conserva varias hojas y cada hoja varias selecciones vinculadas."""
         w,e,s=self.preparar();ident=self.crear_hoja(e,[s]);plan=e.ed.sheet_plans()[0]['id'];h2=e.ed.add_plan_page(plan,ajustes_lamina());otro=e.ed.add_sheet_plan('Otro plano');h3=e.ed.add_plan_page(otro,ajustes_lamina());p=self.pulsar_planos();w.mostrar_hoja(ident);p.insertar([s])
         self.assertEqual(p.lista.count(),3);self.assertEqual(len(p.editor.documento.capas),2);self.assertFalse(p.editor.documento.capas[0].destino(0).intersects(p.editor.documento.capas[1].destino(0)))
-        self.assertEqual(p.editor.documento.campos(0)['hoja'],'1 de 3');self.assertEqual(p.editor.pagina.text(),'Hoja 1 de 3');QTest.mouseClick(p.editor.siguiente,Qt.MouseButton.LeftButton);self.assertEqual(p.hoja_id,h2);self.assertEqual(p.editor.pagina.text(),'Hoja 2 de 3');w.mostrar_hoja(h2);self.assertEqual(p.editor.documento.campos(0)['hoja'],'2 de 3')
+        self.assertEqual(p.editor.documento.campos(0)['hoja'], '1 de 3')
+        self.assertEqual(p.editor.pagina.text(), 'Hoja 1 de 3')
+        QTest.mouseClick(p.lista.viewport(), Qt.MouseButton.LeftButton,
+                         pos=p.lista.visualItemRect(p.lista.item(1)).center())
+        self.assertEqual(p.hoja_id, h2)
+        self.assertEqual(p.editor.pagina.text(), 'Hoja 2 de 3')
+        w.mostrar_hoja(h2)
+        self.assertEqual(p.editor.documento.campos(0)['hoja'], '2 de 3')
         w.mostrar_hoja(h3);self.assertEqual(p.lista.count(),3);ruta=Path(self.tmp.name)/'varios.grafnet';self.assertTrue(w._guardar_archivo(ruta));self.assertTrue(w.abrir_ruta(ruta))
         self.assertEqual(len(w.edicion.ed.sheet_plans()),2);self.assertEqual(len(w.edicion.ed.sheet_links()),3);self.assertEqual(len(w.edicion.ed.sheet_links()[0]['grafcets']),2)
 
@@ -195,7 +202,8 @@ class PlanosIntegrados(BaseQt):
                 else:ruta.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm"><rect x="5" y="5" width="200" height="287" fill="none" stroke="black"/></svg>',encoding='utf-8')
                 with patch('escritorio.laminas.QFileDialog.getOpenFileName',return_value=(str(ruta),'')),patch('escritorio.laminas.QInputDialog.getInt',return_value=(2,True)),patch('escritorio.laminas.QMessageBox.information'),patch.object(EditorPlantilla,'exec') as emergente:
                     p.editor.a_importar.trigger();emergente.assert_not_called()
-                self.assertIn(p.editor.a_importar,p.barra_plantilla.actions());self.assertIsNotNone(p.editor.documento)
+                self.assertIn(p.editor.a_importar, p.editor.b_opciones_plantilla.menu().actions())
+                self.assertIsNotNone(p.editor.documento)
                 self.assertAlmostEqual(p.editor.documento.ancho,210,delta=.2);self.assertAlmostEqual(p.editor.documento.alto,297,delta=.2)
                 if extension in ('pdf','svg'):self.assertTrue(p.editor.plantilla['background']['data'])
                 if extension=='pdf':self.assertTrue(any('original 2' in t.get('text','') for t in p.editor.plantilla['primitives']))

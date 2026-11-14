@@ -582,7 +582,11 @@ class BaseQt(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         from escritorio.ventana import Ventana
-        self.w = Ventana(QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat))
+        ajustes = QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat)
+        # Estas pruebas previas usan la paleta lateral; H comprueba aparte los nuevos valores por defecto.
+        ajustes.setValue("paletas/favoritos_principal_v1", True)
+        ajustes.setValue("paneles/izquierdo", True)
+        self.w = Ventana(ajustes)
         self.w._cambiar_modo_propiedades("abajo")  # (las pruebas del editor dan por hecha la barra inferior; el defecto es «flotante»)
 
     def tearDown(self):
@@ -1197,7 +1201,8 @@ class FichaDeForzado(BaseQt):
         ficha = next(pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole) == "forzado")
         self.assertEqual(ficha.text(), "Forzado")
         self.assertEqual(pa.mimeData([ficha]).text(), "forzado")
-        self.assertEqual(ficha.toolTip(), propiedades.AYUDAS["forzado"])
+        from escritorio.ayudas_emergentes import texto_plano
+        self.assertIn(propiedades.AYUDAS["forzado"], texto_plano(ficha.toolTip()))
         ayuda = propiedades.AYUDAS["forzado"]
         self.assertNotIn("rectángulo doble", ayuda)  # F7: la ayuda describe el uso, no la forma
         self.assertTrue("etapa" in ayuda and "Doble clic" in ayuda and "Supr" in ayuda, ayuda)
@@ -1595,7 +1600,8 @@ class GrafcetParcialSuelto(BaseQt):
         self.assertEqual(pa.count(), 20)
         self.assertEqual(pa.mimeData([ficha]).text(), "parcial")
         self.assertEqual(propiedades.COLOCABLES[-4:], ("forzado", "parcial", "texto", "imagen"))
-        self.assertEqual(ficha.toolTip(), propiedades.AYUDAS["parcial"])
+        from escritorio.ayudas_emergentes import texto_plano
+        self.assertIn(propiedades.AYUDAS["parcial"], texto_plano(ficha.toolTip()))
         ayuda = propiedades.AYUDAS["parcial"]
         self.assertNotIn("marco redondeado", ayuda)  # F7: se retira la descripción visual redundante
         for frase in ("hueco", "G1", "Renombrar", "Forzado", "otro marco", "etapas y transiciones"):

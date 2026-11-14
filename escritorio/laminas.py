@@ -184,7 +184,8 @@ class DocumentoLaminas:
 
     def pintar_dispositivo(self,dispositivo,indices=None):
         p=QPainter()
-        if not p.begin(dispositivo):raise OSError('No se pudo iniciar la salida de la lámina')
+        if not p.begin(dispositivo):
+            raise OSError('No se pudo iniciar la salida del plano')
         try:
             for n,i in enumerate(range(self.total) if indices is None else indices):
                 if n and not dispositivo.newPage():raise OSError('No se pudo crear una nueva hoja')
@@ -215,7 +216,8 @@ class DocumentoLaminas:
         g=QSvgGenerator();g.setOutputDevice(buffer);g.setResolution(254)
         g.setSize(QSize(round(self.ancho*10),round(self.alto*10)))
         g.setViewBox(QRect(0,0,round(self.ancho*10),round(self.alto*10)))
-        g.setTitle(self.ajustes['campos']['titulo']);g.setDescription(f'Lámina {indice+1} de {self.total}')
+        g.setTitle(self.ajustes['campos']['titulo'])
+        g.setDescription(f'Plano {indice + 1} de {self.total}')
         p=QPainter(g)
         try:
             p.setRenderHints(QPainter.RenderHint.Antialiasing|QPainter.RenderHint.TextAntialiasing|QPainter.RenderHint.SmoothPixmapTransform)
@@ -257,7 +259,8 @@ class DocumentoLaminas:
         printer.setDocName(self.ajustes['campos']['titulo'])
         dialogo=QPrintDialog(printer,parent);dialogo.setWindowTitle('Imprimir plano');dialogo.setMinMax(1,self.total)
         if dialogo.exec()!=QDialog.DialogCode.Accepted:return False
-        if not printer.setPageLayout(self.layout()):raise ValueError('La impresora no admite el formato de la lámina')
+        if not printer.setPageLayout(self.layout()):
+            raise ValueError('La impresora no admite el formato del plano')
         printer.setFullPage(True)
         desde,hasta=0,self.total
         if printer.printRange()==QPrinter.PrintRange.PageRange:desde=max(0,printer.fromPage()-1);hasta=min(self.total,printer.toPage())
@@ -277,7 +280,9 @@ class DocumentoHoja(DocumentoLaminas):
         for g in modelo['_graficos']:
             c=copy.deepcopy(cfg);c['escala']=100/g['porcentaje'];c['offset_mm']=g['offset_mm']
             d=DocumentoLaminas(g['modelo'],estado,c,dependencias)
-            if d.total!=1:raise ValueError('El GRAFCET no cabe en esta hoja. Reduce su tamaño (mínimo 50 %) o elige una hoja mayor.')
+            if d.total != 1:
+                from .planos_controles import AVISO_NO_CABE
+                raise ValueError(AVISO_NO_CABE)
             self.capas.append(d)
         self.total=1
     @property
@@ -386,7 +391,8 @@ class DialogoLaminas(QDialog):
     def __init__(self,modelo,estado,ajustes,aplicar,parent=None,dependencias=False,integrado=False):
         super().__init__(parent,Qt.WindowType.Widget if integrado else Qt.WindowType.Dialog);self.integrado=integrado;
         if integrado:self.setParent(parent,Qt.WindowType.Widget);self.setWindowFlags(Qt.WindowType.Widget)
-        self.setWindowTitle('Láminas · vista previa');self.resize(1240,700)
+        self.setWindowTitle('Planos · vista previa')
+        self.resize(1240, 700)
         self.modelo=copy.deepcopy(modelo);self.estado=copy.deepcopy(estado);self.aplicar_callback=aplicar;self.dependencias=dependencias
         self.ajustes=ajustes_lamina(ajustes)
         if not self.ajustes['plantilla'] or self.ajustes['plantilla'].get('source')=='GrafConnect':self.ajustes['margen_mm']=10.
@@ -401,7 +407,9 @@ class DialogoLaminas(QDialog):
         if self.plantilla is None:self.cargar_tecnica(self.ajustes['formato'],self.ajustes['orientacion'],self.ajustes['margen_mm'])
         raiz=QVBoxLayout(self);barra=QMenuBar(self);raiz.setMenuBar(barra)
         if integrado:barra.hide();self.setSizeGripEnabled(False)
-        menu=barra.addMenu('Lámina');self.menu_plantilla=menu;self.a_importar=menu.addAction('Importar plantilla…',self.importar_plantilla)
+        menu = barra.addMenu('Plano')
+        self.menu_plantilla = menu
+        self.a_importar = menu.addAction('Importar plantilla…', self.importar_plantilla)
         self.a_editar_plantilla=menu.addAction('Editar plantilla',self.editar_plantilla);self.a_editar_plantilla.setCheckable(True)
         self.a_estandar=menu.addAction('Usar plantilla estándar',lambda:self.establecer_plantilla(None))
         self.a_quitar_plantilla=menu.addAction('Quitar plantilla',self.quitar_plantilla)
@@ -421,7 +429,11 @@ class DialogoLaminas(QDialog):
             for archivo in asegurar_carpetas()['plantillas'].rglob('*.json'):
                 if archivo.parent.name not in ('A4_vertical','A3_horizontal','A3_vertical') or archivo.name!='plantilla.json':self.predeterminadas.addItem(archivo.stem,str(archivo))
         except OSError:pass
-        form.addRow('Biblioteca de plantillas',self.predeterminadas)
+        if integrado:
+            from .planos_plantillas import fila_plantilla
+            form.addRow("Plantilla", fila_plantilla(self))
+        else:
+            form.addRow("Biblioteca de plantillas", self.predeterminadas)
         self.formato=ComboElidido();self.formato.addItems([*FORMATOS,'Personalizado']);self.formato.setCurrentText(self.ajustes['formato'])
         self.orientacion=ComboElidido();self.orientacion.addItem('Horizontal','horizontal');self.orientacion.addItem('Vertical','vertical');self.orientacion.setCurrentIndex(self.orientacion.findData(self.ajustes['orientacion']))
         self.margen=QDoubleSpinBox();self.margen.setRange(5,40);self.margen.setSuffix(' mm');self.margen.setValue(self.ajustes['margen_mm']);self.margen.setEnabled(False);self.margen.setToolTip('Margen definido por la plantilla; no se modifica desde la hoja')
@@ -442,7 +454,15 @@ class DialogoLaminas(QDialog):
         if integrado:
             self.area=QScrollArea();self.area.setFocusPolicy(Qt.FocusPolicy.NoFocus);self.area.setWidgetResizable(False);self.area.setAlignment(Qt.AlignmentFlag.AlignCenter);self.area.setWidget(self.vista);centro.addWidget(self.area,1);self.propiedades=QStackedWidget();self.propiedades.setFixedWidth(290);self.propiedades.addWidget(scroll);centro.addWidget(self.propiedades)
         else:centro.addWidget(self.vista,1)
-        nav=QHBoxLayout();raiz.addLayout(nav);self.anterior=QPushButton('← Anterior');self.siguiente=QPushButton('Siguiente →');self.pagina=QLabel()
+        nav = QHBoxLayout()
+        self.navegacion_fila = None
+        if not integrado:
+            self.navegacion_fila = QWidget()
+            self.navegacion_fila.setLayout(nav)
+            raiz.addWidget(self.navegacion_fila)
+        self.anterior = QPushButton('← Anterior')
+        self.siguiente = QPushButton('Siguiente →')
+        self.pagina = QLabel()
         self.b_centrar=QPushButton('Centrar GRAFCET');nav.addWidget(self.b_centrar);self.b_centrar.clicked.connect(self.centrar)
         nav.addWidget(self.anterior);nav.addWidget(self.pagina);nav.addWidget(self.siguiente);nav.addStretch(1)
         self.b_exportar=QPushButton('Exportar…');self.b_imprimir=QPushButton('Imprimir…');cerrar=QPushButton('Cerrar')
@@ -461,7 +481,21 @@ class DialogoLaminas(QDialog):
             i=self.indice_predeterminada(self.ajustes['formato'],self.ajustes['orientacion'])
             if i>=0:self.predeterminadas.setCurrentIndex(i)
         self.predeterminadas.currentIndexChanged.connect(self.elegir_predeterminada)
-        self.inicial=copy.deepcopy(self.valores());self.actualizar()
+        self.selector_plantillas = None
+        guardada = copy.deepcopy(self.valores())
+        if integrado:
+            from .planos_plantillas import PlantillasHoja
+            self.selector_plantillas = PlantillasHoja(self)
+            # Los widgets de paginación siguen disponibles para la vista previa independiente, no ocupan una fila aquí.
+            for w in (self.anterior, self.pagina, self.siguiente):
+                w.hide()
+            while nav.count():
+                item = nav.takeAt(0)
+                if item.widget() is not None:
+                    item.widget().setParent(self)
+                    item.widget().hide()
+        self.inicial = guardada
+        self.actualizar()
         if integrado:self.preparar_textos()
 
     def valores(self):
@@ -469,25 +503,53 @@ class DialogoLaminas(QDialog):
           'modo':self.modo.currentData(),'escala':self.escala.value(),'unidad_mm':self.unidad.currentData(),'con_estado':self.con_estado.isChecked(),
           'plantilla':self.plantilla,'offset_mm':self.offset,'campos':{k:w.text() for k,w in self.campos.items()}})
 
-    def actualizar(self,*args):
-        tecnica=self.plantilla is None or self.plantilla.get('source')=='GrafConnect'
+    def _actualizar_biblioteca_independiente(self):
+        tecnica = self.plantilla is None or self.plantilla.get('source') == 'GrafConnect'
         if tecnica:
-            f,o,m=self.formato.currentText(),self.orientacion.currentData(),self.margen.value()
-            w,h=FORMATOS.get(f,(0,0));w,h=(h,w) if o=='horizontal' else (w,h)
-            if self.plantilla is None or self.plantilla['size']!=[w,h] or abs(float(self.plantilla.get('margin_mm',10))-m)>.001:self.cargar_tecnica(f,o,m)
-        for w in (self.formato,self.orientacion):w.setEnabled(tecnica)
+            f, o, m = self.formato.currentText(), self.orientacion.currentData(), self.margen.value()
+            w, h = FORMATOS.get(f, (0, 0))
+            w, h = (h, w) if o == 'horizontal' else (w, h)
+            if (self.plantilla is None or self.plantilla['size'] != [w, h]
+                    or abs(float(self.plantilla.get('margin_mm', 10)) - m) > .001):
+                self.cargar_tecnica(f, o, m)
+        for campo in (self.formato, self.orientacion):
+            campo.setEnabled(tecnica)
+        self.predeterminadas.blockSignals(True)
         if tecnica:
-            self.predeterminadas.blockSignals(True);self.predeterminadas.setCurrentIndex(max(0,self.indice_predeterminada(self.formato.currentText(),self.orientacion.currentData())));self.predeterminadas.blockSignals(False)
-        if not tecnica:
-            self.predeterminadas.blockSignals(True);self.predeterminadas.setItemText(0,self.plantilla.get('source','Personalizada')+' — proyecto');self.predeterminadas.setCurrentIndex(0);self.predeterminadas.blockSignals(False)
-        self.a_editar_plantilla.setEnabled(self.plantilla is not None);self.a_quitar_plantilla.setEnabled(self.plantilla is not None)
-        fijo=self.modo.currentData()=='escala';self.escala.setEnabled(fijo);self.unidad.setEnabled(fijo)
+            indice = self.indice_predeterminada(self.formato.currentText(), self.orientacion.currentData())
+            self.predeterminadas.setCurrentIndex(max(0, indice))
+        else:
+            self.predeterminadas.setItemText(0, self.plantilla.get('source', 'Personalizada') + ' — proyecto')
+            self.predeterminadas.setCurrentIndex(0)
+        self.predeterminadas.blockSignals(False)
+
+    def actualizar(self, *args):
+        if self.integrado:
+            self.selector_plantillas.preparar()
+        else:
+            self._actualizar_biblioteca_independiente()
+        self.a_editar_plantilla.setEnabled(self.plantilla is not None)
+        self.a_quitar_plantilla.setEnabled(self.plantilla is not None)
+        fijo = self.modo.currentData() == 'escala'
+        self.escala.setEnabled(fijo)
+        self.unidad.setEnabled(fijo)
         try:
-            self.documento=(DocumentoHoja if '_graficos' in self.modelo else DocumentoLaminas)(self.modelo,self.estado,self.valores(),self.dependencias);self.error.setText(self.aviso_biblioteca)
-        except (ValueError,OverflowError) as exc:self.documento=None;self.error.setText(str(exc))
-        self.b_exportar.setEnabled(self.documento is not None);self.b_imprimir.setEnabled(self.documento is not None)
-        if self.editor_textos and self.documento:self.editor_textos.campos.update(self.documento.campos(0))
-        self.guardar_ajustes.setEnabled(self.documento is not None);self.b_centrar.setEnabled(self.documento is None or self.documento.total==1);self.ir(self.indice);self.modificado.emit()
+            clase = DocumentoHoja if '_graficos' in self.modelo else DocumentoLaminas
+            self.documento = clase(self.modelo, self.estado, self.valores(), self.dependencias)
+            self.error.setText(self.aviso_biblioteca)
+        except (ValueError, OverflowError) as exc:
+            self.documento = None
+            self.error.setText(str(exc))
+        self.b_exportar.setEnabled(self.documento is not None)
+        self.b_imprimir.setEnabled(self.documento is not None)
+        if self.editor_textos and self.documento:
+            self.editor_textos.campos.update(self.documento.campos(0))
+        self.guardar_ajustes.setEnabled(self.documento is not None)
+        self.b_centrar.setEnabled(self.documento is None or self.documento.total == 1)
+        self.ir(self.indice)
+        if self.integrado and self.selector_plantillas.cambio and self.editor_textos is not None:
+            self.preparar_textos()
+        self.modificado.emit()
 
     def ir(self,indice):
         d=self.documento;self.indice=max(0,min(indice,d.total-1)) if d else 0
@@ -543,7 +605,7 @@ class DialogoLaminas(QDialog):
         from .carpetas import asegurar_carpetas,cargar_plantilla
         try:inicial=str(asegurar_carpetas()['plantillas'])
         except OSError as exc:QMessageBox.warning(self,'Importar plantilla',str(exc));return
-        nombre,_=QFileDialog.getOpenFileName(self,'Importar plantilla de lámina',inicial,
+        nombre,_=QFileDialog.getOpenFileName(self,'Importar plantilla de plano',inicial,
             'Plantillas (*.dxf *.DXF *.pdf *.svg *.json);;Plantilla GRAFCET Connect (*.json);;DXF (*.dxf *.DXF);;PDF (*.pdf);;SVG (*.svg);;Todos los archivos (*)')
         if not nombre:return
         try:

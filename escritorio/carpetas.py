@@ -12,7 +12,7 @@ def directorios():
     documentos=QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
     if not documentos:raise OSError('No se pudo localizar la carpeta Documentos del usuario')
     raiz=Path(documentos)/'GRAFCET Connect'
-    return {'raiz':raiz,'plantillas':raiz/'Plantillas','grafcet':raiz/'GRAFCET','laminas':raiz/'Láminas'}
+    return {'raiz':raiz,'plantillas':raiz/'Plantillas','grafcet':raiz/'GRAFCET','laminas':raiz/'Planos'}
 
 
 def asegurar_carpetas():

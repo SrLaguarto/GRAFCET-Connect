@@ -1,6 +1,7 @@
 """Dibujo en milímetros y edición de textos y zona útil de una plantilla incorporada."""
 import base64
 import copy
+from shiboken6 import isValid
 from PySide6.QtCore import Qt,QRectF,QPointF,Signal
 from PySide6.QtGui import QPainter,QPen,QColor,QFont,QFontMetricsF,QTextLayout,QTextOption,QPainterPath,QImage,QTransform
 from PySide6.QtSvg import QSvgRenderer
@@ -215,8 +216,9 @@ class EditorPlantilla(QDialog):
         else:self.sugerencia.hide()
         self.ocupado=False;self.seleccionado.emit()
     def desde_escena(self):
-        if self.ocupado:return
-        seleccionado=next((i for i in self.items if i.isSelected()),None)
+        if self.ocupado or not isValid(self.escena):
+            return
+        seleccionado = next((i for i in self.escena.selectedItems() if i in self.items), None)
         if seleccionado:self.lista.setCurrentRow(self.items.index(seleccionado))
     def movido(self):
         if self.actual:self.elegir(self.items.index(self.actual));self.modificado.emit()

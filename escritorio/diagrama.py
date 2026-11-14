@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, 
                                QToolButton, QToolTip, QWidget)
 
 from . import estilo
+from .ayudas_emergentes import mostrar_ayuda
 
 SX = 100       # margen izquierdo del dibujo
 H = 22         # semilado de la etapa cuadrada (unidad: lado = 2·H)
@@ -1391,7 +1392,7 @@ class _OpcionConPapel(QStyledItemDelegate):
         nombre, papel = self._nombre_y_papel(index)
         if event.type() == QEvent.Type.ToolTip and papel and not self._separador(index):
             if option.fontMetrics.horizontalAdvance(nombre) > self._hueco_nombre(option.fontMetrics, option.rect, papel):
-                QToolTip.showText(event.globalPos(), nombre, view)
+                mostrar_ayuda(event.globalPos(), nombre, view)
             else:
                 QToolTip.hideText()
             return True

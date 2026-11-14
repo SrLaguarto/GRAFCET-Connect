@@ -38,16 +38,19 @@ class Favoritos(BaseQt):
         self.assertTrue(barra.isVisible())
         self.assertEqual(barra.orden, list(PREDETERMINADOS))
         for clave, boton in barra.botones.items():
-            self.assertEqual(boton.toolTip(), f"Favoritos: {propiedades.Paleta.nombre(clave)}")
-            self.assertEqual(boton.iconSize(), QSize(20, 20))
+            from escritorio.ayudas_emergentes import texto_plano
+            ayuda = texto_plano(boton.toolTip())
+            self.assertIn(propiedades.Paleta.nombre(clave), ayuda)
+            self.assertIn(propiedades.Paleta.texto_ayuda(clave), ayuda)
+            self.assertEqual(boton.iconSize(), QSize(barra.lado_icono, barra.lado_icono))
             self.assertEqual(boton.text(), "")
             self.assertFalse(boton.icon().isNull())
             self.assertIn("background: transparent", boton.styleSheet())
             self.assertIn("border: none", boton.styleSheet())
             if clave in barra._visibles:
                 self.assertEqual(boton.height(), barra.height())
-            self.assertEqual(boton.icon().actualSize(QSize(20, 20)), QSize(20, 20))
-            self.assertEqual(boton.icon().pixmap(20, 20).size(), QSize(20, 20))
+            self.assertEqual(boton.icon().actualSize(QSize(24, 24)), QSize(24, 24))
+            self.assertEqual(boton.icon().pixmap(24, 24).size(), QSize(24, 24))
 
     def test_SFAV02_se_ocultan_al_simular_y_vuelven_al_editar(self):
         w, e, barra = self.preparar()
@@ -132,6 +135,8 @@ class Favoritos(BaseQt):
         QTest.mouseClick(menu, Qt.MouseButton.LeftButton, pos=menu.actionGeometry(acciones["etapa"]).center())
         self.assertTrue(menu.isVisible())
         self.assertNotIn("etapa", barra.orden)
+        acciones["texto"].trigger()
+        self.assertNotIn("texto", barra.orden)
         acciones["texto"].trigger()
         self.assertIn("texto", barra.orden)
         self.assertEqual(w.ajustes.value(barra.CLAVE_AJUSTES), barra.orden)
@@ -245,6 +250,7 @@ class Favoritos(BaseQt):
         self.assertEqual(nombres, [
             "Etapa inicial", "Etapa", "Transición", "Simultaneidad", "Continua", "Condicionada", "Al activar",
             "Al desactivar", "Por evento", "Forzado", "Macroetapa", "Encapsulante", "Grafcet parcial",
+            "Texto", "Imagen",
         ])
         w.ajustes.setValue(barra.CLAVE_AJUSTES, ["accion:evento", "texto", "etapa"])
         recuperada = BarraFavoritos(w.ajustes, w.paleta)
@@ -259,9 +265,9 @@ class Favoritos(BaseQt):
             pintar_mini(pintor, clave)
             cuerpo = pintor.drawRect.call_args_list[0].args[0]
             rectangulos.append(cuerpo)
-            self.assertAlmostEqual(cuerpo.center().y(), 10, delta=0.5)
-            self.assertAlmostEqual(cuerpo.width(), 15, delta=0.5)
-            self.assertAlmostEqual(cuerpo.height(), 7, delta=0.5)
+            self.assertAlmostEqual(cuerpo.center().y(), 12, delta=0.5)
+            self.assertAlmostEqual(cuerpo.width(), 18, delta=0.5)
+            self.assertAlmostEqual(cuerpo.height(), 8.4, delta=0.5)
             pintor.drawText.assert_not_called()
             lapiz = pintor.setPen.call_args.args[0]
             self.assertEqual(lapiz.widthF(), 1.5)
@@ -279,7 +285,7 @@ class Favoritos(BaseQt):
         self.assertTrue(marco.contains(letra))
         self.assertGreaterEqual(letra.height(), 6)
         for ratio in (1, 1.25, 1.5):
-            imagen = icono_mini("parcial").pixmap(QSize(20, 20), ratio)
+            imagen = icono_mini("parcial").pixmap(QSize(24, 24), ratio)
             limites = QRegion(imagen.mask()).boundingRect()
             self.assertGreaterEqual(limites.width() / limites.height(), 1.4)
 
@@ -293,11 +299,11 @@ class Favoritos(BaseQt):
                     self.assertEqual(llamada.args[0].widthF(), 1.5)
                     self.assertEqual(llamada.args[0].color().name(), estilo.TINTA.lower())
                 icono = icono_mini(clave)
-                self.assertEqual(icono.actualSize(QSize(20, 20)), QSize(20, 20))
+                self.assertEqual(icono.actualSize(QSize(24, 24)), QSize(24, 24))
                 for ratio in (1, 1.25, 1.5):
                     with self.subTest(clave=clave, ratio=ratio):
-                        imagen = icono.pixmap(QSize(20, 20), ratio)
-                        self.assertEqual(imagen.size(), QSize(round(20 * ratio), round(20 * ratio)))
+                        imagen = icono.pixmap(QSize(24, 24), ratio)
+                        self.assertEqual(imagen.size(), QSize(round(24 * ratio), round(24 * ratio)))
                         self.assertEqual(imagen.devicePixelRatioF(), ratio)
                         limites = QRegion(imagen.mask()).boundingRect()
                         self.assertFalse(limites.isEmpty())

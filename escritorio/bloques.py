@@ -29,6 +29,7 @@ from grafcet.expressions import CMP, FUNCS_EXPR, FUNCS_REF, KEYWORDS, ParseError
 from grafcet.notation import a_nucleo, a_usuario, normalizar_espacios, x_etapa
 
 from . import estilo
+from .ayudas_emergentes import mostrar_ayuda
 
 # -- modelo: el árbol de bloques --------------------------------------------------------------------------
 # Un nodo es un diccionario con su clase en "k"; un hueco es None:
@@ -1127,7 +1128,7 @@ class _Superficie(QWidget):
         if ev.type() == QEvent.Type.ToolTip:
             texto = self._completo_en(QPointF(ev.pos()))
             if texto:
-                QToolTip.showText(ev.globalPos(), texto, self)
+                mostrar_ayuda(ev.globalPos(), texto, self)
             else:
                 QToolTip.hideText()
             return True

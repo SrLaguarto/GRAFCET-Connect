@@ -31,7 +31,9 @@ def dibujo_vinculado(edicion,refs):
 
 class CrearHoja(QDialog):
     def __init__(self,edicion,parent=None):
-        super().__init__(parent);self.setWindowTitle('Enviar selección a lámina');self.edicion=edicion
+        super().__init__(parent)
+        self.setWindowTitle('Enviar selección a plano')
+        self.edicion = edicion
         raiz=QVBoxLayout(self);form=QFormLayout();raiz.addLayout(form)
         self.destino=QComboBox();self.destino.addItem('Crear hoja nueva',None)
         for h in edicion.ed.sheet_links():self.destino.addItem(h['nombre'],h['id'])

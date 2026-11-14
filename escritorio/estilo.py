@@ -454,17 +454,12 @@ def icono(tipo: str, color: str = TINTA, grosor: float = 1.75, tam: int = 24) ->
     elif tipo == "stop":
         p.fillRect(QRectF(6, 6, 12, 12), QColor(color))
     elif tipo == "dependencias":
-        p.drawRect(QRectF(2, 9, 6, 6))
-        p.drawRoundedRect(QRectF(15, 3, 8, 18), 1, 1)
-        trazo = p.pen()
-        union = QPen(trazo)  # las uniones del cuadrado con el rectángulo: punteadas y más finas que el resto del trazo
-        union.setWidthF(1.0)
-        union.setCapStyle(Qt.PenCapStyle.FlatCap)
-        union.setDashPattern([1.0, 1.5])
+        p.drawRect(QRectF(2.5, 8.5, 7, 7))
+        p.drawRoundedRect(QRectF(15, 5, 6, 14), 1, 1)
+        union = QPen(p.pen())
+        union.setStyle(Qt.PenStyle.DotLine)
         p.setPen(union)
-        p.drawLine(QPointF(8, 9), QPointF(15, 3))
-        p.drawLine(QPointF(8, 15), QPointF(15, 21))
-        p.setPen(trazo)
+        p.drawLine(QPointF(10, 12), QPointF(14, 12))
     elif tipo == "aviso":  # el triángulo de aviso, con el trazo de los demás
         p.drawPath(_triangulo_aviso())
         p.drawLine(QPointF(12, 9.5), QPointF(12, 14.2))

@@ -31,6 +31,8 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
 from . import recursos_ui  # Registra los iconos vectoriales incorporados.
 from . import estilo
 from . import estilo_botones
+from .idioma import instalar as instalar_idioma
+from .ayudas_emergentes import instalar as instalar_ayudas
 from .laminas import VistaLamina
 from .estilo import _trazos_reinicio  # noqa: F401  (las pruebas lo leen desde aquí)
 from . import propiedades_archivo
@@ -590,6 +592,8 @@ class _RespuestaModbus(QObject):
 
 class Ventana(ArchivosProyecto, QMainWindow):
     def __init__(self, ajustes: QSettings | None = None, obtener=None) -> None:
+        instalar_idioma()
+        instalar_ayudas()
         estilo_botones.instalar()  # (iconos y textos de los botones de herramientas, centrados; una sola vez)
         super().__init__()
         self.setWindowTitle(TITULO)
@@ -713,7 +717,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.nuevo()
         self._cargar_config_modbus(self.edicion.ed.model)
         for nombre in ("izquierdo","derecho","inferior"):
-            self._mostrar_panel(nombre, nombre != "inferior" or self._inferior_al_arrancar, guardar=False)
+            self._mostrar_panel(nombre, self.preferencias_paletas.inicial(nombre), guardar=False)
         self._accesibilidad()
         self._configurar_foco()
         self._estilos_locales()
@@ -809,6 +813,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_derecho = self._accion("Panel &derecho", lambda on: self._mostrar_panel("derecho", on), "Ctrl+B", True)
         self.a_inferior = self._accion("Panel &inferior", lambda on: self._mostrar_panel("inferior", on), "Ctrl+J", True)
         ver.addAction(self.a_izquierdo)
+        from .preferencias_paletas import PreferenciasPaletas
+        self.preferencias_paletas = PreferenciasPaletas(self, ver)
         ver.addAction(self.a_derecho)
         ver.addAction(self.a_inferior)
         # Dónde se editan las propiedades del elemento: en una ventana flotante (por defecto) o en la barra inferior (`flotantes.py`)
@@ -1106,6 +1112,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._cab.insertWidget(0, self.favoritos)
         self._cabecera_favoritos = CabeceraFavoritos(self)
         self.favoritos.contenido_cambiado.connect(self._ajustar_cabecera)
+        self.favoritos.contenido_cambiado.connect(self._orden_tab)
+        self.favoritos.distribucion_cambiada.connect(self._orden_tab)
         self.paleta.setMinimumWidth(self.paleta.ancho_minimo())  # las dos columnas de fichas, sin cortarse
         self.paleta.ayuda.connect(self._ayuda_ficha)  # un clic en una ficha solo muestra su ayuda
         self.paleta.escala = self.diagrama.escala
@@ -2401,6 +2409,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self._ancho_reloj = ancho
             self.l_reloj.setMinimumWidth(ancho)
             self.statusBar().updateGeometry()
+            self.statusBar().layout().activate()
 
     def _vigilar_barra(self) -> None:
         """Red de seguridad, a cualquier ancho: si la barra de Play no cabe con «Reiniciar» y su texto (o este queda fuera de ella),
@@ -2481,7 +2490,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
                   self.tb_sim.widgetForAction(self.a_reiniciar),
                   *(self.tb_edit.widgetForAction(a) for a in self._acciones_solo_icono),
                   d.b_dependencias, self.b_errores,
-                  self.flechas["izquierdo"], self.paleta, d, self.b_ayuda, d.b_menos, d.b_mas, d.b_ajustar, d.b_seleccion,
+                  self.flechas["izquierdo"], *self.preferencias_paletas.foco(), d, self.b_ayuda,
+                  d.b_menos, d.b_mas, d.b_ajustar, d.b_seleccion,
                   self.flechas["derecho"], *entradas, self.variables.tabla, *self.variables.b_nuevas.values(),
                   self.variables.b_quitar, self.pestanas["izquierdo"], self.pestanas["derecho"], self.flechas["inferior"],
                   self.pestanas["inferior"], self.props.t_fijar]
@@ -3743,9 +3753,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
             ident=d.destino.currentData()
             if ident is None:
                 from .hojas import dibujo_vinculado
-                from .laminas import DocumentoLaminas
-                cfg=d.configuracion or d.valores();prueba=DocumentoLaminas(dibujo_vinculado(e,e.copiar_fragmento().selected),{},cfg)
-                if prueba.total!=1:raise ValueError('La selección no cabe al 100 %. Elige una hoja mayor o selecciona menos elementos.')
+                from .planos_controles import comprobar_cabe
+                cfg = d.configuracion or d.valores()
+                comprobar_cabe(dibujo_vinculado(e, e.copiar_fragmento().selected), cfg)
                 ident=e.ed.add_plan_page(None,d.configuracion or d.valores(),d.nombre.text().strip() or None)
             e.cambia();self.panel_planos.mostrar(ident);self.panel_planos.insertar(e.copiar_fragmento().selected);self.mostrar_hoja(ident)
         except (OSError,ValueError,RuntimeError) as exc:QMessageBox.warning(self,'Enviar a plano',str(exc))
@@ -3854,38 +3864,48 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName(TITULO)
     app.setWindowIcon(QIcon(str(ICONO_PROGRAMA)))
-    from .errores import instalar as instalar_avisos_de_error
-    instalar_avisos_de_error()
-    from .carpetas import asegurar_carpetas
-    try:asegurar_carpetas()
-    except OSError as exc:QMessageBox.warning(None,"Carpetas de GRAFCET Connect",str(exc))
-    w = Ventana()
-    if args.prueba_propiedades:
-        # Comprobación de construcción: el diálogo Propiedades del archivo se monta en el ejecutable.
-        import traceback
+    from .instancia_unica import InstanciaUnica
+    with InstanciaUnica(app, aislada=bool(args.captura or args.prueba_propiedades)) as instancia:
+        if not instancia.iniciar(args.modelo, args.ejemplo):
+            return instancia.codigo
+        from .errores import instalar as instalar_avisos_de_error
+        instalar_avisos_de_error()
+        from .carpetas import asegurar_carpetas
         try:
-            propiedades_archivo.PropiedadesArchivo(propiedades_archivo.recopilar(w.edicion, True), w)
-            Path(args.prueba_propiedades).write_text("ok", encoding="utf-8")
-            return 0
-        except Exception:
-            Path(args.prueba_propiedades).write_text(traceback.format_exc(), encoding="utf-8")
-            return 4
-    if args.ejemplo:
-        w.cargar_ejemplo(args.ejemplo)
-    if args.modelo and not w.abrir_ruta(Path(args.modelo)):
-        return 1 if args.captura else 0
-    if args.captura:
-        w.show()  # (la captura de comprobación conserva el tamaño de siempre)
-    else:
-        # La aplicación arranca siempre maximizada; al restaurar, la ventana se comporta como siempre. En Windows el
-        # sistema muestra un instante la ventana con su tamaño normal antes de maximizarla (el «amago» de ventana
-        # pequeña): se abre transparente y se hace opaca cuando ya está maximizada.
-        w.setWindowOpacity(0.0)
-        w.showMaximized()
-        QTimer.singleShot(0, w, lambda: w.setWindowOpacity(1.0))
-    if (not args.captura and not os.environ.get(actualizaciones.VARIABLE_SIN_ACTUALIZAR)
-            and actualizaciones.al_arrancar_activo(w.ajustes)):
-        QTimer.singleShot(1500, w.buscar_actualizaciones)  # con la ventana ya a la vista; en un hilo, sin bloquear
-    if args.captura:
-        QTimer.singleShot(300, lambda: (w.grab().save(args.captura), app.quit()))
-    return app.exec()
+            asegurar_carpetas()
+        except OSError as exc:
+            QMessageBox.warning(None, "Carpetas de GRAFCET Connect", str(exc))
+        w = Ventana()
+        instancia.vincular(w)
+        if args.prueba_propiedades:
+            # Comprobación de construcción: el diálogo Propiedades del archivo se monta en el ejecutable.
+            import traceback
+            try:
+                propiedades_archivo.PropiedadesArchivo(propiedades_archivo.recopilar(w.edicion, True), w)
+                Path(args.prueba_propiedades).write_text("ok", encoding="utf-8")
+                return 0
+            except Exception:
+                Path(args.prueba_propiedades).write_text(traceback.format_exc(), encoding="utf-8")
+                return 4
+        if args.ejemplo:
+            w.cargar_ejemplo(args.ejemplo)
+        if args.modelo and not w.abrir_ruta(Path(args.modelo)):
+            return 1 if args.captura else 0
+        if args.captura:
+            w.show()  # (la captura de comprobación conserva el tamaño de siempre)
+        else:
+            # La aplicación arranca siempre maximizada; al restaurar, la ventana se comporta como siempre. En Windows el
+            # sistema muestra un instante la ventana con su tamaño normal antes de maximizarla (el «amago» de ventana
+            # pequeña): se abre transparente y se hace opaca cuando ya está maximizada.
+            w.setWindowOpacity(0.0)
+            w.showMaximized()
+            QTimer.singleShot(0, w, lambda: w.setWindowOpacity(1.0))
+        if (not args.captura and not os.environ.get(actualizaciones.VARIABLE_SIN_ACTUALIZAR)
+                and actualizaciones.al_arrancar_activo(w.ajustes)):
+            QTimer.singleShot(1500, w.buscar_actualizaciones)  # con la ventana ya a la vista; en un hilo, sin bloquear
+        if args.captura:
+            def capturar_y_salir():
+                w.grab().save(args.captura)
+                app.quit()
+            QTimer.singleShot(300, capturar_y_salir)
+        return app.exec()

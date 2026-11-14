@@ -194,7 +194,10 @@ class Ventana(unittest.TestCase):
         from PySide6.QtCore import QSettings
         from escritorio.ventana import Ventana as V
         cls.tmp = tempfile.TemporaryDirectory()  # las preferencias de las pruebas no tocan las del usuario
-        cls.w = V(QSettings(str(Path(cls.tmp.name) / "ajustes.ini"), QSettings.Format.IniFormat))
+        ajustes = QSettings(str(Path(cls.tmp.name) / "ajustes.ini"), QSettings.Format.IniFormat)
+        ajustes.setValue("paletas/favoritos_principal_v1", True)
+        ajustes.setValue("paneles/izquierdo", True)
+        cls.w = V(ajustes)
         cls.w._cambiar_modo_propiedades("abajo")  # (estas pruebas dan por hecha la barra inferior; el defecto es «flotante»)
 
     def proyecto_de_prueba(self,clave):

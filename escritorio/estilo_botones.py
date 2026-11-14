@@ -14,6 +14,8 @@ from PySide6.QtCore import QRectF, QRect, Qt
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QApplication, QProxyStyle, QStyle, QStyleOptionMenuItem, QToolButton
 
+from . import estilo
+
 SEPARACION = 4  # entre el icono y el texto (lo que deja Qt)
 RELLENO_ICONO = 8  # Qt reserva para el icono su ancho más 8 px (4 a cada lado)
 
@@ -30,6 +32,11 @@ class EstiloBotones(QProxyStyle):
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
         self._icono: tuple[QRect, Any, Any] | None = None  # el icono retenido: celda, pixmap y botón
+
+    def pixelMetric(self, metrica, opcion=None, widget=None):  # noqa: N802
+        if metrica == QStyle.PixelMetric.PM_ToolBarExtensionExtent:
+            return estilo.ALTO_CONTROL
+        return super().pixelMetric(metrica, opcion, widget)
 
     def drawPrimitive(self, elemento: Any, opcion: Any, pintor: Any, widget: Any = None) -> None:  # noqa: N802
         """Una opción excluyente de un menú (grupo de acciones exclusivo) se marca con un punto de radio, no con la marca de verificación."""
@@ -63,7 +70,7 @@ class EstiloBotones(QProxyStyle):
             super().drawItemText(pintor, rect, alineacion, paleta, activo, texto, *([] if papel is None else [papel]))
             return
         celda, pixmap, _ = retenido
-        ancho_icono = celda.width() - RELLENO_ICONO
+        ancho_icono = round(pixmap.deviceIndependentSize().width())
         ancho_texto = pintor.fontMetrics().size(Qt.TextFlag.TextShowMnemonic, texto).width() + 1
         ancho_contenido = rect.right() - celda.left() + 1  # del borde izquierdo del icono al derecho del texto
         izquierda = celda.left() + (ancho_contenido - (ancho_icono + SEPARACION + ancho_texto)) // 2

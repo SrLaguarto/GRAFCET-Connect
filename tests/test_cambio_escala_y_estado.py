@@ -143,7 +143,9 @@ class CambioEscalaYEstado(BaseQt):
             self.app.installEventFilter(filtro)
             try:
                 with mock.patch.object(ventana, "QSettings", Ajustes),                         mock.patch.object(carpetas, "asegurar_carpetas", lambda: None),                         mock.patch.object(errores, "instalar", lambda: None),                         mock.patch.object(ventana.QApplication, "exec", bucle),                         mock.patch.dict("os.environ", {"GRAFCONNECT_SIN_ACTUALIZAR": "1"}):
-                    self.assertEqual(ventana.main([]), 0)
+                    with mock.patch("escritorio.instancia_unica.directorio_instancia",
+                                    return_value=Path(tmp) / "instancia"):
+                        self.assertEqual(ventana.main([]), 0)
             finally:
                 self.app.removeEventFilter(filtro)
                 for w in self.app.topLevelWidgets():

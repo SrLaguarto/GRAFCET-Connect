@@ -114,14 +114,14 @@ class Paneles(BaseQt):
             self.assertTrue(zona.rect().contains(caja), boton.text())
 
     def test_SPAN07_preferencias_de_plegado_se_recuperan_en_otra_ventana(self):
-        """REQ-EDT-09: se registra el plegado; una ventana nueva abre los laterales y mantiene propiedades plegadas."""
+        """REQ-EDT-09: se recuerda el plegado de Elementos; Variables arranca abierto y Propiedades plegado."""
         w,e=self.preparar()
         for n in w.flechas:w.flechas[n].click()
         w2=Ventana(w.ajustes)
         try:
             w2.nuevo();w2.resize(1366,768);w2.show();QApplication.processEvents()
             for n in w2.pestanas:
-                plegado=n=="inferior"
+                plegado = n in ("izquierdo", "inferior")
                 self.assertEqual(w2._panel(n).isHidden(),plegado,n);self.assertEqual(w2.pestanas[n].isVisible(),plegado,n)
         finally:
             w2.hide();w2.edicion=None;w2.deleteLater();QApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)

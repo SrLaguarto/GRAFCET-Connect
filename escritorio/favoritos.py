@@ -7,86 +7,97 @@ from PySide6.QtWidgets import QApplication, QMenu, QSizePolicy, QToolButton, QWi
 
 from . import estilo
 from .propiedades import COLOCABLES, SECCIONES, Paleta
+from .ayudas_emergentes import ayuda_html
 
 PREDETERMINADOS = (
     "etapa_inicial", "etapa", "transicion", "simultaneidad", "accion:continua", "accion:condicionada",
-    "accion:activacion", "accion:desactivacion", "accion:evento", "forzado", "macroetapa", "encapsulante", "parcial",
+    "accion:activacion", "accion:desactivacion", "accion:evento", "forzado", "macroetapa", "encapsulante",
+    "parcial", "texto", "imagen",
 )
-LADO_MINI = 20
+LADO_MINI = 24
+FACTOR_MINI = LADO_MINI / 20
+
+
+def _punto(x, y):
+    return QPointF(x * FACTOR_MINI, y * FACTOR_MINI)
+
+
+def _rect(x, y, ancho, alto):
+    return QRectF(x * FACTOR_MINI, y * FACTOR_MINI, ancho * FACTOR_MINI, alto * FACTOR_MINI)
 
 
 def _pintar_accion_mini(pintor, clave):
-    cuerpo = QRectF(2.5, 6.5, 15, 7)
+    cuerpo = _rect(2.5, 6.5, 15, 7)
     pintor.drawRect(cuerpo)
     if clave == "forzado":
-        pintor.drawRect(cuerpo.adjusted(2.25, 2.25, -2.25, -2.25))
+        pintor.drawRect(cuerpo.adjusted(2.7, 2.7, -2.7, -2.7))
         return
     tipo = clave.partition(":")[2]
     if tipo == "condicionada":
-        pintor.drawLine(QPointF(5, 3), QPointF(5, 6.5))
+        pintor.drawLine(_punto(5, 3), _punto(5, 6.5))
     elif tipo in ("activacion", "desactivacion"):
         activar = tipo == "activacion"
         base, punta, hombro = (6.5, 1.5, 3.25) if activar else (13.5, 18.5, 16.75)
-        pintor.drawLine(QPointF(5, base), QPointF(5, punta))
-        camino = QPainterPath(QPointF(3.25, hombro))
-        camino.lineTo(5, punta)
-        camino.lineTo(6.75, hombro)
+        pintor.drawLine(_punto(5, base), _punto(5, punta))
+        camino = QPainterPath(_punto(3.25, hombro))
+        camino.lineTo(_punto(5, punta))
+        camino.lineTo(_punto(6.75, hombro))
         pintor.drawPath(camino)
     elif tipo == "evento":
-        pintor.drawLine(QPointF(5, 1.5), QPointF(5, 6.5))
+        pintor.drawLine(_punto(5, 1.5), _punto(5, 6.5))
         pintor.setBrush(QColor(estilo.TINTA))
-        pintor.drawPolygon(QPolygonF([QPointF(5, 1.5), QPointF(2, 3), QPointF(5, 4.5)]))
+        pintor.drawPolygon(QPolygonF([_punto(5, 1.5), _punto(2, 3), _punto(5, 4.5)]))
         pintor.setBrush(Qt.BrushStyle.NoBrush)
 
 
 def _pintar_etapa_mini(pintor, clave):
-    cuerpo = QRectF(4.5, 4.5, 11, 11)
+    cuerpo = _rect(4.5, 4.5, 11, 11)
     pintor.drawRect(cuerpo)
     if clave == "etapa_inicial":
-        pintor.drawRect(cuerpo.adjusted(2.75, 2.75, -2.75, -2.75))
+        pintor.drawRect(cuerpo.adjusted(3.3, 3.3, -3.3, -3.3))
     elif clave == "macroetapa":
         for y in (7.5, 12.5):
-            pintor.drawLine(QPointF(cuerpo.left(), y), QPointF(cuerpo.right(), y))
+            pintor.drawLine(QPointF(cuerpo.left(), y * FACTOR_MINI), QPointF(cuerpo.right(), y * FACTOR_MINI))
     elif clave == "encapsulante":
         for a, b in (((7, 4.5), (4.5, 7)), ((13, 4.5), (15.5, 7)),
                      ((4.5, 13), (7, 15.5)), ((13, 15.5), (15.5, 13))):
-            pintor.drawLine(QPointF(*a), QPointF(*b))
+            pintor.drawLine(_punto(*a), _punto(*b))
 
 
 def _pintar_g_mini(pintor):
     """G vectorial pequeña, con el mismo trazo y sin depender de una fuente diminuta."""
-    camino = QPainterPath(QPointF(15.5, 8))
+    camino = QPainterPath(_punto(15.5, 8))
     for x, y in ((14.5, 7), (11.5, 7), (10.5, 8), (10.5, 12),
                  (11.5, 13), (15.5, 13), (15.5, 10), (13, 10)):
-        camino.lineTo(x, y)
+        camino.lineTo(_punto(x, y))
     pintor.drawPath(camino)
 
 
 def _pintar_otros_mini(pintor, clave):
     if clave == "transicion":
-        pintor.drawLine(QPointF(10, 3), QPointF(10, 17))
-        pintor.drawLine(QPointF(5, 10), QPointF(15, 10))
+        pintor.drawLine(_punto(10, 3), _punto(10, 17))
+        pintor.drawLine(_punto(5, 10), _punto(15, 10))
     elif clave == "simultaneidad":
         for y in (8.5, 11.5):
-            pintor.drawLine(QPointF(3, y), QPointF(17, y))
+            pintor.drawLine(_punto(3, y), _punto(17, y))
     elif clave == "parcial":
-        pintor.drawRoundedRect(QRectF(2, 5, 16, 10), 2, 2)
+        pintor.drawRoundedRect(_rect(2, 5, 16, 10), 2, 2)
         _pintar_g_mini(pintor)
     else:
-        pintor.drawRect(QRectF(2.5, 3, 15, 14))
+        pintor.drawRect(_rect(2.5, 3, 15, 14))
         if clave == "texto":
             for y in (7, 10, 13):
-                pintor.drawLine(QPointF(5, y), QPointF(15 if y != 13 else 12, y))
+                pintor.drawLine(_punto(5, y), _punto(15 if y != 13 else 12, y))
         elif clave == "imagen":
-            pintor.drawEllipse(QRectF(5, 5, 2.5, 2.5))
-            camino = QPainterPath(QPointF(4, 14))
+            pintor.drawEllipse(_rect(5, 5, 2.5, 2.5))
+            camino = QPainterPath(_punto(4, 14))
             for x, y in ((8, 9), (11, 12), (14, 8), (16, 11)):
-                camino.lineTo(x, y)
+                camino.lineTo(_punto(x, y))
             pintor.drawPath(camino)
 
 
 def pintar_mini(pintor, clave):
-    """Geometría propia en una caja lógica de 20×20, sin reducir la ficha de la paleta."""
+    """Geometría propia en una caja lógica de 24×24, sin reducir la ficha de la paleta."""
     pintor.save()
     pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
     pintor.setPen(QPen(QColor(estilo.TINTA), 1.5))
@@ -161,9 +172,10 @@ class BotonFavorito(QToolButton):
         self.menu = menu
         self._pulsado = None
         self.setIcon(icono_mini(clave))
-        self.setIconSize(QSize(20, 20))
-        self.setToolTip(f"Favoritos: {Paleta.nombre(clave)}")
-        self.setAccessibleName(self.toolTip())
+        self.setIconSize(QSize(barra.lado_icono, barra.lado_icono))
+        self.setToolTip(ayuda_html(Paleta.texto_ayuda(clave), Paleta.nombre(clave)))
+        self.setAccessibleName(Paleta.nombre(clave))
+        self.clicked.connect(lambda: barra.paleta.ayuda.emit(Paleta.texto_ayuda(clave)))
         self.setAutoRaise(True)
         self.setStyleSheet(
             "QToolButton { border: none; background: transparent; padding: 0; min-height: 0; }"
@@ -196,12 +208,14 @@ class BotonFavorito(QToolButton):
 
 class BarraFavoritos(QWidget):
     contenido_cambiado = Signal()
+    distribucion_cambiada = Signal()
     CLAVE_AJUSTES = "favoritos/elementos"
 
     def __init__(self, ajustes, paleta):
         super().__init__()
         self.ajustes = ajustes
         self.paleta = paleta
+        self.lado_icono = round((estilo.ALTO_BARRA + LADO_MINI) / 2)
         self._insercion = None
         self._menu = None
         self._visibles = []
@@ -210,6 +224,11 @@ class BarraFavoritos(QWidget):
         if isinstance(guardados, str):
             guardados = [guardados]
         self.orden = list(dict.fromkeys(h for h in (guardados or []) if h in COLOCABLES))
+        if not ajustes.value("favoritos/texto_imagen_v1", False, type=bool):
+            self.orden.extend(h for h in ("texto", "imagen") if h not in self.orden)
+            if ajustes.contains(self.CLAVE_AJUSTES):
+                ajustes.setValue(self.CLAVE_AJUSTES, self.orden)
+            ajustes.setValue("favoritos/texto_imagen_v1", True)
         self.botones = {h: BotonFavorito(self, h) for h in COLOCABLES}
         self.desborde = QToolButton(self)
         self.desborde.setText("»")
@@ -274,7 +293,11 @@ class BarraFavoritos(QWidget):
 
     def resizeEvent(self, evento):
         super().resizeEvent(evento)
+        self.lado_icono = round((self.height() + LADO_MINI) / 2)
+        for boton in self.botones.values():
+            boton.setIconSize(QSize(self.lado_icono, self.lado_icono))
         self._disponer()
+        self.distribucion_cambiada.emit()
 
     def paintEvent(self, evento):
         pintor = QPainter(self)

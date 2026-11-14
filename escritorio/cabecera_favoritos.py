@@ -2,6 +2,8 @@
 from PySide6.QtCore import QEvent, QObject, QRect, QTimer, Qt
 from PySide6.QtGui import QColor, QFont, QPainter
 
+from PySide6.QtWidgets import QToolBar, QToolButton
+
 from . import estilo
 from .paneles import ChipModo
 
@@ -61,7 +63,15 @@ class UbicaModo(QObject):
         self.ajustar()
 
     def eventFilter(self, objeto, evento):
-        tipos = (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.LayoutRequest, QEvent.Type.FontChange)
+        tipos = (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.LayoutRequest, QEvent.Type.FontChange,
+                 QEvent.Type.DynamicPropertyChange)
+        if objeto is self.fila and evento.type() == QEvent.Type.Resize:
+            for barra in self.fila.window().findChildren(QToolBar):
+                if barra.objectName() not in ("barraEdicion", "barraSimulacion"):
+                    continue
+                for accion in barra.actions():
+                    if accion.isSeparator():
+                        accion.setVisible(True)
         if evento.type() in tipos and not self._pendiente:
             self._pendiente = True
             QTimer.singleShot(0, self.fila, self.ajustar)
@@ -69,6 +79,12 @@ class UbicaModo(QObject):
 
     def ajustar(self):
         self._pendiente = False
+        self._extensiones()
+        fusion = bool(self.fila.property("fusion"))
+        self.fila.layout().setSpacing(estilo.E2 if fusion else 0)
+        self.etiqueta.setVisible(not fusion)
+        if fusion:
+            return
         izquierda = self.pestanas.geometry().right() + estilo.E2
         derecha = self.luz.x() - estilo.E2
         self.etiqueta.fijar_tope(max(1, derecha - izquierda))
@@ -78,6 +94,25 @@ class UbicaModo(QObject):
             x = izquierda
         alto = self.etiqueta.height()
         self.etiqueta.setGeometry(x, (self.fila.height() - alto) // 2, ancho, alto)
+
+    def _extensiones(self):
+        hoja = ("QToolButton { padding:0; min-width:0; min-height:0; border:none; }"
+                f"QToolButton:hover {{ background:{estilo.HOVER}; }}")
+        for boton in self.fila.window().findChildren(QToolButton, "qt_toolbar_ext_button"):
+            if boton.styleSheet() != hoja:
+                boton.setStyleSheet(hoja)
+                boton.setFixedWidth(estilo.ALTO_CONTROL - 2)
+                boton.setToolTip("Más herramientas")
+        for barra in self.fila.window().findChildren(QToolBar):
+            if barra.objectName() not in ("barraEdicion", "barraSimulacion"):
+                continue
+            acciones = barra.actions()
+            visibles = [i for i, accion in enumerate(acciones) if not accion.isSeparator()
+                        and barra.widgetForAction(accion).isVisible()]
+            for i, accion in enumerate(acciones):
+                if accion.isSeparator() and accion.isVisible():
+                    accion.setVisible(any(j < i for j in visibles) and any(j > i for j in visibles))
+
 
 
 class CabeceraFavoritos:
@@ -95,7 +130,7 @@ class CabeceraFavoritos:
         nav = v.navegacion.sizeHint().width() if v.navegacion.isVisibleTo(v) else 0
         ancho = d.parentWidget().width() - 2 * estilo.E2
         minimo = d.ancho_barra(True) + nav + 4 * estilo.E2 + v.b_ayuda.sizeHint().width()
-        if self.editable():
+        if v.preferencias_paletas.visible():
             minimo += v.favoritos.minimumSizeHint().width()
         d.integrar_barra(v._cab if ancho >= minimo else None)
         v._alto_cabecera = max(v._alto_cabecera, estilo.ALTO_CONTROL_COMPACTO, d.barra.sizeHint().height())
@@ -108,11 +143,11 @@ class CabeceraFavoritos:
         v = self.v
         d = v.diagrama
         barra = v.favoritos
-        barra.setVisible(self.editable())
+        barra.setVisible(v.preferencias_paletas.visible())
         ancho = d.parentWidget().width() - 2 * estilo.E2
         nav = v.navegacion.sizeHint().width() + estilo.E2 if v.navegacion.isVisibleTo(v) else 0
         ayuda = v.b_ayuda.sizeHint().width() + estilo.E2
-        favoritos = barra.sizeHint().width() if self.editable() else 0
+        favoritos = barra.sizeHint().width() if v.preferencias_paletas.visible() else 0
         if d.barra_integrada:
             compacto = ancho - favoritos - nav - ayuda - 3 * estilo.E2 < d.ancho_barra(False)
             d.solo_iconos(compacto)

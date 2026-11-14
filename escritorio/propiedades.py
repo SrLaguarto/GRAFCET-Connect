@@ -40,6 +40,7 @@ from grafcet.expressions import is_event_positive
 from grafcet.view import norm
 
 from . import estilo
+from .ayudas_emergentes import ayuda_html
 from .paneles import EtiquetaGrupos, TituloSeccion
 from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
@@ -274,7 +275,7 @@ class Paleta(QListWidget):
             for h in claves:
                 it = QListWidgetItem(icono(h), self.nombre(h))
                 it.setData(Qt.ItemDataRole.UserRole, h)
-                it.setToolTip(self.texto_ayuda(h))
+                it.setToolTip(ayuda_html(self.texto_ayuda(h), self.nombre(h)))
                 it.setSizeHint(self.REJILLA)
                 self.addItem(it)
         self._ancho_celdas = None
@@ -584,6 +585,11 @@ class PanelPropiedades(QWidget):
         mf.setContentsMargins(0, 0, 0, 0)
         mf.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         mf.addRow("Etiqueta", self.m_etiqueta)
+        self.m_comentario = QLineEdit()
+        self.m_comentario.setAccessibleName("Comentario de la macroetapa")
+        self.m_comentario.setPlaceholderText("sin comentario")
+        self.m_comentario.editingFinished.connect(lambda: self._comentar(self.m_comentario))
+        mf.addRow("Comentario", self.m_comentario)
         lh.addWidget(self.m_formulario)
         lh.addWidget(self.ficha_izq)
         lh.addStretch(1)
@@ -1008,7 +1014,7 @@ class PanelPropiedades(QWidget):
         aid = e.accion_activa() if e is not None else None
         if aid and e.datos_accion(aid)["tipo"] == "continua":  # una acción continua no se edita aquí: se despliega su variable con doble clic sobre ella
             for campo in (self.s_etiqueta, self.s_comentario, self.t_etiqueta, self.t_comentario,
-                          self.m_etiqueta):
+                          self.m_etiqueta, self.m_comentario):
                 campo.blockSignals(True)
                 campo.clearFocus()
                 campo.blockSignals(False)
@@ -1039,7 +1045,7 @@ class PanelPropiedades(QWidget):
         ident = aid if kind == "accion" else vivo if kind else None
         if (kind, ident) != (getattr(self, "_mostrado", None)):  # otro elemento: lo escrito sin confirmar se descarta
             for campo in (self.s_etiqueta, self.s_comentario, self.t_etiqueta, self.t_comentario,
-                          self.m_etiqueta):
+                          self.m_etiqueta, self.m_comentario):
                 campo.blockSignals(True)
                 campo.clearFocus()
                 campo.blockSignals(False)
@@ -1048,6 +1054,7 @@ class PanelPropiedades(QWidget):
         self.m_formulario.setVisible(kind == "macro")
         if kind == "macro":
             self._poner(self.m_etiqueta, e.nombres[vivo])
+            self._poner(self.m_comentario, e.comentario(vivo))
         self.cuerpo.setVisible(kind is not None)
         self.vacio.setVisible(kind is None)
         self.pagina = kind or "vacio"  # qué opciones se muestran: etapa, transicion, accion, enlace, barra o vacio
@@ -1063,6 +1070,8 @@ class PanelPropiedades(QWidget):
                                   "orden": 4, "marco": 4}[kind])
         self.izq.setVisible(kind in ("etapa", "transicion", "accion", "macro", "orden", "marco"))
         self.ficha_izq.mostrar(e, vivo if kind in ("macro", "orden", "marco") else None)
+        if kind == "macro":
+            self.ficha_izq.botones["Renombrar…"].hide()
         self.ficha_etapa.mostrar(e, vivo if kind == "etapa" else None)
         self.l_vacio.setText("Enlace de la etapa con sus acciones: Supr (o botón derecho, «Eliminar el enlace») las separa de la "
                              "etapa; quedan sueltas e independientes, cada una donde estaba."

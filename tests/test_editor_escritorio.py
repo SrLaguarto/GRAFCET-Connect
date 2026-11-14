@@ -304,7 +304,11 @@ class Interfaz(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         from escritorio.ventana import Ventana
-        self.w = Ventana(QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat))
+        ajustes = QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat)
+        # Estas pruebas previas usan la paleta lateral; H comprueba aparte los nuevos valores por defecto.
+        ajustes.setValue("paletas/favoritos_principal_v1", True)
+        ajustes.setValue("paneles/izquierdo", True)
+        self.w = Ventana(ajustes)
         self.w._cambiar_modo_propiedades("abajo")  # (estas pruebas dan por hecha la barra inferior; el defecto es «flotante»)
 
     def tearDown(self):
@@ -4124,16 +4128,16 @@ class Interfaz(unittest.TestCase):
             self.assertEqual([tabs.tabRect(j) for j in range(2)],medidas);self.assertEqual(tabs.mapTo(w,QPoint(0,0)),pos)
             self.assertEqual(tabs.currentIndex(),i)
 
-    def test_SEDI266_el_estado_de_conexion_hace_salto_de_linea_y_no_se_corta(self):
-        """REQ-SIM-03: el estado de la conexión del panel de E/S ocupa su propia fila bajo el título, hace salto de línea y
-        crece en alto: un mensaje de error largo (WinError 10053) se ve entero, a cualquier ancho, y va en el tooltip."""
-        from PySide6.QtCore import QRect
-        from PySide6.QtGui import QFontMetrics
+    def test_SEDI266_estado_de_conexion_completo_en_pastilla_sin_segunda_fila(self):
+        """REQ-SIM-03, G4: error completo en la señal y ayuda de la pastilla, sin ampliar la cabecera."""
         from PySide6.QtWidgets import QFrame
         from escritorio.entradas_salidas import PanelES
-        largo = ("El simulador de procesos cerró o anuló la conexión (WinError 10053). Salidas no garantizadas. Pulsa Conectar para "
-                 "reanudar. Detalle: [WinError 10053] Se ha anulado una conexión establecida por el software en su equipo host")
+        largo = ("El simulador de procesos cerró o anuló la conexión (WinError 10053). Salidas no garantizadas. "
+                 "Pulsa Conectar para reanudar. Detalle: [WinError 10053] Se ha anulado una conexión establecida "
+                 "por el software en su equipo host")
         p = PanelES()
+        mensajes = []
+        p.estado_cambiado.connect(lambda estado, mensaje: mensajes.append((estado, mensaje)))
         try:
             p.cargar(*self._doc_y_config_es())
             p.resize(1000, 600)
@@ -4142,27 +4146,21 @@ class Interfaz(unittest.TestCase):
             banda = p.findChild(QFrame, "cabeceraES")
             corto = banda.height()
             p.mostrar_estado("error", largo)
-            self.assertEqual(p.check.text(), "✕")
-            self.assertTrue(p.estado.wordWrap())
+            self.assertEqual(mensajes[-1], ("error", largo))
+            self.w._luz_es(*mensajes[-1])
+            self.assertIn(largo, self.w.luz_es.toolTip())
             self.assertEqual((p.estado.text(), p.estado.toolTip(), p.check.toolTip()), (largo, largo, largo))
             for ancho in (1280, 1000, 760, 560):
                 p.resize(ancho, 600)
                 for _ in range(3):
                     self.app.processEvents()
-                est = p.estado
-                necesaria = QFontMetrics(est.font()).boundingRect(QRect(0, 0, est.width(), 0), Qt.TextFlag.TextWordWrap, largo).height()
-                self.assertGreaterEqual(est.height(), necesaria, f"ancho {ancho}: el texto cabe entero en la etiqueta")
-                self.assertGreaterEqual(est.heightForWidth(est.width()), necesaria)
-                self.assertLessEqual(est.mapTo(banda, est.rect().bottomLeft()).y(), banda.height(), "y la etiqueta cabe en la cabecera")
-                self.assertLessEqual(banda.geometry().bottom(), p.lienzo.mapTo(p, p.lienzo.rect().topLeft()).y(), "sin pisar el cuerpo")
-            p.resize(1000, 600)
-            for _ in range(3):
-                self.app.processEvents()
-            self.assertGreater(p.estado.height(), QFontMetrics(p.estado.font()).height() * 1.5, "son varias líneas")
-            self.assertGreater(banda.height(), corto, "la cabecera crece con el mensaje")
+                self.assertFalse(p.fila_estado.isVisible())
+                self.assertFalse(p.estado.isVisible() or p.check.isVisible())
+                self.assertEqual(banda.height(), corto)
+                cuerpo = p.lienzo.mapTo(p, p.lienzo.rect().topLeft()).y()
+                self.assertLessEqual(banda.geometry().bottom(), cuerpo, "sin pisar el cuerpo")
             p.mostrar_estado("conectado", "Conectado · Ejecutando")
-            for _ in range(3):
-                self.app.processEvents()
+            self.app.processEvents()
             self.assertEqual((p.estado.text(), p.check.text(), banda.height()), ("Conectado", "✓", corto))
         finally:
             p.close()
@@ -4626,14 +4624,18 @@ class Interfaz(unittest.TestCase):
         paneles laterales; el izquierdo (paleta) y el derecho quedan encima, a la altura del dibujo; plegarlos o
         desplegarlos no cambia el panel inferior; su altura se mueve con el divisor y no baja de lo que pide su contenido."""
         from PySide6.QtWidgets import QDockWidget
+        from test_editor_cadenas import BaseQt
         w = self.w
         e, ids, ts, aid = self._con_accion_por_evento()
         self.assertEqual(w.findChildren(QDockWidget), [], "el panel izquierdo ya no es un dock de toda la altura")
         for tam in ((2000, 1000), (1366, 768)):
             w.resize(*tam)
             w.show()
+            BaseQt.pasar_arranque(self, w)
+            BaseQt.asentar_escala(self, w)
             w.editar_accion(ids["0"], aid)
             QApplication.processEvents()
+            BaseQt.asentar_escala(self, w)
             ventana = w.centralWidget()
             inf = QRectF(w.inferior.mapTo(ventana, QPoint(0, 0)), w.inferior.size())
             self.assertEqual((inf.left(), inf.width()), (0, ventana.width()), f"{tam}: el inferior, de borde a borde")
@@ -6755,7 +6757,7 @@ class Interfaz(unittest.TestCase):
                 bt = ficha.botones[t]
                 self.assertTrue(raiz.contains(QRectF(bt.mapTo(w.props, QPoint(0, 0)), bt.size())), (ident, t))
         ver(mid, "macro", izq, "Macroetapa M1 · expansión M1 · entrada E1 · salida S1",
-            ["Etapa", "Encapsulante", "Macroetapa", "Encuadrar la expansión", "Renombrar…"])
+            ["Etapa", "Encapsulante", "Macroetapa", "Encuadrar la expansión"])
         self.assertIn("Macroetapa", w.props.titulo.text())  # (solo el tipo: el nombre ya se ve y se edita en su campo)
         ver(r, "marco", izq, "Recinto R de E0 · activación: ninguna", ["Encuadrar la encapsulante"])
         ver(fid, "orden", izq, "Orden: H fuerza R a {B}", ["Editar orden de forzado…", "Quitar orden de forzado"])
@@ -6786,7 +6788,9 @@ class Interfaz(unittest.TestCase):
         e.parpadeo.parar()
         e.seleccionar([mid])
         e.pedir_texto = lambda *args: "Lavado"
-        izq.botones["Renombrar…"].click()
+        self.assertFalse(izq.botones["Renombrar…"].isVisible())
+        w.props.m_etiqueta.setText("Lavado")
+        w.props.m_etiqueta.editingFinished.emit()
         self.assertEqual(e.nombres[mid], "Lavado")
         self.assertEqual(izq.texto.text(),
                          "Macroetapa Lavado · expansión Lavado · entrada ELavado · salida SLavado")  # F5
