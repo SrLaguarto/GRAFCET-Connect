@@ -123,17 +123,22 @@ class PulidoES(BaseQt):
         self.assertEqual(b.canal.text(), "Salida numérica 0")
 
     def test_SESP07_led_activo_saturado_e_inactivo_neutro(self):
-        """REQ-SIM-03: la señal activa tiene color saturado y la inactiva es neutra en lista y canal."""
+        """REQ-SIM-03 y L: el piloto activo es eléctrico y el apagado conserva su verde atenuado."""
         w, p = self.modelo()
         p.asignar("sensor", "discrete", 0)
         led = p.indicadores["sensor"][0]
-        p.mostrar_valores({"sensor": False}); apagado = led.color()
-        p.mostrar_valores({"sensor": True}); activo = led.color()
-        self.assertLess(apagado.hsvSaturation(), 45)
+        from escritorio import estilo
+        p.mostrar_valores({"sensor": False})
+        apagado = led.color()
+        p.mostrar_valores({"sensor": True})
+        activo = led.color()
+        self.assertEqual(apagado.name(), estilo.PILOTO_APAGADO)
+        self.assertEqual(activo.name(), estilo.PILOTO_ENCENDIDO)
         self.assertGreater(activo.hsvSaturation(), 160)
         self.assertNotEqual(apagado, activo)
         self.assertEqual(led.nivel, NIVEL_ACTIVO)
-        p.mostrar_valores({"sensor": None}); self.assertEqual(led.nivel, NIVEL_ASIGNADO)
+        p.mostrar_valores({"sensor": None})
+        self.assertEqual(led.nivel, NIVEL_ASIGNADO)
 
     def test_SESP08_cabecera_colorea_todos_los_estados_sin_perder_texto(self):
         """REQ-SIM-03: estado inicial neutro, estable verde, fallo y desconexión con el fondo original, con mensaje conservado."""

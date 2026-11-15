@@ -255,7 +255,7 @@ class PanelDirecto(QObject):
         for terminal in self.dibujo.terminales.values():
             variable = terminal.variable
             valor = valores.get(variable["id"]) if variable else None
-            texto = "" if valor is None else str(int(valor)) if isinstance(valor, bool) else str(valor)
+            texto = "" if valor is None or terminal.senal["type"].lower() == "bit" else str(valor)
             terminal.valor.setText(texto)
 
     def establecer_edicion(self, edicion):

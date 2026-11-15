@@ -112,7 +112,7 @@ class Favoritos(BaseQt):
                 e.deshacer()
 
     def test_SFAV05_gesto_de_arrastre_desde_boton_y_menu(self):
-        w, e, barra = self.preparar(960, 1032)
+        w, e, barra = self.preparar(683, 768)
         for boton in (barra.botones["etapa"], barra.crear_menu_desborde().actions()[0].defaultWidget()):
             with mock.patch.object(w.paleta, "arrastrar_elemento") as arrastrar:
                 QTest.mousePress(boton, Qt.MouseButton.LeftButton, pos=QPoint(4, 4))
@@ -160,6 +160,12 @@ class Favoritos(BaseQt):
     def test_SFAV09_desborde_y_zoom_antes_de_ocultar_favoritos(self):
         w, e, barra = self.preparar(960, 1032)
         self.assertTrue(w.diagrama._solo_iconos)
+        self.assertTrue(w.diagrama.l_zoom.isHidden())
+        self.assertFalse(barra.ocultos, "L: los quince caben a 960 sin porcentaje")
+        w.resize(683, 768)
+        self.asentar_escala(w)
+        for _ in range(5):
+            QApplication.processEvents()
         self.assertTrue(barra.desborde.isVisible())
         self.assertTrue(barra.ocultos)
         menu = barra.crear_menu_desborde()

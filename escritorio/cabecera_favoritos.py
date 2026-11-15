@@ -146,10 +146,21 @@ class CabeceraFavoritos:
         barra.setVisible(v.preferencias_paletas.visible())
         ancho = d.parentWidget().width() - 2 * estilo.E2
         nav = v.navegacion.sizeHint().width() + estilo.E2 if v.navegacion.isVisibleTo(v) else 0
+        barra.compacta = False
         favoritos = barra.sizeHint().width() if v.preferencias_paletas.visible() else 0
         if d.barra_integrada:
-            compacto = ancho - favoritos - nav - 3 * estilo.E2 < d.ancho_barra(False)
+            compacto = ancho - favoritos - nav - 4 * estilo.E2 < d.ancho_barra(False)
             d.solo_iconos(compacto)
+            disponible = ancho - favoritos - nav - 4 * estilo.E2
+            ancho_zoom = d.ancho_barra(True)
+            if d.l_zoom.isHidden():
+                ancho_zoom += d.l_zoom.sizeHint().width()
+            porcentaje = not compacto or disponible >= ancho_zoom
+            d.porcentaje_zoom.mostrar(porcentaje)
+            barra.compacta = not porcentaje
+            favoritos = barra.sizeHint().width() if v.preferencias_paletas.visible() else 0
+        else:
+            d.porcentaje_zoom.mostrar(True)
         zoom = d.barra.sizeHint().width() + estilo.E2 if d.barra_integrada else 0
         libre = max(0, ancho - zoom - nav - 3 * estilo.E2)
         barra.setMaximumWidth(min(favoritos, libre))

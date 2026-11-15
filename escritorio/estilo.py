@@ -38,10 +38,14 @@ ACENTO_SUAVE = "#cfeee6"   # relleno de lo seleccionado o activo (menta; una pru
 ACENTO_BORDE = "#8fcdd1"
 
 EDICION = "#2f3b4a"        # tinta pizarra, neutra: el programa está en edición; no compite con el acento petróleo (blanco encima: 11,3:1)
-SIMULACION = "#157a35"     # verde máquina: simulación en marcha, el único verde de la interfaz (blanco encima: 5,4:1)
+SIMULACION = "#157a35"     # verde máquina de la simulación en marcha (blanco encima: 5,4:1)
 SIMULACION_SUAVE = "#e3f4e8"
 SIMULACION_HOVER = "#0f6a2c"  # (blanco encima: 6,7:1)
 SIMULACION_BORDE = "#8cc9a0"
+
+PILOTO_ENCENDIDO = "#39ff14"  # verde eléctrico de las señales booleanas activas
+PILOTO_APAGADO = "#3f8f57"  # verde apagado: distinto del gris de «Cualquiera» (#6d837b), contraste 3,5:1 con el fondo del módulo
+PILOTO_HALO = "#4539ff14"  # mismo verde, con alfa 27 %
 
 OK = SIMULACION           # lo correcto y lo activo comparten el mismo verde
 AVISO = "#8a5a00"          # texto ámbar sobre fondo claro (5,4:1)

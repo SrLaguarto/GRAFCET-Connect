@@ -16,7 +16,7 @@ from conexion.configuracion import Configuracion
 from conexion.http_directo import ClienteDirecto, ErrorDirecto
 from conexion.uniones import Union
 from escritorio.edicion import Edicion
-from escritorio.entradas_salidas import PanelES
+from escritorio.entradas_salidas import NIVEL_ACTIVO, PanelES
 from escritorio.traer_modelo import HistorialUniones, Propuestas, de_fabrica, interna, proponer, traer
 from escritorio.traer_dialogo import DialogoTraer
 from grafcet.editor import Editor, new_grafcet_document
@@ -157,7 +157,8 @@ class TraerES(unittest.TestCase):
         self.edicion.rehacer()
         self.assertEqual(len(panel.config.uniones), 2)
         panel.mostrar_muestra({panel.config.uniones[0].variable: True}, panel.config.uniones)
-        self.assertEqual(panel.directa.dibujo.terminales["a"].valor.text(), "1")
+        self.assertEqual(panel.directa.dibujo.terminales["a"].valor.text(), "")
+        self.assertEqual(panel.directa.dibujo.terminales["a"].led.nivel, NIVEL_ACTIVO)
 
     def test_SCD17_dos_importaciones_deshacer_y_rehacer_seguidas(self):
         historial = HistorialUniones()

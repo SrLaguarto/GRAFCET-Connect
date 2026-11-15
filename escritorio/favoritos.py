@@ -200,6 +200,7 @@ class BarraFavoritos(QWidget):
         self.ajustes = ajustes
         self.paleta = paleta
         self.lado_icono = round((estilo.ALTO_BARRA + LADO_MINI) / 2)
+        self.compacta = False
         self._menu = None
         self._visibles = []
         self.ocultos = []
@@ -220,7 +221,9 @@ class BarraFavoritos(QWidget):
         self._disponer()
 
     def ancho_boton(self):
-        return max(estilo.ALTO_BARRA, self.lado_icono + estilo.E1)  # al menos E1 de aire entre dos iconos: con el ancho común (K1) se tocaban
+        if self.compacta:
+            return max(estilo.ALTO_CONTROL, self.lado_icono)
+        return max(estilo.ALTO_BARRA, self.lado_icono + estilo.E1)
 
     def sizeHint(self):
         return QSize(len(self.orden) * self.ancho_boton() + 2 * estilo.E2, estilo.ALTO_BARRA)
@@ -248,7 +251,7 @@ class BarraFavoritos(QWidget):
         super().resizeEvent(evento)
         self.lado_icono = round((self.height() + LADO_MINI) / 2)
         if self.window().width() <= 960:
-            self.lado_icono = max(30, self.lado_icono)
+            self.lado_icono = 30
         for boton in self.botones.values():
             boton.setIconSize(QSize(self.lado_icono, self.lado_icono))
         self._disponer()

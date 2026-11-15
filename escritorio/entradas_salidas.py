@@ -3,7 +3,8 @@
 A la izquierda, los sensores; a la derecha, los actuadores (listas de variables que se arrastran). En el centro, un marco
 de borde fino con la cabecera «(IP:puerto) Esclavo ID:n» y dos columnas de canales: Input e Input Reg a la izquierda, Coil y
 Holding Reg a la derecha. El nombre de la variable asignada se escribe fuera del marco, pegado a él. Estilo plano y compacto.
-Una barrita de color indica el tipo de la variable (Bool, Decimal, Entera, Cualquiera) y su viveza, si la señal está activa."""
+Un piloto redondo indica el tipo de la variable (Bool, Decimal, Entera, Cualquiera) y su viveza
+si la señal está activa."""
 from dataclasses import replace
 import json
 import copy
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QStackedWidget
                                QStyledItemDelegate, QScrollBar)
 
 from . import estilo
+from .pilotos_es import pintar_piloto, tamano_piloto
 from .paneles import ContextoNombres, EtiquetaGrupos, TituloSeccion
 from conexion.adaptador import texto_numero
 from conexion.configuracion import ETIQUETA_CANAL, CONEXION_INICIAL, CANALES_INICIALES, Configuracion, Senal, es_ipv4, normalizar_host
@@ -33,7 +35,7 @@ MIME_VARIABLE = "application/x-grafconnect-variable"
 # Host, puerto y esclavo que propone el panel la primera vez, sin nada recordado ni mapa guardado: la configuración inicial del servidor Modbus.
 # Después la ventana propone la última conexión que funcionó (`PanelES.conexion_defecto`).
 
-# Aspecto. El color de la barrita es el del tipo; su viveza, el estado: tenue (canal sin asignar), tipo (asignado) y vivo
+# Aspecto. El color del piloto es el del tipo; su viveza, el estado: tenue (canal sin asignar), tipo (asignado) y vivo
 # (la señal está activa). La leyenda de abajo explica los colores.
 FONDO = estilo.SUPERFICIE_2
 COLOR_TIPO = {"bool": estilo.TIPO_BOOL, "decimal": estilo.TIPO_DECIMAL, "int": estilo.TIPO_ENTERA}
@@ -149,11 +151,11 @@ def areas_variable(variable):
 
 
 class IndicadorES(QWidget):
-    """Barrita (o cuadrito) de color: uno o dos colores y un nivel de viveza. No recibe el ratón."""
+    """Piloto redondo de uno o dos colores y un nivel de viveza. No recibe el ratón."""
 
-    def __init__(self, ancho=4, alto=12):
+    def __init__(self):
         super().__init__()
-        self.setFixedSize(ancho, alto)
+        self.setFixedSize(tamano_piloto())
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.colores, self.nivel = (COLOR_CUALQUIERA,), NIVEL_TENUE
 
@@ -168,16 +170,14 @@ class IndicadorES(QWidget):
 
     def color(self):
         """El primer color tal como se ve (con su viveza)."""
+        if self.colores == (COLOR_TIPO["bool"],) and self.nivel >= NIVEL_ASIGNADO:
+            return QColor(estilo.PILOTO_ENCENDIDO if self.nivel >= NIVEL_ACTIVO else estilo.PILOTO_APAGADO)
         return mezclar(self.colores[0], self.nivel)
 
     def paintEvent(self, _evento):
-        p = QPainter(self)
-        n = len(self.colores)
-        for i, c in enumerate(self.colores):
-            y0, y1 = i * self.height() // n, (i + 1) * self.height() // n
-            p.fillRect(0, y0, self.width(), y1 - y0, mezclar(c, self.nivel))
-        p.setPen(QColor(estilo.BORDE_CONTROL))  # el contorno cumple los 3:1 que no cumplen los tonos tenues sobre blanco
-        p.drawRect(0, 0, self.width() - 1, self.height() - 1)
+        colores = [self.color()] if len(self.colores) == 1 else [mezclar(c, self.nivel) for c in self.colores]
+        encendido = self.colores == (COLOR_TIPO["bool"],) and self.nivel >= NIVEL_ACTIVO
+        pintar_piloto(self, colores, encendido)
 
 
 class EtiquetaElidida(QLabel):
@@ -338,6 +338,7 @@ class TerminalES(QFrame):
         entrada = area in ("discrete", "input-register")
         analogica = area in ("input-register", "holding")
         self.led = IndicadorES()
+        self.led.setFixedSize(tamano_piloto(alto))
         if variable:
             self.led.fijar((color_tipo(variable),), NIVEL_ASIGNADO)
         else:  # sin asignar: tenue, con el color propio del área (los registros admiten Decimal y Entera)
@@ -356,7 +357,7 @@ class TerminalES(QFrame):
         self.valor = QLabel("—" if variable else "", self)
         self.valor.setObjectName("valorES")  # cifra en la letra técnica, color y tamaño en la hoja del panel
         self.valor.setVisible(analogica)
-        self.barrita_nombre = IndicadorES(6, 13)
+        self.barrita_nombre = IndicadorES()
         self.barrita_nombre.hide()  # el estado se muestra solo en el indicador del canal del PLC
         interior = QWidget()
         self.interior = interior
@@ -906,6 +907,8 @@ class PanelES(QWidget):
         self.setStyleSheet(hoja_ventana + estilo_panel(escala))
         self.fila_alta.setFixedHeight(e["ALTO_CONTROL_COMPACTO"] + 8)
         self.b_volver.setFixedHeight(e["ALTO_CONTROL_COMPACTO"])
+        for piloto in self.ayuda_vacio.parentWidget().findChildren(IndicadorES):
+            piloto.setFixedSize(tamano_piloto(self.alto_fila))
         self._filas_tabla(escala)
         self.lienzo.fijar_interior(self.ancho_interior, e["ALTO_CONTROL"])
         for lista in (self.lista_entradas, self.lista_salidas):
@@ -1068,8 +1071,9 @@ class PanelES(QWidget):
         pl.setContentsMargins(12, 0, 12, 2)
         pl.setSpacing(6)
         for texto, tipo in LEYENDA:
-            cuadro = IndicadorES(8, 8)
-            cuadro.fijar((COLOR_TIPO.get(tipo, COLOR_CUALQUIERA),), NIVEL_ACTIVO)
+            cuadro = IndicadorES()
+            cuadro.fijar((COLOR_TIPO.get(tipo, COLOR_CUALQUIERA),),
+                         NIVEL_ASIGNADO if tipo == "bool" else NIVEL_ACTIVO)
             pl.addWidget(cuadro)
             pl.addWidget(QLabel(texto))
             pl.addSpacing(12)
@@ -1904,10 +1908,10 @@ class PanelES(QWidget):
         for vid, (led, etiqueta) in self.indicadores.items():
             valor = valores.get(vid)
             if valor is None:
-                etiqueta.setText("—")
+                etiqueta.setText("" if led.colores == (COLOR_TIPO["bool"],) else "—")
                 led.fijar_nivel(NIVEL_ASIGNADO)
             else:
-                etiqueta.setText(str(int(valor)) if type(valor) is bool else str(valor))
+                etiqueta.setText("" if led.colores == (COLOR_TIPO["bool"],) else str(valor))
                 led.fijar_nivel(NIVEL_ACTIVO if activo(valor) else NIVEL_ASIGNADO)
 
     def mostrar_muestra(self, muestra, senales, escritos=None, salidas=()):

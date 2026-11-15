@@ -136,7 +136,7 @@ class CoherenciaK(unittest.TestCase):
         self.assertTrue(tabla.item(0, 0).textAlignment() & Qt.AlignmentFlag.AlignHCenter)
         self.assertEqual(tabla.item(0, 0).foreground().color().name(), estilo.TINTA_2)
 
-    def test_SK106_mismo_terminal_internas_ocultas_y_valor_10(self):
+    def test_SK106_mismo_terminal_internas_ocultas_y_valor_por_piloto(self):
         panel = self.panel()
         marco = panel.directa.dibujo
         self.assertNotIn("interno", marco.terminales)
@@ -145,7 +145,8 @@ class CoherenciaK(unittest.TestCase):
         vid = panel.config.uniones[0].variable
         for valor in (True, False):
             panel.mostrar_valores({vid: valor})
-            self.assertEqual(marco.terminales["s"].valor.text(), str(int(valor)))
+            self.assertEqual(marco.terminales["s"].valor.text(), "")
+            self.assertFalse(marco.terminales["s"].valor.isVisible())
         panel.config.uniones.append(Union(panel.variables[1]["id"], "interno", "Simulador (Running)", "Bit", "input"))
         panel.directa.dibujar()
         self.assertIn("interno", marco.terminales)

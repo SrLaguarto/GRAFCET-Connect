@@ -10,7 +10,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PySide6.QtWidgets import QApplication
-    from escritorio.entradas_salidas import PanelES
+    from escritorio.entradas_salidas import NIVEL_ACTIVO, PanelES
     QT = True
 except ImportError:
     QT = False
@@ -139,7 +139,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual([s.variable for s in guardado.senales], [vid, luz, consigna])
                 w._conectar_modbus()
                 esperar_ui(lambda: w.modbus.estado == "conectado")
-                esperar_ui(lambda: w.panel_es.indicadores[vid][1].text() == "1")
+                esperar_ui(lambda: w.panel_es.indicadores[vid][0].nivel == NIVEL_ACTIVO)
                 self.assertIsNone(w.modbus.adaptador.sesion)
                 self.assertEqual(w.modbus.adaptador.salidas, [], "sin programa compilado, el monitor no controla nada")
                 self.assertEqual([s.variable for s in w.modbus.adaptador.salidas_control], [luz, consigna])
@@ -763,11 +763,11 @@ class PanelTests(unittest.TestCase):
             self.assertLess(NIVEL_ASIGNADO, NIVEL_ACTIVO)
             p.mostrar_valores({"a": True, "v": 0, "d": "1.5", "q": False})
             self.assertEqual([led(v).nivel for v in ("a", "v", "d", "q")], [NIVEL_ACTIVO, NIVEL_ASIGNADO, NIVEL_ACTIVO, NIVEL_ASIGNADO])
-            self.assertEqual([p.indicadores[v][1].text() for v in ("a", "v", "d")], ["1", "0", "1.5"])
+            self.assertEqual([p.indicadores[v][1].text() for v in ("a", "v", "d")], ["", "0", "1.5"])
             self.assertTrue(p.indicadores["v"][1].isVisibleTo(p), "las analógicas enseñan su valor")
             self.assertFalse(p.indicadores["a"][1].isVisibleTo(p), "las digitales, solo la barrita")
-            pixel = led("a").grab().toImage().pixelColor(1, 1)
-            self.assertEqual(pixel.getRgb()[:3], mezclar(COLOR_TIPO["bool"], NIVEL_ACTIVO).getRgb()[:3])
+            pixel = led("a").grab().toImage().pixelColor(led("a").width() // 2, led("a").height() // 2)
+            self.assertEqual(pixel.getRgb()[:3], led("a").color().getRgb()[:3])
             # las listas laterales: sensores a la izquierda, actuadores a la derecha, con su color de tipo
             def fila(lista, nombre):
                 return next(lista.item(i) for i in range(lista.count()) if lista.item(i).text() == nombre)
@@ -1307,8 +1307,9 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(len(escrituras), n, "tras el cero, Pausa no escribe más")
                 self.assertIs(w.modbus.cliente._socket, socket, "la conexión no se cierra")
                 self.assertTrue(w.modbus.activo and w.rt.isActive(), "la observación de entradas sigue")
-                esperar(lambda: w.panel_es.indicadores["sensor"][1].text() == "1" and w.panel_es.indicadores["vel"][1].text() == "0")
-                self.assertEqual([w.panel_es.indicadores[v][1].text() for v in ("motor", "luz")], ["0", "0"])
+                esperar(lambda: w.panel_es.indicadores["sensor"][0].nivel == NIVEL_ACTIVO
+                        and w.panel_es.indicadores["vel"][1].text() == "0")
+                self.assertEqual([w.panel_es.indicadores[v][1].text() for v in ("motor", "luz")], ["", ""])
                 # Play otra vez, con el sensor ya a 0: sesión nueva desde la situación inicial (no sigue en E1)
                 sensor[0] = 0
                 anterior = w.v.s
@@ -1613,7 +1614,7 @@ class PanelTests(unittest.TestCase):
                 esperar(lambda: w.modbus.estado == "conectado" and w.modbus.escritos == cero)
                 esperar(lambda: sum(e[0] == "leer" for e in eventos) >= 3)
                 sensor[0] = 1  # la planta ya tiene el sensor activo cuando se pulsa Play
-                esperar(lambda: w.panel_es.indicadores["sensor"][1].text() == "1")
+                esperar(lambda: w.panel_es.indicadores["sensor"][0].nivel == NIVEL_ACTIVO)
                 n = len(eventos)
                 w.a_ejecutar.setChecked(True)
                 esperar(lambda: w.modbus.escritos == {"motor": False, "luz": True, "vel": 150})
@@ -1739,7 +1740,8 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(w.v.state().get("situation", []), [])
                 self.assertEqual((w.t_vars.rowCount(), w.t_temp.rowCount(), w.traza.count()), (0, 0, 0))
                 self.assertFalse(any(b.isEnabled() for b in w.botones.values()), "sin sesión, las entradas no responden")
-                self.assertEqual([p.indicadores[v][1].text() for v in ("sensor", "motor", "luz", "vel")], ["—"] * 4)
+                self.assertEqual([p.indicadores[v][1].text() for v in ("sensor", "motor", "luz", "vel")],
+                                 ["", "", "", "—"])
                 self.assertEqual({p.indicadores[v][0].nivel for v in ("motor", "luz", "vel")}, {NIVEL_ASIGNADO})
                 w.a_ejecutar.setChecked(True)  # Play: situación inicial (E0: motor y la consigna memorizada)
                 self.assertEqual(w.v.state()["situation"], ["E0"])

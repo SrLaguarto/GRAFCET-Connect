@@ -74,7 +74,10 @@ class FavoritosPrincipal(unittest.TestCase):
             barra = w.favoritos
             alto = barra.height()
             lado = barra.botones["etapa"].iconSize().height()
-            self.assertLessEqual(abs((alto - lado) - (alto - 24) / 2), 1)
+            if tam[0] <= 960:
+                self.assertEqual(lado, 30, "L: conserva los quince favoritos a media pantalla")
+            else:
+                self.assertLessEqual(abs((alto - lado) - (alto - 24) / 2), 1)
             self.assertGreater(alto - lado, 0)
             for boton in barra.botones.values():
                 self.assertEqual(boton.iconSize(), QSize(lado, lado))
