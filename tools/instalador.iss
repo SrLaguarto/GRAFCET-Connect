@@ -20,6 +20,8 @@
 #define Nombre "GRAFCET Connect"
 #define Exe "GRAFCET Connect.exe"
 #define TipoArchivo "GRAFCETConnect.Proyecto"
+#define TextoServidorWeb "Activar el servidor web del simulador de fábricas, si está instalado"
+#define FlagsServidorWeb "runasoriginaluser runhidden waituntilterminated"
 
 [Setup]
 AppId={{6F0C2D8E-3B7A-4C55-9E1D-6A2B9C4E7F10}
@@ -59,6 +61,8 @@ Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "escritorio"; Description: "Crear un acceso directo en el escritorio"; GroupDescription: "Accesos directos:"; Flags: unchecked
 Name: "asociar"; Description: "Abrir los archivos .grafnet con {#Nombre}"; GroupDescription: "Archivos:"
 
+Name: "servidorweb"; Description: "{#TextoServidorWeb}"; GroupDescription: "Conexión directa:"
+
 [Files]
 Source: "{#Origen}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
@@ -75,4 +79,5 @@ Root: HKA; Subkey: "Software\Classes\{#TipoArchivo}\DefaultIcon"; ValueType: str
 Root: HKA; Subkey: "Software\Classes\{#TipoArchivo}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#Exe}"" ""%1"""; Tasks: asociar
 
 [Run]
+Filename: "{app}\{#Exe}"; Parameters: "--activar-servidor-simulador"; Flags: {#FlagsServidorWeb}; Tasks: servidorweb
 Filename: "{app}\{#Exe}"; Description: "Abrir {#Nombre}"; Flags: nowait postinstall skipifsilent

@@ -7,9 +7,12 @@ class ErrorDirecto(ValueError):
     pass
 
 
+AVISO_SIN_SERVIDOR = "El servidor web del simulador de fábricas no está configurado o el simulador no está abierto "
+
+
 def sin_servidor(host, puerto):
-    return ("El servidor web del simulador de fábricas no está configurado o el simulador no está abierto "
-            f"({host}:{puerto}). En el simulador (edición Ultimate) active su servidor web con la orden "
+    return (AVISO_SIN_SERVIDOR
+            + f"({host}:{puerto}). En el simulador (edición Ultimate) active su servidor web con la orden "
             "de consola app.web_server = True, o con un archivo auto.cfg que la contenga en la carpeta "
             "de documentos del simulador.")
 

@@ -29,9 +29,19 @@ class PilaModos(QStackedWidget):
 class PanelDirecto(QObject):
     traer = Signal()
 
+    @staticmethod
+    def _estado_neutro(panel):
+        """Tras activar el servidor web, el aviso deja de verse como error (queda en tinta, con el punto neutro)."""
+        panel.check.setText("●")
+        panel.check.setStyleSheet(f"background:transparent; color:{estilo.TINTA_3}; border-radius:{estilo.R_M}px; "
+                                  f"font-size:{panel.letra}px; font-weight:600")
+
     def __init__(self, panel):
         super().__init__(panel)
         self.panel = panel
+        from .ayuda_servidor_web import AyudaServidorWeb
+        self.ayuda_servidor = AyudaServidorWeb(panel.estado, panel.fila_estado.layout(), panel.fila_estado,
+                                               al_activar=lambda: self._estado_neutro(panel))
         self.catalogo = []
         self.edicion = None
         self.dialogo_traer = None

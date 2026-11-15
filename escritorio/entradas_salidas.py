@@ -1511,6 +1511,7 @@ class PanelES(QWidget):
         # La línea queda oculta: la medida se conserva (texto y detalle), pero no se enseña al alumno.
 
     def mostrar_estado(self, estado, mensaje):
+        mensaje = self.directa.ayuda_servidor.mostrar(mensaje, self.config.modo == "directo" and estado == "error")
         self.estado.setText(mensaje)
         conectado = estado == "conectado"
         self._hubo_conexion |= conectado

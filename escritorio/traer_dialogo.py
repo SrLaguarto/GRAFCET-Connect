@@ -29,7 +29,11 @@ class DialogoTraer(QDialog):
         layout.setContentsMargins(estilo.E2, estilo.E2, estilo.E2, estilo.E2)
         self.estado = QLabel()
         self.estado.setWordWrap(True)
-        layout.addWidget(self.estado)
+        fila_aviso = QHBoxLayout()
+        fila_aviso.addWidget(self.estado, 1)
+        layout.addLayout(fila_aviso)
+        from .ayuda_servidor_web import AyudaServidorWeb
+        self.ayuda_servidor = AyudaServidorWeb(self.estado, fila_aviso)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         self.zona = QWidget()
@@ -77,7 +81,7 @@ class DialogoTraer(QDialog):
         config = self.controlador.obtener()
         self.b_leer.setEnabled(False)
         self.b_traer.setEnabled(False)
-        self.estado.setText(f"{config.host}:{config.puerto} · Leyendo señales…")
+        self.estado.setText(self.ayuda_servidor.mostrar(f"{config.host}:{config.puerto} · Leyendo señales…"))
         def trabajo():
             cliente = ClienteDirecto(config.host, config.puerto, timeout=config.timeout_ms / 1000)
             try:
@@ -96,7 +100,7 @@ class DialogoTraer(QDialog):
         try:
             catalogo = futuro.result()
         except (ValueError, OSError) as exc:
-            self.estado.setText(str(exc))
+            self.estado.setText(self.ayuda_servidor.mostrar(str(exc)))
             return
         from conexion.reconciliar import reconciliar
         avisos = reconciliar(self.controlador.panel.config, self.controlador.edicion.ed.model, catalogo)
