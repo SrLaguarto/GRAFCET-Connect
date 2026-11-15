@@ -205,7 +205,7 @@ class PulidoES(BaseQt):
             self.assertEqual((w.width(), w.height()), (ancho, alto))
             self.assertLessEqual(p.minimumSizeHint().width(), w.width())
             self.assertTrue(p.b_conectar.isVisibleTo(w)); self.assertTrue(p.b_configuracion.isVisibleTo(w))
-            scroll = p.lienzo.parentWidget().parentWidget()
+            scroll = p.directa.scroll
             self.assertEqual(scroll.horizontalScrollBar().maximum(), 0)
             if ancho == 1366:
                 self.assertEqual(scroll.verticalScrollBar().maximum(), 0)

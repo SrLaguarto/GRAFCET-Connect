@@ -95,12 +95,13 @@ class FavoritosPrincipal(unittest.TestCase):
         self.assertEqual(set(esperado), {h for _, claves in SECCIONES for h in claves})
 
     def test_SH103_lista_antigua_migra_una_vez_y_respeta_orden(self):
+        """REQ-EDT-09: J4 sustituye la personalización por el inventario fijo y borra la preferencia."""
         w = self.crear({"favoritos/elementos": ["forzado", "etapa"]})
-        self.assertEqual(w.favoritos.orden, ["forzado", "etapa", "texto", "imagen"])
-        w.favoritos.mostrar_elemento("imagen", False)
-        w.ajustes.sync()
+        self.assertEqual(w.favoritos.orden, list(PREDETERMINADOS))
+        self.assertFalse(w.ajustes.contains("favoritos/elementos"))
         otra = self.crear(archivo=w.ajustes.fileName())
-        self.assertEqual(otra.favoritos.orden, ["forzado", "etapa", "texto"])
+        self.assertEqual(otra.favoritos.orden, list(PREDETERMINADOS))
+
 
     def test_SH104_defectos_y_dos_entradas_independientes_con_ctrl_l(self):
         w = self.crear()
@@ -254,11 +255,12 @@ class FavoritosPrincipal(unittest.TestCase):
             self.assertAlmostEqual(trazo, 1.5 * lado / 24)
 
     def test_SH116_listas_antiguas_vacias_unitarias_y_ya_completas(self):
-        for antigua, esperada in (([], ["texto", "imagen"]),
-                                  ("etapa", ["etapa", "texto", "imagen"]),
-                                  (["imagen", "forzado", "texto"], ["imagen", "forzado", "texto"])):
+        """REQ-EDT-09: todas las variantes antiguas producen la barra fija de J4."""
+        for antigua in ([], "etapa", ["imagen", "forzado", "texto"]):
             w = self.crear({"favoritos/elementos": antigua})
-            self.assertEqual(w.favoritos.orden, esperada)
+            self.assertEqual(w.favoritos.orden, list(PREDETERMINADOS))
+            self.assertFalse(w.ajustes.contains("favoritos/elementos"))
+
 
     def test_SH117_ayuda_de_celda_tambien_se_ajusta(self):
         from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
@@ -290,9 +292,9 @@ class FavoritosPrincipal(unittest.TestCase):
     def test_SH118_identificador_largo_sin_espacios_no_desborda(self):
         w = self.crear(tam=(960, 1032))
         largo = "Identificador" * 30
-        w.b_ayuda.setToolTip(largo)
+        w.diagrama.b_ajustar.setToolTip(largo)
         punto = w.screen().availableGeometry().bottomRight() - QPoint(5, 5)
-        self.app.sendEvent(w.b_ayuda, QHelpEvent(QEvent.Type.ToolTip, QPoint(2, 2), punto))
+        self.app.sendEvent(w.diagrama.b_ajustar, QHelpEvent(QEvent.Type.ToolTip, QPoint(2, 2), punto))
         QTest.qWait(15)
         tips = [t for t in self.app.topLevelWidgets()
                 if t.windowType() == Qt.WindowType.ToolTip and t.isVisible()]
@@ -344,9 +346,9 @@ class FavoritosPrincipal(unittest.TestCase):
 
     def test_SH114_otras_ayudas_largas_se_ajustan(self):
         w = self.crear(tam=(960, 1032))
-        w.b_ayuda.setToolTip("Una descripción extensa de la ventana. " * 15)
+        w.diagrama.b_ajustar.setToolTip("Una descripción extensa de la ventana. " * 15)
         p = w.screen().availableGeometry().bottomRight() - QPoint(5, 5)
-        self.app.sendEvent(w.b_ayuda, QHelpEvent(QEvent.Type.ToolTip, QPoint(2, 2), p))
+        self.app.sendEvent(w.diagrama.b_ajustar, QHelpEvent(QEvent.Type.ToolTip, QPoint(2, 2), p))
         QTest.qWait(15)
         tips = [t for t in self.app.topLevelWidgets()
                 if t.windowType() == Qt.WindowType.ToolTip and t.isVisible()]

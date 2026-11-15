@@ -337,7 +337,7 @@ class VistaLamina(QWidget):
                 t=self.textos
                 if self.nuevo_texto:
                     t.blockSignals(True);t.anadir();t.actual.t.update(x=p.x(),y=p.y());t.actual.sincronizar();t.blockSignals(False);t.movido();self.nuevo_texto=False;self.unsetCursor();return
-                if self.zona and t.b_zona.isChecked():self.inicio_zona=(p,p);return
+                if self.zona and t.vista.zona:self.inicio_zona=(p,p);return
                 item=next((i for i in reversed(t.items) if i.contains(i.mapFromScene(p))),None)
                 t.elegir(t.items.index(item) if item else -1)
                 if item:self.inicio_texto=(p,item.t['x'],item.t['y']);self.seleccionado=False;self.update();return
@@ -420,7 +420,8 @@ class DialogoLaminas(QDialog):
         if integrado:
             form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows);scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         else:centro.addWidget(scroll)
-        self.predeterminadas=ComboElidido();self.predeterminadas.addItem('Elegir plantilla…',None)
+        from .planos_plantillas import ComboPlantillas
+        self.predeterminadas=ComboPlantillas();self.predeterminadas.addItem('Elegir plantilla…',None)
         self.predeterminadas.addItem('A4 vertical — predeterminada',('A4','vertical'));self.predeterminadas.addItem('A3 horizontal',('A3','horizontal'));self.predeterminadas.addItem('A3 vertical',('A3','vertical'))
         for f in ('A2','A1','A0'):
             for o in ('vertical','horizontal'):self.predeterminadas.addItem(f+' '+o,(f,o))
@@ -431,7 +432,8 @@ class DialogoLaminas(QDialog):
         except OSError:pass
         if integrado:
             from .planos_plantillas import fila_plantilla
-            form.addRow("Plantilla", fila_plantilla(self))
+            form.addRow(QLabel("Plantilla"))
+            form.addRow(fila_plantilla(self))
         else:
             form.addRow("Biblioteca de plantillas", self.predeterminadas)
         self.formato=ComboElidido();self.formato.addItems([*FORMATOS,'Personalizado']);self.formato.setCurrentText(self.ajustes['formato'])
@@ -452,7 +454,8 @@ class DialogoLaminas(QDialog):
         self.guardar_ajustes=QPushButton('Aplicar al proyecto');form.addRow(self.guardar_ajustes)
         self.vista=VistaLamina();self.vista.colocar=self.colocar
         if integrado:
-            self.area=QScrollArea();self.area.setFocusPolicy(Qt.FocusPolicy.NoFocus);self.area.setWidgetResizable(False);self.area.setAlignment(Qt.AlignmentFlag.AlignCenter);self.area.setWidget(self.vista);centro.addWidget(self.area,1);self.propiedades=QStackedWidget();self.propiedades.setFixedWidth(290);self.propiedades.addWidget(scroll);centro.addWidget(self.propiedades)
+            from .planos_plantillas import area_integrada
+            area_integrada(self, centro, scroll)
         else:centro.addWidget(self.vista,1)
         nav = QHBoxLayout()
         self.navegacion_fila = None
@@ -494,6 +497,8 @@ class DialogoLaminas(QDialog):
                 if item.widget() is not None:
                     item.widget().setParent(self)
                     item.widget().hide()
+        from .sesion_plantilla import SesionPlantilla
+        self.sesion_plantilla = SesionPlantilla(self)
         self.inicial = guardada
         self.actualizar()
         if integrado:self.preparar_textos()
@@ -558,7 +563,7 @@ class DialogoLaminas(QDialog):
         self.anterior.setEnabled(bool(d and self.indice));self.siguiente.setEnabled(bool(d and self.indice+1<d.total))
 
     def aplicar(self,forzar=False):
-        if self.documento is None:return
+        if self.documento is None or self.editando_plantilla:return
         cfg=self.valores()
         if forzar or cfg!=self.inicial:self.aplicar_callback(cfg);self.inicial=copy.deepcopy(cfg)
 
@@ -632,19 +637,27 @@ class DialogoLaminas(QDialog):
         if self.editor_textos:
             viejo=self.editor_textos;self.propiedades.removeWidget(viejo.panel_propiedades);viejo.panel_propiedades.deleteLater();viejo.deleteLater()
         t=EditorPlantilla(self.plantilla,self.documento.campos(0) if self.documento else {k:w.text() for k,w in self.campos.items()},self,solo_texto=True)
-        t.hide();t.vista.hide();scroll=t.layout().itemAt(0).widget();t.layout().removeWidget(scroll);t.panel_propiedades=scroll;scroll.setFixedWidth(self.propiedades.width()-4 if self.propiedades.width()<290 else 286)
+        t.hide()
+        t.vista.hide()
+        scroll=t.layout().itemAt(0).widget()
+        t.layout().removeWidget(scroll)
+        t.panel_propiedades=scroll
+        scroll.setFixedWidth(self.propiedades.width() - 4)
         self.propiedades.addWidget(scroll);self.editor_textos=t;self.vista.textos=t
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);scroll.widget().layout().setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows);t.nuevo.hide()
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.widget().layout().setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        t.nuevo.hide()
         t.fuente.setMinimumContentsLength(8);t.fuente.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon);t.fuente.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Fixed)
         t.botones_dialogo.hide()
         t.lista.hide();label=scroll.widget().layout().labelForField(t.lista)
         if label:label.hide()
         t.nuevo.clicked.disconnect();t.nuevo.clicked.connect(self.anadir_texto)
         t.modificado.connect(self.textos_cambiados)
-        t.seleccionado.connect(lambda:self.propiedades.setCurrentWidget(t.panel_propiedades if t.actual else self.propiedades.widget(0)))
+        t.seleccionado.connect(lambda:self.propiedades.setCurrentWidget(
+            t.panel_propiedades if t.actual or self.editando_plantilla else self.propiedades.widget(0)))
         t.elegir(-1);self.propiedades.setCurrentIndex(0)
-        t.b_zona.toggled.connect(lambda on:setattr(self.vista,'zona',self.editando_plantilla));self.vista.zona=self.editando_plantilla
-        for w in (t.b_zona,t.restar_zona,t.zona_label):w.setVisible(self.editando_plantilla)
+        self.vista.zona = self.editando_plantilla
+        t.controles.mostrar_zona(self.editando_plantilla)
         self.actualizar_campos()
 
     def actualizar_campos(self):
@@ -656,19 +669,16 @@ class DialogoLaminas(QDialog):
 
     def textos_cambiados(self):
         self.plantilla=copy.deepcopy(self.editor_textos.plantilla);self.actualizar();self.aplicar()
-        self.propiedades.setCurrentWidget(self.editor_textos.panel_propiedades if self.editor_textos.actual else self.propiedades.widget(0))
+        self.propiedades.setCurrentWidget(self.editor_textos.panel_propiedades
+            if self.editor_textos.actual or self.editando_plantilla else self.propiedades.widget(0))
 
     def anadir_texto(self):
         self.vista.nuevo_texto=True;self.vista.setCursor(Qt.CursorShape.CrossCursor);self.error.setText('Pulsa en la hoja para colocar el texto.');self.vista.setFocus()
 
     def editar_plantilla(self):
         if self.integrado:
-            if self.editor_textos is None:self.preparar_textos()
-            self.editando_plantilla=not self.editando_plantilla;self.vista.zona=self.editando_plantilla
-            self.a_editar_plantilla.setText('Terminar edición' if self.editando_plantilla else 'Editar plantilla');self.a_editar_plantilla.setChecked(self.editando_plantilla)
-            self.error.setText('Editando plantilla · el fondo está bloqueado. Selecciona textos o marca la zona de dibujo.' if self.editando_plantilla else '')
-            for w in (self.editor_textos.b_zona,self.editor_textos.restar_zona,self.editor_textos.zona_label):w.setVisible(self.editando_plantilla)
-            self.propiedades.setCurrentWidget(self.editor_textos.panel_propiedades if self.editando_plantilla else self.propiedades.widget(0));self.vista.update();return
+            self.sesion_plantilla.comenzar()
+            return
         if self.plantilla is None:return
         from .plantillas import EditorPlantilla
         editor=EditorPlantilla(self.plantilla,self.documento.campos(self.indice) if self.documento else {},self)

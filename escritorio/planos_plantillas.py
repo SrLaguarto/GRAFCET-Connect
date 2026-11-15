@@ -1,10 +1,41 @@
 """Coherencia y filtro de plantillas del panel derecho de PLANOS."""
 from pathlib import Path
 
-from PySide6.QtWidgets import QHBoxLayout, QMenu, QSizePolicy, QToolButton, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QHBoxLayout, QMenu, QScrollArea, QSizePolicy, QStackedWidget, QToolButton, QWidget
 
 from . import estilo
 from .importar_plantillas import formato_iso
+from .paneles import ComboElidido
+
+
+class ComboPlantillas(ComboElidido):
+    def showPopup(self):
+        ancho = max((self.fontMetrics().horizontalAdvance(self.itemText(i))
+                     for i in range(self.count())), default=0) + 4 * estilo.E2
+        self.view().setMinimumWidth(max(self.width(), ancho))
+        self.view().setTextElideMode(Qt.TextElideMode.ElideNone)
+        super().showPopup()
+
+
+def ancho_panel(editor):
+    texto = editor.predeterminadas.fontMetrics().horizontalAdvance("A3 vertical — predeterminada")
+    return max(320, texto + 2 * estilo.ALTO_CONTROL + 8 * estilo.E2)
+
+
+def area_integrada(editor, centro, scroll):
+    editor.area = QScrollArea()
+    editor.area.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    editor.area.setWidgetResizable(False)
+    editor.area.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    editor.area.setWidget(editor.vista)
+    centro.addWidget(editor.area, 1)
+    ancho = ancho_panel(editor)
+    editor.propiedades = QStackedWidget()
+    editor.propiedades.setFixedWidth(ancho)
+    scroll.setFixedWidth(ancho - 4)
+    editor.propiedades.addWidget(scroll)
+    centro.addWidget(editor.propiedades)
 
 
 def fila_plantilla(editor):

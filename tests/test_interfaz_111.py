@@ -251,7 +251,7 @@ class Interfaz111(BaseQt):
         self.assertEqual((d.formato.currentText(), d.orientacion.currentData()), ("A3", "horizontal"))
         d.a_editar_plantilla.trigger()
         self.assertTrue(d.editando_plantilla)
-        d.a_editar_plantilla.trigger()
+        d.sesion_plantilla.guardar.click()
         self.assertFalse(d.editando_plantilla)
         d.a_estandar.trigger()
         self.assertEqual(d.plantilla["source"], "GrafConnect")

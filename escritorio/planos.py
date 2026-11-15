@@ -316,7 +316,10 @@ class PaginaPlanos(QWidget):
             self.zoom(max(.2,1+event.value()));return True  # el pellizco de un panel táctil (macOS, Linux)
         if event.type()==QEvent.Type.MouseButtonPress and event.button()==Qt.MouseButton.LeftButton and obj is self.editor.vista:
             vista=self.editor.vista;t=vista.textos
-            if t and vista.documento is not None and (vista.nuevo_texto or (vista.zona and t.b_zona.isChecked()) or any(i.contains(i.mapFromScene(vista.punto_hoja(event.position()))) for i in t.items)):return False
+            if t and vista.documento is not None:
+                sobre_texto = any(i.contains(i.mapFromScene(vista.punto_hoja(event.position()))) for i in t.items)
+                if vista.nuevo_texto or (vista.zona and t.vista.zona) or sobre_texto:
+                    return False
         if event.type()==QEvent.Type.MouseButtonPress and (event.button()==Qt.MouseButton.MiddleButton or (event.button()==Qt.MouseButton.LeftButton and (not self.editor.documento or not any(c.destino(0).contains(self.editor.vista.punto_hoja(event.position())) for c in self.editor.documento.capas)))):
             if event.button()==Qt.MouseButton.LeftButton and self.editor.vista.textos:self.editor.vista.textos.elegir(-1);self.editor.vista.seleccionado=False;self.editor.vista.update()
             a=self.editor.area;self.pan=(event.globalPosition(),a.horizontalScrollBar().value(),a.verticalScrollBar().value());self.editor.vista.setCursor(Qt.CursorShape.ClosedHandCursor);return True

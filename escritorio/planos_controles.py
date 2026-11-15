@@ -112,6 +112,8 @@ class ControlesPlanos:
         p.scroll_hojas.setMaximumWidth(150 if p.compacto else 215)
         if p.editor is not None:
             pila = p.editor.propiedades
-            pila.setFixedWidth(232 if p.compacto else 290)
+            from .planos_plantillas import ancho_panel
+            ancho = 232 if p.compacto else ancho_panel(p.editor)
+            pila.setFixedWidth(ancho)
             for i in range(pila.count()):
-                pila.widget(i).setFixedWidth(228 if p.compacto else 286)
+                pila.widget(i).setFixedWidth(ancho - 4)

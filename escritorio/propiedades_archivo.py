@@ -133,6 +133,8 @@ class PropiedadesArchivo(QDialog):
 
     def __init__(self, datos: Propiedades, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        from .estilo_dialogos import aplicar_escala_dialogo
+        aplicar_escala_dialogo(self)
         self.setWindowTitle("Propiedades del archivo")
         self.setMinimumWidth(520)
         lay = QVBoxLayout(self)

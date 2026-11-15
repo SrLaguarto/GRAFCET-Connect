@@ -75,16 +75,16 @@ FAMILIA_TITULO = f'"{FUENTE_TITULO}", "{FUENTE}"'
 FAMILIA_MONO = f'"{FUENTE_MONO}", "Courier New"'
 ANCHO_BARRA = 12           # barras de desplazamiento
 
-# Dos escalas de letra y de controles que cambian solas con el tamaño de la ventana (`activar_escala`): la «normal» es la de siempre
-# (hasta 1366×768) y la «grande» sube la letra base a 14 px, los títulos, el chip y las cifras, y los controles a 32 px (28 en la escala normal), para leer
-# desde el fondo del aula con el proyector (pantalla completa: 1600 px de ancho y 900 de alto, o más). Los menús no se tocan.
+# Dos escalas de letra y controles que cambian con el tamaño de la ventana (`activar_escala`).
+# Normal: hasta 1366×768, controles de 30 px. Grande: letra base de 14 px y controles de 32 px,
+# para leer con el proyector desde 1600×900. Los menús no cambian.
 ESCALAS = {
     "normal": dict(T_BASE=13, T_PEQUENA=12, T_TITULO=16, T_SECCION=14, T_CHIP=13, T_CIFRA=12,
-                   ALTO_CONTROL=28, ALTO_CONTROL_COMPACTO=26, ALTO_BARRA=30, ALTO_BARRA_COMPACTA=28,
+                   ALTO_CONTROL=30, ALTO_CONTROL_COMPACTO=30, ALTO_BARRA=30, ALTO_BARRA_COMPACTA=28,
                    ALTO_FILA=30, ALTO_ENTRADA=32, ALTO_FILA_COMPACTA=28,
                    T_ES=12, ALTO_FILA_ES=16, ANCHO_INTERIOR_ES=200),  # (vista de E/S: filas planas y compactas, P-IMP-63)
     "grande": dict(T_BASE=14, T_PEQUENA=13, T_TITULO=19, T_SECCION=16, T_CHIP=15, T_CIFRA=14,
-                   ALTO_CONTROL=32, ALTO_CONTROL_COMPACTO=28, ALTO_BARRA=34, ALTO_BARRA_COMPACTA=32,
+                   ALTO_CONTROL=32, ALTO_CONTROL_COMPACTO=32, ALTO_BARRA=34, ALTO_BARRA_COMPACTA=32,
                    ALTO_FILA=34, ALTO_ENTRADA=36, ALTO_FILA_COMPACTA=32,
                    T_ES=14, ALTO_FILA_ES=18, ANCHO_INTERIOR_ES=236)}
 UMBRAL_GRANDE = (1600, 900)  # ancho y alto de la ventana a partir de los cuales rige la escala grande
@@ -454,12 +454,17 @@ def icono(tipo: str, color: str = TINTA, grosor: float = 1.75, tam: int = 24) ->
     elif tipo == "stop":
         p.fillRect(QRectF(6, 6, 12, 12), QColor(color))
     elif tipo == "dependencias":
-        p.drawRect(QRectF(2.5, 8.5, 7, 7))
-        p.drawRoundedRect(QRectF(15, 5, 6, 14), 1, 1)
-        union = QPen(p.pen())
-        union.setStyle(Qt.PenStyle.DotLine)
-        p.setPen(union)
-        p.drawLine(QPointF(10, 12), QPointF(14, 12))
+        p.drawRect(QRectF(2.5, 9, 6, 6))
+        p.drawRoundedRect(QRectF(15.5, 4, 6, 16), 1, 1)
+        trazo = QPen(p.pen())
+        punto = QPen(trazo)  # las uniones de las esquinas: tres puntos redondos de verdad (un trazo discontinuo de 1 px se
+        punto.setWidthF(1.4)  # difuminaba en gris al reducir el icono a 20 px y no se veía)
+        punto.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(punto)
+        for (x0, y0), (x1, y1) in (((8.5, 9), (15.5, 4)), ((8.5, 15), (15.5, 20))):
+            for f in (0.2, 0.5, 0.8):
+                p.drawPoint(QPointF(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f))
+        p.setPen(trazo)
     elif tipo == "aviso":  # el triángulo de aviso, con el trazo de los demás
         p.drawPath(_triangulo_aviso())
         p.drawLine(QPointF(12, 9.5), QPointF(12, 14.2))

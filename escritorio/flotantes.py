@@ -326,7 +326,7 @@ class GestorFlotantes(QObject):
 
     def actualizar(self) -> None:
         w = self.w
-        if not self.activo() or not w.a_inferior.isChecked():
+        if not self.activo() or not w.visibilidad_paneles.esta_abierto("inferior"):
             self.ocultar()
             return
         self._crear()

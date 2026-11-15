@@ -1192,6 +1192,8 @@ class PanelES(QWidget):
         self.lienzo.puerto.valueChanged.connect(self._desde_marco)
         self.lienzo.unidad.valueChanged.connect(self._desde_marco)
         self._cargando = False
+        from .conexion_directa import PanelDirecto
+        self.directa = PanelDirecto(self)
 
     def eventFilter(self, objeto, evento):  # noqa: N802
         if evento.type() == QEvent.Type.Leave and objeto in (self.lista_entradas.viewport(), self.lista_salidas.viewport()):
@@ -1383,6 +1385,8 @@ class PanelES(QWidget):
     def _sincronizar_marco(self):
         """Los controles de la cabecera del marco muestran lo mismo que los de Configuración (cuando no coincide, porque se cambió allí o al
         cargar el proyecto) y la IP se marca si no es válida. Con la conexión activa o sin proyecto, la cabecera es el texto de solo lectura."""
+        if self.config.modo == "directo":
+            return
         if self._copiando_marco:
             return
         self._copiando_marco = True
@@ -1410,6 +1414,8 @@ class PanelES(QWidget):
         return "1" if area in ("discrete", "coil") else self.escalas_base.get(f"{area}:{direccion}", "100")
 
     def abrir_configuracion(self):
+        if self.config.modo == "directo":
+            return self.directa.configuracion()
         self.dialogo_config.show()
         self.dialogo_config.raise_()
         self._anchos_controles()  # (con el diálogo ya pulido: la letra y la hoja de estilo son las que se ven)
@@ -1525,6 +1531,8 @@ class PanelES(QWidget):
 
     def autoasignar(self, nuevas):
         """Solo variables recién creadas; nunca desplaza una asignación existente."""
+        if self.config.modo == "directo":
+            return []
         if self.bloqueado:return []
         sin_canal=[]
         for v in self.variables:
@@ -1602,6 +1610,9 @@ class PanelES(QWidget):
         """Pone en el panel las variables de `doc` y el mapa `config` (por defecto, uno nuevo con la última conexión
         propuesta). Las asignaciones que ya no casan con el modelo se quitan y se avisa en el estado. Devuelve esos avisos;
         `avisos` son los de lo ya quitado al leer el mapa (`Configuracion.cargar`), que van delante."""
+        if config is not None and config.modo == "directo":
+            return self.directa.cargar(doc, config)
+        self.directa.seleccionar("modbus")
         self._cargando = True
         aviso_previo=self.aviso if self.doc is not None and self.doc["id"]==doc["id"] else ""
         nombres = {v["id"]: v["name"] for v in self.variables}
@@ -1699,6 +1710,8 @@ class PanelES(QWidget):
         canales y tabla con las variables actuales. Conserva la configuración (servidor, canales, lo escrito en
         Configuración y aún sin aplicar) y las asignaciones que siguen casando; quita, con aviso, las que ya no. Si lo que
         ve el panel no ha cambiado, no reconstruye nada. Devuelve los avisos de lo quitado."""
+        if self.config.modo == "directo":
+            return self.directa.cargar(doc, self.config)
         if self.doc is None:
             return self.cargar(doc)
         if self.firma(doc) == self.firma_modelo:
@@ -1745,6 +1758,8 @@ class PanelES(QWidget):
         self.estado.fijar_nota(" · ".join(t for t in partes if t))
 
     def obtener(self):
+        if self.config.modo == "directo":
+            return self.directa.obtener()
         senales = []
         for fila, v in enumerate(self.variables):
             if self.tabla.cellWidget(fila, 0).isChecked():
@@ -1777,6 +1792,8 @@ class PanelES(QWidget):
         return True
 
     def _dibujar(self):
+        if self.config.modo == "directo":
+            return self.directa.dibujar()
         self.indicadores.clear()
         self.terminales.clear()
         self.indicadores_listas.clear()
@@ -1874,6 +1891,8 @@ class PanelES(QWidget):
             terminal.fijar_redondeo(aviso_redondeo(*dato) if dato else "")
 
     def mostrar_valores(self, valores):
+        if self.config.modo == "directo":
+            self.directa.mostrar_valores(valores)
         self._ultimos_valores = valores
         def activo(valor):
             try:
@@ -1894,6 +1913,8 @@ class PanelES(QWidget):
     def mostrar_muestra(self, muestra, senales, escritos=None, salidas=()):
         """Los valores leídos de la planta (entradas) y, en Pausa con la conexión viva, lo último escrito en las salidas
         asignadas (cero tras pausar), con la escala de cada señal."""
+        if self.config.modo == "directo":
+            return self.mostrar_valores({**muestra, **(escritos or {})})
         valores = {}
         for origen, lista in ((muestra, senales), (escritos or {}, salidas)):
             for s in lista:
@@ -1907,6 +1928,7 @@ class PanelES(QWidget):
         self.mostrar_valores(valores)
 
     def ocupado(self, on):
+        self.directa.ocupado(on)
         self.conectado = on
         self.bloqueado = False
         self.lista_entradas.setDragEnabled(True)

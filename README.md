@@ -48,6 +48,7 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 - La fila de pestañas (GRAFCET, PLANOS) muestra, a la derecha del todo, la luz de conexión: verde si está conectada, gris si no lo está y rojo si hay un error. Es la entrada a **E/S externas**: un clic la abre (y queda resaltada mientras se ve); GRAFCET o PLANOS vuelven.
 - **Configuración** reúne la IP, el puerto (502 por defecto), el esclavo y los canales del servidor (por defecto, 32 digitales y 12 numéricos, con offset y cantidad ajustables).
 - Las variables nuevas se asignan solas a canales libres. También se pueden arrastrar a otro canal, y se quitan con la ×.
+- **Conexión directa (simulador de fábricas).** En **E/S externas**, el título del marco central elige entre «Modbus TCP» y «Conexión directa». En directo no hace falta PLC ni driver: se pone el servidor (por defecto `localhost:7410`, el servidor web del simulador activado y su driver en None), **Traer E/S** lee las señales con sus nombres y crea las variables, y cada variable se une a su señal arrastrándola.
 - **Conectar** pone a cero las salidas asignadas antes de la primera lectura. **Desconectar / editar** escribe el cero antes de cerrar la conexión.
 - Las señales analógicas se llevan a variables Decimal con 2 decimales. Una variable Entera que recibe un valor con decimales se redondea al entero más cercano y lo indica con un aviso.
 
@@ -117,7 +118,7 @@ El submenú **Más ejemplos y casos de estudio** reúne otros dieciséis, entre 
 ## Preguntas frecuentes
 
 **¿Necesita internet?**
-No. El programa funciona sin conexión. Solo usa la red si se conecta a un simulador de procesos por Modbus TCP, en la dirección IP que se configure.
+No. El programa funciona sin conexión. Solo usa la red si se conecta a un simulador de procesos (por Modbus TCP o por conexión directa), en la dirección que se configure.
 
 **¿Por qué avisa Windows?**
 El programa no lleva firma digital de código. Windows lo muestra la primera vez. Véase [Descargar e instalar](#descargar-e-instalar).

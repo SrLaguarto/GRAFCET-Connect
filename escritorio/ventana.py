@@ -74,7 +74,6 @@ ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabl
 NOMBRE_MIN_TABLA = 96  # la columna del nombre de las tablas (estado de la simulación) mide al menos esto a cualquier tamaño: las demás se compactan antes
 ARRIBA_CAJA = 1  # margen superior del contenido de una sección: con el hueco del título deja E2 entre el título y lo primero (T3)
 ARRIBA_VARIABLES = 4  # (el título de Variables es más grande)
-ANCHO_AYUDA_UTIL = 200  # y lo que pide la ayuda de debajo del título para leerse en dos líneas (con menos, se queda en el botón «Ayuda ▾»)
 ALTO_INFERIOR = {"simular": 220, "editar": 240}  # altura inicial del panel inferior: la traza, o las opciones de lo seleccionado
 ESPERA_ESCALA = 120  # ms sin cambios de tamaño de la ventana antes de aplicar la escala nueva (una sola vez por ráfaga de `resizeEvent`)
 ESPERA_ARRANQUE = 600  # ms desde el primer `show` en los que la escala se aplica sin esperar (la ventana se maximiza al arrancar)
@@ -197,6 +196,8 @@ class Lecturas(QDialog):
 
     def __init__(self, parent: QWidget, options: dict[str, str]) -> None:
         super().__init__(parent)
+        from .estilo_dialogos import aplicar_escala_dialogo
+        aplicar_escala_dialogo(self)
         self.base = dict(options)
         self.setWindowTitle("Ajustes de simulación")
         self.resize(560, 300)
@@ -246,6 +247,8 @@ class AcercaDe(QDialog):
         self.setWindowTitle(f"Acerca de {TITULO}")
         self.setMinimumWidth(460)
         self.setStyleSheet(f"QDialog {{ background: {estilo.FONDO} }} QLabel {{ color: {estilo.TINTA} }}")
+        from .estilo_dialogos import aplicar_escala_dialogo
+        aplicar_escala_dialogo(self)
         lay = QVBoxLayout(self)
         lay.setSpacing(8)
         cab = QHBoxLayout()
@@ -298,18 +301,6 @@ def _icono_grafcet() -> QIcon:
 def _icono_barra(tipo: str, color: str = estilo.TINTA) -> QIcon:
     """Iconos de línea propios para los controles de la aplicación (no son notación GRAFCET); de un solo trazo (estilo.py)."""
     return estilo.icono(tipo, color)
-
-
-class _BotonAyuda(QToolButton):
-    """El enlace «Ayuda ▾» de la cabecera del dibujo: pide su ancho natural pero no fija el mínimo de la ventana (si no hay sitio, `_ajustar_cabecera`
-    lo esconde antes que cortarlo; así la ventana sigue cabiendo en media pantalla)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)  # (con «Minimum», el mínimo del diseño sería su `sizeHint`)
-
-    def minimumSizeHint(self) -> QSize:  # noqa: N802
-        return QSize(0, super().minimumSizeHint().height())
 
 
 class _BotonEntrada(QPushButton):
@@ -717,7 +708,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.nuevo()
         self._cargar_config_modbus(self.edicion.ed.model)
         for nombre in ("izquierdo","derecho","inferior"):
-            self._mostrar_panel(nombre, self.preferencias_paletas.inicial(nombre), guardar=False)
+            self._mostrar_panel(nombre, self.visibilidad_paneles.abiertos[nombre], guardar=False)
         self._accesibilidad()
         self._configurar_foco()
         self._estilos_locales()
@@ -808,10 +799,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_reiniciar = self._accion("Reiniciar", self.reiniciar, "Ctrl+R")
         self.a_reiniciar.setToolTip("Volver a la situación inicial; en Play sigue en Play (Ctrl+R)")
         ver = bar.addMenu("&Ver")
-        self.a_izquierdo = self._accion("Panel i&zquierdo (al editar)", lambda on: self._mostrar_panel("izquierdo", on),
-                                        "Ctrl+L", True)
-        self.a_derecho = self._accion("Panel &derecho", lambda on: self._mostrar_panel("derecho", on), "Ctrl+B", True)
-        self.a_inferior = self._accion("Panel &inferior", lambda on: self._mostrar_panel("inferior", on), "Ctrl+J", True)
+        self.a_izquierdo = self._accion(
+            "Panel de elementos", lambda on: self.visibilidad_paneles.desde_menu("izquierdo", on), "Ctrl+L", True)
+        self.a_derecho = self._accion(
+            "Panel &derecho", lambda on: self.visibilidad_paneles.desde_menu("derecho", on), "Ctrl+B", True)
+        self.a_inferior = self._accion(
+            "Panel &inferior", lambda on: self.visibilidad_paneles.desde_menu("inferior", on), "Ctrl+J", True)
         ver.addAction(self.a_izquierdo)
         from .preferencias_paletas import PreferenciasPaletas
         self.preferencias_paletas = PreferenciasPaletas(self, ver)
@@ -890,6 +883,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.a_actualizar_arranque.blockSignals(False)
         m_ajustes.addAction(self.a_actualizar_arranque)
         ayuda = bar.addMenu("A&yuda")
+        self.a_ayuda_pantalla = self._accion("Ayuda de esta pantalla", self._alternar_ayuda, "F1", True)
+        ayuda.addAction(self.a_ayuda_pantalla)
         ayuda.addAction("&Leyenda del dibujo", self.leyenda)
         ayuda.addAction("&Buscar actualizaciones…", lambda: self.buscar_actualizaciones(True))
         ayuda.addAction("&Acerca de GRAFCET Connect…", self.acerca)
@@ -931,24 +926,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.ayuda = EtiquetaAyuda(2)
         self.ayuda.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px")
         cab.addWidget(self.ayuda,1)
-        # Una ayuda que no cabe en sus dos líneas no se corta a media frase sin más: un botón visible («más ▾») la despliega entera en su
-        # propia fila bajo la cabecera (y «Ayuda ▴» la recoge). La ayuda habitual va siempre tras el botón «Ayuda ▾».
-        self.b_ayuda = _BotonAyuda()
-        self.b_ayuda.setObjectName("masAyuda")
-        self.b_ayuda.setText("más ▾")
-        self.b_ayuda.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.b_ayuda.setToolTip("Leer la ayuda entera")
-        self.b_ayuda.setAccessibleName("Ayuda del dibujo")
-        self.b_ayuda.clicked.connect(self._alternar_ayuda)
-        self.b_ayuda.hide()
-        cab.addWidget(self.b_ayuda)
-        cab.setAlignment(self.b_ayuda, Qt.AlignmentFlag.AlignVCenter)
         self.ayuda_larga = QLabel()  # la ayuda entera, a todo el ancho de la tarjeta (solo desplegada)
         self.ayuda_larga.setObjectName("ayudaLarga")
         self.ayuda_larga.setWordWrap(True)
         self.ayuda_larga.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.ayuda_larga.hide()
         self._ayuda_abierta = False
+        from .ayuda_pantalla import AyudaPantalla
+        self.ayuda_pantalla = AyudaPantalla(self)
         self._estilo_ayuda()
         self.diagrama = VistaDiagrama()
         self.navegacion = Navegacion(self.diagrama)
@@ -1315,10 +1300,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _paneles(self) -> None:
         """Controles de cabecera y pestañas en los bordes para plegar y recuperar los paneles (el izquierdo, el de la paleta y las
         propiedades, solo existe al editar), y el estado guardado."""
+        from .visibilidad_paneles import VisibilidadPaneles
+        self.visibilidad_paneles = VisibilidadPaneles(self)
         self.flechas = {n: p.cerrar for n, p in self._plegables.items()}
         self.pestanas = {n: p.pestana for n, p in self._plegables.items()}
         for nombre, panel in self._plegables.items():
-            panel.alternar.connect(lambda n=nombre: self._mostrar_panel(n, not self._accion_panel(n).isChecked()))
+            panel.alternar.connect(lambda n=nombre: self.visibilidad_paneles.alternar(n))
             panel.desplegar.connect(lambda tamano,n=nombre:self._abrir_desde_tiron(n,tamano))
         self.flechas["izquierdo"].hide()
         fijo = self.ajustes.value("paneles/inferior_fijo", False, type=bool)
@@ -1334,6 +1321,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
             accion.setChecked(visible)
             accion.blockSignals(False)
             self._mostrar_panel(nombre, visible, guardar=False)
+
+        self.visibilidad_paneles.restaurar()
 
     def _panel(self, nombre: str) -> QWidget:
         return {"izquierdo": self.dock, "derecho": self.derecho, "inferior": self.inferior}[nombre]
@@ -1352,7 +1341,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _props_abiertas(self) -> bool:
         """¿Están abiertas las propiedades? La barra inferior, o las ventanas flotantes (Ver ▸ Panel de opciones ▸ Flotante)."""
-        return self.a_inferior.isChecked() if self.flot.activo() else self._plegables["inferior"].abierto
+        if self.flot.activo():
+            return self.visibilidad_paneles.esta_abierto("inferior")
+        return self._plegables["inferior"].abierto
 
     def props_activo(self) -> PanelPropiedades:
         """El panel de propiedades que se está usando: el de la barra inferior o el de las ventanas flotantes."""
@@ -1362,7 +1353,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         """Ver ▸ Panel de opciones ▸ Flotante o Abajo: se recuerda, y lo abierto pasa de un sitio al otro."""
         if modo == self.modo_propiedades:
             return
-        abierto = self.a_inferior.isChecked()
+        abierto = self.visibilidad_paneles.esta_abierto("inferior")
         self.ajustes.setValue("paneles/propiedades", modo)
         self.flot.ocultar()
         panel = self._plegables["inferior"]
@@ -1447,6 +1438,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         return {"izquierdo": self.a_izquierdo, "derecho": self.a_derecho, "inferior": self.a_inferior}[nombre]
 
     def _mostrar_panel(self, nombre: str, visible: bool, guardar: bool = True) -> None:
+        self.visibilidad_paneles.mostrar(nombre, visible, guardar)
+
+    def _desplegar_panel(self, nombre: str, visible: bool, guardar: bool = True) -> None:
         if guardar:  # lo pide el usuario (cabecera, pestaña, atajo, divisor): el modo compacto ya no lo mueve
             self._manual_paneles[nombre] = True
             self._auto_plegados.discard(nombre)
@@ -1964,8 +1958,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         ancho = (lateral.width() if lateral.abierto else self._tamanos_paneles["derecho"]) if getattr(self, "_anchos_puestos", False) else self.ancho_derecho
         guardado = getattr(self, "_paneles_edicion", None)
         if not editar and guardado is None:
-            self._paneles_edicion = {"izquierdo": self.a_izquierdo.isChecked(),
-                                    "inferior": self.a_inferior.isChecked() and self._fijado(),  # sin fijar, vuelve plegado
+            self._paneles_edicion = {"izquierdo": self._plegables["izquierdo"].abierto,
+                                    "inferior": self._props_abiertas() and self._fijado(),  # sin fijar, vuelve plegado
                                     "tamanos": self.vsplit.sizes() if self.isVisible() else None}
         self.variables.setEnabled(editar)
         self.props.setEnabled(editar); self.paleta.setEnabled(editar)
@@ -1998,11 +1992,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 self.vsplit.setSizes(guardado["tamanos"])
             QTimer.singleShot(0, self, restaurar)
         else:
-            self._mostrar_panel("izquierdo", self.a_izquierdo.isChecked(), guardar=False)
+            self._mostrar_panel("izquierdo", self.visibilidad_paneles.abiertos["izquierdo"], guardar=False)
             self._alto_inferior(True)
         self.flechas["izquierdo"].setVisible(editar)
         for n in ("derecho", "inferior"):
-            self._mostrar_panel(n, self._accion_panel(n).isChecked(), guardar=False)
+            self.visibilidad_paneles.reponer_modo(n, editar, guardado)
         self.diagrama.modo_edicion(editar, self.edicion if editar else None,
                                    conservar=getattr(self, "_encuadre_modo", None) is not None)
         if not editar:
@@ -2330,18 +2324,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._cabecera_favoritos.ajustar()
 
     def _alternar_ayuda(self) -> None:
-        """«más ▾» / «Ayuda ▾» / «Ayuda ▴»: despliega la ayuda entera bajo la cabecera, o la recoge."""
-        self._ayuda_abierta = not self._ayuda_abierta
-        self._ajustar_cabecera()
+        self.ayuda_pantalla.alternar()
 
     def _estilo_ayuda(self) -> None:
-        """La hoja del botón «más ▾» de la ayuda y la de su fila desplegada (con la letra y el alto de control de la escala de ahora)."""
-        alto = estilo.ALTO_CONTROL_COMPACTO
-        self.b_ayuda.setFixedHeight(alto)
-        self.b_ayuda.setStyleSheet(
-            f"QToolButton#masAyuda {{ color: {estilo.ACENTO}; font-size: {estilo.T_PEQUENA}px; font-weight: 600; padding: 0 4px; min-height: {alto - 2}px; }} "
-            f"QToolButton#masAyuda:hover {{ background: {estilo.ACENTO_SUAVE}; }} "
-            f"QToolButton#masAyuda[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 3px; min-height: {alto - 4}px; }}")
+        """Estilo de la franja de ayuda contextual."""
         self.ayuda_larga.setStyleSheet(
             f"QLabel#ayudaLarga {{ color: {estilo.TINTA}; background: {estilo.SUPERFICIE_2}; border: 1px solid {estilo.BORDE}; "
             f"border-radius: {estilo.R_S}px; padding: 6px 10px; font-size: {estilo.T_PEQUENA}px; }}")
@@ -2490,7 +2476,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
                   self.tb_sim.widgetForAction(self.a_reiniciar),
                   *(self.tb_edit.widgetForAction(a) for a in self._acciones_solo_icono),
                   d.b_dependencias, self.b_errores,
-                  self.flechas["izquierdo"], *self.preferencias_paletas.foco(), d, self.b_ayuda,
+                  self.flechas["izquierdo"], *self.preferencias_paletas.foco(), d,
                   d.b_menos, d.b_mas, d.b_ajustar, d.b_seleccion,
                   self.flechas["derecho"], *entradas, self.variables.tabla, *self.variables.b_nuevas.values(),
                   self.variables.b_quitar, self.pestanas["izquierdo"], self.pestanas["derecho"], self.flechas["inferior"],
@@ -3062,6 +3048,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._recordar_conexion()
         if not self.modbus.activo:
             self._sincronizar_es()
+        self.panel_es.directa.refrescar_catalogo(self.modbus.cliente)
         self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
         self.panel_es.mostrar_tiempos(self.modbus.medidas, self.modbus.ultima_parada)
         self.panel_es.ocupado(self.modbus.activo)
@@ -3124,6 +3111,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 self.panel_es.estado.setText(f"No se pudo guardar el mapa: {exc}")
 
     def _cargar_config_modbus(self, doc: dict[str, Any] | None = None) -> None:
+        self.panel_es.directa.establecer_edicion(self.edicion)
         doc = doc or self.v.doc
         raiz = self._raiz_modbus()
         config, avisos = None, []
@@ -3142,14 +3130,16 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 config = Configuracion.cargar(raiz / ARCHIVO, doc, avisos)  # lo que ya no casa se descarta; el resto se conserva
             except (ValueError, OSError) as exc:
                 fallo = f"No se pudo cargar el mapa: {exc}"
-        if self.modbus.activo:
+        from .conexion_ventana import preparar_carga
+        preparar_carga(self, config)
+        if self.modbus.activo and self.modbus.estado != "cerrando":
             config = copy.deepcopy(config or Configuracion(modelo=doc["id"], canales=copy.deepcopy(self._parametros_recordados["canales"])))
             config.host, config.puerto, config.unidad = self.modbus.cliente.host, self.modbus.cliente.puerto, self.modbus.cliente.unidad
         self.panel_es.cargar(doc, config, avisos)
         self.panel_es.host.setToolTip(f"{origen}. Copia la dirección que muestra el software del servidor Modbus.")
         if fallo:
             self.panel_es.mostrar_estado("error", fallo)
-        if self.modbus.activo and cambio:
+        if self.modbus.activo and self.modbus.estado != "cerrando" and cambio:
             self._cambiar_modelo_modbus(doc)
 
     def _cambiar_modelo_modbus(self, doc: dict[str, Any]) -> None:
@@ -3230,6 +3220,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         return base
 
     def _recordar_parametros(self, config: Configuracion) -> None:
+        if config.modo == "directo":
+            return
         datos = {k: getattr(config, k) for k in ("host", "puerto", "unidad", "periodo_ms", "timeout_ms")}
         datos["canales"] = copy.deepcopy(CANALES_INICIALES)  # (siempre las iniciales: las del proyecto van en su mapa)
         datos["escalas"] = dict(self.panel_es.escalas_base)

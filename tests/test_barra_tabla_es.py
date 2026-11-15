@@ -89,7 +89,7 @@ class BarraYTablaES(BaseQt):
 
     def test_SBAR04_boton_volver_de_la_cabecera_de_es_y_uniones_punteadas_de_dependencias(self):
         """REQ-UX-01: «Volver» lleva icono de flecha y texto, mide el alto de los botones de la cabecera y tiene ayuda sin atajo; el icono de
-        dependencias une el cuadrado con el marco mediante una línea horizontal con huecos entre puntos."""
+        dependencias recupera las dos uniones diagonales finas y punteadas entre el cuadrado y el marco (J5)."""
         from PySide6.QtCore import QSize
         from escritorio import estilo
         p = self.panel()
@@ -98,7 +98,12 @@ class BarraYTablaES(BaseQt):
         self.assertFalse(b.icon().isNull())
         self.assertEqual(b.height(), p.b_configuracion.height())
         img = estilo.icono("dependencias").pixmap(QSize(48, 48)).toImage()
-        # Solo la unión: los nuevos marcos quedan fuera de esta zona de medida.
-        columnas = [sum(img.pixelColor(x, y).alpha() > 60 for y in range(18, 30)) for x in range(22, 28)]
-        self.assertTrue(any(tinta > 0 for tinta in columnas), "hay unión entre los dos marcos")
-        self.assertTrue(any(tinta == 0 for tinta in columnas), "los puntos dejan huecos, no una unión continua")
+        # J5 recupera dos diagonales; el centro del icono queda vacío.
+        for signo in (-1, 1):
+            muestras = []
+            for x in range(21, 29):
+                y = round(24 + signo * (5 * x / 6 - 9))
+                tinta = sum(img.pixelColor(x, fila).alpha() > 60 for fila in range(y - 1, y + 2))
+                muestras.append(tinta)
+            self.assertTrue(any(tinta > 0 for tinta in muestras), "ambas diagonales tienen tinta")
+            self.assertTrue(any(tinta == 0 for tinta in muestras), "los puntos dejan huecos")

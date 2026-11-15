@@ -129,7 +129,7 @@ class CabeceraFavoritos:
         d = v.diagrama
         nav = v.navegacion.sizeHint().width() if v.navegacion.isVisibleTo(v) else 0
         ancho = d.parentWidget().width() - 2 * estilo.E2
-        minimo = d.ancho_barra(True) + nav + 4 * estilo.E2 + v.b_ayuda.sizeHint().width()
+        minimo = d.ancho_barra(True) + nav + 4 * estilo.E2
         if v.preferencias_paletas.visible():
             minimo += v.favoritos.minimumSizeHint().width()
         d.integrar_barra(v._cab if ancho >= minimo else None)
@@ -146,13 +146,12 @@ class CabeceraFavoritos:
         barra.setVisible(v.preferencias_paletas.visible())
         ancho = d.parentWidget().width() - 2 * estilo.E2
         nav = v.navegacion.sizeHint().width() + estilo.E2 if v.navegacion.isVisibleTo(v) else 0
-        ayuda = v.b_ayuda.sizeHint().width() + estilo.E2
         favoritos = barra.sizeHint().width() if v.preferencias_paletas.visible() else 0
         if d.barra_integrada:
-            compacto = ancho - favoritos - nav - ayuda - 3 * estilo.E2 < d.ancho_barra(False)
+            compacto = ancho - favoritos - nav - 3 * estilo.E2 < d.ancho_barra(False)
             d.solo_iconos(compacto)
         zoom = d.barra.sizeHint().width() + estilo.E2 if d.barra_integrada else 0
-        libre = max(0, ancho - zoom - nav - ayuda - 3 * estilo.E2)
+        libre = max(0, ancho - zoom - nav - 3 * estilo.E2)
         barra.setMaximumWidth(min(favoritos, libre))
         barra._disponer()
         self._ajustar_ayuda(max(0, libre - favoritos))
@@ -163,12 +162,4 @@ class CabeceraFavoritos:
         if texto != self._texto_ayuda:
             self._texto_ayuda = texto
             v._ayuda_abierta = False
-        abierta = v._ayuda_abierta and bool(texto)
-        error = bool(texto) and estilo.ERROR in v.ayuda.styleSheet()
-        v.ayuda.mostrar_texto = error and not abierta and libre >= estilo.E6 * 4
-        v.ayuda.update()
-        v.b_ayuda.setText("Ayuda ▴" if abierta else "Ayuda ▾")
-        v.b_ayuda.setToolTip("Recoger la ayuda" if abierta else "Leer la ayuda entera")
-        v.b_ayuda.setVisible(bool(texto))
-        v.ayuda_larga.setText(texto if abierta else "")
-        v.ayuda_larga.setVisible(abierta)
+        v.ayuda_pantalla.actualizar(texto, libre)

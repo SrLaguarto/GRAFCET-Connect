@@ -9,7 +9,7 @@ from grafcet.persistence import add_document, new_project, save_project
 
 
 class ConfigTests(unittest.TestCase):
-    def test_SFIO26_escala_factoryio_100_por_defecto_y_personalizable(self):
+    def test_SFIO26_escala_simulador_100_por_defecto_y_personalizable(self):
         """REQ-DAT-02: entradas/salidas numéricas usan 100 por defecto y respetan las escalas guardadas."""
         import json
         from grafcet.builder import M
@@ -140,5 +140,5 @@ class ConfigTests(unittest.TestCase):
             ruta.write_text(json.dumps(datos), encoding="utf-8")
             cargada = Configuracion.cargar(ruta, doc)
             self.assertEqual(cargada.host, c.host)
-            self.assertFalse(hasattr(cargada, "modo"))
+            self.assertEqual(cargada.modo, "modbus")
             self.assertEqual([s.variable for s in cargada.senales], ["motor"])

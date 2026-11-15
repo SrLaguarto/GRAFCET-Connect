@@ -22,7 +22,11 @@ Qué hace
   sigue abierto se detiene con su cuestión U en vez de aproximarse. Si se elige otra, la barra de estado lo avisa
   («Ajustes de simulación no habituales»).
 - Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J). Al simular, el
-  panel inferior muestra la traza.
+  panel inferior muestra la traza. Desmarcado en Ver (o con su atajo), un panel desaparece del todo, sin pestaña ni hueco, y
+  el dibujo gana su ancho; plegado con su flecha o con el divisor, deja su pestaña y sigue marcado en Ver. Las dos cosas se
+  recuerdan.
+- Ayuda > Ayuda de esta pantalla (F1): despliega bajo la cabecera del dibujo la ayuda completa del modo y la herramienta;
+  la entrada sale marcada mientras se ve, y Esc la cierra.
 - Paneles laterales: crecen con la letra grande. El derecho (Variables y Diagnósticos) mide 270 px desde 1280 px de ancho de ventana y 218 por debajo; a 1600 mide 270 px y a 1920, 300. La letra grande se activa sola desde 1600×900, con 40 px de histéresis para no cambiar al borde del umbral; el izquierdo llega a 264 px a 1600 y a 300 a 1920.
 - Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), Ctrl+rueda (anclada al puntero), Ctrl+= y Ctrl+−; la rueda sola desplaza en vertical y Mayús+rueda en horizontal y el gesto de dos dedos de un panel táctil, en los dos ejes; el pellizco del panel táctil hace zoom; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Al cambiar el tamaño de la ventana principal, el dibujo no se mueve en la pantalla (con zoom manual, que es lo normal al editar): aunque un panel lateral o la barra cambien de tamaño, cada punto del dibujo queda en el mismo sitio respecto a la ventana; lo nuevo aparece por la derecha y por abajo, y lo que tape un panel que se ensancha queda debajo de él. Al simular sin zoom manual, el dibujo se sigue encajando con la ventana. Al cruzar el tamaño de pantalla completa, la letra y los controles cambian de escala una sola vez, cuando la ventana deja de cambiar de tamaño (unos 120 ms), no en cada paso de la animación. El programa se abre ya maximizado, sin mostrar antes una ventana pequeña. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
 - Proyecto > Guardar (Ctrl+S) o Guardar como… (Ctrl+Mayús+S): guarda el proyecto con su dibujo en un archivo .grafnet, para abrirlo después.
@@ -56,12 +60,25 @@ Qué hace
 - Una sola ventana: si el programa ya está abierto, abrirlo otra vez (o hacer doble clic en un .grafnet) lleva el archivo a esa
   ventana; si hay cambios sin guardar, pregunta antes (Guardar, Descartar o Cancelar).
 - PLANOS: barra de una fila (Traer GRAFCET, Centrar GRAFCET, Añadir texto · Exportar, Imprimir · zoom); todo lo de la hoja en
-  el panel derecho: Plantilla (con «▾» para importar, usar la estándar, editar o quitar), Formato y Orientación (filtran las
+  el panel derecho: Plantilla (en su fila, a todo el ancho, con «▾» para importar, usar la estándar, editar o quitar), Formato y Orientación (filtran las
   plantillas), Margen e «Incluir estado de simulación». Se cambia de hoja con sus miniaturas. Si un GRAFCET no cabe en la hoja,
   no se trae y un aviso pide una hoja más grande o la otra orientación. Lo exportado va por defecto a Documentos\GrafConnect\Planos.
+- Editar una plantilla («▾ > Editar plantilla»): arriba de la hoja, «Editando la plantilla «…»» con «Guardar plantilla» y
+  «Cancelar» (Esc; si hay cambios, pregunta antes de descartarlos). Los cambios se aplican al guardar, a la plantilla de la
+  hoja, que se guarda con el proyecto. «Zona del GRAFCET»: Automática (la hoja dentro del margen, sin el cajetín) o
+  Personalizada (se dibuja arrastrando un rectángulo); es donde se coloca el GRAFCET al traerlo.
 - Modo: la fila de las pestañas (GRAFCET, PLANOS) muestra, centrada, una etiqueta de estado con un punto de color, «EDICIÓN» o «SIMULACIÓN · …» (no es un botón). El nombre del grafcet está en la barra de título de la ventana.
-- Barra de favoritos, encima del dibujo (al editar): es la paleta principal. Lleva los quince elementos con dibujo propio (Etapa inicial, Etapa, Transición, Simultaneidad, las cinco acciones, Forzado, Macroetapa, Encapsulante, Grafcet parcial, Texto e Imagen). Se arrastran al dibujo (un clic solo enseña su ayuda, con el nombre y la descripción enteros). Botón derecho sobre la barra: casillas para elegir qué elementos se ven; arrastrando un icono dentro de la barra se cambia el orden; las dos cosas se recuerdan. Si no caben, sale «»» con los que faltan (también se arrastran desde ahí). Al simular, la barra se oculta. En Ver, «Barra de favoritos» y «Panel de elementos» (Ctrl+L) se muestran u ocultan por separado; por defecto, la barra sí y el panel no.
+- Barra de favoritos, encima del dibujo (al editar): es la paleta principal. Lleva los quince elementos con dibujo propio (Etapa inicial, Etapa, Transición, Simultaneidad, las cinco acciones, Forzado, Macroetapa, Encapsulante, Grafcet parcial, Texto e Imagen). Todos los iconos tienen el mismo ancho de dibujo, con aire entre ellos. Se arrastran al dibujo (un clic solo enseña su ayuda, con el nombre y la descripción enteros). La barra es fija: siempre los quince, en ese orden, sin menú para elegirlos ni reordenarlos. Si no caben, sale «»» con los que faltan (también se arrastran desde ahí). Al simular, la barra se oculta. En Ver, «Barra de favoritos» y «Panel de elementos» (Ctrl+L) se muestran u ocultan por separado; por defecto, la barra sí y el panel no.
 - Vista de E/S externas: desconectado, la IP, el puerto y el esclavo se cambian en la cabecera del marco, sin abrir Configuración (son los mismos valores).
+- Conexión directa (simulador de fábricas): el título del marco central de E/S es un desplegable, «Modbus TCP» o «Conexión
+  directa (simulador de fábricas)», y se guarda con el proyecto. En directo no hay PLC ni canales: arriba, «Servidor» y
+  puerto (por defecto localhost:7410) y «Traer E/S»; debajo, el mismo módulo que en Modbus, con el nombre de cada señal del
+  simulador en lugar del canal. Se une una variable arrastrándola a su señal; el botón derecho quita la unión. El simulador
+  debe tener activado su servidor web y el driver en None. «Traer E/S» lee las señales y propone crear las variables: los
+  nombres se pueden cambiar (verde, cambiado; rojo, no vale, con el motivo al pie); las ya unidas salen como «ya traída»; las
+  que conservan el nombre de fábrica y las del propio simulador empiezan sin marcar. Volver a traer nunca borra, renombra ni
+  cambia de papel o tipo una variable; una unión que ya no encaja se ve en ámbar y no se usa. Las salidas se envían al
+  cambiar y, además, cada segundo.
 - Nombres de variable: pueden llevar espacios entre palabras («Marcha motor», «Fin de carrera 1»), uno solo entre cada dos, y los signos + y - («A+», «A-», «1V1-14»); no pueden parecer la actividad de una etapa («X1», «X 1»).
 - Variables (al editar): con la tabla vacía se ve una fila de muestra («nueva variable…»); escribir un nombre en ella crea una entrada booleana, y «+ Entrada/Salida/Memoria» ocupa su sitio. Ctrl+V pega una tabla copiada de una hoja de cálculo (Nombre, Papel, Tipo; p. ej. «Marcha · Entrada · Booleana»): las filas correctas se crean y las que tienen un error quedan en rojo, con el motivo al pasar el ratón, hasta corregirlas.
 - Arrastrar una selección y soltarla dentro de un Grafcet parcial o del recinto de una encapsulante la mete en él (como cortar y pegar dentro; el marco se resalta al pasar por encima).

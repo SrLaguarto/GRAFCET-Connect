@@ -123,63 +123,39 @@ class Favoritos(BaseQt):
                 arrastrar.assert_called_once_with(boton.clave, boton)
 
     def test_SFAV06_menu_por_secciones_no_se_cierra_y_persiste(self):
+        """REQ-EDT-09: J4 retira el menú de selección y muestra siempre todas las fichas."""
         w, e, barra = self.preparar()
-        menu = barra.crear_menu_seleccion()
-        self.addCleanup(menu.close)
-        secciones = [a.text() for a in menu.actions() if a.isSeparator()]
-        self.assertEqual(secciones, [t for t, _ in propiedades.SECCIONES])
-        acciones = {a.data(): a for a in menu.actions() if a.isCheckable()}
-        self.assertEqual(list(acciones), list(propiedades.COLOCABLES))
-        menu.popup(barra.mapToGlobal(QPoint(0, barra.height())))
-        QApplication.processEvents()
-        QTest.mouseClick(menu, Qt.MouseButton.LeftButton, pos=menu.actionGeometry(acciones["etapa"]).center())
-        self.assertTrue(menu.isVisible())
-        self.assertNotIn("etapa", barra.orden)
-        acciones["texto"].trigger()
-        self.assertNotIn("texto", barra.orden)
-        acciones["texto"].trigger()
-        self.assertIn("texto", barra.orden)
-        self.assertEqual(w.ajustes.value(barra.CLAVE_AJUSTES), barra.orden)
-        recuperada = BarraFavoritos(w.ajustes, w.paleta)
-        self.addCleanup(recuperada.deleteLater)
-        self.assertEqual(recuperada.orden, barra.orden)
+        from PySide6.QtGui import QContextMenuEvent
+        evento = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, QPoint(4, 4))
+        QApplication.sendEvent(barra, evento)
+        self.assertIsNone(barra._menu)
+        self.assertEqual(barra.orden, list(PREDETERMINADOS))
+        self.assertFalse(w.ajustes.contains(barra.CLAVE_AJUSTES))
+
 
     def test_SFAV07_reordenacion_marca_insercion_y_persistencia(self):
+        """REQ-EDT-09: J4 ignora soltar dentro de la barra; el arrastre al dibujo conserva SFAV04/05."""
         w, e, barra = self.preparar()
         mime = QMimeData()
         mime.setText("accion:condicionada")
-        evento = mock.Mock()
-        evento.source.return_value = barra.botones["accion:condicionada"]
-        evento.mimeData.return_value = mime
-        evento.position.return_value = QPointF(estilo.E2, 10)
-        barra.dragEnterEvent(evento)
-        barra.dragMoveEvent(evento)
-        self.assertEqual(barra._insercion, 0)
-        imagen = barra.grab().toImage()
-        self.assertEqual(imagen.pixelColor(estilo.E2, estilo.E2).name(), estilo.ACENTO)
+        evento = QDropEvent(QPointF(4, 4), Qt.DropAction.CopyAction, mime,
+                            Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
         barra.dropEvent(evento)
-        self.assertEqual(barra.orden[0], "accion:condicionada")
-        self.assertIsNone(barra._insercion)
-        self.assertEqual(w.ajustes.value(barra.CLAVE_AJUSTES), barra.orden)
-        antes = list(barra.orden)
-        barra.dragMoveEvent(evento)
-        barra.dragLeaveEvent(mock.Mock())
-        self.assertEqual(barra.orden, antes)
-        self.assertIsNone(barra._insercion)
-        recuperada = BarraFavoritos(w.ajustes, w.paleta)
-        self.addCleanup(recuperada.deleteLater)
-        self.assertEqual(recuperada.orden, antes)
+        self.assertFalse(evento.isAccepted())
+        self.assertFalse(barra.acceptDrops())
+        self.assertEqual(barra.orden, list(PREDETERMINADOS))
+
 
     def test_SFAV08_ignora_claves_desconocidas_y_nuevas_no_elegidas(self):
+        """REQ-EDT-09: J4 borra listas antiguas, vacías o con claves desconocidas."""
         w, e, barra = self.preparar()
-        w.ajustes.setValue(barra.CLAVE_AJUSTES, ["desconocida", "transicion", "etapa", "transicion"])
-        recuperada = BarraFavoritos(w.ajustes, w.paleta)
-        self.addCleanup(recuperada.deleteLater)
-        self.assertEqual(recuperada.orden, ["transicion", "etapa"])
-        w.ajustes.setValue(barra.CLAVE_AJUSTES, [])
-        vacia = BarraFavoritos(w.ajustes, w.paleta)
-        self.addCleanup(vacia.deleteLater)
-        self.assertEqual(vacia.orden, [])
+        for antigua in (["desconocida", "transicion", "etapa"], []):
+            w.ajustes.setValue(barra.CLAVE_AJUSTES, antigua)
+            recuperada = BarraFavoritos(w.ajustes, w.paleta)
+            self.addCleanup(recuperada.deleteLater)
+            self.assertEqual(recuperada.orden, list(PREDETERMINADOS))
+            self.assertFalse(w.ajustes.contains(barra.CLAVE_AJUSTES))
+
 
     def test_SFAV09_desborde_y_zoom_antes_de_ocultar_favoritos(self):
         w, e, barra = self.preparar(960, 1032)
@@ -197,8 +173,7 @@ class Favoritos(BaseQt):
                 QApplication.processEvents()
             self.assertFalse(barra.ocultos)
             self.assertFalse(barra.desborde.isVisible())
-            self.assertLess(barra.geometry().right(), w.b_ayuda.x())
-            self.assertLess(w.b_ayuda.geometry().right(), w.diagrama.barra.x())
+            self.assertLess(barra.geometry().right(), w.diagrama.barra.x())
         self.assertFalse(w.diagrama._solo_iconos)
 
     def test_SFAV10_modo_centrado_en_pestanas_sin_aspecto_de_boton(self):
@@ -255,7 +230,7 @@ class Favoritos(BaseQt):
         w.ajustes.setValue(barra.CLAVE_AJUSTES, ["accion:evento", "texto", "etapa"])
         recuperada = BarraFavoritos(w.ajustes, w.paleta)
         self.addCleanup(recuperada.deleteLater)
-        self.assertEqual(recuperada.orden, ["accion:evento", "texto", "etapa"])
+        self.assertEqual(recuperada.orden, list(PREDETERMINADOS))
 
     def test_SFAV14_rectangulos_de_acciones_y_forzado_alineados(self):
         rectangulos = []
@@ -327,7 +302,6 @@ class Favoritos(BaseQt):
 
     def test_SFAV18_ejemplos_sin_barra_y_retorno_a_proyecto_editable(self):
         w, e, barra = self.preparar()
-        barra.reordenar("accion:evento", 0)
         anterior = list(barra.orden)
         w.cargar_ejemplo("aula_marcha")
         QApplication.processEvents()
@@ -344,4 +318,4 @@ class Favoritos(BaseQt):
         self.assertFalse(w.solo_lectura)
         self.assertTrue(barra.isVisible())
         self.assertEqual(barra.orden, anterior)
-        self.assertEqual(w.ajustes.value(barra.CLAVE_AJUSTES), anterior)
+        self.assertFalse(w.ajustes.contains(barra.CLAVE_AJUSTES))

@@ -6,7 +6,7 @@ from PySide6.QtGui import QColor, QIcon, QIconEngine, QPainter, QPainterPath, QP
 from PySide6.QtWidgets import QApplication, QMenu, QSizePolicy, QToolButton, QWidget, QWidgetAction
 
 from . import estilo
-from .propiedades import COLOCABLES, SECCIONES, Paleta
+from .propiedades import COLOCABLES, Paleta
 from .ayudas_emergentes import ayuda_html
 
 PREDETERMINADOS = (
@@ -46,23 +46,26 @@ def _pintar_accion_mini(pintor, clave):
     elif tipo == "evento":
         pintor.drawLine(_punto(5, 1.5), _punto(5, 6.5))
         pintor.setBrush(QColor(estilo.TINTA))
-        pintor.drawPolygon(QPolygonF([_punto(5, 1.5), _punto(2, 3), _punto(5, 4.5)]))
+        pintor.drawPolygon(QPolygonF([_punto(5, 1.5), QPointF(3, 3.6), _punto(5, 4.5)]))
         pintor.setBrush(Qt.BrushStyle.NoBrush)
 
 
 def _pintar_etapa_mini(pintor, clave):
-    cuerpo = _rect(4.5, 4.5, 11, 11)
+    cuerpo = QRectF(3, 3, 18, 18)
     pintor.drawRect(cuerpo)
     if clave == "etapa_inicial":
-        pintor.drawRect(cuerpo.adjusted(3.3, 3.3, -3.3, -3.3))
+        pintor.drawRect(cuerpo.adjusted(4.5, 4.5, -4.5, -4.5))
     elif clave == "macroetapa":
-        for y in (7.5, 12.5):
-            pintor.drawLine(QPointF(cuerpo.left(), y * FACTOR_MINI), QPointF(cuerpo.right(), y * FACTOR_MINI))
+        for proporcion in (3 / 11, 8 / 11):
+            y = cuerpo.top() + cuerpo.height() * proporcion
+            pintor.drawLine(QPointF(cuerpo.left(), y), QPointF(cuerpo.right(), y))
     elif clave == "encapsulante":
-        for a, b in (((7, 4.5), (4.5, 7)), ((13, 4.5), (15.5, 7)),
-                     ((4.5, 13), (7, 15.5)), ((13, 15.5), (15.5, 13))):
-            pintor.drawLine(_punto(*a), _punto(*b))
-
+        lapiz = QPen(QColor(estilo.TINTA), 1.5)
+        lapiz.setCapStyle(Qt.PenCapStyle.FlatCap)
+        pintor.setPen(lapiz)
+        corte = cuerpo.width() * 2.5 / 11
+        for x, y, sx, sy in ((3, 3, 1, 1), (21, 3, -1, 1), (3, 21, 1, -1), (21, 21, -1, -1)):
+            pintor.drawLine(QPointF(x + sx * corte, y), QPointF(x, y + sy * corte))
 
 def _pintar_g_mini(pintor):
     """G vectorial pequeña, con el mismo trazo y sin depender de una fuente diminuta."""
@@ -76,15 +79,15 @@ def _pintar_g_mini(pintor):
 def _pintar_otros_mini(pintor, clave):
     if clave == "transicion":
         pintor.drawLine(_punto(10, 3), _punto(10, 17))
-        pintor.drawLine(_punto(5, 10), _punto(15, 10))
+        pintor.drawLine(QPointF(3, 12), QPointF(21, 12))
     elif clave == "simultaneidad":
         for y in (8.5, 11.5):
-            pintor.drawLine(_punto(3, y), _punto(17, y))
+            pintor.drawLine(QPointF(3, y * FACTOR_MINI), QPointF(21, y * FACTOR_MINI))
     elif clave == "parcial":
-        pintor.drawRoundedRect(_rect(2, 5, 16, 10), 2, 2)
+        pintor.drawRoundedRect(QRectF(3, 6.375, 18, 11.25), 2, 2)
         _pintar_g_mini(pintor)
     else:
-        pintor.drawRect(_rect(2.5, 3, 15, 14))
+        pintor.drawRect(QRectF(3, 3, 18, 18))
         if clave == "texto":
             for y in (7, 10, 13):
                 pintor.drawLine(_punto(5, y), _punto(15 if y != 13 else 12, y))
@@ -145,25 +148,6 @@ def icono_mini(clave):
     return QIcon(_MotorMini(clave))
 
 
-class MenuSeleccion(QMenu):
-    """Las casillas cambian en el acto sin cerrar la selección de favoritos."""
-
-    def mouseReleaseEvent(self, evento):
-        accion = self.actionAt(evento.position().toPoint())
-        if evento.button() == Qt.MouseButton.LeftButton and accion is not None and accion.isCheckable():
-            accion.trigger()
-            return
-        super().mouseReleaseEvent(evento)
-
-    def keyPressEvent(self, evento):
-        accion = self.activeAction()
-        if evento.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            if accion is not None and accion.isCheckable():
-                accion.trigger()
-                return
-        super().keyPressEvent(evento)
-
-
 class BotonFavorito(QToolButton):
     def __init__(self, barra, clave, menu=None):
         super().__init__(menu or barra)
@@ -216,19 +200,12 @@ class BarraFavoritos(QWidget):
         self.ajustes = ajustes
         self.paleta = paleta
         self.lado_icono = round((estilo.ALTO_BARRA + LADO_MINI) / 2)
-        self._insercion = None
         self._menu = None
         self._visibles = []
         self.ocultos = []
-        guardados = ajustes.value(self.CLAVE_AJUSTES) if ajustes.contains(self.CLAVE_AJUSTES) else PREDETERMINADOS
-        if isinstance(guardados, str):
-            guardados = [guardados]
-        self.orden = list(dict.fromkeys(h for h in (guardados or []) if h in COLOCABLES))
-        if not ajustes.value("favoritos/texto_imagen_v1", False, type=bool):
-            self.orden.extend(h for h in ("texto", "imagen") if h not in self.orden)
-            if ajustes.contains(self.CLAVE_AJUSTES):
-                ajustes.setValue(self.CLAVE_AJUSTES, self.orden)
-            ajustes.setValue("favoritos/texto_imagen_v1", True)
+        ajustes.remove(self.CLAVE_AJUSTES)
+        ajustes.remove("favoritos/texto_imagen_v1")
+        self.orden = list(PREDETERMINADOS)
         self.botones = {h: BotonFavorito(self, h) for h in COLOCABLES}
         self.desborde = QToolButton(self)
         self.desborde.setText("»")
@@ -238,42 +215,18 @@ class BarraFavoritos(QWidget):
         self.setObjectName("barraFavoritos")
         self.setAccessibleName("Favoritos de Elementos")
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        self.setAcceptDrops(True)
+        self.setAcceptDrops(False)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self._disponer()
 
     def ancho_boton(self):
-        return estilo.ALTO_BARRA
+        return max(estilo.ALTO_BARRA, self.lado_icono + estilo.E1)  # al menos E1 de aire entre dos iconos: con el ancho común (K1) se tocaban
 
     def sizeHint(self):
         return QSize(len(self.orden) * self.ancho_boton() + 2 * estilo.E2, estilo.ALTO_BARRA)
 
     def minimumSizeHint(self):
         return QSize(self.ancho_boton() + 2 * estilo.E2, estilo.ALTO_BARRA)
-
-    def _guardar(self):
-        self.ajustes.setValue(self.CLAVE_AJUSTES, self.orden)
-        self._disponer()
-        self.updateGeometry()
-        self.contenido_cambiado.emit()
-
-    def mostrar_elemento(self, clave, visible):
-        if clave not in COLOCABLES:
-            return
-        if visible and clave not in self.orden:
-            self.orden.append(clave)
-        elif not visible and clave in self.orden:
-            self.orden.remove(clave)
-        self._guardar()
-
-    def reordenar(self, clave, posicion):
-        if clave not in self.orden:
-            return
-        anterior = self.orden.index(clave)
-        self.orden.remove(clave)
-        if anterior < posicion:
-            posicion -= 1
-        self.orden.insert(max(0, min(posicion, len(self.orden))), clave)
-        self._guardar()
 
     def _disponer(self):
         ancho = self.ancho_boton()
@@ -294,6 +247,8 @@ class BarraFavoritos(QWidget):
     def resizeEvent(self, evento):
         super().resizeEvent(evento)
         self.lado_icono = round((self.height() + LADO_MINI) / 2)
+        if self.window().width() <= 960:
+            self.lado_icono = max(30, self.lado_icono)
         for boton in self.botones.values():
             boton.setIconSize(QSize(self.lado_icono, self.lado_icono))
         self._disponer()
@@ -304,27 +259,7 @@ class BarraFavoritos(QWidget):
         pintor.setPen(QPen(QColor(estilo.BORDE), 1))
         for x in (0, self.width() - 1):
             pintor.drawLine(x, estilo.E1, x, self.height() - estilo.E1)
-        if self._insercion is not None:
-            x = estilo.E2 + self._insercion * self.ancho_boton()
-            pintor.setPen(QPen(QColor(estilo.ACENTO), 2))
-            pintor.drawLine(x, estilo.E1, x, self.height() - estilo.E1)
         pintor.end()
-
-    def crear_menu_seleccion(self):
-        menu = MenuSeleccion(self)
-        for titulo, claves in SECCIONES:
-            menu.addSection(titulo)
-            for clave in claves:
-                accion = menu.addAction(icono_mini(clave), Paleta.nombre(clave))
-                accion.setData(clave)
-                accion.setCheckable(True)
-                accion.setChecked(clave in self.orden)
-                accion.toggled.connect(lambda visible, h=clave: self.mostrar_elemento(h, visible))
-        return menu
-
-    def contextMenuEvent(self, evento):
-        self._menu = self.crear_menu_seleccion()
-        self._menu.popup(evento.globalPos())
 
     def crear_menu_desborde(self):
         menu = QMenu(self)
@@ -340,37 +275,3 @@ class BarraFavoritos(QWidget):
     def _abrir_desborde(self):
         self._menu = self.crear_menu_desborde()
         self._menu.popup(self.desborde.mapToGlobal(QPoint(0, self.desborde.height())))
-
-    def _admite(self, evento):
-        origen = evento.source()
-        return (isinstance(origen, BotonFavorito) and origen.barra is self
-                and evento.mimeData().text() in self.orden)
-
-    def dragEnterEvent(self, evento):
-        if self._admite(evento):
-            evento.acceptProposedAction()
-        else:
-            evento.ignore()
-
-    def dragMoveEvent(self, evento):
-        if not self._admite(evento):
-            evento.ignore()
-            return
-        x = evento.position().x()
-        self._insercion = sum(x > self.botones[h].geometry().center().x() for h in self._visibles)
-        self.update()
-        evento.acceptProposedAction()
-
-    def dragLeaveEvent(self, evento):
-        self._insercion = None
-        self.update()
-
-    def dropEvent(self, evento):
-        if self._admite(evento):
-            self.dragMoveEvent(evento)
-            self.reordenar(evento.mimeData().text(), self._insercion)
-            evento.acceptProposedAction()
-        else:
-            evento.ignore()
-        self._insercion = None
-        self.update()

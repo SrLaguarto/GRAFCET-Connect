@@ -129,10 +129,11 @@ class Alturas(BaseQt):
 
     def test_SALC03_botones_campos_y_desplegables_miden_el_alto_de_su_token(self):
         """REQ-UX-01: un QPushButton, un QLineEdit, un QComboBox y un QSpinBox sueltos, con la hoja global, miden `ALTO_CONTROL` (±1) a las dos
-        escalas (28 y 32 px), también con el foco (anillo de 2 px), y los botones de la barra de edición miden `ALTO_BARRA` (±2)."""
+        escalas (30 y 32 px), también con el foco (anillo de 2 px).
+        Los botones de la barra de edición miden `ALTO_BARRA` (±2)."""
         anterior = estilo.ESCALA
         try:
-            for escala, esperado, barra in (("normal", 28, 30), ("grande", 32, 34)):
+            for escala, esperado, barra in (("normal", 30, 30), ("grande", 32, 34)):
                 estilo.activar_escala(escala)
                 self.assertEqual((estilo.ALTO_CONTROL, estilo.ALTO_BARRA), (esperado, barra))
                 cont = QWidget()
@@ -398,14 +399,15 @@ class Alturas(BaseQt):
             self.assertEqual(desbordes(w, 0), [], (ancho, alto, "E/S desconectada"))
             lienzo = w.panel_es.lienzo
             self.assertGreaterEqual(lienzo.marco.y(), lienzo.cabecera_marco.y() - 4)
-            titulo = lienzo.findChild(QWidget, "tituloPLC")
-            texto = titulo.geometry().bottom() - titulo.contentsMargins().bottom()  # (el título lleva un margen inferior)
-            self.assertGreaterEqual(lienzo.marco.y() - texto, 4, "el marco empieza por debajo del título de la sección, con aire")
+            titulo = w.panel_es.directa.selector
+            texto = titulo.mapTo(w, QPoint(0, titulo.height())).y()
+            marco_y = lienzo.marco.mapTo(w, QPoint()).y()
+            self.assertGreaterEqual(marco_y - texto, 4, "el marco empieza por debajo del selector, con aire")
             w.panel_es.mostrar_estado("conectado", "Conectado")
             self._bombear(8)
             self.assertEqual(solapes(w), [], (ancho, alto, "E/S conectada"))
             self.assertEqual(desbordes(w, 0), [], (ancho, alto, "E/S conectada"))
-            self.assertGreaterEqual(lienzo.marco.y() - texto, 4)
+            self.assertGreaterEqual(lienzo.marco.mapTo(w, QPoint()).y() - texto, 4)
             w.hide()
 
 

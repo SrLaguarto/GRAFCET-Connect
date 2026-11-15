@@ -38,7 +38,7 @@ class Paneles(BaseQt):
             self.assertTrue(w.flechas[n].isVisible())
             QTest.mouseClick(w.flechas[n],Qt.MouseButton.LeftButton);QApplication.processEvents()
             self.assertTrue(w._panel(n).isHidden());self.assertTrue(w.pestanas[n].isVisible())
-            self.assertEqual(w.pestanas[n].text(),texto);self.assertFalse(w._accion_panel(n).isChecked())
+            self.assertEqual(w.pestanas[n].text(),texto);self.assertTrue(w._accion_panel(n).isChecked())
             self.assertFalse(w.ajustes.value("paneles/"+n,True,type=bool))
             self.assertFalse(w.diagrama.isAncestorOf(w.pestanas[n]))
             QTest.mouseClick(w.pestanas[n],Qt.MouseButton.LeftButton);QApplication.processEvents()
@@ -76,6 +76,8 @@ class Paneles(BaseQt):
         self.assertTrue(w.inferior.isHidden());self.assertEqual(w.vsplit.sizes()[1],32)
         self.assertEqual(w.pestanas["inferior"].text(),"Propiedades")
         w.activateWindow();w.setFocus();QApplication.processEvents()
+        QTest.keyClick(w,Qt.Key.Key_J,Qt.KeyboardModifier.ControlModifier);QApplication.processEvents()
+        self.assertFalse(w._plegables["inferior"].isVisible())
         QTest.keyClick(w,Qt.Key.Key_J,Qt.KeyboardModifier.ControlModifier);QApplication.processEvents()
         self.assertTrue(w.inferior.isVisible());self.assertAlmostEqual(w.inferior.height(),alto,delta=2)
         self.assertEqual(w.props.t_texto.text(),formula)
@@ -121,7 +123,7 @@ class Paneles(BaseQt):
         try:
             w2.nuevo();w2.resize(1366,768);w2.show();QApplication.processEvents()
             for n in w2.pestanas:
-                plegado = n in ("izquierdo", "inferior")
+                plegado = True
                 self.assertEqual(w2._panel(n).isHidden(),plegado,n);self.assertEqual(w2.pestanas[n].isVisible(),plegado,n)
         finally:
             w2.hide();w2.edicion=None;w2.deleteLater();QApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
