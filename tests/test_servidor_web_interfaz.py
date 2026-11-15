@@ -116,14 +116,13 @@ class AyudaWeb(unittest.TestCase):
         p.mostrar_estado("error", mensaje)
         self.assertFalse(p.directa.ayuda_servidor.boton.isVisible())
         self.assertIn("auto.cfg", p.estado.text())
-        self.assertIn("No se ha encontrado", p.estado.text())
         self.firma()
         (self.docs / "otra/My Scenes").mkdir(parents=True)
         (self.docs / "otra/CertificatesStore").mkdir()
         p.mostrar_estado("conectando", "Conectando")
         p.mostrar_estado("error", mensaje)
         self.assertFalse(p.directa.ayuda_servidor.boton.isVisible())
-        self.assertIn("varias", p.estado.text())
+        self.assertIn("auto.cfg", p.estado.text())
 
     def test_SM117_modbus_y_exito_no_consultan_configuracion(self):
         for modo, estado in (("modbus", "error"), ("directo", "conectado")):

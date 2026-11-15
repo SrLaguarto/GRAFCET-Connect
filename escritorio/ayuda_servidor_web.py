@@ -8,17 +8,16 @@ from conexion import servidor_web_simulador as servidor
 from conexion.http_directo import AVISO_SIN_SERVIDOR
 from . import estilo
 
-HECHO = "Hecho. Cierre el simulador y vuelva a abrirlo; después pulse otra vez Conectar."
-YA_ACTIVO = ("Su servidor web ya está activado en su configuración: compruebe que el simulador está abierto (si ya lo "
-             "estaba antes de activarlo, ciérrelo y vuelva a abrirlo), con el driver en None y el puerto 7410.")
-FALTA = "Su servidor web no está activado: pulse «Activar el servidor web» y después cierre y vuelva a abrir el simulador."
+HECHO = "Hecho. Reinicie el simulador y pulse Conectar."
+YA_ACTIVO = "Ábralo o reinícielo, con el driver en None."  # (su servidor web ya está activado en auto.cfg)
+FALTA = "su servidor web no está activado."  # (el botón de al lado dice qué hacer)
 
 
 def no_responde(mensaje):
     """«No responde el simulador de fábricas (host:puerto).», sacado del aviso general: cuando se sabe qué pasa, el aviso
     dice solo eso, sin la explicación manual (consola, auto.cfg), que queda para cuando no se encuentra la carpeta."""
     dato = re.search(r"\(([^()]*:\d+)\)", mensaje)
-    return "No responde el simulador de fábricas" + (f" ({dato.group(1)})" if dato else "") + "."
+    return AVISO_SIN_SERVIDOR + (f" ({dato.group(1)})" if dato else "")
 
 
 class AyudaServidorWeb(QObject):
@@ -59,14 +58,11 @@ class AyudaServidorWeb(QObject):
                 self.texto += f" No se pudo comprobar auto.cfg: {servidor.motivo_error(exc)}"
             else:
                 if estado == "falta":
-                    self.texto = no_responde(mensaje) + " " + FALTA
+                    self.texto = no_responde(mensaje) + ": " + FALTA
                     self.boton.show()
                 elif estado == "activo":
-                    self.texto = no_responde(mensaje) + " " + YA_ACTIVO
-                elif estado == "varias":
-                    self.texto += " Hay varias carpetas con la firma del simulador; no se escribe nada."
-                else:
-                    self.texto += " No se ha encontrado la carpeta del simulador en Documentos."
+                    self.texto = no_responde(mensaje) + ". " + YA_ACTIVO
+                # «sin_carpeta» o «varias»: el aviso general, que ya dice cómo activarlo a mano
         return self.texto
 
     def activar(self):
