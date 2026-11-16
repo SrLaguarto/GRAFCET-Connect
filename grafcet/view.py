@@ -14,6 +14,7 @@ Para un modelo abierto sin presentación, o con elementos sin posición, `auto_l
 """
 from __future__ import annotations
 
+import functools
 import re
 from collections import deque
 from fractions import Fraction
@@ -113,8 +114,14 @@ def substitute(text: str, names: dict[str, str]) -> str:
     pairs = {i: n for i, n in names.items() if i != n}
     if not pairs:
         return text
-    rx = re.compile(r"(?<!\w)(" + "|".join(re.escape(i) for i in sorted(pairs, key=len, reverse=True)) + r")(?!\w)")
-    return rx.sub(lambda mo: pairs[mo.group(1)], text)
+    return _patron_ids(tuple(sorted(pairs, key=lambda i: (-len(i), i)))).sub(lambda mo: pairs[mo.group(1)], text)
+
+
+@functools.lru_cache(maxsize=32)
+def _patron_ids(ids: tuple[str, ...]) -> "re.Pattern[str]":
+    """La expresión de los ID, una vez por conjunto de ID: rehacerla en cada texto costaba O(n²) al redibujar (con 90
+    elementos, ~15 000 `re.escape` por cambio, y el editor se notaba lento al soltar). El orden (más largo primero) se conserva."""
+    return re.compile(r"(?<!\w)(" + "|".join(re.escape(i) for i in ids) + r")(?!\w)")
 
 
 def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = None,
