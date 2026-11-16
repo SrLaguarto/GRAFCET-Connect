@@ -1,9 +1,9 @@
 {
- "date": "2026-11-16T15:39:41+01:00",
+ "date": "2026-11-16T19:56:20+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 1508,
+ "total": 1515,
  "failures": 2,
  "errors": 0,
  "results": [
@@ -12410,6 +12410,55 @@
   {
    "test": "test_sr_cambiar_escena.CambiarEscena.test_SR9_muchas_ausentes_no_hacen_crecer_el_resumen",
    "case": "S-R9",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_su_servidor_centro.DeteccionCentro.test_SU1_centro_detectado_y_activado_por_arranque_del_instalador",
+   "case": "S-U1",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_su_servidor_centro.DeteccionCentro.test_SU2_cada_indicio_desempata_frente_a_my_scenes_solo",
+   "case": "S-U2",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_su_servidor_centro.DeteccionCentro.test_SU3_empates_no_escriben_ni_ponderan_numero_de_indicios",
+   "case": "S-U3",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_su_servidor_centro.InterfazCentro.test_SU4_extremo_a_extremo_conectar_solo_my_scenes_y_activar",
+   "case": "S-U4",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_su_servidor_centro.InterfazCentro.test_SU5_sin_carpeta_o_empate_pista_manual_sin_escritura",
+   "case": "S-U5",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_su_servidor_centro.InterfazCentro.test_SU6_traer_ayuda_completa_medidas_captura_y_activacion",
+   "case": "S-U6",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_su_servidor_centro.InterfazCentro.test_SU7_volver_a_leer_catalogo_http_oculta_ayuda_y_muestra_tablas",
+   "case": "S-U7",
    "outcome": "pasa",
    "requirements": [],
    "summary": ""
