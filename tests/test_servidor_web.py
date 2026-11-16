@@ -39,7 +39,7 @@ class ArchivosServidor(unittest.TestCase):
         self.assertEqual(servidor.estado(), "sin_carpeta")
         incompleta = self.docs / "otra"
         (incompleta / "My Scenes").mkdir(parents=True)
-        self.assertIsNone(servidor.buscar_carpeta())
+        self.assertEqual(servidor.buscar_carpeta(), incompleta)
         carpeta = self.firma()
         self.assertEqual(servidor.buscar_carpeta(), carpeta)
         self.assertEqual(servidor.estado(), "falta")

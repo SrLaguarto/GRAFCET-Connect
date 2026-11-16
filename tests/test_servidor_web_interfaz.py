@@ -34,7 +34,7 @@ if QT:
     from grafcet.editor import Editor
 
 @unittest.skipUnless(QT, "requiere PySide6")
-class AyudaWeb(unittest.TestCase):
+class AyudaWebBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
@@ -86,6 +86,8 @@ class AyudaWeb(unittest.TestCase):
                 self.fail("No terminó la operación de la interfaz")
             time.sleep(0.002)
 
+
+class AyudaWeb(AyudaWebBase):
     def test_SM114_falta_boton_activa_y_mantiene_resultado(self):
         carpeta = self.firma()
         p = self.panel()
@@ -151,7 +153,7 @@ class AyudaWeb(unittest.TestCase):
             self.esperar(lambda: dialogo.futuro is None)
             self.assertTrue(dialogo.ayuda_servidor.boton.isVisible())
             dialogo.ayuda_servidor.boton.click()
-            self.assertEqual(dialogo.estado.text(), HECHO)
+            self.assertEqual(dialogo.estado.text(), HECHO.replace("Conectar", "Volver a leer"))
             self.assertTrue((carpeta / "auto.cfg").exists())
             dialogo.leer()
             self.esperar(lambda: dialogo.futuro is None)

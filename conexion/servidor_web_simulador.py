@@ -33,13 +33,16 @@ def localizar(documentos=None):
     documentos = Path(documentos) if documentos is not None else documentos_usuario()
     if not documentos.is_dir():
         return Resultado(False, "No se encuentra la carpeta Documentos del usuario")
-    candidatas = [p for p in documentos.iterdir() if p.is_dir()
-                  and (p / "My Scenes").is_dir() and (p / "CertificatesStore").is_dir()]
+    candidatas = [p for p in documentos.iterdir() if p.is_dir() and (p / "My Scenes").is_dir()]
+    if len(candidatas) > 1:
+        preferidas = [p for p in candidatas if (p / "CertificatesStore").is_dir()
+                      or (p / "Screenshots").is_dir() or (p / "auto.cfg").is_file()]
+        candidatas = preferidas or candidatas
     if len(candidatas) == 1:
         return Resultado(True, "Carpeta reconocida por su contenido", candidatas[0])
     if candidatas:
         return Resultado(False, "Hay varias carpetas con la firma del simulador; no se ha escrito nada", ambiguo=True)
-    return Resultado(False, "No se encontró una carpeta con My Scenes y CertificatesStore en Documentos")
+    return Resultado(False, "No se encontró una carpeta con My Scenes en Documentos")
 
 
 def buscar_carpeta(documentos=None) -> Path | None:

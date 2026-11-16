@@ -35,12 +35,19 @@ class DialogoTraer(QDialog):
         fila_aviso.addWidget(self.resumen_escena, 1)
         layout.addLayout(fila_aviso)
         from .ayuda_servidor_web import AyudaServidorWeb
-        self.ayuda_servidor = AyudaServidorWeb(self.estado, fila_aviso)
+        self.ayuda_servidor = AyudaServidorWeb(self.estado, fila_aviso, reintentar="Volver a leer")
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         self.zona = QWidget()
-        self.grupos = QVBoxLayout(self.zona)
+        contenido = QVBoxLayout(self.zona)
+        contenido.setContentsMargins(0, 0, 0, 0)
+        self.grupos = QVBoxLayout()
         self.grupos.setContentsMargins(0, 0, 0, 0)
+        contenido.addLayout(self.grupos)
+        from .ayuda_lectura_es import AyudaLecturaES
+        self.ayuda_lectura = AyudaLecturaES()
+        contenido.addWidget(self.ayuda_lectura, 1)
+        self.ayuda_servidor.texto_cambiado.connect(self.ayuda_lectura.actualizar)
         scroll.setWidget(self.zona)
         layout.addWidget(scroll, 1)
         fila = QHBoxLayout()
@@ -83,6 +90,7 @@ class DialogoTraer(QDialog):
         config = self.controlador.obtener()
         self.b_leer.setEnabled(False)
         self.b_traer.setEnabled(False)
+        self.ayuda_lectura.hide()
         self.estado.setText(self.ayuda_servidor.mostrar(f"{config.host}:{config.puerto} · Leyendo señales…"))
         def trabajo():
             cliente = ClienteDirecto(config.host, config.puerto, timeout=config.timeout_ms / 1000)
@@ -102,7 +110,10 @@ class DialogoTraer(QDialog):
         try:
             catalogo = futuro.result()
         except (ValueError, OSError) as exc:
-            self.estado.setText(self.ayuda_servidor.mostrar(str(exc)))
+            mensaje = self.ayuda_servidor.mostrar(str(exc))
+            self.estado.setText(mensaje)
+            if not self.tablas:
+                self.ayuda_lectura.mostrar(mensaje, not self.ayuda_servidor.boton.isHidden())
             return
         from conexion.reconciliar import reconciliar
         anteriores = {u.variable: u.id for u in self.controlador.panel.config.uniones}
