@@ -175,7 +175,7 @@ class PanelDirecto(QObject):
         self.panel.resumen.setMinimumWidth(ancho + estilo.E2)
         self.panel.ayuda_vacio.setText(
             "Arrastre una variable a su señal. Botón derecho para quitar la unión. "
-            "Ponga el driver del simulador en None para la conexión directa.")
+            "Ponga el driver del simulador en «Ninguno» para la conexión directa.")
         self.panel.ayuda_vacio.show()
         self.aplicar_estilo()
 

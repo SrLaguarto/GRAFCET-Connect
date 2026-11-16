@@ -107,7 +107,7 @@ class AyudaWeb(unittest.TestCase):
         p.mostrar_estado("error", sin_servidor("localhost", 7410))
         self.assertFalse(p.directa.ayuda_servidor.boton.isVisible())
         self.assertIn(YA_ACTIVO, p.estado.text())
-        self.assertIn("None", p.estado.text())
+        self.assertIn("«Ninguno»", p.estado.text())
         self.assertIn("7410", p.estado.text())
 
     def test_SM116_sin_carpeta_y_varias_sin_boton(self):

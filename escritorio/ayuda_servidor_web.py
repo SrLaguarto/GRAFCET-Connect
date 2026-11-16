@@ -9,7 +9,7 @@ from conexion.http_directo import AVISO_SIN_SERVIDOR
 from . import estilo
 
 HECHO = "Hecho. Reinicie el simulador y pulse Conectar."
-YA_ACTIVO = "Ábralo o reinícielo, con el driver en None."  # (su servidor web ya está activado en auto.cfg)
+YA_ACTIVO = "Ábralo o reinícielo, con el driver en «Ninguno»."  # (su servidor web ya está activado en auto.cfg)
 FALTA = "su servidor web no está activado."  # (el botón de al lado dice qué hacer)
 
 

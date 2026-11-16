@@ -170,7 +170,7 @@ class CoherenciaK(unittest.TestCase):
         pie = panel.ayuda_vacio.parentWidget()
         self.assertIs(panel.resumen.parentWidget(), pie)
         self.assertTrue(panel.resumen.text().endswith("uniones"))
-        self.assertIn("None", panel.ayuda_vacio.text())
+        self.assertIn("«Ninguno»", panel.ayuda_vacio.text())
 
     def test_SK109_auditoria_de_panel_y_dialogo_sin_excepciones_nuevas(self):
         import test_auditoria_maquetacion as auditoria

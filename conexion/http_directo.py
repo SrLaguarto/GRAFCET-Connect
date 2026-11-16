@@ -12,7 +12,7 @@ AVISO_SIN_SERVIDOR = "El simulador de fábricas no responde"
 
 def sin_servidor(host, puerto):
     return (AVISO_SIN_SERVIDOR + f" ({host}:{puerto}): active su servidor web (app.web_server = True en su auto.cfg) "
-            "y ábralo con el driver en None.")  # (una línea: los avisos de dos líneas se hacían muy largos)
+            "y ábralo con el driver en «Ninguno».")  # (una línea: los avisos de dos líneas se hacían muy largos)
 
 
 class ClienteDirecto:

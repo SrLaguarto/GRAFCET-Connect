@@ -74,7 +74,8 @@ Qué hace
   directa (simulador de fábricas)», y se guarda con el proyecto. En directo no hay PLC ni canales: arriba, «Servidor» y
   puerto (por defecto localhost:7410) y «Traer E/S»; debajo, el mismo módulo que en Modbus, con el nombre de cada señal del
   simulador en lugar del canal. Se une una variable arrastrándola a su señal; el botón derecho quita la unión. El simulador
-  debe tener activado su servidor web y el driver en None. «Traer E/S» lee las señales y propone crear las variables: los
+  debe tener activado su servidor web y el driver en «Ninguno» (con otro driver, como Modbus, el simulador
+  también escribe las salidas y parpadean). «Traer E/S» lee las señales y propone crear las variables: los
   nombres se pueden cambiar (verde, cambiado; rojo, no vale, con el motivo al pie); las ya unidas salen como «ya traída»; las
   que conservan el nombre de fábrica y las del propio simulador empiezan sin marcar. Volver a traer nunca borra, renombra ni
   cambia de papel o tipo una variable; una unión que ya no encaja se ve en ámbar y no se usa. Las salidas se envían al
@@ -82,7 +83,7 @@ Qué hace
 - Servidor web del simulador: el instalador lo activa, si el simulador está instalado (casilla marcada por defecto): añade
   «app.web_server = True» al archivo auto.cfg de su carpeta de Documentos, que reconoce por su contenido. Si al conectar
   en directo el simulador no responde y falta esa línea, el aviso ofrece «Activar el servidor web»; después hay que cerrar
-  y volver a abrir el simulador. Si la línea ya está, el aviso recuerda reiniciar el simulador, el driver en None y el
+  y volver a abrir el simulador. Si la línea ya está, el aviso recuerda reiniciar el simulador, el driver en «Ninguno» y el
   puerto 7410. Nunca se borra ni se cambia nada más de ese archivo.
 - Nombres de variable: pueden llevar espacios entre palabras («Marcha motor», «Fin de carrera 1»), uno solo entre cada dos, y los signos + y - («A+», «A-», «1V1-14»); no pueden parecer la actividad de una etapa («X1», «X 1»).
 - Variables (al editar): con la tabla vacía se ve una fila de muestra («nueva variable…»); escribir un nombre en ella crea una entrada booleana, y «+ Entrada/Salida/Memoria» ocupa su sitio. Ctrl+V pega una tabla copiada de una hoja de cálculo (Nombre, Papel, Tipo; p. ej. «Marcha · Entrada · Booleana»): las filas correctas se crean y las que tienen un error quedan en rojo, con el motivo al pasar el ratón, hasta corregirlas.
