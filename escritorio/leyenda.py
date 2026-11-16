@@ -146,11 +146,24 @@ def _encapsulante() -> Escena:
     return _modelo(m, {"H": (40, 40), "I": (400, 40)}), {}, _region(40, 40, 120, 80)
 
 
+def _region_dibujada(modelo, estado, prefijo=None):
+    """Encuadra el dibujo actual, incluidos marcos y rótulos, sin límites antiguos escritos a mano."""
+    escena = QGraphicsScene()
+    dibujar(escena, modelo, estado, dependencias=False)
+    caja = QRectF()
+    for item in escena.items():
+        if prefijo is None or item.toolTip().startswith(prefijo):
+            caja = caja.united(item.sceneBoundingRect())
+    caja = caja.adjusted(-RECUADRO, -RECUADRO, RECUADRO, RECUADRO)
+    return caja.left(), caja.top(), caja.right(), caja.bottom()
+
+
 def _recinto() -> Escena:
     m = M().partial("R").var("p").step("H", True, kind="enclosing").step("I", True, partial="R").step("J", partial="R")
     m.trans("v", ["I"], ["J"], "p", partial="R").enclosure("H", "R", ["I"])
     pos = {"H": (40, 40), "I": (170, 70), "v": (170, 150), "J": (170, 230)}
-    return _modelo(m, pos), {}, (SX - 30, 0, SX + 260, 290)
+    modelo = _modelo(m, pos)
+    return modelo, {}, _region_dibujada(modelo, {})
 
 
 def _enlace_activacion() -> Escena:
@@ -173,7 +186,8 @@ def _temporizador(vencido: bool) -> Escena:
     m.trans("t1", ["E1"], ["E2"], "delay(3 s, active(E1), 0 s) AND fin")
     vista = Vista("leyenda", "", "", lambda: (m, {"E1": (40, 40), "t1": (40, 120), "E2": (40, 200)}), {})
     vista.act("avanzar", {"us": 3_000_000 if vencido else 1_500_000})
-    return vista.model, vista.state(), _region(120, 120, 270, 84)
+    estado = vista.state()
+    return vista.model, estado, _region_dibujada(vista.model, estado, "Transición t1:")
 
 
 def _temporizador_contando() -> Escena:

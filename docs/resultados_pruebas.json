@@ -1,10 +1,10 @@
 {
- "date": "2026-11-13T18:00:52+01:00",
+ "date": "2026-11-16T15:39:41+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 1303,
- "failures": 0,
+ "total": 1508,
+ "failures": 2,
  "errors": 0,
  "results": [
   {
@@ -717,6 +717,13 @@
    "summary": "REQ-UX-01: cada excepción y cada flotante declarados llevan su motivo."
   },
   {
+   "test": "test_auditoria_maquetacion.Auditoria.test_SP108_auditoria_numerica_sin_excepciones",
+   "case": "S-P108",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
    "test": "test_auditoria_maquetacion.CentradoBotones.test_SAUD19_C3_contenido_de_los_botones_centrado",
    "case": "S-AUD19",
    "outcome": "pasa",
@@ -1370,7 +1377,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: el título, «Fijar» y lo demás de la cabecera comparten fila; el primer control queda a menos de"
+   "summary": "REQ-EDT-09: título, Fijar y categorías comparten una fila."
   },
   {
    "test": "test_aula_cambios.PanelesMasCompactos.test_SAUC20_la_cabecera_de_una_accion_enseña_su_condicion_sobre_el_area_de_bloques",
@@ -1950,22 +1957,28 @@
    "test": "test_barra_favoritos.Favoritos.test_SFAV06_menu_por_secciones_no_se_cierra_y_persiste",
    "case": "S-FAV06",
    "outcome": "pasa",
-   "requirements": [],
-   "summary": ""
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: J4 retira el menú de selección y muestra siempre todas las fichas."
   },
   {
    "test": "test_barra_favoritos.Favoritos.test_SFAV07_reordenacion_marca_insercion_y_persistencia",
    "case": "S-FAV07",
    "outcome": "pasa",
-   "requirements": [],
-   "summary": ""
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: J4 ignora soltar dentro de la barra; el arrastre al dibujo conserva SFAV04/05."
   },
   {
    "test": "test_barra_favoritos.Favoritos.test_SFAV08_ignora_claves_desconocidas_y_nuevas_no_elegidas",
    "case": "S-FAV08",
    "outcome": "pasa",
-   "requirements": [],
-   "summary": ""
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: J4 borra listas antiguas, vacías o con claves desconocidas."
   },
   {
    "test": "test_barra_favoritos.Favoritos.test_SFAV09_desborde_y_zoom_antes_de_ocultar_favoritos",
@@ -2062,7 +2075,7 @@
    "requirements": [
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03: Puerto (5 cifras) y Esclavo ID (3 cifras) más estrechos en la cabecera del marco y en Configuración; el marco mide lo mismo con"
+   "summary": "REQ-SIM-03: Puerto y Esclavo ID (3 cifras) más estrechos en la cabecera y en Configuración."
   },
   {
    "test": "test_barra_tabla_es.BarraYTablaES.test_SBAR04_boton_volver_de_la_cabecera_de_es_y_uniones_punteadas_de_dependencias",
@@ -2471,6 +2484,286 @@
    "summary": "REQ-EVT-01, REQ-ACT-02, REQ-EVT-03: ejemplo del responsable; una cuenta por cada subida de I02 con 1 activa, ninguna en 0."
   },
   {
+   "test": "test_conexion_directa_integracion.Limites.test_SCD51_ficheros_del_encargo_sin_nombre_comercial",
+   "case": "S-CD51",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_integracion.VentanaDirecta.test_SCD50_conectar_desde_la_ventana_y_cambiar_papel",
+   "case": "S-CD50",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_intercambio.Intercambio.test_SCD30_ciclo_lotes_ceros_pausa_y_desconexion",
+   "case": "S-CD30",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_intercambio.Intercambio.test_SCD31_tipos_reales_y_redondeo",
+   "case": "S-CD31",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_intercambio.Intercambio.test_SCD32_406_no_desconecta_y_no_repite_union_mala",
+   "case": "S-CD32",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_intercambio.Intercambio.test_SCD33_ambar_no_se_lee_ni_escribe",
+   "case": "S-CD33",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_intercambio.Intercambio.test_SCD34_cambio_id_al_conectar",
+   "case": "S-CD34",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_intercambio.Intercambio.test_SCD35_monitor_sin_motor_cero_y_valores",
+   "case": "S-CD35",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_intercambio.Intercambio.test_SCD36_406_http_no_desconecta",
+   "case": "S-CD36",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_intercambio.Intercambio.test_SCD37_union_nueva_con_conexion_viva_relee_catalogo",
+   "case": "S-CD37",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_intercambio.Intercambio.test_SCD38_cambio_de_modo_exige_desconectar",
+   "case": "S-CD38",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_intercambio.Intercambio.test_SCD61_una_salida_puesta_a_cero_por_el_simulador_se_reenvia",
+   "case": "S-CD61",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Sin cambios en el GRAFCET, las salidas se reenvían cada REFRESCO_S: si el simulador las pone a 0 por su cuenta"
+  },
+  {
+   "test": "test_conexion_directa_modo.ModoDirecto.test_SCD01_selector_y_vista_sin_canales",
+   "case": "S-CD01",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_modo.ModoDirecto.test_SCD02_modo_se_guarda_y_antiguo_es_modbus",
+   "case": "S-CD02",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_modo.ModoDirecto.test_SCD03_unir_quitar_y_rechazar_papel_incorrecto",
+   "case": "S-CD03",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_modo.ModoDirecto.test_SCD04_union_rota_se_conserva_y_modo_bloqueado_conectado",
+   "case": "S-CD04",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_modo.ModoDirecto.test_SCD05_modo_directo_no_hereda_altura_de_canales_modbus",
+   "case": "S-CD05",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_persistencia.Persistencia.test_SCD40_guardar_y_abrir_identidades_sin_cambiar_modelo",
+   "case": "S-CD40",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_persistencia.Persistencia.test_SCD41_cargador_anterior_real_abre_modo_directo",
+   "case": "S-CD41",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_persistencia.Persistencia.test_SCD42_antigua_sin_recurso_abre_en_modbus",
+   "case": "S-CD42",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_persistencia.Persistencia.test_SCD43_recurso_corrupto_rechazado_y_union_rota_conservada",
+   "case": "S-CD43",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_persistencia.Persistencia.test_SCD44_archivo_grafnet_incluye_recurso_y_se_vuelve_a_abrir",
+   "case": "S-CD44",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_relectura.Relectura.test_SCD20_sin_cambios_ya_traida",
+   "case": "S-CD20",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_relectura.Relectura.test_SCD21_senales_nuevas_solo_nuevas_marcadas",
+   "case": "S-CD21",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_relectura.Relectura.test_SCD22_nombre_nuevo_misma_identidad",
+   "case": "S-CD22",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_relectura.Relectura.test_SCD23_borrada_union_ambar",
+   "case": "S-CD23",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_relectura.Relectura.test_SCD24_id_cambia_solo_coincidencia_exacta",
+   "case": "S-CD24",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_relectura.Relectura.test_SCD25_tipo_cambia_variable_intacta",
+   "case": "S-CD25",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_relectura.Relectura.test_SCD26_nombre_de_variable_de_otro_papel_en_rojo",
+   "case": "S-CD26",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_relectura.Relectura.test_SCD27_salida_borrada_no_se_une_a_sensor",
+   "case": "S-CD27",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_relectura.Relectura.test_SCD28_papel_o_tipo_de_variable_cambiado",
+   "case": "S-CD28",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_relectura.Relectura.test_SCD29_varias_coincidencias_no_se_elige",
+   "case": "S-CD29",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_traer.TraerES.test_SCD10_propuestas_neutras_y_validacion_compartida",
+   "case": "S-CD10",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_traer.TraerES.test_SCD11_crear_tres_tipos_unir_y_deshacer_una_vez",
+   "case": "S-CD11",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_traer.TraerES.test_SCD12_existente_ya_traida_y_conflicto",
+   "case": "S-CD12",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_traer.TraerES.test_SCD13_repetidos_impiden_crear_dos_variables",
+   "case": "S-CD13",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_traer.TraerES.test_SCD14_http_errores_y_sin_servidor",
+   "case": "S-CD14",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_traer.TraerES.test_SCD15_dialogo_grupos_rojo_verde_y_boton",
+   "case": "S-CD15",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_traer.TraerES.test_SCD16_importacion_del_dialogo_y_deshacer_con_panel_conectado",
+   "case": "S-CD16",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_conexion_directa_traer.TraerES.test_SCD17_dos_importaciones_deshacer_y_rehacer_seguidas",
+   "case": "S-CD17",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
    "test": "test_contenedor_grafnet.Contenedores.test_SGFN01_ida_vuelta_preserva_json_notas_imagenes_y_es",
    "case": "S-GFN01",
    "outcome": "pasa",
@@ -2629,7 +2922,7 @@
    "case": "S-RED10",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "Encargo D: el nombre queda en la ventana y el estado conserva su texto en pantallas estrechas."
+   "summary": "Encargos D/G8: nombre en la ventana y modo visible salvo cuando se fusionan las herramientas."
   },
   {
    "test": "test_defectos_rediseno.Defectos.test_SRED11_variables_a_un_cuarto_de_pantalla_lleva_una_sola_barra_vertical",
@@ -4877,13 +5170,13 @@
    "summary": "REQ-SIM-03, REQ-EDT-11: las tres pestañas identifican la página y se sincronizan por cualquier vía."
   },
   {
-   "test": "test_editor_escritorio.Interfaz.test_SEDI266_el_estado_de_conexion_hace_salto_de_linea_y_no_se_corta",
+   "test": "test_editor_escritorio.Interfaz.test_SEDI266_estado_de_conexion_completo_en_pastilla_sin_segunda_fila",
    "case": "S-EDI266",
    "outcome": "pasa",
    "requirements": [
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03: el estado de la conexión del panel de E/S ocupa su propia fila bajo el título, hace salto de línea y"
+   "summary": "REQ-SIM-03, G4: error completo en la señal y ayuda de la pastilla, sin ampliar la cabecera."
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI268_supr_del_teclado_numerico_tambien_quita_la_variable",
@@ -6014,7 +6307,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: a todos los tamaños la ayuda habitual de la cabecera es el botón «Ayuda ▾» (no el texto largo); pulsarlo la despliega"
+   "summary": "REQ-EDT-09: a todos los tamaños la ayuda habitual se consulta desde el menú Ayuda; activarlo despliega"
   },
   {
    "test": "test_errores_conmutador.MostrarErrores.test_SERR08_el_resumen_de_incidencias_es_un_enlace_sin_recuadro_ni_fondo",
@@ -6063,6 +6356,150 @@
     "REQ-EDT-05"
    ],
    "summary": "REQ-EDT-02, REQ-EDT-05: la transición colocada nace sin etiqueta visible y se deshace en una operación."
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH101_iconos_margen_mitad_y_fila_sin_crecer",
+   "case": "S-H101",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH102_todas_las_fichas_en_el_orden_solicitado",
+   "case": "S-H102",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH103_lista_antigua_migra_una_vez_y_respeta_orden",
+   "case": "S-H103",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: J4 sustituye la personalización por el inventario fijo y borra la preferencia."
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH104_defectos_y_dos_entradas_independientes_con_ctrl_l",
+   "case": "S-H104",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH105_recuerdo_de_las_dos_elecciones",
+   "case": "S-H105",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH106_panel_antiguo_visible_o_plegado_recibe_nuevo_defecto_una_vez",
+   "case": "S-H106",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH107_oculta_en_simulacion_y_solo_lectura_sin_perder_preferencia",
+   "case": "S-H107",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH108_ayudas_completas_de_paleta_y_favoritos",
+   "case": "S-H108",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH109_ninguna_ayuda_supera_maximo_o_limites_de_pantalla",
+   "case": "S-H109",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH110_ayuda_por_clic_aunque_el_panel_este_oculto",
+   "case": "S-H110",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH111_gana_ancho_y_no_cambia_el_documento",
+   "case": "S-H111",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH112_tab_y_desborde_sin_panel_lateral",
+   "case": "S-H112",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH113_render_nativo_de_la_caja_nueva_en_tres_dpr",
+   "case": "S-H113",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH114_otras_ayudas_largas_se_ajustan",
+   "case": "S-H114",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH115_trazo_proporcional_y_comun_en_la_caja_ampliada",
+   "case": "S-H115",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH116_listas_antiguas_vacias_unitarias_y_ya_completas",
+   "case": "S-H116",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: todas las variantes antiguas producen la barra fija de J4."
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH117_ayuda_de_celda_tambien_se_ajusta",
+   "case": "S-H117",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH118_identificador_largo_sin_espacios_no_desborda",
+   "case": "S-H118",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH119_ayuda_directa_de_bloque_recortado_se_ajusta",
+   "case": "S-H119",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_favoritos_principal.FavoritosPrincipal.test_SH120_ayuda_directa_del_selector_recortado_se_ajusta",
+   "case": "S-H120",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
   },
   {
    "test": "test_filtros_errores.FiltrosYErrores.test_SFLT01_un_evento_de_raton_en_un_qwindow_con_eleccion_pendiente_no_falla",
@@ -6259,6 +6696,97 @@
    "summary": "REQ-DAT-02: un archivo con el contenido cambiado sin re-sellar no se rechaza: abre como sin_firma."
   },
   {
+   "test": "test_iconos_coherencia_k.CoherenciaK.test_SK101_quince_anchos_comunes_y_margen_en_tres_dpr",
+   "case": "S-K101",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_iconos_coherencia_k.CoherenciaK.test_SK102_seis_cuadrados_y_acciones_alineadas",
+   "case": "S-K102",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_iconos_coherencia_k.CoherenciaK.test_SK103_controles_altura_de_token_en_ambas_escalas",
+   "case": "S-K103",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_iconos_coherencia_k.CoherenciaK.test_SK104_titulos_reutilizados_sin_pastilla_en_ambos_estados",
+   "case": "S-K104",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_iconos_coherencia_k.CoherenciaK.test_SK105_motivo_visible_y_ya_traida_centrada",
+   "case": "S-K105",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_iconos_coherencia_k.CoherenciaK.test_SK106_mismo_terminal_internas_ocultas_y_valor_por_piloto",
+   "case": "S-K106",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_iconos_coherencia_k.CoherenciaK.test_SK107_ambar_en_fila_y_estado_sin_cambiar_variables",
+   "case": "S-K107",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_iconos_coherencia_k.CoherenciaK.test_SK108_cabeceras_y_leyenda_mismo_pie",
+   "case": "S-K108",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_iconos_coherencia_k.CoherenciaK.test_SK109_auditoria_de_panel_y_dialogo_sin_excepciones_nuevas",
+   "case": "S-K109",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_iconos_coherencia_k.CoherenciaK.test_SK110_dialogos_generales_usan_la_escala_actual",
+   "case": "S-K110",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_idioma.Idioma.test_SIDI01_dialogo_de_texto_con_aceptar_y_cancelar",
+   "case": "S-IDI01",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_idioma.Idioma.test_SIDI02_confirmacion_si_no_y_guardado",
+   "case": "S-IDI02",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_idioma.Idioma.test_SIDI03_ningun_boton_estandar_queda_en_blanco",
+   "case": "S-IDI03",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
    "test": "test_inicio_y_ejemplos.EjemplosAula.test_SIEJ01_siete_ejemplos_compilan_con_entradas_y_salidas",
    "case": "S-IEJ01",
    "outcome": "pasa",
@@ -6333,6 +6861,391 @@
     "REQ-EDT-07"
    ],
    "summary": "REQ-EDT-07: conectado se publica la variable y se solicita el mapa nuevo sin esperar a desconectar."
+  },
+  {
+   "test": "test_instancia_unica.Guardado.test_SIU08_cancelar_conserva_proyecto_y_cambios",
+   "case": "S-IU08",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Guardado.test_SIU09_descartar_abre_un_proyecto_nuevo_en_la_misma_ventana",
+   "case": "S-IU09",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Guardado.test_SIU10_guardar_conserva_archivo_y_abre_nuevo",
+   "case": "S-IU10",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Guardado.test_SIU11_si_guardar_falla_no_se_sustituye_el_proyecto",
+   "case": "S-IU11",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Guardado.test_SIU12_archivo_solicitado_se_abre_tras_descartar",
+   "case": "S-IU12",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Guardado.test_SIU16_dialogo_real_en_espanol_y_cancelar_conserva_el_proyecto",
+   "case": "S-IU16",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Protocolo.test_SIU01_segundo_arranque_reutiliza_la_ventana_sin_crear_otra",
+   "case": "S-IU01",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Protocolo.test_SIU02_ruta_relativa_con_espacios_y_unicode_se_resuelve_en_el_cliente",
+   "case": "S-IU02",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Protocolo.test_SIU03_dos_peticiones_no_entran_a_la_vez_durante_un_dialogo",
+   "case": "S-IU03",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Protocolo.test_SIU04_cierre_normal_libera_la_reserva",
+   "case": "S-IU04",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Protocolo.test_SIU05_reserva_abandonada_se_recupera_si_el_proceso_muere",
+   "case": "S-IU05",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Protocolo.test_SIU06_mensaje_invalido_no_cambia_el_proyecto",
+   "case": "S-IU06",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Protocolo.test_SIU07_modal_existente_se_resuelve_antes_de_abrir",
+   "case": "S-IU07",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Protocolo.test_SIU13_propietaria_cierra_con_apertura_pendiente_y_la_siguiente_la_recupera",
+   "case": "S-IU13",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Protocolo.test_SIU14_argumento_ejemplo_se_conserva_en_la_ventana_abierta",
+   "case": "S-IU14",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_instancia_unica.Protocolo.test_SIU15_dos_arranques_simultaneos_eligen_una_sola_propietaria",
+   "case": "S-IU15",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG101_favoritos_24_caja_comun_trazo_y_tres_dpr",
+   "case": "S-G101",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: iconos propios de 24, sin subir la fila, y render nativo en las tres escalas."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG102_luz_completa_en_estados_y_dpr",
+   "case": "S-G102",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: círculo o rombo completo dentro de la pastilla, también abierta y a distintos DPR."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG103_dependencias_dentro_de_caja",
+   "case": "S-G103",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: el dibujo no toca los límites de su icono en reposo ni marcado."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG104_cabecera_es_una_fila_y_margenes_iguales",
+   "case": "S-G104",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: estado solo en la pastilla; cabecera de una fila y margen M4 simétrico."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG105_carpeta_planos_sin_tocar_laminas",
+   "case": "S-G105",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-01"
+   ],
+   "summary": "REQ-DAT-01: nueva carpeta Planos y carpeta Láminas anterior intacta."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG106_traer_no_cabe_aviso_y_hoja_intacta",
+   "case": "S-G106",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11: aviso con instrucciones, sin reducir el dibujo ni cambiar la hoja."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG107_barra_tres_grupos_una_fila_y_navegacion_por_miniaturas",
+   "case": "S-G107",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11: contenido/salida/vista, sin distintivo ni navegación inferior duplicados."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG108_plantillas_filtradas_y_guardada_contradictoria",
+   "case": "S-G108",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11: manda la plantilla guardada y los cambios de formato/orientación eligen su predeterminada."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG109_menu_plantilla_cuatro_ordenes_operativas",
+   "case": "S-G109",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11: importar, estándar, editar y quitar desde el panel derecho."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG110_cuarto_pantalla_sin_colision_ni_desborde_fuera",
+   "case": "S-G110",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: sin modo solapado y extensión de herramientas dentro de su barra, separada de E/S."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG111_leyenda_recinto_y_temporizadores_actuales",
+   "case": "S-G111",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: marco entero y tiempos reales de la simulación, con espacio en torno al elemento."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG112_macro_comentario_guardado_deshacer_y_menu_conservado",
+   "case": "S-G112",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, REQ-DAT-02: comentario de M persistente y con deshacer, sin Renombrar en la ficha."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG113_biblioteca_filtrada_y_plantilla_personalizada_conservada",
+   "case": "S-G113",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11: las plantillas propias se filtran sin alterar las que ya contiene el proyecto."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG114_enviar_a_hoja_nueva_no_crea_hoja_si_no_cabe",
+   "case": "S-G114",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11: la segunda ruta de entrada también rechaza antes de crear la hoja."
+  },
+  {
+   "test": "test_interfaz_111.Interfaz111.test_SG115_personalizado_orientacion_fija_hasta_elegir_iso",
+   "case": "S-G115",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11: una plantilla no ISO conserva su orientación hasta elegir formato ISO."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ101_menu_primero_f1_y_escape_sin_boton",
+   "case": "S-J101",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: ayuda contextual completa desde menú/F1, sin reservar cabecera."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ102_ayuda_por_modo_y_herramienta",
+   "case": "S-J102",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09",
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-EDT-09, REQ-SIM-03: el menú conserva el texto contextual del modo actual."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ103_cabecera_sin_solapes_en_cuatro_anchos",
+   "case": "S-J103",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: favoritos y zoom usan el hueco liberado incluso a media pantalla."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ104_ver_oculta_y_plegar_conserva_menu_y_pestana",
+   "case": "S-J104",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: abierto, plegado y oculto tienen estados distintos en los tres paneles."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ105_atajos_y_recuerdo_oculto_y_plegado",
+   "case": "S-J105",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: los atajos alternan visibilidad y se recuerdan los tres estados."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ106_barra_fija_borra_lista_antigua",
+   "case": "S-J106",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: una lista antigua no oculta fichas ni altera su orden fijo."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ107_dependencias_completo_y_uniones_en_tres_dpr",
+   "case": "S-J107",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: el símbolo completo deja margen y conserva las dos uniones finas."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ108_plantilla_ancho_completo_y_lista_legible",
+   "case": "S-J108",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: las plantillas actuales caben y el popup reserva su nombre completo."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ109_guardar_plantilla_aplica_solo_al_aceptar",
+   "case": "S-J109",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02",
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11, REQ-DAT-02: Guardar conserva la edición en la hoja del proyecto."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ110_cancelar_y_escape_preguntan_si_hay_cambios",
+   "case": "S-J110",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11: Cancelar preserva la hoja y no descarta cambios sin confirmación."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ111_zona_unica_personalizada_y_automatica",
+   "case": "S-J111",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-11"
+   ],
+   "summary": "REQ-EDT-11: el rectángulo se dibuja en la hoja y Automática elimina la selección propia."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ112_campos_en_fila_y_aviso_sin_seleccion",
+   "case": "S-J112",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: X, Y y Altura usan la misma fila y explican por qué no son editables."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ113_auditoria_del_panel_de_plantilla_sin_excepciones",
+   "case": "S-J113",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: panel y barra de edición cumplen la auditoría en las dos escalas."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ114_dialogos_estandar_sin_botones_vacios",
+   "case": "S-J114",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: texto, confirmación, guardado, errores y selectores conservan sus botones."
+  },
+  {
+   "test": "test_interfaz_j.InterfazJ.test_SJ115_los_tres_paneles_recuerdan_plegado_y_oculto",
+   "case": "S-J115",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: reiniciar distingue pestaña plegada y ocultación desde Ver para cada panel."
   },
   {
    "test": "test_laminas.AjustesLaminas.test_SLAM01_presentacion_validada_y_deshacer_sin_cambiar_modelo",
@@ -7364,7 +8277,7 @@
    "summary": "REQ-DAT-02: rangos explícitos, asignaciones fuera y compatibilidad sin rangos."
   },
   {
-   "test": "test_modbus_configuracion.ConfigTests.test_SFIO26_escala_factoryio_100_por_defecto_y_personalizable",
+   "test": "test_modbus_configuracion.ConfigTests.test_SFIO26_escala_simulador_100_por_defecto_y_personalizable",
    "case": "S-FIO26",
    "outcome": "pasa",
    "requirements": [
@@ -8347,7 +9260,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: se registra el plegado; una ventana nueva abre los laterales y mantiene propiedades plegadas."
+   "summary": "REQ-EDT-09: se recuerda el plegado de Elementos; Variables arranca abierto y Propiedades plegado."
   },
   {
    "test": "test_paneles_plegables.Paneles.test_SPAN08_simulacion_y_edicion_conservan_paneles_y_nombres_de_pestanas",
@@ -8386,6 +9299,69 @@
     "REQ-EDT-09"
    ],
    "summary": "REQ-EDT-09: el lateral abierto conserva el ancho elegido sin absorber el dibujo al volver de E/S."
+  },
+  {
+   "test": "test_pilotos_zoom.PilotosZoom.test_SL101_circulo_esquinas_transparentes_y_dentro_de_fila",
+   "case": "S-L101",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pilotos_zoom.PilotosZoom.test_SL102_colores_halo_y_contraste_del_contorno",
+   "case": "S-L102",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pilotos_zoom.PilotosZoom.test_SL103_numericas_y_doble_color_no_se_vuelven_verdes",
+   "case": "S-L103",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pilotos_zoom.PilotosZoom.test_SL104_booleanas_sin_cifras_en_ambos_modos",
+   "case": "S-L104",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pilotos_zoom.PilotosZoom.test_SL105_posicion_y_leyenda_redonda",
+   "case": "S-L105",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pilotos_zoom.PilotosZoom.test_SL106_quince_favoritos_a_960_sin_solapes",
+   "case": "S-L106",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pilotos_zoom.PilotosZoom.test_SL107_orden_de_recorte_y_retorno_del_porcentaje",
+   "case": "S-L107",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pilotos_zoom.PilotosZoom.test_SL108_ayudas_con_zoom_actual_y_restaura_las_originales",
+   "case": "S-L108",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pilotos_zoom.PilotosZoom.test_SL109_iconos_antes_de_desbordar_al_recuperar_textos",
+   "case": "S-L109",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
   },
   {
    "test": "test_planos_integrados.PlanosIntegrados.test_SPAG01_planos_es_pagina_incrustada_sin_editor_modal",
@@ -9324,6 +10300,97 @@
    "summary": "REQ-EDT-04, REQ-JER-05: una encapsulante todavía sin recintos no se transforma en ordinaria al copiar."
   },
   {
+   "test": "test_propiedades_111.Propiedades111.test_SPF101_modal_bloquea_dibujo_y_barras_y_cierra",
+   "case": "S-PF101",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: modal de la principal, fondo sin interacción; Esc y cruz cierran."
+  },
+  {
+   "test": "test_propiedades_111.Propiedades111.test_SPF102_transicion_alto_limitado_y_lupa_igual",
+   "case": "S-PF102",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: contenido acotado, centrado y lupa de la altura de su tarjeta."
+  },
+  {
+   "test": "test_propiedades_111.Propiedades111.test_SPF103_sin_variable_fichas_deshabilitadas_y_numerica_solo_con_tipo",
+   "case": "S-PF103",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: sin variable, 1/0 inertes; numérica solo después de elegirla, abajo y flotante."
+  },
+  {
+   "test": "test_propiedades_111.Propiedades111.test_SPF104_selector_mide_opciones_y_elide_con_ayuda",
+   "case": "S-PF104",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: caja y lista iguales si caben; tope y ayuda para nombre largo."
+  },
+  {
+   "test": "test_propiedades_111.Propiedades111.test_SPF105_macro_renombra_entrada_salida_expansion_y_deshace",
+   "case": "S-PF105",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-JER-07, REQ-EDT-02: etiqueta editable, arrastre de E/S y expansión; un único deshacer."
+  },
+  {
+   "test": "test_propiedades_111.Propiedades111.test_SPF106_macro_choque_atomico_y_nombres_antiguos",
+   "case": "S-PF106",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-JER-07: colisión rechazada sin cambios ni historial; nombres antiguos conservados."
+  },
+  {
+   "test": "test_propiedades_111.Propiedades111.test_SPF107_senales_sin_lineas_y_colores_compartidos",
+   "case": "S-PF107",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: dos resaltados suaves y franjas/títulos con la misma señal, sin capa de líneas."
+  },
+  {
+   "test": "test_propiedades_111.Propiedades111.test_SPF108_ayudas_sin_descripciones_de_forma_ni_propiedades",
+   "case": "S-PF108",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: instrucciones directas, sin alternativas ni descripciones visuales redundantes."
+  },
+  {
+   "test": "test_propiedades_111.Propiedades111.test_SPF109_ocultar_principal_cierra_modal_y_mover_la_recoloca",
+   "case": "S-PF109",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la modal sigue a su propietaria y no queda huérfana al ocultarla."
+  },
+  {
+   "test": "test_propiedades_111.Propiedades111.test_SPF110_auditoria_de_las_raices_modales_sin_excepciones_nuevas",
+   "case": "S-PF110",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: las mismas reglas de auditoría también se aplican a la raíz modal nativa."
+  },
+  {
    "test": "test_propiedades_ejecutable.PropiedadesEnEjecutable.test_SPEX01_fecha_de_instalacion_con_sys_executable_inexistente",
    "case": "S-PEX01",
    "outcome": "pasa",
@@ -9417,7 +10484,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: sin «Fijar», un clic en otro elemento cierra la ventana; con «Fijar» sigue y muestra el elemento"
+   "summary": "REQ-EDT-02: un cambio programático de selección actualiza el estado fijado; «✕» cierra."
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL10_continua_no_abre_ventana",
@@ -9555,13 +10622,13 @@
    "summary": "REQ-EDT-02: cada panel es una tarjeta con un único fondo igual en todas, margen interior ≥ E3, el título"
   },
   {
-   "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL25_lupa_con_marco_hueco_y_lineas_hasta_la_tarjeta",
+   "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL25_lupa_con_marco_hueco_y_senales_de_tarjeta",
    "case": "S-PFL25",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: la lupa es una tarjeta con borde, el hueco hasta las tarjetas es E5 (24 px) y cada línea de"
+   "summary": "REQ-EDT-09: la lupa conserva borde y hueco E6; las señales sustituyen a las líneas."
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL26_ningun_texto_recortado",
@@ -9582,13 +10649,13 @@
    "summary": "REQ-EDT-09: la lupa recorta el dibujo a la caja de la acción, su marca y, si es la primera unida a la etapa,"
   },
   {
-   "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL28_linea_de_condicion_sale_de_la_esquina_de_la_marca",
+   "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL28_senales_de_condicion_y_accion_coinciden_con_sus_partes",
    "case": "S-PFL28",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: la línea de la condición o del evento sale de la esquina superior izquierda de la marca ampliada"
+   "summary": "REQ-EDT-09: cada resaltado de la lupa corresponde al rectángulo real y al color de su tarjeta."
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL29_flotante_sin_formula_ni_aviso_ni_frase_y_la_barra_igual",
@@ -9618,13 +10685,13 @@
    "summary": "REQ-EDT-02: el área de bloques de la ventana flotante ve al menos 6 fichas de variables a 1366×768 y el doble aproximadamente a"
   },
   {
-   "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL32_lineas_de_puntos_solo_con_dos_paneles",
+   "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL32_sin_lineas_y_senales_solo_con_dos_paneles",
    "case": "S-PFL32",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: sin línea de puntos en etapa, transición ni acciones de un solo panel; dos líneas en condicionada y evento."
+   "summary": "REQ-EDT-09: no hay líneas; las dos señales solo aparecen con condición o evento."
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL33_lupa_de_transicion_y_etapa_sin_trozos_vecinos",
@@ -9861,7 +10928,7 @@
    "requirements": [
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03: la señal activa tiene color saturado y la inactiva es neutra en lista y canal."
+   "summary": "REQ-SIM-03 y L: el piloto activo es eléctrico y el apagado conserva su verde atenuado."
   },
   {
    "test": "test_pulido_es.PulidoES.test_SESP08_cabecera_colorea_todos_los_estados_sin_perder_texto",
@@ -10510,6 +11577,181 @@
    "summary": "REQ-EDT-09: con un nombre corto («fe») y uno largo, a zoom 50 %, 100 % y 160 %, el cuadro nunca mide más que el interior de la acción"
   },
   {
+   "test": "test_servidor_web.ArchivosServidor.test_SM101_firma_directa_ninguna_y_varias",
+   "case": "S-M101",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM102_no_busca_firmas_anidadas",
+   "case": "S-M102",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM103_crear_crlf_y_no_reescribir_si_ya_activo",
+   "case": "S-M103",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM104_true_con_espacios_mayusculas_y_comentario_intacto",
+   "case": "S-M104",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM105_otro_valor_solo_cambia_su_valor",
+   "case": "S-M105",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM106_sin_linea_y_sin_salto_final",
+   "case": "S-M106",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM107_varias_asignaciones_todas_true_sin_borrar_lineas",
+   "case": "S-M107",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM108_codificaciones_y_finales_mixtos",
+   "case": "S-M108",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM109_permiso_y_reemplazo_fallido_no_danan_original",
+   "case": "S-M109",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM110_codificacion_desconocida_no_se_mezcla",
+   "case": "S-M110",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM111_arranque_sin_ventana_instancia_ni_actualizaciones",
+   "case": "S-M111",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM112_ruta_del_instalador_y_prueba_segura",
+   "case": "S-M112",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM113_instalador_tarea_originaluser_y_sin_desinstalacion",
+   "case": "S-M113",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM122_documentos_redirigidos_resueltos_por_windows",
+   "case": "S-M122",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web.ArchivosServidor.test_SM123_no_toca_otra_orden_en_la_misma_linea",
+   "case": "S-M123",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web_interfaz.AyudaWeb.test_SM114_falta_boton_activa_y_mantiene_resultado",
+   "case": "S-M114",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web_interfaz.AyudaWeb.test_SM115_activo_avisa_reinicio_sin_boton",
+   "case": "S-M115",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web_interfaz.AyudaWeb.test_SM116_sin_carpeta_y_varias_sin_boton",
+   "case": "S-M116",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web_interfaz.AyudaWeb.test_SM117_modbus_y_exito_no_consultan_configuracion",
+   "case": "S-M117",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web_interfaz.AyudaWeb.test_SM118_error_permiso_se_muestra_sin_danar",
+   "case": "S-M118",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web_interfaz.AyudaWeb.test_SM119_traer_caido_ofrece_activar_y_luego_ya_activo",
+   "case": "S-M119",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web_interfaz.AyudaWeb.test_SM120_respuesta_http_erronea_no_es_servidor_ausente",
+   "case": "S-M120",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web_interfaz.AyudaWeb.test_SM121_conectar_real_propaga_la_ayuda_del_fallo",
+   "case": "S-M121",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web_interfaz.AyudaWeb.test_SM124_avisos_y_boton_pasan_auditoria_en_ambas_escalas",
+   "case": "S-M124",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_servidor_web_interfaz.AyudaWeb.test_SM125_aviso_de_traer_pasa_auditoria_en_ambas_escalas",
+   "case": "S-M125",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
    "test": "test_simulador_escritorio.Nucleo.test_SAPP01_abrir_lo_guardado",
    "case": "S-APP01",
    "outcome": "pasa",
@@ -10891,6 +12133,286 @@
     "REQ-MOD-03"
    ],
    "summary": "REQ-MOD-03, REQ-EDT-02: la salida de una etapa soltada sobre una barra que no es la suya la une a ESA barra (nunca a"
+  },
+  {
+   "test": "test_sp_filtro_directo.FiltroDirecto.test_SP101_regla_doble_y_no_patron_antiguo",
+   "case": "S-P101",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_filtro_directo.FiltroDirecto.test_SP102_lista_inicial_y_excepcion_unida",
+   "case": "S-P102",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_filtro_directo.FiltroDirecto.test_SP103_sin_recordar_siguiente_lectura_restaura",
+   "case": "S-P103",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_filtro_directo.FiltroDirecto.test_SP104_recordar_desmarcada_quitada_anadida_y_otra_escena",
+   "case": "S-P104",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_filtro_directo.FiltroDirecto.test_SP105_validacion_y_duplicados",
+   "case": "S-P105",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_filtro_directo.FiltroDirecto.test_SP106_persistencia_recordada_y_proyecto_sin_lista",
+   "case": "S-P106",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_filtro_directo.FiltroDirecto.test_SP107_catalogo_http_falso_conserva_identidad_interna_neutral",
+   "case": "S-P107",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_filtro_directo.FiltroDirecto.test_SP123_unidas_excluidas_se_leen_y_escriben_con_http_falso",
+   "case": "S-P123",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_filtro_directo.FiltroDirecto.test_SP124_metadatos_de_filtro_incorrectos_se_rechazan",
+   "case": "S-P124",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP109_numeros_no_se_estiran_y_sufijos",
+   "case": "S-P109",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP110_selector_centrado_misma_medida_ambos_modos",
+   "case": "S-P110",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP111_restablecer_mide_su_texto",
+   "case": "S-P111",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP112_dialogo_filtro_sin_servidor_y_aceptar_cancelar",
+   "case": "S-P112",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP113_ausentes_se_conservan_grises_y_se_pueden_quitar",
+   "case": "S-P113",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP114_bloques_sin_papelera_supr_y_retroceso",
+   "case": "S-P114",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP115_arrastrar_fuera_quita_el_bloque",
+   "case": "S-P115",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP116_unida_excluida_sigue_en_modulo_y_traer",
+   "case": "S-P116",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP117_popup_estable_con_27_variables_en_ambos_paneles",
+   "case": "S-P117",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP118_transicion_a_media_pantalla_y_categorias_a_1366",
+   "case": "S-P118",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP129_dialogo_filtro_cumple_medidas_en_ambas_escalas",
+   "case": "S-P129",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_interfaz.InterfazP.test_SP131_numericas_alineadas_tras_booleanas_desiguales",
+   "case": "S-P131",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_medidas_reales.MedidasRealesP.test_SP120_medidas_y_capturas_a_1366_y_media_pantalla",
+   "case": "S-P120",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_medidas_reales.MedidasRealesP.test_SP121_puerto_largo_conserva_rango_y_crece_sin_recorte",
+   "case": "S-P121",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_medidas_reales.MedidasRealesP.test_SP122_guardado_sin_modo_sigue_en_modbus",
+   "case": "S-P122",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_medidas_reales.MedidasRealesP.test_SP125_proyecto_vacio_nuevo_desde_modbus_usa_directo",
+   "case": "S-P125",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_medidas_reales.MedidasRealesP.test_SP132_columna_sigue_al_numero_al_reducir_la_fuente",
+   "case": "S-P132",
+   "outcome": "falla",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_remates.RematesP.test_SP126_nombre_invalido_naranja_y_se_limpia_al_corregir",
+   "case": "S-P126",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_remates.RematesP.test_SP127_escribir_sustituye_texto_inicial",
+   "case": "S-P127",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sp_remates.RematesP.test_SP128_editar_y_cancelar_conservan_contenido_existente",
+   "case": "S-P128",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR10_auditoria_panel_y_ventana_pequena_a_media_pantalla",
+   "case": "S-R10",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR11_ctrl_z_en_el_grupo_recupera_las_variables",
+   "case": "S-R11",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR1_resumen_corto_y_detalle_plegado",
+   "case": "S-R1",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR2_grupo_solo_ausentes_y_casillas_marcadas_por_defecto",
+   "case": "S-R2",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR3_quitar_solo_uniones_conserva_variables",
+   "case": "S-R3",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR4_defecto_borra_libres_y_conserva_usada_con_aviso_de_donde",
+   "case": "S-R4",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR5_una_operacion_deshacer_y_rehacer_devuelve_todo",
+   "case": "S-R5",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR6_boton_del_panel_solo_si_hay_ausentes_y_misma_ventana",
+   "case": "S-R6",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR7_solo_quita_las_marcadas_y_reunidas_fuera_del_grupo",
+   "case": "S-R7",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR8_auditoria_ventana_a_1366_y_media_pantalla",
+   "case": "S-R8",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sr_cambiar_escena.CambiarEscena.test_SR9_muchas_ausentes_no_hacen_crecer_el_resumen",
+   "case": "S-R9",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
   },
   {
    "test": "test_suplementarios.BloqueosU.test_SU03_accion_por_evento_en_etapa_que_sale",

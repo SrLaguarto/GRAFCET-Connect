@@ -61,7 +61,8 @@ class BarraYTablaES(BaseQt):
         casilla = t.cellWidget(0, 0).casilla
         centro = casilla.mapTo(t.viewport(), casilla.rect().center()).x()
         self.assertLessEqual(abs(centro - (t.columnViewportPosition(0) + t.columnWidth(0) // 2)), 2)
-        self.assertEqual(t.horizontalHeaderItem(5).text(), "Dirección\n(base 0)")
+        self.assertEqual(t.horizontalHeaderItem(5).text(), "Dir.\n(base 0)")
+        self.assertEqual(t.horizontalHeaderItem(5).toolTip(), "Dirección (base 0)")
         self.assertLessEqual(t.columnWidth(5), 130)
         self.assertGreaterEqual(t.cellWidget(0, 5).width(), t.columnWidth(5) - 4, "el campo de la dirección ocupa su celda")
         for col in (4, 6):
@@ -71,14 +72,15 @@ class BarraYTablaES(BaseQt):
         self.assertGreater(t.columnWidth(7), 60, "Escala se ve")
 
     def test_SBAR03_puerto_y_esclavo_estrechos_y_el_marco_no_cambia_de_ancho(self):
-        """REQ-SIM-03: Puerto (5 cifras) y Esclavo ID (3 cifras) más estrechos en la cabecera del marco y en Configuración; el marco mide lo mismo con
+        """REQ-SIM-03: Puerto y Esclavo ID (3 cifras) más estrechos en la cabecera y en Configuración.
+        El marco mide lo mismo con
         la cabecera de edición o con la de solo lectura."""
         p = self.panel()
         for puerto, unidad in ((p.puerto, p.unidad), (p.lienzo.puerto, p.lienzo.unidad)):
             self.assertLessEqual(puerto.width(), 90)
             self.assertLessEqual(unidad.width(), 70)
-            self.assertLess(unidad.width(), puerto.width())
-            self.assertGreaterEqual(puerto.width(), puerto.fontMetrics().horizontalAdvance("65535") + 18)
+            self.assertEqual(unidad.width(), puerto.width())
+            self.assertEqual(puerto.width(), puerto.fontMetrics().horizontalAdvance("888") + 28)
         c = p.lienzo.cabecera_marco
         medidas = []
         for pagina in (p.lienzo.edicion_destino, p.lienzo.destino):
@@ -89,7 +91,7 @@ class BarraYTablaES(BaseQt):
 
     def test_SBAR04_boton_volver_de_la_cabecera_de_es_y_uniones_punteadas_de_dependencias(self):
         """REQ-UX-01: «Volver» lleva icono de flecha y texto, mide el alto de los botones de la cabecera y tiene ayuda sin atajo; el icono de
-        dependencias une el cuadrado con el rectángulo con trazos punteados y finos (menos tinta que una línea continua)."""
+        dependencias recupera las dos uniones diagonales finas y punteadas entre el cuadrado y el marco (J5)."""
         from PySide6.QtCore import QSize
         from escritorio import estilo
         p = self.panel()
@@ -98,5 +100,12 @@ class BarraYTablaES(BaseQt):
         self.assertFalse(b.icon().isNull())
         self.assertEqual(b.height(), p.b_configuracion.height())
         img = estilo.icono("dependencias").pixmap(QSize(48, 48)).toImage()
-        tinta = sum(1 for x in range(18, 30) for y in range(8, 40) if img.pixelColor(x, y).alpha() > 60)
-        self.assertLess(tinta, 120)  # (con las uniones continuas de 1,75 px, la zona entre el cuadrado y el rectángulo son unos 158 píxeles)
+        # J5 recupera dos diagonales; el centro del icono queda vacío.
+        for signo in (-1, 1):
+            muestras = []
+            for x in range(21, 29):
+                y = round(24 + signo * (5 * x / 6 - 9))
+                tinta = sum(img.pixelColor(x, fila).alpha() > 60 for fila in range(y - 1, y + 2))
+                muestras.append(tinta)
+            self.assertTrue(any(tinta > 0 for tinta in muestras), "ambas diagonales tienen tinta")
+            self.assertTrue(any(tinta == 0 for tinta in muestras), "los puntos dejan huecos")

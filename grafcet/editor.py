@@ -1044,9 +1044,10 @@ class Editor:
                 and isinstance(n.get("elementRef"), str) and isinstance(n.get("text"), str) and n["text"]}
 
     def set_comment(self, ident: str, text: str) -> None:
-        """Pone (o, con texto vacío, quita) el comentario de una etapa o transición. Solo presentación."""
-        if not any(x["id"] == ident for x in self.model["steps"] + self.model["transitions"]):
-            raise DiagnosticError(Diagnostic("D-REF", f"solo las etapas y las transiciones llevan comentario: {ident}", element=ident))
+        """Pone o quita el comentario de una etapa, transición o macroetapa. Solo presentación."""
+        entidades = self.model["steps"] + self.model["transitions"] + self.model["hierarchy"]["macros"]
+        if not any(x["id"] == ident for x in entidades):
+            raise DiagnosticError(Diagnostic("D-REF", f"este elemento no admite comentario: {ident}", element=ident))
         text = text.strip()
 
         def fn(m: dict[str, Any], p: dict[str, Any]) -> None:

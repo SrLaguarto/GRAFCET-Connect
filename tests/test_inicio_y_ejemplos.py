@@ -83,7 +83,9 @@ class InicioInterfaz(BaseQt):
 
     def test_SIEJ04_autoasignar_nuevas_respetando_mapa_y_memorias(self):
         """REQ-EDT-07: las nuevas E/S ocupan el primer canal libre compatible; no se asignan memorias ni se pisa un canal."""
-        w=self.w;e=w.edicion
+        w = self.w
+        w.panel_es.directa.selector.setCurrentIndex(0)  # Autoasignación explícita de Modbus.
+        e = w.edicion
         self.assertEqual({k:v['cantidad'] for k,v in CANALES_INICIALES.items()},{'discrete':32,'coil':32,'input-register':12,'holding':12})
         for nombre,papel,tipo in (('a','input',None),('b','input',None),('motor','output',None),('n','internal',None),('nivel','input',{'kind':'decimal','scale':2})):
             self.assertIsNone(e.nueva_variable(nombre,papel,tipo))
@@ -113,7 +115,10 @@ class InicioInterfaz(BaseQt):
 
     def test_SIEJ07_autoasignacion_no_pisa_si_no_hay_capacidad(self):
         """REQ-EDT-07: agotar canales deja la nueva variable sin asignar, con aviso, y conserva las existentes."""
-        w=self.w;e=w.edicion;e.nueva_variable('a','input')
+        w = self.w
+        w.panel_es.directa.selector.setCurrentIndex(0)  # Autoasignación explícita de Modbus.
+        e = w.edicion
+        e.nueva_variable('a', 'input')
         w.panel_es.cantidades['discrete'].setValue(1)
         antes=copy.deepcopy(w.panel_es.config.senales)
         e.nueva_variable('b','input')
@@ -122,7 +127,9 @@ class InicioInterfaz(BaseQt):
     def test_SIEJ08_autoasignacion_inmediata_con_conexion_activa(self):
         """REQ-EDT-07: conectado se publica la variable y se solicita el mapa nuevo sin esperar a desconectar."""
         from conexion.adaptador import MonitorEntradas
-        w=self.w;e=w.edicion
+        w = self.w
+        w.panel_es.directa.selector.setCurrentIndex(0)  # Autoasignación explícita de Modbus.
+        e = w.edicion
         w.modbus.estado='conectado';w.modbus.adaptador=MonitorEntradas(w.panel_es.config,e.ed.model)
         with patch.object(w.modbus,'reasignar') as reasignar:
             e.nueva_variable('a','input')

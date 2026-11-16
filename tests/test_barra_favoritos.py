@@ -38,16 +38,19 @@ class Favoritos(BaseQt):
         self.assertTrue(barra.isVisible())
         self.assertEqual(barra.orden, list(PREDETERMINADOS))
         for clave, boton in barra.botones.items():
-            self.assertEqual(boton.toolTip(), f"Favoritos: {propiedades.Paleta.nombre(clave)}")
-            self.assertEqual(boton.iconSize(), QSize(20, 20))
+            from escritorio.ayudas_emergentes import texto_plano
+            ayuda = texto_plano(boton.toolTip())
+            self.assertIn(propiedades.Paleta.nombre(clave), ayuda)
+            self.assertIn(propiedades.Paleta.texto_ayuda(clave), ayuda)
+            self.assertEqual(boton.iconSize(), QSize(barra.lado_icono, barra.lado_icono))
             self.assertEqual(boton.text(), "")
             self.assertFalse(boton.icon().isNull())
             self.assertIn("background: transparent", boton.styleSheet())
             self.assertIn("border: none", boton.styleSheet())
             if clave in barra._visibles:
                 self.assertEqual(boton.height(), barra.height())
-            self.assertEqual(boton.icon().actualSize(QSize(20, 20)), QSize(20, 20))
-            self.assertEqual(boton.icon().pixmap(20, 20).size(), QSize(20, 20))
+            self.assertEqual(boton.icon().actualSize(QSize(24, 24)), QSize(24, 24))
+            self.assertEqual(boton.icon().pixmap(24, 24).size(), QSize(24, 24))
 
     def test_SFAV02_se_ocultan_al_simular_y_vuelven_al_editar(self):
         w, e, barra = self.preparar()
@@ -109,7 +112,7 @@ class Favoritos(BaseQt):
                 e.deshacer()
 
     def test_SFAV05_gesto_de_arrastre_desde_boton_y_menu(self):
-        w, e, barra = self.preparar(960, 1032)
+        w, e, barra = self.preparar(683, 768)
         for boton in (barra.botones["etapa"], barra.crear_menu_desborde().actions()[0].defaultWidget()):
             with mock.patch.object(w.paleta, "arrastrar_elemento") as arrastrar:
                 QTest.mousePress(boton, Qt.MouseButton.LeftButton, pos=QPoint(4, 4))
@@ -120,65 +123,49 @@ class Favoritos(BaseQt):
                 arrastrar.assert_called_once_with(boton.clave, boton)
 
     def test_SFAV06_menu_por_secciones_no_se_cierra_y_persiste(self):
+        """REQ-EDT-09: J4 retira el menú de selección y muestra siempre todas las fichas."""
         w, e, barra = self.preparar()
-        menu = barra.crear_menu_seleccion()
-        self.addCleanup(menu.close)
-        secciones = [a.text() for a in menu.actions() if a.isSeparator()]
-        self.assertEqual(secciones, [t for t, _ in propiedades.SECCIONES])
-        acciones = {a.data(): a for a in menu.actions() if a.isCheckable()}
-        self.assertEqual(list(acciones), list(propiedades.COLOCABLES))
-        menu.popup(barra.mapToGlobal(QPoint(0, barra.height())))
-        QApplication.processEvents()
-        QTest.mouseClick(menu, Qt.MouseButton.LeftButton, pos=menu.actionGeometry(acciones["etapa"]).center())
-        self.assertTrue(menu.isVisible())
-        self.assertNotIn("etapa", barra.orden)
-        acciones["texto"].trigger()
-        self.assertIn("texto", barra.orden)
-        self.assertEqual(w.ajustes.value(barra.CLAVE_AJUSTES), barra.orden)
-        recuperada = BarraFavoritos(w.ajustes, w.paleta)
-        self.addCleanup(recuperada.deleteLater)
-        self.assertEqual(recuperada.orden, barra.orden)
+        from PySide6.QtGui import QContextMenuEvent
+        evento = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, QPoint(4, 4))
+        QApplication.sendEvent(barra, evento)
+        self.assertIsNone(barra._menu)
+        self.assertEqual(barra.orden, list(PREDETERMINADOS))
+        self.assertFalse(w.ajustes.contains(barra.CLAVE_AJUSTES))
+
 
     def test_SFAV07_reordenacion_marca_insercion_y_persistencia(self):
+        """REQ-EDT-09: J4 ignora soltar dentro de la barra; el arrastre al dibujo conserva SFAV04/05."""
         w, e, barra = self.preparar()
         mime = QMimeData()
         mime.setText("accion:condicionada")
-        evento = mock.Mock()
-        evento.source.return_value = barra.botones["accion:condicionada"]
-        evento.mimeData.return_value = mime
-        evento.position.return_value = QPointF(estilo.E2, 10)
-        barra.dragEnterEvent(evento)
-        barra.dragMoveEvent(evento)
-        self.assertEqual(barra._insercion, 0)
-        imagen = barra.grab().toImage()
-        self.assertEqual(imagen.pixelColor(estilo.E2, estilo.E2).name(), estilo.ACENTO)
+        evento = QDropEvent(QPointF(4, 4), Qt.DropAction.CopyAction, mime,
+                            Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
         barra.dropEvent(evento)
-        self.assertEqual(barra.orden[0], "accion:condicionada")
-        self.assertIsNone(barra._insercion)
-        self.assertEqual(w.ajustes.value(barra.CLAVE_AJUSTES), barra.orden)
-        antes = list(barra.orden)
-        barra.dragMoveEvent(evento)
-        barra.dragLeaveEvent(mock.Mock())
-        self.assertEqual(barra.orden, antes)
-        self.assertIsNone(barra._insercion)
-        recuperada = BarraFavoritos(w.ajustes, w.paleta)
-        self.addCleanup(recuperada.deleteLater)
-        self.assertEqual(recuperada.orden, antes)
+        self.assertFalse(evento.isAccepted())
+        self.assertFalse(barra.acceptDrops())
+        self.assertEqual(barra.orden, list(PREDETERMINADOS))
+
 
     def test_SFAV08_ignora_claves_desconocidas_y_nuevas_no_elegidas(self):
+        """REQ-EDT-09: J4 borra listas antiguas, vacías o con claves desconocidas."""
         w, e, barra = self.preparar()
-        w.ajustes.setValue(barra.CLAVE_AJUSTES, ["desconocida", "transicion", "etapa", "transicion"])
-        recuperada = BarraFavoritos(w.ajustes, w.paleta)
-        self.addCleanup(recuperada.deleteLater)
-        self.assertEqual(recuperada.orden, ["transicion", "etapa"])
-        w.ajustes.setValue(barra.CLAVE_AJUSTES, [])
-        vacia = BarraFavoritos(w.ajustes, w.paleta)
-        self.addCleanup(vacia.deleteLater)
-        self.assertEqual(vacia.orden, [])
+        for antigua in (["desconocida", "transicion", "etapa"], []):
+            w.ajustes.setValue(barra.CLAVE_AJUSTES, antigua)
+            recuperada = BarraFavoritos(w.ajustes, w.paleta)
+            self.addCleanup(recuperada.deleteLater)
+            self.assertEqual(recuperada.orden, list(PREDETERMINADOS))
+            self.assertFalse(w.ajustes.contains(barra.CLAVE_AJUSTES))
+
 
     def test_SFAV09_desborde_y_zoom_antes_de_ocultar_favoritos(self):
         w, e, barra = self.preparar(960, 1032)
         self.assertTrue(w.diagrama._solo_iconos)
+        self.assertTrue(w.diagrama.l_zoom.isHidden())
+        self.assertFalse(barra.ocultos, "L: los quince caben a 960 sin porcentaje")
+        w.resize(683, 768)
+        self.asentar_escala(w)
+        for _ in range(5):
+            QApplication.processEvents()
         self.assertTrue(barra.desborde.isVisible())
         self.assertTrue(barra.ocultos)
         menu = barra.crear_menu_desborde()
@@ -192,8 +179,7 @@ class Favoritos(BaseQt):
                 QApplication.processEvents()
             self.assertFalse(barra.ocultos)
             self.assertFalse(barra.desborde.isVisible())
-            self.assertLess(barra.geometry().right(), w.b_ayuda.x())
-            self.assertLess(w.b_ayuda.geometry().right(), w.diagrama.barra.x())
+            self.assertLess(barra.geometry().right(), w.diagrama.barra.x())
         self.assertFalse(w.diagrama._solo_iconos)
 
     def test_SFAV10_modo_centrado_en_pestanas_sin_aspecto_de_boton(self):
@@ -245,11 +231,12 @@ class Favoritos(BaseQt):
         self.assertEqual(nombres, [
             "Etapa inicial", "Etapa", "Transición", "Simultaneidad", "Continua", "Condicionada", "Al activar",
             "Al desactivar", "Por evento", "Forzado", "Macroetapa", "Encapsulante", "Grafcet parcial",
+            "Texto", "Imagen",
         ])
         w.ajustes.setValue(barra.CLAVE_AJUSTES, ["accion:evento", "texto", "etapa"])
         recuperada = BarraFavoritos(w.ajustes, w.paleta)
         self.addCleanup(recuperada.deleteLater)
-        self.assertEqual(recuperada.orden, ["accion:evento", "texto", "etapa"])
+        self.assertEqual(recuperada.orden, list(PREDETERMINADOS))
 
     def test_SFAV14_rectangulos_de_acciones_y_forzado_alineados(self):
         rectangulos = []
@@ -259,9 +246,9 @@ class Favoritos(BaseQt):
             pintar_mini(pintor, clave)
             cuerpo = pintor.drawRect.call_args_list[0].args[0]
             rectangulos.append(cuerpo)
-            self.assertAlmostEqual(cuerpo.center().y(), 10, delta=0.5)
-            self.assertAlmostEqual(cuerpo.width(), 15, delta=0.5)
-            self.assertAlmostEqual(cuerpo.height(), 7, delta=0.5)
+            self.assertAlmostEqual(cuerpo.center().y(), 12, delta=0.5)
+            self.assertAlmostEqual(cuerpo.width(), 18, delta=0.5)
+            self.assertAlmostEqual(cuerpo.height(), 8.4, delta=0.5)
             pintor.drawText.assert_not_called()
             lapiz = pintor.setPen.call_args.args[0]
             self.assertEqual(lapiz.widthF(), 1.5)
@@ -279,7 +266,7 @@ class Favoritos(BaseQt):
         self.assertTrue(marco.contains(letra))
         self.assertGreaterEqual(letra.height(), 6)
         for ratio in (1, 1.25, 1.5):
-            imagen = icono_mini("parcial").pixmap(QSize(20, 20), ratio)
+            imagen = icono_mini("parcial").pixmap(QSize(24, 24), ratio)
             limites = QRegion(imagen.mask()).boundingRect()
             self.assertGreaterEqual(limites.width() / limites.height(), 1.4)
 
@@ -293,11 +280,11 @@ class Favoritos(BaseQt):
                     self.assertEqual(llamada.args[0].widthF(), 1.5)
                     self.assertEqual(llamada.args[0].color().name(), estilo.TINTA.lower())
                 icono = icono_mini(clave)
-                self.assertEqual(icono.actualSize(QSize(20, 20)), QSize(20, 20))
+                self.assertEqual(icono.actualSize(QSize(24, 24)), QSize(24, 24))
                 for ratio in (1, 1.25, 1.5):
                     with self.subTest(clave=clave, ratio=ratio):
-                        imagen = icono.pixmap(QSize(20, 20), ratio)
-                        self.assertEqual(imagen.size(), QSize(round(20 * ratio), round(20 * ratio)))
+                        imagen = icono.pixmap(QSize(24, 24), ratio)
+                        self.assertEqual(imagen.size(), QSize(round(24 * ratio), round(24 * ratio)))
                         self.assertEqual(imagen.devicePixelRatioF(), ratio)
                         limites = QRegion(imagen.mask()).boundingRect()
                         self.assertFalse(limites.isEmpty())
@@ -321,7 +308,6 @@ class Favoritos(BaseQt):
 
     def test_SFAV18_ejemplos_sin_barra_y_retorno_a_proyecto_editable(self):
         w, e, barra = self.preparar()
-        barra.reordenar("accion:evento", 0)
         anterior = list(barra.orden)
         w.cargar_ejemplo("aula_marcha")
         QApplication.processEvents()
@@ -338,4 +324,4 @@ class Favoritos(BaseQt):
         self.assertFalse(w.solo_lectura)
         self.assertTrue(barra.isVisible())
         self.assertEqual(barra.orden, anterior)
-        self.assertEqual(w.ajustes.value(barra.CLAVE_AJUSTES), anterior)
+        self.assertFalse(w.ajustes.contains(barra.CLAVE_AJUSTES))

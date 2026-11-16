@@ -175,25 +175,26 @@ class MostrarErrores(BaseQt):
             w.hide()
 
     def test_SERR07_la_ayuda_del_dibujo_es_siempre_el_boton_ayuda_salvo_un_mensaje_de_error(self):
-        """REQ-EDT-09: a todos los tamaños la ayuda habitual de la cabecera es el botón «Ayuda ▾» (no el texto largo); pulsarlo la despliega
-        entera («Ayuda ▴») y otra vez la recoge; un mensaje de error (en rojo) sí se lee en la fila."""
+        """REQ-EDT-09: a todos los tamaños la ayuda habitual se consulta desde el menú Ayuda; activarlo despliega
+        la franja entera y otra vez la recoge; un mensaje de error (en rojo) sí se lee en la fila."""
         from escritorio import estilo
         for ancho, alto in ((1366, 768), (2000, 1250), (960, 1032)):
             w, e = self.preparar(ancho, alto)
-            self.assertTrue(w.b_ayuda.isVisible() and w.b_ayuda.text() == "Ayuda ▾", (ancho, w.b_ayuda.text()))
+            self.assertEqual(w.a_ayuda_pantalla.text(), "Ayuda de esta pantalla")
             self.assertFalse(w.ayuda.mostrar_texto)
-            w.b_ayuda.click()
+            w.a_ayuda_pantalla.trigger()
             self.bombear()
-            self.assertEqual(w.b_ayuda.text(), "Ayuda ▴")
+            self.assertTrue(w.a_ayuda_pantalla.isChecked())
             self.assertTrue(w.ayuda_larga.isVisible())
-            w.b_ayuda.click()
+            w.a_ayuda_pantalla.trigger()
             self.bombear()
             self.assertFalse(w.ayuda_larga.isVisible())
             e.rechazar("Mensaje de error de prueba")
             e.cambiado.emit()
             self.bombear()
             self.assertIn(estilo.ERROR, w.ayuda.styleSheet())
-            self.assertTrue(w.ayuda.mostrar_texto or w.b_ayuda.text() == "Ayuda ▾", (ancho, "el error se lee o queda tras el botón con sitio justo"))
+            self.assertTrue(w.ayuda.mostrar_texto or w.a_ayuda_pantalla.isEnabled(),
+                            (ancho, "el error se lee o se consulta desde el menú Ayuda"))
             w.hide()
 
     def test_SERR08_el_resumen_de_incidencias_es_un_enlace_sin_recuadro_ni_fondo(self):

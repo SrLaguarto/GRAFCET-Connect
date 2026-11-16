@@ -2,6 +2,8 @@
 from PySide6.QtCore import QEvent, QObject, QRect, QTimer, Qt
 from PySide6.QtGui import QColor, QFont, QPainter
 
+from PySide6.QtWidgets import QToolBar, QToolButton
+
 from . import estilo
 from .paneles import ChipModo
 
@@ -61,7 +63,15 @@ class UbicaModo(QObject):
         self.ajustar()
 
     def eventFilter(self, objeto, evento):
-        tipos = (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.LayoutRequest, QEvent.Type.FontChange)
+        tipos = (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.LayoutRequest, QEvent.Type.FontChange,
+                 QEvent.Type.DynamicPropertyChange)
+        if objeto is self.fila and evento.type() == QEvent.Type.Resize:
+            for barra in self.fila.window().findChildren(QToolBar):
+                if barra.objectName() not in ("barraEdicion", "barraSimulacion"):
+                    continue
+                for accion in barra.actions():
+                    if accion.isSeparator():
+                        accion.setVisible(True)
         if evento.type() in tipos and not self._pendiente:
             self._pendiente = True
             QTimer.singleShot(0, self.fila, self.ajustar)
@@ -69,6 +79,12 @@ class UbicaModo(QObject):
 
     def ajustar(self):
         self._pendiente = False
+        self._extensiones()
+        fusion = bool(self.fila.property("fusion"))
+        self.fila.layout().setSpacing(estilo.E2 if fusion else 0)
+        self.etiqueta.setVisible(not fusion)
+        if fusion:
+            return
         izquierda = self.pestanas.geometry().right() + estilo.E2
         derecha = self.luz.x() - estilo.E2
         self.etiqueta.fijar_tope(max(1, derecha - izquierda))
@@ -78,6 +94,25 @@ class UbicaModo(QObject):
             x = izquierda
         alto = self.etiqueta.height()
         self.etiqueta.setGeometry(x, (self.fila.height() - alto) // 2, ancho, alto)
+
+    def _extensiones(self):
+        hoja = ("QToolButton { padding:0; min-width:0; min-height:0; border:none; }"
+                f"QToolButton:hover {{ background:{estilo.HOVER}; }}")
+        for boton in self.fila.window().findChildren(QToolButton, "qt_toolbar_ext_button"):
+            if boton.styleSheet() != hoja:
+                boton.setStyleSheet(hoja)
+                boton.setFixedWidth(estilo.ALTO_CONTROL - 2)
+                boton.setToolTip("Más herramientas")
+        for barra in self.fila.window().findChildren(QToolBar):
+            if barra.objectName() not in ("barraEdicion", "barraSimulacion"):
+                continue
+            acciones = barra.actions()
+            visibles = [i for i, accion in enumerate(acciones) if not accion.isSeparator()
+                        and barra.widgetForAction(accion).isVisible()]
+            for i, accion in enumerate(acciones):
+                if accion.isSeparator() and accion.isVisible():
+                    accion.setVisible(any(j < i for j in visibles) and any(j > i for j in visibles))
+
 
 
 class CabeceraFavoritos:
@@ -94,8 +129,8 @@ class CabeceraFavoritos:
         d = v.diagrama
         nav = v.navegacion.sizeHint().width() if v.navegacion.isVisibleTo(v) else 0
         ancho = d.parentWidget().width() - 2 * estilo.E2
-        minimo = d.ancho_barra(True) + nav + 4 * estilo.E2 + v.b_ayuda.sizeHint().width()
-        if self.editable():
+        minimo = d.ancho_barra(True) + nav + 4 * estilo.E2
+        if v.preferencias_paletas.visible():
             minimo += v.favoritos.minimumSizeHint().width()
         d.integrar_barra(v._cab if ancho >= minimo else None)
         v._alto_cabecera = max(v._alto_cabecera, estilo.ALTO_CONTROL_COMPACTO, d.barra.sizeHint().height())
@@ -108,16 +143,26 @@ class CabeceraFavoritos:
         v = self.v
         d = v.diagrama
         barra = v.favoritos
-        barra.setVisible(self.editable())
+        barra.setVisible(v.preferencias_paletas.visible())
         ancho = d.parentWidget().width() - 2 * estilo.E2
         nav = v.navegacion.sizeHint().width() + estilo.E2 if v.navegacion.isVisibleTo(v) else 0
-        ayuda = v.b_ayuda.sizeHint().width() + estilo.E2
-        favoritos = barra.sizeHint().width() if self.editable() else 0
+        barra.compacta = False
+        favoritos = barra.sizeHint().width() if v.preferencias_paletas.visible() else 0
         if d.barra_integrada:
-            compacto = ancho - favoritos - nav - ayuda - 3 * estilo.E2 < d.ancho_barra(False)
+            compacto = ancho - favoritos - nav - 4 * estilo.E2 < d.ancho_barra(False)
             d.solo_iconos(compacto)
+            disponible = ancho - favoritos - nav - 4 * estilo.E2
+            ancho_zoom = d.ancho_barra(True)
+            if d.l_zoom.isHidden():
+                ancho_zoom += d.l_zoom.sizeHint().width()
+            porcentaje = not compacto or disponible >= ancho_zoom
+            d.porcentaje_zoom.mostrar(porcentaje)
+            barra.compacta = not porcentaje
+            favoritos = barra.sizeHint().width() if v.preferencias_paletas.visible() else 0
+        else:
+            d.porcentaje_zoom.mostrar(True)
         zoom = d.barra.sizeHint().width() + estilo.E2 if d.barra_integrada else 0
-        libre = max(0, ancho - zoom - nav - ayuda - 3 * estilo.E2)
+        libre = max(0, ancho - zoom - nav - 3 * estilo.E2)
         barra.setMaximumWidth(min(favoritos, libre))
         barra._disponer()
         self._ajustar_ayuda(max(0, libre - favoritos))
@@ -128,12 +173,4 @@ class CabeceraFavoritos:
         if texto != self._texto_ayuda:
             self._texto_ayuda = texto
             v._ayuda_abierta = False
-        abierta = v._ayuda_abierta and bool(texto)
-        error = bool(texto) and estilo.ERROR in v.ayuda.styleSheet()
-        v.ayuda.mostrar_texto = error and not abierta and libre >= estilo.E6 * 4
-        v.ayuda.update()
-        v.b_ayuda.setText("Ayuda ▴" if abierta else "Ayuda ▾")
-        v.b_ayuda.setToolTip("Recoger la ayuda" if abierta else "Leer la ayuda entera")
-        v.b_ayuda.setVisible(bool(texto))
-        v.ayuda_larga.setText(texto if abierta else "")
-        v.ayuda_larga.setVisible(abierta)
+        v.ayuda_pantalla.actualizar(texto, libre)

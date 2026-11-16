@@ -181,7 +181,7 @@ class Plantillas(unittest.TestCase):
             a=d.vista.mapFromScene(item.pos()+QPointF(0,1));b=a+__import__('PySide6.QtCore',fromlist=['QPoint']).QPoint(25,15)
             pos=item.pos();QTest.mousePress(d.vista.viewport(),Qt.MouseButton.LeftButton,pos=a);QTest.mouseMove(d.vista.viewport(),b);QTest.mouseRelease(d.vista.viewport(),Qt.MouseButton.LeftButton,pos=b)
             self.assertNotEqual(item.pos(),pos);self.assertEqual(item.t['text'],'Texto nuevo');self.assertEqual(item.t['rotation'],90.)
-            QTest.mouseClick(d.b_zona,Qt.MouseButton.LeftButton);a=d.vista.mapFromScene(QPointF(25,25));b=d.vista.mapFromScene(QPointF(180,210))
+            d.zona.setCurrentIndex(1);a=d.vista.mapFromScene(QPointF(25,25));b=d.vista.mapFromScene(QPointF(180,210))
             QTest.mousePress(d.vista.viewport(),Qt.MouseButton.LeftButton,pos=a);QTest.mouseMove(d.vista.viewport(),b);QTest.mouseRelease(d.vista.viewport(),Qt.MouseButton.LeftButton,pos=b)
             self.assertIsNotNone(d.plantilla['zone']);self.assertAlmostEqual(d.plantilla['zone'][2],155,delta=2)
             n=len(d.items);QTest.mouseClick(d.borrar,Qt.MouseButton.LeftButton);self.assertEqual(len(d.items),n-1);d.reject();self.assertEqual(original,antes)

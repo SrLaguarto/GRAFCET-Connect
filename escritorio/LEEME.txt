@@ -1,10 +1,10 @@
-GRAFCET Connect (versión portable 1.1.0)
+GRAFCET Connect (versión portable 1.1.1)
 ====================================================
 
 Abrir: doble clic en «GRAFCET Connect.exe». No necesita instalación ni conexión a la red. La carpeta entera es el
 programa: puede copiarse a otro sitio o a un USB, pero «GRAFCET Connect.exe» no funciona separado de ella.
 
-Instalador (alternativa): «GRAFCET-Connect-1.1.0-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
+Instalador (alternativa): «GRAFCET-Connect-1.1.1-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
 acceso en el menú Inicio (y en el escritorio, si lo marca), asocia los .grafnet si lo deja marcado y se desinstala desde
 Configuración > Aplicaciones. Contiene la misma carpeta que la versión portable (P-IMP-103).
 
@@ -22,9 +22,13 @@ Qué hace
   sigue abierto se detiene con su cuestión U en vez de aproximarse. Si se elige otra, la barra de estado lo avisa
   («Ajustes de simulación no habituales»).
 - Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J). Al simular, el
-  panel inferior muestra la traza.
+  panel inferior muestra la traza. Desmarcado en Ver (o con su atajo), un panel desaparece del todo, sin pestaña ni hueco, y
+  el dibujo gana su ancho; plegado con su flecha o con el divisor, deja su pestaña y sigue marcado en Ver. Las dos cosas se
+  recuerdan.
+- Ayuda > Ayuda de esta pantalla (F1): despliega bajo la cabecera del dibujo la ayuda completa del modo y la herramienta;
+  la entrada sale marcada mientras se ve, y Esc la cierra.
 - Paneles laterales: crecen con la letra grande. El derecho (Variables y Diagnósticos) mide 270 px desde 1280 px de ancho de ventana y 218 por debajo; a 1600 mide 270 px y a 1920, 300. La letra grande se activa sola desde 1600×900, con 40 px de histéresis para no cambiar al borde del umbral; el izquierdo llega a 264 px a 1600 y a 300 a 1920.
-- Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), Ctrl+rueda (anclada al puntero), Ctrl+= y Ctrl+−; la rueda sola desplaza en vertical y Mayús+rueda en horizontal y el gesto de dos dedos de un panel táctil, en los dos ejes; el pellizco del panel táctil hace zoom; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Al cambiar el tamaño de la ventana principal, el dibujo no se mueve en la pantalla (con zoom manual, que es lo normal al editar): aunque un panel lateral o la barra cambien de tamaño, cada punto del dibujo queda en el mismo sitio respecto a la ventana; lo nuevo aparece por la derecha y por abajo, y lo que tape un panel que se ensancha queda debajo de él. Al simular sin zoom manual, el dibujo se sigue encajando con la ventana. Al cruzar el tamaño de pantalla completa, la letra y los controles cambian de escala una sola vez, cuando la ventana deja de cambiar de tamaño (unos 120 ms), no en cada paso de la animación. El programa se abre ya maximizado, sin mostrar antes una ventana pequeña. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
+- Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), Ctrl+rueda (anclada al puntero), Ctrl+= y Ctrl+−; la rueda sola desplaza en vertical y Mayús+rueda en horizontal y el gesto de dos dedos de un panel táctil, en los dos ejes; el pellizco del panel táctil hace zoom; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). Si la cabecera del dibujo no cabe, primero «Centrar todo» y «Centrar selección» se quedan en icono y después se oculta el porcentaje de zoom (la ayuda de «−» y «+» lo dice); si aun así no cabe, la barra de favoritos saca «»». El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Al cambiar el tamaño de la ventana principal, el dibujo no se mueve en la pantalla (con zoom manual, que es lo normal al editar): aunque un panel lateral o la barra cambien de tamaño, cada punto del dibujo queda en el mismo sitio respecto a la ventana; lo nuevo aparece por la derecha y por abajo, y lo que tape un panel que se ensancha queda debajo de él. Al simular sin zoom manual, el dibujo se sigue encajando con la ventana. Al cruzar el tamaño de pantalla completa, la letra y los controles cambian de escala una sola vez, cuando la ventana deja de cambiar de tamaño (unos 120 ms), no en cada paso de la animación. El programa se abre ya maximizado, sin mostrar antes una ventana pequeña. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
 - Proyecto > Guardar (Ctrl+S) o Guardar como… (Ctrl+Mayús+S): guarda el proyecto con su dibujo en un archivo .grafnet, para abrirlo después.
 - Proyecto > Propiedades del archivo…: autor (se puede cambiar; por defecto, el usuario de Windows), fechas de creación y de última edición, versiones de GRAFCET Connect con que se creó y se guardó por última vez, versión del formato y sello del archivo. Muestra también los datos de este programa (versión, distribución o desarrollo, y fecha de instalación). Los archivos anteriores a la 1.0 muestran «desconocida (archivo anterior a la 1.0)» en fechas y versiones.
 - Firma: el programa abre todos los archivos .grafnet, también los guardados con la versión de desarrollo o sin firma. La barra de estado indica «Archivo sin firma» (o «Archivo de la versión de desarrollo») si no tienen la firma de esta versión; al guardarlos siguen sin firma. El autor del programa puede volver a sellarlos.
@@ -47,14 +51,44 @@ Qué hace
   que abre las Issues de GitHub (https://github.com/SrLaguarto/GRAFCET-Connect/issues).
 - Con Tab, el control activo muestra un anillo de foco. El anillo solo aparece al navegar con el teclado, no con un clic.
 - Los avisos no muestran códigos internos y usan vocabulario GRAFCET. El detalle técnico y la «Referencia: código» van en la ayuda emergente de cada aviso. El icono de aviso es un triángulo ámbar; el rojo queda para «No se puede simular».
-- Lista de variables de la acción (Propiedades): Salidas y Memorias, cada una con su tipo en corto («Bool», «Ent», «Dec»); la lista
-  se ensancha lo que haga falta para leer el nombre más largo.
+- Lista de variables de la acción (Propiedades): Salidas y Memorias, cada una con su tipo en corto («Bool», «Ent», «Dec»); la caja
+  y la lista miden lo que pide el nombre más largo (con un tope). Sin variable elegida, la acción memorizada o por evento
+  muestra «? :=» con 1 y 0 desactivados; el programador de valor solo sale si la variable es numérica.
 - Errores y avisos del grafcet: botón «Mostrar errores» de la barra de edición. Marcado, el aviso se ve sobre el dibujo (triángulo y resumen, «2 errores», «1 error · 2 avisos»; un clic o Espacio despliega la lista); desmarcado, no se ve al editar. Al marcarlo, la lista sale desplegada (el resumen la pliega). Un Play que no puede simular lo marca y despliega la lista, y se desmarca solo al corregirlo todo.
 - Propiedades: el título dice el tipo de lo elegido («Propiedades · Etapa», «· Transición», «· Acción»…), sin su nombre. La etiqueta de una etapa admite como mucho 4 caracteres al escribirla; un archivo con nombres más largos se abre igual.
 - Barra de edición, tras Play y Reiniciar: Deshacer, Rehacer, Cortar, Copiar, Pegar y Borrar (solo icono; la ayuda emergente dice el atajo), «Mostrar dependencias» y «Mostrar errores». Fuera de la edición, desactivados. «Añadir debajo» ya no está en la barra: sigue en el menú Edición y con Ctrl+Intro. Al simular, la barra no cambia de color: el modo lo dicen la franja verde bajo la barra y la etiqueta de la fila de pestañas.
+- Una sola ventana: si el programa ya está abierto, abrirlo otra vez (o hacer doble clic en un .grafnet) lleva el archivo a esa
+  ventana; si hay cambios sin guardar, pregunta antes (Guardar, Descartar o Cancelar).
+- PLANOS: barra de una fila (Traer GRAFCET, Centrar GRAFCET, Añadir texto · Exportar, Imprimir · zoom); todo lo de la hoja en
+  el panel derecho: Plantilla (en su fila, a todo el ancho, con «▾» para importar, usar la estándar, editar o quitar), Formato y Orientación (filtran las
+  plantillas), Margen e «Incluir estado de simulación». Se cambia de hoja con sus miniaturas. Si un GRAFCET no cabe en la hoja,
+  no se trae y un aviso pide una hoja más grande o la otra orientación. Lo exportado va por defecto a Documentos\GrafConnect\Planos.
+- Editar una plantilla («▾ > Editar plantilla»): arriba de la hoja, «Editando la plantilla «…»» con «Guardar plantilla» y
+  «Cancelar» (Esc; si hay cambios, pregunta antes de descartarlos). Los cambios se aplican al guardar, a la plantilla de la
+  hoja, que se guarda con el proyecto. «Zona del GRAFCET»: Automática (la hoja dentro del margen, sin el cajetín) o
+  Personalizada (se dibuja arrastrando un rectángulo); es donde se coloca el GRAFCET al traerlo.
 - Modo: la fila de las pestañas (GRAFCET, PLANOS) muestra, centrada, una etiqueta de estado con un punto de color, «EDICIÓN» o «SIMULACIÓN · …» (no es un botón). El nombre del grafcet está en la barra de título de la ventana.
-- Barra de favoritos, encima del dibujo (al editar): los elementos de la paleta en pequeño, con dibujo propio. Se arrastran al dibujo como las fichas de la paleta (un clic no hace nada); la ayuda emergente dice «Favoritos: <nombre>». Botón derecho sobre la barra: casillas para elegir qué elementos se ven; arrastrando un icono dentro de la barra se cambia el orden; las dos cosas se recuerdan. Por defecto: Etapa inicial, Etapa, Transición, Simultaneidad, las cinco acciones, Forzado, Macroetapa, Encapsulante y Grafcet parcial. Si no caben, sale «»» con los que faltan (también se arrastran desde ahí). Al simular, la barra se oculta.
+- Barra de favoritos, encima del dibujo (al editar): es la paleta principal. Lleva los quince elementos con dibujo propio (Etapa inicial, Etapa, Transición, Simultaneidad, las cinco acciones, Forzado, Macroetapa, Encapsulante, Grafcet parcial, Texto e Imagen). Todos los iconos tienen el mismo ancho de dibujo, con aire entre ellos. Se arrastran al dibujo (un clic solo enseña su ayuda, con el nombre y la descripción enteros). La barra es fija: siempre los quince, en ese orden, sin menú para elegirlos ni reordenarlos. Si no caben, sale «»» con los que faltan (también se arrastran desde ahí). Al simular, la barra se oculta. En Ver, «Barra de favoritos» y «Panel de elementos» (Ctrl+L) se muestran u ocultan por separado; por defecto, la barra sí y el panel no.
 - Vista de E/S externas: desconectado, la IP, el puerto y el esclavo se cambian en la cabecera del marco, sin abrir Configuración (son los mismos valores).
+- Conexión directa (simulador de fábricas): el título del marco central de E/S es un desplegable, «Modbus TCP» o «Conexión
+  directa (simulador de fábricas)», y se guarda con el proyecto. En directo no hay PLC ni canales: arriba, «Servidor» y
+  puerto (por defecto localhost:7410) y «Traer E/S»; debajo, el mismo módulo que en Modbus, con el nombre de cada señal del
+  simulador en lugar del canal. Se une una variable arrastrándola a su señal; el botón derecho quita la unión. El simulador
+  debe tener activado su servidor web y el driver en «Ninguno» (con otro driver, como Modbus, el simulador
+  también escribe las salidas y parpadean). «Traer E/S» lee las señales y propone crear las variables: los
+  nombres se pueden cambiar (verde, cambiado; rojo, no vale, con el motivo al pie); las ya unidas salen como «ya traída»; las
+  que conservan el nombre de fábrica y las del propio simulador empiezan sin marcar. Volver a traer nunca borra, renombra ni
+  cambia de papel o tipo una variable; una unión que ya no encaja se ve en ámbar y no se usa. Las salidas se envían al
+  cambiar y, además, cada segundo. Un proyecto nuevo empieza en conexión directa; uno guardado sin modo sigue en Modbus.
+  La configuración directa solo tiene Periodo y Tiempo de espera; en «Opciones avanzadas ›», «Señales que no se traen»: la
+  lista, por ID, de las señales internas del simulador, que se puede cambiar. Al traer las E/S de otra escena, la línea de
+  estado resume en una línea y el grupo «De otra escena» quita de una vez las uniones viejas y, con su casilla (marcada), las
+  variables que no se usan en el GRAFCET; Ctrl+Z lo devuelve. En el panel, «Quitar uniones sin señal» hace lo mismo.
+- Servidor web del simulador: el instalador lo activa, si el simulador está instalado (casilla marcada por defecto): añade
+  «app.web_server = True» al archivo auto.cfg de su carpeta de Documentos, que reconoce por su contenido. Si al conectar
+  en directo el simulador no responde y falta esa línea, el aviso ofrece «Activar el servidor web»; después hay que cerrar
+  y volver a abrir el simulador. Si la línea ya está, el aviso recuerda reiniciar el simulador, el driver en «Ninguno» y el
+  puerto 7410. Nunca se borra ni se cambia nada más de ese archivo.
 - Nombres de variable: pueden llevar espacios entre palabras («Marcha motor», «Fin de carrera 1»), uno solo entre cada dos, y los signos + y - («A+», «A-», «1V1-14»); no pueden parecer la actividad de una etapa («X1», «X 1»).
 - Variables (al editar): con la tabla vacía se ve una fila de muestra («nueva variable…»); escribir un nombre en ella crea una entrada booleana, y «+ Entrada/Salida/Memoria» ocupa su sitio. Ctrl+V pega una tabla copiada de una hoja de cálculo (Nombre, Papel, Tipo; p. ej. «Marcha · Entrada · Booleana»): las filas correctas se crean y las que tienen un error quedan en rojo, con el motivo al pasar el ratón, hasta corregirlas.
 - Arrastrar una selección y soltarla dentro de un Grafcet parcial o del recinto de una encapsulante la mete en él (como cortar y pegar dentro; el marco se resalta al pasar por encima).
@@ -110,10 +144,11 @@ Editar: paleta, panel de Opciones y no solapar (P-IMP-45)
 
 En modo Editar, la pantalla tiene tres zonas:
 
-- Paleta (panel izquierdo): solo tiene la paleta, en una sola lista: la etapa, la transición, la simultaneidad (barra
+- Paleta (panel izquierdo, oculto por defecto: la barra de favoritos hace de paleta; se muestra con «Ver > Panel de
+  elementos»): solo tiene la paleta, en una sola lista: la etapa, la transición, la simultaneidad (barra
   de doble trazo) y la acción (la ficha «Acción» es la continua; los otros tipos se eligen con el botón derecho, en
   «Tipo de acción»). Las fichas se colocan arrastrándolas al dibujo; un clic en una ficha solo muestra su ayuda. El
-  panel izquierdo se pliega con su flecha en el borde del dibujo o con «Ver > Panel izquierdo» (Ctrl+L).
+  panel izquierdo se pliega con su flecha en el borde del dibujo o con «Ver > Panel de elementos» (Ctrl+L).
 - Dibujo (centro): donde se ve y se toca el grafcet. Con el ratón se selecciona, se mueve y se enlaza; la rueda
   desplaza en vertical, Mayús+rueda en horizontal y Ctrl+rueda hace zoom.
 - Opciones (panel inferior): ocupa todo el ancho de la ventana, debajo de los paneles laterales. Muestra la
@@ -331,15 +366,16 @@ piezas, en lugar de escribirlo.
   derecha, el área de trabajo, con la fórmula dibujada en una línea si cabe.
 - Debajo del área: la fórmula en texto, «Escrito» (el texto que ha quedado guardado), «Se dibuja» (cómo se verá en el
   dibujo de la norma) y «Crear las que faltan» (declara como entradas booleanas las variables que se usan y no
-  existen). En la última fila, el aviso y la papelera («⤢ Ampliar» se retiró en P-IMP-144: para más sitio, Ver ▸ Panel de opciones ▸ Flotante).
+  existen). En la última fila, el aviso («⤢ Ampliar» se retiró en P-IMP-144: para más sitio, Ver ▸ Panel de opciones ▸ Flotante).
 - Ver ▸ «Panel de opciones» ▸ «Flotante» (por defecto) o «Abajo»: dos opciones excluyentes, y se recuerda la elegida. En flotante, las propiedades se editan en una sola ventana centrada
   sobre la aplicación (puede tapar los paneles laterales), con título y ✕: a la izquierda, el elemento ampliado como bajo una
-  lupa (hasta el 125 %, se actualiza al editar); a la derecha, sus paneles, unidos a su parte del elemento con líneas de puntos.
-  En una acción condicionada o por evento hay dos paneles: «Condición» (o «Evento») arriba y «Acción» debajo, unidos a su parte
-  con líneas de puntos (con un solo panel no hay líneas). La ventana no se mueve al hacer zoom, desplazar o mover el elemento;
+  lupa (hasta el 125 %, se actualiza al editar); a la derecha, sus paneles. Mientras está abierta, lo de detrás no responde.
+  En una acción condicionada o por evento hay dos paneles: «Condición» (o «Evento») arriba y «Acción» debajo; cada parte del
+  elemento ampliado y su panel comparten un color (la marca de la condición, turquesa, como la franja de «Condición»; la caja de
+  la acción, gris, como la franja de «Acción»). Una transición o una etapa abren una ventana a la medida de su contenido. La ventana no se mueve al hacer zoom, desplazar o mover el elemento;
   si el contenido no cabe, se desplaza por dentro. Esc la cierra (si hay un desplegable abierto, el primer Esc cierra el
   desplegable). En la ventana no hay fila «Fórmula», ni aviso de «correcta», ni frase de la acción (la lupa ya los enseña): si la
-  fórmula tiene un error, sale una línea roja bajo los bloques; la papelera está a la derecha de las pestañas del formulador.
+  fórmula tiene un error, sale una línea roja bajo los bloques. No hay papelera: un bloque se quita con Supr o Retroceso, o arrastrándolo fuera.
   El área de bloques aprovecha el alto de la ventana.
   Con la barra abajo, la parte de la acción que se edita se resalta en el dibujo. Una acción continua no abre Propiedades:
   su variable se elige con doble clic (o Intro) sobre ella.
@@ -362,7 +398,7 @@ piezas, en lugar de escribirlo.
     aritméticas encadenadas que se leen igual sin paréntesis se dibujan en línea.
   · Comparación: [variable ▾][= ≠ < ≤ > ≥ ▾][valor], por ejemplo CT ≥ 3. Constantes 1 y 0.
 - Cómo se mueven los bloques: arrastrar un bloque a un hueco lo encaja. Soltar un bloque que envuelve (no, ↑, ↓ o
-  temporizar) sobre otro lo envuelve. Arrastrarlo fuera o a la papelera lo quita y deja su hueco.
+  temporizar) sobre otro lo envuelve. Arrastrarlo fuera (o Supr) lo quita y deja su hueco.
 - Hueco sin llenar: se muestra como «?»; la receptividad queda pendiente y no se puede ejecutar.
 - Texto y bloques sincronizados: lo que se escribe a mano pasa a bloques; si no se puede, el programa avisa y los
   bloques no cambian.
@@ -412,7 +448,9 @@ a ese parcial (con un margen de una etapa a la derecha y abajo); moverlo a otro 
 dibujo.
 
 - Macroetapa: al soltar la ficha se crea la macroetapa (M1, M2…) con su expansión a la derecha: un parcial con una etapa
-  de entrada (E1, E2…) y una de salida (S1, S2…), unidas a la macroetapa (con «Mostrar dependencias» activado, por trazos discontinuos). La expansión no lleva
+  de entrada (E1, E2…) y una de salida (S1, S2…) (su nombre sigue al de la macroetapa: al renombrar M1 a M13, desde
+  Propiedades o con «Renombrar…» del botón derecho, pasan a E13 y S13; E y S no se renombran sueltas; la macroetapa, E y S
+  admiten comentario), unidas a la macroetapa (con «Mostrar dependencias» activado, por trazos discontinuos). La expansión no lleva
   ruta interior: se rellena soltando etapas y transiciones dentro de su zona. Botón derecho: «Encuadrar la expansión» y
   «Renombrar…». El doble clic en la macroetapa encuadra la expansión.
 - Encapsulante y tipo de etapa: se arrastra la ficha, o se elige en el botón derecho de una etapa, submenú «Tipo de etapa»
@@ -460,7 +498,7 @@ E/S externas (simulador de procesos por Modbus) y botón conmutador (P-IMP-63)
 
 - A E/S se entra con la luz «E/S externas: …» del extremo derecho de la fila de pestañas (ya no hay pestaña propia): un clic la abre y la luz queda resaltada mientras se ve; las pestañas GRAFCET y PLANOS vuelven. El botón «E/S externas» abre el panel de E/S. Mientras se ve, el botón está marcado y dice «Vista GRAFCET» (con un icono de etapa, transición y etapa); pulsado, vuelve al dibujo. La flecha ← hace lo mismo. Ninguna de las dos desconecta la conexión. Tiene un ancho fijo, el del texto más largo, así que la barra no se mueve al alternar.
 - El panel tiene a la izquierda la lista SENSORES y a la derecha la lista ACTUADORES: arrastre cada variable a un canal de su lado, o haga dos clics: primero la variable y luego el canal, en cualquier orden. Esc o un clic en vacío cancelan. En el centro, un marco con la cabecera «(IP:puerto)» y «Esclavo ID:n»: a su izquierda, los canales Input e Input Reg; a su derecha, Coil y Holding Reg. El nombre de la variable asignada aparece fuera del marco, pegado a él. Al arrastrar, se resalta la fila entera.
-- Cada canal tiene un indicador: tenue si no tiene variable, del color de su tipo si la tiene, y más vivo si la señal está activa. Bool es verde, Decimal azul, Entera naranja y Cualquiera blanco. El resumen de abajo cuenta «x/y entradas asignadas · x/y salidas asignadas».
+- Cada canal tiene un piloto redondo (a la izquierda en las entradas y a la derecha en las salidas): tenue si no tiene variable y del color de su tipo si la tiene. Una señal booleana a 1 se enciende en verde eléctrico con un halo; a 0 queda verde apagado. No se escribe «0» ni «1»: el valor lo da el piloto. Las numéricas (Decimal azul, Entera naranja) llevan su cifra al lado. Cualquiera es gris. La leyenda de abajo usa los mismos pilotos. El resumen de abajo cuenta «x/y entradas asignadas · x/y salidas asignadas».
 - Para quitar una asignación, pase el ratón por ella y pulse la «×», que solo aparece al pasar el ratón (con la conexión activa, antes pulse «Desconectar / editar»). También puede usar el menú contextual del canal.
 - «+ Canales» ya no existe: los campos de offset y cantidad de I/Q/AI/AQ están en Configuración, en «Canales del servidor». Un proyecto sin mapa propio abre con 32 canales digitales y 12 numéricos; no hereda las cantidades de canales de preferencias anteriores.
 - El estado de conexión va en su propia fila, bajo el título. Si hay un fallo, el texto hace salto de línea y su mensaje completo aparece al pasar el ratón por encima. Los fallos de red habituales se explican en una frase, por ejemplo: «El simulador de procesos cerró la conexión. Salidas no garantizadas. Pulse Conectar para reanudar. Detalle: …».

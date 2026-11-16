@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, 
                                QToolButton, QToolTip, QWidget)
 
 from . import estilo
+from .ayudas_emergentes import mostrar_ayuda
 
 SX = 100       # margen izquierdo del dibujo
 H = 22         # semilado de la etapa cuadrada (unidad: lado = 2·H)
@@ -1391,7 +1392,7 @@ class _OpcionConPapel(QStyledItemDelegate):
         nombre, papel = self._nombre_y_papel(index)
         if event.type() == QEvent.Type.ToolTip and papel and not self._separador(index):
             if option.fontMetrics.horizontalAdvance(nombre) > self._hueco_nombre(option.fontMetrics, option.rect, papel):
-                QToolTip.showText(event.globalPos(), nombre, view)
+                mostrar_ayuda(event.globalPos(), nombre, view)
             else:
                 QToolTip.hideText()
             return True
@@ -1525,7 +1526,8 @@ class VistaDiagrama(QGraphicsView):
         self.barra_integrada = False  # los controles del zoom van en la cabecera de la ventana (integrar_barra), no encima del dibujo
         self._solo_iconos = False  # con los controles en la cabecera y poco sitio: solo iconos y el porcentaje (`solo_iconos`)
         self._estrecho = self._bajo = False  # lo último que pidió `compactar`
-        self._anchos_barra: dict[tuple[bool, str], int] = {}  # lo que mide el recuadro del zoom con solo iconos o con texto, por escala
+        # Anchos con texto o iconos, por escala y con o sin porcentaje.
+        self._anchos_barra: dict[tuple[bool, str, bool], int] = {}
         self.dependencias = False  # se dibujan los trazos discontinuos de las dependencias (macroetapa-expansión, encapsulante-recinto)
         self.ajustes: QSettings | None = None  # dónde se recuerda; sin él, los `ajustes` de la ventana que contiene la vista
         self._dependencias_leidas = False
@@ -1885,6 +1887,8 @@ class VistaDiagrama(QGraphicsView):
         self.b_menos.clicked.connect(self.alejar)
         self.l_zoom = QLabel("100 %")
         self.l_zoom.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        from .zoom_cabecera import PorcentajeZoom
+        self.porcentaje_zoom = PorcentajeZoom(self)
         self.b_mas = QToolButton()
         self.b_mas.setObjectName("pasoZoom")
         self.b_mas.setText("+")
@@ -1957,7 +1961,7 @@ class VistaDiagrama(QGraphicsView):
     def ancho_barra(self, iconos: bool) -> int:
         """Lo que mide el recuadro del zoom con solo iconos o con las palabras de «Centrar todo» y «Centrar selección» (se mide una vez por
         escala: la ventana lo usa para decidir si caben en la cabecera)."""
-        clave = (iconos, estilo.ESCALA)
+        clave = (iconos, estilo.ESCALA, not self.l_zoom.isHidden())
         if clave not in self._anchos_barra:
             ahora = self._compacta
             self._estilo_barra(iconos)

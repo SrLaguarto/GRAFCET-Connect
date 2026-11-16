@@ -194,7 +194,10 @@ class Ventana(unittest.TestCase):
         from PySide6.QtCore import QSettings
         from escritorio.ventana import Ventana as V
         cls.tmp = tempfile.TemporaryDirectory()  # las preferencias de las pruebas no tocan las del usuario
-        cls.w = V(QSettings(str(Path(cls.tmp.name) / "ajustes.ini"), QSettings.Format.IniFormat))
+        ajustes = QSettings(str(Path(cls.tmp.name) / "ajustes.ini"), QSettings.Format.IniFormat)
+        ajustes.setValue("paletas/favoritos_principal_v1", True)
+        ajustes.setValue("paneles/izquierdo", True)
+        cls.w = V(ajustes)
         cls.w._cambiar_modo_propiedades("abajo")  # (estas pruebas dan por hecha la barra inferior; el defecto es «flotante»)
 
     def proyecto_de_prueba(self,clave):
@@ -491,12 +494,14 @@ class Ventana(unittest.TestCase):
         w.nuevo();w._mostrar_panel("derecho",True);w._mostrar_panel("inferior",True)
         self.assertFalse(w.derecho.isHidden() or w.inferior.isHidden())
         w.flechas["derecho"].click()
-        self.assertTrue(w.derecho.isHidden() and not w.a_derecho.isChecked())
+        self.assertTrue(w.derecho.isHidden() and w.a_derecho.isChecked())
         self.assertEqual(w.flechas["derecho"].text(), "◂")
         w.flechas["inferior"].click()
-        self.assertTrue(w.inferior.isHidden() and not w.a_inferior.isChecked())
+        self.assertTrue(w.inferior.isHidden() and w.a_inferior.isChecked())
         self.assertEqual(w.flechas["inferior"].text(), "▴")
         self.assertFalse(w.ajustes.value("paneles/derecho", True, type=bool))
+        w.a_derecho.setChecked(False)
+        w.a_inferior.setChecked(False)
         w.a_derecho.setChecked(True)  # desde el menú Ver
         w.a_inferior.setChecked(True)
         self.assertFalse(w.derecho.isHidden() or w.inferior.isHidden())
@@ -506,7 +511,9 @@ class Ventana(unittest.TestCase):
         w.ajustes.sync()
         otra = V(QSettings(w.ajustes.fileName(), QSettings.Format.IniFormat))
         try:
-            self.assertFalse(otra.derecho.isHidden());self.assertTrue(otra.a_derecho.isChecked());self.assertTrue(otra.inferior.isHidden())
+            self.assertTrue(otra._plegables["derecho"].isHidden())
+            self.assertFalse(otra.a_derecho.isChecked())
+            self.assertTrue(otra.a_inferior.isChecked())
         finally:
             otra.a_ejecutar.setChecked(False)
             otra.deleteLater()

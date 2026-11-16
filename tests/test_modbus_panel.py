@@ -10,7 +10,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PySide6.QtWidgets import QApplication
-    from escritorio.entradas_salidas import PanelES
+    from escritorio.entradas_salidas import NIVEL_ACTIVO, PanelES
     QT = True
 except ImportError:
     QT = False
@@ -123,6 +123,7 @@ class PanelTests(unittest.TestCase):
             w = Ventana(ajustes_de_prueba(tmp))
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self.assertIsNone(w.edicion.nueva_variable("sensor"))
                 self.assertIsNone(w.edicion.nueva_variable("luz", "output"))
                 self.assertIsNone(w.edicion.nueva_variable("consigna", "output", {"kind": "decimal", "scale": 2}))
@@ -139,7 +140,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual([s.variable for s in guardado.senales], [vid, luz, consigna])
                 w._conectar_modbus()
                 esperar_ui(lambda: w.modbus.estado == "conectado")
-                esperar_ui(lambda: w.panel_es.indicadores[vid][1].text() == "1")
+                esperar_ui(lambda: w.panel_es.indicadores[vid][0].nivel == NIVEL_ACTIVO)
                 self.assertIsNone(w.modbus.adaptador.sesion)
                 self.assertEqual(w.modbus.adaptador.salidas, [], "sin programa compilado, el monitor no controla nada")
                 self.assertEqual([s.variable for s in w.modbus.adaptador.salidas_control], [luz, consigna])
@@ -373,14 +374,15 @@ class PanelTests(unittest.TestCase):
                 w.deleteLater()
                 app.processEvents()
 
-    def _ventana_conectada(self, tmp, sc, doc, senales):
+    def _ventana_conectada(self, tmp, sc, doc, senales, timeout_ms=500):
         """Una ventana con el modelo dado, mapa asignado y conexión establecida (en Pausa: salidas a 0 y observando las entradas)."""
         from escritorio.ventana import Ventana
         w = Ventana(ajustes_de_prueba(tmp))
         w.fuente = {"tipo": "fichero", "ruta": Path(tmp) / "modelo.json", "doc": doc,
                     "layout": {}, "titulo": "Prueba", "ayuda": "", "raiz": None}
         w._cargar()
-        w.panel_es.cargar(doc, Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=senales))
+        w.panel_es.cargar(doc, Configuracion(
+            host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=senales, timeout_ms=timeout_ms))
         w._conectar_modbus()
         return w
 
@@ -601,7 +603,9 @@ class PanelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, servidor(responder) as sc:
             m = M().var("sensor").var("motor", "output").step("E0", True)
             m.cont("E0", "motor")  # motor = 1 desde la situación inicial: el reinicio de Play ya lo escribe
-            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            # El falso retiene la respuesta hasta 5 s; este caso prueba una petición en vuelo, no su caducidad.
+            w = self._ventana_conectada(
+                tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)], timeout_ms=6000)
             esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
             try:
                 esperar(lambda: w.modbus.estado == "conectado")
@@ -763,11 +767,11 @@ class PanelTests(unittest.TestCase):
             self.assertLess(NIVEL_ASIGNADO, NIVEL_ACTIVO)
             p.mostrar_valores({"a": True, "v": 0, "d": "1.5", "q": False})
             self.assertEqual([led(v).nivel for v in ("a", "v", "d", "q")], [NIVEL_ACTIVO, NIVEL_ASIGNADO, NIVEL_ACTIVO, NIVEL_ASIGNADO])
-            self.assertEqual([p.indicadores[v][1].text() for v in ("a", "v", "d")], ["1", "0", "1.5"])
+            self.assertEqual([p.indicadores[v][1].text() for v in ("a", "v", "d")], ["", "0", "1.5"])
             self.assertTrue(p.indicadores["v"][1].isVisibleTo(p), "las analógicas enseñan su valor")
             self.assertFalse(p.indicadores["a"][1].isVisibleTo(p), "las digitales, solo la barrita")
-            pixel = led("a").grab().toImage().pixelColor(1, 1)
-            self.assertEqual(pixel.getRgb()[:3], mezclar(COLOR_TIPO["bool"], NIVEL_ACTIVO).getRgb()[:3])
+            pixel = led("a").grab().toImage().pixelColor(led("a").width() // 2, led("a").height() // 2)
+            self.assertEqual(pixel.getRgb()[:3], led("a").color().getRgb()[:3])
             # las listas laterales: sensores a la izquierda, actuadores a la derecha, con su color de tipo
             def fila(lista, nombre):
                 return next(lista.item(i) for i in range(lista.count()) if lista.item(i).text() == nombre)
@@ -843,7 +847,9 @@ class PanelTests(unittest.TestCase):
     @staticmethod
     def _ventana_nueva(tmp, ajustes=None):
         from escritorio.ventana import Ventana
-        return Ventana(ajustes or ajustes_de_prueba(tmp))
+        w = Ventana(ajustes or ajustes_de_prueba(tmp))
+        w.panel_es.directa.selector.setCurrentIndex(0)  # Estas regresiones ejercen Modbus.
+        return w
 
     def _ventana_modelo(self, tmp, doc, ajustes=None):
         """Una ventana con el modelo dado abierto como si viniera de un fichero, sin conexión."""
@@ -892,6 +898,7 @@ class PanelTests(unittest.TestCase):
             p = w.panel_es
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self.assertIsNone(w.edicion.nueva_variable("sensor1"))
                 self._es(w, True)
                 self.assertEqual(self._nombres(p.lista_entradas), ["sensor1"])
@@ -947,6 +954,7 @@ class PanelTests(unittest.TestCase):
             p = w.panel_es
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 for nombre, papel, tipo in (("a", "input", None), ("b", "input", decimal), ("c", "input", decimal)):
                     self.assertIsNone(w.edicion.nueva_variable(nombre, papel, tipo))
                 self._es(w, True)
@@ -981,6 +989,7 @@ class PanelTests(unittest.TestCase):
             p = w.panel_es
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self.assertIsNone(w.edicion.nueva_variable("uno"))
                 self._es(w, True)
                 p.host.setText("10.1.2.3")
@@ -1033,6 +1042,7 @@ class PanelTests(unittest.TestCase):
             p = w.panel_es
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self.assertIsNone(w.edicion.nueva_variable("s1"))
                 self._es(w, True)
                 p.cantidades["input-register"].setValue(0)
@@ -1115,6 +1125,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(w.ajustes.value("modbus/host", "nada"), "nada", "no se guarda nada sin una conexión que funcione")
                 self.assertEqual(w.panel_es.obtener().host, "192.168.1.133")  # el ejemplo con el que arranca
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self._es(w, True)
                 self.assertEqual((w.panel_es.host.text(), w.panel_es.puerto.value(), w.panel_es.unidad.value()),
                                  ("192.168.1.133", 502, 1))
@@ -1143,6 +1154,7 @@ class PanelTests(unittest.TestCase):
                 w._desconectar_modbus()
                 self._esperar(app, w, lambda: not w.modbus.activo)
                 w.nuevo()  # otro proyecto, sin mapa propio
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self._es(w, True)
                 self.assertEqual((w.panel_es.host.text(), w.panel_es.puerto.value(), w.panel_es.unidad.value()),
                                  ("127.0.0.1", sc.puerto, 7))
@@ -1307,8 +1319,9 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(len(escrituras), n, "tras el cero, Pausa no escribe más")
                 self.assertIs(w.modbus.cliente._socket, socket, "la conexión no se cierra")
                 self.assertTrue(w.modbus.activo and w.rt.isActive(), "la observación de entradas sigue")
-                esperar(lambda: w.panel_es.indicadores["sensor"][1].text() == "1" and w.panel_es.indicadores["vel"][1].text() == "0")
-                self.assertEqual([w.panel_es.indicadores[v][1].text() for v in ("motor", "luz")], ["0", "0"])
+                esperar(lambda: w.panel_es.indicadores["sensor"][0].nivel == NIVEL_ACTIVO
+                        and w.panel_es.indicadores["vel"][1].text() == "0")
+                self.assertEqual([w.panel_es.indicadores[v][1].text() for v in ("motor", "luz")], ["", ""])
                 # Play otra vez, con el sensor ya a 0: sesión nueva desde la situación inicial (no sigue en E1)
                 sensor[0] = 0
                 anterior = w.v.s
@@ -1613,7 +1626,7 @@ class PanelTests(unittest.TestCase):
                 esperar(lambda: w.modbus.estado == "conectado" and w.modbus.escritos == cero)
                 esperar(lambda: sum(e[0] == "leer" for e in eventos) >= 3)
                 sensor[0] = 1  # la planta ya tiene el sensor activo cuando se pulsa Play
-                esperar(lambda: w.panel_es.indicadores["sensor"][1].text() == "1")
+                esperar(lambda: w.panel_es.indicadores["sensor"][0].nivel == NIVEL_ACTIVO)
                 n = len(eventos)
                 w.a_ejecutar.setChecked(True)
                 esperar(lambda: w.modbus.escritos == {"motor": False, "luz": True, "vel": 150})
@@ -1739,7 +1752,8 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(w.v.state().get("situation", []), [])
                 self.assertEqual((w.t_vars.rowCount(), w.t_temp.rowCount(), w.traza.count()), (0, 0, 0))
                 self.assertFalse(any(b.isEnabled() for b in w.botones.values()), "sin sesión, las entradas no responden")
-                self.assertEqual([p.indicadores[v][1].text() for v in ("sensor", "motor", "luz", "vel")], ["—"] * 4)
+                self.assertEqual([p.indicadores[v][1].text() for v in ("sensor", "motor", "luz", "vel")],
+                                 ["", "", "", "—"])
                 self.assertEqual({p.indicadores[v][0].nivel for v in ("motor", "luz", "vel")}, {NIVEL_ASIGNADO})
                 w.a_ejecutar.setChecked(True)  # Play: situación inicial (E0: motor y la consigna memorizada)
                 self.assertEqual(w.v.state()["situation"], ["E0"])
@@ -1761,6 +1775,7 @@ class PanelTests(unittest.TestCase):
             p = w.panel_es
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self.assertIsNone(w.edicion.nueva_variable("sensor"))
                 self.assertIsNone(w.edicion.nueva_variable("luz", "output"))
                 self._es(w, True)

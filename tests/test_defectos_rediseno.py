@@ -99,19 +99,24 @@ class Defectos(BaseQt):
         self.assertEqual(w.titulo_sim.text(), "Simulación")
 
     def test_SRED10_nombre_en_titulo_nativo_y_estado_en_pestanas(self):
-        """Encargo D: el nombre queda en la ventana y el estado conserva su texto en pantallas estrechas."""
+        """Encargos D/G8: nombre en la ventana y modo visible salvo cuando se fusionan las herramientas."""
         w, e = self.vacio()
         self.assertIn(e.titulo, w.windowTitle())
         self.assertFalse(hasattr(w, "titulo"))
-        for ancho in (900, 683, 640):
-            w.resize(ancho, 520)
+        for ancho, alto, visible in ((1366, 768, True), (960, 1032, True),
+                                      (683, 384, False), (960, 540, False)):
+            w.resize(ancho, alto)
             w.show()
+            self.pasar_arranque(w)
+            self.asentar_escala(w)
             for _ in range(3):
                 QApplication.processEvents()
-            self.assertIn("EDICIÓN", w.estado.elegida())
             self.assertIs(w.estado.parentWidget(), w.fila_pestanas)
-            self.assertGreater(w.estado.x(), w.pestanas_vistas.geometry().right())
-            self.assertLess(w.estado.geometry().right(), w.luz_es.x())
+            self.assertEqual(w.estado.isVisible(), visible)
+            if visible:
+                self.assertIn("EDICIÓN", w.estado.elegida())
+                self.assertGreater(w.estado.x(), w.pestanas_vistas.geometry().right())
+                self.assertLess(w.estado.geometry().right(), w.luz_es.x())
 
     def test_SRED11_variables_a_un_cuarto_de_pantalla_lleva_una_sola_barra_vertical(self):
         """REQ-EDT-07, REQ-EDT-09 (F10): con muchas variables en un panel bajo, se desplaza la tabla o el panel, no los dos a la vez."""
@@ -363,11 +368,14 @@ class Defectos(BaseQt):
         """REQ-EDT-09: el arranque real (`main`) muestra la ventana maximizada, salvo con `--captura`; crear una `Ventana` no la maximiza
         ni la muestra (las pruebas no se ven afectadas)."""
         import os
+        import tempfile
         from unittest import mock
         from escritorio import ventana as v
         self.assertFalse(self.w.isMaximized())
+        tmp = tempfile.TemporaryDirectory()  # (instancia única en una carpeta propia: nunca la del usuario ni la de otro programa abierto)
+        self.addCleanup(tmp.cleanup)
         for argv, maximizada in (([], True), (["--captura", "x.png"], False)):
-            with mock.patch.object(v, "Ventana") as clase, mock.patch.object(QApplication, "exec", return_value=0),                     mock.patch("escritorio.errores.instalar"), mock.patch("escritorio.carpetas.asegurar_carpetas"),                     mock.patch.object(v.QTimer, "singleShot"), mock.patch.dict(os.environ, {v.actualizaciones.VARIABLE_SIN_ACTUALIZAR: "1"}):
+            with mock.patch("escritorio.instancia_unica.directorio_instancia", return_value=Path(tmp.name) / "instancia"),                     mock.patch.object(v, "Ventana") as clase, mock.patch.object(QApplication, "exec", return_value=0),                     mock.patch("escritorio.errores.instalar"), mock.patch("escritorio.carpetas.asegurar_carpetas"),                     mock.patch.object(v.QTimer, "singleShot"), mock.patch.dict(os.environ, {v.actualizaciones.VARIABLE_SIN_ACTUALIZAR: "1"}):
                 self.assertEqual(v.main(argv), 0)
                 ventana = clase.return_value
                 self.assertEqual(ventana.showMaximized.called, maximizada, argv)

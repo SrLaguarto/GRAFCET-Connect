@@ -149,8 +149,9 @@ class PanelInferiorFijarYEsconder(BaseQt):
         edición arranca plegado y «Fijar» desmarcado."""
         for ajustes in ({}, {"paneles__inferior": True}, {"paneles__inferior": True, "paneles__inferior_fijo": False}):
             v = self.ventana_con(**ajustes)
-            self.assertFalse(v._plegables["inferior"].abierto, ajustes)
-            self.assertFalse(v.a_inferior.isChecked())
+            esperado = ajustes.get("paneles__inferior", False)
+            self.assertEqual(v._plegables["inferior"].abierto, esperado, ajustes)
+            self.assertEqual(v.a_inferior.isChecked(), esperado)
             self.assertFalse(v.props.t_fijar.isChecked())
 
     def test_SAUC32_arranca_abierto_y_fijado_si_se_guardo_fijado(self):
@@ -184,6 +185,8 @@ class PanelInferiorFijarYEsconder(BaseQt):
         """REQ-EDT-09: con la ventana ya mostrada, y al agrandarla, el panel plegado es solo su pestaña pegada al borde inferior y el
         dibujo se queda con todo lo demás (antes quedaba un hueco vacío del alto del panel); seleccionar no lo cambia."""
         v = self.ventana_con()
+        v._mostrar_panel("inferior", True)
+        v._mostrar_panel("inferior", False)
         v.show();QTest.qWait(50)
         for ancho, alto in ((None, None), (1800, 1100)):
             if ancho:
@@ -288,7 +291,10 @@ class PanelInferiorFijarYEsconder(BaseQt):
         w.flechas["inferior"].click();QApplication.processEvents()
         self.assertFalse(self.abierto(w), "la flecha lo pliega")
         self.assertTrue(w.props.t_fijar.isChecked(), "y sigue fijado")
-        w.a_inferior.setChecked(True);QApplication.processEvents()  # lo mismo que Ctrl+J
+        w.a_inferior.setChecked(False)
+        self.assertTrue(w._plegables["inferior"].isHidden())
+        w.a_inferior.setChecked(True)
+        QApplication.processEvents()
         self.assertTrue(self.abierto(w))
         w.a_inferior.setChecked(False);QApplication.processEvents()
         self.assertFalse(self.abierto(w))
@@ -829,22 +835,24 @@ class PanelesMasCompactos(BaseQt):
         return w, e, y
 
     def test_SAUC19_la_cabecera_del_panel_inferior_es_una_sola_fila_y_hay_menos_capas_sobre_el_dibujo(self):
-        """REQ-EDT-09: el título, «Fijar» y lo demás de la cabecera comparten fila; el primer control queda a menos de
-        32 px del borde del panel, la paleta de bloques de una transición también, y el dibujo empieza antes de los 140 px."""
+        """REQ-EDT-09: título, Fijar y categorías comparten una fila.
+        El primer control y los bloques quedan bajo esa fila, según el token, sin cabeceras duplicadas."""
+        from escritorio import estilo
         w, e, y = self.preparar()
+        limite = estilo.ALTO_CONTROL_COMPACTO + 7  # cabecera +4, borde +1 y separación +2
         self.assertLessEqual(y(w.diagrama), 156, "antes, 157 (con el zoom siempre en la cabecera y un hueco bajo la franja)")
         etapa = [s["id"] for s in e.M["steps"] if s["label"] == "1"][0]
         e.seleccionar([etapa])
         for _ in range(6):
             QApplication.processEvents()
         arriba = y(w.inferior)
-        self.assertLessEqual(y(w.props.s_etiqueta) - arriba, 33, "antes, 40 (con 1 px de borde de la tarjeta sobre la cabecera)")
+        self.assertLessEqual(y(w.props.s_etiqueta) - arriba, limite, "una fila de cabecera más sus márgenes")
         e.seleccionar([e.M["transitions"][0]["id"]])
         for _ in range(8):
             QApplication.processEvents()
         self.assertEqual(w.props.pagina, "transicion")
         arriba = y(w.inferior)
-        self.assertLessEqual(y(w.props.prog) - arriba, 33, "antes, 65: dos filas de cabecera")
+        self.assertLessEqual(y(w.props.prog) - arriba, limite, "una fila de cabecera, también en transición")
         self.assertTrue(w.props.t_fijar.isVisible())
         self.assertAlmostEqual(y(w.props.t_fijar) + w.props.t_fijar.height() / 2, y(w.props.titulo) + w.props.titulo.height() / 2,
                                delta=4, msg="«Fijar» va en la fila del título")

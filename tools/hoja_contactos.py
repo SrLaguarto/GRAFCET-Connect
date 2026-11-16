@@ -198,6 +198,7 @@ def _es(conectado: bool) -> Callable[[Contexto], None]:
     def preparar(c: Contexto) -> None:
         _edicion(c)
         c.w.mostrar_es()
+        c.w.panel_es.directa.selector.setCurrentIndex(0)
         _bombear(8)
         if conectado:
             c.w.panel_es.mostrar_estado("conectado", "Conectado")
@@ -212,6 +213,8 @@ def _configuracion(c: Contexto) -> None:
     c.w.mostrar_es()
     _bombear(8)
     p = c.w.panel_es
+    p.directa.selector.setCurrentIndex(0)
+    _bombear(2)
     p.abrir_configuracion()
     p._alternar_avanzado()
     _bombear(10)

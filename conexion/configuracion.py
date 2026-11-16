@@ -69,11 +69,21 @@ class Configuracion:
     senales: list[Senal] = field(default_factory=list)
     canales: dict[str, dict[str, int]] = field(default_factory=dict)
 
+    modo: str = "modbus"
+    uniones: list = field(default_factory=list)
+    filtro_senales: list[dict] = field(default_factory=list)
+    recordar_filtro: bool = False
+
     def fijar_escalas_simulador(self):
         for s in self.senales:
             s.escala = "1" if s.formato == "BOOL" else "100"
 
     def validar(self, doc: dict):
+        if self.modo == "directo":
+            from .configuracion_directa import validar
+            return validar(self, doc)
+        if self.modo != "modbus":
+            raise ValueError("Modo de conexión desconocido")
         if not isinstance(self.host, str) or not self.host.strip():
             raise ValueError("Falta la dirección del servidor")
         if not es_ipv4(self.host.strip()):
@@ -131,6 +141,8 @@ class Configuracion:
         mapa (área o formato desconocidos, formato que no casa con el área, direcciones o variables repetidas…) no se toca:
         eso lo rechaza `validar`. De una variable que ya no existe solo queda su ID, que no se enseña: el aviso la nombra por su
         canal."""
+        if self.modo == "directo":
+            return []
         variables = {v["id"]: v for v in doc["variables"]}
         validas, quitadas = [], []
         for s in self.senales:
@@ -161,6 +173,14 @@ class Configuracion:
     def guardar(self, ruta: Path, doc: dict):
         self.validar(doc)
         datos = {**asdict(self), "modelo": doc["id"], "version": 1}
+        datos.pop("uniones")
+        datos.pop("filtro_senales")
+        datos.pop("recordar_filtro")
+        if self.modo == "directo":
+            from .persistencia_directa import guardar
+            guardar(self, ruta, doc)
+            datos["senales"] = []
+            datos["canales"] = {}
         ruta.parent.mkdir(parents=True, exist_ok=True)
         fd, temporal = tempfile.mkstemp(dir=ruta.parent, prefix=ruta.name, suffix=".tmp")
         try:
@@ -182,10 +202,16 @@ class Configuracion:
             datos = json.loads(ruta.read_text(encoding="utf-8"))
             if datos.pop("version") != 1:
                 raise ValueError("Versión de conexión desconocida")
-            datos.pop("modo", None)  # restos del modo servidor, ya retirado
+            modo = datos.get("modo", "modbus")
+            if modo not in ("modbus", "directo"):
+                datos.pop("modo", None)  # configuración antigua del servidor retirado
             datos.pop("escucha", None)
             datos["senales"] = [Senal(**s) for s in datos["senales"]]
             config = cls(**datos)
+            if config.modo == "directo":
+                config.validar(doc)
+                from .persistencia_directa import cargar
+                return cargar(config, ruta, doc)
             aviso = aviso_host(config.host)
             config.host = normalizar_host(config.host)  # un mapa antiguo con «localhost» u otro nombre sigue cargando
             config.aviso_host = aviso  # (no es un campo: no se guarda; el panel lo enseña hasta que se escriba otra IP)

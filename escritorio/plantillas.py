@@ -1,6 +1,7 @@
 """Dibujo en milímetros y edición de textos y zona útil de una plantilla incorporada."""
 import base64
 import copy
+from shiboken6 import isValid
 from PySide6.QtCore import Qt,QRectF,QPointF,Signal
 from PySide6.QtGui import QPainter,QPen,QColor,QFont,QFontMetricsF,QTextLayout,QTextOption,QPainterPath,QImage,QTransform
 from PySide6.QtSvg import QSvgRenderer
@@ -148,7 +149,7 @@ class EditorPlantilla(QDialog):
         panel=QWidget();form=QFormLayout(panel);scroll.setWidget(panel);raiz.addWidget(scroll)
         self.lista=QListWidget();self.lista.setMaximumHeight(140);form.addRow('Textos de la plantilla',self.lista)
         botones=QHBoxLayout();self.nuevo=QPushButton('Añadir texto');self.borrar=QPushButton('Eliminar')
-        botones.addWidget(self.nuevo);botones.addWidget(self.borrar);form.addRow(botones)
+        botones.addWidget(self.nuevo);form.addRow(botones)
         self.contenido=QPlainTextEdit();self.contenido.setMaximumHeight(65);self.enlace=QComboBox();self.enlace.addItem('Texto fijo','')
         for k in CAMPOS:self.enlace.addItem(ROTULOS[k],k)
         for t in self.plantilla['primitives']:
@@ -158,6 +159,8 @@ class EditorPlantilla(QDialog):
         if solo_texto:self.enlace.hide();form.labelForField(self.enlace).hide()
         self.fuente=QFontComboBox();form.addRow('Fuente',self.fuente)
         self.color=QPushButton('Color del texto');form.addRow(self.color);self.color.clicked.connect(self.elegir_color)
+        from .campos_medidos import ajustar_boton
+        ajustar_boton(self.color)
         self.x=self.spin(-2000,4000);self.y=self.spin(-2000,4000);self.altura=self.spin(.05,500)
         self.alineacion=QComboBox()
         for texto,dato in (('Izquierda','left'),('Centro','center'),('Derecha','right')):self.alineacion.addItem(texto,dato)
@@ -165,9 +168,8 @@ class EditorPlantilla(QDialog):
         for texto,dato in (('Arriba','top'),('Centro','middle'),('Abajo','bottom'),('Línea base','baseline')):self.vertical.addItem(texto,dato)
         self.giro=QComboBox();self.giro.addItem('0°',0.);self.giro.addItem('90°',90.)
         for label,w in (('X (mm)',self.x),('Y (mm)',self.y),('Altura (mm)',self.altura),('Alineación',self.alineacion),('Anclaje vertical',self.vertical),('Giro',self.giro)):form.addRow(label,w)
-        self.b_zona=QPushButton('Marcar zona de dibujo');self.b_zona.setCheckable(True);form.addRow(self.b_zona)
-        self.zona_label=QLabel();self.zona_label.setWordWrap(True);form.addRow(self.zona_label)
-        self.restar_zona=QPushButton('Usar zona automática');form.addRow(self.restar_zona)
+        from .controles_plantilla import ControlesPlantilla
+        self.controles = ControlesPlantilla(self, form)
         self.info=QLabel('Arrastra los textos para moverlos.' if solo_texto else 'Arrastra los textos para moverlos. Los enlaces propuestos solo se aplican al aceptarlos.');self.info.setWordWrap(True);form.addRow(self.info)
         self.botones_dialogo=aceptar=QDialogButtonBox(QDialogButtonBox.StandardButton.Ok|QDialogButtonBox.StandardButton.Cancel);aceptar.button(QDialogButtonBox.StandardButton.Ok).setText('Aceptar');aceptar.button(QDialogButtonBox.StandardButton.Cancel).setText('Cancelar');form.addRow(aceptar)
         self.escena=QGraphicsScene();self.escena.setSceneRect(QRectF(0,0,*self.plantilla['size']))
@@ -179,7 +181,6 @@ class EditorPlantilla(QDialog):
         for w in (self.x,self.y,self.altura):w.valueChanged.connect(self.editar)
         for w in (self.enlace,self.alineacion,self.vertical,self.giro):w.currentIndexChanged.connect(self.editar)
         self.fuente.currentFontChanged.connect(self.editar)
-        self.b_zona.toggled.connect(lambda on:setattr(self.vista,'zona',on));self.restar_zona.clicked.connect(lambda:self.poner_zona(None))
         aceptar.accepted.connect(self.accept);aceptar.rejected.connect(self.reject);self.rellenar();self.mostrar_zona()
     def elegir_color(self):
         color=QColorDialog.getColor(QColor(self.color_actual),self,'Color del texto')
@@ -215,8 +216,9 @@ class EditorPlantilla(QDialog):
         else:self.sugerencia.hide()
         self.ocupado=False;self.seleccionado.emit()
     def desde_escena(self):
-        if self.ocupado:return
-        seleccionado=next((i for i in self.items if i.isSelected()),None)
+        if self.ocupado or not isValid(self.escena):
+            return
+        seleccionado = next((i for i in self.escena.selectedItems() if i in self.items), None)
         if seleccionado:self.lista.setCurrentRow(self.items.index(seleccionado))
     def movido(self):
         if self.actual:self.elegir(self.items.index(self.actual));self.modificado.emit()
@@ -239,7 +241,11 @@ class EditorPlantilla(QDialog):
         if self.actual:self.plantilla['primitives'].remove(self.actual.t);self.actual=None;self.rellenar();self.modificado.emit()
     def aceptar_sugerencia(self):
         if self.actual and self.actual.t.get('suggest'):self.enlace.setCurrentIndex(self.enlace.findData(self.actual.t['suggest']))
-    def poner_zona(self,rect):self.plantilla['zone']=rect;self.b_zona.setChecked(False);self.mostrar_zona();self.modificado.emit()
+    def poner_zona(self, rect):
+        self.plantilla['zone'] = rect
+        self.controles.sincronizar_zona()
+        self.mostrar_zona()
+        self.modificado.emit()
     def mostrar_zona(self):
         if self.zona_item:self.escena.removeItem(self.zona_item);self.zona_item=None
         r=self.plantilla.get('zone') or self.plantilla.get('detected_zone')

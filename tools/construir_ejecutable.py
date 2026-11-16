@@ -151,6 +151,9 @@ def _construir(fuentes, clave, motor) -> int:
             print("ERROR: el diálogo Propiedades del archivo falla en el ejecutable:\n" + resultado, flush=True)
             return 1
         print("Propiedades del archivo comprobadas en el ejecutable.", flush=True)
+    from tools.comprobar_servidor_web import comprobar
+    if not comprobar(dist / (NOMBRE + ".exe"), dist, prueba_env):
+        return 1
     size = sum(f.stat().st_size for f in dist.rglob("*") if f.is_file())
     print(f"\nListo: {dist / (NOMBRE + '.exe')}  ({size / 1e6:.0f} MB en la carpeta)")
     if repartible:

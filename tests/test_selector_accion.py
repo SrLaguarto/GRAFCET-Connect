@@ -68,6 +68,8 @@ class SelectorAccion(BaseQt):
         for ancho, alto in ((1360, 860), (2000, 1250)):
             w, e, did = self.preparar()
             w.resize(ancho, alto)
+            self.pasar_arranque(w)
+            self.asentar_escala(w)
             for _ in range(6):
                 QApplication.processEvents()
             for zoom in (None, 1.5, 2.5):
@@ -76,7 +78,9 @@ class SelectorAccion(BaseQt):
                     w.diagrama.zoom(zoom)
                     for _ in range(3):
                         QApplication.processEvents()
+                self.asentar_escala(w)
                 caja, cb = self.doble(w, e, did)
+                self.assertIsNotNone(cb, (ancho, zoom))
                 r = w.diagrama.mapFromScene(QRectF(*caja["rect"])).boundingRect()
                 self.assertGreaterEqual(cb.geometry().left(), r.left(), (ancho, zoom))
                 self.assertLessEqual(cb.geometry().right(), r.right(), (ancho, zoom))

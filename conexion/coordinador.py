@@ -127,7 +127,7 @@ class Coordinador:
         config = config or self.adaptador.config
         if documento is not None:
             config.validar(documento)
-        adaptador = Adaptador(config, sesion)
+        adaptador = self._adaptador(config, sesion)
         adaptador.valores_salida()  # solo comprueba que las salidas iniciales caben en su formato; no se escribe nada todavía
         self._generacion += 1
         self._cambios_entradas.clear()
@@ -168,12 +168,21 @@ class Coordinador:
         config,documento=deepcopy(config),deepcopy(documento)
         config.validar(documento)
         actual=self.adaptador.config
-        if (config.host,config.puerto,config.unidad)!=(actual.host,actual.puerto,actual.unidad):
+        destino = (config.modo, config.host, config.puerto, config.unidad)
+        previo = (actual.modo, actual.host, actual.puerto, actual.unidad)
+        if destino != previo:
             raise ValueError("Desconecta para cambiar la conexión; las asignaciones sí se pueden cambiar conectado")
         self._mapa_pendiente=(config,documento)
 
     def _cambiar_mapa(self, nuevo, documento, retiradas):
-        escribir_salidas(self.cliente,retiradas,valores_cero(retiradas))
+        if nuevo.config.modo == "directo":
+            self.cliente.preparar(nuevo, documento)
+            variables = {v["id"]: v for v in documento["variables"]}
+            for union in retiradas:
+                variable = variables.get(union.variable)
+                if variable is not None and not union.compatible(variable):
+                    union.motivo = "El papel o el tipo de la variable ha cambiado"
+        self._publicar(self.cliente,retiradas,valores_cero(retiradas))
         return nuevo,documento
 
     def observar(self, config, documento):
@@ -183,7 +192,7 @@ class Coordinador:
         if not self.activo:
             return
         self._documento=deepcopy(documento)
-        monitor = MonitorEntradas(config, documento)
+        monitor = self._monitor(config, documento)
         self._generacion += 1
         self._mapa_pendiente=None
         self.adaptador = monitor
@@ -214,8 +223,8 @@ class Coordinador:
             raise RuntimeError("Desconecte antes de cambiar la conexión")
         self._mapa_pendiente=None
         self._documento=deepcopy(documento)
-        self.adaptador = Adaptador(config, sesion) if sesion is not None else MonitorEntradas(config, documento)
-        self.cliente = ClienteModbus(config.host, config.puerto, config.unidad, config.timeout_ms / 1000)
+        self.adaptador = self._adaptador(config, sesion) if sesion is not None else self._monitor(config, documento)
+        self.cliente = self._cliente(config)
         self.estado = "probando" if prueba else "conectando"
         self.mensaje = "Probando conexión…" if prueba else "Conectando; actuadores a cero…"
         self.muestra, self.escritos = {}, {}
@@ -233,11 +242,13 @@ class Coordinador:
         salidas = salidas_asignadas(self.adaptador)
         def conectar():
             self.cliente.conectar()
+            if config.modo == "directo":
+                self.cliente.preparar(self.adaptador, documento)
             self._tcp_abierto = True
             try:
                 if not prueba:
-                    escribir_salidas(self.cliente, salidas, cero)
-                return leer_entradas(self.cliente, self.adaptador.entradas)
+                    self._publicar(self.cliente, salidas, cero)
+                return self._leer(self.cliente, self.adaptador.entradas)
             finally:
                 if prueba:
                     self.cliente.cerrar()
@@ -265,7 +276,7 @@ class Coordinador:
         self.mensaje = "Desconectando · salidas a cero…" if self._cero_al_cerrar else "Desconectando…"
         # La respuesta pendiente se descarta; el mismo trabajador escribirá el cero y cerrará el socket.
 
-    def tick(self, ejecutar=False):
+    def _tick_red(self, ejecutar=False):
         """Recoger red y aplicar muestras; llamar exclusivamente desde el hilo de sesión."""
         if self._cerrado:
             return
@@ -284,7 +295,7 @@ class Coordinador:
                 if fase == "mapa" and self.estado != "cerrando" and generacion == self._generacion:
                     nuevo,documento=resultado
                     if not self._ejecutar and nuevo.sesion is not None:
-                        nuevo=MonitorEntradas(nuevo.config,documento)
+                        nuevo=self._monitor(nuevo.config, documento)
                     self.adaptador=nuevo
                     self.muestra={};self.escritos={};self.proxima=0
                     self._documento=documento
@@ -389,7 +400,7 @@ class Coordinador:
             config,documento=self._mapa_pendiente
             self._mapa_pendiente=None
             sesion=self.adaptador.sesion
-            nuevo=Adaptador(config,sesion) if sesion is not None else MonitorEntradas(config,documento)
+            nuevo=self._adaptador(config, sesion) if sesion is not None else self._monitor(config, documento)
             destinos={(s.variable,s.area,s.direccion,s.formato) for s in salidas_asignadas(nuevo)}
             retiradas=[s for s in salidas_asignadas(self.adaptador) if (s.variable,s.area,s.direccion,s.formato) not in destinos]
             if sesion is None:
@@ -422,11 +433,11 @@ class Coordinador:
             self._enviar("cero", self._escribir, self.adaptador.valores_salida(cero=True), list(self.adaptador.salidas))
         elif not self.fallo_motor and perf_counter() >= self.proxima:
             self.proxima = perf_counter() + self.adaptador.config.periodo_ms / 1000
-            self._enviar("leer", leer_entradas, self.cliente, self.adaptador.entradas)
+            self._enviar("leer", self._leer, self.cliente, self.adaptador.entradas)
 
     def _escribir(self, valores, senales=None):
-        escribir_salidas(self.cliente, self.adaptador.salidas if senales is None else senales, valores)
-        return valores
+        resultado = self._publicar(self.cliente, self.adaptador.salidas if senales is None else senales, valores)
+        return resultado if self.adaptador.config.modo == "directo" else valores
 
     def cerrar(self):
         # No destruir un trabajador activo: el cierre se serializa después de la petición.
@@ -445,8 +456,50 @@ class Coordinador:
         cierra igual)."""
         try:
             if cero is not None:
-                escribir_salidas(self.cliente, *cero)
+                self._publicar(self.cliente, *cero)
         except Exception:  # noqa: BLE001 - mejor esfuerzo: ya no hay a quién avisar
             pass
         finally:
             self.cliente.cerrar()
+
+    @staticmethod
+    def _adaptador(config, sesion):
+        if config.modo == "directo":
+            from .adaptador_directo import AdaptadorDirecto
+            return AdaptadorDirecto(config, sesion)
+        return Adaptador(config, sesion)
+
+    @staticmethod
+    def _monitor(config, documento):
+        if config.modo == "directo":
+            from .adaptador_directo import MonitorDirecto
+            return MonitorDirecto(config, documento)
+        return MonitorEntradas(config, documento)
+
+    @staticmethod
+    def _cliente(config):
+        if config.modo == "directo":
+            from .intercambio_directo import TransporteDirecto
+            return TransporteDirecto(config)
+        return ClienteModbus(config.host, config.puerto, config.unidad, config.timeout_ms / 1000)
+
+    @staticmethod
+    def _leer(cliente, senales):
+        from .intercambio_directo import TransporteDirecto
+        if isinstance(cliente, TransporteDirecto):
+            return cliente.leer(senales)
+        return leer_entradas(cliente, senales)
+
+    def _publicar(self, cliente, senales, valores):
+        from .intercambio_directo import TransporteDirecto
+        if isinstance(cliente, TransporteDirecto):
+            return cliente.escribir(senales, valores, forzar=self.fase != "escribir")
+        return escribir_salidas(cliente, senales, valores)
+
+    def tick(self, ejecutar=False):
+        self._tick_red(ejecutar)
+        from .intercambio_directo import TransporteDirecto
+        if isinstance(self.cliente, TransporteDirecto) and self.cliente.avisos:
+            avisos = " · ".join(dict.fromkeys(self.cliente.avisos))
+            if avisos not in self.mensaje:
+                self.mensaje += " · " + avisos

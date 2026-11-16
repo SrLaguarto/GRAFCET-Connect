@@ -38,16 +38,21 @@ ACENTO_SUAVE = "#cfeee6"   # relleno de lo seleccionado o activo (menta; una pru
 ACENTO_BORDE = "#8fcdd1"
 
 EDICION = "#2f3b4a"        # tinta pizarra, neutra: el programa está en edición; no compite con el acento petróleo (blanco encima: 11,3:1)
-SIMULACION = "#157a35"     # verde máquina: simulación en marcha, el único verde de la interfaz (blanco encima: 5,4:1)
+SIMULACION = "#157a35"     # verde máquina de la simulación en marcha (blanco encima: 5,4:1)
 SIMULACION_SUAVE = "#e3f4e8"
 SIMULACION_HOVER = "#0f6a2c"  # (blanco encima: 6,7:1)
 SIMULACION_BORDE = "#8cc9a0"
+
+PILOTO_ENCENDIDO = "#39ff14"  # verde eléctrico de las señales booleanas activas
+PILOTO_APAGADO = "#3f8f57"  # verde apagado: distinto del gris de «Cualquiera» (#6d837b), contraste 3,5:1 con el fondo del módulo
+PILOTO_HALO = "#4539ff14"  # mismo verde, con alfa 27 %
 
 OK = SIMULACION           # lo correcto y lo activo comparten el mismo verde
 AVISO = "#8a5a00"          # texto ámbar sobre fondo claro (5,4:1)
 AVISO_FONDO = "#fff4d6"
 AVISO_BORDE = "#e3b74a"
 ERROR = "#c62828"          # solo errores (el mismo del dibujo)
+NOMBRE_PENDIENTE_FONDO = "#ffe0b2"  # naranja claro: nombre que impide traer una señal
 ERROR_FONDO = "#fdecea"
 FOCO = TINTA               # el foco de teclado: trazo discontinuo de 2 px
 FOCO_FUERTE = "#000000"    # el foco de un botón relleno (Play/Stop): 3 px, 3:1 o más contra el relleno y contra el fondo
@@ -75,16 +80,16 @@ FAMILIA_TITULO = f'"{FUENTE_TITULO}", "{FUENTE}"'
 FAMILIA_MONO = f'"{FUENTE_MONO}", "Courier New"'
 ANCHO_BARRA = 12           # barras de desplazamiento
 
-# Dos escalas de letra y de controles que cambian solas con el tamaño de la ventana (`activar_escala`): la «normal» es la de siempre
-# (hasta 1366×768) y la «grande» sube la letra base a 14 px, los títulos, el chip y las cifras, y los controles a 32 px (28 en la escala normal), para leer
-# desde el fondo del aula con el proyector (pantalla completa: 1600 px de ancho y 900 de alto, o más). Los menús no se tocan.
+# Dos escalas de letra y controles que cambian con el tamaño de la ventana (`activar_escala`).
+# Normal: hasta 1366×768, controles de 30 px. Grande: letra base de 14 px y controles de 32 px,
+# para leer con el proyector desde 1600×900. Los menús no cambian.
 ESCALAS = {
     "normal": dict(T_BASE=13, T_PEQUENA=12, T_TITULO=16, T_SECCION=14, T_CHIP=13, T_CIFRA=12,
-                   ALTO_CONTROL=28, ALTO_CONTROL_COMPACTO=26, ALTO_BARRA=30, ALTO_BARRA_COMPACTA=28,
+                   ALTO_CONTROL=30, ALTO_CONTROL_COMPACTO=30, ALTO_BARRA=30, ALTO_BARRA_COMPACTA=28,
                    ALTO_FILA=30, ALTO_ENTRADA=32, ALTO_FILA_COMPACTA=28,
                    T_ES=12, ALTO_FILA_ES=16, ANCHO_INTERIOR_ES=200),  # (vista de E/S: filas planas y compactas, P-IMP-63)
     "grande": dict(T_BASE=14, T_PEQUENA=13, T_TITULO=19, T_SECCION=16, T_CHIP=15, T_CIFRA=14,
-                   ALTO_CONTROL=32, ALTO_CONTROL_COMPACTO=28, ALTO_BARRA=34, ALTO_BARRA_COMPACTA=32,
+                   ALTO_CONTROL=32, ALTO_CONTROL_COMPACTO=32, ALTO_BARRA=34, ALTO_BARRA_COMPACTA=32,
                    ALTO_FILA=34, ALTO_ENTRADA=36, ALTO_FILA_COMPACTA=32,
                    T_ES=14, ALTO_FILA_ES=18, ANCHO_INTERIOR_ES=236)}
 UMBRAL_GRANDE = (1600, 900)  # ancho y alto de la ventana a partir de los cuales rige la escala grande
@@ -314,6 +319,8 @@ QAbstractItemView QAbstractSpinBox QLineEdit { border:0; min-height:0; padding:0
 def hoja_global(compacto_alto: bool = False) -> str:
     """La hoja de estilo de la ventana. La ventana usa siempre la de alturas normales (cambiarla al vuelo cuesta cerca de un
     segundo); `compacto_alto` baja las alturas de control a 32 px y queda para herramientas y maquetas."""
+    from .campos_medidos import instalar
+    instalar()
     alto = ALTO_CONTROL_COMPACTO if compacto_alto else ALTO_CONTROL
     alto_tb = ALTO_BARRA_COMPACTA if compacto_alto else ALTO_BARRA  # botones de las barras: 34 px, o 32 en un cuarto de pantalla
     t = dict(
@@ -454,16 +461,16 @@ def icono(tipo: str, color: str = TINTA, grosor: float = 1.75, tam: int = 24) ->
     elif tipo == "stop":
         p.fillRect(QRectF(6, 6, 12, 12), QColor(color))
     elif tipo == "dependencias":
-        p.drawRect(QRectF(2, 9, 6, 6))
-        p.drawRoundedRect(QRectF(15, 3, 8, 18), 1, 1)
-        trazo = p.pen()
-        union = QPen(trazo)  # las uniones del cuadrado con el rectángulo: punteadas y más finas que el resto del trazo
-        union.setWidthF(1.0)
-        union.setCapStyle(Qt.PenCapStyle.FlatCap)
-        union.setDashPattern([1.0, 1.5])
-        p.setPen(union)
-        p.drawLine(QPointF(8, 9), QPointF(15, 3))
-        p.drawLine(QPointF(8, 15), QPointF(15, 21))
+        p.drawRect(QRectF(2.5, 9, 6, 6))
+        p.drawRoundedRect(QRectF(15.5, 4, 6, 16), 1, 1)
+        trazo = QPen(p.pen())
+        punto = QPen(trazo)  # las uniones de las esquinas: tres puntos redondos de verdad (un trazo discontinuo de 1 px se
+        punto.setWidthF(1.4)  # difuminaba en gris al reducir el icono a 20 px y no se veía)
+        punto.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(punto)
+        for (x0, y0), (x1, y1) in (((8.5, 9), (15.5, 4)), ((8.5, 15), (15.5, 20))):
+            for f in (0.2, 0.5, 0.8):
+                p.drawPoint(QPointF(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f))
         p.setPen(trazo)
     elif tipo == "aviso":  # el triángulo de aviso, con el trazo de los demás
         p.drawPath(_triangulo_aviso())

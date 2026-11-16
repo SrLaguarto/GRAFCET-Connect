@@ -38,7 +38,7 @@ class Paneles(BaseQt):
             self.assertTrue(w.flechas[n].isVisible())
             QTest.mouseClick(w.flechas[n],Qt.MouseButton.LeftButton);QApplication.processEvents()
             self.assertTrue(w._panel(n).isHidden());self.assertTrue(w.pestanas[n].isVisible())
-            self.assertEqual(w.pestanas[n].text(),texto);self.assertFalse(w._accion_panel(n).isChecked())
+            self.assertEqual(w.pestanas[n].text(),texto);self.assertTrue(w._accion_panel(n).isChecked())
             self.assertFalse(w.ajustes.value("paneles/"+n,True,type=bool))
             self.assertFalse(w.diagrama.isAncestorOf(w.pestanas[n]))
             QTest.mouseClick(w.pestanas[n],Qt.MouseButton.LeftButton);QApplication.processEvents()
@@ -77,6 +77,8 @@ class Paneles(BaseQt):
         self.assertEqual(w.pestanas["inferior"].text(),"Propiedades")
         w.activateWindow();w.setFocus();QApplication.processEvents()
         QTest.keyClick(w,Qt.Key.Key_J,Qt.KeyboardModifier.ControlModifier);QApplication.processEvents()
+        self.assertFalse(w._plegables["inferior"].isVisible())
+        QTest.keyClick(w,Qt.Key.Key_J,Qt.KeyboardModifier.ControlModifier);QApplication.processEvents()
         self.assertTrue(w.inferior.isVisible());self.assertAlmostEqual(w.inferior.height(),alto,delta=2)
         self.assertEqual(w.props.t_texto.text(),formula)
 
@@ -84,10 +86,9 @@ class Paneles(BaseQt):
         """REQ-EDT-02, REQ-EDT-09: fórmula y papelera comparten fila, con el estado debajo;
         sin «Vista previa» (sí «Fijar») ni edición manual de la fórmula."""
         w,e=self.preparar();p=w.props
-        centros = [c.mapTo(p, c.rect().center()).y() for c in (p.t_texto, p.prog.papelera)]
+        self.assertNotIn("papelera", vars(p.prog))
         self.assertGreater(p.t_estado.y(), p.t_texto.geometry().bottom())
         self.assertEqual(p.t_estado.x(), p.t_texto.x())
-        self.assertLessEqual(max(centros)-min(centros),3)
         self.assertTrue(p.t_texto.isReadOnly());self.assertTrue(p.t_fijar.isVisible())
         self.assertFalse(hasattr(p,"t_previa"));self.assertFalse(hasattr(p,"detalles_bloques"))
         self.assertFalse(p.t_vista.isVisible());self.assertFalse(p.t_dibujo.isVisible())  # (se calculan, pero ya no se enseñan)
@@ -99,7 +100,7 @@ class Paneles(BaseQt):
         """REQ-EDT-09: a 1000×600 los controles no se cortan, y las categorías largas conservan su desplazamiento."""
         w,e=self.preparar(1000,600);p=w.props
         self.assertLessEqual(w.minimumSizeHint().height(),600)
-        for c in (p.t_texto,p.t_estado,p.prog.papelera):
+        for c in (p.t_texto,p.t_estado):
             r=c.rect();esquina=c.mapTo(p,r.bottomRight())
             self.assertLessEqual(esquina.x(),p.width());self.assertLessEqual(esquina.y(),p.height())
         self.assertGreater(p.prog.lienzo.parentWidget().height(),40)
@@ -114,14 +115,14 @@ class Paneles(BaseQt):
             self.assertTrue(zona.rect().contains(caja), boton.text())
 
     def test_SPAN07_preferencias_de_plegado_se_recuperan_en_otra_ventana(self):
-        """REQ-EDT-09: se registra el plegado; una ventana nueva abre los laterales y mantiene propiedades plegadas."""
+        """REQ-EDT-09: se recuerda el plegado de Elementos; Variables arranca abierto y Propiedades plegado."""
         w,e=self.preparar()
         for n in w.flechas:w.flechas[n].click()
         w2=Ventana(w.ajustes)
         try:
             w2.nuevo();w2.resize(1366,768);w2.show();QApplication.processEvents()
             for n in w2.pestanas:
-                plegado=n=="inferior"
+                plegado = True
                 self.assertEqual(w2._panel(n).isHidden(),plegado,n);self.assertEqual(w2.pestanas[n].isVisible(),plegado,n)
         finally:
             w2.hide();w2.edicion=None;w2.deleteLater();QApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)

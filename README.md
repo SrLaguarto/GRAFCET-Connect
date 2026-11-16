@@ -32,12 +32,12 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 ### Documentación y planos
 
 - Pestaña **PLANOS**: hojas con cajetín, con **+ Añadir hoja**, **Traer GRAFCET** (copia a una hoja los elementos seleccionados) y **Añadir texto**.
-- **Importar plantillas de lámina** desde **Lámina > Importar plantilla…**. Se admiten:
+- **Importar plantillas de lámina** con el botón **▾** junto a **Plantilla**, en el panel derecho de PLANOS (**Importar plantilla…**). Se admiten:
   - **DXF**: el cajetín y sus campos pasan a ser editables.
   - **PDF**: se elige la página; los textos extraíbles son editables y el resto queda como fondo.
   - **SVG**: queda como fondo, sin campos editables.
   - **JSON** de GRAFCET Connect: una plantilla guardada antes.
-- Plantillas predeterminadas A4 (vertical), A3 (horizontal y vertical) y A2, A1 y A0 en ambas orientaciones. Desde **Lámina** también se edita una plantilla, se usa la estándar, se quita, se guarda en la biblioteca o se restaura la predeterminada.
+- Plantillas predeterminadas A4 (vertical), A3 (horizontal y vertical) y A2, A1 y A0 en ambas orientaciones. Desde ese mismo botón **▾** también se edita una plantilla, se usa la estándar o se quita. **Formato** y **Orientación** filtran las plantillas que se ofrecen, así que nunca quedan contradictorias.
 - El cajetín (180 × 36 mm) incluye dibujado y comprobado (fecha, autor y firma), razón social, escala, nombre del plano, número, «sustituye a» y «sustituido por».
 - **Proyecto > Exportar…** genera PDF o SVG (un SVG por hoja si hay varias). **Proyecto > Imprimir…** (Ctrl+P) imprime las hojas.
 - **Proyecto > Guardar el dibujo como imagen…** guarda el grafcet como PNG.
@@ -48,12 +48,14 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 - La fila de pestañas (GRAFCET, PLANOS) muestra, a la derecha del todo, la luz de conexión: verde si está conectada, gris si no lo está y rojo si hay un error. Es la entrada a **E/S externas**: un clic la abre (y queda resaltada mientras se ve); GRAFCET o PLANOS vuelven.
 - **Configuración** reúne la IP, el puerto (502 por defecto), el esclavo y los canales del servidor (por defecto, 32 digitales y 12 numéricos, con offset y cantidad ajustables).
 - Las variables nuevas se asignan solas a canales libres. También se pueden arrastrar a otro canal, y se quitan con la ×.
+- **Conexión directa (simulador de fábricas).** En **E/S externas**, el título del marco central elige entre «Modbus TCP» y «Conexión directa». En directo no hace falta PLC ni driver: se pone el servidor (por defecto `localhost:7410`, el servidor web del simulador activado y su driver en «Ninguno»), **Traer E/S** lee las señales con sus nombres y crea las variables, y cada variable se une a su señal arrastrándola. Un proyecto nuevo empieza en conexión directa. Las señales internas del simulador no se traen (lista editable en «Opciones avanzadas»), y al cambiar de escena el grupo **De otra escena** quita de una vez las uniones viejas y las variables que ya no se usan.
 - **Conectar** pone a cero las salidas asignadas antes de la primera lectura. **Desconectar / editar** escribe el cero antes de cerrar la conexión.
 - Las señales analógicas se llevan a variables Decimal con 2 decimales. Una variable Entera que recibe un valor con decimales se redondea al entero más cercano y lo indica con un aviso.
 
 ### Proyectos y archivos
 
 - Cada proyecto es un único archivo `.grafnet`, con su dibujo, sus planos y la configuración de E/S.
+- Una sola ventana del programa por usuario: abrir otro archivo (o el programa otra vez) lo lleva a la ventana que ya está abierta, preguntando antes si hay cambios sin guardar. Los planos exportados se guardan por defecto en `Documentos\GrafConnect\Planos`.
 - **Proyecto > Nuevo proyecto** (Ctrl+N), **Abrir…** (Ctrl+O), **Guardar** (Ctrl+S) y **Guardar como…** (Ctrl+Mayús+S).
 - La firma del archivo indica si lo guardó esta versión sin cambios. No impide abrir ni guardar archivos sin firma. Véase [Preguntas frecuentes](#preguntas-frecuentes).
 - **Proyecto > Propiedades del archivo…** muestra el autor (editable), las fechas, las versiones y la firma.
@@ -73,7 +75,7 @@ Descargue el instalador de la última versión: [GRAFCET-Connect-setup.exe](http
 
 1. **Dibujar.** Abra un ejemplo desde **Ejemplos** o cree un proyecto con **Proyecto > Nuevo proyecto**. Arrastre elementos desde la paleta y únalos desde sus puntos de unión. Las variables se crean en la tabla de variables, con «Nueva E», «Nueva S» o «Nueva M». **Edición > Añadir elemento** y Ctrl+Intro (Añadir debajo) agilizan el dibujo.
 2. **Simular.** Pulse **Play** (F5) y pulse las entradas del panel lateral. Para volver a editar, pulse **Stop**. Con **Reiniciar** (Ctrl+R) vuelve a la situación inicial.
-3. **Documentar e importar una plantilla.** Abra la pestaña **PLANOS**, pulse **+ Añadir hoja** y elija la plantilla. Para usar una propia, vaya a **Lámina > Importar plantilla…** y elija un DXF, un PDF, un SVG o un JSON de GRAFCET Connect. Para exportar, use **Proyecto > Exportar…**.
+3. **Documentar e importar una plantilla.** Abra la pestaña **PLANOS**, pulse **+ Añadir hoja** y elija la plantilla. Para usar una propia, pulse **▾** junto a **Plantilla** (panel derecho) e **Importar plantilla…**, y elija un DXF, un PDF, un SVG o un JSON de GRAFCET Connect. Para exportar, use **Proyecto > Exportar…**.
 4. **Conectar por Modbus.** Pulse **E/S externas**, abra **Configuración** para poner la IP, el puerto y el esclavo de su simulador de procesos, y asigne las variables a los canales. Después pulse **Conectar** y, luego, **Play**. La guía paso a paso está en [docs/PRIMERA_CONEXION_MODBUS.md](docs/PRIMERA_CONEXION_MODBUS.md).
 5. **Guardar y firmar.** **Guardar** (Ctrl+S) guarda el proyecto con su dibujo. **Proyecto > Propiedades del archivo…** muestra los datos y la firma.
 
@@ -116,7 +118,7 @@ El submenú **Más ejemplos y casos de estudio** reúne otros dieciséis, entre 
 ## Preguntas frecuentes
 
 **¿Necesita internet?**
-No. El programa funciona sin conexión. Solo usa la red si se conecta a un simulador de procesos por Modbus TCP, en la dirección IP que se configure.
+No. El programa funciona sin conexión. Solo usa la red si se conecta a un simulador de procesos (por Modbus TCP o por conexión directa), en la dirección que se configure.
 
 **¿Por qué avisa Windows?**
 El programa no lleva firma digital de código. Windows lo muestra la primera vez. Véase [Descargar e instalar](#descargar-e-instalar).

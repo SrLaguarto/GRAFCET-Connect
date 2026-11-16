@@ -28,7 +28,13 @@ class Remates(BaseQt):
 
     def test_SREM01_divisor_no_realimenta_relayout_de_paleta(self):
         """REQ-EDT-09: el arrastre real del divisor mantiene mínimos, barra y celdas estables al cambiar solo el alto."""
-        w,e=self.editor();p=w.paleta;h=w.vsplit.handle(1);centro=h.rect().center()
+        w, e = self.editor()
+        # J2: el divisor solo existe si el panel está habilitado y desplegado.
+        w._mostrar_panel("inferior", True)
+        QApplication.processEvents()
+        p = w.paleta
+        h = w.vsplit.handle(1)
+        centro = h.rect().center()
         class Cuenta(QObject):
             def __init__(self):
                 super().__init__();self.tamanos=0;self.pintados=0

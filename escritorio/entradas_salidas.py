@@ -3,7 +3,8 @@
 A la izquierda, los sensores; a la derecha, los actuadores (listas de variables que se arrastran). En el centro, un marco
 de borde fino con la cabecera «(IP:puerto) Esclavo ID:n» y dos columnas de canales: Input e Input Reg a la izquierda, Coil y
 Holding Reg a la derecha. El nombre de la variable asignada se escribe fuera del marco, pegado a él. Estilo plano y compacto.
-Una barrita de color indica el tipo de la variable (Bool, Decimal, Entera, Cualquiera) y su viveza, si la señal está activa."""
+Un piloto redondo indica el tipo de la variable (Bool, Decimal, Entera, Cualquiera) y su viveza
+si la señal está activa."""
 from dataclasses import replace
 import json
 import copy
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QStackedWidget
                                QStyledItemDelegate, QScrollBar)
 
 from . import estilo
+from .pilotos_es import pintar_piloto, tamano_piloto
 from .paneles import ContextoNombres, EtiquetaGrupos, TituloSeccion
 from conexion.adaptador import texto_numero
 from conexion.configuracion import ETIQUETA_CANAL, CONEXION_INICIAL, CANALES_INICIALES, Configuracion, Senal, es_ipv4, normalizar_host
@@ -33,7 +35,7 @@ MIME_VARIABLE = "application/x-grafconnect-variable"
 # Host, puerto y esclavo que propone el panel la primera vez, sin nada recordado ni mapa guardado: la configuración inicial del servidor Modbus.
 # Después la ventana propone la última conexión que funcionó (`PanelES.conexion_defecto`).
 
-# Aspecto. El color de la barrita es el del tipo; su viveza, el estado: tenue (canal sin asignar), tipo (asignado) y vivo
+# Aspecto. El color del piloto es el del tipo; su viveza, el estado: tenue (canal sin asignar), tipo (asignado) y vivo
 # (la señal está activa). La leyenda de abajo explica los colores.
 FONDO = estilo.SUPERFICIE_2
 COLOR_TIPO = {"bool": estilo.TIPO_BOOL, "decimal": estilo.TIPO_DECIMAL, "int": estilo.TIPO_ENTERA}
@@ -149,11 +151,11 @@ def areas_variable(variable):
 
 
 class IndicadorES(QWidget):
-    """Barrita (o cuadrito) de color: uno o dos colores y un nivel de viveza. No recibe el ratón."""
+    """Piloto redondo de uno o dos colores y un nivel de viveza. No recibe el ratón."""
 
-    def __init__(self, ancho=4, alto=12):
+    def __init__(self):
         super().__init__()
-        self.setFixedSize(ancho, alto)
+        self.setFixedSize(tamano_piloto())
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.colores, self.nivel = (COLOR_CUALQUIERA,), NIVEL_TENUE
 
@@ -168,16 +170,14 @@ class IndicadorES(QWidget):
 
     def color(self):
         """El primer color tal como se ve (con su viveza)."""
+        if self.colores == (COLOR_TIPO["bool"],) and self.nivel >= NIVEL_ASIGNADO:
+            return QColor(estilo.PILOTO_ENCENDIDO if self.nivel >= NIVEL_ACTIVO else estilo.PILOTO_APAGADO)
         return mezclar(self.colores[0], self.nivel)
 
     def paintEvent(self, _evento):
-        p = QPainter(self)
-        n = len(self.colores)
-        for i, c in enumerate(self.colores):
-            y0, y1 = i * self.height() // n, (i + 1) * self.height() // n
-            p.fillRect(0, y0, self.width(), y1 - y0, mezclar(c, self.nivel))
-        p.setPen(QColor(estilo.BORDE_CONTROL))  # el contorno cumple los 3:1 que no cumplen los tonos tenues sobre blanco
-        p.drawRect(0, 0, self.width() - 1, self.height() - 1)
+        colores = [self.color()] if len(self.colores) == 1 else [mezclar(c, self.nivel) for c in self.colores]
+        encendido = self.colores == (COLOR_TIPO["bool"],) and self.nivel >= NIVEL_ACTIVO
+        pintar_piloto(self, colores, encendido)
 
 
 class EtiquetaElidida(QLabel):
@@ -338,6 +338,7 @@ class TerminalES(QFrame):
         entrada = area in ("discrete", "input-register")
         analogica = area in ("input-register", "holding")
         self.led = IndicadorES()
+        self.led.setFixedSize(tamano_piloto(alto))
         if variable:
             self.led.fijar((color_tipo(variable),), NIVEL_ASIGNADO)
         else:  # sin asignar: tenue, con el color propio del área (los registros admiten Decimal y Entera)
@@ -356,7 +357,7 @@ class TerminalES(QFrame):
         self.valor = QLabel("—" if variable else "", self)
         self.valor.setObjectName("valorES")  # cifra en la letra técnica, color y tamaño en la hoja del panel
         self.valor.setVisible(analogica)
-        self.barrita_nombre = IndicadorES(6, 13)
+        self.barrita_nombre = IndicadorES()
         self.barrita_nombre.hide()  # el estado se muestra solo en el indicador del canal del PLC
         interior = QWidget()
         self.interior = interior
@@ -596,7 +597,7 @@ class LienzoPLC(QWidget):
         self.unidad.setRange(0, 255)
         self.unidad.setAccessibleName("Esclavo ID")
         self.unidad.setToolTip("El ID de unidad configurado en el servidor Modbus; normalmente 1.")
-        self.puerto.fijar_digitos(5)
+        self.puerto.fijar_digitos(3)
         self.unidad.fijar_digitos(3)
         for elementos in ((QLabel("IP"), self.ip, QLabel(":"), self.puerto), (QLabel("Esclavo ID"), self.unidad)):
             fila = QHBoxLayout()
@@ -702,12 +703,16 @@ class _SpinConfiguracion(_SinRueda, QSpinBox):
 
     def fijar_digitos(self, digitos):
         """Ancho justo para `digitos` cifras y las flechas (se recalcula si cambia la letra)."""
+        if not self._digitos:
+            self.valueChanged.connect(self._medir)
         self._digitos = digitos
+        self.setProperty("digitosColumna", digitos)
         self._medir()
 
-    def _medir(self):
+    def _medir(self, _valor=None):
         if self._digitos:
-            self.setFixedWidth(self.fontMetrics().horizontalAdvance("0" * self._digitos) + 40)
+            from .campos_medidos import ajustar
+            ajustar(self)
 
     def changeEvent(self, evento):  # noqa: N802
         super().changeEvent(evento)
@@ -746,7 +751,7 @@ class _Octeto(QLineEdit):
         super().__init__()
         self.campo, self.indice, self._previo = campo, indice, ""
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setFixedWidth(46)
+        self.setProperty("cifrasNumericas", 3)
         self.setMaxLength(15)  # lo que cabe al pegar una IP entera; al teclear nunca pasa de 3
         self.setValidator(QRegularExpressionValidator(QRegularExpression(r"[0-9.]*"), self))
         self.setStyleSheet("QLineEdit { padding: 0 2px; } QLineEdit:focus { padding: 0 1px; }")
@@ -906,6 +911,8 @@ class PanelES(QWidget):
         self.setStyleSheet(hoja_ventana + estilo_panel(escala))
         self.fila_alta.setFixedHeight(e["ALTO_CONTROL_COMPACTO"] + 8)
         self.b_volver.setFixedHeight(e["ALTO_CONTROL_COMPACTO"])
+        for piloto in self.ayuda_vacio.parentWidget().findChildren(IndicadorES):
+            piloto.setFixedSize(tamano_piloto(self.alto_fila))
         self._filas_tabla(escala)
         self.lienzo.fijar_interior(self.ancho_interior, e["ALTO_CONTROL"])
         for lista in (self.lista_entradas, self.lista_salidas):
@@ -964,7 +971,7 @@ class PanelES(QWidget):
         self.fila_alta = fila_alta
         fila_alta.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 8)  # los botones de la cabecera miden `ALTO_CONTROL_COMPACTO` (hoja `estilo_panel`)
         cabecera = QHBoxLayout(fila_alta)
-        cabecera.setContentsMargins(estilo.E3, 0, estilo.E3, 0)
+        cabecera.setContentsMargins(estilo.E2, 0, estilo.E2, 0)
         cabecera.setSpacing(estilo.E2)
         self.b_volver = QPushButton("Volver")  # de la familia de los botones de la barra: icono de flecha del mismo trazo y borde como «Reiniciar» (hoja de `cabeceraES`)
         self.b_volver.setIcon(estilo.icono("volver", estilo.TINTA, tam=20))
@@ -995,7 +1002,9 @@ class PanelES(QWidget):
         self.tiempos.hide()
         fe.addWidget(self.tiempos)
         cabeza.addWidget(fila_alta)
-        cabeza.addWidget(fila_estado)
+        self.fila_estado = fila_estado
+        fila_estado.setParent(banda)
+        fila_estado.hide()
         self.b_configuracion = QPushButton("Configuración")
         self.b_configuracion.setToolTip("Servidor Modbus, cantidad de canales y asignaciones")
         self.b_configuracion.clicked.connect(self.abrir_configuracion)
@@ -1066,8 +1075,9 @@ class PanelES(QWidget):
         pl.setContentsMargins(12, 0, 12, 2)
         pl.setSpacing(6)
         for texto, tipo in LEYENDA:
-            cuadro = IndicadorES(8, 8)
-            cuadro.fijar((COLOR_TIPO.get(tipo, COLOR_CUALQUIERA),), NIVEL_ACTIVO)
+            cuadro = IndicadorES()
+            cuadro.fijar((COLOR_TIPO.get(tipo, COLOR_CUALQUIERA),),
+                         NIVEL_ASIGNADO if tipo == "bool" else NIVEL_ACTIVO)
             pl.addWidget(cuadro)
             pl.addWidget(QLabel(texto))
             pl.addSpacing(12)
@@ -1111,7 +1121,7 @@ class PanelES(QWidget):
         self.timeout = _SpinConfiguracion()
         self.timeout.setRange(10, 10000)
         self.timeout.setSuffix(" ms")
-        self.puerto.fijar_digitos(5)
+        self.puerto.fijar_digitos(3)
         self.unidad.fijar_digitos(3)
         self.host.setToolTip("Copia la dirección del software que actúa como servidor Modbus. Debe coincidir con el servidor activo.")
         self.unidad.setToolTip("El ID de unidad configurado en el servidor Modbus; normalmente 1.")
@@ -1122,6 +1132,7 @@ class PanelES(QWidget):
         titulo_canales.setStyleSheet(f"font-size:{estilo.T_SECCION}px; font-weight:600; color:{estilo.ACENTO}; padding-top:10px")
         configuracion.addWidget(titulo_canales)
         rejilla_canales = QGridLayout()
+        rejilla_canales.setColumnStretch(3, 1)
         rejilla_canales.addWidget(QLabel("Offset (desde)"), 0, 1)
         rejilla_canales.addWidget(QLabel("Cantidad"), 0, 2)
         self.offsets, self.cantidades = {}, {}
@@ -1131,18 +1142,18 @@ class PanelES(QWidget):
             offset, cantidad = _SpinConfiguracion(), _SpinConfiguracion()
             offset.setRange(0, 65535)
             cantidad.setRange(0, 256 if area in ("discrete", "coil") else 64)
-            offset.setFixedWidth(110)
-            cantidad.setFixedWidth(110)
+            offset.fijar_digitos(5)
+            cantidad.fijar_digitos(3)
             offset.valueChanged.connect(self._marcar_canales)
             cantidad.valueChanged.connect(self._marcar_canales)
             self.offsets[area], self.cantidades[area] = offset, cantidad
             rejilla_canales.addWidget(QLabel(texto), fila, 0)
-            rejilla_canales.addWidget(offset, fila, 1)
-            rejilla_canales.addWidget(cantidad, fila, 2)
+            rejilla_canales.addWidget(offset, fila, 1, Qt.AlignmentFlag.AlignLeft)
+            rejilla_canales.addWidget(cantidad, fila, 2, Qt.AlignmentFlag.AlignLeft)
         configuracion.addLayout(rejilla_canales)
         self.b_restaurar_canales = QPushButton("Restablecer canales: 32 digitales y 12 numéricos")
         self.b_restaurar_canales.clicked.connect(self.restablecer_canales)
-        configuracion.addWidget(self.b_restaurar_canales)
+        rejilla_canales.addWidget(self.b_restaurar_canales, 5, 0, 1, 3, Qt.AlignmentFlag.AlignRight)
         self.ayuda_canales = QLabel("Copia el desplazamiento y la cantidad del software del servidor. Estos ajustes no modifican el servidor.")
         self.ayuda_canales.setWordWrap(True)
         self.ayuda_canales.setStyleSheet(f"color:{estilo.TINTA_2}; font-size:12px")
@@ -1160,7 +1171,11 @@ class PanelES(QWidget):
         tiempos.addRow("Tiempo de espera", self.timeout)
         avanzado.addLayout(tiempos)
         self.tabla = QTableWidget(0, 8)
-        self.tabla.setHorizontalHeaderLabels(["Usar", "Variable", "Papel", "Tipo", "Área", "Dirección\n(base 0)", "Formato", "Escala"])
+        from .campos_medidos import ColumnaNumerica
+        self.columna_direccion = ColumnaNumerica(self.tabla, 5)
+        self.tabla.setHorizontalHeaderLabels(
+            ["Usar", "Variable", "Papel", "Tipo", "Área", "Dir.\n(base 0)", "Formato", "Escala"])
+        self.tabla.horizontalHeaderItem(5).setToolTip("Dirección (base 0)")
         self.tabla.horizontalHeader().setStretchLastSection(True)
         self.tabla.setMinimumHeight(150)
         self._filas_tabla()
@@ -1190,6 +1205,8 @@ class PanelES(QWidget):
         self.lienzo.puerto.valueChanged.connect(self._desde_marco)
         self.lienzo.unidad.valueChanged.connect(self._desde_marco)
         self._cargando = False
+        from .conexion_directa import PanelDirecto
+        self.directa = PanelDirecto(self)
 
     def eventFilter(self, objeto, evento):  # noqa: N802
         if evento.type() == QEvent.Type.Leave and objeto in (self.lista_entradas.viewport(), self.lista_salidas.viewport()):
@@ -1381,6 +1398,8 @@ class PanelES(QWidget):
     def _sincronizar_marco(self):
         """Los controles de la cabecera del marco muestran lo mismo que los de Configuración (cuando no coincide, porque se cambió allí o al
         cargar el proyecto) y la IP se marca si no es válida. Con la conexión activa o sin proyecto, la cabecera es el texto de solo lectura."""
+        if self.config.modo == "directo":
+            return
         if self._copiando_marco:
             return
         self._copiando_marco = True
@@ -1408,6 +1427,8 @@ class PanelES(QWidget):
         return "1" if area in ("discrete", "coil") else self.escalas_base.get(f"{area}:{direccion}", "100")
 
     def abrir_configuracion(self):
+        if self.config.modo == "directo":
+            return self.directa.configuracion()
         self.dialogo_config.show()
         self.dialogo_config.raise_()
         self._anchos_controles()  # (con el diálogo ya pulido: la letra y la hoja de estilo son las que se ven)
@@ -1434,7 +1455,8 @@ class PanelES(QWidget):
                 pide += [fm.horizontalAdvance(self.tabla.item(f, col).text()) + 16 for f in range(self.tabla.rowCount())
                          if self.tabla.item(f, col) is not None]
             elif col == 5:
-                pide.append(self.tabla.fontMetrics().horizontalAdvance("0" * 5) + 44)  # cinco cifras, márgenes y flechas
+                from .campos_medidos import ancho_numero
+                pide += [ancho_numero(self.tabla.cellWidget(f, col)) for f in range(self.tabla.rowCount())]
             elif col != 0:
                 pide += [self.tabla.cellWidget(f, col).sizeHint().width() for f in range(self.tabla.rowCount())]
             self.tabla.setColumnWidth(col, max(pide))
@@ -1499,6 +1521,7 @@ class PanelES(QWidget):
         # La línea queda oculta: la medida se conserva (texto y detalle), pero no se enseña al alumno.
 
     def mostrar_estado(self, estado, mensaje):
+        mensaje = self.directa.ayuda_servidor.mostrar(mensaje, self.config.modo == "directo" and estado == "error")
         self.estado.setText(mensaje)
         conectado = estado == "conectado"
         self._hubo_conexion |= conectado
@@ -1523,6 +1546,8 @@ class PanelES(QWidget):
 
     def autoasignar(self, nuevas):
         """Solo variables recién creadas; nunca desplaza una asignación existente."""
+        if self.config.modo == "directo":
+            return []
         if self.bloqueado:return []
         sin_canal=[]
         for v in self.variables:
@@ -1600,6 +1625,9 @@ class PanelES(QWidget):
         """Pone en el panel las variables de `doc` y el mapa `config` (por defecto, uno nuevo con la última conexión
         propuesta). Las asignaciones que ya no casan con el modelo se quitan y se avisa en el estado. Devuelve esos avisos;
         `avisos` son los de lo ya quitado al leer el mapa (`Configuracion.cargar`), que van delante."""
+        if config is not None and config.modo == "directo":
+            return self.directa.cargar(doc, config)
+        self.directa.seleccionar("modbus")
         self._cargando = True
         aviso_previo=self.aviso if self.doc is not None and self.doc["id"]==doc["id"] else ""
         nombres = {v["id"]: v["name"] for v in self.variables}
@@ -1697,6 +1725,8 @@ class PanelES(QWidget):
         canales y tabla con las variables actuales. Conserva la configuración (servidor, canales, lo escrito en
         Configuración y aún sin aplicar) y las asignaciones que siguen casando; quita, con aviso, las que ya no. Si lo que
         ve el panel no ha cambiado, no reconstruye nada. Devuelve los avisos de lo quitado."""
+        if self.config.modo == "directo":
+            return self.directa.cargar(doc, self.config)
         if self.doc is None:
             return self.cargar(doc)
         if self.firma(doc) == self.firma_modelo:
@@ -1743,6 +1773,8 @@ class PanelES(QWidget):
         self.estado.fijar_nota(" · ".join(t for t in partes if t))
 
     def obtener(self):
+        if self.config.modo == "directo":
+            return self.directa.obtener()
         senales = []
         for fila, v in enumerate(self.variables):
             if self.tabla.cellWidget(fila, 0).isChecked():
@@ -1775,6 +1807,8 @@ class PanelES(QWidget):
         return True
 
     def _dibujar(self):
+        if self.config.modo == "directo":
+            return self.directa.dibujar()
         self.indicadores.clear()
         self.terminales.clear()
         self.indicadores_listas.clear()
@@ -1872,6 +1906,8 @@ class PanelES(QWidget):
             terminal.fijar_redondeo(aviso_redondeo(*dato) if dato else "")
 
     def mostrar_valores(self, valores):
+        if self.config.modo == "directo":
+            self.directa.mostrar_valores(valores)
         self._ultimos_valores = valores
         def activo(valor):
             try:
@@ -1883,15 +1919,17 @@ class PanelES(QWidget):
         for vid, (led, etiqueta) in self.indicadores.items():
             valor = valores.get(vid)
             if valor is None:
-                etiqueta.setText("—")
+                etiqueta.setText("" if led.colores == (COLOR_TIPO["bool"],) else "—")
                 led.fijar_nivel(NIVEL_ASIGNADO)
             else:
-                etiqueta.setText(str(int(valor)) if type(valor) is bool else str(valor))
+                etiqueta.setText("" if led.colores == (COLOR_TIPO["bool"],) else str(valor))
                 led.fijar_nivel(NIVEL_ACTIVO if activo(valor) else NIVEL_ASIGNADO)
 
     def mostrar_muestra(self, muestra, senales, escritos=None, salidas=()):
         """Los valores leídos de la planta (entradas) y, en Pausa con la conexión viva, lo último escrito en las salidas
         asignadas (cero tras pausar), con la escala de cada señal."""
+        if self.config.modo == "directo":
+            return self.mostrar_valores({**muestra, **(escritos or {})})
         valores = {}
         for origen, lista in ((muestra, senales), (escritos or {}, salidas)):
             for s in lista:
@@ -1905,6 +1943,7 @@ class PanelES(QWidget):
         self.mostrar_valores(valores)
 
     def ocupado(self, on):
+        self.directa.ocupado(on)
         self.conectado = on
         self.bloqueado = False
         self.lista_entradas.setDragEnabled(True)

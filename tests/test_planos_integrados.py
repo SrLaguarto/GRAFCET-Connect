@@ -118,7 +118,14 @@ class PlanosIntegrados(BaseQt):
         """REQ-DAT-02, REQ-EDT-11: cada plano conserva varias hojas y cada hoja varias selecciones vinculadas."""
         w,e,s=self.preparar();ident=self.crear_hoja(e,[s]);plan=e.ed.sheet_plans()[0]['id'];h2=e.ed.add_plan_page(plan,ajustes_lamina());otro=e.ed.add_sheet_plan('Otro plano');h3=e.ed.add_plan_page(otro,ajustes_lamina());p=self.pulsar_planos();w.mostrar_hoja(ident);p.insertar([s])
         self.assertEqual(p.lista.count(),3);self.assertEqual(len(p.editor.documento.capas),2);self.assertFalse(p.editor.documento.capas[0].destino(0).intersects(p.editor.documento.capas[1].destino(0)))
-        self.assertEqual(p.editor.documento.campos(0)['hoja'],'1 de 3');self.assertEqual(p.editor.pagina.text(),'Hoja 1 de 3');QTest.mouseClick(p.editor.siguiente,Qt.MouseButton.LeftButton);self.assertEqual(p.hoja_id,h2);self.assertEqual(p.editor.pagina.text(),'Hoja 2 de 3');w.mostrar_hoja(h2);self.assertEqual(p.editor.documento.campos(0)['hoja'],'2 de 3')
+        self.assertEqual(p.editor.documento.campos(0)['hoja'], '1 de 3')
+        self.assertEqual(p.editor.pagina.text(), 'Hoja 1 de 3')
+        QTest.mouseClick(p.lista.viewport(), Qt.MouseButton.LeftButton,
+                         pos=p.lista.visualItemRect(p.lista.item(1)).center())
+        self.assertEqual(p.hoja_id, h2)
+        self.assertEqual(p.editor.pagina.text(), 'Hoja 2 de 3')
+        w.mostrar_hoja(h2)
+        self.assertEqual(p.editor.documento.campos(0)['hoja'], '2 de 3')
         w.mostrar_hoja(h3);self.assertEqual(p.lista.count(),3);ruta=Path(self.tmp.name)/'varios.grafnet';self.assertTrue(w._guardar_archivo(ruta));self.assertTrue(w.abrir_ruta(ruta))
         self.assertEqual(len(w.edicion.ed.sheet_plans()),2);self.assertEqual(len(w.edicion.ed.sheet_links()),3);self.assertEqual(len(w.edicion.ed.sheet_links()[0]['grafcets']),2)
 
@@ -195,7 +202,8 @@ class PlanosIntegrados(BaseQt):
                 else:ruta.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm"><rect x="5" y="5" width="200" height="287" fill="none" stroke="black"/></svg>',encoding='utf-8')
                 with patch('escritorio.laminas.QFileDialog.getOpenFileName',return_value=(str(ruta),'')),patch('escritorio.laminas.QInputDialog.getInt',return_value=(2,True)),patch('escritorio.laminas.QMessageBox.information'),patch.object(EditorPlantilla,'exec') as emergente:
                     p.editor.a_importar.trigger();emergente.assert_not_called()
-                self.assertIn(p.editor.a_importar,p.barra_plantilla.actions());self.assertIsNotNone(p.editor.documento)
+                self.assertIn(p.editor.a_importar, p.editor.b_opciones_plantilla.menu().actions())
+                self.assertIsNotNone(p.editor.documento)
                 self.assertAlmostEqual(p.editor.documento.ancho,210,delta=.2);self.assertAlmostEqual(p.editor.documento.alto,297,delta=.2)
                 if extension in ('pdf','svg'):self.assertTrue(p.editor.plantilla['background']['data'])
                 if extension=='pdf':self.assertTrue(any('original 2' in t.get('text','') for t in p.editor.plantilla['primitives']))
@@ -237,13 +245,20 @@ class PlanosIntegrados(BaseQt):
         w,e,s=self.preparar();ident=self.crear_hoja(e);p=self.pulsar_planos();d=p.editor
         plantilla={'version':1,'size':[210,297],'source':'DXF','primitives':[{'kind':'text','text':'HOJA 1 DE 1','x':30,'y':60,'height':3,'rotation':0,'valign':'top','suggest':'hoja'}]}
         d.establecer_plantilla(plantilla);d.aplicar();QApplication.processEvents();t=d.editor_textos
-        d.a_editar_plantilla.trigger();self.assertTrue(d.editando_plantilla);self.assertFalse(t.isWindow() and t.isVisible());self.assertEqual(d.a_editar_plantilla.text(),'Terminar edición')
+        d.a_editar_plantilla.trigger()
+        self.assertTrue(d.editando_plantilla)
+        self.assertFalse(t.isWindow() and t.isVisible())
+        self.assertTrue(d.sesion_plantilla.barra.isVisible())
         a=self.punto_mm(d.vista,31,61);QTest.mouseClick(d.vista,Qt.MouseButton.LeftButton,pos=a)
         self.assertIsNotNone(t.actual);self.assertFalse(t.actual.t.get('field'));self.assertFalse(t.sugerencia.isVisible());self.assertFalse(t.enlace.isVisible());t.contenido.setPlainText('Hoja escrita a mano');self.assertFalse(t.actual.t.get('field'))
-        t.b_zona.click();a=self.punto_mm(d.vista,25,25);b=self.punto_mm(d.vista,150,180)
+        t.zona.setCurrentIndex(1);a=self.punto_mm(d.vista,25,25);b=self.punto_mm(d.vista,150,180)
         QTest.mousePress(d.vista,Qt.MouseButton.LeftButton,pos=a);QTest.mouseMove(d.vista,b);QTest.mouseRelease(d.vista,Qt.MouseButton.LeftButton,pos=b)
         self.assertIsNotNone(d.plantilla.get('zone'));self.assertAlmostEqual(d.documento.contenido.left(),25,delta=1)
-        d.a_editar_plantilla.trigger();self.assertFalse(d.editando_plantilla);self.assertFalse(t.b_zona.isVisible());p.insertar([s]);self.assertTrue(p.editor.documento.contenido.contains(p.editor.documento.capas[0].destino(0)))
+        d.sesion_plantilla.guardar.click()
+        self.assertFalse(d.editando_plantilla)
+        self.assertFalse(t.zona.isVisible())
+        p.insertar([s])
+        self.assertTrue(p.editor.documento.contenido.contains(p.editor.documento.capas[0].destino(0)))
 
     def test_SPAG22_plantilla_libre_campos_contextuales_y_exportacion(self):
         """REQ-EDT-11: sin campos extensos; textos usan el mismo dibujo en PDF/SVG/impresión."""
@@ -303,9 +318,11 @@ class PlanosIntegrados(BaseQt):
         d.establecer_plantilla({'version':1,'size':[210,297],'source':'DXF','primitives':[{'kind':'text','text':'Título','field':'titulo','x':40,'y':60,'height':3,'rotation':0}]})
         t=d.editor_textos;t.elegir(0);self.assertEqual(t.contenido.toPlainText(),'Título heredado');self.assertTrue(t.contenido.isVisible());self.assertTrue(t.contenido.isEnabled());self.assertFalse(t.enlace.isVisible());self.assertFalse(t.botones_dialogo.isVisible());self.assertFalse(t.sugerencia.isVisible())
         t.contenido.setPlainText('Escrito a mano');self.assertEqual(t.actual.t['text'],'Escrito a mano');self.assertFalse(t.actual.t.get('field'))
-        d.a_editar_plantilla.trigger();self.assertTrue(d.a_editar_plantilla.isChecked());self.assertEqual(d.a_editar_plantilla.text(),'Terminar edición')
+        d.a_editar_plantilla.trigger()
+        self.assertTrue(d.a_editar_plantilla.isChecked())
+        self.assertTrue(d.sesion_plantilla.barra.isVisible())
         t.elegir(0);t.contenido.setPlainText('Cambio durante edición');self.assertTrue(d.a_editar_plantilla.isChecked())
-        d.a_editar_plantilla.trigger();self.assertFalse(d.a_editar_plantilla.isChecked())
+        d.sesion_plantilla.guardar.click();self.assertFalse(d.a_editar_plantilla.isChecked())
 
     def test_SPAG28_rotulos_antiguos_y_margen_fijo(self):
         """REQ-EDT-11, REQ-DAT-02: elimina rótulos auxiliares propios heredados y bloquea la edición de márgenes."""
