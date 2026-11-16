@@ -1,7 +1,7 @@
 """Ayuda de activación junto al aviso de conexión existente; solo tras un fallo de red directo."""
 import re
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QPushButton
 
 from conexion import servidor_web_simulador as servidor
@@ -11,6 +11,7 @@ from . import estilo
 HECHO = "Hecho. Reinicie el simulador y pulse Conectar."
 YA_ACTIVO = "Ábralo o reinícielo, con el driver en «Ninguno»."  # (su servidor web ya está activado en auto.cfg)
 FALTA = "su servidor web no está activado."  # (el botón de al lado dice qué hacer)
+MANUAL = "active app.web_server = True en su auto.cfg y reinicie el simulador"
 
 
 def no_responde(mensaje):
@@ -21,7 +22,9 @@ def no_responde(mensaje):
 
 
 class AyudaServidorWeb(QObject):
-    def __init__(self, etiqueta, layout, fila=None, al_activar=None):
+    texto_cambiado = Signal(str, bool)
+
+    def __init__(self, etiqueta, layout, fila=None, al_activar=None, reintentar="Conectar"):
         super().__init__(etiqueta)
         self.al_activar = al_activar  # (deja de pintar el aviso como error: «Hecho» es una buena noticia)
         self.etiqueta = etiqueta
@@ -29,6 +32,7 @@ class AyudaServidorWeb(QObject):
         self.abierta = False
         self.ultimo = None
         self.texto = ""
+        self.reintentar = reintentar
         self.boton = QPushButton("Activar el servidor web")
         self.boton.setFixedHeight(estilo.ALTO_CONTROL)
         self.boton.hide()
@@ -62,13 +66,14 @@ class AyudaServidorWeb(QObject):
                     self.boton.show()
                 elif estado == "activo":
                     self.texto = no_responde(mensaje) + ". " + YA_ACTIVO
-                # «sin_carpeta» o «varias»: el aviso general, que ya dice cómo activarlo a mano
+                elif estado in ("sin_carpeta", "varias"):
+                    self.texto = no_responde(mensaje) + ": " + MANUAL + "."
         return self.texto
 
     def activar(self):
         resultado = servidor.activar()
         if resultado.correcto:
-            self.texto = HECHO
+            self.texto = HECHO.replace("Conectar", self.reintentar)
             self.boton.hide()
             self.etiqueta.setStyleSheet(f"color:{estilo.TINTA}; font-weight:600")
             if self.al_activar is not None:
@@ -76,3 +81,4 @@ class AyudaServidorWeb(QObject):
         else:
             self.texto = resultado.motivo
         self.etiqueta.setText(self.texto)
+        self.texto_cambiado.emit(self.texto, not self.boton.isHidden())

@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-11-16T15:39:41+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 1508 pruebas ejecutadas, 2 fallos, 0 errores.
+Generado el 2026-11-16T19:56:20+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 1515 pruebas ejecutadas, 2 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 1380 casos, 1410 pruebas, 1409 pasan.
+Pruebas suplementarias S-xx: 1387 casos, 1417 pruebas, 1416 pasan.
 
 ## Requisitos
 
@@ -1606,6 +1606,13 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-U06 | REQ-SEM-08, REQ-TMP-03 | pasa | `test_SU06_vencimientos_que_dependen_del_orden` | vencimientos simultáneos con efecto mutuo (U-06). |
 | S-U07 | REQ-MOD-04 | pasa | `test_SU07_fuente_de_nivel_y_transicion_sin_lados` | fuente de nivel y transición sin lados no compilan (comparador 6.2 A y 6.4 A); con «detener», U-07. |
 | S-U09 | REQ-ACT-02, REQ-SEM-01, REQ-TMP-02 | pasa | `test_SU09_inicializacion_decidida` | hoja 08, 1.1 A, 1.2 A y 1.3 A (U-09 cerrada por el responsable). |
+| S-U1 |  | pasa | `test_SU1_centro_detectado_y_activado_por_arranque_del_instalador` |  |
+| S-U2 |  | pasa | `test_SU2_cada_indicio_desempata_frente_a_my_scenes_solo` |  |
+| S-U3 |  | pasa | `test_SU3_empates_no_escriben_ni_ponderan_numero_de_indicios` |  |
+| S-U4 |  | pasa | `test_SU4_extremo_a_extremo_conectar_solo_my_scenes_y_activar` |  |
+| S-U5 |  | pasa | `test_SU5_sin_carpeta_o_empate_pista_manual_sin_escritura` |  |
+| S-U6 |  | pasa | `test_SU6_traer_ayuda_completa_medidas_captura_y_activacion` |  |
+| S-U7 |  | pasa | `test_SU7_volver_a_leer_catalogo_http_oculta_ayuda_y_muestra_tablas` |  |
 | S-UIV01 | REQ-ACT-01, REQ-SIM-03 | pasa | `test_SUIV01_acciones_reales_y_trazos_completos_con_inicial` | solo contribuciones reales; recuadros, texto, palito y banderita activos en lima. |
 | S-UIV02 | REQ-EDT-02, REQ-SIM-03 | pasa | `test_SUIV02_transiciones_negras_simultaneidad_y_marca_historica_paridad` | negro inactivo, lima verdadero y verde oscuro última franqueada, también en barras Y. |
 | S-UIV03 | REQ-ACT-02, REQ-EDT-09 | pasa | `test_SUIV03_banderita_identifica_accion_y_exige_evento_sin_elegir_flanco` | b no es un evento; error con variable y etapa, ayuda inmediata y modelo sin cambios implícitos. |
