@@ -23,6 +23,8 @@ def guardar(config, ruta, documento):
         datos.pop("motivo")
         uniones.append(datos)
     datos = {"version": 1, "modelo": documento["id"], "uniones": uniones}
+    if config.recordar_filtro:
+        datos.update(recordar_filtro=True, filtro_senales=config.filtro_senales)
     fd, temporal = tempfile.mkstemp(dir=destino.parent, prefix=destino.name, suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as archivo:
@@ -44,6 +46,8 @@ def cargar(config, ruta, documento):
         if datos["version"] != 1 or datos["modelo"] != documento["id"]:
             raise ValueError("El recurso de uniones pertenece a otro modelo o versión")
         config.uniones = [Union(**union) for union in datos["uniones"]]
+        config.recordar_filtro = datos.get("recordar_filtro", False)
+        config.filtro_senales = datos.get("filtro_senales", []) if config.recordar_filtro else []
         config.validar(documento)
     except (TypeError, KeyError, AttributeError) as exc:
         raise ValueError("Recurso de uniones inválido") from exc

@@ -69,6 +69,7 @@ class ClienteDirecto:
             ids.add(senal["id"])
         from .catalogo_directo import interna, nombre_visible
         for senal in datos:
+            senal["_nombre_original"] = senal["name"]
             senal["_sistema"] = interna(senal)
             senal["name"] = nombre_visible(senal)
         return datos

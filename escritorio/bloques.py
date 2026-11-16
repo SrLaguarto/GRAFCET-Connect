@@ -1318,6 +1318,7 @@ class AreaBloques(_Superficie):
         self._hueco_sel: tuple | None = None  # el hueco vacío seleccionado (se quita con Supr)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.setAcceptDrops(True)
+        self.setToolTip("Para quitar un bloque, arrástrelo fuera o pulse Supr")
 
     @property
     def arbol(self) -> dict[str, Any] | None:
@@ -1540,51 +1541,7 @@ class AreaBloques(_Superficie):
             p.drawText(QRectF(x, y, c.w, c.h), Qt.AlignmentFlag.AlignCenter, "arrastre aquí un bloque")
 
 
-class Papelera(QWidget):
-    """Papelera visible: soltar aquí un bloque del área lo quita."""
-
-    def __init__(self, al_soltar: Callable[[dict[str, Any]], None]) -> None:
-        super().__init__()
-        self.al_soltar, self._encima = al_soltar, False
-        self.setAcceptDrops(True)
-        self.setFixedSize(34, 30)
-        self.setToolTip("Papelera: suelte aquí un bloque para quitarlo")
-
-    def paintEvent(self, event: Any) -> None:  # noqa: N802
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = QColor("#C0392B" if self._encima else "#6B7385")
-        p.setPen(QPen(color, 1.6))
-        p.setBrush(QColor("#FDECEA") if self._encima else Qt.BrushStyle.NoBrush)
-        p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
-        cx = self.width() / 2
-        p.drawLine(QPointF(cx - 7, 9), QPointF(cx + 7, 9))
-        p.drawLine(QPointF(cx - 2, 6), QPointF(cx + 2, 6))
-        p.drawPolyline(QPolygonF([QPointF(cx - 6, 9), QPointF(cx - 5, 24), QPointF(cx + 5, 24), QPointF(cx + 6, 9)]))
-        p.drawLine(QPointF(cx - 2, 12), QPointF(cx - 2, 21))
-        p.drawLine(QPointF(cx + 2, 12), QPointF(cx + 2, 21))
-        p.end()
-
-    def dragEnterEvent(self, event: Any) -> None:  # noqa: N802
-        if event.mimeData().hasFormat(MIME):
-            self._encima = True
-            self.update()
-            event.acceptProposedAction()
-
-    def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802
-        self._encima = False
-        self.update()
-
-    def dropEvent(self, event: Any) -> None:  # noqa: N802
-        self._encima = False
-        self.update()
-        _ARRASTRE["resuelto"] = True
-        event.setDropAction(Qt.DropAction.MoveAction)
-        event.accept()
-        self.al_soltar(json.loads(bytes(event.mimeData().data(MIME)).decode()))
-
-
-# -- el programador: paleta, área, papelera ------------------------------------------------------------------
+# -- el programador: paleta y área ------------------------------------------------------------------
 class FlowLayout(QLayout):
     """Los controles uno tras otro, y a la línea siguiente cuando no caben: el panel se puede estrechar."""
 
@@ -1675,7 +1632,7 @@ def _desplazable(w: QWidget, ancho: int | None = None) -> QScrollArea:
 class Programador(QWidget):
     """Programador por bloques: categorías en una franja horizontal desplazable; debajo, los bloques de la categoría elegida
     en una columna arrastrable y, a su derecha, el
-    área de trabajo con la fórmula (en línea si cabe) con el aviso y la papelera. `fuente()` devuelve las
+    área de trabajo con la fórmula (en línea si cabe) con el aviso. `fuente()` devuelve las
     variables {nombre: (papel, tipo)} y las etapas (en notación X) del modelo en curso. `cambiado(texto)` se emite en
     cada cambio hecho con bloques (no al llamar a `poner`). Con `historial`, Ctrl+Z y Ctrl+Mayús+Z deshacen y rehacen
     los cambios de bloques; sin él, el deshacer lo pone quien lo usa (`al_deshacer`, `al_rehacer`)."""
@@ -1746,7 +1703,7 @@ class Programador(QWidget):
         lay.addWidget(self._sc_paleta)
         if not valor:
             self.paleta.geometria_cambiada.connect(self._medir_paleta)
-        # columna 3: el área de trabajo y, debajo, el aviso y la papelera
+        # columna 3: el área de trabajo y, debajo, el aviso
         derecha = QVBoxLayout()
         derecha.setSpacing(4)
         self.lienzo = AreaBloques(fuente, self.grupo, valor)
@@ -1763,8 +1720,6 @@ class Programador(QWidget):
         self.aviso.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)  # no impone su ancho
         pie.addWidget(self.aviso, 1)
         pie.addStretch(1)
-        self.papelera = Papelera(self._a_la_papelera)
-        pie.addWidget(self.papelera)
         derecha.addLayout(pie)
         lay.addLayout(derecha, 1)
         self.setMinimumHeight(116 if compacto else 112)
@@ -1874,21 +1829,6 @@ class Programador(QWidget):
         """Lo que miden todas las categorías en una sola fila."""
         botones = list(self.categorias.values())
         return sum(b.sizeHint().width() for b in botones) + self._flujo_carpetas.spacing() * (len(botones) - 1) + 4
-
-    def papelera_arriba(self) -> None:
-        """La papelera pasa del pie del área a la derecha de la fila de categorías (la ventana flotante: el pie se quita y el alto es para los
-        bloques). No vuelve: cada programador lo pide una vez, al crearse."""
-        if getattr(self, "_fila_cat", None) is not None:
-            return
-        self._raiz.removeWidget(self._sc_carpetas)
-        fila = QHBoxLayout()
-        fila.setContentsMargins(0, 0, 0, 0)
-        fila.setSpacing(estilo.E2)
-        fila.addWidget(self._sc_carpetas, 1)
-        self.pie.removeWidget(self.papelera)
-        fila.addWidget(self.papelera, 0, Qt.AlignmentFlag.AlignTop)
-        self._raiz.insertLayout(0, fila)
-        self._fila_cat = fila
 
     def categorias_en_cabecera(self, destino: QBoxLayout | None, posicion: int = 1) -> None:
         """Con `destino` (la fila de cabecera de un panel), las categorías van **en esa fila**, en una sola línea y sin barra, y el programador
@@ -2012,7 +1952,3 @@ class Programador(QWidget):
     def _restaurar(self, arbol: dict[str, Any] | None) -> None:
         self._fijar_arbol(arbol)
         self.cambiado.emit(self.texto())
-
-    def _a_la_papelera(self, datos: dict[str, Any]) -> None:
-        if datos.get("origen") is not None and datos.get("grupo") == self.grupo:
-            self.lienzo.quitar(tuple(datos["origen"]))

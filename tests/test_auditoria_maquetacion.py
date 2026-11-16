@@ -31,7 +31,6 @@ EXCEPCIONES: list[tuple[str, str, str]] = [
     ("C1", "selectorVariableAccion", "el selector de variable de la acción se dibuja como una caja de acción de 62 px, a propósito (`ALTO_SELECTOR` de acciones.py)"),
     ("C1", "QPushButton#[Encuadrar", "los botones de la ficha de jerarquía son más bajos (20 px) a propósito: varias filas en una columna estrecha sin que crezca el panel (comentario de `FichaJerarquia`)"),
     ("C1", "QPushButton#[Renombrar", "los botones de la ficha de jerarquía son más bajos (20 px) a propósito: varias filas en una columna estrecha sin que crezca el panel (comentario de `FichaJerarquia`)"),
-    ("C5", "_SpinConfiguracion", "la dirección de la tabla avanzada ocupa su celda entera (TB1) y la columna la fija la cabecera «Dirección (base 0)», más ancha que 5 cifras y flechas"),
     ("C1", "QPushButton#[1]", "las fichas «1» y «0» del valor de una acción memorizada (`ESTILO_FICHA`, con su borde de 3 px al marcarse) son más altas que el token a propósito: son el valor que se elige (pantalla «flot_accion_evento»)"),
     ("C1", "QPushButton#[0]", "ídem: la ficha «0» del valor de una acción memorizada"),
     ("M4", "«Entradas»", "las cajas de la columna de simulación (Entradas, Salidas y variables) llevan sus tablas de borde a borde: a 218 px de panel no caben las cuatro columnas con 16 px más de margen (SRED13); la guía M4 no las lista"),
@@ -318,14 +317,13 @@ def regla_C4(raiz):
 
 
 def regla_C5(raiz):
-    """Un campo numérico mide lo que pide su mayor valor más las flechas, sin hueco sobrante."""
+    """P1: todos los números acotados, sin hueco dentro del campo ni excepciones."""
+    from escritorio.campos_medidos import ancho_numero, TOLERANCIA
     out = []
     for w in visibles(raiz):
-        if isinstance(w, QSpinBox) and not isinstance(w.parentWidget(), QAbstractSpinBox):
-            cifras = min(5, len(str(w.maximum())))
-            justo = w.fontMetrics().horizontalAdvance("0" * cifras) + 44
-            if w.width() > justo + 24:
-                out.append(f"{_desc(w)} máx {w.maximum()}: mide {w.width()}, lo justo ≈ {justo}")
+        ancho = ancho_numero(w)
+        if ancho is not None and w.width() > ancho + TOLERANCIA:
+            out.append(f"{_desc(w)}: mide {w.width()}, máximo {ancho + TOLERANCIA}")
     return out
 
 
@@ -504,6 +502,9 @@ class Auditoria(unittest.TestCase):
     def test_SAUD12_C5_ancho_justo_para_cifras(self):
         """REQ-UX-01 (guía C5): un campo numérico mide lo que pide su mayor valor más las flechas."""
         self._sin_hallazgos("C5")
+
+    def test_SP108_auditoria_numerica_sin_excepciones(self):
+        self.assertEqual(self.hallazgos["C5"], [])
 
     def test_SAUD13_TB1_columnas_sin_hueco(self):
         """REQ-UX-01 (guía TB1): ninguna columna con hueco; un control de celda ocupa la celda."""

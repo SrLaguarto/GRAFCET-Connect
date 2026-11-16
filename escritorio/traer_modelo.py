@@ -35,13 +35,16 @@ class Propuestas:
         variables = {v["id"]: v for v in edicion.ed.model["variables"]}
         unidas = {u.id: variables.get(u.variable) for u in config.uniones}
         self.filas = []
+        from conexion.filtro_directo import excluida
         for senal in catalogo:
+            if excluida(config, senal):
+                continue
             if senal["name"].strip() in ("", "-"):
                 continue
             variable = unidas.get(senal["id"])
             ya = variable["name"] if variable else ""
             nombre = ya or proponer(nombre_visible(senal))
-            marcada = not ya and not interna(senal) and not de_fabrica(senal["name"])
+            marcada = not ya and not de_fabrica(senal["name"])
             self.filas.append(Fila(senal, nombre, marcada, ya))
         self.validar()
 

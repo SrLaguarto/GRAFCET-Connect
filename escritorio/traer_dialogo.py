@@ -2,7 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QBrush, QColor, QFont
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QHeaderView, QLabel, QPushButton, QScrollArea,
                                QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
@@ -25,12 +25,14 @@ class DialogoTraer(QDialog):
         self.tablas = []
         self.cambiando = False
         self.resumen = ""
+        self.otra_escena = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(estilo.E2, estilo.E2, estilo.E2, estilo.E2)
-        self.estado = QLabel()
-        self.estado.setWordWrap(True)
+        from .resumen_escena import ResumenEscena
+        self.resumen_escena = ResumenEscena()
+        self.estado = self.resumen_escena.etiqueta
         fila_aviso = QHBoxLayout()
-        fila_aviso.addWidget(self.estado, 1)
+        fila_aviso.addWidget(self.resumen_escena, 1)
         layout.addLayout(fila_aviso)
         from .ayuda_servidor_web import AyudaServidorWeb
         self.ayuda_servidor = AyudaServidorWeb(self.estado, fila_aviso)
@@ -103,21 +105,32 @@ class DialogoTraer(QDialog):
             self.estado.setText(self.ayuda_servidor.mostrar(str(exc)))
             return
         from conexion.reconciliar import reconciliar
+        anteriores = {u.variable: u.id for u in self.controlador.panel.config.uniones}
         avisos = reconciliar(self.controlador.panel.config, self.controlador.edicion.ed.model, catalogo)
+        from .escena_modelo import contar_reunidas
+        self.controlador.catalogo_leido = True
+        self.controlador.reunidas_lectura = contar_reunidas(anteriores, self.controlador.panel.config)
+        self.controlador.avisos_lectura = avisos
+        from conexion.filtro_directo import actualizar
+        actualizar(self.controlador.panel.config, catalogo)
         self.controlador.catalogo = catalogo
         self.controlador.dibujar()
         self.controlador.aplicar()
         self.propuestas = Propuestas(self.controlador.edicion, self.controlador.panel.config, catalogo)
         self.propuestas.avisos = avisos
-        self.estado.setText(f"{self.controlador.host.text()}:{self.controlador.puerto.value()} · "
-                            f"{len(catalogo)} señales leídas" + (" · " + "; ".join(avisos) if avisos else ""))
+        from .escena_modelo import resumen_lectura
+        texto = resumen_lectura(self.controlador.panel.config, catalogo, self.controlador.reunidas_lectura)
+        self.resumen_escena.fijar(texto, avisos)
+        if self.otra_escena is not None:
+            self.otra_escena.aviso.hide()
+            self.otra_escena.rellenar()
         self.construir()
 
     def construir(self):
         self.tablas.clear()
         while self.grupos.count():
             item = self.grupos.takeAt(0)
-            if item.widget():
+            if item.widget() and item.widget() is not self.otra_escena:
                 item.widget().deleteLater()
         grupos = (("Entradas (sensores)", lambda f: not interna(f.senal) and f.senal["kind"].lower() == "input"),
                   ("Salidas (actuadores)", lambda f: not interna(f.senal) and f.senal["kind"].lower() == "output"),
@@ -125,8 +138,22 @@ class DialogoTraer(QDialog):
         for numero, (nombre, filtro) in enumerate(grupos):
             filas = [f for f in self.propuestas.filas if filtro(f)]
             self.grupo(nombre, filas, numero == 2)
+        if self.otra_escena is None:
+            from .otra_escena import OtraEscena
+            self.otra_escena = OtraEscena(self.controlador)
+            self.otra_escena.limpiada.connect(self.tras_limpiar)
+        self.grupos.addWidget(self.otra_escena)
         self.grupos.addStretch()
         self.pintar()
+
+    def tras_limpiar(self):
+        from .escena_modelo import resumen_lectura
+        controlador = self.controlador
+        self.propuestas.config = controlador.panel.config
+        texto = resumen_lectura(controlador.panel.config, controlador.catalogo, controlador.reunidas_lectura)
+        detalles = [u.motivo for u in controlador.panel.config.uniones if u.motivo]
+        self.resumen_escena.fijar(texto, detalles)
+        self.construir()
 
     def grupo(self, nombre, filas, plegado):
         caja = QWidget()
@@ -151,11 +178,17 @@ class DialogoTraer(QDialog):
         tabla.setItemDelegateForColumn(2, NombrePropuesto(tabla))
         tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        tabla.setColumnWidth(0, 86)
         tabla.setColumnWidth(3, 82)
         tabla.setMinimumHeight(min(260, 44 + len(filas) * 34))
         tabla.setMaximumHeight(min(300, 44 + len(filas) * 34))
         self._poner_filas(tabla, filas)
+        tabla.ensurePolished()
+        cabecera = tabla.horizontalHeader()
+        cabecera.ensurePolished()
+        ancho = cabecera.fontMetrics().horizontalAdvance("Usar") + 2 * estilo.E2
+        if any(f.ya for f in filas):
+            ancho = max(ancho, tabla.fontMetrics().horizontalAdvance("ya traída") + 2 * estilo.E2)
+        tabla.setColumnWidth(0, ancho)
         tabla.itemChanged.connect(lambda item: self.editar(tabla, filas, item))
         todas.clicked.connect(lambda: self.marcar(tabla, filas))
         titulo.clicked.connect(lambda: self.plegar(titulo, tabla, titulo.plegado))
@@ -172,6 +205,7 @@ class DialogoTraer(QDialog):
         for row, fila in enumerate(filas):
             usar = QTableWidgetItem("ya traída" if fila.ya else "")
             usar.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            usar.setToolTip("ya traída" if fila.ya else "Traer esta señal")
             usar.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             usar.setForeground(QColor(estilo.TINTA_2))
             if not fila.ya:
@@ -239,6 +273,8 @@ class DialogoTraer(QDialog):
                 if fila.ya:
                     color = estilo.TINTA_2
                 item.setForeground(QColor(color))
+                fondo = QBrush(QColor(estilo.NOMBRE_PENDIENTE_FONDO)) if fila.motivo else QBrush()
+                item.setBackground(fondo)
                 item.setData(Qt.ItemDataRole.StatusTipRole, "unir a la variable existente" if fila.existente else "")
                 item.setToolTip(fila.motivo or ("Unir a la variable existente" if fila.existente else fila.nombre))
         self.cambiando = False

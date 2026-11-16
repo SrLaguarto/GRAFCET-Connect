@@ -633,13 +633,11 @@ class PanelPropiedades(QWidget):
         lay.addWidget(self.msg)
         if flotante:
             self.cabecera.hide()  # (el título, «Fijar» y cerrar los pone la ventana flotante)
-            # La lupa ya enseña la fórmula dibujada: sin la fila «Fórmula», sin el aviso de «correcta» ni la frase de la acción. La papelera
-            # sube a la fila de categorías (no roba alto); un error de la fórmula sí sale, en una línea roja bajo el área de bloques.
+            # La lupa ya enseña la fórmula; los errores permanecen bajo los bloques.
             self._l_formula.hide()
             self.t_texto.hide()
             self.t_estado.hide()
             self.accion.frase.hide()
-            self.prog.papelera_arriba()
 
     def zona_de(self, w: QWidget | None) -> str | None:
         """En qué zona de la página de una acción está el widget `w` (el que tiene el foco): «bloques» (la condición o el evento) o «accion» (lo
@@ -765,8 +763,6 @@ class PanelPropiedades(QWidget):
         self.t_texto.setMinimumWidth(48)
         g.addWidget(self.t_estado, 1, 1, 1, 3)
         g.addWidget(self.t_crear, 0, 2)
-        self.prog.pie.removeWidget(self.prog.papelera)
-        g.addWidget(self.prog.papelera, 0, 3, Qt.AlignmentFlag.AlignVCenter)
         g.setColumnStretch(1, 1)
         self._rejilla_formula, self._estado_abajo = g, True
         lay.addWidget(self.caja_formula)

@@ -54,7 +54,9 @@ class GrafnetInterfaz(BaseQt):
         self.assertIs(w.edicion,e);self.assertEqual(e.ed.model,antes);self.assertTrue(e.ed.dirty)
     def test_SGFN11_archivo_conserva_mapa_y_recursos(self):
         """REQ-DAT-01, REQ-DAT-02: el archivo conserva E/S y recursos sin exponer carpetas como formato de proyecto."""
-        w,e=self.preparar();destino=self.guardar()
+        w, e = self.preparar()
+        w.panel_es.directa.selector.setCurrentIndex(0)  # Esta regresión guarda una conexión Modbus.
+        destino = self.guardar()
         (e.ruta/'recursos').mkdir();(e.ruta/'recursos'/'imagen.png').write_bytes(b'recurso conservado')
         w.panel_es.host.setText('10.20.30.40');w.panel_es.host.editingFinished.emit()
         self.assertTrue(w.guardar());self.assertTrue(w.abrir_ruta(destino))

@@ -4,6 +4,8 @@ import re
 
 
 def validar(config, doc):
+    from .filtro_directo import validar as validar_filtro
+    validar_filtro(config)
     host = config.host
     if not isinstance(host, str) or not host or host != host.strip():
         raise ValueError("Falta el servidor del simulador de fábricas")

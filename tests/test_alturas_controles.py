@@ -184,6 +184,7 @@ class Alturas(BaseQt):
         for ancho, alto in TAMANOS:
             w, e, ids = self._preparar(ancho, alto)
             w.mostrar_es()
+            w.panel_es.directa.selector.setCurrentIndex(0)  # Esta prueba mide el módulo Modbus.
             self._bombear(8)
             p = w.panel_es
             p.abrir_configuracion()
@@ -296,6 +297,7 @@ class Alturas(BaseQt):
     def _es(self):
         w, e, ids = self._preparar(1366, 768)
         w.mostrar_es()
+        w.panel_es.directa.selector.setCurrentIndex(0)  # Esta prueba mide el módulo Modbus.
         self._bombear(8)
         return w, w.panel_es
 
@@ -394,6 +396,7 @@ class Alturas(BaseQt):
             self.assertEqual(solapes(w), [], (ancho, alto, "planos con hoja"))
             self.assertEqual(desbordes(w, 0), [], (ancho, alto, "planos con hoja"))
             w.mostrar_es()
+            w.panel_es.directa.selector.setCurrentIndex(0)  # Esta prueba mide el módulo Modbus.
             self._bombear(8)
             self.assertEqual(solapes(w), [], (ancho, alto, "E/S desconectada"))
             self.assertEqual(desbordes(w, 0), [], (ancho, alto, "E/S desconectada"))

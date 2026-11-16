@@ -79,7 +79,11 @@ Qué hace
   nombres se pueden cambiar (verde, cambiado; rojo, no vale, con el motivo al pie); las ya unidas salen como «ya traída»; las
   que conservan el nombre de fábrica y las del propio simulador empiezan sin marcar. Volver a traer nunca borra, renombra ni
   cambia de papel o tipo una variable; una unión que ya no encaja se ve en ámbar y no se usa. Las salidas se envían al
-  cambiar y, además, cada segundo.
+  cambiar y, además, cada segundo. Un proyecto nuevo empieza en conexión directa; uno guardado sin modo sigue en Modbus.
+  La configuración directa solo tiene Periodo y Tiempo de espera; en «Opciones avanzadas ›», «Señales que no se traen»: la
+  lista, por ID, de las señales internas del simulador, que se puede cambiar. Al traer las E/S de otra escena, la línea de
+  estado resume en una línea y el grupo «De otra escena» quita de una vez las uniones viejas y, con su casilla (marcada), las
+  variables que no se usan en el GRAFCET; Ctrl+Z lo devuelve. En el panel, «Quitar uniones sin señal» hace lo mismo.
 - Servidor web del simulador: el instalador lo activa, si el simulador está instalado (casilla marcada por defecto): añade
   «app.web_server = True» al archivo auto.cfg de su carpeta de Documentos, que reconoce por su contenido. Si al conectar
   en directo el simulador no responde y falta esa línea, el aviso ofrece «Activar el servidor web»; después hay que cerrar
@@ -362,7 +366,7 @@ piezas, en lugar de escribirlo.
   derecha, el área de trabajo, con la fórmula dibujada en una línea si cabe.
 - Debajo del área: la fórmula en texto, «Escrito» (el texto que ha quedado guardado), «Se dibuja» (cómo se verá en el
   dibujo de la norma) y «Crear las que faltan» (declara como entradas booleanas las variables que se usan y no
-  existen). En la última fila, el aviso y la papelera («⤢ Ampliar» se retiró en P-IMP-144: para más sitio, Ver ▸ Panel de opciones ▸ Flotante).
+  existen). En la última fila, el aviso («⤢ Ampliar» se retiró en P-IMP-144: para más sitio, Ver ▸ Panel de opciones ▸ Flotante).
 - Ver ▸ «Panel de opciones» ▸ «Flotante» (por defecto) o «Abajo»: dos opciones excluyentes, y se recuerda la elegida. En flotante, las propiedades se editan en una sola ventana centrada
   sobre la aplicación (puede tapar los paneles laterales), con título y ✕: a la izquierda, el elemento ampliado como bajo una
   lupa (hasta el 125 %, se actualiza al editar); a la derecha, sus paneles. Mientras está abierta, lo de detrás no responde.
@@ -371,7 +375,7 @@ piezas, en lugar de escribirlo.
   la acción, gris, como la franja de «Acción»). Una transición o una etapa abren una ventana a la medida de su contenido. La ventana no se mueve al hacer zoom, desplazar o mover el elemento;
   si el contenido no cabe, se desplaza por dentro. Esc la cierra (si hay un desplegable abierto, el primer Esc cierra el
   desplegable). En la ventana no hay fila «Fórmula», ni aviso de «correcta», ni frase de la acción (la lupa ya los enseña): si la
-  fórmula tiene un error, sale una línea roja bajo los bloques; la papelera está a la derecha de las pestañas del formulador.
+  fórmula tiene un error, sale una línea roja bajo los bloques. No hay papelera: un bloque se quita con Supr o Retroceso, o arrastrándolo fuera.
   El área de bloques aprovecha el alto de la ventana.
   Con la barra abajo, la parte de la acción que se edita se resalta en el dibujo. Una acción continua no abre Propiedades:
   su variable se elige con doble clic (o Intro) sobre ella.
@@ -394,7 +398,7 @@ piezas, en lugar de escribirlo.
     aritméticas encadenadas que se leen igual sin paréntesis se dibujan en línea.
   · Comparación: [variable ▾][= ≠ < ≤ > ≥ ▾][valor], por ejemplo CT ≥ 3. Constantes 1 y 0.
 - Cómo se mueven los bloques: arrastrar un bloque a un hueco lo encaja. Soltar un bloque que envuelve (no, ↑, ↓ o
-  temporizar) sobre otro lo envuelve. Arrastrarlo fuera o a la papelera lo quita y deja su hueco.
+  temporizar) sobre otro lo envuelve. Arrastrarlo fuera (o Supr) lo quita y deja su hueco.
 - Hueco sin llenar: se muestra como «?»; la receptividad queda pendiente y no se puede ejecutar.
 - Texto y bloques sincronizados: lo que se escribe a mano pasa a bloques; si no se puede, el programa avisa y los
   bloques no cambian.

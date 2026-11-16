@@ -81,6 +81,8 @@ class ControlesPlanos:
         form.addRow("Tamaño", p.tamano)
         p.b_eliminar_grafico = QPushButton("Eliminar del plano")
         p.b_eliminar_grafico.clicked.connect(p.eliminar_grafico)
+        from .campos_medidos import ajustar_boton
+        ajustar_boton(p.b_eliminar_grafico)
         form.addRow(p.b_eliminar_grafico)
 
     def _rellenar_mas(self):

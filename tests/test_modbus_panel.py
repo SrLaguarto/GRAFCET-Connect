@@ -123,6 +123,7 @@ class PanelTests(unittest.TestCase):
             w = Ventana(ajustes_de_prueba(tmp))
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self.assertIsNone(w.edicion.nueva_variable("sensor"))
                 self.assertIsNone(w.edicion.nueva_variable("luz", "output"))
                 self.assertIsNone(w.edicion.nueva_variable("consigna", "output", {"kind": "decimal", "scale": 2}))
@@ -373,14 +374,15 @@ class PanelTests(unittest.TestCase):
                 w.deleteLater()
                 app.processEvents()
 
-    def _ventana_conectada(self, tmp, sc, doc, senales):
+    def _ventana_conectada(self, tmp, sc, doc, senales, timeout_ms=500):
         """Una ventana con el modelo dado, mapa asignado y conexión establecida (en Pausa: salidas a 0 y observando las entradas)."""
         from escritorio.ventana import Ventana
         w = Ventana(ajustes_de_prueba(tmp))
         w.fuente = {"tipo": "fichero", "ruta": Path(tmp) / "modelo.json", "doc": doc,
                     "layout": {}, "titulo": "Prueba", "ayuda": "", "raiz": None}
         w._cargar()
-        w.panel_es.cargar(doc, Configuracion(host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=senales))
+        w.panel_es.cargar(doc, Configuracion(
+            host="127.0.0.1", puerto=sc.puerto, periodo_ms=20, senales=senales, timeout_ms=timeout_ms))
         w._conectar_modbus()
         return w
 
@@ -601,7 +603,9 @@ class PanelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, servidor(responder) as sc:
             m = M().var("sensor").var("motor", "output").step("E0", True)
             m.cont("E0", "motor")  # motor = 1 desde la situación inicial: el reinicio de Play ya lo escribe
-            w = self._ventana_conectada(tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)])
+            # El falso retiene la respuesta hasta 5 s; este caso prueba una petición en vuelo, no su caducidad.
+            w = self._ventana_conectada(
+                tmp, sc, m.doc, [Senal("sensor", "discrete", 0), Senal("motor", "coil", 0)], timeout_ms=6000)
             esperar = lambda c: self._esperar(app, w, c)  # noqa: E731
             try:
                 esperar(lambda: w.modbus.estado == "conectado")
@@ -843,7 +847,9 @@ class PanelTests(unittest.TestCase):
     @staticmethod
     def _ventana_nueva(tmp, ajustes=None):
         from escritorio.ventana import Ventana
-        return Ventana(ajustes or ajustes_de_prueba(tmp))
+        w = Ventana(ajustes or ajustes_de_prueba(tmp))
+        w.panel_es.directa.selector.setCurrentIndex(0)  # Estas regresiones ejercen Modbus.
+        return w
 
     def _ventana_modelo(self, tmp, doc, ajustes=None):
         """Una ventana con el modelo dado abierto como si viniera de un fichero, sin conexión."""
@@ -892,6 +898,7 @@ class PanelTests(unittest.TestCase):
             p = w.panel_es
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self.assertIsNone(w.edicion.nueva_variable("sensor1"))
                 self._es(w, True)
                 self.assertEqual(self._nombres(p.lista_entradas), ["sensor1"])
@@ -947,6 +954,7 @@ class PanelTests(unittest.TestCase):
             p = w.panel_es
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 for nombre, papel, tipo in (("a", "input", None), ("b", "input", decimal), ("c", "input", decimal)):
                     self.assertIsNone(w.edicion.nueva_variable(nombre, papel, tipo))
                 self._es(w, True)
@@ -981,6 +989,7 @@ class PanelTests(unittest.TestCase):
             p = w.panel_es
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self.assertIsNone(w.edicion.nueva_variable("uno"))
                 self._es(w, True)
                 p.host.setText("10.1.2.3")
@@ -1033,6 +1042,7 @@ class PanelTests(unittest.TestCase):
             p = w.panel_es
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self.assertIsNone(w.edicion.nueva_variable("s1"))
                 self._es(w, True)
                 p.cantidades["input-register"].setValue(0)
@@ -1115,6 +1125,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(w.ajustes.value("modbus/host", "nada"), "nada", "no se guarda nada sin una conexión que funcione")
                 self.assertEqual(w.panel_es.obtener().host, "192.168.1.133")  # el ejemplo con el que arranca
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self._es(w, True)
                 self.assertEqual((w.panel_es.host.text(), w.panel_es.puerto.value(), w.panel_es.unidad.value()),
                                  ("192.168.1.133", 502, 1))
@@ -1143,6 +1154,7 @@ class PanelTests(unittest.TestCase):
                 w._desconectar_modbus()
                 self._esperar(app, w, lambda: not w.modbus.activo)
                 w.nuevo()  # otro proyecto, sin mapa propio
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self._es(w, True)
                 self.assertEqual((w.panel_es.host.text(), w.panel_es.puerto.value(), w.panel_es.unidad.value()),
                                  ("127.0.0.1", sc.puerto, 7))
@@ -1763,6 +1775,7 @@ class PanelTests(unittest.TestCase):
             p = w.panel_es
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Elección explícita para probar Modbus.
                 self.assertIsNone(w.edicion.nueva_variable("sensor"))
                 self.assertIsNone(w.edicion.nueva_variable("luz", "output"))
                 self._es(w, True)

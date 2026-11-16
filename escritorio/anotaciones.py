@@ -29,25 +29,55 @@ def importar_imagen(padre=None):
             "width":w,"height":w*imagen.height()/imagen.width()}
 
 
-def editar_texto(n,padre=None):
-    d=QDialog(padre);d.setWindowTitle("Editar texto");d.resize(540,360)
-    l=QVBoxLayout(d);texto=QPlainTextEdit(n.get("text",""));l.addWidget(texto,1)
-    f=QFormLayout();fuente=QFontComboBox();fuente.setCurrentFont(QFont(n.get("font","Arial")))
-    tam=QSpinBox();tam.setRange(1,1024);tam.setValue(round(n.get("size",18)))
+def editar_texto(n, padre=None):
+    d = QDialog(padre)
+    d.setWindowTitle("Editar texto")
+    d.resize(540, 360)
+    layout = QVBoxLayout(d)
+    texto = QPlainTextEdit(n.get("text", ""))
+    layout.addWidget(texto, 1)
+    form = QFormLayout()
+    fuente = QFontComboBox()
+    fuente.setCurrentFont(QFont(n.get("font", "Arial")))
+    tam = QSpinBox()
+    tam.setRange(1, 1024)
+    tam.setValue(round(n.get("size", 18)))
     tam.setToolTip("Tamaño del texto en píxeles")
-    color=QPushButton();elegido=[n.get("color","#172e4d")]
+    color = QPushButton()
+    elegido = [n.get("color", "#172e4d")]
+
     def actualizar():
-        ff=fuente.currentFont();ff.setPixelSize(tam.value());texto.setFont(ff)
-        texto.setStyleSheet("color:"+elegido[0]);color.setText(elegido[0]);color.setStyleSheet("color:"+elegido[0])
+        letra = fuente.currentFont()
+        letra.setPixelSize(tam.value())
+        texto.setFont(letra)
+        texto.setStyleSheet("color:" + elegido[0])
+        color.setText(elegido[0])
+        color.setStyleSheet("color:" + elegido[0])
+
     def elegir():
-        c=QColorDialog.getColor(QColor(elegido[0]),d,"Color del texto")
-        if c.isValid():elegido[0]=c.name();actualizar()
-    color.clicked.connect(elegir);fuente.currentFontChanged.connect(lambda _:actualizar());tam.valueChanged.connect(lambda _:actualizar())
-    for etiqueta,w in (("Fuente",fuente),("Tamaño",tam),("Color",color)):f.addRow(etiqueta,w)
-    l.addLayout(f);botones=QDialogButtonBox(QDialogButtonBox.StandardButton.Ok|QDialogButtonBox.StandardButton.Cancel)
-    botones.accepted.connect(d.accept);botones.rejected.connect(d.reject);l.addWidget(botones);actualizar()
-    if d.exec()!=QDialog.DialogCode.Accepted:return None
-    return {"text":texto.toPlainText(),"font":fuente.currentFont().family(),"size":tam.value(),"color":elegido[0]}
+        nuevo_color = QColorDialog.getColor(QColor(elegido[0]), d, "Color del texto")
+        if nuevo_color.isValid():
+            elegido[0] = nuevo_color.name()
+            actualizar()
+
+    color.clicked.connect(elegir)
+    fuente.currentFontChanged.connect(lambda _: actualizar())
+    tam.valueChanged.connect(lambda _: actualizar())
+    for etiqueta, widget in (("Fuente", fuente), ("Tamaño", tam), ("Color", color)):
+        form.addRow(etiqueta, widget)
+    layout.addLayout(form)
+    botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+    botones.accepted.connect(d.accept)
+    botones.rejected.connect(d.reject)
+    layout.addWidget(botones)
+    actualizar()
+    if n.get("text") == "Texto":
+        texto.selectAll()
+    texto.setFocus()
+    if d.exec() != QDialog.DialogCode.Accepted:
+        return None
+    return {"text": texto.toPlainText(), "font": fuente.currentFont().family(),
+            "size": tam.value(), "color": elegido[0]}
 
 
 @lru_cache(maxsize=16)

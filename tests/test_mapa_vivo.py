@@ -68,6 +68,11 @@ class MapaVivo(unittest.TestCase):
 
 @unittest.skipUnless(QT,'requiere PySide6')
 class InterfazMapaVivo(BaseQt):
+    def setUp(self):
+        super().setUp()
+        # Estas regresiones ejercen el mapa Modbus, no el modo inicial del proyecto.
+        self.w.panel_es.directa.selector.setCurrentIndex(0)
+
     def activar(self):
         from conexion.adaptador import MonitorEntradas
         w=self.w;w.modbus.estado='conectado'

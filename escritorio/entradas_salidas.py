@@ -597,7 +597,7 @@ class LienzoPLC(QWidget):
         self.unidad.setRange(0, 255)
         self.unidad.setAccessibleName("Esclavo ID")
         self.unidad.setToolTip("El ID de unidad configurado en el servidor Modbus; normalmente 1.")
-        self.puerto.fijar_digitos(5)
+        self.puerto.fijar_digitos(3)
         self.unidad.fijar_digitos(3)
         for elementos in ((QLabel("IP"), self.ip, QLabel(":"), self.puerto), (QLabel("Esclavo ID"), self.unidad)):
             fila = QHBoxLayout()
@@ -703,12 +703,16 @@ class _SpinConfiguracion(_SinRueda, QSpinBox):
 
     def fijar_digitos(self, digitos):
         """Ancho justo para `digitos` cifras y las flechas (se recalcula si cambia la letra)."""
+        if not self._digitos:
+            self.valueChanged.connect(self._medir)
         self._digitos = digitos
+        self.setProperty("digitosColumna", digitos)
         self._medir()
 
-    def _medir(self):
+    def _medir(self, _valor=None):
         if self._digitos:
-            self.setFixedWidth(self.fontMetrics().horizontalAdvance("0" * self._digitos) + 40)
+            from .campos_medidos import ajustar
+            ajustar(self)
 
     def changeEvent(self, evento):  # noqa: N802
         super().changeEvent(evento)
@@ -747,7 +751,7 @@ class _Octeto(QLineEdit):
         super().__init__()
         self.campo, self.indice, self._previo = campo, indice, ""
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setFixedWidth(46)
+        self.setProperty("cifrasNumericas", 3)
         self.setMaxLength(15)  # lo que cabe al pegar una IP entera; al teclear nunca pasa de 3
         self.setValidator(QRegularExpressionValidator(QRegularExpression(r"[0-9.]*"), self))
         self.setStyleSheet("QLineEdit { padding: 0 2px; } QLineEdit:focus { padding: 0 1px; }")
@@ -1117,7 +1121,7 @@ class PanelES(QWidget):
         self.timeout = _SpinConfiguracion()
         self.timeout.setRange(10, 10000)
         self.timeout.setSuffix(" ms")
-        self.puerto.fijar_digitos(5)
+        self.puerto.fijar_digitos(3)
         self.unidad.fijar_digitos(3)
         self.host.setToolTip("Copia la dirección del software que actúa como servidor Modbus. Debe coincidir con el servidor activo.")
         self.unidad.setToolTip("El ID de unidad configurado en el servidor Modbus; normalmente 1.")
@@ -1128,6 +1132,7 @@ class PanelES(QWidget):
         titulo_canales.setStyleSheet(f"font-size:{estilo.T_SECCION}px; font-weight:600; color:{estilo.ACENTO}; padding-top:10px")
         configuracion.addWidget(titulo_canales)
         rejilla_canales = QGridLayout()
+        rejilla_canales.setColumnStretch(3, 1)
         rejilla_canales.addWidget(QLabel("Offset (desde)"), 0, 1)
         rejilla_canales.addWidget(QLabel("Cantidad"), 0, 2)
         self.offsets, self.cantidades = {}, {}
@@ -1137,18 +1142,18 @@ class PanelES(QWidget):
             offset, cantidad = _SpinConfiguracion(), _SpinConfiguracion()
             offset.setRange(0, 65535)
             cantidad.setRange(0, 256 if area in ("discrete", "coil") else 64)
-            offset.setFixedWidth(110)
-            cantidad.setFixedWidth(110)
+            offset.fijar_digitos(5)
+            cantidad.fijar_digitos(3)
             offset.valueChanged.connect(self._marcar_canales)
             cantidad.valueChanged.connect(self._marcar_canales)
             self.offsets[area], self.cantidades[area] = offset, cantidad
             rejilla_canales.addWidget(QLabel(texto), fila, 0)
-            rejilla_canales.addWidget(offset, fila, 1)
-            rejilla_canales.addWidget(cantidad, fila, 2)
+            rejilla_canales.addWidget(offset, fila, 1, Qt.AlignmentFlag.AlignLeft)
+            rejilla_canales.addWidget(cantidad, fila, 2, Qt.AlignmentFlag.AlignLeft)
         configuracion.addLayout(rejilla_canales)
         self.b_restaurar_canales = QPushButton("Restablecer canales: 32 digitales y 12 numéricos")
         self.b_restaurar_canales.clicked.connect(self.restablecer_canales)
-        configuracion.addWidget(self.b_restaurar_canales)
+        rejilla_canales.addWidget(self.b_restaurar_canales, 5, 0, 1, 3, Qt.AlignmentFlag.AlignRight)
         self.ayuda_canales = QLabel("Copia el desplazamiento y la cantidad del software del servidor. Estos ajustes no modifican el servidor.")
         self.ayuda_canales.setWordWrap(True)
         self.ayuda_canales.setStyleSheet(f"color:{estilo.TINTA_2}; font-size:12px")
@@ -1166,7 +1171,11 @@ class PanelES(QWidget):
         tiempos.addRow("Tiempo de espera", self.timeout)
         avanzado.addLayout(tiempos)
         self.tabla = QTableWidget(0, 8)
-        self.tabla.setHorizontalHeaderLabels(["Usar", "Variable", "Papel", "Tipo", "Área", "Dirección\n(base 0)", "Formato", "Escala"])
+        from .campos_medidos import ColumnaNumerica
+        self.columna_direccion = ColumnaNumerica(self.tabla, 5)
+        self.tabla.setHorizontalHeaderLabels(
+            ["Usar", "Variable", "Papel", "Tipo", "Área", "Dir.\n(base 0)", "Formato", "Escala"])
+        self.tabla.horizontalHeaderItem(5).setToolTip("Dirección (base 0)")
         self.tabla.horizontalHeader().setStretchLastSection(True)
         self.tabla.setMinimumHeight(150)
         self._filas_tabla()
@@ -1446,7 +1455,8 @@ class PanelES(QWidget):
                 pide += [fm.horizontalAdvance(self.tabla.item(f, col).text()) + 16 for f in range(self.tabla.rowCount())
                          if self.tabla.item(f, col) is not None]
             elif col == 5:
-                pide.append(self.tabla.fontMetrics().horizontalAdvance("0" * 5) + 44)  # cinco cifras, márgenes y flechas
+                from .campos_medidos import ancho_numero
+                pide += [ancho_numero(self.tabla.cellWidget(f, col)) for f in range(self.tabla.rowCount())]
             elif col != 0:
                 pide += [self.tabla.cellWidget(f, col).sizeHint().width() for f in range(self.tabla.rowCount())]
             self.tabla.setColumnWidth(col, max(pide))

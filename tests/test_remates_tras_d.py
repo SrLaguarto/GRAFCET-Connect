@@ -88,12 +88,12 @@ class RematesTrasD(BaseQt):
     def test_SREM203_aviso_en_linea_bajo_formula_y_papelera_centrada(self):
         for flotante in (False,):  # (la ventana flotante ya no tiene fila «Fórmula» ni aviso fijo, y la papelera va junto a las categorías: SPFL29 y SPFL30)
             w, e, p, aid = self.preparar(flotante=flotante)
-            estado, campo, papelera = p.t_estado, p.t_texto, p.prog.papelera
+            estado, campo = p.t_estado, p.t_texto
+            self.assertNotIn("papelera", vars(p.prog))
             self.assertFalse(estado.wordWrap())
             self.assertEqual(estado.height(), estado.fontMetrics().height())
             self.assertGreater(estado.y(), campo.geometry().bottom())
             self.assertEqual(estado.x(), campo.x())
-            self.assertLessEqual(abs(papelera.geometry().center().y() - campo.geometry().center().y()), 1)
             texto = "Error de validación\n" + "con una explicación extensa. " * 30
             estado.setText(texto)
             self.assertEqual(estado.toolTip(), texto)

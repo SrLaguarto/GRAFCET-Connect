@@ -47,13 +47,19 @@ class PanelDirecto(QObject):
         self.dialogo_traer = None
         self.dialogo_resumen = None
         self.firma_catalogo = None
+        self.catalogo_leido = False
+        self.cliente_catalogo = None
+        self.reunidas_lectura = 0
+        self.avisos_lectura = []
+        self.dialogo_otra_escena = None
         from .traer_modelo import HistorialUniones
         self.historial = HistorialUniones()
         self.traer.connect(self.abrir_traer)
         self.config_modbus = None
         self.config_directa = Configuracion(host="localhost", puerto=7410, modo="directo")
         self.cargando = False
-        self.selector = QComboBox()
+        from .campos_medidos import ComboMedido
+        self.selector = ComboMedido()
         self.selector.addItem("Modbus TCP", "modbus")
         self.selector.addItem("Conexión directa (simulador de fábricas)", "directo")
         self.selector.setAccessibleName("Modo de conexión")
@@ -71,13 +77,26 @@ class PanelDirecto(QObject):
         layout = QVBoxLayout(contenedor)
         layout.setContentsMargins(estilo.E2, estilo.E1, estilo.E2, estilo.E1)
         layout.setSpacing(estilo.E2)
-        layout.addWidget(self.selector)
+        layout.addWidget(self.selector, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(self.paginas, 1)
         scroll.setWidget(contenedor)
         panel.lienzo.layout().itemAtPosition(0, 0).widget().hide()
         panel.lienzo.layout().setContentsMargins(0, estilo.E2, 0, 2)
         self._crear_panel()
         panel.cabecera.layout().addWidget(panel.fila_estado)
+        self._crear_escena()
+
+    def _crear_escena(self):
+        panel = self.panel
+        from .resumen_escena import ResumenEscena
+        self.resumen_escena = ResumenEscena(panel)
+        panel.cabecera.layout().addWidget(self.resumen_escena)
+        self.resumen_escena.hide()
+        self.b_quitar_sin_senal = QPushButton("Quitar uniones sin señal")
+        self.b_quitar_sin_senal.clicked.connect(self.abrir_otra_escena)
+        self.b_quitar_sin_senal.hide()
+        from .pie_escena import PieEscena
+        self.pie_escena = PieEscena(panel, self.b_quitar_sin_senal)
         self.selector.currentIndexChanged.connect(self.cambiar_modo)
 
     def _crear_panel(self):
@@ -116,6 +135,8 @@ class PanelDirecto(QObject):
         self.cargando = False
         self.aplicar_estilo()
         if modo == "modbus":
+            self.resumen_escena.hide()
+            self.b_quitar_sin_senal.hide()
             self.panel.fila_estado.hide()
             self.panel.resumen.setMinimumWidth(0)
             self.panel.ayuda_vacio.setText("Arrastra las variables a las entradas y salidas.")
@@ -181,10 +202,11 @@ class PanelDirecto(QObject):
 
     def aplicar_estilo(self):
         alto = estilo.ESCALAS[self.panel.escala]["ALTO_CONTROL"]
-        for control in (self.selector, self.host, self.puerto, self.b_traer):
+        for control in (self.selector, self.host, self.puerto, self.b_traer, self.b_quitar_sin_senal):
             control.setFixedHeight(alto)
-        fuente = self.puerto.fontMetrics()
-        self.puerto.setFixedWidth(fuente.horizontalAdvance("65535") + 36)
+        from .campos_medidos import ajustar
+        ajustar(self.puerto)
+        self.selector.medir()
 
     def _variables(self):
         from .entradas_salidas import ROL_COLOR, COLOR_TIPO
@@ -224,29 +246,12 @@ class PanelDirecto(QObject):
         self.dibujar()
 
     def configuracion(self):
-        dialogo = QDialog(self.panel)
-        dialogo.setWindowTitle("Configuración de conexión directa")
-        layout = QFormLayout(dialogo)
-        host = QLineEdit(self.host.text())
-        controles = {}
-        layout.addRow("Servidor", host)
-        for nombre, etiqueta, minimo, maximo in (("puerto", "Puerto", 1, 65535),
-                ("periodo_ms", "Periodo (ms)", 5, 10000), ("timeout_ms", "Tiempo de espera (ms)", 10, 10000)):
-            control = QSpinBox()
-            control.setRange(minimo, maximo)
-            control.setValue(getattr(self.panel.config, nombre))
-            controles[nombre] = control
-            layout.addRow(etiqueta, control)
-        botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        botones.accepted.connect(dialogo.accept)
-        botones.rejected.connect(dialogo.reject)
-        layout.addRow(botones)
+        from .filtro_senales import ConfiguracionDirecta
+        dialogo = ConfiguracionDirecta(self)
         if dialogo.exec() == QDialog.DialogCode.Accepted:
-            self.host.setText(host.text())
-            self.puerto.setValue(controles["puerto"].value())
-            for nombre in ("periodo_ms", "timeout_ms"):
-                setattr(self.panel.config, nombre, controles[nombre].value())
+            self.panel.config = dialogo.config
             self.aplicar()
+            self.dibujar()
 
     def ocupado(self, on):
         self.selector.setEnabled(not on)
@@ -297,11 +302,48 @@ class PanelDirecto(QObject):
         from conexion.intercambio_directo import TransporteDirecto
         if self.panel.config.modo != "directo" or not isinstance(cliente, TransporteDirecto):
             return
+        anteriores = {u.variable: u.id for u in self.panel.config.uniones}
         if cliente.config.modelo == self.panel.doc["id"]:
             self.panel.config.uniones = deepcopy(cliente.config.uniones)
         firma = (tuple((s["id"], s["name"], s["type"], s["kind"]) for s in cliente.senales.values()),
                  tuple((u.variable, u.id, u.nombre, u.motivo) for u in self.panel.config.uniones))
-        if firma != self.firma_catalogo:
+        lectura = cliente is not self.cliente_catalogo or self.firma_catalogo is None
+        lectura = lectura or firma[0] != self.firma_catalogo[0]
+        if lectura or firma != self.firma_catalogo:
             self.firma_catalogo = firma
             self.catalogo = list(cliente.senales.values())
+            from .escena_modelo import contar_reunidas
+            self.catalogo_leido = True
+            if lectura:
+                self.cliente_catalogo = cliente
+                self.reunidas_lectura = contar_reunidas(anteriores, self.panel.config)
+                self.avisos_lectura = list(cliente.avisos)
+                from conexion.filtro_directo import actualizar
+                actualizar(self.panel.config, self.catalogo)
             self.dibujar()
+
+    def avisar_escena(self, motivos):
+        from .escena_modelo import de_otra_escena, resumen_lectura
+        config = self.panel.config
+        ausentes = de_otra_escena(config, self.catalogo) if self.catalogo_leido else []
+        self.b_quitar_sin_senal.setVisible(bool(ausentes) and self.edicion is not None)
+        mostrar = self.catalogo_leido and bool(motivos or self.reunidas_lectura)
+        self.resumen_escena.setVisible(mostrar)
+        if mostrar:
+            reunidas = [a for a in self.avisos_lectura if "se ha vuelto a unir" in a]
+            texto = resumen_lectura(config, self.catalogo, self.reunidas_lectura)
+            self.resumen_escena.fijar(texto, reunidas + motivos)
+
+    def abrir_otra_escena(self):
+        if self.edicion is None:
+            return
+        from .otra_escena import DialogoOtraEscena
+        self.dialogo_otra_escena = DialogoOtraEscena(self)
+        self.dialogo_otra_escena.open()
+
+
+def configuracion_inicial(proyecto, documento, canales):
+    """Solo un proyecto nuevo nace directo; un archivo anterior sigue usando Modbus."""
+    if proyecto[0] == "nuevo":
+        return Configuracion(host="localhost", puerto=7410, modo="directo", modelo=documento["id"])
+    return Configuracion(modelo=documento["id"], canales=deepcopy(canales))

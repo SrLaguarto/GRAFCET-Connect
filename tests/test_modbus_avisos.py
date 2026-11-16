@@ -113,6 +113,7 @@ class PanelAvisos(unittest.TestCase):
             w = Ventana(QSettings(str(Path(tmp) / "a.ini"), QSettings.Format.IniFormat))
             try:
                 w.nuevo()
+                w.panel_es.directa.selector.setCurrentIndex(0)  # Probar los registros de Modbus.
                 e = w.edicion
                 for nombre, papel, tipo in (("ent", "input", {"kind": "int"}), ("dec", "input", DECIMAL),
                                             ("sal_e", "output", {"kind": "int"}), ("sal_d", "output", DECIMAL),

@@ -283,6 +283,7 @@ class NombresConEspacios(BaseQt):
         """REQ-DAT-01, REQ-EDT-07: la vista de E/S muestra los nombres con espacios; la configuración Modbus asigna las señales por
         el id de la variable, así que un nombre con espacios (o renombrar) no cambia el mapa."""
         w, e = self.w, self.e
+        w.panel_es.directa.selector.setCurrentIndex(0)  # El mapa de esta prueba es Modbus.
         self.construir()
         QApplication.processEvents()
         p = w.panel_es

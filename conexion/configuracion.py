@@ -71,6 +71,8 @@ class Configuracion:
 
     modo: str = "modbus"
     uniones: list = field(default_factory=list)
+    filtro_senales: list[dict] = field(default_factory=list)
+    recordar_filtro: bool = False
 
     def fijar_escalas_simulador(self):
         for s in self.senales:
@@ -172,6 +174,8 @@ class Configuracion:
         self.validar(doc)
         datos = {**asdict(self), "modelo": doc["id"], "version": 1}
         datos.pop("uniones")
+        datos.pop("filtro_senales")
+        datos.pop("recordar_filtro")
         if self.modo == "directo":
             from .persistencia_directa import guardar
             guardar(self, ruta, doc)

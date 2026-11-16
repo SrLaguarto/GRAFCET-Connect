@@ -3,14 +3,15 @@ import re
 
 
 def interna(senal):
-    return (senal.get("_sistema", False) or senal.get("address") in (240, 496, 497, 498)
-            or re.match(r"^[A-Z][A-Z\d_]*\s*\(", senal["name"]) is not None)
+    nombre = senal.get("_nombre_original", senal["name"])
+    return "I/O (" in nombre and senal.get("address") in (240, 496, 497, 498)
 
 
 def nombre_visible(senal):
     nombre = senal["name"]
     if interna(senal):
-        return re.sub(r"^[A-Z][A-Z\d_]*\s*(?=\()", "Simulador ", nombre)
+        original = senal.get("_nombre_original", nombre)
+        return "Simulador (" + original.split("I/O (", 1)[1]
     return nombre
 
 

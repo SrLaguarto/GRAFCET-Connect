@@ -86,10 +86,9 @@ class Paneles(BaseQt):
         """REQ-EDT-02, REQ-EDT-09: fórmula y papelera comparten fila, con el estado debajo;
         sin «Vista previa» (sí «Fijar») ni edición manual de la fórmula."""
         w,e=self.preparar();p=w.props
-        centros = [c.mapTo(p, c.rect().center()).y() for c in (p.t_texto, p.prog.papelera)]
+        self.assertNotIn("papelera", vars(p.prog))
         self.assertGreater(p.t_estado.y(), p.t_texto.geometry().bottom())
         self.assertEqual(p.t_estado.x(), p.t_texto.x())
-        self.assertLessEqual(max(centros)-min(centros),3)
         self.assertTrue(p.t_texto.isReadOnly());self.assertTrue(p.t_fijar.isVisible())
         self.assertFalse(hasattr(p,"t_previa"));self.assertFalse(hasattr(p,"detalles_bloques"))
         self.assertFalse(p.t_vista.isVisible());self.assertFalse(p.t_dibujo.isVisible())  # (se calculan, pero ya no se enseñan)
@@ -101,7 +100,7 @@ class Paneles(BaseQt):
         """REQ-EDT-09: a 1000×600 los controles no se cortan, y las categorías largas conservan su desplazamiento."""
         w,e=self.preparar(1000,600);p=w.props
         self.assertLessEqual(w.minimumSizeHint().height(),600)
-        for c in (p.t_texto,p.t_estado,p.prog.papelera):
+        for c in (p.t_texto,p.t_estado):
             r=c.rect();esquina=c.mapTo(p,r.bottomRight())
             self.assertLessEqual(esquina.x(),p.width());self.assertLessEqual(esquina.y(),p.height())
         self.assertGreater(p.prog.lienzo.parentWidget().height(),40)

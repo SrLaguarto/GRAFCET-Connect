@@ -83,7 +83,7 @@ AYUDA_EDICION = {
                    "rejilla, y no encima de otro elemento); de un punto de unión (arriba o abajo de una etapa o transición, "
                    "a la derecha de una etapa) sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y deshacen y rehacen. Los "
                    "elementos y las acciones nuevos se arrastran desde la paleta de la izquierda; otro tipo de acción, con botón derecho "
-                   "sobre ella.",
+                   "sobre ella. Para quitar un bloque, arrástrelo fuera o pulse Supr.",
 }
 NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar"}
 AVISO = "Basado en IEC 60848"
@@ -1849,10 +1849,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if not self._salir_de_edicion():
             return
         self._empezar_edicion(Edicion.nuevo())
-        if self.modbus.activo:  # la conexión sigue; el modelo nuevo trae su propio mapa (vacío)
-            self._cargar_config_modbus(self.edicion.ed.model)
-        elif self.paginas_es.currentIndex() == 1:  # el panel de E/S está a la vista: que muestre el proyecto nuevo, no el anterior
-            self._sincronizar_es(mostrando=True)
+        self._cargar_config_modbus(self.edicion.ed.model)
 
     def _edicion_desde_fuente(self) -> Edicion:
         """Copia editable de lo que se está simulando (un ejemplo o un modelo abierto)."""
@@ -3130,10 +3127,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
                 config = Configuracion.cargar(raiz / ARCHIVO, doc, avisos)  # lo que ya no casa se descarta; el resto se conserva
             except (ValueError, OSError) as exc:
                 fallo = f"No se pudo cargar el mapa: {exc}"
+        from .conexion_directa import configuracion_inicial
+        if config is None and self._proyecto[0] == "nuevo":
+            config = configuracion_inicial(self._proyecto, doc, self._parametros_recordados["canales"])
         from .conexion_ventana import preparar_carga
         preparar_carga(self, config)
         if self.modbus.activo and self.modbus.estado != "cerrando":
-            config = copy.deepcopy(config or Configuracion(modelo=doc["id"], canales=copy.deepcopy(self._parametros_recordados["canales"])))
+            config = copy.deepcopy(config or configuracion_inicial(
+                self._proyecto, doc, self._parametros_recordados["canales"]))
             config.host, config.puerto, config.unidad = self.modbus.cliente.host, self.modbus.cliente.puerto, self.modbus.cliente.unidad
         self.panel_es.cargar(doc, config, avisos)
         self.panel_es.host.setToolTip(f"{origen}. Copia la dirección que muestra el software del servidor Modbus.")
@@ -3296,8 +3297,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             p.actualizar(doc)
             if cambio and self.modbus.activo:self.modbus.reasignar(p.config,doc)
         else:
-            self._proyecto_modbus = self._proyecto
-            p.cargar(doc)
+            self._cargar_config_modbus(doc)
         self._autoasignar_nuevas_es()
 
     def mostrar_es(self):

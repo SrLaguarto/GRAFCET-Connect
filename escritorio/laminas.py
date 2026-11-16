@@ -452,6 +452,8 @@ class DialogoLaminas(QDialog):
         self.campos['hoja'].setToolTip('{n}: número de hoja; {m}: total de hojas')
         self.campos['escala'].setPlaceholderText('Automática si se deja vacío')
         self.guardar_ajustes=QPushButton('Aplicar al proyecto');form.addRow(self.guardar_ajustes)
+        from .campos_medidos import ajustar_boton
+        ajustar_boton(self.guardar_ajustes)
         self.vista=VistaLamina();self.vista.colocar=self.colocar
         if integrado:
             from .planos_plantillas import area_integrada

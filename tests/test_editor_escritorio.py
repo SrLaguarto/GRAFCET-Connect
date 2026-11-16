@@ -2044,7 +2044,8 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(len(e.ed.draft_actions()), n + 1, "soltar la ficha en el dibujo la coloca")
         # la paleta de bloques arrastra con su propio QDrag y el área (y la papelera) aceptan lo que se suelta
         prog = w.props.prog
-        self.assertTrue(prog.lienzo.acceptDrops() and prog.papelera.acceptDrops())
+        self.assertTrue(prog.lienzo.acceptDrops())
+        self.assertNotIn("papelera", vars(prog))
         capturados.clear()
         with mock.patch.object(bloques, "QDrag", FalsoDrag), mock.patch.object(bloques.QDrag, "exec", create=True):
             prog.paleta._arrastrar((0,))
@@ -7669,13 +7670,9 @@ class Bloques(unittest.TestCase):
         self.assertEqual(p.texto(), "? OR ?")
         area.quitar(())
         self.assertEqual((p.texto(), area.arbol), ("", None))
-        # la papelera: un bloque del área sale; de otro grupo o de la paleta, no
+        # P6: quitar la pieza por su ruta, igual que Supr o soltar fuera del área.
         area.soltar(None, nuevo("y", a=var("marcha"), b=var("paro")))
-        p._a_la_papelera({"origen": ["b"], "grupo": "otro"})
-        self.assertEqual(p.texto(), "marcha AND paro")
-        p._a_la_papelera({"origen": None, "grupo": p.grupo})
-        self.assertEqual(p.texto(), "marcha AND paro")
-        p._a_la_papelera({"origen": ["b"], "grupo": p.grupo})
+        area.quitar((0, "b"))
         self.assertEqual(p.texto(), "marcha AND ?")
         # y arrastrar fuera del área (sin papelera) quita lo mismo: `quitar` con la ruta de la superficie
         area.quitar((0, "a"))
@@ -7830,7 +7827,7 @@ class Bloques(unittest.TestCase):
         p.poner("(↑marcha AND NOT X0) OR (3s/X1 AND CT >= 3)")
         a = p.lienzo
         self.assertLess(a.heightForWidth(900), a.heightForWidth(250))
-        self.assertTrue(p.papelera.isVisible())
+        self.assertNotIn("papelera", vars(p))
         p.close()
 
     def test_SEDI56_cabe_a_200_px_y_crece_en_alto(self):
@@ -7941,10 +7938,8 @@ class Bloques(unittest.TestCase):
         a.dropEvent(QDropEvent(centro_((0, "b")), Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton,
                                Qt.KeyboardModifier.NoModifier))
         self.assertEqual(p.texto(), "2s/(CT < 3) AND marcha")
-        # la papelera
-        m = mime(a.arbol["a"], p.grupo, ["a"])
-        p.papelera.dropEvent(QDropEvent(QPointF(5, 5), Qt.DropAction.MoveAction, m, Qt.MouseButton.LeftButton,
-                                        Qt.KeyboardModifier.NoModifier))
+        # P6: la pieza seleccionada se quita sin una papelera.
+        a.quitar((0, "a"))
         self.assertEqual(p.texto(), "? AND marcha")
         # el área vacía recibe un bloque como raíz
         a.quitar(())

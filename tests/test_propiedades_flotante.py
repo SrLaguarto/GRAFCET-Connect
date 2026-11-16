@@ -620,7 +620,7 @@ class PropiedadesFlotante(unittest.TestCase):
             self.assertFalse(p._l_formula.isVisible() or p.t_texto.isVisible(), "sin la fila Fórmula")
             self.assertFalse(p.t_estado.isVisible(), "sin el aviso de fórmula correcta")
             self.assertFalse(p.accion.frase.isVisible(), "sin la frase de la acción")
-            self.assertTrue(p.prog.papelera.isVisible())
+            self.assertNotIn("papelera", vars(p.prog))
         c = HC.Contexto(1366, 768)
         try:
             HC._con_seleccion("accion")(c)
@@ -628,7 +628,7 @@ class PropiedadesFlotante(unittest.TestCase):
             self.assertTrue(p._l_formula.isVisible() and p.t_texto.isVisible() and p.t_estado.isVisible() and p.accion.frase.isVisible())
             self.assertIn("correcta", p.t_estado.text())
             self.assertTrue(p.accion.frase.text())
-            self.assertIs(p.prog.papelera.parentWidget(), p.caja_formula, "la papelera, en la fila de la fórmula")
+            self.assertNotIn("papelera", vars(p.prog))
         finally:
             c.cerrar()
 
@@ -661,15 +661,12 @@ class PropiedadesFlotante(unittest.TestCase):
                     HC._bombear(12)
                     aid = p.objetivo_bloques()[1]
                     self.assertFalse(p.t_estado.isVisible())
-                    # la papelera: junto a las categorías, no en el pie
-                    pap = p.prog.papelera
-                    self.assertTrue(pap.isVisible() and pap.toolTip())
-                    self.assertLess(pap.mapTo(p.prog, QPoint()).y() + pap.height(), p.prog.lienzo.mapTo(p.prog, QPoint()).y() + 2)
-                    self.assertGreater(pap.mapTo(p.prog, QPoint()).x(), p.prog.width() // 2)
+                    self.assertNotIn("papelera", vars(p.prog))
+                    self.assertIn("pulse Supr", p.prog.lienzo.toolTip())
                     self.assertTrue(p.prog.texto())
-                    pap.al_soltar({"origen": (0,), "grupo": p.prog.grupo})
+                    p.prog.lienzo.quitar((0,))
                     HC._bombear(8)
-                    self.assertEqual(p.prog.texto(), "", "la papelera borró la fórmula")
+                    self.assertEqual(p.prog.texto(), "", "quitar el bloque borra la fórmula")
                 finally:
                     c.cerrar()
 

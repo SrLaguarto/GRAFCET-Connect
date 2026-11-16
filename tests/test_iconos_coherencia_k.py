@@ -47,15 +47,16 @@ class CoherenciaK(unittest.TestCase):
         panel.show()
         panel.directa.selector.setCurrentIndex(1)
         panel.directa.catalogo = [senal("s", "Pulsador"), senal("q", "Motor", papel="Output"),
-                                  senal("interno", "SISTEMA (Running)", direccion=496)]
+                                  senal("interno", "Simulador I/O (Running)", direccion=496)]
         panel.config.uniones = [Union(doc["variables"][0]["id"], "s", "Pulsador", "Bit", "input")]
+        panel.directa.catalogo_leido = True
         panel.directa.dibujar()
         self.app.processEvents()
         return panel
 
     def dialogo(self, panel):
         servidor = ServidorDirecto([senal("s", "Pulsador"), senal("nuevo", "Xmotor permiso"),
-                                   senal("interno", "SISTEMA (Running)", direccion=496)])
+                                   senal("interno", "Simulador I/O (Running)", direccion=496)])
         self.addCleanup(servidor.cerrar)
         panel.directa.host.setText("127.0.0.1")
         panel.directa.puerto.setValue(servidor.puerto)
@@ -113,7 +114,8 @@ class CoherenciaK(unittest.TestCase):
     def test_SK104_titulos_reutilizados_sin_pastilla_en_ambos_estados(self):
         dialogo = self.dialogo(self.panel())
         titulos = dialogo.findChildren(TituloGrupo)
-        self.assertEqual(len(titulos), 3)
+        self.assertEqual(len(titulos), 4)
+        self.assertTrue(any(t.text().startswith("De otra escena ·") for t in titulos))
         for titulo in titulos:
             self.assertIn(" · ", titulo.text())
             self.assertNotIn(") (", titulo.text())
@@ -159,8 +161,10 @@ class CoherenciaK(unittest.TestCase):
         terminal = panel.directa.dibujo.terminales["s"]
         self.assertTrue(terminal.nombre.property("aviso"))
         self.assertIn("no encontrada", terminal.toolTip())
-        self.assertIn("no encontrada", panel.estado.nota)
-        self.assertTrue(panel.estado.isVisible())
+        resumen = panel.directa.resumen_escena
+        self.assertIn("no encontrada", resumen.detalle.toPlainText())
+        self.assertTrue(resumen.isVisible())
+        self.assertTrue(resumen.detalle.isHidden())
 
     def test_SK108_cabeceras_y_leyenda_mismo_pie(self):
         panel = self.panel()
@@ -168,7 +172,7 @@ class CoherenciaK(unittest.TestCase):
             self.assertIn("font-weight:400", cabecera.text())
         self.assertTrue(panel.ayuda_vacio.isVisible())
         pie = panel.ayuda_vacio.parentWidget()
-        self.assertIs(panel.resumen.parentWidget(), pie)
+        self.assertTrue(pie.isAncestorOf(panel.resumen))
         self.assertTrue(panel.resumen.text().endswith("uniones"))
         self.assertIn("«Ninguno»", panel.ayuda_vacio.text())
 

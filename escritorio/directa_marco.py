@@ -107,35 +107,57 @@ class MarcoDirecto(LienzoPLC):
         panel = self.controlador.panel
         self.alto_fila = panel.alto_fila
         self.fijar_interior(panel.ancho_interior, estilo.ESCALAS[panel.escala]["ALTO_CONTROL"])
-        while self.fila_izq.count() or self.fila_der.count():
-            for fila in (self.fila_izq, self.fila_der):
-                if fila.count():
-                    widget = fila.takeAt(0).widget()
-                    widget.hide()
-                    widget.deleteLater()
+        self._limpiar_terminales()
         self.terminales.clear()
         variables = {v["id"]: v for v in panel.variables}
         uniones = {u.id: u for u in panel.config.uniones}
-        senales = {s["id"]: s for s in self.controlador.catalogo if not interna(s) or s["id"] in uniones}
+        from conexion.filtro_directo import excluida
+        senales = {s["id"]: s for s in self.controlador.catalogo if not excluida(panel.config, s)}
         for union in panel.config.uniones:
             senales.setdefault(union.id, {"id": union.id, "name": union.nombre,
                                          "type": union.tipo, "kind": union.papel})
         motivos = []
-        for identidad, senal in senales.items():
-            union = uniones.get(identidad)
-            variable = variables.get(union.variable) if union else None
-            motivo = union.motivo if union else ""
-            if union and not union.compatible(variable):
-                motivo = "El papel o el tipo de la variable ha cambiado"
-            if motivo:
-                motivos.append(f"{variable['name'] if variable else union.nombre}: {motivo}")
-            terminal = TerminalDirecto(self, senal, variable, motivo)
-            fila = self.fila_izq if senal["kind"].lower() == "input" else self.fila_der
-            fila.addWidget(terminal)
-            self.terminales[identidad] = terminal
-            panel.terminales[(terminal.area, identidad)] = terminal
-            if variable:
-                panel.indicadores[variable["id"]] = (terminal.led, terminal.valor)
-        panel.fila_estado.setVisible(bool(motivos))
-        panel.aviso = " · ".join(motivos)
+        digitales = max(sum(s["kind"].lower() == papel and s["type"].lower() == "bit"
+                            for s in senales.values()) for papel in ("input", "output"))
+        for papel, fila in (("input", self.fila_izq), ("output", self.fila_der)):
+            grupo = [s for s in senales.values() if s["kind"].lower() == papel]
+            booleanas = [s for s in grupo if s["type"].lower() == "bit"]
+            numericas = [s for s in grupo if s["type"].lower() != "bit"]
+            for senal in booleanas:
+                self._poner_terminal(senal, fila, uniones, variables, motivos)
+            hueco = digitales - len(booleanas)
+            if hueco and numericas:
+                fila.addSpacing(hueco * self.alto_fila)
+            for senal in numericas:
+                self._poner_terminal(senal, fila, uniones, variables, motivos)
+        self.controlador.avisar_escena(motivos)
+        panel.aviso = ""
         panel._pintar_nota()
+
+    def _limpiar_terminales(self):
+        for fila in (self.fila_izq, self.fila_der):
+            while fila.count():
+                widget = fila.takeAt(0).widget()
+                if widget is not None:
+                    widget.hide()
+                    widget.deleteLater()
+
+    def _poner_terminal(self, senal, fila, uniones, variables, motivos):
+        panel = self.controlador.panel
+        identidad = senal["id"]
+        union = uniones.get(identidad)
+        variable = variables.get(union.variable) if union else None
+        motivo = union.motivo if union else ""
+        if union and not union.compatible(variable):
+            motivo = "El papel o el tipo de la variable ha cambiado"
+        if motivo:
+            motivos.append(f"{variable['name'] if variable else union.nombre}: {motivo}")
+        terminal = TerminalDirecto(self, senal, variable, motivo)
+        if union:
+            ayuda = "Una señal ya unida sigue funcionando aunque figure en el filtro de señales."
+            terminal.setToolTip(terminal.toolTip() + "\n" + ayuda)
+        fila.addWidget(terminal)
+        self.terminales[identidad] = terminal
+        panel.terminales[(terminal.area, identidad)] = terminal
+        if variable:
+            panel.indicadores[variable["id"]] = (terminal.led, terminal.valor)

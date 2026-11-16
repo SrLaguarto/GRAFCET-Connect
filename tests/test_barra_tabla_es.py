@@ -61,7 +61,8 @@ class BarraYTablaES(BaseQt):
         casilla = t.cellWidget(0, 0).casilla
         centro = casilla.mapTo(t.viewport(), casilla.rect().center()).x()
         self.assertLessEqual(abs(centro - (t.columnViewportPosition(0) + t.columnWidth(0) // 2)), 2)
-        self.assertEqual(t.horizontalHeaderItem(5).text(), "Dirección\n(base 0)")
+        self.assertEqual(t.horizontalHeaderItem(5).text(), "Dir.\n(base 0)")
+        self.assertEqual(t.horizontalHeaderItem(5).toolTip(), "Dirección (base 0)")
         self.assertLessEqual(t.columnWidth(5), 130)
         self.assertGreaterEqual(t.cellWidget(0, 5).width(), t.columnWidth(5) - 4, "el campo de la dirección ocupa su celda")
         for col in (4, 6):
@@ -71,14 +72,15 @@ class BarraYTablaES(BaseQt):
         self.assertGreater(t.columnWidth(7), 60, "Escala se ve")
 
     def test_SBAR03_puerto_y_esclavo_estrechos_y_el_marco_no_cambia_de_ancho(self):
-        """REQ-SIM-03: Puerto (5 cifras) y Esclavo ID (3 cifras) más estrechos en la cabecera del marco y en Configuración; el marco mide lo mismo con
+        """REQ-SIM-03: Puerto y Esclavo ID (3 cifras) más estrechos en la cabecera y en Configuración.
+        El marco mide lo mismo con
         la cabecera de edición o con la de solo lectura."""
         p = self.panel()
         for puerto, unidad in ((p.puerto, p.unidad), (p.lienzo.puerto, p.lienzo.unidad)):
             self.assertLessEqual(puerto.width(), 90)
             self.assertLessEqual(unidad.width(), 70)
-            self.assertLess(unidad.width(), puerto.width())
-            self.assertGreaterEqual(puerto.width(), puerto.fontMetrics().horizontalAdvance("65535") + 18)
+            self.assertEqual(unidad.width(), puerto.width())
+            self.assertEqual(puerto.width(), puerto.fontMetrics().horizontalAdvance("888") + 28)
         c = p.lienzo.cabecera_marco
         medidas = []
         for pagina in (p.lienzo.edicion_destino, p.lienzo.destino):

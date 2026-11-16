@@ -159,6 +159,8 @@ class EditorPlantilla(QDialog):
         if solo_texto:self.enlace.hide();form.labelForField(self.enlace).hide()
         self.fuente=QFontComboBox();form.addRow('Fuente',self.fuente)
         self.color=QPushButton('Color del texto');form.addRow(self.color);self.color.clicked.connect(self.elegir_color)
+        from .campos_medidos import ajustar_boton
+        ajustar_boton(self.color)
         self.x=self.spin(-2000,4000);self.y=self.spin(-2000,4000);self.altura=self.spin(.05,500)
         self.alineacion=QComboBox()
         for texto,dato in (('Izquierda','left'),('Centro','center'),('Derecha','right')):self.alineacion.addItem(texto,dato)

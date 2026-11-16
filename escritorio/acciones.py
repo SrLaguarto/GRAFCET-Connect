@@ -116,6 +116,11 @@ class _ComboVariable(QComboBox):
     def __init__(self) -> None:
         super().__init__()
         self.al_poner: Callable[[str], None] | None = None
+        from .estilo_listas import EstiloLista
+        self._estilo_lista = EstiloLista("Fusion")
+        self._estilo_lista.setParent(self)
+        self.setStyle(self._estilo_lista)
+        self.setMaxVisibleItems(10)
 
     def changeEvent(self, evento) -> None:  # noqa: N802
         super().changeEvent(evento)

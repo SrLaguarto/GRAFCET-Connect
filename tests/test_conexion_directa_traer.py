@@ -39,10 +39,10 @@ class TraerES(unittest.TestCase):
         for nombre in ("Emergency Stop 0", "Pick & Place 0 (Grab)", "Light Indicator (Green) 0"):
             self.assertTrue(de_fabrica(nombre))
         catalogo = [senal("a", "Marcha"), senal("b", "Emergency Stop 0"), senal("c", "Xmotor inicio"),
-                    senal("d", ""), senal("e", "-"), senal("f", "SISTEMA (Running)", direccion=496)]
+                    senal("d", ""), senal("e", "-"), senal("f", "Simulador I/O (Running)", direccion=496)]
         propuestas = Propuestas(self.edicion, self.config, catalogo)
-        self.assertEqual(len(propuestas.filas), 4)
-        self.assertEqual([f.marcada for f in propuestas.filas], [True, False, True, False])
+        self.assertEqual(len(propuestas.filas), 3)
+        self.assertEqual([f.marcada for f in propuestas.filas], [True, False, True])
         fila = propuestas.filas[2]
         self.assertEqual(fila.motivo, self.edicion.motivo_variable_nueva(fila.nombre))
         self.assertTrue(interna(catalogo[-1]))
@@ -107,7 +107,7 @@ class TraerES(unittest.TestCase):
 
     def test_SCD15_dialogo_grupos_rojo_verde_y_boton(self):
         servidor = ServidorDirecto([senal("a", "Marcha"), senal("b", "Xmotor inicio"),
-                                   senal("c", "SISTEMA (Running)", direccion=496)])
+                                   senal("c", "Simulador I/O (Running)", direccion=496)])
         self.addCleanup(servidor.cerrar)
         panel = PanelES()
         self.addCleanup(panel.close)

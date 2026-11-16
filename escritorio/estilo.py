@@ -52,6 +52,7 @@ AVISO = "#8a5a00"          # texto ámbar sobre fondo claro (5,4:1)
 AVISO_FONDO = "#fff4d6"
 AVISO_BORDE = "#e3b74a"
 ERROR = "#c62828"          # solo errores (el mismo del dibujo)
+NOMBRE_PENDIENTE_FONDO = "#ffe0b2"  # naranja claro: nombre que impide traer una señal
 ERROR_FONDO = "#fdecea"
 FOCO = TINTA               # el foco de teclado: trazo discontinuo de 2 px
 FOCO_FUERTE = "#000000"    # el foco de un botón relleno (Play/Stop): 3 px, 3:1 o más contra el relleno y contra el fondo
@@ -318,6 +319,8 @@ QAbstractItemView QAbstractSpinBox QLineEdit { border:0; min-height:0; padding:0
 def hoja_global(compacto_alto: bool = False) -> str:
     """La hoja de estilo de la ventana. La ventana usa siempre la de alturas normales (cambiarla al vuelo cuesta cerca de un
     segundo); `compacto_alto` baja las alturas de control a 32 px y queda para herramientas y maquetas."""
+    from .campos_medidos import instalar
+    instalar()
     alto = ALTO_CONTROL_COMPACTO if compacto_alto else ALTO_CONTROL
     alto_tb = ALTO_BARRA_COMPACTA if compacto_alto else ALTO_BARRA  # botones de las barras: 34 px, o 32 en un cuarto de pantalla
     t = dict(
