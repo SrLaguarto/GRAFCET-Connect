@@ -1,12 +1,19 @@
 {
- "date": "2026-11-17T15:36:13+01:00",
+ "date": "2026-11-17T17:36:38+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 1563,
+ "total": 1564,
  "failures": 0,
  "errors": 0,
  "results": [
+  {
+   "test": "setUpClass (test_clic_exterior_tras_arrastre.ClicExteriorNativo)",
+   "case": null,
+   "outcome": "omitida",
+   "requirements": [],
+   "summary": ""
+  },
   {
    "test": "test_acabados_activos.Acabados.test_SUIV01_acciones_reales_y_trazos_completos_con_inicial",
    "case": "S-UIV01",
@@ -2417,6 +2424,13 @@
     "REQ-TMP-01"
    ],
    "summary": "REQ-TMP-01, REQ-SIM-03: JS sitúa el tiempo sobre la aparición exacta y ancla a izquierda o derecha según el retardo."
+  },
+  {
+   "test": "test_clic_exterior_tras_arrastre.CapturaPopup.test_SXC2_no_roba_la_captura_de_un_desplegable_abierto",
+   "case": "S-XC2",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Un popup distinto abierto durante el arrastre conserva la prioridad del ratón."
   },
   {
    "test": "test_comparador.Comparador.test_SCMP01_catalogo_coherente",
