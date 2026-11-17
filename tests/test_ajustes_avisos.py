@@ -101,30 +101,16 @@ class AjustesYAvisos(BaseQt):
         self.assertEqual((p.cantidades["discrete"].value(), p.cantidades["input-register"].value()), (16, 8))
 
     # -- 3 y 5: ajustes de simulación y barra de estado --------------------------------------------------------
-    def test_SAJU04_el_dialogo_de_ajustes_de_simulacion_tiene_una_sola_opcion_con_palabras_normales(self):
-        """REQ-SEM-09: «Ajustes de simulación» muestra solo la lectura de los eventos de entrada, con dos textos sin
-        jerga (de uno en uno = «situacion-anterior», todo de una vez = «recorrido»); las demás lecturas no se
-        tocan."""
-        from escritorio.ventana import Lecturas
+    def test_SAJU04_no_hay_selector_de_lecturas_de_simulacion(self):
+        """Y+3: se retiran la entrada y el diálogo; Ajustes conserva las actualizaciones."""
+        from escritorio import ventana
         w = self.w
-        titulos = [a.text().replace("&", "") for m in w.menuBar().actions() if m.menu() for a in m.menu().actions()]
-        self.assertIn("Ajustes de simulación…", titulos)
+        titulos = [a.text().replace("&", "") for a in w.findChildren(ventana.QAction)]
+        self.assertNotIn("Ajustes de simulación…", titulos)
         self.assertNotIn("Lecturas de interpretación…", titulos)
-        d = Lecturas(w, w.options)
-        self.assertEqual(d.windowTitle(), "Ajustes de simulación")
-        self.assertEqual(sorted(d.botones), ["recorrido", "situacion-anterior"])
-        self.assertEqual(len(d.findChildren(QRadioButton)), 2)
-        textos = " ".join(x.text() for x in d.findChildren(QLabel) + d.findChildren(QRadioButton))
-        self.assertIsNone(CODIGO.search(textos), textos)
-        self.assertEqual(d.options(), w.options, "sin tocar nada, las lecturas no cambian")
-        self.assertTrue(d.botones[SEMANTIC_OPTIONS["U-03"]["default"]].isChecked())
-        d.botones["recorrido"].setChecked(True)
-        self.assertEqual(d.options(), {**w.options, "U-03": "recorrido"})
-        d._defaults()
-        self.assertEqual(d.options(), w.options)
-        base = {**w.options, "1.1": "B"}
-        self.assertEqual(Lecturas(w, base).options()["1.1"], "B",
-                         "las demás lecturas conservan su valor, aunque no se vean")
+        self.assertIn("Buscar actualizaciones al arrancar", titulos)
+        self.assertNotIn("Lecturas", vars(ventana))
+        self.assertEqual(w.options["U-03"], SEMANTIC_OPTIONS["U-03"]["default"])
 
     def test_SAJU05_barra_de_estado_basado_en_iec_60848_y_aviso_de_ajuste_no_habitual(self):
         """REQ-NOR-02, REQ-SEM-09: la barra de estado dice «Basado en IEC 60848» (sin «conformidad» ni

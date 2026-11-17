@@ -1,9 +1,9 @@
 {
- "date": "2026-11-17T17:36:38+01:00",
+ "date": "2026-11-17T23:05:19+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 1564,
+ "total": 1578,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -104,13 +104,11 @@
    "summary": "REQ-DAT-02, REQ-SIM-03: un proyecto con su propio mapa conserva sus cantidades; lo que se recuerda para los"
   },
   {
-   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU04_el_dialogo_de_ajustes_de_simulacion_tiene_una_sola_opcion_con_palabras_normales",
+   "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU04_no_hay_selector_de_lecturas_de_simulacion",
    "case": "S-AJU04",
    "outcome": "pasa",
-   "requirements": [
-    "REQ-SEM-09"
-   ],
-   "summary": "REQ-SEM-09: «Ajustes de simulación» muestra solo la lectura de los eventos de entrada, con dos textos sin"
+   "requirements": [],
+   "summary": "Y+3: se retiran la entrada y el diálogo; Ajustes conserva las actualizaciones."
   },
   {
    "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU05_barra_de_estado_basado_en_iec_60848_y_aviso_de_ajuste_no_habitual",
@@ -2338,6 +2336,55 @@
     "REQ-EDT-09"
    ],
    "summary": "REQ-EDT-09: entre la franja de modo y el borde superior del recuadro del zoom (y del chip y el título) quedan al menos 4 px."
+  },
+  {
+   "test": "test_callbacks_qt.CallbacksQt.test_SCB1_tabla_destruida_cancela_la_reconstruccion",
+   "case": "S-CB1",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_callbacks_qt.CallbacksQt.test_SCB2_panel_destruido_cancela_la_fila_rechazada",
+   "case": "S-CB2",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_callbacks_qt.CallbacksQt.test_SCB3_control_vivo_sigue_ejecutando_el_cambio",
+   "case": "S-CB3",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_callbacks_qt.CallbacksQt.test_SCB4_selector_eliminado_cancela_sus_senales_pendientes",
+   "case": "S-CB4",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_callbacks_qt.CallbacksQt.test_SCB5_selector_vivo_sigue_avisando_del_cierre",
+   "case": "S-CB5",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_callbacks_qt.CallbacksQt.test_SCB6_editor_eliminado_no_abre_lista_ni_emite_cierre_tardio",
+   "case": "S-CB6",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_callbacks_qt.CallbacksQt.test_SCB7_editor_vivo_confirma_y_cierra_como_antes",
+   "case": "S-CB7",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
   },
   {
    "test": "test_cambio_escala_y_estado.CambioEscalaYEstado.test_SRED31_el_cambio_de_escala_no_deja_nada_pendiente_que_mueva_el_dibujo",
@@ -11855,13 +11902,11 @@
    "summary": "Cambiar una lectura reinicia la simulación (queda en Pausa, sin estado, hasta Play) y se señala como distinta de la"
   },
   {
-   "test": "test_simulador_escritorio.Ventana.test_SAPP08_ajustes_y_lecturas",
+   "test": "test_simulador_escritorio.Ventana.test_SAPP08_ajustes_sin_selector_de_simulacion",
    "case": "S-APP08",
    "outcome": "pasa",
-   "requirements": [
-    "REQ-SEM-09"
-   ],
-   "summary": "REQ-SEM-09: «Ajustes» (entre Simulación y Ayuda) tiene los ajustes de simulación; el diálogo muestra una sola"
+   "requirements": [],
+   "summary": "Y+3: Ajustes conserva actualizaciones, sin selector ni diálogo de lecturas."
   },
   {
    "test": "test_simulador_escritorio.Ventana.test_SAPP09_play_pausa_y_un_solo_control",
@@ -13196,6 +13241,55 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-EDT-02: el límite al cambiar el cliente es el mismo que al arrastrar."
+  },
+  {
+   "test": "test_sy_propiedades.PropiedadesY.test_SY1_ancho_maximo_igual_al_de_media_pantalla",
+   "case": "S-Y1",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "El cambio de letra normal a grande conserva el tope confirmado de 848 px lógicos."
+  },
+  {
+   "test": "test_sy_propiedades.PropiedadesY.test_SY2_medias_pantallas_y_altos_previos_no_cambian",
+   "case": "S-Y2",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Medidas de referencia tomadas antes de Y, sin alterar la altura vigente de X+."
+  },
+  {
+   "test": "test_sy_propiedades.PropiedadesY.test_SY3_centrada_y_categorias_enteras_a_pantalla_completa",
+   "case": "S-Y3",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Una sola fila de categorías completas dentro de su columna con el ancho nuevo."
+  },
+  {
+   "test": "test_sy_propiedades.PropiedadesY.test_SY4_etapas_y_macroetapas_conservan_su_ancho_menor",
+   "case": "S-Y4",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "El máximo también rige para las fichas cortas sin estirarlas hasta el tope."
+  },
+  {
+   "test": "test_sy_propiedades.PropiedadesY.test_SY5_cursor_de_flecha_sin_perder_el_arrastre",
+   "case": "S-Y5",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "La cabecera, título y cerrar heredan flecha, y el movimiento conserva el agarre."
+  },
+  {
+   "test": "test_sy_propiedades.PropiedadesY.test_SY6_lupa_identica_con_y_sin_vecinos",
+   "case": "S-Y6",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "No basta estrechar un recorte: ni un ítem vecino superpuesto puede salir en la lupa."
+  },
+  {
+   "test": "test_sy_propiedades.PropiedadesY.test_SY7_altos_a_pantalla_completa_se_conservan",
+   "case": "S-Y7",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "El tope horizontal no cambia las alturas medidas antes de Y."
   },
   {
    "test": "test_t01_t08_evolucion.Evolucion.test_T01a_situacion_inicial_explicita",

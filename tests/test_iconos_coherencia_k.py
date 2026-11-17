@@ -199,7 +199,7 @@ class CoherenciaK(unittest.TestCase):
 
     def test_SK110_dialogos_generales_usan_la_escala_actual(self):
         from test_editor_cadenas import BaseQt
-        from escritorio.ventana import AcercaDe, Lecturas
+        from escritorio.ventana import AcercaDe
         from escritorio.propiedades_archivo import PropiedadesArchivo, recopilar
         BaseQt.setUpClass()
         caso = BaseQt()
@@ -212,7 +212,7 @@ class CoherenciaK(unittest.TestCase):
         for _ in range(8):
             self.app.processEvents()
         self.assertEqual(estilo.ESCALA, "grande")
-        dialogos = (AcercaDe(ventana), Lecturas(ventana, ventana.options),
+        dialogos = (AcercaDe(ventana),
                     PropiedadesArchivo(recopilar(edicion, True), ventana))
         for dialogo in dialogos:
             self.addCleanup(dialogo.close)

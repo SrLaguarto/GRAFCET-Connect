@@ -15,6 +15,8 @@ from . import estilo
 from .diagrama import COL, Z_EDIT, caja_barra, orientaciones, posiciones
 from .paneles import TituloSeccion, pintar_marcador
 from .propiedades import ANCHO_COLUMNA, PanelPropiedades
+from .elementos_lupa import ocultar_vecinos
+from .medidas_propiedades import ancho_maximo, margen_horizontal
 
 AMPLIACION_MAXIMA = 1.25
 MEDIO_TRAZO = 0.8  # la mitad del trazo de 1,6 px de las cajas del dibujo
@@ -39,6 +41,7 @@ class Lupa(QWidget):
         super().__init__()
         self.vista = vista
         self.origen = QRectF()
+        self.elemento = None
         self.senales: list[tuple[QRectF, str]] = []
         self.recorte: list[QRectF] = []  # rectángulos de la escena que se pintan; vacío: todo lo que cae en `origen`
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
@@ -72,12 +75,10 @@ class Lupa(QWidget):
         if self.origen.isEmpty():
             return
         escena = self.vista.scene()
-        ocultos = [i for i in escena.items() if i.isVisible() and i.zValue() >= Z_EDIT]
+        ocultos = ocultar_vecinos(escena, self.elemento, Z_EDIT)
         p = QPainter(self)
         p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         try:
-            for item in ocultos:
-                item.hide()
             destino = self.transformar().mapRect(self.origen)
             if self.recorte:  # solo el elemento: nada de las cajas vecinas que caen en el encuadre
                 t = self.transformar()
@@ -191,6 +192,7 @@ class VentanaFlotante(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setWindowModality(Qt.WindowModality.WindowModal)
         self.setObjectName("ventanaFlotante")
+        self.setCursor(Qt.CursorShape.ArrowCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
             f"QFrame#ventanaFlotante {{ background: {estilo.FONDO}; "
@@ -214,6 +216,7 @@ class VentanaFlotante(QFrame):
         fila.addWidget(self.titulo, 1)
         self.b_cerrar = QToolButton()
         self.b_cerrar.setText("✕")
+        self.b_cerrar.setCursor(Qt.CursorShape.ArrowCursor)
         self.b_cerrar.setAutoRaise(True)
         self.b_cerrar.setToolTip("Cerrar")
         self.b_cerrar.setAccessibleName("Cerrar la ventana de propiedades")
@@ -470,8 +473,9 @@ class GestorFlotantes(QObject):
 
     def _dimensionar(self, area: QRect) -> None:
         v = self.principal
-        margen = max(2 * estilo.E6, area.width() // (16 * estilo.E2) * estilo.E2)
+        margen = margen_horizontal(area.width())
         disponible = area.adjusted(margen, estilo.E6, -margen, -estilo.E6)
+        disponible.setWidth(min(disponible.width(), ancho_maximo()))
         necesita_formulador = (
             self.panel.pagina == "transicion" or self.panel._bloques_fuera
             or self.panel.accion.caja_numerica.isVisibleTo(self.panel)
@@ -645,6 +649,7 @@ class GestorFlotantes(QObject):
             self.geometrias = {"principal": QRect(v.geometry())}
             zonas = self._zonas()
             v.lupa.origen = self._origen_lupa(zonas)
+            v.lupa.elemento = self.panel.ident
             v.lupa.recorte = self._recorte(v.lupa.origen)
             v.lupa.update()
             self._senales_lupa()
