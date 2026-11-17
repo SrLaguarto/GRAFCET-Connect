@@ -12,7 +12,8 @@ from servidor_directo_falso import ServidorDirecto, senal
 def esperar(condicion, limite_s=5):
     limite = monotonic() + limite_s
     while not condicion():
-        QTest.qWait(2)
+        HC._bombear(1)
+        sleep(.002)  # El servidor falso es Python: dejarle el GIL entre vueltas de la UI.
         if monotonic() >= limite:
             raise AssertionError("No terminó la operación del servidor falso")
 
@@ -35,7 +36,7 @@ def contexto(caso, numero=60, retardo=.02, conectar=True):
     c.e.poner_etapa(QPointF(200, 200), inicial=True)
     p = c.w.panel_es
     config = Configuracion(host="127.0.0.1", puerto=servidor.puerto,
-                           modo="directo", modelo=c.e.ed.model["id"])
+                           modo="directo", modelo=c.e.ed.model["id"], timeout_ms=2000)
     propuestas = Propuestas(c.e, config, datos)
     for fila in propuestas.filas:
         fila.marcada = True
@@ -46,7 +47,9 @@ def contexto(caso, numero=60, retardo=.02, conectar=True):
     c.w._proyecto_modbus = c.w._proyecto
     if conectar:
         c.w._conectar_modbus()
-        esperar(lambda: c.w.modbus.estado == "conectado")
+        esperar(lambda: c.w.modbus.estado in ("conectado", "error"))
+        if c.w.modbus.estado != "conectado":
+            raise AssertionError(f"Falló la conexión HTTP falsa: {c.w.modbus.mensaje}")
         QTest.qWait(300)
     return c, servidor
 

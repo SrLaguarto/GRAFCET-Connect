@@ -282,19 +282,17 @@ class Ventana(unittest.TestCase):
             self.w.a_ejecutar.setChecked(False)
             self.w._opciones(normalize_options(None))  # un fallo no deja las lecturas cambiadas a las pruebas siguientes
 
-    def test_SAPP08_ajustes_y_lecturas(self):
-        """REQ-SEM-09: «Ajustes» (entre Simulación y Ayuda) tiene los ajustes de simulación; el diálogo muestra una sola
-        lectura, sin «detener», y el panel derecho ya no las lleva."""
+    def test_SAPP08_ajustes_sin_selector_de_simulacion(self):
+        """Y+3: Ajustes conserva actualizaciones, sin selector ni diálogo de lecturas."""
         from PySide6.QtWidgets import QComboBox, QGroupBox
-        from escritorio.ventana import Lecturas
         titulos = [a.text().replace("&", "") for a in self.w.menuBar().actions()]
         self.assertEqual(titulos[titulos.index("Simulación") + 1:], ["Ajustes", "Ayuda"])
-        d = Lecturas(self.w, self.w.options)
-        self.assertEqual(sorted(d.botones), ["recorrido", "situacion-anterior"])
-        self.assertEqual(d.options(), self.w.options, "sin tocar nada, las lecturas no cambian")
-        self.assertFalse(hasattr(self.w, "u03"))
+        ajustes = self.w.menuBar().actions()[titulos.index("Ajustes")].menu()
+        self.assertEqual([a.text().replace("&", "") for a in ajustes.actions()],
+                         ["Buscar actualizaciones al arrancar"])
+        self.assertEqual(self.w.options["U-03"], "situacion-anterior")
         self.assertNotIn("Lecturas de interpretación", [g.title() for g in self.w.scroll.findChildren(QGroupBox)])
-        self.assertEqual(self.w.scroll.findChildren(QComboBox), [], "el panel derecho no tiene combos de lecturas")
+        self.assertEqual(self.w.scroll.findChildren(QComboBox), [])
 
     def test_SAPP09_play_pausa_y_un_solo_control(self):
         """REQ-SIM-03: un solo control de ejecución. Play simula en tiempo real (traza abajo, sin paleta) y Pausa detiene y

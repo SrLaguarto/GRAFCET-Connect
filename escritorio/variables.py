@@ -22,6 +22,8 @@ from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QMenu, QSizePolicy,
                                QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
+from shiboken6 import isValid
+
 from . import estilo
 from .paneles import AIRE_LINEAS, CabeceraCompacta, ContextoNombres, ReparteColumnas, SALTO
 from .diagrama import COL
@@ -155,11 +157,15 @@ class _DelegadoCombo(QStyledItemDelegate):
         cb.setCurrentIndex(max(0, next((i for i in range(cb.count()) if _igual(cb.itemData(i), actual)), 0)))
 
         def elegido(_: int = 0) -> None:
-            QTimer.singleShot(0, lambda: self.closeEditor.emit(cb))  # primero se cierra, luego se rehace la tabla
+            QTimer.singleShot(0, self, lambda: self._cerrar_combo(cb))
             self.panel.elegir(r, c, cb.currentData())
         cb.activated.connect(elegido)
-        QTimer.singleShot(0, cb.showPopup)
+        QTimer.singleShot(0, cb, cb.showPopup)
         return cb
+
+    def _cerrar_combo(self, combo: QComboBox) -> None:
+        if isValid(combo):
+            self.closeEditor.emit(combo)
 
     def setEditorData(self, editor: QWidget, index: Any) -> None:  # noqa: N802
         if index.column() == 0:
@@ -363,7 +369,7 @@ class PanelVariables(QWidget):
             reparto.aplicar()
 
     def eventFilter(self, objeto: Any, evento: Any) -> bool:  # noqa: N802
-        if objeto is self.tabla.viewport() and evento.type() == QEvent.Type.Leave:
+        if evento.type() == QEvent.Type.Leave and objeto is self.tabla.viewport():
             self._detallar(self.tabla.currentRow())  # el ratón se va: vuelve el detalle de la fila elegida (o nada)
         return False
 
@@ -531,7 +537,7 @@ class PanelVariables(QWidget):
     def _diferir(self, fn: Any) -> None:
         """Hacerlo ya, o cuando acabe la edición en curso de una celda (no se rehace la tabla bajo el editor abierto)."""
         if self.tabla.state() == QAbstractItemView.State.EditingState:
-            QTimer.singleShot(0, fn)
+            QTimer.singleShot(0, self.tabla, fn)
         else:
             fn()
 

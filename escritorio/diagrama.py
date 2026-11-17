@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, 
 
 from . import estilo
 from .ayudas_emergentes import mostrar_ayuda
+from .elementos_lupa import DATO_ELEMENTOS
 
 SX = 100       # margen izquierdo del dibujo
 H = 22         # semilado de la etapa cuadrada (unidad: lado = 2·H)
@@ -92,6 +93,7 @@ class _Pintor:
         self.sc = scene
         self.verdaderos: set[str] = set()
         self.parcial = None
+        self.elementos = ()
 
     @staticmethod
     def pen(color: str, width: float = 1.6, dash: tuple[float, float] | None = None) -> QPen:
@@ -104,6 +106,7 @@ class _Pintor:
 
     def _put(self, item: Any, z: float, tip: str | None) -> Any:
         item.setData(42, self.parcial)
+        item.setData(DATO_ELEMENTOS, self.elementos)
         item.setZValue(z)
         if tip:
             item.setToolTip(tip)
@@ -667,6 +670,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     marcadas = {i for i in (sel or set()) if i.startswith(("accion:", "parte:"))} | {f"parpadeo:{i}" for i in (naranja or ())}
     link = pt.pen("text")
     for t in M["transitions"]:
+        pt.elementos = (t["id"],)
         pt.parcial = t.get("partial") or "g"
         tx, ty = t["x"] + SX, t["y"]
         ob = (S.get("transitions") or {}).get(t["id"], {})
@@ -728,6 +732,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         if t.get("comment"):  # a la derecha de la receptividad (o de la transición, si no tiene)
             pt.comentario(max(fin + (14 if w else 0), derecha + 8), ty, t["comment"], Z_BAR)
     for b in M.get("bars", []):  # barras de simultaneidad (doble trazo) y de alternativa (trazo simple), con sus conectores
+        pt.elementos = (b["id"],)
         pt.parcial = pertenencia[b["id"]]
         bx, by, w, h = barra(b)
         trazo = pt.pen(roles.get(b["id"], "text"))
@@ -737,12 +742,14 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
             pt.rect(bx, by+1, w, h-2, None, Z_LINK+0.25, "panel")
             pt.line(bx, by + h, bx + w, by + h, trazo, Z_LINK + 0.5, tipo)
     for e in enlaces(M):
+        pt.elementos = tuple(i for i in (e.get("sid"), e.get("tid")) if i)
         pt.parcial = pertenencia.get(e.get("tid") or e.get("sid"))
         color_enlace = _color_enlace(M, roles, e)
         pt.poly([(float(x), float(y)) for x, y in e["pts"]], pt.pen(color_enlace), Z_LINK)
         for flecha in e["arrows"]:
             pt.poly(flecha["pts"], None, Z_LINK + 0.1, fill=color_enlace)
     for s in M["steps"]:
+        pt.elementos = (s["id"],)
         pt.parcial = s.get("partial") or "g"
         x, y = pos[s["id"]]
         sid = s["id"]
@@ -793,6 +800,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
             cajas_ = _geometria_acciones(x, y, s["actions"] + unidas, s.get("actionLayout", "fila"))[0]
             pt.comentario(max([ax + w for _, ax, _, w in cajas_] + [x + H]) + 10, y, s["comment"], Z_STEP)
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
+        pt.elementos = (m["id"],)
         pt.parcial = m.get("partial") or "g"
         x, y = pos[m["id"]]
         act = bool((S.get("macros") or {}).get(m["id"]))
@@ -1109,6 +1117,8 @@ def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S:
     `resaltar`, el enlace de la etapa a sus acciones."""
     if not actions:
         return
+    anteriores = pt.elementos
+    pt.elementos = tuple(a["id"] for a in actions) + ((etapa,) if etapa else ())
     colocadas, union = _geometria_acciones(x, y, actions, disposicion, suelto)
     linea = pt.pen("active" if etapa in (S.get("situation") or []) and not S.get("blocked") else "text")
     for tramo in union:
@@ -1120,8 +1130,10 @@ def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S:
             pt.poly([(float(a), float(b)) for a, b in tramo], pt.pen("accent", 4), Z_EDIT)
     cabeza = actions[0].get("id", "")
     for a, ax, cy, w in colocadas:
+        pt.elementos = (a["id"],)
         _caja_accion(pt, ax, cy, a, S, tmp, cajas, etapa, marcadas, suelta=suelto, ancho=w, grupo=grupo, cabeza=cabeza,
                      ordenes=ordenes)
+    pt.elementos = anteriores
 
 
 def _caja_accion(pt: _Pintor, ax: float, y: float, a: dict[str, Any], S: dict[str, Any],
@@ -1479,7 +1491,7 @@ class SelectorAccion(QComboBox):
 
     def hidePopup(self) -> None:  # noqa: N802
         super().hidePopup()
-        QTimer.singleShot(0, self.cerrado.emit)
+        QTimer.singleShot(0, self, self.cerrado.emit)
 
     def keyPressEvent(self, ev: Any) -> None:  # noqa: N802
         if ev.key() == Qt.Key.Key_Escape:
@@ -1492,10 +1504,14 @@ class SelectorAccion(QComboBox):
         super().focusOutEvent(ev)
         r = ev.reason()
         if r in (Qt.FocusReason.MouseFocusReason, Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason, Qt.FocusReason.ActiveWindowFocusReason):
-            QTimer.singleShot(0, self.cerrado.emit)  # (un clic en otro sitio, Tab o cambiar de ventana)
+            QTimer.singleShot(0, self, self.cerrado.emit)
         elif r == Qt.FocusReason.OtherFocusReason and not self._reclamado:  # el dibujo repinta y se queda el foco: se recupera una vez
             self._reclamado = True
-            QTimer.singleShot(0, lambda: self.setFocus(Qt.FocusReason.OtherFocusReason) if self.isVisible() else None)
+            QTimer.singleShot(0, self, self._recuperar_foco)
+
+    def _recuperar_foco(self) -> None:
+        if self.isVisible():
+            self.setFocus(Qt.FocusReason.OtherFocusReason)
 
 
 class VistaDiagrama(QGraphicsView):
@@ -2287,7 +2303,7 @@ class VistaDiagrama(QGraphicsView):
         self._barras()
         self._encajar(r)
         self._encuadrando = r  # (al avisar de lo encuadrado, la ventana puede recolocar sus paneles y cambiar el tamaño de la vista)
-        QTimer.singleShot(0, self._terminar_encuadre)
+        QTimer.singleShot(0, self, self._terminar_encuadre)
 
     def _terminar_encuadre(self) -> None:
         self._encuadrando = None
@@ -2374,7 +2390,7 @@ class VistaDiagrama(QGraphicsView):
         cb.show()
         cb.raise_()
         cb.setFocus(Qt.FocusReason.OtherFocusReason)
-        QTimer.singleShot(0, lambda: cb.showPopup() if self._selector is cb and cb.isVisible() else None)
+        QTimer.singleShot(0, cb, lambda: cb.showPopup() if self._selector is cb and cb.isVisible() else None)
 
     def cerrar_selector(self) -> None:
         """Quita el desplegable de la acción, si hay uno."""

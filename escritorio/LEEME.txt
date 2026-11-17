@@ -17,10 +17,7 @@ Qué hace
   retardo es un temporizador: sobre la duración de su receptividad (o de la condición o evento de una acción) se ve el tiempo transcurrido («0,5 s») mientras cuenta, y «3 s ✓» al vencer. Pausa (F5 de nuevo) detiene y
   vuelve a editar y deja todo a 0 hasta el siguiente Play (sin etapas activas ni temporizadores); cada Play empieza desde la situación inicial. Barra de herramientas: Ejecutar/Pausa
   y Reiniciar (Ctrl+R).
-- Ajustes > Ajustes de simulación…: una sola pregunta, «¿Cuándo vale el cambio de una entrada?», con «De uno en uno»
-  (por defecto) o «Todo de una vez». Las demás lecturas de interpretación conservan su valor y no se muestran. Lo que
-  sigue abierto se detiene con su cuestión U en vez de aproximarse. Si se elige otra, la barra de estado lo avisa
-  («Ajustes de simulación no habituales»).
+- Simulación: el cambio de una entrada vale de uno en uno (decisión fija; la opción «Ajustes de simulación» se retiró en la 1.1.5).
 - Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J). Al simular, el
   panel inferior muestra la traza. Desmarcado en Ver (o con su atajo), un panel desaparece del todo, sin pestaña ni hueco, y
   el dibujo gana su ancho; plegado con su flecha o con el divisor, deja su pestaña y sigue marcado en Ver. Las dos cosas se

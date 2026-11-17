@@ -26,7 +26,7 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 - Las entradas son pulsadores: un clic para pulsar, Ctrl+clic para enclavar y clic derecho para interruptor. Las numéricas se escriben.
 - Las etapas activas se ven en el dibujo; las salidas, las variables y las entradas, en el panel lateral; la traza, en el panel inferior.
 - Los temporizadores muestran el tiempo transcurrido y una marca al vencer.
-- En **Ajustes > Ajustes de simulación…** se elige cuándo vale el cambio de una entrada: «De uno en uno» (por defecto) o «Todo de una vez».
+- En la simulación, el cambio de una entrada vale de uno en uno.
 - Los avisos usan vocabulario GRAFCET. Los diagnósticos se resumen en el panel de la derecha.
 
 ### Documentación y planos

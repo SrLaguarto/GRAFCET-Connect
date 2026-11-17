@@ -37,7 +37,7 @@ class ArrastrePropiedades(QObject):
         self.posicion = QPoint()
         self.movida = False
         for zona in (flotante.cabecera, flotante.titulo):
-            zona.setCursor(Qt.CursorShape.SizeAllCursor)
+            zona.setCursor(Qt.CursorShape.ArrowCursor)
             zona.installEventFilter(self)
 
     def limitar(self, posicion=None):

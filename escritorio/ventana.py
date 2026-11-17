@@ -2,7 +2,7 @@
 
 Simula un ejemplo o un modelo guardado (proyecto o documento de modelo, documento 09) con el dibujo de la
 norma. Entradas, tiempo real (como un autómata: los retardos son temporizadores que cuentan solos), evolución a
-evolución, traza, salidas, variables, temporizadores y, en «Ajustes», las lecturas de interpretación. Toda la
+evolución, traza, salidas, variables y temporizadores. Toda la
 semántica la decide grafcet/engine.py con el perfil provisional: la ventana no aproxima nada y los bloqueos por
 cuestiones U se muestran tal cual. No es el editor. Basado en IEC 60848.
 """
@@ -178,61 +178,6 @@ class DialogoForzado(QDialog):
         marcadas = [self.etapas.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.etapas.count())
                     if self.etapas.item(i).checkState() == Qt.CheckState.Checked] if forma == "explicit" else []
         return {"destino": self.destino.currentData(), "forma": forma, "etapas": marcadas}
-
-
-TEXTOS_FLANCOS = {
-    "situacion-anterior": "De uno en uno. Cuando cambia una entrada, solo avanzan las transiciones que ya estaban "
-                          "listas antes del cambio: la simulación recorre el grafcet paso a paso. Es lo habitual.",
-    "recorrido": "Todo de una vez. Cuando cambia una entrada, el cambio vale durante todo el recorrido de ese "
-                 "instante: el grafcet puede avanzar varias etapas seguidas con el mismo cambio."}
-# (los valores son los de SEMANTIC_OPTIONS["U-03"])
-
-
-class Lecturas(QDialog):
-    """«Ajustes de simulación»: una sola opción con palabras normales, cuándo vale el cambio de una entrada (la
-    lectura U-03 de SEMANTIC_OPTIONS). Las demás lecturas no se muestran: conservan los valores con que se abre."""
-
-    CUESTION = "U-03"
-
-    def __init__(self, parent: QWidget, options: dict[str, str]) -> None:
-        super().__init__(parent)
-        from .estilo_dialogos import aplicar_escala_dialogo
-        aplicar_escala_dialogo(self)
-        self.base = dict(options)
-        self.setWindowTitle("Ajustes de simulación")
-        self.resize(560, 300)
-        lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("<b>¿Cuándo vale el cambio de una entrada?</b>"))
-        nota = QLabel("Elija cómo reacciona la simulación cuando una entrada cambia de valor. Si cambia el ajuste, la "
-                      "simulación se reinicia y la barra de estado avisa de que no es el habitual.")
-        nota.setWordWrap(True)
-        lay.addWidget(nota)
-        spec = SEMANTIC_OPTIONS[self.CUESTION]
-        self.grupo = QButtonGroup(self)
-        self.botones: dict[str, QRadioButton] = {}
-        actual = options.get(self.CUESTION, spec["default"])
-        for valor in (v for v in spec["values"] if v in TEXTOS_FLANCOS):
-            r = QRadioButton(TEXTOS_FLANCOS[valor])
-            r.setStyleSheet("QRadioButton { padding: 4px }")
-            r.setChecked(valor == actual)
-            self.grupo.addButton(r)
-            lay.addWidget(r)
-            self.botones[valor] = r
-        lay.addStretch(1)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-                                   | QDialogButtonBox.StandardButton.RestoreDefaults)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        buttons.button(QDialogButtonBox.StandardButton.RestoreDefaults).setText("Volver al ajuste habitual")
-        buttons.button(QDialogButtonBox.StandardButton.RestoreDefaults).clicked.connect(self._defaults)
-        lay.addWidget(buttons)
-
-    def _defaults(self) -> None:
-        self.botones[SEMANTIC_OPTIONS[self.CUESTION]["default"]].setChecked(True)
-
-    def options(self) -> dict[str, str]:
-        elegido = next((v for v, r in self.botones.items() if r.isChecked()), self.base.get(self.CUESTION))
-        return {**self.base, self.CUESTION: elegido}
 
 
 class AcercaDe(QDialog):
@@ -878,7 +823,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         for a in (self.a_ejecutar, self.a_reiniciar):
             sim.addAction(a)
         m_ajustes = bar.addMenu("A&justes")
-        m_ajustes.addAction("&Ajustes de simulación…", self.lecturas)
         self.a_actualizar_arranque = self._accion("&Buscar actualizaciones al arrancar", self._buscar_al_arrancar, marcable=True)
         self.a_actualizar_arranque.blockSignals(True)
         self.a_actualizar_arranque.setChecked(actualizaciones.al_arrancar_activo(self.ajustes))
@@ -1723,7 +1667,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         ayuda = self._ayuda if self._ayuda and not e.ed.undo_stack else "Simulación del grafcet."
         nueva = Vista(e.ed.model["id"], e.titulo, ayuda, lambda: (copy.deepcopy(e.ed.model), e.layout()), self.options,
                       presentation=e.ed.presentation)
-        if nueva.s is None:  # compila con las lecturas por defecto, pero no con las activas (diálogo «Lecturas»)
+        if nueva.s is None:  # compila con las lecturas por defecto, pero no con el perfil efectivo
             lineas = [f"• {e.sust(d.message)}" for d in nueva.compile_diags]  # (el texto del núcleo, con nombres y sin ID)
             QMessageBox.warning(self, TITULO, "El grafcet no compila con las lecturas de interpretación activas, no se puede "
                                 "simular todavía:\n\n" + "\n".join(lineas[:8]) + ("\n…" if len(lineas) > 8 else ""))
@@ -2917,11 +2861,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if play:
             self.a_ejecutar.setChecked(True)
 
-    def lecturas(self) -> None:
-        d = Lecturas(self, self.options)
-        if d.exec() == QDialog.DialogCode.Accepted and d.options() != self.options:
-            self._opciones(d.options())
-
     def _marcar_play(self, on: bool) -> None:
         """Pone el aspecto del control de ejecución (marca, texto e icono) sin provocar la transición."""
         self.a_ejecutar.blockSignals(True)
@@ -3547,7 +3486,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         """Aviso discreto, en la barra de estado, cuando alguna lectura difiere de la decidida por el responsable."""
         changed = [q for q, v in self.options.items() if q in SEMANTIC_OPTIONS and v != SEMANTIC_OPTIONS[q]["default"]]
         self.l_lect.setText("Ajustes de simulación no habituales · " if changed else "")
-        self.l_lect.setToolTip("Cambian cómo reacciona la simulación (Ajustes > Ajustes de simulación)"
+        self.l_lect.setToolTip("El documento usa ajustes de simulación distintos de los habituales"
                                if changed else "")
 
     def _variables(self, M: dict[str, Any], S: dict[str, Any]) -> None:

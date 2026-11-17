@@ -251,9 +251,6 @@ def _dialogo(cual: str) -> Callable[[Contexto], None]:
         if cual == "propiedades_archivo":
             from escritorio import propiedades_archivo
             d = propiedades_archivo.PropiedadesArchivo(propiedades_archivo.recopilar(c.e, True), w)
-        elif cual == "ajustes_simulacion":
-            from escritorio.ventana import Lecturas
-            d = Lecturas(w, w.options)
         elif cual == "leyenda":
             from escritorio.leyenda import Leyenda
             d = Leyenda(w)
@@ -301,7 +298,6 @@ PANTALLAS: list[tuple[str, Callable[[Contexto], None]]] = [
     ("planos_sin_hoja", _planos(False)),
     ("planos_con_hoja", _planos(True)),
     ("dialogo_propiedades_archivo", _dialogo("propiedades_archivo")),
-    ("dialogo_ajustes_simulacion", _dialogo("ajustes_simulacion")),
     ("dialogo_leyenda", _dialogo("leyenda")),
     ("dialogo_acerca", _dialogo("acerca")),
     ("buscar_elemento", _buscar),
