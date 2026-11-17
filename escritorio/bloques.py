@@ -29,6 +29,7 @@ from grafcet.expressions import CMP, FUNCS_EXPR, FUNCS_REF, KEYWORDS, ParseError
 from grafcet.notation import a_nucleo, a_usuario, normalizar_espacios, x_etapa
 
 from . import estilo
+from .arrastre_popup import ejecutar_arrastre
 from .ayudas_emergentes import mostrar_ayuda
 
 # -- modelo: el árbol de bloques --------------------------------------------------------------------------
@@ -1220,7 +1221,7 @@ class _Superficie(QWidget):
         drag.setPixmap(self.motor.pixmap(nodo, 240, self.devicePixelRatioF()))
         drag.setHotSpot(QPoint(12, 12))
         _ARRASTRE["resuelto"] = False
-        drag.exec(Qt.DropAction.MoveAction | Qt.DropAction.CopyAction, Qt.DropAction.CopyAction)
+        ejecutar_arrastre(drag, self.window())
         if self.mueve and not _ARRASTRE["resuelto"] and not self.rect().contains(self.mapFromGlobal(QCursor.pos())):
             self.quitar(tuple(r))  # soltado fuera del área: se quita
         self._pulsado = None

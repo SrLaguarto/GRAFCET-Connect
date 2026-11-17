@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-11-17T15:36:13+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 1563 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-11-17T17:36:38+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 1564 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 1436 casos, 1466 pruebas, 1466 pasan.
+Pruebas suplementarias S-xx: 1437 casos, 1467 pruebas, 1467 pasan.
 
 ## Requisitos
 
@@ -1688,6 +1688,7 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-X7 | REQ-EDT-02 | pasa | `test_SX7_un_valor_solo_toca_su_piloto` | una nueva muestra actualiza solo la señal que cambió. |
 | S-X8 | REQ-EDT-02 | pasa | `test_SX8_traidas_sin_conectar_no_rehace_modulo_por_seleccion` | seleccionar y abrir Propiedades no cambia el catálogo ni sus filas. |
 | S-X9 | REQ-EDT-02 | pasa | `test_SX9_cero_variables_sin_refrescos_visuales` | conectar sin variables no repinta el indicador cada periodo. |
+| S-XC2 |  | pasa | `test_SXC2_no_roba_la_captura_de_un_desplegable_abierto` | Un popup distinto abierto durante el arrastre conserva la prioridad del ratón. |
 | S-XM1 | REQ-EDT-02 | pasa | `test_SXM1_cinco_categorias_enteras_en_una_fila` | en las tres ventanas las cinco pestañas caben, también a media pantalla real. |
 | S-XM2 | REQ-EDT-02 | pasa | `test_SXM2_campos_sin_corte_y_comentario_largo` | etiqueta y casilla comparten fila; el comentario ocupa el ancho del panel. |
 | S-XM3 | REQ-EDT-02 | pasa | `test_SXM3_altura_moderada_y_aire_alrededor` | el responsable sustituyó el 33 % y el doble exacto por un aumento moderado. |
@@ -1696,6 +1697,8 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-XM6 | REQ-JER-07 | pasa | `test_SXM6_nombre_macro_renombra_expansion_y_deshace` | el texto M1 edita M33, E33 y S33 en una sola operación, conservando las referencias. |
 | S-XM7 | REQ-JER-07 | pasa | `test_SXM7_cuerpo_macro_navega_y_nombre_repetido_se_rechaza` | cuerpo y nombre mantienen operaciones distintas; el rechazo no cambia el modelo. |
 | S-XM8 | REQ-EDT-02 | pasa | `test_SXM8_simultaneidad_sola_visible_y_persistente` | la doble línea sola se dibuja y conserva su caja al añadir y quitar otro elemento. |
+
+Pruebas sin caso asignado: setUpClass (test_clic_exterior_tras_arrastre.ClicExteriorNativo)
 
 ## Revisión bidireccional del paquete
 
