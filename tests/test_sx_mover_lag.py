@@ -200,6 +200,8 @@ class IntercambioX(unittest.TestCase):
             with patch.object(c.w.diagrama, "mostrar", wraps=c.w.diagrama.mostrar) as dibujo:
                 with patch.object(c.w, "_filas", wraps=c.w._filas) as filas:
                     QTest.qWait(400)
+                    # con el equipo cargado, el hilo de red puede tardar más: se espera al reenvío, con límite
+                    esperar(lambda: sum(p[0] == "PUT" for p in servidor.peticiones) > puts)
                     self.assertEqual(dibujo.call_count, 0)
                     tablas = [x for x in filas.call_args_list if x.args[0] in (c.w.t_vars, c.w.t_temp)]
                     self.assertEqual(tablas, [])
