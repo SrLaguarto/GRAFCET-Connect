@@ -2,7 +2,7 @@
 
 Documento **generado** por `tools/generar_trazabilidad.py`; no editar a mano.
 
-Generado el 2026-11-17T17:36:38+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 1564 pruebas ejecutadas, 0 fallos, 0 errores.
+Generado el 2026-11-17T23:05:19+01:00 · Python 3.12.10 · Windows-11-10.0.26200-SP0 · 1578 pruebas ejecutadas, 0 fallos, 0 errores.
 
 Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (no es el oráculo del documento 11, que pedía detener; contraste U-01 pendiente) · ⛔ bloqueo por U verificado (el oráculo semántico sigue abierto) · ◐ parcial · ∅ capacidad no implementada en esta iteración (se verifica que no se ejecuta) · — no ejecutado · ✘ falla. **Un ✔ con oráculo I es provisional (U-01): no prueba conformidad.**
 
@@ -28,7 +28,7 @@ Leyenda: ✔ pasa · ◆ pasa según una decisión del responsable sobre una U (
 | PASA | 76 |
 | PASA SEGÚN DECISIÓN | 12 |
 
-Pruebas suplementarias S-xx: 1437 casos, 1467 pruebas, 1467 pasan.
+Pruebas suplementarias S-xx: 1451 casos, 1481 pruebas, 1481 pasan.
 
 ## Requisitos
 
@@ -58,7 +58,7 @@ Pruebas suplementarias S-xx: 1437 casos, 1467 pruebas, 1467 pasan.
 | REQ-SEM-06 | I/crítica | 04 | IMPL-I | engine | T-07a ✔, T-07b ✔, T-07c ✔, S-EJ01 ✔, S-H09 ✔ | Etapas inestables sin pulso continuo; memorizadas conservadas; eventos en el recorrido según la lectura 5.1 (P-IMP-22) |
 | REQ-SEM-07 | P/crítica | 04 | IMPL-P | engine | T-08a ✔, T-08b ✔, S-FIO29 ✔, S-FIO62 ✔, S-APP19 ✔, S-08a ✔, S-H09b ✔, S-OPT03c ✔ | D-LIM-EVOL recuperable, τ sin avanzar, sin falsa estabilidad (T-08a con su oráculo original desde la respuesta 1.2 A; S-08a) |
 | REQ-SEM-08 | P/crítica | 04 | IMPL-P | engine, trace | T-04c ✔, T-23b ✔, T-24a ◐, S-U06 ✔ | Mismos observables con independencia de recorrido, geometría y control; entre sistemas: U-10 |
-| REQ-SEM-09 | U/crítica | 04 | IMPL-DEC | engine | T-10d ◆, T-11b ⛔, T-15c ◆, S-AJU04 ✔, S-AJU05 ✔, S-CMP01 ✔, S-CMP02 ✔, S-CMP03 ✔, S-CMP05 ✔, S-APP08 ✔, S-U05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔ | U-05 (P-IMP-20) y U-03, U-04, U-06, U-07 (comparador, 27-10-2026, P-IMP-22) cerradas por el responsable; cada lectura sigue siendo seleccionable, «detener» incluida en el banco (P-IMP-15, P-IMP-21; el simulador de escritorio no la ofrece, P-IMP-30). Siguen deteniéndose los eventos internos y de franqueamiento (U-03), 0s/p/d2 y los vencimientos que dependen del orden (U-06) |
+| REQ-SEM-09 | U/crítica | 04 | IMPL-DEC | engine | T-10d ◆, T-11b ⛔, T-15c ◆, S-AJU05 ✔, S-CMP01 ✔, S-CMP02 ✔, S-CMP03 ✔, S-CMP05 ✔, S-U05 ✔, S-OPT03a ✔, S-OPT03b ✔, S-OPT03c ✔ | U-05 (P-IMP-20) y U-03, U-04, U-06, U-07 (comparador, 27-10-2026, P-IMP-22) cerradas por el responsable; cada lectura sigue siendo seleccionable, «detener» incluida en el banco (P-IMP-15, P-IMP-21; el simulador de escritorio no la ofrece, P-IMP-30). Siguen deteniéndose los eventos internos y de franqueamiento (U-03), 0s/p/d2 y los vencimientos que dependen del orden (U-06) |
 | REQ-ACT-01 | I/crítica | 05 | IMPL-I | engine | T-14a ✔, T-14b ✔, T-14c ✔, T-07a ✔, T-12c ✔, S-UIV01 ✔, S-FBR03 ✔, S-EDI317 ✔, S-EDI249 ✔, S-EDI224 ✔, S-EDI256 ✔, S-EDI304 ✔, S-EDI305 ✔, S-EDI240 ✔, S-EDI100 ✔, S-EDI102 ✔, S-EDI104 ✔, S-EDI105 ✔, S-EDI106 ✔, S-EDI114 ✔, S-EDI117 ✔, S-EDI123 ✔, S-EDI124 ✔, S-EDI126 ✔, S-EDI127 ✔, S-EDI128 ✔, S-EDI129 ✔, S-EDI130 ✔, S-EDI131 ✔, S-EDI132 ✔, S-EDI133 ✔, S-EDI134 ✔, S-EDI135 ✔, S-EDI136 ✔, S-EDI137 ✔, S-EDI189 ✔, S-EDI40 ✔, S-EDI44 ✔, S-EDI48 ✔, S-EDI58 ✔, S-EDI62 ✔, S-EDI70 ✔, S-EDI71 ✔, S-EDI72 ✔, S-EDI74 ✔, S-EDI75 ✔, S-EDI82 ✔, S-EDI83 ✔, S-EDI84 ✔, S-EDI86 ✔, S-EDI88 ✔, S-EDI89 ✔, S-EDI90 ✔, S-EDI91 ✔, S-EDI92 ✔, S-EDI93 ✔, S-EDI94 ✔, S-EDI95 ✔, S-EDI39 ✔, S-EDI98 ✔, S-CLQ08 ✔, S-CLQ09 ✔, S-CLI06 ✔, S-CLI10 ✔, S-VIS03 ✔, S-COR05 ✔, S-SEL01 ✔, S-SEL01b ✔, S-SEL02 ✔, S-SEL04 ✔, S-H10 ✔ | Disyunción sobre situación efectiva; una salida continua leída en una expresión vale según la situación del momento (comparador, 8.2 C; cierra H-10) |
 | REQ-ACT-02 | I/crítica | 05 | IMPL-I | engine | T-15a ✔, T-15b ✔, T-01c ✔, T-07b ✔, T-07c ✔, T-18e ◐, S-UIV03 ✔, S-CMP02 ✔, S-EJ02 ✔, S-SAL03 ✔, S-U03 ✔, S-U05b ✔, S-U09 ✔, S-H07 ✔, S-H08c ✔ | Memorizadas por activación, desactivación y evento, también virtuales |
 | REQ-ACT-03 | P/crítica | 05 | IMPL-P | model, engine | T-16a ✔, T-16b ✔, S-ESC01 ✔, S-ESC02 ✔ | D-ESCRITURA-CONFLICTO con autores y valores, sin prioridad oculta; un conflicto seguro impide compilar (P-IMP-16) y el resto se detiene en ejecución |
@@ -260,7 +260,7 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-AJU01 | REQ-EDT-09, REQ-JER-05 | pasa | `test_SAJU01_el_panel_de_una_etapa_de_un_recinto_tiene_la_casilla_enlace_de_activacion` | el panel de opciones de una etapa de un recinto muestra la casilla «Enlace de |
 | S-AJU02 | REQ-DAT-02, REQ-SIM-03 | pasa | `test_SAJU02_un_proyecto_nuevo_no_hereda_los_16_8_recordados_de_una_version_anterior` | las preferencias recordadas por una versión anterior (16 digitales y 8 numéricas) |
 | S-AJU03 | REQ-DAT-02, REQ-SIM-03 | pasa | `test_SAJU03_las_cantidades_de_un_proyecto_concreto_se_respetan_y_no_se_recuerdan_globalmente` | un proyecto con su propio mapa conserva sus cantidades; lo que se recuerda para los |
-| S-AJU04 | REQ-SEM-09 | pasa | `test_SAJU04_el_dialogo_de_ajustes_de_simulacion_tiene_una_sola_opcion_con_palabras_normales` | «Ajustes de simulación» muestra solo la lectura de los eventos de entrada, con dos textos sin |
+| S-AJU04 |  | pasa | `test_SAJU04_no_hay_selector_de_lecturas_de_simulacion` | se retiran la entrada y el diálogo; Ajustes conserva las actualizaciones. |
 | S-AJU05 | REQ-NOR-02, REQ-SEM-09 | pasa | `test_SAJU05_barra_de_estado_basado_en_iec_60848_y_aviso_de_ajuste_no_habitual` | la barra de estado dice «Basado en IEC 60848» (sin «conformidad» ni |
 | S-AJU06 | REQ-EDT-09 | pasa | `test_SAJU06_los_avisos_no_llevan_codigos_internos_ni_rojo_agresivo` | la lista de diagnósticos dice «t1: la receptividad está vacía» (sin D-…, U-… ni H-…), con |
 | S-AJU07 | REQ-EDT-09 | pasa | `test_SAJU07_los_rechazos_del_nucleo_se_muestran_sin_codigos` | un rechazo del núcleo (aquí, convertir en macroetapa una etapa inicial) se enseña sin código. |
@@ -292,7 +292,7 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-APP05 | REQ-SIM-03 | pasa | `test_SAPP05_ejemplos_en_la_ventana` | cada ejemplo se carga y se dibuja; abrirlo deja Pausa sin estado y, con Play, un clic en una entrada hace |
 | S-APP06 | REQ-DAT-02, REQ-EDT-01 | pasa | `test_SAPP06_guardar_y_abrir_en_la_ventana` | «Guardar como proyecto» y «Abrir modelo» conservan el modelo y su dibujo. |
 | S-APP07 |  | pasa | `test_SAPP07_lecturas_reinician` | Cambiar una lectura reinicia la simulación (queda en Pausa, sin estado, hasta Play) y se señala como distinta de la |
-| S-APP08 | REQ-SEM-09 | pasa | `test_SAPP08_ajustes_y_lecturas` | «Ajustes» (entre Simulación y Ayuda) tiene los ajustes de simulación; el diálogo muestra una sola |
+| S-APP08 |  | pasa | `test_SAPP08_ajustes_sin_selector_de_simulacion` | Ajustes conserva actualizaciones, sin selector ni diálogo de lecturas. |
 | S-APP09 | REQ-SIM-03 | pasa | `test_SAPP09_play_pausa_y_un_solo_control` | un solo control de ejecución. Play simula en tiempo real (traza abajo, sin paleta) y Pausa detiene y |
 | S-APP10 | REQ-SIM-03 | pasa | `test_SAPP10_temporizador_en_dibujo_y_tabla` | «temporizada», con E1 activa y 1 s transcurrido, muestra «1,00 s» (solo lo transcurrido) encima de la |
 | S-APP11 | REQ-SIM-03 | pasa | `test_SAPP11_paneles_plegables` | el panel derecho y el inferior se pliegan del todo con su flecha y desde «Ver»; el estado se guarda. |
@@ -432,6 +432,13 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-BAR03 | REQ-SIM-03 | pasa | `test_SBAR03_puerto_y_esclavo_estrechos_y_el_marco_no_cambia_de_ancho` | Puerto y Esclavo ID (3 cifras) más estrechos en la cabecera y en Configuración. |
 | S-BAR04 | REQ-UX-01 | pasa | `test_SBAR04_boton_volver_de_la_cabecera_de_es_y_uniones_punteadas_de_dependencias` | «Volver» lleva icono de flecha y texto, mide el alto de los botones de la cabecera y tiene ayuda sin atajo; el icono de |
 | S-CAN | REQ-DAT-05, REQ-DAT-06 | pasa | `test_SCAN_formato_canonico` | reglas de representación canónica y lectura estricta (09). |
+| S-CB1 |  | pasa | `test_SCB1_tabla_destruida_cancela_la_reconstruccion` |  |
+| S-CB2 |  | pasa | `test_SCB2_panel_destruido_cancela_la_fila_rechazada` |  |
+| S-CB3 |  | pasa | `test_SCB3_control_vivo_sigue_ejecutando_el_cambio` |  |
+| S-CB4 |  | pasa | `test_SCB4_selector_eliminado_cancela_sus_senales_pendientes` |  |
+| S-CB5 |  | pasa | `test_SCB5_selector_vivo_sigue_avisando_del_cierre` |  |
+| S-CB6 |  | pasa | `test_SCB6_editor_eliminado_no_abre_lista_ni_emite_cierre_tardio` |  |
+| S-CB7 |  | pasa | `test_SCB7_editor_vivo_confirma_y_cierra_como_antes` |  |
 | S-CD01 |  | pasa | `test_SCD01_selector_y_vista_sin_canales` |  |
 | S-CD02 |  | pasa | `test_SCD02_modo_se_guarda_y_antiguo_es_modbus` |  |
 | S-CD03 |  | pasa | `test_SCD03_unir_quitar_y_rechazar_papel_incorrecto` |  |
@@ -1697,6 +1704,13 @@ No sustituyen oráculos del paquete; cubren hallazgos, bloqueos U y reglas P int
 | S-XM6 | REQ-JER-07 | pasa | `test_SXM6_nombre_macro_renombra_expansion_y_deshace` | el texto M1 edita M33, E33 y S33 en una sola operación, conservando las referencias. |
 | S-XM7 | REQ-JER-07 | pasa | `test_SXM7_cuerpo_macro_navega_y_nombre_repetido_se_rechaza` | cuerpo y nombre mantienen operaciones distintas; el rechazo no cambia el modelo. |
 | S-XM8 | REQ-EDT-02 | pasa | `test_SXM8_simultaneidad_sola_visible_y_persistente` | la doble línea sola se dibuja y conserva su caja al añadir y quitar otro elemento. |
+| S-Y1 |  | pasa | `test_SY1_ancho_maximo_igual_al_de_media_pantalla` | El cambio de letra normal a grande conserva el tope confirmado de 848 px lógicos. |
+| S-Y2 |  | pasa | `test_SY2_medias_pantallas_y_altos_previos_no_cambian` | Medidas de referencia tomadas antes de Y, sin alterar la altura vigente de X+. |
+| S-Y3 |  | pasa | `test_SY3_centrada_y_categorias_enteras_a_pantalla_completa` | Una sola fila de categorías completas dentro de su columna con el ancho nuevo. |
+| S-Y4 |  | pasa | `test_SY4_etapas_y_macroetapas_conservan_su_ancho_menor` | El máximo también rige para las fichas cortas sin estirarlas hasta el tope. |
+| S-Y5 |  | pasa | `test_SY5_cursor_de_flecha_sin_perder_el_arrastre` | La cabecera, título y cerrar heredan flecha, y el movimiento conserva el agarre. |
+| S-Y6 |  | pasa | `test_SY6_lupa_identica_con_y_sin_vecinos` | ni un ítem vecino superpuesto puede salir en la lupa. |
+| S-Y7 |  | pasa | `test_SY7_altos_a_pantalla_completa_se_conservan` | El tope horizontal no cambia las alturas medidas antes de Y. |
 
 Pruebas sin caso asignado: setUpClass (test_clic_exterior_tras_arrastre.ClicExteriorNativo)
 
