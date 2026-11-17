@@ -627,6 +627,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._proxima_lectura.setSingleShot(True)
         self._proxima_lectura.setTimerType(Qt.TimerType.PreciseTimer)
         self._proxima_lectura.timeout.connect(self._tick)
+        from .refresco_conexion import RefrescoConexion
+        self.refresco_conexion = RefrescoConexion(self)
         self._ultimo_refresco_modbus = 0.0
         self._marca_reloj_ns = 0
         self._resto_reloj_ns = 0
@@ -3038,23 +3040,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._marca_reloj_ns = self._resto_reloj_ns = 0
 
     def _refrescar_modbus(self):
-        ahora = perf_counter()
-        if self.modbus.activo and ahora - self._ultimo_refresco_modbus < TICK_MS / 1000:
-            return
-        self._ultimo_refresco_modbus = ahora
-        self._recordar_conexion()
-        if not self.modbus.activo:
-            self._sincronizar_es()
-        self.panel_es.directa.refrescar_catalogo(self.modbus.cliente)
-        self.panel_es.mostrar_estado(self.modbus.estado, self.modbus.mensaje)
-        self.panel_es.mostrar_tiempos(self.modbus.medidas, self.modbus.ultima_parada)
-        self.panel_es.ocupado(self.modbus.activo)
-        self.panel_es.mostrar_redondeos(self.modbus.adaptador.redondeos if self.modbus.adaptador else {})
-        if self.modo == "simular" and self.paginas_es.currentIndex() == 0:
-            self.refrescar()
-        else:
-            self.panel_es.mostrar_muestra(self.modbus.muestra, self.modbus.adaptador.entradas,
-                self.modbus.escritos, getattr(self.modbus.adaptador, "salidas_control", []))
+        self.refresco_conexion.actualizar()
 
     def _tick(self) -> None:
         marca = self.reloj.nsecsElapsed() if self.reloj.isValid() else 0
@@ -3565,6 +3551,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
                                if changed else "")
 
     def _variables(self, M: dict[str, Any], S: dict[str, Any]) -> None:
+        if not self.refresco_conexion.tablas_cambiadas(M, S):
+            return
         outs = S.get("outputs") or {}
         rows = [(self.nombre(k), "salida continua", "ON" if o["value"] else "OFF", ", ".join(self.nombre(c) for c in o["contributors"]),
                  "ok" if o["value"] else "muted") for k, o in outs.items()]

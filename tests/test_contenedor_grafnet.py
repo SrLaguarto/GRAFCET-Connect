@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from entorno_pruebas import entorno_aislado
 from unittest.mock import patch
 import zipfile
 from grafcet.contenedor import empaquetar,extraer,guardar_atomico,ErrorContenedor,SELLO,VERSION
@@ -65,7 +66,7 @@ class Contenedores(unittest.TestCase):
     def test_SGFN07_construccion_exige_clave_y_no_deja_modulo_en_repositorio(self):
         """REQ-DAT-02: sin clave se rechaza repartir; la clave se genera y elimina fuera del árbol de trabajo, incluso al fallar."""
         repo=Path(__file__).resolve().parents[1]
-        with patch.dict(os.environ,{},clear=True):
+        with entorno_aislado({"GRAFCONNECT_CLAVE_SELLO": ""}):
             with self.assertRaises(ErrorClave):obtener_clave(repo)
             self.assertIsNone(obtener_clave(repo,desarrollo=True))
         destino=None
@@ -79,8 +80,13 @@ class Contenedores(unittest.TestCase):
         """REQ-DAT-02: la orden de construcción se niega sin clave antes de llamar al empaquetador."""
         import contextlib
         from tools import construir_ejecutable as build
-        with patch.dict(os.environ,{},clear=True),patch.object(build.subprocess,'run') as run,contextlib.redirect_stdout(io.StringIO()) as salida:
-            self.assertEqual(build.main([]),1);run.assert_not_called()
+        with (
+            entorno_aislado({"GRAFCONNECT_CLAVE_SELLO": ""}),
+            patch.object(build.subprocess, "run") as run,
+            contextlib.redirect_stdout(io.StringIO()) as salida,
+        ):
+            self.assertEqual(build.main([]), 1)
+            run.assert_not_called()
         self.assertIn('requiere una clave',salida.getvalue())
     def test_SGFN17_conversion_conserva_modelos_y_escenarios_adicionales(self):
         """REQ-DAT-02: abrir y guardar un contenedor conserva todos sus documentos, no solo el modelo editable."""
@@ -100,6 +106,12 @@ class Contenedores(unittest.TestCase):
         """REQ-DAT-02: si no hay Nuitka se informa y no se sustituye silenciosamente la construcción elegida."""
         import contextlib
         from tools import construir_ejecutable as build
-        with patch.dict(os.environ,{},clear=True),patch.object(build.importlib.util,'find_spec',return_value=None),patch.object(build.subprocess,'run') as run,contextlib.redirect_stdout(io.StringIO()) as salida:
-            self.assertEqual(build.main(['--desarrollo','--motor','nuitka']),1);run.assert_not_called()
+        with (
+            entorno_aislado({"GRAFCONNECT_CLAVE_SELLO": ""}),
+            patch.object(build.importlib.util, "find_spec", return_value=None),
+            patch.object(build.subprocess, "run") as run,
+            contextlib.redirect_stdout(io.StringIO()) as salida,
+        ):
+            self.assertEqual(build.main(["--desarrollo", "--motor", "nuitka"]), 1)
+            run.assert_not_called()
         self.assertIn('Nuitka no está instalado',salida.getvalue())

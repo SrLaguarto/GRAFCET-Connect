@@ -6860,7 +6860,7 @@ class Interfaz(unittest.TestCase):
         # doble clic en una macroetapa: encuadra su expansión; en una etapa, sigue pidiendo su etiqueta
         encuadrados.clear()
         e.seleccionar([])
-        self.assertTrue(e.doble(centro(e.M, mid)))
+        self.assertTrue(e.doble(centro(e.M, mid) + QPointF(0, -17)))
         b = cajas_parciales(e.M)[x.partial]
         self.assertEqual((e.sel, len(encuadrados), e.parpadeo.ids), ([x.partial], 1, {x.partial}))
         self.assertTrue(encuadrados[0].contains(QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"])))

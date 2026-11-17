@@ -1,9 +1,10 @@
 """Barra de PLANOS y propiedades de su gráfico seleccionado."""
-from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFormLayout, QLabel, QMenu, QPushButton,
+from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QMenu, QPushButton,
                                QToolBar, QToolButton, QWidget)
 from PySide6.QtCore import Qt
 
 from . import estilo
+from .campos_medidos import DecimalMedido
 
 AVISO_NO_CABE = (
     "El GRAFCET no cabe en esta hoja. Cambie el tamaño de la hoja a uno más grande "
@@ -70,7 +71,7 @@ class ControlesPlanos:
         p.propiedades_grafico.hide()
         form = QFormLayout(p.propiedades_grafico)
         form.addRow(QLabel("GRAFCET seleccionado"))
-        p.tamano = QDoubleSpinBox()
+        p.tamano = DecimalMedido()
         p.tamano.setRange(50, 200)
         p.tamano.setSingleStep(10)
         p.tamano.setDecimals(0)

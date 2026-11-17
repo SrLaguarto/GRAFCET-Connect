@@ -4,9 +4,9 @@ from unittest import mock
 from test_editor_cadenas import BaseQt, QT
 if QT:
     from PySide6.QtCore import QPoint, QPointF, QRect, Qt
-    from PySide6.QtGui import QFont, QFontMetrics, QImage, QPainter, QPixmap
+    from PySide6.QtGui import QFont, QFontMetrics, QImage, QPainter, QPixmap, QRawFont
     from PySide6.QtTest import QTest
-    from escritorio import propiedades as pr
+    from escritorio import estilo, propiedades as pr
 
 
 @unittest.skipUnless(QT, "requiere PySide6")
@@ -70,7 +70,13 @@ class PaletaUnificada(BaseQt):
         w,p=self.preparar();self.assertEqual(w.dock.width(),218)
         self.assertEqual([p.item(i).data(Qt.ItemDataRole.UserRole) for i in range(p.count()) if p.item(i).data(Qt.ItemDataRole.UserRole)],list(pr.COLOCABLES))
         self.assertEqual((p.ICONO.width(),p.ICONO.height()),(72,64))
-        fila=0;fuente=QFont(p.font());fuente.setPixelSize(11);fm=QFontMetrics(fuente)
+        fila = 0
+        fuente = QFont(p.font())
+        fuente.setPixelSize(estilo.T_PEQUENA)
+        fuente_real = QRawFont.fromFont(fuente)
+        self.assertTrue(fuente_real.isValid(), "La prueba debe usar los glifos reales de la paleta")
+        self.assertTrue(fuente_real.supportsCharacter(ord("ó")))
+        fm = QFontMetrics(fuente, p.viewport())
         for titulo,claves in pr.SECCIONES:
             cab=p.visualItemRect(p.item(fila));self.assertEqual(p.item(fila).text(),titulo)
             self.assertEqual((cab.x(),cab.width()),(0,p.viewport().width()));fila+=1

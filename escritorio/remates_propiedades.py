@@ -35,7 +35,13 @@ class AvisoFormula(EtiquetaElidida):
 class FlujoCategorias(FlowLayout):
     """Evita una última fila con una categoría suelta cuando caben repartidas en dos."""
 
+    def __init__(self, padre, separacion):
+        super().__init__(padre, separacion)
+        self.una_fila = False
+
     def _filas(self, ancho):
+        if self.una_fila:
+            return [[i for i in self._items if i.widget() is None or not i.widget().isHidden()]]
         filas = [[]]
         usado = 0
         for item in self._items:
@@ -127,6 +133,10 @@ class RematesAccion(QObject):
 
     def _columna(self):
         p = self.panel
+        if p.flotante and p.pagina == "transicion":
+            p.izq.setMinimumWidth(0)
+            p.izq.setMaximumWidth(16777215)
+            return
         ancho = self.ancho_columna
         if self.activa:
             ancho = max(ancho, p.accion.variable.width())

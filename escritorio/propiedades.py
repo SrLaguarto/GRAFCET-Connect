@@ -39,6 +39,7 @@ from grafcet.routing import TALLO_T
 from grafcet.expressions import is_event_positive
 from grafcet.view import norm
 
+from .interaccion_propiedades import CasillaPropiedades
 from . import estilo
 from .ayudas_emergentes import ayuda_html
 from .paneles import EtiquetaGrupos, TituloSeccion
@@ -436,7 +437,7 @@ class FichaJerarquia(QWidget):
         self.setStyleSheet(self._hoja())
 
     def _crear(self, texto: str) -> QAbstractButton:
-        b: QAbstractButton = QCheckBox(texto) if texto in self.CASILLAS else QPushButton(texto)
+        b: QAbstractButton = CasillaPropiedades(texto) if texto in self.CASILLAS else QPushButton(texto)
         b.clicked.connect(lambda _=False, t=texto: self._pulsar(t))
         self.flujo.addWidget(b)
         self.botones[texto] = b
@@ -631,7 +632,10 @@ class PanelPropiedades(QWidget):
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
+        self.categorias_una_fila = None
         if flotante:
+            from .propiedades_ampliadas import CategoriasUnaFila
+            self.categorias_una_fila = CategoriasUnaFila(self.prog)
             self.cabecera.hide()  # (el título, «Fijar» y cerrar los pone la ventana flotante)
             # La lupa ya enseña la fórmula; los errores permanecen bajo los bloques.
             self._l_formula.hide()
@@ -829,7 +833,8 @@ class PanelPropiedades(QWidget):
             self.s_colocacion.addItem(texto, valor)
         self.s_colocacion.setToolTip("Cómo se colocan las acciones de la etapa en el dibujo")
         self.s_colocacion.activated.connect(lambda _: self.e.colocar_acciones(self.ident, self.s_colocacion.currentData()))
-        self.s_enlace = QCheckBox("Enlace de activación")  # solo en una etapa de un recinto; como la opción del menú
+        # Solo en una etapa de un recinto, como la opción del menú.
+        self.s_enlace = CasillaPropiedades("Enlace de activación")
         self.s_enlace.setToolTip("Al activarse la encapsulante, esta etapa se activa (el «*» del dibujo)")
         self.s_enlace.clicked.connect(lambda _: self.e.enlace_activacion(self.ident))
         f.addRow("Etiqueta", self.s_etiqueta)
@@ -900,10 +905,9 @@ class PanelPropiedades(QWidget):
 
     def _transicion(self) -> QWidget:
         w = QWidget()
-        f = _formulario(w)
         self.t_etiqueta = QLineEdit()
         self.t_etiqueta.editingFinished.connect(lambda: self._renombrar(self.t_etiqueta))
-        self.t_mostrar = QCheckBox("Mostrar etiqueta")
+        self.t_mostrar = CasillaPropiedades("Mostrar etiqueta")
         self.t_mostrar.setToolTip("Dibujar la etiqueta (t1) junto a la transición")
         self.t_mostrar.clicked.connect(lambda on: self.e.mostrar_etiqueta(self.ident, on))
         self.t_comentario = QLineEdit()
@@ -911,9 +915,14 @@ class PanelPropiedades(QWidget):
         self.t_comentario.setToolTip("Comentario de la transición: se dibuja entre comillas a la derecha de su receptividad "
                                      "(no entra en la simulación)")
         self.t_comentario.editingFinished.connect(lambda: self._comentar(self.t_comentario))
-        f.addRow("Etiqueta", self.t_etiqueta)
-        f.addRow(self.t_mostrar)
-        f.addRow("Comentario", self.t_comentario)
+        if self.flotante:
+            from .propiedades_ampliadas import campos_transicion
+            campos_transicion(self, w)
+        else:
+            f = _formulario(w)
+            f.addRow("Etiqueta", self.t_etiqueta)
+            f.addRow(self.t_mostrar)
+            f.addRow("Comentario", self.t_comentario)
         return w
 
     def _desde_bloques(self, texto: str) -> None:
@@ -940,7 +949,7 @@ class PanelPropiedades(QWidget):
         self.f_tipo.setMaximumWidth(260)
         self.f_tipo.currentIndexChanged.connect(self._elegir_flecha)
         f.addWidget(self.f_tipo)
-        self.f_visible = QCheckBox("Mostrar flecha")
+        self.f_visible = CasillaPropiedades("Mostrar flecha")
         self.f_visible.clicked.connect(lambda on: self.e.ajustar_flecha(visible=on))
         f.addWidget(self.f_visible)
         fila = QHBoxLayout()

@@ -27,7 +27,7 @@ if Path("C:/Windows/Fonts").is_dir():
     os.environ.setdefault("QT_QPA_FONTDIR", "C:/Windows/Fonts")
 os.environ.setdefault("GRAFCONNECT_SIN_ACTUALIZAR", "1")
 
-from PySide6.QtCore import QPointF, QSettings, Qt  # noqa: E402
+from PySide6.QtCore import QEvent, QPointF, QSettings, Qt  # noqa: E402
 from PySide6.QtGui import QColor, QFont, QImage, QPainter  # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog, QWidget  # noqa: E402
 
@@ -41,6 +41,8 @@ def _bombear(n: int = 8) -> None:
 
 
 def aplicacion() -> QApplication:
+    from tools.qt_pruebas import preparar_fuentes_offscreen
+    preparar_fuentes_offscreen()
     return QApplication.instance() or QApplication([])
 
 
@@ -99,6 +101,7 @@ class Contexto:
         self.w.edicion = None  # sin preguntar al cerrar
         self.w.hide()
         self.w.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         _bombear(2)
         self.tmp.cleanup()
 

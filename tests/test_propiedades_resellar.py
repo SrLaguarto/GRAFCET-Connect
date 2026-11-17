@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from entorno_pruebas import entorno_aislado
 from unittest.mock import patch
 import zipfile
 from grafcet.contenedor import (INFO, SELLO, ErrorContenedor, construir_info, empaquetar, huella, inspeccionar,
@@ -270,12 +271,12 @@ class DialogoPropiedades(BaseQt):
     def test_SPRP20_proyecto_nuevo_se_sellara_al_guardar_y_toma_el_usuario_como_autor(self):
         """REQ-DAT-02: sin guardar no hay sello ni fechas; el autor por defecto es el usuario del sistema."""
         w, e = self.vacio()
-        with patch.dict(os.environ, {'USERNAME': 'maria'}):
+        with entorno_aislado({'USERNAME': 'maria'}):
             d = self.propiedades()
             self.assertEqual((d.nombre, d.sello, d.autor), ('sin guardar', 'Se firmará al guardar', 'maria'))
-        with patch.dict(os.environ, {'USERNAME': ''}), patch.object(pa.getpass, 'getuser', return_value='respaldo'):
+        with entorno_aislado({'USERNAME': ''}), patch.object(pa.getpass, 'getuser', return_value='respaldo'):
             self.assertEqual(pa.autor_por_defecto(), 'respaldo')
-        with patch.dict(os.environ, {'USERNAME': ''}), patch.object(pa.getpass, 'getuser', side_effect=OSError):
+        with entorno_aislado({'USERNAME': ''}), patch.object(pa.getpass, 'getuser', side_effect=OSError):
             self.assertEqual(pa.autor_por_defecto(), '')
 
     def test_SPRP21_cambiar_el_autor_marca_modificado_lo_guarda_y_lo_recuerda(self):

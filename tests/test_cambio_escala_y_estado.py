@@ -1,6 +1,7 @@
 """Encargo 9 del rediseño: el cambio de escala (maximizada <-> media pantalla) deja el dibujo en su sitio final en el mismo pintado, y el
 texto de estado de una acción suelta sigue al estado de la selección."""
 import unittest
+from entorno_pruebas import entorno_aislado
 from time import perf_counter
 
 from test_editor_cadenas import BaseQt, QT
@@ -142,7 +143,13 @@ class CambioEscalaYEstado(BaseQt):
             filtro = Filtro()
             self.app.installEventFilter(filtro)
             try:
-                with mock.patch.object(ventana, "QSettings", Ajustes),                         mock.patch.object(carpetas, "asegurar_carpetas", lambda: None),                         mock.patch.object(errores, "instalar", lambda: None),                         mock.patch.object(ventana.QApplication, "exec", bucle),                         mock.patch.dict("os.environ", {"GRAFCONNECT_SIN_ACTUALIZAR": "1"}):
+                with (
+                    mock.patch.object(ventana, 'QSettings', Ajustes),
+                    mock.patch.object(carpetas, 'asegurar_carpetas', lambda: None),
+                    mock.patch.object(errores, 'instalar', lambda: None),
+                    mock.patch.object(ventana.QApplication, 'exec', bucle),
+                    entorno_aislado({'GRAFCONNECT_SIN_ACTUALIZAR': '1'}),
+                ):
                     with mock.patch("escritorio.instancia_unica.directorio_instancia",
                                     return_value=Path(tmp) / "instancia"):
                         self.assertEqual(ventana.main([]), 0)

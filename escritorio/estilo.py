@@ -117,6 +117,8 @@ def activar_escala(nombre: str) -> None:
     global ESCALA
     ESCALA = nombre
     globals().update(ESCALAS[nombre])
+    from .campos_medidos import notificar_fuentes
+    notificar_fuentes()
 
 
 activar_escala("normal")

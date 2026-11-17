@@ -1,6 +1,7 @@
 """Defectos abiertos tras el veredicto de la rama de rediseño (F2 a F10) y lo que halló la revisión técnica (R1 a R3)."""
 import re
 import unittest
+from entorno_pruebas import entorno_aislado
 from pathlib import Path
 
 from test_editor_cadenas import BaseQt, QT
@@ -375,7 +376,18 @@ class Defectos(BaseQt):
         tmp = tempfile.TemporaryDirectory()  # (instancia única en una carpeta propia: nunca la del usuario ni la de otro programa abierto)
         self.addCleanup(tmp.cleanup)
         for argv, maximizada in (([], True), (["--captura", "x.png"], False)):
-            with mock.patch("escritorio.instancia_unica.directorio_instancia", return_value=Path(tmp.name) / "instancia"),                     mock.patch.object(v, "Ventana") as clase, mock.patch.object(QApplication, "exec", return_value=0),                     mock.patch("escritorio.errores.instalar"), mock.patch("escritorio.carpetas.asegurar_carpetas"),                     mock.patch.object(v.QTimer, "singleShot"), mock.patch.dict(os.environ, {v.actualizaciones.VARIABLE_SIN_ACTUALIZAR: "1"}):
+            with (
+                mock.patch(
+                    'escritorio.instancia_unica.directorio_instancia',
+                    return_value=Path(tmp.name) / 'instancia',
+                ),
+                mock.patch.object(v, 'Ventana') as clase,
+                mock.patch.object(QApplication, 'exec', return_value=0),
+                mock.patch('escritorio.errores.instalar'),
+                mock.patch('escritorio.carpetas.asegurar_carpetas'),
+                mock.patch.object(v.QTimer, 'singleShot'),
+                entorno_aislado({v.actualizaciones.VARIABLE_SIN_ACTUALIZAR: '1'}),
+            ):
                 self.assertEqual(v.main(argv), 0)
                 ventana = clase.return_value
                 self.assertEqual(ventana.showMaximized.called, maximizada, argv)

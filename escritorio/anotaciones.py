@@ -6,7 +6,8 @@ from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QFont, QImage, QPixmap, QPen, QBrush
 from PySide6.QtWidgets import (QColorDialog, QDialog, QDialogButtonBox, QFileDialog,
     QFontComboBox, QFormLayout, QGraphicsItem, QGraphicsPixmapItem, QGraphicsRectItem,
-    QGraphicsTextItem, QPlainTextEdit, QPushButton, QSpinBox, QVBoxLayout)
+    QGraphicsTextItem, QPlainTextEdit, QPushButton, QVBoxLayout)
+from .campos_medidos import SpinMedido as QSpinBox
 
 
 def rect(n):

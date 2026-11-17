@@ -653,7 +653,8 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     nombre = M.get("names", {}).get  # los ID internos nunca se muestran: etapas, parciales y macroetapas, por su nombre
     pos = {s["id"]: (s["x"] + SX, s["y"]) for s in M["steps"]}
     pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
-    if not pos and not M["transitions"] and not M.get("draftActions") and not any(c.get("vacio") for c in M.get("partials") or []):
+    hay_elementos = pos or M["transitions"] or M.get("draftActions") or M.get("bars")
+    if not hay_elementos and not any(c.get("vacio") for c in M.get("partials") or []):
         return cajas  # (un grafcet parcial recién soltado, con su marco vacío, es lo único que puede haber que dibujar)
     # Enlace ascendente: por la izquierda del parcial de la transición, no de todo el dibujo
     situation, virtual = set(S.get("situation") or []), set(S.get("virtual") or [])
@@ -1433,7 +1434,12 @@ class SelectorAccion(QComboBox):
     """El desplegable que sale sobre una acción del dibujo (doble clic en una continua). Se cierra solo al elegir, con Esc, con un clic fuera o al
     perder el foco; `cerrado` avisa de ello para quitarlo."""
     cerrado = Signal()
-    _reclamado = False
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from .cierre_selector_accion import CierreSelectorAccion
+        self.cierre = CierreSelectorAccion(self)
+        self._reclamado = False
 
     def paintEvent(self, ev: Any) -> None:  # noqa: N802
         """Como un desplegable normal, pero lo que no cabe se acorta con «…» (la ayuda emergente da el nombre entero) y no se corta a medias."""

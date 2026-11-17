@@ -6,11 +6,12 @@ from PySide6.QtCore import Qt,QRectF,QPointF,Signal
 from PySide6.QtGui import QPainter,QPen,QColor,QFont,QFontMetricsF,QTextLayout,QTextOption,QPainterPath,QImage,QTransform
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QFormLayout,QPushButton,QLabel,
-    QPlainTextEdit,QLineEdit,QComboBox,QDoubleSpinBox,QListWidget,QGraphicsView,QGraphicsScene,QGraphicsItem,
+    QPlainTextEdit,QLineEdit,QComboBox,QListWidget,QGraphicsView,QGraphicsScene,QGraphicsItem,
     QDialogButtonBox,QWidget,QScrollArea,QFontComboBox,QMessageBox,QColorDialog)
 from grafcet.laminas import CAMPOS
 from grafcet.plantillas import validar_plantilla
 from . import estilo
+from .campos_medidos import DecimalMedido as QDoubleSpinBox
 
 ROTULOS={'titulo':'Título','proyecto':'Proyecto','autor':'Autor','centro':'Centro o empresa',
          'fecha':'Fecha','revision':'Revisión','escala':'Escala','hoja':'Hoja','libre':'Campo libre','comprobado':'Comprobado por','fecha_comprobado':'Fecha de comprobación','firma_autor':'Firma dibujado','firma_comprobado':'Firma comprobado','numero':'Número','sustituye':'Sustituye a','sustituido_por':'Sustituido por'}
