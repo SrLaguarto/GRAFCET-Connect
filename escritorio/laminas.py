@@ -12,10 +12,11 @@ from PySide6.QtSvg import QSvgGenerator
 from .paneles import ComboElidido
 from PySide6.QtPrintSupport import QPrinter,QPrintDialog
 from PySide6.QtWidgets import (QWidget,QDialog,QVBoxLayout,QHBoxLayout,QFormLayout,QScrollArea,
-    QComboBox,QDoubleSpinBox,QLineEdit,QCheckBox,QPushButton,QLabel,QFileDialog,QMessageBox,
+    QComboBox,QLineEdit,QCheckBox,QPushButton,QLabel,QFileDialog,QMessageBox,
     QMenuBar,QInputDialog,QStackedWidget,QDialogButtonBox,QSizePolicy,QGraphicsScene,QGraphicsTextItem,QGraphicsRectItem,QGraphicsPathItem,QGraphicsPixmapItem)
 from grafcet.laminas import FORMATOS,CAMPOS,ajustes_lamina
 from . import estilo
+from .campos_medidos import DecimalMedido as QDoubleSpinBox
 from .diagrama import dibujar,Z_EDIT,Z_STEP
 
 ROTULOS={'titulo':'Título','proyecto':'Proyecto','autor':'Autor','centro':'Centro o empresa','fecha':'Fecha',

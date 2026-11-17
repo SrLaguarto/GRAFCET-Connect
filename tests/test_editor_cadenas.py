@@ -31,7 +31,7 @@ try:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     if Path("C:/Windows/Fonts").is_dir():
         os.environ.setdefault("QT_QPA_FONTDIR", "C:/Windows/Fonts")
-    from PySide6.QtCore import QMimeData, QPointF, QRectF, QSettings, Qt
+    from PySide6.QtCore import QEvent, QMimeData, QPointF, QRectF, QSettings, Qt
     from PySide6.QtGui import QDropEvent
     from PySide6.QtWidgets import QApplication
     QT = True
@@ -577,9 +577,12 @@ class Mayus:
 class BaseQt(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from tools.qt_pruebas import preparar_fuentes_offscreen
+        preparar_fuentes_offscreen()
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        self.addCleanup(self.app.sendPostedEvents, None, QEvent.Type.DeferredDelete)
         self.tmp = tempfile.TemporaryDirectory()
         from escritorio.ventana import Ventana
         ajustes = QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat)
@@ -2013,7 +2016,7 @@ class EncuadrarYDependencias(BaseQt):
         comprobar("botón derecho")
         d.ajustar()
         e.seleccionar([])
-        self.assertTrue(e.doble(centro(e.M, mid)))
+        self.assertTrue(e.doble(centro(e.M, mid) + QPointF(0, -17)))
         comprobar("doble clic")
         d.ajustar()
         e.seleccionar([mid])

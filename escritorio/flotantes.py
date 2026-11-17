@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QBoxLayout, QFrame, QHBoxLayout, QLayout, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
+from .interaccion_propiedades import ArrastrePropiedades
 from . import estilo
 from .diagrama import COL, Z_EDIT, caja_barra, orientaciones, posiciones
 from .paneles import TituloSeccion, pintar_marcador
@@ -183,12 +184,16 @@ class VentanaFlotante(QFrame):
     cerrar_pedido = Signal()
 
     def __init__(self, padre: QWidget, vista: QWidget) -> None:
-        super().__init__(padre, Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        # Popup recibe el clic exterior antes del bloqueo modal; NoMouseReplay evita que llegue al fondo.
+        banderas = Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint
+        super().__init__(padre, banderas)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setWindowModality(Qt.WindowModality.WindowModal)
         self.setObjectName("ventanaFlotante")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
-            f"QFrame#ventanaFlotante {{ background: {estilo.SUPERFICIE}; "
+            f"QFrame#ventanaFlotante {{ background: {estilo.FONDO}; "
             f"border: 1px solid {estilo.ACENTO}; border-radius: {estilo.R_M}px; }}"
             f"QFrame#lineaCabecera {{ background: {estilo.BORDE}; border: 0; border-radius: 0; }}"
             f"QFrame#tarjetaFlotante {{ background: {estilo.SUPERFICIE_2}; "
@@ -237,6 +242,14 @@ class VentanaFlotante(QFrame):
         raiz.addWidget(self.cuerpo, 1)
         self.hide()
 
+    def paintEvent(self, evento: Any) -> None:  # noqa: N802
+        pintor = QPainter(self)
+        pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pintor.setPen(QPen(QColor(estilo.ACENTO), 1))
+        pintor.setBrush(QColor(estilo.FONDO))
+        pintor.drawRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5), estilo.R_M, estilo.R_M)
+        pintor.end()
+
     def escalar(self) -> None:
         self.cabecera.setFixedHeight(estilo.ALTO_CONTROL + 2 * estilo.E2)
         self.b_cerrar.setFixedSize(estilo.ALTO_CONTROL, estilo.ALTO_CONTROL)
@@ -257,6 +270,9 @@ class GestorFlotantes(QObject):
         self._colocando = False
         self._vigilando = False
         self._tamano = QSize()
+        self.arrastre = None
+        self._clic_fuera = False
+        self._ocultando = False
 
     def _crear(self) -> None:
         if self.panel is not None:
@@ -268,6 +284,7 @@ class GestorFlotantes(QObject):
         self.panel = PanelPropiedades(flotante=True)
         self.panel.setObjectName("panelPropiedadesFlotante")
         self.principal = VentanaFlotante(self.superficie, self.vista)
+        self.arrastre = ArrastrePropiedades(self.principal, self.w)
         self.principal.accion.lay_cuerpo.addWidget(self.panel)
         self.panel.destino_bloques = self.principal.condicion.lay_cuerpo
         self.principal.cerrar_pedido.connect(lambda: self.w._mostrar_panel("inferior", False))
@@ -289,9 +306,14 @@ class GestorFlotantes(QObject):
 
     def ocultar(self) -> None:
         if self.principal is not None:
-            self.principal.hide()
+            self._ocultando = True
+            try:
+                self.principal.hide()
+            finally:
+                self._ocultando = False
         self.geometrias = {}
-        self._vigilar(False)
+        if not self._clic_fuera:
+            self._vigilar(False)
 
     def _vigilar(self, on: bool) -> None:
         """Mientras la ventana está abierta, la aplicación nos pasa las teclas Esc (antes que a nadie): la cierran, como su ✕."""
@@ -309,7 +331,7 @@ class GestorFlotantes(QObject):
     def _esc(self, evento: Any, receptor: QObject) -> bool:
         """Esc con la ventana abierta: si hay un desplegable abierto, o un campo con algo que Esc cancela, o el foco está en otra ventana, lo
         suyo primero; si no, cierra la ventana (también con el foco en el dibujo: sin deseleccionar a la vez)."""
-        if QApplication.activePopupWidget() is not None:
+        if QApplication.activePopupWidget() not in (None, self.principal):
             return False
         foco = QApplication.focusWidget()
         if foco is not None and foco.window() not in (self.w, self.principal):
@@ -350,10 +372,13 @@ class GestorFlotantes(QObject):
             v.titulo.setText("Propiedades · Acción por evento" if evento else "Propiedades · Acción condicionada")
             v.condicion.titulo.setText("Evento" if evento else "Condición")
             p.l_bloques.hide()
+        if not v.isVisible():
+            self.arrastre.movida = False
+            self.arrastre.inicio = None
         v.show()
         self._vigilar(True)
         self.colocar()
-        QTimer.singleShot(0, self.colocar)
+        QTimer.singleShot(0, self, self.colocar)
 
     def _bloquear_fondo(self, objeto: QObject, evento: Any) -> bool:
         """También rechaza eventos enviados directamente, que eluden la modalidad nativa de Qt."""
@@ -372,13 +397,42 @@ class GestorFlotantes(QObject):
         evento.accept()
         return True
 
+    def _fuera(self, evento: Any) -> bool:
+        tipo = evento.type()
+        if self._clic_fuera and tipo == QEvent.Type.MouseButtonRelease:
+            self._clic_fuera = False
+            if not self.hay_ventanas():
+                self._vigilar(False)
+            return True
+        if tipo != QEvent.Type.MouseButtonPress or not self.hay_ventanas():
+            return False
+        punto = evento.globalPosition().toPoint()
+        popup = QApplication.activePopupWidget()
+        if popup not in (None, self.principal):
+            if popup.geometry().contains(punto):
+                return False
+            self._clic_fuera = True
+            popup.hide()
+            return True
+        mascara = self.principal.mask()
+        visible = mascara.isEmpty() or mascara.contains(punto - self.principal.pos())
+        if visible and self.principal.geometry().contains(punto):
+            return False
+        self._clic_fuera = True
+        self.w._mostrar_panel("inferior", False)
+        return True
+
     def eventFilter(self, objeto: QObject, evento: Any) -> bool:  # noqa: N802
         tipo = evento.type()
+        if objeto is self.principal and tipo == QEvent.Type.Hide and not self._ocultando:
+            self.w._mostrar_panel("inferior", False)
         if objeto is self.w and tipo in (QEvent.Type.Hide, QEvent.Type.Close):
             self.ocultar()
             return False
-        if self._vigilando and not self.principal.isVisible():  # (la ventana se cerró, o su aplicación: deja de vigilar)
+        if self._vigilando and not self._clic_fuera and not self.principal.isVisible():
             self._vigilar(False)
+        if self._fuera(evento):
+            return True
         if tipo in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress):
             es_esc = evento.key() == Qt.Key.Key_Escape and not evento.modifiers()
             if es_esc and self.hay_ventanas() and self._esc(evento, objeto):
@@ -445,7 +499,10 @@ class GestorFlotantes(QObject):
             filas = 11 if estilo.ESCALA == "grande" else 9
             contenido = max(p.minimumSizeHint().height(), (filas + 2) * estilo.ALTO_CONTROL)
             tope = max(1, disponible.height() - estilo.E6)
-            return min(tope, contenido + self._marco_ventana() + self._marco_tarjeta())
+            alto = contenido + self._marco_ventana() + self._marco_tarjeta()
+            if p.pagina == "transicion":
+                alto = round(alto * 1.2)
+            return min(tope, alto)
         if not numerica:
             return disponible.height()
         fijos = self._marco_ventana() + cantidad * (self._marco_tarjeta() + 2 * estilo.E3)
@@ -460,7 +517,7 @@ class GestorFlotantes(QObject):
         v, p = self.principal, self.panel
         v.lupa.setFixedWidth(min(12 * estilo.E4, max(8 * estilo.E4, v.width() // 6)))
         disponible = v.columna.width() - 4 * estilo.E2
-        vertical = disponible < 36 * estilo.E4
+        vertical = p.pagina == "transicion" or disponible < 36 * estilo.E4
         direccion = QBoxLayout.Direction.TopToBottom if vertical else QBoxLayout.Direction.LeftToRight
         p.cuerpo.layout().setDirection(direccion)
         p.cuerpo.layout().setSpacing(estilo.E3)
@@ -493,7 +550,8 @@ class GestorFlotantes(QObject):
         if falta:
             alto = min(v.height() + falta, area.height() - 2 * estilo.E6)
             lugar = QRect(v.pos(), QSize(v.width(), alto))
-            lugar.moveCenter(area.center())
+            if not self.arrastre.movida:
+                lugar.moveCenter(area.center())
             v.setGeometry(lugar)
             v.layout().activate()
             v.cuerpo.layout().activate()
@@ -573,8 +631,9 @@ class GestorFlotantes(QObject):
             v = self.principal
             area = self._area()
             self._dimensionar(area)
-            lugar = QRect(area.topLeft(), self._tamano)
-            lugar.moveCenter(area.center())
+            lugar = QRect(v.pos(), self._tamano)
+            if not self.arrastre.movida:
+                lugar.moveCenter(area.center())
             v.setGeometry(lugar)
             v.layout().activate()
             v.cuerpo.layout().activate()
@@ -582,6 +641,7 @@ class GestorFlotantes(QObject):
             v.cuerpo.layout().activate()
             v.columna.layout().activate()
             self._repartir_paneles(area)
+            self.arrastre.limitar()
             self.geometrias = {"principal": QRect(v.geometry())}
             zonas = self._zonas()
             v.lupa.origen = self._origen_lupa(zonas)

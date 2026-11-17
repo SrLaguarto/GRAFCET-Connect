@@ -1,5 +1,5 @@
 """Anchos numéricos compartidos; el espacio sobrante pertenece al formulario."""
-from PySide6.QtCore import QEvent, QObject, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QLineEdit, QSizePolicy, QSpinBox,
                                QStyle, QStyleOptionComboBox, QTableWidget)
@@ -51,26 +51,93 @@ def ajustar(widget):
 
 
 class CamposMedidos(QObject):
-    def eventFilter(self, objeto, evento):
-        if isinstance(objeto, (QSpinBox, QDoubleSpinBox, QLineEdit)):
-            if evento.type() in (QEvent.Type.Show, QEvent.Type.Polish, QEvent.Type.FontChange,
-                                 QEvent.Type.StyleChange, QEvent.Type.LayoutRequest):
-                ajustar(objeto)
-                if isinstance(objeto, (QSpinBox, QDoubleSpinBox)) and not objeto.property("numeroConectado"):
-                    objeto.setProperty("numeroConectado", True)
-                    objeto.valueChanged.connect(self.cambio_numero)
-        return False
+    """Una notificación diferida por cambio de fuente; no observa eventos de la aplicación."""
+    fuentes_cambiadas = Signal()
 
-    def cambio_numero(self, _valor):
-        ajustar(self.sender())
+    def __init__(self, app):
+        super().__init__(app)
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.fuentes_cambiadas)
+
+    def programar(self):
+        if not self.timer.isActive():
+            self.timer.start(0)
 
 
 def instalar():
     app = QApplication.instance()
-    if app is not None and app.property("camposMedidos") is None:
+    if app is None:
+        return None
+    politica = app.property("camposMedidos")
+    if politica is None:
         politica = CamposMedidos(app)
         app.setProperty("camposMedidos", politica)
-        app.installEventFilter(politica)
+    return politica
+
+
+def notificar_fuentes():
+    politica = instalar()
+    if politica is not None:
+        politica.programar()
+
+
+class MedicionCampo(QObject):
+    def __init__(self, campo):
+        super().__init__(campo)
+        self.campo = campo
+        self.firma = None
+        self.texto = None
+        instalar().fuentes_cambiadas.connect(self.medir)
+        if isinstance(campo, (QSpinBox, QDoubleSpinBox)):
+            campo.valueChanged.connect(self.cambio_valor)
+        QTimer.singleShot(0, self, self.medir)
+
+    def medir(self):
+        campo = self.campo
+        campo.ensurePolished()
+        texto = texto_maximo(campo)
+        firma = (campo.font().key(), texto)
+        if firma != self.firma:
+            self.firma, self.texto = firma, texto
+            ajustar(campo)
+
+    def cambio_valor(self, _valor):
+        if self.campo.property("digitosColumna") and texto_maximo(self.campo) != self.texto:
+            self.medir()
+
+
+def registrar(campo):
+    medicion = campo.property("medicionCampo")
+    if medicion is None:
+        medicion = MedicionCampo(campo)
+        campo.setProperty("medicionCampo", medicion)
+    return medicion
+
+
+class _CampoMedido:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._primera_medida = False
+        self.medicion = registrar(self)
+
+    def showEvent(self, evento):
+        super().showEvent(evento)
+        if not self._primera_medida:
+            self._primera_medida = True
+            self.medicion.medir()
+
+
+class SpinMedido(_CampoMedido, QSpinBox):
+    pass
+
+
+class DecimalMedido(_CampoMedido, QDoubleSpinBox):
+    pass
+
+
+class LineaMedida(_CampoMedido, QLineEdit):
+    pass
 
 
 def ajustar_boton(boton):
@@ -88,8 +155,7 @@ class ColumnaNumerica(QObject):
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.medir)
         tabla.setProperty("columnaNumerica", self)
-        for objeto in (tabla, tabla.viewport(), tabla.horizontalHeader()):
-            objeto.installEventFilter(self)
+        instalar().fuentes_cambiadas.connect(self.programar)
         tabla.horizontalHeader().sectionResized.connect(self.cambio_columna)
 
     def cambio_columna(self, columna, _antes, _despues):
@@ -113,21 +179,11 @@ class ColumnaNumerica(QObject):
         finally:
             self._ajustando = False
 
-    def eventFilter(self, objeto, evento):
-        if evento.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange,
-                             QEvent.Type.Show, QEvent.Type.LayoutRequest):
-            self.programar()
-        return False
-
 
 class ComboMedido(QComboBox):
     def __init__(self):
         super().__init__()
-        from .estilo_listas import EstiloLista
         self._midiendo = False
-        self._estilo_lista = EstiloLista("Fusion")
-        self._estilo_lista.setParent(self)
-        self.setStyle(self._estilo_lista)
         self.view().setTextElideMode(Qt.TextElideMode.ElideNone)
 
     def medir(self):

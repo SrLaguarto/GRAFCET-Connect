@@ -43,6 +43,9 @@ class PanelDirecto(QObject):
         self.ayuda_servidor = AyudaServidorWeb(panel.estado, panel.fila_estado.layout(), panel.fila_estado,
                                                al_activar=lambda: self._estado_neutro(panel))
         self.catalogo = []
+        self.revision_dibujo = 0
+        self._firma_dibujo = None
+        self._valores_presentados = {}
         self.edicion = None
         self.dialogo_traer = None
         self.dialogo_resumen = None
@@ -170,6 +173,19 @@ class PanelDirecto(QObject):
         self.dibujar()
         return []
 
+    def _firma(self, doc):
+        uniones = self.panel.config.uniones
+        return (doc["id"], self.panel.firma(doc),
+                tuple((u.variable, u.id, u.nombre, u.tipo, u.papel, u.motivo) for u in uniones))
+
+    def actualizar(self, doc):
+        if self.edicion is not None:
+            self.historial.sincronizar(self.edicion.ed, self.panel.config)
+        if self._firma(doc) == self._firma_dibujo:
+            self.panel.doc = doc
+            return []
+        return self.cargar(doc, self.panel.config)
+
     def obtener(self):
         config = deepcopy(self.panel.config)
         config.host = self.host.text().strip()
@@ -186,6 +202,8 @@ class PanelDirecto(QObject):
         self.panel.aplicar.emit(self.panel.config)
 
     def dibujar(self):
+        self.revision_dibujo += 1
+        self._valores_presentados.clear()
         self.panel.indicadores.clear()
         self.panel.indicadores_listas.clear()
         self.panel.terminales.clear()
@@ -199,13 +217,12 @@ class PanelDirecto(QObject):
             "Ponga el driver del simulador en «Ninguno» para la conexión directa.")
         self.panel.ayuda_vacio.show()
         self.aplicar_estilo()
+        self._firma_dibujo = self._firma(self.panel.doc)
 
     def aplicar_estilo(self):
         alto = estilo.ESCALAS[self.panel.escala]["ALTO_CONTROL"]
         for control in (self.selector, self.host, self.puerto, self.b_traer, self.b_quitar_sin_senal):
             control.setFixedHeight(alto)
-        from .campos_medidos import ajustar
-        ajustar(self.puerto)
         self.selector.medir()
 
     def _variables(self):
@@ -267,11 +284,25 @@ class PanelDirecto(QObject):
         self.dialogo_traer.open()
 
     def mostrar_valores(self, valores):
-        for terminal in self.dibujo.terminales.values():
+        from fractions import Fraction
+        from .entradas_salidas import NIVEL_ACTIVO, NIVEL_ASIGNADO
+        for identidad, terminal in self.dibujo.terminales.items():
             variable = terminal.variable
             valor = valores.get(variable["id"]) if variable else None
-            texto = "" if valor is None or terminal.senal["type"].lower() == "bit" else str(valor)
-            terminal.valor.setText(texto)
+            firma = (terminal, valor)
+            if self._valores_presentados.get(identidad) == firma:
+                continue
+            self._valores_presentados[identidad] = firma
+            numerica = terminal.senal["type"].lower() != "bit"
+            texto = (str(valor) if valor is not None else "—" if variable else "") if numerica else ""
+            if terminal.valor.text() != texto:
+                terminal.valor.setText(texto)
+            if variable is not None:
+                try:
+                    activo = bool(Fraction(valor)) if isinstance(valor, str) else bool(valor)
+                except (ValueError, TypeError, ZeroDivisionError):
+                    activo = False
+                terminal.led.fijar_nivel(NIVEL_ACTIVO if activo else NIVEL_ASIGNADO)
 
     def establecer_edicion(self, edicion):
         if self.edicion is edicion:
@@ -303,13 +334,15 @@ class PanelDirecto(QObject):
         if self.panel.config.modo != "directo" or not isinstance(cliente, TransporteDirecto):
             return
         anteriores = {u.variable: u.id for u in self.panel.config.uniones}
-        if cliente.config.modelo == self.panel.doc["id"]:
-            self.panel.config.uniones = deepcopy(cliente.config.uniones)
+        mismo_modelo = cliente.config.modelo == self.panel.doc["id"]
+        uniones = cliente.config.uniones if mismo_modelo else self.panel.config.uniones
         firma = (tuple((s["id"], s["name"], s["type"], s["kind"]) for s in cliente.senales.values()),
-                 tuple((u.variable, u.id, u.nombre, u.motivo) for u in self.panel.config.uniones))
+                 tuple((u.variable, u.id, u.nombre, u.motivo) for u in uniones))
         lectura = cliente is not self.cliente_catalogo or self.firma_catalogo is None
         lectura = lectura or firma[0] != self.firma_catalogo[0]
         if lectura or firma != self.firma_catalogo:
+            if mismo_modelo:
+                self.panel.config.uniones = deepcopy(uniones)
             self.firma_catalogo = firma
             self.catalogo = list(cliente.senales.values())
             from .escena_modelo import contar_reunidas

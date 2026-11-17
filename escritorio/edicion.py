@@ -2014,8 +2014,9 @@ class Edicion(QObject):
             self.pedir_condicion(ident)
         elif any(s["id"] == ident for s in self.M["steps"]):
             self.pedir_etiqueta(ident)
-        elif any(x["id"] == ident for x in self.M.get("macros", [])):  # doble clic en una macroetapa: encuadra su expansión
-            self.encuadrar_expansion(ident)
+        elif any(x["id"] == ident for x in self.M.get("macros", [])):
+            from .interaccion_jerarquia import doble_macro
+            doble_macro(self, ident, p)
         elif ident in cajas_parciales(self.M) and self._es_parcial_suelto(ident):  # en el marco de un parcial suelto: lo renombra
             self.renombrar_parcial(ident)
         return True

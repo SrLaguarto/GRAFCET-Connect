@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 try:
     from tools import hoja_contactos as HC
     from PySide6.QtCore import QPoint, QRect, Qt
-    from PySide6.QtGui import QFontMetrics
+    from PySide6.QtGui import QFontMetrics, QRegion
     from PySide6.QtWidgets import (QAbstractButton, QAbstractItemView, QAbstractScrollArea, QAbstractSpinBox, QApplication, QCheckBox, QComboBox,
                                    QGroupBox, QHeaderView, QLabel, QLineEdit, QPushButton, QScrollBar, QSpinBox, QTableWidget, QToolBar,
                                    QToolButton, QWidget)
@@ -95,6 +95,21 @@ def _contenido_desplazable(w: QWidget, raiz: QWidget) -> bool:
 
 
 # ----------------------------------------------------------------------------------------------------------------- las reglas
+def regla_C6(raiz):
+    """El indicador de cada casilla visible queda dentro del widget y de sus antecesores."""
+    from PySide6.QtWidgets import QStyle, QStyleOptionButton
+    out = []
+    for casilla in raiz.findChildren(QCheckBox):
+        if not casilla.isVisible() or casilla.visibleRegion().isEmpty():
+            continue
+        opcion = QStyleOptionButton()
+        casilla.initStyleOption(opcion)
+        indicador = casilla.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, opcion, casilla)
+        if not QRegion(indicador).subtracted(casilla.visibleRegion()).isEmpty():
+            out.append(f"{_desc(casilla)}: indicador {indicador.getRect()} recortado")
+    return out
+
+
 def regla_M1(raiz):
     return [f"{d}" for d in desbordes(raiz, 0)]
 
@@ -416,8 +431,25 @@ def regla_B2(raiz):
     return out
 
 
-REGLAS = {"M1": regla_M1, "M2": regla_M2, "M3": regla_M3, "M4": regla_M4, "T1": regla_T1, "T2": regla_T2, "T3": regla_T3,
-          "C1": regla_C1, "C2": regla_C2, "C3": regla_C3, "C4": regla_C4, "C5": regla_C5, "TB1": regla_TB1, "TB2": regla_TB2, "B1": regla_B1, "B2": regla_B2}
+REGLAS = {
+    "C6": regla_C6,
+    "M1": regla_M1,
+    "M2": regla_M2,
+    "M3": regla_M3,
+    "M4": regla_M4,
+    "T1": regla_T1,
+    "T2": regla_T2,
+    "T3": regla_T3,
+    "C1": regla_C1,
+    "C2": regla_C2,
+    "C3": regla_C3,
+    "C4": regla_C4,
+    "C5": regla_C5,
+    "TB1": regla_TB1,
+    "TB2": regla_TB2,
+    "B1": regla_B1,
+    "B2": regla_B2,
+}
 
 
 @unittest.skipUnless(QT, "requiere PySide6")
@@ -525,6 +557,10 @@ class Auditoria(unittest.TestCase):
     def test_SAUD17_B2_sin_cortes_al_estrechar(self):
         """REQ-UX-01 (guía B2): las barras de herramientas caben en su fila y no cortan ningún botón a ningún tamaño."""
         self._sin_hallazgos("B2")
+
+    def test_SAUD23_C6_indicadores_contenidos(self):
+        """REQ-UX-01: los indicadores de las casillas se muestran completos."""
+        self._sin_hallazgos("C6")
 
     def test_SAUD18_las_excepciones_llevan_motivo(self):
         """REQ-UX-01: cada excepción y cada flotante declarados llevan su motivo."""

@@ -12,13 +12,14 @@ from PySide6.QtCore import Signal, Qt, QMimeData, QObject, QSize, QRect, QEvent,
 from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPixmap, QRegularExpressionValidator
 from fractions import Fraction
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QStackedWidget, QFrame, QHBoxLayout,
-                               QLabel, QLineEdit, QPushButton, QScrollArea, QSpinBox, QSizePolicy,
+                               QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
                                QDialog, QDialogButtonBox, QListWidget, QListWidgetItem,
                                QAbstractItemView, QMenu, QApplication, QGridLayout, QStyle,
                                QStyledItemDelegate, QScrollBar)
 
 from . import estilo
+from .campos_medidos import LineaMedida, SpinMedido
 from .pilotos_es import pintar_piloto, tamano_piloto
 from .paneles import ContextoNombres, EtiquetaGrupos, TituloSeccion
 from conexion.adaptador import texto_numero
@@ -698,26 +699,12 @@ class _SinRueda:
         evento.ignore()
 
 
-class _SpinConfiguracion(_SinRueda, QSpinBox):
-    _digitos = 0
+class _SpinConfiguracion(_SinRueda, SpinMedido):
 
     def fijar_digitos(self, digitos):
         """Ancho justo para `digitos` cifras y las flechas (se recalcula si cambia la letra)."""
-        if not self._digitos:
-            self.valueChanged.connect(self._medir)
-        self._digitos = digitos
         self.setProperty("digitosColumna", digitos)
-        self._medir()
-
-    def _medir(self, _valor=None):
-        if self._digitos:
-            from .campos_medidos import ajustar
-            ajustar(self)
-
-    def changeEvent(self, evento):  # noqa: N802
-        super().changeEvent(evento)
-        if evento.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange) and self._digitos:
-            self._medir()
+        self.medicion.medir()
 
 
 class _CasillaCentrada(QWidget):
@@ -743,7 +730,7 @@ class _ComboConfiguracion(_SinRueda, QComboBox):
     pass
 
 
-class _Octeto(QLineEdit):
+class _Octeto(LineaMedida):
     """Una de las cuatro cajas de la IP: solo cifras, hasta 255. Tres cifras o un punto pasan a la siguiente; Retroceso en
     una caja vacía vuelve a la anterior; pegar «a.b.c.d» reparte los números."""
 
@@ -801,7 +788,7 @@ class _Octeto(QLineEdit):
     def focusOutEvent(self, e):
         super().focusOutEvent(e)
         self.sin_ceros()
-        QTimer.singleShot(0, self.campo._comprobar_salida)
+        QTimer.singleShot(0, self.campo, self.campo._comprobar_salida)
 
 
 class CampoIPv4(QWidget):
@@ -909,6 +896,8 @@ class PanelES(QWidget):
         fuente.setPixelSize(self.letra)
         self.setFont(fuente)
         self.setStyleSheet(hoja_ventana + estilo_panel(escala))
+        from .campos_medidos import notificar_fuentes
+        notificar_fuentes()
         self.fila_alta.setFixedHeight(e["ALTO_CONTROL_COMPACTO"] + 8)
         self.b_volver.setFixedHeight(e["ALTO_CONTROL_COMPACTO"])
         for piloto in self.ayuda_vacio.parentWidget().findChildren(IndicadorES):
@@ -1726,7 +1715,7 @@ class PanelES(QWidget):
         Configuración y aún sin aplicar) y las asignaciones que siguen casando; quita, con aviso, las que ya no. Si lo que
         ve el panel no ha cambiado, no reconstruye nada. Devuelve los avisos de lo quitado."""
         if self.config.modo == "directo":
-            return self.directa.cargar(doc, self.config)
+            return self.directa.actualizar(doc)
         if self.doc is None:
             return self.cargar(doc)
         if self.firma(doc) == self.firma_modelo:
@@ -1907,7 +1896,8 @@ class PanelES(QWidget):
 
     def mostrar_valores(self, valores):
         if self.config.modo == "directo":
-            self.directa.mostrar_valores(valores)
+            self._ultimos_valores = dict(valores)
+            return self.directa.mostrar_valores(valores)
         self._ultimos_valores = valores
         def activo(valor):
             try:

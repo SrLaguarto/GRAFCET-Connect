@@ -783,7 +783,7 @@ class PropiedadesFlotante(unittest.TestCase):
         QTest.keyClick(popup, Qt.Key.Key_Escape)
         HC._bombear(6)
         self.assertEqual(len(self.ventanas()), 1, "el primer Esc solo cierra el desplegable")
-        self.assertIsNone(QApplication.activePopupWidget())
+        self.assertIs(QApplication.activePopupWidget(), f.principal)
         combo.setFocus()
         QTest.keyClick(combo, Qt.Key.Key_Escape)
         HC._bombear(6)

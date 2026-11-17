@@ -17,7 +17,7 @@ try:
     from conexion.configuracion import Configuracion
     from escritorio import estilo
     from escritorio.bloques import Programador, var
-    from escritorio.campos_medidos import ajustar, ancho_numero
+    from escritorio.campos_medidos import ajustar, ancho_numero, registrar
     from escritorio.entradas_salidas import PanelES
     from escritorio.filtro_senales import ConfiguracionDirecta
     from grafcet.builder import M
@@ -55,6 +55,7 @@ class InterfazP(unittest.TestCase):
             spin.setRange(-10000, 10000)
             spin.setSuffix(" ms")
             form.addRow("Tiempo", spin)
+            registrar(spin)
         w.show()
         self.addCleanup(w.close)
         self.app.processEvents()
@@ -196,7 +197,13 @@ class InterfazP(unittest.TestCase):
                         hc._bombear(8)
                         self.assertEqual((marco.geometry(), p.geometry()), antes)
                         inicio = registro.eventos.index(QEvent.Type.Show)
-                        self.assertEqual(registro.eventos[inicio + 1:], [])
+                        posteriores = registro.eventos[inicio + 1:]
+                        # V: se conserva la lista nativa. Qt puede colocarla una vez después de Show.
+                        self.assertTrue(all(e == QEvent.Type.Move for e in posteriores))
+                        self.assertLessEqual(len(posteriores), 1)
+                        registro.eventos.clear()
+                        hc._bombear(8)
+                        self.assertEqual(registro.eventos, [])
                         combo.hidePopup()
                     finally:
                         c.cerrar()

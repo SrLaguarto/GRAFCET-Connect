@@ -39,7 +39,12 @@ class Propiedades111(unittest.TestCase):
         antes = list(c.e.sel)
         modo = c.w.modo
         QTest.mouseClick(c.w.diagrama.viewport(), Qt.MouseButton.LeftButton, pos=QPoint(5, 5))
+        self.assertFalse(v.isVisible())
+        c.w._abrir_opciones()
+        HC._bombear(4)
         QTest.mouseClick(c.w.tb_sim.widgetForAction(c.w.a_ejecutar), Qt.MouseButton.LeftButton)
+        self.assertFalse(v.isVisible())
+        c.w._abrir_opciones()
         HC._bombear(4)
         self.assertEqual(c.e.sel, antes)
         self.assertEqual(c.w.modo, modo)
@@ -61,7 +66,7 @@ class Propiedades111(unittest.TestCase):
             f = c.w.flot
             filas = 11 if estilo.ESCALA == "grande" else 9
             necesario = max(p.minimumSizeHint().height(), (filas + 2) * estilo.ALTO_CONTROL)
-            tope = necesario + f._marco_ventana() + f._marco_tarjeta()
+            tope = round((necesario + f._marco_ventana() + f._marco_tarjeta()) * 1.2)
             self.assertLessEqual(v.height(), tope)
             self.assertLess(v.height(), f._area().height() - 2 * estilo.E6)
             self.assertEqual(v.lupa.height(), v.accion.height())

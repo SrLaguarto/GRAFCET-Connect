@@ -180,6 +180,7 @@ class MedidasRealesP(unittest.TestCase):
 
     def test_SP132_columna_sigue_al_numero_al_reducir_la_fuente(self):
         from test_auditoria_maquetacion import regla_C5, regla_TB1
+        from escritorio.campos_medidos import notificar_fuentes
         from escritorio import estilo
         escala_anterior = estilo.ESCALA
         c = hc.Contexto(2000, 1250)
@@ -189,11 +190,13 @@ class MedidasRealesP(unittest.TestCase):
             campos = [p.tabla.cellWidget(row, 5) for row in range(p.tabla.rowCount())]
             for campo in campos:
                 campo.setStyleSheet("font-size:32px")
+            notificar_fuentes()
             p._anchos_controles()
             hc._bombear(4)
             grande = p.tabla.columnWidth(5)
             for campo in campos:
                 campo.setStyleSheet("")
+            notificar_fuentes()
             hc._bombear(4)
             self.assertLess(p.tabla.columnWidth(5), grande)
             self.assertEqual(regla_C5(p.dialogo_config), [])

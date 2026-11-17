@@ -76,8 +76,10 @@ class PilotosZoom(unittest.TestCase):
         return panel, ids
 
     def ventana(self, ancho=960):
+        BaseQt.setUpClass()
         caso = BaseQt()
         caso.setUp()
+        self.addCleanup(caso.doCleanups)
         self.addCleanup(caso.tearDown)
         w, _ = caso.vacio()
         self.addCleanup(w.hide)

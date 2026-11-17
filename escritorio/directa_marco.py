@@ -1,12 +1,13 @@
 """Mismo módulo y terminales de E/S; el destino es una señal identificada por id."""
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QSpinBox, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QWidget
 
 from conexion.catalogo_directo import interna
 from conexion.uniones import Union
 from . import estilo
 from .entradas_salidas import LienzoPLC, TerminalES
 from .paneles import EtiquetaElidida
+from .campos_medidos import SpinMedido
 
 
 class TerminalDirecto(TerminalES):
@@ -62,7 +63,7 @@ class MarcoDirecto(LienzoPLC):
         fila.setSpacing(estilo.E1)
         controlador.host = QLineEdit("localhost")
         controlador.host.setMinimumWidth(0)
-        controlador.puerto = QSpinBox()
+        controlador.puerto = SpinMedido()
         controlador.puerto.setRange(1, 65535)
         controlador.puerto.setValue(7410)
         controlador.b_traer = QPushButton("Traer E/S")
