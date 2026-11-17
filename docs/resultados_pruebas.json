@@ -1,10 +1,10 @@
 {
- "date": "2026-11-16T19:56:20+01:00",
+ "date": "2026-11-17T15:36:13+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 1515,
- "failures": 2,
+ "total": 1563,
+ "failures": 0,
  "errors": 0,
  "results": [
   {
@@ -715,6 +715,15 @@
     "REQ-UX-01"
    ],
    "summary": "REQ-UX-01: cada excepción y cada flotante declarados llevan su motivo."
+  },
+  {
+   "test": "test_auditoria_maquetacion.Auditoria.test_SAUD23_C6_indicadores_contenidos",
+   "case": "S-AUD23",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: los indicadores de las casillas se muestran completos."
   },
   {
    "test": "test_auditoria_maquetacion.Auditoria.test_SP108_auditoria_numerica_sin_excepciones",
@@ -12310,9 +12319,16 @@
    "summary": ""
   },
   {
+   "test": "test_sp_medidas_reales.MedidasRealesP.test_SP130_direcciones_ocupan_su_columna_sin_hueco_ni_excepcion",
+   "case": "S-P130",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
    "test": "test_sp_medidas_reales.MedidasRealesP.test_SP132_columna_sigue_al_numero_al_reducir_la_fuente",
    "case": "S-P132",
-   "outcome": "falla",
+   "outcome": "pasa",
    "requirements": [],
    "summary": ""
   },
@@ -12771,6 +12787,401 @@
     "REQ-CR-02"
    ],
    "summary": "REQ-ALC-02, REQ-CR-02: parte automatizable de R-02 (doce Markdown, huellas de la versión implementada)."
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV10_base_qt_destruye_la_ventana_en_tear_down",
+   "case": "S-V10",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV11_salir_de_ip_no_invoca_un_campo_destruido",
+   "case": "S-V11",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV12_pruebas_de_clave_conservan_el_entorno_de_qt",
+   "case": "S-V12",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV13_aislar_python_no_cambia_el_entorno_nativo_ni_al_fallar",
+   "case": "S-V13",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV14_las_fuentes_se_leen_con_509_streams_ocupados",
+   "case": "S-V14",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV1_instalar_no_intercepta_eventos_de_la_aplicacion",
+   "case": "S-V1",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV2_cambio_de_valor_mide_solo_si_cambian_las_cifras",
+   "case": "S-V2",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV3_selector_abre_elige_y_cierra_al_100",
+   "case": "S-V3",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV4_selector_abre_elige_y_cierra_al_125",
+   "case": "S-V4",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV5_selector_abre_elige_y_cierra_al_150",
+   "case": "S-V5",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV6_fuentes_se_notifican_una_vez_y_actualizan_la_medida",
+   "case": "S-V6",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV7_arrastre_y_layout_no_recalculan_campos_existentes",
+   "case": "S-V7",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV8_los_combos_heredan_el_estilo_de_la_aplicacion",
+   "case": "S-V8",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sv_lag_desplegable.LagYDesplegable.test_SV9_cerrar_contexto_destruye_las_ventanas_qt",
+   "case": "S-V9",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW10_otras_casillas",
+   "case": "S-W10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: se revisan también etapa, acciones y las fichas de jerarquía."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW11_jerarquia_y_auditoria_detecta_recortes",
+   "case": "S-W11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: macroetapa y encapsulante; la regla detecta un indicador desplazado fuera."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW12_clic_por_ventana_nativa",
+   "case": "S-W12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la modalidad no oculta el clic exterior al filtro de la aplicación."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW13_popup_y_clic_por_ventana_nativa",
+   "case": "S-W13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el clic nativo tampoco atraviesa los dos niveles de ventanas."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW1_indicador_entero_y_alineado",
+   "case": "S-W1",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: casilla y borde completos, también con foco, en los tres tamaños."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW2_clic_fuera_se_consume",
+   "case": "S-W2",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el clic cierra sin seleccionar ni pulsar la barra de detrás."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW3_popup_tiene_prioridad",
+   "case": "S-W3",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un clic exterior cierra primero el desplegable, después Propiedades."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW4_clic_dentro_no_cierra",
+   "case": "S-W4",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: ni la lupa ni la cabecera cierran la ventana."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW5_arrastrar_mueve_y_no_recoloca_con_zoom",
+   "case": "S-W5",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: mover la cabecera desplaza solo Propiedades; el zoom conserva su lugar."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW6_arrastre_acotado",
+   "case": "S-W6",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: X1 conserva la barra alcanzable aunque el resto salga del cliente."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW7_reabrir_centra",
+   "case": "S-W7",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la posición manual no persiste al cerrar."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW8_redimensionar_acota",
+   "case": "S-W8",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: X1 conserva la barra alcanzable al estrechar la principal."
+  },
+  {
+   "test": "test_sw_propiedades.PropiedadesW.test_SW9_esc_y_cruz",
+   "case": "S-W9",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: Esc y cruz siguen cerrando sin deseleccionar."
+  },
+  {
+   "test": "test_sx_mas.EdicionMas.test_SXM6_nombre_macro_renombra_expansion_y_deshace",
+   "case": "S-XM6",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-JER-07: el texto M1 edita M33, E33 y S33 en una sola operación, conservando las referencias."
+  },
+  {
+   "test": "test_sx_mas.EdicionMas.test_SXM7_cuerpo_macro_navega_y_nombre_repetido_se_rechaza",
+   "case": "S-XM7",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-JER-07"
+   ],
+   "summary": "REQ-JER-07: cuerpo y nombre mantienen operaciones distintas; el rechazo no cambia el modelo."
+  },
+  {
+   "test": "test_sx_mas.EdicionMas.test_SXM8_simultaneidad_sola_visible_y_persistente",
+   "case": "S-XM8",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la doble línea sola se dibuja y conserva su caja al añadir y quitar otro elemento."
+  },
+  {
+   "test": "test_sx_mas.PropiedadesMas.test_SXM1_cinco_categorias_enteras_en_una_fila",
+   "case": "S-XM1",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: en las tres ventanas las cinco pestañas caben, también a media pantalla real."
+  },
+  {
+   "test": "test_sx_mas.PropiedadesMas.test_SXM2_campos_sin_corte_y_comentario_largo",
+   "case": "S-XM2",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: etiqueta y casilla comparten fila; el comentario ocupa el ancho del panel."
+  },
+  {
+   "test": "test_sx_mas.PropiedadesMas.test_SXM3_altura_moderada_y_aire_alrededor",
+   "case": "S-XM3",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el responsable sustituyó el 33 % y el doble exacto por un aumento moderado."
+  },
+  {
+   "test": "test_sx_mas.PropiedadesMas.test_SXM4_aviso_vacio_y_lupa_se_conservan",
+   "case": "S-XM4",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la transición vacía sigue mostrando el aviso rojo bajo los bloques."
+  },
+  {
+   "test": "test_sx_mas.PropiedadesMas.test_SXM5_esquinas_redondas_y_fondo_opaco",
+   "case": "S-XM5",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: curvas transparentes por fuera, marco gris azulado completamente opaco."
+  },
+  {
+   "test": "test_sx_mover_lag.IntercambioX.test_SX10_reenvio_forzado_no_reconstruye_tablas",
+   "case": "S-X10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: REFRESCO_S reenvía las salidas, sin redibujar un estado idéntico."
+  },
+  {
+   "test": "test_sx_mover_lag.IntercambioX.test_SX11_ciclo_completo_de_interfaz_acotado",
+   "case": "S-X11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el refresco completo de 60 señales no espera al HTTP ni rehace sus widgets."
+  },
+  {
+   "test": "test_sx_mover_lag.IntercambioX.test_SX5_red_lenta_fuera_del_hilo_interfaz",
+   "case": "S-X5",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: HTTP tarda 150 ms y la interfaz sigue atendiendo sus ciclos."
+  },
+  {
+   "test": "test_sx_mover_lag.IntercambioX.test_SX6_sin_cambios_no_redibuja_ni_reconstruye",
+   "case": "S-X6",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: los resultados repetidos no rehacen el GRAFCET, tablas ni módulo."
+  },
+  {
+   "test": "test_sx_mover_lag.IntercambioX.test_SX7_un_valor_solo_toca_su_piloto",
+   "case": "S-X7",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: una nueva muestra actualiza solo la señal que cambió."
+  },
+  {
+   "test": "test_sx_mover_lag.IntercambioX.test_SX8_traidas_sin_conectar_no_rehace_modulo_por_seleccion",
+   "case": "S-X8",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: seleccionar y abrir Propiedades no cambia el catálogo ni sus filas."
+  },
+  {
+   "test": "test_sx_mover_lag.IntercambioX.test_SX9_cero_variables_sin_refrescos_visuales",
+   "case": "S-X9",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: conectar sin variables no repinta el indicador cada periodo."
+  },
+  {
+   "test": "test_sx_mover_lag.MoverX.test_SX12_clic_en_zona_oculta_es_clic_fuera",
+   "case": "S-X12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la zona que sale del cliente no cuenta como interior visible de Propiedades."
+  },
+  {
+   "test": "test_sx_mover_lag.MoverX.test_SX1_barra_dentro_y_contenido_fuera",
+   "case": "S-X1",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la barra permanece recuperable en los cuatro extremos."
+  },
+  {
+   "test": "test_sx_mover_lag.MoverX.test_SX2_un_move_sin_resize_y_agarre_sigue_cursor",
+   "case": "S-X2",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: se limita el destino antes de mover, sin un segundo salto correctivo."
+  },
+  {
+   "test": "test_sx_mover_lag.MoverX.test_SX3_reabrir_centra_y_retira_recorte",
+   "case": "S-X3",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la posición de X no se conserva al reabrir."
+  },
+  {
+   "test": "test_sx_mover_lag.MoverX.test_SX4_redimensionar_conserva_barra",
+   "case": "S-X4",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el límite al cambiar el cliente es el mismo que al arrastrar."
   },
   {
    "test": "test_t01_t08_evolucion.Evolucion.test_T01a_situacion_inicial_explicita",
