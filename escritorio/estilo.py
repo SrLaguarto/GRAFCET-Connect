@@ -153,7 +153,7 @@ _PLANTILLA = Template("""
 QWidget { font-family:"$fuente"; font-size:${t_base}px; color:$tinta; }
 QMainWindow, QDialog { background:$fondo; }
 QToolTip { background:$tinta; color:$blanco; border:0; padding:6px 8px; }
-QWidget#panelDibujo, QWidget#panelElementos, QWidget#panelVariables,
+QWidget#panelDibujo, QWidget#panelVariables,
 QWidget#panelPropiedades { background:$superficie; border:1px solid $borde; border-radius:${r_m}px; }
 QLabel#tituloPanel { font-family:$familia_titulo; font-size:${t_titulo}px; font-weight:600; color:$tinta; border:0; }
 QWidget#cabeceraPropiedades { background:$superficie_2; border-radius:${r_s}px; }
@@ -290,9 +290,6 @@ QGroupBox#grupoVariables::title { color:$tinta; }
 QGroupBox QLabel, QGroupBox QPushButton, QGroupBox QTableWidget, QGroupBox QLineEdit, QGroupBox QComboBox, QGroupBox QCheckBox { font-family:"$fuente"; font-weight:400; font-size:${t_base}px; }
 QTableWidget, QListWidget, QTreeWidget { background:$superficie; border:2px solid transparent; gridline-color:$borde; alternate-background-color:$superficie_2;
     selection-background-color:$acento_suave; selection-color:$tinta; outline:0; }
-QListWidget#paletaElementos::item { padding-left:7px; border:0; }
-QListWidget#paletaElementos::item:hover { background:$hover; }
-QListWidget#paletaElementos QScrollBar:vertical { width: 9px; }  /* la paleta mide justo dos columnas de fichas */
 QHeaderView::section { background:$superficie_2; border:0; border-bottom:1px solid $borde; padding:6px 6px; color:$tinta_2; font-weight:600; }
 QScrollArea { border:0; background:transparent; }
 QScrollArea > QWidget > QWidget { background:$fondo; }  /* el contenido de un área desplazable, con el fondo de la ventana (no el gris de Qt) */

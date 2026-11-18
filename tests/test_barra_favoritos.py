@@ -85,31 +85,26 @@ class Favoritos(BaseQt):
         w.diagrama.dropEvent(evento)
         self.assertTrue(evento.isAccepted())
 
-    def test_SFAV04_arrastre_compartido_y_mismo_resultado_al_soltar(self):
+    def test_SFAV04_arrastre_conserva_mime_figura_y_suelta(self):
         w, e, barra = self.preparar()
+
         def resumen():
             return (len(e.M["steps"]), len(e.M["transitions"]), len(e.ed.draft_actions()), len(e.M["partials"]))
+
         for clave in ("etapa", "transicion", "accion:condicionada", "parcial"):
             with self.subTest(clave=clave):
-                item = next(w.paleta.item(i) for i in range(w.paleta.count())
-                            if w.paleta.item(i).data(Qt.ItemDataRole.UserRole) == clave)
-                w.paleta.setCurrentItem(item)
-                original = self._capturar_arrastre(lambda: w.paleta.startDrag(Qt.DropAction.CopyAction))
-                favorito = self._capturar_arrastre(lambda: w.paleta.arrastrar_elemento(clave, barra.botones[clave]))
-                self.assertEqual(original[0].formats(), favorito[0].formats())
-                for formato in original[0].formats():
-                    self.assertEqual(original[0].data(formato), favorito[0].data(formato))
-                self.assertEqual(original[1].toImage(), favorito[1].toImage())
-                self.assertEqual(original[2], favorito[2])
+                boton = barra.botones[clave]
+                datos, figura, punto = self._capturar_arrastre(lambda: w.paleta.arrastrar_elemento(clave, boton))
+                esperado, ancla = propiedades.figura(clave, w.diagrama.escala(), boton.devicePixelRatioF())
+                self.assertEqual(datos.formats(), ["text/plain"])
+                self.assertEqual(datos.text(), clave)
+                self.assertEqual(figura.toImage(), esperado.toImage())
+                self.assertEqual(punto, ancla)
                 antes = resumen()
-                self._soltar(w, original[0])
-                esperado = resumen()
-                self.assertNotEqual(esperado, antes)
+                self._soltar(w, datos)
+                self.assertNotEqual(resumen(), antes)
                 e.deshacer()
                 self.assertEqual(resumen(), antes)
-                self._soltar(w, favorito[0])
-                self.assertEqual(resumen(), esperado)
-                e.deshacer()
 
     def test_SFAV05_gesto_de_arrastre_desde_boton_y_menu(self):
         w, e, barra = self.preparar(683, 768)
@@ -122,16 +117,28 @@ class Favoritos(BaseQt):
                 boton.mouseMoveEvent(mover)
                 arrastrar.assert_called_once_with(boton.clave, boton)
 
-    def test_SFAV06_menu_por_secciones_no_se_cierra_y_persiste(self):
-        """REQ-EDT-09: J4 retira el menú de selección y muestra siempre todas las fichas."""
-        w, e, barra = self.preparar()
-        from PySide6.QtGui import QContextMenuEvent
-        evento = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, QPoint(4, 4))
-        QApplication.sendEvent(barra, evento)
-        self.assertIsNone(barra._menu)
+    def test_SFAV06_catalogo_fijo_y_arrastre_de_las_quince_fichas(self):
+        """REQ-EDT-09: las quince fichas fijas arrastran, incluso desde el menú de desborde."""
+        w, e, barra = self.preparar(683, 768)
+        self.assertTrue(barra.ocultos)
         self.assertEqual(barra.orden, list(PREDETERMINADOS))
-        self.assertFalse(w.ajustes.contains(barra.CLAVE_AJUSTES))
+        menu = barra.crear_menu_desborde()
+        self.addCleanup(menu.deleteLater)
+        botones = [barra.botones[c] for c in barra._visibles] + [a.defaultWidget() for a in menu.actions()]
+        self.assertEqual([b.clave for b in botones], list(PREDETERMINADOS))
+        for boton in botones:
+            with self.subTest(clave=boton.clave):
+                datos, figura, punto = self._capturar_arrastre(lambda: self._arrastrar_boton(boton))
+                self.assertEqual(datos.text(), boton.clave)
+                self.assertFalse(figura.isNull())
+                self.assertTrue(figura.rect().contains(punto))
 
+    @staticmethod
+    def _arrastrar_boton(boton):
+        QTest.mousePress(boton, Qt.MouseButton.LeftButton, pos=QPoint(4, 4))
+        mover = QMouseEvent(QMouseEvent.Type.MouseMove, QPointF(40, 4), QPointF(40, 4),
+                            Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        boton.mouseMoveEvent(mover)
 
     def test_SFAV07_reordenacion_marca_insercion_y_persistencia(self):
         """REQ-EDT-09: J4 ignora soltar dentro de la barra; el arrastre al dibujo conserva SFAV04/05."""
@@ -160,8 +167,8 @@ class Favoritos(BaseQt):
     def test_SFAV09_desborde_y_zoom_antes_de_ocultar_favoritos(self):
         w, e, barra = self.preparar(960, 1032)
         self.assertTrue(w.diagrama._solo_iconos)
-        self.assertTrue(w.diagrama.l_zoom.isHidden())
-        self.assertFalse(barra.ocultos, "L: los quince caben a 960 sin porcentaje")
+        self.assertTrue(w.diagrama.l_zoom.isVisible())
+        self.assertFalse(barra.ocultos, "a 960 caben las quince fichas y el porcentaje")
         w.resize(683, 768)
         self.asentar_escala(w)
         for _ in range(5):

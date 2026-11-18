@@ -73,11 +73,13 @@ class Defectos(BaseQt):
         from escritorio.ventana import _FocoTeclado
         self.assertIn(VistaLamina, _FocoTeclado.CON_ANILLO)
         vista = VistaLamina()
+        self.addCleanup(vista.close)
         vista.resize(200, 160)
         vista.show()
         QApplication.processEvents()
         vista.setFocus(Qt.FocusReason.TabFocusReason)
         QApplication.processEvents()
+        estilo.poner(vista, tecl=False)
         sin = vista.grab().toImage()
         estilo.poner(vista, tecl=True)
         con = vista.grab().toImage()
@@ -205,7 +207,7 @@ class Defectos(BaseQt):
             w.resize(pedido, 600)
             QApplication.processEvents()
             self.assertEqual(w.width(), pedido)
-            self.assertEqual((w.ancho_lateral, w.ancho_derecho), (218, 218))
+            self.assertEqual(w.ancho_derecho, 218)
             w.hide()
 
     def test_SRED16_ningun_singleshot_de_la_ventana_sin_objeto_de_contexto(self):
@@ -292,13 +294,11 @@ class Defectos(BaseQt):
             w._abrir_opciones()
             for _ in range(3):
                 QApplication.processEvents()
-            p = w.paleta
-            self.assertTrue(p.isVisible() and p.width() > 0 and p.height() > 0 and p.count() >= 10, (ancho, alto))
-            for panel in (p, w.variables.tabla, w.props, w.dock, w.derecho):
+            p = w.favoritos
+            self.assertTrue(p.isVisible() and p.width() > 0 and p.height() > 0 and len(p._visibles) >= 10, (ancho, alto))
+            for panel in (p, w.variables.tabla, w.props, w.derecho):
                 self.assertTrue(panel.updatesEnabled(), (ancho, alto, type(panel).__name__))
-            vis = [i for i in range(p.count()) if p.viewport().rect().intersects(p.visualItemRect(p.item(i)))]
-            self.assertGreaterEqual(len(vis), 4, (ancho, alto))
-            self.assertGreater(self._tinta(w.dock), 200, f"la paleta de Elementos se ve a {ancho}×{alto}")
+            self.assertGreater(self._tinta(w.favoritos), 200, f"la paleta de Elementos se ve a {ancho}×{alto}")
             self.assertGreater(self._tinta(w.variables), 50)
             self.assertGreater(self._tinta(w.props), 50)
         for tamano in ((1366, 768), (2000, 1250), (1366, 768), (2000, 1250)):
@@ -322,7 +322,7 @@ class Defectos(BaseQt):
         w.resize(1680, 1100)
         for _ in range(4):
             QApplication.processEvents()
-        self.assertGreater(self._tinta(w.dock), 200)
+        self.assertGreater(self._tinta(w.favoritos), 200)
         self.assertTrue(w.cambiar_modo("simular"))
         for tamano in ((1366, 768), (2000, 1250), (1366, 768)):
             w.resize(*tamano)
@@ -393,71 +393,7 @@ class Defectos(BaseQt):
                 self.assertEqual(ventana.showMaximized.called, maximizada, argv)
                 self.assertEqual(ventana.show.called, not maximizada, argv)
 
-    def test_SRED23_sin_formulario_la_cabecera_va_arriba_y_el_panel_mide_lo_que_pide(self):
-        """REQ-EDT-09: con varios elementos elegidos (o ninguno), la cabecera de Propiedades está arriba, en el mismo sitio y con el mismo alto que
-        con una transición, el mensaje va justo debajo alineado arriba a la izquierda y el panel no deja bandas vacías."""
-        for ancho, alto in ((2000, 1250), (1366, 768), (960, 1040)):
-            w, e = self.vacio()
-            ids = self.cadena(e)
-            w.resize(ancho, alto)
-            w.show()
-            for _ in range(4):
-                QApplication.processEvents()
-            p = w.props
-            e.seleccionar([ids[1]])
-            w._abrir_opciones()
-            for _ in range(5):
-                QApplication.processEvents()
-            self.assertEqual(p.pagina, "transicion")
-            ref = (p.cabecera.mapTo(p, QPoint(0, 0)), p.cabecera.height(), p.titulo.mapTo(p, QPoint(0, 0)).y(), p.t_fijar.mapTo(p, QPoint(0, 0)).y())
-            for seleccion in ([ids[0], ids[1], ids[2]], []):
-                e.seleccionar(seleccion)
-                for _ in range(6):
-                    QApplication.processEvents()
-                self.assertEqual(p.pagina, "vacio")
-                self.assertEqual((p.cabecera.mapTo(p, QPoint(0, 0)), p.cabecera.height(), p.titulo.mapTo(p, QPoint(0, 0)).y(),
-                                  p.t_fijar.mapTo(p, QPoint(0, 0)).y()), ref, (ancho, alto, seleccion))
-                self.assertEqual(p.vacio.y(), p.cabecera.y() + p.cabecera.height(), "el mensaje, justo bajo la cabecera")
-                self.assertTrue(p.vacio.alignment() & Qt.AlignmentFlag.AlignTop)
-                self.assertLessEqual(w.inferior.height(), p.minimumSizeHint().height() + 12, "el panel mide lo que pide su contenido")
-                if seleccion:
-                    self.assertIn("elementos seleccionados", p.titulo.text())
-            w.hide()
 
-    def test_SRED24_las_categorias_de_bloques_van_en_la_fila_de_la_cabecera_si_caben(self):
-        """REQ-EDT-09: con una transición elegida, a 1920 y 2000 las categorías están en la fila de la cabecera (empiezan donde la paleta y el
-        área, entre el título y «Fijar»); a 960 vuelven a su fila propia, en dos filas, sin cortarse; el alto que pide el panel baja una fila."""
-        from escritorio.alto_opciones import alto_minimo_transicion
-        altos = {}
-        for ancho, alto in ((2000, 1250), (1920, 1080), (1366, 768), (960, 1040)):
-            w, e = self.vacio()
-            ids = self.cadena(e)
-            w.resize(ancho, alto)
-            w.show()
-            e.seleccionar([ids[1]])
-            w._abrir_opciones()
-            for _ in range(6):
-                QApplication.processEvents()
-            p, prog = w.props, w.props.prog
-            sc = prog._sc_carpetas
-            if ancho >= 1366:
-                self.assertTrue(prog.cat_en_cabecera, (ancho, alto))
-                self.assertTrue(sc.parentWidget().isAncestorOf(sc) and p.cabecera.isAncestorOf(sc))
-                self.assertEqual(sc.mapTo(p, QPoint(0, 0)).x(), prog._sc_paleta.mapTo(p, QPoint(0, 0)).x(), "empiezan donde la paleta")
-                self.assertGreater(sc.mapTo(p, QPoint(0, 0)).x(), p.titulo.mapTo(p, QPoint(0, 0)).x() + p.titulo.width() - 1)
-                self.assertLess(sc.mapTo(p, QPoint(0, 0)).x() + sc.width(), p.t_fijar.mapTo(p, QPoint(0, 0)).x(), "antes de «Fijar»")
-                self.assertEqual(sc.mapTo(p, QPoint(0, 0)).y(), p.titulo.mapTo(p, QPoint(0, 0)).y() + (p.titulo.height() - sc.height()) // 2)
-                self.assertEqual(prog._sc_paleta.mapTo(p, QPoint(0, 0)).y(), p.izq.mapTo(p, QPoint(0, 0)).y(), "paleta y campos, justo bajo la cabecera")
-                self.assertEqual(sc.horizontalScrollBar().maximum(), 0)
-            else:
-                self.assertFalse(prog.cat_en_cabecera)
-                for b in prog.categorias.values():
-                    sc.ensureWidgetVisible(b, 0, 0)
-                    QApplication.processEvents()
-                    self.assertTrue(sc.viewport().rect().contains(QRect(b.mapTo(sc.viewport(), QPoint(0, 0)), b.size())), b.text())
-            altos[(ancho, alto)] = alto_minimo_transicion(p)
-            w.hide()
-        self.assertLess(altos[(1366, 768)], 330, "con las categorías en la cabecera el panel gana una fila (antes ≈ 334 px)")
 
     def test_SRED25_ningun_panel_tapa_el_borde_de_otro(self):
         """REQ-EDT-09: con Propiedades abierto (y plegado), el borde de las tarjetas de arriba —Elementos, el dibujo y Variables— y el de
@@ -476,7 +412,7 @@ class Defectos(BaseQt):
                 for _ in range(6):
                     QApplication.processEvents()
                 imagen = w.grab().toImage()
-                tarjetas = [("Elementos", w.dock), ("dibujo", w.diagrama.parentWidget()), ("Variables", w.derecho.widget(1).widget())]
+                tarjetas = [("dibujo", w.diagrama.parentWidget()), ("Variables", w.derecho.widget(1).widget())]
                 if abierto:
                     tarjetas.append(("Propiedades", w.props))
                 for nombre, t in tarjetas:

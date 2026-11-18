@@ -29,7 +29,6 @@ class PropiedadesFlotante(unittest.TestCase):
         self.addCleanup(self.c.cerrar)
         HC._edicion(self.c)
         self.w, self.e, self.ids = self.c.w, self.c.e, self.c.ids
-        self.w._cambiar_modo_propiedades("flotante")
         HC._bombear(6)
 
     # -- ayudas
@@ -65,25 +64,6 @@ class PropiedadesFlotante(unittest.TestCase):
             self.assertTrue(v.lupa.origen.contains(original))
 
     # -- SPFL01
-    def test_SPFL01_modo_en_ver_y_persistencia(self):
-        """REQ-EDT-02: Ver ▸ Panel de opciones tiene «Flotante» y «Abajo», excluyentes, y la elección se
-        recuerda."""
-        w = self.w
-        self.assertEqual({m: a.text().replace("&", "") for m, a in w.a_props.items()},
-                         {"flotante": "Flotante", "abajo": "Abajo"})
-        self.assertTrue(w.a_props["flotante"].isChecked() and not w.a_props["abajo"].isChecked())
-        w.a_props["abajo"].trigger()
-        self.assertEqual((w.modo_propiedades, w.a_props["flotante"].isChecked()), ("abajo", False))
-        self.assertEqual(w.ajustes.value("paneles/propiedades"), "abajo")
-        w.a_props["flotante"].trigger()
-        self.assertEqual(w.ajustes.value("paneles/propiedades"), "flotante")
-        ruta = w.ajustes.fileName()
-        w.ajustes.sync()
-        from escritorio.ventana import Ventana
-        otra = Ventana(QSettings(ruta, QSettings.Format.IniFormat))
-        self.addCleanup(otra.deleteLater)
-        self.assertEqual(otra.modo_propiedades, "flotante")
-        self.assertTrue(otra.a_props["flotante"].isChecked())
 
     # -- SPFL02 / SPFL03
     def test_SPFL02_doble_clic_en_etapa_abre_ventana_unida(self):
@@ -233,8 +213,6 @@ class PropiedadesFlotante(unittest.TestCase):
         self.assertEqual(self.ventanas(), [], "sin fijar se esconde")
         self.abrir([s0])
         v = self.w.flot.principal
-        self.w.props.t_fijar.click()
-        self.assertTrue(self.w.props.t_fijar.isChecked())
         pto = self.e.zonas_propiedades(t0)["elemento"].center()
         self.e.prensar(pto)
         self.e.soltar(pto)
@@ -259,48 +237,13 @@ class PropiedadesFlotante(unittest.TestCase):
     def test_SPFL11_continua_seleccionada_oculta_ventana(self):
         """REQ-EDT-02: con la ventana abierta y fijada por otro elemento, seleccionar una continua oculta la ventana."""
         self.abrir([self.ids["etapas"][0]])
-        self.w.props.t_fijar.click()
         self.abrir_accion(self.accion("continua"), self.ids["etapas"][1])
         p = self.w.flot.panel
         self.assertEqual(self.ventanas(), [])
         self.assertTrue(p.continua)
 
-    def test_SPFL12_continua_en_la_barra_solo_la_frase(self):
-        """REQ-EDT-02: con la barra inferior, una acción continua seleccionada no muestra campos, como el lienzo vacío:
-        solo la frase."""
-        self.w._cambiar_modo_propiedades("abajo")
-        self.abrir_accion(self.accion("continua"), self.ids["etapas"][1])
-        p = self.w.props
-        self.assertTrue(p.isVisible())
-        self.assertEqual(
-            p.vacio.text(), "Haz doble clic sobre la acción continua para desplegar las variables disponibles.",
-        )
-        self.assertTrue(p.vacio.isVisible())
-        self.assertFalse(p.cuerpo.isVisible() or p.izq.isVisible() or p.accion.variable.isVisible())
 
     # -- SPFL13
-    def test_SPFL13_barra_resalta_la_parte_editada(self):
-        """REQ-EDT-09: con la barra inferior, al editar una acción condicionada se resalta la condición (foco en los
-        bloques) o el rectángulo de
-        la acción (foco en el resto); con el foco en otra parte, no se resalta otra cosa."""
-        self.w._cambiar_modo_propiedades("abajo")
-        aid, sid = self.accion("condicionada"), self.ids["etapas"][2]
-        self.abrir_accion(aid, sid)
-        p = self.w.props
-        self.assertFalse([m for m in self.e.seleccion_dibujo() if m.startswith("parte:")])
-        n0 = len(self.w.diagrama.scene().items())
-        self.assertFalse(any(m.startswith("parte:") for m in self.e.seleccion_dibujo()))
-        p.prog.lienzo.setFocus()
-        HC._bombear(6)
-        self.assertIn(f"parte:{aid}:condicion", self.e.seleccion_dibujo())
-        self.assertGreater(len(self.w.diagrama.scene().items()), n0, "el dibujo resalta la banderita")
-        p.accion.variable.setFocus()
-        HC._bombear(6)
-        marcas = [m for m in self.e.seleccion_dibujo() if m.startswith("parte:")]
-        self.assertEqual(marcas, [f"parte:{aid}:accion"])
-        self.e.seleccionar([])
-        HC._bombear(6)
-        self.assertFalse([m for m in self.e.seleccion_dibujo() if m.startswith("parte:")])
 
     # -- SPFL14
     def test_SPFL14_ampliar_ya_no_existe(self):
@@ -316,13 +259,6 @@ class PropiedadesFlotante(unittest.TestCase):
         """REQ-EDT-02: pasar a «abajo» esconde las ventanas y abre la barra; al simular no queda ninguna ventana
         flotante."""
         self.abrir([self.ids["etapas"][0]])
-        self.assertEqual(len(self.ventanas()), 1)
-        self.w._cambiar_modo_propiedades("abajo")
-        HC._bombear(10)
-        self.assertEqual(self.ventanas(), [])
-        self.assertTrue(self.w._plegables["inferior"].isVisible() and self.w.props.isVisible())
-        self.w._cambiar_modo_propiedades("flotante")
-        HC._bombear(10)
         self.assertEqual(len(self.ventanas()), 1)
         self.w.cambiar_modo("simular")
         HC._bombear(10)
@@ -442,7 +378,6 @@ class PropiedadesFlotante(unittest.TestCase):
                     try:
                         HC._edicion(c)
                         c.e.nueva_variable("hh", "output", {"kind": "int"})
-                        c.w._cambiar_modo_propiedades("flotante")
                         aid = c.e.poner_accion_suelta(QPointF(450, 180), tipo=tipo)
                         c.e.seleccionar([aid])
                         c.w._abrir_opciones()
@@ -621,16 +556,6 @@ class PropiedadesFlotante(unittest.TestCase):
             self.assertFalse(p.t_estado.isVisible(), "sin el aviso de fórmula correcta")
             self.assertFalse(p.accion.frase.isVisible(), "sin la frase de la acción")
             self.assertNotIn("papelera", vars(p.prog))
-        c = HC.Contexto(1366, 768)
-        try:
-            HC._con_seleccion("accion")(c)
-            p = c.w.props
-            self.assertTrue(p._l_formula.isVisible() and p.t_texto.isVisible() and p.t_estado.isVisible() and p.accion.frase.isVisible())
-            self.assertIn("correcta", p.t_estado.text())
-            self.assertTrue(p.accion.frase.text())
-            self.assertNotIn("papelera", vars(p.prog))
-        finally:
-            c.cerrar()
 
     def test_SPFL30_error_de_formula_una_linea_roja_y_papelera_que_borra(self):
         """REQ-EDT-02: con la fórmula errónea sale una línea roja de una línea bajo el área de bloques; la papelera, junto a las categorías,
@@ -714,14 +639,12 @@ class PropiedadesFlotante(unittest.TestCase):
         c.e.cambiado.emit()
 
     def test_SPFL33_lupa_de_transicion_y_etapa_sin_trozos_vecinos(self):
-        """REQ-EDT-09: la lupa de una transición dibuja su trazo, su barra y su texto con los muñones del enlace, sin la etapa de debajo (ni
-        de arriba); la de una etapa, su caja y sus muñones."""
+        """REQ-EDT-09: la lupa de una transición dibuja su símbolo y su texto. La de una etapa conserva la caja y sus muñones."""
         from escritorio.diagrama import posiciones
         for caso in ("transicion", "etapa"):
             c = HC.Contexto(1366, 768)
             try:
                 HC._edicion(c)
-                c.w._cambiar_modo_propiedades("flotante")
                 tid, e = c.ids["transiciones"][0], c.e
                 z0 = e.zonas_propiedades(tid)["elemento"]
                 self.mover_etapa(c, c.ids["etapas"][1], int(z0.bottom() + 3 + 22))  # la etapa de debajo casi pegada a la zona de la transición
@@ -738,6 +661,17 @@ class PropiedadesFlotante(unittest.TestCase):
                 zr = t.mapRect(zona)
                 xc = t.map(QPointF(*posiciones(e.M)[ident])).x()
                 imagen = v.lupa.grab().toImage()
+                if caso == "transicion":
+                    from PySide6.QtGui import QColor, QPen
+                    from escritorio.diagrama import Z_LINK
+                    from escritorio.elementos_lupa import DATO_ELEMENTOS
+                    # El retorno pertenece a la transición, pero cruza su receptividad lejos del símbolo.
+                    x = zona.right() - 4
+                    retorno = v.lupa._escena.addLine(x, zona.top(), x, zona.bottom(), QPen(QColor("red"), 2))
+                    retorno.setZValue(Z_LINK)
+                    retorno.setData(DATO_ELEMENTOS, (ident,))
+                    self.assertEqual(imagen, v.lupa.grab().toImage())
+                    self.assertTrue(retorno.isVisible())
                 ancho_muñon = 2 * esc + 2
                 for y in range(imagen.height()):
                     if zr.top() - 2 <= y <= zr.bottom() + 2:
@@ -789,43 +723,41 @@ class PropiedadesFlotante(unittest.TestCase):
         HC._bombear(6)
         self.assertEqual(self.ventanas(), [], "el siguiente cierra la ventana")
 
-    def test_SPFL35_grupos_plegables_en_la_barra_y_en_la_flotante(self):
-        """REQ-EDT-02: los subtítulos de la paleta de variables plegan su grupo con clic y con el teclado, se recuerdan y se comparten entre la
-        barra inferior y la ventana flotante."""
+    def test_SPFL35_grupos_plegables_en_propiedades(self):
+        """REQ-EDT-02: clic y Espacio pliegan Variables, y el estado se recuerda al reabrir."""
         from PySide6.QtTest import QTest
         from escritorio.paleta_variables import CLAVE_PLEGADOS, TituloGrupo
-        for modo in ("abajo", "flotante"):
-            with self.subTest(modo=modo):
-                c = HC.Contexto(1366, 768)
-                try:
-                    (HC._flotante("condicionada") if modo == "flotante" else HC._con_seleccion("accion"))(c)
-                    self.con_entradas(c, 3)
-                    HC._bombear(10)
-                    panel = c.w.flot.panel if modo == "flotante" else c.w.props
-                    otro = c.w.props if modo == "flotante" else c.w.flot.panel if c.w.flot.panel is not None else None
-                    paleta = panel.prog.paleta
-                    titulos = {t.papel: t for t in paleta.findChildren(TituloGrupo) if t.isVisible()}
-                    self.assertIn("entrada", titulos)
-                    self.assertFalse(titulos["entrada"].plegado, "por defecto, desplegados")
-                    antes = len(paleta.bloques())
-                    titulos["entrada"].click()
-                    HC._bombear(4)
-                    self.assertTrue(titulos["entrada"].plegado)
-                    self.assertLess(len(paleta.bloques()), antes)
-                    self.assertEqual(c.w.ajustes.value(CLAVE_PLEGADOS), "entrada")
-                    if otro is not None:
-                        self.assertTrue(any(g[0] == "entrada" and g[3] == 0 for g in otro.prog.paleta.grupos), "el otro control lo sigue")
-                    titulos["entrada"].setFocus(Qt.FocusReason.TabFocusReason)
-                    QTest.keyClick(titulos["entrada"], Qt.Key.Key_Space)
-                    HC._bombear(4)
-                    self.assertFalse(titulos["entrada"].plegado)
-                    QTest.keyClick(titulos["entrada"], Qt.Key.Key_Return)
-                    HC._bombear(4)
-                    self.assertTrue(titulos["entrada"].plegado)
-                    self.assertEqual(c.w.ajustes.value(CLAVE_PLEGADOS), "entrada")
-                    titulos["entrada"].click()  # desplegado otra vez, para el siguiente modo
-                finally:
-                    c.cerrar()
+
+        c = HC.Contexto(1366, 768)
+        try:
+            HC._flotante("condicionada")(c)
+            self.con_entradas(c, 3)
+            HC._bombear(10)
+            paleta = c.w.props.prog.paleta
+            titulos = {t.papel: t for t in paleta.findChildren(TituloGrupo) if t.isVisible()}
+            entrada = titulos["entrada"]
+            self.assertFalse(entrada.plegado)
+            antes = len(paleta.bloques())
+            entrada.click()
+            self.assertTrue(entrada.plegado)
+            self.assertLess(len(paleta.bloques()), antes)
+            self.assertEqual(c.w.ajustes.value(CLAVE_PLEGADOS), "entrada")
+            entrada.setFocus(Qt.FocusReason.TabFocusReason)
+            QTest.keyClick(entrada, Qt.Key.Key_Space)
+            HC._bombear(4)
+            self.assertFalse(entrada.plegado)
+            QTest.keyClick(entrada, Qt.Key.Key_Space)
+            self.assertTrue(entrada.plegado)
+            QTest.keyClick(entrada, Qt.Key.Key_Return)
+            HC._bombear(4)
+            self.assertFalse(c.w.flot.hay_ventanas())
+            c.w._abrir_opciones()
+            HC._bombear(4)
+            titulo_reabierto = next(t for t in paleta.findChildren(TituloGrupo)
+                                     if t.papel == "entrada" and t.isVisible())
+            self.assertTrue(titulo_reabierto.plegado)
+        finally:
+            c.cerrar()
 
 
 if __name__ == "__main__":

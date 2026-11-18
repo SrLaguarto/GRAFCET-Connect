@@ -32,7 +32,6 @@ class PropiedadesY(unittest.TestCase):
         if tipo == "macroetapa":
             HC._edicion(c)
             mid = c.e.poner_macro(QPointF(500, 200))
-            c.w._cambiar_modo_propiedades("flotante")
             c.e.seleccionar([mid])
             c.w._abrir_opciones()
         else:
@@ -55,15 +54,15 @@ class PropiedadesY(unittest.TestCase):
                     self.assertEqual(v.width(), 848)
                     self.doCleanups()
 
-    def test_SY2_medias_pantallas_y_altos_previos_no_cambian(self):
-        """Medidas de referencia tomadas antes de Y, sin alterar la altura vigente de X+."""
+    def test_SY2_medias_pantallas_y_altos_acotados_al_area_actual(self):
+        """En media pantalla, solo las acciones de dos tarjetas usan todo el alto disponible."""
         for ancho, alto, esperado in ((683, 768, 587), (960, 1032, 848)):
             for tipo in ("transicion", "condicionada", "evento", "activacion_numerica"):
                 with self.subTest(tipo=tipo, ancho=ancho):
                     c, p, v = self.contexto(tipo, ancho, alto)
-                    alto_previo = {"transicion": 558, "activacion_numerica": 465}.get(
-                        tipo, 603 if ancho == 683 else 867)
-                    self.assertEqual((v.width(), v.height()), (esperado, alto_previo))
+                    disponible = c.w.paginas_es.height() - 2 * estilo.E6
+                    alto_por_tipo = {"transicion": 558, "activacion_numerica": 465}
+                    self.assertEqual((v.width(), v.height()), (esperado, alto_por_tipo.get(tipo, disponible)))
                     self.doCleanups()
 
     def test_SY3_centrada_y_categorias_enteras_a_pantalla_completa(self):
@@ -129,13 +128,14 @@ class PropiedadesY(unittest.TestCase):
                     item.show()
                 self.doCleanups()
 
-    def test_SY7_altos_a_pantalla_completa_se_conservan(self):
-        """El tope horizontal no cambia las alturas medidas antes de Y."""
+    def test_SY7_altos_a_pantalla_completa_se_ajustan_al_area_actual(self):
+        """Las alturas de una tarjeta se conservan. Dos tarjetas aprovechan el área con sus márgenes."""
+        fijos = {"transicion": 664, "activacion_numerica": 553}
         for ancho, alto in ((1920, 1080), (2560, 1440)):
-            for tipo, esperado in (("transicion", 664), ("activacion_numerica", 553),
-                                   ("condicionada", 905 if ancho == 1920 else 1265)):
+            for tipo in (*fijos, "condicionada"):
                 c, p, v = self.contexto(tipo, ancho, alto)
-                self.assertEqual(v.height(), esperado, (ancho, tipo))
+                disponible = c.w.paginas_es.height() - 2 * estilo.E6
+                self.assertEqual(v.height(), fijos.get(tipo, disponible), (ancho, tipo))
                 self.doCleanups()
 
 

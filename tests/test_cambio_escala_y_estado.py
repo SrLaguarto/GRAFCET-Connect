@@ -21,7 +21,7 @@ class CambioEscalaYEstado(BaseQt):
     def _firma(self, w):
         d = w.diagrama
         return (d.viewport().mapTo(w, d.mapFromScene(0, 0)).toTuple(), d.viewport().mapTo(w, d.viewport().rect().topLeft()).toTuple(),
-                d.size().toTuple(), round(d.escala(), 4), w.dock.width(), w.derecho.width())
+                d.size().toTuple(), round(d.escala(), 4), w.derecho.width())
 
     def test_SRED31_el_cambio_de_escala_no_deja_nada_pendiente_que_mueva_el_dibujo(self):
         """REQ-EDT-09: al pasar de 2000×1250 a 1000×1250 y vuelta (cruza el umbral de escala) el dibujo queda en su sitio final al volver
@@ -100,7 +100,8 @@ class CambioEscalaYEstado(BaseQt):
         e.unir_accion(did, ids[0])
         QApplication.processEvents()
         self.assertFalse(w.ayuda.text().startswith("Acción suelta"), w.ayuda.text())
-        self.assertEqual(w.statusBar().currentMessage(), "")
+        self.assertEqual(w.statusBar().currentMessage(), w.ayuda.text())
+        self.assertEqual(w.ayuda.text(), e.nombre(did))
         w.historial_plano(False)  # Ctrl+Z
         QApplication.processEvents()
         self.assertEqual(e.sel, [did])
@@ -108,7 +109,7 @@ class CambioEscalaYEstado(BaseQt):
         self.assertTrue(w.statusBar().currentMessage().startswith("Acción suelta"))
         w.historial_plano(True)  # Ctrl+Y: otra vez unida
         QApplication.processEvents()
-        self.assertEqual(w.statusBar().currentMessage(), "")
+        self.assertEqual(w.statusBar().currentMessage(), e.nombre(did))
 
 
     def test_SRED34_al_arrancar_la_unica_ventana_que_se_muestra_es_la_principal_maximizada(self):
@@ -145,7 +146,9 @@ class CambioEscalaYEstado(BaseQt):
             try:
                 with (
                     mock.patch.object(ventana, 'QSettings', Ajustes),
-                    mock.patch.object(carpetas, 'asegurar_carpetas', lambda: None),
+                    mock.patch.object(
+                        carpetas, 'asegurar_carpetas', return_value={'grafcet': Path(tmp)}
+                    ),
                     mock.patch.object(errores, 'instalar', lambda: None),
                     mock.patch.object(ventana.QApplication, 'exec', bucle),
                     entorno_aislado({'GRAFCONNECT_SIN_ACTUALIZAR': '1'}),

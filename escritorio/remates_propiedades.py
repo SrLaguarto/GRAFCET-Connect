@@ -133,7 +133,7 @@ class RematesAccion(QObject):
 
     def _columna(self):
         p = self.panel
-        if p.flotante and p.pagina == "transicion":
+        if p.pagina == "transicion":
             p.izq.setMinimumWidth(0)
             p.izq.setMaximumWidth(16777215)
             return

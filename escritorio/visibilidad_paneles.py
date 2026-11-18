@@ -1,46 +1,37 @@
-"""Distingue un panel oculto desde Ver de un panel plegado en su borde."""
+"""Gestiona el plegado de Variables y la visibilidad de la traza."""
 
 
 class VisibilidadPaneles:
     def __init__(self, ventana):
         self.v = ventana
-        self.habilitados = {}
         self.abiertos = {}
-        for nombre in ("izquierdo", "derecho", "inferior"):
+        for nombre in ("derecho", "inferior"):
             abierto = ventana.ajustes.value(f"paneles/{nombre}", nombre != "inferior", type=bool)
-            self.habilitados[nombre] = ventana.ajustes.value(self.clave(nombre), abierto, type=bool)
             self.abiertos[nombre] = abierto
 
-    @staticmethod
-    def clave(nombre):
-        return f"paneles/{nombre}/visible"
+        ventana.ajustes.remove("paneles/izquierdo")
+        ventana.ajustes.remove("paneles/derecho/visible")
+        self.traza_habilitada = ventana.ajustes.value("paneles/inferior/visible", self.abiertos["inferior"], type=bool)
 
-    def esta_abierto(self, nombre):
-        return self.habilitados[nombre] and self.abiertos[nombre]
-
-    def desde_menu(self, nombre, visible):
-        self.habilitados[nombre] = visible
-        self.v.ajustes.setValue(self.clave(nombre), visible)
-        self.mostrar(nombre, visible)
+    def activar_traza(self, visible):
+        self.traza_habilitada = visible
+        self.mostrar("inferior", visible)
 
     def mostrar(self, nombre, abierto, guardar=True):
         v = self.v
         if guardar:
             self.abiertos[nombre] = abierto
-            if abierto:
-                self.habilitados[nombre] = True
-            v.ajustes.setValue(self.clave(nombre), self.habilitados[nombre])
         v._desplegar_panel(nombre, abierto, guardar)
-        editar = v.modo == "editar" and v.edicion is not None and not v.solo_lectura
-        permitido = nombre != "izquierdo" or editar
-        permitido = permitido and not (nombre == "inferior" and v.flot.activo())
-        v._plegables[nombre].setVisible(self.habilitados[nombre] and permitido)
-        accion = v._accion_panel(nombre)
-        accion.blockSignals(True)
-        accion.setChecked(self.habilitados[nombre])
-        accion.blockSignals(False)
-        if nombre == "inferior" and v.flot.activo():
-            v.flot.actualizar()
+        if nombre == "derecho":
+            return
+
+        if guardar:
+            self.traza_habilitada |= abierto
+            v.ajustes.setValue("paneles/inferior/visible", self.traza_habilitada)
+        v._plegables[nombre].setVisible(self.traza_habilitada and v.modo == "simular")
+        v.a_inferior.blockSignals(True)
+        v.a_inferior.setChecked(self.traza_habilitada)
+        v.a_inferior.blockSignals(False)
 
     def alternar(self, nombre):
         self.mostrar(nombre, not self.v._plegables[nombre].abierto)

@@ -99,33 +99,6 @@ class Alturas(BaseQt):
                 self.assertEqual(desbordes(w, 0), [], (ancho, alto, nombre))
             w.hide()
 
-    def test_SALC02_cabecera_de_propiedades_contiene_categorias_y_fijar_y_el_primer_campo_queda_debajo(self):
-        """REQ-EDT-09: en la cabecera de Propiedades, los chips de categoría y «Fijar» caben con al menos 2 px arriba y abajo y el campo
-        «Etiqueta» empieza por debajo de la franja del título, de una transición y de una etapa y a las dos pantallas."""
-        for ancho, alto in TAMANOS:
-            w, e, ids = self._preparar(ancho, alto)
-            p = w.props
-            for nombre, ident, campo in (("transicion", ids[1], None), ("etapa", ids[0], p.s_etiqueta)):
-                e.seleccionar([ident])
-                w._abrir_opciones()
-                self._bombear(10)
-                franja = p.cabecera.rect()  # (los hijos de la cabecera dan su geometría en las coordenadas de ella)
-                self.assertTrue(p.t_fijar.isVisible())
-                fijar = p.t_fijar.geometry()
-                self.assertGreaterEqual(fijar.top() - franja.top(), 2, (ancho, alto, nombre))
-                self.assertGreaterEqual(franja.bottom() - fijar.bottom(), 2, (ancho, alto, nombre))
-                if nombre == "transicion":
-                    self.assertTrue(p.prog.cat_en_cabecera, (ancho, alto, "las categorías suben a la cabecera"))
-                    chips = p.prog._sc_carpetas.geometry()
-                    self.assertGreaterEqual(chips.top() - franja.top(), 2, (ancho, alto, nombre))
-                    self.assertGreaterEqual(franja.bottom() - chips.bottom(), 2, (ancho, alto, nombre))
-                    for b in p.prog.categorias.values():
-                        self.assertLessEqual(b.height(), p.prog._sc_carpetas.height())
-                    campo = p.izq.currentWidget().findChildren(QLineEdit)[0]
-                if campo is not None and campo.isVisible():
-                    y = campo.mapTo(p, QPoint(0, 0)).y()
-                    self.assertGreater(y, p.cabecera.geometry().bottom(), (ancho, alto, nombre, "el campo empieza por debajo de la franja"))
-            w.hide()
 
     def test_SALC03_botones_campos_y_desplegables_miden_el_alto_de_su_token(self):
         """REQ-UX-01: un QPushButton, un QLineEdit, un QComboBox y un QSpinBox sueltos, con la hoja global, miden `ALTO_CONTROL` (±1) a las dos
@@ -245,7 +218,7 @@ class Alturas(BaseQt):
         los seis primeros solo llevan icono y atajo en la ayuda. Cabe a 1366×768; al simular se desactivan."""
         w, e, ids = self._preparar(1366, 768)
         acciones = list(w.tb_edit.actions())
-        esperado = ["|", w.a_deshacer, w.a_rehacer, "|", w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar,
+        esperado = [w.a_deshacer, w.a_rehacer, "|", w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar,
                     "|", w.a_dependencias, w.a_errores]
         self.assertEqual([("|" if a.isSeparator() else a) for a in acciones], esperado)
         for a, atajo in ((w.a_deshacer, "Ctrl+Z"), (w.a_rehacer, "Ctrl+Y"), (w.a_cortar, "Ctrl+X"), (w.a_copiar, "Ctrl+C"),

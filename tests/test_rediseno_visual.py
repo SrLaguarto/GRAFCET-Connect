@@ -41,18 +41,11 @@ class RedisenoVisual(BaseQt):
     def test_SVIS04_encabezados_y_dependencias(self):
         """REQ-EDT-02, REQ-SIM-03: encabezados sin arrastre; dependencias accesible al editar y simular."""
         w, e = self.vacio()
-        pa = w.paleta
-        for i in range(pa.count()):
-            it = pa.item(i)
-            if not it.data(Qt.ItemDataRole.UserRole):
-                self.assertFalse(it.flags() & (Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsDragEnabled))
-                self.assertFalse(pa.mimeData([it]).hasText())
         w.show()
         self.app.processEvents()
         b = w.diagrama.b_dependencias
         self.assertIs(b.parent(), w.tb_edit)
         self.assertTrue(b.isVisible())
-        b.click()
         self.assertTrue(w.diagrama.dependencias)
         e.ed.dirty = False
         w.cargar_ejemplo("temporizada")
@@ -60,29 +53,22 @@ class RedisenoVisual(BaseQt):
         self.app.processEvents()
         self.assertTrue(b.isVisible() and b.isChecked())
 
-    def test_SVIS05_propiedades_compactas_y_divisor_manual_respetado(self):
-        """REQ-EDT-02, REQ-EDT-09: sin selección se libera el lienzo; el reparto manual se conserva."""
+    def test_SVIS05_propiedades_flotantes_no_redimensionan_el_lienzo(self):
+        """REQ-EDT-02, REQ-EDT-09: abrir y cerrar Propiedades no ocupa sitio en el divisor."""
         w, e = self.vacio()
         w.resize(1366, 768)
-        w._abrir_opciones()
         w.show()
         for _ in range(5):
             self.app.processEvents()
-        vacio = w.vsplit.sizes()[1]
-        self.assertLessEqual(vacio, 100)
-        e.colocar("transicion", QPointF(300, 180))
-        for _ in range(5):
-            self.app.processEvents()
-        self.assertGreater(w.vsplit.sizes()[1], vacio)
-        self.assertTrue(w.props.cuerpo.isVisible())
-        w.vsplit.moveSplitter(w.vsplit.sizes()[0] - 35, 1)
-        self.app.processEvents()
-        manual = w.vsplit.sizes()
-        e.seleccionar([])
-        for _ in range(5):
-            self.app.processEvents()
-        self.assertEqual(w.vsplit.sizes(), manual)
-        self.assertFalse(w.props.cuerpo.isVisible())
+        transicion = e.poner_transicion(QPointF(300, 180))
+        e.seleccionar([transicion])
+        antes = w.vsplit.sizes()
+        w._abrir_opciones()
+        self.assertTrue(w.flot.hay_ventanas())
+        self.assertEqual(w.vsplit.sizes(), antes)
+        w.flot.cerrar()
+        self.assertFalse(w.flot.hay_ventanas())
+        self.assertEqual(w.vsplit.sizes(), antes)
 
     def test_SVIS11_cajas_y_conectores_de_acciones_y_forzado_iguales(self):
         """REQ-EDT-02: las seis fichas comparten caja y trazo sin conector sin perder sus marcas distintivas."""
@@ -120,10 +106,11 @@ class RedisenoVisual(BaseQt):
 
     def test_SVIS14_ficha_unica_conserva_apertura_y_cierre_por_enlace(self):
         """REQ-EDT-02, REQ-MOD-03: una sola ficha con ayuda conserva los gestos de apertura y cierre de simultaneidad."""
-        w,e=self.vacio(); pa=w.paleta
-        items=[pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole)=="simultaneidad"]
-        self.assertEqual(len(items),1);self.assertEqual(items[0].text(),"Simultaneidad")
-        self.assertIn("varias etapas",items[0].toolTip());self.assertIn("extremos",items[0].toolTip())
+        w, e = self.vacio()
+        ficha = w.favoritos.botones["simultaneidad"]
+        self.assertEqual(w.favoritos.orden.count("simultaneidad"), 1)
+        self.assertIn("varias etapas", ficha.toolTip())
+        self.assertIn("extremos", ficha.toolTip())
         for tipo,x,y in (("transicion",400,100),("simultaneidad",400,180),("etapa",360,280),
                          ("etapa",460,280),("simultaneidad",400,380),("transicion",400,460)):
             e.colocar(tipo,QPointF(x,y))

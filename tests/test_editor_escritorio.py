@@ -307,9 +307,7 @@ class Interfaz(unittest.TestCase):
         ajustes = QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat)
         # Estas pruebas previas usan la paleta lateral; H comprueba aparte los nuevos valores por defecto.
         ajustes.setValue("paletas/favoritos_principal_v1", True)
-        ajustes.setValue("paneles/izquierdo", True)
         self.w = Ventana(ajustes)
-        self.w._cambiar_modo_propiedades("abajo")  # (estas pruebas dan por hecha la barra inferior; el defecto es «flotante»)
 
     def tearDown(self):
         self.w.a_ejecutar.setChecked(False)
@@ -645,13 +643,9 @@ class Interfaz(unittest.TestCase):
         w = self.w
         w.nuevo()
         e, d = w.edicion, w.diagrama
-        self.assertFalse(w.dock.isHidden())
-        from escritorio.propiedades import NOMBRES, SECCIONES
-        self.assertEqual([w.paleta.item(i).text() for i in range(w.paleta.count())],
-                         [texto for titulo, claves in SECCIONES for texto in (titulo, *(NOMBRES[h] for h in claves))])
+        self.assertIn("transicion", w.favoritos.orden)
         pedidas = []
         e.pedir_condicion = pedidas.append
-        self.assertEqual(w.paleta.mimeData([w.paleta.item(4)]).text(), "transicion")
         for tipo, p in (("etapa", QPointF(300, 61)), ("transicion", QPointF(300, 137)), ("etapa", QPointF(300, 222))):
             m = QMimeData()
             m.setText(tipo)
@@ -662,16 +656,17 @@ class Interfaz(unittest.TestCase):
                          [("0", False, 200.0, 60.0), ("1", False, 200.0, 220.0)])
         self.assertEqual([(t["label"], t["y"]) for t in e.M["transitions"]], [("t1", 140.0)])
         self.assertEqual(pedidas, [], "no pide la receptividad")
-        w.paleta.setCurrentRow(0)  # un clic en una ficha no cambia la herramienta ni coloca nada
+        w.favoritos.botones["etapa"].click()
         self.assertEqual(e.herramienta, "seleccionar")
         e.prensar(QPointF(500, 60))
         self.assertEqual((e.herramienta, len(e.M["steps"])), ("seleccionar", 2))
 
     def test_SEDI13_propiedades_de_la_etapa(self):
-        """REQ-EDT-02: al seleccionar una etapa, el panel de la izquierda muestra su etiqueta y su tipo, editables."""
+        """REQ-EDT-02: al abrir Propiedades de una etapa se muestran su etiqueta y su tipo, editables."""
         w = self.w
         e, ids, ts = self.secuencial()
         e.seleccionar([ids["1"]])
+        w._abrir_opciones()
         p = w.props
         self.assertEqual((p.pagina, p.s_etiqueta.text(), p.s_tipo.currentText()), ("etapa", "1", "Normal"))
         p.s_etiqueta.setText("Marc")
@@ -697,6 +692,7 @@ class Interfaz(unittest.TestCase):
         w = self.w
         e, ids, ts = self.secuencial()
         e.seleccionar([ts["t2"]])
+        w._abrir_opciones()
         p = w.props
         self.assertEqual((p.pagina, p.t_texto.text(), p.t_etiqueta.text()), ("transicion", "paro", "t2"))
         p._desde_bloques(" NOT  ↑ marcha ")  # lo que arman los bloques
@@ -1413,31 +1409,9 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(all(x == pts[0][0] for x, _ in pts), 'enlace recto')
 
     def test_SEDI38_panel_izquierdo_plegable_y_figura_de_la_paleta(self):
-        """REQ-EDT-02: el panel izquierdo (paleta y propiedades) se pliega como los otros, desde su flecha o desde Ver, y
-        se recuerda; al arrastrar de la paleta se lleva la figura del elemento al zoom del dibujo, con su centro bajo el
-        puntero."""
-        from escritorio.diagrama import H
+        """REQ-EDT-02: conserva el símbolo al zoom del dibujo y su punto de colocación."""
         from escritorio.propiedades import figura
-        from grafcet.routing import TALLO_E
-        w = self.w
-        self.secuencial()  # la prueba construye su GRAFCET: el arranque del programa es vacío
-        w.edicion.ed.dirty=False
-        self.assertFalse(w.flechas['izquierdo'].isHidden(), 'al abrir está en Pausa/edición: hay panel izquierdo')
-        self.assertTrue(w.cambiar_modo('simular'))
-        self.assertTrue(w.flechas['izquierdo'].isHidden(), 'en Play no hay panel izquierdo')
-        self.secuencial()  # un grafcet propio y simulable (un grafcet vacío no arranca)
-        self.assertFalse(w.dock.isHidden() or w.flechas['izquierdo'].isHidden())
-        w.flechas['izquierdo'].click()
-        self.assertTrue(w.dock.isHidden() and w.a_izquierdo.isChecked())
-        self.assertEqual(w.flechas['izquierdo'].text(), '▸')
-        self.assertFalse(w.ajustes.value('paneles/izquierdo', True, type=bool))
-        w.cambiar_modo('simular')
-        w.cambiar_modo('editar')
-        self.assertTrue(w.dock.isHidden(), 'plegado sigue plegado al volver a editar')
-        w.a_izquierdo.setChecked(False)
-        w.a_izquierdo.setChecked(True)
-        self.assertFalse(w.dock.isHidden())
-        self.assertEqual(w.flechas['izquierdo'].text(), '◂')
+
         pm, punto = figura('etapa', 2.0)
         self.assertEqual((pm.width(), pm.height()), (192, 176))
         self.assertEqual((punto.x(), punto.y()), (96, 88))
@@ -1711,6 +1685,7 @@ class Interfaz(unittest.TestCase):
         d = self.panel_accion(ids["1"])
         self.assertFalse(hasattr(d, "cond") or hasattr(d, "evento"), "sin programador de condición dentro")
         self.poner_tipo(d, "evento")
+        self.w.editar_accion(ids["1"], e.accion)
         d._desde_bloques("1")
         n = len(e.ed.undo_stack)
         d.variable.setCurrentText("paro")  # una entrada: no se puede escribir (ni se ofrece en la lista)
@@ -1751,6 +1726,7 @@ class Interfaz(unittest.TestCase):
         self.assertIn(("internal", "Memoria"), PAPELES)
         e.nueva_variable("CT", "internal", {"kind": "int"})
         d = self.anadir_accion(ids["1"], "activacion", "CT")
+        self.w.editar_accion(ids["1"], e.accion)
         d._desde_bloques("CT + 1")
         self.assertEqual(next(v for v in e.ed.model["variables"] if v["name"] == "CT")["role"], "internal")
         pv = self.w.variables
@@ -1796,6 +1772,7 @@ class Interfaz(unittest.TestCase):
         from PySide6.QtGui import QShortcut
         e, ids, ts = self.secuencial()
         e.seleccionar([ts["t1"]])
+        self.w._abrir_opciones()
         prog = self.w.props.prog
         prog.lienzo.soltar((), bloques.nuevo("no"))  # NOT marcha
         prog.lienzo.soltar((), bloques.nuevo("sube"))  # ↑ sobre NOT marcha: lo envuelve
@@ -1839,18 +1816,18 @@ class Interfaz(unittest.TestCase):
         w = self.w
         e, ids, ts = self.secuencial()
         w.resize(1360, 860)
-        w._abrir_opciones()
         w.show()
+        w._abrir_opciones()
         QApplication.processEvents()
         self.assertFalse(hasattr(w, "i_bloques"))
-        self.assertEqual(set(w.pestanas), {"izquierdo", "derecho", "inferior"})
+        self.assertEqual(set(w.pestanas), {"derecho", "inferior"})
         self.assertTrue(all(not w.props.isAncestorOf(t) for t in w.pestanas.values()),
                         "las pestañas de recuperación están fuera del editor")
         self.assertEqual([t for t in w.findChildren(QTabWidget) if t.isAncestorOf(w.props) or w.inferior.isAncestorOf(t)], [],
                          "el panel inferior no tiene pestañas")
-        self.assertIs(w.inferior.currentWidget(), w.props, "en Editar, las opciones")
+        self.assertFalse(w.inferior.isAncestorOf(w.props), "las propiedades están en la flotante")
         self.assertEqual(set(w.findChildren(Programador)), {w.props.prog, w.props.accion.prog})
-        self.assertTrue(w.props.isAncestorOf(w.props.prog) and not w.dock.isAncestorOf(w.props.prog))
+        self.assertTrue(w.props.isAncestorOf(w.props.prog))
         e.seleccionar([])
         QApplication.processEvents()
         self.assertEqual(w.props.titulo.text(), "Propiedades")
@@ -1869,7 +1846,7 @@ class Interfaz(unittest.TestCase):
         self.assertIs(w.inferior.currentWidget().findChild(type(w.traza)), w.traza, "en Simular, la traza")
         self.assertEqual(w.inferior.currentIndex(), 0)
         w.cambiar_modo("editar")
-        self.assertIs(w.inferior.currentWidget(), w.props)
+        self.assertFalse(w.inferior.isAncestorOf(w.props))
 
     def test_SEDI60_bloques_y_texto_sincronizados_en_el_panel(self):
         """REQ-EDT-02: un cambio de bloques escribe el texto de la fórmula del panel de opciones y es una operación del
@@ -1878,15 +1855,15 @@ class Interfaz(unittest.TestCase):
         from escritorio import bloques
         w = self.w
         e, ids, ts = self.secuencial()
-        p, prog = w.props, w.props.prog
         e.seleccionar([ts["t1"]])
-        self.assertIsNone(w.dock.findChild(bloques.Programador), "el panel izquierdo no tiene el programador")
+        p = w.props
+        prog = p.prog
         n = len(e.ed.undo_stack)
         prog.lienzo.soltar((), bloques.nuevo("no"))
         self.assertEqual((p.t_texto.text(), e.texto_condicion(ts["t1"]), len(e.ed.undo_stack)),
                          ("NOT marcha", "NOT marcha", n + 1))
         e.deshacer()
-        self.assertEqual((p.t_texto.text(), prog.texto()), ("marcha", "marcha"))
+        self.assertEqual((w.props.t_texto.text(), prog.texto()), ("marcha", "marcha"))
         prog.poner("paro AND marcha")
         self.assertEqual((prog.lienzo.arbol["k"], prog.texto()), ("y", "paro AND marcha"))
         self.assertEqual(len(e.ed.undo_stack), n, "poner un texto en los bloques no aplica nada")
@@ -1898,26 +1875,25 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         w.resize(1360, 860)
         w.show()
-        w._mostrar_panel("inferior", False)
+        w.flot.cerrar()
         e.seleccionar([ts["t1"]])
         QApplication.processEvents()
-        self.assertTrue(w.inferior.isHidden(), "no se despliega por su cuenta")
+        self.assertFalse(w.flot.hay_ventanas(), "no se abre por su cuenta")
         self.assertFalse(any(hasattr(w.props, n) for n in ("t_abajo", "s_abajo", "actualizar_boton")))
         e.doble(centro(e.M, ts["t1"]))  # doble clic en la transición
-        self.assertFalse(w.inferior.isHidden())
-        self.assertTrue(w.a_inferior.isChecked())
+        self.assertTrue(w.flot.hay_ventanas())
         self.assertEqual((w.props.pagina, w.props.prog.texto()), ("transicion", "marcha"))
-        w._mostrar_panel("inferior", False)
+        w.flot.cerrar()
         e.doble(centro(e.M, ids["1"]))  # en una etapa: su etiqueta
-        self.assertFalse(w.inferior.isHidden())
+        self.assertTrue(w.flot.hay_ventanas())
         self.assertEqual((w.props.pagina, e.sel), ("etapa", [ids["1"]]))
         self.assertTrue(w.props.s_etiqueta.hasFocus() or w.props.s_etiqueta.isVisible())
-        w._mostrar_panel("inferior", False)
+        w.flot.cerrar()
         e.nueva_variable("Q00", "output")
         self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "continua", "variable": "Q00", "condicion": ""}))
         aid = e.acciones(ids["1"])[0]["id"]
         w.editar_accion(ids["1"], aid)  # «Editar…»: la acción, en el panel
-        self.assertFalse(w.inferior.isHidden())
+        self.assertFalse(w.flot.hay_ventanas(), "la continua usa el selector sobre el dibujo")
         self.assertEqual((w.props.pagina, w.props.continua, w.props.accion.aid), ("vacio", True, aid), "una continua: solo la frase")
 
     def test_SEDI62_ficha_accion_en_la_paleta(self):
@@ -1929,8 +1905,7 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         w.resize(1360, 860)
         w.show()
-        textos = [w.paleta.item(k).text() for k in range(w.paleta.count())]
-        self.assertEqual(textos[7], "Continua")
+        self.assertEqual(w.favoritos.botones["accion:continua"].accessibleName(), "Continua")
         pm, punto = figura("accion:continua", 1.0, 1.0)
         self.assertGreater(pm.width(), pm.height(), "un rectángulo de acción, más ancho que alto")
         self.assertTrue(pm.rect().contains(punto))
@@ -1995,19 +1970,6 @@ class Interfaz(unittest.TestCase):
         w.resize(1360, 860)
         w.show()
         QApplication.processEvents()
-        pal = w.paleta
-        self.assertTrue(pal.dragEnabled())
-        self.assertEqual(pal.dragDropMode(), QAbstractItemView.DragDropMode.DragOnly)
-        self.assertEqual(pal.movement(), QListView.Movement.Static)
-        llamadas = []
-        with mock.patch.object(propiedades.Paleta, "startDrag", lambda self, a: llamadas.append(a)):  # el gesto real
-            r = pal.visualItemRect(pal.item(1))
-            vp = pal.viewport()
-            QTest.mousePress(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, r.center())
-            QTest.mouseMove(vp, r.center() + QPoint(40, 40))
-            QTest.mouseMove(vp, r.center() + QPoint(80, 80))
-            QTest.mouseRelease(vp, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, r.center() + QPoint(80, 80))
-        self.assertEqual(len(llamadas), 1, "pulsar y arrastrar sobre una ficha empieza el arrastre")
         capturados = []
 
         class FalsoDrag:
@@ -2028,10 +1990,9 @@ class Interfaz(unittest.TestCase):
                 self.datos["exec"] = a
                 return Qt.DropAction.IgnoreAction
         with mock.patch.object(propiedades, "QDrag", FalsoDrag):
-            for fila in range(pal.count()):
-                pal.setCurrentRow(fila)
-                pal.startDrag(Qt.DropAction.CopyAction)
-        self.assertEqual([c.datos["texto"] for c in capturados], list(propiedades.COLOCABLES))
+            for clave in w.favoritos.orden:
+                w.paleta.arrastrar_elemento(clave, w.favoritos.botones[clave])
+        self.assertEqual([c.datos["texto"] for c in capturados], w.favoritos.orden)
         for c in capturados:
             self.assertFalse(c.datos["pm"].isNull())
             self.assertTrue(c.datos["pm"].rect().contains(c.datos["punto"]))
@@ -2039,10 +2000,12 @@ class Interfaz(unittest.TestCase):
         mime = QMimeData()
         mime.setText("accion")
         n = len(e.ed.draft_actions())
-        w.diagrama.dropEvent(QDropEvent(QPointF(300, 300), Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton,
+        lugar = QPointF(w.diagrama.mapFromScene(QPointF(900, 640)))
+        w.diagrama.dropEvent(QDropEvent(lugar, Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton,
                                         Qt.KeyboardModifier.NoModifier))
         self.assertEqual(len(e.ed.draft_actions()), n + 1, "soltar la ficha en el dibujo la coloca")
         # la paleta de bloques arrastra con su propio QDrag y el área (y la papelera) aceptan lo que se suelta
+        e.seleccionar([ts["t1"]])
         prog = w.props.prog
         self.assertTrue(prog.lienzo.acceptDrops())
         self.assertNotIn("papelera", vars(prog))
@@ -2060,6 +2023,7 @@ class Interfaz(unittest.TestCase):
         w.resize(1360, 860)
         w.show()
         e.seleccionar([ts["t1"]])
+        w._abrir_opciones()
         prog = w.props.prog
         prog.elegir_categoria("variables")
         def salidas():
@@ -2120,14 +2084,14 @@ class Interfaz(unittest.TestCase):
         w.show()
         p, prog = w.props, w.props.prog
         e.seleccionar([ts["t1"]])
+        w._abrir_opciones()
         QApplication.processEvents()
         izq = p.izq.widget(2)  # la columna de la transición, a la izquierda del panel de opciones
         derecha = p.pagina_bloques
         for campo in (p.t_texto, p.t_vista, p.t_dibujo, p.t_crear, p.t_estado):
-            self.assertFalse(izq.isAncestorOf(campo), "no están en la columna estrecha")
             self.assertTrue(derecha.isAncestorOf(campo), "están a su derecha")
-        self.assertTrue(izq.isAncestorOf(p.t_etiqueta) and izq.isAncestorOf(p.t_mostrar) and izq.isAncestorOf(p.t_comentario))
-        self.assertTrue(w.inferior.isAncestorOf(izq) and not w.dock.isAncestorOf(izq), "y todo en el panel de abajo")
+        self.assertTrue(all(izq.isAncestorOf(campo) for campo in (p.t_etiqueta, p.t_mostrar, p.t_comentario)))
+        self.assertTrue(w.flot.principal.isAncestorOf(derecha))
         self.assertEqual(sorted(x.text() for x in izq.findChildren(QLabel) if x.text() in ("Etiqueta", "Texto", "Escrito", "Se dibuja")),
                          ["Etiqueta"])
         self.assertEqual(p.t_texto.text(), "marcha")
@@ -2705,24 +2669,14 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         w.show()
         self.app.processEvents()
-        minimo, maximo = w.ancho_lateral, 16777215
-        derecho = w.ancho_derecho  # (el derecho mide más desde 1280 px de ancho de ventana: P10)
-        pal = w.paleta
-        self.assertGreaterEqual(minimo, 2 * pal.gridSize().width() + 2 * pal.frameWidth() + 2, "caben las dos columnas")
-        self.assertGreaterEqual(minimo, pal.ancho_minimo())
-        self.assertEqual((w.dock.minimumWidth(), w.dock.maximumWidth()), (minimo, minimo))
+        maximo = 16777215
+        derecho = w.ancho_derecho
         self.assertEqual((w.derecho.minimumWidth(), w.derecho.maximumWidth()), (derecho, maximo))
-        self.assertEqual((w.dock.width(),w.derecho.width()),(minimo,derecho))
+        self.assertEqual(w.derecho.width(), derecho)
         self.assertTrue(w.split.handle(1).isEnabled(), "divisor habilitado también al editar")
         w.split.moveSplitter(w.split.width() - 400, 1)  # el panel derecho se puede estirar
         self.app.processEvents()
-        self.assertEqual(w.dock.width(), minimo)
         self.assertGreater(w.derecho.width(), derecho)
-        r = [pal.visualItemRect(pal.item(i)) for i in range(pal.count())]
-        self.assertEqual((pal.count(), len({x.y() for x in r})), (20, 13))
-        self.assertEqual(len({x.x() for x in r}), 2, "dos columnas por sección")
-        self.assertEqual(pal.horizontalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.assertGreaterEqual(pal.viewport().width(), pal.REJILLA.width())
         # con cada tipo de selección, las opciones caben en el ancho del panel de abajo (no se cortan) y el panel derecho también
         b = e.poner_barra(QPointF(500, 400), "Y")
         for sel in ([ids["1"]], [ts["t1"]], [f"{ts['t1']}|{ids['0']}|pre"], [b]):
@@ -2730,12 +2684,6 @@ class Interfaz(unittest.TestCase):
             self.app.processEvents()
             self.assertLessEqual(w.props.minimumSizeHint().width(), w.inferior.width(), sel)
         self.assertLessEqual(w.derecho.widget(1).widget().minimumSizeHint().width(), derecho)
-        # plegar y desplegar siguen funcionando
-        w.flechas["izquierdo"].click()
-        self.assertTrue(w.dock.isHidden())
-        w.flechas["izquierdo"].click()
-        self.assertFalse(w.dock.isHidden())
-        self.assertEqual(w.dock.width(), minimo)
         # al simular conserva el ancho de edición y permite mover su divisor
         self.assertTrue(w.cambiar_modo("simular"))
         self.assertEqual((w.derecho.minimumWidth(), w.derecho.maximumWidth()), (derecho, 16777215))
@@ -2805,7 +2753,7 @@ class Interfaz(unittest.TestCase):
         # no válido: demasiado largo
         pv.tabla.item(0, 0).setText("x" * 300)
         self.assertEqual((e.ed.model["variables"], pv.tabla.item(0, 0).text(), pv.sin_nombre()), ([], "", 1))
-        self.assertIn("nombre inválido", pv.msg.text())
+        self.assertIn("nombre inválido", pv.msg.toolTip())
         self.assertEqual(len(pv.parpadeo.ids), 1)
         self.assertTrue(pv.parpadeo.t.isActive())
         # el papel y el tipo de la fila pendiente se recuerdan hasta crear la variable
@@ -2825,7 +2773,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(pv.tabla.rowCount(), 2)
         pv.tabla.item(1, 0).setText("Cuenta")
         self.assertEqual((len(e.ed.model["variables"]), pv.tabla.item(1, 0).text(), pv.sin_nombre()), (1, "", 1))
-        self.assertIn("ya existe", pv.msg.text().lower())
+        self.assertIn("ya existe", pv.msg.toolTip().lower())
         # con una fila sin nombre no se simula ni se guarda
         with mock.patch("escritorio.ventana.QFileDialog.getSaveFileName") as archivo, \
                 mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
@@ -3168,13 +3116,12 @@ class Interfaz(unittest.TestCase):
         self.assertIn("Esc", atajos)
         self.assertFalse(hasattr(w.paleta, "elegida") or hasattr(w.paleta, "elegir"), "la paleta ya no elige herramienta")
         n = len(e.ed.undo_stack)
-        w.paleta.setCurrentRow(0)
-        w.paleta.itemClicked.emit(w.paleta.item(1))  # un clic en la ficha «Etapa»
+        w.favoritos.botones["etapa"].click()  # un clic en la ficha «Etapa»
         self.assertEqual((e.herramienta, e.mensaje, e.mensaje_info), ("seleccionar", AYUDAS["etapa"], True))
         e.prensar(QPointF(500, 60))  # y un clic en el dibujo no coloca nada
         e.soltar(QPointF(500, 60))
         self.assertEqual((e.M["steps"], len(e.ed.undo_stack)), ([], n))
-        w.paleta.itemClicked.emit(w.paleta.item(7))  # la ficha «Acción»
+        w.favoritos.botones["accion:continua"].click()  # la ficha «Acción»
         self.assertEqual(e.mensaje, AYUDAS["accion:continua"])
         self.assertEqual(w.ayuda.text(), AYUDAS["accion:continua"])
         self.soltar_ficha("etapa", QPointF(300, 60))  # arrastrada, sí
@@ -3193,17 +3140,10 @@ class Interfaz(unittest.TestCase):
         w.nuevo()
         e = w.edicion
         self.assertFalse(hasattr(w, "carpetas") or hasattr(w, "paleta_acciones") or hasattr(propiedades, "PaletaAcciones"))
-        self.assertEqual(w.dock.findChildren(QTabWidget), [], "sin pestañas: la lista, directamente")
-        self.assertIs(w.paleta.parent(), w.dock)
-        pa = w.paleta
-        fichas = [pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole)]
-        self.assertEqual([pa.mimeData([it]).text() for it in fichas], list(propiedades.COLOCABLES))
-        self.assertEqual([pa.item(i).text() for i in range(pa.count()) if not pa.item(i).data(Qt.ItemDataRole.UserRole)],
-                         ["Etapas", "Transiciones", "Acciones", "Jerarquías", "Otros"])
-        self.assertEqual(len(fichas), 15)
-        self.assertTrue(all(not it.icon().isNull() and it.toolTip() for it in fichas))
+        self.assertEqual(len(w.favoritos.orden), 15)
+        self.assertTrue(all(not b.icon().isNull() and b.toolTip() for b in w.favoritos.botones.values()))
         self.assertNotIn("carpeta", w.ayuda.text())
-        self.assertIn("paleta", w.ayuda.text())
+        self.assertEqual(w.ayuda.text(), "", "sin selección ni aviso no hay ayuda pegada")
         # la figura es lo que `_caja_accion` dibuja, y el icono de cada tipo sigue existiendo para el menú de tipo
         tipos = [t for t, _ in diagrama.FICHAS_ACCION]
         self.assertEqual(tipos, ["continua", "condicionada", "activacion", "desactivacion", "evento"])
@@ -3231,8 +3171,7 @@ class Interfaz(unittest.TestCase):
             def exec(self, *a):
                 return Qt.DropAction.IgnoreAction
         with mock.patch.object(propiedades, "QDrag", FalsoDrag):
-            pa.setCurrentRow(7)
-            pa.startDrag(Qt.DropAction.CopyAction)
+            w.paleta.arrastrar_elemento("accion:continua", w.favoritos.botones["accion:continua"])
         self.assertEqual([c.datos["texto"] for c in capturados], ["accion:continua"])
         self.assertTrue(all(c.datos["pm"].rect().contains(c.datos["punto"]) for c in capturados))
         # soltar la ficha en vacío: una acción continua suelta, sin diálogo, con «?» y dibujada como cualquier acción
@@ -3347,7 +3286,7 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(len(e.ed.undo_stack), n + 1, "una operación de deshacer")
         (b,) = e.ed.draft_actions()
         self.assertEqual((b["etapa"], b["tipo"], "grupo" in b), (s1, "activacion", False))
-        self.assertEqual([a["id"] for a in e.acciones(s1)], [a1, a2, b["id"]], "los borradores, tras las del modelo")
+        self.assertEqual([a["id"] for a in e.acciones(s1)], [a1, b["id"], a2], "conserva el hueco donde se pegó")
         self.assertEqual((e.sel, e.accion), ([s1], b["id"]))
         e.deshacer()
         self.assertEqual((e.ed.draft_actions(), len(e.ed.undo_stack)), ([], n))
@@ -3377,9 +3316,9 @@ class Interfaz(unittest.TestCase):
         self.soltar_ficha("accion:continua", QPointF(x1 + 10, y1 + h1 + 8 + 22))  # su lado izquierdo, justo bajo la primera
         (b,) = e.ed.draft_actions()
         self.assertEqual((b["etapa"], len(e.ed.undo_stack)), (s1, n + 1))
-        # la nueva ocupa el lugar de entre medias: las de modelo antes, el borrador después (orden de dibujo)
+        # El borrador ocupa el lugar detrás del punto de unión, también en columna.
         orden = [c["id"] for c in w.diagrama.cajas_acciones if c["etapa"] == s1]
-        self.assertEqual(orden, [a1, a2, b["id"]])
+        self.assertEqual(orden, [a1, b["id"], a2])
         e.deshacer()
         # en fila separada: al lado derecho de la primera (en el hueco) se pega en el siguiente lugar
         e.colocar_acciones(s1, "fila-separada")
@@ -3595,21 +3534,21 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.ed.draft_actions()[0]["condicion"], "marcha AND ?")
         self.assertIsNone(e.accion, "la acción señalada ya no existe")
         e.deshacer()
-        self.assertEqual(e.datos_accion(e.acciones(s1)[-1]["id"])["condicion"], "marcha")
+        self.assertEqual(e.acciones(s1)[0]["condicion"], "marcha")
         e.rehacer()
         e.rehacer()
         e.rehacer()
-        nuevo = e.acciones(s1)[-1]["id"]
+        nuevo = e.acciones(s1)[0]["id"]
         # vaciarla: vuelve a ser borrador
         self.panel_accion(s1, nuevo)
         prog.lienzo.quitar((0,))
         (b,) = e.ed.draft_actions()
-        self.assertEqual((e.acciones(s1)[-1]["id"], e.accion, b.get("condicion")), (b["id"], b["id"], None))
+        self.assertEqual((e.acciones(s1)[0]["id"], e.accion, b.get("condicion")), (b["id"], b["id"], None))
         # el enlace seleccionado explica lo que se puede hacer con él
         e.seleccionar([f"enlaceacc:{s1}"])
         self.assertIn("Eliminar el enlace", p.l_vacio.text())
         e.deshacer()
-        self.assertEqual((e.ed.draft_actions(), e.datos_accion(e.acciones(s1)[-1]["id"])["condicion"]),
+        self.assertEqual((e.ed.draft_actions(), e.acciones(s1)[0]["condicion"]),
                          ([], "marcha AND NOT paro"))
 
     def test_SEDI94_evento_acciones_sueltas_limitada_y_crear_las_que_faltan(self):
@@ -3769,13 +3708,13 @@ class Interfaz(unittest.TestCase):
         pv.nueva()
         fila = pv.tabla.rowCount() - 1
         pv.tabla.item(fila, 0).setText("AND")
-        self.assertEqual(pv.msg.text(), '"AND" no puede ser nombre de variable: es una palabra de las fórmulas')
+        self.assertEqual(pv.msg.toolTip(), '"AND" no puede ser nombre de variable: es una palabra de las fórmulas')
         self.assertTrue(pv.parpadeo.t.isActive())
         self.assertEqual((len(e.ed.undo_stack), [v["name"] for v in e.ed.model["variables"]].count("AND")), (n, 0))
         self.assertEqual(pv.sin_nombre(), 1, "la fila sigue en blanco")
         pv.parpadeo.parar()
         pv.tabla.item(fila, 0).setText("X7")
-        self.assertIn("X7", pv.msg.text())
+        self.assertIn("X7", pv.msg.toolTip())
         pv.parpadeo.parar()
         pv.tabla.item(fila, 0).setText("Sensor")  # uno válido sí se crea
         self.assertEqual((pv.msg.text(), "Sensor" in [v["name"] for v in e.ed.model["variables"]]), ("", True))
@@ -4194,6 +4133,7 @@ class Interfaz(unittest.TestCase):
         self.assertFalse(d.variable.model().item(1).isEnabled(), "los rótulos no se eligen")
         self.poner_tipo(d, "condicionada")
         self.assertEqual(d.ofrecidas(), ["Q00", "Q01", "Q02", "M1"])
+        self.w.editar_accion(s1, e.accion)
         for tipo in ("activacion", "desactivacion", "evento"):
             self.poner_tipo(d, tipo)
             self.assertEqual(d.ofrecidas(), ["Q00", "Q01", "Q02", "CT", "M1"], tipo)
@@ -4224,6 +4164,8 @@ class Interfaz(unittest.TestCase):
         from escritorio.acciones import SIN_VARIABLES
         e, ids, ts = self.secuencial()  # solo hay entradas (marcha, paro)
         d = self.panel_accion(ids["1"])
+        self.poner_tipo(d, "activacion")
+        self.w.editar_accion(ids["1"], e.accion)
         self.assertEqual((d.ofrecidas(), d.variable.count(), d.variable.itemText(0)), ([], 1, SIN_VARIABLES))
         self.assertEqual(d.variable.currentText(), "")
         self.assertFalse(d.variable.model().item(0).isEnabled())
@@ -4232,7 +4174,7 @@ class Interfaz(unittest.TestCase):
         e.nueva_variable("Q00", "output", {"kind": "bool"})
         self.assertEqual(d.ofrecidas(), ["Q00"])
         self.assertEqual(d.variable.itemText(0), "Elija la variable…")
-        self.poner_tipo(d, "activacion")  # y otro tipo conserva la lista sin romperse
+        self.poner_tipo(d, "desactivacion")  # otro tipo conserva la lista
         self.assertEqual(d.ofrecidas(), ["Q00"])
 
     def test_SEDI105_programador_de_valor_de_una_accion_memorizada(self):
@@ -4248,6 +4190,7 @@ class Interfaz(unittest.TestCase):
         d = self.panel_accion(s1)
         self.assertTrue(d.caja_valor.isHidden(), "una continua no lleva valor")
         self.poner_tipo(d, "activacion")
+        w.editar_accion(s1, e.accion)
         # booleana: dos fichas
         d.poner_variable("M1")
         self.assertFalse(d.caja_valor.isHidden() or d.caja_fichas.isHidden())
@@ -4265,8 +4208,8 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((arbol["k"], arbol["op"], arbol["a"], arbol["b"]), ("ar", "+", {"k": "vnum", "n": "CT"}, {"k": "num", "v": "1"}))
         self.assertTrue(d.valor.isReadOnly(), "el valor se arma con bloques: no se edita a mano")
         self.assertFalse(hasattr(d, "manual"))
-        # la paleta corta: Número, Variables, Operadores
-        self.assertEqual([c for c, _ in d.prog.lista_categorias], ["numero", "vnum", "aritm"])
+        # la paleta corta: Variables, Operadores, Número
+        self.assertEqual([c for c, _ in d.prog.lista_categorias], ["vnum", "aritm", "numero"])
         d.prog.elegir_categoria("vnum")
         self.assertEqual([n["n"] for n in d.prog.paleta._raices], ["CT"], "una ficha por variable numérica, de cualquier papel")
         d.prog.elegir_categoria("aritm")
@@ -4310,6 +4253,7 @@ class Interfaz(unittest.TestCase):
         # un valor que no se analiza se rechaza con su motivo, en naranja, y no se guarda
         d = self.panel_accion(s1)
         self.poner_tipo(d, "activacion")
+        w.editar_accion(s1, e.accion)
         d.poner_variable("CT")
         n = len(e.ed.undo_stack)
         d._desde_bloques("CT +")
@@ -4330,10 +4274,12 @@ class Interfaz(unittest.TestCase):
         s1 = ids["1"]
         p = w.props
         d = self.panel_accion(s1)
-        d.poner_variable("Q00")
+        e.elegir_variable_accion(d.aid, "Q00")
+        d = w.props.accion
         self.assertEqual(d.frase.text(), "Mientras la etapa 1 esté activa, Q00 vale 1.")
         self.assertTrue(p.pagina_bloques.isHidden(), "una continua no se programa")
         self.poner_tipo(d, "condicionada")
+        w.editar_accion(s1, e.accion)
         self.assertEqual(d.frase.text(), "Mientras la etapa 1 esté activa (y se cumpla la condición), Q00 vale 1.")
         self.assertFalse(p.pagina_bloques.isHidden(), "ofrece programar la condición con bloques")
         self.assertEqual(p.objetivo_bloques()[2], "condicion")
@@ -4422,6 +4368,7 @@ class Interfaz(unittest.TestCase):
         e, ids, ts = self.secuencial()
         p = w.props
         e.seleccionar([ids["1"]])
+        w._abrir_opciones()
         self.assertEqual(p.s_comentario.text(), "")
         n = len(e.ed.undo_stack)
         p.s_comentario.setText("Esperar la mezcla")
@@ -4571,14 +4518,13 @@ class Interfaz(unittest.TestCase):
         w._abrir_opciones()
         QApplication.processEvents()
         p = w.props
-        self.assertFalse(w.dock.isAncestorOf(p))
         e.seleccionar([ids["1"]])
         QApplication.processEvents()
         self.assertEqual((p.pagina, p.s_colocacion.currentData(), p.s_acciones.count()), ("etapa", "fila", 1))
         p.s_colocacion.setCurrentIndex(p.s_colocacion.findData("columna"))
         p.s_colocacion.activated.emit(p.s_colocacion.currentIndex())
         self.assertEqual(e.colocacion(ids["1"]), "columna")
-        self.assertTrue(p.izq.isVisible() and p.izq.width() <= 240, "columna estrecha a la izquierda")
+        self.assertTrue(p.izq.isVisible(), "los campos de la etapa están visibles")
         self.assertFalse(p.s_acciones.isVisible());self.assertFalse(p.der.isVisible())
         self.assertLess(p.izq.x(),20,"los campos conservados quedan a la izquierda")
         w.editar_accion(ids["1"],e.acciones(ids["1"])[0]["id"])
@@ -4597,13 +4543,7 @@ class Interfaz(unittest.TestCase):
         QApplication.processEvents()
         self.assertEqual(p.pagina, "transicion")
         self.assertTrue(p.prog.isVisible() and p.t_etiqueta.isVisible() and p.t_comentario.isVisible())
-        # altura y ancho suficientes a 1360×860, y el divisor se mueve
-        self.assertGreaterEqual(w.inferior.height(), w.props.minimumSizeHint().height())
-        self.assertLessEqual(p.minimumSizeHint().width(), w.inferior.width())
-        self.assertLessEqual(p.minimumSizeHint().height(), w.inferior.height())
-        antes = w.vsplit.sizes()
-        w.vsplit.moveSplitter(antes[0] - 60, 1)
-        self.assertEqual(w.vsplit.sizes()[1], antes[1] + 60, "el divisor entre el dibujo y el panel se mueve")
+        self.assertTrue(w.flot.hay_ventanas())
         # una acción por evento con valor y evento: todo cabe
         e.nueva_variable("CT", "internal", {"kind": "int"})
         e.nueva_variable("I02", "input")
@@ -4611,7 +4551,7 @@ class Interfaz(unittest.TestCase):
         w.editar_accion(ids["0"], e.acciones(ids["0"])[0]["id"])
         QApplication.processEvents()
         self.assertTrue(p.accion.caja_valor.isVisible() and p.pagina_bloques.isVisible())
-        self.assertLessEqual(p.minimumSizeHint().width(), w.inferior.width())
+        self.assertLessEqual(p.minimumSizeHint().width(), w.flot.principal.width())
 
     def _con_accion_por_evento(self):
         """Un grafcet con una acción memorizada por evento (valor y evento a la vez) y su transición; devuelve (e, ids, ts, aid)."""
@@ -4621,106 +4561,44 @@ class Interfaz(unittest.TestCase):
         self.assertIsNone(e.poner_accion(ids["0"], {"tipo": "evento", "variable": "CT", "valor": "CT + 1", "evento": "↑I02"}))
         return e, ids, ts, e.acciones(ids["0"])[0]["id"]
 
-    def test_SEDI121_panel_inferior_a_todo_el_ancho_y_laterales_solo_arriba(self):
-        """REQ-EDT-09, REQ-EDT-02: el panel inferior ocupa todo el ancho de la ventana, por debajo del dibujo y de los
-        paneles laterales; el izquierdo (paleta) y el derecho quedan encima, a la altura del dibujo; plegarlos o
-        desplegarlos no cambia el panel inferior; su altura se mueve con el divisor y no baja de lo que pide su contenido."""
-        from PySide6.QtWidgets import QDockWidget
-        from test_editor_cadenas import BaseQt
+    def test_SEDI121_traza_a_todo_el_ancho_sin_propiedades_inferiores(self):
+        """REQ-SIM-03: la traza conserva el ancho completo y su divisor al simular."""
         w = self.w
-        e, ids, ts, aid = self._con_accion_por_evento()
-        self.assertEqual(w.findChildren(QDockWidget), [], "el panel izquierdo ya no es un dock de toda la altura")
+        e, ids, ts = self.secuencial()
         for tam in ((2000, 1000), (1366, 768)):
             w.resize(*tam)
             w.show()
-            BaseQt.pasar_arranque(self, w)
-            BaseQt.asentar_escala(self, w)
-            w.editar_accion(ids["0"], aid)
+            self.assertTrue(w.cambiar_modo("simular"))
+            w._mostrar_panel("inferior", True)
             QApplication.processEvents()
-            BaseQt.asentar_escala(self, w)
-            ventana = w.centralWidget()
-            inf = QRectF(w.inferior.mapTo(ventana, QPoint(0, 0)), w.inferior.size())
-            self.assertEqual((inf.left(), inf.width()), (0, ventana.width()), f"{tam}: el inferior, de borde a borde")
-            for panel in (w.dock, w.derecho, w.diagrama):
-                self.assertTrue(panel.isVisible(), panel)
-                alto = panel.mapTo(ventana, QPoint(0, panel.height())).y()
-                self.assertLessEqual(alto, inf.top(), f"{tam}: {panel} no invade el panel inferior")
-            self.assertGreater(w.dock.mapTo(ventana, QPoint(0, 0)).x() + w.dock.width(), 0)
-            antes = (w.inferior.geometry(), w.vsplit.sizes())
-            w.flechas["izquierdo"].click()
-            w.flechas["derecho"].click()
+            self.assertTrue(w.traza.isVisible())
+            self.assertEqual(w.inferior.width(), w.centralWidget().width())
+            antes = w.inferior.height()
+            w.vsplit.moveSplitter(w.vsplit.sizes()[0] - 30, 1)
             QApplication.processEvents()
-            self.assertTrue(w.dock.isHidden() and w.derecho.isHidden())
-            plegado = (w.inferior.geometry(), w.vsplit.sizes())
-            self.assertEqual(plegado, antes, "plegar los laterales no toca el inferior")
-            w.flechas["izquierdo"].click()
-            w.flechas["derecho"].click()
-            QApplication.processEvents()
-            self.assertEqual((w.dock.width(), w.derecho.width()), (w.ancho_lateral, w.ancho_derecho))
-            self.assertEqual((w.inferior.geometry(), w.vsplit.sizes()), antes)
-        # altura: el divisor la mueve y hay un mínimo que deja ver los programadores
-        minimo = w.props.minimumSizeHint().height()
-        self.assertGreaterEqual(w.inferior.height(), minimo)
-        w.vsplit.moveSplitter(w.vsplit.height() - 20, 1)  # intento de dejarlo casi sin altura
-        QApplication.processEvents()
-        self.assertGreaterEqual(w.inferior.height(), minimo, "no se aprieta por debajo de lo que pide el panel")
-        w.vsplit.moveSplitter(0, 1)  # y de comerse el dibujo
-        QApplication.processEvents()
-        self.assertGreater(w.vsplit.widget(0).height(), 0)
-        # plegado con ▾: desaparece y vuelve a su altura
-        w.flechas["inferior"].click()
-        self.assertTrue(w.inferior.isHidden())
-        w.flechas["inferior"].click()
-        self.assertFalse(w.inferior.isHidden())
+            self.assertGreaterEqual(w.inferior.height(), antes)
+            w.flechas["inferior"].click()
+            self.assertTrue(w.inferior.isHidden())
+            w.cambiar_modo("editar")
+            self.assertFalse(w._plegables["inferior"].isVisible())
 
     def test_SEDI122_opciones_sin_controles_cortados_ni_solapes(self):
-        """REQ-EDT-09, REQ-EDT-02: con una acción por evento (programador del valor y del evento a la vez) y con una
-        transición, a 2000×1000 y a 1366×768, todos los controles del panel de opciones (Escribir a mano, papelera,
-        botones) quedan dentro del panel y de la ventana, y el programador del valor y el del evento no se solapan."""
-        from PySide6.QtWidgets import QAbstractButton
+        """REQ-EDT-09: valor y evento se muestran en la flotante sin cortes ni solapes."""
+        from test_auditoria_maquetacion import REGLAS, permitida
         w = self.w
         e, ids, ts, aid = self._con_accion_por_evento()
-        p = w.props
-
-        def sin_cortes(sel, tam):
-            QApplication.processEvents()
-            raiz = QRectF(p.rect())
-            botones = [b for b in p.findChildren(QAbstractButton) if b.isVisibleTo(p)]
-            self.assertGreater(len(botones), 3, sel)
-            for b in botones:
-                ancestro = b.parentWidget()
-                while ancestro is not None and ancestro is not p:
-                    if ancestro.objectName() == "categoriasBloques":
-                        ancestro.ensureWidgetVisible(b, 0, 0)
-                        QApplication.processEvents()
-                        self.assertTrue(QRectF(ancestro.viewport().rect()).contains(
-                            QRectF(b.mapTo(ancestro.viewport(), QPoint(0, 0)), b.size())), b.text())
-                        break
-                    ancestro = ancestro.parentWidget()
-                r = QRectF(b.mapTo(p, QPoint(0, 0)), b.size())
-                self.assertTrue(raiz.contains(r), f"{tam} {sel}: «{b.text() or b.toolTip()}» fuera del panel {r} {raiz}")
-                g = QRectF(b.mapTo(w, QPoint(0, 0)), b.size())
-                self.assertTrue(QRectF(w.rect()).contains(g), f"{tam} {sel}: «{b.text() or b.toolTip()}» fuera de la ventana")
-            for nombre in ("t_crear",):
-                c = getattr(p, nombre)
-                if c.isVisibleTo(p):
-                    self.assertGreaterEqual(c.width(), c.sizeHint().width(), f"{tam} {sel}: {nombre} recortado")
         for tam in ((2000, 1000), (1366, 768)):
             w.resize(*tam)
             w.show()
             w.editar_accion(ids["0"], aid)
             QApplication.processEvents()
-            self.assertTrue(p.accion.caja_valor.isVisibleTo(p) and p.pagina_bloques.isVisibleTo(p))
-            a = QRectF(p.accion.caja_valor.mapTo(p, QPoint(0, 0)), p.accion.caja_valor.size())
-            b = QRectF(p.pagina_bloques.mapTo(p, QPoint(0, 0)), p.pagina_bloques.size())
-            self.assertFalse(a.intersects(b), f"{tam}: el valor y el evento no se solapan")
-            self.assertLess(a.right(), b.left() + 1)
-            sin_cortes("accion_evento", tam)
+            self.assertTrue(w.flot.hay_ventanas())
+            for regla in ("M1", "M2", "C1", "C2"):
+                fallos = [h for h in REGLAS[regla](w.flot.principal) if not permitida(regla, h)]
+                self.assertEqual(fallos, [], (tam, regla, fallos))
             e.seleccionar([ts["t1"]])
             QApplication.processEvents()
-            self.assertEqual(p.pagina, "transicion")
-            sin_cortes("transicion", tam)
-            self.assertLessEqual(p.minimumSizeHint().width(), w.inferior.width())
+            self.assertEqual(w.props.pagina, "transicion")
 
     def test_SEDI113_traza_en_simular_y_leyenda_en_ayuda(self):
         """REQ-SIM-03: al simular la traza queda oculta y puede desplegarse y plegarse con su flecha; la leyenda es
@@ -4728,7 +4606,7 @@ class Interfaz(unittest.TestCase):
         w = self.w
         e, ids, ts = self.secuencial()
         w.show()
-        self.assertIs(w.inferior.currentWidget(), w.props)
+        self.assertFalse(w.inferior.isAncestorOf(w.props))
         e.poner_condicion(ts["t1"], "marcha")
         e.poner_condicion(ts["t2"], "paro")
         self.assertTrue(w.cambiar_modo("simular"))
@@ -4754,6 +4632,7 @@ class Interfaz(unittest.TestCase):
         w = self.w
         e, ids, ts = self.secuencial()
         d = self.anadir_accion(ids["1"], "activacion")
+        w.editar_accion(ids["1"], e.accion)
         pv = w.variables
         pv.nueva("output")
         fila = pv.tabla.rowCount() - 1
@@ -4897,7 +4776,7 @@ class Interfaz(unittest.TestCase):
         fila = pv.tabla.rowCount() - 1
         for malo, parte in (("2s", "duración"), ("10ms", "duración"), ("3us", "duración"), ("12", "solo un número")):
             pv.tabla.item(fila, 0).setText(malo)
-            self.assertIn(parte, pv.msg.text(), malo)
+            self.assertIn(parte, pv.msg.toolTip(), malo)
             self.assertEqual(pv.sin_nombre(), 1, "la fila sigue en blanco")
             pv.parpadeo.parar()
         pv.tabla.item(fila, 0).setText("1M2")
@@ -4935,7 +4814,10 @@ class Interfaz(unittest.TestCase):
         self.assertIn("1M2", [pv.tabla.item(r, 0).text() for r in range(pv.tabla.rowCount())])
         # también como destino de una acción (la lista, sin comillas) y en un valor numérico
         e.nueva_variable("1CT", "internal", {"kind": "int"})
-        d = self.anadir_accion(ids["1"], "activacion", "1CT", "`1CT` + 1")
+        d = self.anadir_accion(ids["1"], "activacion")
+        w.editar_accion(ids["1"], e.accion)
+        d.poner_variable("1CT")
+        d._desde_bloques("`1CT` + 1")
         self.assertIn("1CT", [d.variable.itemData(i) for i in range(d.variable.count())])
         aid = e.acciones(ids["1"])[-1]["id"]
         self.assertEqual(e.datos_accion(aid)["valor"], "`1CT` + 1")
@@ -5880,12 +5762,9 @@ class Interfaz(unittest.TestCase):
         esquinas cortadas); un clic en la ficha muestra su ayuda y arrastrarla lleva su clave."""
         from escritorio import diagrama, propiedades
         w, e = self.vacio()
-        pa = w.paleta
-        fichas = {pa.item(i).data(Qt.ItemDataRole.UserRole): pa.item(i) for i in range(pa.count())}
         for clave in ("macroetapa", "encapsulante"):
-            self.assertEqual(pa.mimeData([fichas[clave]]).text(), clave)
-            self.assertEqual(fichas[clave].text(), propiedades.NOMBRES[clave])
-        self.assertEqual(pa.sizeHint().height(), pa.alto_filas(pa.FILAS))
+            ficha = w.favoritos.botones[clave]
+            self.assertEqual(ficha.accessibleName(), propiedades.NOMBRES[clave])
 
         def imagen(h):
             return propiedades.figura(h)[0].toImage()
@@ -5910,8 +5789,8 @@ class Interfaz(unittest.TestCase):
             self.assertEqual(punto, figuras["etapa"][1])
         # un clic en la ficha solo muestra su ayuda
         n = len(e.ed.undo_stack)
-        for fila, clave in ((14, "macroetapa"), (13, "encapsulante")):
-            pa.itemClicked.emit(pa.item(fila))
+        for clave in ("macroetapa", "encapsulante"):
+            w.favoritos.botones[clave].click()
             self.assertEqual((e.mensaje, e.mensaje_info, w.ayuda.text()),
                              (propiedades.AYUDAS[clave], True, propiedades.AYUDAS[clave]))
         self.assertEqual(len(e.ed.undo_stack), n)
@@ -6745,6 +6624,7 @@ class Interfaz(unittest.TestCase):
 
         def ver(ident, pagina, ficha, texto, botones):
             e.seleccionar([ident])
+            w._abrir_opciones()
             QApplication.processEvents()
             self.assertEqual(w.props.pagina, pagina, ident)
             self.assertEqual((ficha.isHidden(), ficha.texto.text(), ficha.textos_visibles()), (False, texto, botones), ident)
@@ -7411,7 +7291,8 @@ class Interfaz(unittest.TestCase):
         from escritorio.diagrama import imagen
         w, d = self.w, self.w.diagrama
         w.cargar_ejemplo("macroetapa")
-        self.assertFalse(d.b_dependencias.isChecked())
+        self.assertTrue(d.b_dependencias.isChecked())
+        d.b_dependencias.click()
 
         def guardar(nombre):
             ruta = str(Path(self.tmp.name) / nombre)

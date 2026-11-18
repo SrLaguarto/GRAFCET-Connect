@@ -42,7 +42,7 @@ class TraerES(unittest.TestCase):
                     senal("d", ""), senal("e", "-"), senal("f", "Simulador I/O (Running)", direccion=496)]
         propuestas = Propuestas(self.edicion, self.config, catalogo)
         self.assertEqual(len(propuestas.filas), 3)
-        self.assertEqual([f.marcada for f in propuestas.filas], [True, False, True])
+        self.assertEqual([f.marcada for f in propuestas.filas], [True, True, True])
         fila = propuestas.filas[2]
         self.assertEqual(fila.motivo, self.edicion.motivo_variable_nueva(fila.nombre))
         self.assertTrue(interna(catalogo[-1]))
@@ -148,7 +148,11 @@ class TraerES(unittest.TestCase):
         while dialogo.propuestas is None and time.monotonic() < limite:
             self.app.processEvents()
             time.sleep(0.005)
+        conexiones = []
+        panel.conectar.connect(lambda: conexiones.append(len(panel.config.uniones)))
+        self.assertEqual(conexiones, [])
         dialogo.importar()
+        self.assertEqual(conexiones, [2])
         self.addCleanup(panel.directa.dialogo_resumen.close)
         self.assertEqual(len(panel.config.uniones), 2)
         self.edicion.deshacer()

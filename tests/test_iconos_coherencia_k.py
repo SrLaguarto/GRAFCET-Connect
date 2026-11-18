@@ -130,8 +130,8 @@ class CoherenciaK(unittest.TestCase):
     def test_SK105_motivo_visible_y_ya_traida_centrada(self):
         dialogo = self.dialogo(self.panel())
         self.assertTrue(dialogo.motivos.isVisible())
-        self.assertIn("Xmotor permiso", dialogo.motivos.text())
-        self.assertIn("se confundiría", dialogo.motivos.text())
+        self.assertIn("Xmotor permiso", dialogo.motivos.toolTip())
+        self.assertIn("se confundiría", dialogo.motivos.toolTip())
         self.assertFalse(dialogo.b_traer.isEnabled())
         tabla, filas = dialogo.tablas[0]
         self.assertEqual(tabla.item(0, 0).text(), "ya traída")

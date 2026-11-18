@@ -23,13 +23,13 @@ class FocoPropiedades(unittest.TestCase):
         self.addCleanup(c.cerrar)
         HC._edicion(c)
         w = c.w
-        w._cambiar_modo_propiedades("abajo")
         c.e.seleccionar([c.ids["transiciones"][0]])
         w._abrir_opciones()
         HC._bombear(6)
         self.assertEqual(w.props.objetivo_bloques()[0], "transicion")
         antes = c.e.parte_editada
-        w._foco_propiedades(None, w.props.prog)  # (antes: IndexError en objetivo[2])
+        w.props.prog.lienzo.setFocus()
+        HC._bombear(6)
         self.assertEqual(c.e.parte_editada, antes)
 
 

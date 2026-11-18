@@ -26,35 +26,6 @@ class Remates(BaseQt):
         w.resize(1366,768);w.show();QApplication.processEvents()
         return w,e
 
-    def test_SREM01_divisor_no_realimenta_relayout_de_paleta(self):
-        """REQ-EDT-09: el arrastre real del divisor mantiene mínimos, barra y celdas estables al cambiar solo el alto."""
-        w, e = self.editor()
-        # J2: el divisor solo existe si el panel está habilitado y desplegado.
-        w._mostrar_panel("inferior", True)
-        QApplication.processEvents()
-        p = w.paleta
-        h = w.vsplit.handle(1)
-        centro = h.rect().center()
-        class Cuenta(QObject):
-            def __init__(self):
-                super().__init__();self.tamanos=0;self.pintados=0
-            def eventFilter(self,obj,event):
-                self.tamanos+=event.type()==QEvent.Type.Resize
-                self.pintados+=event.type()==QEvent.Type.Paint
-                return False
-        cuenta=Cuenta();p.viewport().installEventFilter(cuenta)
-        minimos=[];politicas=[];anchos=[];altos=[]
-        with mock.patch.object(p,"doItemsLayout",wraps=p.doItemsLayout) as layout:
-            QTest.mousePress(h,Qt.MouseButton.LeftButton,pos=centro)
-            for dy in (-12,-24,-36,12,24,0):
-                QTest.mouseMove(h,centro+QPoint(0,dy));QApplication.processEvents()
-                minimos.append(p.minimumSizeHint().height());politicas.append(p.verticalScrollBarPolicy());anchos.append(p._ancho_celdas);altos.append(p.height())
-            QTest.mouseRelease(h,Qt.MouseButton.LeftButton,pos=centro)
-            self.assertLessEqual(layout.call_count,1)
-        self.assertLessEqual(cuenta.pintados,cuenta.tamanos+1)
-        self.assertGreater(len(set(altos)),1);self.assertEqual(len(set(minimos)),1);self.assertEqual(len(set(politicas)),1);self.assertEqual(len(set(anchos)),1)
-        w._mostrar_panel("inferior",False);w._mostrar_panel("inferior",True);QApplication.processEvents()
-        self.assertEqual(p.minimumSizeHint().height(),minimos[0])
 
     def test_SREM02_variables_ajustan_filas_y_botones_debajo_con_limite(self):
         """REQ-EDT-07, REQ-EDT-09: tabla sin espacio sobrante, botones debajo y desplazamiento interno con muchas filas."""

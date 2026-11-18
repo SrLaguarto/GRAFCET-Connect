@@ -54,7 +54,6 @@ from .paleta_variables import PaletaVariables
 from .navegacion import Navegacion
 from .leyenda import Leyenda
 from .mensajes import amable, motivo_parada, partir
-from .alto_opciones import agrandar_para_transicion
 from .paneles import (PanelPlegable, DivisorPlegable, PilaActual, EtiquetaAyuda, EtiquetaElidida, BandaModo,
                       CajaSeccion, TituloSeccion, CabeceraCompacta, ContextoNombres, DelegadoNombres, EtiquetaGrupos, ReparteColumnas,
                       partir_nombre, LINEAS_NOMBRE)
@@ -70,16 +69,16 @@ ICONO_PROGRAMA = Path(__file__).resolve().parent / "recursos" / "grafcet_connect
 HUECO_FRANJA = 4  # px entre la franja de modo (4 px de alto, arriba del recuadro del dibujo) y la fila de cabecera
 ANCHO_DERECHO = 270  # el panel derecho desde UMBRAL_DERECHO px de ancho de ventana (P10: «Papel» y «Tipo» enteros, tablas de estado con sus cuatro columnas)
 UMBRAL_DERECHO = 1280
-ANCHO_LATERAL = 212  # ancho mínimo de los paneles laterales al editar (la tabla de variables enseña los nombres)
+ANCHO_DERECHO_BASE = 218  # las columnas de Variables mantienen su ancho mínimo
 NOMBRE_MIN_TABLA = 96  # la columna del nombre de las tablas (estado de la simulación) mide al menos esto a cualquier tamaño: las demás se compactan antes
 ARRIBA_CAJA = 1  # margen superior del contenido de una sección: con el hueco del título deja E2 entre el título y lo primero (T3)
 ARRIBA_VARIABLES = 4  # (el título de Variables es más grande)
-ALTO_INFERIOR = {"simular": 220, "editar": 240}  # altura inicial del panel inferior: la traza, o las opciones de lo seleccionado
+ALTO_TRAZA = 220  # altura inicial del panel de traza
 ESPERA_ESCALA = 120  # ms sin cambios de tamaño de la ventana antes de aplicar la escala nueva (una sola vez por ráfaga de `resizeEvent`)
 ESPERA_ARRANQUE = 600  # ms desde el primer `show` en los que la escala se aplica sin esperar (la ventana se maximiza al arrancar)
 TICK_MS = 100  # tiempo real: cada cuánto se avanza el tiempo lógico
 AYUDA_EDICION = {
-    "seleccionar": "Clic selecciona un elemento (doble clic o Intro abre sus opciones abajo); arrastrarlo lo mueve (a la "
+    "seleccionar": "Clic selecciona un elemento (doble clic o Intro abre sus propiedades); arrastrarlo lo mueve (a la "
                    "rejilla, y no encima de otro elemento); de un punto de unión (arriba o abajo de una etapa o transición, "
                    "a la derecha de una etapa) sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y deshacen y rehacen. Los "
                    "elementos y las acciones nuevos se arrastran desde la paleta de la izquierda; otro tipo de acción, con botón derecho "
@@ -549,7 +548,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.rt.timeout.connect(self._tick)
         self.reloj = QElapsedTimer()
         self.edicion: Edicion | None = None
-        self._alturas = dict(ALTO_INFERIOR)
         self._arrancando = False  # el primer instante tras mostrarse la ventana por primera vez: la escala se aplica sin esperas
         self._arranque_hecho = False
         self._escala_lista = False  # verdadero solo mientras se aplica la escala que esperaba el final de la ráfaga de cambios de tamaño
@@ -580,6 +578,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._transicion_ui = False  # Play/Pausa en curso: los cambios que él mismo provoca no lo repiten
         self._aviso_inestable_sesion = None  # sesión de la que ya se avisó (un solo aviso por episodio)
         self._popup_inestable = None
+        self._marcas_diagnostico: set[str] = set()
         self._errores_auto = False  # «Mostrar errores» lo marcó un Play fallido (no el usuario)
         self._avisos_ejecucion: list[tuple[str, str]] = []  # por qué se paró el motor (texto, ayuda): entre los avisos al editar
         self._ayuda = ""  # ayuda del ejemplo o modelo abierto, para mostrarla al simular lo que aún no se ha editado
@@ -591,7 +590,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._alto_cabecera = 0
         self._zoom_pendiente = False  # hay una revisión (diferida) de dónde van los controles del zoom
         self._hoja_escala = ""  # la hoja de la escala grande que llevan las partes de la ventana ("" en la normal)
-        self._es_pendiente = self._props_pendiente = False  # E/S y Propiedades aún llevan la escala de antes (se ponen al mostrarlos)
+        self._es_pendiente = False  # E/S y Propiedades aún llevan la escala de antes (se ponen al mostrarlos)
         self._entradas_nc = {}
         self._portapapeles = None
         self._menus()
@@ -654,7 +653,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.comprobador.resultado.connect(self._resultado_actualizacion)
         self.nuevo()
         self._cargar_config_modbus(self.edicion.ed.model)
-        for nombre in ("izquierdo","derecho","inferior"):
+        for nombre in ("derecho", "inferior"):
             self._mostrar_panel(nombre, self.visibilidad_paneles.abiertos[nombre], guardar=False)
         self._accesibilidad()
         self._configurar_foco()
@@ -663,7 +662,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         # La hoja de la ventana es siempre la de la escala normal; en la escala grande la hoja entera (con las letras y los alto de control
         # grandes) va en las partes de la ventana, y en la vista de E/S solo cuando se muestra: así cruzar 1600×900 no repasa los más de mil
         # widgets de las filas de E/S (era lo que congelaba la interfaz ≈ 700 ms). El que está más cerca manda sobre el de la ventana.
-        self._destinos_hoja = [self.menuBar(), self.statusBar(), self.fila_pestanas, self.herramientas_grafcet, self.split_izquierdo,
+        self._destinos_hoja = [self.menuBar(), self.statusBar(), self.fila_pestanas, self.herramientas_grafcet, self.split,
                                self.inferior.widget(0)]  # (la vista de E/S, Propiedades y PLANOS, al mostrarlas; el aviso de PLANOS lleva su hoja propia)
         self._planos_pendiente = False
 
@@ -705,8 +704,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         for boton in self.findChildren(QAbstractButton):
             if not boton.accessibleName(): boton.setAccessibleName((boton.text() or boton.toolTip()).replace('&',''))
             if not boton.accessibleDescription(): boton.setAccessibleDescription(boton.toolTip() or boton.accessibleName())
-        for nombre in ('izquierdo', 'derecho', 'inferior'):
-            self._plegables[nombre].setAccessibleName({'izquierdo':'Elementos','derecho':'Variables y simulación','inferior':'Propiedades y traza'}[nombre])
+        for nombre in ('derecho', 'inferior'):
+            self._plegables[nombre].setAccessibleName({'derecho': 'Variables y simulación', 'inferior': 'Traza'}[nombre])
             self._plegables[nombre].setAccessibleDescription('Panel plegable. Use su cabecera para ocultarlo o su pestaña para recuperarlo.')
 
     def _menus(self) -> None:
@@ -727,47 +726,25 @@ class Ventana(ArchivosProyecto, QMainWindow):
         archivo.addAction("Propiedades del archi&vo…", lambda *_: propiedades_archivo.abrir(self))
         archivo.addSeparator()
         archivo.addAction("&Salir", self.close).setShortcut(QKeySequence.StandardKey.Quit)
-        ejemplos = bar.addMenu("&Ejemplos")
-        self.grupo = QActionGroup(self)
-        from grafcet.ejemplos_aula import DIDACTICOS
-        avanzados=ejemplos.addMenu("Más ejemplos y casos de estudio")
-        self.acciones_ej: dict[str, QAction] = {}
-        for key in (*DIDACTICOS,*(k for k in EJEMPLOS if k not in DIDACTICOS)):
-            title,_,_=EJEMPLOS[key]
-            act = (ejemplos if key in DIDACTICOS else avanzados).addAction(title)
-            act.setCheckable(True)
-            act.triggered.connect(lambda _=False, k=key: self.cargar_ejemplo(k))
-            self.grupo.addAction(act)
-            self.acciones_ej[key] = act
-        ejemplos.removeAction(avanzados.menuAction());ejemplos.addSeparator();ejemplos.addAction(avanzados.menuAction())
         # Un solo control de ejecución: Play simula (traza abajo, sin paleta) y Pausa detiene y vuelve a editar
         self.a_ejecutar = self._accion("Play", self._ejecutar, "F5", marcable=True)
         self.a_ejecutar.setToolTip("Play: iniciar una simulación nueva · Stop: detener y dejar todo a 0 (F5)")
         self.a_reiniciar = self._accion("Reiniciar", self.reiniciar, "Ctrl+R")
         self.a_reiniciar.setToolTip("Volver a la situación inicial; en Play sigue en Play (Ctrl+R)")
         ver = bar.addMenu("&Ver")
-        self.a_izquierdo = self._accion(
-            "Panel de elementos", lambda on: self.visibilidad_paneles.desde_menu("izquierdo", on), "Ctrl+L", True)
         self.a_derecho = self._accion(
-            "Panel &derecho", lambda on: self.visibilidad_paneles.desde_menu("derecho", on), "Ctrl+B", True)
+            "Panel &derecho", lambda on: self._mostrar_panel("derecho", on), "Ctrl+B", True)
         self.a_inferior = self._accion(
-            "Panel &inferior", lambda on: self.visibilidad_paneles.desde_menu("inferior", on), "Ctrl+J", True)
-        ver.addAction(self.a_izquierdo)
-        from .preferencias_paletas import PreferenciasPaletas
-        self.preferencias_paletas = PreferenciasPaletas(self, ver)
-        ver.addAction(self.a_derecho)
-        ver.addAction(self.a_inferior)
-        # Dónde se editan las propiedades del elemento: en una ventana flotante (por defecto) o en la barra inferior (`flotantes.py`)
-        self.modo_propiedades = "abajo" if self.ajustes.value("paneles/propiedades", "flotante") == "abajo" else "flotante"
-        self.g_props = QActionGroup(self)  # (exclusivo: una sola marcada y marcar la marcada no la desmarca)
-        self.a_props = {}
-        self.m_props = ver.addMenu("Panel de &opciones")
-        for modo, texto in (("flotante", "&Flotante"), ("abajo", "&Abajo")):
-            a = self._accion(texto, lambda on, m=modo: on and self._cambiar_modo_propiedades(m), None, True)
-            a.setChecked(modo == self.modo_propiedades)
-            self.g_props.addAction(a)
-            self.m_props.addAction(a)
-            self.a_props[modo] = a
+            "Panel &inferior", lambda on: self.visibilidad_paneles.activar_traza(on), "Ctrl+J", True)
+        self.addAction(self.a_derecho)  # Ctrl+B pliega Variables desde su pestaña.
+        self.addAction(self.a_inferior)  # Ctrl+J conserva el acceso a la traza, sin entrada en Ver.
+        self.a_ver_dependencias = self._accion(
+            "Mostrar dependencias", lambda on: self.diagrama.mostrar_dependencias(on), marcable=True)
+        self.a_ver_errores = self._accion("Mostrar errores", self._errores_desde_menu, marcable=True)
+        ver.addSeparator()
+        ver.addAction(self.a_ver_dependencias)
+        ver.addAction(self.a_ver_errores)
+        ver.aboutToShow.connect(self._sincronizar_menu_dibujo)
         ver.addSeparator()
         ver.addAction(self._accion("&Acercar", lambda: self.diagrama.acercar(), ["Ctrl+=", "Ctrl++"]))
         ver.addAction(self._accion("A&lejar", lambda: self.diagrama.alejar(), "Ctrl+-"))
@@ -834,7 +811,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         ayuda.addAction("&Leyenda del dibujo", self.leyenda)
         ayuda.addAction("&Buscar actualizaciones…", lambda: self.buscar_actualizaciones(True))
         ayuda.addAction("&Acerca de GRAFCET Connect…", self.acerca)
-        for menu in (archivo, edicion, ver, ejemplos, sim, m_ajustes, ayuda):
+        for menu in (archivo, edicion, ver, sim, m_ajustes, ayuda):
             bar.removeAction(menu.menuAction())
             bar.addAction(menu.menuAction())
 
@@ -891,19 +868,16 @@ class Ventana(ArchivosProyecto, QMainWindow):
         # Panel inferior: al simular, la traza; al editar, las opciones de lo seleccionado
         self.traza = QListWidget()
         self.traza.setWordWrap(True)
-        caja_traza = CajaSeccion("Traza")
+        from .traza_panel import CajaTraza
+        caja_traza = CajaTraza()
         QVBoxLayout(caja_traza).addWidget(self.traza)
-        self.props = PanelPropiedades()
-        self.props.setObjectName("panelPropiedades")
-        self.props.prog.franja_cambiada.connect(lambda: agrandar_para_transicion(self))  # las categorías pasan a dos filas: el panel crece lo justo
-        for ficha in self.props.findChildren(FichaJerarquia):  # (la ficha de jerarquía en más filas: el panel crece)
-            ficha.alto_cambiado.connect(lambda: QTimer.singleShot(0, self, self._dimensionar_opciones))
-        self.props.alto_cambiado.connect(lambda: QTimer.singleShot(0, self, lambda: agrandar_para_transicion(self)))  # (y si el estado de la fórmula baja a su línea)
+        self._props = PanelPropiedades()
+        self._props.setObjectName("panelPropiedadesFlotante")
+        self._props.setParent(self)
+        self._props.hide()
         self.inferior = PilaActual()
         self.inferior.addWidget(caja_traza)
-        self.inferior.addWidget(self.props)
         self.flot = GestorFlotantes(self)  # las propiedades flotantes (se crean al usarlas)
-        QApplication.instance().focusChanged.connect(self._foco_propiedades)
         self._leyenda: QDialog | None = None
 
         der = QWidget()
@@ -1034,45 +1008,22 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.derecho.addWidget(pag_scroll)
         self._pag_scroll, self._caja_vars = pag_scroll, caja_vars
         self._vigila_pagina = _VigilaAlto(pag_scroll.viewport(), self._alto_tabla_variables)
-        self.derecho.setMinimumWidth(300)  # al simular; al editar, el mismo margen de ancho que el panel izquierdo
-        # Izquierda: la paleta (una sola lista de fichas); solo al editar. Las opciones de lo seleccionado van abajo.
-        self.paleta = Paleta()
+        self.derecho.setMinimumWidth(300)
+        self.paleta = Paleta(self.diagrama.escala, self)
         from .favoritos import BarraFavoritos
         from .cabecera_favoritos import CabeceraFavoritos
         self.favoritos = BarraFavoritos(self.ajustes, self.paleta)
         self._cab.insertWidget(0, self.favoritos)
         self._cabecera_favoritos = CabeceraFavoritos(self)
-        self.favoritos.contenido_cambiado.connect(self._ajustar_cabecera)
-        self.favoritos.contenido_cambiado.connect(self._orden_tab)
         self.favoritos.distribucion_cambiada.connect(self._orden_tab)
-        self.paleta.setMinimumWidth(self.paleta.ancho_minimo())  # las dos columnas de fichas, sin cortarse
-        self.paleta.ayuda.connect(self._ayuda_ficha)  # un clic en una ficha solo muestra su ayuda
-        self.paleta.escala = self.diagrama.escala
-        self.dock = QWidget()  # panel izquierdo: solo a la altura del dibujo, no del panel inferior
-        self.dock.setObjectName("panelElementos")
-        vl = QVBoxLayout(self.dock)
-        vl.setContentsMargins(1, 1, 1, 3)  # (dentro del borde de la tarjeta: ni la paleta ni el título lo tapan; abajo 3 px por la esquina redonda)
-        titulo_elementos = TituloSeccion("Elementos")
-        titulo_elementos.setObjectName("tituloPanel")
-        titulo_elementos.setContentsMargins(12, 10, 8, 6)
-        vl.addWidget(titulo_elementos)
-        vl.addWidget(self.paleta, 1)
-        # Ancho de los paneles laterales al editar: único y fijo (lo que piden las dos columnas de la paleta y, como mínimo,
-        # lo que hace falta para que la tabla de variables deje ver los nombres), el mismo en el panel izquierdo y en el
-        # izquierdo fijo; el derecho puede ampliarse y ambos se pueden plegar
-        self.ancho_lateral = self._ancho_lateral_base = max(self.dock.minimumSizeHint().width(), ANCHO_LATERAL)
-        self.ancho_derecho = self.ancho_lateral  # el del panel derecho: desde `UMBRAL_DERECHO` de ancho de ventana mide `ANCHO_DERECHO` (P10)
+        self.paleta.ayuda.connect(self._ayuda_ficha)
+        self.ancho_derecho = ANCHO_DERECHO_BASE
         self.variables.fijar_ancho_nominal(self.ancho_derecho)
-        self.dock.setFixedWidth(self.ancho_lateral)
-        self.dock.hide()
-        # Arriba, el panel izquierdo (solo al editar), el dibujo y el panel derecho; abajo, a todo el ancho de la ventana, el
-        # panel inferior (traza, opciones): así una fórmula larga o dos programadores por bloques caben sin apretarse.
-        self._plegables = {n: PanelPlegable(c, titulo, n, lambda n=n: self._minimo_panel(n))
-                          for n, c, titulo in (("izquierdo", self.dock, "Elementos"),
-                                               ("derecho", self.derecho, "Variables"),
-                                               ("inferior", self.inferior, "Propiedades"))}
-        self._plegables["izquierdo"].maximo = lambda: self.ancho_lateral
-        self._tamanos_paneles = {"izquierdo": self.ancho_lateral, "derecho": self.ancho_derecho, "inferior": ALTO_INFERIOR["editar"]}
+        self._plegables = {
+            n: PanelPlegable(c, titulo, n, lambda n=n: self._minimo_panel(n))
+            for n, c, titulo in (("derecho", self.derecho, "Variables"), ("inferior", self.inferior, "Traza"))
+        }
+        self._tamanos_paneles = {"derecho": self.ancho_derecho, "inferior": ALTO_TRAZA}
         self.split = DivisorPlegable(Qt.Orientation.Horizontal)
         self.split.addWidget(izq)
         self.split.addWidget(self._plegables["derecho"])
@@ -1083,31 +1034,21 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._derecho_a_mano = False  # el usuario movió el divisor: su ancho no se vuelve a tocar al cambiar de tamaño la ventana
         self.split.splitterMoved.connect(lambda *_: setattr(self, "_derecho_a_mano", True))
         self.split.setSizes([880, 460])
-        self.split_izquierdo = DivisorPlegable(Qt.Orientation.Horizontal)
-        self.split_izquierdo.addWidget(self._plegables["izquierdo"])
-        self.split_izquierdo.addWidget(self.split)
-        self.split_izquierdo.setStretchFactor(0, 0)
-        self.split_izquierdo.setStretchFactor(1, 1)
-        self.split_izquierdo.configurar(1, "izquierdo", 0, self._plegables["izquierdo"])
         self.vsplit = DivisorPlegable(Qt.Orientation.Vertical)
-        self.vsplit.addWidget(self.split_izquierdo)
+        self.vsplit.addWidget(self.split)
         self.vsplit.addWidget(self._plegables["inferior"])
         self.vsplit.configurar(1, "inferior", 1, self._plegables["inferior"])
-        for divisor in (self.split_izquierdo, self.split, self.vsplit):
+        for divisor in (self.split, self.vsplit):
             divisor.plegar.connect(self._plegar_desde_divisor)
             divisor.abrir.connect(self._abrir_desde_tiron)
         self.vsplit.setCollapsible(0, False)
         self.vsplit.setCollapsible(1, False)  # el panel inferior se pliega con su flecha, no arrastrando: nunca por debajo de lo que pide
         self.vsplit.setHandleWidth(8)
-        self.split_izquierdo.setContentsMargins(estilo.E2, 0, estilo.E2, 0)  # los paneles de arriba, alineados con la barra de herramientas (el inferior va de borde a borde)
-        self._opciones_automaticas = True
-        self._seleccion_alto: tuple[str, tuple[str, ...]] | None = None  # qué selección comprobó ya el alto del panel
-        self.vsplit.splitterMoved.connect(lambda *_: setattr(self, "_opciones_automaticas", False))
+        self.split.setContentsMargins(estilo.E2, 0, estilo.E2, 0)  # los paneles de arriba, alineados con la barra de herramientas (el inferior va de borde a borde)
         self.vsplit.setStretchFactor(0, 1)  # al agrandar la ventana crece el dibujo; el panel inferior conserva su altura
         self.vsplit.setStretchFactor(1, 0)
-        self.vsplit.setSizes([520, ALTO_INFERIOR["simular"]])
+        self.vsplit.setSizes([520, ALTO_TRAZA])
         self.setCentralWidget(self.vsplit)
-        self.props.t_fijar.toggled.connect(self._fijar_cambiado)
         # Barra de estado: aviso de conformidad, lecturas distintas de las decididas, instante lógico
         sb = self.statusBar()
         self.l_aviso = QLabel(AVISO)
@@ -1160,6 +1101,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.tb_sim.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.tb_sim.setIconSize(QSize(20, 20))
         self.tb_sim.addAction(self.a_ejecutar)
+        self.tb_sim.addSeparator()
         self.tb_sim.addAction(self.a_reiniciar)
         self.tb_sim.widgetForAction(self.a_ejecutar).setObjectName("botonPlay")  # el único botón primario de la barra
         self.tb_sim.widgetForAction(self.a_reiniciar).setObjectName("botonReiniciar")
@@ -1200,7 +1142,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.tb_edit.setIconSize(QSize(20, 20))
         self.tb_edit.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self._acciones_solo_icono = []
-        self.tb_edit.addSeparator()  # entre Reiniciar y Deshacer
         for grupo in ((self.a_deshacer, "Deshacer", "Ctrl+Z"), (self.a_rehacer, "Rehacer", "Ctrl+Y")),                      ((self.a_cortar, "Cortar", "Ctrl+X"), (self.a_copiar, "Copiar", "Ctrl+C"), (self.a_pegar, "Pegar", "Ctrl+V"),
                       (self.a_borrar, "Borrar la selección", "Supr")):
             for a, nombre, atajo in grupo:
@@ -1237,15 +1178,19 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.herramientas_grafcet.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.herramientas_grafcet.setProperty("modo", "editar")  # la hoja global la tiñe de verde al simular
         fila=QHBoxLayout(self.herramientas_grafcet);fila.setContentsMargins(estilo.E2,estilo.E1,estilo.E2,estilo.E1);fila.setSpacing(estilo.E2)
-        for barra in (self.tb_sim,self.tb_edit):
-            self.removeToolBar(barra);fila.addWidget(barra);barra.show()
+        from .separadores_barra import SeparadorBarra
+        for numero, barra in enumerate((self.tb_sim, self.tb_edit)):
+            if numero:
+                fila.addWidget(SeparadorBarra())
+            self.removeToolBar(barra)
+            fila.addWidget(barra)
+            barra.show()
         fila.addStretch(1)
         self.centralWidget().layout().insertWidget(1,self.herramientas_grafcet)
         self._acciones_edicion(False)
 
     def _paneles(self) -> None:
-        """Controles de cabecera y pestañas en los bordes para plegar y recuperar los paneles (el izquierdo, el de la paleta y las
-        propiedades, solo existe al editar), y el estado guardado."""
+        """Recupera la visibilidad de Variables y Traza y conecta sus tiradores."""
         from .visibilidad_paneles import VisibilidadPaneles
         self.visibilidad_paneles = VisibilidadPaneles(self)
         self.flechas = {n: p.cerrar for n, p in self._plegables.items()}
@@ -1253,16 +1198,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
         for nombre, panel in self._plegables.items():
             panel.alternar.connect(lambda n=nombre: self.visibilidad_paneles.alternar(n))
             panel.desplegar.connect(lambda tamano,n=nombre:self._abrir_desde_tiron(n,tamano))
-        self.flechas["izquierdo"].hide()
-        fijo = self.ajustes.value("paneles/inferior_fijo", False, type=bool)
-        self.props.t_fijar.blockSignals(True)
-        self.props.t_fijar.setChecked(fijo)
-        self.props.t_fijar.blockSignals(False)
-        for nombre in ("izquierdo", "derecho", "inferior"):
+        for nombre in ("derecho", "inferior"):
             accion = self._accion_panel(nombre)
             visible = self.ajustes.value(f"paneles/{nombre}", True, type=bool)
-            if nombre == "inferior":  # sin fijar, arranca plegado aunque un ajuste antiguo lo dejara abierto
-                visible = self._inferior_al_arrancar = visible and fijo
+            if nombre == "inferior":  # La traza arranca plegada aunque un ajuste antiguo la dejara abierta.
+                visible = False
             accion.blockSignals(True)
             accion.setChecked(visible)
             accion.blockSignals(False)
@@ -1271,117 +1211,32 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.visibilidad_paneles.restaurar()
 
     def _panel(self, nombre: str) -> QWidget:
-        return {"izquierdo": self.dock, "derecho": self.derecho, "inferior": self.inferior}[nombre]
+        return {"derecho": self.derecho, "inferior": self.inferior}[nombre]
 
     def _abrir_opciones(self, explicito: bool = True) -> None:
-        """Despliega el panel inferior (las opciones de lo seleccionado) si estaba plegado, pero solo cuando el usuario lo
-        pide (doble clic, Intro, «Editar…»). En otro caso (P-IMP-118) un panel plegado se queda plegado."""
-        if not explicito and not self._props_abiertas():
-            return
-        self._mostrar_panel("inferior", True)
-        if self.flot.activo():
-            return  # (las ventanas flotantes se colocan solas junto al elemento)
-        agrandar_para_transicion(self)
-        QTimer.singleShot(0, self, self._ver_seleccion)
-        QTimer.singleShot(80, self, self._ver_seleccion)
+        self.flot.abrir(explicito)
 
     def _props_abiertas(self) -> bool:
-        """¿Están abiertas las propiedades? La barra inferior, o las ventanas flotantes (Ver ▸ Panel de opciones ▸ Flotante)."""
-        if self.flot.activo():
-            return self.visibilidad_paneles.esta_abierto("inferior")
-        return self._plegables["inferior"].abierto
+        return self.flot.abierto
+
+    @property
+    def props(self) -> PanelPropiedades:
+        return self.flot.panel_actual()
 
     def props_activo(self) -> PanelPropiedades:
-        """El panel de propiedades que se está usando: el de la barra inferior o el de las ventanas flotantes."""
-        return self.flot.panel if self.flot.activo() and self.flot.panel is not None else self.props
+        return self.props
 
-    def _cambiar_modo_propiedades(self, modo: str) -> None:
-        """Ver ▸ Panel de opciones ▸ Flotante o Abajo: se recuerda, y lo abierto pasa de un sitio al otro."""
-        if modo == self.modo_propiedades:
-            return
-        abierto = self.visibilidad_paneles.esta_abierto("inferior")
-        self.ajustes.setValue("paneles/propiedades", modo)
-        self.flot.ocultar()
-        panel = self._plegables["inferior"]
-        if modo == "flotante":
-            self.modo_propiedades = "abajo"
-            self._mostrar_panel("inferior", False, guardar=False)  # (se pliega la barra: al volver, se abre desde cero)
-            self.modo_propiedades = modo
-            self._mostrar_panel("inferior", abierto, guardar=False)
-        else:
-            self.modo_propiedades = modo
-            panel.show()
-            self._mostrar_panel("inferior", abierto, guardar=False)
-        for m, a in self.a_props.items():
-            a.blockSignals(True)
-            a.setChecked(m == modo)
-            a.blockSignals(False)
-        if self.edicion is not None and self.modo == "editar":
-            self.refrescar_edicion()
 
-    def _foco_propiedades(self, antes: Any, ahora: Any) -> None:
-        """Con la barra inferior, al editar una acción condicionada o por evento se resalta en el dibujo lo que se está editando: su condición (o
-        evento), si el foco está en los bloques, o su rectángulo, si está en el resto del panel."""
-        e, p = self.edicion, self.props
-        objetivo = p.objetivo_bloques()
-        if e is None or self.modo_propiedades != "abajo" or ahora is None or objetivo is None or objetivo[0] != "accion":
-            return  # (solo las acciones condicionadas o por evento tienen dos partes; una transición no)
-        zona = p.zona_de(ahora)
-        if zona is None:
-            return
-        parte = (objetivo[1], objetivo[2] if zona == "bloques" else "accion")
-        if e.parte_editada != parte:
-            e.parte_editada = parte
-            self._redibujar_edicion()
 
-    def _ver_seleccion(self) -> None:
-        """Al abrir las Propiedades el dibujo pierde alto: si lo seleccionado queda tapado, se desplaza el dibujo hasta verlo
-        (sin tocar el zoom ni la selección)."""
-        if self.edicion is None or self.modo != "editar" or not self.diagrama.isVisible():
-            return
-        caja = self.diagrama._caja_seleccion()
-        if caja is not None:
-            self.diagrama.ensureVisible(caja, 24, 24)
 
-    def _fijado(self) -> bool:
-        return self.props.t_fijar.isChecked()
 
-    def _fijar_cambiado(self, fijo: bool) -> None:
-        """«Fijar»: se guarda (arranca abierto solo si está fijado) y fijado ya no se esconde nada."""
-        self.ajustes.setValue("paneles/inferior_fijo", fijo)
 
     def _tras_gesto(self, antes: tuple, despues: tuple) -> None:
-        """Pulsar o soltar el ratón en el dibujo (`antes` y `despues`: lo seleccionado y la acción señalada, `Edicion.clave_panel`).
-        Con el panel de opciones abierto y sin fijar, un gesto que lo deja vacío o en otro elemento lo esconde al momento, sin
-        estados intermedios; sobre el mismo elemento, no. Un panel que no mostraba nada se limita a actualizarse."""
-        if (self.modo != "editar" or getattr(self, "solo_lectura", False) or not self._props_abiertas()
-                or self._fijado()):
-            return
-        mismo = despues == antes and bool(despues[0])
-        sin_nada = not antes[0] and antes[1] is None and bool(despues[0])
-        if not mismo and not sin_nada:
-            self._ocultar_sin_fijar()
+        self.flot.tras_gesto(antes, despues)
 
-    def _ocultar_sin_fijar(self) -> None:
-        """Esconde el panel de opciones sin que el dibujo salte: el punto de la escena de su esquina superior izquierda
-        sigue en el mismo sitio de la pantalla."""
-        d = self.diagrama
-        if self.flot.activo():  # (las ventanas flotantes no cambian el tamaño del dibujo)
-            self._mostrar_panel("inferior", False)
-            return
-        punto = d.mapToScene(0, 0)
-        self._mostrar_panel("inferior", False)
-
-        def corregir() -> None:
-            dx, dy = d.mapFromScene(punto).x(), d.mapFromScene(punto).y()
-            if dx or dy:
-                d.horizontalScrollBar().setValue(d.horizontalScrollBar().value() + dx)
-                d.verticalScrollBar().setValue(d.verticalScrollBar().value() + dy)
-        corregir()
-        QTimer.singleShot(0, d, corregir)
 
     def _accion_panel(self, nombre: str) -> QAction:
-        return {"izquierdo": self.a_izquierdo, "derecho": self.a_derecho, "inferior": self.a_inferior}[nombre]
+        return {"derecho": self.a_derecho, "inferior": self.a_inferior}[nombre]
 
     def _mostrar_panel(self, nombre: str, visible: bool, guardar: bool = True) -> None:
         self.visibilidad_paneles.mostrar(nombre, visible, guardar)
@@ -1390,51 +1245,30 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if guardar:  # lo pide el usuario (cabecera, pestaña, atajo, divisor): el modo compacto ya no lo mueve
             self._manual_paneles[nombre] = True
             self._auto_plegados.discard(nombre)
-        if nombre == "inferior" and self.flot.activo():  # propiedades flotantes: la barra inferior no se usa; ventanas sobre el dibujo
-            accion = self.a_inferior
-            if accion.isChecked() != visible:
-                accion.blockSignals(True)
-                accion.setChecked(visible)
-                accion.blockSignals(False)
-            if guardar:
-                self.ajustes.setValue("paneles/inferior", visible)
-            self._plegables["inferior"].hide()
-            if not visible and self.edicion is not None:
-                self.edicion.parte_editada = None
-            self.flot.actualizar()
-            return
         editar = self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False)
         panel = self._plegables[nombre]
         anterior = panel.abierto
         if nombre == "inferior" and not visible and self.edicion is not None and self.edicion.parte_editada is not None:
             self.edicion.parte_editada = None
-        if visible and nombre == "inferior":
-            self._escala_props()
         if anterior and not visible:
             actual = panel.height() if nombre == "inferior" else panel.width()
             self._tamanos_paneles[nombre] = getattr(panel, "tamano_recordado", None) or actual
             panel.tamano_recordado = None
         panel.mostrar(visible)
-        panel.setVisible(editar or nombre != "izquierdo")
-        self.pestanas[nombre].setText({"izquierdo": "Elementos", "derecho": "Variables" if editar else "Simulación",
-                                      "inferior": "Propiedades" if editar else "Traza"}[nombre])
+        self.pestanas[nombre].setText({"derecho": "Variables" if editar else "Simulación",
+                                      "inferior": "Traza"}[nombre])
         if visible != anterior:
             tamano = max(self._minimo_panel(nombre), self._tamanos_paneles[nombre]) if visible else panel.GROSOR_PESTANA
-            if visible and nombre == "izquierdo":
-                tamano = self.ancho_lateral  # (el izquierdo mide siempre su ancho, aunque con la escala grande pueda estrecharse hasta la base)
-            if nombre == "derecho":
-                total = sum(self.split.sizes());self.split.setSizes([max(100,total-tamano),tamano])
-            elif nombre == "inferior":
-                total = sum(self.vsplit.sizes());self.vsplit.setSizes([max(100,total-tamano),tamano])
-            elif editar:
-                total = sum(self.split_izquierdo.sizes());self.split_izquierdo.setSizes([tamano,max(100,total-tamano)])
+            divisor = self.split if nombre == "derecho" else self.vsplit
+            total = sum(divisor.sizes())
+            divisor.setSizes([max(100, total - tamano), tamano])
         accion = self._accion_panel(nombre)
         if accion.isChecked() != visible:
             accion.blockSignals(True)
             accion.setChecked(visible)
             accion.blockSignals(False)
         # La flecha apunta hacia donde se pliega el panel y, plegado, hacia donde se despliega
-        self.flechas[nombre].setText({"izquierdo": "◂" if visible else "▸", "derecho": "▸" if visible else "◂",
+        self.flechas[nombre].setText({"derecho": "▸" if visible else "◂",
                                       "inferior": "▾" if visible else "▴"}[nombre])
         self.flechas[nombre].setToolTip(f"{'Plegar' if visible else 'Desplegar'} el panel {nombre}")
         if guardar:
@@ -1444,19 +1278,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _minimo_panel(self, nombre):
         if nombre != "inferior":
-            return self._ancho_minimo_lateral(nombre)
-        if self.modo == "editar":
-            minimo = max(76 if self.props.pagina == "vacio" else 160, self.props.minimumSizeHint().height())
-            if self.props.pagina == "accion":
-                # La frase se parte según el ancho de su columna: minimumSizeHint no cuenta esas líneas.
-                minimo = max(minimo, self.props.layout().totalHeightForWidth(self.props.width()))
-            return minimo
+            return self._ancho_minimo_derecho()
         return max(120, self.traza.minimumSizeHint().height()+30)
 
     def _abrir_desde_tiron(self, nombre, tamano):
-        tamano = self.ancho_lateral if nombre == "izquierdo" else max(self._minimo_panel(nombre),tamano)
+        tamano = max(self._minimo_panel(nombre), tamano)
         self._tamanos_paneles[nombre] = tamano
-        if nombre == "inferior":self._opciones_automaticas = False
         self._mostrar_panel(nombre, True)
         if nombre == "derecho":
             total=sum(self.split.sizes());self.split.setSizes([max(100,total-tamano),tamano])
@@ -1464,8 +1291,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
             total=sum(self.vsplit.sizes());self.vsplit.setSizes([max(100,total-tamano),tamano])
 
     def _plegar_desde_divisor(self, nombre):
-        if nombre == "inferior":
-            self._opciones_automaticas = False
         self._mostrar_panel(nombre, False)
 
     @staticmethod
@@ -1520,10 +1345,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
     # -- fuentes: ejemplo o modelo guardado ------------------------------------------------------------
     def cargar_ejemplo(self, key: str) -> None:
         if not self._salir_de_edicion():
-            self.acciones_ej[key].setChecked(False)
             return
         self.fuente = {"tipo": "ejemplo", "clave": key}
-        self.acciones_ej[key].setChecked(True)
         self._cargar()
 
     def abrir_ruta(self, ruta: Path) -> bool:
@@ -1556,11 +1379,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.fuente = {"tipo": "fichero", "ruta": ruta, "doc": op.doc, "layout": layout, "titulo": op.title,
                        "ayuda": ayuda, "raiz": proyecto, "presentacion": op.presentations[0] if op.presentations else None}
         self.fuente["contenedor"] = contenedor
-        checked = self.grupo.checkedAction()
-        if checked:
-            self.grupo.setExclusive(False)
-            checked.setChecked(False)
-            self.grupo.setExclusive(True)
         self._cargar()
         if quitadas:
             if self.edicion is not None:
@@ -1716,8 +1534,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
         e = self.edicion
         if e is None or self.modo != "editar" or self._foco_portapapeles() or self.destino_traer:
             return False
+        from .bloques import MIME_FORMULA
+        clipboard = QApplication.clipboard()
+        datos = clipboard.mimeData()
+        hay_formula = datos is not None and datos.hasFormat(MIME_FORMULA)
         if operacion == "pegar":
-            if self._portapapeles is None:
+            if hay_formula or self._portapapeles is None:
                 return False
             if punto is None:
                 viewport = self.diagrama.viewport()
@@ -1732,6 +1554,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
             return False
         if operacion == "cortar" and not e.borrar():
             return False
+        if hay_formula:
+            clipboard.clear()
         self._portapapeles = fragmento
         e.informar("Selección cortada" if operacion == "cortar" else "Selección copiada")
         e.cambiado.emit()
@@ -1901,26 +1725,24 @@ class Ventana(ArchivosProyecto, QMainWindow):
         ancho = (lateral.width() if lateral.abierto else self._tamanos_paneles["derecho"]) if getattr(self, "_anchos_puestos", False) else self.ancho_derecho
         guardado = getattr(self, "_paneles_edicion", None)
         if not editar and guardado is None:
-            self._paneles_edicion = {"izquierdo": self._plegables["izquierdo"].abierto,
-                                    "inferior": self._props_abiertas() and self._fijado(),  # sin fijar, vuelve plegado
+            self._paneles_edicion = {"inferior": False,
                                     "tamanos": self.vsplit.sizes() if self.isVisible() else None}
         self.variables.setEnabled(editar)
-        self.props.setEnabled(editar); self.paleta.setEnabled(editar)
+        self._props.setEnabled(editar)
         for accion in (self.a_guardar,self.a_guardar_como,self.a_enviar_lamina,self.a_exportar): accion.setEnabled(not getattr(self,"solo_lectura",False))
         # (con la pestaña de E/S oculta y marcada, Qt elegiría otra al habilitar PLANOS: se vuelve a marcar la de la página que se ve)
         self.pestanas_vistas.blockSignals(True);self.pestanas_vistas.setTabEnabled(1,not getattr(self,"solo_lectura",False))
         self.pestanas_vistas.setCurrentIndex({0:0,1:2,2:1}[self.paginas_es.currentIndex()]);self.pestanas_vistas.blockSignals(False)
         self._acciones_edicion(editar)
+        self.a_inferior.setEnabled(self.modo == "simular")
         self.derecho.setCurrentIndex(1 if editar else 0)
-        self.inferior.setCurrentIndex(1 if editar else 0)
+        self.inferior.setCurrentIndex(0)
         self._anchos_laterales(ancho)
         if not editar:
             self.diagrama.actualizar_diagnosticos(False)
-            self._mostrar_panel("izquierdo", False, guardar=False)
             self._mostrar_panel("inferior", False, guardar=False)
         elif guardado is not None:
             self._restauracion_paneles = guardado
-            self._mostrar_panel("izquierdo", guardado["izquierdo"], guardar=False)
             self._mostrar_panel("inferior", guardado["inferior"], guardar=False)
             self._paneles_edicion = None
             def restaurar():
@@ -1934,10 +1756,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
             if guardado["tamanos"] is not None:
                 self.vsplit.setSizes(guardado["tamanos"])
             QTimer.singleShot(0, self, restaurar)
-        else:
-            self._mostrar_panel("izquierdo", self.visibilidad_paneles.abiertos["izquierdo"], guardar=False)
-            self._alto_inferior(True)
-        self.flechas["izquierdo"].setVisible(editar)
         for n in ("derecho", "inferior"):
             self.visibilidad_paneles.reponer_modo(n, editar, guardado)
         self.diagrama.modo_edicion(editar, self.edicion if editar else None,
@@ -1953,44 +1771,13 @@ class Ventana(ArchivosProyecto, QMainWindow):
     def _anchos_laterales(self, ancho: int | None = None) -> None:
         panel = self._plegables["derecho"]
         ancho = max(self.ancho_derecho, panel.width() if ancho is None else ancho) if panel.abierto else panel.GROSOR_PESTANA
-        self.derecho.setMinimumWidth(self._ancho_minimo_lateral("derecho"))
+        self.derecho.setMinimumWidth(self._ancho_minimo_derecho())
         self.derecho.setMaximumWidth(16777215)
         self.split.handle(1).setEnabled(True)
-        total = self.split.width() - self.split.handleWidth()
+        total = self.split.contentsRect().width() - self.split.handleWidth()
         self.split.setSizes([max(total - ancho, 100), ancho])
 
-    def _dimensionar_opciones(self) -> None:
-        """Reparto visual inicial: propiedades compactas, sin sobreescribir el divisor movido a mano."""
-        if getattr(self,"_seleccionando_hoja",False):return
-        self.props.layout().activate();self.props.updateGeometry()
-        self._plegables["inferior"].mostrar(self._plegables["inferior"].abierto)
-        if (not self._opciones_automaticas or self.modo != "editar" or self.inferior.isHidden()
-                or getattr(self, "_restauracion_paneles", None) is not None):
-            return
-        self.props.layout().activate()
-        alto = self._minimo_panel("inferior")
-        total = sum(self.vsplit.sizes())
-        self.vsplit.setSizes([max(total - alto, 120), alto])
-        agrandar_para_transicion(self)
 
-    def _alto_inferior(self, editar: bool) -> None:
-        """Al cambiar de modo, el panel inferior recupera la altura que tenía en ese modo (la inicial, o la que dejó el
-        divisor): el dibujo y el panel se reparten el alto. Al editar, mientras el divisor no se haya movido, el panel cede lo
-        que haga falta (sin bajar de su mínimo) para que la paleta se vea entera; en una ventana más baja, la paleta se
-        encoge y se desplaza."""
-        if self.isVisible() and self.inferior.isVisible():
-            self._alturas["simular" if editar else "editar"] = self.vsplit.sizes()[1]
-        if self.inferior.isHidden():  # plegado, solo su pestaña y el resto para el dibujo: al desplegarlo vuelve a su altura
-            grosor = self._plegables["inferior"].GROSOR_PESTANA
-            self.vsplit.setSizes([max(sum(self.vsplit.sizes()) - grosor, 100), grosor])
-            return
-        alto = self._alturas["editar" if editar else "simular"]
-        total = max(sum(self.vsplit.sizes()), alto + 200)
-        if editar and alto == ALTO_INFERIOR["editar"] and not self.dock.isHidden():  # (a 1366×768: el inferior pasa de 380 a 328)
-            alto = max(min(alto, total - self.paleta.sizeHint().height()), self.inferior.minimumSizeHint().height())
-        self.vsplit.setSizes([total - alto, alto])
-        if editar and self._opciones_automaticas:
-            QTimer.singleShot(0, self, self._dimensionar_opciones)
 
     def _estilo_aviso_traer(self) -> None:
         """La hoja de la franja «seleccionando para Planos» (con los alto de control de la escala de ahora)."""
@@ -2111,12 +1898,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._planos_pendiente = True  # PLANOS (oculta casi siempre, ≈ 10 ms) se pone al día cuando se muestra
         if self.paginas_es.currentIndex() == 2:
             self._escala_planos()
-        self._es_pendiente = self._props_pendiente = True  # E/S y Propiedades se ponen al día cuando se muestran
+        self._es_pendiente = True  # E/S y Propiedades se ponen al día cuando se muestran
         if self.paginas_es.currentIndex() == 1:
             self._escala_es()
-        if self._plegables["inferior"].abierto:
-            self._escala_props()
-        self._poner_ancho_lateral(self._ancho_lateral_para(self.width()), self._ancho_derecho_para(self.width()))  # (por si el ancho no cambió pero la letra sí)
+        self._poner_ancho_derecho(self._ancho_derecho_para(self.width()))  # (por si el ancho no cambió pero la letra sí)
         self._estilos_locales()
         self._ancho_reloj = 0  # el reloj vuelve a medir lo que su texto (otra letra, otro ancho)
         self.l_reloj.setMinimumWidth(0)
@@ -2138,55 +1923,29 @@ class Ventana(ArchivosProyecto, QMainWindow):
         # entonces el dibujo se veía en un sitio y, al repartirse, saltaba unos píxeles («flotando»). Se reparten aquí, en este pintado.
         QApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
 
-    def _ancho_lateral_para(self, ancho_ventana: int) -> int:
-        """Los paneles laterales ganan ancho con la letra grande (así las tablas de la simulación llevan sus cuatro columnas con las
-        cabeceras enteras), pero **poco a poco**: de los 218 px que fijan las pruebas de la paleta a 1366 de ancho, hasta los 264 px de la
-        pantalla completa a 1600 (y 300 px a 1920×1080, donde sobra sitio). Así, al cruzar el umbral de 1600×900 el dibujo no da un salto
-        de casi 100 px de ancho."""
-        t = min(1.0, max(0.0, (ancho_ventana - 1366) / (estilo.UMBRAL_GRANDE[0] - 1366)))
-        mas = min(1.0, max(0.0, (ancho_ventana - estilo.UMBRAL_GRANDE[0]) / 320))  # y de 264 a 300 px entre 1600 y 1920: con la letra grande las
-        return self._ancho_lateral_base + round(46 * t) + round(36 * mas)           # tablas de estado llevan sus cuatro columnas enteras
-
-    def _ancho_minimo_lateral(self, nombre: str) -> int:
-        """Lo que mide, como poco, un panel lateral. Con la escala normal es su ancho; con la grande (donde los paneles son más anchos) solo la base:
-        así el mínimo de la ventana es el de siempre y bajar de 1920 a 683 o 640 px de ancho cabe **en una sola petición** (F6: antes se quedaba en
-        769 hasta que los paneles se estrechaban)."""
-        nominal = self.ancho_derecho if nombre == "derecho" else self.ancho_lateral
-        return min(nominal, self._ancho_lateral_base) if self._escala == "grande" else nominal
-
-    def _fijar_dock(self, ancho: int) -> None:
-        """El panel izquierdo mide `ancho` (fijo); con la escala grande puede estrecharse hasta la base (ver `_ancho_minimo_lateral`)."""
-        self.dock.setMinimumWidth(self._ancho_minimo_lateral("izquierdo"))
-        self.dock.setMaximumWidth(ancho)
+    def _ancho_minimo_derecho(self) -> int:
+        return min(self.ancho_derecho, ANCHO_DERECHO_BASE) if self._escala == "grande" else self.ancho_derecho
 
     def _ancho_derecho_para(self, ancho_ventana: int) -> int:
-        """El panel derecho (Variables, o las tablas de la simulación, que conserva el ancho al pulsar Play) mide `ANCHO_DERECHO` desde
-        `UMBRAL_DERECHO` px de ancho de ventana: con él «Papel» y «Tipo» salen enteros y las tablas de estado llevan sus cuatro columnas
-        (P10). Por debajo, el de siempre; a pantalla completa, lo que ya hacía la rama (`_ancho_lateral_para`) si es más."""
-        base = self._ancho_lateral_para(ancho_ventana)
+        """Ancho nominal para Variables y Simulación, con espacio para la letra grande."""
+        umbral = estilo.UMBRAL_GRANDE[0]
+        tramo = min(1.0, max(0.0, (ancho_ventana - 1366) / (umbral - 1366)))
+        grande = min(1.0, max(0.0, (ancho_ventana - umbral) / 320))
+        base = ANCHO_DERECHO_BASE + round(46 * tramo) + round(36 * grande)
         return max(base, ANCHO_DERECHO) if ancho_ventana >= UMBRAL_DERECHO else base
 
-    def _poner_ancho_lateral(self, nuevo: int, derecho: int | None = None) -> None:
-        """Pone el ancho de los dos paneles laterales (`nuevo` el del izquierdo y, sin `derecho`, el del derecho también; el del divisor
-        también: si no, queda un hueco muerto a su lado). Lo que el usuario ensanchó a mano no se toca."""
-        derecho = nuevo if derecho is None else derecho
-        if nuevo == self.ancho_lateral and derecho == self.ancho_derecho:
+    def _poner_ancho_derecho(self, ancho: int) -> None:
+        if ancho == self.ancho_derecho:
             return
-        viejo, self.ancho_lateral = self.ancho_lateral, nuevo
-        viejo_d, self.ancho_derecho = self.ancho_derecho, derecho
-        self.variables.fijar_ancho_nominal(derecho)  # (con él se decide si «Papel» y «Tipo» van en palabras o abreviados)
-        self._fijar_dock(nuevo)
-        for n, antes, ahora in (("izquierdo", viejo, nuevo), ("derecho", viejo_d, derecho)):
-            if self._tamanos_paneles[n] == antes:
-                self._tamanos_paneles[n] = ahora
-            self._plegables[n].mostrar(self._plegables[n].abierto)
-        izq = self._plegables["izquierdo"]
-        if izq.abierto and not izq.isHidden():
-            total = sum(self.split_izquierdo.sizes())
-            self.split_izquierdo.setSizes([nuevo, max(100, total - nuevo)])
-        self.derecho.setMinimumWidth(self._ancho_minimo_lateral("derecho"))
-        der = self._plegables["derecho"]
-        self._anchos_laterales(derecho if der.abierto and (der.width() == viejo_d or not self._derecho_a_mano) else None)
+        anterior, self.ancho_derecho = self.ancho_derecho, ancho
+        self.variables.fijar_ancho_nominal(ancho)
+        if self._tamanos_paneles["derecho"] == anterior:
+            self._tamanos_paneles["derecho"] = ancho
+        panel = self._plegables["derecho"]
+        panel.mostrar(panel.abierto)
+        self.derecho.setMinimumWidth(self._ancho_minimo_derecho())
+        ajustar = panel.abierto and (panel.width() == anterior or not self._derecho_a_mano)
+        self._anchos_laterales(ancho if ajustar else None)
 
     def _escala_planos(self) -> None:
         """PLANOS lleva la hoja de la escala de ahora; se hace al mostrarla (cruzar el umbral no repasa una página que no se ve)."""
@@ -2200,23 +1959,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self._es_pendiente = False
             self.panel_es.escalar(self._hoja_escala, self._escala)
 
-    def _escala_props(self) -> None:
-        """Propiedades lleva la escala de ahora (campos, «Fijar», categorías y fichas). Se hace al abrirlo."""
-        if self._props_pendiente:
-            self._props_pendiente = False
-            self.props.escalar(self._hoja_escala)
 
     def _zoom_diferido(self) -> None:
         if not self._zoom_pendiente:
             self._zoom_pendiente = True
             QTimer.singleShot(0, self, self._ajustar_zoom)
 
-    def _props_alto(self, mantener: bool) -> bool:
-        """¿Está abierto el panel de Propiedades con su panel alto (al editar)? La receptividad de una transición pide ≈ 340 px y deja el dibujo
-        en la mitad del alto de la ventana a cualquier tamaño; el panel de una etapa (≈ 180 px) deja el dibujo alto. Con histéresis: seguir
-        integrado pide algo menos que integrarse."""
-        return (self.modo == "editar" and not self.inferior.isHidden()
-                and self.inferior.height() >= estilo.ALTO_PROPS_ZOOM - (40 if mantener else 0))
 
     def _ajustar_zoom(self) -> None:
         self._cabecera_favoritos.integrar_zoom()
@@ -2228,7 +1976,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         agrandar la ventana vuelve lo que se plegó solo. No se cambia la hoja de estilo (aplicarla a toda la ventana tarda cerca
         de un segundo): los controles miden lo mismo a todos los tamaños."""
         self._escala_de_la_ventana()
-        self._poner_ancho_lateral(self._ancho_lateral_para(self.width()), self._ancho_derecho_para(self.width()))
+        self._poner_ancho_derecho(self._ancho_derecho_para(self.width()))
         nuevo = estilo.tamano_compacto(self.width(), self.height())
         if nuevo != self._compacto:
             bajo_antes = self._compacto[1]
@@ -2236,7 +1984,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
             ancho, alto = nuevo
             if alto != bajo_antes:
                 self._fusionar_filas(alto)
-                self.props.prog.modo_fila(alto)  # P1: la paleta de operadores en una fila (el panel pide ≈ 190 px y no 334)
             il = self.diagrama.parentWidget().layout()
             il.setContentsMargins(*((estilo.E2, estilo.E1 + HUECO_FRANJA, estilo.E2, estilo.E1) if alto else self._margenes_dibujo))
             self._reflujo_entradas()
@@ -2419,11 +2166,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
                   self.tb_sim.widgetForAction(self.a_reiniciar),
                   *(self.tb_edit.widgetForAction(a) for a in self._acciones_solo_icono),
                   d.b_dependencias, self.b_errores,
-                  self.flechas["izquierdo"], *self.preferencias_paletas.foco(), d,
+                  *self.favoritos.foco(), d,
                   d.b_menos, d.b_mas, d.b_ajustar, d.b_seleccion,
                   self.flechas["derecho"], *entradas, self.variables.tabla, *self.variables.b_nuevas.values(),
-                  self.variables.b_quitar, self.pestanas["izquierdo"], self.pestanas["derecho"], self.flechas["inferior"],
-                  self.pestanas["inferior"], self.props.t_fijar]
+                  self.variables.b_quitar, self.pestanas["derecho"], self.flechas["inferior"],
+                  self.pestanas["inferior"]]
         cadena = [w for w in cadena if w is not None]
         for a, b in zip(cadena, cadena[1:]):
             QWidget.setTabOrder(a, b)
@@ -2460,7 +2207,16 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if self.modo == "editar" and self.edicion is not None and not getattr(self,"solo_lectura",False) and not getattr(self, "_anchos_puestos", False):
             self._anchos_puestos = True  # con la ventana ya dimensionada, los dos paneles laterales con el mismo ancho
             self._anchos_laterales(self.ancho_derecho)
-            self._alto_inferior(True)
+
+    def _errores_desde_menu(self, on: bool) -> None:
+        self._marcar_errores(on, False)
+        self._alternar_errores(on)
+
+    def _sincronizar_menu_dibujo(self) -> None:
+        self.a_ver_dependencias.setChecked(self.diagrama.dependencias)
+        self.a_ver_dependencias.setEnabled(self.a_dependencias.isEnabled())
+        self.a_ver_errores.setChecked(self.b_errores.isChecked())
+        self.a_ver_errores.setEnabled(self.a_errores.isEnabled())
 
     def _alternar_errores(self, on: bool) -> None:
         """El usuario marca o desmarca «Mostrar errores»: el aviso de la cabecera del dibujo se ve y se actualiza en vivo, o no se ve al editar."""
@@ -2520,45 +2276,22 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if e is None or self.modo != "editar":
             return
         diags = e.diagnosticos()
-        marcados = e.marcados_de(diags)
-        self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), marcados, e.parpadeo.activos())
+        self._marcas_diagnostico = e.marcados_de(diags) if self.b_errores.isChecked() else set()
+        self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), self._marcas_diagnostico, e.parpadeo.activos())
         if getattr(self, "solo_lectura", False):
             self._poner_chip("lectura", "EJEMPLO · SOLO LECTURA", "Ejemplo de solo lectura: se puede simular; para editar, abra un proyecto o cree uno nuevo")
         else:
             self._poner_chip("editar", "EDICIÓN", "Modo edición: Play inicia la simulación")
         self.ayuda.setToolTip(self._ayuda if getattr(self,"solo_lectura",False) else AYUDA_EDICION[e.herramienta])
         mensaje, info = e.texto_estado()
-        self.ayuda.setText(self._ayuda if getattr(self,"solo_lectura",False) else mensaje or "Arrastre fichas desde la paleta; doble clic en un elemento para ver sus propiedades.")
-        error = bool(mensaje) and not info  # un aviso informativo no va en rojo
-        self.ayuda.setStyleSheet(f"color: {estilo.ERROR if error else estilo.TINTA_2}; font-weight: {600 if error else 400}; "
-                                 f"font-size: {estilo.T_PEQUENA}px")
-        # (la barra de estado sigue al texto de ahora: se retira cuando el mensaje que puso esta vista ya no es el vigente, no a los 9 s)
-        barra, puesto = self.statusBar(), getattr(self, "_texto_estado_edicion", "")
-        if mensaje:
-            barra.showMessage(mensaje, 9000)
-        elif puesto and barra.currentMessage() == puesto:
-            barra.clearMessage()
-        self._texto_estado_edicion = mensaje
+        from .vigencia_avisos import presentar_estado
+        presentar_estado(self, mensaje, info)
         self.l_herr.setText(f"<b>{NOMBRE_HERRAMIENTA[e.herramienta]}</b>: {html.escape(AYUDA_EDICION[e.herramienta])}")
         sel = [e.nombre(i) for i in e.sel]
         self.l_sel.setText(("Selección: " + ", ".join(sel)) if sel else "Nada seleccionado.")
         self._poner_reloj(f"{len(e.M['steps'])} etapas · {len(e.M['transitions'])} transiciones")
         self.a_herr[e.herramienta].setChecked(True)
-        if self.flot.activo():
-            self.flot.actualizar()
-        else:
-            self.props.mostrar(e)
-            objetivo = self.props.objetivo_bloques()
-            if e.parte_editada is not None and (objetivo is None or objetivo[1] != e.parte_editada[0]):
-                e.parte_editada = None  # (ya no se edita esa acción)
-            pagina = (self.props.pagina, self.props.minimumSizeHint().height())
-            if pagina != getattr(self, "_pagina_opciones", None):
-                self._pagina_opciones = pagina
-                QTimer.singleShot(0, self, self._dimensionar_opciones)
-            seleccion = (self.props.pagina, tuple(e.sel))
-            if seleccion != self._seleccion_alto:
-                self._seleccion_alto = seleccion
-                QTimer.singleShot(0, self, lambda: agrandar_para_transicion(self))
+        self.flot.actualizar()
         self.variables.mostrar(e)
         planos=hasattr(self,"paginas_es") and self.paginas_es.currentIndex()==2
         self.a_deshacer.setEnabled(bool(e.ed.undo_stack))
@@ -2612,8 +2345,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         e = self.edicion
         if e is not None and self.modo == "editar":
             # un arrastre no valida de nuevo; el parpadeo sí repinta lo marcado por los diagnósticos
-            self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), e.marcados() if e.parpadeo.ids else set(),
-                                  e.parpadeo.activos())
+            self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), self._marcas_diagnostico, e.parpadeo.activos())
 
     def _ir_a_diagnostico(self, item: QListWidgetItem) -> None:
         """Un clic en un diagnóstico selecciona el elemento y lo centra (REQ-EDT-09)."""
@@ -3615,7 +3347,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if activo:
             from .hojas import SeleccionParaHoja
             self._paneles_traer={n:p.abierto for n,p in self._plegables.items()}
-            self._tamanos_traer=(self.split_izquierdo.sizes(),self.split.sizes(),self.vsplit.sizes())
+            self._tamanos_traer = (self.split.sizes(), self.vsplit.sizes())
             for n in self._paneles_traer:
                 self._plegables[n].hide();self.flechas[n].hide();self.pestanas[n].hide()
             self.diagrama.controlador=SeleccionParaHoja(self.edicion);self.diagrama.setAcceptDrops(False)
@@ -3626,10 +3358,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.diagrama.controlador=self.edicion if self.modo=='editar' else None;self.diagrama.setAcceptDrops(self.modo=='editar' and not getattr(self,'solo_lectura',False));self.diagrama.setStyleSheet(getattr(self,'_estilo_traer',''))
             for n,visible in getattr(self,'_paneles_traer',{}).items():
                 self._mostrar_panel(n,visible,guardar=False);self.flechas[n].setVisible(visible)
-            sizes=getattr(self,'_tamanos_traer',(None,None,None))
-            if sizes[0] is not None:self.split_izquierdo.setSizes(sizes[0])
-            if sizes[1] is not None:self.split.setSizes(sizes[1])
-            if sizes[2] is not None:self.vsplit.setSizes(sizes[2])
+            for divisor, tamanos in zip((self.split, self.vsplit), self._tamanos_traer):
+                divisor.setSizes(tamanos)
             if self.modo=='editar':self.refrescar_edicion()
 
     def preparar_traer(self,ident):
@@ -3765,7 +3495,7 @@ def main(argv: list[str] | None = None) -> int:
     import sys
     ap = argparse.ArgumentParser(prog="GRAFCET", description=TITULO)
     ap.add_argument("modelo", nargs="?", help="archivo .grafnet")
-    ap.add_argument("--ejemplo", choices=list(EJEMPLOS), help="ejemplo con el que empezar")
+    ap.add_argument("--ejemplo", choices=list(EJEMPLOS), help=argparse.SUPPRESS)
     ap.add_argument("--captura", metavar="PNG", help="guardar una captura de la ventana y salir (comprobación)")
     ap.add_argument("--prueba-contenedor",action="store_true",help=argparse.SUPPRESS)
     ap.add_argument("--prueba-distribucion", metavar="GRAFNET", help=argparse.SUPPRESS)
@@ -3790,11 +3520,14 @@ def main(argv: list[str] | None = None) -> int:
         from .errores import instalar as instalar_avisos_de_error
         instalar_avisos_de_error()
         from .carpetas import asegurar_carpetas
+        ajustes = QSettings(QSettings.Format.IniFormat, QSettings.Scope.UserScope, "GRAFCET", "Simulador")
         try:
-            asegurar_carpetas()
+            rutas = asegurar_carpetas()
+            from .ejemplos_archivos import instalar_ejemplos
+            instalar_ejemplos(rutas["grafcet"], ajustes)
         except OSError as exc:
             QMessageBox.warning(None, "Carpetas de GRAFCET Connect", str(exc))
-        w = Ventana()
+        w = Ventana(ajustes)
         instancia.vincular(w)
         if args.prueba_propiedades:
             # Comprobación de construcción: el diálogo Propiedades del archivo se monta en el ejecutable.

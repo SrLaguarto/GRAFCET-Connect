@@ -546,7 +546,12 @@ class PanelVariables(QWidget):
         self.mostrar(self.e)
 
     def _resultado(self, motivo: str | None, f: dict[str, Any] | None = None) -> None:
-        self.msg.setText(motivo or "")
+        from .avisos_nombres import aviso_corto
+        nombre = self.tabla.item(self._filas.index(f), 0).text() if f in self._filas else ""
+        es_nombre = bool(motivo and ("nombre" in motivo or "ya existe" in motivo))
+        self.msg.setWordWrap(not es_nombre)
+        self.msg.setText(aviso_corto(nombre, motivo) if es_nombre else motivo or "")
+        self.msg.setToolTip(motivo or "")
         self.msg.setStyleSheet(f"color: {COL['err']}" if motivo else "")
         if motivo:  # la fila parpadea y la tabla vuelve a lo que hay en el modelo
             if f is not None:
@@ -607,7 +612,11 @@ class PanelVariables(QWidget):
         else:
             self._pend.insert(pos, f)
         self._rechazado = True
-        self.msg.setText(motivo)
+        from .avisos_nombres import aviso_corto
+        self.msg.setWordWrap(False)
+        self.msg.setText(aviso_corto(texto, motivo))
+        self.msg.setToolTip(motivo)
+        self.tabla.item(it.row(), 0).setToolTip(motivo)
         self.msg.setStyleSheet(f"color: {COL['err']}")
         self.parpadear(f)
         self._diferir(lambda: self._en_blanco(f))

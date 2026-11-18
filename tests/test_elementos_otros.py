@@ -64,10 +64,15 @@ class OtrosInterfaz(BaseQt):
         QTest.mousePress(vp,Qt.MouseButton.LeftButton,pos=a);QTest.mouseMove(vp,b)
         QTest.mouseRelease(vp,Qt.MouseButton.LeftButton,pos=b);QApplication.processEvents()
 
-    def test_SOTR03_pestanas_abren_minimo_o_distancia_y_la_izquierda_es_fija(self):
+    def test_SOTR03_pestanas_abren_minimo_o_distancia(self):
         """REQ-EDT-09: arrastrar una pestaña cerrada hacia el centro abre al mínimo o a la distancia elegida."""
-        w,e=self.preparar()
-        for nombre,delta in (('izquierdo',QPoint(24,0)),('derecho',QPoint(-24,0)),('inferior',QPoint(0,-24))):
+        w, e = self.preparar()
+        e.ed.add_step("g", "0", True)
+        e.cambia()
+        self.assertTrue(w.cambiar_modo("simular"))
+        w.rt.stop()
+        QApplication.processEvents()
+        for nombre,delta in (('derecho',QPoint(-24,0)),('inferior',QPoint(0,-24))):
             w._mostrar_panel(nombre,False);QApplication.processEvents();self.arrastrar(w.pestanas[nombre],delta)
             self.assertFalse(w._panel(nombre).isHidden(),nombre)
             dimension=w._panel(nombre).height() if nombre=='inferior' else w._panel(nombre).width()
@@ -78,16 +83,22 @@ class OtrosInterfaz(BaseQt):
             self.assertAlmostEqual(dimension,esperado,delta=2)
 
     def test_SOTR04_divisores_cerrados_abren_hacia_el_centro(self):
-        """REQ-EDT-09: el divisor de un panel cerrado admite el gesto de apertura, incluido Elementos."""
-        w,e=self.preparar()
-        for nombre,sp,delta in (('izquierdo',w.split_izquierdo,QPoint(24,0)),('derecho',w.split,QPoint(-300,0)),('inferior',w.vsplit,QPoint(0,-250))):
+        """REQ-EDT-09: el divisor de un panel cerrado admite el gesto de apertura."""
+        w, e = self.preparar()
+        e.ed.add_step("g", "0", True)
+        e.cambia()
+        self.assertTrue(w.cambiar_modo("simular"))
+        w.rt.stop()
+        QApplication.processEvents()
+        for nombre,sp,delta in (('derecho',w.split,QPoint(-300,0)),('inferior',w.vsplit,QPoint(0,-250))):
             w._mostrar_panel(nombre,False);QApplication.processEvents();self.arrastrar(sp.handle(1),delta)
             self.assertFalse(w._panel(nombre).isHidden(),nombre)
             self.assertGreaterEqual(w._panel(nombre).height() if nombre=='inferior' else w._panel(nombre).width(),w._minimo_panel(nombre))
 
     def test_SOTR05_texto_desde_paleta_se_mueve_redimensiona_y_deshace(self):
         """REQ-EDT-02, REQ-EDT-05: un Texto de Otros se selecciona, mueve y redimensiona mediante eventos reales."""
-        w,e=self.preparar();self.assertEqual(pr.SECCIONES[-1],('Otros',('texto','imagen')))
+        w, e = self.preparar()
+        self.assertEqual(w.favoritos.orden[-2:], ["texto", "imagen"])
         self.soltar_ficha('texto',QPointF(300,140));QApplication.processEvents();n=e.M['annotations'][0];ident=n['id']
         self.assertEqual(e.sel,[ident]);self.assertIn('Texto',w.props.titulo.text())
         self.gesto(rect(n).center(),rect(n).center()+QPointF(40,40))
@@ -126,10 +137,13 @@ class OtrosInterfaz(BaseQt):
 
     def test_SOTR08_etapa_interior_arrastra_y_borde_enlaza(self):
         """REQ-EDT-03: el interior cerca de los conectores mueve la etapa; el borde conserva el enlace."""
-        w,e=self.preparar();w._abrir_opciones();s=e.ed.add_step('g','1',True,at=(200,140));e.cambia()
+        w, e = self.preparar()
+        s = e.ed.add_step('g', '1', True, at=(200, 140))
+        e.cambia()
         p=QPointF(300,140+H-5);self.assertIsNone(ancla_en(e.M,p))
         self.assertEqual(ancla_en(e.M,QPointF(300,140+H))['id'],s)
         self.gesto(p,p+QPointF(60,40));self.assertEqual(self.pos(e)[s],(260,180));self.assertIsNone(e.enlace)
+        w._abrir_opciones()
         self.assertFalse(w.props.der.isVisible());self.assertTrue(w.props.s_etiqueta.isVisible())
         textos=[x[0] for x in e.menu(QPointF(360,180))]
         self.assertIn('Tipo de etapa',textos)

@@ -180,6 +180,7 @@ class MostrarErrores(BaseQt):
         from escritorio import estilo
         for ancho, alto in ((1366, 768), (2000, 1250), (960, 1032)):
             w, e = self.preparar(ancho, alto)
+            e.seleccionar([e.ed.model["steps"][0]["id"]])
             self.assertEqual(w.a_ayuda_pantalla.text(), "Ayuda de esta pantalla")
             self.assertFalse(w.ayuda.mostrar_texto)
             w.a_ayuda_pantalla.trigger()

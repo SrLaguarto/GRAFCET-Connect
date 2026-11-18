@@ -69,6 +69,9 @@ class InterfazJ(unittest.TestCase):
         menu = next(a.menu() for a in w.menuBar().actions() if a.text().replace("&", "") == "Ayuda")
         self.assertIs(menu.actions()[0], w.a_ayuda_pantalla)
         self.assertEqual(w.a_ayuda_pantalla.shortcut().toString(), "F1")
+        from PySide6.QtCore import QPointF
+        sid = w.edicion.poner_etapa(QPointF(200, 200))
+        w.edicion.seleccionar([sid])
         w.activateWindow()
         w.diagrama.setFocus()
         QTest.keyClick(w, Qt.Key.Key_F1)
@@ -107,49 +110,30 @@ class InterfazJ(unittest.TestCase):
                     self.assertFalse(primero.geometry().intersects(segundo.geometry()), tam)
             self.assertEqual(w.favoritos._visibles + w.favoritos.ocultos, list(PREDETERMINADOS))
 
-    def test_SJ104_ver_oculta_y_plegar_conserva_menu_y_pestana(self):
-        """REQ-EDT-09: abierto, plegado y oculto tienen estados distintos en los tres paneles."""
+    def test_SJ104_plegar_conserva_pestana_y_libera_espacio(self):
         w = self.crear(tam=(2000, 1250))
-        w._cambiar_modo_propiedades("abajo")
-        for nombre in ("izquierdo", "derecho", "inferior"):
-            w._accion_panel(nombre).setChecked(True)
-            w._mostrar_panel(nombre, True)
-            self.bombear()
-            abierto = w.diagrama.size()
-            w.flechas[nombre].click()
-            self.bombear()
-            self.assertTrue(w._accion_panel(nombre).isChecked(), nombre)
-            self.assertTrue(w.pestanas[nombre].isVisible(), nombre)
-            plegado = w.diagrama.size()
-            w._accion_panel(nombre).trigger()
-            self.bombear()
-            self.assertFalse(w._plegables[nombre].isVisible(), nombre)
-            self.assertFalse(w.pestanas[nombre].isVisible(), nombre)
-            oculto = w.diagrama.size()
-            dimension = "height" if nombre == "inferior" else "width"
-            self.assertGreater(getattr(oculto, dimension)(), getattr(plegado, dimension)(), nombre)
-            self.assertGreater(getattr(oculto, dimension)(), getattr(abierto, dimension)(), nombre)
-
-    def test_SJ105_atajos_y_recuerdo_oculto_y_plegado(self):
-        """REQ-EDT-09: los atajos alternan visibilidad y se recuerdan los tres estados."""
-        w = self.crear()
-        w._cambiar_modo_propiedades("abajo")
-        for nombre, tecla in (("izquierdo", Qt.Key.Key_L), ("derecho", Qt.Key.Key_B),
-                              ("inferior", Qt.Key.Key_J)):
-            w.activateWindow()
-            w.diagrama.setFocus()
-            antes = w._accion_panel(nombre).isChecked()
-            QTest.keyClick(w, tecla, Qt.KeyboardModifier.ControlModifier)
-            self.bombear()
-            self.assertEqual(w._accion_panel(nombre).isChecked(), not antes)
-        w.visibilidad_paneles.desde_menu("izquierdo", False)
-        w.visibilidad_paneles.desde_menu("derecho", True)
+        w._mostrar_panel("derecho", True)
+        self.bombear()
+        abierto = w.diagrama.width()
         w.flechas["derecho"].click()
-        w.ajustes.sync()
-        otra = self.crear(archivo=w.ajustes.fileName())
-        self.assertFalse(otra._plegables["izquierdo"].isVisible())
-        self.assertTrue(otra.a_derecho.isChecked())
-        self.assertTrue(otra.pestanas["derecho"].isVisible())
+        self.bombear()
+        self.assertTrue(w.pestanas["derecho"].isVisible())
+        self.assertGreater(w.diagrama.width(), abierto)
+        w.pestanas["derecho"].click()
+        self.bombear()
+        self.assertTrue(w.derecho.isVisible())
+
+    def test_SJ105_ctrl_b_alterna_plegado_sin_ocultar_panel(self):
+        w = self.crear(tam=(2000, 1250))
+        w._mostrar_panel("derecho", True)
+        w.activateWindow()
+        w.diagrama.setFocus()
+        for abierto in (False, True):
+            QTest.keyClick(w, Qt.Key.Key_B, Qt.KeyboardModifier.ControlModifier)
+            self.bombear()
+            self.assertEqual(w.derecho.isVisible(), abierto)
+            self.assertEqual(w.pestanas["derecho"].isVisible(), not abierto)
+            self.assertTrue(w._plegables["derecho"].isVisible())
 
     def test_SJ106_barra_fija_borra_lista_antigua(self):
         """REQ-EDT-09: una lista antigua no oculta fichas ni altera su orden fijo."""
@@ -160,7 +144,7 @@ class InterfazJ(unittest.TestCase):
             self.assertFalse(w.favoritos.acceptDrops())
             evento = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, QPoint(3, 3))
             QApplication.sendEvent(w.favoritos, evento)
-            self.assertFalse([m for m in w.favoritos.findChildren(QMenu) if m.isVisible()])
+            self.assertIsNone(w.favoritos._menu)
 
     def test_SJ107_dependencias_completo_y_uniones_en_tres_dpr(self):
         """REQ-UX-01: el símbolo completo deja margen y conserva las dos uniones finas."""
@@ -302,22 +286,16 @@ class InterfazJ(unittest.TestCase):
                 for boton in caja.buttons():
                     self.assertTrue(boton.text().strip(), type(dialogo).__name__)
 
-    def test_SJ115_los_tres_paneles_recuerdan_plegado_y_oculto(self):
-        """REQ-EDT-09: reiniciar distingue pestaña plegada y ocultación desde Ver para cada panel."""
-        for plegado in (True, False):
-            w = self.crear(tam=(2000, 1250))
-            w._cambiar_modo_propiedades("abajo")
-            for nombre in ("izquierdo", "derecho", "inferior"):
-                w.visibilidad_paneles.desde_menu(nombre, True)
-                w._mostrar_panel(nombre, False)
-                if not plegado:
-                    w._accion_panel(nombre).trigger()
+    def test_SJ115_recuerda_plegado_e_ignora_ocultacion_antigua(self):
+        for abierto in (True, False):
+            w = self.crear({"paneles/derecho/visible": False}, tam=(2000, 1250))
+            w._mostrar_panel("derecho", abierto)
             w.ajustes.sync()
             otra = self.crear(archivo=w.ajustes.fileName(), tam=(2000, 1250))
-            for nombre in ("izquierdo", "derecho", "inferior"):
-                self.assertEqual(otra._accion_panel(nombre).isChecked(), plegado, nombre)
-                self.assertEqual(otra.pestanas[nombre].isVisible(), plegado, nombre)
-                self.assertFalse(otra._panel(nombre).isVisible(), nombre)
+            self.assertFalse(otra.ajustes.contains("paneles/derecho/visible"))
+            self.assertTrue(otra._plegables["derecho"].isVisible())
+            self.assertEqual(otra.derecho.isVisible(), abierto)
+            self.assertEqual(otra.pestanas["derecho"].isVisible(), not abierto)
 
 
 if __name__ == "__main__":

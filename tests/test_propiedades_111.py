@@ -77,10 +77,9 @@ class Propiedades111(unittest.TestCase):
 
     def test_SPF103_sin_variable_fichas_deshabilitadas_y_numerica_solo_con_tipo(self):
         """REQ-EDT-02: sin variable, 1/0 inertes; numérica solo después de elegirla, abajo y flotante."""
-        for flotante in (True, False):
+        for flotante in (True,):
             c, p, v = self.contexto()
             if not flotante:
-                c.w._cambiar_modo_propiedades("abajo")
                 HC._bombear(4)
                 p = c.w.props
             aid = p.accion.aid

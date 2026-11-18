@@ -21,16 +21,19 @@ def hueco_de_tinta(boton):
 @unittest.skipUnless(QT, "Falta PySide6")
 class BarraYTablaES(BaseQt):
     def test_SBAR01_separador_entre_reiniciar_y_deshacer_y_play_centrado(self):
-        """REQ-UX-01: la barra de edición empieza con un separador (tras Reiniciar) y el contenido de Play y de Stop queda centrado en su botón de ancho fijo."""
+        """REQ-UX-01: Reiniciar y Deshacer tienen un separador visible entre sus barras y el contenido de Play y de Stop queda centrado en su botón de ancho fijo."""
         w, e = self.vacio()
         w.resize(1366, 768)
         w.show()
         for _ in range(6):
             QApplication.processEvents()
         self.addCleanup(w.hide)
-        acciones = w.tb_edit.actions()
-        self.assertTrue(acciones[0].isSeparator())
-        self.assertIs(acciones[1], w.a_deshacer)
+        from escritorio.separadores_barra import SeparadorBarra
+        separador, = w.herramientas_grafcet.findChildren(SeparadorBarra)
+        self.assertTrue(separador.isVisible())
+        self.assertLess(w.tb_sim.geometry().right(), separador.geometry().left())
+        self.assertLess(separador.geometry().right(), w.tb_edit.geometry().left())
+        self.assertIs(w.tb_edit.actions()[0], w.a_deshacer)
         boton = w.tb_sim.widgetForAction(w.a_ejecutar)
         ancho = boton.width()
         for on in (False, True):

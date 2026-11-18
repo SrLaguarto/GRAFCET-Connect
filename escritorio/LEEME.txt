@@ -1,15 +1,29 @@
-GRAFCET Connect (versión portable 1.1.5)
+GRAFCET Connect (versión portable 1.1.6)
 ====================================================
 
 Abrir: doble clic en «GRAFCET Connect.exe». No necesita instalación ni conexión a la red. La carpeta entera es el
 programa: puede copiarse a otro sitio o a un USB, pero «GRAFCET Connect.exe» no funciona separado de ella.
 
-Instalador (alternativa): «GRAFCET-Connect-1.1.5-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
+Instalador (alternativa): «GRAFCET-Connect-1.1.6-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
 acceso en el menú Inicio (y en el escritorio, si lo marca), asocia los .grafnet si lo deja marcado y se desinstala desde
 Configuración > Aplicaciones. Contiene la misma carpeta que la versión portable (P-IMP-103).
 
+Novedades 1.1.6
+- Ejemplos: ya no hay menú. Se instalan 23 archivos .grafnet editables en Documentos\GRAFCET Connect\GRAFCET\Ejemplos; se abren con Proyecto > Abrir… como «Archivo sin firma».
+- Propiedades es solo una ventana flotante (se retiran «Abajo» y «Panel inferior» de Ver). Intro o clic fuera confirman y cierran; Esc descarta los cambios. Con una lista desplegable abierta, el primer clic fuera, Intro o Esc actúa solo sobre la lista.
+- Se retira el panel de elementos (Ver › Panel de elementos y Ctrl+L). Las quince fichas se arrastran desde la barra de favoritos, que es fija.
+- Ver ya no ofrece «Barra de favoritos» ni «Panel derecho». Variables se pliega con su flecha o con Ctrl+B.
+- Traer E/S: al aceptar en directo se conecta, y el botón se llama «Corregir nombres incompatibles». El aviso de nombres incompatibles ocupa una línea, con «Corregirlos».
+- «Mostrar dependencias» viene activado por defecto (si falta la preferencia); «Mostrar errores» también está en Ver.
+- Gestos: Ctrl+clic alterna elementos y acciones; se copian y pegan acciones agrupadas y fórmulas; desde un tirador, las etapas y transiciones nuevas siguen un paso de 60 unidades.
+- Zoom: el recuadro vuelve a su ancho natural, alineado a la derecha. Las categorías del programador de valor van en el orden Variables, Operadores y Número.
+
+Novedades 1.1.5
+- Propiedades (flotante): ancho tope de media pantalla, cursor normal en la ventana y lupa que solo dibuja el elemento.
+- Se retira «Ajustes de simulación»: el cambio de una entrada vale de uno en uno.
+
 Qué hace
-- Simula los ejemplos (menú Ejemplos) y los proyectos guardados (Proyecto > Abrir…): un archivo .grafnet.
+- Simula los ejemplos y los proyectos guardados (Proyecto > Abrir…): un archivo .grafnet. Los ejemplos son archivos en Documentos\GRAFCET Connect\GRAFCET\Ejemplos.
 - Dibuja el grafcet con la notación de la norma y muestra la evolución: etapas activas e inestables,
   transiciones validadas y franqueables, acciones, salidas, variables, temporizadores y traza.
 - Entradas con un clic (las numéricas se escriben); bajo «Entradas» hay un rótulo con los gestos: «Clic: pulsar · Ctrl+clic: enclavar · Clic derecho: tipo». Al abrir un ejemplo o un modelo, el programa queda en Pausa, sin estado, que
@@ -18,24 +32,23 @@ Qué hace
   vuelve a editar y deja todo a 0 hasta el siguiente Play (sin etapas activas ni temporizadores); cada Play empieza desde la situación inicial. Barra de herramientas: Ejecutar/Pausa
   y Reiniciar (Ctrl+R).
 - Simulación: el cambio de una entrada vale de uno en uno (decisión fija; la opción «Ajustes de simulación» se retiró en la 1.1.5).
-- Paneles derecho e inferior plegables (flechas en el borde del dibujo; menú Ver, Ctrl+B y Ctrl+J). Al simular, el
-  panel inferior muestra la traza. Desmarcado en Ver (o con su atajo), un panel desaparece del todo, sin pestaña ni hueco, y
-  el dibujo gana su ancho; plegado con su flecha o con el divisor, deja su pestaña y sigue marcado en Ver. Las dos cosas se
-  recuerdan.
+- Variables (panel derecho) se pliega con su flecha en el borde del dibujo o con Ctrl+B, y deja su pestaña. Al simular,
+  la traza va abajo y se pliega con su flecha o con Ctrl+J. Ver no ofrece «Panel derecho» ni «Panel inferior». Los dos
+  plegados se recuerdan.
 - Ayuda > Ayuda de esta pantalla (F1): despliega bajo la cabecera del dibujo la ayuda completa del modo y la herramienta;
   la entrada sale marcada mientras se ve, y Esc la cierra.
-- Paneles laterales: crecen con la letra grande. El derecho (Variables y Diagnósticos) mide 270 px desde 1280 px de ancho de ventana y 218 por debajo; a 1600 mide 270 px y a 1920, 300. La letra grande se activa sola desde 1600×900, con 40 px de histéresis para no cambiar al borde del umbral; el izquierdo llega a 264 px a 1600 y a 300 a 1920.
+- Panel derecho (Variables y Diagnósticos): crece con la letra grande. Mide 270 px desde 1280 px de ancho de ventana y 218 por debajo; a 1600 mide 270 px y a 1920, 300. La letra grande se activa sola desde 1600×900, con 40 px de histéresis para no cambiar al borde del umbral.
 - Zoom del dibujo: «−», «+», «Centrar todo» (Ctrl+0; en simulación, también doble clic; menú Ver → «Centrar todo el dibujo»), Ctrl+rueda (anclada al puntero), Ctrl+= y Ctrl+−; la rueda sola desplaza en vertical y Mayús+rueda en horizontal y el gesto de dos dedos de un panel táctil, en los dos ejes; el pellizco del panel táctil hace zoom; el zoom elegido se mantiene. «Centrar todo» encaja y centra lo dibujado, con 24 px de margen y una escala máxima de 1,6; reserva arriba el alto del recuadro de zoom, además del margen. «Centrar selección», junto a él, encuadra lo seleccionado (solo al editar; desactivado sin selección y al simular). Si la cabecera del dibujo no cabe, primero «Centrar todo» y «Centrar selección» se quedan en icono y después se oculta el porcentaje de zoom (la ayuda de «−» y «+» lo dice); si aun así no cabe, la barra de favoritos saca «»». El botón central del ratón (la rueda) arrastra el dibujo, al editar y al simular. Al cambiar el tamaño de la ventana principal, el dibujo no se mueve en la pantalla (con zoom manual, que es lo normal al editar): aunque un panel lateral o la barra cambien de tamaño, cada punto del dibujo queda en el mismo sitio respecto a la ventana; lo nuevo aparece por la derecha y por abajo, y lo que tape un panel que se ensancha queda debajo de él. Al simular sin zoom manual, el dibujo se sigue encajando con la ventana. Al cruzar el tamaño de pantalla completa, la letra y los controles cambian de escala una sola vez, cuando la ventana deja de cambiar de tamaño (unos 120 ms), no en cada paso de la animación. El programa se abre ya maximizado, sin mostrar antes una ventana pequeña. Arrastrar el dibujo con la mano lo deja con zoom manual, pero solo si el arrastre supera la distancia de arrastre del sistema: un clic con un pequeño temblor no cambia nada.
 - Proyecto > Guardar (Ctrl+S) o Guardar como… (Ctrl+Mayús+S): guarda el proyecto con su dibujo en un archivo .grafnet, para abrirlo después.
 - Proyecto > Propiedades del archivo…: autor (se puede cambiar; por defecto, el usuario de Windows), fechas de creación y de última edición, versiones de GRAFCET Connect con que se creó y se guardó por última vez, versión del formato y sello del archivo. Muestra también los datos de este programa (versión, distribución o desarrollo, y fecha de instalación). Los archivos anteriores a la 1.0 muestran «desconocida (archivo anterior a la 1.0)» en fechas y versiones.
 - Firma: el programa abre todos los archivos .grafnet, también los guardados con la versión de desarrollo o sin firma. La barra de estado indica «Archivo sin firma» (o «Archivo de la versión de desarrollo») si no tienen la firma de esta versión; al guardarlos siguen sin firma. El autor del programa puede volver a sellarlos.
-- Editor de un grafcet secuencial (Proyecto > Nuevo proyecto, o editar en Pausa cualquier modelo abierto): paleta a la
-  izquierda, con la etapa, la transición, la simultaneidad y la acción (las fichas se arrastran al dibujo; sin herramienta, el ratón
+- Editor de un grafcet secuencial (Proyecto > Nuevo proyecto, o editar en Pausa cualquier modelo abierto): barra de
+  favoritos encima del dibujo, con la etapa, la transición, la simultaneidad y la acción (las fichas se arrastran al dibujo; sin herramienta, el ratón
   selecciona, mueve y enlaza). Puntos de unión arriba y abajo (al acercar el puntero se marcan y de ellos sale el
-  enlace). Panel de Opciones abajo, con la configuración de lo seleccionado (ver más abajo). Al seleccionar una transición, si el panel es más bajo de lo necesario, se agranda hasta ver todos los operadores de la receptividad (≈334 px con la paleta actual), sin pasar del 55 % del alto de la ventana (lo que no cabe se desplaza dentro); por debajo de 560 px de alto, los operadores van en una sola fila con desplazamiento horizontal. Si usted lo ha agrandado, se respeta su altura. Mover con rejilla,
+  enlace). Propiedades, en una ventana flotante, con la configuración de lo seleccionado (ver más abajo). Mover con rejilla,
   borrar, deshacer y rehacer (Ctrl+Z, Ctrl+Y), «Añadir debajo» (menú Edición, Ctrl+Intro) y panel de diagnósticos.
   Los enlaces se seleccionan con un clic (se pueden quitar o volver a enlazar; el sentido sale del trazo, y de
-  abajo arriba lleva flecha). La simultaneidad (doble trazo) es una barra de la paleta que se suelta en el dibujo,
+  abajo arriba lleva flecha). La simultaneidad (doble trazo) es una ficha de la barra de favoritos que se suelta en el dibujo,
   se enlaza con etapas y transiciones y se ensancha estirando de sus extremos. Las alternativas se construyen con
   el ratón, arrastrando de un punto de unión: a un hueco crea lo que sigue (desde una etapa, una transición;
   desde una transición, una etapa: así se abre una rama), a otra etapa las une con una transición
@@ -51,7 +64,7 @@ Qué hace
 - Lista de variables de la acción (Propiedades): Salidas y Memorias, cada una con su tipo en corto («Bool», «Ent», «Dec»); la caja
   y la lista miden lo que pide el nombre más largo (con un tope). Sin variable elegida, la acción memorizada o por evento
   muestra «? :=» con 1 y 0 desactivados; el programador de valor solo sale si la variable es numérica.
-- Errores y avisos del grafcet: botón «Mostrar errores» de la barra de edición. Marcado, el aviso se ve sobre el dibujo (triángulo y resumen, «2 errores», «1 error · 2 avisos»; un clic o Espacio despliega la lista); desmarcado, no se ve al editar. Al marcarlo, la lista sale desplegada (el resumen la pliega). Un Play que no puede simular lo marca y despliega la lista, y se desmarca solo al corregirlo todo.
+- Errores y avisos del grafcet: botón «Mostrar errores» de la barra de edición (también en Ver). Marcado, el aviso se ve sobre el dibujo (triángulo y resumen, «2 errores», «1 error · 2 avisos»; un clic o Espacio despliega la lista); desmarcado, no se ve al editar. Al marcarlo, la lista sale desplegada (el resumen la pliega). Un Play que no puede simular lo marca y despliega la lista, y se desmarca solo al corregirlo todo.
 - Propiedades: el título dice el tipo de lo elegido («Propiedades · Etapa», «· Transición», «· Acción»…), sin su nombre. La etiqueta de una etapa admite como mucho 4 caracteres al escribirla; un archivo con nombres más largos se abre igual.
 - Barra de edición, tras Play y Reiniciar: Deshacer, Rehacer, Cortar, Copiar, Pegar y Borrar (solo icono; la ayuda emergente dice el atajo), «Mostrar dependencias» y «Mostrar errores». Fuera de la edición, desactivados. «Añadir debajo» ya no está en la barra: sigue en el menú Edición y con Ctrl+Intro. Al simular, la barra no cambia de color: el modo lo dicen la franja verde bajo la barra y la etiqueta de la fila de pestañas.
 - Una sola ventana: si el programa ya está abierto, abrirlo otra vez (o hacer doble clic en un .grafnet) lleva el archivo a esa
@@ -65,7 +78,7 @@ Qué hace
   hoja, que se guarda con el proyecto. «Zona del GRAFCET»: Automática (la hoja dentro del margen, sin el cajetín) o
   Personalizada (se dibuja arrastrando un rectángulo); es donde se coloca el GRAFCET al traerlo.
 - Modo: la fila de las pestañas (GRAFCET, PLANOS) muestra, centrada, una etiqueta de estado con un punto de color, «EDICIÓN» o «SIMULACIÓN · …» (no es un botón). El nombre del grafcet está en la barra de título de la ventana.
-- Barra de favoritos, encima del dibujo (al editar): es la paleta principal. Lleva los quince elementos con dibujo propio (Etapa inicial, Etapa, Transición, Simultaneidad, las cinco acciones, Forzado, Macroetapa, Encapsulante, Grafcet parcial, Texto e Imagen). Todos los iconos tienen el mismo ancho de dibujo, con aire entre ellos. Se arrastran al dibujo (un clic solo enseña su ayuda, con el nombre y la descripción enteros). La barra es fija: siempre los quince, en ese orden, sin menú para elegirlos ni reordenarlos. Si no caben, sale «»» con los que faltan (también se arrastran desde ahí). Al simular, la barra se oculta. En Ver, «Barra de favoritos» y «Panel de elementos» (Ctrl+L) se muestran u ocultan por separado; por defecto, la barra sí y el panel no.
+- Barra de favoritos, encima del dibujo (al editar): es la única paleta. Lleva los quince elementos con dibujo propio (Etapa inicial, Etapa, Transición, Simultaneidad, las cinco acciones, Forzado, Macroetapa, Encapsulante, Grafcet parcial, Texto e Imagen). Todos los iconos tienen el mismo ancho de dibujo, con aire entre ellos. Se arrastran al dibujo (un clic solo enseña su ayuda, con el nombre y la descripción enteros). La barra es fija: siempre los quince, en ese orden, sin menú para elegirlos ni reordenarlos. Si no caben, sale «»» con los que faltan (también se arrastran desde ahí). Al simular, la barra se oculta. Ver no tiene entrada para ocultarla ni mostrarla.
 - Vista de E/S externas: desconectado, la IP, el puerto y el esclavo se cambian en la cabecera del marco, sin abrir Configuración (son los mismos valores).
 - Conexión directa (simulador de fábricas): el título del marco central de E/S es un desplegable, «Modbus TCP» o «Conexión
   directa (simulador de fábricas)», y se guarda con el proyecto. En directo no hay PLC ni canales: arriba, «Servidor» y
@@ -100,7 +113,7 @@ Selección, salto y repetición (corrección del paso 3, P-IMP-33)
 - Unir una entrada: desde el punto superior de una transición hasta un enlace que salga de una etapa se toma esa etapa como anterior; no se añade una segunda etapa a la transición del enlace.
 - Arriba recibe y abajo emite, independientemente de dónde esté el otro elemento. Un clic en un enlace lo selecciona; arrastrarlo mueve el tramo que se agarra (sin abrir ninguna rama: las ramas se abren desde un punto de unión). Cada conexión o creación se deshace con Ctrl+Z.
 - Una etapa o transición se une a una barra por el lado en que está dibujada (encima, por arriba; debajo, por abajo), aunque se suelte en el punto de unión del otro lado. Si una barra de simultaneidad no es válida, el aviso dice qué lleva unido por arriba y por abajo; para quitar lo que sobra, seleccione su conector y pulse Supr. Al abrir un archivo se quitan de las barras las uniones a elementos que ya no existen.
-- Una transición con varias etapas anteriores o siguientes sigue siendo una simultaneidad, y usa la barra de la paleta.
+- Una transición con varias etapas anteriores o siguientes sigue siendo una simultaneidad, y usa la ficha de simultaneidad de la barra de favoritos.
 - Unión automática al soltar: si al soltar un elemento (recién creado o movido) uno de sus puntos de unión libres queda a 8 píxeles
   o menos (medidos en pantalla, así que con zoom se escalan) de un punto libre compatible de otro elemento, se unen solos, como
   si se hubiera trazado el enlace: la salida de una transición con la entrada de una etapa, la salida de una etapa con la
@@ -108,7 +121,7 @@ Selección, salto y repetición (corrección del paso 3, P-IMP-33)
   de las acciones de una etapa. Con cualquier otro par, o con un punto ya ocupado, no se une nada. No atrae desde lejos y
   entra en el mismo paso de Deshacer que el soltar. Las flechas del teclado no unen solas.
 
-El menú Ejemplos incluye «Selección de secuencia», «Salto de etapas» y «Repetición de secuencia» para probar cada caso por separado. El retorno se actualiza al mover los elementos; se guarda la topología y la posición, no una flecha decorativa independiente.
+Los ejemplos «Selección de secuencia», «Salto de etapas» y «Repetición de secuencia» prueban cada caso por separado (carpeta Ejemplos). El retorno se actualiza al mover los elementos; se guarda la topología y la posición, no una flecha decorativa independiente.
 
 Qué no es
 - Edita macroetapas, encapsulantes con recintos y órdenes de forzado (ver «Jerarquías») y grafcets parciales sueltos. Variables, acciones, receptividades, selección, salto y repetición sí se editan.
@@ -137,25 +150,23 @@ Cada arrastre se deshace con Ctrl+Z y se rehace con Ctrl+Y. Los extremos del enl
 Un enlace siempre sale de una etapa y llega a ella con un tramo vertical (16), y a cada lado de una transición con otro algo mayor (24); si no caben, se acortan, y solo si los elementos están casi a la misma altura el enlace da un rodeo y sube con flecha. Una transición se agarra por su trazo para moverla; la rama solo sale de los puntos de unión, al final de sus tramos rectos. Al mover una etapa o una transición cerca de la vertical de un elemento enlazado (dos pasos de rejilla), se alinea con él y el enlace queda recto.
 
 
-Editar: paleta, panel de Opciones y no solapar (P-IMP-45)
+Editar: barra de favoritos, Propiedades y no solapar (P-IMP-45)
 
 En modo Editar, la pantalla tiene tres zonas:
 
-- Paleta (panel izquierdo, oculto por defecto: la barra de favoritos hace de paleta; se muestra con «Ver > Panel de
-  elementos»): solo tiene la paleta, en una sola lista: la etapa, la transición, la simultaneidad (barra
-  de doble trazo) y la acción (la ficha «Acción» es la continua; los otros tipos se eligen con el botón derecho, en
-  «Tipo de acción»). Las fichas se colocan arrastrándolas al dibujo; un clic en una ficha solo muestra su ayuda. El
-  panel izquierdo se pliega con su flecha en el borde del dibujo o con «Ver > Panel de elementos» (Ctrl+L).
+- Barra de favoritos (encima del dibujo): las quince fichas, en un orden fijo: la etapa, la transición, la simultaneidad
+  (barra de doble trazo) y la acción (la ficha «Acción» es la continua; los otros tipos se eligen con el botón derecho, en
+  «Tipo de acción»). Las fichas se colocan arrastrándolas al dibujo; un clic en una ficha solo muestra su ayuda. No se
+  oculta desde Ver.
 - Dibujo (centro): donde se ve y se toca el grafcet. Con el ratón se selecciona, se mueve y se enlaza; la rueda
   desplaza en vertical, Mayús+rueda en horizontal y Ctrl+rueda hace zoom.
-- Opciones (panel inferior): ocupa todo el ancho de la ventana, debajo de los paneles laterales. Muestra la
-  configuración de lo que está seleccionado. Sin selección, dice «Haga clic en
-  un elemento del dibujo para ver y cambiar sus opciones». Se despliega y se pliega con su flecha (plegado, no se abre al seleccionar: ver más arriba); el divisor con el
-  dibujo se arrastra, y el programa recuerda la altura que le dio en Pausa y en Play por separado.
+- Propiedades (ventana flotante, centrada sobre la aplicación): muestra la configuración de lo que está seleccionado.
+  Sin selección, dice «Haga clic en un elemento del dibujo para ver y cambiar sus opciones». Se abre como se describe
+  más abajo.
 
 Dónde se cambia cada cosa
 
-El panel de Opciones es uno solo, sin pestañas, y cambia según lo seleccionado:
+Propiedades es una sola ventana, sin pestañas, y cambia según lo seleccionado:
 
 - Transición: a la izquierda, la etiqueta, «Mostrar etiqueta» y el comentario. A la derecha, la receptividad, con
   el programador de bloques (ver «Bloques» más abajo).
@@ -165,18 +176,18 @@ El panel de Opciones es uno solo, sin pestañas, y cambia según lo seleccionado
 - Acción: una frase que dice en lenguaje claro lo que hace (por ejemplo «Al activarse la etapa 2: CT := CT + 1.»),
   y debajo la variable, el valor (si es memorizada) y la condición o el evento con el programador de
   bloques (si es condicionada o por evento).
-- Enlace, barra de simultaneidad, varios elementos o nada: lo que ya mostraba antes el panel para cada caso.
+- Enlace, barra de simultaneidad, varios elementos o nada: lo que ya mostraba Propiedades para cada caso.
 
 Cada cambio se aplica al momento y se deshace con Ctrl+Z, una vez por cambio. No hay botón de Aceptar ni ventana
 aparte para las acciones: el antiguo diálogo «Editar…» ya no existe. Doble clic en una acción, o «Editar…» en su
-menú, despliega el panel con esa acción; seleccionar un elemento no lo despliega.
+menú, abre Propiedades con esa acción; seleccionar un elemento no la abre.
 
 Si una variable que se usa no existe, aparece en naranja y parpadea en el panel. Un valor a medias no se guarda
 hasta que está completo: la acción queda como borrador (con «?») hasta entonces.
 
 Traza y Leyenda
 
-- Traza: en Play (simulación), el panel inferior, que ocupa todo el ancho de la ventana, muestra la traza de la evolución. En Pausa (edición) ese panel muestra las opciones de lo seleccionado.
+- Traza: en Play (simulación), la traza de la evolución va abajo, a todo el ancho de la ventana; conserva Ctrl+J y su flecha. En Pausa (edición) las opciones de lo seleccionado van en Propiedades.
 - Leyenda: está en el menú Ayuda > Leyenda del dibujo, en una ventana aparte que se puede dejar abierta mientras
   se trabaja.
 
@@ -185,7 +196,7 @@ No se puede poner un elemento encima de otro
 Ningún elemento (etapa, transición, barra de simultaneidad, acción o grupo de acciones) se puede soltar ni mover a mano
 encima de otro. Se mide con un margen de 8 unidades del dibujo alrededor de cada caja (no depende del zoom). Los comentarios no cuentan.
 
-- Desde la paleta: si la caja cae sobre otro elemento, no se crea nada.
+- Desde la barra de favoritos: si la caja cae sobre otro elemento, no se crea nada.
 - Al mover: uno o varios elementos vuelven a su sitio.
 - Al añadir, pegar o unir acciones de una etapa, al editar una acción ya colocada o al cambiar la colocación
   de las acciones: el programa comprueba que las acciones de la etapa (o del grupo) no queden encima de etapas,
@@ -319,12 +330,10 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
   Mientras se arrastra, y al soltar, ningún otro enlace se mueve (P-IMP-118): los retornos automáticos se colocan como si
   nada se hubiera colocado a mano y el tramo colocado se superpone, en la rejilla de 20 px; si queda a 10 o menos de un tramo
   paralelo de otro enlace, se pega exactamente a él (también durante el arrastre), para poder poner un conector justo encima de otro.
-- El panel de opciones no se abre solo (P-IMP-118 y P-IMP-128): el programa arranca con él escondido y seleccionar un
-  elemento, añadir una acción o soltar una transición nueva no lo despliegan. Lo abre el doble clic en el elemento, Intro
-  con él seleccionado, «Editar…» en el menú de una acción, su pestaña o Ctrl+J. Sin fijar, se esconde solo al hacer clic en
-  el dibujo fuera del elemento (en el fondo o en otro elemento); un clic en Variables, la paleta o los menús no lo esconde.
-  Con «Fijar» (en su cabecera), se queda abierto, la selección lo actualiza y vuelve abierto al arrancar; la flecha y
-  Ctrl+J lo siguen plegando.
+- Propiedades no se abre sola (P-IMP-118 y P-IMP-128): seleccionar un elemento, añadir una acción o soltar una transición
+  nueva no la abren. La abren el doble clic en el elemento, Intro con él seleccionado o «Editar…» en el menú de una
+  acción. Intro o un clic fuera la confirman y la cierran; Esc descarta los cambios hechos desde que se abrió. Si hay
+  un desplegable abierto, el primer clic fuera, Intro o Esc actúa solo sobre él.
 - Número de etapa repetido (P-IMP-118): se puede poner a una etapa un número que ya tiene otra (para reordenar números
   no hace falta pasar por uno libre). Las dos salen marcadas en rojo, el panel de diagnósticos dice «Hay dos etapas con el
   número 3: cambie una.» y Play no arranca con ese mismo aviso. Se guarda y se abre igual. Mientras haya dos con el mismo
@@ -337,8 +346,8 @@ Una acción es algo que la etapa hace mientras está activa, o cuando se activa 
   discontinuo) con el aviso «La etapa 4 llega a la transición t1, que ya tiene otra etapa anterior: use una barra de
   simultaneidad.», que se quita o se deshace como cualquier borrador y que impide Play. Dos transiciones ya enlazadas con
   etapas se pueden unir: queda un borrador por la alternancia, como dos etapas seguidas.
-- Menos capas de cabecera (P-IMP-118): el panel inferior tiene una sola fila de cabecera (título, lo que programan los
-  bloques y «Fijar»); sobre el dibujo, las pestañas, la barra de Play y la cabecera del dibujo son más bajas. A
+- Menos capas de cabecera (P-IMP-118): el panel inferior de entonces (hoy, Propiedades flotante) tenía una sola fila de
+  cabecera (título y lo que programan los bloques; «Fijar» se retiró); sobre el dibujo, las pestañas, la barra de Play y la cabecera del dibujo son más bajas. A
   1366×768 el dibujo empieza 21 px más arriba y los controles del panel inferior, 11 px (36 en una transición).
 - Acciones limitadas de ficheros antiguos: una continua con límite de tiempo de un fichero anterior se sigue dibujando
   y simulando igual, con su límite como una condición más (NOT 3s/X1). En el menú y en el panel aparece como
@@ -350,7 +359,7 @@ Bloques (programador de receptividades, condiciones y eventos)
 El programador es de bloques, al estilo de Scratch: se arma una receptividad, una condición o un evento arrastrando
 piezas, en lugar de escribirlo.
 
-- Dónde está: en el panel de Opciones, a la derecha de los datos de la transición o de la acción. Al seleccionar una
+- Dónde está: en Propiedades, a la derecha de los datos de la transición o de la acción. Al seleccionar una
   transición, o hacer doble clic en ella, el panel muestra su receptividad. Al seleccionar una acción condicionada o
   por evento, muestra su condición o su evento, con un título como «Condición de la acción Q01 (etapa 0)».
 - Cómo se ve: arriba, cinco pestañas con un círculo de color: Variables, Operadores, Temporizadores, Comparaciones y
@@ -363,18 +372,18 @@ piezas, en lugar de escribirlo.
   derecha, el área de trabajo, con la fórmula dibujada en una línea si cabe.
 - Debajo del área: la fórmula en texto, «Escrito» (el texto que ha quedado guardado), «Se dibuja» (cómo se verá en el
   dibujo de la norma) y «Crear las que faltan» (declara como entradas booleanas las variables que se usan y no
-  existen). En la última fila, el aviso («⤢ Ampliar» se retiró en P-IMP-144: para más sitio, Ver ▸ Panel de opciones ▸ Flotante).
-- Ver ▸ «Panel de opciones» ▸ «Flotante» (por defecto) o «Abajo»: dos opciones excluyentes, y se recuerda la elegida. En flotante, las propiedades se editan en una sola ventana centrada
+  existen). En la última fila, el aviso («⤢ Ampliar» se retiró en P-IMP-144; Propiedades ya es siempre flotante).
+- Propiedades es una ventana flotante: las propiedades se editan en una sola ventana centrada
   sobre la aplicación (puede tapar los paneles laterales), con título y ✕: a la izquierda, el elemento ampliado como bajo una
   lupa (hasta el 125 %, se actualiza al editar); a la derecha, sus paneles. Mientras está abierta, lo de detrás no responde.
   En una acción condicionada o por evento hay dos paneles: «Condición» (o «Evento») arriba y «Acción» debajo; cada parte del
   elemento ampliado y su panel comparten un color (la marca de la condición, turquesa, como la franja de «Condición»; la caja de
   la acción, gris, como la franja de «Acción»). Una transición o una etapa abren una ventana a la medida de su contenido. La ventana no se mueve al hacer zoom, desplazar o mover el elemento;
-  si el contenido no cabe, se desplaza por dentro. Esc la cierra (si hay un desplegable abierto, el primer Esc cierra el
-  desplegable). En la ventana no hay fila «Fórmula», ni aviso de «correcta», ni frase de la acción (la lupa ya los enseña): si la
+  si el contenido no cabe, se desplaza por dentro. Intro o un clic fuera la confirman y la cierran; Esc descarta los
+  cambios de esa apertura (si hay un desplegable abierto, el primer Esc cierra solo el desplegable). En la ventana no hay fila «Fórmula», ni aviso de «correcta», ni frase de la acción (la lupa ya los enseña): si la
   fórmula tiene un error, sale una línea roja bajo los bloques. No hay papelera: un bloque se quita con Supr o Retroceso, o arrastrándolo fuera.
   El área de bloques aprovecha el alto de la ventana.
-  Con la barra abajo, la parte de la acción que se edita se resalta en el dibujo. Una acción continua no abre Propiedades:
+  Una acción continua no abre Propiedades:
   su variable se elige con doble clic (o Intro) sobre ella.
 - Bloques ya puestos: cada bloque del área tiene su ▾ para cambiar de elemento (otra etapa, otra variable).
 - Fórmula en texto: no se edita (no hay casilla «Escribir a mano»); la fórmula se arma solo con bloques y el cuadro la
@@ -415,15 +424,13 @@ piezas, en lugar de escribirlo.
 
 Anchos de los paneles laterales
 
-Al editar, el panel izquierdo (la paleta) y el derecho (Variables y Diagnósticos) tienen un ancho fijo de 212 píxeles,
-o más si su contenido lo necesita. Quedan arriba, a la altura del dibujo, encima del panel inferior. Se pliegan y se
-despliegan del todo, como antes. Al simular, el derecho conserva su
-ancho de siempre.
+Al editar, el panel derecho (Variables y Diagnósticos) tiene un ancho fijo de 212 píxeles, o más si su contenido lo
+necesita. Se pliega y se despliega del todo, como antes. Al simular, conserva su ancho de siempre.
 
 
 Comentarios de etapas y transiciones (P-IMP-44)
 
-En modo Editar, el panel de Opciones de una etapa y el de una transición tienen el campo «Comentario», de una línea.
+En modo Editar, Propiedades de una etapa y de una transición tiene el campo «Comentario», de una línea.
 Vacío significa sin comentario. Cada cambio se deshace con Ctrl+Z.
 - Se dibuja entre comillas tipográficas, en cursiva y gris: el de una transición, a la derecha de su receptividad (o de
   su etiqueta, si no tiene receptividad); el de una etapa, a la derecha de la etapa, o de su última acción si la tiene.
@@ -433,13 +440,13 @@ Vacío significa sin comentario. Cada cambio se deshace con Ctrl+Z.
 - Se guarda en presentation.notes, con kind: "comment". Borrar el elemento borra su comentario, y Ctrl+Z lo devuelve.
 - Las acciones no llevan comentario.
 - Limitaciones: un comentario largo con elementos muy juntos puede pisar a un vecino (no se mueve nada solo); si el
-  texto ya lleva comillas, salen dobles. Copiar y pegar elementos aún no existe. Más adelante se añadirá un elemento de
+  texto ya lleva comillas, salen dobles. Más adelante se añadirá un elemento de
   texto de comentario que se pueda arrastrar.
 
 
 Jerarquías: macroetapas, encapsulantes, grafcets parciales sueltos y forzado (paso 6, P-IMP-61 y P-IMP-62; segunda ronda, P-IMP-66)
 
-En modo Editar, la paleta tiene las fichas Macroetapa, Encapsulante, Grafcet parcial y Forzado, que se arrastran al dibujo como las demás. Cada
+En modo Editar, la barra de favoritos tiene las fichas Macroetapa, Encapsulante, Grafcet parcial y Forzado, que se arrastran al dibujo como las demás. Cada
 operación se deshace con Ctrl+Z. Lo que se suelta dentro del marco de un recinto o de la zona de una expansión pertenece
 a ese parcial (con un margen de una etapa a la derecha y abajo); moverlo a otro marco solo cambia su posición en el
 dibujo.
@@ -456,7 +463,7 @@ dibujo.
 - Recintos: botón derecho en la encapsulante, «Añadir recinto…», y el nombre (G1, G2…: el primero libre entre parciales y macroetapas). El marco vacío aparece a su
   derecha y se arrastra por su borde. Una encapsulante puede tener varios recintos. Con «Mostrar dependencias» (botón junto al zoom) se dibujan dos trazos discontinuos, desde las esquinas de la encapsulante más cercanas hasta las dos esquinas del lado del recinto que mira hacia ella (P-IMP-68).
 - Grafcet parcial suelto: se arrastra la ficha «Grafcet parcial» (marco redondeado con «G») a un hueco del dibujo, o se usa «Nuevo grafcet parcial aquí» del botón derecho en el hueco. Crea un parcial vacío, con nombre automático (G1, G2…) y su marco en ese punto, en una sola operación de deshacer. Las etapas que se suelten dentro pasan a él. Se renombra con «Renombrar…» (botón derecho o doble clic en su borde); es destino de la ficha «Forzado»; Supr lo borra con aviso si hay órdenes que lo apuntan. Se guarda y se abre como cualquier otro parcial. Sin posición guardada no se dibuja, y su marco vacío solo se ve al editar, no al simular.
-- Mostrar dependencias: botón junto a los controles de zoom, apagado por defecto y recordado entre sesiones. Con él se dibujan los trazos discontinuos que unen una macroetapa con su expansión y una encapsulante con su recinto; sin él no aparecen. No cambia la disposición, los marcos ni la selección.
+- Mostrar dependencias: botón junto a los controles de zoom, también en Ver; viene activado por defecto (si falta la preferencia) y se recuerda entre sesiones. Con él se dibujan los trazos discontinuos que unen una macroetapa con su expansión y una encapsulante con su recinto; sin él no aparecen. No cambia la disposición, los marcos ni la selección.
 - Marcos de los parciales (P-IMP-68): el marco de un parcial rodea todo lo que se dibuja de él: etapas, transiciones con sus textos, acciones y órdenes, barras y recorridos de enlaces, también los de retorno. Deja 26 px a los lados y 22 arriba y abajo. No cuentan el estado del temporizador, las etiquetas de simulación ni los comentarios.
 - Enlace de activación: botón derecho en una etapa de un recinto, «Enlace de activación» (o su casilla en las propiedades de la etapa). La etapa marcada
   lleva un «*» y se activa cuando se activa la encapsulante (P-IMP-23).
@@ -468,7 +475,7 @@ dibujo.
   · Vacía: el destino no tiene etapas activas mientras la orden está vigente.
   · Inicial: el destino mantiene su situación inicial.
   «Editar orden de forzado…» y «Quitar orden de forzado» están en el menú de la caja.
-- Forzado desde la paleta (P-IMP-68): la ficha «Forzado» (rectángulo doble «G{ }») se arrastra como una acción. Soltada en un hueco, crea una orden suelta, con «G?{?}», que no se simula; se mueve y se pega como una acción suelta. Soltada sobre una etapa (o sobre una de sus acciones u órdenes, o a menos de 16 del borde derecho de su fila), queda unida a ella y abre sus opciones, no el diálogo. Se une a mano a una etapa como una acción: desde su punto de unión izquierdo, desde el lado derecho de la etapa, o con el imán. Se configura con doble clic, con el menú o con el panel. Solo pasa a ser orden del modelo unida a una etapa y completa (parcial destino, forma y, si es explícita, etapas); suelta o sin destino no tiene efecto. Una explícita sin etapas queda sin completar. Separarla o «Eliminar el enlace» la devuelve a suelta, también si ya estaba en el modelo; borrar su destino o sus etapas la deja sin completar. Un ciclo de forzado se rechaza al unir. Con esta ficha, la paleta pide cuatro filas; en una ventana baja se encoge a tres (ver P-IMP-65).
+- Forzado desde la barra de favoritos (P-IMP-68): la ficha «Forzado» (rectángulo doble «G{ }») se arrastra como una acción. Soltada en un hueco, crea una orden suelta, con «G?{?}», que no se simula; se mueve y se pega como una acción suelta. Soltada sobre una etapa (o sobre una de sus acciones u órdenes, o a menos de 16 del borde derecho de su fila), queda unida a ella y abre sus opciones, no el diálogo. Se une a mano a una etapa como una acción: desde su punto de unión izquierdo, desde el lado derecho de la etapa, o con el imán. Se configura con doble clic, con el menú o con el panel. Solo pasa a ser orden del modelo unida a una etapa y completa (parcial destino, forma y, si es explícita, etapas); suelta o sin destino no tiene efecto. Una explícita sin etapas queda sin completar. Separarla o «Eliminar el enlace» la devuelve a suelta, también si ya estaba en el modelo; borrar su destino o sus etapas la deja sin completar. Un ciclo de forzado se rechaza al unir.
 - Navegación: «Encuadrar la expansión» (y el doble clic en la macroetapa) encaja su expansión en la vista y la hace parpadear; no cambia el modelo ni el deshacer. «Encuadrar la macroetapa» (desde la entrada, la salida o la zona de la expansión), «Encuadrar la encapsulante» (desde una etapa del recinto o desde su marco) y «Encuadrar el recinto» o «los recintos» (desde la encapsulante) hacen lo mismo con su elemento: 24 px de margen y zoom máximo 1,6. Ayuda > Leyenda del dibujo explica los símbolos de la jerarquía.
 - Errores: un rechazo sale en rojo como aviso, y el elemento parpadea en naranja; la operación no deja nada a medias.
 
@@ -488,7 +495,7 @@ En modo Editar:
 - Supr sobre una acción: con una acción señalada (de la etapa o suelta), o con una orden de forzado seleccionada, Supr borra solo esa acción u orden, no la etapa. Para borrar la etapa, selecciónela. Un grupo suelto seleccionado se borra entero.
 - Mover varios: si pulsa un elemento que ya está en una selección múltiple, la selección no se deshace. Al arrastrar se mueven todos juntos (etapas, macroetapas, transiciones, barras, grupos de acciones sueltas y marcos vacíos de recinto); las acciones unidas y los marcos con contenido van con sus etapas. Todo se coloca a la rejilla y es una sola operación de deshacer. Las rutas manuales de los enlaces cuyos dos extremos se mueven se desplazan con el grupo. Si lo movido queda encima de algo que no se mueve, vuelve a su sitio con el aviso. Un clic sin arrastrar reduce la selección a ese elemento.
 - Equidistanciar alturas: con el botón derecho, «Equidistanciar alturas de la cadena» (en una etapa, macroetapa, transición, enlace o barra), «Equidistanciar la selección» o, en el hueco, «Equidistanciar todo el lienzo». Una cadena son los elementos enlazados entre sí dentro de un mismo parcial (etapas, macroetapas, transiciones y barras). Solo cambia la presentación: los niveles siguen el camino más largo, sin contar las realimentaciones; la distancia es la estándar (80 unidades del modelo) o mayor si lo exigen las acciones y órdenes que sobresalen, en múltiplos de la rejilla; las barras quedan a mitad de su hueco. Si el resultado creara un solape nuevo en el que intervenga algún elemento de la cadena (con algo de fuera o con otro de la propia cadena), no cambia nada y avisa. Es una sola operación de deshacer.
-- Paleta: pide cuatro filas de fichas; en una ventana baja se encoge a tres, con barra de desplazamiento, y sigue en dos columnas. A 1366×768 se ven las ocho fichas sin barra: el panel de Opciones cede hasta 328 px para que la paleta quepa entera, mientras no mueva usted el divisor entre el dibujo y ese panel (si lo mueve, se respeta su altura). En la ventana más baja, «Forzado» se alcanza desplazando la paleta.
+- Paleta: hasta la 1.1.5 era una columna que pedía cuatro filas de fichas. Desde la 1.1.6 las fichas están en la barra de favoritos, de una sola fila con menú de desborde.
 
 
 E/S externas (simulador de procesos por Modbus) y botón conmutador (P-IMP-63)

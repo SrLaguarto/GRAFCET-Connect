@@ -57,13 +57,12 @@ class InicioInterfaz(BaseQt):
         """REQ-EDT-09: el inicio es un proyecto vacío con laterales abiertos y propiedades plegadas; ayuda junto al título."""
         w=self.w;w.resize(1366,768);w.show();QApplication.processEvents()
         self.assertFalse(w.edicion.M['steps']);self.assertFalse(w.edicion.ed.dirty)
-        self.assertTrue(w._plegables['izquierdo'].abierto);self.assertTrue(w._plegables['derecho'].abierto)
+        self.assertTrue(w._plegables['derecho'].abierto)
         self.assertFalse(w._plegables['inferior'].abierto)
         self.assertAlmostEqual(w._plegables['derecho'].width(),w.ancho_derecho,delta=2)
-        self.assertLess(abs(w.ayuda.mapTo(w, w.ayuda.rect().center()).y()
-                            - w.favoritos.mapTo(w, w.favoritos.rect().center()).y()), 4)
-        self.assertGreater(w.ayuda.mapTo(w, w.ayuda.rect().topLeft()).x(),
-                           w.favoritos.mapTo(w, w.favoritos.rect().topRight()).x())
+        self.assertFalse(w.ayuda.isVisible())
+        self.assertFalse(w.ayuda_larga.isVisible())
+        self.assertEqual(w.ayuda.text(), "")
 
     def test_SIEJ03_ejemplo_solo_lectura_incluso_tras_play_stop(self):
         """REQ-EDT-05, REQ-SIM-01: los ejemplos permiten simular e imprimir, sin editar ni guardar copias editables."""

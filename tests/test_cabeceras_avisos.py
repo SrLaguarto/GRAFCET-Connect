@@ -36,33 +36,6 @@ class CabecerasYAvisos(BaseQt):
         e.cambia()
         self.assertEqual(e.nombres[sid], "etapa_larga")
 
-    def test_SRED27_las_categorias_de_una_accion_suben_a_la_cabecera(self):
-        """REQ-EDT-09: el programador visible de una acción usa la fila de la cabecera, entre el título y «Fijar», alineado con su paleta; el
-        título dice «Propiedades · Acción» y lo que se edita va sobre el área de bloques; en estrecho vuelven a su fila propia."""
-        w, e = self.vacio()
-        ids = self.cadena(e)
-        e.nueva_variable("CT", "internal", {"kind": "int"})
-        e.nueva_variable("I02", "input")
-        self.assertIsNone(e.poner_accion(ids[0], {"tipo": "evento", "variable": "CT", "valor": "CT + 1", "evento": "↑I02"}))
-        aid = e.acciones(ids[0])[0]["id"]
-        w.resize(2000, 1250)
-        w.show()
-        w.editar_accion(ids[0], aid)
-        for _ in range(8):
-            QApplication.processEvents()
-        p = w.props
-        self.assertEqual(p.titulo.text(), "Propiedades · Acción")
-        prog = p.prog
-        self.assertTrue(prog.cat_en_cabecera)
-        self.assertTrue(p.cabecera.isAncestorOf(prog._sc_carpetas))
-        self.assertEqual(prog._sc_carpetas.mapTo(p, QPoint(0, 0)).x(), prog._sc_paleta.mapTo(p, QPoint(0, 0)).x())
-        self.assertLess(prog._sc_carpetas.mapTo(p, QPoint(0, 0)).x() + prog._sc_carpetas.width(), p.t_fijar.mapTo(p, QPoint(0, 0)).x())
-        self.assertIn("Evento de la acción", p.l_bloques.text())
-        self.assertGreater(p.l_bloques.mapTo(p, QPoint(0, 0)).y(), p.cabecera.height() - 2)
-        w.resize(960, 1040)
-        for _ in range(6):
-            QApplication.processEvents()
-        self.assertFalse(prog.cat_en_cabecera)
 
     def test_SRED28_la_ficha_de_una_etapa_con_nombre_no_numerico_se_ve_como_en_la_formula(self):
         """REQ-EDT-02: una etapa llamada «0fsd» (o con espacios) se ve «X0fsd» en la paleta, en el área y en el desplegable, no «active(`0fsd`)»;

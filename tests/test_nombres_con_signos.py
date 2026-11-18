@@ -59,15 +59,15 @@ class NombresConSignos(BaseQt):
         lienzo.soltar((), bloques.var(AMAS, "input"))
         lienzo.soltar((), bloques.nuevo("y"))
         lienzo.soltar(("b",), bloques.nuevo("no", a=bloques.var(AMENOS, "input")))
-        e.seleccionar([e1])
-        e.anadir_accion(e1)
+        continua = e.anadir_accion(e1)
+        e.elegir_variable_accion(continua, CIL)
+        almacenada = e.anadir_accion(e1)
+        e.tipo_accion(almacenada, "activacion")
+        w.editar_accion(e1, almacenada)
         d = w.props.accion
-        d.variable.setCurrentText(CIL)
-        e.anadir_accion(e1)
-        d = w.props.accion
-        d.e.tipo_accion(d.aid, "activacion")
         d.variable.setCurrentText(CUENTA)
         d._desde_bloques(f"`{CUENTA}` + 1")
+        w.flot.cerrar()
         return e0, t1, e1, t2
 
     def test_SNSG01_regla_de_nombres_con_signos(self):
@@ -107,9 +107,9 @@ class NombresConSignos(BaseQt):
         motor = bloques.Motor(w.props.prog.fuente)
         motor.reiniciar()
         self.assertEqual([x[2] for x in motor.elementos(w.props.prog.lienzo.arbol["a"])], [AMAS])
-        e.anadir_accion(e1)
-        d = w.props.accion
-        self.assertIn(CIL, [d.variable.itemData(i) for i in range(d.variable.count())])
+        borrador = e.anadir_accion(e1)
+        opciones = [dato for _, dato, habilitada, _ in e.opciones_variable_accion(borrador) if habilitada]
+        self.assertIn(CIL, opciones)
 
     def test_SNSG03_simular_y_evolucionar(self):
         """REQ-SIM-01, REQ-EDT-07: con «A+», «B-» y «A-» la red evoluciona (y «NOT A-» la retiene); las acciones se ejecutan y la traza y los botones
@@ -197,7 +197,7 @@ class NombresConSignos(BaseQt):
         pv.nueva()
         fila = pv.tabla.rowCount() - 1
         pv.tabla.item(fila, 0).setText("+X")
-        self.assertIn("no puede ser", pv.msg.text())
+        self.assertIn("no puede ser", pv.msg.toolTip())
         pv.parpadeo.parar()
         pv.tabla.item(fila, 0).setText(V1)
         self.assertIn(V1, self.nombres())

@@ -768,15 +768,16 @@ class UnionAutomatica(BaseQt):
         salida está a 8 px o menos de su entrada; un solo paso de deshacer."""
         w, e = self.vacio()
         a = e.ed.add_step("g", "1", True, at=(100, 80))
-        c = e.ed.add_step("g", "2", at=(100, 300))
+        c = e.ed.add_step("g", "2", at=(100, 190))
         e.cambia()
         antes, n = self.estado(e), len(e.ed.undo_stack)
         pa = next(x for x in dg.anclas(e.M, a) if x["lado"] == "abajo")["pos"]
-        q = QPointF(100 + SX, 260)  # la salida de la transición nueva queda a 6 px de la entrada de la etapa 2
+        q = QPointF(100 + SX, 260)  # el paso fijo coloca la transición en 140: 4 px del segundo enlace
         e.prensar(pa)
         e.mover(q)
         e.soltar(q)
         tr = next(x for x in e.M["transitions"] if x["id"] == e.sel[0])
+        self.assertEqual(tr["y"], 140)
         self.assertEqual((tr["pre"], tr["post"]), ([a], [c]))
         self.assertEqual(len(e.ed.undo_stack), n + 1)
         e.deshacer()
