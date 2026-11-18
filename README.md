@@ -4,7 +4,7 @@ Editor y simulador de GRAFCET, basado en IEC 60848, con conexión Modbus TCP a s
 
 Pensado para quien aprende, enseña o trabaja con automatización. Permite dibujar un grafcet, simularlo con entradas pulsables, documentarlo en planos con cajetín y, si hace falta, conectarlo a un simulador de procesos por Modbus TCP. Es una herramienta de aprendizaje y consulta: no es una declaración de conformidad con la norma.
 
-**Contenido:** [Características](#características) · [Descargar e instalar](#descargar-e-instalar) · [Primeros pasos](#primeros-pasos) · [Ejemplos incluidos](#ejemplos-incluidos) · [Preguntas frecuentes](#preguntas-frecuentes) · [Comunicar un fallo](#comunicar-un-fallo) · [Licencia](#licencia) · [Para desarrolladores](#para-desarrolladores)
+**Contenido:** [Características](#características) · [Descargar e instalar](#descargar-e-instalar) · [Primeros pasos](#primeros-pasos) · [Ejemplos](#ejemplos) · [Preguntas frecuentes](#preguntas-frecuentes) · [Comunicar un fallo](#comunicar-un-fallo) · [Licencia](#licencia) · [Para desarrolladores](#para-desarrolladores)
 
 ![Captura de GRAFCET Connect con el ejemplo «Marcha y paro»](docs/imagenes/captura_aula_marcha.png)
 
@@ -12,7 +12,7 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 
 ### Edición
 
-- Paleta con etapa, transición, simultaneidad (barra de doble trazo), acción, macroetapa, encapsulante, grafcet parcial y orden de forzado. Cada elemento se arrastra al dibujo.
+- Barra de favoritos fija, encima del dibujo, con etapa, transición, simultaneidad (barra de doble trazo), acción, macroetapa, encapsulante, grafcet parcial, orden de forzado, texto e imagen. Cada elemento se arrastra al dibujo.
 - Enlaces trazados con el ratón desde los puntos de unión, con selección de secuencia, salto de etapas y repetición. Los retornos llevan su flecha y se recolocan a mano.
 - Receptividades, condiciones y eventos con un programador de bloques, o escritos a mano.
 - Acciones continuas, condicionadas, al activar, al desactivar y por evento. Tipos de etapa (etapa, etapa inicial, encapsulante, macroetapa) desde el botón derecho.
@@ -73,7 +73,7 @@ Descargue el instalador de la última versión: [GRAFCET-Connect-setup.exe](http
 
 ## Primeros pasos
 
-1. **Dibujar.** Abra un ejemplo desde **Ejemplos** o cree un proyecto con **Proyecto > Nuevo proyecto**. Arrastre elementos desde la paleta y únalos desde sus puntos de unión. Las variables se crean en la tabla de variables, con «Nueva E», «Nueva S» o «Nueva M». **Edición > Añadir elemento** y Ctrl+Intro (Añadir debajo) agilizan el dibujo.
+1. **Dibujar.** Abra un ejemplo desde su carpeta (véase [Ejemplos](#ejemplos)) o cree un proyecto con **Proyecto > Nuevo proyecto**. Arrastre elementos desde la barra de favoritos y únalos desde sus puntos de unión. Las variables se crean en la tabla de variables, con «Nueva E», «Nueva S» o «Nueva M». **Edición > Añadir debajo** (Ctrl+Intro) agiliza el dibujo.
 2. **Simular.** Pulse **Play** (F5) y pulse las entradas del panel lateral. Para volver a editar, pulse **Stop**. Con **Reiniciar** (Ctrl+R) vuelve a la situación inicial.
 3. **Documentar e importar una plantilla.** Abra la pestaña **PLANOS**, pulse **+ Añadir hoja** y elija la plantilla. Para usar una propia, pulse **▾** junto a **Plantilla** (panel derecho) e **Importar plantilla…**, y elija un DXF, un PDF, un SVG o un JSON de GRAFCET Connect. Para exportar, use **Proyecto > Exportar…**.
 4. **Conectar por Modbus.** Pulse **E/S externas**, abra **Configuración** para poner la IP, el puerto y el esclavo de su simulador de procesos, y asigne las variables a los canales. Después pulse **Conectar** y, luego, **Play**. La guía paso a paso está en [docs/PRIMERA_CONEXION_MODBUS.md](docs/PRIMERA_CONEXION_MODBUS.md).
@@ -94,22 +94,12 @@ Descargue el instalador de la última versión: [GRAFCET-Connect-setup.exe](http
 | Desplazar en horizontal | Mayús+rueda |
 | Panel táctil | Dos dedos desplazan; pellizco acerca y aleja |
 | Girar la transición seleccionada | Ctrl+Mayús+← / → |
-| Mostrar u ocultar paneles izquierdo, derecho e inferior | Ctrl+L, Ctrl+B, Ctrl+J |
+| Plegar o desplegar Variables (panel derecho) y la traza | Ctrl+B, Ctrl+J |
 | Imprimir | Ctrl+P |
 
-## Ejemplos incluidos
+## Ejemplos
 
-El menú **Ejemplos** trae siete ejemplos para el aula, listos para simular:
-
-- **Marcha y paro**: marcha activa el motor; paro lo detiene.
-- **Elección de secuencia**: elige izquierda o derecha; fin vuelve al inicio.
-- **Simultaneidad**: marcha inicia dos ramas y se espera a que terminen ambas.
-- **Macroetapa**: marcha entra en una macroetapa; fin completa su expansión.
-- **Encapsulación**: una encapsulante con su recinto.
-- **Temporización**: el motor funciona 3 s y después se enciende la luz.
-- **Repetición de secuencia**: repetir vuelve al motor; fin termina si no se repite.
-
-El submenú **Más ejemplos y casos de estudio** reúne otros dieciséis, entre ellos selección y salto de etapas, alternativas, contadores, paralelismo, forzado y conflictos de escritura.
+Los ejemplos son 23 archivos `.grafnet` editables, listos para simular. Se instalan al arrancar el programa en la carpeta `Documentos\GRAFCET Connect\GRAFCET\Ejemplos`. Para abrir uno, use **Proyecto > Abrir…** y elíjalo en esa carpeta. Se abren como «Archivo sin firma», porque no los guardó esta versión: son archivos normales, que puede modificar y guardar. Si modifica o borra un ejemplo, el programa no lo vuelve a copiar.
 
 ![Captura de GRAFCET Connect con el ejemplo «Simultaneidad»](docs/imagenes/captura_aula_simultaneidad.png)
 

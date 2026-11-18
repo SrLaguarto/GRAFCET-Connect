@@ -113,7 +113,7 @@ class PaletaVariables(unittest.TestCase):
 
     def test_SPVU06_programador_numerico_no_cambia(self):
         p = self.programador({"CT": ("internal", "int")}, valor=True)
-        self.assertEqual(list(p.categorias), ["numero", "vnum", "aritm"])
+        self.assertEqual(list(p.categorias), ["vnum", "aritm", "numero"])
         self.assertEqual(p.paleta.clave, "numero")
         self.assertIs(type(p.paleta), bloques.PaletaBloques)
         p.elegir_categoria("vnum")

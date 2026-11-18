@@ -873,11 +873,14 @@ class Dependencias(unittest.TestCase):
             d.mostrar(v.model, v.state())
             b = d.b_dependencias
             self.assertEqual((b.text(), b.isCheckable(), b.isChecked(), d.dependencias, rayas(d.scene())),
-                             ("Mostrar dependencias", True, False, False, []))
+                             ("Mostrar dependencias", True, True, True, rayas(d.scene())))
+            self.assertEqual(len(rayas(d.scene())), 2)
             lay = d.barra.layout()
             self.assertEqual([lay.itemAt(i).widget() for i in range(lay.count())],
                              [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion])
-            self.assertFalse(d.ajustes.value(dg.CLAVE_DEPENDENCIAS, False, type=bool))
+            b.click()
+            self.assertFalse(d.ajustes.value(dg.CLAVE_DEPENDENCIAS, True, type=bool))
+            self.assertFalse(rayas(d.scene()))
             b.click()
             self.assertEqual((b.isChecked(), d.dependencias, len(rayas(d.scene()))), (True, True, 2), "al simular")
             self.assertTrue(d.ajustes.value(dg.CLAVE_DEPENDENCIAS, False, type=bool))
@@ -895,8 +898,9 @@ class Dependencias(unittest.TestCase):
             self.assertFalse(d.ajustes.value(dg.CLAVE_DEPENDENCIAS, False, type=bool))
             d3 = dg.VistaDiagrama()  # sin ajustes ni ventana, no recuerda nada pero funciona
             d3.mostrar(v.model, v.state())
-            d3.b_dependencias.click()
             self.assertEqual(len(rayas(d3.scene())), 2)
+            d3.b_dependencias.click()
+            self.assertFalse(rayas(d3.scene()))
             for vista_ in (d, d2, d3):
                 vista_.close()
                 vista_.deleteLater()

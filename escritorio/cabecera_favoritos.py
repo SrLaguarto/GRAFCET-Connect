@@ -130,7 +130,7 @@ class CabeceraFavoritos:
         nav = v.navegacion.sizeHint().width() if v.navegacion.isVisibleTo(v) else 0
         ancho = d.parentWidget().width() - 2 * estilo.E2
         minimo = d.ancho_barra(True) + nav + 4 * estilo.E2
-        if v.preferencias_paletas.visible():
+        if self.editable():
             minimo += v.favoritos.minimumSizeHint().width()
         d.integrar_barra(v._cab if ancho >= minimo else None)
         v._alto_cabecera = max(v._alto_cabecera, estilo.ALTO_CONTROL_COMPACTO, d.barra.sizeHint().height())
@@ -143,11 +143,12 @@ class CabeceraFavoritos:
         v = self.v
         d = v.diagrama
         barra = v.favoritos
-        barra.setVisible(v.preferencias_paletas.visible())
+        visible = self.editable()
+        barra.setVisible(visible)
         ancho = d.parentWidget().width() - 2 * estilo.E2
         nav = v.navegacion.sizeHint().width() + estilo.E2 if v.navegacion.isVisibleTo(v) else 0
         barra.compacta = False
-        favoritos = barra.sizeHint().width() if v.preferencias_paletas.visible() else 0
+        favoritos = barra.sizeHint().width() if visible else 0
         if d.barra_integrada:
             compacto = ancho - favoritos - nav - 4 * estilo.E2 < d.ancho_barra(False)
             d.solo_iconos(compacto)
@@ -158,7 +159,7 @@ class CabeceraFavoritos:
             porcentaje = not compacto or disponible >= ancho_zoom
             d.porcentaje_zoom.mostrar(porcentaje)
             barra.compacta = not porcentaje
-            favoritos = barra.sizeHint().width() if v.preferencias_paletas.visible() else 0
+            favoritos = barra.sizeHint().width() if visible else 0
         else:
             d.porcentaje_zoom.mostrar(True)
         zoom = d.barra.sizeHint().width() + estilo.E2 if d.barra_integrada else 0
@@ -172,5 +173,4 @@ class CabeceraFavoritos:
         texto = v.ayuda.text()
         if texto != self._texto_ayuda:
             self._texto_ayuda = texto
-            v._ayuda_abierta = False
         v.ayuda_pantalla.actualizar(texto, libre)

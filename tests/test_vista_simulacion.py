@@ -40,22 +40,22 @@ class VistaSimulacion(BaseQt):
 
     def test_SMOD02_play_oculta_y_stop_restaura_tamanos_y_divisor_manual(self):
         """REQ-EDT-09, REQ-SIM-03: Play oculta paleta e inferior; Stop restaura sus tamaños y el reparto manual."""
-        w,d=self.preparar();w.props.t_fijar.setChecked(True)  # (sin fijar, el panel inferior vuelve plegado de simular)
+        w,d=self.preparar()
         w.vsplit.moveSplitter(420,1);self.procesar()
-        anterior=(w.dock.width(),w.derecho.width(),w.inferior.height(),w.vsplit.sizes())
-        self.assertFalse(w._opciones_automaticas)
+        anterior=(w.derecho.width(),w.inferior.height(),w.vsplit.sizes())
         self.ejecutar(w,True)
-        self.assertTrue(w.dock.isHidden() and w.inferior.isHidden())
-        self.assertEqual(w.derecho.width(),anterior[1])
+        self.assertTrue(w.inferior.isHidden())
+        self.assertEqual(w.derecho.width(), anterior[0])
         self.ejecutar(w,False)
-        self.assertFalse(w.dock.isHidden() or w.inferior.isHidden())
-        self.assertEqual((w.dock.width(),w.derecho.width(),w.inferior.height(),w.vsplit.sizes()),anterior)
+        self.assertTrue(w.favoritos.isVisible())
+        self.assertTrue(w.inferior.isHidden())
+        self.assertEqual((w.derecho.width(),w.inferior.height(),w.vsplit.sizes()),anterior)
 
     def test_SMOD03_plegado_previo_y_ancho_derecho_manual_se_conservan(self):
         """REQ-EDT-09: se respetan los paneles plegados previamente y el ancho que el usuario haya dejado con el divisor."""
-        w,d=self.preparar();w.flechas["inferior"].click();w.flechas["izquierdo"].click()
+        w,d=self.preparar();w.flechas["inferior"].click()
         self.ejecutar(w,True);w.split.moveSplitter(w.split.width()-350,1);self.procesar();ancho=w.derecho.width()
-        self.ejecutar(w,False);self.assertTrue(w.dock.isHidden() and w.inferior.isHidden())
+        self.ejecutar(w,False);self.assertTrue(w.inferior.isHidden())
         self.assertEqual(w.derecho.width(),ancho)
         self.ejecutar(w,True);self.assertEqual(w.derecho.width(),ancho)
 
@@ -135,12 +135,6 @@ class VistaSimulacion(BaseQt):
         for b in (*p.b_nuevas.values(),p.b_quitar):
             self.assertGreaterEqual(b.width(),b.fontMetrics().horizontalAdvance(b.text())+16)
 
-    def test_SMOD11_altura_automatica_previa_se_restaura_con_receptividad_seleccionada(self):
-        """REQ-EDT-09, REQ-SIM-03: también la altura automática del editor se conserva al parar, sin un nuevo reparto."""
-        w,d=self.preparar();w.edicion.seleccionar(["t"]);self.procesar();self.assertTrue(w._opciones_automaticas)
-        altura=w.inferior.height();tamanos=w.vsplit.sizes()
-        self.ejecutar(w,True);self.ejecutar(w,False)
-        self.assertEqual(w.inferior.height(),altura);self.assertEqual(w.vsplit.sizes(),tamanos)
 
     def test_SMOD12_abrir_otro_ejemplo_cancela_restauraciones_pendientes(self):
         """REQ-EDT-01, REQ-EDT-09: abrir otra fuente permite el encuadre inicial, sin aplicar el del proyecto anterior."""

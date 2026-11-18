@@ -1,5 +1,4 @@
 """SH1: favoritos como paleta principal; pruebas ejecutables sin preparar PYTHONPATH."""
-import copy
 from pathlib import Path
 import sys
 import tempfile
@@ -22,9 +21,8 @@ if QEvent is not None:
     from PySide6.QtWidgets import QApplication, QToolTip
     from escritorio.ventana import Ventana
     from escritorio.favoritos import PREDETERMINADOS, icono_mini
-    from escritorio.propiedades import COLOCABLES, SECCIONES, Paleta
+    from escritorio.propiedades import COLOCABLES, Paleta
     from escritorio.ayudas_emergentes import ANCHO_MAXIMO, texto_plano
-    from escritorio.preferencias_paletas import MIGRACION, VISIBLE
     from test_editor_cadenas import BaseQt
 
 
@@ -95,7 +93,6 @@ class FavoritosPrincipal(unittest.TestCase):
                     "forzado", "macroetapa", "encapsulante", "parcial", "texto", "imagen"]
         self.assertEqual(w.favoritos.orden, esperado)
         self.assertEqual(set(esperado), set(COLOCABLES))
-        self.assertEqual(set(esperado), {h for _, claves in SECCIONES for h in claves})
 
     def test_SH103_lista_antigua_migra_una_vez_y_respeta_orden(self):
         """REQ-EDT-09: J4 sustituye la personalización por el inventario fijo y borra la preferencia."""
@@ -106,49 +103,37 @@ class FavoritosPrincipal(unittest.TestCase):
         self.assertEqual(otra.favoritos.orden, list(PREDETERMINADOS))
 
 
-    def test_SH104_defectos_y_dos_entradas_independientes_con_ctrl_l(self):
-        w = self.crear()
-        a = w.preferencias_paletas.accion
-        self.assertEqual(w.a_izquierdo.text(), "Panel de elementos")
-        self.assertEqual(w.a_izquierdo.shortcut().toString(), "Ctrl+L")
-        self.assertEqual(a.text(), "Barra de favoritos")
-        self.assertFalse(w.a_izquierdo.isChecked())
-        self.assertTrue(a.isChecked())
-        self.assertFalse(w.dock.isVisible())
-        self.assertTrue(w.favoritos.isVisible())
-        for panel, barra in ((True, True), (True, False), (False, False), (False, True)):
-            w.a_izquierdo.setChecked(panel)
-            a.setChecked(barra)
-            self.bombear()
-            self.assertEqual((w.dock.isVisible(), w.favoritos.isVisible()), (panel, barra))
-        w.activateWindow()
-        w.diagrama.setFocus()
-        QTest.keyClick(w, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
-        self.bombear()
-        self.assertTrue(w.dock.isVisible())
+    def test_SH104_ver_sin_paneles_ni_favoritos(self):
+        from PySide6.QtGui import QAction
+        from PySide6.QtWidgets import QWidget
 
-    def test_SH105_recuerdo_de_las_dos_elecciones(self):
         w = self.crear()
-        w.a_izquierdo.setChecked(True)
-        w.preferencias_paletas.accion.setChecked(False)
+        ver = next(a.menu() for a in w.menuBar().actions() if a.text().replace("&", "") == "Ver")
+        textos = [a.text().replace("&", "") for a in ver.actions()]
+        for opcion in ("Panel de elementos", "Panel derecho", "Barra de favoritos"):
+            self.assertNotIn(opcion, textos)
+        self.assertFalse(any(a.shortcut().toString() == "Ctrl+L" for a in w.findChildren(QAction)))
+        self.assertNotIn("izquierdo", w.pestanas)
+        self.assertIsNone(w.findChild(QWidget, "panelElementos"))
+        self.assertTrue(w.favoritos.isVisible())
+
+    def test_SH105_ignora_visibilidad_antigua_de_favoritos(self):
+        w = self.crear({"paletas/favoritos_principal_v1": True, "favoritos/visible": False})
+        self.assertTrue(w.favoritos.isVisible())
+        self.assertFalse(w.ajustes.contains("favoritos/visible"))
+        self.assertFalse(w.ajustes.contains("paletas/favoritos_principal_v1"))
         w.ajustes.sync()
         otra = self.crear(archivo=w.ajustes.fileName())
-        self.assertTrue(otra.a_izquierdo.isChecked())
-        self.assertFalse(otra.preferencias_paletas.accion.isChecked())
-        self.assertTrue(otra.dock.isVisible())
-        self.assertFalse(otra.favoritos.isVisible())
+        self.assertTrue(otra.favoritos.isVisible())
 
-    def test_SH106_panel_antiguo_visible_o_plegado_recibe_nuevo_defecto_una_vez(self):
+    def test_SH106_elimina_el_ajuste_antiguo_sin_cambiar_favoritos(self):
         for antiguo in (False, True):
-            w = self.crear({"paneles/izquierdo": antiguo})
-            self.assertTrue(w.ajustes.value(MIGRACION, type=bool))
-            self.assertFalse(w.a_izquierdo.isChecked())
-            w.a_izquierdo.setChecked(True)
-            w.ajustes.sync()
-            otra = self.crear(archivo=w.ajustes.fileName())
-            self.assertTrue(otra.a_izquierdo.isChecked())
+            w = self.crear({"paneles/izquierdo": antiguo, "paneles/izquierdo/visible": True})
+            self.assertNotIn("paneles/izquierdo", w.ajustes.allKeys())
+            self.assertNotIn("paneles/izquierdo/visible", w.ajustes.allKeys())
+            self.assertTrue(w.favoritos.isVisible())
 
-    def test_SH107_oculta_en_simulacion_y_solo_lectura_sin_perder_preferencia(self):
+    def test_SH107_oculta_en_simulacion_y_solo_lectura(self):
         w = self.crear()
         w.edicion.ed.add_step("g", "0", True)
         w.edicion.cambia()
@@ -162,14 +147,11 @@ class FavoritosPrincipal(unittest.TestCase):
         w._poner_modo()
         w._ajustar_cabecera()
         self.assertFalse(w.favoritos.isVisible())
-        self.assertTrue(w.preferencias_paletas.accion.isChecked())
 
     def test_SH108_ayudas_completas_de_paleta_y_favoritos(self):
         w = self.crear()
         for clave in COLOCABLES:
-            item = next(w.paleta.item(i) for i in range(w.paleta.count())
-                        if w.paleta.item(i).data(Qt.ItemDataRole.UserRole) == clave)
-            for texto in (item.toolTip(), w.favoritos.botones[clave].toolTip()):
+            for texto in (w.favoritos.botones[clave].toolTip(),):
                 self.assertIn("<b>", texto)
                 self.assertIn(Paleta.nombre(clave), texto_plano(texto))
                 self.assertIn(Paleta.texto_ayuda(clave), texto_plano(texto))
@@ -179,9 +161,7 @@ class FavoritosPrincipal(unittest.TestCase):
         pantalla = w.screen().availableGeometry()
         punto = pantalla.bottomRight() - QPoint(5, 5)
         for clave in COLOCABLES:
-            item = next(w.paleta.item(i) for i in range(w.paleta.count())
-                        if w.paleta.item(i).data(Qt.ItemDataRole.UserRole) == clave)
-            for texto in (item.toolTip(), w.favoritos.botones[clave].toolTip()):
+            for texto in (w.favoritos.botones[clave].toolTip(),):
                 QToolTip.showText(punto, texto, w.favoritos)
                 QTest.qWait(15)
                 tips = [t for t in self.app.topLevelWidgets()
@@ -198,26 +178,13 @@ class FavoritosPrincipal(unittest.TestCase):
         QTest.mouseClick(w.favoritos.botones["etapa"], Qt.MouseButton.LeftButton)
         self.assertEqual(aviso.count(), 1)
         self.assertIn(Paleta.texto_ayuda("etapa"), w.ayuda.text())
-        self.assertFalse(w.dock.isVisible())
 
-    def test_SH111_gana_ancho_y_no_cambia_el_documento(self):
-        w = self.crear()
-        antes = copy.deepcopy(w.edicion.ed.model)
-        ancho = w.diagrama.width()
-        w.a_izquierdo.setChecked(True)
-        self.bombear()
-        self.assertLess(w.diagrama.width(), ancho)
-        w.a_izquierdo.setChecked(False)
-        self.bombear()
-        self.assertEqual(w.diagrama.width(), ancho)
-        self.assertEqual(w.edicion.ed.model, antes)
 
     def test_SH112_tab_y_desborde_sin_panel_lateral(self):
         w = self.crear(tam=(683, 384))
-        self.assertFalse(w.dock.isVisible())
         self.assertTrue(w.favoritos.ocultos)
         self.assertEqual(set(w.favoritos._visibles + w.favoritos.ocultos), set(COLOCABLES))
-        foco = w.preferencias_paletas.foco()
+        foco = w.favoritos.foco()
         self.assertNotIn(w.paleta, foco)
         self.assertIn(w.favoritos.desborde, foco)
         w._orden_tab()

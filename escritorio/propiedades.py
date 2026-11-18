@@ -3,8 +3,8 @@
 La paleta agrupa fichas arrastrables en Etapas, Transiciones, Acciones y Jerarquías.
 Los encabezados solo organizan la lista; un clic en una ficha muestra su ayuda.
 
-El panel de opciones (abajo, a todo el ancho, al editar) muestra y cambia la configuración de lo seleccionado, con dos
-zonas: a la izquierda una columna estrecha con los campos y a la derecha lo ancho.
+El panel configura lo seleccionado dentro de la única ventana flotante de propiedades.
+La disposición y la apertura se coordinan en flotantes.py.
 - Transición: etiqueta, si se muestra y comentario; a la derecha, el programador por bloques de la receptividad (con el
   texto de la fórmula, cómo se escribe y cómo se dibuja, y «Crear las que faltan» para las variables que no existen).
 - Etapa: etiqueta, tipo, comentario y colocación de las acciones; a la derecha, la lista de sus acciones y sus botones.
@@ -12,8 +12,7 @@ zonas: a la izquierda una columna estrecha con los campos y a la derecha lo anch
   derecho sobre la acción); a la derecha el
   programador del valor de una memorizada y, si es condicionada o por evento, el de su condición o su evento. Una acción continua no
   lleva campos aquí: solo la frase que manda a hacer doble clic sobre ella (`FRASE_CONTINUA`; la variable se elige en el desplegable
-  sobre la acción). El mismo panel (`flotante=True`, sin cabecera) sirve a las ventanas de Ver ▸ Panel de opciones ▸ Flotante
-  (`flotantes.py`), donde el programador de la condición o del evento va en su propia ventana (`_llevar_bloques`).
+  sobre la acción). La condición o el evento ocupa su propia sección de la ventana (`_llevar_bloques`).
 - Macroetapa, recinto (su marco), expansión, grafcet parcial suelto y orden de forzado (también la que aún no está completa): una
   ficha compacta (`FichaJerarquia`) con su descripción y los mismos botones que el botón derecho (Encuadrar la expansión,
   Renombrar…, Encuadrar la encapsulante, Configurar, Editar o Quitar la orden…; el doble clic en una orden la edita); una
@@ -32,8 +31,8 @@ from typing import Any, Callable
 from PySide6.QtCore import QEvent, QMimeData, QObject, QPoint, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QFormLayout, QGridLayout, QHBoxLayout, QLabel,
-                               QLineEdit, QListView, QListWidget, QListWidgetItem, QPushButton, QSizePolicy,
-                               QStackedWidget, QStyledItemDelegate, QStyle, QToolButton, QVBoxLayout, QWidget)
+                               QLineEdit, QListWidget, QListWidgetItem, QPushButton, QSizePolicy,
+                               QStackedWidget, QToolButton, QVBoxLayout, QWidget)
 
 from grafcet.routing import TALLO_T
 from grafcet.expressions import is_event_positive
@@ -41,7 +40,6 @@ from grafcet.view import norm
 
 from .interaccion_propiedades import CasillaPropiedades
 from . import estilo
-from .ayudas_emergentes import ayuda_html
 from .paneles import EtiquetaGrupos, TituloSeccion
 from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
@@ -83,13 +81,6 @@ AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: a
                      "la etapa hasta ella), soltándola sobre la etapa o pegándola a su fila de acciones; unida y completa, "
                      "mientras esa etapa está activa impone esa situación al parcial. Supr la quita. Hace falta otro parcial "
                      "(un grafcet parcial, un recinto o una macroetapa) al que forzar"}
-SECCIONES = (
-    ("Etapas", ("etapa", "etapa_inicial")),
-    ("Transiciones", ("transicion", "simultaneidad")),
-    ("Acciones", tuple("accion:" + t for t in ("continua", "condicionada", "activacion", "desactivacion", "evento"))),
-    ("Jerarquías", ("encapsulante", "macroetapa", "forzado", "parcial")),
-    ("Otros", ("texto", "imagen")),
-)
 NOMBRES.update({"etapa_inicial": "Etapa inicial", "accion:continua": "Continua",
                 "accion:condicionada": "Condicionada", "accion:activacion": "Al activar",
                 "accion:desactivacion": "Al desactivar", "accion:evento": "Por evento"})
@@ -100,7 +91,11 @@ for t in ("continua", "condicionada", "activacion", "desactivacion", "evento"):
 NOMBRES.update({"texto":"Texto", "imagen":"Imagen"})
 AYUDAS.update({"texto":"Cuadro de texto: arrástrelo al dibujo. Doble clic para elegir texto, fuente, tamaño y color. Estire su esquina para cambiar el cuadro.",
                "imagen":"Imagen PNG o JPG: arrástrela al dibujo y elija un archivo. Estire su esquina para cambiar el tamaño conservando sus proporciones."})
-COLOCABLES = tuple(h for _, claves in SECCIONES for h in claves)
+COLOCABLES = (
+    "etapa", "etapa_inicial", "transicion", "simultaneidad", "accion:continua", "accion:condicionada",
+    "accion:activacion", "accion:desactivacion", "accion:evento", "encapsulante", "macroetapa",
+    "forzado", "parcial", "texto", "imagen",
+)
 
 
 def _medidas_ficha(h: str) -> tuple[QRectF, QPointF]:
@@ -202,161 +197,36 @@ def icono(h: str) -> QIcon:
     return QIcon(lienzo)
 
 
-class _DelegadoPaleta(QStyledItemDelegate):
-    """Filas limpias y cabeceras de sección; el icono conserva el símbolo existente."""
-    def paint(self, p: QPainter, opcion: Any, indice: Any) -> None:
-        p.save()
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        r = opcion.rect.adjusted(5, 1, -5, -1)
-        clave = indice.data(Qt.ItemDataRole.UserRole)
-        fuente = QFont(opcion.font)
-        if not clave:
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(estilo.SUPERFICIE_2))
-            p.drawRoundedRect(QRectF(r), estilo.R_S, estilo.R_S)
-            p.setBrush(QColor(estilo.ACENTO))  # el filete de acento a la izquierda de cada sección
-            p.drawRoundedRect(QRectF(r.left(), r.top() + 4, 3, r.height() - 8), 1.5, 1.5)
-            fuente.setBold(True)
-            p.setFont(fuente)
-            p.setPen(QColor(estilo.ACENTO))
-            p.drawText(r.adjusted(12, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, indice.data())
-        else:
-            if opcion.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver):
-                p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(QColor(estilo.ACENTO_SUAVE if opcion.state & QStyle.StateFlag.State_Selected else estilo.HOVER))
-                p.drawRoundedRect(QRectF(r), estilo.R_S, estilo.R_S)
-            icono = indice.data(Qt.ItemDataRole.DecorationRole)
-            icono.paint(p, r.center().x() - 36, r.top() + 3, 72, 64)
-            fuente.setPixelSize(estilo.T_PEQUENA)
-            p.setFont(fuente)
-            p.setPen(QColor(estilo.TINTA))
-            p.drawText(QRectF(r.left() + 2, r.top() + 69, r.width() - 4, 27),
-                       Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, indice.data())
-        p.restore()
-
-
-class Paleta(QListWidget):
-    """La lista de fichas del grafcet (etapa, transición, simultaneidad, acción, macroetapa, encapsulante, grafcet parcial y
-    forzado). Las fichas solo se colocan arrastrándolas al dibujo; un clic en una ficha no hace nada salvo mostrar su ayuda
-    (señal `ayuda`)."""
+class Paleta(QObject):
+    """Catálogo y preparación de las fichas que se arrastran desde Favoritos."""
 
     ayuda = Signal(str)
-    REJILLA = QSize(100, 98)  # dos fichas por fila; icono y nombre debajo
-    ICONO = QSize(72, 64)
-    FILAS = 3  # filas visibles solicitadas; el resto queda accesible con desplazamiento
-    FILAS_MIN = 1  # hasta dónde se encoge en una ventana baja (con desplazamiento vertical): fija el mínimo de alto de la ventana
-    CLAVES: tuple[str, ...] = COLOCABLES
+    CLAVES = COLOCABLES
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.setViewMode(QListView.ViewMode.IconMode)
-        self.setFlow(QListView.Flow.LeftToRight)
-        self.setWrapping(True)
-        self.setSpacing(0)
-        self.setUniformItemSizes(False)
-        self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
-        self.setIconSize(self.ICONO)
-        self.setMovement(QListView.Movement.Static)  # Static desactiva el arrastre: se activa después
-        self.setResizeMode(QListView.ResizeMode.Fixed)
-        self.setDragEnabled(True)
-        self.setDragDropMode(QListWidget.DragDropMode.DragOnly)
-        self.setObjectName("paletaElementos")
-        self.setItemDelegate(_DelegadoPaleta(self))
-        self.setMouseTracking(True)
-        for titulo, claves in SECCIONES:
-            cabecera = QListWidgetItem(titulo)
-            cabecera.setFlags(Qt.ItemFlag.NoItemFlags)
-            cabecera.setSizeHint(QSize(188, 28))
-            cabecera.setBackground(QColor(estilo.SUPERFICIE_2))
-            cabecera.setForeground(QColor(estilo.ACENTO))
-            f = cabecera.font()
-            f.setBold(True)
-            cabecera.setFont(f)
-            self.addItem(cabecera)
-            for h in claves:
-                it = QListWidgetItem(icono(h), self.nombre(h))
-                it.setData(Qt.ItemDataRole.UserRole, h)
-                it.setToolTip(ayuda_html(self.texto_ayuda(h), self.nombre(h)))
-                it.setSizeHint(self.REJILLA)
-                self.addItem(it)
-        self._ancho_celdas = None
-        self._actualizar_celdas()
-        self.setCurrentRow(-1)
-        self.itemClicked.connect(lambda it: self.ayuda.emit(self.texto_ayuda(it.data(Qt.ItemDataRole.UserRole)) if it.data(Qt.ItemDataRole.UserRole) else ""))
-        # Altura flexible; el desplazamiento conserva todas las secciones accesibles.
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-    def _actualizar_celdas(self) -> None:
-        ancho = max(2, self.width() - 2 * self.frameWidth() - self.verticalScrollBar().sizeHint().width())
-        if ancho == getattr(self, "_ancho_celdas", None):
-            return
-        self._ancho_celdas = ancho
-        self.setUpdatesEnabled(False)
-        try:
-            for i in range(self.count()):
-                it = self.item(i)
-                tam = QSize(ancho // 2, self.REJILLA.height()) if it.data(Qt.ItemDataRole.UserRole) else QSize(ancho, 26)
-                if it.sizeHint() != tam:
-                    it.setSizeHint(tam)
-            self.doItemsLayout()
-        finally:
-            self.setUpdatesEnabled(True)  # (siempre a cierto: si se guardara lo de antes y la ventana lo tenía en falso, la paleta se quedaba sin pintar)
-
-    def resizeEvent(self, evento: Any) -> None:  # noqa: N802
-        super().resizeEvent(evento)
-        self._actualizar_celdas()
+    def __init__(self, escala: Callable[[], float], parent: QObject) -> None:
+        super().__init__(parent)
+        self.escala = escala
 
     @staticmethod
-    def nombre(h: str) -> str:
-        return NOMBRES[h]
+    def nombre(clave: str) -> str:
+        return NOMBRES[clave]
 
     @staticmethod
-    def texto_ayuda(h: str) -> str:
-        return AYUDAS[h]
+    def texto_ayuda(clave: str) -> str:
+        return AYUDAS[clave]
 
-    def ancho_minimo(self) -> int:
-        """Ancho para icono, nombre y barra vertical, sin desplazamiento horizontal."""
-        return 216  # (+ 1 px de borde de la tarjeta a cada lado = 218, el ancho del panel)
-
-    def alto_filas(self, filas: int) -> int:
-        """El alto de `filas` filas de fichas, con el marco."""
-        return filas * self.REJILLA.height() + 2 * self.frameWidth() + 2
-
-    def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(self.ancho_minimo(), self.alto_filas(self.FILAS))
-
-    def minimumSizeHint(self) -> QSize:  # noqa: N802
-        return QSize(self.ancho_minimo(), self.alto_filas(self.FILAS_MIN))
-
-    escala = staticmethod(lambda: 1.0)  # zoom del dibujo; lo pone la ventana
-
-    def startDrag(self, actions: Any) -> None:  # noqa: N802
-        """Se arrastra el elemento mismo, al tamaño con que se verá en el dibujo, no el icono de la lista."""
-        it = self.currentItem()
-        if it is None or not it.data(Qt.ItemDataRole.UserRole):
+    def arrastrar_elemento(self, clave: str, origen: QWidget) -> None:
+        """Conserva el MIME y la figura al zoom del dibujo y al DPI del origen."""
+        if clave not in self.CLAVES:
             return
-        self.arrastrar_elemento(it.data(Qt.ItemDataRole.UserRole))
-
-    def arrastrar_elemento(self, clave: str, origen: QWidget | None = None) -> None:
-        """La ficha y sus favoritos comparten MIME, escala, vista previa y punto de colocación."""
-        items = [self.item(i) for i in range(self.count())
-                 if self.item(i).data(Qt.ItemDataRole.UserRole) == clave]
-        if not items:
-            return
-        drag = QDrag(origen if origen is not None else self)
-        drag.setMimeData(self.mimeData(items))
-        pm, punto = figura(clave, self.escala(), self.devicePixelRatioF())
-        drag.setPixmap(pm)
-        drag.setHotSpot(punto)
-        drag.exec(Qt.DropAction.CopyAction)
-
-    def mimeData(self, items: list[QListWidgetItem]) -> QMimeData:  # noqa: N802
-        m = QMimeData()
-        if items and items[0].data(Qt.ItemDataRole.UserRole):
-            m.setText(items[0].data(Qt.ItemDataRole.UserRole))
-        return m
+        datos = QMimeData()
+        datos.setText(clave)
+        arrastre = QDrag(origen)
+        arrastre.setMimeData(datos)
+        imagen, punto = figura(clave, self.escala(), origen.devicePixelRatioF())
+        arrastre.setPixmap(imagen)
+        arrastre.setHotSpot(punto)
+        arrastre.exec(Qt.DropAction.CopyAction)
 
 
 def _formulario(w: QWidget) -> QFormLayout:
@@ -475,33 +345,19 @@ class FichaJerarquia(QWidget):
         return [t for t, b in self.botones.items() if not b.isHidden()]
 
 
-class _UbicaCategorias(QObject):
-    """Cuando cambia el ancho de la cabecera del panel, vuelve a decidir si las categorías de bloques caben en ella."""
-
-    def __init__(self, panel: "PanelPropiedades") -> None:
-        super().__init__(panel)
-        self.panel = panel
-
-    def eventFilter(self, objeto: QObject, evento: QEvent) -> bool:  # noqa: N802
-        if evento.type() in (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.Hide, QEvent.Type.Move):
-            self.panel._ubicar_categorias()
-        return False
 
 
 class PanelPropiedades(QWidget):
-    """Las opciones del elemento seleccionado, con campos editables (el panel «Opciones» de abajo)."""
+    """Las opciones del elemento seleccionado, con campos editables (la ventana de Propiedades)."""
     ANCHO_MINIMO = 560  # lo más ancho que pide el panel a la ventana: con él abierto, la ventana baja a 640 px y vuelve
     alto_cambiado = Signal()  # el panel pide más o menos alto (el estado de la fórmula baja a su línea o vuelve a su lado)
 
     def escalar(self, hoja_ventana: str = "") -> None:
-        """Cambió la escala de letra y de controles (pantalla completa o no): la hoja (la de la ventana para esa escala, si hay, y la de los
-        campos compactos), «Fijar», categorías y fichas se miden otra vez. La ventana lo llama al abrir el panel."""
+        """Actualiza letra, controles, categorías y fichas al abrir las propiedades."""
         self.setStyleSheet(hoja_ventana + estilo.campos_compactos())
         self.cabecera.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 4)
-        self.t_fijar.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
-        for prog in (self.prog, getattr(self.accion, "prog", None)):
-            if prog is not None:
-                prog.escalar()
+        for prog in (self.prog, self.accion.prog):
+            prog.escalar()
         for ficha in (self.ficha_izq, self.ficha_etapa):
             ficha.escalar()
         self._ubicar_categorias()
@@ -521,9 +377,8 @@ class PanelPropiedades(QWidget):
 
     FRASE_CONTINUA = "Haz doble clic sobre la acción continua para desplegar las variables disponibles."
 
-    def __init__(self, flotante: bool = False) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.flotante = flotante  # en una ventana flotante (`flotantes.py`): sin cabecera propia, y la condición o el evento de una acción pueden ir en otra ventana
         self.continua = False  # lo que se muestra es una acción continua: solo la frase (se elige la variable con doble clic sobre ella)
         self._bloques_fuera = False  # el programador de la condición o el evento está en la otra ventana (`destino_bloques`)
         self.destino_bloques: QVBoxLayout | None = None
@@ -541,12 +396,11 @@ class PanelPropiedades(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(10, 1, 10, 4)  # (1 px arriba: dentro del borde de la tarjeta, que la cabecera no tapa)  la cabecera (32 px) pega con el borde: el primer campo queda a 32 px del panel
         lay.setSpacing(0)
-        # Una sola fila de cabecera (P-IMP-118): el título, lo que programan los bloques (si no repite el título) y «Fijar»;
-        # a la derecha queda libre el sitio del botón de plegar
+        # El título se conserva como fuente para la cabecera de la ventana flotante.
         self.cabecera = QWidget()
         self.cabecera.setObjectName("cabeceraPropiedades")
         self.fila_cabecera = QHBoxLayout(self.cabecera)
-        self.fila_cabecera.setContentsMargins(estilo.E2, 2, 40, 2)  # a la derecha, el sitio del botón de plegar (32 px); 2 px arriba y abajo: ni las categorías ni «Fijar» tocan el borde de la franja
+        self.fila_cabecera.setContentsMargins(estilo.E2, 2, 40, 2)
         self.cabecera.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 4)
         self.fila_cabecera.setSpacing(estilo.E3)
         self.titulo = TituloSeccion(x_marcador=4)
@@ -566,7 +420,7 @@ class PanelPropiedades(QWidget):
         cuerpo.setSpacing(14)
         lay.addWidget(self.cuerpo, 1)
         # Izquierda, la columna estrecha de campos; derecha, lo ancho (lista de acciones, programadores, enlace, barra)
-        self.izq = PilaActualSolo() if flotante else PilaActual()  # (flotante: el alto de la página que se ve, no el de la mayor)
+        self.izq = PilaActualSolo()  # (flotante: el alto de la página que se ve, no el de la mayor)
         self.izq.setFixedWidth(ANCHO_COLUMNA)
         self.izq.addWidget(QWidget())  # 0: nada que mostrar en la columna
         self.izq.addWidget(self._etapa())  # 1
@@ -596,7 +450,7 @@ class PanelPropiedades(QWidget):
         lh.addStretch(1)
         self.izq.addWidget(pagina)
         cuerpo.addWidget(self.izq)
-        self.der = PilaActualSolo() if flotante else PilaActual()
+        self.der = PilaActualSolo()
         self.der.addWidget(self._vacio())  # 0
         self.der.addWidget(self._lista_acciones())  # 1
         self.der.addWidget(self._programacion())  # 2
@@ -610,49 +464,19 @@ class PanelPropiedades(QWidget):
         self.der.addWidget(nota)  # 5: texto o imagen
         cuerpo.addWidget(self.der, 1)
         cuerpo.addStretch(0)
-        # «Fijar» (en el sitio de la antigua «Vista previa», en todas las páginas): sin fijar, el panel se esconde solo al
-        # hacer clic en el dibujo fuera del elemento que muestra (lo decide la ventana)
-        self.t_fijar = QToolButton()
-        self.t_fijar.setText("Fijar")
-        self.t_fijar.setCheckable(True)
-        self.t_fijar.setAutoRaise(True)
-        self.t_fijar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.t_fijar.setToolTip("Mantiene abierto este panel. Sin fijar, se esconde al hacer clic fuera del elemento.")
-        self.t_fijar.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
-        self.t_fijar.setStyleSheet(f"QToolButton{{padding:0 12px;border:1px solid {estilo.BORDE_CONTROL};"
-                                   f"border-radius:{estilo.R_S}px;background:{estilo.SUPERFICIE};}}"
-                                   f"QToolButton:hover{{background:{estilo.HOVER};border-color:{estilo.TINTA_2};}}"
-                                   f"QToolButton[tecl=\"true\"]:focus{{border:2px dashed {estilo.FOCO};padding:0 11px;}}"
-                                   f"QToolButton:checked{{background:{estilo.ACENTO};color:white;border-color:{estilo.ACENTO_OSCURO};font-weight:600;}}"
-                                   f"QToolButton:checked[tecl=\"true\"]:focus{{border:2px dashed white;}}")
-        self.fila_cabecera.addWidget(self.t_fijar)
-        self._ubica_categorias = _UbicaCategorias(self)  # (las categorías de bloques, en la fila de la cabecera si caben)
-        for objeto in (self.cabecera, self.cuerpo, self.pagina_bloques, self.accion.caja_valor, self.accion.caja_numerica):
-            objeto.installEventFilter(self._ubica_categorias)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
         self.categorias_una_fila = None
-        if flotante:
-            from .propiedades_ampliadas import CategoriasUnaFila
-            self.categorias_una_fila = CategoriasUnaFila(self.prog)
-            self.cabecera.hide()  # (el título, «Fijar» y cerrar los pone la ventana flotante)
-            # La lupa ya enseña la fórmula; los errores permanecen bajo los bloques.
-            self._l_formula.hide()
-            self.t_texto.hide()
-            self.t_estado.hide()
-            self.accion.frase.hide()
+        from .propiedades_ampliadas import CategoriasUnaFila
+        self.categorias_una_fila = CategoriasUnaFila(self.prog)
+        self.cabecera.hide()  # (el título y el cierre los pone la ventana flotante)
+        # La lupa ya enseña la fórmula; los errores permanecen bajo los bloques.
+        self._l_formula.hide()
+        self.t_texto.hide()
+        self.t_estado.hide()
+        self.accion.frase.hide()
 
-    def zona_de(self, w: QWidget | None) -> str | None:
-        """En qué zona de la página de una acción está el widget `w` (el que tiene el foco): «bloques» (la condición o el evento) o «accion» (lo
-        demás: variable, valor…); None si no está en ninguna."""
-        if w is None:
-            return None
-        if self.pagina_bloques.isAncestorOf(w):
-            return "bloques"
-        if self.izq.isAncestorOf(w) or self.accion.caja_valor.isAncestorOf(w):
-            return "accion"
-        return None
 
     def _llevar_bloques(self, fuera: bool) -> None:
         """En una ventana flotante, el programador de la condición o del evento de una acción va en su propia ventana (`destino_bloques`); en los
@@ -667,51 +491,10 @@ class PanelPropiedades(QWidget):
             self._hl_prog.insertWidget(1, self.pagina_bloques, 3)
 
     # -- categorías de bloques en la cabecera -------------------------------------------------------
-    def _programador_en_cabecera(self) -> Programador | None:
-        """El programador cuyas categorías suben a la fila de la cabecera: el de la receptividad (transición), el de la condición o el evento de
-        una acción y, si una acción solo tiene el del valor, ese."""
-        if self.pagina == "transicion":
-            return self.prog
-        if self.pagina == "accion":
-            if self.pagina_bloques.isVisibleTo(self):
-                return self.prog
-            if self.accion.caja_valor.isVisibleTo(self) and self.accion.caja_numerica.isVisibleTo(self):
-                return self.accion.prog
-        return None
 
     def _ubicar_categorias(self) -> None:
-        """Las categorías del programador por bloques (el de una transición, o el que se vea en una acción) van en la fila de la cabecera, entre el
-        título (que ocupa la columna de campos, o hasta donde empieza la paleta) y «Fijar»: empiezan donde empiezan la paleta y el área, y el panel
-        gana una fila de alto. Si no caben en esa fila, o en otra página, vuelven a su fila propia sobre la paleta (donde, en un panel estrecho,
-        pasan a dos filas). Siempre en una sola línea, sin cortarse. En las páginas con columna de campos el título mide lo que esa columna."""
-        if self.flotante:  # (sin cabecera: las categorías van en su fila, sobre la paleta)
-            for prog in (self.prog, self.accion.prog):
-                prog.categorias_en_cabecera(None)
-            return
-        e3, e2 = estilo.E3, estilo.E2
-        elegido = self._programador_en_cabecera()
-        columna = ANCHO_COLUMNA + 14 - e2 - e3  # la columna de campos más el hueco hasta la paleta, menos lo que ya pone la fila
-        ancho_titulo = columna
-        if elegido is self.accion.prog or (elegido is self.prog and self.pagina == "accion"):
-            # el título llega hasta donde empieza el área de ese programador (en una acción, tras la columna de campos y, si lo hay, el valor)
-            contenedor = self.accion.caja_valor if elegido is self.accion.prog else self.pagina_bloques
-            x = contenedor.mapTo(self, QPoint(0, 0)).x() - self.cabecera.x()  # (a coordenadas de la cabecera, que no es antecesora del contenedor)
-            if contenedor.isVisibleTo(self) and e2 + e3 + 60 < x < self.cabecera.width():
-                ancho_titulo = x - e2 - e3
-        disponible = self.cabecera.width() - e2 - ancho_titulo - e3 - (self.t_fijar.sizeHint().width() + e3) - 40 - e3
-        natural = self.titulo.fontMetrics().horizontalAdvance(self.titulo.text()) + self.titulo.indent() + 8  # (no `sizeHint`: con ancho fijo da ese)
-        titulo_cabe = natural <= ancho_titulo
         for prog in (self.prog, self.accion.prog):
-            quiere = (prog is elegido and self.cabecera.width() > 0 and prog.ancho_categorias() <= disponible and titulo_cabe)
-            if quiere:
-                prog.categorias_en_cabecera(self.fila_cabecera, 1)
-            else:
-                prog.categorias_en_cabecera(None)
-        if (elegido is not None and elegido.cat_en_cabecera) or (self.izq.isVisibleTo(self) and titulo_cabe):
-            self.titulo.setFixedWidth(ancho_titulo)
-        else:
-            self.titulo.setMinimumWidth(0)
-            self.titulo.setMaximumWidth(16777215)
+            prog.categorias_en_cabecera(None)
 
     # -- páginas -----------------------------------------------------------------------------------
     def _programacion(self) -> QWidget:
@@ -768,7 +551,6 @@ class PanelPropiedades(QWidget):
         g.addWidget(self.t_estado, 1, 1, 1, 3)
         g.addWidget(self.t_crear, 0, 2)
         g.setColumnStretch(1, 1)
-        self._rejilla_formula, self._estado_abajo = g, True
         lay.addWidget(self.caja_formula)
         self._ver_bloques(None)
         return w
@@ -915,14 +697,8 @@ class PanelPropiedades(QWidget):
         self.t_comentario.setToolTip("Comentario de la transición: se dibuja entre comillas a la derecha de su receptividad "
                                      "(no entra en la simulación)")
         self.t_comentario.editingFinished.connect(lambda: self._comentar(self.t_comentario))
-        if self.flotante:
-            from .propiedades_ampliadas import campos_transicion
-            campos_transicion(self, w)
-        else:
-            f = _formulario(w)
-            f.addRow("Etiqueta", self.t_etiqueta)
-            f.addRow(self.t_mostrar)
-            f.addRow("Comentario", self.t_comentario)
+        from .propiedades_ampliadas import campos_transicion
+        campos_transicion(self, w)
         return w
 
     def _desde_bloques(self, texto: str) -> None:
@@ -1203,11 +979,11 @@ class PanelPropiedades(QWidget):
     # -- receptividad ------------------------------------------------------------------------------
     def _previsualizar(self) -> None:
         self._previsualizar_texto()
-        if self.flotante:  # solo se ve lo que no está bien (rojo o naranja); «correcta» y «vacía» (gris) no
-            malo = self.t_estado.styleSheet() in (f"color: {COL['err']}", f"color: {NARANJA}") and bool(self.t_estado.text())
-            if malo != self.t_estado.isVisibleTo(self.caja_formula):
-                self.t_estado.setVisible(malo)
-                self.alto_cambiado.emit()
+        colores_error = (f"color: {COL['err']}", f"color: {NARANJA}")
+        malo = self.t_estado.styleSheet() in colores_error and bool(self.t_estado.text())
+        if malo != self.t_estado.isVisibleTo(self.caja_formula):
+            self.t_estado.setVisible(malo)
+            self.alto_cambiado.emit()
 
     def _previsualizar_texto(self) -> None:
         e, o, texto = self.e, self._objetivo, self.t_texto.text().strip()
@@ -1269,8 +1045,7 @@ class PanelPropiedades(QWidget):
         if motivo:  # un nombre que no se puede escribir en una fórmula: mensaje y parpadeo
             self.t_estado.setText(motivo)
             self.t_estado.setStyleSheet(f"color: {COL['err']}")
-            if self.flotante:
-                self.t_estado.show()
+            self.t_estado.show()
             self.parpadeo_crear.iniciar({"crear"})
 
     def _pintar_crear(self) -> None:

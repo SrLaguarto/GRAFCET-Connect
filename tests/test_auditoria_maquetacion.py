@@ -139,7 +139,7 @@ def regla_M2(raiz):
 
 
 def _cajas_con_borde(raiz):
-    return [w for w in visibles(raiz) if w.objectName() in ("panelDibujo", "panelElementos", "panelVariables", "panelPropiedades")]
+    return [w for w in visibles(raiz) if w.objectName() in ("panelDibujo", "panelVariables", "panelPropiedades")]
 
 
 def regla_M3(raiz):
@@ -401,13 +401,18 @@ def regla_TB3(raiz, ancho):
 
 
 def regla_B1(raiz):
-    """La barra de edición separa sus grupos con separadores: | Deshacer·Rehacer | Cortar·Copiar·Pegar·Borrar | Añadir debajo·Dependencias·Errores."""
+    """Comprueba las separaciones internas y la que divide las barras de edición y simulación."""
+    from escritorio.separadores_barra import SeparadorBarra
+
     out = []
     for tb in hijos_de(raiz, QToolBar, "barraEdicion"):
+        if not tb.isVisible():
+            continue
         acciones = tb.actions()
         seps = [i for i, a in enumerate(acciones) if a.isSeparator()]
-        if len(seps) < 3:
-            out.append(f"barraEdicion: {len(seps)} separadores (se esperan ≥ 3)")
+        externos = [w for w in tb.parentWidget().findChildren(SeparadorBarra) if w.isVisible()]
+        if len(seps) != 2 or len(externos) != 1:
+            out.append(f"barraEdicion: {len(seps)} separadores internos y {len(externos)} externos (se esperan 2 y 1)")
         for a, b in zip(acciones, acciones[1:]):
             if a.isSeparator() and b.isSeparator():
                 out.append("barraEdicion: dos separadores seguidos")

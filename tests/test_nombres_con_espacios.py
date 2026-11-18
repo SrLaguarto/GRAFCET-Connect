@@ -48,23 +48,21 @@ class NombresConEspacios(BaseQt):
         lienzo.soltar(("b",), bloques.nuevo("no", a=bloques.var(FIN, "input")))
         e.seleccionar([t2])
         w.props.prog.lienzo.soltar((), bloques.var(FIN, "input"))
-        e.seleccionar([e1])
-        d = self.panel_accion(e1)
-        d.variable.setCurrentText(LUZ)
-        d = self.panel_accion(e1)
-        self.poner_tipo(d, "activacion")
+        continua = e.anadir_accion(e1)
+        e.elegir_variable_accion(continua, LUZ)
+        almacenada = e.anadir_accion(e1)
+        e.tipo_accion(almacenada, "activacion")
+        w.editar_accion(e1, almacenada)
+        d = w.props.accion
         d.variable.setCurrentText(CUENTA)
         d._desde_bloques(f"`{CUENTA}` + 1")
+        w.flot.cerrar()
         return e0, t1, e1, t2
 
     def panel_accion(self, sid):
-        w, e = self.w, self.e
-        e.anadir_accion(sid)
-        return w.props.accion
-
-    @staticmethod
-    def poner_tipo(d, tipo):
-        d.e.tipo_accion(d.aid, tipo)
+        e = self.e
+        borrador = e.anadir_accion(sid)
+        return [dato for _, dato, habilitada, _ in e.opciones_variable_accion(borrador) if habilitada]
 
     def nombres(self):
         return [v["name"] for v in self.e.ed.model["variables"]]
@@ -170,8 +168,7 @@ class NombresConEspacios(BaseQt):
         e.seleccionar([t1])
         nombres_ficha = [x[2] for x in motor.elementos(w.props.prog.lienzo.arbol["a"])]
         self.assertEqual(nombres_ficha, [MARCHA])
-        d = self.panel_accion(e1)
-        self.assertIn(LUZ, [d.variable.itemData(i) for i in range(d.variable.count())])
+        self.assertIn(LUZ, self.panel_accion(e1))
         # la tabla de variables
         pv = w.variables
         self.assertTrue({MARCHA, FIN, LUZ, CUENTA} <= {pv.tabla.item(r, 0).text() for r in range(pv.tabla.rowCount())})

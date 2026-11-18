@@ -475,7 +475,6 @@ class PanelPlegable(QWidget):
         super().__init__()
         self.contenido, self.posicion = contenido, posicion
         self.minimo = minimo
-        self.maximo = None  # () -> px: lo más ancho del panel izquierdo abierto (si es mayor que su mínimo); sin él, su mínimo
         self.abierto = True
         self.pestana = PestanaPanel(nombre, posicion != "inferior")
         self.pestana.clicked.connect(self.alternar)
@@ -504,7 +503,7 @@ class PanelPlegable(QWidget):
     def _seguir_tiron(self, punto):
         if self._origen_tiron is None:return
         delta = punto-self._origen_tiron
-        d = delta.x() if self.posicion == "izquierdo" else -delta.x() if self.posicion == "derecho" else -delta.y()
+        d = -delta.x() if self.posicion == "derecho" else -delta.y()
         if abs(d) >= QApplication.startDragDistance():self._ha_arrastrado = True
         if self._ha_arrastrado and d > 0:self.desplegar.emit(max(self.minimo(),round(self.GROSOR_PESTANA+d)))
 
@@ -531,10 +530,7 @@ class PanelPlegable(QWidget):
             self.setMinimumHeight(valor);self.setMaximumHeight(16777215 if abierto else valor)
         else:
             self.setMinimumWidth(valor)
-            tope = valor if not abierto or self.posicion == "izquierdo" else 16777215
-            if abierto and self.posicion == "izquierdo" and self.maximo is not None:
-                tope = max(valor, self.maximo())
-            self.setMaximumWidth(tope)
+            self.setMaximumWidth(16777215 if abierto else valor)
         self.updateGeometry();self._situar_cierre()
 
     def eventFilter(self, objeto, evento):
@@ -575,7 +571,7 @@ class _Tirador(QSplitterHandle):
                 self._plegado = True
                 panel.tamano_recordado = self._tamano
                 sp.plegar.emit(nombre)
-            if self._plegado or panel.posicion == "izquierdo":
+            if self._plegado:
                 evento.accept();return
         super().mouseMoveEvent(evento)
 

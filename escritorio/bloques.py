@@ -22,8 +22,10 @@ from typing import Any, Callable
 from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (QColor, QCursor, QDrag, QFont, QFontMetricsF, QKeySequence, QPainter, QPainterPath, QPen,
                            QPixmap, QPolygonF, QShortcut)
-from PySide6.QtWidgets import (QBoxLayout, QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit, QMenu, QPushButton, QScrollArea,
-                               QSizePolicy, QToolTip, QVBoxLayout, QWidget, QWidgetItem)
+from PySide6.QtWidgets import (
+    QApplication, QBoxLayout, QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit, QMenu, QPushButton,
+    QScrollArea, QSizePolicy, QToolTip, QVBoxLayout, QWidget, QWidgetItem,
+)
 
 from grafcet.expressions import CMP, FUNCS_EXPR, FUNCS_REF, KEYWORDS, ParseError, _Parser, parse, render
 from grafcet.notation import a_nucleo, a_usuario, normalizar_espacios, x_etapa
@@ -532,7 +534,7 @@ COLORES = {"entrada": "#278B87", "salida": "#43845E", "interna": "#B27A39", "eta
            "constante": "#8A5A44"}  # las fichas 1 (verdadero) y 0 (falso): su propia carpeta, no se pierden entre los operadores
 CATEGORIAS = (("variables", "Variables"), ("operador", "Operadores"), ("tiempo", "Temporizadores"),
               ("comparacion", "Comparaciones"), ("constante", "Constantes"))
-CATEGORIAS_VALOR = (("numero", "Número"), ("vnum", "Variables"), ("aritm", "Operadores"))  # modo «valor»
+CATEGORIAS_VALOR = (("vnum", "Variables"), ("aritm", "Operadores"), ("numero", "Número"))  # modo «valor»
 _PAPEL_CAT = {"input": "entrada", "output": "salida", "internal": "interna"}
 PADX, PADX_PILA, PADV, GAP, FILA = 10, 7, 3, 4, 3  # relleno lateral y vertical de un bloque, hueco entre piezas y entre filas
 ALTO = 20  # alto de las piezas (desplegables, campos)
@@ -542,6 +544,7 @@ SANGRIA = {"no": 8, "sube": 8, "baja": 8, "temp": 8}  # el hijo de un bloque que
 PUNTA = 8  # cuánto entra la punta de un hexágono
 MARGEN = 6
 MIME = "application/x-grafcet-bloque"
+MIME_FORMULA = "application/x-grafcet-formula"
 _ARRASTRE = {"resuelto": False}  # el arrastre en curso (solo hay uno): si algún programador lo recibió
 
 
@@ -1431,7 +1434,35 @@ class AreaBloques(_Superficie):
                 self.setFocus()
         self.update()
 
+    def _portapapeles_formula(self, evento: Any) -> bool:
+        portapapeles = QApplication.clipboard()
+        if evento.matches(QKeySequence.StandardKey.Copy):
+            ruta = self._bloque_sel[1:] if self._bloque_sel else ()
+            bloque = obtener(self.arbol, ruta)
+            if bloque is not None:
+                datos = QMimeData()
+                datos.setData(MIME_FORMULA, arbol_a_texto(bloque).encode("utf-8"))
+                portapapeles.setMimeData(datos)
+            return True
+        if not evento.matches(QKeySequence.StandardKey.Paste):
+            return False
+        datos = portapapeles.mimeData()
+        if datos is None or not datos.hasFormat(MIME_FORMULA):
+            return True
+        analizar = texto_a_arbol_valor if self.valor else texto_a_arbol
+        try:
+            nodo = analizar(bytes(datos.data(MIME_FORMULA)).decode("utf-8"), *self._datos())
+        except ValueError:
+            return True
+        if nodo is not None:
+            ruta = self._hueco_sel or self._bloque_sel or (0,)
+            self.soltar(ruta[1:], nodo)
+        return True
+
     def keyPressEvent(self, event: Any) -> None:  # noqa: N802
+        if self._portapapeles_formula(event):
+            event.accept()
+            return
         if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace) and self._hueco_sel is not None:
             ruta, self._hueco_sel = self._hueco_sel, None
             self.quitar_hueco_en(ruta)
@@ -1443,6 +1474,11 @@ class AreaBloques(_Superficie):
         super().keyPressEvent(event)
 
     def event(self, ev: Any) -> bool:
+        if ev.type() == QEvent.Type.ShortcutOverride and (
+            ev.matches(QKeySequence.StandardKey.Copy) or ev.matches(QKeySequence.StandardKey.Paste)
+        ):
+            ev.accept()
+            return True
         if ev.type() == QEvent.Type.ShortcutOverride and (self._hueco_sel is not None or self._bloque_sel is not None) \
                 and ev.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
             ev.accept()  # Supr con un hueco seleccionado es para el hueco, no para el atajo «Borrar» de la ventana
@@ -1734,11 +1770,12 @@ class Programador(QWidget):
 
     @staticmethod
     def _hoja_categoria() -> str:
-        return (f"QPushButton {{ text-align: left; padding: 0 10px; border: 1px solid transparent; "
+        return (f"QPushButton {{ text-align: left; padding: 0 {estilo.E1}px; border: 1px solid transparent; "
                 f"border-radius: {estilo.R_S}px; background: transparent; min-height: {estilo.ALTO_CONTROL_COMPACTO - 2}px; }}"
                 f"QPushButton:hover {{ background: {estilo.HOVER}; }}"
                 f"QPushButton:pressed {{ background: {estilo.PULSADO}; }}"
-                f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 9px; min-height: {estilo.ALTO_CONTROL_COMPACTO - 4}px; }}"
+                f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 {estilo.E1 - 1}px; "
+                f"min-height: {estilo.ALTO_CONTROL_COMPACTO - 4}px; }}"
                 f"QPushButton:checked {{ color: {estilo.TINTA}; background: {estilo.ACENTO_SUAVE}; border: 1px solid {estilo.ACENTO}; }}")
 
     def escalar(self) -> None:

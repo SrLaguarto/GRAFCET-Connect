@@ -622,8 +622,8 @@ class PulidoTrasLaSegundaPrueba(BaseQt):
         e.reconstruir()
         e.cambiado.emit()
         e.tipo_accion(did, "activacion")
-        e.cambiado.emit()
-        pa = p.accion
+        w.editar_accion(None, did)
+        pa = w.props.accion
         self.assertFalse(hasattr(pa, "manual"))
         self.assertEqual(pa.l_valor.text(), "? :=")
         pa.poner_variable("Q")

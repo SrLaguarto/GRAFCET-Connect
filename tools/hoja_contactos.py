@@ -79,7 +79,6 @@ class Contexto:
         from escritorio.ventana import Ventana
         self.tmp = tempfile.TemporaryDirectory()
         self.w = Ventana(QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat))
-        self.w._cambiar_modo_propiedades("abajo")  # (las pantallas parten de la barra inferior; el defecto del programa es «flotante»)
         self.w.nuevo()
         self.e = self.w.edicion
         self.e.ed.dirty = False
@@ -138,12 +137,10 @@ def _flotante(que: str) -> Callable[[Contexto], None]:
     def preparar(c: Contexto) -> None:
         _edicion(c)
         e, w = c.e, c.w
-        w._cambiar_modo_propiedades("flotante")
         sid = c.ids["etapas"][1 if que == "continua" else 2]
         if que == "continua":  # con la ventana de una etapa abierta y fijada, se selecciona una acción continua
             e.seleccionar([c.ids["etapas"][0]])
             w._abrir_opciones()
-            w.props.t_fijar.setChecked(True)
         nuevas = ("evento", "activacion", "desactivacion", "activacion_numerica", "evento_numerico")
         if que in nuevas:
             tipo = que.split("_")[0]
@@ -176,7 +173,7 @@ def _props_plegado(c: Contexto) -> None:
     c.e.seleccionar([c.ids["etapas"][0]])
     c.w._abrir_opciones()
     _bombear(6)
-    c.w._mostrar_panel("inferior", False)
+    c.w.flot.cerrar()
     _bombear(8)
 
 
@@ -329,7 +326,11 @@ def recorrer(ancho: int, alto: int, nombres: list[str] | None = None) -> Iterato
 
 def imagenes(c: Contexto) -> list[QImage]:
     """La ventana principal y, si hay, cada diálogo abierto (cada uno a su tamaño real)."""
-    return [c.w.grab().toImage(), *(x.grab().toImage() for x in c.extras if x.isVisible())]
+    ventanas = [x for x in c.extras if x.isVisible()]
+    flotante = c.w.flot.principal
+    if flotante is not None and flotante.isVisible():
+        ventanas.append(flotante)
+    return [c.w.grab().toImage(), *(x.grab().toImage() for x in ventanas)]
 
 
 def _hoja(tarjetas: list[tuple[str, QImage]], ancho_tarjeta: int = 640, columnas: int = 3) -> QImage:

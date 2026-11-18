@@ -9,7 +9,6 @@ if QT:
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QLabel
     from escritorio import leyenda
-    from escritorio.alto_opciones import alto_minimo_transicion
 from escritorio.mensajes import amable, motivo_parada, partir
 
 SECCIONES = ("Etapas", "Transiciones", "Acciones", "Jerarquía y forzado", "Temporizadores", "Ratón y teclado")
@@ -111,40 +110,7 @@ class Interfaz(BaseQt):
         QApplication.processEvents()
         return w, e, ids
 
-    def test_SALT01_panel_de_transicion_enseña_todos_los_operadores_sin_barra(self):
-        """REQ-EDT-09: al seleccionar una transición el panel inferior mide al menos lo justo para ver la paleta de
-        operadores sin barra de desplazamiento; si es menor, se agranda."""
-        w, e, ids = self._transicion_seleccionada()
-        self.assertEqual(w.props.pagina, "transicion")
-        self.assertGreaterEqual(w.vsplit.sizes()[1], alto_minimo_transicion(w.props), "al abrirlo ya cabe")
-        total = sum(w.vsplit.sizes())
-        w.vsplit.setSizes([total - 90, 90])  # el usuario lo deja pequeño con el divisor
-        w.vsplit.splitterMoved.emit(total - 90, 1)
-        e.seleccionar([ids[0]])
-        QApplication.processEvents()
-        e.seleccionar([ids[1]])
-        QApplication.processEvents()
-        QApplication.processEvents()
-        self.assertGreaterEqual(w.vsplit.sizes()[1], alto_minimo_transicion(w.props))
-        w.props.prog.elegir_categoria("operador")
-        QApplication.processEvents()
-        barra = w.props.prog._sc_paleta.verticalScrollBar()
-        self.assertEqual(barra.maximum(), 0, "la paleta de operadores se ve entera")
-        self.assertTrue(w.props.caja_formula.isVisible())
 
-    def test_SALT02_un_panel_mayor_que_el_minimo_se_respeta(self):
-        """REQ-EDT-09: si el usuario hace el panel más grande que el mínimo, seleccionar una transición no lo cambia."""
-        w, e, ids = self._transicion_seleccionada()
-        e.seleccionar([ids[0]])
-        QApplication.processEvents()
-        total = sum(w.vsplit.sizes())
-        grande = alto_minimo_transicion(w.props) + 60
-        w.vsplit.setSizes([total - grande, grande])
-        w.vsplit.splitterMoved.emit(total - grande, 1)
-        e.seleccionar([ids[1]])
-        QApplication.processEvents()
-        QApplication.processEvents()
-        self.assertEqual(w.vsplit.sizes()[1], grande)
 
     def test_SRCT01_cambiar_el_tamaño_de_la_ventana_no_recentra_y_ancla_al_area_cliente(self):
         """REQ-EDT-09: al redimensionar conserva zoom y coordenadas respecto al área cliente de la ventana.

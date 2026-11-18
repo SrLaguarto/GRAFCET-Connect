@@ -23,9 +23,8 @@ else:
 
 @unittest.skipUnless(QT, "requiere PySide6")
 class RematesTrasD(BaseQt):
-    def preparar(self, tipo="transicion", flotante=False, ancho=1366, alto=768):
+    def preparar(self, tipo="transicion", flotante=True, ancho=1366, alto=768):
         w, e = self.vacio()
-        w._cambiar_modo_propiedades("flotante" if flotante else "abajo")
         ids = self.cadena(e)
         e.nueva_variable("aux", "internal")
         w.resize(ancho, alto)
@@ -63,6 +62,7 @@ class RematesTrasD(BaseQt):
         sid = e.poner_etapa(QPointF(700, 100))
         e.seleccionar([sid])
         antes = len(e.M["steps"]), len(e.M["transitions"])
+        w.flot.cerrar()
         w.diagrama.setFocus()
         QTest.keyClick(w.diagrama, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
         QApplication.processEvents()
@@ -85,34 +85,10 @@ class RematesTrasD(BaseQt):
             self.assertIn("SIMULACIÓN", w.estado.text())
             w.cambiar_modo("editar")
 
-    def test_SREM203_aviso_en_linea_bajo_formula_y_papelera_centrada(self):
-        for flotante in (False,):  # (la ventana flotante ya no tiene fila «Fórmula» ni aviso fijo, y la papelera va junto a las categorías: SPFL29 y SPFL30)
-            w, e, p, aid = self.preparar(flotante=flotante)
-            estado, campo = p.t_estado, p.t_texto
-            self.assertNotIn("papelera", vars(p.prog))
-            self.assertFalse(estado.wordWrap())
-            self.assertEqual(estado.height(), estado.fontMetrics().height())
-            self.assertGreater(estado.y(), campo.geometry().bottom())
-            self.assertEqual(estado.x(), campo.x())
-            texto = "Error de validación\n" + "con una explicación extensa. " * 30
-            estado.setText(texto)
-            self.assertEqual(estado.toolTip(), texto)
-            elidido = estado.texto_visible()
-            self.assertNotIn("\n", elidido)
-            self.assertTrue(elidido.endswith("…"))
 
-    def test_SREM204_frase_usa_el_ancho_completo(self):
-        for flotante in (False,):  # (la ventana flotante ya no lleva la frase de la acción: SPFL29)
-            w, e, p, aid = self.preparar("evento", flotante)
-            frase = p.accion.frase
-            self.assertGreater(frase.width(), 300)
-            self.assertGreater(frase.width(), p.izq.width())
-            self.assertAlmostEqual(frase.width(), p.width() - p.layout().contentsMargins().left()
-                                   - p.layout().contentsMargins().right(), delta=2)
-            self.assertTrue(frase.wordWrap())
 
     def test_SREM205_fila_valor_centrada_y_salto_al_estrechar(self):
-        for flotante in (False, True):
+        for flotante in (True,):
             w, e, p, aid = self.preparar("evento", flotante)
             pa = p.accion
             controles = [pa.variable, pa.l_fichas, *pa.fichas.values()]
@@ -151,7 +127,7 @@ class RematesTrasD(BaseQt):
 
     def test_SREM207_filas_de_categorias_en_tamanos_y_modos(self):
         for ancho, alto in ((1366, 768), (2000, 1250), (960, 1032)):
-            for flotante in (False, True):
+            for flotante in (True,):
                 for tipo in ("transicion", "condicionada", "evento"):
                     with self.subTest(ancho=ancho, flotante=flotante, tipo=tipo):
                         w, e, p, aid = self.preparar(tipo, flotante, ancho, alto)

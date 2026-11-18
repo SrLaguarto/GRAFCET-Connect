@@ -1,7 +1,8 @@
 """Barra de PLANOS y propiedades de su gráfico seleccionado."""
-from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QMenu, QPushButton,
-                               QToolBar, QToolButton, QWidget)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette
+from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QMenu, QPushButton, QStyle,
+                               QStyleOptionComboBox, QStylePainter, QToolBar, QToolButton, QWidget)
 
 from . import estilo
 from .campos_medidos import DecimalMedido
@@ -21,6 +22,29 @@ def comprobar_cabe(modelo, ajustes):
         raise ValueError(AVISO_NO_CABE) from exc
     if documento.total != 1:
         raise ValueError(AVISO_NO_CABE)
+
+
+class ComboZoom(QComboBox):
+    """Centra el valor seleccionado y el porcentaje de un zoom libre en el campo."""
+
+    def paintEvent(self, evento):
+        opcion = QStyleOptionComboBox()
+        self.initStyleOption(opcion)
+        pintor = QStylePainter(self)
+        tipo = QStyle.ComplexControl.CC_ComboBox
+        pintor.drawComplexControl(tipo, opcion)
+        zona = self.style().subControlRect(tipo, opcion, QStyle.SubControl.SC_ComboBoxEditField, self)
+        flecha = self.style().subControlRect(tipo, opcion, QStyle.SubControl.SC_ComboBoxArrow, self)
+        margen = flecha.width() + estilo.E1
+        # Reserva el mismo margen a ambos lados para centrar en toda la caja.
+        zona.setLeft(opcion.rect.left() + margen)
+        zona.setRight(opcion.rect.right() - margen)
+        if self.currentIndex() < 0:
+            texto, papel = self.placeholderText(), QPalette.ColorRole.PlaceholderText
+        else:
+            texto, papel = opcion.currentText, QPalette.ColorRole.ButtonText
+        texto = opcion.fontMetrics.elidedText(texto, Qt.TextElideMode.ElideRight, zona.width())
+        pintor.drawItemText(zona, int(Qt.AlignmentFlag.AlignCenter), opcion.palette, self.isEnabled(), texto, papel)
 
 
 class ControlesPlanos:
@@ -46,7 +70,7 @@ class ControlesPlanos:
         p.a_imprimir = p.barra.addAction("Imprimir…", lambda: p.editor and p.editor.imprimir())
         p.barra.addSeparator()
         p.a_menos = p.barra.addAction("−", lambda: p.zoom(1 / 1.15))
-        p.zoom_combo = QComboBox()
+        p.zoom_combo = ComboZoom()
         p.zoom_combo.setMinimumWidth(110)
         p.zoom_combo.addItem("Ajustar hoja", None)
         for n in (50, 75, 100, 125, 150, 200):

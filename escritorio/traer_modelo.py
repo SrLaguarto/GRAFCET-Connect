@@ -44,7 +44,7 @@ class Propuestas:
             variable = unidas.get(senal["id"])
             ya = variable["name"] if variable else ""
             nombre = ya or proponer(nombre_visible(senal))
-            marcada = not ya and not de_fabrica(senal["name"])
+            marcada = not bool(ya)
             self.filas.append(Fila(senal, nombre, marcada, ya))
         self.validar()
 

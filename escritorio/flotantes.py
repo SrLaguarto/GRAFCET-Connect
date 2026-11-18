@@ -3,16 +3,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QLineF, QObject, QPoint, QPointF, QRect, QRectF, QSignalBlocker, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QTransform
 from PySide6.QtWidgets import (
-    QApplication, QLabel,
+    QApplication, QGraphicsScene, QLabel, QLineEdit, QPlainTextEdit, QTextEdit,
     QBoxLayout, QFrame, QHBoxLayout, QLayout, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
 from .interaccion_propiedades import ArrastrePropiedades
 from . import estilo
-from .diagrama import COL, Z_EDIT, caja_barra, orientaciones, posiciones
+from .diagrama import ANCLA, COL, EVOLUCION_HORIZONTAL, Z_BAR, Z_EDIT, dibujar, orientaciones, posiciones
 from .paneles import TituloSeccion, pintar_marcador
 from .propiedades import ANCHO_COLUMNA, PanelPropiedades
 from .elementos_lupa import ocultar_vecinos
@@ -41,7 +41,11 @@ class Lupa(QWidget):
         super().__init__()
         self.vista = vista
         self.origen = QRectF()
+        self._escena = QGraphicsScene(self)
+        self._modelo = None
+        self._dependencias = None
         self.elemento = None
+        self.tallo_transicion: QLineF | None = None
         self.senales: list[tuple[QRectF, str]] = []
         self.recorte: list[QRectF] = []  # rectángulos de la escena que se pintan; vacío: todo lo que cae en `origen`
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
@@ -65,6 +69,12 @@ class Lupa(QWidget):
         t.translate(-centro.x(), -centro.y())
         return t
 
+    def preparar_dibujo(self, modelo: dict[str, Any], dependencias: bool) -> None:
+        if modelo is self._modelo and dependencias == self._dependencias:
+            return
+        dibujar(self._escena, modelo, {}, dependencias=dependencias)
+        self._modelo, self._dependencias = modelo, dependencias
+
     def paintEvent(self, evento: Any) -> None:  # noqa: N802
         marco = QPainter(self)  # la tarjeta de la vista previa: fondo suave, borde de 1 px y radio R_M, como las de los paneles
         marco.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -74,14 +84,20 @@ class Lupa(QWidget):
         marco.end()
         if self.origen.isEmpty():
             return
-        escena = self.vista.scene()
-        ocultos = ocultar_vecinos(escena, self.elemento, Z_EDIT)
+        escena = self._escena
+        minimo = Z_BAR if self.tallo_transicion is not None else float("-inf")
+        ocultos = ocultar_vecinos(escena, self.elemento, Z_EDIT, minimo)
         p = QPainter(self)
         p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         try:
-            destino = self.transformar().mapRect(self.origen)
+            t = self.transformar()
+            destino = t.mapRect(self.origen)
+            if self.tallo_transicion is not None:
+                pen = QPen(QColor(COL["text"]), 1.6 * t.m11())
+                pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+                p.setPen(pen)
+                p.drawLine(t.map(self.tallo_transicion))
             if self.recorte:  # solo el elemento: nada de las cajas vecinas que caen en el encuadre
-                t = self.transformar()
                 zona = QPainterPath()  # (la unión en un solo contorno: con rectángulos sueltos y bordes suavizados se vería una costura)
                 for r in self.recorte:
                     trozo = QPainterPath()
@@ -259,14 +275,17 @@ class VentanaFlotante(QFrame):
 
 
 class GestorFlotantes(QObject):
-    """Conserva el estado de la barra inferior y organiza una única ventana al usarla."""
+    """Organiza la única ventana de propiedades y su apertura explícita."""
 
     def __init__(self, ventana: Any) -> None:
         super().__init__(ventana)
         self.w = ventana
         self.vista = ventana.diagrama
         self.superficie = None
-        self.panel: PanelPropiedades | None = None
+        self.panel: PanelPropiedades = ventana._props
+        self._panel_pendiente = True
+        self._sesion = None
+        self.abierto = False
         self.principal: VentanaFlotante | None = None
         self.geometrias: dict[str, QRect] = {}
         self._escala = None
@@ -278,31 +297,77 @@ class GestorFlotantes(QObject):
         self._ocultando = False
 
     def _crear(self) -> None:
-        if self.panel is not None:
+        if self.principal is not None:
             return
         self.superficie = self.w.centralWidget()
         self.w.paginas_es.installEventFilter(self)
         self.superficie.installEventFilter(self)
         self.w.paginas_es.currentChanged.connect(self.actualizar)
-        self.panel = PanelPropiedades(flotante=True)
         self.panel.setObjectName("panelPropiedadesFlotante")
         self.principal = VentanaFlotante(self.superficie, self.vista)
         self.arrastre = ArrastrePropiedades(self.principal, self.w)
         self.principal.accion.lay_cuerpo.addWidget(self.panel)
+        self.panel.show()
         self.panel.destino_bloques = self.principal.condicion.lay_cuerpo
-        self.principal.cerrar_pedido.connect(lambda: self.w._mostrar_panel("inferior", False))
+        self.principal.cerrar_pedido.connect(self.cerrar)
         self.panel.prog.franja_cambiada.connect(self.colocar)
         self.panel.accion.prog.franja_cambiada.connect(self.colocar)
         self.panel.alto_cambiado.connect(self.colocar)
         self.vista.vista_cambiada.connect(self.colocar)
-        self.panel.setEnabled(self.w.props.isEnabled())
+        self.panel.setEnabled(self.activo())
+
+    def panel_actual(self) -> PanelPropiedades:
+        """Prepara los controles cuando se consultan sin abrir la ventana."""
+        if self._panel_pendiente and self.w.edicion is not None:
+            self.panel.mostrar(self.w.edicion)
+            self._panel_pendiente = False
+        return self.panel
 
     def activo(self) -> bool:
         w = self.w
         return (
-            w.modo_propiedades == "flotante" and w.modo == "editar"
+            w.modo == "editar"
             and w.edicion is not None and not w.solo_lectura and w.paginas_es.currentIndex() == 0
         )
+
+    def abrir(self, explicito: bool = True) -> None:
+        if not self.activo() or (not explicito and not self.abierto):
+            return
+        if not self.abierto:
+            from .sesion_propiedades import SesionPropiedades
+            self._sesion = SesionPropiedades(self.w.edicion)
+        self.abierto = True
+        self.actualizar()
+
+    def cerrar(self) -> None:
+        self._cerrar(confirmar=True)
+
+    def _cerrar(self, confirmar: bool) -> None:
+        if not self.abierto:
+            return
+        sesion, self._sesion = self._sesion, None
+        foco = QApplication.focusWidget()
+        if self.principal is not None and isinstance(foco, (QLineEdit, QPlainTextEdit, QTextEdit)):
+            if foco.window() is self.principal:
+                if confirmar:
+                    foco.clearFocus()
+                else:
+                    with QSignalBlocker(foco):
+                        foco.clearFocus()
+        self.abierto = False
+        if sesion is not None and sesion.edicion is self.w.edicion:
+            sesion.terminar(confirmar)
+        if self.w.edicion is not None:
+            self.w.edicion.parte_editada = None
+        self.ocultar()
+
+    def tras_gesto(self, antes: tuple, despues: tuple) -> None:
+        if not self.activo() or not self.abierto:
+            return
+        mismo = despues == antes and bool(despues[0])
+        sin_nada = not antes[0] and antes[1] is None and bool(despues[0])
+        if not mismo and not sin_nada:
+            self.cerrar()
 
     def hay_ventanas(self) -> bool:
         return self.principal is not None and self.principal.isVisible()
@@ -332,8 +397,7 @@ class GestorFlotantes(QObject):
         return foco is not None and (hasattr(foco, "cancelado") or hasattr(foco, "cerrado"))
 
     def _esc(self, evento: Any, receptor: QObject) -> bool:
-        """Esc con la ventana abierta: si hay un desplegable abierto, o un campo con algo que Esc cancela, o el foco está en otra ventana, lo
-        suyo primero; si no, cierra la ventana (también con el foco en el dibujo: sin deseleccionar a la vez)."""
+        """Esc primero cierra un desplegable abierto y, en Propiedades, cancela la sesión."""
         if QApplication.activePopupWidget() not in (None, self.principal):
             return False
         foco = QApplication.focusWidget()
@@ -341,17 +405,36 @@ class GestorFlotantes(QObject):
             if not isinstance(receptor, QWidget) or receptor.window() not in (self.w, self.principal):
                 return False
             foco = receptor  # el foco global puede seguir en el contenedor del popup que acaba de cerrarse
-        if self._cancela_con_esc(foco):
-            return False
         if evento.type() == QEvent.Type.ShortcutOverride:
             evento.accept()  # (el atajo de Esc de la ventana, que deselecciona, no salta: llega la tecla)
         else:
-            self.w._mostrar_panel("inferior", False)
+            self._cerrar(confirmar=False)
+        return True
+
+    def _intro(self, evento: Any, receptor: QObject) -> bool:
+        if QApplication.activePopupWidget() not in (None, self.principal):
+            return False
+        if not isinstance(receptor, QWidget) or receptor.window() is not self.principal:
+            return False
+        modificadores = evento.modifiers()
+        multilinea = isinstance(receptor, (QPlainTextEdit, QTextEdit))
+        if modificadores != (Qt.KeyboardModifier.ControlModifier if multilinea else Qt.KeyboardModifier.NoModifier):
+            return False
+        if self._cancela_con_esc(receptor):
+            return False
+        if evento.type() == QEvent.Type.ShortcutOverride:
+            evento.accept()
+        else:
+            self.cerrar()
         return True
 
     def actualizar(self) -> None:
+        self._panel_pendiente = True
         w = self.w
-        if not self.activo() or not w.visibilidad_paneles.esta_abierto("inferior"):
+        if not self.activo():
+            self.ocultar()
+            return
+        if not self.abierto:
             self.ocultar()
             return
         self._crear()
@@ -359,7 +442,7 @@ class GestorFlotantes(QObject):
             self._escala = (w._hoja_escala, estilo.ESCALA)
             self.panel.escalar(w._hoja_escala)
             self.principal.escalar()
-        self.panel.mostrar(w.edicion)
+        self.panel_actual()
         p, v = self.panel, self.principal
         if p.pagina == "vacio":
             self.ocultar()
@@ -411,24 +494,25 @@ class GestorFlotantes(QObject):
             return False
         punto = evento.globalPosition().toPoint()
         popup = QApplication.activePopupWidget()
-        if popup not in (None, self.principal):
-            if popup.geometry().contains(punto):
-                return False
-            self._clic_fuera = True
-            popup.hide()
-            return True
+        cerrar_popup = popup not in (None, self.principal)
+        if cerrar_popup and popup.frameGeometry().contains(punto):
+            return False
         mascara = self.principal.mask()
         visible = mascara.isEmpty() or mascara.contains(punto - self.principal.pos())
-        if visible and self.principal.geometry().contains(punto):
+        dentro = visible and self.principal.geometry().contains(punto)
+        if dentro and not cerrar_popup:
             return False
         self._clic_fuera = True
-        self.w._mostrar_panel("inferior", False)
+        if cerrar_popup:
+            popup.hide()
+        elif not dentro:
+            self.cerrar()
         return True
 
     def eventFilter(self, objeto: QObject, evento: Any) -> bool:  # noqa: N802
         tipo = evento.type()
         if objeto is self.principal and tipo == QEvent.Type.Hide and not self._ocultando:
-            self.w._mostrar_panel("inferior", False)
+            self.cerrar()
         if objeto is self.w and tipo in (QEvent.Type.Hide, QEvent.Type.Close):
             self.ocultar()
             return False
@@ -439,6 +523,9 @@ class GestorFlotantes(QObject):
         if tipo in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress):
             es_esc = evento.key() == Qt.Key.Key_Escape and not evento.modifiers()
             if es_esc and self.hay_ventanas() and self._esc(evento, objeto):
+                return True
+            intro = evento.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            if intro and self.hay_ventanas() and self._intro(evento, objeto):
                 return True
             return self._bloquear_fondo(objeto, evento)
         if self._bloquear_fondo(objeto, evento):
@@ -576,8 +663,24 @@ class GestorFlotantes(QObject):
             origen = origen.united(QRectF(*caja["marca"]))
         return origen.adjusted(-estilo.E2, -estilo.E2, estilo.E2, estilo.E2)
 
+    def _tallo_transicion(self, origen: QRectF) -> QLineF | None:
+        if self.panel.pagina != "transicion":
+            return None
+        modelo = self.w.edicion.M
+        ident = self.panel.ident
+        centro = posiciones(modelo).get(ident)
+        if centro is None:
+            return None
+        x, y = centro
+        radio = ANCLA / 2
+        if orientaciones(modelo)[ident] in EVOLUCION_HORIZONTAL:
+            return QLineF(max(origen.left(), x - radio), y, min(origen.right(), x + radio), y)
+        return QLineF(x, max(origen.top(), y - radio), x, min(origen.bottom(), y + radio))
+
     def _recorte(self, origen: QRectF) -> list[QRectF]:
         """Lo que pinta la lupa de una acción: su caja, su marca y, si es la primera unida a la etapa, el trazo de unión."""
+        if self.panel.pagina == "transicion":
+            return []
         e = self.w.edicion
         caja = e.accion_en_id(self.panel.ident)
         if caja is None:
@@ -591,30 +694,20 @@ class GestorFlotantes(QObject):
         return sitios
 
     def _recorte_elemento(self, e: Any, origen: QRectF) -> list[QRectF]:
-        """Lo que pinta la lupa de una transición (su trazo, su barra y sus textos) o de una etapa (su caja): con los muñones del enlace hasta
-        el borde del encuadre, y nada de las etapas, transiciones o acciones vecinas. Otros elementos, sin recorte."""
+        """Conserva la caja de la etapa y los tramos cortos que salen de ella."""
         ident = self.panel.ident
         z = e.zonas_propiedades(ident).get("elemento")
         pos = posiciones(e.M)
         if z is None or ident not in pos:
             return []
         x, y = pos[ident]
-        grosor = 2.0  # (el trazo del enlace: 1,6 px, con holgura)
-        sitios = [QRectF(z)]
-        trans = orientaciones(e.M)
-        vertical = True  # el enlace va arriba y abajo
-        if ident in trans:
-            barra = caja_barra(trans[ident], x, y)
-            vertical = barra.width() > barra.height()
-        if vertical:
-            sitios.append(QRectF(x - grosor, origen.top(), 2 * grosor, z.top() - origen.top() + 1))
-            sitios.append(QRectF(x - grosor, z.bottom() - 1, 2 * grosor, origen.bottom() - z.bottom() + 1))
-        else:
-            sitios.append(QRectF(origen.left(), y - grosor, z.left() - origen.left() + 1, 2 * grosor))
-            sitios.append(QRectF(z.right() - 1, y - grosor, origen.right() - z.right() + 1, 2 * grosor))
-        if ident not in trans:  # la etapa puede llevar su enlace a la acción: un muñón corto a su derecha
-            sitios.append(QRectF(z.right() - 1, y - grosor, origen.right() - z.right() + 1, 2 * grosor))
-        return sitios
+        grosor = 2.0
+        return [
+            QRectF(z),
+            QRectF(x - grosor, origen.top(), 2 * grosor, z.top() - origen.top() + 1),
+            QRectF(x - grosor, z.bottom() - 1, 2 * grosor, origen.bottom() - z.bottom() + 1),
+            QRectF(z.right() - 1, y - grosor, origen.right() - z.right() + 1, 2 * grosor),
+        ]
 
     def _senales_lupa(self) -> None:
         v, p = self.principal, self.panel
@@ -648,8 +741,10 @@ class GestorFlotantes(QObject):
             self.arrastre.limitar()
             self.geometrias = {"principal": QRect(v.geometry())}
             zonas = self._zonas()
+            v.lupa.preparar_dibujo(self.w.edicion.M, self.vista.dependencias)
             v.lupa.origen = self._origen_lupa(zonas)
             v.lupa.elemento = self.panel.ident
+            v.lupa.tallo_transicion = self._tallo_transicion(v.lupa.origen)
             v.lupa.recorte = self._recorte(v.lupa.origen)
             v.lupa.update()
             self._senales_lupa()

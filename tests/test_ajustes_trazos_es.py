@@ -171,5 +171,8 @@ class ControlesES(BaseQt):
         self.assertFalse(pm.isNull());self.assertNotEqual(pm.toImage(),_icono_barra("conexion").pixmap(24,24).toImage())
         w,e=self.vacio();w.show();QTest.qWait(20);b=w.diagrama.b_dependencias
         self.assertEqual(b.accessibleName(),"Mostrar dependencias")
-        QTest.mouseClick(b,Qt.MouseButton.LeftButton);self.assertTrue(w.diagrama.dependencias)
-        QTest.mouseClick(b,Qt.MouseButton.LeftButton);self.assertFalse(w.diagrama.dependencias)
+        self.assertTrue(w.diagrama.dependencias)
+        QTest.mouseClick(b, Qt.MouseButton.LeftButton)
+        self.assertFalse(w.diagrama.dependencias)
+        QTest.mouseClick(b, Qt.MouseButton.LeftButton)
+        self.assertTrue(w.diagrama.dependencias)

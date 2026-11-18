@@ -25,7 +25,8 @@ class PanelPlegadoNoSeAbre(BaseQt):
         e = Edicion.desde(m.doc, {"1": (100, 80), "t": (100, 180), "2": (100, 280)}, "Panel")
         w = self.w
         w._establecer_edicion(e);w.resize(1366, 768);w.show();QApplication.processEvents()
-        w._mostrar_panel("inferior", False);QApplication.processEvents()
+        w.flot.cerrar()
+        QApplication.processEvents()
         return w, e
 
     def ids(self, e):
@@ -38,51 +39,56 @@ class PanelPlegadoNoSeAbre(BaseQt):
         pest = w.pestanas["inferior"]
         for ident in (etapas["1"], t):
             e.seleccionar([ident]);QApplication.processEvents()
-            self.assertFalse(w._plegables["inferior"].abierto)
-            self.assertTrue(w.inferior.isHidden())
+            self.assertFalse(w._props_abiertas())
+            self.assertTrue(not w.flot.hay_ventanas())
             self.assertFalse(hasattr(pest, "destellos"), "ya no hay parpadeo de la pestaña")
             self.assertFalse(hasattr(pest, "parpadear"))
         e.seleccionar([]);QApplication.processEvents()
-        self.assertTrue(w.inferior.isHidden())
+        self.assertTrue(not w.flot.hay_ventanas())
 
     def test_SAUC02_el_doble_clic_y_intro_abren_el_panel_plegado(self):
         """REQ-EDT-09: el doble clic en una etapa, una transición o una acción, y Intro con algo seleccionado, despliegan el panel."""
         w, e = self.preparar()
         etapas, t = self.ids(e)
         for ident in (etapas["1"], t):
-            w._mostrar_panel("inferior", False);QApplication.processEvents()
+            w.flot.cerrar()
+            QApplication.processEvents()
             c = e.centro(ident)
             e.seleccionar([ident])
-            self.assertTrue(w.inferior.isHidden())
+            self.assertTrue(not w.flot.hay_ventanas())
             e.doble(QPointF(c))
             QApplication.processEvents()
-            self.assertTrue(w._plegables["inferior"].abierto, ident)
-            self.assertTrue(w.inferior.isVisible())
-        w._mostrar_panel("inferior", False);QApplication.processEvents()
+            self.assertTrue(w._props_abiertas(), ident)
+            self.assertTrue(w.flot.hay_ventanas())
+        w.flot.cerrar()
+        QApplication.processEvents()
         e.seleccionar([t])
         w.diagrama.controlador = e
         QTest.keyClick(w.diagrama, Qt.Key.Key_Return);QApplication.processEvents()
-        self.assertTrue(w._plegables["inferior"].abierto)
+        self.assertTrue(w._props_abiertas())
 
     def test_SAUC03_una_accion_nueva_no_abre_el_panel_plegado(self):
         """REQ-EDT-09: añadir una acción (que pide su editor) o soltar una transición nueva no despliega un panel plegado."""
         w, e = self.preparar()
         etapas, _ = self.ids(e)
         e.anadir_accion(etapas["1"]);QApplication.processEvents()
-        self.assertTrue(w.inferior.isHidden())
-        w._mostrar_panel("inferior", False);QApplication.processEvents()
+        self.assertTrue(not w.flot.hay_ventanas())
+        w.flot.cerrar()
+        QApplication.processEvents()
         e.poner_transicion(QPointF(300, 300), pedir=True);QApplication.processEvents()  # soltar una transición de la paleta
-        self.assertTrue(w.inferior.isHidden())
+        self.assertTrue(not w.flot.hay_ventanas())
         # con el panel abierto, la petición lo deja abierto
-        w._mostrar_panel("inferior", True);QApplication.processEvents()
+        w._abrir_opciones()
+        QApplication.processEvents()
         e.anadir_accion(etapas["2"]);QApplication.processEvents()
-        self.assertTrue(w.inferior.isVisible())
+        self.assertFalse(w.flot.hay_ventanas(), "la acción continua usa el selector del dibujo")
 
     def test_SAUC04_con_el_panel_abierto_la_seleccion_lo_actualiza(self):
         """REQ-EDT-09: con el panel abierto, seleccionar cambia su página como siempre."""
         w, e = self.preparar()
         etapas, t = self.ids(e)
-        w._mostrar_panel("inferior", True);QApplication.processEvents()
+        w._abrir_opciones()
+        QApplication.processEvents()
         e.seleccionar([t]);QApplication.processEvents()
         self.assertEqual(w.props.pagina, "transicion")
         e.seleccionar([etapas["1"]]);QApplication.processEvents()
@@ -112,7 +118,6 @@ class PanelInferiorFijarYEsconder(BaseQt):
         a.sync()
         from escritorio.ventana import Ventana
         v = Ventana(QSettings(str(ini), QSettings.Format.IniFormat))
-        v._cambiar_modo_propiedades("abajo")  # (estas pruebas dan por hecha la barra inferior; el defecto es «flotante»)
         self.otras.append(v)
         return v
 
@@ -121,7 +126,8 @@ class PanelInferiorFijarYEsconder(BaseQt):
         e = Edicion.desde(m.doc, {"1": (100, 80), "t": (100, 180), "2": (100, 280)}, "Panel")
         w = self.w
         w._establecer_edicion(e);w.resize(1366, 768);w.show();QApplication.processEvents()
-        w._mostrar_panel("inferior", False);QApplication.processEvents()
+        w.flot.cerrar()
+        QApplication.processEvents()
         etapas = {s["label"]: s["id"] for s in e.M["steps"]}
         return w, e, etapas["1"], etapas["2"], e.M["transitions"][0]["id"]
 
@@ -142,63 +148,20 @@ class PanelInferiorFijarYEsconder(BaseQt):
     FONDO = QPointF(600, 420)
 
     def abierto(self, w):
-        return w._plegables["inferior"].abierto
+        return w._props_abiertas()
 
-    def test_SAUC31_arranca_plegado_y_sin_fijar_con_ajustes_vacios_o_antiguos(self):
-        """REQ-EDT-09: con ajustes vacíos, o con un `paneles/inferior=True` antiguo sin `inferior_fijo`, el panel inferior de
-        edición arranca plegado y «Fijar» desmarcado."""
-        for ajustes in ({}, {"paneles__inferior": True}, {"paneles__inferior": True, "paneles__inferior_fijo": False}):
-            v = self.ventana_con(**ajustes)
-            esperado = ajustes.get("paneles__inferior", False)
-            self.assertEqual(v._plegables["inferior"].abierto, esperado, ajustes)
-            self.assertEqual(v.a_inferior.isChecked(), esperado)
-            self.assertFalse(v.props.t_fijar.isChecked())
 
-    def test_SAUC32_arranca_abierto_y_fijado_si_se_guardo_fijado(self):
-        """REQ-EDT-09: con `paneles/inferior_fijo` y `paneles/inferior` en True arranca abierto y fijado; fijado pero con el
-        panel plegado, arranca plegado (y fijado)."""
-        v = self.ventana_con(paneles__inferior=True, paneles__inferior_fijo=True)
-        self.assertTrue(v._plegables["inferior"].abierto)
-        self.assertTrue(v.props.t_fijar.isChecked())
-        v2 = self.ventana_con(paneles__inferior=False, paneles__inferior_fijo=True)
-        self.assertFalse(v2._plegables["inferior"].abierto)
-        self.assertTrue(v2.props.t_fijar.isChecked())
 
-    def test_SAUC33_fijar_se_guarda_en_los_ajustes_y_tiene_su_tooltip(self):
-        """REQ-EDT-09: «Fijar» es un botón marcable con su tooltip, visible sin nada seleccionado, y guarda `paneles/inferior_fijo`."""
-        w, e, s1, s2, t = self.preparar()
-        w._mostrar_panel("inferior", True);QApplication.processEvents()
-        self.assertEqual(w.props.pagina, "vacio")
-        b = w.props.t_fijar
-        self.assertTrue(b.isVisible())
-        self.assertEqual(b.text(), "Fijar")
-        self.assertTrue(b.isCheckable())
-        self.assertEqual(b.toolTip(), "Mantiene abierto este panel. Sin fijar, se esconde al hacer clic fuera del elemento.")
-        self.assertFalse(w.ajustes.value("paneles/inferior_fijo", False, type=bool))
-        b.click()
-        self.assertTrue(w.ajustes.value("paneles/inferior_fijo", False, type=bool))
-        b.click()
-        self.assertFalse(w.ajustes.value("paneles/inferior_fijo", True, type=bool))
-        self.assertFalse(hasattr(w.props, "t_previa"), "«Vista previa» ya no existe")
 
-    def test_SAUC43_plegado_al_arrancar_no_deja_hueco_debajo_de_la_pestana(self):
-        """REQ-EDT-09: con la ventana ya mostrada, y al agrandarla, el panel plegado es solo su pestaña pegada al borde inferior y el
-        dibujo se queda con todo lo demás (antes quedaba un hueco vacío del alto del panel); seleccionar no lo cambia."""
+    def test_SAUC43_sin_panel_inferior_no_queda_hueco_al_arrancar(self):
+        """REQ-EDT-09: la edición no reserva altura ni pestaña para propiedades inferiores."""
         v = self.ventana_con()
-        v._mostrar_panel("inferior", True)
-        v._mostrar_panel("inferior", False)
-        v.show();QTest.qWait(50)
-        for ancho, alto in ((None, None), (1800, 1100)):
-            if ancho:
-                v.resize(ancho, alto);QTest.qWait(50)
-            panel = v._plegables["inferior"]
-            self.assertEqual(v.vsplit.sizes()[1], panel.GROSOR_PESTANA)
-            self.assertEqual(panel.y() + panel.height(), v.vsplit.height())
-        e = v.edicion
-        s = e.poner_etapa(v.diagrama.mapToScene(300, 200));e.cambia()
-        e.prensar(e.centro(s));e.soltar(e.centro(s));QTest.qWait(50)
-        self.assertEqual(v.vsplit.sizes()[1], v._plegables["inferior"].GROSOR_PESTANA)
-        e.ed.dirty = False;v.hide()
+        v.show()
+        for ancho, alto in ((1366, 768), (1920, 1080)):
+            v.resize(ancho, alto)
+            QApplication.processEvents()
+            self.assertFalse(v._plegables["inferior"].isVisible())
+            self.assertEqual(v.vsplit.sizes()[1], 0)
 
     def test_SAUC44_se_esconde_al_pulsar_sin_ensenar_la_pagina_nueva(self):
         """REQ-EDT-09: el clic fuera lo esconde al pulsar, sin esperas: no se ve antes el panel vacío ni el del otro elemento,
@@ -206,10 +169,10 @@ class PanelInferiorFijarYEsconder(BaseQt):
         w, e, s1, s2, t = self.preparar()
         self.doble_clic(e, e.centro(s1));QApplication.processEvents()
         alto = w.vsplit.sizes()[1]
-        self.assertGreater(alto, 32)
+        self.assertTrue(w.flot.hay_ventanas())
         e.prensar(self.FONDO)
         self.assertFalse(self.abierto(w), "ya al pulsar en el fondo")
-        self.assertEqual(w.vsplit.sizes()[1], 32)
+        self.assertEqual(w.vsplit.sizes()[1], alto)
         e.soltar(self.FONDO)
         self.doble_clic(e, e.centro(s1));QApplication.processEvents()
         self.assertTrue(self.abierto(w))
@@ -243,7 +206,7 @@ class PanelInferiorFijarYEsconder(BaseQt):
         QApplication.processEvents()
         self.assertEqual(e.sel, [])
         self.assertFalse(self.abierto(w))
-        self.assertTrue(w.inferior.isHidden())
+        self.assertTrue(not w.flot.hay_ventanas())
 
     def test_SAUC35_el_clic_en_el_mismo_elemento_no_lo_esconde_y_en_otro_si(self):
         """REQ-EDT-09: un clic en el mismo elemento (o arrastrarlo) no esconde el panel; un clic en otro elemento, sí."""
@@ -277,37 +240,19 @@ class PanelInferiorFijarYEsconder(BaseQt):
         self.assertTrue(self.abierto(w))
         self.assertEqual(w.props.pagina, "transicion")
 
-    def test_SAUC38_fijado_ningun_clic_lo_esconde_pero_la_flecha_y_ctrl_j_si_lo_pliegan(self):
-        """REQ-EDT-09: fijado, ni el fondo ni otro elemento lo esconden y la selección lo actualiza; la flecha y Ctrl+J lo
-        pliegan y sigue fijado."""
-        w, e, s1, s2, t = self.preparar()
-        w.props.t_fijar.setChecked(True)
-        self.doble_clic(e, e.centro(s1));QApplication.processEvents()
-        self.clic(e, self.FONDO);self.esperar()
-        self.assertTrue(self.abierto(w), "fondo")
-        self.clic(e, e.centro(t));self.esperar()
-        self.assertTrue(self.abierto(w), "otro elemento")
-        self.assertEqual(w.props.pagina, "transicion", "la selección lo actualiza")
-        w.flechas["inferior"].click();QApplication.processEvents()
-        self.assertFalse(self.abierto(w), "la flecha lo pliega")
-        self.assertTrue(w.props.t_fijar.isChecked(), "y sigue fijado")
-        w.a_inferior.setChecked(False)
-        self.assertTrue(w._plegables["inferior"].isHidden())
-        w.a_inferior.setChecked(True)
-        QApplication.processEvents()
-        self.assertTrue(self.abierto(w))
-        w.a_inferior.setChecked(False);QApplication.processEvents()
-        self.assertFalse(self.abierto(w))
-        self.assertTrue(w.props.t_fijar.isChecked())
 
     def test_SAUC39_un_clic_dentro_del_panel_o_en_variables_no_lo_esconde(self):
         """REQ-EDT-09: un clic en la lista de variables, en el propio panel o en la paleta no esconde el panel sin fijar."""
         w, e, s1, s2, t = self.preparar()
         self.doble_clic(e, e.centro(s1));QApplication.processEvents()
-        for widget in (w.variables, w.props.cabecera, w.props.s_etiqueta, w.paleta.viewport()):
+        for widget in (w.flot.principal.cabecera, w.props.s_etiqueta):
             QTest.mouseClick(widget, Qt.MouseButton.LeftButton)
             self.esperar()
             self.assertTrue(self.abierto(w), widget)
+
+        QTest.mouseClick(w.variables, Qt.MouseButton.LeftButton)
+        self.esperar()
+        self.assertFalse(self.abierto(w), "el clic fuera cierra la flotante")
 
     def test_SAUC40_seleccionar_con_el_panel_plegado_no_lo_abre_ni_parpadea(self):
         """REQ-EDT-09: un clic que selecciona, con el panel plegado, no lo abre ni deja rastro de parpadeo en la pestaña."""
@@ -331,23 +276,9 @@ class PanelInferiorFijarYEsconder(BaseQt):
         alto = d.viewport().height()
         self.clic(e, self.FONDO);self.esperar()
         self.assertFalse(self.abierto(w))
-        self.assertGreater(d.viewport().height(), alto, "el dibujo gana el alto del panel")
+        self.assertEqual(d.viewport().height(), alto, "la flotante no ocupa el alto del dibujo")
         self.assertEqual([d.viewport().mapToGlobal(d.mapFromScene(p)) for p in puntos], antes)
 
-    def test_SAUC42_al_volver_de_simular_el_panel_solo_sigue_abierto_si_estaba_fijado(self):
-        """REQ-EDT-09: al volver de simular, un panel abierto sin fijar vuelve plegado y uno fijado vuelve abierto."""
-        w, e, s1, s2, t = self.preparar()
-        for fijo in (False, True):
-            w.props.t_fijar.setChecked(fijo)
-            self.doble_clic(e, e.centro(s1));QApplication.processEvents()
-            self.assertTrue(self.abierto(w))
-            self.assertTrue(w.cambiar_modo("simular"))
-            QApplication.processEvents()
-            self.assertTrue(w.cambiar_modo("editar"))
-            for _ in range(4):
-                QApplication.processEvents()
-            self.assertEqual(self.abierto(w), fijo, fijo)
-            w._mostrar_panel("inferior", False)
 
 
 @unittest.skipUnless(QT, "requiere PySide6")
@@ -834,47 +765,21 @@ class PanelesMasCompactos(BaseQt):
         y = lambda wd: wd.mapTo(w, QPoint(0, 0)).y()
         return w, e, y
 
-    def test_SAUC19_la_cabecera_del_panel_inferior_es_una_sola_fila_y_hay_menos_capas_sobre_el_dibujo(self):
-        """REQ-EDT-09: título, Fijar y categorías comparten una fila.
-        El primer control y los bloques quedan bajo esa fila, según el token, sin cabeceras duplicadas."""
-        from escritorio import estilo
-        w, e, y = self.preparar()
-        limite = estilo.ALTO_CONTROL_COMPACTO + 7  # cabecera +4, borde +1 y separación +2
-        self.assertLessEqual(y(w.diagrama), 156, "antes, 157 (con el zoom siempre en la cabecera y un hueco bajo la franja)")
-        etapa = [s["id"] for s in e.M["steps"] if s["label"] == "1"][0]
-        e.seleccionar([etapa])
-        for _ in range(6):
-            QApplication.processEvents()
-        arriba = y(w.inferior)
-        self.assertLessEqual(y(w.props.s_etiqueta) - arriba, limite, "una fila de cabecera más sus márgenes")
-        e.seleccionar([e.M["transitions"][0]["id"]])
-        for _ in range(8):
-            QApplication.processEvents()
-        self.assertEqual(w.props.pagina, "transicion")
-        arriba = y(w.inferior)
-        self.assertLessEqual(y(w.props.prog) - arriba, limite, "una fila de cabecera, también en transición")
-        self.assertTrue(w.props.t_fijar.isVisible())
-        self.assertAlmostEqual(y(w.props.t_fijar) + w.props.t_fijar.height() / 2, y(w.props.titulo) + w.props.titulo.height() / 2,
-                               delta=4, msg="«Fijar» va en la fila del título")
-        self.assertFalse(w.props.l_bloques.isVisible(), "no repite el título")
-        self.assertIn("t", w.props.l_bloques.text())  # (el texto sigue, para quien lo lea)
 
-    def test_SAUC20_la_cabecera_de_una_accion_enseña_su_condicion_sobre_el_area_de_bloques(self):
-        """REQ-EDT-09: en una acción con condición, el título dice solo «Acción» y lo que programan los bloques se dice sobre el área de bloques
-        (no en la cabecera, para que las categorías suban a su fila)."""
+    def test_SAUC20_las_tarjetas_distinguen_accion_y_condicion(self):
+        """REQ-EDT-09: la flotante separa las tarjetas Acción y Condición."""
         w, e, y = self.preparar()
-        sid = [s["id"] for s in e.M["steps"] if s["label"] == "1"][0]
-        e.pedir_accion = lambda *a: None
+        sid = next(s["id"] for s in e.M["steps"] if s["label"] == "1")
+        e.pedir_accion = lambda *args: None
         did = e.anadir_accion(sid)
         e.tipo_accion(did, "condicionada")
-        for _ in range(8):
-            QApplication.processEvents()
-        self.assertEqual(w.props.pagina, "accion")
-        self.assertIn("Condición de la acción", w.props.l_bloques.text())
-        self.assertTrue(w.props.l_bloques.isVisible())
-        self.assertEqual(w.props.titulo.text(), "Propiedades · Acción")
-        self.assertGreater(y(w.props.l_bloques), y(w.props.titulo) + w.props.titulo.height() - 2)
-
+        w._abrir_opciones()
+        QApplication.processEvents()
+        v = w.flot.principal
+        self.assertEqual(v.accion.titulo.text(), "Acción")
+        self.assertEqual(v.condicion.titulo.text(), "Condición")
+        self.assertTrue(v.condicion.isVisible())
+        self.assertLess(v.condicion.geometry().bottom(), v.accion.geometry().top())
 
 
 @unittest.skipUnless(QT, "requiere PySide6")

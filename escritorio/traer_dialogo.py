@@ -1,24 +1,29 @@
 """Ventana modal de lectura, revisión e importación de E/S."""
 from concurrent.futures import ThreadPoolExecutor
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QBrush, QColor, QFont
-from PySide6.QtWidgets import (QDialog, QHBoxLayout, QHeaderView, QLabel, QPushButton, QScrollArea,
+from PySide6.QtCore import QEvent, QPoint, QRect, QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
+from PySide6.QtWidgets import (QDialog, QHBoxLayout, QHeaderView, QPushButton, QScrollArea,
                                QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
 from conexion.http_directo import ClienteDirecto
 from . import estilo
+from .interaccion_propiedades import ArrastrePropiedades
+from .medidas_propiedades import ancho_maximo, margen_horizontal
+from .paneles import EtiquetaElidida, TituloSeccion
 from .traer_modelo import Propuestas, interna, nombre_visible, traer
 
 
 class DialogoTraer(QDialog):
     def __init__(self, controlador):
-        super().__init__(controlador.panel)
+        banderas = Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint
+        super().__init__(controlador.panel, banderas)
+        self.anfitrion = controlador.panel.window()
         self.controlador = controlador
         self.setWindowTitle("Traer E/S del simulador de fábricas")
         self.setModal(True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setStyleSheet(estilo.hoja_global())
-        self.resize(940, 610)
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="traer-es")
         self.futuro = None
         self.propuestas = None
@@ -28,6 +33,8 @@ class DialogoTraer(QDialog):
         self.otra_escena = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(estilo.E2, estilo.E2, estilo.E2, estilo.E2)
+        layout.addWidget(self._crear_cabecera())
+        self.arrastre = ArrastrePropiedades(self, self.anfitrion)
         from .resumen_escena import ResumenEscena
         self.resumen_escena = ResumenEscena()
         self.estado = self.resumen_escena.etiqueta
@@ -59,12 +66,17 @@ class DialogoTraer(QDialog):
         fila.addStretch()
         fila.addWidget(cancelar)
         fila.addWidget(self.b_traer)
-        self.motivos = QLabel()
-        self.motivos.setWordWrap(True)
+        self.motivos = EtiquetaElidida()
+        self.motivos.setWordWrap(False)
         self.motivos.setTextFormat(Qt.TextFormat.PlainText)
         self.motivos.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.motivos.setStyleSheet(f"color:{estilo.ERROR}")
-        layout.addWidget(self.motivos)
+        aviso = QHBoxLayout()
+        aviso.addWidget(self.motivos, 1)
+        self.b_corregir = QPushButton("Corregir nombres incompatibles")
+        self.b_corregir.clicked.connect(self.corregir_nombres)
+        aviso.addWidget(self.b_corregir)
+        layout.addLayout(aviso)
         layout.addLayout(fila)
         self.b_leer.clicked.connect(self.leer)
         cancelar.clicked.connect(self.reject)
@@ -74,6 +86,69 @@ class DialogoTraer(QDialog):
         self.timer.timeout.connect(self.recoger)
         self.finished.connect(self.cerrar_trabajo)
         self.leer()
+
+    def _crear_cabecera(self):
+        self.cabecera = QWidget()
+        fila = QHBoxLayout(self.cabecera)
+        fila.setContentsMargins(estilo.E1, 0, 0, 0)
+        self.titulo = TituloSeccion(self.windowTitle())
+        self.titulo.setObjectName("tituloPanel")
+        fila.addWidget(self.titulo, 1)
+        cerrar = QToolButton()
+        cerrar.setText("✕")
+        cerrar.setToolTip("Cerrar")
+        cerrar.setAccessibleName("Cerrar Traer E/S")
+        cerrar.setAutoRaise(True)
+        cerrar.setFixedSize(estilo.ALTO_CONTROL, estilo.ALTO_CONTROL)
+        cerrar.clicked.connect(self.reject)
+        fila.addWidget(cerrar)
+        return self.cabecera
+
+    def paintEvent(self, evento):
+        pintor = QPainter(self)
+        pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pintor.setPen(QPen(QColor(estilo.ACENTO), 1))
+        pintor.setBrush(QColor(estilo.FONDO))
+        marco = QRectF(self.rect()).adjusted(.5, .5, -.5, -.5)
+        pintor.drawRoundedRect(marco, estilo.R_M, estilo.R_M)
+        pintor.end()
+
+    def showEvent(self, evento):
+        super().showEvent(evento)
+        self.anfitrion.installEventFilter(self)
+        QTimer.singleShot(0, self, self._centrar_en_ventana)
+
+    def hideEvent(self, evento):
+        self.anfitrion.removeEventFilter(self)
+        super().hideEvent(evento)
+
+    def eventFilter(self, objeto, evento):
+        if objeto is self.anfitrion and evento.type() in (QEvent.Type.Move, QEvent.Type.Resize):
+            self.arrastre.limitar()
+        return super().eventFilter(objeto, evento)
+
+    def _centrar_en_ventana(self):
+        if not self.isVisible():
+            return
+        anfitrion = self.anfitrion
+        pantalla = anfitrion.screen().availableGeometry()
+        area = pantalla
+        if anfitrion.isVisible():
+            cliente = QRect(anfitrion.mapToGlobal(QPoint()), anfitrion.size())
+            area = cliente.intersected(pantalla)
+        margen = margen_horizontal(area.width())
+        espacio = area.adjusted(margen, estilo.E6, -margen, -estilo.E6)
+        ancho = min(ancho_maximo(), espacio.width())
+        alto = min(610, espacio.height())
+        tamano = QSize(max(1, ancho), max(1, alto))
+        self.setMaximumSize(tamano)
+        self.resize(tamano)
+        cuadro = QRect(QPoint(), self.size())
+        cuadro.moveCenter(area.center())
+        if anfitrion.isVisible():
+            self.arrastre.limitar(cuadro.topLeft())
+        else:
+            self.move(cuadro.topLeft())
 
     def _fuente_titulo(self):
         fuente = QFont(self.font())
@@ -193,6 +268,8 @@ class DialogoTraer(QDialog):
         tabla.setMinimumHeight(min(260, 44 + len(filas) * 34))
         tabla.setMaximumHeight(min(300, 44 + len(filas) * 34))
         self._poner_filas(tabla, filas)
+        from .traer_celdas import ajustar_casillas
+        ajustar_casillas(tabla)
         tabla.ensurePolished()
         cabecera = tabla.horizontalHeader()
         cabecera.ensurePolished()
@@ -294,12 +371,26 @@ class DialogoTraer(QDialog):
         sufijo = f" ({pendientes} por corregir)" if pendientes else ""
         self.b_traer.setText(f"Traer {numero}{sufijo}")
         self.b_traer.setEnabled(numero > 0 and pendientes == 0)
-        motivos = [f"{f.nombre}: {f.motivo}" for f in self.propuestas.elegidas() if f.motivo]
-        self.motivos.setText("\n".join(dict.fromkeys(motivos)))
-        self.motivos.setVisible(bool(motivos))
+        from .avisos_nombres import resumen_nombres
+        pendientes = [f for f in self.propuestas.elegidas() if f.motivo]
+        self.motivos.setText(resumen_nombres(pendientes))
+        detalle = "\n".join(f"{f.nombre}: {f.motivo}" for f in pendientes)
+        self.motivos.setToolTip(f"{self.motivos.text()}\n{detalle}" if detalle else "")
+        self.motivos.setVisible(bool(pendientes))
+        self.b_corregir.setVisible(bool(pendientes))
         alto = estilo.ESCALAS[self.controlador.panel.escala]["ALTO_CONTROL"]
         for boton in self.findChildren(QPushButton):
             boton.setFixedHeight(alto)
+
+    def corregir_nombres(self):
+        from .avisos_nombres import corregir_nombres
+        corregir_nombres(self.propuestas)
+        self.cambiando = True
+        for tabla, filas in self.tablas:
+            for row, fila in enumerate(filas):
+                tabla.item(row, 2).setText(fila.nombre)
+        self.cambiando = False
+        self.pintar()
 
     def importar(self):
         self.resumen = traer(self.propuestas, self.controlador.historial)
@@ -308,5 +399,8 @@ class DialogoTraer(QDialog):
         self.controlador.aplicar()
         self.controlador.edicion.cambia()
         self.controlador.panel.estado.setText(self.resumen)
+        panel = self.controlador.panel
         self.accept()
+        if panel.config.modo == "directo" and panel.b_conectar.isEnabled():
+            panel.b_conectar.click()
         self.controlador.mostrar_resumen(self.resumen)

@@ -588,9 +588,7 @@ class BaseQt(unittest.TestCase):
         ajustes = QSettings(str(Path(self.tmp.name) / "a.ini"), QSettings.Format.IniFormat)
         # Estas pruebas previas usan la paleta lateral; H comprueba aparte los nuevos valores por defecto.
         ajustes.setValue("paletas/favoritos_principal_v1", True)
-        ajustes.setValue("paneles/izquierdo", True)
         self.w = Ventana(ajustes)
-        self.w._cambiar_modo_propiedades("abajo")  # (las pruebas del editor dan por hecha la barra inferior; el defecto es «flotante»)
 
     def tearDown(self):
         self.w.a_ejecutar.setChecked(False)
@@ -1200,10 +1198,8 @@ class FichaDeForzado(BaseQt):
         arrastrarla lleva su texto («forzado»); ocho fichas en dos columnas y cuatro filas."""
         from escritorio import propiedades
         w, e = self.vacio()
-        pa = w.paleta
-        ficha = next(pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole) == "forzado")
-        self.assertEqual(ficha.text(), "Forzado")
-        self.assertEqual(pa.mimeData([ficha]).text(), "forzado")
+        ficha = w.favoritos.botones["forzado"]
+        self.assertEqual(ficha.accessibleName(), "Forzado")
         from escritorio.ayudas_emergentes import texto_plano
         self.assertIn(propiedades.AYUDAS["forzado"], texto_plano(ficha.toolTip()))
         ayuda = propiedades.AYUDAS["forzado"]
@@ -1226,7 +1222,7 @@ class FichaDeForzado(BaseQt):
         self.assertEqual((contornos("forzado"), contornos("accion:continua")), (2, 1))
         # un clic en la ficha solo muestra su ayuda
         n = len(e.ed.undo_stack)
-        pa.itemClicked.emit(ficha)
+        ficha.click()
         self.assertEqual((e.mensaje, e.mensaje_info, w.ayuda.text(), len(e.ed.undo_stack)),
                          (propiedades.AYUDAS["forzado"], True, propiedades.AYUDAS["forzado"], n))
         # arrastrar la ficha: el texto que viaja
@@ -1249,8 +1245,7 @@ class FichaDeForzado(BaseQt):
                 return Qt.DropAction.IgnoreAction
         from unittest import mock
         with mock.patch.object(propiedades, "QDrag", FalsoDrag):
-            pa.setCurrentItem(ficha)
-            pa.startDrag(Qt.DropAction.CopyAction)
+            w.paleta.arrastrar_elemento("forzado", ficha)
         self.assertEqual([c.texto for c in capturados], ["forzado"])
         self.assertTrue(capturados[0].pm.rect().contains(capturados[0].punto))
 
@@ -1430,60 +1425,19 @@ class FichaDeForzado(BaseQt):
         e.soltar(pc)
         self.assertEqual((e.sel, e.accion, e.ver_accion, len(e.ed.undo_stack)), ([s1], aid, True, pila + 1))
 
-    def test_SEDI257_secciones_y_fichas_accesibles_a_1366x768(self):
-        """REQ-EDT-02, REQ-EDT-09: secciones legibles; todas las fichas accesibles con desplazamiento a 1366×768."""
-        w, e = self.vacio()
-        w.resize(1366, 768)
-        w.show()
-        self.app.processEvents()
-        pa = w.paleta
-        self.assertEqual((pa.count(), pa.REJILLA.height()), (20, 98))
-        self.assertEqual(len({pa.visualItemRect(pa.item(i)).x() for i in range(pa.count())}), 2)
-        for i in range(pa.count()):
-            pa.scrollToItem(pa.item(i))
-            self.app.processEvents()
-            self.assertTrue(pa.viewport().rect().contains(pa.visualItemRect(pa.item(i))), pa.item(i).text())
-        self.assertGreaterEqual(w.inferior.height(), w.props.minimumSizeHint().height())
 
     def test_SEDI267_la_paleta_se_encoge_en_ventanas_bajas_sin_subir_el_minimo_de_alto_de_la_ventana(self):
         """REQ-EDT-02, REQ-EDT-09: en ambos tamaños las fichas se alcanzan con scroll, sin aumentar el mínimo de ventana."""
         w, e = self.vacio()
-        pa = w.paleta
-        for tam in ((1366, 768), (1000, 600)):
-            w.resize(*tam)
+        for ancho, alto in ((1366, 768), (1000, 600)):
+            w.resize(ancho, alto)
             w.show()
             self.app.processEvents()
-            self.assertEqual((w.width(), w.height()), tam)
+            self.assertEqual((w.width(), w.height()), (ancho, alto))
             self.assertLessEqual(w.minimumSizeHint().height(), 564)
-            self.assertGreaterEqual(pa.viewport().width(), pa.REJILLA.width())
-            for clave in pa.CLAVES:
-                it = next(pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole) == clave)
-                pa.scrollToItem(it)
-                self.app.processEvents()
-                self.assertTrue(pa.viewport().rect().contains(pa.visualItemRect(it)), clave)
-            self.assertFalse(pa.horizontalScrollBar().isVisible())
+            barra = w.favoritos
+            self.assertEqual(barra._visibles + barra.ocultos, barra.orden)
 
-    def test_SEDI272_el_divisor_movido_a_mano_se_respeta_aunque_la_paleta_no_quepa_entera(self):
-        """REQ-EDT-09, REQ-EDT-02: la paleta solo gana su alto completo mientras el divisor entre el dibujo y el panel inferior
-        no se haya movido: si se arrastra para dar más sitio al panel, al pasar a Play y volver a Pausa el panel conserva su alto
-        y la paleta se desplaza."""
-        w, e = self.vacio()
-        ids = self.cadena(e)
-        e.conectar(ids[3], ids[0])  # cerrado en lazo, para poder pasar a Play
-        w.resize(1366, 768)
-        w.show()
-        self.app.processEvents()
-        pa = w.paleta
-        self.assertGreaterEqual(pa.height(), pa.minimumSizeHint().height())
-        w.vsplit.moveSplitter(w.vsplit.sizes()[0] - 40, 1)
-        self.app.processEvents()
-        movido = w.vsplit.sizes()
-        self.assertGreaterEqual(pa.height(), pa.minimumSizeHint().height())
-        alto_movido = pa.height()
-        self.assertTrue(w.cambiar_modo("simular"))
-        self.assertTrue(w.cambiar_modo("editar"))
-        self.app.processEvents()
-        self.assertEqual((w.vsplit.sizes(), pa.height(), pa.verticalScrollBar().isVisible()), (movido, alto_movido, True))
 
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
@@ -1598,11 +1552,7 @@ class GrafcetParcialSuelto(BaseQt):
         from escritorio import propiedades
         from escritorio.diagrama import VACIO_H, VACIO_W
         w, e = self.vacio()
-        pa = w.paleta
-        ficha = next(pa.item(i) for i in range(pa.count()) if pa.item(i).data(Qt.ItemDataRole.UserRole) == "parcial")
-        self.assertEqual(pa.count(), 20)
-        self.assertEqual(pa.mimeData([ficha]).text(), "parcial")
-        self.assertEqual(propiedades.COLOCABLES[-4:], ("forzado", "parcial", "texto", "imagen"))
+        ficha = w.favoritos.botones["parcial"]
         from escritorio.ayudas_emergentes import texto_plano
         self.assertIn(propiedades.AYUDAS["parcial"], texto_plano(ficha.toolTip()))
         ayuda = propiedades.AYUDAS["parcial"]
@@ -1626,7 +1576,7 @@ class GrafcetParcialSuelto(BaseQt):
         self.assertGreater(im.pixelColor(punto.x(), 10).alpha(), 0, "su borde de arriba")
         # un clic en la ficha solo muestra su ayuda
         n = len(e.ed.undo_stack)
-        pa.itemClicked.emit(ficha)
+        ficha.click()
         self.assertEqual((e.mensaje, e.mensaje_info, w.ayuda.text(), len(e.ed.undo_stack)),
                          (propiedades.AYUDAS["parcial"], True, propiedades.AYUDAS["parcial"], n))
         # arrastrarla: el texto que viaja
@@ -1648,8 +1598,7 @@ class GrafcetParcialSuelto(BaseQt):
             def exec(self, *a):
                 return Qt.DropAction.IgnoreAction
         with mock.patch.object(propiedades, "QDrag", FalsoDrag):
-            pa.setCurrentItem(ficha)
-            pa.startDrag(Qt.DropAction.CopyAction)
+            w.paleta.arrastrar_elemento("parcial", ficha)
         self.assertEqual([c.texto for c in capturados], ["parcial"])
         self.assertTrue(capturados[0].pm.rect().contains(capturados[0].punto))
 
@@ -1919,7 +1868,9 @@ class EncuadrarYDependencias(BaseQt):
         self.app.processEvents()
         d = w.diagrama
         b = d.b_dependencias
-        self.assertEqual((b.text(), b.isCheckable(), b.isChecked(), d.dependencias), ("Mostrar dependencias", True, False, False))
+        self.assertEqual(
+            (b.text(), b.isCheckable(), b.isChecked(), d.dependencias), ("Mostrar dependencias", True, True, True)
+        )
         lay = d.barra.layout()
         self.assertEqual([lay.itemAt(i).widget() for i in range(lay.count())],
                          [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion], "controles de zoom sin dependencias")
@@ -1933,7 +1884,10 @@ class EncuadrarYDependencias(BaseQt):
         r = e.anadir_recinto(enc)
         e.seleccionar([mid])
         self.app.processEvents()
-        self.assertEqual(self.rayas(w), [], "por defecto, sin trazos de dependencia")
+        self.assertEqual(len(self.rayas(w)), 4, "por defecto, dependencias visibles")
+        b.click()
+        self.app.processEvents()
+        self.assertFalse(self.rayas(w))
         marcos, escala, sel = cajas_parciales(e.M), d.escala(), list(e.sel)
         contenido = d.scene().itemsBoundingRect()
         b.click()

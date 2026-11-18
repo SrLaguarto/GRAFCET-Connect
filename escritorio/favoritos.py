@@ -1,4 +1,4 @@
-"""Favoritos de la paleta: selección persistente, arrastre, reordenación y desborde."""
+"""Catálogo de fichas, arrastre al dibujo y desborde de Favoritos."""
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, Signal
@@ -191,13 +191,11 @@ class BotonFavorito(QToolButton):
 
 
 class BarraFavoritos(QWidget):
-    contenido_cambiado = Signal()
     distribucion_cambiada = Signal()
     CLAVE_AJUSTES = "favoritos/elementos"
 
     def __init__(self, ajustes, paleta):
         super().__init__()
-        self.ajustes = ajustes
         self.paleta = paleta
         self.lado_icono = round((estilo.ALTO_BARRA + LADO_MINI) / 2)
         self.compacta = False
@@ -205,6 +203,8 @@ class BarraFavoritos(QWidget):
         self._visibles = []
         self.ocultos = []
         ajustes.remove(self.CLAVE_AJUSTES)
+        ajustes.remove("favoritos/visible")
+        ajustes.remove("paletas/favoritos_principal_v1")
         ajustes.remove("favoritos/texto_imagen_v1")
         self.orden = list(PREDETERMINADOS)
         self.botones = {h: BotonFavorito(self, h) for h in COLOCABLES}
@@ -263,6 +263,14 @@ class BarraFavoritos(QWidget):
         for x in (0, self.width() - 1):
             pintor.drawLine(x, estilo.E1, x, self.height() - estilo.E1)
         pintor.end()
+
+    def foco(self):
+        if not self.isVisibleTo(self.window()):
+            return []
+        botones = [self.botones[clave] for clave in self._visibles]
+        if self.desborde.isVisible():
+            botones.append(self.desborde)
+        return botones
 
     def crear_menu_desborde(self):
         menu = QMenu(self)

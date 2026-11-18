@@ -65,41 +65,7 @@ class PaletaUnificada(BaseQt):
         pr._pintar_ficha(p,"parcial");fuente=p.font();p.end()
         self.assertFalse(fuente.bold());self.assertLess(fuente.pixelSize(),120*.2)
 
-    def test_SPAL05_dos_columnas_cabeceras_completas_y_nombres_debajo(self):
-        """REQ-EDT-02, REQ-EDT-09: orden y cabeceras se conservan, dos fichas por fila y espacio para todos los nombres."""
-        w,p=self.preparar();self.assertEqual(w.dock.width(),218)
-        self.assertEqual([p.item(i).data(Qt.ItemDataRole.UserRole) for i in range(p.count()) if p.item(i).data(Qt.ItemDataRole.UserRole)],list(pr.COLOCABLES))
-        self.assertEqual((p.ICONO.width(),p.ICONO.height()),(72,64))
-        fila = 0
-        fuente = QFont(p.font())
-        fuente.setPixelSize(estilo.T_PEQUENA)
-        fuente_real = QRawFont.fromFont(fuente)
-        self.assertTrue(fuente_real.isValid(), "La prueba debe usar los glifos reales de la paleta")
-        self.assertTrue(fuente_real.supportsCharacter(ord("ó")))
-        fm = QFontMetrics(fuente, p.viewport())
-        for titulo,claves in pr.SECCIONES:
-            cab=p.visualItemRect(p.item(fila));self.assertEqual(p.item(fila).text(),titulo)
-            self.assertEqual((cab.x(),cab.width()),(0,p.viewport().width()));fila+=1
-            for j,clave in enumerate(claves):
-                r=p.visualItemRect(p.item(fila+j));self.assertEqual(r.x(),(j%2)*(p.viewport().width()//2))
-                if j%2:self.assertEqual(r.y(),p.visualItemRect(p.item(fila+j-1)).y())
-                texto=fm.boundingRect(QRect(0,0,r.width()-14,27),Qt.TextFlag.TextWordWrap,p.item(fila+j).text())
-                self.assertLessEqual(texto.height(),27);self.assertLessEqual(texto.width(),r.width()-14)
-            fila+=len(claves)
-        self.assertEqual(fila,p.count())
 
-    def test_SPAL06_ancho_y_minimo_no_crecen_y_scroll_alcanza_todas(self):
-        """REQ-EDT-09: se conserva el ancho de 218 y el mínimo anterior; a 1366×768 y 1000×600 se alcanzan las fichas."""
-        w,p=self.preparar()
-        self.assertLessEqual(p.minimumSizeHint().height(),3*34+2*p.frameWidth()+2)
-        for ancho,alto in ((1366,768),(1000,600)):
-            w.resize(ancho,alto)
-            for _ in range(5):self.app.processEvents()
-            self.assertEqual((w.width(),w.height()),(ancho,alto));self.assertEqual(w.dock.width(),218)
-            for i in range(p.count()):
-                p.scrollToItem(p.item(i));self.app.processEvents()
-                self.assertTrue(p.viewport().rect().contains(p.visualItemRect(p.item(i))),p.item(i).text())
-            self.assertEqual(p.horizontalScrollBar().maximum(),0);self.assertGreater(p.verticalScrollBar().maximum(),0)
 
     def test_SPAL07_gestos_reales_arrastran_parcial_y_accion_a_su_escala(self):
         """REQ-EDT-02, REQ-EDT-03: pulsar y arrastrar conserva MIME, imagen compartida y punto de colocación con zoom y DPR."""
@@ -113,14 +79,14 @@ class PaletaUnificada(BaseQt):
         p.escala=lambda:1.5
         with mock.patch.object(pr,"QDrag",Drag):
             for clave in ("parcial","accion:condicionada"):
-                item=next(p.item(i) for i in range(p.count()) if p.item(i).data(Qt.ItemDataRole.UserRole)==clave)
-                p.scrollToItem(item);self.app.processEvents();r=p.visualItemRect(item);vp=p.viewport()
+                vp = w.favoritos.botones[clave]
+                r = vp.rect()
                 antes=len(capturas)
                 QTest.mousePress(vp,Qt.MouseButton.LeftButton,pos=r.center())
                 QTest.mouseMove(vp,r.center()+QPoint(30,0));QTest.mouseMove(vp,r.center()+QPoint(45,0))
                 QTest.mouseRelease(vp,Qt.MouseButton.LeftButton,pos=r.center()+QPoint(45,0))
                 self.assertEqual(len(capturas),antes+1);c=capturas[-1];self.assertEqual(c["clave"],clave)
-                esperado,punto=pr.figura(clave,1.5,p.devicePixelRatioF())
+                esperado,punto=pr.figura(clave,1.5,vp.devicePixelRatioF())
                 self.assertEqual(c["punto"],punto);self.assertEqual(c["pm"].toImage(),esperado.toImage())
         for clave in pr.COLOCABLES:
             for escala,dpr in ((.5,1),(1,2),(1.7,2)):

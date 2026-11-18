@@ -20,7 +20,13 @@ class Paneles(BaseQt):
     def preparar(self,ancho=1366,alto=768):
         m=M().var("a").var("b").step("1",True).step("2").trans("t",["1"],["2"],"a")
         e=Edicion.desde(m.doc,{"1":(100,80),"t":(100,180),"2":(100,280)},"Paneles")
-        w=self.w;w._establecer_edicion(e);w.resize(ancho,alto);w.show();w.editar_condicion("t");QApplication.processEvents()
+        w = self.w
+        w._establecer_edicion(e)
+        w.resize(ancho, alto)
+        w.show()
+        w.editar_condicion("t")
+        QApplication.processEvents()
+        w.flot.cerrar()
         return w,e
 
     def arrastrar(self,divisor,delta):
@@ -34,26 +40,17 @@ class Paneles(BaseQt):
         """REQ-EDT-09: cada cabecera pliega y la pestaña nombrada recupera su panel, con menú y ajustes coherentes."""
         w,e=self.preparar()
         self.assertFalse(w.diagrama._bordes)
-        for n,texto in (("izquierdo","Elementos"),("derecho","Variables"),("inferior","Propiedades")):
+        for n,texto in (("derecho", "Variables"),):
             self.assertTrue(w.flechas[n].isVisible())
             QTest.mouseClick(w.flechas[n],Qt.MouseButton.LeftButton);QApplication.processEvents()
             self.assertTrue(w._panel(n).isHidden());self.assertTrue(w.pestanas[n].isVisible())
-            self.assertEqual(w.pestanas[n].text(),texto);self.assertTrue(w._accion_panel(n).isChecked())
+            self.assertEqual(w.pestanas[n].text(), texto)
+            self.assertFalse(w._accion_panel(n).isChecked())
             self.assertFalse(w.ajustes.value("paneles/"+n,True,type=bool))
             self.assertFalse(w.diagrama.isAncestorOf(w.pestanas[n]))
             QTest.mouseClick(w.pestanas[n],Qt.MouseButton.LeftButton);QApplication.processEvents()
             self.assertTrue(w._panel(n).isVisible());self.assertTrue(w._accion_panel(n).isChecked())
 
-    def test_SPAN02_izquierdo_ancho_fijo_y_arrastre_para_plegar(self):
-        """REQ-EDT-09: el izquierdo no se amplía; arrastrar hacia dentro lo pliega y su pestaña recupera el ancho fijo."""
-        w,e=self.preparar();ancho=w.dock.width()
-        self.arrastrar(w.split_izquierdo,QPoint(80,0))
-        self.assertEqual(w.dock.width(),ancho);self.assertTrue(w.dock.isVisible())
-        self.arrastrar(w.split_izquierdo,QPoint(-50,0))
-        self.assertTrue(w.dock.isHidden());self.assertEqual(w._plegables["izquierdo"].width(),32)
-        self.assertGreater(w.pestanas["izquierdo"].height(),100)
-        QTest.mouseClick(w.pestanas["izquierdo"],Qt.MouseButton.LeftButton);QApplication.processEvents()
-        self.assertEqual(w.dock.width(),ancho)
 
     def test_SPAN03_derecho_amplia_nombre_y_pliega_antes_de_comprimir_tabla(self):
         """REQ-EDT-07, REQ-EDT-09: solo Nombre absorbe el ancho extra; bajar del mínimo pliega y restaura el tamaño útil anterior."""
@@ -68,46 +65,17 @@ class Paneles(BaseQt):
         self.assertAlmostEqual(w.derecho.width(),amplio,delta=2)
         self.assertEqual([t.columnWidth(i) for i in (1,2)],antes[1:])
 
-    def test_SPAN04_inferior_pliega_bajo_minimo_y_recupera_altura_por_atajo(self):
-        """REQ-EDT-09: el editor no se comprime por debajo de su mínimo útil; la pestaña y Ctrl+J conservan la altura anterior."""
-        w,e=self.preparar();self.arrastrar(w.vsplit,QPoint(0,-35));alto=w.inferior.height()
-        formula=w.props.t_texto.text()
-        self.arrastrar(w.vsplit,QPoint(0,alto-w._minimo_panel("inferior")+30))
-        self.assertTrue(w.inferior.isHidden());self.assertEqual(w.vsplit.sizes()[1],32)
-        self.assertEqual(w.pestanas["inferior"].text(),"Propiedades")
-        w.activateWindow();w.setFocus();QApplication.processEvents()
-        QTest.keyClick(w,Qt.Key.Key_J,Qt.KeyboardModifier.ControlModifier);QApplication.processEvents()
-        self.assertFalse(w._plegables["inferior"].isVisible())
-        QTest.keyClick(w,Qt.Key.Key_J,Qt.KeyboardModifier.ControlModifier);QApplication.processEvents()
-        self.assertTrue(w.inferior.isVisible());self.assertAlmostEqual(w.inferior.height(),alto,delta=2)
-        self.assertEqual(w.props.t_texto.text(),formula)
 
-    def test_SPAN05_formula_estado_y_controles_en_una_fila_sin_vista_previa(self):
-        """REQ-EDT-02, REQ-EDT-09: fórmula y papelera comparten fila, con el estado debajo;
-        sin «Vista previa» (sí «Fijar») ni edición manual de la fórmula."""
-        w,e=self.preparar();p=w.props
-        self.assertNotIn("papelera", vars(p.prog))
-        self.assertGreater(p.t_estado.y(), p.t_texto.geometry().bottom())
-        self.assertEqual(p.t_estado.x(), p.t_texto.x())
-        self.assertTrue(p.t_texto.isReadOnly());self.assertTrue(p.t_fijar.isVisible())
-        self.assertFalse(hasattr(p,"t_previa"));self.assertFalse(hasattr(p,"detalles_bloques"))
-        self.assertFalse(p.t_vista.isVisible());self.assertFalse(p.t_dibujo.isVisible())  # (se calculan, pero ya no se enseñan)
-        self.assertIn("a",p.t_vista.text())
-        p._desde_bloques("a AND NOT b")
-        self.assertEqual(e.texto_usuario("t"),"a AND NOT b")
 
     def test_SPAN06_editor_compacto_util_a_1000_y_categorias_accesibles(self):
-        """REQ-EDT-09: a 1000×600 los controles no se cortan, y las categorías largas conservan su desplazamiento."""
-        w,e=self.preparar(1000,600);p=w.props
-        self.assertLessEqual(w.minimumSizeHint().height(),600)
-        for c in (p.t_texto,p.t_estado):
-            r=c.rect();esquina=c.mapTo(p,r.bottomRight())
-            self.assertLessEqual(esquina.x(),p.width());self.assertLessEqual(esquina.y(),p.height())
-        self.assertGreater(p.prog.lienzo.parentWidget().height(),40)
+        """REQ-EDT-09: los controles de la flotante y sus categorías caben a 1000×600."""
+        w, e = self.preparar(1000, 600)
+        w._abrir_opciones()
+        QApplication.processEvents()
+        p = w.props
+        self.assertTrue(w.flot.hay_ventanas())
+        self.assertGreater(p.prog.lienzo.parentWidget().height(), 40)
         self.assertEqual(len(p.prog.categorias), 5)
-        politica = (Qt.ScrollBarPolicy.ScrollBarAlwaysOff if p.prog.cat_en_cabecera
-                    else Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.assertEqual(p.prog._sc_carpetas.horizontalScrollBarPolicy(), politica)
         zona = p.prog._sc_carpetas.viewport()
         for boton in p.prog.categorias.values():
             self.assertTrue(boton.isVisible())
@@ -115,47 +83,39 @@ class Paneles(BaseQt):
             self.assertTrue(zona.rect().contains(caja), boton.text())
 
     def test_SPAN07_preferencias_de_plegado_se_recuperan_en_otra_ventana(self):
-        """REQ-EDT-09: se recuerda el plegado de Elementos; Variables arranca abierto y Propiedades plegado."""
+        """REQ-EDT-09: se recuerda el plegado de Variables."""
         w,e=self.preparar()
         for n in w.flechas:w.flechas[n].click()
         w2=Ventana(w.ajustes)
         try:
             w2.nuevo();w2.resize(1366,768);w2.show();QApplication.processEvents()
-            for n in w2.pestanas:
+            for n in ("derecho",):
                 plegado = True
                 self.assertEqual(w2._panel(n).isHidden(),plegado,n);self.assertEqual(w2.pestanas[n].isVisible(),plegado,n)
         finally:
             w2.hide();w2.edicion=None;w2.deleteLater();QApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 
     def test_SPAN08_simulacion_y_edicion_conservan_paneles_y_nombres_de_pestanas(self):
-        """REQ-SIM-03, REQ-EDT-09: Play oculta Elementos, y los paneles de edición se recuperan sin perder sus preferencias."""
-        w,e=self.preparar();w.props.t_fijar.setChecked(True)  # (sin fijar, el panel inferior vuelve plegado: SAUC42)
+        """REQ-SIM-03, REQ-EDT-09: Play y Pausa conservan Variables, Simulación y Traza."""
+        w,e=self.preparar()
         w.flechas["derecho"].click();QApplication.processEvents()
         antes=w.vsplit.sizes()
         w.a_ejecutar.setChecked(True);w.rt.stop();QApplication.processEvents()
-        self.assertFalse(w._plegables["izquierdo"].isVisible())
+        self.assertFalse(w.favoritos.isVisible())
         self.assertEqual(w.pestanas["derecho"].text(),"Simulación")
         self.assertEqual(w.pestanas["inferior"].text(),"Traza")
         w.a_ejecutar.setChecked(False);QApplication.processEvents()
-        self.assertTrue(w.dock.isVisible());self.assertTrue(w.derecho.isHidden());self.assertTrue(w.inferior.isVisible())
+        self.assertTrue(w.favoritos.isVisible())
+        self.assertTrue(w.derecho.isHidden())
+        self.assertTrue(w.inferior.isHidden())
         self.assertEqual(w.pestanas["derecho"].text(),"Variables")
         self.assertEqual(w.vsplit.sizes(),antes)
 
-    def test_SPAN09_minimo_inferior_se_actualiza_tras_arrastre_y_cambio_de_elemento(self):
-        """REQ-EDT-02, REQ-EDT-09: pasar de etapa a transición aumenta el mínimo útil aunque el alto se haya elegido a mano."""
-        w,e=self.preparar();e.seleccionar(['1']);QApplication.processEvents();QApplication.processEvents()
-        self.arrastrar(w.vsplit,QPoint(0,20))
-        if w.inferior.isHidden():QTest.mouseClick(w.pestanas['inferior'],Qt.MouseButton.LeftButton);QApplication.processEvents()
-        self.assertFalse(w._opciones_automaticas);total=sum(w.vsplit.sizes());menor=w._minimo_panel('inferior');w.vsplit.setSizes([total-menor,menor]);QApplication.processEvents()
-        e.seleccionar(['t']);QApplication.processEvents();QApplication.processEvents();mayor=w._minimo_panel('inferior')
-        self.assertGreater(mayor,menor);self.assertGreaterEqual(w._plegables['inferior'].minimumHeight(),mayor);self.assertGreaterEqual(w._plegables['inferior'].height(),mayor);self.assertFalse(w._opciones_automaticas)
-        self.assertGreaterEqual(w.props.prog.height(),w.props.prog.minimumSizeHint().height());self.assertTrue(w.props.t_texto.isVisible())
-        e.seleccionar(['1']);QApplication.processEvents();QApplication.processEvents();self.assertLess(w._plegables['inferior'].minimumHeight(),mayor)
 
     def test_SPAN10_pestanas_plegadas_sin_hueco_al_volver_de_es(self):
         """REQ-EDT-09: cambiar de pantalla en E/S no reserva el ancho del contenido plegado."""
         w,e=self.preparar(2500,1400)
-        for n in ('izquierdo','derecho'):w._mostrar_panel(n,False)
+        w._mostrar_panel("derecho", False)
         QApplication.processEvents()
         for ancho in (1000,1900,1100):
             QTest.mouseClick(w.luz_es,Qt.MouseButton.LeftButton)
@@ -165,7 +125,7 @@ class Paneles(BaseQt):
             self.assertEqual(w.paginas_es.currentIndex(),0)
             self.assertFalse(w._plegables['derecho'].abierto)
             self.assertEqual(w.split.sizes()[1],w._plegables['derecho'].GROSOR_PESTANA)
-            self.assertEqual(w.split.sizes()[0]+w.split.sizes()[1]+w.split.handleWidth(),w.split.width())
+            self.assertEqual(w.split.sizes()[0]+w.split.sizes()[1]+w.split.handleWidth(),w.split.contentsRect().width())
             self.assertGreater(w.split.sizes()[0],w.width()-100)
 
     def test_SPAN11_ancho_elegido_se_conserva_tras_es_y_redimensionar(self):

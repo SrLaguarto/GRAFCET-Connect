@@ -157,7 +157,7 @@ class PilotosZoom(unittest.TestCase):
 
     def test_SL106_quince_favoritos_a_960_sin_solapes(self):
         w, _ = self.ventana()
-        self.assertFalse(w.diagrama.l_zoom.isVisible())
+        self.assertTrue(w.diagrama.l_zoom.isVisible())
         self.assertEqual(w.favoritos.ocultos, [])
         self.assertEqual(len(w.favoritos._visibles), 15)
         self.assertEqual(w.favoritos.lado_icono, 30)
@@ -185,7 +185,12 @@ class PilotosZoom(unittest.TestCase):
 
     def test_SL108_ayudas_con_zoom_actual_y_restaura_las_originales(self):
         w, caso = self.ventana()
+        w.resize(683, 768)
+        BaseQt.asentar_escala(caso, w)
+        for _ in range(8):
+            self.app.processEvents()
         d = w.diagrama
+        self.assertTrue(d.l_zoom.isHidden())
         d.zoom(1.5)
         for boton in (d.b_menos, d.b_mas):
             self.assertIn("zoom 150 %", boton.toolTip())

@@ -196,9 +196,7 @@ class Ventana(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()  # las preferencias de las pruebas no tocan las del usuario
         ajustes = QSettings(str(Path(cls.tmp.name) / "ajustes.ini"), QSettings.Format.IniFormat)
         ajustes.setValue("paletas/favoritos_principal_v1", True)
-        ajustes.setValue("paneles/izquierdo", True)
         cls.w = V(ajustes)
-        cls.w._cambiar_modo_propiedades("abajo")  # (estas pruebas dan por hecha la barra inferior; el defecto es «flotante»)
 
     def proyecto_de_prueba(self,clave):
         """Fixture editable independiente; los ejemplos del menú son de consulta."""
@@ -304,8 +302,12 @@ class Ventana(unittest.TestCase):
         self.assertEqual((w.modo, w.a_ejecutar.isChecked(), w.rt.isActive()), ("editar", False, False), "abrir deja Pausa")
         self.assertEqual(w.a_ejecutar.text(), "Play")
         self.assertIsNotNone(w.edicion)
-        self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (1, 1), "paleta, propiedades y opciones")
-        self.assertFalse(w.dock.isHidden())
+        self.assertEqual(
+            (w.derecho.currentIndex(), w.inferior.currentIndex()),
+            (1, 0),
+            "paleta de edición; el inferior conserva solo la traza",
+        )
+        self.assertTrue(w.favoritos.isVisibleTo(w))
         for nombre in ("a_editar", "a_simular", "a_paso", "a_completar", "tb_modo", "g_modo", "paso", "paso_evolucion"):
             self.assertFalse(hasattr(w, nombre), nombre)
         textos = {a.text().replace("&", "") for a in w.findChildren(QAction)}
@@ -317,7 +319,7 @@ class Ventana(unittest.TestCase):
         w.a_ejecutar.setChecked(True)
         self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("simular", "Stop", True))
         self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (0, 0), "entradas y traza")
-        self.assertTrue(w.dock.isHidden() and w.flechas["izquierdo"].isHidden(), "sin paleta")
+        self.assertFalse(w.favoritos.isVisibleTo(w))
         self.assertFalse(hasattr(self.w, "b_tiempo"), "ya no hay botones de tiempo lógico")
         w._cambiar_tipo_entrada("marcha", True)  # esta prueba mantiene la entrada
         w.botones["marcha"].click()
@@ -328,8 +330,8 @@ class Ventana(unittest.TestCase):
         # Pausa: detiene y vuelve a editar
         w.a_ejecutar.setChecked(False)
         self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("editar", "Play", False))
-        self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (1, 1))
-        self.assertFalse(w.dock.isHidden())
+        self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (1, 0))
+        self.assertTrue(w.favoritos.isVisibleTo(w))
         # Pausa = todo a 0 hasta un nuevo Play: sin etapas activas ni temporizadores, y las tablas no enseñan la sesión anterior
         self.assertEqual(w.v.state().get("situation", []), [])
         self.assertEqual(w.v.state().get("temporal", {}), {})
@@ -485,14 +487,14 @@ class Ventana(unittest.TestCase):
                          (["vencido"], True))
 
     def test_SAPP11_paneles_plegables(self):
-        """REQ-SIM-03: el panel derecho y el inferior se pliegan del todo con su flecha y desde «Ver»; el estado se guarda."""
+        """REQ-SIM-03: el panel derecho y el inferior se pliegan del todo con su flecha y sus atajos. El estado se guarda."""
         from PySide6.QtCore import QSettings
         from escritorio.ventana import Ventana as V
         w = self.w
         w.nuevo();w._mostrar_panel("derecho",True);w._mostrar_panel("inferior",True)
         self.assertFalse(w.derecho.isHidden() or w.inferior.isHidden())
         w.flechas["derecho"].click()
-        self.assertTrue(w.derecho.isHidden() and w.a_derecho.isChecked())
+        self.assertTrue(w.derecho.isHidden() and not w.a_derecho.isChecked())
         self.assertEqual(w.flechas["derecho"].text(), "◂")
         w.flechas["inferior"].click()
         self.assertTrue(w.inferior.isHidden() and w.a_inferior.isChecked())
@@ -500,16 +502,17 @@ class Ventana(unittest.TestCase):
         self.assertFalse(w.ajustes.value("paneles/derecho", True, type=bool))
         w.a_derecho.setChecked(False)
         w.a_inferior.setChecked(False)
-        w.a_derecho.setChecked(True)  # desde el menú Ver
+        w.a_derecho.setChecked(True)
         w.a_inferior.setChecked(True)
         self.assertFalse(w.derecho.isHidden() or w.inferior.isHidden())
         self.assertTrue(w.ajustes.value("paneles/inferior", False, type=bool))
         self.assertEqual(w.flechas["derecho"].text(), "▸")
-        w.a_derecho.setChecked(False)  # se registra la preferencia; el arranque abre los laterales y pliega el inferior
+        w.a_derecho.setChecked(False)
         w.ajustes.sync()
         otra = V(QSettings(w.ajustes.fileName(), QSettings.Format.IniFormat))
         try:
-            self.assertTrue(otra._plegables["derecho"].isHidden())
+            self.assertFalse(otra._plegables["derecho"].isHidden())
+            self.assertTrue(otra.derecho.isHidden())
             self.assertFalse(otra.a_derecho.isChecked())
             self.assertTrue(otra.a_inferior.isChecked())
         finally:

@@ -185,7 +185,6 @@ class InterfazP(unittest.TestCase):
                                 c.e.nueva_variable(f"salida_con_nombre_muy_largo_{n:02d}", "output")
                         c.e.cambiado.emit()
                         if not flotante:
-                            c.w._cambiar_modo_propiedades("abajo")
                             c.w._abrir_opciones()
                         hc._bombear(12)
                         p = c.w.flot.panel if flotante else c.w.props

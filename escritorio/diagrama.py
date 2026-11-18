@@ -19,6 +19,7 @@ import html
 from typing import Any
 
 from .anclaje import AnclajeVentana
+from .orden_acciones import acciones_etapa
 
 from grafcet.routing import NORMAL, SENTIDO, TALLO_T, enlaces, orientacion, punto_t
 
@@ -396,7 +397,9 @@ def barra(b: dict[str, Any]) -> tuple[float, float, float, float]:
     return b["x"] + SX, b["y"], b["ancho"], BARRA_GROSOR if b["kind"] == "Y" else 0
 
 
-def anclas(M: dict[str, Any], ident: str) -> list[dict[str, Any]]:
+def anclas(
+    M: dict[str, Any], ident: str, pos: dict[str, tuple[float, float]] | None = None
+) -> list[dict[str, Any]]:
     """Puntos de unión de un elemento: etapa y transición, arriba (entra el enlace) y abajo (sale); la etapa, además, en
     el centro de su lado derecho (de ahí salen las acciones); una acción suelta (la primera de su grupo), a la
     izquierda."""
@@ -408,7 +411,8 @@ def anclas(M: dict[str, Any], ident: str) -> list[dict[str, Any]]:
     for d in M.get("draftActions", []):  # una acción suelta: un solo punto de unión, en el medio de su lado izquierdo
         if d["id"] == ident and not d.get("etapa") and d.get("cabeza", True):
             return [{"id": ident, "lado": "izq", "pos": QPointF(d["x"] + SX, d["y"])}]
-    pos = posiciones(M)
+    if pos is None:
+        pos = posiciones(M)
     if ident not in pos:
         return []
     x, y = pos[ident]
@@ -793,11 +797,11 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
                                    (stale, "último estable", "muted"), (cand, "alcanzada, sin confirmar", "glow")):
             if flag:
                 pt.text(x, y + H + 13, pt.seg(label), 10, color, Z_STEP, "middle", tip)
-        unidas = [d for d in M.get("draftActions", []) if d.get("etapa") == s["id"]]  # sin completar, al final de la fila
-        _acciones(pt, x, y, s["actions"] + unidas, S, tmp, cajas, s["id"], marcadas, s.get("actionLayout", "fila"),
+        acciones = acciones_etapa(M, s)
+        _acciones(pt, x, y, acciones, S, tmp, cajas, s["id"], marcadas, s.get("actionLayout", "fila"),
                   uniones=uniones, resaltar=f"enlaceacc:{s['id']}" in (sel or ()), ordenes=ordenes)
         if s.get("comment"):  # a la derecha de la etapa, o de su última acción si las tiene
-            cajas_ = _geometria_acciones(x, y, s["actions"] + unidas, s.get("actionLayout", "fila"))[0]
+            cajas_ = _geometria_acciones(x, y, acciones, s.get("actionLayout", "fila"))[0]
             pt.comentario(max([ax + w for _, ax, _, w in cajas_] + [x + H]) + 10, y, s["comment"], Z_STEP)
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
         pt.elementos = (m["id"],)
@@ -848,7 +852,7 @@ def _contenido_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]])
         x, y = pos[s["id"]]
         de[s["id"]] = pid = s.get("partial")
         anotar(pid, x - H, y - H, x + H, y + H)
-        acciones = s["actions"] + [d for d in unidas if d.get("etapa") == s["id"]]
+        acciones = acciones_etapa(M, s)
         if acciones and pid:
             cajas, union = _geometria_acciones(x, y, acciones, s.get("actionLayout", "fila"))
             for a, ax, cy, w in cajas:
@@ -1550,7 +1554,7 @@ class VistaDiagrama(QGraphicsView):
         self._estrecho = self._bajo = False  # lo último que pidió `compactar`
         # Anchos con texto o iconos, por escala y con o sin porcentaje.
         self._anchos_barra: dict[tuple[bool, str, bool], int] = {}
-        self.dependencias = False  # se dibujan los trazos discontinuos de las dependencias (macroetapa-expansión, encapsulante-recinto)
+        self.dependencias = True  # trazos de macroetapa a expansión y de encapsulante a recinto
         self.ajustes: QSettings | None = None  # dónde se recuerda; sin él, los `ajustes` de la ventana que contiene la vista
         self._dependencias_leidas = False
         self._ultimo: tuple[Any, ...] | None = None  # lo último que se dibujó: lo repinta el botón de dependencias
@@ -1740,12 +1744,16 @@ class VistaDiagrama(QGraphicsView):
 
     def trazo_provisional(self, a: QPointF | None, b: QPointF | None = None) -> None:
         """Línea de ayuda mientras se traza un enlace (None la quita)."""
+        if a is not None and b is not None:
+            if self.goma is not None and self.goma.scene() is self.scene():
+                self.goma.setLine(a.x(), a.y(), b.x(), b.y())
+                return
+            self.goma = self.scene().addLine(a.x(), a.y(), b.x(), b.y(), _Pintor.pen("accent", 2, (6, 4)))
+            self.goma.setZValue(Z_EDIT + 1)
+            return
         if self.goma is not None and self.goma.scene() is self.scene():
             self.scene().removeItem(self.goma)
         self.goma = None
-        if a is not None and b is not None:
-            self.goma = self.scene().addLine(a.x(), a.y(), b.x(), b.y(), _Pintor.pen("accent", 2, (6, 4)))
-            self.goma.setZValue(Z_EDIT + 1)
 
     def lazo(self, a: QPointF | None, b: QPointF | None = None) -> None:
         """Rectángulo de selección mientras se arrastra desde un hueco (None lo quita)."""
@@ -1935,6 +1943,7 @@ class VistaDiagrama(QGraphicsView):
         self.b_dependencias = QToolButton()
         self.b_dependencias.setText("Mostrar dependencias")
         self.b_dependencias.setCheckable(True)
+        self.b_dependencias.setChecked(self.dependencias)
         self.b_dependencias.setToolTip("Mostrar dependencias: dibuja los trazos discontinuos que unen una macroetapa con su "
                                        "expansión y una encapsulante con sus recintos. Apagado por defecto; se recuerda")
         self.b_dependencias.clicked.connect(self.mostrar_dependencias)
@@ -2006,7 +2015,7 @@ class VistaDiagrama(QGraphicsView):
         sobre el dibujo (ni lo tapan ni reservan su franja al centrar todo); con None, vuelven a flotar arriba a la derecha.
         La ventana lo pide con la ventana estrecha o baja."""
         if diseno is not None and not self.barra_integrada:
-            diseno.addWidget(self.barra)
+            diseno.addWidget(self.barra, 0, Qt.AlignmentFlag.AlignRight)
             self.barra_integrada = self.barra.integrada = True
         elif diseno is None and self.barra_integrada:
             self.barra.setParent(self)
@@ -2029,12 +2038,12 @@ class VistaDiagrama(QGraphicsView):
         return a if isinstance(a, QSettings) else None
 
     def _leer_dependencias(self) -> None:
-        """La primera vez que hay dónde leerlo, el estado guardado de «Mostrar dependencias» (apagado si no lo hay)."""
+        """Lee la preferencia de dependencias una vez. Si falta, las muestra."""
         a = self._ajustes()
         if a is None or self._dependencias_leidas:
             return
         self._dependencias_leidas = True
-        self.dependencias = bool(a.value(CLAVE_DEPENDENCIAS, False, type=bool))
+        self.dependencias = bool(a.value(CLAVE_DEPENDENCIAS, True, type=bool))
         self.b_dependencias.setChecked(self.dependencias)
 
     def mostrar_dependencias(self, on: bool) -> None:
