@@ -121,7 +121,9 @@ def regla_M2(raiz):
     for p in [raiz, *hijos_de(raiz)]:
         if not p.isVisible() or (isinstance(p.parentWidget(), QAbstractScrollArea) and p is p.parentWidget().viewport()):
             continue  # (el contenido de un área de desplazamiento se coloca por dentro de ella: sus widgets de celda sin colocar no cuentan)
-        hijos = [h for h in p.children() if isinstance(h, QWidget) and h.isVisible() and not h.isWindow() and h.width() > 0 and h.height() > 0]
+        # Al escalar una barra, Qt puede conservar isVisible() en su botón de desborde ya oculto.
+        hijos = [h for h in p.children() if isinstance(h, QWidget) and h.isVisible() and not h.isHidden()
+                 and not h.isWindow() and h.width() > 0 and h.height() > 0]
         if isinstance(p, QAbstractScrollArea):
             hijos = [h for h in hijos if h is not p.viewport() and not isinstance(h, QScrollBar) and not h.objectName().startswith("qt_")]
         for i, a in enumerate(hijos):

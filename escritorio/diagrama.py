@@ -21,7 +21,8 @@ from typing import Any
 from .anclaje import AnclajeVentana
 from .orden_acciones import acciones_etapa
 
-from grafcet.routing import NORMAL, SENTIDO, TALLO_T, enlaces, orientacion, punto_t
+from grafcet import routing
+from grafcet.routing import NORMAL, SENTIDO, TALLO_T, orientacion, punto_t
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, QPainter, QPainterPath, QPen,
@@ -237,20 +238,74 @@ class _Pintor:
     def comentario(self, x: float, yc: float, texto: str, z: float, ancho: float = ANCHO_COMENTARIO) -> None:
         """Comentario de una etapa o transición: el texto entre comillas tipográficas, en cursiva y discreto, a la derecha
         de `x`, centrado en vertical en `yc` y ajustado a varias líneas si pasa de `ancho`."""
-        font = QFont(FONT)
-        font.setPixelSize(12)
-        font.setItalic(True)
-        item = QGraphicsTextItem()
-        item.document().setDocumentMargin(0)
-        item.setFont(font)
-        item.setDefaultTextColor(QColor(COL["muted"]))
-        item.setPlainText(f"“{texto}”")
-        item.setTextWidth(ancho)
-        w = item.document().idealWidth()
-        item.setTextWidth(min(ancho, w + 2))  # sin hueco a la derecha si cabe en menos
+        item = _item_comentario(texto, ancho)
         item.setPos(x, yc - item.boundingRect().height() / 2)
         self.sc.addItem(item)
         self._put(item, z + 0.02, None)
+
+
+def _item_comentario(texto: str, ancho: float = ANCHO_COMENTARIO) -> QGraphicsTextItem:
+    """El texto de un comentario ya compuesto (sin escena): lo dibuja `_Pintor.comentario` y lo mide `medida_comentario`."""
+    font = QFont(FONT)
+    font.setPixelSize(12)
+    font.setItalic(True)
+    item = QGraphicsTextItem()
+    item.document().setDocumentMargin(0)
+    item.setFont(font)
+    item.setDefaultTextColor(QColor(COL["muted"]))
+    item.setPlainText(f"“{texto}”")
+    item.setTextWidth(ancho)
+    w = item.document().idealWidth()
+    item.setTextWidth(min(ancho, w + 2))  # sin hueco a la derecha si cabe en menos
+    return item
+
+
+_MEDIDAS_COMENTARIO: dict[tuple[str, float], tuple[float, float]] = {}
+
+
+def medida_comentario(texto: str, ancho: float = ANCHO_COMENTARIO) -> tuple[float, float]:
+    """Ancho y alto que ocupa un comentario dibujado con `_Pintor.comentario`."""
+    clave = (texto, ancho)
+    if clave not in _MEDIDAS_COMENTARIO:
+        r = _item_comentario(texto, ancho).boundingRect()
+        _MEDIDAS_COMENTARIO[clave] = (r.width(), r.height())
+    return _MEDIDAS_COMENTARIO[clave]
+
+
+def pos_comentario_t(t: dict[str, Any], tx: float, ty: float, w: float, derecha: float = 0.0) -> tuple[float, float]:
+    """Dónde empieza (x) y dónde está su centro vertical (yc) el comentario de la transición centrada en (tx, ty), con la
+    receptividad de ancho `w` (0 si no tiene) y `derecha`, hasta dónde llega el estado de un temporizador (0 si no hay): a
+    la derecha de todo ello, con 14 de margen, para que nunca se monte sobre su receptividad. Con evolución horizontal, la
+    receptividad va centrada sobre el trazo y el comentario junto a ella."""
+    tope = derecha + 8 if derecha else float("-inf")  # (sin temporizador `derecha` es 0, no una x: no cuenta, AB1)
+    if orientacion(t) in EVOLUCION_HORIZONTAL:
+        return max(tx - w / 2 + w + (14 if w else 0), tope), ty - TB - 9 - 5
+    return max(tx + TB + 8 + w + (14 if w else 0), tope), ty
+
+
+def pos_comentario_e(x: float, y: float, derecho: float) -> tuple[float, float]:
+    """Lo mismo para una etapa en (x, y): a la derecha de su última acción (`derecho`, o el borde de la etapa)."""
+    return max(derecho, x + H) + 10, y
+
+
+def rects_comentarios(M: dict[str, Any]) -> list[tuple[str, QRectF]]:
+    """El rectángulo de cada comentario de etapa y de transición según el modelo y sin dibujar, con el ID de su elemento
+    (un comentario se mueve con él): lo que cuenta como obstáculo al colocar otras cosas (AB2)."""
+    out: list[tuple[str, QRectF]] = []
+    for t in M["transitions"]:
+        if t.get("comment"):
+            w = _Pintor.ancho(t["cond"], 14) if t.get("cond") else 0.0
+            x, yc = pos_comentario_t(t, t["x"] + SX, t["y"], w)
+            cw, ch = medida_comentario(t["comment"])
+            out.append((t["id"], QRectF(x, yc - ch / 2, cw, ch)))
+    for s in M["steps"]:
+        if s.get("comment"):
+            x, y = s["x"] + SX, s["y"]
+            cajas_ = _geometria_acciones(x, y, acciones_etapa(M, s), s.get("actionLayout", "fila"))[0]
+            xc, yc = pos_comentario_e(x, y, max([ax + w for _, ax, _, w in cajas_] + [x + H]))
+            cw, ch = medida_comentario(s["comment"])
+            out.append((s["id"], QRectF(xc, yc - ch / 2, cw, ch)))
+    return out
 
 
 def _temporizadores(S: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -318,9 +373,46 @@ ANCLA = TALLO_T  # distancia de los puntos de unión de una transición a su cen
                  # trazo, para que agarrar la transición la mueva y no saque una rama
 ANCLA_S = 28   # ... y si ese lado es una simultaneidad (el punto queda fuera del doble trazo)
 SIMUL = 14     # distancia del doble trazo de una simultaneidad al centro de la transición
+PASO = 60      # el paso estándar entre elementos (el DY de la edición): con hueco de dos pasos, el doble trazo va a un paso de cada lado
 RADIO_ANCLA = 14  # a qué distancia del puntero se marca un punto de unión (generoso: se agarra sin puntería)
 Z_EDIT = 10    # selección, tiradores y marcas por encima de todo el dibujo
 EVOLUCION_HORIZONTAL = ("derecha", "izquierda")  # orientaciones de una transición cuyo trazo es vertical
+
+
+def simul_d(t: dict[str, Any], tx: float, ty: float, otros: list[tuple[float, float]], signo: int) -> float:
+    """Distancia de la transición en (tx, ty) a su doble trazo de simultaneidad, por arriba (`signo` -1) o por abajo (1), de
+    evolución hacia abajo: un paso (PASO) si la etapa más cercana de ese lado está a dos pasos o más (lo deja así
+    «Equidistanciar», que trata el doble trazo como un elemento más de la cadena: PASO de la transición y PASO de la etapa);
+    SIMUL (14) en lo demás, como siempre (lo ya dibujado no cambia)."""
+    if orientacion(t) != "abajo":
+        return SIMUL
+    lejos = [signo * (p[1] - ty) for p in otros if signo * (p[1] - ty) > 0]
+    return PASO if lejos and min(lejos) >= 2 * PASO else SIMUL
+
+
+def _otros_t(M: dict[str, Any], t: dict[str, Any], pos: dict[str, tuple[float, float]], signo: int) -> list[tuple[float, float]]:
+    ids = t.get("preDib", t["pre"]) if signo < 0 else t.get("postDib", t["post"])
+    return [pos[i] for i in ids if i in pos]
+
+
+def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
+    """`grafcet.routing.enlaces`, con el doble trazo de una simultaneidad a `simul_d` de su transición en vez de a SIMUL:
+    los enlaces que acaban en él se recolocan."""
+    out = routing.enlaces(M)
+    pos = posiciones(M)
+    ts = {t["id"]: t for t in M["transitions"]}
+    for e in out:
+        t = ts.get(e.get("tid"))
+        if t is None or not e.get("simul") or "orient" in e or e["rol"] not in ("pre", "post"):
+            continue
+        tx, ty = pos[t["id"]]
+        signo = -1 if e["rol"] == "pre" else 1
+        d = simul_d(t, tx, ty, _otros_t(M, t, pos, signo), signo)
+        if d == SIMUL:
+            continue
+        viejo, nuevo = ty + signo * (SIMUL + BARRA_GROSOR), ty + signo * (d + BARRA_GROSOR)
+        e["pts"] = [(x, nuevo if y == viejo else nuevo - 30 if (y == viejo - 30 and signo < 0) else y) for x, y in e["pts"]]
+    return out
 
 
 def caja_barra(o: str, x: float, y: float) -> QRectF:
@@ -417,8 +509,8 @@ def anclas(
         return []
     x, y = pos[ident]
     t = next((t for t in M["transitions"] if t["id"] == ident), None)
-    arriba = H if t is None else ANCLA_S if t.get("simulPre") else ANCLA
-    abajo = H if t is None else ANCLA_S if t.get("simulPost") else ANCLA
+    arriba = H if t is None else ANCLA_S + simul_d(t, x, y, _otros_t(M, t, pos, -1), -1) - SIMUL if t.get("simulPre") else ANCLA
+    abajo = H if t is None else ANCLA_S + simul_d(t, x, y, _otros_t(M, t, pos, 1), 1) - SIMUL if t.get("simulPost") else ANCLA
     if t is not None and orientacion(t) != "abajo":  # «arriba» es la entrada (el lado de donde viene la evolución)
         return [{"id": ident, "lado": "arriba", "pos": QPointF(*punto_t(t, x, y, -arriba))},
                 {"id": ident, "lado": "abajo", "pos": QPointF(*punto_t(t, x, y, abajo))}]
@@ -685,13 +777,13 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         if giro != "abajo":
             _trazos_girada(pt, t, tx, ty, pre, post, trazo)
         if giro == "abajo" and (len(pre) > 1 or t.get("simulPre")):
-            xs, yy = [p[0] for p in pre] + [tx], ty - SIMUL
+            xs, yy = [p[0] for p in pre] + [tx], ty - simul_d(t, tx, ty, pre, -1)
             pt.line(min(xs) - 8, yy, max(xs) + 8, yy, trazo, Z_LINK)
             pt.rect(min(xs)-8, yy-BARRA_GROSOR+1, max(xs)-min(xs)+16, BARRA_GROSOR-2, None, Z_LINK+0.1, "panel")
             pt.line(min(xs) - 8, yy - BARRA_GROSOR, max(xs) + 8, yy - BARRA_GROSOR, trazo, Z_LINK)
             pt.line(tx, yy, tx, ty, trazo, Z_LINK)
         if giro == "abajo" and t.get("simulPost"):
-            xs, yy = [p[0] for p in post] + [tx], ty + SIMUL
+            xs, yy = [p[0] for p in post] + [tx], ty + simul_d(t, tx, ty, post, 1)
             pt.line(tx, ty, tx, yy, trazo, Z_LINK)
             pt.line(min(xs) - 8, yy, max(xs) + 8, yy, trazo, Z_LINK)
             pt.rect(min(xs)-8, yy+1, max(xs)-min(xs)+16, BARRA_GROSOR-2, None, Z_LINK+0.1, "panel")
@@ -724,7 +816,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
             derecha = _estado_temporal(pt, x0, yb, t.get("cond"), 14, t.get("conditionRef"), tmp, Z_BAR, tip)
             _valores_variables(pt, x0, yb, t, S, M.get("names", {}), Z_BAR, tip)
             if t.get("comment"):
-                pt.comentario(max(x0 + w + (14 if w else 0), derecha + 8), yb - 5, t["comment"], Z_BAR)
+                pt.comentario(*pos_comentario_t(t, tx, ty, w, derecha), t["comment"], Z_BAR)
             continue
         pt.line(tx - TB, ty, tx + TB, ty, pt.pen(color, width), Z_BAR, tip)
         if t.get("showLabel", True):
@@ -734,7 +826,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         derecha = _estado_temporal(pt, tx + TB + 8, ty + 5, t.get("cond"), 14, t.get("conditionRef"), tmp, Z_BAR, tip)
         _valores_variables(pt, tx + TB + 8, ty + 5, t, S, M.get("names", {}), Z_BAR, tip)
         if t.get("comment"):  # a la derecha de la receptividad (o de la transición, si no tiene)
-            pt.comentario(max(fin + (14 if w else 0), derecha + 8), ty, t["comment"], Z_BAR)
+            pt.comentario(*pos_comentario_t(t, tx, ty, w, derecha), t["comment"], Z_BAR)
     for b in M.get("bars", []):  # barras de simultaneidad (doble trazo) y de alternativa (trazo simple), con sus conectores
         pt.elementos = (b["id"],)
         pt.parcial = pertenencia[b["id"]]
@@ -802,7 +894,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
                   uniones=uniones, resaltar=f"enlaceacc:{s['id']}" in (sel or ()), ordenes=ordenes)
         if s.get("comment"):  # a la derecha de la etapa, o de su última acción si las tiene
             cajas_ = _geometria_acciones(x, y, acciones, s.get("actionLayout", "fila"))[0]
-            pt.comentario(max([ax + w for _, ax, _, w in cajas_] + [x + H]) + 10, y, s["comment"], Z_STEP)
+            pt.comentario(*pos_comentario_e(x, y, max([ax + w for _, ax, _, w in cajas_] + [x + H])), s["comment"], Z_STEP)
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
         pt.elementos = (m["id"],)
         pt.parcial = m.get("partial") or "g"
@@ -892,10 +984,12 @@ def _contenido_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]])
             anotar(pid, tx + TB + 8, ty - 12, tx + TB + 8 + _Pintor.ancho(t["cond"], 14), ty + 9)
         if len(pre) > 1 or t.get("simulPre"):  # el doble trazo de una divergencia o convergencia simultánea
             xs = [p[0] for p in pre] + [tx]
-            anotar(pid, min(xs) - 8, ty - SIMUL - BARRA_GROSOR, max(xs) + 8, ty - SIMUL)
+            d = simul_d(t, tx, ty, pre, -1)
+            anotar(pid, min(xs) - 8, ty - d - BARRA_GROSOR, max(xs) + 8, ty - d)
         if t.get("simulPost"):
             xs = [p[0] for p in post] + [tx]
-            anotar(pid, min(xs) - 8, ty + SIMUL, max(xs) + 8, ty + SIMUL + BARRA_GROSOR)
+            d = simul_d(t, tx, ty, post, 1)
+            anotar(pid, min(xs) - 8, ty + d, max(xs) + 8, ty + d + BARRA_GROSOR)
     for e in M["links"] if "links" in M else enlaces(M):  # el enlace es del parcial de su transición (el de una barra, del de su elemento)
         pid = de.get(e["sid"] if e["rol"] == "barra" else e["tid"])
         for px, py in e["pts"]:
@@ -1542,6 +1636,9 @@ class VistaDiagrama(QGraphicsView):
         self.anclaje = None
         self.setScene(QGraphicsScene(self))
         self.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        # Repintado completo (P-IMP-171, AA2/AA3): con escala fraccionaria el repintado parcial dejaba cajas y textos
+        # sin pintar. Medido en artifacts/aa_117/MEDICION_REPINTADO.md: nunca pasa de 10 ms por fotograma.
+        self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
         self.setBackgroundBrush(QColor(COL["panel"]))
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.NoAnchor)  # el zoom lo ancla `zoom`, no Qt
@@ -1647,7 +1744,7 @@ class VistaDiagrama(QGraphicsView):
     def editar_propiedades_teclado(self):
         c = self.controlador
         if not c or not c.sel or getattr(c,"solo_seleccion",False): return
-        ident = c.sel[-1]
+        ident = c.accion_activa() or c.sel[-1]
         if any(t['id'] == ident for t in c.M['transitions']):
             c.pedir_condicion(ident)
             if hasattr(self.window(), 'props_activo'): self.window().props_activo().prog.setFocus()

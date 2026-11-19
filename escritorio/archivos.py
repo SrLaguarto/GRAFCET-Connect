@@ -9,6 +9,21 @@ from .proyecto_archivo import abrir_grafnet,guardar_grafnet
 
 
 class ArchivosProyecto:
+    CLAVE_CARPETA='archivos/ultima_carpeta'
+
+    def carpeta_proyectos(self):
+        """Donde empiezan «Abrir» y «Guardar como»: la última carpeta con la que se abrió o guardó un .grafnet; si ya no existe
+        (una unidad desconectada), la de siempre (AA5)."""
+        from .carpetas import asegurar_carpetas
+        guardada=self.ajustes.value(self.CLAVE_CARPETA,'',str)
+        try:
+            if guardada and Path(guardada).is_dir():return Path(guardada)
+        except OSError:pass
+        return asegurar_carpetas()['grafcet']
+
+    def _recordar_carpeta(self,ruta):
+        self.ajustes.setValue(self.CLAVE_CARPETA,str(Path(ruta).parent))
+
     def _leer_grafnet_gui(self,ruta):
         return abrir_grafnet(ruta,sello.CLAVE,sello.POLITICA_SELLO,None if sello.DESARROLLO else sello.CLAVE_DESARROLLO)
 
@@ -17,8 +32,8 @@ class ArchivosProyecto:
         e=self.edicion
         if e is None or self._variables_sin_nombre():return False
         actual=getattr(e,'archivo',None)
-        from .carpetas import asegurar_carpetas,nombre_proyecto
-        try:inicial=actual or asegurar_carpetas()['grafcet']/nombre_proyecto(e.titulo)
+        from .carpetas import nombre_proyecto
+        try:inicial=actual or self.carpeta_proyectos()/nombre_proyecto(e.titulo)
         except OSError as exc:QMessageBox.warning(self,'Guardar proyecto',str(exc));return False
         ruta,_=QFileDialog.getSaveFileName(self,'Guardar proyecto como',str(inicial),'Proyecto GRAFCET Connect (*.grafnet)')
         if not ruta:return False
@@ -48,6 +63,7 @@ class ArchivosProyecto:
             QMessageBox.warning(self,'Guardar proyecto',f'No se pudo guardar:\n\n{exc}');return False
         self._adoptar_archivo(e,archivo)
         e.ed.dirty=False
+        self._recordar_carpeta(destino)
         self._recordar_parametros(config);self._titulo_ventana()
         self.statusBar().showMessage(f'Proyecto guardado en {destino}',10000)
         return True

@@ -3329,7 +3329,7 @@ class Interfaz(unittest.TestCase):
 
     def test_SEDI91_grupos_sueltos_se_mueven_y_se_unen_juntos(self):
         """REQ-ACT-01, REQ-DAT-01: varias acciones sueltas pegadas forman un grupo suelto (`grupo` y `orden` en la
-        presentación) que se selecciona entero, se mueve junto, tiene su colocación y se une a una etapa de una vez
+        presentación). Un clic selecciona una caja y el grupo se mueve junto y se une a una etapa de una vez
         (completas, al modelo; en una operación de deshacer); se guarda y se abre; la que se separa deja el grupo, que
         se disuelve con menos de dos."""
         from escritorio.diagrama import anclas
@@ -3352,12 +3352,12 @@ class Interfaz(unittest.TestCase):
         self.assertEqual([m["cabeza"] for m in e.M["draftActions"]], [True, False, False])
         self.assertEqual([x["lado"] for i in (a, b, c) for x in anclas(e.M, i)], ["izq"], "un solo punto de unión: el del grupo")
         self.assertEqual({self._caja(i)["grupo"] for i in (a, b, c)}, {g})
-        # se selecciona entero y se mueve junto (una operación)
+        # selecciona una caja y arrastra el grupo entero
         cen = centro_caja(w, b)
         e.prensar(cen)
         e.soltar(cen)
-        self.assertEqual((e.sel, e.accion), ([a, b, c], b))
-        self.assertEqual(e.seleccion_dibujo() & {f"accion:{i}" for i in (a, b, c)}, {f"accion:{i}" for i in (a, b, c)})
+        self.assertEqual((e.sel, e.accion), ([b], b))
+        self.assertEqual(e.seleccion_dibujo() & {f"accion:{i}" for i in (a, b, c)}, {f"accion:{b}"})
         n = len(e.ed.undo_stack)
         e.prensar(cen)
         e.mover(cen + QPointF(60, 40))
@@ -3610,11 +3610,15 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((e.ed.draft_actions()[-1]["condicion"], e.ed.draft_actions()[-1]["id"]), ("paro", d), "sigue suelta")
         x, y, ancho, alto = self._caja(d)["rect"]
         d2 = e.poner_accion_suelta(QPointF(x + ancho + 3, y + alto / 2), "evento")
-        e.prensar(centro_caja(w, d2))  # el grupo entero seleccionado y la acción señalada, la pulsada
+        w.flot.cerrar()
+        e.prensar(centro_caja(w, d2))
         e.soltar(centro_caja(w, d2))
-        self.assertEqual((len(e.sel), e.accion, p.objetivo_bloques()), (2, d2, ("accion", d2, "evento")))
+        w._abrir_opciones()
+        self.assertEqual((e.sel, e.accion, p.objetivo_bloques()), ([d2], d2, ("accion", d2, "evento")))
+        w.flot.cerrar()
         e.prensar(centro_caja(w, d))
         e.soltar(centro_caja(w, d))
+        w._abrir_opciones()
         self.assertEqual((e.accion, p.objetivo_bloques(), prog.texto()), (d, ("accion", d, "condicion"), "paro"))
         # una limitada de un fichero antiguo: su condición se programa y su límite se conserva
         self.assertIsNone(e.poner_accion(s1, {"tipo": "limitada", "variable": "Q02", "condicion": "marcha", "limite": "3s"}))

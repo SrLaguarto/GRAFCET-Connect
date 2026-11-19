@@ -1,12 +1,20 @@
-GRAFCET Connect (versión portable 1.1.6)
+GRAFCET Connect (versión portable 1.1.7)
 ====================================================
 
 Abrir: doble clic en «GRAFCET Connect.exe». No necesita instalación ni conexión a la red. La carpeta entera es el
 programa: puede copiarse a otro sitio o a un USB, pero «GRAFCET Connect.exe» no funciona separado de ella.
 
-Instalador (alternativa): «GRAFCET-Connect-1.1.6-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
+Instalador (alternativa): «GRAFCET-Connect-1.1.7-setup.exe» instala el programa en Archivos de programa (pide permisos de administrador; sin ellos, ofrece instalarlo solo para su usuario). Crea el
 acceso en el menú Inicio (y en el escritorio, si lo marca), asocia los .grafnet si lo deja marcado y se desinstala desde
 Configuración > Aplicaciones. Contiene la misma carpeta que la versión portable (P-IMP-103).
+
+Novedades 1.1.7
+- Abrir y Guardar como recuerdan la última carpeta usada (si no está disponible, la de siempre).
+- Conectar las E/S en Play: conecta en Pausa y, ya conectado, vuelve a Play desde las etapas iniciales.
+- Acciones agrupadas: un clic selecciona solo la pulsada; arrastrar mueve el grupo; Supr borra solo la seleccionada; pegar junto a una acción la une a continuación.
+- Equidistanciar usa un único paso; la doble línea de simultaneidad de una transición queda a un paso de cada lado.
+- Los comentarios de transición van siempre tras su receptividad y cuentan al comprobar superposiciones.
+- Corregidos: parpadeo naranja al añadir acciones, cajas y textos que desaparecían, fichas de entrada que se movían al simular.
 
 Novedades 1.1.6
 - Ejemplos: ya no hay menú. Se instalan 23 archivos .grafnet editables en Documentos\GRAFCET Connect\GRAFCET\Ejemplos; se abren con Proyecto > Abrir… como «Archivo sin firma».
