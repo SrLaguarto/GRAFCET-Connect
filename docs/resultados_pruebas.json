@@ -1,9 +1,9 @@
 {
- "date": "2026-11-18T23:24:49+01:00",
+ "date": "2026-11-19T13:10:08+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 1579,
+ "total": 1609,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -13,6 +13,272 @@
    "outcome": "omitida",
    "requirements": [],
    "summary": ""
+  },
+  {
+   "test": "test_aa117.EncargoAA.test_SAA1_anadir_una_accion_no_hace_parpadear_la_etapa_de_la_banderita",
+   "case": "S-AA1",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: la acción condicionada con su banderita ya rozaba un texto de transición antes de la operación; añadir otra"
+  },
+  {
+   "test": "test_aa117.EncargoAA.test_SAA2_con_errores_tras_desplazar_y_zoom_cada_accion_conserva_su_caja",
+   "case": "S-AA2",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con «Mostrar errores», desplazando y acercando, cada acción mantiene su caja y su texto en la escena y en"
+  },
+  {
+   "test": "test_aa117.EncargoAA.test_SAA3_200_pasos_de_simulacion_no_pierden_texto_ni_caja",
+   "case": "S-AA3",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: durante 200 cambios de entrada, ninguna acción pierde su caja ni su texto."
+  },
+  {
+   "test": "test_aa117.EncargoAA.test_SAA4_las_entradas_no_bailan_al_alternar_su_estado",
+   "case": "S-AA4",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: al pasar una entrada de 0 a 1 y de 1 a 0 no cambian ni la posición y el alto de las fichas ni el desplazamiento"
+  },
+  {
+   "test": "test_aa117.EncargoAA.test_SAA5_carpeta_inexistente_vuelve_a_la_de_por_defecto_y_cancelar_no_cambia_nada",
+   "case": "S-AA5",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: una carpeta guardada que ya no existe se sustituye por la de siempre; cancelar no cambia la guardada."
+  },
+  {
+   "test": "test_aa117.EncargoAA.test_SAA5_se_recuerda_la_carpeta_tras_abrir_y_tras_guardar",
+   "case": "S-AA5",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: «Abrir» y «Guardar como» empiezan en la última carpeta con la que se abrió o guardó un .grafnet."
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB1a_el_comentario_empieza_a_la_derecha_de_la_receptividad_larga_con_etiqueta",
+   "case": "S-AB1a",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con la etiqueta (tN) a la izquierda y una receptividad larga con sufijo «· condición», el comentario"
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB1b_en_una_divergencia_tampoco_se_monta",
+   "case": "S-AB1b",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: dos transiciones que salen de una misma etapa (divergencia): el comentario de cada una queda a la"
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB1c_en_un_retorno_o_un_salto_tampoco_se_monta",
+   "case": "S-AB1c",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: la transición que vuelve a la etapa inicial, de evolución hacia abajo y con la evolución girada"
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB1d_una_transicion_a_la_izquierda_del_origen_no_manda_su_comentario_a_x_8",
+   "case": "S-AB1d",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: causa de AB1 y AB4: sin temporizador, `derecha` valía 0 y el comentario nunca empezaba antes de la x 8 del"
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB2a_los_comentarios_de_etapas_y_transiciones_cuentan_como_obstaculos",
+   "case": "S-AB2a",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-05: soltar una etapa sobre el comentario de una etapa o de una transición no la coloca y avisa."
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB2b_las_acciones_nuevas_apartan_el_comentario_de_otra_transicion_en_vez_de_taparlo",
+   "case": "S-AB2b",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-05: abrir hueco a las acciones de una etapa aparta a la derecha, con su transición, un comentario que"
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB2c_un_comentario_que_ya_chocaba_antes_no_hace_parpadear",
+   "case": "S-AB2c",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un comentario que ya se montaba sobre una etapa antes de la operación no dispara el aviso de «queda"
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB2d_soltar_con_90_elementos_no_empeora",
+   "case": "S-AB2d",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: con 90 elementos (la mitad con comentario) el coste de decidir si lo que se suelta cabe es de milisegundos"
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB3_al_equidistanciar_la_barra_de_simultaneidad_es_un_elemento_mas_de_la_cadena",
+   "case": "S-AB3",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-03: la distancia de una transición a una barra de simultaneidad, y la de la barra a las"
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB3b_la_doble_linea_de_la_transicion_es_un_elemento_mas_de_la_cadena",
+   "case": "S-AB3b",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-03: al equidistanciar, la doble línea de una divergencia (bajo su transición) y la de una"
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB3c_tools_dibujo_js_dibuja_la_doble_linea_como_qt",
+   "case": "S-AB3c",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: tools/dibujo.js y escritorio/diagrama.py colocan igual la doble línea de una transición con hueco de dos pasos."
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB4_el_comentario_de_una_transicion_de_retorno_esta_junto_a_ella_y_la_sigue",
+   "case": "S-AB4",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: el comentario de una transición en un tramo horizontal está junto a su receptividad (a su derecha) y"
+  },
+  {
+   "test": "test_ab117.EncargoAB.test_SAB5_todas_las_cadenas_comparten_un_unico_paso_salvo_los_huecos_que_lo_piden",
+   "case": "S-AB5",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03",
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-03, REQ-EDT-05: tras equidistanciar, entre etapa y transición hay siempre DY, en todas las cadenas y ramas;"
+  },
+  {
+   "test": "test_ab117.EncargoAC.test_SAC2_soltar_un_bloque_en_el_formulador_queda_colocado_en_milisegundos",
+   "case": "S-AC2",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: desde que se suelta un bloque en el formulador hasta que queda colocado y repintado pasan pocos"
+  },
+  {
+   "test": "test_ac118.AccionesAgrupadas.test_SAC10_intro_y_doble_clic_editan_la_accion_pulsada",
+   "case": "S-AC10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-13"
+   ],
+   "summary": "REQ-EDT-13: la ventana de Propiedades recibe la acción pulsada."
+  },
+  {
+   "test": "test_ac118.AccionesAgrupadas.test_SAC1_clic_y_ctrl_clic_seleccionan_cajas_individuales",
+   "case": "S-AC1",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el contorno de selección corresponde a las cajas pulsadas."
+  },
+  {
+   "test": "test_ac118.AccionesAgrupadas.test_SAC3_arrastrar_segunda_accion_mueve_el_grupo",
+   "case": "S-AC3",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-03"
+   ],
+   "summary": "REQ-EDT-03: todas las cajas se mueven juntas aunque se agarre la segunda."
+  },
+  {
+   "test": "test_ac118.AccionesAgrupadas.test_SAC4_supr_borra_solo_la_caja_y_cierra_el_hueco",
+   "case": "S-AC4",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-05: Supr quita una y Deshacer recupera la fila original."
+  },
+  {
+   "test": "test_ac118.AccionesAgrupadas.test_SAC5_el_punto_izquierdo_conecta_el_grupo_entero",
+   "case": "S-AC5",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el enlace del grupo conserva todas sus acciones en orden."
+  },
+  {
+   "test": "test_ac118.AccionesAgrupadas.test_SAC6_ctrl_v_usa_la_accion_seleccionada_y_aparta_el_comentario",
+   "case": "S-AC6",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-04",
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-04, REQ-EDT-05: el destino seleccionado manda y Ctrl+Z restaura toda la operación."
+  },
+  {
+   "test": "test_ac118.AccionesAgrupadas.test_SAC7_pegar_en_punto_derecho_inserta_en_la_fila",
+   "case": "S-AC7",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-04"
+   ],
+   "summary": "REQ-EDT-04: el menú ofrece Pegar en el punto de unión de una acción."
+  },
+  {
+   "test": "test_ac118.AccionesAgrupadas.test_SAC8_soltar_segunda_caja_del_grupo_en_punto_derecho",
+   "case": "S-AC8",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: cuenta el punto bajo el puntero aunque se arrastre desde la segunda caja."
+  },
+  {
+   "test": "test_ac118.AccionesAgrupadas.test_SAC9_pegar_en_otra_etapa_y_no_unir_fragmento_mixto",
+   "case": "S-AC9",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-04"
+   ],
+   "summary": "REQ-EDT-04: el grupo cambia de etapa. Un fragmento con una etapa sigue siendo espacial."
   },
   {
    "test": "test_acabados_activos.Acabados.test_SUIV01_acciones_reales_y_trazos_completos_con_inicial",
@@ -10906,6 +11172,13 @@
     "REQ-SIM-04"
    ],
    "summary": "REQ-SIM-03, REQ-SIM-04: operaciones internas de Stop/Reiniciar usan el cambio central; la interfaz E/S las deshabilita."
+  },
+  {
+   "test": "test_pulsadores_play_stop.PulsadoresYControl.test_SCTL03_reiniciar_un_proyecto_vacio_no_abre_un_aviso",
+   "case": "S-CTL03",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
   },
   {
    "test": "test_pulsadores_play_stop.PulsadoresYControl.test_SPUL01_presionar_y_soltar_producen_dos_cambios_y_evoluciones",
