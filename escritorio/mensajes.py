@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from grafcet.notation import x_etapa
+
 LIMITE_LINEA = 130  # a partir de aquí, el aviso se parte: una frase en la lista y el resto en la ayuda emergente
 MAX_NOMBRES = 4  # cuántas transiciones o etapas se nombran en un aviso de bucle
 RECIENTES = 6  # cuántas de las últimas evoluciones se miran para saber qué se repite
@@ -127,6 +129,27 @@ def _lista(nombres: list[str]) -> str:
     if len(visibles) == 1:
         return visibles[0] + resto
     return ", ".join(visibles[:-1]) + " y " + visibles[-1] + resto
+
+
+def mezcla_acciones(modelo: dict[str, Any], nombres: dict[str, str], variable: str) -> str:
+    etapas = {e["id"]: nombres.get(e["id"], e["label"]) for e in modelo["steps"]}
+    modos: dict[str, set[str]] = {"continuous": set(), "stored": set()}
+    for accion in modelo["actions"]:
+        etapa = accion.get("stepRef")
+        modo = accion.get("mode")
+        if accion.get("targetRef") == variable and etapa in etapas and modo in modos:
+            modos[modo].add(etapa)
+
+    def lista(ids: set[str]) -> str:
+        etiquetas = (x_etapa(etapas[ident]) for ident in ids)
+        orden = sorted(etiquetas, key=lambda s: [
+            (0, int(p)) if p.isdecimal() else (1, p.casefold()) for p in re.split(r"(\d+)", s)
+        ])
+        return f" ({', '.join(orden[:-1]) + ' y ' if len(orden) > 1 else ''}{orden[-1]})" if orden else ""
+
+    continuas, memorizadas = lista(modos["continuous"]), lista(modos["stored"])
+    nombre = nombres.get(variable, variable)
+    return f"{nombre} recibe acciones continuas{continuas} y memorizadas{memorizadas} a la vez: use solo un tipo."
 
 
 def _repetidas(evoluciones: list[dict[str, Any]], nombres: dict[str, str]) -> tuple[list[str], list[str]]:

@@ -32,8 +32,10 @@ from grafcet.values import format_value, parse_type, parse_value, zero
 from grafcet.view import (Vista, display_names, force_situation, norm, layout_from_presentation, presentation_for,
                          substitute)
 
-from .mensajes import amable, correccion_amable
+from .mensajes import amable, correccion_amable, mezcla_acciones
 from . import orden_acciones, pegado_acciones
+from .rutas_diagrama import rutas
+from .equidistancia import reservar_barras
 from .bloques import _dur_usuario, normalizar_duracion, sin_comillas
 from .anotaciones import en as anotacion_en, rect as rect_anotacion, importar_imagen, editar_texto
 from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, RADIO_ANCLA, REJILLA, SX, TB, VACIO_H, VACIO_W, _distancia, _extra,
@@ -411,6 +413,7 @@ class Edicion(QObject):
                            draft_actions=self._borradores(), action_layouts=ed.action_layouts(),
                            comments=ed.comments(), orientations=ed.transition_orientations())
         self.M = self.vista.model
+        rutas.preparar(self.M)
         orden_acciones.aplicar_vista(self.M, ed)
         quitar_comillas_vista(self.M)
         self.M["annotations"] = self.ed.annotations()
@@ -502,11 +505,14 @@ class Edicion(QObject):
                 mensaje = self._texto_expresion_pendiente(mensaje, self.dibujable(d.element))
             if d.code == "D-SIMULTANEIDAD":
                 mensaje += self._lados_cruzados(d.element)
+            if d.code == "D-MODO-SALIDA":
+                mensaje = mezcla_acciones(self.ed.model, self.nombres, d.element)
             mensaje = sin_codigos(mensaje)
             out.append({"code": d.code, "message": mensaje, "correction": correccion,
                         "severity": d.severity, "blocks": d.blocks_start, "question": d.question,
                         "element": d.element, "target": evento["id"] if d.code == "D-TIPO-EVENTO" and evento else self.dibujable(d.element),
-                        "completo": d.code in ("D-SIMULTANEIDAD", "D-BARRA-SUELTA") or (d.code == "D-ALTERNANCIA" and self._es_enlace_borrador(d.element))})
+                        "completo": d.code in ("D-SIMULTANEIDAD", "D-BARRA-SUELTA", "D-MODO-SALIDA")
+                        or (d.code == "D-ALTERNANCIA" and self._es_enlace_borrador(d.element))})
         if self.ignorados:
             out.append({"code": "AVISO", "severity": "advertencia", "blocks": False, "question": None, "element": None,
                         "target": None, "correction": "Se descartó al abrir; vuelva a colocar la acción si hacía falta",
@@ -2856,7 +2862,8 @@ class Edicion(QObject):
         return orden_acciones.ordenar(out, orden_acciones.ids_etapa(self.ed, sid))
 
     def _atomico(
-        self, etiqueta: str, fn: Callable[[], Any], hueco: bool = True, vista_actual: bool = False
+        self, etiqueta: str, fn: Callable[[], Any], hueco: bool = True, vista_actual: bool = False,
+        antes_de_notificar: Callable[[], None] | None = None,
     ) -> str | None:
         """Varias operaciones como una sola de deshacer; si una falla, no queda ninguna y se devuelve el motivo. Con `hueco`
         (lo normal), lo que ensanchó o añadió acciones aparta lo que estorba; sin él, la operación ya cuida de dónde pone
@@ -2877,6 +2884,8 @@ class Edicion(QObject):
             self.ed.redo_stack[:] = rehacer  # (como estaba, aunque fn haya hecho varias operaciones)
             self.reconstruir()  # (una operación pudo haber rehecho la vista a medias)
             return "; ".join(self.sust(d.message) for d in exc.diagnostics)
+        if antes_de_notificar is not None:
+            antes_de_notificar()
         self.cambia(reconstruir=not (vista_actual and hueco))
         if self._encima:  # no se pudo abrir hueco: se deja como está, con un aviso que no es un error
             self.informar(MSG_ENCIMA)
@@ -3028,15 +3037,19 @@ class Edicion(QObject):
                 nuevo[0] = self._a_borrador(aid, {**d, "variable": nombre}, sid, vid)
             else:
                 self._crear_o_cambiar(sid, d, aid, vid)
+        return self._atomico("acción", hacer, antes_de_notificar=self._seguir_accion(aid, nuevo))
+
+    def _seguir_accion(self, aid: str, nuevo: list[str]) -> Callable[[], None]:
+        """Conserva la selección al sustituir el ID de una acción, antes de actualizar Propiedades."""
         señalada, seleccion = self.accion == aid, list(self.sel)
-        motivo = self._atomico("acción", hacer)
-        if motivo:
-            return motivo
-        if nuevo[0] != aid:  # pasó a borrador: la selección la sigue
-            self.sel = [nuevo[0] if i == aid else i for i in seleccion]
-            self.accion = nuevo[0] if señalada else self.accion
-            self.cambiado.emit()
-        return None
+
+        def seguir() -> None:
+            if nuevo[0] != aid:
+                self.sel = [nuevo[0] if i == aid else i for i in seleccion]
+                if señalada:
+                    self.accion = nuevo[0]
+
+        return seguir
 
     def _revisar_textos(self, d: dict[str, str], parcial: str | None = None, nueva: str | None = None) -> str | None:
         """Por qué un texto de la acción (condición, valor, evento) no se interpreta en el ámbito del `parcial` de su etapa
@@ -3085,10 +3098,7 @@ class Edicion(QObject):
             vid = (var["id"] if var else self.ed.add_variable(nombre, crear[0], (crear[1] if isinstance(crear[1], dict) else {"kind": crear[1]}))) if nombre else None
             self.ed.update_draft_action(did, **self._campos_borrador(d, vid))
             self._completar(did)
-        motivo = self._atomico("acción", hacer)
-        if motivo is None:
-            self._tras_borrador(did)
-        return motivo
+        return self._atomico("acción", hacer, antes_de_notificar=lambda: self._seleccionar_tras_borrador(did))
 
     def _completar(self, did: str) -> bool:
         """Si el borrador está unido a una etapa y no le falta nada, lo pasa al modelo (dentro de una operación agrupada)."""
@@ -3111,7 +3121,7 @@ class Edicion(QObject):
         orden_acciones.sustituir(self.ed, b["etapa"], orden, did, nuevo)
         return True
 
-    def _tras_borrador(self, did: str) -> None:
+    def _seleccionar_tras_borrador(self, did: str) -> None:
         """Deja la selección donde el borrador esté ahora: en el modelo (la última acción de su etapa) o sigue siendo un
         borrador."""
         if self._es_borrador(did):
@@ -3121,6 +3131,9 @@ class Edicion(QObject):
             sid = next((a["stepRef"] for a in self.ed.model["actions"][-1:]), None)
             st = next((s for s in self.ed.model["steps"] if s["id"] == sid), None)
             self.sel, self.accion = ([sid], self.ed.model["actions"][-1]["id"]) if st else ([], None)
+
+    def _tras_borrador(self, did: str) -> None:
+        self._seleccionar_tras_borrador(did)
         self.cambiado.emit()
 
     def anadir_accion(self, sid: str) -> str:
@@ -3344,16 +3357,12 @@ class Edicion(QObject):
                 nuevo[0] = self._a_borrador(aid, d, sid)
             else:
                 self._crear_o_cambiar(sid, d, aid, self._id_variable(d["variable"]))
-        señalada, seleccion = self.accion == aid, list(self.sel)
-        motivo = self._atomico("condición de la acción" if campo == "condicion" else "evento de la acción", hacer)
+        etiqueta = "condición de la acción" if campo == "condicion" else "evento de la acción"
+        motivo = self._atomico(etiqueta, hacer, antes_de_notificar=self._seguir_accion(aid, nuevo))
         if motivo:
             self.mensaje = motivo
             self.cambiado.emit()
             return motivo
-        if nuevo[0] != aid:  # cambió de ID (pasó al modelo o salió de él): la selección la sigue
-            self.sel = [nuevo[0] if i == aid else i for i in seleccion]
-            self.accion = nuevo[0] if señalada else self.accion
-            self.cambiado.emit()
         return None
 
     # -- variables (REQ-EDT-07, P-IMP-38) ------------------------------------------------------------
@@ -4371,8 +4380,7 @@ class Edicion(QObject):
     def _extensiones(self) -> dict[str, tuple[float, float]]:
         """Cuánto sobresale, por encima y por debajo de su centro, lo que acompaña a una etapa (sus acciones y órdenes de
         forzado con sus marcas) y a una transición (su texto): lo que pide `Editor.equidistribute` para que no se solapen
-        con el nivel siguiente. La etapa sin acciones no figura: cabe en la distancia estándar. Lo que tiene una barra de
-        simultaneidad o de alternativa debajo pide, además, el hueco de dos pasos (AB3)."""
+        con el nivel siguiente. La etapa sin acciones no figura: cabe en la distancia estándar."""
         pos = posiciones(self.M)
         out: dict[str, tuple[float, float]] = {t["id"]: (12.0, 12.0) for t in self.M["transitions"]}
         for c in self._colocadas():
@@ -4383,21 +4391,6 @@ class Edicion(QObject):
                 arriba, abajo = y - (ry - extra[0]), (ry + rh + extra[1]) - y
                 previo = out.get(c["etapa"], (float(H), float(H)))
                 out[c["etapa"]] = (max(previo[0], arriba), max(previo[1], abajo))
-        trans = orientaciones(self.M)
-        for t in self.M["transitions"]:
-            # el doble trazo propio de una transición (divergencia o convergencia simultánea) es un elemento más: de la
-            # transición a él y de él a la etapa hay el paso DY, así que entre la transición y su etapa hay dos (AB3)
-            if trans[t["id"]] == "abajo" and (t.get("simulPre") or t.get("simulPost")):
-                arriba, abajo = out[t["id"]]
-                out[t["id"]] = (max(arriba, 2 * DY - MARGEN_SOLAPE) if t.get("simulPre") else arriba,
-                                max(abajo, 2 * DY - MARGEN_SOLAPE) if t.get("simulPost") else abajo)
-        for b in self.ed.presentation.get("barras", []):
-            # una barra es un elemento más de la cadena (AB3): del último nivel que tiene encima a la barra, y de ella al
-            # siguiente nivel, hay el paso DY (el hueco es 2·DY y `equidistribute` la pone a mitad)
-            for i in b.get("arriba", []):
-                if i in pos:
-                    previo = out.get(i, (float(H), float(H)))
-                    out[i] = (previo[0], max(previo[1], 2 * DY - MARGEN_SOLAPE))
         return out
 
     def _pares_solape(self, propios: set[str], sin_horizontales: bool = False) -> set[tuple[str, str]]:
@@ -4445,7 +4438,9 @@ class Edicion(QObject):
         movidos: list[str] = []
 
         def hacer() -> None:
-            movidos.extend(self.ed.equidistribute(ids, DY, self._extensiones(), MARGEN_SOLAPE, REJILLA, pos))
+            extensiones = self._extensiones()
+            reservar_barras(self.ed, self.M, ids, pos, extensiones, DY, MARGEN_SOLAPE)
+            movidos.extend(self.ed.equidistribute(ids, DY, extensiones, MARGEN_SOLAPE, REJILLA, pos))
             self.reconstruir()
             if self._pares_solape(propios, True) - antes:
                 raise DiagnosticError(Diagnostic("D-FORMATO", MSG_EQUIDISTANCIA))
