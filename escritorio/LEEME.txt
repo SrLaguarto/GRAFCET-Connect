@@ -8,6 +8,12 @@ Instalador (alternativa): «GRAFCET-Connect-1.1.7-setup.exe» instala el program
 acceso en el menú Inicio (y en el escritorio, si lo marca), asocia los .grafnet si lo deja marcado y se desinstala desde
 Configuración > Aplicaciones. Contiene la misma carpeta que la versión portable (P-IMP-103).
 
+Novedades 1.1.8
+- Más ágil con GRAFCET grandes: añadir una acción con 100 etapas pasa de unos 350 ms a unos 90 ms.
+- El aviso de acciones continuas y memorizadas a la vez dice en qué etapas está cada una, por ejemplo «continuas (X3) y memorizadas (X1)».
+- La ventana de Propiedades de la acción por evento y de la condicionada ya no se mueve ni cambia de tamaño al editarla.
+- Equidistanciar con simultaneidades ya no deja filas de más.
+
 Novedades 1.1.7
 - Abrir y Guardar como recuerdan la última carpeta usada (si no está disponible, la de siempre).
 - Conectar las E/S en Play: conecta en Pausa y, ya conectado, vuelve a Play desde las etapas iniciales.

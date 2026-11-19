@@ -1442,6 +1442,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         una sesión nueva, que escribe sus salidas solo tras leer y aplicar las entradas de la planta. En Pausa ya está todo a
         0 y sin estado (Pausa es «todo a 0 hasta un nuevo Play»): no hay nada que reiniciar, solo se vuelve a pedir el cero
         a la planta si hay conexión."""
+        self.diagrama.scene().vaciar_textos()
         self._mostrar_pagina(False)
         if not self.a_ejecutar.isChecked():
             self.modbus.pausar(diagnostico=True)
@@ -1648,6 +1649,9 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.cambiar_modo("editar")
 
     def _establecer_edicion(self, e: Edicion) -> None:
+        from .rutas_diagrama import rutas
+        rutas.vaciar()
+        self.diagrama.scene().vaciar_textos()
         self.solo_lectura = False
         if self._errores_auto:
             self._marcar_errores(False, False)
@@ -2378,9 +2382,10 @@ class Ventana(ArchivosProyecto, QMainWindow):
             if sid:
                 e.anadir_accion(sid)
             return
-        e.accion, e.ver_accion = aid, True
-        e.sel = [sid] if sid else (e.sel if aid in e.sel else [aid])
-        e.cambiado.emit()
+        seleccion = [sid] if sid else (e.sel if aid in e.sel else [aid])
+        if (e.accion, e.ver_accion, e.sel) != (aid, True, seleccion):
+            e.accion, e.ver_accion, e.sel = aid, True, seleccion
+            e.cambiado.emit()
         self._abrir_opciones(explicito)
 
     def editar_etiqueta(self, ident: str, explicito: bool = True) -> None:
@@ -2626,6 +2631,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         Pausa conserva TCP y sigue observando las entradas, y Play vincula la sesión nueva al TCP existente."""
         if self._transicion_ui:
             return
+        self.diagrama.scene().vaciar_textos()
         self._encuadre_modo = self.diagrama.guardar_encuadre()
         self._generacion_encuadre = getattr(self, "_generacion_encuadre", 0) + 1
         generacion = self._generacion_encuadre
@@ -3085,6 +3091,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._iniciar_conexion_modbus(config, None, prueba)
 
     def _iniciar_conexion_modbus(self, config, sesion, prueba):
+        if not prueba:
+            self.diagrama.scene().vaciar_textos()
         en_play = self.a_ejecutar.isChecked() and not prueba  # P-IMP-172: al conectar en Play, se vuelve a Play
         try:
             self._parar_sin_cambiar_vista()
@@ -3123,6 +3131,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         finally:self._conservar_vista_al_parar=anterior
 
     def _desconectar_modbus(self):
+        self.diagrama.scene().vaciar_textos()
         anterior = getattr(self, "_conservar_vista_al_parar", False)
         self._conservar_vista_al_parar = True
         try:

@@ -559,7 +559,6 @@ class GestorFlotantes(QObject):
         return t + estilo.E2 + 2 * estilo.E3 + 2
 
     def _dimensionar(self, area: QRect) -> None:
-        v = self.principal
         margen = margen_horizontal(area.width())
         disponible = area.adjusted(margen, estilo.E6, -margen, -estilo.E6)
         disponible.setWidth(min(disponible.width(), ancho_maximo()))
@@ -568,7 +567,8 @@ class GestorFlotantes(QObject):
             or self.panel.accion.caja_numerica.isVisibleTo(self.panel)
         )
         if necesita_formulador:
-            alto = self._alto_formuladores(disponible)
+            # Con dos tarjetas se conserva el alto de apertura, también al aparecer el formulador numérico.
+            alto = disponible.height() if self.panel._bloques_fuera else self._alto_formulador(disponible)
             self._tamano = QSize(disponible.width(), alto)
         else:
             ancho = min(40 * estilo.E4, disponible.width())
@@ -579,29 +579,14 @@ class GestorFlotantes(QObject):
             alto = contenido + self._marco_ventana() + self._marco_tarjeta() + estilo.E1
             self._tamano = QSize(ancho, min(alto, disponible.height()))
 
-    def _alto_formuladores(self, disponible: QRect) -> int:
-        """Un panel: alto de contenido acotado; condición/evento: área alta, repartida con el valor numérico."""
+    def _alto_formulador(self, disponible: QRect) -> int:
+        """Alto acotado para una ventana con un solo formulador."""
         p = self.panel
-        previa = min(12 * estilo.E4, max(8 * estilo.E4, disponible.width() // 6))
-        vertical = disponible.width() - previa - 5 * estilo.E4 < 36 * estilo.E4
-        numerica = p.accion.caja_numerica.isVisibleTo(p)
-        cantidad = 2 if p._bloques_fuera and numerica else 1
-        if not p._bloques_fuera:
-            filas = 11 if estilo.ESCALA == "grande" else 9
-            contenido = max(p.minimumSizeHint().height(), (filas + 2) * estilo.ALTO_CONTROL)
-            tope = max(1, disponible.height() - estilo.E6)
-            alto = contenido + self._marco_ventana() + self._marco_tarjeta()
-            if p.pagina == "transicion":
-                alto = round(alto * 1.2)
-            return min(tope, alto)
-        if not numerica:
-            return disponible.height()
-        fijos = self._marco_ventana() + cantidad * (self._marco_tarjeta() + 2 * estilo.E3)
-        if vertical and p.izq.isVisibleTo(p):
-            fijos += p.izq.sizeHint().height() + estilo.E3
-        minimo = fijos + cantidad * 8 * estilo.E4
-        alto = max(minimo, (disponible.height() + fijos) // 2)
-        return min(alto, disponible.height())
+        filas = 11 if estilo.ESCALA == "grande" else 9
+        contenido = max(p.minimumSizeHint().height(), (filas + 2) * estilo.ALTO_CONTROL)
+        tope = max(1, disponible.height() - estilo.E6)
+        alto = contenido + self._marco_ventana() + self._marco_tarjeta()
+        return min(tope, round(alto * 1.2) if p.pagina == "transicion" else alto)
 
     def _componer(self) -> None:
         """La vista previa cede sitio al formulador; los campos se apilan solo si falta ancho."""
@@ -628,7 +613,7 @@ class GestorFlotantes(QObject):
         v.columna.layout().setStretch(0, 1)
         v.columna.layout().setStretch(1, 1)
 
-    def _repartir_paneles(self, area: QRect) -> None:
+    def _repartir_paneles(self) -> None:
         """Reserva contenido real antes de repartir el espacio libre entre los dos editores."""
         v, p = self.principal, self.panel
         if not p._bloques_fuera:
@@ -637,15 +622,6 @@ class GestorFlotantes(QObject):
         inferior = v.accion.alto_necesario(justo=not p.accion.caja_numerica.isVisibleTo(p))
         separacion = v.columna.layout().spacing()
         requerido = superior + inferior + separacion
-        falta = max(0, requerido - v.columna.height())
-        if falta:
-            alto = min(v.height() + falta, area.height() - 2 * estilo.E6)
-            lugar = QRect(v.pos(), QSize(v.width(), alto))
-            if not self.arrastre.movida:
-                lugar.moveCenter(area.center())
-            v.setGeometry(lugar)
-            v.layout().activate()
-            v.cuerpo.layout().activate()
         if requerido <= v.columna.height():
             v.condicion.setMinimumHeight(superior)
             v.accion.setMinimumHeight(inferior)
@@ -737,7 +713,7 @@ class GestorFlotantes(QObject):
             self._componer()
             v.cuerpo.layout().activate()
             v.columna.layout().activate()
-            self._repartir_paneles(area)
+            self._repartir_paneles()
             self.arrastre.limitar()
             self.geometrias = {"principal": QRect(v.geometry())}
             zonas = self._zonas()

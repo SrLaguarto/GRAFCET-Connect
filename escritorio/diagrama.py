@@ -34,6 +34,8 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, 
 from . import estilo
 from .ayudas_emergentes import mostrar_ayuda
 from .elementos_lupa import DATO_ELEMENTOS
+from .rutas_diagrama import rutas
+from .textos_diagrama import EscenaDiagrama, texto_nuevo
 
 SX = 100       # margen izquierdo del dibujo
 H = 22         # semilado de la etapa cuadrada (unidad: lado = 2·H)
@@ -154,15 +156,14 @@ class _Pintor:
             font.setFixedPitch(True)
         font.setPixelSize(size)
         font.setBold(bold)
-        item = QGraphicsTextItem()
-        item.document().setDocumentMargin(0)
-        item.setFont(font)
-        item.setDefaultTextColor(QColor(COL[color]))
-        item.setHtml(_html(segs, False, self.verdaderos))
+        contenido, tinta = _html(segs, False, self.verdaderos), QColor(COL[color])
+        item = self.sc.texto(contenido, tinta, font) if isinstance(self.sc, EscenaDiagrama) else texto_nuevo(
+            contenido, tinta, font)
         w = item.boundingRect().width()
         x0 = x - w if anchor == "end" else x - w / 2 if anchor == "middle" else x
         top = y - QFontMetricsF(font).ascent()
         item.setPos(x0, top)
+        item.setToolTip(tip or "")
         self.sc.addItem(item)
         self._put(item, z + 0.02, tip)
         tramos = _negados(segs)
@@ -396,12 +397,15 @@ def _otros_t(M: dict[str, Any], t: dict[str, Any], pos: dict[str, tuple[float, f
 
 
 def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
-    """`grafcet.routing.enlaces`, con el doble trazo de una simultaneidad a `simul_d` de su transición en vez de a SIMUL:
-    los enlaces que acaban en él se recolocan."""
-    out = routing.enlaces(M)
+    """Recorridos de solo lectura, con los extremos ajustados a las simultaneidades de la vista."""
+    return rutas.obtener(M, _ajustar_enlaces)
+
+
+def _ajustar_enlaces(M: dict[str, Any], base: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out = list(base)
     pos = posiciones(M)
     ts = {t["id"]: t for t in M["transitions"]}
-    for e in out:
+    for i, e in enumerate(base):
         t = ts.get(e.get("tid"))
         if t is None or not e.get("simul") or "orient" in e or e["rol"] not in ("pre", "post"):
             continue
@@ -411,7 +415,8 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
         if d == SIMUL:
             continue
         viejo, nuevo = ty + signo * (SIMUL + BARRA_GROSOR), ty + signo * (d + BARRA_GROSOR)
-        e["pts"] = [(x, nuevo if y == viejo else nuevo - 30 if (y == viejo - 30 and signo < 0) else y) for x, y in e["pts"]]
+        puntos = [(x, nuevo if y == viejo else nuevo - 30 if (y == viejo - 30 and signo < 0) else y) for x, y in e["pts"]]
+        out[i] = {**e, "pts": puntos}
     return out
 
 
@@ -742,7 +747,11 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     rectángulo de cada orden de forzado ({id, etapa, rect}: no son acciones, pero también se señalan con el ratón).
     `dependencias` (como en tools/dibujo.js) dibuja los trazos discontinuos que unen una macroetapa con su expansión y una
     encapsulante con sus recintos; por defecto no se dibujan. Mostrarlos u ocultarlos no cambia ninguna otra cosa."""
-    scene.clear()
+    reutiliza = isinstance(scene, EscenaDiagrama)
+    if reutiliza:
+        scene.comenzar_dibujo()
+    else:
+        scene.clear()
     cajas: list[dict[str, Any]] = []
     from .anotaciones import dibujar as dibujar_anotaciones
     dibujar_anotaciones(scene,M,sel or set())
@@ -754,6 +763,8 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
     hay_elementos = pos or M["transitions"] or M.get("draftActions") or M.get("bars")
     if not hay_elementos and not any(c.get("vacio") for c in M.get("partials") or []):
+        if reutiliza:
+            scene.terminar_dibujo()
         return cajas  # (un grafcet parcial recién soltado, con su marco vacío, es lo único que puede haber que dibujar)
     # Enlace ascendente: por la izquierda del parcial de la transición, no de todo el dibujo
     situation, virtual = set(S.get("situation") or []), set(S.get("virtual") or [])
@@ -918,6 +929,8 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     pt.parcial = None
     if sel or marcados or naranja or M.get("drafts"):
         _realces(pt, M, set(sel or ()), set(marcados or ()), set(naranja or ()))
+    if reutiliza:
+        scene.terminar_dibujo()
     return cajas
 
 
@@ -1634,7 +1647,7 @@ class VistaDiagrama(QGraphicsView):
     def __init__(self) -> None:
         super().__init__()
         self.anclaje = None
-        self.setScene(QGraphicsScene(self))
+        self.setScene(EscenaDiagrama(self))
         self.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         # Repintado completo (P-IMP-171, AA2/AA3): con escala fraccionaria el repintado parcial dejaba cajas y textos
         # sin pintar. Medido en artifacts/aa_117/MEDICION_REPINTADO.md: nunca pasa de 10 ms por fotograma.
