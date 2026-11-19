@@ -1384,11 +1384,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
             if self.edicion is not None:
                 self.edicion.ed.dirty = True  # guardar escribe el arreglo; abrir solo no firma ni guarda nada
             QMessageBox.information(self, TITULO, aviso_valores_iniciales(quitadas))
+        self._recordar_carpeta(ruta)
         return True
 
     def abrir(self) -> None:
-        from .carpetas import asegurar_carpetas
-        try:inicial=str(asegurar_carpetas()['grafcet'])
+        try:inicial=str(self.carpeta_proyectos())
         except OSError as exc:QMessageBox.warning(self,"Abrir proyecto",str(exc));return
         ruta, _ = QFileDialog.getOpenFileName(self, "Abrir proyecto", inicial, "Proyecto GRAFCET Connect (*.grafnet)")
         if ruta:
@@ -3079,6 +3079,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._iniciar_conexion_modbus(config, None, prueba)
 
     def _iniciar_conexion_modbus(self, config, sesion, prueba):
+        en_play = self.a_ejecutar.isChecked() and not prueba  # P-IMP-172: al conectar en Play, se vuelve a Play
         try:
             self._parar_sin_cambiar_vista()
             self.modbus.iniciar(config, sesion, prueba, documento=self.panel_es.doc)
@@ -3091,6 +3092,23 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.rt.start()
         except (ValueError, RuntimeError) as exc:
             self.panel_es.estado.setText(f"No se pudo conectar: {exc}")
+            return
+        if en_play:  # conecta en Pausa (P-IMP-60, con su cero) y, ya conectado, Play de nuevo desde las etapas iniciales
+            self._replay_intentos = 100
+            QTimer.singleShot(50, self._replay_tras_conectar)
+
+    def _replay_tras_conectar(self):
+        estado = getattr(self.modbus, "estado", "")
+        if estado == "conectado":
+            if not self.a_ejecutar.isChecked():
+                anterior = getattr(self, "_conservar_vista_al_parar", False)
+                self._conservar_vista_al_parar = True
+                try:self.a_ejecutar.setChecked(True)
+                finally:self._conservar_vista_al_parar = anterior
+            return
+        self._replay_intentos -= 1
+        if self._replay_intentos > 0 and self.modbus.activo and estado != "error":
+            QTimer.singleShot(50, self._replay_tras_conectar)
 
     def _parar_sin_cambiar_vista(self):
         anterior=getattr(self,"_conservar_vista_al_parar",False)

@@ -1400,7 +1400,11 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (False, "editar"))
                 self.assertEqual(w.v.state().get("situation", []), [])
                 esperar(lambda: w.modbus.estado == "conectado")
-                self.assertEqual(escrituras, [("coil", 0, 0), ("coil", 1, 0), ("holding", 0, 0)], "conectar en Pausa: solo el cero")
+                # P-IMP-172: conectar en Play pasa por Pausa (con su cero) y, ya conectado, vuelve a Play desde las iniciales
+                self.assertEqual(escrituras[:3], [("coil", 0, 0), ("coil", 1, 0), ("holding", 0, 0)], "conectar en Pausa: primero el cero")
+                esperar(lambda: w.a_ejecutar.isChecked())
+                self.assertEqual(w.modo, "simular")
+                w.a_ejecutar.setChecked(False)
                 # inestable: avisa una vez, acaba en Pausa con todo a 0 y la conexión se conserva
                 w._desconectar_modbus()
                 esperar(lambda: not w.modbus.activo)

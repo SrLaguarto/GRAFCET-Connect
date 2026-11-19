@@ -56,6 +56,7 @@ class UbicaModo(QObject):
         self.pestanas = pestanas
         self.luz = luz
         self._pendiente = False
+        self._barras = []  # las barras de herramientas de la ventana, al existir (AC2: no buscar en toda la ventana en cada ajuste)
         etiqueta.setParent(fila)
         etiqueta.show()
         for widget in (fila, pestanas, luz, etiqueta):
@@ -66,7 +67,7 @@ class UbicaModo(QObject):
         tipos = (QEvent.Type.Resize, QEvent.Type.Show, QEvent.Type.LayoutRequest, QEvent.Type.FontChange,
                  QEvent.Type.DynamicPropertyChange)
         if objeto is self.fila and evento.type() == QEvent.Type.Resize:
-            for barra in self.fila.window().findChildren(QToolBar):
+            for barra in self._barras_toolbar():
                 if barra.objectName() not in ("barraEdicion", "barraSimulacion"):
                     continue
                 for accion in barra.actions():
@@ -95,15 +96,22 @@ class UbicaModo(QObject):
         alto = self.etiqueta.height()
         self.etiqueta.setGeometry(x, (self.fila.height() - alto) // 2, ancho, alto)
 
+    def _barras_toolbar(self):
+        if not self._barras:
+            self._barras = self.fila.window().findChildren(QToolBar)
+        return self._barras
+
     def _extensiones(self):
         hoja = ("QToolButton { padding:0; min-width:0; min-height:0; border:none; }"
                 f"QToolButton:hover {{ background:{estilo.HOVER}; }}")
-        for boton in self.fila.window().findChildren(QToolButton, "qt_toolbar_ext_button"):
-            if boton.styleSheet() != hoja:
-                boton.setStyleSheet(hoja)
-                boton.setFixedWidth(estilo.ALTO_CONTROL - 2)
-                boton.setToolTip("Más herramientas")
-        for barra in self.fila.window().findChildren(QToolBar):
+        barras = self._barras_toolbar()
+        for barra in barras:
+            for boton in barra.findChildren(QToolButton, "qt_toolbar_ext_button"):
+                if boton.styleSheet() != hoja:
+                    boton.setStyleSheet(hoja)
+                    boton.setFixedWidth(estilo.ALTO_CONTROL - 2)
+                    boton.setToolTip("Más herramientas")
+        for barra in barras:
             if barra.objectName() not in ("barraEdicion", "barraSimulacion"):
                 continue
             acciones = barra.actions()

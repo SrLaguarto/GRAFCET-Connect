@@ -27,6 +27,13 @@ const MARGEN_MARCO_X = 26;  // lo que se separa el marco de un parcial de todo l
 const MARGEN_MARCO_Y = 22;  // ... y por arriba y por abajo (el mismo de siempre alrededor de sus etapas)
 const TALLO_T = 24;       // tramo recto de una transición sin etapa anterior o siguiente (grafcet/routing.py)
 const SIMUL = 14;         // de la transición al doble trazo de una simultaneidad
+const PASO = 60;          // el paso estándar: con dos pasos o más hasta la etapa, el doble trazo va a un paso de la transición (escritorio/diagrama.py: simul_d)
+// Distancia de la transición (evolución hacia abajo) a su doble trazo por arriba (signo -1) o por abajo (1): PASO si la etapa más cercana de ese lado está a dos pasos o más; SIMUL en lo demás
+function simulD(giro, ty, otros, signo) {
+  if (giro !== "abajo") return SIMUL;
+  const lejos = otros.map(q => signo * (q.y - ty)).filter(v => v > 0);
+  return lejos.length && Math.min(...lejos) >= 2 * PASO ? PASO : SIMUL;
+}
 
 let parcialDeDibujo = null;
 function el(tag, attrs={}, parent) { const e = document.createElementNS(NS, tag);
@@ -191,13 +198,13 @@ function drawDiagram(svg, M, S, opciones = {}) {
       if (!post.length) trazo([tx, ty], P(TALLO_T));
     }
     if (giro === "abajo" && t.simulPre) {
-      const xs = [...pre.map(p=>p.x), tx], yy = ty - 14;
+      const xs = [...pre.map(p=>p.x), tx], yy = ty - simulD(giro, ty, pre, -1);
       el("rect", {x:Math.min(...xs)-8,y:yy-BARRA_GROSOR+1,width:Math.max(...xs)-Math.min(...xs)+16,height:BARRA_GROSOR-2,class:"sync-gap"}, bars);
       [yy, yy-BARRA_GROSOR].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl " + rol}, bars));
       el("path", {d:`M${tx},${yy} V${ty}`, class:"link " + rol}, links);
     }
     if (giro === "abajo" && t.simulPost) {
-      const xs = [...post.map(p=>p.x), tx], yy = ty + 14;
+      const xs = [...post.map(p=>p.x), tx], yy = ty + simulD(giro, ty, post, 1);
       el("rect", {x:Math.min(...xs)-8,y:yy+1,width:Math.max(...xs)-Math.min(...xs)+16,height:BARRA_GROSOR-2,class:"sync-gap"}, bars);
       [yy, yy+BARRA_GROSOR].forEach(y => el("line", {x1:Math.min(...xs)-8, x2:Math.max(...xs)+8, y1:y, y2:y, class:"dbl " + rol}, bars));
       el("path", {d:`M${tx},${ty} V${yy}`, class:"link " + rol}, links);
@@ -313,8 +320,8 @@ function cajaTransicion(t, tx, ty, pre, post, wl, wc) {
   const unir = (x0, y0, x1, y1) => { r = [Math.min(r[0], x0), Math.min(r[1], y0), Math.max(r[2], x1), Math.max(r[3], y1)]; };
   if (wl !== null) unir(tx - TB - 6 - wl, ty - 12, tx - TB - 6, ty + 9);
   if (wc !== null) unir(tx + TB + 8, ty - 12, tx + TB + 8 + wc, ty + 9);
-  if (t.simulPre) { const xs = [...pre.map(q => q.x), tx]; unir(Math.min(...xs) - 8, ty - SIMUL - BARRA_GROSOR, Math.max(...xs) + 8, ty - SIMUL); }
-  if (t.simulPost) { const xs = [...post.map(q => q.x), tx]; unir(Math.min(...xs) - 8, ty + SIMUL, Math.max(...xs) + 8, ty + SIMUL + BARRA_GROSOR); }
+  if (t.simulPre) { const xs = [...pre.map(q => q.x), tx]; const d = simulD(giro, ty, pre, -1); unir(Math.min(...xs) - 8, ty - d - BARRA_GROSOR, Math.max(...xs) + 8, ty - d); }
+  if (t.simulPost) { const xs = [...post.map(q => q.x), tx]; const d = simulD(giro, ty, post, 1); unir(Math.min(...xs) - 8, ty + d, Math.max(...xs) + 8, ty + d + BARRA_GROSOR); }
   return r;
 }
 

@@ -1161,9 +1161,9 @@ class EquidistanciarEnElDibujo(BaseQt):
         self.assertEqual(e.sel, [barra])
         dict(e.menu(sobre))[self.OPCION]()
         pos = self.pos(e)
-        self.assertEqual([pos[i][1] for i in (*ids, a, b)], [60.0, 120.0, 180.0, 240.0, 320.0, 320.0], "a y b al mismo nivel")
+        self.assertEqual([pos[i][1] for i in (*ids, a, b)], [60.0, 120.0, 180.0, 240.0, 360.0, 360.0], "a y b al mismo nivel")
         barra_y = float(next(x for x in e.ed.bars() if x["id"] == barra)["y"])
-        self.assertEqual(barra_y, 280.0, "la barra, justo a mitad de t2 (240) y de las etapas (320)")
+        self.assertEqual(barra_y, 300.0, "la barra, a un paso (60) de t2 (240) y de las etapas (360): un elemento más de la cadena (AB3)")
         self.assertEqual(e.ed.model, modelo)
         destino = Path(self.tmp.name) / "equidistanciado"
         e.guardar(destino)
