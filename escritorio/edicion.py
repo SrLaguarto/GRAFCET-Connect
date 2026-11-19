@@ -33,7 +33,7 @@ from grafcet.view import (Vista, display_names, force_situation, norm, layout_fr
                          substitute)
 
 from .mensajes import amable, correccion_amable
-from . import orden_acciones
+from . import orden_acciones, pegado_acciones
 from .bloques import _dur_usuario, normalizar_duracion, sin_comillas
 from .anotaciones import en as anotacion_en, rect as rect_anotacion, importar_imagen, editar_texto
 from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, RADIO_ANCLA, REJILLA, SX, TB, VACIO_H, VACIO_W, _distancia, _extra,
@@ -979,10 +979,10 @@ class Edicion(QObject):
                 # una de las seleccionadas junto a otras cosas: no se deshace la selección, se mueven todas juntas
                 self.accion = None
                 ids = self._ids_grupo(caja["id"])
-                self.arrastre = self._arrastre_grupo(ids[0], p, (ids, caja["id"], False))
-            elif caja.get("suelta"):  # una acción suelta se selecciona y se mueve, con las que lleva pegadas
+                self.arrastre = self._arrastre_grupo(ids[0], p, ([caja["id"]], caja["id"], True))
+            elif caja.get("suelta"):  # se selecciona la caja pulsada y se mueve su grupo
                 ids = self._ids_grupo(caja["id"])
-                self.sel, self.accion = ids, caja["id"]
+                self.sel, self.accion = [caja["id"]], caja["id"]
                 cab = self._borrador(ids[0])
                 hx, hy = float(Fraction(str(cab["x"]))), float(Fraction(str(cab["y"])))
                 self.arrastre = {"id": ids[0], "ids": ids, "tipo": "borrador", "dx": p.x() - (hx + SX), "dy": p.y() - hy,
@@ -1181,7 +1181,7 @@ class Edicion(QObject):
                 self.reconstruir()
                 self.redibujar.emit()
             if a["movido"] and self.diagrama is not None:  # si toca otra acción, el lado donde se pegaría
-                iman = self._buscar_iman(a["ids"], a["x"], a["y"])
+                iman = self._iman_del_arrastre(a, p)
                 self.diagrama.marcar_iman(iman["linea"] if iman else None)
                 self._marcar_solape(None if iman else a)
             return True
@@ -1286,7 +1286,7 @@ class Edicion(QObject):
             if a.get("tipo") == "borrador" and self.diagrama is not None:
                 self.diagrama.marcar_iman(None)
             if a["movido"] and a.get("tipo") == "borrador":
-                iman = self._buscar_iman(a["ids"], a["x"], a["y"])
+                iman = self._iman_del_arrastre(a, p)
                 if iman:  # tocaba otra acción: se pega a ella
                     self._marcar_solape(None)
                     self.reconstruir()
@@ -2289,6 +2289,14 @@ class Edicion(QObject):
                     mejor = (puntos, {"objetivo": c["id"], "lado": lado, "linea": linea})
         return mejor[1] if mejor else None
 
+    def _iman_del_arrastre(self, arrastre, punto):
+        ids = arrastre["ids"]
+        if len(ids) > 1 and self.diagrama is not None:
+            iman = pegado_acciones.iman_en_punto(self.diagrama.cajas_acciones, punto, RADIO_ANCLA, ids)
+            if iman is not None:
+                return iman
+        return self._buscar_iman(ids, arrastre["x"], arrastre["y"])
+
     def sobrevolar(self, ficha: str, p: QPointF) -> bool:
         """Una ficha que se arrastra desde la paleta pasa por encima del dibujo: una acción resalta el lado de la acción donde
         se pegaría al soltarla; si quedaría encima de otro elemento se ve en rojo y no se puede soltar (devuelve False). Una orden de
@@ -2725,7 +2733,7 @@ class Edicion(QObject):
             return self._menu_orden_suelta(caja)
         aid, sid, suelta = caja["id"], caja["etapa"] or None, bool(caja.get("suelta"))
         grupo = self._ids_grupo(aid) if suelta else [aid]
-        self.sel, self.accion = (grupo, aid) if suelta else ([sid], aid)
+        self.sel, self.accion = ([aid], aid) if suelta else ([sid], aid)
         self.ver_accion = True  # botón derecho en una acción: se selecciona, y sus opciones salen abajo
         self.cambiado.emit()
         actual = self.datos_accion(aid)["tipo"]
@@ -3108,7 +3116,7 @@ class Edicion(QObject):
         borrador."""
         if self._es_borrador(did):
             b = self._borrador(did)
-            self.sel, self.accion = ([b["etapa"]], did) if b.get("etapa") else (self._ids_grupo(did), did)
+            self.sel, self.accion = [b.get("etapa") or did], did
         else:
             sid = next((a["stepRef"] for a in self.ed.model["actions"][-1:]), None)
             st = next((s for s in self.ed.model["steps"] if s["id"] == sid), None)
@@ -4578,53 +4586,75 @@ class Edicion(QObject):
                 d["x"], d["y"] = str(x - SX), str(y + h / 2)
         return frag
 
-    def pegar_fragmento(self, frag: Fragment, punto: QPointF, parcial: str | None = None) -> bool:
-        """Pega en la posición libre de rejilla más cercana al puntero, en una sola operación de deshacer. Es del parcial en cuyo
-        marco cae el punto, salvo que se diga `parcial` (arrastrar elementos a otro marco, `_soltar_en_marco`)."""
+    def objetivo_pegar_acciones(self, frag: Fragment, punto: QPointF, sobre_seleccion: bool = False):
+        return pegado_acciones.objetivo(self, frag, punto, RADIO_ANCLA, sobre_seleccion)
+
+    def pegar_fragmento(
+        self, frag: Fragment, punto: QPointF, parcial: str | None = None, *, sobre_seleccion: bool = False,
+    ) -> bool:
+        """Pega en el destino o en un hueco de rejilla, con un solo deshacer."""
+        objetivo = self.objetivo_pegar_acciones(frag, punto, sobre_seleccion) if parcial is None else None
         previo = (list(self.sel), self.accion, self.ver_accion, self.ed.dirty)
-        nuevos: dict[str, str] = {}
+        ids, etapa, promovidas = [], None, []
+
         def pegar() -> None:
-            nuevos.update(self.ed.paste(frag, parcial or self.parcial_en(punto), at=(ajustar(punto.x() - SX), ajustar(punto.y()))))
-            propios = set(nuevos.values())
-            seleccionados = {nuevos[i] for i in frag.selected if i in nuevos}
-            borradores = [
-                d for d in self.ed.draft_actions() if d["id"] in seleccionados and not d.get("etapa")
-            ]
-            if len(borradores) > 1 and len(borradores) == len(seleccionados):
-                orden_acciones.agrupar_pegadas(self.ed, borradores)
-            self.reconstruir()
-            base = {i: xy for i, xy in layout_from_presentation(self.ed.presentation).items() if i in propios}
-            base.update({b["id"]: (float(b["x"]), float(b["y"])) for b in self.ed.bars() if b["id"] in propios})
-            base.update({d["id"]: (float(d["x"]), float(d["y"])) for d in self.ed.draft_actions()
-                         if d["id"] in propios and not d.get("etapa")})
-            base.update({n["id"]:(n["x"],n["y"]) for n in self.ed.annotations() if n["id"] in propios})
+            nonlocal ids, etapa, promovidas
+            destino = self._parcial(objetivo) if objetivo else parcial
             origen = (ajustar(punto.x() - SX), ajustar(punto.y()))
-            cola, vistos, anterior = [(0, 0, 0)], {(0, 0)}, (0, 0)
-            while any(not ({a, b} <= propios) for a, b in self._pares_solape(propios)):
-                _, ix, iy = heapq.heappop(cola)
-                for nx, ny in ((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)):
-                    if (nx, ny) not in vistos:
-                        vistos.add((nx, ny))
-                        distancia = ((origen[0] + nx * REJILLA - (punto.x() - SX)) ** 2
-                                     + (origen[1] + ny * REJILLA - punto.y()) ** 2)
-                        heapq.heappush(cola, (distancia, nx, ny))
-                dx, dy = ix * REJILLA, iy * REJILLA
-                if (dx, dy) != anterior:
-                    rutas = self._rutas_con_grupo(propios, dx - anterior[0], dy - anterior[1])
-                    self.ed.move_many({i: (float(x) + dx, float(y) + dy) for i, (x, y) in base.items()}, rutas)
-                    anterior = dx, dy
-                    self.reconstruir()
-            self.sel = [nuevos[i] for i in frag.selected if i in nuevos]
-            self.accion, self.ver_accion = None, False
-        motivo = self._atomico("pegar", pegar, hueco=False)
+            nuevos = self.ed.paste(frag, destino or self.parcial_en(punto), at=origen)
+            if objetivo:
+                ids = pegado_acciones.acciones_copiadas(self.ed, frag, nuevos)
+                etapa, promovidas = self._pegar(ids, objetivo)
+            else:
+                self._colocar_fragmento_libre(frag, punto, nuevos)
+                self.sel = [nuevos[i] for i in frag.selected if i in nuevos]
+                self.accion, self.ver_accion = None, False
+
+        motivo = self._atomico("pegar", pegar, hueco=objetivo is not None)
         if motivo:
             self.sel, self.accion, self.ver_accion, self.ed.dirty = previo
             self.rechazar(motivo)
             self.cambiado.emit()
             return False
-        self.informar("Copia pegada")
-        self.cambiado.emit()
+        if not objetivo or not self._encima:
+            self.informar("Copia pegada")
+        if objetivo:
+            self._tras_pegar(ids, etapa, promovidas)
+        else:
+            self.cambiado.emit()
         return True
+
+    def _colocar_fragmento_libre(self, frag: Fragment, punto: QPointF, nuevos: dict[str, str]) -> None:
+        """Busca el hueco más cercano al puntero y conserva la geometría relativa."""
+        propios = set(nuevos.values())
+        seleccionados = {nuevos[i] for i in frag.selected if i in nuevos}
+        borradores = [
+            d for d in self.ed.draft_actions() if d["id"] in seleccionados and not d.get("etapa")
+        ]
+        if len(borradores) > 1 and len(borradores) == len(seleccionados):
+            orden_acciones.agrupar_pegadas(self.ed, borradores)
+        self.reconstruir()
+        base = {i: xy for i, xy in layout_from_presentation(self.ed.presentation).items() if i in propios}
+        base.update({b["id"]: (float(b["x"]), float(b["y"])) for b in self.ed.bars() if b["id"] in propios})
+        base.update({d["id"]: (float(d["x"]), float(d["y"])) for d in self.ed.draft_actions()
+                     if d["id"] in propios and not d.get("etapa")})
+        base.update({n["id"]:(n["x"],n["y"]) for n in self.ed.annotations() if n["id"] in propios})
+        origen = (ajustar(punto.x() - SX), ajustar(punto.y()))
+        cola, vistos, anterior = [(0, 0, 0)], {(0, 0)}, (0, 0)
+        while any(not ({a, b} <= propios) for a, b in self._pares_solape(propios)):
+            _, ix, iy = heapq.heappop(cola)
+            for nx, ny in ((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)):
+                if (nx, ny) not in vistos:
+                    vistos.add((nx, ny))
+                    distancia = ((origen[0] + nx * REJILLA - (punto.x() - SX)) ** 2
+                                 + (origen[1] + ny * REJILLA - punto.y()) ** 2)
+                    heapq.heappush(cola, (distancia, nx, ny))
+            dx, dy = ix * REJILLA, iy * REJILLA
+            if (dx, dy) != anterior:
+                rutas = self._rutas_con_grupo(propios, dx - anterior[0], dy - anterior[1])
+                self.ed.move_many({i: (float(x) + dx, float(y) + dy) for i, (x, y) in base.items()}, rutas)
+                anterior = dx, dy
+                self.reconstruir()
 
     def borrar(self) -> bool:
         """Borra la selección (una sola operación de deshacer); si arrastra otros elementos, antes lo consulta (REQ-EDT-05).

@@ -1744,7 +1744,7 @@ class VistaDiagrama(QGraphicsView):
     def editar_propiedades_teclado(self):
         c = self.controlador
         if not c or not c.sel or getattr(c,"solo_seleccion",False): return
-        ident = c.sel[-1]
+        ident = c.accion_activa() or c.sel[-1]
         if any(t['id'] == ident for t in c.M['transitions']):
             c.pedir_condicion(ident)
             if hasattr(self.window(), 'props_activo'): self.window().props_activo().prog.setFocus()

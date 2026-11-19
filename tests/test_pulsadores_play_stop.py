@@ -1,5 +1,6 @@
 """Gestos reales de pulsadores y controles de ejecución del simulador."""
 import copy
+import sys
 import unittest
 from unittest import mock
 from test_editor_cadenas import BaseQt, QT
@@ -159,3 +160,25 @@ class PulsadoresYControl(BaseQt):
                 self.assertFalse(w.a_es.isChecked())
                 self.assertEqual(w.a_es.text(), "E/S externas")
                 self.assertEqual(w.a_ejecutar.isChecked(), marcha and operacion == "reiniciar")
+
+    def test_SCTL03_reiniciar_un_proyecto_vacio_no_abre_un_aviso(self):
+        w, _ = self.vacio()
+        w.resize(1366, 768)
+        w.show()
+        QApplication.processEvents()
+        self.assertIsNone(w.v)
+
+        with mock.patch.object(sys, "excepthook") as error, \
+                mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:
+            boton = w.tb_sim.widgetForAction(w.a_reiniciar)
+            QTest.mouseClick(boton, Qt.MouseButton.LeftButton)
+            error.assert_not_called()
+            aviso.assert_not_called()
+            self.assertIsNone(w.v)
+            self.assertEqual(w.modo, "editar")
+
+            QTest.mouseClick(w.tb_sim.widgetForAction(w.a_ejecutar), Qt.MouseButton.LeftButton)
+            error.assert_not_called()
+            aviso.assert_called_once()
+            self.assertIn("Falta una etapa inicial", aviso.call_args.args[2])
+            self.assertFalse(w.a_ejecutar.isChecked())

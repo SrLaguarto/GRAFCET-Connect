@@ -1112,8 +1112,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.luz_es.setProperty("abierta", False)
         self.luz_es.clicked.connect(lambda: self.mostrar_es())
         self.fila_pestanas.layout().addWidget(self.luz_es)
-        from .cabecera_favoritos import UbicaModo
-        self._ubica_modo = UbicaModo(self.estado, self.fila_pestanas, self.pestanas_vistas, self.luz_es)
         self._luz_es("desconectado", "")
         self.addToolBar(self.tb_sim)
         self.tb_conexion = QToolBar("Conexión")
@@ -1187,6 +1185,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
             barra.show()
         fila.addStretch(1)
         self.centralWidget().layout().insertWidget(1,self.herramientas_grafcet)
+        from .cabecera_favoritos import UbicaModo
+        self._ubica_modo = UbicaModo(self.estado, self.fila_pestanas, self.pestanas_vistas, self.luz_es)
         self._acciones_edicion(False)
 
     def _paneles(self) -> None:
@@ -1445,6 +1445,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._mostrar_pagina(False)
         if not self.a_ejecutar.isChecked():
             self.modbus.pausar(diagnostico=True)
+            if self.v is None:
+                return  # Todavía no hay una simulación cuyo estado refrescar.
             self._sin_estado()
             self.refrescar()
             self.refrescar_edicion()
@@ -1541,12 +1543,13 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if operacion == "pegar":
             if hay_formula or self._portapapeles is None:
                 return False
-            if punto is None:
+            sobre_seleccion = punto is None
+            if sobre_seleccion:
                 viewport = self.diagrama.viewport()
                 local = viewport.mapFromGlobal(QCursor.pos())
                 local = local if viewport.rect().contains(local) else viewport.rect().center()
                 punto = self.diagrama.mapToScene(local)
-            return e.pegar_fragmento(self._portapapeles, punto)
+            return e.pegar_fragmento(self._portapapeles, punto, sobre_seleccion=sobre_seleccion)
         if not e.sel:
             return False
         fragmento = e.copiar_fragmento()
@@ -1564,9 +1567,12 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _menu_portapapeles(self, punto: Any, sobre_elemento: bool) -> list[tuple[str, Any]]:
         if sobre_elemento:
-            return [("Cortar", lambda: self._portapapeles_accion("cortar")),
-                    ("Copiar", lambda: self._portapapeles_accion("copiar")),
-                    ("Enviar a plano…",self.enviar_seleccion_lamina)]
+            opciones = [("Cortar", lambda: self._portapapeles_accion("cortar")),
+                        ("Copiar", lambda: self._portapapeles_accion("copiar"))]
+            if self._portapapeles and self.edicion.objetivo_pegar_acciones(self._portapapeles, punto):
+                opciones.append(("Pegar", lambda: self._portapapeles_accion("pegar", punto)))
+            opciones.append(("Enviar a plano…", self.enviar_seleccion_lamina))
+            return opciones
         return [("Pegar", (lambda: self._portapapeles_accion("pegar", punto)) if self._portapapeles is not None else None)]
 
     def _acciones_edicion(self, on: bool) -> None:
@@ -3095,7 +3101,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             return
         if en_play:  # conecta en Pausa (P-IMP-60, con su cero) y, ya conectado, Play de nuevo desde las etapas iniciales
             self._replay_intentos = 100
-            QTimer.singleShot(50, self._replay_tras_conectar)
+            QTimer.singleShot(50, self, self._replay_tras_conectar)
 
     def _replay_tras_conectar(self):
         estado = getattr(self.modbus, "estado", "")
@@ -3108,7 +3114,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
             return
         self._replay_intentos -= 1
         if self._replay_intentos > 0 and self.modbus.activo and estado != "error":
-            QTimer.singleShot(50, self._replay_tras_conectar)
+            QTimer.singleShot(50, self, self._replay_tras_conectar)
 
     def _parar_sin_cambiar_vista(self):
         anterior=getattr(self,"_conservar_vista_al_parar",False)
