@@ -80,6 +80,9 @@ Después de cada etapa:
 3. Medidas comparadas.
 4. Revisión del coordinador y commit en `v2`.
 5. El responsable puede probar desde el código.
+6. Tras E4 y E5, además, el responsable prueba a mano con E/S reales: una escena larga del simulador de planta
+   (muchas cintas, cilindros y etapas temporizadas) y su proyecto, por conexión directa y por Modbus, comparando
+   con la 1.1.x. La escena y su proyecto quedan fuera del repositorio.
 
 ## Riesgos
 
