@@ -1,0 +1,545 @@
+"""Prueba de choque del dibujo del editor (V2-E3, paso 0).
+
+Miles de ediciones al azar con semilla fija sobre GEMMA, el proyecto generado de 100 etapas y Linea larga. Entre una
+operación y otra se disparan también los redibujados automáticos (pasos del parpadeo, `_redibujar_edicion`, refresco de E/S,
+`mostrar` del último estado, eventos pendientes de Qt). Tras cada paso se comprueba la escena:
+
+  ESC-1  un objeto por elemento del modelo: todo id del modelo tiene figura, toda polilínea de enlace está dibujada y
+         ninguna figura pertenece a un elemento inexistente;
+  ESC-2  ninguna figura oculta, fuera de la escena, vacía o con geometría no finita (salvo lo que ordena el filtro de parcial);
+  ESC-3  la escena coincide con una reconstrucción completa desde cero (`diagrama.dibujar` sobre una escena nueva): posiciones,
+         trazos, textos, apilado, `cajas_acciones`, `uniones_acciones` y `cajas_ordenes`;
+  ESC-4  `Edicion.M` coincide con el que daría una reconstrucción nueva desde el modelo, y `enlaces(M)` con el cálculo en limpio;
+  EXC    una operación lanza una excepción que no es un aviso o rechazo de la propia interfaz.
+
+La secuencia se guarda como datos (objetivos por ordinal, no por id: los ids son UUID al abrir un .grafnet), de modo que se
+puede repetir y minimizar con ddmin. Uso:
+
+  python tools/choque_escena.py --proyecto gemma --semilla 7 --ops 300
+  python tools/choque_escena.py --largo                      # 3000 / 1500 / 500 operaciones
+  python tools/choque_escena.py --reproducir fallo.json
+
+Solo lee y ejecuta el programa; escribe únicamente los informes de fallo (por defecto en artifacts/v2_e3/fallos/).
+"""
+from argparse import ArgumentParser
+from copy import deepcopy
+from math import isfinite
+from pathlib import Path
+from random import Random
+from tempfile import TemporaryDirectory
+from time import perf_counter
+import json
+import sys
+import traceback
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.entorno_v2_e0 import GEMMA, RAIZ, archivo_referencia, paso, play, ventana  # noqa: E402
+from tools.hoja_contactos import _bombear as bombear  # noqa: E402
+from PySide6.QtCore import QPointF, Qt  # noqa: E402
+from PySide6.QtWidgets import (QApplication, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsPathItem,  # noqa: E402
+                               QGraphicsRectItem, QGraphicsScene, QGraphicsTextItem)
+
+LINEA = RAIZ / "tests" / "fixtures" / "referencia" / "linea_larga.grafnet"
+SALIDA = RAIZ / "artifacts" / "v2_e3" / "fallos"
+TEXTOS = ("marcha", "Paro", "no Paro", "marcha y no Paro", "Seta emergencia", "A+", "x", "↑marcha", "")
+COMENTARIOS = ("", "prueba", "Retorno al inicio de ciclo de la máquina", "x")
+TIPOS = ("continua", "condicionada", "activacion", "desactivacion", "evento")
+PESOS = (("anadir_etapa", 4), ("anadir_transicion", 2), ("anadir_accion", 5), ("anadir_debajo", 1), ("mover", 8),
+         ("borrar", 3), ("deshacer", 6), ("rehacer", 3), ("pegar", 3), ("equidistanciar", 2), ("texto_accion", 3),
+         ("condicion", 3), ("renombrar", 2), ("comentario", 2), ("flecha", 1), ("girar", 1), ("zoom", 2),
+         ("errores", 1), ("dependencias", 1), ("filtro", 1), ("play", 1), ("sim_paso", 3), ("stop", 2))
+AUTOMATICOS = ("parpadeo", "redibujar_edicion", "redibujar_senal", "refrescar_modbus", "refrescar", "mostrar_ultimo",
+               "eventos", "refrescar_edicion")
+
+
+class Fallo(Exception):
+    def __init__(self, tipo, detalle, indice=None, momento=""):
+        super().__init__(f"{tipo}: {detalle}")
+        self.tipo, self.detalle, self.indice, self.momento = tipo, detalle, indice, momento
+
+
+# ------------------------------------------------------------------------------------------------------------ generación
+def generar(semilla, n):
+    azar = Random(semilla)
+    nombres = [x for x, p in PESOS for _ in range(p)]
+    secuencia = []
+    for _ in range(n):
+        reg = {"op": azar.choice(nombres), "k": azar.randrange(10**6), "k2": azar.randrange(10**6),
+               "dx": azar.randrange(-15, 16) * 20, "dy": azar.randrange(-15, 16) * 20, "v": azar.randrange(10**6),
+               "auto": [{"a": azar.choice(AUTOMATICOS), "k": azar.randrange(10**6), "n": azar.randrange(1, 4)}
+                        for _ in range(azar.choice((0, 0, 1, 1, 2, 3)))]}
+        if reg["op"] == "mover":
+            reg["mitad"] = azar.choice((None, None, "redibujar_edicion", "parpadeo", "mostrar_ultimo"))
+        secuencia.append(reg)
+    return secuencia
+
+
+# ------------------------------------------------------------------------------------------------------------ operaciones
+def _elige(lista, k):
+    return lista[k % len(lista)] if lista else None
+
+
+def _ids(e):
+    m = e.ed.model
+    return {"etapas": [s["id"] for s in m["steps"]], "transiciones": [t["id"] for t in m["transitions"]],
+            "acciones": [a["id"] for a in m["actions"]] + [b["id"] for b in e.ed.draft_actions()],
+            "barras": [b["id"] for b in e.M.get("bars", [])]}
+
+
+def _punto(e, ident, dx=0, dy=0):
+    from escritorio.diagrama import posiciones
+    x, y = posiciones(e.M)[ident]
+    return QPointF(x + dx, y + dy)
+
+
+def aplicar(w, r):
+    e, d = w.edicion, w.diagrama
+    op, k = r["op"], r["k"]
+    ids = _ids(e)
+    sim = w.modo == "simular"
+    if op == "play":
+        if not sim:
+            while e.ed.undo_stack and not e.ed.validate().can_simulate:  # deshace hasta un estado que se pueda simular
+                e.deshacer()
+            if e.ed.validate().can_simulate:
+                play(w)
+        return
+    if op == "stop":
+        if sim:
+            w.a_ejecutar.trigger()
+            bombear()
+        return
+    if op == "sim_paso":
+        if sim:
+            paso(w, "avanzar", us=1_000_000 * (1 + r["v"] % 3))
+        return
+    if sim:
+        return  # en simulación no se edita
+    todos = ids["etapas"] + ids["transiciones"]
+    if op in ("anadir_etapa", "anadir_transicion"):
+        base = _elige(todos, k)
+        if base:
+            e.colocar("etapa" if op == "anadir_etapa" else "transicion", _punto(e, base, r["dx"] + 120, r["dy"] + 120))
+    elif op == "anadir_accion":
+        base = _elige(ids["etapas"], k)
+        if base:
+            e.colocar("accion:" + TIPOS[r["v"] % len(TIPOS)], _punto(e, base, 200 + abs(r["dx"]), r["dy"] // 4))
+    elif op == "anadir_debajo":
+        e.seleccionar([_elige(todos, k)] if todos else [])
+        if e.sel:
+            e.anadir_debajo()
+    elif op == "mover":
+        ident = _elige(todos, k)
+        if ident:
+            o = _punto(e, ident)
+            e.seleccionar([])
+            e.prensar(o)
+            e.mover(o + QPointF(r["dx"] / 2, r["dy"] / 2))
+            if r.get("mitad"):
+                automatico(w, {"a": r["mitad"], "k": k, "n": 1})
+                comprobar(w, lite=True, momento="a mitad de un gesto")
+            e.mover(o + QPointF(r["dx"], r["dy"]))
+            e.soltar(o + QPointF(r["dx"], r["dy"]))
+    elif op == "borrar":
+        ident = _elige(todos + ids["acciones"], k)
+        if ident:
+            e.seleccionar([ident])
+            e.borrar()
+    elif op == "deshacer":
+        e.deshacer()
+    elif op == "rehacer":
+        e.rehacer()
+    elif op == "pegar":
+        ident = _elige(todos + ids["acciones"], k)
+        if ident:
+            e.seleccionar([ident])
+            frag = e.copiar_fragmento()
+            e.pegar_fragmento(frag, _punto(e, _elige(ids["etapas"], r["k2"]) or ident, r["dx"] + 260, r["dy"] + 260))
+    elif op == "equidistanciar":
+        ident = _elige(ids["etapas"], k)
+        if ident:
+            e.seleccionar([ident])
+            e.equidistanciar([ident])
+    elif op == "texto_accion":
+        ident = _elige(ids["acciones"], k)
+        if ident:
+            e.poner_texto_accion(ident, "texto", TEXTOS[r["v"] % len(TEXTOS)], crear=r["k2"] % 2 == 0)
+    elif op == "condicion":
+        ident = _elige(ids["transiciones"], k)
+        if ident:
+            e.poner_condicion(ident, TEXTOS[r["v"] % len(TEXTOS)], crear=r["k2"] % 2 == 0)
+    elif op == "renombrar":
+        ident = _elige(ids["etapas"], k)
+        if ident:
+            e.renombrar(ident, str(r["v"] % 400))
+    elif op == "comentario":
+        ident = _elige(todos, k)
+        if ident:
+            e.poner_comentario(ident, COMENTARIOS[r["v"] % len(COMENTARIOS)])
+    elif op == "flecha":
+        ident = _elige([x["id"] for x in e.M.get("links", [])], k)
+        if ident:
+            e.alternar_flecha(ident)
+    elif op == "girar":
+        ident = _elige(ids["transiciones"], k)
+        if ident:
+            e.girar_transiciones("derecha" if r["v"] % 2 else "izquierda", [ident])
+    elif op == "zoom":
+        d.zoom(1.25 if r["v"] % 2 else 0.8, QPointF(300, 200))
+        d.verticalScrollBar().setValue(d.verticalScrollBar().value() + r["dy"])
+    elif op == "errores":
+        w.b_errores.setChecked(not w.b_errores.isChecked())
+        w._alternar_errores(w.b_errores.isChecked())
+    elif op == "dependencias":
+        d.mostrar_dependencias(not d.dependencias)
+    elif op == "filtro":
+        nav = w.navegacion
+        n = nav.parcial.count()
+        nav.modo.setCurrentIndex(r["v"] % max(1, nav.modo.count()))
+        nav.parcial.setCurrentIndex(k % n if n and r["k2"] % 3 else 0)
+    bombear()
+
+
+def automatico(w, r):
+    e, d = w.edicion, w.diagrama
+    a = r["a"]
+    editando = w.modo == "editar"
+    if a == "parpadeo" and editando:
+        ids = _ids(e)
+        objetivos = [i for i in (_elige(ids["etapas"], r["k"]), _elige(ids["transiciones"], r["k"]),
+                                 _elige(ids["acciones"], r["k"])) if i]
+        e.parpadeo.iniciar(objetivos)
+        for _ in range(r["n"]):
+            e.parpadeo.paso()
+        if r["k"] % 3 == 0:
+            e.parpadeo.parar()
+    elif a == "redibujar_edicion" and editando:
+        w._redibujar_edicion()
+    elif a == "redibujar_senal" and editando:
+        e.redibujar.emit()
+    elif a == "refrescar_modbus":
+        w._refrescar_modbus()
+    elif a == "refrescar":
+        if w.modo == "simular":
+            w.refrescar()
+        else:
+            w.refrescar_edicion()
+    elif a == "mostrar_ultimo" and d._ultimo is not None:
+        d.mostrar(*d._ultimo)
+    elif a == "eventos":
+        bombear(3)
+    elif a == "refrescar_edicion" and editando:
+        w.refrescar_edicion()
+
+
+# ------------------------------------------------------------------------------------------------------------ comprobaciones
+def _num(x):
+    return round(float(x), 4)
+
+
+def _sin_repetidos(pts):
+    """Qt descarta los puntos consecutivos iguales de un camino."""
+    return tuple(p for n, p in enumerate(pts) if n == 0 or p != pts[n - 1])
+
+
+def _pluma(p):
+    return (p.color().rgba(), _num(p.widthF()), int(p.style().value), int(p.capStyle().value), int(p.joinStyle().value),
+            tuple(_num(v) for v in p.dashPattern()))
+
+
+def _relleno(b):
+    return (b.color().rgba(), int(b.style().value))
+
+
+def huella_item(i, filtro):
+    base = [type(i).__name__, _num(i.zValue()), (_num(i.pos().x()), _num(i.pos().y())), i.data(42), i.data(43), i.toolTip()]
+    if not filtro:
+        base += [i.isVisible(), _num(i.opacity())]
+    if isinstance(i, QGraphicsLineItem):
+        ln = i.line()
+        base += [tuple(_num(v) for v in (ln.x1(), ln.y1(), ln.x2(), ln.y2())), _pluma(i.pen())]
+    elif isinstance(i, (QGraphicsRectItem, QGraphicsEllipseItem)):
+        r = i.rect()
+        base += [tuple(_num(v) for v in (r.x(), r.y(), r.width(), r.height())), _pluma(i.pen()), _relleno(i.brush())]
+    elif isinstance(i, QGraphicsPathItem):
+        p = i.path()
+        base += [tuple((_num(p.elementAt(n).x), _num(p.elementAt(n).y), int(p.elementAt(n).type.value))
+                       for n in range(p.elementCount())), _pluma(i.pen()), _relleno(i.brush())]
+    elif isinstance(i, QGraphicsTextItem):
+        b = i.boundingRect()
+        base += [i.toPlainText(), i.defaultTextColor().rgba(), i.font().key(), (_num(b.width()), _num(b.height()))]
+    return tuple(base)
+
+
+def _provisionales(d):
+    return {id(x) for x in [*d._marcas, d.goma, d.cuadro, d.iman, d.destino, *d.prohibidos] if x is not None}
+
+
+def figuras(d):
+    ajenas = _provisionales(d)
+    return [i for i in d.scene().items(Qt.SortOrder.DescendingOrder) if id(i) not in ajenas]
+
+
+def filtro_activo(w):
+    nav = w.navegacion
+    return nav.parcial.currentData(), nav.modo.currentData()
+
+
+def esperados(e):
+    from escritorio.diagrama import cajas_parciales, enlaces
+    m, M = e.ed.model, e.M
+    ids = {s["id"] for s in m["steps"]} | {t["id"] for t in m["transitions"]} | {a["id"] for a in m["actions"]}
+    ids |= {b["id"] for b in e.ed.draft_actions()} | {b["id"] for b in M.get("bars", [])}
+    ids |= {x["id"] for x in M.get("macros", [])} | {f["id"] for f in m["forces"]}
+    return ids, [tuple((float(x), float(y)) for x, y in r["pts"]) for r in enlaces(M)], set(cajas_parciales(M))
+
+
+def comprobar_objetos(w, momento):
+    """ESC-1 y ESC-2."""
+    d, e = w.diagrama, w.edicion
+    sc = d.scene()
+    pid, modo = filtro_activo(w)
+    cosas = figuras(d)
+    transiciones = {t["id"] for t in e.ed.model["transitions"]}
+    for i in cosas:
+        if i.scene() is not sc:
+            raise Fallo("ESC-2", f"ítem fuera de la escena: {type(i).__name__}", momento=momento)
+        oculto_esperado = bool(pid and i.data(42) and i.data(42) != pid and modo == "ocultar")
+        if i.isVisible() == oculto_esperado:
+            raise Fallo("ESC-2", f"{type(i).__name__} {'oculto' if oculto_esperado is False else 'visible'} sin motivo "
+                                 f"(elementos {i.data(43)}, parcial {i.data(42)})", momento=momento)
+        opaco = 0.18 if (pid and i.data(42) and i.data(42) != pid and modo == "atenuar") else 1.0
+        if abs(i.opacity() - opaco) > 1e-9:
+            raise Fallo("ESC-2", f"opacidad {i.opacity()} en lugar de {opaco} ({type(i).__name__}, {i.data(43)})", momento=momento)
+        r = i.sceneBoundingRect()
+        if not all(isfinite(v) for v in (r.x(), r.y(), r.width(), r.height())):
+            raise Fallo("ESC-2", f"geometría no finita en {type(i).__name__}", momento=momento)
+        vacia_legitima = bool(i.data(43)) and all(x in transiciones for x in i.data(43))  # receptividad aún sin escribir
+        if isinstance(i, QGraphicsTextItem) and not vacia_legitima and (not i.toPlainText() or r.width() <= 0 or r.height() <= 0):
+            raise Fallo("ESC-2", f"texto vacío o sin tamaño ({i.data(43)})", momento=momento)
+        if isinstance(i, QGraphicsRectItem) and i.rect().isEmpty() and i.rect().width() == 0 and i.rect().height() == 0:
+            raise Fallo("ESC-2", f"rectángulo vacío ({i.data(43)})", momento=momento)
+    if w.modo != "editar":
+        return
+    ids, rutas, marcos = esperados(e)
+    presentes = set()
+    for i in cosas:
+        presentes |= set(i.data(43) or ())
+    for ident in ids:
+        if ident not in presentes:
+            raise Fallo("ESC-1", f"el elemento {e.nombres.get(ident, ident)} ({ident}) no tiene ninguna figura", momento=momento)
+    sobran = {x for x in presentes - ids if not x.startswith("enlaceacc:") and x not in marcos
+              and x not in {p["id"] for p in e.ed.model["partials"]}}
+    if sobran:
+        raise Fallo("ESC-1", f"figuras de elementos que ya no existen: {sorted(sobran)[:4]}", momento=momento)
+    dibujadas = set()
+    for i in cosas:
+        if isinstance(i, QGraphicsPathItem):
+            p = i.path()
+            dibujadas.add(_sin_repetidos(tuple((_num(p.elementAt(n).x), _num(p.elementAt(n).y)) for n in range(p.elementCount()))))
+    for pts in rutas:
+        if _sin_repetidos(tuple((_num(x), _num(y)) for x, y in pts)) not in dibujadas:
+            raise Fallo("ESC-1", f"un enlace no está dibujado: {pts[:2]}…", momento=momento)
+
+
+def comprobar_huella(w, momento):
+    """ESC-3."""
+    from escritorio import diagrama as dg
+    d = w.diagrama
+    if d._ultimo is None:
+        return
+    M, S, sel, marcados, naranja = d._ultimo
+    fresca = QGraphicsScene()
+    uniones, ordenes = [], []
+    cajas = dg.dibujar(fresca, M, S, sel, marcados, naranja, uniones, ordenes, d.dependencias)
+    filtro = bool(filtro_activo(w)[0])
+    a = [huella_item(i, filtro) for i in figuras(d)]
+    b = [huella_item(i, filtro) for i in fresca.items(Qt.SortOrder.DescendingOrder)]
+    if a != b:
+        n = next((n for n, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+        raise Fallo("ESC-3", f"la escena no coincide con la reconstrucción completa: {len(a)} ítems frente a {len(b)}; primera "
+                             f"diferencia en el {n}: {a[n] if n < len(a) else None} frente a {b[n] if n < len(b) else None}",
+                    momento=momento)
+    for nombre, mia, otra in (("cajas_acciones", d.cajas_acciones, cajas), ("uniones_acciones", d.uniones_acciones, uniones),
+                              ("cajas_ordenes", d.cajas_ordenes, ordenes)):
+        if mia != otra:
+            raise Fallo("ESC-3", f"{nombre} distinto de la reconstrucción completa", momento=momento)
+    fresca.clear()
+
+
+def comprobar_modelo(w, momento):
+    """ESC-4: M coincide con el de una reconstrucción nueva y las rutas con el cálculo en limpio."""
+    from escritorio.geometria.enlaces import _ajustar_enlaces
+    from grafcet import routing
+    e = w.edicion
+    if w.modo != "editar":
+        return
+    guardado = (e.M, e.vista, e.nombres, list(e.sel), e.accion)
+    antes = deepcopy(e.M)
+    try:
+        e.reconstruir()
+        distinto = antes != e.M
+        claves = [k for k in set(antes) | set(e.M) if antes.get(k) != e.M.get(k)]
+    finally:
+        e.M, e.vista, e.nombres, e.sel, e.accion = guardado
+    if distinto:
+        raise Fallo("ESC-4", f"Edicion.M está obsoleto frente al modelo (campos distintos: {sorted(claves)})", momento=momento)
+    from escritorio.diagrama import enlaces
+    limpios = _ajustar_enlaces(e.M, routing.enlaces(e.M))
+    if enlaces(e.M) != limpios:
+        raise Fallo("ESC-4", "enlaces(M) no coincide con el cálculo en limpio", momento=momento)
+
+
+def comprobar(w, lite=False, huella=True, modelo=True, momento=""):
+    comprobar_objetos(w, momento)
+    if lite:
+        return
+    if huella:
+        comprobar_huella(w, momento)
+    if modelo:
+        comprobar_modelo(w, momento)
+
+
+# ------------------------------------------------------------------------------------------------------------ ejecución
+def _aviso_de_interfaz(exc):
+    t = str(exc)
+    return isinstance(exc, RuntimeError) and (" — " in t or t.startswith(("Paso de simulación fallido", "Play no arrancó")))
+
+
+def reiniciar(w, ruta):
+    if w.modo == "simular":
+        w.a_ejecutar.setChecked(False)
+        bombear()
+    if w.edicion is not None:
+        w.edicion.parpadeo.parar()
+        w.edicion.ed.dirty = False
+    if not w.abrir_ruta(ruta):
+        raise RuntimeError(f"No se pudo abrir {ruta}")
+    bombear()
+    w.edicion.confirmar_borrado = lambda plan: True
+
+
+def ejecutar(w, ruta, secuencia, cada=1, modelo_cada=1, tope_s=None):
+    """Repite la secuencia desde el proyecto y devuelve el primer `Fallo` (o None)."""
+    reiniciar(w, ruta)
+    inicio = perf_counter()
+    for i, reg in enumerate(secuencia):
+        if tope_s is not None and perf_counter() - inicio > tope_s:
+            break
+        try:
+            aplicar(w, reg)
+        except Fallo as f:
+            f.indice = i
+            return f
+        except Exception as exc:  # noqa: BLE001
+            if not _aviso_de_interfaz(exc):
+                f = Fallo("EXC", f"{reg['op']}: {type(exc).__name__}: {exc}\n{traceback.format_exc(limit=6)}", i, "operación")
+                return f
+        try:
+            if reg["op"] != "mover" or True:
+                comprobar(w, huella=i % cada == 0, modelo=i % modelo_cada == 0, momento=f"tras {reg['op']}")
+            for a in reg["auto"]:
+                try:
+                    automatico(w, a)
+                except Exception as exc:  # noqa: BLE001
+                    if not _aviso_de_interfaz(exc):
+                        return Fallo("EXC", f"automático {a['a']}: {type(exc).__name__}: {exc}\n{traceback.format_exc(limit=6)}",
+                                     i, "automático")
+                bombear(1)
+                comprobar(w, huella=i % cada == 0, modelo=False, momento=f"tras el redibujado automático {a['a']}")
+        except Fallo as f:
+            f.indice = i
+            return f
+    return None
+
+
+def ddmin(w, ruta, secuencia, tipo, presupuesto_s=180, **kw):
+    """Minimiza la secuencia manteniendo el mismo tipo de fallo; se detiene al agotar el presupuesto."""
+    limite = perf_counter() + presupuesto_s
+
+    def falla(s):
+        if perf_counter() > limite:
+            return False
+        f = ejecutar(w, ruta, s, **kw)
+        return f is not None and f.tipo == tipo
+
+    n = 2
+    while len(secuencia) >= 2 and perf_counter() < limite:
+        trozo = max(1, len(secuencia) // n)
+        partes = [secuencia[i:i + trozo] for i in range(0, len(secuencia), trozo)]
+        for p in partes:
+            if falla(p):
+                secuencia, n = p, 2
+                break
+        else:
+            for k in range(len(partes)):
+                resto = [x for j, p in enumerate(partes) if j != k for x in p]
+                if resto and falla(resto):
+                    secuencia, n = resto, max(n - 1, 2)
+                    break
+            else:
+                if n >= len(secuencia):
+                    break
+                n = min(len(secuencia), n * 2)
+    return secuencia
+
+
+def informe(proyecto, semilla, f, minima, ruta_json):
+    datos = {"proyecto": proyecto, "semilla": semilla, "tipo": f.tipo, "momento": f.momento, "detalle": f.detalle,
+             "indice_en_la_secuencia_completa": f.indice, "secuencia_minima": minima,
+             "repetir": f"python tools/choque_escena.py --reproducir {ruta_json}"}
+    ruta_json.parent.mkdir(parents=True, exist_ok=True)
+    ruta_json.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
+    return datos
+
+
+def correr(nombre, ruta, semilla, n, cada=1, modelo_cada=1, minimizar_s=180, salida=SALIDA, w=None):
+    """Genera, ejecuta y, si falla, minimiza y escribe el informe. Devuelve (fallo, datos)."""
+    secuencia = generar(semilla, n)
+    f = ejecutar(w, ruta, secuencia, cada, modelo_cada)
+    if f is None:
+        return None, None
+    corta = secuencia[:f.indice + 1]
+    minima = ddmin(w, ruta, corta, f.tipo, minimizar_s, cada=1, modelo_cada=1)
+    return f, informe(nombre, semilla, f, minima, Path(salida) / f"fallo_{nombre}_{semilla}_{f.tipo}.json")
+
+
+def proyectos(temporal):
+    return {"gemma": GEMMA, "linea": LINEA, "ref100": archivo_referencia(Path(temporal))}
+
+
+# ------------------------------------------------------------------------------------------------------------ línea de órdenes
+def main():
+    ap = ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--proyecto", choices=("gemma", "linea", "ref100"))
+    ap.add_argument("--semilla", type=int, nargs="*", default=[20261120])
+    ap.add_argument("--ops", type=int, default=300)
+    ap.add_argument("--cada", type=int, default=1, help="comparación completa (ESC-3) cada N operaciones")
+    ap.add_argument("--largo", action="store_true", help="3000 operaciones en GEMMA, 1500 en ref100 y 500 en linea")
+    ap.add_argument("--reproducir", type=Path)
+    ap.add_argument("--salida", type=Path, default=SALIDA)
+    a = ap.parse_args()
+    with TemporaryDirectory(prefix="choque-") as tmp, ventana() as w:
+        rutas = proyectos(tmp)
+        if a.reproducir:
+            d = json.loads(a.reproducir.read_text(encoding="utf-8"))
+            f = ejecutar(w, rutas[d["proyecto"]], d["secuencia_minima"])
+            print("sin fallo" if f is None else f"{f.tipo} ({f.momento}): {f.detalle}")
+            return 0 if f is None else 1
+        plan = ([("gemma", 3000, 1), ("ref100", 1500, 5), ("linea", 500, 5)] if a.largo
+                else [(a.proyecto or "gemma", a.ops, a.cada)])
+        fallos = 0
+        for nombre, n, cada in plan:
+            for semilla in a.semilla:
+                t = perf_counter()
+                f, datos = correr(nombre, rutas[nombre], semilla, n, cada=cada, modelo_cada=cada, salida=a.salida, w=w)
+                print(f"{nombre} semilla {semilla}: {n} operaciones en {perf_counter() - t:.0f} s: "
+                      + ("sin fallos" if f is None else f"FALLO {f.tipo} -> {datos['repetir']}"), flush=True)
+                fallos += f is not None
+        return 1 if fallos else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
