@@ -32,6 +32,21 @@ incremental. **Sin funciones nuevas ni cambios visibles.** Solo cambia lo de det
 6. **Sin dependencias nuevas** de ejecución.
 7. **Cada etapa mide** con el banco de E0, antes y después.
 
+## Decisiones del responsable para E3 (20-nov-2026)
+
+Tras el diseño de E3 (`artifacts/v2_e3/DISENO_E3.md`, fuera del repositorio):
+
+- **Núcleo, solo rendimiento y sin cambiar la semántica** (excepción a la regla 3): calcular la huella una vez por
+  cambio, no arrancar una `Session` en la `Vista` de edición, no validar dos veces lo mismo y calcular los enlaces por
+  parcial.
+- **Pruebas SAD1** (`test_ad118`) que comprueban internos que E3 elimina (caché de rutas, número de dibujos,
+  reutilización de textos): se sustituyen por pruebas equivalentes de la escena nueva (excepción a la regla 1).
+- **E3 incluye**, además de la escena: validar una vez por cambio, no rehacer la `Vista` en cada fotograma del arrastre,
+  un refresco por gesto y la lupa incremental. La simulación sigue con el dibujo completo hasta E4.
+- **`Linea larga`** (111 etapas, generada) se añade a `tests/fixtures/referencia/` para la prueba de choque.
+- **Desapariciones de la 1.x:** el pintado no es transaccional (vacía la escena y, si falla a mitad, queda a medias);
+  se arregla en la 1.x sin cambiar imágenes.
+
 ## Metas
 
 Proyecto de referencia, Qt offscreen a 1366 × 768, mediana tras calentamiento.
