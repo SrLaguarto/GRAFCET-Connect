@@ -19,7 +19,6 @@ import html
 from typing import Any
 
 from .anclaje import AnclajeVentana
-from .orden_acciones import acciones_etapa
 
 from grafcet import routing
 from grafcet.routing import NORMAL, SENTIDO, TALLO_T, orientacion, punto_t
@@ -34,31 +33,29 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, 
 from . import estilo
 from .ayudas_emergentes import mostrar_ayuda
 from .elementos_lupa import DATO_ELEMENTOS
-from .rutas_diagrama import rutas
+from .geometria import base as geo_base, marcos as geo_marcos, seleccion as geo_seleccion, textos as geo_textos
+from .geometria.acciones import acciones_etapa, ancho_accion, extra as _extra, geometria_acciones, grupos_sueltos
+from .geometria.base import (
+    ACT_BUS, ACT_CANAL, ACT_COL, ACT_GAP, ACT_LINK, ACT_MIN, ALTO_T, ANCHO_COMENTARIO, ANCLA, ANCLA_S,
+    BARRA_GROSOR, DISTANCIA_TRANSICION_BARRA, EVOLUCION_HORIZONTAL, H, MARGEN_MARCO_X,
+    MARGEN_MARCO_Y, PASO, RADIO_ANCLA, REJILLA, SIMUL, SX, TB, TMR_EXTRA, VACIO_H, VACIO_W,
+    barra, orientaciones, posiciones,
+)
+from .geometria.enlaces import _ajustar_enlaces, enlaces, simul_d
+from .geometria.marcos import _dependencia_cajas, _dependencias_recinto, parciales_dibujo
+from .geometria.seleccion import _segmento
+from .geometria.textos import pos_comentario_e, pos_comentario_t
 from .textos_diagrama import EscenaDiagrama, texto_nuevo
 
-SX = 100       # margen izquierdo del dibujo
-H = 22         # semilado de la etapa cuadrada (unidad: lado = 2·H)
-TB = 8         # trazo de transición de 16 px frente al lado de etapa de 44 px
-ACT_LINK = 26  # enlace etapa–acción (≈0,6 del lado)
-ACT_MIN = 80   # anchura mínima de una acción
 MARK = 7       # divisiones de la macroetapa
-ACT_GAP = 36   # entre cajas de acción de una fila separada
-ACT_BUS = 28   # de la línea común de una fila separada, por debajo de las cajas
-ACT_COL = 12   # separación mínima entre cajas de una columna (crece lo que piden sus marcas)
-ACT_CANAL = 7  # de la derivación a la segunda columna de una matriz, por debajo de su fila
 
 # Colores del tema claro de tools/dibujo.css: el dibujo es negro sobre blanco, como en la norma
 COL = {"readout": "#326dcb","panel": "#ffffff", "text": "#1d2330", "muted": "#6b7385", "accent": "#1f6feb", "accent_soft": "#dbe8ff",
        "ok": "#1a7f37", "active": "#40d641", "active_soft": "#e4f9e4", "true_text": "#40d641", "history": "#1a7f1b", "err": "#c62828", "aviso": "#eeb445", "virt": "#8250df", "glow": "#e36209"}
 FONT = "Arial"
 Z_FRAME, Z_LINK, Z_BAR, Z_STEP = 0, 1, 2, 3
-ANCHO_COMENTARIO = 190  # ancho máximo de un comentario antes de pasar a otra línea
 GROSOR_NEGADO = 1.25     # grosor de la barra de una variable negada (Qt no deja regular el del sobrerrayado del texto)
 TMR_TAM = 10            # tamaño del tiempo transcurrido de un temporizador, que se dibuja encima de su duración
-TMR_EXTRA = 12          # lo que sube por encima de la condición o el evento de una acción con temporizador
-MARGEN_MARCO_X = 26     # lo que se separa el marco de un parcial de todo lo que dibuja de él, a izquierda y derecha...
-MARGEN_MARCO_Y = 22     # ... y por arriba y por abajo (el mismo de siempre alrededor de sus etapas)
 _ANCHOS: dict[tuple[Any, ...], float] = {}  # lo que mide cada texto (`_Pintor.ancho`): los marcos lo piden a cada movimiento del ratón
 
 
@@ -273,40 +270,8 @@ def medida_comentario(texto: str, ancho: float = ANCHO_COMENTARIO) -> tuple[floa
     return _MEDIDAS_COMENTARIO[clave]
 
 
-def pos_comentario_t(t: dict[str, Any], tx: float, ty: float, w: float, derecha: float = 0.0) -> tuple[float, float]:
-    """Dónde empieza (x) y dónde está su centro vertical (yc) el comentario de la transición centrada en (tx, ty), con la
-    receptividad de ancho `w` (0 si no tiene) y `derecha`, hasta dónde llega el estado de un temporizador (0 si no hay): a
-    la derecha de todo ello, con 14 de margen, para que nunca se monte sobre su receptividad. Con evolución horizontal, la
-    receptividad va centrada sobre el trazo y el comentario junto a ella."""
-    tope = derecha + 8 if derecha else float("-inf")  # (sin temporizador `derecha` es 0, no una x: no cuenta, AB1)
-    if orientacion(t) in EVOLUCION_HORIZONTAL:
-        return max(tx - w / 2 + w + (14 if w else 0), tope), ty - TB - 9 - 5
-    return max(tx + TB + 8 + w + (14 if w else 0), tope), ty
-
-
-def pos_comentario_e(x: float, y: float, derecho: float) -> tuple[float, float]:
-    """Lo mismo para una etapa en (x, y): a la derecha de su última acción (`derecho`, o el borde de la etapa)."""
-    return max(derecho, x + H) + 10, y
-
-
 def rects_comentarios(M: dict[str, Any]) -> list[tuple[str, QRectF]]:
-    """El rectángulo de cada comentario de etapa y de transición según el modelo y sin dibujar, con el ID de su elemento
-    (un comentario se mueve con él): lo que cuenta como obstáculo al colocar otras cosas (AB2)."""
-    out: list[tuple[str, QRectF]] = []
-    for t in M["transitions"]:
-        if t.get("comment"):
-            w = _Pintor.ancho(t["cond"], 14) if t.get("cond") else 0.0
-            x, yc = pos_comentario_t(t, t["x"] + SX, t["y"], w)
-            cw, ch = medida_comentario(t["comment"])
-            out.append((t["id"], QRectF(x, yc - ch / 2, cw, ch)))
-    for s in M["steps"]:
-        if s.get("comment"):
-            x, y = s["x"] + SX, s["y"]
-            cajas_ = _geometria_acciones(x, y, acciones_etapa(M, s), s.get("actionLayout", "fila"))[0]
-            xc, yc = pos_comentario_e(x, y, max([ax + w for _, ax, _, w in cajas_] + [x + H]))
-            cw, ch = medida_comentario(s["comment"])
-            out.append((s["id"], QRectF(xc, yc - ch / 2, cw, ch)))
-    return out
+    return [(i, QRectF(*r)) for i, r in geo_textos.rects_comentarios(M, _Pintor.ancho, medida_comentario)]
 
 
 def _temporizadores(S: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -368,81 +333,17 @@ def _valores_variables(pt: _Pintor, x: float, y: float, t: dict[str, Any], S: di
         pt.text(x + (lim[i] + lim[i + 1]) / 2, base, pt.seg(valor), 10, "readout", z, anchor="middle", tip=tip, mono=True)
 
 
-REJILLA = 20   # paso de la rejilla del editor (coordenadas del modelo)
-ALTO_T = 14    # semialtura del área de una transición al editar (el trazo es fino: se acierta mejor así)
-ANCLA = TALLO_T  # distancia de los puntos de unión de una transición a su centro: al final de su tramo recto, lejos del
                  # trazo, para que agarrar la transición la mueva y no saque una rama
-ANCLA_S = 28   # ... y si ese lado es una simultaneidad (el punto queda fuera del doble trazo)
-SIMUL = 14     # distancia del doble trazo de una simultaneidad al centro de la transición
-PASO = 60      # el paso estándar entre centros de etapa y transición (DY de la edición)
-DISTANCIA_TRANSICION_BARRA = PASO - REJILLA  # hueco exterior parecido al de una transición y el borde de una etapa
-RADIO_ANCLA = 14  # a qué distancia del puntero se marca un punto de unión (generoso: se agarra sin puntería)
 Z_EDIT = 10    # selección, tiradores y marcas por encima de todo el dibujo
-EVOLUCION_HORIZONTAL = ("derecha", "izquierda")  # orientaciones de una transición cuyo trazo es vertical
-
-
-def simul_d(t: dict[str, Any], tx: float, ty: float, otros: list[tuple[float, float]], signo: int) -> float:
-    """Distancia de la transición en (tx, ty) a su doble trazo de simultaneidad, por arriba (`signo` -1) o por abajo (1), de
-    evolución hacia abajo: el hueco exterior se acorta un paso de rejilla al equidistanciar.
-    Si no cabe también el paso hacia la etapa, se conserva el trazo compacto."""
-    if orientacion(t) != "abajo":
-        return SIMUL
-    lejos = [signo * (p[1] - ty) for p in otros if signo * (p[1] - ty) > 0]
-    return DISTANCIA_TRANSICION_BARRA if lejos and min(lejos) >= PASO + DISTANCIA_TRANSICION_BARRA else SIMUL
-
-
-def _otros_t(M: dict[str, Any], t: dict[str, Any], pos: dict[str, tuple[float, float]], signo: int) -> list[tuple[float, float]]:
-    ids = t.get("preDib", t["pre"]) if signo < 0 else t.get("postDib", t["post"])
-    return [pos[i] for i in ids if i in pos]
-
-
-def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
-    """Recorridos de solo lectura, con los extremos ajustados a las simultaneidades de la vista."""
-    return rutas.obtener(M, _ajustar_enlaces)
-
-
-def _ajustar_enlaces(M: dict[str, Any], base: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = list(base)
-    pos = posiciones(M)
-    ts = {t["id"]: t for t in M["transitions"]}
-    for i, e in enumerate(base):
-        t = ts.get(e.get("tid"))
-        if t is None or not e.get("simul") or "orient" in e or e["rol"] not in ("pre", "post"):
-            continue
-        tx, ty = pos[t["id"]]
-        signo = -1 if e["rol"] == "pre" else 1
-        d = simul_d(t, tx, ty, _otros_t(M, t, pos, signo), signo)
-        if d == SIMUL:
-            continue
-        viejo, nuevo = ty + signo * (SIMUL + BARRA_GROSOR), ty + signo * (d + BARRA_GROSOR)
-        puntos = [(x, nuevo if y == viejo else nuevo - 30 if (y == viejo - 30 and signo < 0) else y) for x, y in e["pts"]]
-        out[i] = {**e, "pts": puntos}
-    return out
 
 
 def caja_barra(o: str, x: float, y: float) -> QRectF:
-    """La caja del trazo de una transición centrada en (x, y) con la orientación `o` (vertical si la evolución es horizontal)."""
-    return QRectF(x - 2, y - TB, 4, 2 * TB) if o in EVOLUCION_HORIZONTAL else QRectF(x - TB, y - 2, 2 * TB, 4)
-
-
-def orientaciones(M: dict[str, Any]) -> dict[str, str]:
-    """La orientación de cada transición de la vista (`abajo` la de siempre)."""
-    return {t["id"]: orientacion(t) for t in M["transitions"]}
+    return QRectF(*geo_base.caja_barra(o, x, y))
 
 
 def rects_textos_t(t: dict[str, Any], x: float, y: float) -> tuple[QRectF | None, QRectF | None]:
-    """Lo que ocupan la designación y la receptividad de una transición centrada en (x, y): a izquierda y derecha del trazo
-    (evolución vertical) o, si el trazo es vertical, la designación debajo y la receptividad encima, centradas en él, para que
-    no pisen los enlaces horizontales."""
-    horizontal = orientacion(t) in EVOLUCION_HORIZONTAL
-    etq = cond = None
-    if t.get("showLabel", True):
-        w = _Pintor.ancho([{"t": f"({t.get('label', t['id'])})"}], 13)
-        etq = QRectF(x - w / 2, y + TB + 2, w, 21) if horizontal else QRectF(x - TB - 6 - w, y - 12, w, 21)
-    if t.get("cond"):
-        w = _Pintor.ancho(t["cond"], 14)
-        cond = QRectF(x - w / 2, y - TB - 26, w, 21) if horizontal else QRectF(x + TB + 8, y - 12, w, 21)
-    return etq, cond
+    etiqueta, condicion = geo_textos.rects_textos_t(t, x, y, _Pintor.ancho)
+    return QRectF(*etiqueta) if etiqueta is not None else None, QRectF(*condicion) if condicion is not None else None
 
 
 def _trazos_girada(pt: _Pintor, t: dict[str, Any], tx: float, ty: float, pre: list[tuple[float, float]],
@@ -473,164 +374,35 @@ def _trazos_girada(pt: _Pintor, t: dict[str, Any], tx: float, ty: float, pre: li
         pt.line(tx, ty, *P(TALLO_T), trazo, Z_LINK)
 
 
-def posiciones(M: dict[str, Any]) -> dict[str, tuple[float, float]]:
-    """Centro, en el dibujo, de cada etapa, macroetapa y transición."""
-    pos = {s["id"]: (s["x"] + SX, s["y"]) for s in M["steps"]}
-    pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
-    pos.update({t["id"]: (t["x"] + SX, t["y"]) for t in M["transitions"]})
-    return pos
-
-
-def _segmento(M: dict[str, Any], pos: dict[str, tuple[float, float]], d: dict[str, Any]) -> tuple[tuple[float, float], tuple[float, float]] | None:
-    a, b = pos.get(d["from"]), pos.get(d["to"])
-    return (a, b) if a and b else None
-
-
-BARRA_GROSOR = 8   # separación de las dos líneas de una barra de simultaneidad
-
-
-def barra(b: dict[str, Any]) -> tuple[float, float, float, float]:
-    """Una barra en el dibujo: x, y de arriba, ancho y alto."""
-    return b["x"] + SX, b["y"], b["ancho"], BARRA_GROSOR if b["kind"] == "Y" else 0
 
 
 def anclas(
     M: dict[str, Any], ident: str, pos: dict[str, tuple[float, float]] | None = None
 ) -> list[dict[str, Any]]:
-    """Puntos de unión de un elemento: etapa y transición, arriba (entra el enlace) y abajo (sale); la etapa, además, en
-    el centro de su lado derecho (de ahí salen las acciones); una acción suelta (la primera de su grupo), a la
-    izquierda."""
-    for b in M.get("bars", []):
-        if b["id"] == ident:
-            bx, by, w, h = barra(b)
-            return [{"id": ident, "lado": "arriba", "pos": QPointF(bx + w / 2, by - 9)},
-                    {"id": ident, "lado": "abajo", "pos": QPointF(bx + w / 2, by + h + 9)}]
-    for d in M.get("draftActions", []):  # una acción suelta: un solo punto de unión, en el medio de su lado izquierdo
-        if d["id"] == ident and not d.get("etapa") and d.get("cabeza", True):
-            return [{"id": ident, "lado": "izq", "pos": QPointF(d["x"] + SX, d["y"])}]
-    if pos is None:
-        pos = posiciones(M)
-    if ident not in pos:
-        return []
-    x, y = pos[ident]
-    t = next((t for t in M["transitions"] if t["id"] == ident), None)
-    arriba = H if t is None else ANCLA_S + simul_d(t, x, y, _otros_t(M, t, pos, -1), -1) - SIMUL if t.get("simulPre") else ANCLA
-    abajo = H if t is None else ANCLA_S + simul_d(t, x, y, _otros_t(M, t, pos, 1), 1) - SIMUL if t.get("simulPost") else ANCLA
-    if t is not None and orientacion(t) != "abajo":  # «arriba» es la entrada (el lado de donde viene la evolución)
-        return [{"id": ident, "lado": "arriba", "pos": QPointF(*punto_t(t, x, y, -arriba))},
-                {"id": ident, "lado": "abajo", "pos": QPointF(*punto_t(t, x, y, abajo))}]
-    out = [{"id": ident, "lado": "arriba", "pos": QPointF(x, y - arriba)},
-           {"id": ident, "lado": "abajo", "pos": QPointF(x, y + abajo)}]
-    if any(st["id"] == ident for st in M["steps"]):
-        out.append({"id": ident, "lado": "der", "pos": QPointF(x + H, y)})
-    return out
+    return [{**a, "pos": QPointF(*a["pos"])} for a in geo_seleccion.anclas(M, ident, pos)]
 
 
 def _distancia(p: QPointF, a: tuple[float, float], b: tuple[float, float]) -> float:
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    k = max(0.0, min(1.0, ((p.x() - a[0]) * dx + (p.y() - a[1]) * dy) / ((dx * dx + dy * dy) or 1)))
-    return ((p.x() - a[0] - k * dx) ** 2 + (p.y() - a[1] - k * dy) ** 2) ** 0.5
+    return geo_seleccion._distancia(p.toTuple(), a, b)
 
 
 def ancla_en(M: dict[str, Any], p: QPointF, radio: float = RADIO_ANCLA, sin_der: bool = False) -> dict[str, Any] | None:
-    """El punto de unión más cercano al puntero, si hay alguno a menos de `radio` (el de la derecha de una etapa, de
-    donde salen las acciones, solo a menos de 8 si la etapa ya las tiene: ahí empieza su enlace, que se selecciona; `sin_der`
-    lo ignora, para enlaces que no son de acciones)."""
-    best = None
-    ocupadas = {s["id"] for s in M["steps"] if s["actions"]} | {d["etapa"] for d in M.get("draftActions", []) if d.get("etapa")}
-    cuadrados = {s["id"] for s in M["steps"]} | {s["id"] for s in M.get("macros", [])}
-    for ident, (cx, cy) in posiciones(M).items():
-        if ident in cuadrados and QRectF(cx-H+2,cy-H+2,2*H-4,2*H-4).contains(p):
-            continue  # dentro de la caja se selecciona o arrastra; los puntos de enlace quedan fuera
-        for a in anclas(M, ident):
-            if a["lado"] == "der" and sin_der:
-                continue
-            d = ((a["pos"].x() - p.x()) ** 2 + (a["pos"].y() - p.y()) ** 2) ** 0.5
-            if d <= (min(radio, 8) if a["lado"] == "der" and ident in ocupadas else radio) and (best is None or d < best[0]):
-                best = (d, a)
-    for d in M.get("draftActions", []):
-        for a in anclas(M, d["id"]):
-            dist = ((a["pos"].x() - p.x()) ** 2 + (a["pos"].y() - p.y()) ** 2) ** 0.5
-            if dist <= radio and (best is None or dist < best[0]):
-                best = (dist, a)
-    for b in M.get("bars", []):  # en una barra, el punto de unión sigue al puntero a lo largo de su ancho
-        bx, by, w, h = barra(b)
-        if bx - 4 <= p.x() <= bx + w + 4:
-            x = min(max(p.x(), bx), bx + w)
-            for lado, y in (("arriba", by - 9), ("abajo", by + h + 9)):
-                d = abs(p.y() - y)
-                if d <= min(radio, 7) and (best is None or d < best[0]):
-                    best = (d, {"id": b["id"], "lado": lado, "pos": QPointF(x, y)})
-    return best[1] if best else None
+    a = geo_seleccion.ancla_en(M, p.toTuple(), radio, sin_der)
+    return {**a, "pos": QPointF(*a["pos"])} if a is not None else None
 
 
 def marco_en(M: dict[str, Any], p: QPointF, borde: float = 6) -> str | None:
-    """El parcial cuyo marco (recinto o parcial; la expansión no tiene) se toca en el punto: su borde, a `borde` o menos, o
-    su nombre. Dentro del marco, lejos del borde, no hay nada que agarrar: ahí se suelta, se traza el lazo… Si hay varios,
-    el más pequeño."""
-    cajas = cajas_parciales(M)
-    mejor: tuple[float, str] | None = None
-    for part in M.get("partials") or []:
-        b = cajas.get(part["id"])
-        if not b or part["kind"] not in ("enclosure", "partial"):
-            continue
-        x0, y0, x1, y1 = b["x0"], b["y0"], b["x1"], b["y1"]
-        cerca = x0 - borde <= p.x() <= x1 + borde and y0 - borde <= p.y() <= y1 + borde
-        interior = x0 + borde < p.x() < x1 - borde and y0 + borde < p.y() < y1 - borde
-        w = 8 * len(part["label"]) + 8  # lo que ocupa el nombre del parcial, abajo (a la izquierda en un recinto, a la derecha si no)
-        xn = x0 + 26
-        en_nombre = xn <= p.x() <= xn + w + 8 and y1 - 8 <= p.y() <= y1 + 12
-        if part["kind"] == "enclosure":
-            dueno = M.get("names", {}).get(part.get("ownerStep"), part.get("ownerStep", ""))
-            en_nombre |= xn <= p.x() <= xn + 8 * len(dueno) + 16 and y0 - 12 <= p.y() <= y0 + 8
-        if (cerca and not interior) or en_nombre:
-            area = (x1 - x0) * (y1 - y0)
-            if mejor is None or area < mejor[0]:
-                mejor = (area, part["id"])
-    return mejor[1] if mejor else None
+    return geo_seleccion.marco_en(M, p.toTuple(), borde, medir=_Pintor.ancho)
 
 
 def elemento_en(M: dict[str, Any], p: QPointF) -> str | None:
-    """El elemento bajo un punto del dibujo: etapa, transición (su trazo), enlace en borrador, enlace o, al final y solo
-    en su borde o su nombre, el marco de un parcial."""
-    pos = posiciones(M)
-    for t in M["transitions"]:  # el trazo, su designación a la izquierda y su receptividad a la derecha
-        x, y = pos[t["id"]]
-        if orientacion(t) in EVOLUCION_HORIZONTAL:  # trazo vertical; designación (debajo) y receptividad (encima), centradas
-            if abs(p.x() - x) <= ALTO_T and abs(p.y() - y) <= TB + 6 or any(
-                    r is not None and r.adjusted(-2, -2, 2, 2).contains(p) for r in rects_textos_t(t, x, y)):
-                return t["id"]
-            continue
-        ancho = 8 * sum(len(sg["t"]) for sg in (t.get("cond") or []))
-        if -(TB + 44) <= p.x() - x <= TB + 12 + ancho and abs(p.y() - y) <= ALTO_T:
-            return t["id"]
-    for s in list(M["steps"]) + list(M.get("macros", [])):
-        x, y = pos[s["id"]]
-        if abs(p.x() - x) <= H + 4 and abs(p.y() - y) <= H + 4:
-            return s["id"]
-    for b in M.get("bars", []):
-        bx, by, w, h = barra(b)
-        if bx - 6 <= p.x() <= bx + w + 6 and by - 6 <= p.y() <= by + h + 6:
-            return b["id"]
-    for d in M.get("drafts", []):
-        seg = _segmento(M, pos, d)
-        if seg and _distancia(p, *seg) <= 6:
-            return d["id"]
-    for e in enlaces(M):  # los enlaces, al final: lo que hay encima manda
-        if any(_distancia(p, a, b) <= 7 for a, b in zip(e["pts"], e["pts"][1:])):
-            return e["id"]
     from .anotaciones import en
-    n = en(M,p)
-    return n["id"] if n else marco_en(M, p)
 
+    def anotacion() -> str | None:
+        n = en(M, p)
+        return n["id"] if n else None
 
-def parciales_dibujo(M):
-    """Pertenencia visual: las barras heredan el parcial de sus extremos, sin cambiar el modelo."""
-    partes = {x["id"]: x.get("partial") or "g" for k in ("steps", "transitions", "macros") for x in M.get(k, [])}
-    for b in M.get("bars", []):
-        extremos = {partes[i] for i in b.get("arriba", []) + b.get("abajo", []) if i in partes}
-        partes[b["id"]] = next(iter(extremos)) if len(extremos) == 1 else (None if extremos else "g")
-    return partes
+    return geo_seleccion.elemento_en(M, p.toTuple(), _Pintor.ancho, anotacion)
 
 
 def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], naranja: set[str] = frozenset()) -> None:
@@ -918,11 +690,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         pt.line(x - H, y - H + MARK, x + H, y - H + MARK, pt.pen("active" if act else "text"), Z_STEP + 0.01, tip)
         pt.line(x - H, y + H - MARK, x + H, y + H - MARK, pt.pen("active" if act else "text"), Z_STEP + 0.01, tip)
         pt.text(x, y + 5, pt.seg(nombre(m["id"], m["id"])), 16, "active" if act else "text", Z_STEP, "middle", tip)
-    grupos: dict[str, list[dict[str, Any]]] = {}
-    for d in M.get("draftActions", []):  # acciones sueltas: las de un grupo, juntas desde la posición de la primera
-        if not d.get("etapa"):
-            grupos.setdefault(d.get("grupo") or d["id"], []).append(d)
-    for g, miembros in grupos.items():
+    for g, miembros in grupos_sueltos(M).items():
         pt.parcial = miembros[0].get("partial") or "g"
         _acciones(pt, miembros[0]["x"] + SX, miembros[0]["y"], miembros, S, tmp, cajas, "", marcadas,
                   (M.get("actionLayouts") or {}).get(g, "fila"), suelto=True, grupo=g)
@@ -934,164 +702,10 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     return cajas
 
 
-VACIO_W, VACIO_H = 180, 120  # tamaño del marco de un recinto sin etapas (el editor lo anota con `vacio`, ver `cajas_parciales`)
-
-
-def _contenido_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]]) -> dict[str, list[float]]:
-    """Por parcial, el rectángulo [x0, y0, x1, y1] (en el dibujo, sin márgenes) de todo lo que se dibuja de él: sus etapas y
-    macroetapas, sus transiciones (el trazo, su designación a la izquierda y su receptividad a la derecha, y los trazos de
-    una simultaneidad), las acciones y órdenes unidas a sus etapas (con las marcas que sobresalen y los trazos que las unen),
-    los recorridos de sus enlaces (también los de retorno, por fuera) y las barras que unen elementos suyos. No cuenta lo que
-    depende del estado de la simulación (el tiempo de un temporizador, las etiquetas «inestable»…) ni los comentarios: el marco
-    no cambia al simular. Igual que `drawFrames` de tools/dibujo.js."""
-    out: dict[str, list[float]] = {}
-    de: dict[str, str | None] = {}
-
-    def anotar(pid: str | None, x0: float, y0: float, x1: float, y1: float) -> None:
-        if not pid:
-            return
-        b = out.setdefault(pid, [x0, y0, x1, y1])
-        b[:] = [min(b[0], x0), min(b[1], y0), max(b[2], x1), max(b[3], y1)]
-    unidas = M.get("draftActions", [])
-    for s in M["steps"]:
-        x, y = pos[s["id"]]
-        de[s["id"]] = pid = s.get("partial")
-        anotar(pid, x - H, y - H, x + H, y + H)
-        acciones = acciones_etapa(M, s)
-        if acciones and pid:
-            cajas, union = _geometria_acciones(x, y, acciones, s.get("actionLayout", "fila"))
-            for a, ax, cy, w in cajas:
-                arriba, abajo = _extra(a)
-                anotar(pid, ax, cy - H - arriba, ax + w, cy + H + abajo)
-            for tramo in union:
-                for px, py in tramo:
-                    anotar(pid, px, py, px, py)
-    for m in M.get("macros", []):
-        x, y = pos[m["id"]]
-        de[m["id"]] = pid = m.get("partial")
-        anotar(pid, x - H, y - H, x + H, y + H)
-    for t in M["transitions"]:
-        tx, ty = t["x"] + SX, t["y"]
-        de[t["id"]] = pid = t.get("partial")
-        pre = [pos[p] for p in t.get("preDib", t["pre"]) if p in pos]
-        post = [pos[p] for p in t.get("postDib", t["post"]) if p in pos]
-        if orientacion(t) != "abajo":  # transición girada: su trazo, sus tramos rectos y sus textos
-            n = NORMAL[orientacion(t)]
-            for u, v in ((0, -TB), (0, TB), (-TALLO_T if not pre else 0, 0), (TALLO_T if not post else 0, 0)):
-                anotar(pid, *punto_t(t, tx, ty, u, v), *punto_t(t, tx, ty, u, v))
-            for r in rects_textos_t(t, tx, ty):
-                if r is not None:
-                    anotar(pid, r.left(), r.top(), r.right(), r.bottom())
-            for signo, otros, hay in ((-1, pre, len(pre) > 1 or t.get("simulPre")), (1, post, t.get("simulPost"))):
-                if hay:
-                    vs = [(p[0] - tx) * n[0] + (p[1] - ty) * n[1] for p in otros] + [0.0]
-                    for u in (signo * SIMUL, signo * (SIMUL + BARRA_GROSOR)):
-                        for v in (min(vs) - 8, max(vs) + 8):
-                            anotar(pid, *punto_t(t, tx, ty, u, v), *punto_t(t, tx, ty, u, v))
-            continue
-        anotar(pid, tx - TB, ty - (TALLO_T if not pre else 0), tx + TB, ty + (TALLO_T if not post else 0))
-        if t.get("showLabel", True):
-            w = _Pintor.ancho([{"t": f"({t.get('label', t['id'])})"}], 13)
-            anotar(pid, tx - TB - 6 - w, ty - 12, tx - TB - 6, ty + 9)
-        if t.get("cond"):
-            anotar(pid, tx + TB + 8, ty - 12, tx + TB + 8 + _Pintor.ancho(t["cond"], 14), ty + 9)
-        if len(pre) > 1 or t.get("simulPre"):  # el doble trazo de una divergencia o convergencia simultánea
-            xs = [p[0] for p in pre] + [tx]
-            d = simul_d(t, tx, ty, pre, -1)
-            anotar(pid, min(xs) - 8, ty - d - BARRA_GROSOR, max(xs) + 8, ty - d)
-        if t.get("simulPost"):
-            xs = [p[0] for p in post] + [tx]
-            d = simul_d(t, tx, ty, post, 1)
-            anotar(pid, min(xs) - 8, ty + d, max(xs) + 8, ty + d + BARRA_GROSOR)
-    for e in M["links"] if "links" in M else enlaces(M):  # el enlace es del parcial de su transición (el de una barra, del de su elemento)
-        pid = de.get(e["sid"] if e["rol"] == "barra" else e["tid"])
-        for px, py in e["pts"]:
-            anotar(pid, px, py, px, py)
-    for b in M.get("bars", []):
-        bx, by, w, h = barra(b)
-        for ident in list(b["arriba"]) + list(b["abajo"]):
-            anotar(de.get(ident), bx, by, bx + w, by + h)
-    return out
 
 
 def cajas_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]] | None = None) -> dict[str, dict[str, float]]:
-    """El rectángulo (x0, y0, x1, y1, en el dibujo) de cada parcial con contenido: el que rodea todo lo que se dibuja de él
-    (`_contenido_parciales`: etapas, transiciones con sus textos, acciones y órdenes unidas, barras y los recorridos de sus
-    enlaces, también los de retorno) con el margen de la norma (MARGEN_MARCO_X, MARGEN_MARCO_Y) y, como mínimo, el de siempre
-    alrededor de sus etapas y transiciones (por la derecha, más ancho, para sus acciones), más el de sus parciales hijos. Es
-    el marco que pinta `_marcos` (un recinto o un parcial) y, en una expansión, la zona que ocupa aunque no se dibuje (el
-    editor la usa para saber en qué parcial cae lo que se suelta). Solo el editor anota un parcial con `vacio` (un recinto
-    recién creado, sin etapas), con su esquina superior izquierda en `x`, `y` (coordenadas del modelo): se dibuja como marco
-    vacío de VACIO_W × VACIO_H. Un parcial sin contenido ni `vacio` no tiene caja."""
-    pos = pos if pos is not None else posiciones(M)
-    parts = M.get("partials") or []
-    box: dict[str, dict[str, float] | None] = {}
-    dibujado = _contenido_parciales(M, pos)
-
-    def own(pid: str) -> list[tuple[float, float]]:
-        return ([pos[s["id"]] for s in M["steps"] if s.get("partial") == pid]
-                + [pos[m["id"]] for m in M.get("macros", []) if m.get("partial") == pid]
-                + [(t["x"] + SX, t["y"]) for t in M["transitions"] if t.get("partial") == pid])
-
-    def frame(pid: str) -> dict[str, float] | None:
-        if pid in box:
-            return box[pid]
-        pts = own(pid)
-        b = ({"x0": min(p[0] for p in pts) - H - 26, "x1": max(p[0] for p in pts) + H + 70,
-              "y0": min(p[1] for p in pts) - H - 22, "y1": max(p[1] for p in pts) + H + 22} if pts else None)
-        if pid in dibujado:  # todo lo que se dibuja de él queda dentro, con margen
-            x0, y0, x1, y1 = dibujado[pid]
-            e = {"x0": x0 - MARGEN_MARCO_X, "x1": x1 + MARGEN_MARCO_X, "y0": y0 - MARGEN_MARCO_Y, "y1": y1 + MARGEN_MARCO_Y}
-            b = e if b is None else {"x0": min(b["x0"], e["x0"]), "x1": max(b["x1"], e["x1"]),
-                                     "y0": min(b["y0"], e["y0"]), "y1": max(b["y1"], e["y1"])}
-        if b is None:
-            vacio = next((c for c in parts if c["id"] == pid and c.get("vacio")), None)
-            if vacio is not None:
-                b = {"x0": vacio["x"] + SX, "x1": vacio["x"] + SX + VACIO_W, "y0": vacio["y"], "y1": vacio["y"] + VACIO_H}
-        for c in parts:
-            if c.get("owner") == pid and c["kind"] == "partial":
-                cb = frame(c["id"])
-                if not cb:
-                    continue
-                e = {"x0": cb["x0"] - 12, "x1": cb["x1"] + 12, "y0": cb["y0"] - 12, "y1": cb["y1"] + 16}
-                b = e if b is None else {"x0": min(b["x0"], e["x0"]), "x1": max(b["x1"], e["x1"]),
-                                         "y0": min(b["y0"], e["y0"]), "y1": max(b["y1"], e["y1"])}
-        box[pid] = b
-        return b
-
-    return {c["id"]: b for c in parts if (b := frame(c["id"]))}
-
-
-def _dependencias_recinto(b: dict[str, float], ox: float, oy: float, inicial: bool = False
-                          ) -> list[tuple[tuple[float, float], tuple[float, float]]]:
-    """Los dos trazos de dependencia de una encapsulante centrada en (ox, oy) a su recinto de marco `b`, como en la figura de la
-    norma: cada uno llega a una de las dos esquinas del lado del marco que mira hacia la encapsulante (el lado cuya normal
-    apunta a su centro, según el eje de mayor diferencia entre los centros; en empate, el vertical): con el recinto debajo, a sus
-    dos esquinas de arriba; a la derecha, a las dos de la izquierda; y así. Salen de la esquina de la encapsulante más cercana a
-    cada esquina de destino: en las esquinas cortadas de la etapa, el punto medio de su diagonal (en una inicial, la esquina
-    del cuadrado exterior). Se eligen al dibujar, según la posición de ahora: si el marco cambia de lado, cambian. Igual en
-    tools/dibujo.js."""
-    dx, dy = ox - (b["x0"] + b["x1"]) / 2, oy - (b["y0"] + b["y1"]) / 2
-    if abs(dy) >= abs(dx):
-        y = b["y0"] if dy <= 0 else b["y1"]
-        destinos = [(b["x0"], y), (b["x1"], y)]
-    else:
-        x = b["x0"] if dx < 0 else b["x1"]
-        destinos = [(x, b["y0"]), (x, b["y1"])]
-    c = H if inicial else H - round(0.22 * 2 * H) / 2
-    esquinas = [(ox + sx * c, oy + sy * c) for sy in (-1, 1) for sx in (-1, 1)]
-    return [(min(esquinas, key=lambda e: (e[0] - d[0]) ** 2 + (e[1] - d[1]) ** 2), d) for d in destinos]
-
-
-def _dependencia_cajas(a: tuple[float, float], b: tuple[float, float], superior: bool = True,
-                        lado: float | None = None) -> tuple[tuple[float, float], tuple[float, float]]:
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    lado = dx if lado is None else lado
-    if lado == 0:
-        k = min(.5, H / max(abs(dx), abs(dy))) if dx or dy else 0
-        return (a[0] + dx * k, a[1] + dy * k), (b[0] - dx * k, b[1] - dy * k)
-    hx, hy = (H if lado > 0 else -H), (-H if superior else H)
-    return (a[0] + hx, a[1] + hy), (b[0] - hx, b[1] + hy)
+    return geo_marcos.cajas_parciales(M, pos, medir=_Pintor.ancho)
 
 
 def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]], dependencias: bool = False, roles: dict[str, str] | None = None) -> None:
@@ -1136,85 +750,12 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]],
             pt.text(b["x0"] + 30, b["y1"] + 5, pt.seg(p["label"]), 14, roles.get(p["id"], "text"), Z_FRAME, halo=True)
 
 
-def _extra(a: dict[str, Any]) -> tuple[int, int]:
-    """Lo que sobresale la marca de una acción por encima y por debajo de su caja (condición, flecha, banderita), y el
-    tiempo transcurrido de su temporizador, que va encima de la condición o del evento (`tmr`)."""
-    if a["kind"] == "continuous" and a.get("cond"):
-        return 20 + (TMR_EXTRA if a.get("tmr") else 0), 0
-    arriba, abajo = {"event": (24, 0), "activation": (20, 0), "deactivation": (0, 20)}.get(a.get("trigger"), (0, 0))
-    return arriba + (TMR_EXTRA if a.get("tmr") and a.get("trigger") == "event" else 0), abajo
-
-
 def _ancho_accion(a: dict[str, Any]) -> float:
-    """Ancho de la caja de una acción: el de su texto y, si lleva condición o evento encima, el que éstos necesitan para
-    no invadir a la caja vecina (el estado de un temporizador, que cambia al simular, no cuenta)."""
-    w = max(ACT_MIN, _Pintor.ancho(a["text"], 15) + 24)
-    marca = a.get("cond") if a["kind"] == "continuous" else a.get("event") if a.get("trigger") == "event" else None
-    return max(w, 12 + 5 + _Pintor.ancho(marca, 13) + 8) if marca else w
+    return ancho_accion(a, _Pintor.ancho)
 
 
-def _geometria_acciones(x: float, y: float, actions: list[dict[str, Any]], disposicion: str,
-                        suelto: bool = False) -> tuple[list[tuple[dict[str, Any], float, float, float]], list[list[tuple[float, float]]]]:
-    """Dónde va cada acción ({acción, x, y del centro, ancho}) y los trazos que las unen entre sí y con la etapa
-    (polilíneas). Cuatro colocaciones (figuras (1)–(3) de la norma): «fila» (por defecto; cajas contiguas, la
-    representación (2)), «fila-separada» (cajas separadas, unidas a una línea común que sale de la etapa), «matriz-2»
-    (cuadrícula de dos columnas, de izquierda a derecha y de arriba abajo; una barra vertical común a su izquierda con
-    una derivación a cada fila: la de la segunda columna pasa por debajo de la caja de la primera y sube a la suya) y
-    «columna» (una debajo de otra, unidas por una línea vertical que sale de la etapa). Una etapa está en (x, y) y las acciones
-    salen de su lado derecho; un grupo suelto empieza en (x, y), el punto medio de su lado izquierdo."""
-    ax = x if suelto else x + H + ACT_LINK
-    union: list[list[tuple[float, float]]] = [] if suelto else [[(x + H, y), (ax, y)]]
-    if not actions:
-        return [], union
-    bx = ax - ACT_LINK / 2
-    if disposicion == "columna":
-        ancho, ys = max(_ancho_accion(a) for a in actions), [y]
-        for previa, a in zip(actions, actions[1:]):  # el hueco deja sitio a las marcas de las dos cajas vecinas
-            ys.append(ys[-1] + 2 * H + max(ACT_COL, _extra(previa)[1] + _extra(a)[0] + 4))
-        if len(ys) > 1:
-            union.append([(bx, y), (bx, ys[-1])])
-            union += [[(bx, cy), (ax, cy)] for cy in (ys if suelto else ys[1:])]
-        return [(a, ax, cy, max(ancho, _ancho_accion(a))) for a, cy in zip(actions, ys)], union
-    if disposicion == "matriz-2":
-        filas = [actions[i:i + 2] for i in range(0, len(actions), 2)]
-        w1 = max(_ancho_accion(f[0]) for f in filas)
-        w2 = max((_ancho_accion(f[1]) for f in filas if len(f) > 1), default=0)
-        x2, ys, canales = ax + w1 + ACT_GAP, [y], []
-        for n, f in enumerate(filas):
-            if n:  # el hueco deja sitio a las marcas y al canal de la derivación de la fila de arriba
-                ys.append(ys[-1] + 2 * H + max(ACT_COL, max(_extra(a)[1] for a in filas[n - 1])
-                                               + max(_extra(a)[0] for a in f) + 2 * ACT_CANAL))
-            canales.append(ys[-1] + H + max(_extra(a)[1] for a in f) + ACT_CANAL)  # por debajo de la fila, entre las dos cajas
-        cajas = [(a, ax if i % 2 == 0 else x2, ys[i // 2], w1 if i % 2 == 0 else w2) for i, a in enumerate(actions)]
-        if len(actions) > 1:
-            fin = canales[-1] if len(filas[-1]) > 1 else ys[-1]
-            union.append([(bx, y), (bx, fin)])
-            union += [[(bx, cy), (ax, cy)] for cy in (ys if suelto else ys[1:])]
-            union += [[(bx, canales[n]), (x2 - 14, canales[n]), (x2 - 14, ys[n]), (x2, ys[n])]
-                      for n, f in enumerate(filas) if len(f) > 1]
-        return cajas, union
-    if disposicion == "fila-separada":
-        cajas, entradas = [], []
-        for i, a in enumerate(actions):
-            if i:
-                ax += ACT_GAP
-                entradas.append(ax - 14)
-            w = _ancho_accion(a)
-            cajas.append((a, ax, y, w))
-            ax += w
-        if entradas:
-            yb = y + H + ACT_BUS
-            union.append([(bx, y), (bx, yb), (entradas[-1], yb)])
-            if suelto:
-                union.append([(bx, y), (cajas[0][1], y)])
-            union += [[(ex, yb), (ex, y), (ex + 14, y)] for ex in entradas]
-        return cajas, union
-    cajas = []
-    for a in actions:
-        w = _ancho_accion(a)
-        cajas.append((a, ax, y, w))
-        ax += w
-    return cajas, union
+def _geometria_acciones(x: float, y: float, actions: list[dict[str, Any]], disposicion: str, suelto: bool = False):
+    return geometria_acciones(x, y, actions, disposicion, suelto, medir=_Pintor.ancho)
 
 
 def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S: dict[str, Any],

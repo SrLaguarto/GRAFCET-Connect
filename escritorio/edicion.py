@@ -9,8 +9,6 @@ así que se puede probar sin pantalla.
 from __future__ import annotations
 
 import copy
-import heapq
-import math
 import re
 import uuid
 from fractions import Fraction
@@ -35,22 +33,26 @@ from grafcet.view import (Vista, display_names, force_situation, norm, layout_fr
 from .mensajes import amable, correccion_amable, mezcla_acciones
 from . import orden_acciones, pegado_acciones
 from .rutas_diagrama import rutas
-from .equidistancia import reservar_barras
+from .geometria import acciones as geo_acciones, choques as geo_choques, enlaces as geo_enlaces
+from .geometria import equidistancia as geo_equidistancia, textos as geo_textos
+from .geometria.acciones import BORDE_ACCION, IMAN_ACCION
+from .geometria.base import PASO, Rect, ajustar, esquina_parcial, punto_modelo
+from .geometria.choques import (
+    BARRA_ALTO_MIN, DESPLAZA_MAX, DESPLAZA_PASADAS, EXP_DX, EXP_DY, EXP_INTENTOS, EXP_PASO, MARGEN_SOLAPE,
+)
+from .geometria.enlaces import IMAN
 from .bloques import _dur_usuario, normalizar_duracion, sin_comillas
 from .anotaciones import en as anotacion_en, rect as rect_anotacion, importar_imagen, editar_texto
 from .diagrama import (ACT_LINK, ACT_MIN, FICHAS_ACCION, H, RADIO_ANCLA, REJILLA, SX, TB, VACIO_H, VACIO_W, _distancia, _extra,
                        _geometria_acciones, _Pintor, ancla_en, anclas, barra, caja_barra, cajas_parciales, elemento_en, enlaces,
                        EVOLUCION_HORIZONTAL, orientaciones, rects_comentarios, rects_textos_t,
-                       icono_accion, posiciones)
+                       icono_accion, medida_comentario, posiciones)
 
 HERRAMIENTAS = ("seleccionar",)  # el ratón selecciona, mueve y enlaza; los elementos nuevos solo se colocan arrastrándolos
 MAX_ETIQUETA_ETAPA = 4  # lo más largo que se escribe en la etiqueta de una etapa: más no cabe en su cuadro (lo ya guardado con más se abre igual)
-DY = 60  # distancia vertical estándar: tres pasos de rejilla entre etapa y transición
-IMAN = 40  # a qué distancia horizontal (dos pasos de rejilla) un elemento movido se alinea con uno enlazado
+DY = PASO  # distancia vertical estándar: tres pasos de rejilla entre etapa y transición
 RADIO_UNION = 8  # a qué distancia (px al 100 %) dos puntos de unión libres compatibles se unen solos al soltar un elemento
 RADIO_UNION_MAX = 12  # tope en unidades del dibujo: con zoom bajo no une lo que no está casi encima
-BORDE_ACCION = RADIO_ANCLA  # a cada lado de los bordes derecho e inferior de una acción, de los que se tira para sacar otra: lo mismo que el radio de un punto de unión, en unidades del dibujo (crece con el zoom igual que él)
-IMAN_ACCION = 16  # a qué distancia de otra acción se pega una acción suelta (lado derecho, o inferior en columna)
 TIPOS_ACCION = FICHAS_ACCION  # continua, condicionada, al activar, al desactivar, por evento (+ «limitada» de ficheros antiguos)
 TEXTO_LIMITADA = "Condicionada (con límite de tiempo)"
 TEXTO_ORDEN = "Orden de forzado"  # sexto tipo del submenú «Tipo de acción»: la acción pasa a ser una orden de forzado
@@ -66,20 +68,12 @@ RESERVADAS = {p.lower() for p in KEYWORDS | set(FUNCS_REF) | FUNCS_EXPR | {"dela
 COLOCACIONES = (("fila", "En fila, pegadas"), ("fila-separada", "En fila, separadas"), ("matriz-2", "En matriz de 2"),
                 ("columna", "En columna"))
 PARPADEO_MS, PARPADEO_PASOS = 250, 6  # tres parpadeos en 1,5 s: encendido al empezar y en los pasos 2 y 4
-MARGEN_SOLAPE = 8  # un elemento no se coloca a menos de esto de la caja de otro (en unidades del dibujo)
 MSG_SOLAPE = "No se puede poner encima de otro elemento"
 MSG_ACCION_SUELTA = ("Acción suelta: arrástrela hasta una etapa (desde el punto de unión de su izquierda) para unirla, "
                      "o péguela al lado de otra acción.")
 MSG_SOLAPE_PARCIAL = "Un grafcet parcial nuevo no se pone encima de otro elemento ni de otro marco: suéltelo en un hueco"
 MSG_ENCIMA = "Las acciones quedan encima de otro elemento: apártelo"  # aviso (no error): no se pudo abrir hueco
-DESPLAZA_MAX = 600  # lo más que se desplaza a la derecha lo que estorba a las acciones de una etapa (P-IMP-48)
-BARRA_ALTO_MIN = 4  # alto con el que una barra cuenta como obstáculo aunque se dibuje sin grosor (la «O»)
-DESPLAZA_PASADAS = 4  # veces que se recalcula el hueco tras desplazar, por si sigue habiendo algo que estorba
 # Jerarquías (P-IMP-23..27, REQ-EDT-08, REQ-JER-04, 05, 07): dónde se colocan la expansión de una macroetapa y el marco de un recinto
-EXP_DX = 280   # de la macroetapa a la columna de su expansión (a la derecha, como en el ejemplo «macroetapa»)
-EXP_DY = 320  # espacio inicial de edición de la expansión; independiente del paso entre elementos
-EXP_PASO = 160  # si la columna no está libre, cuánto se corre a la derecha para probar otra
-EXP_INTENTOS = 40
 RECINTO_DX = 140  # del centro de la encapsulante al borde izquierdo del marco de su recinto vacío
 RECINTO_PASO = 40  # hueco entre dos marcos vacíos seguidos
 ENCUADRE = 3 * H  # semilado del cuadrado que se encuadra alrededor de una etapa o macroetapa (la encapsulante, la macroetapa)
@@ -162,11 +156,6 @@ class Parpadeo(QObject):
     def activos(self) -> set[str]:
         """Los que se dibujan en naranja ahora (vacío en la fase apagada)."""
         return set(self.ids) if self.fase else set()
-
-
-def ajustar(v: float) -> int:
-    """Al punto de la rejilla más cercano."""
-    return round(v / REJILLA) * REJILLA
 
 
 def quitar_valores_iniciales(doc: dict[str, Any]) -> list[str]:
@@ -696,7 +685,7 @@ class Edicion(QObject):
 
     # -- gestos del ratón (los llama VistaDiagrama) ---------------------------------------------------
     def _modelo(self, p: QPointF) -> tuple[int, int]:
-        return ajustar(p.x() - SX), ajustar(p.y())
+        return punto_modelo(p.toTuple())
 
     def anotacion(self, ident):
         return next((n for n in self.M.get("annotations",[]) if n["id"] == ident),None)
@@ -879,43 +868,21 @@ class Edicion(QObject):
     def _num(v: float) -> str:
         return str(int(v)) if v == int(v) else str(v)
 
-    @staticmethod
-    def _rango_tramo(pts: list[Any], i: int, vertical: bool) -> tuple[float, float]:
-        """Lo que ocupa el tramo i de un recorrido a lo largo del otro eje (y si es vertical, x si es horizontal)."""
-        e = 1 if vertical else 0
-        return min(pts[i][e], pts[i + 1][e]), max(pts[i][e], pts[i + 1][e])
+    _rango_tramo = staticmethod(geo_enlaces.rango_tramo)
 
     def _pegar_a_paralelo(self, valor: float, vertical: bool, propio: str, rango: tuple[float, float]) -> float:
-        """Al colocar a mano un tramo (P-IMP-118): si la posición de la rejilla lo deja a media rejilla (10) o menos de un tramo
-        paralelo de OTRO enlace que de verdad coincide con él a lo largo del otro eje (`rango` y el del otro se cortan, con 4 de
-        margen), queda exactamente en la coordenada de ese tramo (solo hacia el solape, nunca para apartarse); si no, la
-        posición de la rejilla. `vertical`: el tramo es vertical (su x); si no, su y."""
-        eje = 0 if vertical else 1
-        mejor = None
-        for r in enlaces(self.M):
-            if r["id"] == propio:
-                continue
-            for u, v in zip(r["pts"], r["pts"][1:]):
-                lo, hi = min(u[1 - eje], v[1 - eje]), max(u[1 - eje], v[1 - eje])
-                if u != v and u[eje] == v[eje] and abs(u[eje] - valor) <= REJILLA / 2                         and max(lo, rango[0]) <= min(hi, rango[1]) + 4:
-                    if mejor is None or abs(u[eje] - valor) < abs(mejor - valor):
-                        mejor = u[eje]
-        return valor if mejor is None else mejor
+        return geo_enlaces.pegar_a_paralelo(enlaces(self.M), valor, vertical, propio, rango)
 
     def _arrastre_tramo(self, enlace: str, p: QPointF) -> dict[str, Any] | None:
         """Agarrar el cuerpo de un enlace y arrastrar mueve el tramo de su recorrido que se agarra (como su tirador, sin
         seleccionarlo antes): None si el punto no cae en un tramo movible (el primero y el último, que unen con la etapa o la
         transición, no se mueven; un enlace recto no tiene ninguno): entonces solo se selecciona."""
-        for r in enlaces(self.M):
-            if r["id"] != enlace:
-                continue
-            pts = r["pts"]
-            for h in r["handles"]:
-                i = h["segment"]
-                if _distancia(p, pts[i], pts[i + 1]) <= 7:
-                    return {"id": r["id"], "tipo": "tramo", "pts": r.get("routePts", r["pts"]), "handle": h, "movido": False,
-                            "start": p, "style": copy.deepcopy(self.ed.link_styles().get(r["id"], {}))}
-        return None
+        tramo = geo_enlaces.tramo_en(enlaces(self.M), enlace, p.toTuple())
+        if tramo is None:
+            return None
+        pts, marca = tramo
+        return {"id": enlace, "tipo": "tramo", "pts": pts, "handle": marca, "movido": False,
+                "start": p, "style": copy.deepcopy(self.ed.link_styles().get(enlace, {}))}
 
     def _barra(self, ident: str | None) -> dict[str, Any] | None:
         return next((b for b in self.M.get("bars", []) if b["id"] == ident), None)
@@ -1118,20 +1085,7 @@ class Edicion(QObject):
         return out
 
     def _iman(self, ident: str, x: float, moviendo: set[str] | frozenset[str] = frozenset()) -> float:
-        """Al mover una etapa o una transición cerca de la vertical de un elemento enlazado con ella (a IMAN o menos), se
-        alinea con él: el enlace queda recto, sin la S de un desplazamiento de un par de puntos de rejilla. Con varios
-        elementos que se mueven juntos (`moviendo`), solo cuentan los enlazados que se quedan donde están."""
-        pos = posiciones(self.M)
-        enlazados = set()
-        for t in self.M["transitions"]:
-            pasos = set(t.get("preDib", t["pre"])) | set(t.get("postDib", t["post"]))
-            if t["id"] == ident:
-                enlazados |= pasos
-            elif ident in pasos:
-                enlazados.add(t["id"])
-        xs = [pos[o][0] - SX for o in enlazados if o in pos and o not in moviendo]
-        cerca = min(xs, key=lambda v: abs(v - x), default=None)
-        return cerca if cerca is not None and 0 < abs(cerca - x) <= IMAN else x
+        return geo_enlaces.iman_etapa(self.M, ident, x, moviendo)
 
     def mover(self, p: QPointF, event: Any = None) -> bool:
         a = self.arrastre
@@ -1151,31 +1105,16 @@ class Edicion(QObject):
                 segment, ratio = project_on_link(a["pts"], p.toTuple())
                 a["style"].setdefault("arrows", {}).setdefault(self.flecha, {}).update(segment=segment, ratio=str(ratio))
             else:
-                pts, handle = a["pts"], a["handle"]
-                if handle.get("orient"):  # enlace de una transición girada: se corre el tramo, en perpendicular a su eje
-                    i = handle["segment"]
-                    vertical = pts[i][0] == pts[i + 1][0]
-                    previo = a.setdefault("tramos0", a["style"].get("route", {}).get("tramos", {}))  # lo guardado al pulsar
-                    valido = isinstance(previo, dict) and str(previo.get("n")) == str(len(pts))
-                    d0 = float(previo.get(str(i), 0)) if valido else 0.0
-                    destino = self._pegar_a_paralelo(ajustar(p.x() if vertical else p.y()), vertical, a["id"], self._rango_tramo(pts, i, vertical))
-                    nuevo = dict(previo) if valido else {}
-                    desplazamiento = d0 + destino - pts[i][0 if vertical else 1]
-                    nuevo.update({"n": str(len(pts)), str(i): str(int(desplazamiento)) if desplazamiento == int(desplazamiento)
-                                  else str(desplazamiento)})
-                    a["style"]["route"] = {**a["style"].get("route", {}), "tramos": nuevo}
-                elif len(pts) == 6:
-                    route = a["style"].setdefault("route", {"laneX": str(pts[2][0]-SX),
-                                                            "exitY": str(pts[1][1]), "entryY": str(pts[3][1])})
-                    key = {1: "exitY", 2: "laneX", 3: "entryY"}[handle.get("routeSegment", handle["segment"])]
-                    vertical = key == "laneX"
-                    k = handle.get("routeSegment", handle["segment"])
-                    v = self._pegar_a_paralelo(ajustar(p.x() if vertical else p.y()), vertical, a["id"],
-                                               self._rango_tramo(pts, k, vertical))
-                    route[key] = self._num(v - SX if vertical else v)
-                elif len(pts) == 4:
-                    a["style"]["route"] = {"middleY": self._num(self._pegar_a_paralelo(
-                        ajustar(p.y()), False, a["id"], self._rango_tramo(pts, handle["segment"], False)))}
+                marca = a["handle"]
+                ruta = a["style"].get("route")
+                anterior = a.setdefault("tramos0", (ruta or {}).get("tramos", {})) if marca.get("orient") else None
+
+                def alinear(valor, vertical, rango):
+                    return self._pegar_a_paralelo(valor, vertical, a["id"], rango)
+
+                ajustada = geo_enlaces.ajustar_tramo(a["pts"], marca, ruta, anterior, p.toTuple(), alinear)
+                if ajustada is not None:
+                    a["style"]["route"] = ajustada
             a["movido"] = True
             self.reconstruir()
             self.redibujar.emit()
@@ -1378,153 +1317,49 @@ class Edicion(QObject):
 
     # -- no colocar un elemento encima de otro ---------------------------------------------------------------
     def _elementos(self) -> list[tuple[str, QRectF, str]]:
-        """La caja de cada elemento que no puede quedar tapado, tal como está dibujado (etapas, macroetapas, transiciones,
-        barras, acciones y grupos de acciones, y los comentarios de etapas y transiciones, con ID «coment:<elemento>» y como
-        «etapa» el elemento al que acompañan; no cuentan los enlaces): (ID, caja, etapa de la acción)."""
-        trans = orientaciones(self.M)
-        out = [(i, caja_barra(trans[i], x, y) if i in trans else QRectF(x - H, y - H, 2 * H, 2 * H), "")
-               for i, (x, y) in posiciones(self.M).items()]
-        out += [(b["id"], QRectF(*barra(b)), "") for b in self.M.get("bars", [])]
-        out += [(c["id"], QRectF(*c["rect"]), c["etapa"] or "")
-                for c in getattr(self.diagrama, "cajas_acciones", None) or []]
-        out += [(c["id"], QRectF(*c["rect"]), c["etapa"]) for c in getattr(self.diagrama, "cajas_ordenes", None) or []]
-        out += [(f"coment:{i}", r, i) for i, r in rects_comentarios(self.M)]  # AB2: un comentario también estorba
-        return out
+        return [(i, QRectF(*r), etapa) for i, r, etapa in self._elementos_geometricos()]
+
+    def _elementos_geometricos(self):
+        acciones = getattr(self.diagrama, "cajas_acciones", None) or []
+        ordenes = getattr(self.diagrama, "cajas_ordenes", None) or []
+        return geo_choques.elementos(self.M, acciones, ordenes, _Pintor.ancho, medida_comentario)
 
     def _solapa(self, huella: list[QRectF], propios: set[str]) -> list[QRectF]:
-        """Las cajas de `huella` que quedan a menos de MARGEN_SOLAPE de otro elemento (no cuentan los `propios`, ni las
-        acciones de una etapa que se mueve)."""
-        m = MARGEN_SOLAPE
-        otros = [r for i, r, etapa in self._elementos() if i not in propios and etapa not in propios]
-        return [h for h in huella if any(h.adjusted(-m, -m, m, m).intersects(r) for r in otros)]
+        cajas = [Rect(*r.getRect()) for r in huella]
+        return [QRectF(*r) for r in geo_choques.solapa(self._elementos_geometricos(), cajas, propios)]
 
     # -- las acciones de una etapa tampoco se quedan encima de otro elemento: se aparta lo que estorba (P-IMP-48) ----
     def _colocadas(self) -> list[dict[str, Any]]:
-        """Dónde quedan las acciones de cada etapa y de cada grupo suelto según el modelo y su colocación, sin esperar a
-        que se dibujen: {id, etapa, grupo, rect, extra: lo que sobresalen sus marcas por arriba y por abajo}."""
-        M, pos, out = self.M, posiciones(self.M), []
-        unidas = M.get("draftActions", [])
-
-        def anotar(acciones: list[dict[str, Any]], x: float, y: float, disposicion: str, suelto: bool, etapa: str,
-                   grupo: str) -> None:
-            for a, ax, cy, w in _geometria_acciones(x, y, acciones, disposicion, suelto)[0]:
-                out.append({"id": a.get("id", ""), "etapa": etapa, "grupo": grupo, "rect": (ax, cy - H, w, 2 * H),
-                            "extra": _extra(a), "evento": a.get("trigger") == "event"})
-        for s in M["steps"]:
-            acciones = orden_acciones.acciones_etapa(M, s)
-            if acciones:
-                anotar(acciones, *pos[s["id"]], s.get("actionLayout", "fila"), False, s["id"], "")
-        grupos: dict[str, list[dict[str, Any]]] = {}
-        for d in unidas:
-            if not d.get("etapa"):
-                grupos.setdefault(d.get("grupo") or d["id"], []).append(d)
-        for g, miembros in grupos.items():
-            anotar(miembros, miembros[0]["x"] + SX, miembros[0]["y"], (M.get("actionLayouts") or {}).get(g, "fila"),
-                   True, "", g)
-        return out
+        return geo_acciones.colocadas(self.M, _Pintor.ancho)
 
     def _textos_transiciones(self) -> list[tuple[QRectF, str]]:
-        """Lo que ocupan los textos de las transiciones (su etiqueta a la izquierda y su receptividad a la derecha), con la
-        transición a la que pertenecen."""
-        out = []
-        for t in self.M["transitions"]:
-            tx, ty = t["x"] + SX, t["y"]
-            out += [(r, t["id"]) for r in rects_textos_t(t, tx, ty) if r is not None]
-        return out
+        return [(QRectF(*r), tid) for r, tid in geo_textos.textos_transiciones(self.M, _Pintor.ancho)]
 
     def _situacion(self, clave: str) -> tuple[float, float, list[dict[str, Any]], bool] | None:
-        """Dónde empiezan (x, y en el dibujo) y cuáles son las acciones de la etapa o del grupo suelto `clave`, y si es un
-        grupo suelto; None si no tiene ninguna (con el modelo ya rehecho: `reconstruir`)."""
-        M = self.M
-        unidas = M.get("draftActions", [])
-        if any(s["id"] == clave for s in M["steps"]):
-            paso = next(s for s in M["steps"] if s["id"] == clave)
-            acciones = orden_acciones.acciones_etapa(M, paso)
-            return (*posiciones(M)[clave], acciones, False) if acciones else None
-        acciones = [d for d in unidas if not d.get("etapa") and (d.get("grupo") or d["id"]) == clave]
-        return (acciones[0]["x"] + SX, acciones[0]["y"], acciones, True) if acciones else None
+        return geo_acciones.situacion(self.M, clave)
 
     def _choques(self, clave: str, disposicion: str) -> list[tuple[QRectF, float, float, float]]:
-        """Con qué choca la colocación `disposicion` de las acciones de la etapa (o del grupo suelto) `clave`: las etapas,
-        transiciones, barras, textos de transición y acciones de lo demás que quedan a menos de MARGEN_SOLAPE de sus cajas, o
-        que sus trazos cruzan. Cada choque: (caja del obstáculo, `ancla`, `izq`, hasta dónde llega por la derecha lo suyo que
-        toca, con el margen). `ancla` es la referencia con la que `_desplazar` decide qué se mueve: el centro x de la etapa
-        o transición que lleva el obstáculo (una acción, el de su etapa; un texto, el de su transición), de modo que toda
-        una columna se mueve junta; para una barra o un grupo suelto, su borde izquierdo (se mueven si ese borde llega al
-        corte). `izq` es el borde izquierdo de ese mismo elemento, solo para saber si el obstáculo empieza antes que las
-        acciones (`_despejar`). Las barras cuentan con un alto mínimo (BARRA_ALTO_MIN) aunque midan 0. Vacío: cabe. Con `_previas`
-        (la firma de `_firmas` que tenía la etapa antes de la operación; solo lo pone `_asegurar_hueco` para el aviso de «quedan
-        encima») no se cuenta lo que ya chocaba entonces (cajas con la misma firma), solo lo que la operación añade o mueve."""
-        sit = self._situacion(clave)
-        if sit is None:
-            return []
-        x, y, acciones, suelto = sit
-        m, previas = MARGEN_SOLAPE, self._previas
-        cajas, trazos = _geometria_acciones(x, y, acciones, disposicion, suelto)
-        huella = [QRectF(ax, cy - H - _extra(a)[0], w, 2 * H + _extra(a)[0] + _extra(a)[1]).adjusted(-m, -m, m, m)
-                  for a, ax, cy, w in cajas
-                  if (a.get("id", ""), *(round(v, 1) for v in (ax, cy - H, w, 2 * H)), *_extra(a)) not in previas]
-        lineas = [QRectF(min(x1, x2) - 1, min(y1, y2) - 1, abs(x2 - x1) + 2, abs(y2 - y1) + 2).adjusted(0, 0, m, 0)
-                  for tramo in trazos for (x1, y1), (x2, y2) in zip(tramo, tramo[1:])]
-        trans = orientaciones(self.M)
-        pos = posiciones(self.M)
-        obstaculos: list[tuple[QRectF, float, float]] = []
-        for i, (px, py) in pos.items():
-            if i != clave:
-                r = caja_barra(trans[i], px, py) if i in trans else QRectF(px - H, py - H, 2 * H, 2 * H)
-                obstaculos.append((r, px, r.left()))
-        for b in self.M.get("bars", []):
-            bx, by, bw, bh = barra(b)
-            r = QRectF(bx, by - (BARRA_ALTO_MIN - bh) / 2, bw, BARRA_ALTO_MIN) if bh < BARRA_ALTO_MIN else QRectF(bx, by, bw, bh)
-            obstaculos.append((r, bx, bx))  # (QRectF.intersects es falso con alto 0: una barra «O» nunca estorbaría)
-        otras = [c for c in self._colocadas() if clave not in (c["etapa"], c["grupo"])]
-        izq_grupo: dict[str, float] = {}
-        for c in otras:
-            if not c["etapa"]:
-                izq_grupo[c["grupo"]] = min(izq_grupo.get(c["grupo"], c["rect"][0]), c["rect"][0])
-        for c in otras:
-            if c["etapa"]:
-                obstaculos.append((QRectF(*c["rect"]), pos[c["etapa"]][0], pos[c["etapa"]][0] - H))
-            else:
-                obstaculos.append((QRectF(*c["rect"]), izq_grupo[c["grupo"]], izq_grupo[c["grupo"]]))
-        obstaculos += [(r, pos[tid][0], pos[tid][0] - TB) for r, tid in self._textos_transiciones()]
-        for i, r in rects_comentarios(self.M):  # los comentarios de los demás (el de esta etapa va a la derecha de sus acciones)
-            if i != clave:
-                obstaculos.append((r, pos[i][0], pos[i][0] - (TB if i in trans else H)))
-        out = []
-        for r, ancla, izq in obstaculos:
-            toca = [h.right() for h in huella if h.intersects(r)] + [ln.right() for ln in lineas if ln.intersects(r)]
-            if toca:
-                out.append((r, ancla, izq, max(toca)))
-        return out
+        choques = geo_choques.choques(
+            self.M, clave, disposicion, self._previas, _Pintor.ancho, medida_comentario, BARRA_ALTO_MIN,
+        )
+        return [(QRectF(*r), ancla, izq, derecha) for r, ancla, izq, derecha in choques]
 
     def _desplazar(self, corte: float, d: int, propio: str) -> None:
-        """Mueve `d` a la derecha, con operaciones del editor, todo lo que está en `corte` o a su derecha (en el dibujo).
-        La referencia de cada elemento es la misma que la `ancla` de `_choques`: el centro x de una etapa, macroetapa o
-        transición (así una columna entera se mueve junta, aunque su obstáculo sea una transición y no una etapa) y el
-        borde izquierdo de una barra o de un grupo suelto (menos el grupo `propio`); una barra que empieza antes del corte
-        y acaba después se ensancha. Las acciones de una etapa y los textos van con ella. También las vías de los enlaces
-        con recorrido propio."""
-        ed, pos = self.ed, posiciones(self.M)
-        for i, (px, py) in pos.items():
-            if px >= corte:
-                ed.move(i, px - SX + d, py)
-        for b in ed.bars():
-            izq, ancho = Fraction(str(b["x"])), Fraction(str(b["ancho"]))
-            if izq + SX >= corte:
-                ed.move_bar(b["id"], izq + d, b["y"])
-            elif izq + SX + ancho > corte:  # empieza antes del corte y acaba después: sigue llegando a lo que se movió
-                ed.resize_bar(b["id"], izq, ancho + d)
-        sueltas = {s["id"]: {"x": Fraction(str(s["x"])) + d} for s in ed.draft_actions()
-                   if not s.get("etapa") and (s.get("grupo") or s["id"]) != propio and Fraction(str(s["x"])) + SX >= corte}
-        if sueltas:
-            ed.update_draft_actions(sueltas)
-        for lid, estilo in list(ed.link_styles().items()):
-            via = estilo.get("route", {}).get("laneX") if isinstance(estilo, dict) else None
-            if via is not None and float(via) + SX >= corte:
-                nuevo = copy.deepcopy(estilo)
-                nuevo["route"]["laneX"] = str(int(float(via) + d)) if float(via) == int(float(via)) else str(float(via) + d)
-                ed.set_link_style(lid, nuevo)
+        ed = self.ed
+        plan = geo_choques.plan_desplazamiento(
+            self.M, ed.bars(), ed.draft_actions(), ed.link_styles(), corte, d, propio,
+        )
+        for ident, x, y in plan.nodos:
+            ed.move(ident, x, y)
+        for ident, x, medida, ensanchar in plan.barras:
+            if ensanchar:
+                ed.resize_bar(ident, x, medida)
+            else:
+                ed.move_bar(ident, x, medida)
+        if plan.sueltas:
+            ed.update_draft_actions(plan.sueltas)
+        for ident, estilo in plan.estilos.items():
+            ed.set_link_style(ident, estilo)
 
     def _despejar(self, clave: str, reconstruir: bool = True) -> bool:
         """Que las acciones de la etapa (o del grupo suelto) `clave`, con la colocación elegida, no queden encima de otro
@@ -1541,13 +1376,12 @@ class Edicion(QObject):
         x, _, _, suelto = self._situacion(clave)
         n, rehacer, total = len(self.ed.undo_stack), list(self.ed.redo_stack), 0
         for _ in range(DESPLAZA_PASADAS):
-            corte = min(ancla for _, ancla, _, _ in choques)
-            if min(izq for _, _, izq, _ in choques) < (x if suelto else x + H):
-                break  # un obstáculo empieza antes que las acciones: no se aparta a la derecha
-            d = math.ceil(max(derecha - r.left() for r, _, _, derecha in choques) / REJILLA) * REJILLA
-            total += d
-            if total > DESPLAZA_MAX:
+            limites = [(r.left(), ancla, izq, derecha) for r, ancla, izq, derecha in choques]
+            siguiente = geo_choques.proximo_desplazamiento(limites, x if suelto else x + H, total, DESPLAZA_MAX)
+            if siguiente is None:
                 break
+            corte, d = siguiente
+            total += d
             self._desplazar(corte, d, clave)
             self.reconstruir()
             choques = self._choques(clave, disposicion)
@@ -1560,12 +1394,7 @@ class Edicion(QObject):
         return False
 
     def _firmas(self) -> dict[str, tuple[Any, ...]]:
-        """Por cada etapa y grupo suelto con acciones, dónde y de qué tamaño quedan sus cajas (con el modelo ya rehecho);
-        cambia si se añade, se quita, se ensancha o se coloca de otro modo alguna de sus acciones."""
-        out: dict[str, list[Any]] = {}
-        for c in self._colocadas():
-            out.setdefault(c["etapa"] or c["grupo"], []).append((c["id"], *(round(v, 1) for v in c["rect"]), *c["extra"]))
-        return {k: tuple(v) for k, v in out.items()}
+        return geo_acciones.firmas(self._colocadas())
 
     def _asegurar_hueco(self, antes: dict[str, tuple[Any, ...]]) -> list[str]:
         """Tras una edición (dentro de su operación atómica): las etapas y grupos sueltos cuyas acciones cambiaron respecto a
@@ -1578,46 +1407,32 @@ class Edicion(QObject):
         despues = self._firmas()
         etapas = {s["id"] for s in self.M["steps"]}
         pendientes = []
-        for k, v in despues.items():
-            if (k in antes or k in etapas) and antes.get(k) != v:
-                if not self._despejar(k, reconstruir=False):
-                    self._previas = antes.get(k, ())
-                    try:
-                        if self._choques(k, self.colocacion(k)):
-                            pendientes.append(k)
-                    finally:
-                        self._previas = ()
+        for k in geo_choques.candidatos_hueco(antes, despues, etapas):
+            if not self._despejar(k, reconstruir=False):
+                self._previas = antes.get(k, ())
+                try:
+                    if self._choques(k, self.colocacion(k)):
+                        pendientes.append(k)
+                finally:
+                    self._previas = ()
         return pendientes
 
     def _huella_arrastre(self, a: dict[str, Any]) -> list[QRectF]:
-        """Las cajas de lo que se está moviendo, en su posición actual: el elemento y, de una etapa, sus acciones; de un
-        grupo de acciones sueltas, cada una."""
-        if a.get("tipo") == "borrador":
-            return [QRectF(*c["rect"]) for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["id"] in a["ids"]]
-        if a.get("tipo") == "marco":  # el marco vacío, con su nombre debajo
-            return [QRectF(a["x"] + SX, a["y"], VACIO_W, VACIO_H + 20)]
-        if a.get("tipo") == "grupo":  # todo lo que se mueve: los elementos con sus acciones, las barras, las sueltas y los marcos
-            moviendo = set(a["ids"])
-            return [r for i, r, etapa in self._elementos() if i in moviendo or etapa in moviendo] + self._marcos_grupo(a)
-        mio = [(i, r) for i, r, _ in self._elementos() if i == a["id"]]
-        acciones = [QRectF(*c["rect"]) for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["etapa"] == a["id"]]
-        return [r for _, r in mio] + acciones + [r for i, r, etapa in self._elementos() if i.startswith("coment:") and etapa == a["id"]]
+        cajas = getattr(self.diagrama, "cajas_acciones", None) or []
+        return [QRectF(*r) for r in geo_choques.huella_arrastre(a, self._elementos_geometricos, cajas)]
 
     def _malas_arrastre(self, a: dict[str, Any]) -> list[QRectF]:
-        """Las cajas de lo que se arrastra que quedan encima de otro elemento (el marco de un recinto vacío, además, no se
-        pone encima del marco de otro parcial)."""
-        propios = set(a["ids"]) if a.get("tipo") in ("borrador", "grupo") else {a["id"]}
+        tipo = a.get("tipo")
+        propios = set(a["ids"]) if tipo in ("borrador", "grupo") else {a["id"]}
         huella = self._huella_arrastre(a)
         malas = self._solapa(huella, propios)
-        if a.get("tipo") == "marco" and not malas:
-            otros = [QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"])
-                     for pid, b in cajas_parciales(self.M).items() if pid != a["id"]]
-            malas = [h for h in huella if any(self._toca(h, o) for o in otros)]
-        if a.get("tipo") == "grupo" and not malas:  # los marcos vacíos que se mueven tampoco van encima del marco de otro parcial
-            otros = [QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"])
-                     for pid, b in cajas_parciales(self.M).items() if pid not in propios and pid not in a.get("marcos", [])]
-            malas = [h for h in self._marcos_grupo(a) if any(self._toca(h, o) for o in otros)]
-        return malas
+        if malas or tipo not in ("marco", "grupo"):
+            return malas
+        if tipo == "grupo":
+            huella = self._marcos_grupo(a)
+            propios.update(a.get("marcos", []))
+        cajas = geo_choques.solapa_marcos([Rect(*r.getRect()) for r in huella], cajas_parciales(self.M), propios)
+        return [QRectF(*r) for r in cajas]
 
     def _hay_solape(self, a: dict[str, Any]) -> bool:
         return bool(self._malas_arrastre(a))
@@ -1770,34 +1585,12 @@ class Edicion(QObject):
         return (min(x for x, _ in pts), min(y for _, y in pts)) if pts else (0.0, 0.0)
 
     def _marcos_grupo(self, a: dict[str, Any]) -> list[QRectF]:
-        """Dónde quedan, en el dibujo, los marcos vacíos que se mueven con el grupo (con su nombre debajo)."""
-        dx, dy = a["x"] - a["x0"], a["y"] - a["y0"]
-        return [QRectF(x + dx + SX, y + dy, VACIO_W, VACIO_H + 20) for i, (x, y) in a["inicio"].items() if a["tipos"][i] == "marco"]
+        return [QRectF(*r) for r in geo_choques.marcos_grupo(a)]
 
-    @staticmethod
-    def _sumar(valor: Any, d: float) -> Any:
-        """Un valor de coordenada del estilo de un enlace (un texto) con `d` más; sin cambio si no es un número."""
-        try:
-            v = float(valor) + d
-        except (TypeError, ValueError):
-            return valor
-        return str(int(v)) if v == int(v) else str(v)
+    _sumar = staticmethod(geo_enlaces.sumar_coordenada)
 
     def _rutas_con_grupo(self, ids: set[str], dx: float, dy: float) -> dict[str, dict[str, Any]]:
-        """El estilo nuevo de los enlaces con sus dos extremos en `ids` (lo que se mueve): su recorrido manual, en coordenadas
-        absolutas (laneX, exitY, entryY, middleY), se desplaza con ellos. Los de un solo extremo movido se quedan como están,
-        igual que al mover un elemento con `Editor.move`."""
-        out: dict[str, dict[str, Any]] = {}
-        for lid, estilo in self.ed.link_styles().items():
-            extremos = lid.split("|")[:2]
-            ruta = estilo.get("route") if isinstance(estilo, dict) else None
-            if isinstance(ruta, dict) and len(extremos) == 2 and all(e in ids for e in extremos):
-                nuevo = copy.deepcopy(estilo)
-                for clave, d in (("laneX", dx), ("exitY", dy), ("entryY", dy), ("middleY", dy)):
-                    if clave in nuevo["route"]:
-                        nuevo["route"][clave] = self._sumar(nuevo["route"][clave], d)
-                out[lid] = nuevo
-        return out
+        return geo_enlaces.rutas_con_grupo(self.ed.link_styles(), ids, dx, dy)
 
     def mover_teclado(self, dx, dy):
         if not self.sel: return False
@@ -1841,29 +1634,21 @@ class Edicion(QObject):
         return True
 
     def _huella_ficha(self, tipo: str, p: QPointF) -> list[QRectF]:
-        """Las cajas, ya solapadas con otro elemento, de lo que se colocaría al soltar una ficha de la paleta en p (vacío si
-        cabe: una acción que se pega a otra no cuenta)."""
-        x, y = self._modelo(p)
-        if tipo in ("texto","imagen"):return []
-        if tipo in ("etapa", "etapa_inicial", "encapsulante", "macroetapa"):
-            caja = QRectF(x + SX - H, y - H, 2 * H, 2 * H)
-        elif tipo == "transicion":
-            caja = QRectF(x + SX - TB, y - 2, 2 * TB, 4)
-        elif tipo in ("simultaneidad", "simultaneidad:apertura", "simultaneidad:cierre"):
-            caja = QRectF(ajustar(x - 60) + SX, y, 120, 4)
-        elif tipo == "parcial":  # su marco vacío con el nombre debajo: ni encima de un elemento ni (con un margen) de otro marco
-            x0, y0 = self._esquina_parcial(p)
-            caja = QRectF(x0 + SX, y0, VACIO_W, VACIO_H + 20)
-            m = MARGEN_SOLAPE
-            otros = [QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"]) for b in cajas_parciales(self.M).values()]
-            return self._solapa([caja], set()) or ([caja] if any(self._toca(caja.adjusted(-m, -m, m, m), o) for o in otros) else [])
-        elif tipo == "accion" or tipo.startswith("accion:") or tipo == "forzado":
-            if self._buscar_iman([], x, y, ACT_MIN):
-                return []
-            caja = QRectF(x + SX, y - H, ACT_MIN, 2 * H)
-        else:
+        x, y = self._esquina_parcial(p) if tipo == "parcial" else self._modelo(p)
+        caja = geo_choques.huella_ficha(tipo, x, y)
+        if caja is None:
             return []
-        return self._solapa([caja], set())
+        if (
+            (tipo == "accion" or tipo.startswith("accion:") or tipo == "forzado")
+            and self._buscar_iman([], x, y, ACT_MIN)
+        ):
+            return []
+        qt = QRectF(*caja)
+        malas = self._solapa([qt], set())
+        if not malas and tipo == "parcial":
+            if geo_choques.solapa_marcos([caja], cajas_parciales(self.M), margen=MARGEN_SOLAPE):
+                return [qt]
+        return malas
 
     def _enlace_del_punto(self, origen: dict[str, Any], destino: dict[str, Any]) -> str | None:
         """Soltar la salida de una transición sobre la salida de otra que ya tiene su etapa siguiente (o la entrada sobre la
@@ -2270,30 +2055,10 @@ class Edicion(QObject):
         return self.colocacion(clave) if clave else "fila"
 
     def _buscar_iman(self, ids: list[str], x: float, y: float, ancho: float | None = None) -> dict[str, Any] | None:
-        """Si una acción suelta (la primera de `ids`, con su lado izquierdo en el punto del modelo (x, y)) toca el lado
-        derecho de otra acción, o el inferior si va en columna, a menos de IMAN_ACCION: la acción a cuya espalda se pegaría
-        ({objetivo, lado, linea: el lado que se resalta}). Las acciones de `ids` no cuentan."""
-        cajas = [*(getattr(self.diagrama, "cajas_acciones", None) or []), *(getattr(self.diagrama, "cajas_ordenes", None) or [])]
-        if ancho is None:
-            propia = next((c for c in cajas if ids and c["id"] == ids[0]), None)
-            ancho = propia["rect"][2] if propia else ACT_MIN
-        izq, arriba = x + SX, y - H
-        mejor: tuple[float, dict[str, Any]] | None = None
-        for c in cajas:
-            if c["id"] in ids:
-                continue
-            tx, ty, tw, th = c["rect"]
-            candidatos = []
-            dx, dy = abs(izq - (tx + tw)), abs(y - (ty + th / 2))
-            if dx <= IMAN_ACCION and dy <= H:  # al lado derecho
-                candidatos.append((dx + dy, "der", (QPointF(tx + tw, ty), QPointF(tx + tw, ty + th))))
-            hueco = arriba - (ty + th)
-            if self._colocacion_de(c) == "columna" and -IMAN_ACCION <= hueco <= IMAN_ACCION + 12 and abs(izq - tx) <= tw / 2:
-                candidatos.append((abs(hueco) + abs(izq - tx), "abajo", (QPointF(tx, ty + th), QPointF(tx + tw, ty + th))))
-            for puntos, lado, linea in candidatos:
-                if mejor is None or puntos < mejor[0]:
-                    mejor = (puntos, {"objetivo": c["id"], "lado": lado, "linea": linea})
-        return mejor[1] if mejor else None
+        acciones = getattr(self.diagrama, "cajas_acciones", None) or []
+        ordenes = getattr(self.diagrama, "cajas_ordenes", None) or []
+        iman = geo_acciones.buscar_iman([*acciones, *ordenes], ids, x, y, self._colocacion_de)
+        return {**iman, "linea": tuple(QPointF(*p) for p in iman["linea"])} if iman is not None else None
 
     def _iman_del_arrastre(self, arrastre, punto):
         ids = arrastre["ids"]
@@ -3161,22 +2926,7 @@ class Edicion(QObject):
         return next((c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if self._borde_accion(c, p)), None)
 
     def _borde_accion(self, caja: dict[str, Any], p: QPointF) -> str | None:
-        """«der» o «abajo» si el punto está en el borde de la caja de una acción de una etapa del que se tira para sacar otra
-        acción; None si no. Se agarra a los dos lados del borde, a BORDE_ACCION del dibujo (lo mismo que un punto de unión, y
-        a cualquier zoom), sin pasar de un tercio del lado de la caja por dentro, para que el cuerpo siga agarrándose para
-        seleccionar y mover. Depende de la colocación de las acciones de la etapa, que nunca cambia por esto: en «fila» y «fila
-        separada», solo el borde derecho; en «columna», solo el inferior (la nueva va debajo); en «matriz 2», ninguno."""
-        if not caja.get("etapa") or caja.get("forzado") or caja.get("suelta"):
-            return None
-        x, y, w, h = caja["rect"]
-        colocacion = self.colocacion(caja["etapa"])
-        if colocacion in ("fila", "fila-separada"):
-            dentro = min(BORDE_ACCION, w / 3)
-            return "der" if y <= p.y() <= y + h and x + w - dentro <= p.x() <= x + w + BORDE_ACCION else None
-        if colocacion == "columna":
-            dentro = min(BORDE_ACCION, h / 3)
-            return "abajo" if x <= p.x() <= x + w and y + h - dentro <= p.y() <= y + h + BORDE_ACCION else None
-        return None  # matriz de 2: la acción nueva no tiene un sitio evidente, se añade desde la etapa
+        return geo_acciones.borde_accion(caja, p.toTuple(), self.colocacion)
 
     def anadir_accion_tras(self, aid: str, borde: str) -> str:
         """Tirar del borde de una acción de una etapa (el derecho en fila, el inferior en columna; `_borde_accion`): una acción
@@ -3532,27 +3282,17 @@ class Edicion(QObject):
     # del núcleo (un diagnóstico) se muestra como cualquier otro, con el parpadeo naranja, y no deja nada a medias.
     @staticmethod
     def _toca(a: QRectF, b: QRectF) -> bool:
-        """Si dos rectángulos se tocan o se cruzan (también con alto 0, como una barra de alternativa)."""
-        return a.left() <= b.right() and b.left() <= a.right() and a.top() <= b.bottom() and b.top() <= a.bottom()
+        return geo_choques.toca(Rect(*a.getRect()), Rect(*b.getRect()))
 
     def _libre(self, zona: QRectF) -> bool:
         """Si la zona del dibujo no toca ningún elemento (etapas, macroetapas, transiciones, barras, acciones) ni marco."""
-        if any(self._toca(zona, r) for _, r, _ in self._elementos()):
+        rect = Rect(*zona.getRect())
+        if any(geo_choques.toca(rect, r) for _, r, _ in self._elementos_geometricos()):
             return False
-        return not any(self._toca(zona, QRectF(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"]))
-                       for b in cajas_parciales(self.M).values())
+        return not geo_choques.solapa_marcos([rect], cajas_parciales(self.M))
 
     def _columna_expansion(self, x: int, y: int) -> int | None:
-        """La columna (x del modelo) de la expansión de una macroetapa colocada en (x, y): a EXP_DX de ella y, si esa zona no
-        está libre (con el margen de los marcos), cada vez más a la derecha. La entrada va a la altura de la macroetapa y la
-        salida EXP_DY más abajo. None si no hay hueco en EXP_INTENTOS columnas."""
-        m = MARGEN_SOLAPE
-        for k in range(EXP_INTENTOS):
-            xe = x + EXP_DX + k * EXP_PASO
-            zona = QRectF(xe + SX - H - 26, y - H - 22, 2 * H + 96, EXP_DY + 2 * H + 44).adjusted(-m, -m, m, m)
-            if self._libre(zona):
-                return xe
-        return None
+        return geo_choques.columna_expansion(x, y, lambda zona: self._libre(QRectF(*zona)))
 
     def _etiqueta_libre(self, prefijo: str, usadas: set[str]) -> str:
         """M1, M2… (o G1, G2…): el primero cuyo nombre no está en `usadas` (claves de `label_key`)."""
@@ -3598,7 +3338,7 @@ class Edicion(QObject):
     def _esquina_parcial(self, p: QPointF) -> tuple[int, int]:
         """La esquina superior izquierda (x, y del modelo, en la rejilla) del marco de un grafcet parcial nuevo soltado en p: el
         marco queda centrado en el punto, como una etapa."""
-        return ajustar(p.x() - SX - VACIO_W / 2), ajustar(p.y() - VACIO_H / 2)
+        return esquina_parcial(p.toTuple())
 
     def poner_parcial(self, p: QPointF) -> str | None:
         """La ficha «Grafcet parcial» soltada en un hueco del dibujo (o «Nuevo grafcet parcial aquí» del botón derecho): un
@@ -4373,52 +4113,15 @@ class Edicion(QObject):
 
     # -- equidistanciar alturas: la distancia estándar entre niveles, mayor donde las acciones lo piden -----------------
     def _posiciones_modelo(self) -> dict[str, tuple[float, float]]:
-        """La posición (x, y) del modelo de cada etapa, macroetapa y transición, tal como se dibuja (también las que no
-        tienen posición guardada)."""
-        return {i: (x - SX, y) for i, (x, y) in posiciones(self.M).items()}
+        return geo_equidistancia.posiciones_modelo(self.M)
 
     def _extensiones(self) -> dict[str, tuple[float, float]]:
-        """Cuánto sobresale, por encima y por debajo de su centro, lo que acompaña a una etapa (sus acciones y órdenes de
-        forzado con sus marcas) y a una transición (su texto): lo que pide `Editor.equidistribute` para que no se solapen
-        con el nivel siguiente. La etapa sin acciones no figura: cabe en la distancia estándar."""
-        pos = posiciones(self.M)
-        out: dict[str, tuple[float, float]] = {t["id"]: (12.0, 12.0) for t in self.M["transitions"]}
-        for c in self._colocadas():
-            if c["etapa"]:
-                y, (_, ry, _, rh), extra = pos[c["etapa"]][1], c["rect"], c["extra"]
-                if c.get("evento"):  # la banderita de una acción por evento no cuenta: ocupa lo mismo que una normal
-                    extra = (max(0, extra[0] - _extra({"kind": "stored", "trigger": "event"})[0]), extra[1])
-                arriba, abajo = y - (ry - extra[0]), (ry + rh + extra[1]) - y
-                previo = out.get(c["etapa"], (float(H), float(H)))
-                out[c["etapa"]] = (max(previo[0], arriba), max(previo[1], abajo))
-        return out
+        return geo_equidistancia.extensiones(self.M, _Pintor.ancho)
 
     def _pares_solape(self, propios: set[str], sin_horizontales: bool = False) -> set[tuple[str, str]]:
-        """Las parejas de elementos, con al menos uno de `propios`, cuyas cajas quedan a menos de MARGEN_SOLAPE (etapas,
-        macroetapas, transiciones y sus textos, barras, y las acciones y órdenes, que cuentan como de su etapa), según el
-        modelo y sin esperar a que se dibuje. Con `sin_horizontales`, no cuentan las transiciones en un tramo horizontal (de un
-        retorno o un salto) ni sus textos: su sitio lo da el enlace, no el paso vertical (AB5)."""
-        M, m = self.M, MARGEN_SOLAPE
-        trans = orientaciones(M)
-        cajas: list[tuple[str, QRectF]] = [
-            (i, caja_barra(trans[i], x, y) if i in trans else QRectF(x - H, y - H, 2 * H, 2 * H))
-            for i, (x, y) in posiciones(M).items()]
-        for b in M.get("bars", []):
-            bx, by, bw, bh = barra(b)
-            cajas.append((b["id"], QRectF(bx, by - (BARRA_ALTO_MIN - bh) / 2, bw, BARRA_ALTO_MIN) if bh < BARRA_ALTO_MIN
-                          else QRectF(bx, by, bw, bh)))
-        cajas += [(c["etapa"] or c["grupo"], QRectF(*c["rect"])) for c in self._colocadas()]
-        cajas += [(tid, r) for r, tid in self._textos_transiciones()]
-        cajas += rects_comentarios(M)  # (con el ID de su elemento: se mueve con él y no choca con él)
-        if sin_horizontales:
-            fuera = {i for i, o in trans.items() if o in EVOLUCION_HORIZONTAL}
-            cajas = [(i, r) for i, r in cajas if i not in fuera]
-        out: set[tuple[str, str]] = set()
-        for n, (i, r) in enumerate(cajas):
-            for j, s in cajas[n + 1:]:
-                if i != j and (i in propios or j in propios) and r.adjusted(-m, -m, m, m).intersects(s):
-                    out.add((min(i, j), max(i, j)))
-        return out
+        return geo_choques.pares_solape(
+            self.M, propios, sin_horizontales, _Pintor.ancho, medida_comentario, BARRA_ALTO_MIN,
+        )
 
     def equidistanciar(self, ids: list[str] | None = None) -> list[str] | None:
         """«Equidistanciar alturas de la cadena», «…de la selección» o «…de todo el lienzo» (con `ids` None):
@@ -4439,8 +4142,9 @@ class Edicion(QObject):
 
         def hacer() -> None:
             extensiones = self._extensiones()
-            reservar_barras(self.ed, self.M, ids, pos, extensiones, DY, MARGEN_SOLAPE)
-            movidos.extend(self.ed.equidistribute(ids, DY, extensiones, MARGEN_SOLAPE, REJILLA, pos))
+            movidos.extend(geo_equidistancia.equidistribuir(
+                self.ed, self.M, ids, pos, extensiones, DY, MARGEN_SOLAPE, REJILLA,
+            ))
             self.reconstruir()
             if self._pares_solape(propios, True) - antes:
                 raise DiagnosticError(Diagnostic("D-FORMATO", MSG_EQUIDISTANCIA))
@@ -4455,19 +4159,9 @@ class Edicion(QObject):
         return movidos
 
     def _separar_ramas(self, origen: str, destino: str) -> None:
-        """Una etapa con dos transiciones (o dos transiciones hacia una etapa) es una alternativa: si la transición que se
-        acaba de enlazar quedó justo encima de una hermana, se aparta a un lado para que se vea la rama."""
-        ts = {t["id"]: t for t in self.ed.model["transitions"]}
-        pos = posiciones(self.M)
-        t = ts.get(destino) or ts.get(origen)
-        if t is None or t["id"] not in pos:
-            return
-        etapa = origen if t["id"] == destino else destino
-        hermanas = [o for o in ts.values() if o["id"] != t["id"] and o["id"] in pos
-                    and (etapa in o["preRefs"] if t["id"] == destino else etapa in o["postRefs"])]
-        if any(abs(pos[o["id"]][0] - pos[t["id"]][0]) < 40 for o in hermanas):
-            x = max(pos[o["id"]][0] for o in hermanas) - SX + 160
-            self.ed.move(t["id"], x, pos[t["id"]][1])
+        nueva = geo_enlaces.separar_ramas(self.ed.model["transitions"], posiciones(self.M), origen, destino)
+        if nueva is not None:
+            self.ed.move(*nueva)
 
     def conectar(self, origen: str, destino: str, borrador: bool = False) -> None:
         """Etapa→transición o transición→etapa; entre dos del mismo tipo queda como borrador (D-ALTERNANCIA), también entre
@@ -4634,17 +4328,10 @@ class Edicion(QObject):
         base.update({d["id"]: (float(d["x"]), float(d["y"])) for d in self.ed.draft_actions()
                      if d["id"] in propios and not d.get("etapa")})
         base.update({n["id"]:(n["x"],n["y"]) for n in self.ed.annotations() if n["id"] in propios})
-        origen = (ajustar(punto.x() - SX), ajustar(punto.y()))
-        cola, vistos, anterior = [(0, 0, 0)], {(0, 0)}, (0, 0)
+        anterior = (0, 0)
+        candidatos = geo_choques.posiciones_hueco(punto.toTuple())
         while any(not ({a, b} <= propios) for a, b in self._pares_solape(propios)):
-            _, ix, iy = heapq.heappop(cola)
-            for nx, ny in ((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)):
-                if (nx, ny) not in vistos:
-                    vistos.add((nx, ny))
-                    distancia = ((origen[0] + nx * REJILLA - (punto.x() - SX)) ** 2
-                                 + (origen[1] + ny * REJILLA - punto.y()) ** 2)
-                    heapq.heappush(cola, (distancia, nx, ny))
-            dx, dy = ix * REJILLA, iy * REJILLA
+            dx, dy = next(candidatos)
             if (dx, dy) != anterior:
                 rutas = self._rutas_con_grupo(propios, dx - anterior[0], dy - anterior[1])
                 self.ed.move_many({i: (float(x) + dx, float(y) + dy) for i, (x, y) in base.items()}, rutas)

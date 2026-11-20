@@ -2,23 +2,12 @@
 from PySide6.QtCore import QPointF
 
 from . import orden_acciones
+from .geometria.acciones import iman_en_punto as geometria_iman
 
 
 def iman_en_punto(cajas, punto, radio, excluir=()):
-    """El punto de unión derecho más próximo, fuera de las cajas que se arrastran."""
-    candidatos = []
-    for caja in cajas:
-        if caja["id"] in excluir or caja.get("forzado"):
-            continue
-        x, y, ancho, alto = caja["rect"]
-        derecha = x + ancho
-        distancia = (punto - QPointF(derecha, y + alto / 2)).manhattanLength()
-        if distancia <= radio:
-            candidatos.append((distancia, caja["id"], derecha, y, alto))
-    if not candidatos:
-        return None
-    _, ident, derecha, y, alto = min(candidatos)
-    return {"objetivo": ident, "linea": (QPointF(derecha, y), QPointF(derecha, y + alto))}
+    iman = geometria_iman(cajas, punto.toTuple(), radio, excluir)
+    return {**iman, "linea": tuple(QPointF(*p) for p in iman["linea"])} if iman is not None else None
 
 
 def objetivo(edicion, fragmento, punto, radio, sobre_seleccion):

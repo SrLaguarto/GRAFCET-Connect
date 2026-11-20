@@ -3,15 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-CLAVE = "actionOrder"
-
-
-def ordenar(elementos: list[dict[str, Any]], orden: list[str]) -> list[dict[str, Any]]:
-    por_id = {a["id"]: a for a in elementos}
-    ids = dict.fromkeys(i for i in orden if isinstance(i, str) and i in por_id)
-    for a in elementos:
-        ids.setdefault(a["id"], None)
-    return [por_id[i] for i in ids]
+from .geometria.acciones import CLAVE, acciones_etapa as acciones_etapa, ordenar as ordenar
 
 
 def ids_etapa(editor: Any, sid: str) -> list[str]:
@@ -73,12 +65,6 @@ def aplicar_vista(vista: dict[str, Any], editor: Any) -> None:
         ordenes = editor.presentation[CLAVE]
         if isinstance(ordenes, dict):
             vista[CLAVE] = {sid: orden for sid, orden in ordenes.items() if isinstance(orden, list)}
-
-
-def acciones_etapa(vista: dict[str, Any], etapa: dict[str, Any]) -> list[dict[str, Any]]:
-    elementos = etapa["actions"] + [d for d in vista.get("draftActions", []) if d.get("etapa") == etapa["id"]]
-    orden = vista.get(CLAVE, {}).get(etapa["id"], [])
-    return ordenar(elementos, orden) if orden else elementos
 
 
 def agrupar_pegadas(editor: Any, borradores: list[dict[str, Any]]) -> None:
