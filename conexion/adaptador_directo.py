@@ -39,6 +39,10 @@ class AdaptadorDirecto(Adaptador):
         self.salidas = activas(config, self.documento, "output")
         self.redondeos = {}
 
+    def aplicar(self, muestra):
+        self.entradas[:] = [u for u in self.entradas if not u.motivo]  # (una señal perdida con la conexión en marcha ya no llega)
+        super().aplicar(muestra)
+
     @staticmethod
     def _registro_a_valor(senal, variable, raw):
         if type(raw) not in (int, float):
