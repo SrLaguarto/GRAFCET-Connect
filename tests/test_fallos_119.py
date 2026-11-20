@@ -21,7 +21,9 @@ from test_editor_cadenas import BaseQt, QT
 from test_selector_accion import SelectorAccion as _Sel
 
 if QT:
-    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
     from escritorio import diagrama
 
@@ -92,25 +94,28 @@ class DesplegableConRatonPulsado(BaseQt):
     preparar = _Sel.preparar
     doble = _Sel.doble
 
-    def test_SF119_10_no_abre_la_lista_con_el_boton_pulsado_y_la_abre_al_soltar(self):
-        """REQ-EDT-09: con el botón del ratón aún pulsado (el del doble clic) la lista no se abre; al soltarlo, sí."""
-        pulsado = [True]
-        izq = Qt.MouseButton.LeftButton
-        nada = Qt.MouseButton.NoButton
-        with mock.patch.object(QApplication, "mouseButtons", staticmethod(lambda: izq if pulsado[0] else nada)):
-            w, e, did = self.preparar()
-            caja, cb = self.doble(w, e, did)
-            self.assertIsNotNone(cb)
-            for _ in range(5):
-                QApplication.processEvents()
-                time.sleep(0.02)
-            self.assertFalse(cb.view().isVisible(), "pulsado: la lista no se abre")
-            pulsado[0] = False
-            limite = time.monotonic() + 2
-            while not cb.view().isVisible() and time.monotonic() < limite:
-                QApplication.processEvents()
-                time.sleep(0.005)
-            self.assertTrue(cb.view().isVisible(), "soltado: se abre")
+    def test_SF119_10_la_suelta_del_doble_clic_no_cierra_la_lista_y_un_clic_normal_elige(self):
+        """REQ-EDT-09: la suelta sin pulsación previa que llega a la lista recién abierta se ignora; luego un clic normal elige y cierra."""
+        w, e, did = self.preparar()
+        caja, cb = self.doble(w, e, did)
+        self.assertIsNotNone(cb)
+        for _ in range(5):
+            QApplication.processEvents()
+            time.sleep(0.01)
+        vista = cb.view()
+        self.assertTrue(vista.isVisible(), "abierta")
+        pos = vista.visualRect(vista.model().index(0, 0)).center()
+        suelta = QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(pos), QPointF(vista.viewport().mapToGlobal(pos)),
+                             Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier)
+        QApplication.sendEvent(vista.viewport(), suelta)
+        QApplication.processEvents()
+        self.assertTrue(vista.isVisible(), "la suelta suelta no cierra")
+        self.assertIs(w.diagrama._selector, cb)
+        QTest.mouseClick(vista.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+        for _ in range(5):
+            QApplication.processEvents()
+        self.assertIsNone(w.diagrama._selector, "el clic normal elige y cierra")
+        self.assertEqual(e.datos_accion(did).get("variable"), "motor")
 
 
 del _Sel  # (para que no se descubra como prueba)
