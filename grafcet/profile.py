@@ -99,7 +99,11 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
     _c("eventos.recorrido", "Un evento solo franquea las transiciones validadas antes de él; una acción por evento solo "
        "se ejecuta si su etapa estaba activa antes y no sale con él", "provisional",
        "decisión del responsable, comparador 27-10-2026, 5.1 «situación anterior» (seleccionable, P-IMP-15), 5.2 B y 5.3 A", "REQ-EVT-03", "REQ-SEM-09"),
-    _c("eventos.internos", "Flancos sobre actividad, variables internas o condiciones temporales", "no-soportada", "U-03", "REQ-EVT-03"),
+    _c("eventos.actividad", "Flancos sobre actividad (etapas, parciales, macroetapas): verdaderos solo en la evolución "
+       "inmediatamente siguiente a la que cambió el operando, aunque sea fugaz; al arrancar no hay flancos",
+       "provisional", "decisión del responsable, chat 20-11-2026, U-03 (flancos sobre actividad)", "REQ-EVT-03"),
+    _c("eventos.internos", "Flancos sobre variables internas, condiciones temporales u operandos que mezclan entradas con "
+       "actividad o con internas", "no-soportada", "U-03", "REQ-EVT-03"),
     _c("eventos.franqueamiento", "Eventos de franqueamiento como disparadores", "no-soportada", "U-03", "REQ-EVT-03"),
     _c("lotes", "Lotes simultáneos y lotes ordenados con igual tiempo", "provisional", "P", "REQ-EVT-02"),
     _c("temporal.delay", "delay(d1,p,d2) ordinario con d1>0", "provisional", "I (U-01)", "REQ-TMP-02"),

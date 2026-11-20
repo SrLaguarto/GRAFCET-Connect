@@ -187,7 +187,8 @@ class BloqueosU(unittest.TestCase):
         """REQ-EVT-03: eventos internos estáticamente bloqueados (U-03)."""
         m = M().var("n", "internal").step("A", True).step("B").trans("t", ["A"], ["B"], "rise(n)")
         self.assertTrue(any(d.question == "U-03" for d in m.validate().diagnostics))
-        m2 = M().step("A", True).step("B").step("C").trans("t", ["A"], ["B"], "rise(active(C))")
+        # el flanco sobre actividad sola se admite desde el 20-11-2026 (test_flancos_actividad); mezclado con entradas, no
+        m2 = M().var("p").step("A", True).step("B").step("C").trans("t", ["A"], ["B"], "rise(active(C) AND p)")
         self.assertTrue(any(d.question == "U-03" for d in m2.validate().diagnostics))
 
     def test_SU03_accion_por_evento_en_etapa_que_sale(self):

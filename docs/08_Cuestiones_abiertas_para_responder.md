@@ -289,6 +289,15 @@ Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-1
 
 Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
 
+### 5.4 · Flanco sobre la actividad de una etapa (↑X72, ↓X4)
+**Hoy:** se admite en receptividades de transiciones con etapas anteriores (P-IMP-174). En acciones por evento y transiciones fuente sigue detenido; los flancos de variables internas y de temporizaciones siguen abiertos.
+**Ejemplo:** 72 encapsulante con 60 de activación y 60 → 61 con `↑X72`; o 101b → 100 con `c · ↓X4` tras 4 → 0.
+- [ ] **A.** El flanco vale en la misma evolución que lo produce.
+- [X] **B.** Vale en la evolución inmediatamente siguiente (aunque sea fugaz), y solo en esa; al arrancar no hay flancos; un encadenamiento sin fin acaba en el límite de evoluciones.
+- [ ] **Dejar abierta**
+
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 20-11-2026 en el chat, a propuesta del coordinador (sin cláusula citada; contraste normativo pendiente, U-01).
+
 ---
 
 ## 6. Transiciones fuente y arranque vacío (U-07)

@@ -556,6 +556,13 @@ class Support:
     temporals: list[Node] = field(default_factory=list)
 
 
+def es_flanco_de_actividad(n: Node) -> bool:
+    """Flanco (rise/fall) cuyo operando depende solo de actividad (etapas, parciales, macroetapas): decisión del
+    responsable, 20-11-2026, U-03. Con entradas, variables internas, temporales o elapsed no cuenta."""
+    s = support(n.kids[0])
+    return bool(s.steps or s.partials or s.macros) and not (s.vars or s.elapsed or s.temporals or s.events)
+
+
 def support(n: Node, s: Support | None = None) -> Support:
     s = s if s is not None else Support()
     if n.op == "ref":
