@@ -14,7 +14,8 @@ incremental. **Sin funciones nuevas ni cambios visibles.** Solo cambia lo de det
   - Implementador y verificador del proyecto: etapas delicadas (dibujo y simulación).
   - Coordinador: planifica, revisa, valida y hace los commits.
 - **Tamaño.** El mayor proyecto real ronda las 50 etapas, con varios GRAFCET parciales, forzados y muchas acciones.
-  La meta se fija al doble: un proyecto de referencia de 100 etapas con esa riqueza.
+  La referencia principal es ese proyecto real (guía GEMMA, `tests/fixtures/referencia/guia_gemma.grafnet`), y
+  como margen se mide también uno generado del doble: 100 etapas con esa riqueza.
 - **Sin ejecutable** durante los exámenes. La 2.0 se publica al terminar todas las etapas.
 
 ## Reglas
