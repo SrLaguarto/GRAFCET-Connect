@@ -255,10 +255,9 @@ class EncargoAB(BaseQt):
         return s0, t1, a, b, t2, s3
 
     def test_SAB3b_la_doble_linea_de_la_transicion_es_un_elemento_mas_de_la_cadena(self):
-        """REQ-EDT-02, REQ-EDT-03: al equidistanciar, la doble línea de una divergencia (bajo su transición) y la de una
-        convergencia (sobre la suya) quedan a un paso (DY) de la transición y a un paso de la etapa; el dibujo, los enlaces y
-        los puntos de unión las siguen; un dibujo sin equidistanciar no cambia."""
-        from escritorio.diagrama import BARRA_GROSOR, SIMUL, anclas, enlaces
+        """REQ-EDT-02, REQ-EDT-03: el hueco exterior de la doble línea se aproxima al de una etapa ordinaria.
+        Se conserva el hueco interior. Los enlaces y los puntos de unión siguen al doble trazo."""
+        from escritorio.diagrama import BARRA_GROSOR, H, SIMUL, anclas, enlaces
         w, e = self.abierta()
         s0, t1, a, b, t2, s3 = self.divergencia_y_convergencia(e)
         ts = {t["id"]: t for t in e.M["transitions"]}
@@ -272,23 +271,28 @@ class EncargoAB(BaseQt):
         self.assertIn(round(pos[t1][1] + SIMUL, 1), antes, "sin equidistanciar: a 14, como siempre")
         self.assertIsNotNone(e.equidistanciar(None))
         pos = posiciones(e.M)
-        self.assertEqual((pos[a][1] - pos[t1][1], pos[t2][1] - pos[a][1]), (2 * modulo.DY, 2 * modulo.DY))
+        exterior, interior = 40, modulo.DY
+        distancia = exterior + interior
+        self.assertEqual((pos[a][1] - pos[t1][1], pos[t2][1] - pos[a][1]), (distancia, distancia))
         self.assertEqual(pos[a][1], pos[b][1])
         ly = lineas()
-        for y in (pos[t1][1] + modulo.DY, pos[t1][1] + modulo.DY + BARRA_GROSOR, pos[t2][1] - modulo.DY,
-                  pos[t2][1] - modulo.DY - BARRA_GROSOR):
+        for y in (pos[t1][1] + exterior, pos[t1][1] + exterior + BARRA_GROSOR, pos[t2][1] - exterior,
+                  pos[t2][1] - exterior - BARRA_GROSOR):
             self.assertIn(round(y, 1), ly)
-        self.assertEqual((pos[a][1] - (pos[t1][1] + modulo.DY + BARRA_GROSOR) - 22,), (modulo.DY - BARRA_GROSOR - 22,))
+        interior_libre = interior - BARRA_GROSOR - H
+        self.assertAlmostEqual(exterior, pos[t1][1] - pos[s0][1] - H, delta=2)
+        self.assertEqual(pos[a][1] - (pos[t1][1] + exterior + BARRA_GROSOR) - H, interior_libre)
+        self.assertEqual(pos[t2][1] - exterior - BARRA_GROSOR - (pos[a][1] + H), interior_libre)
         # los enlaces llegan a la doble línea nueva y los puntos de unión quedan fuera de ella
         ya = {(l["tid"], l["rol"]): l["pts"] for l in enlaces(e.M) if l["sid"] in (a, b)}
-        self.assertEqual(ya[(t1, "post")][0][1], pos[t1][1] + modulo.DY + BARRA_GROSOR)
-        self.assertEqual(ya[(t2, "pre")][-1][1], pos[t2][1] - modulo.DY - BARRA_GROSOR)
+        self.assertEqual(ya[(t1, "post")][0][1], pos[t1][1] + exterior + BARRA_GROSOR)
+        self.assertEqual(ya[(t2, "pre")][-1][1], pos[t2][1] - exterior - BARRA_GROSOR)
         an = {x["lado"]: x["pos"].y() for x in anclas(e.M, t1)}
-        self.assertGreater(an["abajo"], pos[t1][1] + modulo.DY + BARRA_GROSOR)
+        self.assertGreater(an["abajo"], pos[t1][1] + exterior + BARRA_GROSOR)
         self.assertEqual(e.equidistanciar(None), [], "ya está equidistanciado")
 
     def test_SAB3c_tools_dibujo_js_dibuja_la_doble_linea_como_qt(self):
-        """REQ-EDT-02: tools/dibujo.js y escritorio/diagrama.py colocan igual la doble línea de una transición con hueco de dos pasos."""
+        """REQ-EDT-02: el navegador y Qt dibujan el mismo doble trazo y los enlaces llegan a él."""
         from test_dibujo_vista import QJS, dibujar_con_js
         if not QJS:
             self.skipTest("requiere QtQml")
@@ -297,19 +301,26 @@ class EncargoAB(BaseQt):
         s0, t1, a, b, t2, s3 = self.divergencia_y_convergencia(e)
         e.equidistanciar(None)
         self.bombear()
-        modelo = dict(e.M, links=[dict(l, pts=[list(p) for p in l["pts"]]) for l in enlaces(e.M)])
+        dobles, rutas_js = set(), set()
 
-        def dobles(nodo, out):
-            if "dbl" in str((nodo.get("attrs") or {}).get("class", "")) and nodo.get("tag") == "line":
-                out.add(round(float(nodo["attrs"]["y1"]), 1))
+        def recoger(nodo):
+            attrs = nodo.get("attrs", {})
+            clases = attrs.get("class", "").split()
+            if "dbl" in clases and nodo.get("tag") == "line":
+                dobles.add(round(float(attrs["y1"]), 1))
+            if "link" in clases and nodo.get("tag") == "path":
+                rutas_js.add(attrs["d"])
             for h in nodo.get("hijos", nodo.get("children", [])):
-                dobles(h, out)
-            return out
-        js = dobles(dibujar_con_js(modelo, e.vista.state()), set())
+                recoger(h)
+
+        recoger(dibujar_con_js(e.M, e.vista.state()))
         pos = posiciones(e.M)
-        esperado = {round(pos[t1][1] + modulo.DY, 1), round(pos[t1][1] + modulo.DY + 8, 1),
-                    round(pos[t2][1] - modulo.DY, 1), round(pos[t2][1] - modulo.DY - 8, 1)}
-        self.assertEqual(js, esperado)
+        esperado = {pos[t1][1] + 40, pos[t1][1] + 48, pos[t2][1] - 40, pos[t2][1] - 48}
+        self.assertEqual(dobles, esperado)
+        for ruta in enlaces(e.M):
+            if ruta.get("simul"):
+                trazado = " ".join(f"{'L' if i else 'M'}{x:g},{y:g}" for i, (x, y) in enumerate(ruta["pts"]))
+                self.assertIn(trazado, rutas_js)
 
     # -- AB5 -------------------------------------------------------------------------------------------------------
     def test_SAB5_todas_las_cadenas_comparten_un_unico_paso_salvo_los_huecos_que_lo_piden(self):

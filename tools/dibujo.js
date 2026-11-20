@@ -27,12 +27,24 @@ const MARGEN_MARCO_X = 26;  // lo que se separa el marco de un parcial de todo l
 const MARGEN_MARCO_Y = 22;  // ... y por arriba y por abajo (el mismo de siempre alrededor de sus etapas)
 const TALLO_T = 24;       // tramo recto de una transición sin etapa anterior o siguiente (grafcet/routing.py)
 const SIMUL = 14;         // de la transición al doble trazo de una simultaneidad
-const PASO = 60;          // el paso estándar: con dos pasos o más hasta la etapa, el doble trazo va a un paso de la transición (escritorio/diagrama.py: simul_d)
-// Distancia de la transición (evolución hacia abajo) a su doble trazo por arriba (signo -1) o por abajo (1): PASO si la etapa más cercana de ese lado está a dos pasos o más; SIMUL en lo demás
+const PASO = 60;          // distancia estándar entre centros de etapa y transición
+const DISTANCIA_TRANSICION_BARRA = PASO - 20;  // se descuenta un paso de rejilla en el hueco exterior
+// Como en escritorio: con espacio suficiente se acorta el hueco externo y se conserva el paso hacia la etapa.
 function simulD(giro, ty, otros, signo) {
   if (giro !== "abajo") return SIMUL;
   const lejos = otros.map(q => signo * (q.y - ty)).filter(v => v > 0);
-  return lejos.length && Math.min(...lejos) >= 2 * PASO ? PASO : SIMUL;
+  return lejos.length && Math.min(...lejos) >= PASO + DISTANCIA_TRANSICION_BARRA ? DISTANCIA_TRANSICION_BARRA : SIMUL;
+}
+
+function puntosEnlace(e, transiciones, pos) {
+  const t = transiciones.get(e.tid);
+  if (!t || !e.simul || e.orient || !["pre", "post"].includes(e.rol)) return e.pts;
+  const signo = e.rol === "pre" ? -1 : 1;
+  const ids = e.rol === "pre" ? (t.preDib ?? t.pre) : (t.postDib ?? t.post);
+  const ty = t.y, d = simulD("abajo", ty, ids.map(id => pos[id]).filter(Boolean), signo);
+  if (d === SIMUL) return e.pts;
+  const viejo = ty + signo * (SIMUL + BARRA_GROSOR), nuevo = ty + signo * (d + BARRA_GROSOR);
+  return e.pts.map(([x, y]) => [x, y === viejo ? nuevo : signo < 0 && y === viejo - 30 ? nuevo - 30 : y]);
 }
 
 let parcialDeDibujo = null;
@@ -243,10 +255,12 @@ function drawDiagram(svg, M, S, opciones = {}) {
     }
   });
   // Exactamente los mismos recorridos que Qt y la detección del ratón.
+  const transiciones = new Map(M.transitions.map(t => [t.id, t]));
   (M.links || []).forEach(e => {
     parcialDeDibujo = pertenencia[e.tid || e.sid];
     const rol = colorEnlace(M, roles, e);
-    el("path", {d:e.pts.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" "), class:"link " + rol}, links);
+    const puntos = puntosEnlace(e, transiciones, pos);
+    el("path", {d:puntos.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" "), class:"link " + rol}, links);
     (e.arrows || []).forEach(a => el("path", {d:a.pts.map((p,i) => `${i ? "L" : "M"}${p[0]},${p[1]}`).join(" ")+" Z", class:"arrow " + rol}, links));
   });
   (M.bars || []).forEach(b => {

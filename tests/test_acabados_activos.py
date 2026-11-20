@@ -58,8 +58,11 @@ class Acabados(BaseQt):
             sc,_=dibujo(v,st);x,y=180+dg.SX,180
             barra=next(i for i in sc.items() if isinstance(i,QGraphicsLineItem) and i.line().x1()==x-dg.TB and i.line().y1()==y)
             self.assertEqual(barra.pen().color().name(),dg.COL[esperado])
-            doble=[i for i in sc.items() if isinstance(i,QGraphicsLineItem) and i.line().y1() in (y-dg.SIMUL,y-dg.SIMUL-dg.BARRA_GROSOR) and i.line().x1()!=i.line().x2()]
-            self.assertEqual(len(doble),2);self.assertTrue(all(i.pen().color().name()==dg.COL[esperado] for i in doble))
+            doble = [i for i in sc.items() if isinstance(i, QGraphicsLineItem)
+                     and i.line().y1() == i.line().y2() < y
+                     and i.line().x1() < 100 + dg.SX and i.line().x2() > 260 + dg.SX]
+            self.assertEqual(len(doble), 2)
+            self.assertTrue(all(i.pen().color().name() == dg.COL[esperado] for i in doble))
             if QJS:
                 eng=QJSEngine();js=(ROOT/"tools/dibujo.js").read_text(encoding="utf-8").replace("{x, y, ...attrs}","Object.assign({x, y}, attrs)")
                 self.assertFalse(eng.evaluate(MOCK_DOM+js).isError())

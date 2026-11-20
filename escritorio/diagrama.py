@@ -374,7 +374,8 @@ ANCLA = TALLO_T  # distancia de los puntos de unión de una transición a su cen
                  # trazo, para que agarrar la transición la mueva y no saque una rama
 ANCLA_S = 28   # ... y si ese lado es una simultaneidad (el punto queda fuera del doble trazo)
 SIMUL = 14     # distancia del doble trazo de una simultaneidad al centro de la transición
-PASO = 60      # el paso estándar entre elementos (el DY de la edición): con hueco de dos pasos, el doble trazo va a un paso de cada lado
+PASO = 60      # el paso estándar entre centros de etapa y transición (DY de la edición)
+DISTANCIA_TRANSICION_BARRA = PASO - REJILLA  # hueco exterior parecido al de una transición y el borde de una etapa
 RADIO_ANCLA = 14  # a qué distancia del puntero se marca un punto de unión (generoso: se agarra sin puntería)
 Z_EDIT = 10    # selección, tiradores y marcas por encima de todo el dibujo
 EVOLUCION_HORIZONTAL = ("derecha", "izquierda")  # orientaciones de una transición cuyo trazo es vertical
@@ -382,13 +383,12 @@ EVOLUCION_HORIZONTAL = ("derecha", "izquierda")  # orientaciones de una transici
 
 def simul_d(t: dict[str, Any], tx: float, ty: float, otros: list[tuple[float, float]], signo: int) -> float:
     """Distancia de la transición en (tx, ty) a su doble trazo de simultaneidad, por arriba (`signo` -1) o por abajo (1), de
-    evolución hacia abajo: un paso (PASO) si la etapa más cercana de ese lado está a dos pasos o más (lo deja así
-    «Equidistanciar», que trata el doble trazo como un elemento más de la cadena: PASO de la transición y PASO de la etapa);
-    SIMUL (14) en lo demás, como siempre (lo ya dibujado no cambia)."""
+    evolución hacia abajo: el hueco exterior se acorta un paso de rejilla al equidistanciar.
+    Si no cabe también el paso hacia la etapa, se conserva el trazo compacto."""
     if orientacion(t) != "abajo":
         return SIMUL
     lejos = [signo * (p[1] - ty) for p in otros if signo * (p[1] - ty) > 0]
-    return PASO if lejos and min(lejos) >= 2 * PASO else SIMUL
+    return DISTANCIA_TRANSICION_BARRA if lejos and min(lejos) >= PASO + DISTANCIA_TRANSICION_BARRA else SIMUL
 
 
 def _otros_t(M: dict[str, Any], t: dict[str, Any], pos: dict[str, tuple[float, float]], signo: int) -> list[tuple[float, float]]:

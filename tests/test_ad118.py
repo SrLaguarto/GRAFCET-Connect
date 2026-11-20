@@ -229,7 +229,8 @@ class InterfazAD(BaseQt):
                 antes = posiciones(e.M)
                 self.assertTrue(e.equidistanciar())
                 pos = posiciones(e.M)
-                self.assertEqual((pos[a][1] - pos[t1][1], pos[t2][1] - pos[a][1]), (2 * DY, 2 * DY))
+                normal = 2 * DY if explicita else DY + 40
+                self.assertEqual((pos[a][1] - pos[t1][1], pos[t2][1] - pos[a][1]), (normal, normal))
                 self.assertEqual(pos[a][1], pos[b][1])
                 self.assertEqual(e.equidistanciar(), [])
                 e.deshacer()
@@ -240,5 +241,5 @@ class InterfazAD(BaseQt):
                 e.cambia()
                 self.assertTrue(e.equidistanciar())
                 pos = posiciones(e.M)
-                self.assertGreater(pos[t2][1] - pos[a][1], 2 * DY)
+                self.assertGreater(pos[t2][1] - pos[a][1], normal)
                 self.assertEqual(e.equidistanciar(), [])

@@ -5,6 +5,8 @@ from fractions import Fraction
 from grafcet.editor import _niveles
 from grafcet.routing import BARRA_GROSOR, orientacion
 
+from .diagrama import DISTANCIA_TRANSICION_BARRA
+
 
 def reservar_barras(editor, vista, ids, posiciones, extensiones, paso, margen):
     explicitas = {b["id"]: b["kind"] for b in editor.bars()}
@@ -49,14 +51,15 @@ def _reservar_niveles(por_nivel, requisitos, extensiones, paso, margen):
         arriba, abajo = por_nivel[nivel], por_nivel[nivel + 1]
         inferior = max(extensiones.get(i, (0, 0))[1] for i in arriba)
         superior = max(extensiones.get(i, (0, 0))[0] for i in abajo)
-        hueco = 2 * paso
+        exterior = DISTANCIA_TRANSICION_BARRA
+        hueco = paso + exterior
         if "pre" in tipos:
-            hueco = max(hueco, paso + BARRA_GROSOR + margen + inferior)
+            hueco = max(hueco, exterior + BARRA_GROSOR + margen + inferior)
         if "post" in tipos:
-            hueco = max(hueco, paso + BARRA_GROSOR + margen + superior)
+            hueco = max(hueco, exterior + BARRA_GROSOR + margen + superior)
         if tipos.intersection(("Y", "O")):
             grosor = BARRA_GROSOR if "Y" in tipos else 0
-            hueco = max(hueco, 2 * (margen + max(inferior, superior + grosor)))
+            hueco = max(hueco, 2 * paso, 2 * (margen + max(inferior, superior + grosor)))
         ident = arriba[0]
         alto, _ = extensiones.get(ident, (0, 0))
         # El núcleo suma ambas caras y el margen antes de redondear a rejilla.
