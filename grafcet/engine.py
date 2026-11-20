@@ -140,6 +140,7 @@ class _Env:
         self.options = options or normalize_options(None)
         self.before, self.written = before, written
         self._computing: set[str] = set()
+        self.sit: frozenset[str] | None = None  # situación alternativa (flancos sobre actividad)
 
     def var(self, vid: str) -> Value:
         if vid in self.cm.continuous_by_target:  # solo admitido con la lectura 8.2 B o C
@@ -160,20 +161,21 @@ class _Env:
         return self.w.values[vid]
 
     def active(self, sid: str) -> bool:
-        return sid in self.w.situation
+        return sid in (self.w.situation if self.sit is None else self.sit)
 
     def active_partial(self, pid: str) -> bool:
         steps = set(self.cm.partials[pid]["steps"])
+        situation = self.w.situation if self.sit is None else self.sit
         if self.options["8.1"] in ("A", "C"):  # 8.1 A, y en C los hijos admitidos (recinto o expansión) cuentan
             pending = list(self.cm.partials[pid]["children"])
             while pending:
                 child = pending.pop()
                 steps |= self.cm.partials[child]["steps"]
                 pending.extend(self.cm.partials[child]["children"])
-        return bool(steps & self.w.situation)
+        return bool(steps & situation)
 
     def active_macro(self, mid: str) -> bool:
-        return bool(self.cm.hier.macro_steps[mid] & self.w.situation)  # XM: alguna etapa de la expansión
+        return bool(self.cm.hier.macro_steps[mid] & (self.w.situation if self.sit is None else self.sit))  # XM: alguna etapa de la expansión
 
     def elapsed(self, sid: str) -> int:
         raise DiagnosticError(blocked("temporal.elapsed", "elapsed no ejecutable"))
@@ -325,6 +327,8 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                 w.values[vid] = val
             for e in cm.exprs.values():
                 for n in e.support.events:
+                    if ex.es_flanco_de_actividad(n):
+                        continue  # se evalúa por evolución (U-03, decisión del 20-11-2026)
                     b = bool(ex.evaluate(n.kids[0], _InputEnv(cm, before)))
                     a = bool(ex.evaluate(n.kids[0], _InputEnv(cm, w.values)))
                     events[n.key] = (not b and a) if n.op == "rise" else (b and not a)
@@ -435,6 +439,8 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                     st.start += shift
                     if st.deadline is not None:
                         st.deadline = st.deadline + shift if st.deadline + shift <= MAX_US else None
+        act_events = [n for e in cm.exprs.values() for n in e.support.events if ex.es_flanco_de_actividad(n)]
+        prev_s = w.situation  # situación de antes de la evolución anterior del recorrido
         k = 0
         while True:
             k += 1
@@ -449,6 +455,15 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
             if hier.active:  # órdenes cuyo origen está activo al empezar la evolución (arranque, o lectura 7.2 B)
                 hierarchy.register(hier, w.forces, s, cm, w.time, w.frozen, o, hstep)
                 hier_events.extend(hstep.events)
+            if act_events:  # flancos sobre actividad: solo en la evolución siguiente a la que cambió el operando
+                events = {key: v for key, v in events.items() if key in present}
+                if prev_s != s:
+                    benv, aenv = _Env(cm, w, None, o), _Env(cm, w, None, o)
+                    benv.sit = prev_s
+                    for n in act_events:
+                        b, a = bool(ex.evaluate(n.kids[0], benv)), bool(ex.evaluate(n.kids[0], aenv))
+                        events[n.key] = (not b and a) if n.op == "rise" else (b and not a)
+            prev_s = s
             env = _Env(cm, w, events, o)
             renv = _Env(cm, w, events, o, old, written)
             renv0 = _Env(cm, w, None, o, old, written)

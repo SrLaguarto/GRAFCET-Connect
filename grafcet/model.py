@@ -650,8 +650,15 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
             if children.get(pid) and opt["8.1"] == "detener":
                 v.d.append(unsupported("parciales.anidados", f"activePartial({pid}) con parciales hijos", user))
         for evn in sup.events:
-            v.caps.add("eventos.entradas")
             es = ex.support(evn.kids[0])
+            if ex.es_flanco_de_actividad(evn):  # decisión del responsable, 20-11-2026, U-03: flanco sobre actividad
+                v.caps.add("eventos.actividad")
+                for u in uses[eid]:  # solo en receptividades de transiciones con etapas anteriores
+                    if not (u in raw_trans and raw_trans[u]["preRefs"]):
+                        donde = "una transición fuente" if u in raw_trans else "una acción por evento"
+                        v.d.append(blocked("eventos.internos", f"flanco sobre actividad en {donde}: pendiente de decidir (U-03)", u))
+                continue
+            v.caps.add("eventos.entradas")
             if es.steps or es.partials or es.macros or es.elapsed or es.temporals or (es.vars - inputs):
                 v.d.append(blocked("eventos.internos", "flanco sobre una proposición que no es solo de entradas", user))
         for tn in sup.temporals:
