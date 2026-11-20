@@ -1,5 +1,5 @@
 """Mide el editor y el simulador de escritorio Qt a 1366 × 768."""
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentTypeError
 from copy import copy, deepcopy
 from cProfile import Profile
 from hashlib import sha256
@@ -194,14 +194,37 @@ def _buscar_cambio(vista):
     return None
 
 
-def _simulacion(w, medir, pasos, periodico):
-    medir("play", play, w)
+def _entradas(texto):
+    valores = {}
+    for pareja in texto.split(","):
+        nombre, separador, valor = pareja.partition("=")
+        nombre, valor = nombre.strip(), valor.strip()
+        if not separador or not nombre or valor not in ("0", "1"):
+            raise ArgumentTypeError("Use nombres de entradas booleanas y valores 0 o 1, separados por comas")
+        if nombre in valores:
+            raise ArgumentTypeError(f"Entrada repetida: {nombre}")
+        valores[nombre] = valor == "1"
+    return valores
+
+
+def _identificar_entradas(modelo, entradas):
+    cambios = {}
+    for nombre, valor in (entradas or {}).items():
+        ids = [v["id"] for v in modelo["variables"]
+               if v["name"] == nombre and v["role"] == "input" and v["type"]["kind"] == "bool"]
+        if len(ids) != 1:
+            raise ValueError(f"El nombre {nombre!r} debe identificar una única entrada booleana")
+        cambios[ids[0]] = valor
+    return cambios
+
+
+def _pasos_simulacion(w, medir, pasos, periodico):
     cambios = []
     for _ in range(pasos):
         antes = _situacion(w.v)
         guion = (("avanzar", {"us": SEGUNDO}),) if periodico else _buscar_cambio(w.v)
         if not guion:
-            raise RuntimeError(f"Solo se pudieron guionizar {len(cambios)} cambios de situación")
+            return cambios, f"Solo se pudieron guionizar {len(cambios)} de {pasos} cambios de situación"
         for op, args in guion[:-1]:
             paso(w, op, **args)
             bombear()
@@ -211,10 +234,22 @@ def _simulacion(w, medir, pasos, periodico):
         if antes == despues:
             raise RuntimeError(f"El paso {len(cambios) + 1} no cambió la situación")
         cambios.append({"estimulos": list(guion), "situacion": sorted(despues)})
-    medir("stop", w.a_ejecutar.trigger)
+    return cambios, None
+
+
+def _simulacion(w, medir, pasos, periodico, entradas):
+    medir("play", play, w)
+    try:
+        if entradas:
+            paso(w, "fijar", cambios=entradas)
+            bombear()
+        resultado = _pasos_simulacion(w, medir, pasos, periodico)
+    finally:
+        if w.modo == "simular":
+            medir("stop", w.a_ejecutar.trigger)
     if w.modo != "editar":
         raise RuntimeError("Stop no volvió a edición")
-    return cambios
+    return resultado
 
 
 def _cadena_externa(w):
@@ -234,7 +269,7 @@ def _cadena_externa(w):
     raise RuntimeError("No se encontró una cadena que se pueda equidistanciar")
 
 
-def medir_proyecto(ruta, *, calentamientos=3, repeticiones=9, pasos=50, perfil=False, periodico=False):
+def medir_proyecto(ruta, *, calentamientos=3, repeticiones=9, pasos=50, perfil=False, periodico=False, entradas=None):
     if calentamientos < 0 or repeticiones < 1 or pasos < 1:
         raise ValueError("Se requiere al menos una repetición y un paso de simulación")
     muestras = Medidas(perfil)
@@ -249,6 +284,7 @@ def medir_proyecto(ruta, *, calentamientos=3, repeticiones=9, pasos=50, perfil=F
             e = w.edicion
             sid = e.ed.model["steps"][0]["id"]
             if cadena is None:
+                iniciales = _identificar_entradas(e.ed.model, entradas)
                 if ruta == GEMMA:
                     cadena = next(s["id"] for s in e.ed.model["steps"] if s["label"] == "100")
                 else:
@@ -268,8 +304,12 @@ def medir_proyecto(ruta, *, calentamientos=3, repeticiones=9, pasos=50, perfil=F
                 pasos_vuelta = min(10, pasos)
             elif i == total - 1:
                 pasos_vuelta = pasos
-            cambios = _simulacion(w, medir, pasos_vuelta, periodico)
-    return {"fuente": fuente, "operaciones": muestras.resumir(), "cambios_situacion": cambios}
+            cambios, motivo = _simulacion(w, medir, pasos_vuelta, periodico, iniciales)
+    simulacion = {"estado": ("parcial" if cambios else "no medida") if motivo else "medida",
+                  "solicitados": pasos, "medidos": len(cambios), "entradas": entradas or {}}
+    if motivo:
+        simulacion["motivo"] = motivo
+    return {"fuente": fuente, "operaciones": muestras.resumir(), "cambios_situacion": cambios, "simulacion": simulacion}
 
 
 def tabla(proyectos):
@@ -282,6 +322,12 @@ def tabla(proyectos):
             lineas.append(
                 f"| {proyecto} | {operacion} | {n} | {fila['mediana_ms']:.2f} | {fila['p90_ms']:.2f} | {meta} |"
             )
+        if "paso" not in datos["operaciones"]:
+            lineas.append(f"| {proyecto} | paso (no medido) | 0 | — | — | < {METAS['paso']} |")
+    for proyecto, datos in proyectos.items():
+        sim = datos["simulacion"]
+        if sim.get("motivo"):
+            lineas.extend(("", f"**{proyecto}** · Simulación {sim['estado']}. {sim['motivo']}."))
     return "\n".join(lineas) + "\n"
 
 
@@ -305,8 +351,12 @@ def main():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument("--perfil", action="store_true")
     parser.add_argument("--proyecto", type=Path)
+    parser.add_argument("--entradas", type=_entradas, metavar="NOMBRE=1,OTRO=0",
+                        help="entradas booleanas fijadas juntas tras Play, antes de medir los pasos")
     parser.add_argument("--salida", type=Path, default=RAIZ / "artifacts" / "v2_e0" / "medidas")
     args = parser.parse_args()
+    if args.entradas and not args.proyecto:
+        parser.error("--entradas requiere --proyecto")
     with TemporaryDirectory(prefix="rendimiento-e0-") as carpeta:
         fuentes = [(args.proyecto.resolve(), False)] if args.proyecto else [
             (GEMMA, True), (archivo_referencia(Path(carpeta)), True),
@@ -314,7 +364,9 @@ def main():
         proyectos = {}
         for ruta, periodico in fuentes:
             print(f"Midiendo {ruta.stem}…", flush=True)
-            proyectos[ruta.stem] = medir_proyecto(ruta, perfil=args.perfil, periodico=periodico or ruta == GEMMA)
+            proyectos[ruta.stem] = medir_proyecto(
+                ruta, perfil=args.perfil, periodico=periodico or ruta == GEMMA, entradas=args.entradas,
+            )
     args.salida.mkdir(parents=True, exist_ok=True)
     nombre = "rendimiento_perfil" if args.perfil else "rendimiento"
     datos = {"entorno": {"ventana_px": TAMANO, "qt": qVersion(), "python": platform.python_version(),
