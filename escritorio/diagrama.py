@@ -1553,10 +1553,6 @@ class _OpcionConPapel(QStyledItemDelegate):
         painter.restore()
 
 
-SELECTOR_ESPERA_MS = 10  # el desplegable de la acción espera a que se suelte el ratón: sondea cada tanto, hasta SELECTOR_ESPERAS veces (~3 s)
-SELECTOR_ESPERAS = 300
-
-
 class SelectorAccion(QComboBox):
     """El desplegable que sale sobre una acción del dibujo (doble clic en una continua). Se cierra solo al elegir, con Esc, con un clic fuera o al
     perder el foco; `cerrado` avisa de ello para quitarlo."""
@@ -1599,6 +1595,7 @@ class SelectorAccion(QComboBox):
         """La lista desplegada empieza donde el cuadro y mide lo que él, salvo que un nombre no quepa: entonces lo justo para el más largo
         (decisión del responsable, 12-nov-2026)."""
         super().showPopup()
+        self.cierre.suelta_pendiente()  # (la suelta del doble clic que abrió la lista no la cierra ni elige)
         marco = self.view().parentWidget()
         if marco is not None and marco.isWindow():
             marco.setFixedWidth(self.ancho_lista())
@@ -2513,17 +2510,7 @@ class VistaDiagrama(QGraphicsView):
         cb.show()
         cb.raise_()
         cb.setFocus(Qt.FocusReason.OtherFocusReason)
-        intentos = [0]
-
-        def desplegar() -> None:
-            if self._selector is not cb or not cb.isVisible():
-                return
-            if QApplication.mouseButtons() != Qt.MouseButton.NoButton and intentos[0] < SELECTOR_ESPERAS:
-                intentos[0] += 1  # el doble clic sigue pulsado: abrir la lista ahora haría que su suelta la cerrase o eligiese
-                QTimer.singleShot(SELECTOR_ESPERA_MS, cb, desplegar)
-                return
-            cb.showPopup()
-        QTimer.singleShot(0, cb, desplegar)
+        QTimer.singleShot(0, cb, lambda: cb.showPopup() if self._selector is cb and cb.isVisible() else None)
 
     def cerrar_selector(self) -> None:
         """Quita el desplegable de la acción, si hay uno."""
