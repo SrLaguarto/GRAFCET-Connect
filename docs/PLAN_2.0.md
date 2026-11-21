@@ -75,7 +75,8 @@ Diseño en `artifacts/v2_e4/DISENO_E4.md` (fuera del repositorio).
 
 ## Decisiones para E7 (21-nov-2026)
 
-El responsable decide hacerla. Va después de E6.
+El responsable decide hacerla. Va después de E6. El cierre que antes estaba en E6 (documentación de la arquitectura,
+ejecutable y medida final) pasa a E8, para que recoja también E7.
 
 - **Objetivo:** que el ciclo con el simulador de planta, por conexión directa o por Modbus, no espere nunca al dibujo, y
   sea regular aunque el equipo esté cargado (el simulador de planta y otros programas abiertos).
@@ -120,6 +121,8 @@ escritorio/
               acciones y grupos, diagnósticos y órdenes de deshacer
   ventana/    Ventana se queda como fachada; detrás: archivos, simulación, E/S (Modbus y
               directa), vista y modos, menús
+  (E7)        hilo de control: el motor y la E/S con su propio reloj; publica fotos del estado
+              y recibe las órdenes de la pantalla por una cola (el nombre y el sitio, en el diseño)
 ```
 
 Paneles, Propiedades, Planos y el resto se quedan donde están. Solo se agrupan si sale de forma natural.
@@ -137,8 +140,9 @@ La caché de rutas y la reutilización de textos de AD desaparecen cuando la esc
 | E3 | Escena incremental en edición | Implementador y verificador |
 | E4 | Simulación incremental | Implementador y verificador |
 | E5 | Ventana partida: controladores | Implementador y verificador (el responsable lo cambió el 21-nov; antes, Codex) |
-| E6 | Limpieza: código muerto, pruebas rápidas, documentación de la arquitectura, medida final. Además: dejar una sola de las dos memorias de validación (la de la edición, del paso 7 de E3, y la del núcleo, del paso 9), y dejar la comprobación de los documentos sellados como opción permanente, que se pasa con la suite antes de publicar | Codex y documentador |
+| E6 | Limpieza: código muerto (con una herramienta propia que se pueda repetir), una sola de las dos memorias de validación (la de la edición, del paso 7 de E3, y la del núcleo, del paso 9), comprobación opcional y permanente de los documentos sellados y compatibilidad del `.grafnet` entre la 1.x y la 2.0 | Implementador y verificador (antes, Codex y documentador) |
 | E7 | Ciclo de E/S independiente: el motor y la E/S en un hilo de control propio, con su reloj; la pantalla dibuja fotos del estado y le pasa las órdenes del usuario | Implementador y verificador |
+| E8 | Cierre: segunda pasada de código muerto, documentación de la arquitectura y sus reglas en `CLAUDE.md`, resultados de pruebas y trazabilidad regenerados, ejecutable de prueba, medida final, prueba final del responsable con E/S reales y decisión sobre la meta de «mover una etapa» | Implementador, documentador y verificador |
 
 Después de cada etapa:
 
@@ -147,7 +151,7 @@ Después de cada etapa:
 3. Medidas comparadas.
 4. Revisión del coordinador y commit en `v2`.
 5. El responsable puede probar desde el código.
-6. Tras E4 y E5, además, el responsable prueba a mano con E/S reales: una escena larga del simulador de planta
+6. Tras E4, E5, E7 y E8, además, el responsable prueba a mano con E/S reales: una escena larga del simulador de planta
    (muchas cintas, cilindros y etapas temporizadas) y su proyecto, por conexión directa y por Modbus, comparando
    con la 1.1.x. La escena y su proyecto quedan fuera del repositorio.
 
@@ -159,3 +163,9 @@ Después de cada etapa:
 - **Cierres bruscos de PySide** (un objeto de Qt borrado mientras Python aún lo usa). Hubo uno aislado en una suite de E3
   y no se ha reproducido. E4 mantiene vivos los objetos de la escena entre pasos de simulación, así que la suite completa
   se pasa siempre con `-X faulthandler`.
+- **Hilos (E7).** Un dato que tocan a la vez el hilo de control y la pantalla da fallos intermitentes, los más difíciles
+  de reproducir. Se mitiga con estas medidas:
+  - el motor tiene un solo dueño;
+  - la pantalla solo lee fotos inmutables;
+  - las órdenes van por una cola;
+  - hay pruebas de estrés y de choque con una conexión simulada.
