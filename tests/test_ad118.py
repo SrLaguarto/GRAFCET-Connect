@@ -18,8 +18,8 @@ if QT:
 
     from artifacts.ad_118.medir_100_etapas import construir, muestra
     from escritorio.diagrama import _ajustar_enlaces, enlaces, posiciones
+    from escritorio.geometria.enlaces import recalcular
     from escritorio.edicion import DY
-    from escritorio.rutas_diagrama import rutas
     from grafcet import routing
     from tools import hoja_contactos as HC
 
@@ -88,13 +88,14 @@ class InterfazAD(BaseQt):
         modelo_t = next(tr for tr in e.M["transitions"] if tr["id"] == t)
         modelo_t["orient"] = "derecha"
         e.M.setdefault("linkStyles", {})[lid] = {"arrows": {"flow": {"visible": False}}}
+        recalcular(e.M)  # (V2-E3: los enlaces son parte de M, sin caché global: tocar M a mano pide recalcularlos)
         nuevas = enlaces(e.M)
         self.assertNotEqual(nuevas, base)
         self.assertEqual(nuevas, _ajustar_enlaces(e.M, routing.enlaces(e.M)))
         self.assertFalse(next(r for r in nuevas if r["id"] == lid)["arrows"])
         modelo_t["postDib"] = [ids["etapas"][1]]
+        recalcular(e.M)
         self.assertNotIn(lid, {r["id"] for r in enlaces(e.M)})
-        rutas.vaciar()
 
     def test_SAD1_textos_se_reusan_y_se_actualizan_al_renombrar_y_parar(self):
         w, e = self.vacio()
@@ -123,17 +124,17 @@ class InterfazAD(BaseQt):
         self.assertIn("Arranque", [i.toPlainText() for i in textos()])
 
     def test_SAD1_una_escena_y_limite_holgado_al_anadir_con_100_etapas(self):
-        from escritorio import diagrama
+        from escritorio.escena.escena import EscenaIncremental
         c = HC.Contexto(1366, 768)
         self.addCleanup(c.cerrar)
         sid = construir(c)
         aid = c.e.acciones(sid)[0]["id"]
         muestra(c, aid)
-        original = diagrama.dibujar
+        original = EscenaIncremental.aplicar  # (V2-E3: el editor ya no pasa por `dibujar`: una `aplicar` por cambio)
         sueltas = []
 
         def contar_durante_suelta(punto):
-            with patch.object(diagrama, "dibujar", wraps=original) as dibujo:
+            with patch.object(EscenaIncremental, "aplicar", autospec=True, side_effect=original) as dibujo:
                 resultado = soltar(punto)
                 self.assertEqual(dibujo.call_count, 1)
                 return resultado

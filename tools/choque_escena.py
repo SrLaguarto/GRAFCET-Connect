@@ -139,10 +139,12 @@ def aplicar(w, r):
             e.seleccionar([])
             e.prensar(o)
             e.mover(o + QPointF(r["dx"] / 2, r["dy"] / 2))
+            comprobar_modelo(w, "en un fotograma del arrastre")
             if r.get("mitad"):
                 automatico(w, {"a": r["mitad"], "k": k, "n": 1})
                 comprobar(w, lite=True, momento="a mitad de un gesto")
             e.mover(o + QPointF(r["dx"], r["dy"]))
+            comprobar_modelo(w, "en el último fotograma del arrastre")
             e.soltar(o + QPointF(r["dx"], r["dy"]))
     elif op == "borrar":
         ident = _elige(todos + ids["acciones"], k)
@@ -424,6 +426,17 @@ def comprobar_modelo(w, momento):
         raise Fallo("ESC-4", "enlaces(M) no coincide con el cálculo en limpio", momento=momento)
 
 
+def comprobar_diagnosticos(w, momento):
+    """ESC-5: los diagnósticos que da la memoria de la validación son los de validar de nuevo."""
+    e = w.edicion
+    if w.modo != "editar":
+        return
+    memoria = e.diagnosticos()
+    e._memo_validacion = []
+    if memoria != e.diagnosticos():
+        raise Fallo("ESC-5", "los diagnósticos memorizados no coinciden con una validación nueva", momento=momento)
+
+
 def comprobar(w, lite=False, huella=True, modelo=True, momento=""):
     comprobar_objetos(w, momento)
     if lite:
@@ -432,6 +445,7 @@ def comprobar(w, lite=False, huella=True, modelo=True, momento=""):
         comprobar_huella(w, momento)
     if modelo:
         comprobar_modelo(w, momento)
+        comprobar_diagnosticos(w, momento)
 
 
 # ------------------------------------------------------------------------------------------------------------ ejecución

@@ -40,6 +40,8 @@ class EscenaDiagrama(QGraphicsScene):
         clave = html, color.rgba(), fuente.key()
         anteriores = self._anteriores.get(clave)
         item = anteriores.pop() if anteriores else texto_nuevo(html, color, fuente)
+        item.setVisible(True)   # un texto reutilizado no conserva el estado de otra pasada (el filtro de parcial lo dejaba oculto o atenuado)
+        item.setOpacity(1.0)
         self._actuales[clave].append(item)
         return item
 

@@ -6,7 +6,6 @@ from fractions import Fraction
 from typing import Any
 from PySide6.QtCore import QPointF, Qt
 from grafcet.routing import project_on_link
-from ..rutas_diagrama import rutas
 from ..geometria import enlaces as geo_enlaces
 from ..geometria.base import ajustar, punto_modelo
 from ..anotaciones import rect as rect_anotacion
@@ -309,7 +308,7 @@ class _Gestos:
                 x1 = max(gx, x0 + 40)
             if (x0, x1 - x0) != (a["x"], a["ancho"]):
                 a.update(x=x0, ancho=x1 - x0, movido=True)
-                self.reconstruir()
+                self._fotograma()
                 self.redibujar.emit()
             return True
         if a and a.get("tipo") == "grupo":  # varios seleccionados que se mueven juntos
@@ -319,7 +318,7 @@ class _Gestos:
             x = self._iman(a["id"], x, set(a["ids"]))
             if (x, y) != (a["x"], a["y"]):
                 a.update(x=x, y=y, movido=True)
-                self.reconstruir()
+                self._fotograma()
                 self.redibujar.emit()
             if a["movido"]:
                 self._marcar_solape(None if self._marcar_marco_destino(a, p) else a)
@@ -329,7 +328,7 @@ class _Gestos:
             x = self._iman(a["id"], x)
             if (x, y) != (a["x"], a["y"]):
                 a.update(x=x, y=y, movido=True)
-                self.reconstruir()
+                self._fotograma()
                 self.redibujar.emit()
             if a["movido"]:
                 self._marcar_solape(None if self._marcar_marco_destino(a, p) else a)
@@ -418,7 +417,10 @@ class _Gestos:
                 else:
                     with self.ed.group("mover"):  # (y, si queda pegado a un punto de unión libre, su enlace: un solo paso)
                         self.ed.move(a["id"], a["x"], a["y"])
-                        self._unir_cercanos({a["id"]})
+                        unido = self._unir_cercanos({a["id"]})
+                    # `_unir_cercanos` ya reconstruyó con el elemento en su sitio: si no unió nada, esa vista es la de ahora
+                    self.cambia(reconstruir=unido)
+                    return True
             self.cambia()
             return True
         if self.enlace and self.enlace.get("nueva"):

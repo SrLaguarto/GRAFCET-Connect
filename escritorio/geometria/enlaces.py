@@ -2,11 +2,11 @@
 import copy
 from typing import Any
 
+from grafcet import routing
 from grafcet.routing import orientacion
 
 from .base import BARRA_GROSOR, DISTANCIA_TRANSICION_BARRA, PASO, REJILLA, SIMUL, SX, Punto, posiciones
 from .base import ajustar, distancia_segmento
-from .rutas import rutas
 
 IMAN = 40
 
@@ -27,9 +27,48 @@ def _otros_t(t: dict[str, Any], pos: dict[str, Punto], signo: int) -> list[Punto
     return [pos[i] for i in ids if i in pos]
 
 
+# Las listas de las que dependen los recorridos (`grafcet.routing.enlaces` solo lee estas).
+_ENTRADAS = ("links", "steps", "macros", "transitions", "bars", "linkStyles")
+
+
+def _vigentes(M: dict[str, Any]) -> bool:
+    """`M["enlaces"]` solo vale mientras `M` siga teniendo **los mismos objetos** de lista con los que se calculó (`M["_enlaces_de"]`):
+    quien filtra o sustituye `links`, etapas, transiciones, barras o estilos (una hoja, un plano, una selección) deja de tener recorridos
+    vigentes aunque la copia conserve la clave. `deepcopy` conserva la relación porque copia las listas y su referencia a la vez."""
+    de = M.get("_enlaces_de")
+    return "enlaces" in M and de is not None and all(a is M.get(k) for a, k in zip(de, _ENTRADAS))
+
+
 def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
-    """Recorridos de solo lectura, con los extremos ajustados a las simultaneidades de la vista."""
-    return rutas.obtener(M, _ajustar_enlaces)
+    """Recorridos de solo lectura, con los extremos ajustados a las simultaneidades de la vista.
+
+    Los recorridos son parte del modelo de la vista: `Edicion.reconstruir` los deja en `M["enlaces"]` (y los sin ajustar en
+    `M["links"]`, que ya calculó `Vista`). Si `M` ya no tiene las listas con las que se calcularon (se filtró una copia), se calculan
+    desde cero con lo que hay, sin recordarlos. Un modelo que nunca los tuvo (el de la simulación, uno hecho a mano) usa los `links`
+    que trae o los calcula. Si se toca `M` a mano sin cambiar sus listas, `recalcular` los rehace."""
+    if "enlaces" in M:
+        return M["enlaces"] if _vigentes(M) else _ajustar_enlaces(M, routing.enlaces(M))
+    return _ajustar_enlaces(M, M["links"] if "links" in M else routing.enlaces(M))
+
+
+def fijar(M: dict[str, Any]) -> list[dict[str, Any]]:
+    """Ajusta los `links` que ya trae `M` y los deja como sus recorridos vigentes."""
+    M["enlaces"] = _ajustar_enlaces(M, M["links"])
+    M["_enlaces_de"] = tuple(M.get(k) for k in _ENTRADAS)
+    return M["enlaces"]
+
+
+def resolver(M: dict[str, Any]) -> list[dict[str, Any]]:
+    """Calcula desde cero los recorridos de las listas que tiene `M` ahora y los deja vigentes en `enlaces`, sin tocar `links`."""
+    M["enlaces"] = _ajustar_enlaces(M, routing.enlaces(M))
+    M["_enlaces_de"] = tuple(M.get(k) for k in _ENTRADAS)
+    return M["enlaces"]
+
+
+def recalcular(M: dict[str, Any]) -> list[dict[str, Any]]:
+    """Calcula los recorridos de `M` desde cero y los deja en él: sin ajustar en `links`, ajustados en `enlaces`."""
+    M["links"] = routing.enlaces(M)
+    return fijar(M)
 
 
 def _ajustar_enlaces(M: dict[str, Any], base: list[dict[str, Any]]) -> list[dict[str, Any]]:

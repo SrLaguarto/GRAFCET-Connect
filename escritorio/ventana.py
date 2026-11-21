@@ -1649,8 +1649,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.cambiar_modo("editar")
 
     def _establecer_edicion(self, e: Edicion) -> None:
-        from .rutas_diagrama import rutas
-        rutas.vaciar()
         self.diagrama.scene().vaciar_textos()
         self.solo_lectura = False
         if self._errores_auto:
@@ -1664,6 +1662,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         e.diagrama = self.diagrama
         e.cambiado.connect(self.refrescar_edicion)
         e.redibujar.connect(self._redibujar_edicion)
+        e.realces.connect(self._redibujar_realces)
         # (lo que pide el usuario, con doble clic, Intro o «Editar…», despliega el panel; lo que piden otras operaciones, no: P-IMP-118)
         e.pedir_condicion = lambda tid: self.editar_condicion(tid, e.pedido_explicito)
         e.pedir_etiqueta = lambda ident: self.editar_etiqueta(ident, e.pedido_explicito)
@@ -2350,6 +2349,13 @@ class Ventana(ArchivosProyecto, QMainWindow):
         if hasattr(self, "panel_es"):  # las variables pueden haber cambiado: el panel de E/S las sigue (o avisa, si hay conexión)
             self._sincronizar_es()
             self._autoasignar_nuevas_es()
+
+    def _redibujar_realces(self) -> None:
+        """Un paso del parpadeo: solo cambian los realces naranjas. La escena aplica esa diferencia y no se tocan ni las marcas
+        provisionales de un gesto en curso (lazo, imán, anclas…) ni el encuadre."""
+        e = self.edicion
+        if e is not None and self.modo == "editar":
+            self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), self._marcas_diagnostico, e.parpadeo.activos(), solo_realces=True)
 
     def _redibujar_edicion(self) -> None:
         e = self.edicion

@@ -10,6 +10,8 @@ from ..mensajes import amable, correccion_amable, mezcla_acciones
 from ..bloques import sin_comillas
 from ..diagrama import cajas_parciales, posiciones
 from .constantes import INTERNO, MSG_ENCIMA, PARPADEO_MS, PARPADEO_PASOS
+
+VALIDACIONES_RECORDADAS = 6
 from .utilidades import sin_codigos
 
 
@@ -133,6 +135,18 @@ class _Diagnosticos:
             return "un elemento" if INTERNO.fullmatch(ident) else ident
         return n
 
+    def _validacion(self) -> Any:
+        """El resultado de validar el modelo del editor. Los documentos del editor son inmutables (cada cambio crea otros: Editor._txn),
+        así que mientras `ed.model` y `ed.presentation` sean los mismos objetos el resultado es el mismo y no se vuelve a calcular."""
+        ed, memoria = self.ed, self._memo_validacion
+        for modelo, presentacion, resultado in memoria:
+            if modelo is ed.model and presentacion is ed.presentation:
+                return resultado
+        resultado = ed.validate()
+        memoria.append((ed.model, ed.presentation, resultado))
+        del memoria[:-VALIDACIONES_RECORDADAS]  # (deshacer y rehacer vuelven a documentos ya validados)
+        return resultado
+
     def diagnosticos(self) -> list[dict[str, Any]]:
         """Los diagnósticos del modelo para el panel (REQ-EDT-09): código, texto con nombres, corrección y elemento."""
         out = []
@@ -148,7 +162,7 @@ class _Diagnosticos:
                         "severity": "error", "blocks": True, "question": None, "element": grupo[0], "target": grupo[0],
                         "targets": list(grupo)})
         enrepetidas = {i for g in repetidas for i in g}
-        for d in self.ed.validate().diagnostics:
+        for d in self._validacion().diagnostics:
             if d.code == "D-NOMBRE-COLISION" and d.element in enrepetidas:
                 continue
             mensaje, correccion = self.sust(d.message), self.sust(correccion_amable(d.code, d.correction))

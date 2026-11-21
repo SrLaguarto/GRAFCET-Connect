@@ -1959,7 +1959,9 @@ class VistaDiagrama(QGraphicsView):
             self._situar(r.topLeft(), QPointF(0, 0))
 
     def mostrar(self, M: dict[str, Any], S: dict[str, Any], sel: set[str] | None = None,
-                marcados: set[str] | None = None, naranja: set[str] | None = None) -> None:
+                marcados: set[str] | None = None, naranja: set[str] | None = None, solo_realces: bool = False) -> None:
+        """Dibuja `M` con el estado `S`. Con `solo_realces` (un paso del parpadeo, en edición) solo se aplica a la escena lo que cambia, sin
+        retirar las marcas provisionales de un gesto en curso ni reencajar la vista."""
         self._leer_dependencias()
         if self.controlador is None and sel is None: sel = self.seleccion_navegacion
         self._ultimo = (M, S, sel, marcados, naranja)
@@ -1968,6 +1970,14 @@ class VistaDiagrama(QGraphicsView):
         if incremental:
             from .escena.modelo_visual import construir
             mv = construir(M, S, sel, marcados, naranja, self.dependencias)  # si falla, la escena queda como estaba
+            if solo_realces:
+                escena.aplicar(mv)
+                self.cajas_acciones, self.uniones_acciones, self.cajas_ordenes = mv.cajas, mv.uniones, mv.ordenes
+                if self.navegacion and self.navegacion.parcial.currentData():
+                    self.navegacion.filtrar()  # (con un filtro puesto, los realces nuevos también lo cumplen)
+                r = escena.itemsBoundingRect()
+                self._contenido = r if not r.isEmpty() else None
+                return
             self._quitar_provisionales()
         self.goma = None
         self.cuadro = None

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import Any, Callable
 from PySide6.QtCore import QPointF, QRectF, Qt
-from ..rutas_diagrama import rutas
 from ..anotaciones import rect as rect_anotacion
 from ..diagrama import (
     H, _distancia, barra, caja_barra, cajas_parciales, elemento_en, enlaces, orientaciones, posiciones,

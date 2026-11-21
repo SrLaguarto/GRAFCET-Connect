@@ -9,19 +9,25 @@ from ..bloques import sin_comillas
 from .constantes import CODIGOS
 
 
-def quitar_comillas_vista(M: dict[str, Any]) -> None:
+def quitar_comillas_vista(M: dict[str, Any]) -> bool:
     """Lo que se dibuja de una fórmula que no se interpreta (a medias, con un «?») es su texto del núcleo: sin las comillas
-    invertidas de los nombres con espacios, que el usuario no ve ni teclea."""
+    invertidas de los nombres con espacios, que el usuario no ve ni teclea. Devuelve si cambió algún texto (entonces cambia el
+    ancho de las cajas y hay que volver a calcular los recorridos)."""
+    cambio = False
+
     def segmentos(lista: Any) -> None:
+        nonlocal cambio
         for seg in lista or []:
             if isinstance(seg, dict) and isinstance(seg.get("t"), str) and "`" in seg["t"]:
                 seg["t"] = sin_comillas(seg["t"])
+                cambio = True
     for t in M.get("transitions", []):
         segmentos(t.get("cond"))
     for s in M.get("steps", []):
         for a in s.get("actions", []):
             for campo in ("text", "cond", "event"):
                 segmentos(a.get(campo))
+    return cambio
 
 
 def sin_codigos(texto: str) -> str:

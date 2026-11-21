@@ -11,7 +11,7 @@ from grafcet.editor import Editor
 from grafcet.persistence import Project, add_document, new_project, save_project
 from grafcet.view import Vista, layout_from_presentation
 from .. import orden_acciones
-from ..rutas_diagrama import rutas
+from ..geometria import enlaces as geo_enlaces
 from ..geometria.base import ajustar
 from ..anotaciones import importar_imagen, editar_texto
 from ..diagrama import H, SX, VACIO_W, cajas_parciales, enlaces, posiciones
@@ -96,9 +96,12 @@ class _Modelo:
                            draft_actions=self._borradores(), action_layouts=ed.action_layouts(),
                            comments=ed.comments(), orientations=ed.transition_orientations())
         self.M = self.vista.model
-        rutas.preparar(self.M)
+        self._base_vista = (ed.model, ed.presentation)  # de qué documentos viene M (ver `_fotograma`)
         orden_acciones.aplicar_vista(self.M, ed)
-        quitar_comillas_vista(self.M)
+        if quitar_comillas_vista(self.M):  # el ancho de las cajas cambió: los recorridos de `Vista` ya no valen
+            geo_enlaces.recalcular(self.M)
+        else:
+            geo_enlaces.fijar(self.M)
         self.M["annotations"] = self.ed.annotations()
         if self.arrastre:
             a = self.arrastre
@@ -121,6 +124,41 @@ class _Modelo:
         self.sel = [i for i in self.sel if i in vivos]
         if self.accion not in vivos:  # la acción señalada ya no existe (se deshizo, cambió de ID al completarse…)
             self.accion = None
+
+    def _fotograma(self) -> None:
+        """Un fotograma de un arrastre de etapas, transiciones, macroetapas, marcos o barras: el modelo y su significado no cambian,
+        solo posiciones, así que no se rehace `Vista` (validar, huella, sesión) y se parte del `M` anterior, con las posiciones
+        del arrastre, los estilos de los enlaces del grupo y los recorridos recalculados. Cualquier otro arrastre, o un `M` que no
+        venga de los documentos de ahora, rehace la vista entera."""
+        a, ed, base = self.arrastre, self.ed, self._base_vista
+        tipo = a.get("tipo") if a else None
+        simple = tipo in (None, "marco", "barra", "estirar") or (
+            tipo == "grupo" and set(a["tipos"].values()) <= {"nodo", "marco", "barra"})
+        if not simple or base is None or base[0] is not ed.model or base[1] is not ed.presentation or "links" not in self.M:
+            self.reconstruir()
+            return
+        lay = self.layout()
+
+        def en_su_sitio(lista: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            out = []
+            for n in lista:
+                p = lay.get(n["id"])
+                out.append(n if p is None or (n["x"], n["y"]) == p else {**n, "x": p[0], "y": p[1]})
+            return out
+        M = dict(self.M)
+        M["steps"], M["macros"], M["transitions"] = (en_su_sitio(M[k]) for k in ("steps", "macros", "transitions"))
+        barras = {b["id"]: b for b in self._barras()}
+        nuevas = []
+        for b in M["bars"]:
+            n = barras[b["id"]]
+            pos = (float(Fraction(n["x"])), float(Fraction(n["y"])), float(Fraction(n["ancho"])))
+            nuevas.append(b if pos == (b["x"], b["y"], b["ancho"]) else {**b, "x": pos[0], "y": pos[1], "ancho": pos[2]})
+        M["bars"] = nuevas
+        M["linkStyles"] = self.estilos_enlaces()
+        M["partials"] = [p for p in M.get("partials", []) if not p.get("vacio")]  # (los marcos vacíos se vuelven a poner abajo)
+        self.M = M
+        geo_enlaces.recalcular(M)
+        self._marcos_vacios()
 
     def _marcos_vacios(self) -> None:
         """Un recinto sin etapas (el que acaba de crear «Añadir recinto…») no lo dibuja Vista, que solo lleva los parciales con

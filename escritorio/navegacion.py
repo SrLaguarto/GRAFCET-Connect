@@ -180,9 +180,12 @@ class Navegacion(QFrame):
 
     def filtrar(self, *args):
         pid, modo = self.parcial.currentData(), self.modo.currentData()
-        for item in self.vista.scene().items():
-            fuera = bool(pid and item.data(PARCIAL_ITEM) and item.data(PARCIAL_ITEM) != pid)
-            item.setVisible(not (fuera and modo == 'ocultar')); item.setOpacity(.18 if fuera and modo == 'atenuar' else 1)
+        # Sin filtro, ni ahora ni antes, todo ítem de la escena está tal como se creó (visible y opaco): no hay nada que recorrer.
+        if pid or getattr(self, '_filtrado', False):
+            for item in self.vista.scene().items():
+                fuera = bool(pid and item.data(PARCIAL_ITEM) and item.data(PARCIAL_ITEM) != pid)
+                item.setVisible(not (fuera and modo == 'ocultar')); item.setOpacity(.18 if fuera and modo == 'atenuar' else 1)
+        self._filtrado = bool(pid)
         cantidad = sum(d['parcial'] != pid for d in self.datos) if pid else 0
         self.aviso.setText((f'{cantidad} elementos '+('ocultos' if modo == 'ocultar' else 'atenuados')+' · El filtro solo afecta a la vista; se simula todo el GRAFCET.') if pid else '')
         self.aviso.setVisible(bool(pid))

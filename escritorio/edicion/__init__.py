@@ -22,7 +22,6 @@ from grafcet.view import (Vista, display_names, force_situation, norm, layout_fr
                          substitute)
 from ..mensajes import amable, correccion_amable, mezcla_acciones
 from .. import orden_acciones, pegado_acciones
-from ..rutas_diagrama import rutas
 from ..geometria import acciones as geo_acciones, choques as geo_choques, enlaces as geo_enlaces
 from ..geometria import equidistancia as geo_equidistancia, textos as geo_textos
 from ..geometria.acciones import BORDE_ACCION, IMAN_ACCION
@@ -86,7 +85,7 @@ __all__ = [
     "new_grafcet_document", "new_project", "norm", "normalizar_duracion", "normalize_options", "orden_acciones",
     "orientaciones", "parse_duration", "parse_type", "parse_value", "pegado_acciones", "posiciones",
     "presentation_for", "project_on_link", "punto_modelo", "quitar_comillas_vista", "quitar_valores_iniciales",
-    "re", "rect_anotacion", "rects_comentarios", "rects_textos_t", "rutas", "save_project", "sin_codigos",
+    "re", "rect_anotacion", "rects_comentarios", "rects_textos_t", "save_project", "sin_codigos",
     "sin_comillas", "substitute", "uuid", "valid_label", "x_etapa", "zero",
 ]
 
@@ -99,6 +98,8 @@ class Edicion(
     cambiado = Signal()    # el modelo, la selección o los diagnósticos cambiaron: hay que redibujarlo todo
 
     redibujar = Signal()   # solo cambia el dibujo (un arrastre en curso)
+
+    realces = Signal()     # solo cambian los realces (un paso del parpadeo): no toca el resto del dibujo ni lo provisional
 
     def __init__(self, ed: Editor, titulo: str, ruta: Path | None = None) -> None:
         super().__init__()
@@ -127,7 +128,8 @@ class Edicion(
         self.opciones = normalize_options(None)
         self.diagrama: Any = None
         self.parpadeo = Parpadeo(self)  # lo que parpadea en naranja tras un error
-        self.parpadeo.cambia.connect(self.redibujar)
+        self.parpadeo.cambia.connect(self.realces)
+        self._memo_validacion: list[tuple[Any, ...]] = []  # (modelo, presentación, resultado) de las últimas validaciones: ver `_validacion`
         self.arrastre: dict[str, Any] | None = None  # id, desplazamiento del agarre, posición actual, si se movió
         self.enlace: dict[str, Any] | None = None    # punto de unión de origen de un enlace que se está trazando
         self.flecha = "flow"

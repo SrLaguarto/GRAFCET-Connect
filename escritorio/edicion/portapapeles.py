@@ -6,7 +6,6 @@ from grafcet.diagnostics import DiagnosticError
 from grafcet.editor import Fragment
 from grafcet.view import layout_from_presentation
 from .. import orden_acciones, pegado_acciones
-from ..rutas_diagrama import rutas
 from ..geometria import choques as geo_choques
 from ..geometria.base import ajustar
 from ..diagrama import RADIO_ANCLA, SX, barra, cajas_parciales, posiciones

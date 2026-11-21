@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QDialog,QVBoxLayout,QFormLayout,QComboBox,QLineEdi
 from grafcet.editor import Editor
 from grafcet.laminas import ajustes_lamina,FORMATOS
 from .carpetas import predeterminada,asegurar_carpetas,cargar_plantilla
+from .geometria.enlaces import resolver
 
 
 def dibujo_vinculado(edicion,refs):
@@ -26,6 +27,7 @@ def dibujo_vinculado(edicion,refs):
     salida['links']=[l for l in salida.get('links',[]) if l['tid'] in elegidos and l['sid'] in elegidos]
     for bar in salida.get('bars',[]):
         for k in ('arriba','abajo'):bar[k]=[i for i in bar[k] if i in elegidos]
+    resolver(salida)  # los recorridos de lo que queda (los de la vista completa ya no valen: se filtraron las listas)
     return salida
 
 
