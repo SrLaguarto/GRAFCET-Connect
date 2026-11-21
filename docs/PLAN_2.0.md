@@ -25,12 +25,16 @@ incremental. **Sin funciones nuevas ni cambios visibles.** Solo cambia lo de det
    - Una prueba que llame a un interno renombrado se adapta solo al nombre nuevo, y el informe lo justifica.
 2. **Imagen idéntica.** En cada etapa, el banco de imágenes de E0 debe dar las mismas imágenes antes y después:
    ejemplos, fixtures y proyecto de referencia, en edición y en simulación. Toda diferencia se explica o se corrige.
+   Desde E4, la referencia es `artifacts/v2_e3/imagenes_7400f0c/`: la de E0 más las 8 de `Linea larga`, que E0 no tenía,
+   generada desde el commit 7400f0c.
 3. **`grafcet/` no se toca.** Si una medida demuestra que el cuello está en el núcleo, el responsable decide
    antes, y solo para rendimiento, sin cambiar la semántica.
 4. **`.grafnet` idéntico.** Un archivo guardado con la 2.0 abre en la 1.1.x, y al revés.
 5. **`tools/dibujo.js`** sigue dibujando igual que Qt.
 6. **Sin dependencias nuevas** de ejecución.
 7. **Cada etapa mide** con el banco de E0, antes y después.
+8. **Antes de pedir al responsable una autorización técnica**, el coordinador comprueba que es viable (lección del paso 9
+   de E3: el cálculo de enlaces por parcial no lo era).
 
 ## Decisiones del responsable para E3 (20-nov-2026)
 
@@ -46,6 +50,25 @@ Tras el diseño de E3 (`artifacts/v2_e3/DISENO_E3.md`, fuera del repositorio):
 - **`Linea larga`** (111 etapas, generada) se añade a `tests/fixtures/referencia/` para la prueba de choque.
 - **Desapariciones de la 1.x:** el pintado no es transaccional (vacía la escena y, si falla a mitad, queda a medias);
   se arregla en la 1.x sin cambiar imágenes.
+- **Enlaces por parcial (paso 9):** no es posible sin cambiar los recorridos, que dependen del dibujo entero. En su
+  lugar se aceleró `routing.enlaces` por dentro, con el mismo resultado.
+- **Paso 10** (21-nov): huella sellada al abrir y un refresco por gesto.
+- **Resultado de E3** (7400f0c), medianas en GEMMA: añadir una acción 31 ms, deshacer 49, rehacer 44, mover una etapa 93,
+  paso de simulación 63 (sin cambios hasta E4).
+
+## Decisiones para E4 (21-nov-2026)
+
+Diseño en `artifacts/v2_e4/DISENO_E4.md` (fuera del repositorio).
+
+- **`grafcet/` no se toca:** el motor cuesta ~1 ms por paso. El tiempo está en rehacer la escena entera, en el modelo
+  visual y en las tablas de Variables y Temporizadores.
+- **P-IMP-171 se mantiene:** el lienzo sigue con repintado completo.
+- **Se adelantan de E6 a E4, tras su paso 1:**
+  - `test_ad118` y `SCD51`, que dependen de ficheros que solo hay en la carpeta de la 1.x. `test_ad118` ni siquiera
+    llega a ejecutarse en la suite: sus 7 pruebas solo se han pasado a mano.
+  - El `KeyError` de `_desde_bloques` (`escritorio/acciones.py`): el editor de bloques avisa a una acción que ya no está en
+    el modelo. Sale en cada suite, y el único cierre brusco de E3 ocurrió justo después. Si también está en la 1.x, el
+    responsable decide si se arregla allí.
 
 ## Metas
 
@@ -56,6 +79,9 @@ Proyecto de referencia, Qt offscreen a 1366 × 768, mediana tras calentamiento.
 | Añadir una acción, mover una etapa, deshacer | < 50 ms |
 | Un paso de simulación que cambia la situación | < 20 ms |
 | Abrir el proyecto | < 2 s |
+
+«Mover una etapa» se mide por gesto: pulsar, mover y soltar, tres dibujos. Al cerrar la 2.0, el responsable decide si
+la meta es por gesto o por fotograma (al cerrar E3, en GEMMA: unos 31 ms por fotograma y 93 por gesto).
 
 ## Arquitectura de llegada
 
@@ -86,7 +112,7 @@ La caché de rutas y la reutilización de textos de AD desaparecen cuando la esc
 | E3 | Escena incremental en edición | Implementador y verificador |
 | E4 | Simulación incremental | Implementador y verificador |
 | E5 | Ventana partida: controladores | Codex |
-| E6 | Limpieza: código muerto, pruebas rápidas, documentación de la arquitectura, medida final | Codex y documentador |
+| E6 | Limpieza: código muerto, pruebas rápidas, documentación de la arquitectura, medida final. Además: dejar una sola de las dos memorias de validación (la de la edición, del paso 7 de E3, y la del núcleo, del paso 9), y dejar la comprobación de los documentos sellados como opción permanente, que se pasa con la suite antes de publicar | Codex y documentador |
 
 Después de cada etapa:
 
@@ -104,3 +130,6 @@ Después de cada etapa:
 - **Detalles finos sin prueba.** Muchos P-IMP corrigen síntomas de dibujo. Se mitiga con el banco de imágenes
   y con la prueba del responsable en cada etapa de dibujo (E1, E3 y E4).
 - **Ramas que se separan.** Se mitiga con la 1.x congelada y cada arreglo fusionado en `v2` en el momento.
+- **Cierres bruscos de PySide** (un objeto de Qt borrado mientras Python aún lo usa). Hubo uno aislado en una suite de E3
+  y no se ha reproducido. E4 mantiene vivos los objetos de la escena entre pasos de simulación, así que la suite completa
+  se pasa siempre con `-X faulthandler`.
