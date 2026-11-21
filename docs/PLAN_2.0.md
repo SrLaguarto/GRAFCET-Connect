@@ -73,6 +73,28 @@ Diseño en `artifacts/v2_e4/DISENO_E4.md` (fuera del repositorio).
     el modelo. Sale en cada suite, y el único cierre brusco de E3 ocurrió justo después. También está en la 1.x: queda
     pendiente allí (21-nov), como la ayuda emergente. Se hará después, si la 1.x sigue en uso.
 
+## Decisiones para E7 (21-nov-2026)
+
+El responsable decide hacerla. Va después de E6.
+
+- **Objetivo:** que el ciclo con el simulador de planta, por conexión directa o por Modbus, no espere nunca al dibujo, y
+  sea regular aunque el equipo esté cargado (el simulador de planta y otros programas abiertos).
+- **Reparto:**
+  - El motor y la E/S solo los toca el hilo de control.
+  - La pantalla lee fotos inmutables del estado y le pasa las órdenes del usuario (entradas, Play, Stop, Reiniciar,
+    forzados) por una cola.
+- **Misma semántica.** Se mantiene lo decidido sobre el intercambio: orden de lectura y escritura, lotes, cuándo se
+  escriben las salidas. Lo que no esté decidido se pregunta. `grafcet/` no se toca salvo que el diseño lo justifique y
+  el responsable lo decida.
+- **Medida antes y después:**
+  - intervalo del ciclo (mediana, P95 y máximo);
+  - retraso de entrada a salida;
+  - con y sin carga, y por las dos conexiones;
+  - incluye la resolución del temporizador de Windows (~15,6 ms).
+- **Diseño con esfuerzo Máx.** En Python, los hilos se turnan (GIL). Si un hilo no basta para la regularidad que se
+  busca, se valora un proceso aparte, y eso lo decide el responsable.
+- Tras E7, el responsable prueba otra vez con E/S reales.
+
 ## Metas
 
 Proyecto de referencia, Qt offscreen a 1366 × 768, mediana tras calentamiento.
@@ -116,6 +138,7 @@ La caché de rutas y la reutilización de textos de AD desaparecen cuando la esc
 | E4 | Simulación incremental | Implementador y verificador |
 | E5 | Ventana partida: controladores | Implementador y verificador (el responsable lo cambió el 21-nov; antes, Codex) |
 | E6 | Limpieza: código muerto, pruebas rápidas, documentación de la arquitectura, medida final. Además: dejar una sola de las dos memorias de validación (la de la edición, del paso 7 de E3, y la del núcleo, del paso 9), y dejar la comprobación de los documentos sellados como opción permanente, que se pasa con la suite antes de publicar | Codex y documentador |
+| E7 | Ciclo de E/S independiente: el motor y la E/S en un hilo de control propio, con su reloj; la pantalla dibuja fotos del estado y le pasa las órdenes del usuario | Implementador y verificador |
 
 Después de cada etapa:
 
