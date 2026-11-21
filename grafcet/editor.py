@@ -20,7 +20,7 @@ from typing import Any, Callable, Iterable, Iterator, NamedTuple
 from . import expressions as ex
 from .diagnostics import Diagnostic, DiagnosticError
 from .ids import IdGenerator, label_key, valid_label
-from .model import ValidationResult, compute_revision, validate_model
+from .model import ValidationResult, compute_revision, sellar, validate_model
 from .profile import FORMAT_VERSION
 from .values import TypeSpec, format_value, parse_type, parse_value, zero
 
@@ -131,6 +131,7 @@ class Editor:
         if not view_only:
             self._resincronizar(work_m)  # un texto ligado a una etapa ya no repetida vuelve a cuadrar con su número
             work_m["revisionId"] = compute_revision(work_m)
+            sellar(work_m, work_m["revisionId"])
         self.model, self.presentation = work_m, work_p
         self.undo_stack.append((label, before, (work_m, work_p)))
         self.redo_stack.clear()
@@ -2230,4 +2231,4 @@ def duplicate_model(model: dict[str, Any], new_id: str, ids: IdGenerator) -> dic
     for e in dup["expressions"]:
         e["bindings"] = {k: mapping.get(v, v) for k, v in e.get("bindings", {}).items()}
     dup["revisionId"] = compute_revision(dup)
-    return dup
+    return dup  # (no se sella: nadie promete que `dup` no se vaya a tocar)

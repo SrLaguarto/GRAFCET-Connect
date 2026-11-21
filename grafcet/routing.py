@@ -157,14 +157,18 @@ def _flechas_de_lazo(out: list[dict[str, Any]]) -> set[str]:
     aristas = {e["id"]: (e["sid"], e["tid"]) if e["rol"] == "pre" else (e["tid"], e["sid"])
                for e in out if e["rol"] in ("pre", "post")}
 
+    salientes: dict[str, list[tuple[str, str]]] = {}  # origen -> [(arista, destino)]: solo rendimiento, mismo recorrido
+    for ident, (a, b) in aristas.items():
+        salientes.setdefault(a, []).append((ident, b))
+
     def llega(origen: str, destino: str, sin: set[str]) -> bool:
         vistos, pila = {origen}, [origen]
         while pila:
             n = pila.pop()
             if n == destino:
                 return True
-            for ident, (a, b) in aristas.items():
-                if a == n and ident not in sin and b not in vistos:
+            for ident, b in salientes.get(n, ()):
+                if ident not in sin and b not in vistos:
                     vistos.add(b)
                     pila.append(b)
         return False
@@ -214,9 +218,19 @@ def _separar_lazos(M, out, pos):
     izquierda = min((p[0] for p in pos.values()), default=SX)-70
     derecha = max([p[0] for p in pos.values()] + [c[3] for c in cajas] + [SX])+70
 
+    def envolvente(pts):
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        return min(xs), min(ys), max(xs), max(ys)
+
+    envolventes = {id(o): envolvente(o["pts"]) for o in fijos}  # (solo rendimiento: un corte exige que las cajas se toquen)
+
     def cortes(pts, e):
         encontrados = set()
+        x0_, y0_, x1_, y1_ = envolvente(pts)
         for otro in fijos:
+            ox0, oy0, ox1, oy1 = envolventes[id(otro)]
+            if ox1 < x0_ or ox0 > x1_ or oy1 < y0_ or oy0 > y1_:
+                continue  # sus cajas no se tocan: ningún tramo de uno puede cruzar ni solaparse con uno del otro
             extremos = {e["tid"], e["sid"]} & {otro["tid"], otro["sid"]}
             for a, b in zip(pts, pts[1:]):
                 if a == b: continue
@@ -251,6 +265,7 @@ def _separar_lazos(M, out, pos):
             return (choques, cortes(pts,e), (x < min(original[0][0],original[-1][0])) != preferida, abs(x-x0)), pts
         _, e["pts"] = min((puntuar(x) for x in candidatos), key=lambda v:v[0])
         fijos.append(e)
+        envolventes[id(e)] = envolvente(e["pts"])
 
 
 def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
@@ -260,11 +275,21 @@ def enlaces(M: dict[str, Any]) -> list[dict[str, Any]]:
     out, lanes = [], {}
     # Una misma etapa comparte la línea de selección/convergencia entre todas sus ramas.
     salidas, entradas = {}, {}
+    # (solo rendimiento: se indexan una vez las transiciones de cada etapa, en el mismo orden, en vez de recorrerlas todas por etapa)
+    salen_de: dict[str, list[dict[str, Any]]] = {}
+    llegan_a: dict[str, list[dict[str, Any]]] = {}
+    for t in M["transitions"]:
+        if orientacion(t) != "abajo":
+            continue
+        if not t.get("simulPre"):
+            for sid in dict.fromkeys(t.get("preDib", t["pre"])):
+                salen_de.setdefault(sid, []).append(t)
+        if not t.get("simulPost"):
+            for sid in dict.fromkeys(t.get("postDib", t["post"])):
+                llegan_a.setdefault(sid, []).append(t)
     for sid, (px, py) in pos.items():
-        salen = [t for t in M["transitions"] if sid in t.get("preDib", t["pre"]) and not t.get("simulPre")
-                 and orientacion(t) == "abajo"]
-        llegan = [t for t in M["transitions"] if sid in t.get("postDib", t["post"]) and not t.get("simulPost")
-                  and orientacion(t) == "abajo"]
+        salen = salen_de.get(sid, [])
+        llegan = llegan_a.get(sid, [])
         if len(salen) > 1:
             limites = [t["y"] - TALLO_T for t in salen if t["y"] > py + H]
             salidas[sid] = max(py + H + TALLO_E, min([py + H + 20] + limites))

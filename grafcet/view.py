@@ -285,15 +285,16 @@ class Vista:
         from .routing import validar_barras
         res.diagnostics.extend(validar_barras(doc, self.bars))
         self.compile_diags = [d for d in res.diagnostics if d.blocks_start]
-        self.s: Session | None = None
-        self.start_diags: list = []
+        self._s: Session | None = None
+        self._start_diags: list = []
+        self._arrancada = True  # (nada que arrancar si no hay sesión)
         if res.can_simulate:
             cm = res.model
             # Entradas: su valor inicial del modelo, salvo lo que fije el guion
             start = {v["id"]: v["initialValue"] for v in doc["variables"] if v["role"] == "input"}
             start.update(init or {})
-            self.s = Session(cm, scenario(cm, start, batches, max_contexts=1_000_000), budget=budget, options=options)
-            self.start_diags = self.s.start()
+            self._s = Session(cm, scenario(cm, start, batches, max_contexts=1_000_000), budget=budget, options=options)
+            self._arrancada = False  # `Session.start` es lo que cuesta: se hace al usar la sesión (`s` o `start_diags`), no al construir
         try:
             self.model = self._structure(key, title, help_text, doc, res.can_simulate, layout)
             self.names.update({b["id"]: b["label"] for b in self.model["bars"]})  # «Simultaneidad 1», no el ID de la barra
@@ -309,6 +310,32 @@ class Vista:
             self.texts = {}
             self.model = {"key": key, "names": self.names, "title": title, "help": help_text, "compilable": False, "steps": [],
                           "macros": [], "partials": [], "transitions": [], "inputs": [], "numericInputs": {}}
+
+    # La sesión se crea al construir la vista (mismos errores, mismo momento) pero se arranca al primer uso: quien solo dibuja o valida
+    # (el editor) no paga el arranque, y quien simula lo paga al pedir `s` o `start_diags`, con el mismo resultado de siempre.
+    def _arrancar(self) -> None:
+        if not self._arrancada:
+            self._arrancada = True
+            self._start_diags = self._s.start()
+
+    @property
+    def s(self) -> Session | None:
+        self._arrancar()
+        return self._s
+
+    @s.setter
+    def s(self, sesion: Session | None) -> None:
+        self._s, self._arrancada = sesion, True
+
+    @property
+    def start_diags(self) -> list:
+        self._arrancar()
+        return self._start_diags
+
+    @start_diags.setter
+    def start_diags(self, diagnosticos: list) -> None:
+        self._arrancar()  # (como antes: el arranque ya se había hecho cuando alguien reemplazaba los diagnósticos)
+        self._start_diags = diagnosticos
 
     def _structure(self, key: str, title: str, help_text: str, doc: dict[str, Any], compilable: bool,
                    layout: Layout | None) -> dict[str, Any]:

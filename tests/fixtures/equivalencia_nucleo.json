@@ -1,0 +1,4315 @@
+{
+ "aula/aula_eleccion": {
+  "disposiciones": [
+   "f82fc2977f844f23",
+   "0219b690da298e7a",
+   "f1bc804c34e4b6d3",
+   "e70464bd4eeb971f",
+   "dab511e822be63fe",
+   "5d95edd8eff387a3",
+   "69b72c3babb5ae54",
+   "41fe48221fb57de8",
+   "b48154e005a06aec",
+   "7902d9f85dff5a07",
+   "93122cb82ff36346",
+   "522f8968a7d54ae7",
+   "5c810a0a1fae6ded",
+   "ecfb1a6cc0fec386",
+   "5506f8cdae92ee3f",
+   "dea4431044e9eb6f",
+   "3d2d812fa00429a4",
+   "dfe924cb7f302d41",
+   "c468b2379d5298e8",
+   "c0184e749dc62659",
+   "4867cc9e10aeffab",
+   "9fccb1eb67ae06c8",
+   "0a08d46dd9972a62",
+   "487441a63f1491ac",
+   "718729f66b5b0cb1"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-c985fa7ddd54366af27d0fb9",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "5c7245e65eddb816",
+     "estructura": "f834e930543a0002",
+     "evolucion": [
+      "3838160575e201ca"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-c985fa7ddd54366af27d0fb9",
+     "revisionId": "rev-c985fa7ddd54366af27d0fb9",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-c985fa7ddd54366af27d0fb9",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "e71d2b7a43ddef73",
+     "estructura": "5492353441ebdefb",
+     "evolucion": [
+      "3838160575e201ca"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-c985fa7ddd54366af27d0fb9",
+     "revisionId": "rev-c985fa7ddd54366af27d0fb9",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-c830f6832fb0019b0b326994",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b0fe6b93ccab28d6",
+     "estructura": "f7a947358b74903b",
+     "evolucion": [
+      "3838160575e201ca"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-c830f6832fb0019b0b326994",
+     "revisionId": "rev-c830f6832fb0019b0b326994",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-c830f6832fb0019b0b326994",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b0fe6b93ccab28d6",
+     "estructura": "f8f1a7032c28d2be",
+     "evolucion": [
+      "8bcd5b03d9a1f855"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-c830f6832fb0019b0b326994",
+     "revisionId": "rev-c830f6832fb0019b0b326994",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-c830f6832fb0019b0b326994",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b0fe6b93ccab28d6",
+     "estructura": "f7a947358b74903b",
+     "evolucion": [
+      "3838160575e201ca"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-c830f6832fb0019b0b326994",
+     "revisionId": "rev-c830f6832fb0019b0b326994",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-c985fa7ddd54366af27d0fb9",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "e71d2b7a43ddef73",
+     "estructura": "5492353441ebdefb",
+     "evolucion": [
+      "3838160575e201ca"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-c985fa7ddd54366af27d0fb9",
+     "revisionId": "rev-c985fa7ddd54366af27d0fb9",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-c985fa7ddd54366af27d0fb9",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "5c7245e65eddb816",
+     "estructura": "f834e930543a0002",
+     "evolucion": [
+      "3838160575e201ca"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-c985fa7ddd54366af27d0fb9",
+     "revisionId": "rev-c985fa7ddd54366af27d0fb9",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-c985fa7ddd54366af27d0fb9",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "e9d7397917fb3703",
+     "estructura": "84ca93276adf943d",
+     "evolucion": [
+      "3838160575e201ca"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-c985fa7ddd54366af27d0fb9",
+     "revisionId": "rev-c985fa7ddd54366af27d0fb9",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-c985fa7ddd54366af27d0fb9",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "5c7245e65eddb816",
+     "estructura": "f834e930543a0002",
+     "evolucion": [
+      "3838160575e201ca"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-c985fa7ddd54366af27d0fb9",
+     "revisionId": "rev-c985fa7ddd54366af27d0fb9",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-c985fa7ddd54366af27d0fb9",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "e71d2b7a43ddef73",
+     "estructura": "5492353441ebdefb",
+     "evolucion": [
+      "3838160575e201ca"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-c985fa7ddd54366af27d0fb9",
+     "revisionId": "rev-c985fa7ddd54366af27d0fb9",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas"
+   ],
+   "cm_revision": "rev-c985fa7ddd54366af27d0fb9",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "e9d7397917fb3703",
+   "estructura": "84ca93276adf943d",
+   "evolucion": [
+    "3838160575e201ca",
+    "39ed2376ac66f65f",
+    "df57fe58e6a58982",
+    "63661d37091a70e8",
+    "7fab9e90aa98bbae",
+    "ceeec0b5a01cac6f",
+    "9228753b9e4a89bb",
+    "885fc708d4060d90",
+    "473cbd8d33c57b3e",
+    "294d0a537e82eb13",
+    "e302252920c493b2",
+    "1a97e37a38e76f9b",
+    "d438c88e3ee6d16c"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 8,
+   "puede_simular": true,
+   "revision": "rev-c985fa7ddd54366af27d0fb9",
+   "revisionId": "rev-c985fa7ddd54366af27d0fb9",
+   "situacion_inicial": [
+    "0"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ },
+ "aula/aula_encapsulada": {
+  "disposiciones": [
+   "cd2365ca079d7c06",
+   "1795595d554503b9",
+   "13881cb4d7b67406",
+   "32c5471e06bce020",
+   "b132816ff2ce16cc",
+   "b68aca8a773c9b40",
+   "ac0d576ac64502d3",
+   "25a5d6ade180d1a0",
+   "4ca2a3fde4f86fc4",
+   "ef71e38407e0f49b",
+   "75c1713dd794e6e8",
+   "255e14e8e57c17d2",
+   "bf68c344e53a4916",
+   "d005622f9ccf4dd3",
+   "c6328bf99787228a",
+   "7123ca3e49ad403b",
+   "5be5bf6e9f3c2008",
+   "db2066321bc29d75",
+   "27ece57004b832d0",
+   "0db27456b9975760",
+   "628741b83298b2a4",
+   "abd0994dbfa9e4a4",
+   "d6b786c83a9ec0e4",
+   "52a8e1cc45cc4fa0",
+   "f150b0b3d78a03ae"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura"
+     ],
+     "cm_revision": "rev-68744eceab0d3093bcd20eca",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "e54ab88e5b135039",
+     "estructura": "4364ba2fdb2e8fa6",
+     "evolucion": [
+      "6eb97202b587391c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-68744eceab0d3093bcd20eca",
+     "revisionId": "rev-68744eceab0d3093bcd20eca",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura"
+     ],
+     "cm_revision": "rev-68744eceab0d3093bcd20eca",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "5bc151312e9e011f",
+     "estructura": "22fb6e5850e8a870",
+     "evolucion": [
+      "6eb97202b587391c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-68744eceab0d3093bcd20eca",
+     "revisionId": "rev-68744eceab0d3093bcd20eca",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura"
+     ],
+     "cm_revision": "rev-ade7eaf6635050afa0bcb377",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "5bc151312e9e011f",
+     "estructura": "544d495b4bd98076",
+     "evolucion": [
+      "6eb97202b587391c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-ade7eaf6635050afa0bcb377",
+     "revisionId": "rev-ade7eaf6635050afa0bcb377",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura"
+     ],
+     "cm_revision": "rev-ade7eaf6635050afa0bcb377",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "5bc151312e9e011f",
+     "estructura": "e3883d2bcc0251fc",
+     "evolucion": [
+      "47f5cf30c10ebfbc"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-ade7eaf6635050afa0bcb377",
+     "revisionId": "rev-ade7eaf6635050afa0bcb377",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura"
+     ],
+     "cm_revision": "rev-ade7eaf6635050afa0bcb377",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "5bc151312e9e011f",
+     "estructura": "544d495b4bd98076",
+     "evolucion": [
+      "6eb97202b587391c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-ade7eaf6635050afa0bcb377",
+     "revisionId": "rev-ade7eaf6635050afa0bcb377",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura"
+     ],
+     "cm_revision": "rev-68744eceab0d3093bcd20eca",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "5bc151312e9e011f",
+     "estructura": "22fb6e5850e8a870",
+     "evolucion": [
+      "6eb97202b587391c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-68744eceab0d3093bcd20eca",
+     "revisionId": "rev-68744eceab0d3093bcd20eca",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura"
+     ],
+     "cm_revision": "rev-68744eceab0d3093bcd20eca",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "e54ab88e5b135039",
+     "estructura": "4364ba2fdb2e8fa6",
+     "evolucion": [
+      "6eb97202b587391c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-68744eceab0d3093bcd20eca",
+     "revisionId": "rev-68744eceab0d3093bcd20eca",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura"
+     ],
+     "cm_revision": "rev-68744eceab0d3093bcd20eca",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "a5aa867a4298fb6b",
+     "estructura": "93409dd0c8b1fee0",
+     "evolucion": [
+      "6eb97202b587391c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-68744eceab0d3093bcd20eca",
+     "revisionId": "rev-68744eceab0d3093bcd20eca",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura"
+     ],
+     "cm_revision": "rev-68744eceab0d3093bcd20eca",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "e54ab88e5b135039",
+     "estructura": "4364ba2fdb2e8fa6",
+     "evolucion": [
+      "6eb97202b587391c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-68744eceab0d3093bcd20eca",
+     "revisionId": "rev-68744eceab0d3093bcd20eca",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura"
+     ],
+     "cm_revision": "rev-68744eceab0d3093bcd20eca",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "5bc151312e9e011f",
+     "estructura": "22fb6e5850e8a870",
+     "evolucion": [
+      "6eb97202b587391c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-68744eceab0d3093bcd20eca",
+     "revisionId": "rev-68744eceab0d3093bcd20eca",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas",
+    "jerarquia.encapsulacion",
+    "jerarquia.estructura"
+   ],
+   "cm_revision": "rev-68744eceab0d3093bcd20eca",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "a5aa867a4298fb6b",
+   "estructura": "93409dd0c8b1fee0",
+   "evolucion": [
+    "6eb97202b587391c",
+    "392c98c3ad57a17f",
+    "6f3c3e3473a69e55",
+    "50eaa04f5114501f",
+    "f3b98c1b7c9fdd07",
+    "59ac135db9a6a468",
+    "42e1b31e60306694",
+    "f07d9cf845b83b7e",
+    "94924fe554934169",
+    "d466a961e98b5624",
+    "74de94af397da55f",
+    "f2d8d5be293b6948",
+    "9e7887e70d4725c9"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 6,
+   "puede_simular": true,
+   "revision": "rev-68744eceab0d3093bcd20eca",
+   "revisionId": "rev-68744eceab0d3093bcd20eca",
+   "situacion_inicial": [
+    "0"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ },
+ "aula/aula_macro": {
+  "disposiciones": [
+   "dc88e21dc7343e47",
+   "9bf6c318401bf8ab",
+   "20eb857f9858f408",
+   "8e681bfae3e375b6",
+   "072c0ec9e937e5f3",
+   "5efb234b84b2d3ee",
+   "51b31b330cf14464",
+   "885be419e087c45f",
+   "70f237338bd13374",
+   "4c0ad916a1607a7e",
+   "ba07936f2c899c73",
+   "c9272dea8e2e7550",
+   "9a36cfb06a8f1949",
+   "3249c7e75f6de071",
+   "64c9b3ec96213611",
+   "78a111e68d891449",
+   "77bf9306f5b61715",
+   "6c1bc3192d86e20a",
+   "0c374d41b4c10b7b",
+   "8fa8ecbdb02739c3",
+   "cb909c0a426bbc95",
+   "af4fd4158553186e",
+   "9a240cc30ba78d9c",
+   "67703b00be3da8a2",
+   "f557f3517583825c"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.estructura",
+      "jerarquia.macroetapas"
+     ],
+     "cm_revision": "rev-b2b9787783ab17c6ac567fd6",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b8c24e4c1db4e28f",
+     "estructura": "ab08668e4dab8bbd",
+     "evolucion": [
+      "025ab58454338559"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-b2b9787783ab17c6ac567fd6",
+     "revisionId": "rev-b2b9787783ab17c6ac567fd6",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.estructura",
+      "jerarquia.macroetapas"
+     ],
+     "cm_revision": "rev-b2b9787783ab17c6ac567fd6",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b19c10def9863115",
+     "estructura": "aa89d2e8a45c0d13",
+     "evolucion": [
+      "025ab58454338559"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-b2b9787783ab17c6ac567fd6",
+     "revisionId": "rev-b2b9787783ab17c6ac567fd6",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.estructura",
+      "jerarquia.macroetapas"
+     ],
+     "cm_revision": "rev-a2a4ac87def34eaee79764a8",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b19c10def9863115",
+     "estructura": "38558b50239919d6",
+     "evolucion": [
+      "025ab58454338559"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-a2a4ac87def34eaee79764a8",
+     "revisionId": "rev-a2a4ac87def34eaee79764a8",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.estructura",
+      "jerarquia.macroetapas"
+     ],
+     "cm_revision": "rev-a2a4ac87def34eaee79764a8",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b19c10def9863115",
+     "estructura": "407def3d57895941",
+     "evolucion": [
+      "637c74c6cf5f3a5d"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-a2a4ac87def34eaee79764a8",
+     "revisionId": "rev-a2a4ac87def34eaee79764a8",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.estructura",
+      "jerarquia.macroetapas"
+     ],
+     "cm_revision": "rev-a2a4ac87def34eaee79764a8",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b19c10def9863115",
+     "estructura": "38558b50239919d6",
+     "evolucion": [
+      "025ab58454338559"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-a2a4ac87def34eaee79764a8",
+     "revisionId": "rev-a2a4ac87def34eaee79764a8",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.estructura",
+      "jerarquia.macroetapas"
+     ],
+     "cm_revision": "rev-b2b9787783ab17c6ac567fd6",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b19c10def9863115",
+     "estructura": "aa89d2e8a45c0d13",
+     "evolucion": [
+      "025ab58454338559"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-b2b9787783ab17c6ac567fd6",
+     "revisionId": "rev-b2b9787783ab17c6ac567fd6",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.estructura",
+      "jerarquia.macroetapas"
+     ],
+     "cm_revision": "rev-b2b9787783ab17c6ac567fd6",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b8c24e4c1db4e28f",
+     "estructura": "ab08668e4dab8bbd",
+     "evolucion": [
+      "025ab58454338559"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-b2b9787783ab17c6ac567fd6",
+     "revisionId": "rev-b2b9787783ab17c6ac567fd6",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.estructura",
+      "jerarquia.macroetapas"
+     ],
+     "cm_revision": "rev-b2b9787783ab17c6ac567fd6",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "aa2ec1f50a3ad74e",
+     "estructura": "a6b50826979ff810",
+     "evolucion": [
+      "025ab58454338559"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-b2b9787783ab17c6ac567fd6",
+     "revisionId": "rev-b2b9787783ab17c6ac567fd6",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.estructura",
+      "jerarquia.macroetapas"
+     ],
+     "cm_revision": "rev-b2b9787783ab17c6ac567fd6",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b8c24e4c1db4e28f",
+     "estructura": "ab08668e4dab8bbd",
+     "evolucion": [
+      "025ab58454338559"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-b2b9787783ab17c6ac567fd6",
+     "revisionId": "rev-b2b9787783ab17c6ac567fd6",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "jerarquia.estructura",
+      "jerarquia.macroetapas"
+     ],
+     "cm_revision": "rev-b2b9787783ab17c6ac567fd6",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b19c10def9863115",
+     "estructura": "aa89d2e8a45c0d13",
+     "evolucion": [
+      "025ab58454338559"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-b2b9787783ab17c6ac567fd6",
+     "revisionId": "rev-b2b9787783ab17c6ac567fd6",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas",
+    "jerarquia.estructura",
+    "jerarquia.macroetapas"
+   ],
+   "cm_revision": "rev-b2b9787783ab17c6ac567fd6",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "aa2ec1f50a3ad74e",
+   "estructura": "a6b50826979ff810",
+   "evolucion": [
+    "025ab58454338559",
+    "3cd837fac6dd4675",
+    "ab00b5abb23e4375",
+    "9e43cdc0d5e76f84",
+    "44f72af69d423563",
+    "05cf1bc40e6d0ae2",
+    "05cf1bc40e6d0ae2",
+    "05cf1bc40e6d0ae2",
+    "RuntimeError:las entradas manuales se admiten en pausa estable"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 6,
+   "puede_simular": true,
+   "revision": "rev-b2b9787783ab17c6ac567fd6",
+   "revisionId": "rev-b2b9787783ab17c6ac567fd6",
+   "situacion_inicial": [
+    "0"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ },
+ "aula/aula_marcha": {
+  "disposiciones": [
+   "62b30eeb365c2519",
+   "6cd59e7ebcc66fd7",
+   "e36c7d0898be75e8",
+   "4719b0979166ec40",
+   "4600a68ed62cd52c",
+   "429660726d35aa42",
+   "d69641bdde41632f",
+   "57471c8d6bbb46cf",
+   "023db79fc7f1559a",
+   "6da528e85db51d57",
+   "784915ddf7ac7541",
+   "57899c5b14fa5313",
+   "8234589b60bde2df",
+   "e4b256685a4e1e9d",
+   "a43287408eecaffa",
+   "391704d2e2f729bb",
+   "9f6b184b6e9013db",
+   "ec2390cf4a726bbc",
+   "eb1aff6995073f5d",
+   "e463f4c823baf1f9",
+   "adbca2ce56efda8a",
+   "7c9c20da92f511f7",
+   "59bd1413b43dbd04",
+   "50d6ba1502485c97",
+   "d824f522b04403bc"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-eb41f588b77866d8d14aae64",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "9e35ab1c3beb0f14",
+     "estructura": "c18537c361a08c91",
+     "evolucion": [
+      "68e6bbe7a9e8713a"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 4,
+     "puede_simular": true,
+     "revision": "rev-eb41f588b77866d8d14aae64",
+     "revisionId": "rev-eb41f588b77866d8d14aae64",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-eb41f588b77866d8d14aae64",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "6b61304b04fbc719",
+     "estructura": "55777aeb6780ce11",
+     "evolucion": [
+      "68e6bbe7a9e8713a"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 4,
+     "puede_simular": true,
+     "revision": "rev-eb41f588b77866d8d14aae64",
+     "revisionId": "rev-eb41f588b77866d8d14aae64",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-1e0e1cf4f539fb8ad061d98a",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "be647518795cbee9",
+     "estructura": "67d212487c066746",
+     "evolucion": [
+      "68e6bbe7a9e8713a"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 4,
+     "puede_simular": true,
+     "revision": "rev-1e0e1cf4f539fb8ad061d98a",
+     "revisionId": "rev-1e0e1cf4f539fb8ad061d98a",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-1e0e1cf4f539fb8ad061d98a",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "be647518795cbee9",
+     "estructura": "bf6f0b8273b3e449",
+     "evolucion": [
+      "e04cc3077abcd72e"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 4,
+     "puede_simular": true,
+     "revision": "rev-1e0e1cf4f539fb8ad061d98a",
+     "revisionId": "rev-1e0e1cf4f539fb8ad061d98a",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-1e0e1cf4f539fb8ad061d98a",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "be647518795cbee9",
+     "estructura": "67d212487c066746",
+     "evolucion": [
+      "68e6bbe7a9e8713a"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 4,
+     "puede_simular": true,
+     "revision": "rev-1e0e1cf4f539fb8ad061d98a",
+     "revisionId": "rev-1e0e1cf4f539fb8ad061d98a",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-eb41f588b77866d8d14aae64",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "6b61304b04fbc719",
+     "estructura": "55777aeb6780ce11",
+     "evolucion": [
+      "68e6bbe7a9e8713a"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 4,
+     "puede_simular": true,
+     "revision": "rev-eb41f588b77866d8d14aae64",
+     "revisionId": "rev-eb41f588b77866d8d14aae64",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-eb41f588b77866d8d14aae64",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "9e35ab1c3beb0f14",
+     "estructura": "c18537c361a08c91",
+     "evolucion": [
+      "68e6bbe7a9e8713a"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 4,
+     "puede_simular": true,
+     "revision": "rev-eb41f588b77866d8d14aae64",
+     "revisionId": "rev-eb41f588b77866d8d14aae64",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-eb41f588b77866d8d14aae64",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "5c2bfb7e4ba3520a",
+     "estructura": "0ffeebff12e48860",
+     "evolucion": [
+      "68e6bbe7a9e8713a"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 4,
+     "puede_simular": true,
+     "revision": "rev-eb41f588b77866d8d14aae64",
+     "revisionId": "rev-eb41f588b77866d8d14aae64",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-eb41f588b77866d8d14aae64",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "9e35ab1c3beb0f14",
+     "estructura": "c18537c361a08c91",
+     "evolucion": [
+      "68e6bbe7a9e8713a"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 4,
+     "puede_simular": true,
+     "revision": "rev-eb41f588b77866d8d14aae64",
+     "revisionId": "rev-eb41f588b77866d8d14aae64",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-eb41f588b77866d8d14aae64",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "6b61304b04fbc719",
+     "estructura": "55777aeb6780ce11",
+     "evolucion": [
+      "68e6bbe7a9e8713a"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 4,
+     "puede_simular": true,
+     "revision": "rev-eb41f588b77866d8d14aae64",
+     "revisionId": "rev-eb41f588b77866d8d14aae64",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas"
+   ],
+   "cm_revision": "rev-eb41f588b77866d8d14aae64",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "5c2bfb7e4ba3520a",
+   "estructura": "0ffeebff12e48860",
+   "evolucion": [
+    "68e6bbe7a9e8713a",
+    "47210e5bd1172347",
+    "e001dbc5c4f5d2af",
+    "f29d33f63b6ce5a4",
+    "7c9249b58b507b39",
+    "d7976273ec528e59",
+    "3f8579d2be4d6c31",
+    "233f5e0c4db2cede",
+    "ba6f8e39024b1874",
+    "03133852700b7f2f",
+    "51804e773c74e9b0",
+    "01b2edbb4108019b",
+    "51cb3f5beefdaba6"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 4,
+   "puede_simular": true,
+   "revision": "rev-eb41f588b77866d8d14aae64",
+   "revisionId": "rev-eb41f588b77866d8d14aae64",
+   "situacion_inicial": [
+    "0"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ },
+ "aula/aula_repeticion": {
+  "disposiciones": [
+   "49051d280562aed2",
+   "80f7955e51cd500a",
+   "c6dcb4991c87ea9d",
+   "f720e502ffb4658f",
+   "6b962829466d1c0f",
+   "1319f3060ab15797",
+   "c010c684a1f97093",
+   "03f744aec2b474ff",
+   "8ecd3b8754e48b50",
+   "f26788e8de772f4f",
+   "1d7e440a7d780b03",
+   "7ab70e8d8e127469",
+   "8ecd0a0bafff836c",
+   "88c979933c480dd5",
+   "568c0f22000c91c2",
+   "986bcf36abeaefe8",
+   "96804f84086265e1",
+   "46214d40f16083a7",
+   "2c0a3a4760d9883c",
+   "cd60f8242286d035",
+   "ef1271e7b2c65318",
+   "4415357b50336e09",
+   "6f3198b30f04510c",
+   "935b5ad41f5a2d90",
+   "d8455f0cb93b950d"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-836814f07ca83b565f2f82f1",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "de19a7dc1addd83b",
+     "estructura": "b75de36a29d80a88",
+     "evolucion": [
+      "dbbe6ad7d24a1a54"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-836814f07ca83b565f2f82f1",
+     "revisionId": "rev-836814f07ca83b565f2f82f1",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-836814f07ca83b565f2f82f1",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "a9d0087e90b941a1",
+     "estructura": "7ce5ce0eaf25e06f",
+     "evolucion": [
+      "dbbe6ad7d24a1a54"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-836814f07ca83b565f2f82f1",
+     "revisionId": "rev-836814f07ca83b565f2f82f1",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-0ae368efd215535fd3b6a009",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "881fc85dc9082aad",
+     "estructura": "65ac9b0193a14c79",
+     "evolucion": [
+      "dbbe6ad7d24a1a54"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-0ae368efd215535fd3b6a009",
+     "revisionId": "rev-0ae368efd215535fd3b6a009",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-0ae368efd215535fd3b6a009",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "881fc85dc9082aad",
+     "estructura": "ccfb03b05bb2d02c",
+     "evolucion": [
+      "83d5c3a0cfee980f"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-0ae368efd215535fd3b6a009",
+     "revisionId": "rev-0ae368efd215535fd3b6a009",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-0ae368efd215535fd3b6a009",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "881fc85dc9082aad",
+     "estructura": "65ac9b0193a14c79",
+     "evolucion": [
+      "dbbe6ad7d24a1a54"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-0ae368efd215535fd3b6a009",
+     "revisionId": "rev-0ae368efd215535fd3b6a009",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-836814f07ca83b565f2f82f1",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "a9d0087e90b941a1",
+     "estructura": "7ce5ce0eaf25e06f",
+     "evolucion": [
+      "dbbe6ad7d24a1a54"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-836814f07ca83b565f2f82f1",
+     "revisionId": "rev-836814f07ca83b565f2f82f1",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-836814f07ca83b565f2f82f1",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "de19a7dc1addd83b",
+     "estructura": "b75de36a29d80a88",
+     "evolucion": [
+      "dbbe6ad7d24a1a54"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-836814f07ca83b565f2f82f1",
+     "revisionId": "rev-836814f07ca83b565f2f82f1",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-836814f07ca83b565f2f82f1",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "b2a98ed523ddef81",
+     "estructura": "eff273f971eff6ec",
+     "evolucion": [
+      "dbbe6ad7d24a1a54"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-836814f07ca83b565f2f82f1",
+     "revisionId": "rev-836814f07ca83b565f2f82f1",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-836814f07ca83b565f2f82f1",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "de19a7dc1addd83b",
+     "estructura": "b75de36a29d80a88",
+     "evolucion": [
+      "dbbe6ad7d24a1a54"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-836814f07ca83b565f2f82f1",
+     "revisionId": "rev-836814f07ca83b565f2f82f1",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-836814f07ca83b565f2f82f1",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "a9d0087e90b941a1",
+     "estructura": "7ce5ce0eaf25e06f",
+     "evolucion": [
+      "dbbe6ad7d24a1a54"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 8,
+     "puede_simular": true,
+     "revision": "rev-836814f07ca83b565f2f82f1",
+     "revisionId": "rev-836814f07ca83b565f2f82f1",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas"
+   ],
+   "cm_revision": "rev-836814f07ca83b565f2f82f1",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "b2a98ed523ddef81",
+   "estructura": "eff273f971eff6ec",
+   "evolucion": [
+    "dbbe6ad7d24a1a54",
+    "d40ab5082c8009b6",
+    "201985eb707b7f46",
+    "14dade7328c13220",
+    "980865d355b7db96",
+    "61db77548908377d",
+    "c54742bfd7b429eb",
+    "fcfe35d4c8324872",
+    "46fa6112b80f8fc7",
+    "8064cf607eb119b1",
+    "1e8a63346eb30e35",
+    "befcd4a105fe4133",
+    "befcd4a105fe4133"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 8,
+   "puede_simular": true,
+   "revision": "rev-836814f07ca83b565f2f82f1",
+   "revisionId": "rev-836814f07ca83b565f2f82f1",
+   "situacion_inicial": [
+    "0"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ },
+ "aula/aula_simultaneidad": {
+  "disposiciones": [
+   "cc62160fcbd75d61",
+   "e57d87b9ad373b1a",
+   "2f4e51822e59519c",
+   "dc9c7dc893f24306",
+   "790aff213b2136ca",
+   "5d9084cbe75c79bc",
+   "59b2b802ca436047",
+   "2813f64879fe7ac7",
+   "5cfa2451a6c3dafe",
+   "85d2499e6ff3888c",
+   "1c0bf8b22e8cbd41",
+   "f556719505d2bfd7",
+   "8eb379f8805ccbe9",
+   "91aa921f2f149951",
+   "51e329e3d8e7280e",
+   "720b5ca3eb137887",
+   "3421336f8b58e2f3",
+   "7a32ec01cbb4bf86",
+   "1da2fa76004d5839",
+   "9ae1b2e25584d4d3",
+   "975fb18c36986f88",
+   "da3d74e0640870b7",
+   "dfc3a53fc0a5465a",
+   "c88bdecc096958a3",
+   "ec7ed3620d502b55"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-78bbd0215361d86ed13dc982",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "9b97cb67eb978f5d",
+     "estructura": "b38ebe50aef55f20",
+     "evolucion": [
+      "4e10d42979f308c7"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 10,
+     "puede_simular": true,
+     "revision": "rev-78bbd0215361d86ed13dc982",
+     "revisionId": "rev-78bbd0215361d86ed13dc982",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-78bbd0215361d86ed13dc982",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "84e79e4763e8c340",
+     "estructura": "604024858ec11d6c",
+     "evolucion": [
+      "4e10d42979f308c7"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 10,
+     "puede_simular": true,
+     "revision": "rev-78bbd0215361d86ed13dc982",
+     "revisionId": "rev-78bbd0215361d86ed13dc982",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-06a55dbcc09c098ba1834adc",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "f1d4c3ed24236c2d",
+     "estructura": "935cf2961afece4d",
+     "evolucion": [
+      "4e10d42979f308c7"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 10,
+     "puede_simular": true,
+     "revision": "rev-06a55dbcc09c098ba1834adc",
+     "revisionId": "rev-06a55dbcc09c098ba1834adc",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-06a55dbcc09c098ba1834adc",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "f1d4c3ed24236c2d",
+     "estructura": "a04c8980b3ec9a31",
+     "evolucion": [
+      "e3a8e852fb878827"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 10,
+     "puede_simular": true,
+     "revision": "rev-06a55dbcc09c098ba1834adc",
+     "revisionId": "rev-06a55dbcc09c098ba1834adc",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-06a55dbcc09c098ba1834adc",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "f1d4c3ed24236c2d",
+     "estructura": "935cf2961afece4d",
+     "evolucion": [
+      "4e10d42979f308c7"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 10,
+     "puede_simular": true,
+     "revision": "rev-06a55dbcc09c098ba1834adc",
+     "revisionId": "rev-06a55dbcc09c098ba1834adc",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-78bbd0215361d86ed13dc982",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "84e79e4763e8c340",
+     "estructura": "604024858ec11d6c",
+     "evolucion": [
+      "4e10d42979f308c7"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 10,
+     "puede_simular": true,
+     "revision": "rev-78bbd0215361d86ed13dc982",
+     "revisionId": "rev-78bbd0215361d86ed13dc982",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-78bbd0215361d86ed13dc982",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "9b97cb67eb978f5d",
+     "estructura": "b38ebe50aef55f20",
+     "evolucion": [
+      "4e10d42979f308c7"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 10,
+     "puede_simular": true,
+     "revision": "rev-78bbd0215361d86ed13dc982",
+     "revisionId": "rev-78bbd0215361d86ed13dc982",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-78bbd0215361d86ed13dc982",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "ca167a7c0f9a55dc",
+     "estructura": "6524af942a200968",
+     "evolucion": [
+      "4e10d42979f308c7"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 10,
+     "puede_simular": true,
+     "revision": "rev-78bbd0215361d86ed13dc982",
+     "revisionId": "rev-78bbd0215361d86ed13dc982",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-78bbd0215361d86ed13dc982",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "9b97cb67eb978f5d",
+     "estructura": "b38ebe50aef55f20",
+     "evolucion": [
+      "4e10d42979f308c7"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 10,
+     "puede_simular": true,
+     "revision": "rev-78bbd0215361d86ed13dc982",
+     "revisionId": "rev-78bbd0215361d86ed13dc982",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas"
+     ],
+     "cm_revision": "rev-78bbd0215361d86ed13dc982",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "84e79e4763e8c340",
+     "estructura": "604024858ec11d6c",
+     "evolucion": [
+      "4e10d42979f308c7"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 10,
+     "puede_simular": true,
+     "revision": "rev-78bbd0215361d86ed13dc982",
+     "revisionId": "rev-78bbd0215361d86ed13dc982",
+     "situacion_inicial": [
+      "0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas"
+   ],
+   "cm_revision": "rev-78bbd0215361d86ed13dc982",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "ca167a7c0f9a55dc",
+   "estructura": "6524af942a200968",
+   "evolucion": [
+    "4e10d42979f308c7",
+    "40f1e260b91b13f3",
+    "18dcfce315bbf254",
+    "bfc078247818a78c",
+    "113b1c9abaa85397",
+    "dee62aaaae4148b0",
+    "666e488842e59f93",
+    "b9590919728b830f",
+    "8a4c544c9b4f30d6",
+    "bea9a8f534700fd2",
+    "c4fdf4001b826762",
+    "9742daa2c63806b2",
+    "8bcbcb8871db335e"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 10,
+   "puede_simular": true,
+   "revision": "rev-78bbd0215361d86ed13dc982",
+   "revisionId": "rev-78bbd0215361d86ed13dc982",
+   "situacion_inicial": [
+    "0"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ },
+ "aula/aula_temporizacion": {
+  "disposiciones": [
+   "b1b227419bd1a5a6",
+   "daa39e74db0183b9",
+   "d75c840a767aaacd",
+   "171d65fdf0856041",
+   "8ecc416f7a01f140",
+   "36cb15aa0c934b9b",
+   "6c33c828ad6a2c12",
+   "2c9b496d4318e5ad",
+   "8b75a56d714cfd98",
+   "8da68a9302a0a7da",
+   "9354af8edaea9d5a",
+   "6a03ea6bcce0ebe5",
+   "d79046cb741db933",
+   "397383c3e5d6e968",
+   "37029c6119d9ee2d",
+   "47570784189b0230",
+   "dac1a1266de95a25",
+   "80482b7ea6413364",
+   "60513202b30d7bca",
+   "c6b6955a6aafdd09",
+   "8310afc37fb02691",
+   "e9ec0aed8ba32368",
+   "2b98aa9ccd9bd50b",
+   "edbd720f70d8149d",
+   "0a4db99933bd5d14"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-3621e2cd852f6abc701ea700",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "cec9ce489590a59c",
+     "estructura": "9939d9d93fdf6dc9",
+     "evolucion": [
+      "a9b06b452aa2bb5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-3621e2cd852f6abc701ea700",
+     "revisionId": "rev-3621e2cd852f6abc701ea700",
+     "situacion_inicial": [
+      "E0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-3621e2cd852f6abc701ea700",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "1d1d31fd931f8001",
+     "estructura": "268016d8f95fee8b",
+     "evolucion": [
+      "a9b06b452aa2bb5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-3621e2cd852f6abc701ea700",
+     "revisionId": "rev-3621e2cd852f6abc701ea700",
+     "situacion_inicial": [
+      "E0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-03a3542a89d68b174132fed6",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "d5a8870e4ad10a32",
+     "estructura": "e698ffdefcf1c30d",
+     "evolucion": [
+      "a9b06b452aa2bb5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-03a3542a89d68b174132fed6",
+     "revisionId": "rev-03a3542a89d68b174132fed6",
+     "situacion_inicial": [
+      "E0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-03a3542a89d68b174132fed6",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "d5a8870e4ad10a32",
+     "estructura": "188758959a490d6d",
+     "evolucion": [
+      "f574f7edda5205b4"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-03a3542a89d68b174132fed6",
+     "revisionId": "rev-03a3542a89d68b174132fed6",
+     "situacion_inicial": [
+      "E0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-03a3542a89d68b174132fed6",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "d5a8870e4ad10a32",
+     "estructura": "e698ffdefcf1c30d",
+     "evolucion": [
+      "a9b06b452aa2bb5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-03a3542a89d68b174132fed6",
+     "revisionId": "rev-03a3542a89d68b174132fed6",
+     "situacion_inicial": [
+      "E0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-3621e2cd852f6abc701ea700",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "1d1d31fd931f8001",
+     "estructura": "268016d8f95fee8b",
+     "evolucion": [
+      "a9b06b452aa2bb5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-3621e2cd852f6abc701ea700",
+     "revisionId": "rev-3621e2cd852f6abc701ea700",
+     "situacion_inicial": [
+      "E0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-3621e2cd852f6abc701ea700",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "cec9ce489590a59c",
+     "estructura": "9939d9d93fdf6dc9",
+     "evolucion": [
+      "a9b06b452aa2bb5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-3621e2cd852f6abc701ea700",
+     "revisionId": "rev-3621e2cd852f6abc701ea700",
+     "situacion_inicial": [
+      "E0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-3621e2cd852f6abc701ea700",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "eb7e4fb68af99592",
+     "estructura": "ee92abea88e36937",
+     "evolucion": [
+      "a9b06b452aa2bb5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-3621e2cd852f6abc701ea700",
+     "revisionId": "rev-3621e2cd852f6abc701ea700",
+     "situacion_inicial": [
+      "E0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-3621e2cd852f6abc701ea700",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "cec9ce489590a59c",
+     "estructura": "9939d9d93fdf6dc9",
+     "evolucion": [
+      "a9b06b452aa2bb5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-3621e2cd852f6abc701ea700",
+     "revisionId": "rev-3621e2cd852f6abc701ea700",
+     "situacion_inicial": [
+      "E0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-3621e2cd852f6abc701ea700",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "1d1d31fd931f8001",
+     "estructura": "268016d8f95fee8b",
+     "evolucion": [
+      "a9b06b452aa2bb5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 6,
+     "puede_simular": true,
+     "revision": "rev-3621e2cd852f6abc701ea700",
+     "revisionId": "rev-3621e2cd852f6abc701ea700",
+     "situacion_inicial": [
+      "E0"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas",
+    "temporal.delay"
+   ],
+   "cm_revision": "rev-3621e2cd852f6abc701ea700",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "eb7e4fb68af99592",
+   "estructura": "ee92abea88e36937",
+   "evolucion": [
+    "a9b06b452aa2bb5b",
+    "442a5d4adf76ed08",
+    "d514d110daff2b28",
+    "53f47a1469bcf887",
+    "339661c7586ac8bc",
+    "e6acce728bb2ddb7",
+    "1b6144c299307180",
+    "7400bdf8a5b64f6e",
+    "7b831250761ab69a",
+    "679a4c29563f2493",
+    "2a34ca28476bf7e9",
+    "5d965f5dcd661077",
+    "20998a78bab8f00b"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 6,
+   "puede_simular": true,
+   "revision": "rev-3621e2cd852f6abc701ea700",
+   "revisionId": "rev-3621e2cd852f6abc701ea700",
+   "situacion_inicial": [
+    "E0"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ },
+ "fixtures/aa117/desaparece.grafnet": {
+  "disposiciones": [
+   "c3367956a4b903cc",
+   "ea310114b04b6add",
+   "d8a3930bc012e8cb",
+   "77ef6c0d69fb9a8d",
+   "e5c96f4175dff1e9",
+   "ba747b21d195e70c",
+   "a107ca62c7f94e99",
+   "e90bea53752273a0",
+   "15493bb696b4319d",
+   "cca9b92745e869fd",
+   "b6f5bbb7fa900261",
+   "d9a628cffd8f95b4",
+   "5c646287cf022ccc",
+   "28938e59f1849940",
+   "db5668530733adb4",
+   "c3e180535ef662fc",
+   "aec3d2b7982a03f9",
+   "d028732bc5f32f2e",
+   "6f74722c25dff2b6",
+   "1a7a72ce1a6a4371",
+   "6bd841bf7490f4df",
+   "e5e60b42dd8b54cc",
+   "596e8115742e1670",
+   "b9daa3dee8e084cc",
+   "ec9c0a00947837d8"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay",
+      "transiciones.sumidero"
+     ],
+     "cm_revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "compile_diags": "74797c74fa7620e2",
+     "editor_validate": "74797c74fa7620e2",
+     "enlaces": "4847e4f734478e53",
+     "estructura": "aa5acc22405455ed",
+     "n_diag": 2,
+     "n_enlaces": 9,
+     "puede_simular": false,
+     "revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "revisionId": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "validacion": "74797c74fa7620e2"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay",
+      "transiciones.sumidero"
+     ],
+     "cm_revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "compile_diags": "74797c74fa7620e2",
+     "editor_validate": "74797c74fa7620e2",
+     "enlaces": "2d42da5767dd2523",
+     "estructura": "711c128efadd96a8",
+     "n_diag": 2,
+     "n_enlaces": 9,
+     "puede_simular": false,
+     "revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "revisionId": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "validacion": "74797c74fa7620e2"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay",
+      "transiciones.sumidero"
+     ],
+     "cm_revision": "rev-b75b0e7ec0e424160ee56ad6",
+     "compile_diags": "74797c74fa7620e2",
+     "editor_validate": "74797c74fa7620e2",
+     "enlaces": "0e5c4fa22749579d",
+     "estructura": "1a9cc142d4bdc4bc",
+     "n_diag": 2,
+     "n_enlaces": 9,
+     "puede_simular": false,
+     "revision": "rev-b75b0e7ec0e424160ee56ad6",
+     "revisionId": "rev-b75b0e7ec0e424160ee56ad6",
+     "validacion": "74797c74fa7620e2"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay",
+      "transiciones.sumidero"
+     ],
+     "cm_revision": "rev-b75b0e7ec0e424160ee56ad6",
+     "compile_diags": "74797c74fa7620e2",
+     "editor_validate": "74797c74fa7620e2",
+     "enlaces": "0e5c4fa22749579d",
+     "estructura": "4cfb12fc5fc3016f",
+     "n_diag": 2,
+     "n_enlaces": 9,
+     "puede_simular": false,
+     "revision": "rev-b75b0e7ec0e424160ee56ad6",
+     "revisionId": "rev-b75b0e7ec0e424160ee56ad6",
+     "validacion": "74797c74fa7620e2"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay",
+      "transiciones.sumidero"
+     ],
+     "cm_revision": "rev-b75b0e7ec0e424160ee56ad6",
+     "compile_diags": "74797c74fa7620e2",
+     "editor_validate": "74797c74fa7620e2",
+     "enlaces": "0e5c4fa22749579d",
+     "estructura": "1a9cc142d4bdc4bc",
+     "n_diag": 2,
+     "n_enlaces": 9,
+     "puede_simular": false,
+     "revision": "rev-b75b0e7ec0e424160ee56ad6",
+     "revisionId": "rev-b75b0e7ec0e424160ee56ad6",
+     "validacion": "74797c74fa7620e2"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay",
+      "transiciones.sumidero"
+     ],
+     "cm_revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "compile_diags": "74797c74fa7620e2",
+     "editor_validate": "74797c74fa7620e2",
+     "enlaces": "2d42da5767dd2523",
+     "estructura": "711c128efadd96a8",
+     "n_diag": 2,
+     "n_enlaces": 9,
+     "puede_simular": false,
+     "revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "revisionId": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "validacion": "74797c74fa7620e2"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay",
+      "transiciones.sumidero"
+     ],
+     "cm_revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "compile_diags": "74797c74fa7620e2",
+     "editor_validate": "74797c74fa7620e2",
+     "enlaces": "4847e4f734478e53",
+     "estructura": "aa5acc22405455ed",
+     "n_diag": 2,
+     "n_enlaces": 9,
+     "puede_simular": false,
+     "revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "revisionId": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "validacion": "74797c74fa7620e2"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay",
+      "transiciones.sumidero"
+     ],
+     "cm_revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "compile_diags": "74797c74fa7620e2",
+     "editor_validate": "74797c74fa7620e2",
+     "enlaces": "db19e1ff314c0640",
+     "estructura": "4f766955b413b88c",
+     "n_diag": 2,
+     "n_enlaces": 9,
+     "puede_simular": false,
+     "revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "revisionId": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "validacion": "74797c74fa7620e2"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay",
+      "transiciones.sumidero"
+     ],
+     "cm_revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "compile_diags": "74797c74fa7620e2",
+     "editor_validate": "74797c74fa7620e2",
+     "enlaces": "4847e4f734478e53",
+     "estructura": "aa5acc22405455ed",
+     "n_diag": 2,
+     "n_enlaces": 9,
+     "puede_simular": false,
+     "revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "revisionId": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "validacion": "74797c74fa7620e2"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay",
+      "transiciones.sumidero"
+     ],
+     "cm_revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "compile_diags": "74797c74fa7620e2",
+     "editor_validate": "74797c74fa7620e2",
+     "enlaces": "2d42da5767dd2523",
+     "estructura": "711c128efadd96a8",
+     "n_diag": 2,
+     "n_enlaces": 9,
+     "puede_simular": false,
+     "revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "revisionId": "rev-a0d0e0ff53cf023ad0ade8c4",
+     "validacion": "74797c74fa7620e2"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas",
+    "acciones.memorizadas",
+    "eventos.entradas",
+    "temporal.delay",
+    "transiciones.sumidero"
+   ],
+   "cm_revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+   "compile_diags": "74797c74fa7620e2",
+   "editor_validate": "74797c74fa7620e2",
+   "enlaces": "db19e1ff314c0640",
+   "estructura": "4f766955b413b88c",
+   "n_diag": 2,
+   "n_enlaces": 9,
+   "puede_simular": false,
+   "revision": "rev-a0d0e0ff53cf023ad0ade8c4",
+   "revisionId": "rev-a0d0e0ff53cf023ad0ade8c4",
+   "validacion": "74797c74fa7620e2"
+  }
+ },
+ "fixtures/aa117/reto6.grafnet": {
+  "disposiciones": [
+   "35503f1392549a60",
+   "6e6471813924a7bd",
+   "cf16baf9ac1b444b",
+   "4b99d99cbee5bade",
+   "bb33c16d98ac3a38",
+   "e5f2f1e40edeedd6",
+   "1e27e25977411bd8",
+   "ee7b57ef361aa009",
+   "83161e9cfe669de8",
+   "57d93d02fd82cb23",
+   "bad30d1c07c4adaf",
+   "9081b03ff82f3b7d",
+   "b93f0708b94ce9c6",
+   "4bc16b96b9abcbce",
+   "9deea8e5ab585fc1",
+   "2dff10d9198771ba",
+   "c15860014c656141",
+   "b8ee64e0fb49c704",
+   "ec502a8e901386fd",
+   "1c29c1b41410898f",
+   "91e83d484d13133a",
+   "e99b3592d357e85d",
+   "391c9a2ea1d36082",
+   "e1cf93d400b0be9d",
+   "567a973f61e2fcb8"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "38e87f215ac3233f",
+     "estructura": "3a4f28b3f2e292ff",
+     "evolucion": [
+      "3fbe85da7d42d28c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 20,
+     "puede_simular": true,
+     "revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "revisionId": "rev-7ee4c8b3b8fe58066d56b51c",
+     "situacion_inicial": [
+      "s-a6b9fd5c266f423aaf27426e8319e6f6"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "2d934799533aebc4",
+     "estructura": "27dc292a48fc5e96",
+     "evolucion": [
+      "3fbe85da7d42d28c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 20,
+     "puede_simular": true,
+     "revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "revisionId": "rev-7ee4c8b3b8fe58066d56b51c",
+     "situacion_inicial": [
+      "s-a6b9fd5c266f423aaf27426e8319e6f6"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-40da16934e6f38fa36369a0f",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "2d934799533aebc4",
+     "estructura": "da47359b88b1e356",
+     "evolucion": [
+      "3fbe85da7d42d28c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 20,
+     "puede_simular": true,
+     "revision": "rev-40da16934e6f38fa36369a0f",
+     "revisionId": "rev-40da16934e6f38fa36369a0f",
+     "situacion_inicial": [
+      "s-a6b9fd5c266f423aaf27426e8319e6f6"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-40da16934e6f38fa36369a0f",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "2d934799533aebc4",
+     "estructura": "4426f24fa956e7d9",
+     "evolucion": [
+      "ce910e280deef481"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 20,
+     "puede_simular": true,
+     "revision": "rev-40da16934e6f38fa36369a0f",
+     "revisionId": "rev-40da16934e6f38fa36369a0f",
+     "situacion_inicial": [
+      "s-a6b9fd5c266f423aaf27426e8319e6f6"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-40da16934e6f38fa36369a0f",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "2d934799533aebc4",
+     "estructura": "da47359b88b1e356",
+     "evolucion": [
+      "3fbe85da7d42d28c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 20,
+     "puede_simular": true,
+     "revision": "rev-40da16934e6f38fa36369a0f",
+     "revisionId": "rev-40da16934e6f38fa36369a0f",
+     "situacion_inicial": [
+      "s-a6b9fd5c266f423aaf27426e8319e6f6"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "2d934799533aebc4",
+     "estructura": "27dc292a48fc5e96",
+     "evolucion": [
+      "3fbe85da7d42d28c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 20,
+     "puede_simular": true,
+     "revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "revisionId": "rev-7ee4c8b3b8fe58066d56b51c",
+     "situacion_inicial": [
+      "s-a6b9fd5c266f423aaf27426e8319e6f6"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "38e87f215ac3233f",
+     "estructura": "3a4f28b3f2e292ff",
+     "evolucion": [
+      "3fbe85da7d42d28c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 20,
+     "puede_simular": true,
+     "revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "revisionId": "rev-7ee4c8b3b8fe58066d56b51c",
+     "situacion_inicial": [
+      "s-a6b9fd5c266f423aaf27426e8319e6f6"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "d71d0aae77f12859",
+     "estructura": "60b819f6a17af48c",
+     "evolucion": [
+      "3fbe85da7d42d28c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 20,
+     "puede_simular": true,
+     "revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "revisionId": "rev-7ee4c8b3b8fe58066d56b51c",
+     "situacion_inicial": [
+      "s-a6b9fd5c266f423aaf27426e8319e6f6"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "38e87f215ac3233f",
+     "estructura": "3a4f28b3f2e292ff",
+     "evolucion": [
+      "3fbe85da7d42d28c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 20,
+     "puede_simular": true,
+     "revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "revisionId": "rev-7ee4c8b3b8fe58066d56b51c",
+     "situacion_inicial": [
+      "s-a6b9fd5c266f423aaf27426e8319e6f6"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "2d934799533aebc4",
+     "estructura": "27dc292a48fc5e96",
+     "evolucion": [
+      "3fbe85da7d42d28c"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 20,
+     "puede_simular": true,
+     "revision": "rev-7ee4c8b3b8fe58066d56b51c",
+     "revisionId": "rev-7ee4c8b3b8fe58066d56b51c",
+     "situacion_inicial": [
+      "s-a6b9fd5c266f423aaf27426e8319e6f6"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas",
+    "eventos.entradas",
+    "temporal.delay"
+   ],
+   "cm_revision": "rev-7ee4c8b3b8fe58066d56b51c",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "d71d0aae77f12859",
+   "estructura": "60b819f6a17af48c",
+   "evolucion": [
+    "3fbe85da7d42d28c",
+    "a24a0148f5efe8aa",
+    "bb82badaf1984616",
+    "1e149029dd386620",
+    "1a5981f67dc9344a",
+    "43d928ff7e38c550",
+    "708db473cc641e4a",
+    "31bc8ff40ebabf30",
+    "aa9fee7ee9873896",
+    "fa92ddfdf40bb47d",
+    "e35d9082ec9f8a11",
+    "9ed245291cd647b5",
+    "5fee04ac14bbad6c"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 20,
+   "puede_simular": true,
+   "revision": "rev-7ee4c8b3b8fe58066d56b51c",
+   "revisionId": "rev-7ee4c8b3b8fe58066d56b51c",
+   "situacion_inicial": [
+    "s-a6b9fd5c266f423aaf27426e8319e6f6"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ },
+ "fixtures/referencia/guia_gemma.grafnet": {
+  "disposiciones": [
+   "fe8b0e5506b2960b",
+   "65c56f1f9de710e5",
+   "5874e903a5c1ba9d",
+   "95181163f4dbe2c2",
+   "f171ac1cc408be08",
+   "957ced7e762ebc0b",
+   "a4910d6be83e0280",
+   "1e93ead1a4d5fc7c",
+   "ea147a661cc6514f",
+   "decd2bf651990c8a",
+   "4cf4c71028792db9",
+   "a6e399fa9761eae7",
+   "10dba309493162ee",
+   "e70798858e014192",
+   "523751a7aa732b5d",
+   "520f63e9b715352e",
+   "643e23be2207c8d4",
+   "047be2c49f3145ef",
+   "53e43e40bfb02dfc",
+   "4e8156d781ba4c0e",
+   "d5fa64903d2d1382",
+   "51717a3c4796daf3",
+   "a981e86d290f011a",
+   "628602dfc72c8f31",
+   "b9f9dde9fb821425"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.actividad",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-39f2e02d7b14c933736f474c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "c2f314c901d18946",
+     "estructura": "5db7d1a792a4db95",
+     "evolucion": [
+      "24c2463264be4a5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 60,
+     "puede_simular": true,
+     "revision": "rev-39f2e02d7b14c933736f474c",
+     "revisionId": "rev-39f2e02d7b14c933736f474c",
+     "situacion_inicial": [
+      "s-0157b6b8cfa749438f50c0b6b33b9a30",
+      "s-37bd1f004d474e60bd663d0a2a641fc4",
+      "s-6073dc57f028471cb052d574e0fbcbe4"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.actividad",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-39f2e02d7b14c933736f474c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "bed4bec11ab7b4c5",
+     "estructura": "558eb6e065c740f1",
+     "evolucion": [
+      "24c2463264be4a5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 60,
+     "puede_simular": true,
+     "revision": "rev-39f2e02d7b14c933736f474c",
+     "revisionId": "rev-39f2e02d7b14c933736f474c",
+     "situacion_inicial": [
+      "s-0157b6b8cfa749438f50c0b6b33b9a30",
+      "s-37bd1f004d474e60bd663d0a2a641fc4",
+      "s-6073dc57f028471cb052d574e0fbcbe4"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.actividad",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-eea0a405d9bd55f0924a5860",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "bed4bec11ab7b4c5",
+     "estructura": "8ce7de1177cd4307",
+     "evolucion": [
+      "24c2463264be4a5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 60,
+     "puede_simular": true,
+     "revision": "rev-eea0a405d9bd55f0924a5860",
+     "revisionId": "rev-eea0a405d9bd55f0924a5860",
+     "situacion_inicial": [
+      "s-0157b6b8cfa749438f50c0b6b33b9a30",
+      "s-37bd1f004d474e60bd663d0a2a641fc4",
+      "s-6073dc57f028471cb052d574e0fbcbe4"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.actividad",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-eea0a405d9bd55f0924a5860",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "bed4bec11ab7b4c5",
+     "estructura": "7d6057045ae5d4c4",
+     "evolucion": [
+      "50435c7858acfa51"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 60,
+     "puede_simular": true,
+     "revision": "rev-eea0a405d9bd55f0924a5860",
+     "revisionId": "rev-eea0a405d9bd55f0924a5860",
+     "situacion_inicial": [
+      "s-0157b6b8cfa749438f50c0b6b33b9a30",
+      "s-37bd1f004d474e60bd663d0a2a641fc4",
+      "s-6073dc57f028471cb052d574e0fbcbe4"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.actividad",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-eea0a405d9bd55f0924a5860",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "bed4bec11ab7b4c5",
+     "estructura": "8ce7de1177cd4307",
+     "evolucion": [
+      "24c2463264be4a5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 60,
+     "puede_simular": true,
+     "revision": "rev-eea0a405d9bd55f0924a5860",
+     "revisionId": "rev-eea0a405d9bd55f0924a5860",
+     "situacion_inicial": [
+      "s-0157b6b8cfa749438f50c0b6b33b9a30",
+      "s-37bd1f004d474e60bd663d0a2a641fc4",
+      "s-6073dc57f028471cb052d574e0fbcbe4"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.actividad",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-39f2e02d7b14c933736f474c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "bed4bec11ab7b4c5",
+     "estructura": "558eb6e065c740f1",
+     "evolucion": [
+      "24c2463264be4a5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 60,
+     "puede_simular": true,
+     "revision": "rev-39f2e02d7b14c933736f474c",
+     "revisionId": "rev-39f2e02d7b14c933736f474c",
+     "situacion_inicial": [
+      "s-0157b6b8cfa749438f50c0b6b33b9a30",
+      "s-37bd1f004d474e60bd663d0a2a641fc4",
+      "s-6073dc57f028471cb052d574e0fbcbe4"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.actividad",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-39f2e02d7b14c933736f474c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "c2f314c901d18946",
+     "estructura": "5db7d1a792a4db95",
+     "evolucion": [
+      "24c2463264be4a5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 60,
+     "puede_simular": true,
+     "revision": "rev-39f2e02d7b14c933736f474c",
+     "revisionId": "rev-39f2e02d7b14c933736f474c",
+     "situacion_inicial": [
+      "s-0157b6b8cfa749438f50c0b6b33b9a30",
+      "s-37bd1f004d474e60bd663d0a2a641fc4",
+      "s-6073dc57f028471cb052d574e0fbcbe4"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.actividad",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-39f2e02d7b14c933736f474c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "3f7a0935208bc887",
+     "estructura": "18e6aebd7ec5aa89",
+     "evolucion": [
+      "24c2463264be4a5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 60,
+     "puede_simular": true,
+     "revision": "rev-39f2e02d7b14c933736f474c",
+     "revisionId": "rev-39f2e02d7b14c933736f474c",
+     "situacion_inicial": [
+      "s-0157b6b8cfa749438f50c0b6b33b9a30",
+      "s-37bd1f004d474e60bd663d0a2a641fc4",
+      "s-6073dc57f028471cb052d574e0fbcbe4"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.actividad",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-39f2e02d7b14c933736f474c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "c2f314c901d18946",
+     "estructura": "5db7d1a792a4db95",
+     "evolucion": [
+      "24c2463264be4a5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 60,
+     "puede_simular": true,
+     "revision": "rev-39f2e02d7b14c933736f474c",
+     "revisionId": "rev-39f2e02d7b14c933736f474c",
+     "situacion_inicial": [
+      "s-0157b6b8cfa749438f50c0b6b33b9a30",
+      "s-37bd1f004d474e60bd663d0a2a641fc4",
+      "s-6073dc57f028471cb052d574e0fbcbe4"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.actividad",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-39f2e02d7b14c933736f474c",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "bed4bec11ab7b4c5",
+     "estructura": "558eb6e065c740f1",
+     "evolucion": [
+      "24c2463264be4a5b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 60,
+     "puede_simular": true,
+     "revision": "rev-39f2e02d7b14c933736f474c",
+     "revisionId": "rev-39f2e02d7b14c933736f474c",
+     "situacion_inicial": [
+      "s-0157b6b8cfa749438f50c0b6b33b9a30",
+      "s-37bd1f004d474e60bd663d0a2a641fc4",
+      "s-6073dc57f028471cb052d574e0fbcbe4"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas",
+    "acciones.memorizadas",
+    "eventos.actividad",
+    "eventos.entradas",
+    "jerarquia.encapsulacion",
+    "jerarquia.estructura",
+    "jerarquia.forzado",
+    "temporal.delay"
+   ],
+   "cm_revision": "rev-39f2e02d7b14c933736f474c",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "3f7a0935208bc887",
+   "estructura": "18e6aebd7ec5aa89",
+   "evolucion": [
+    "24c2463264be4a5b",
+    "c6882789d281c0a6",
+    "60a37c70e69157d7",
+    "93d527428e4e8e28",
+    "c44858a531b0dc90",
+    "6947e5e5eafd21ab",
+    "51ad0c5ca0918358",
+    "6a4a353e84f2b9f1",
+    "232fa95227b1f1f0",
+    "b5758a62d825bbeb",
+    "54b69e345b92132d",
+    "d80f2bbef8f509ed",
+    "7e186f6e9d8b8231"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 60,
+   "puede_simular": true,
+   "revision": "rev-39f2e02d7b14c933736f474c",
+   "revisionId": "rev-39f2e02d7b14c933736f474c",
+   "situacion_inicial": [
+    "s-0157b6b8cfa749438f50c0b6b33b9a30",
+    "s-37bd1f004d474e60bd663d0a2a641fc4",
+    "s-6073dc57f028471cb052d574e0fbcbe4"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ },
+ "fixtures/referencia/linea_larga.grafnet": {
+  "disposiciones": [
+   "77050532a07d660d",
+   "05ca8bbd537cd174",
+   "774c6aa321b1142c",
+   "8a1e048ec57f48e6",
+   "37450cb2b91400c6",
+   "fa466edfbf80f752",
+   "b07d3dc127c431e9",
+   "cd9f038dd0fb6705"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-d0ff2e6956142d51a87dbd40",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "20727d345a44fdc7",
+     "estructura": "5a97b199d26b7552",
+     "evolucion": [
+      "cab9711587b11536"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 224,
+     "puede_simular": true,
+     "revision": "rev-d0ff2e6956142d51a87dbd40",
+     "revisionId": "rev-d0ff2e6956142d51a87dbd40",
+     "situacion_inicial": [
+      "s-02f65fb564cf41dcad114d85c2046f5f",
+      "s-1642b67e71ce4c34857b4f3cfece72d0",
+      "s-1b9154045b1447e9a582676fbc609fc7",
+      "s-4a60014904ab48f788689f2f70dea6e7",
+      "s-5012ec9a748047aca24be01488280236",
+      "s-62e09c3cc316440aa47d7f63b9bc7864",
+      "s-6c67621fdd0b42acbd2faed96b17b13f",
+      "s-7a9beac4af984546b86775a4ea490121",
+      "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+      "s-9422c2a1a0524f93ac8f740cea9ae95a",
+      "s-abfcf0f1e82645fa9e87ca702724feb8",
+      "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+      "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-d0ff2e6956142d51a87dbd40",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "df8dd76f41a643aa",
+     "estructura": "bb6f2d77ee82dfbf",
+     "evolucion": [
+      "cab9711587b11536"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 224,
+     "puede_simular": true,
+     "revision": "rev-d0ff2e6956142d51a87dbd40",
+     "revisionId": "rev-d0ff2e6956142d51a87dbd40",
+     "situacion_inicial": [
+      "s-02f65fb564cf41dcad114d85c2046f5f",
+      "s-1642b67e71ce4c34857b4f3cfece72d0",
+      "s-1b9154045b1447e9a582676fbc609fc7",
+      "s-4a60014904ab48f788689f2f70dea6e7",
+      "s-5012ec9a748047aca24be01488280236",
+      "s-62e09c3cc316440aa47d7f63b9bc7864",
+      "s-6c67621fdd0b42acbd2faed96b17b13f",
+      "s-7a9beac4af984546b86775a4ea490121",
+      "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+      "s-9422c2a1a0524f93ac8f740cea9ae95a",
+      "s-abfcf0f1e82645fa9e87ca702724feb8",
+      "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+      "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-3f9de856bf2b46dfb8950e64",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "df8dd76f41a643aa",
+     "estructura": "cb3abb970e13d815",
+     "evolucion": [
+      "cab9711587b11536"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 224,
+     "puede_simular": true,
+     "revision": "rev-3f9de856bf2b46dfb8950e64",
+     "revisionId": "rev-3f9de856bf2b46dfb8950e64",
+     "situacion_inicial": [
+      "s-02f65fb564cf41dcad114d85c2046f5f",
+      "s-1642b67e71ce4c34857b4f3cfece72d0",
+      "s-1b9154045b1447e9a582676fbc609fc7",
+      "s-4a60014904ab48f788689f2f70dea6e7",
+      "s-5012ec9a748047aca24be01488280236",
+      "s-62e09c3cc316440aa47d7f63b9bc7864",
+      "s-6c67621fdd0b42acbd2faed96b17b13f",
+      "s-7a9beac4af984546b86775a4ea490121",
+      "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+      "s-9422c2a1a0524f93ac8f740cea9ae95a",
+      "s-abfcf0f1e82645fa9e87ca702724feb8",
+      "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+      "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-3f9de856bf2b46dfb8950e64",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "df8dd76f41a643aa",
+     "estructura": "4e5962c89b212842",
+     "evolucion": [
+      "ac4af7ddc6a67a73"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 224,
+     "puede_simular": true,
+     "revision": "rev-3f9de856bf2b46dfb8950e64",
+     "revisionId": "rev-3f9de856bf2b46dfb8950e64",
+     "situacion_inicial": [
+      "s-02f65fb564cf41dcad114d85c2046f5f",
+      "s-1642b67e71ce4c34857b4f3cfece72d0",
+      "s-1b9154045b1447e9a582676fbc609fc7",
+      "s-4a60014904ab48f788689f2f70dea6e7",
+      "s-5012ec9a748047aca24be01488280236",
+      "s-62e09c3cc316440aa47d7f63b9bc7864",
+      "s-6c67621fdd0b42acbd2faed96b17b13f",
+      "s-7a9beac4af984546b86775a4ea490121",
+      "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+      "s-9422c2a1a0524f93ac8f740cea9ae95a",
+      "s-abfcf0f1e82645fa9e87ca702724feb8",
+      "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+      "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-3f9de856bf2b46dfb8950e64",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "df8dd76f41a643aa",
+     "estructura": "cb3abb970e13d815",
+     "evolucion": [
+      "cab9711587b11536"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 224,
+     "puede_simular": true,
+     "revision": "rev-3f9de856bf2b46dfb8950e64",
+     "revisionId": "rev-3f9de856bf2b46dfb8950e64",
+     "situacion_inicial": [
+      "s-02f65fb564cf41dcad114d85c2046f5f",
+      "s-1642b67e71ce4c34857b4f3cfece72d0",
+      "s-1b9154045b1447e9a582676fbc609fc7",
+      "s-4a60014904ab48f788689f2f70dea6e7",
+      "s-5012ec9a748047aca24be01488280236",
+      "s-62e09c3cc316440aa47d7f63b9bc7864",
+      "s-6c67621fdd0b42acbd2faed96b17b13f",
+      "s-7a9beac4af984546b86775a4ea490121",
+      "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+      "s-9422c2a1a0524f93ac8f740cea9ae95a",
+      "s-abfcf0f1e82645fa9e87ca702724feb8",
+      "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+      "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-d0ff2e6956142d51a87dbd40",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "df8dd76f41a643aa",
+     "estructura": "bb6f2d77ee82dfbf",
+     "evolucion": [
+      "cab9711587b11536"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 224,
+     "puede_simular": true,
+     "revision": "rev-d0ff2e6956142d51a87dbd40",
+     "revisionId": "rev-d0ff2e6956142d51a87dbd40",
+     "situacion_inicial": [
+      "s-02f65fb564cf41dcad114d85c2046f5f",
+      "s-1642b67e71ce4c34857b4f3cfece72d0",
+      "s-1b9154045b1447e9a582676fbc609fc7",
+      "s-4a60014904ab48f788689f2f70dea6e7",
+      "s-5012ec9a748047aca24be01488280236",
+      "s-62e09c3cc316440aa47d7f63b9bc7864",
+      "s-6c67621fdd0b42acbd2faed96b17b13f",
+      "s-7a9beac4af984546b86775a4ea490121",
+      "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+      "s-9422c2a1a0524f93ac8f740cea9ae95a",
+      "s-abfcf0f1e82645fa9e87ca702724feb8",
+      "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+      "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-d0ff2e6956142d51a87dbd40",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "20727d345a44fdc7",
+     "estructura": "5a97b199d26b7552",
+     "evolucion": [
+      "cab9711587b11536"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 224,
+     "puede_simular": true,
+     "revision": "rev-d0ff2e6956142d51a87dbd40",
+     "revisionId": "rev-d0ff2e6956142d51a87dbd40",
+     "situacion_inicial": [
+      "s-02f65fb564cf41dcad114d85c2046f5f",
+      "s-1642b67e71ce4c34857b4f3cfece72d0",
+      "s-1b9154045b1447e9a582676fbc609fc7",
+      "s-4a60014904ab48f788689f2f70dea6e7",
+      "s-5012ec9a748047aca24be01488280236",
+      "s-62e09c3cc316440aa47d7f63b9bc7864",
+      "s-6c67621fdd0b42acbd2faed96b17b13f",
+      "s-7a9beac4af984546b86775a4ea490121",
+      "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+      "s-9422c2a1a0524f93ac8f740cea9ae95a",
+      "s-abfcf0f1e82645fa9e87ca702724feb8",
+      "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+      "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-d0ff2e6956142d51a87dbd40",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "96596c3b1275d2f3",
+     "estructura": "663ba97e3a2cb461",
+     "evolucion": [
+      "cab9711587b11536"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 224,
+     "puede_simular": true,
+     "revision": "rev-d0ff2e6956142d51a87dbd40",
+     "revisionId": "rev-d0ff2e6956142d51a87dbd40",
+     "situacion_inicial": [
+      "s-02f65fb564cf41dcad114d85c2046f5f",
+      "s-1642b67e71ce4c34857b4f3cfece72d0",
+      "s-1b9154045b1447e9a582676fbc609fc7",
+      "s-4a60014904ab48f788689f2f70dea6e7",
+      "s-5012ec9a748047aca24be01488280236",
+      "s-62e09c3cc316440aa47d7f63b9bc7864",
+      "s-6c67621fdd0b42acbd2faed96b17b13f",
+      "s-7a9beac4af984546b86775a4ea490121",
+      "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+      "s-9422c2a1a0524f93ac8f740cea9ae95a",
+      "s-abfcf0f1e82645fa9e87ca702724feb8",
+      "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+      "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-d0ff2e6956142d51a87dbd40",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "20727d345a44fdc7",
+     "estructura": "5a97b199d26b7552",
+     "evolucion": [
+      "cab9711587b11536"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 224,
+     "puede_simular": true,
+     "revision": "rev-d0ff2e6956142d51a87dbd40",
+     "revisionId": "rev-d0ff2e6956142d51a87dbd40",
+     "situacion_inicial": [
+      "s-02f65fb564cf41dcad114d85c2046f5f",
+      "s-1642b67e71ce4c34857b4f3cfece72d0",
+      "s-1b9154045b1447e9a582676fbc609fc7",
+      "s-4a60014904ab48f788689f2f70dea6e7",
+      "s-5012ec9a748047aca24be01488280236",
+      "s-62e09c3cc316440aa47d7f63b9bc7864",
+      "s-6c67621fdd0b42acbd2faed96b17b13f",
+      "s-7a9beac4af984546b86775a4ea490121",
+      "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+      "s-9422c2a1a0524f93ac8f740cea9ae95a",
+      "s-abfcf0f1e82645fa9e87ca702724feb8",
+      "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+      "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-d0ff2e6956142d51a87dbd40",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "df8dd76f41a643aa",
+     "estructura": "bb6f2d77ee82dfbf",
+     "evolucion": [
+      "cab9711587b11536"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 224,
+     "puede_simular": true,
+     "revision": "rev-d0ff2e6956142d51a87dbd40",
+     "revisionId": "rev-d0ff2e6956142d51a87dbd40",
+     "situacion_inicial": [
+      "s-02f65fb564cf41dcad114d85c2046f5f",
+      "s-1642b67e71ce4c34857b4f3cfece72d0",
+      "s-1b9154045b1447e9a582676fbc609fc7",
+      "s-4a60014904ab48f788689f2f70dea6e7",
+      "s-5012ec9a748047aca24be01488280236",
+      "s-62e09c3cc316440aa47d7f63b9bc7864",
+      "s-6c67621fdd0b42acbd2faed96b17b13f",
+      "s-7a9beac4af984546b86775a4ea490121",
+      "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+      "s-9422c2a1a0524f93ac8f740cea9ae95a",
+      "s-abfcf0f1e82645fa9e87ca702724feb8",
+      "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+      "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas",
+    "acciones.memorizadas",
+    "eventos.entradas",
+    "temporal.delay"
+   ],
+   "cm_revision": "rev-d0ff2e6956142d51a87dbd40",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "96596c3b1275d2f3",
+   "estructura": "663ba97e3a2cb461",
+   "evolucion": [
+    "cab9711587b11536",
+    "fd9bcf2baa4d0336",
+    "f4b70779c2d551d3",
+    "961a4983e6ee897a",
+    "21f83a7fcdb62946",
+    "f3cec03ec283c564",
+    "fbb421f8288fabe6",
+    "1c90adae8680d5ff",
+    "ae071a6cccd6dfa5",
+    "1f2ca922014ddf41",
+    "079c9e923cf3aa8b",
+    "5e231975b2a6ae77",
+    "f8e56a6d6857748f"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 224,
+   "puede_simular": true,
+   "revision": "rev-d0ff2e6956142d51a87dbd40",
+   "revisionId": "rev-d0ff2e6956142d51a87dbd40",
+   "situacion_inicial": [
+    "s-02f65fb564cf41dcad114d85c2046f5f",
+    "s-1642b67e71ce4c34857b4f3cfece72d0",
+    "s-1b9154045b1447e9a582676fbc609fc7",
+    "s-4a60014904ab48f788689f2f70dea6e7",
+    "s-5012ec9a748047aca24be01488280236",
+    "s-62e09c3cc316440aa47d7f63b9bc7864",
+    "s-6c67621fdd0b42acbd2faed96b17b13f",
+    "s-7a9beac4af984546b86775a4ea490121",
+    "s-7d4dcd905f9d4d7fa46eb0238b17df62",
+    "s-9422c2a1a0524f93ac8f740cea9ae95a",
+    "s-abfcf0f1e82645fa9e87ca702724feb8",
+    "s-d2f2c5a0f4444acb8deec87ce2df7f3d",
+    "s-f5646f0c95eb4e9dbabcd8fc3323b748"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ },
+ "generado/referencia_100": {
+  "disposiciones": [
+   "b4a86fd90cd2387c",
+   "f6e9586ff6d56ad1",
+   "a624e42e128555c4",
+   "0ba45c4e58037b7f",
+   "7a3defea7ebffaf7",
+   "43e147fa4f708cee",
+   "e6b2ed983aec252a",
+   "bb2b2774c0c34a04"
+  ],
+  "ediciones": [
+   [
+    "mover",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.limitadas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "jerarquia.macroetapas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-68070cbd83e2b71c1c309cf4",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "1c5f8dd011c7ff9c",
+     "estructura": "6fe885dfa9bb8a71",
+     "evolucion": [
+      "ce1b29d41a5aceaf"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 204,
+     "puede_simular": true,
+     "revision": "rev-68070cbd83e2b71c1c309cf4",
+     "revisionId": "rev-68070cbd83e2b71c1c309cf4",
+     "situacion_inicial": [
+      "ref-s-13",
+      "ref-s-140",
+      "ref-s-216",
+      "ref-s-257",
+      "ref-s-55",
+      "ref-s-97"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "mover_otra",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.limitadas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "jerarquia.macroetapas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-68070cbd83e2b71c1c309cf4",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "d1e4aff703812c2b",
+     "estructura": "91082ced5c436917",
+     "evolucion": [
+      "ce1b29d41a5aceaf"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 204,
+     "puede_simular": true,
+     "revision": "rev-68070cbd83e2b71c1c309cf4",
+     "revisionId": "rev-68070cbd83e2b71c1c309cf4",
+     "situacion_inicial": [
+      "ref-s-13",
+      "ref-s-140",
+      "ref-s-216",
+      "ref-s-257",
+      "ref-s-55",
+      "ref-s-97"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "anadir_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.limitadas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "jerarquia.macroetapas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-e5b19376602260fec8de0099",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "d1e4aff703812c2b",
+     "estructura": "f0fd7955fa2737da",
+     "evolucion": [
+      "ce1b29d41a5aceaf"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 204,
+     "puede_simular": true,
+     "revision": "rev-e5b19376602260fec8de0099",
+     "revisionId": "rev-e5b19376602260fec8de0099",
+     "situacion_inicial": [
+      "ref-s-13",
+      "ref-s-140",
+      "ref-s-216",
+      "ref-s-257",
+      "ref-s-55",
+      "ref-s-97"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.limitadas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "jerarquia.macroetapas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-e5b19376602260fec8de0099",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "d1e4aff703812c2b",
+     "estructura": "4a5d33f75050c580",
+     "evolucion": [
+      "b37bfdc190cb024b"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 204,
+     "puede_simular": true,
+     "revision": "rev-e5b19376602260fec8de0099",
+     "revisionId": "rev-e5b19376602260fec8de0099",
+     "situacion_inicial": [
+      "ref-s-13",
+      "ref-s-140",
+      "ref-s-216",
+      "ref-s-257",
+      "ref-s-55",
+      "ref-s-97"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_renombrar",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.limitadas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "jerarquia.macroetapas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-e5b19376602260fec8de0099",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "d1e4aff703812c2b",
+     "estructura": "f0fd7955fa2737da",
+     "evolucion": [
+      "ce1b29d41a5aceaf"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 204,
+     "puede_simular": true,
+     "revision": "rev-e5b19376602260fec8de0099",
+     "revisionId": "rev-e5b19376602260fec8de0099",
+     "situacion_inicial": [
+      "ref-s-13",
+      "ref-s-140",
+      "ref-s-216",
+      "ref-s-257",
+      "ref-s-55",
+      "ref-s-97"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer_etapa",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.limitadas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "jerarquia.macroetapas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-68070cbd83e2b71c1c309cf4",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "d1e4aff703812c2b",
+     "estructura": "91082ced5c436917",
+     "evolucion": [
+      "ce1b29d41a5aceaf"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 204,
+     "puede_simular": true,
+     "revision": "rev-68070cbd83e2b71c1c309cf4",
+     "revisionId": "rev-68070cbd83e2b71c1c309cf4",
+     "situacion_inicial": [
+      "ref-s-13",
+      "ref-s-140",
+      "ref-s-216",
+      "ref-s-257",
+      "ref-s-55",
+      "ref-s-97"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.limitadas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "jerarquia.macroetapas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-68070cbd83e2b71c1c309cf4",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "1c5f8dd011c7ff9c",
+     "estructura": "6fe885dfa9bb8a71",
+     "evolucion": [
+      "ce1b29d41a5aceaf"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 204,
+     "puede_simular": true,
+     "revision": "rev-68070cbd83e2b71c1c309cf4",
+     "revisionId": "rev-68070cbd83e2b71c1c309cf4",
+     "situacion_inicial": [
+      "ref-s-13",
+      "ref-s-140",
+      "ref-s-216",
+      "ref-s-257",
+      "ref-s-55",
+      "ref-s-97"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "deshacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.limitadas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "jerarquia.macroetapas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-68070cbd83e2b71c1c309cf4",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "6246cdc0ba997dfe",
+     "estructura": "93d53e641b772b31",
+     "evolucion": [
+      "ce1b29d41a5aceaf"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 204,
+     "puede_simular": true,
+     "revision": "rev-68070cbd83e2b71c1c309cf4",
+     "revisionId": "rev-68070cbd83e2b71c1c309cf4",
+     "situacion_inicial": [
+      "ref-s-13",
+      "ref-s-140",
+      "ref-s-216",
+      "ref-s-257",
+      "ref-s-55",
+      "ref-s-97"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.limitadas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "jerarquia.macroetapas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-68070cbd83e2b71c1c309cf4",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "1c5f8dd011c7ff9c",
+     "estructura": "6fe885dfa9bb8a71",
+     "evolucion": [
+      "ce1b29d41a5aceaf"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 204,
+     "puede_simular": true,
+     "revision": "rev-68070cbd83e2b71c1c309cf4",
+     "revisionId": "rev-68070cbd83e2b71c1c309cf4",
+     "situacion_inicial": [
+      "ref-s-13",
+      "ref-s-140",
+      "ref-s-216",
+      "ref-s-257",
+      "ref-s-55",
+      "ref-s-97"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ],
+   [
+    "rehacer2",
+    {
+     "capacidades": [
+      "acciones.continuas",
+      "acciones.limitadas",
+      "acciones.memorizadas",
+      "eventos.entradas",
+      "jerarquia.encapsulacion",
+      "jerarquia.estructura",
+      "jerarquia.forzado",
+      "jerarquia.macroetapas",
+      "temporal.delay"
+     ],
+     "cm_revision": "rev-68070cbd83e2b71c1c309cf4",
+     "compile_diags": "4f53cda18c2baa0c",
+     "editor_validate": "4f53cda18c2baa0c",
+     "enlaces": "d1e4aff703812c2b",
+     "estructura": "91082ced5c436917",
+     "evolucion": [
+      "ce1b29d41a5aceaf"
+     ],
+     "n_diag": 0,
+     "n_enlaces": 204,
+     "puede_simular": true,
+     "revision": "rev-68070cbd83e2b71c1c309cf4",
+     "revisionId": "rev-68070cbd83e2b71c1c309cf4",
+     "situacion_inicial": [
+      "ref-s-13",
+      "ref-s-140",
+      "ref-s-216",
+      "ref-s-257",
+      "ref-s-55",
+      "ref-s-97"
+     ],
+     "start_diags": "4f53cda18c2baa0c",
+     "validacion": "4f53cda18c2baa0c"
+    }
+   ]
+  ],
+  "inicial": {
+   "capacidades": [
+    "acciones.continuas",
+    "acciones.limitadas",
+    "acciones.memorizadas",
+    "eventos.entradas",
+    "jerarquia.encapsulacion",
+    "jerarquia.estructura",
+    "jerarquia.forzado",
+    "jerarquia.macroetapas",
+    "temporal.delay"
+   ],
+   "cm_revision": "rev-68070cbd83e2b71c1c309cf4",
+   "compile_diags": "4f53cda18c2baa0c",
+   "editor_validate": "4f53cda18c2baa0c",
+   "enlaces": "6246cdc0ba997dfe",
+   "estructura": "93d53e641b772b31",
+   "evolucion": [
+    "ce1b29d41a5aceaf",
+    "6cc53c74115b9f56",
+    "36d8fae9ba7f2747",
+    "826c4d7c983e6dc5",
+    "5d7c4bc088bd504d",
+    "fd6225c854b075dd",
+    "98af65598f47908d",
+    "093d59805577f2f5",
+    "548637b7ac34bf41",
+    "d904b606b12ef7ef",
+    "9c553bc00611d2a8",
+    "342021a48d75dc83",
+    "4d43fd8f1cc2a5a0"
+   ],
+   "n_diag": 0,
+   "n_enlaces": 204,
+   "puede_simular": true,
+   "revision": "rev-68070cbd83e2b71c1c309cf4",
+   "revisionId": "rev-68070cbd83e2b71c1c309cf4",
+   "situacion_inicial": [
+    "ref-s-13",
+    "ref-s-140",
+    "ref-s-216",
+    "ref-s-257",
+    "ref-s-55",
+    "ref-s-97"
+   ],
+   "start_diags": "4f53cda18c2baa0c",
+   "validacion": "4f53cda18c2baa0c"
+  }
+ }
+}

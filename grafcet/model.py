@@ -7,6 +7,7 @@ Requisitos: REQ-MOD-01..07, REQ-EXP-01, REQ-ACT-04, REQ-JER-03, REQ-DAT-01, REQ-
 """
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -282,10 +283,42 @@ def _cycle(graph: dict[str, set[str]]) -> list[str] | None:
     return None
 
 
+# Documentos que el editor ha «sellado»: los crea `Editor._txn` y nunca los modifica en el sitio (P-IMP-08), así que su revisión y
+# el resultado de validarlos no cambian mientras sigan siendo los mismos objetos. Solo por rendimiento: `validate_model` devuelve lo
+# mismo que sin esta memoria, pero no recalcula la huella canónica ni vuelve a validar un documento que ya validó con las mismas
+# lecturas (el editor valida el mismo documento desde la `Vista` y desde `Editor.validate`). id(doc) -> [doc, revisión, {lecturas: resultado}]
+_SELLADOS: dict[int, list[Any]] = {}
+MAX_SELLADOS = 32
+
+
+def sellar(doc: dict[str, Any], revision: str) -> None:
+    """Registra que `doc` es inmutable y que su revisión es `revision` (la que acaba de calcular quien lo creó)."""
+    _SELLADOS.pop(id(doc), None)
+    _SELLADOS[id(doc)] = [doc, revision, {}]
+    while len(_SELLADOS) > MAX_SELLADOS:
+        del _SELLADOS[next(iter(_SELLADOS))]
+
+
+def _copiar(r: "ValidationResult") -> "ValidationResult":
+    return ValidationResult([copy.copy(d) for d in r.diagnostics], r.model, set(r.capabilities))
+
+
 def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -> ValidationResult:
     """Valida el documento con las lecturas elegidas (P-IMP-21): una alternativa puede hacer que un caso no
     compile, se permita o siga detenido."""
     opt = normalize_options(options)
+    sello = _SELLADOS.get(id(doc))
+    if sello is None or sello[0] is not doc:
+        return _validar(doc, opt, None)
+    clave = tuple(sorted(opt.items()))
+    if clave in sello[2]:
+        return _copiar(sello[2][clave])
+    resultado = _validar(doc, opt, sello[1])
+    sello[2][clave] = _copiar(resultado)
+    return resultado
+
+
+def _validar(doc: dict[str, Any], opt: dict[str, str], revision: str | None) -> ValidationResult:
     v = _V(doc)
     if not v.fields("model", doc, "modelo"):
         return ValidationResult(v.d, None, v.caps)
@@ -728,7 +761,7 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
         return ValidationResult(v.d, None, v.caps)
 
     steps = {sid: Step(sid, s["label"], s["partialRef"], s["kind"], s["initial"]) for sid, s in raw_steps.items()}
-    cm = CompiledModel(model_id, compute_revision(doc), steps, transitions, variables, exprs, actions,
+    cm = CompiledModel(model_id, revision if revision is not None else compute_revision(doc), steps, transitions, variables, exprs, actions,
                        {pid: {"label": p["label"], "children": children.get(pid, set()),
                               "steps": {sid for sid, s in raw_steps.items() if s["partialRef"] == pid}}
                         for pid, p in partials.items()}, has_h, inputs)
