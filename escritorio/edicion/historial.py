@@ -9,7 +9,7 @@ from .constantes import MSG_ENCIMA
 class _Historial:
     def _atomico(
         self, etiqueta: str, fn: Callable[[], Any], hueco: bool = True, vista_actual: bool = False,
-        antes_de_notificar: Callable[[], None] | None = None,
+        antes_de_notificar: Callable[[], None] | None = None, vista_al_final: bool = False, emitir: bool = True,
     ) -> str | None:
         """Varias operaciones como una sola de deshacer; si una falla, no queda ninguna y se devuelve el motivo. Con `hueco`
         (lo normal), lo que ensanchó o añadió acciones aparta lo que estorba; sin él, la operación ya cuida de dónde pone
@@ -32,7 +32,8 @@ class _Historial:
             return "; ".join(self.sust(d.message) for d in exc.diagnostics)
         if antes_de_notificar is not None:
             antes_de_notificar()
-        self.cambia(reconstruir=not (vista_actual and hueco))
+        # `vista_al_final`: `fn` ya dejó la vista como queda (acabó con `reconstruir`); `emitir` falso: quien llama emite él, tras su mensaje
+        self.cambia(reconstruir=not ((vista_actual and hueco) or vista_al_final), emitir=emitir)
         if self._encima:  # no se pudo abrir hueco: se deja como está, con un aviso que no es un error
             self.informar(MSG_ENCIMA)
             self.parpadear(self._encima)

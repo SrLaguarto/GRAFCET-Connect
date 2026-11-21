@@ -207,7 +207,8 @@ class _Colocacion:
             self.reconstruir()
             if self._pares_solape(propios, True) - antes:
                 raise DiagnosticError(Diagnostic("D-FORMATO", MSG_EQUIDISTANCIA))
-        motivo = self._atomico("equidistanciar alturas", hacer, hueco=False)
+        # La vista ya es la de ahora al empezar (arriba) y al acabar `hacer`; el refresco de la ventana, uno solo, tras el mensaje.
+        motivo = self._atomico("equidistanciar alturas", hacer, hueco=False, vista_actual=True, vista_al_final=True, emitir=False)
         if motivo:
             self.ed.dirty = sucio  # lo que se deshizo no cuenta como un cambio sin guardar
             self.mensaje = motivo

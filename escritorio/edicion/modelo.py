@@ -196,12 +196,15 @@ class _Modelo:
             self.M.setdefault("partials", []).append({"id": pid, "label": parte["label"], "owner": parte.get("ownerRef"),
                                                       "kind": "enclosure", "ownerStep": dueno, "vacio": True, "x": x, "y": y})
 
-    def cambia(self, reconstruir: bool = True) -> None:
+    def cambia(self, reconstruir: bool = True, emitir: bool = True) -> None:
+        """Avisa de un cambio: rehace la vista (si `reconstruir`) y emite `cambiado`, que refresca la ventana. Con `emitir` falso no
+        emite: quien llama lo hará él, una sola vez, cuando acabe de poner su mensaje."""
         if self.vigencia_aviso.cambio():
             self._mensaje, self.mensaje_info = "", False
         if reconstruir:
             self.reconstruir()
-        self.cambiado.emit()
+        if emitir:
+            self.cambiado.emit()
 
     def anotacion(self, ident):
         return next((n for n in self.M.get("annotations",[]) if n["id"] == ident),None)

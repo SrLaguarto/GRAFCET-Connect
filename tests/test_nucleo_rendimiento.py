@@ -1,4 +1,4 @@
-"""SNUC01..SNUC08: los cambios de rendimiento del núcleo (V2-E3, paso 9) no cambian ningún resultado."""
+"""SNUC01..SNUC10: los cambios de rendimiento del núcleo (V2-E3, paso 9) no cambian ningún resultado."""
 import copy
 import json
 import sys
@@ -90,6 +90,31 @@ class HuellaUnaVezPorCambio(unittest.TestCase):
         self.assertEqual(validate_model(ed.model).model.revision, cambiada)
         ed.redo()
         self.assertEqual(validate_model(ed.model).model.revision, ultima)
+
+    def test_SNUC09_el_documento_inicial_del_editor_tambien_esta_sellado(self):
+        """REQ-DAT-02: un proyecto recién abierto (sin ninguna operación todavía) no recalcula la huella al validarse, y el editor sigue
+        siendo dueño del mismo documento que recibió (`ed.model is doc`: no se copia)."""
+        doc = new_grafcet_document("inicial")
+        ed = Editor(doc, ids=IdGenerator("i-"))
+        ed.add_variable("Marcha", "input", {"kind": "bool"})
+        ed.undo()  # vuelve al documento inicial
+        self.assertIs(ed.model, doc)
+        with mock.patch.object(modelo, "compute_revision", wraps=compute_revision) as huella:
+            r = validate_model(ed.model)
+            validate_model(ed.model)
+        self.assertEqual(huella.call_count, 0)
+        self.assertEqual(r.model.revision if r.model else compute_revision(doc), compute_revision(doc))
+
+    def test_SNUC10_un_borrador_reparado_al_abrir_tambien_se_sella_con_su_copia(self):
+        """REQ-DAT-02: si el editor repara el documento al abrirlo (copia y quita un enlace huérfano), sella la copia que usa."""
+        doc = new_grafcet_document("reparado")
+        doc["draftLinks"] = [{"id": "d1", "fromRef": "nada", "toRef": "nunca"}]
+        ed = Editor(doc, ids=IdGenerator("j-"))
+        self.assertIsNot(ed.model, doc)
+        self.assertEqual(ed.cleaned_draft_link_ids, ("d1",))
+        with mock.patch.object(modelo, "compute_revision", wraps=compute_revision) as huella:
+            validate_model(ed.model)
+        self.assertEqual(huella.call_count, 0)
 
 
 class ValidarUnaVez(unittest.TestCase):

@@ -2280,7 +2280,16 @@ class Ventana(ArchivosProyecto, QMainWindow):
             self.edicion.informar(texto)
             self.edicion.cambiado.emit()
 
+    refrescando = False  # dentro de `refrescar_edicion` (lo mira `GestorFlotantes.colocar`)
+
     def refrescar_edicion(self) -> None:
+        self.refrescando = True
+        try:
+            self._refrescar_edicion()
+        finally:
+            self.refrescando = False
+
+    def _refrescar_edicion(self) -> None:
         e = self.edicion
         if e is None or self.modo != "editar":
             return

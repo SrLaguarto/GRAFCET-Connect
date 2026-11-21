@@ -114,6 +114,10 @@ class Editor:
                     b[lado] = vistos
         self.dirty = bool(self.cleaned_draft_link_ids) or bool(self.cleaned_bar_refs)
         self.model["revisionId"] = compute_revision(self.model)
+        # El documento inicial también se sella (solo por rendimiento, ver `model.sellar`): el editor se queda con el `model` que recibe
+        # y nunca lo modifica en el sitio. Quien lo creó tampoco debe hacerlo (todos los que construyen un `Editor` en el programa le
+        # pasan un documento recién copiado o recién creado).
+        sellar(self.model, self.model["revisionId"])
 
     # -- infraestructura de transacciones
     @property

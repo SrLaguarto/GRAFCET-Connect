@@ -292,6 +292,7 @@ class GestorFlotantes(QObject):
         self.geometrias: dict[str, QRect] = {}
         self._escala = None
         self._colocando = False
+        self._colocar_pendiente = False
         self._vigilando = False
         self._tamano = QSize()
         self.arrastre = None
@@ -466,7 +467,13 @@ class GestorFlotantes(QObject):
         v.show()
         self._vigilar(True)
         self.colocar()
-        QTimer.singleShot(0, self, self.colocar)
+        if not self._colocar_pendiente:  # (una sola recolocación diferida aunque se refresque varias veces en la misma vuelta)
+            self._colocar_pendiente = True
+            QTimer.singleShot(0, self, self._colocar_diferido)
+
+    def _colocar_diferido(self) -> None:
+        self._colocar_pendiente = False
+        self.colocar()
 
     def _bloquear_fondo(self, objeto: QObject, evento: Any) -> bool:
         """También rechaza eventos enviados directamente, que eluden la modalidad nativa de Qt."""
@@ -700,6 +707,8 @@ class GestorFlotantes(QObject):
 
     def colocar(self) -> None:
         if self.principal is None or self._colocando or not self.principal.isVisible() or self.w.edicion is None:
+            return
+        if self.w.refrescando:  # `refrescar_edicion` acaba en `actualizar`, que recoloca: no se hace dos veces por cambio
             return
         self._colocando = True
         try:
