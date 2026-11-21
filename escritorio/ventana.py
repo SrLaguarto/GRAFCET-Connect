@@ -1442,7 +1442,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         una sesión nueva, que escribe sus salidas solo tras leer y aplicar las entradas de la planta. En Pausa ya está todo a
         0 y sin estado (Pausa es «todo a 0 hasta un nuevo Play»): no hay nada que reiniciar, solo se vuelve a pedir el cero
         a la planta si hay conexión."""
-        self.diagrama.scene().vaciar_textos()
         self._mostrar_pagina(False)
         if not self.a_ejecutar.isChecked():
             self.modbus.pausar(diagnostico=True)
@@ -1649,7 +1648,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.cambiar_modo("editar")
 
     def _establecer_edicion(self, e: Edicion) -> None:
-        self.diagrama.scene().vaciar_textos()
+        self.diagrama.scene().reiniciar()
         self.solo_lectura = False
         if self._errores_auto:
             self._marcar_errores(False, False)
@@ -1724,7 +1723,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
 
     def _poner_modo(self) -> None:
         """Alterna las herramientas sin perder tamaños de edición ni el encuadre manual."""
-        self._dibujo_simulado = None
+        self.diagrama.dibujado = None  # (otro modo, otro dibujo: lo primero que se pida se dibuja)
         self._ancho_reloj = 0  # el reloj de la barra de estado vuelve a medir lo que su texto (otro modo, otro texto)
         self.l_reloj.setMinimumWidth(0)
         self._modo_visual()
@@ -2646,7 +2645,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         Pausa conserva TCP y sigue observando las entradas, y Play vincula la sesión nueva al TCP existente."""
         if self._transicion_ui:
             return
-        self.diagrama.scene().vaciar_textos()
         self._encuadre_modo = self.diagrama.guardar_encuadre()
         self._generacion_encuadre = getattr(self, "_generacion_encuadre", 0) + 1
         generacion = self._generacion_encuadre
@@ -3106,8 +3104,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._iniciar_conexion_modbus(config, None, prueba)
 
     def _iniciar_conexion_modbus(self, config, sesion, prueba):
-        if not prueba:
-            self.diagrama.scene().vaciar_textos()
         en_play = self.a_ejecutar.isChecked() and not prueba  # P-IMP-172: al conectar en Play, se vuelve a Play
         try:
             self._parar_sin_cambiar_vista()
@@ -3146,7 +3142,6 @@ class Ventana(ArchivosProyecto, QMainWindow):
         finally:self._conservar_vista_al_parar=anterior
 
     def _desconectar_modbus(self):
-        self.diagrama.scene().vaciar_textos()
         anterior = getattr(self, "_conservar_vista_al_parar", False)
         self._conservar_vista_al_parar = True
         try:
@@ -3178,10 +3173,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
             # valores, colores e historial gráfico siguen formando parte de la huella.
             huella = {k: v for k, v in estado_dibujo.items()
                       if k not in ("time", "timeUs", "trace", "nextEvent", "nextEventUs")}
-            previo = getattr(self, "_dibujo_simulado", None)
+            # H5: se compara con lo que la vista tiene dibujado (lo registra `mostrar`, la llame quien la llame), no con lo último que pidió
+            # este método: Navegacion.ir o el botón de dependencias también dibujan.
+            previo = self.diagrama.dibujado
             if previo is None or previo[0] is not M or previo[1] != huella:
                 self.diagrama.mostrar(M, estado_dibujo)
-                self._dibujo_simulado = (M, copy.deepcopy(huella))
         values = S.get("values", {})
         for var, b in self.botones.items():
             b.setEnabled(stable)

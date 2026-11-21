@@ -51,8 +51,10 @@ TIPOS = ("continua", "condicionada", "activacion", "desactivacion", "evento")
 PESOS = (("anadir_etapa", 4), ("anadir_transicion", 2), ("anadir_accion", 5), ("anadir_debajo", 1), ("mover", 8),
          ("borrar", 3), ("deshacer", 6), ("rehacer", 3), ("pegar", 3), ("equidistanciar", 2), ("texto_accion", 3),
          ("condicion", 3), ("renombrar", 2), ("comentario", 2), ("flecha", 1), ("girar", 1), ("zoom", 2),
-         ("errores", 1), ("dependencias", 1), ("filtro", 1), ("play", 1), ("sim_paso", 2), ("stop", 6),
-         ("propiedades", 5), ("cerrar_propiedades", 1))
+         ("errores", 1), ("dependencias", 2), ("filtro", 1), ("play", 4), ("sim_paso", 1), ("stop", 1),
+         ("propiedades", 5), ("cerrar_propiedades", 1),
+         # simulación (V2-E4): tramos largos en que cambian entradas y situación
+         ("sim_fijar", 7), ("sim_cambio", 5), ("sim_reiniciar", 1), ("sim_filtro", 1), ("navegar", 2))
 AUTOMATICOS = ("parpadeo", "redibujar_edicion", "redibujar_senal", "refrescar_modbus", "refrescar", "mostrar_ultimo",
                "eventos", "refrescar_edicion")
 
@@ -118,7 +120,17 @@ def aplicar(w, r):
         if sim:
             paso(w, "avanzar", us=1_000_000 * (1 + r["v"] % 3))
         return
-    if sim:
+    if op in ("sim_fijar", "sim_cambio", "sim_reiniciar"):
+        if sim and w.v is not None and w.v.s is not None:
+            _operacion_sim(w, r)
+        return
+    if op == "navegar":
+        datos = w.navegacion.datos
+        if datos:
+            w.navegacion.ir(_elige([x["id"] for x in datos], k), enfocar=False)
+            bombear()
+        return
+    if sim and op not in ("dependencias", "zoom", "filtro", "sim_filtro"):
         return  # en simulación no se edita
     if op == "propiedades":
         tipo = r["v"] % 3
@@ -215,12 +227,42 @@ def aplicar(w, r):
         w._alternar_errores(w.b_errores.isChecked())
     elif op == "dependencias":
         d.mostrar_dependencias(not d.dependencias)
-    elif op == "filtro":
+    elif op in ("filtro", "sim_filtro"):
         nav = w.navegacion
         n = nav.parcial.count()
         nav.modo.setCurrentIndex(r["v"] % max(1, nav.modo.count()))
         nav.parcial.setCurrentIndex(k % n if n and r["k2"] % 3 else 0)
     bombear()
+
+
+def _entradas_sim(w):
+    s = w.v.s
+    return sorted(k for k, var in s.cm.variables.items() if var.role == "input" and var.type.kind == "bool")
+
+
+def _operacion_sim(w, r):
+    """Operaciones de simulación: cambiar 1 o 2 entradas, un guion corto hasta que cambie la situación, o Reiniciar."""
+    op, k = r["op"], r["k"]
+    s = w.v.s
+    entradas = _entradas_sim(w)
+    if op == "sim_reiniciar":
+        w.reiniciar()
+        bombear()
+    elif op == "sim_fijar" and entradas:
+        elegidas = list(dict.fromkeys(entradas[(k + i * 7) % len(entradas)] for i in range(1 + r["k2"] % 2)))
+        paso(w, "fijar", cambios={x: not bool(s.z.values[x]) for x in elegidas})
+        bombear()
+    elif op == "sim_cambio":
+        antes = set(w.v.s.z.situation)
+        for intento in range(6):  # (como `_buscar_cambio` del banco, con tope)
+            if entradas and intento % 2 == 0:
+                x = entradas[(k + intento) % len(entradas)]
+                paso(w, "fijar", cambios={x: not bool(w.v.s.z.values[x])})
+            else:
+                paso(w, "avanzar", us=1_000_000)
+            bombear()
+            if set(w.v.s.z.situation) != antes:
+                break
 
 
 def automatico(w, r):
@@ -346,9 +388,9 @@ def comprobar_objetos(w, momento):
         if isinstance(i, QGraphicsRectItem) and i.rect().isEmpty() and i.rect().width() == 0 and i.rect().height() == 0:
             raise Fallo("ESC-2", f"rectángulo vacío ({i.data(43)})", momento=momento)
     comprobar_lupa(w, momento)
+    registro(w, cosas, momento)  # (también al simular: la escena es incremental en los dos modos)
     if w.modo != "editar":
         return
-    registro(w, cosas, momento)
     ids, rutas, marcos = esperados(e)
     presentes = set()
     for i in cosas:
@@ -490,12 +532,119 @@ def comprobar_diagnosticos(w, momento):
         raise Fallo("ESC-5", "los diagnósticos memorizados no coinciden con una validación nueva", momento=momento)
 
 
+# ------------------------------------------------------------------------------------------------------------ simulación
+def foto_tabla(t):
+    """Todo lo que se ve de una tabla de estado: celdas (texto, ayuda, UserRole, color, letra), alto de cada fila, ancho de cada columna
+    y alto de la tabla."""
+    from PySide6.QtCore import Qt as _Qt
+    celdas = []
+    for r in range(t.rowCount()):
+        fila = []
+        for c in range(t.columnCount()):
+            it = t.item(r, c)
+            fila.append(None if it is None else (it.text(), it.toolTip(), it.data(_Qt.ItemDataRole.UserRole),
+                                                 it.foreground().color().rgba(), it.font().key()))
+        celdas.append(tuple(fila))
+    return (tuple(celdas), tuple(t.rowHeight(r) for r in range(t.rowCount())), tuple(t.columnWidth(c) for c in range(t.columnCount())),
+            t.height(), t.minimumHeight(), t.maximumHeight())
+
+
+def foto_paneles(w):
+    nombres = tuple(tuple(getattr(d.contexto, "_nombres", ())) for d in (*w._del_vars, w._del_temp))
+    return (foto_tabla(w.t_vars), foto_tabla(w.t_temp), w.c_temp.isVisibleTo(w), nombres, w.sc_entradas.height(),
+            w.sc_entradas.minimumHeight(), w.sc_entradas.maximumHeight())
+
+
+def comprobar_tablas(w, momento):
+    """ESC-6: las tablas de Variables y Temporizadores son las que deja la rutina completa (`_variables`) con el estado de ahora."""
+    bombear(1)
+    antes = foto_paneles(w)
+    completa = getattr(w, "_variables_completo", w._variables)
+    completa(w.v.model, w.v.state())
+    bombear(1)
+    despues = foto_paneles(w)
+    if antes != despues:
+        for nombre, a, b in zip(("t_vars", "t_temp", "c_temp", "contextos", "alto_entradas", "min_entradas", "max_entradas"), antes, despues):
+            if a != b:
+                raise Fallo("ESC-6", f"las tablas no son las de la rutina completa: difiere {nombre}", momento=momento)
+
+
+def comprobar_traza(w, momento):
+    """ESC-7: la traza tiene las filas, textos y colores de construirla de cero desde `S["trace"]`, desplazada al final."""
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QListWidgetItem
+    from escritorio.diagrama import COL
+    from escritorio.ventana import TRAZA
+    S = w.v.state()
+    defecto = QListWidgetItem("").foreground().color().rgba()
+    esperado = [(f"{r['time']:>9}   {r['text']}", QColor(COL[TRAZA[r["kind"]]]).rgba() if r["kind"] in TRAZA else defecto)
+                for r in S.get("trace", [])]
+    real = [(w.traza.item(i).text(), w.traza.item(i).foreground().color().rgba()) for i in range(w.traza.count())]
+    if real != esperado:
+        raise Fallo("ESC-7", f"la traza no es la de construirla de cero: {len(real)} filas frente a {len(esperado)}", momento=momento)
+    barra = w.traza.verticalScrollBar()
+    if barra.value() != barra.maximum():
+        raise Fallo("ESC-7", "la traza no está desplazada al final", momento=momento)
+
+
+def comprobar_entradas(w, momento):
+    """ESC-8: texto, marcado, habilitado y estilo de cada botón y campo de entrada son los que da el estado."""
+    S = w.v.state()
+    estable = S["status"] == "pausada-estable"
+    valores = S.get("values", {})
+    for var, b in w.botones.items():
+        if w.modbus.activo:
+            continue
+        if b.isEnabled() != estable:
+            raise Fallo("ESC-8", f"entrada {w.nombre(var)}: habilitada {b.isEnabled()}, debería {estable}", momento=momento)
+        if var in w.campos:
+            campo = w.campos[var]
+            if not campo.hasFocus() and campo.text() != str(valores.get(var, "")):
+                raise Fallo("ESC-8", f"campo {w.nombre(var)}: {campo.text()!r} en lugar de {valores.get(var, '')!r}", momento=momento)
+            if campo.isEnabled() != estable:
+                raise Fallo("ESC-8", f"campo {w.nombre(var)}: habilitado {campo.isEnabled()}, debería {estable}", momento=momento)
+            continue
+        on = valores.get(var) is True
+        esperado = (on, f"{w.nombre(var)} = {1 if on else 0}", on)
+        real = (b.isChecked(), b.text(), b.property("activa"))
+        if real != esperado:
+            raise Fallo("ESC-8", f"entrada {w.nombre(var)}: {real} en lugar de {esperado}", momento=momento)
+
+
+def comprobar_atajo(w, momento):
+    """ESC-9 (H5): tras un `refrescar` (que se salta el dibujo si el estado es idéntico al dibujado), la escena es la del estado vigente."""
+    from escritorio import diagrama as dg
+    w.refrescar()
+    if w.modo != "simular" or w.v is None:
+        return
+    d = w.diagrama
+    S, M = w.v.state(), w.v.model
+    estado = S if "time" in S else {}
+    fresca = QGraphicsScene()
+    dg.dibujar_directo(fresca, M, estado, set(d.seleccion_navegacion), None, None, [], [], d.dependencias)
+    filtro = bool(filtro_activo(w)[0])
+    if [huella_item(i, filtro) for i in figuras(d)] != [huella_item(i, filtro) for i in fresca.items(Qt.SortOrder.DescendingOrder)]:
+        raise Fallo("ESC-9", "tras refrescar, la escena no es la del estado vigente (el atajo del dibujo dejó un estado viejo)",
+                    momento=momento)
+    fresca.clear()
+
+
+def comprobar_simulacion(w, momento):
+    if w.modo != "simular" or w.v is None or w.v.s is None:
+        return
+    comprobar_tablas(w, momento)
+    comprobar_traza(w, momento)
+    comprobar_entradas(w, momento)
+    comprobar_atajo(w, momento)
+
+
 def comprobar(w, lite=False, huella=True, modelo=True, momento=""):
     comprobar_objetos(w, momento)
     if lite:
         return
     if huella:
         comprobar_huella(w, momento)
+    comprobar_simulacion(w, momento)
     if modelo:
         comprobar_modelo(w, momento)
         comprobar_diagnosticos(w, momento)

@@ -1,7 +1,8 @@
 """Escena incremental del editor: aplica solo lo que cambia entre dos modelos visuales (V2-E3, paso 4)."""
 from typing import Any
 
-from ..textos_diagrama import EscenaDiagrama
+from PySide6.QtWidgets import QGraphicsScene
+
 from . import realizador
 from .diferencia import diferencia
 from .modelo_visual import ModeloVisual
@@ -9,8 +10,8 @@ from .modelo_visual import ModeloVisual
 UMBRAL_REHACER = 0.6   # si cambia más de esta parte de los objetos, es más simple y barato rehacer la escena entera
 
 
-class EscenaIncremental(EscenaDiagrama):
-    """Una `EscenaDiagrama` que, en edición, guarda el modelo visual que tiene dibujado y los ítems de cada objeto
+class EscenaIncremental(QGraphicsScene):
+    """La escena del diagrama, en edición y en simulación: guarda el modelo visual que tiene dibujado y los ítems de cada objeto
     (`nodos`: clave -> [(descriptor, [ítems])]) y, ante uno nuevo, da de alta, de baja, actualiza y reordena solo lo que difiere.
 
     El dibujo completo de siempre (`diagrama.dibujar`, que usa la simulación) vacía el registro: la primera aplicación después
@@ -27,13 +28,9 @@ class EscenaIncremental(EscenaDiagrama):
         self.modelo: ModeloVisual | None = None
         self.nodos: dict[Any, list[tuple[Any, list[Any]]]] = {}
 
-    def vaciar_textos(self) -> None:
-        super().vaciar_textos()
-        self.reiniciar()
-
-    def comenzar_dibujo(self) -> None:
-        self.reiniciar()
-        super().comenzar_dibujo()
+    def clear(self) -> None:
+        self.reiniciar()  # (antes que `clear`: ningún envoltorio de un ítem que Qt va a destruir debe seguir en el registro)
+        super().clear()
 
     # --- aplicar
     def aplicar(self, mv: ModeloVisual) -> None:
@@ -58,14 +55,12 @@ class EscenaIncremental(EscenaDiagrama):
             self.error = fallo
 
     def _rehacer(self, mv: ModeloVisual) -> None:
-        self.comenzar_dibujo()
+        self.clear()
         try:
-            self.nodos = realizador.crear_todo(self, mv, reservar=False)
+            self.nodos = realizador.crear_todo(self, mv)
         except Exception:
             self.reiniciar()
             raise
-        finally:
-            self.terminar_dibujo()
         self.modelo = mv
 
     def _quitar(self, nodo: list[tuple[Any, list[Any]]]) -> None:
@@ -93,19 +88,19 @@ class EscenaIncremental(EscenaDiagrama):
                         rehecho.append((ahora, items))
                     else:
                         self._quitar([(antes, items)])
-                        items = realizador.crear(self, ahora, reservar=False)
+                        items = realizador.crear(self, ahora)
                         nuevos.extend(items)
                         recien.update(id(i) for i in items)
                         rehecho.append((ahora, items))
                 self.nodos[clave] = rehecho
             else:
                 self._quitar(nodo)
-                self.nodos[clave] = [(d, realizador.crear(self, d, reservar=False)) for d in descriptores]
+                self.nodos[clave] = [(d, realizador.crear(self, d)) for d in descriptores]
                 creados = [i for _, items in self.nodos[clave] for i in items]
                 nuevos.extend(creados)
                 recien.update(id(i) for i in creados)
         for clave, descriptores in cambios.altas.items():
-            self.nodos[clave] = [(d, realizador.crear(self, d, reservar=False)) for d in descriptores]
+            self.nodos[clave] = [(d, realizador.crear(self, d)) for d in descriptores]
             creados = [i for _, items in self.nodos[clave] for i in items]
             nuevos.extend(creados)
             recien.update(id(i) for i in creados)

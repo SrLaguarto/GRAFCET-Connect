@@ -30,11 +30,10 @@ def _poner(item: Any, z: float, tip: str | None, parcial: Any, elementos: Any) -
     return item
 
 
-def crear(escena: QGraphicsScene, d: Descriptor, reservar: bool = True) -> list[Any]:
-    """Crea y añade a la escena los ítems de un descriptor (los mismos, con los mismos datos, que `diagrama._Pintor`). Con `reservar`,
-    un texto de una `EscenaDiagrama` sale de su reserva de textos idénticos; la escena incremental no la usa."""
+def crear(escena: QGraphicsScene, d: Descriptor) -> list[Any]:
+    """Crea y añade a la escena los ítems de un descriptor (los mismos, con los mismos datos, que `diagrama._Pintor`)."""
     from .. import diagrama as dg
-    from ..textos_diagrama import EscenaDiagrama, texto_nuevo
+    from ..textos_diagrama import texto_nuevo
     tipo = d[0]
     if tipo == "linea":
         _, x1, y1, x2, y2, pluma, z, tip, parcial, elementos = d
@@ -63,8 +62,7 @@ def crear(escena: QGraphicsScene, d: Descriptor, reservar: bool = True) -> list[
     if tipo == "texto":
         _, contenido, color, (tamano, negrita, mono), x, arriba, z, tip, parcial, elementos = d
         fuente, tinta = dg._fuente(tamano, negrita, mono), QColor(dg.COL[color])
-        item = (escena.texto(contenido, tinta, fuente) if reservar and isinstance(escena, EscenaDiagrama)
-                else texto_nuevo(contenido, tinta, fuente))
+        item = texto_nuevo(contenido, tinta, fuente)
         item.setPos(x, arriba)
         item.setToolTip(tip or "")
         escena.addItem(item)
@@ -87,11 +85,11 @@ def todo(escena: QGraphicsScene, mv: ModeloVisual) -> None:
         crear(escena, d)
 
 
-def crear_todo(escena: QGraphicsScene, mv: ModeloVisual, reservar: bool = True) -> dict[Any, list[tuple[Descriptor, list[Any]]]]:
+def crear_todo(escena: QGraphicsScene, mv: ModeloVisual) -> dict[Any, list[tuple[Descriptor, list[Any]]]]:
     """Como `todo`, y devuelve los ítems de cada objeto: clave -> [(descriptor, [ítems])]."""
     nodos: dict[Any, list[tuple[Descriptor, list[Any]]]] = {}
     for clave, d in mv.secuencia:
-        nodos.setdefault(clave, []).append((d, crear(escena, d, reservar)))
+        nodos.setdefault(clave, []).append((d, crear(escena, d)))
     return nodos
 
 

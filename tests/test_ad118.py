@@ -16,7 +16,7 @@ if QT:
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QGraphicsTextItem
 
-    from artifacts.ad_118.medir_100_etapas import construir, muestra
+    from tools.medir_100_etapas import construir, muestra
     from escritorio.diagrama import _ajustar_enlaces, enlaces, posiciones
     from escritorio.geometria.enlaces import recalcular
     from escritorio.edicion import DY
@@ -117,11 +117,12 @@ class InterfazAD(BaseQt):
         w.rt.stop()
         HC._bombear()
         self.assertEqual(w.modo, "simular")
-        simulacion = next(i for i in textos() if i.toPlainText() == "Arranque")
+        cuenta = [i.toPlainText() for i in textos()].count("Arranque")
         w.a_ejecutar.setChecked(False)
         HC._bombear()
-        self.assertNotIn(simulacion, textos())
-        self.assertIn("Arranque", [i.toPlainText() for i in textos()])
+        # (V2-E4: la escena incremental sirve también en simulación; el texto de la simulación se reutiliza al
+        # volver a editar, así que ya no se exige que sea otro objeto, sino que no se duplique ni se pierda)
+        self.assertEqual([i.toPlainText() for i in textos()].count("Arranque"), cuenta)
 
     def test_SAD1_una_escena_y_limite_holgado_al_anadir_con_100_etapas(self):
         from escritorio.escena.escena import EscenaIncremental

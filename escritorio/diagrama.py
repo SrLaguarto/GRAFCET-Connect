@@ -15,6 +15,7 @@ el motor a través de grafcet.view.Vista; aquí solo se pinta.
 """
 from __future__ import annotations
 
+import copy
 import html
 from typing import Any
 
@@ -47,7 +48,7 @@ from .geometria.seleccion import _segmento
 from .geometria.textos import pos_comentario_e, pos_comentario_t
 from .escena.descriptores import Grabadora, Servicios
 from .escena.escena import EscenaIncremental
-from .textos_diagrama import EscenaDiagrama, texto_nuevo
+from .textos_diagrama import texto_nuevo
 
 MARK = 7       # divisiones de la macroetapa
 
@@ -158,8 +159,7 @@ class _Pintor:
             return 0.0
         font = _fuente(size, bold, mono)
         contenido, tinta = _html(segs, False, self.verdaderos), QColor(COL[color])
-        item = self.sc.texto(contenido, tinta, font) if isinstance(self.sc, EscenaDiagrama) else texto_nuevo(
-            contenido, tinta, font)
+        item = texto_nuevo(contenido, tinta, font)
         w = item.boundingRect().width()
         x0 = x - w if anchor == "end" else x - w / 2 if anchor == "middle" else x
         top = y - QFontMetricsF(font).ascent()
@@ -567,14 +567,8 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     from .escena import realizador
     from .escena.modelo_visual import construir
     mv = construir(M, S, sel, marcados, naranja, dependencias)
-    reutiliza = isinstance(scene, EscenaDiagrama)
-    if reutiliza:
-        scene.comenzar_dibujo()
-    else:
-        scene.clear()
+    scene.clear()
     realizador.todo(scene, mv)
-    if reutiliza:
-        scene.terminar_dibujo()
     if uniones is not None:
         uniones.extend(mv.uniones)
     if ordenes is not None:
@@ -587,15 +581,8 @@ def dibujar_directo(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any],
             uniones: list[dict[str, Any]] | None = None, ordenes: list[dict[str, Any]] | None = None,
             dependencias: bool = False) -> list[dict[str, Any]]:
     """Lo mismo que `dibujar`, pintando ítem a ítem con `_Pintor` (sin pasar por el modelo visual): es el dibujo de referencia."""
-    reutiliza = isinstance(scene, EscenaDiagrama)
-    if reutiliza:
-        scene.comenzar_dibujo()
-    else:
-        scene.clear()
-    cajas = _recorrer(_Pintor(scene), M, S, sel, marcados, naranja, uniones, ordenes, dependencias)
-    if reutiliza:
-        scene.terminar_dibujo()
-    return cajas
+    scene.clear()
+    return _recorrer(_Pintor(scene), M, S, sel, marcados, naranja, uniones, ordenes, dependencias)
 
 
 def _recorrer(pt: Any, M: dict[str, Any], S: dict[str, Any], sel: set[str] | None, marcados: set[str] | None,
@@ -1294,6 +1281,8 @@ class VistaDiagrama(QGraphicsView):
         self.ajustes: QSettings | None = None  # dónde se recuerda; sin él, los `ajustes` de la ventana que contiene la vista
         self._dependencias_leidas = False
         self._ultimo: tuple[Any, ...] | None = None  # lo último que se dibujó: lo repinta el botón de dependencias
+        self.dibujado: tuple[Any, ...] | None = None  # (M, huella del estado) de lo que la escena tiene dibujado, lo pida quien lo pida (H5)
+        self._firma_encuadre: tuple[Any, ...] | None = None  # con qué se encuadró la última vez (al simular): si no cambia, no se vuelve a encuadrar
         self._ajuste_pendiente = False  # se encajó el dibujo antes de que la vista se mostrara (con su tamaño final): al mostrarse o al primer cambio de tamaño se encaja de nuevo
         self._encuadrando: QRectF | None = None  # lo que acaba de encuadrarse, hasta que la ventana termina de recolocarse
         self._barra_zoom()
@@ -1966,12 +1955,13 @@ class VistaDiagrama(QGraphicsView):
         if self.controlador is None and sel is None: sel = self.seleccion_navegacion
         self._ultimo = (M, S, sel, marcados, naranja)
         escena = self.scene()
-        incremental = self.controlador is not None and isinstance(escena, EscenaIncremental)
+        incremental = isinstance(escena, EscenaIncremental)  # (en edición y en simulación)
         if incremental:
             from .escena.modelo_visual import construir
             mv = construir(M, S, sel, marcados, naranja, self.dependencias)  # si falla, la escena queda como estaba
             if solo_realces:
                 escena.aplicar(mv)
+                self.dibujado = (M, self.huella_estado(S))
                 self.cajas_acciones, self.uniones_acciones, self.cajas_ordenes = mv.cajas, mv.uniones, mv.ordenes
                 if self.navegacion and self.navegacion.parcial.currentData():
                     self.navegacion.filtrar()  # (con un filtro puesto, los realces nuevos también lo cumplen)
@@ -1993,18 +1983,36 @@ class VistaDiagrama(QGraphicsView):
         else:
             self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados, naranja, self.uniones_acciones, self.cajas_ordenes,
                                           self.dependencias)
+        self.dibujado = (M, self.huella_estado(S))
         if self.navegacion: self.navegacion.actualizar(M, S)
         r = self.scene().itemsBoundingRect()
         self._contenido = r if not r.isEmpty() else None
         self._actualizar_seleccion()
-        self._actualizar_escena()
-        if not self._manual:
-            self.ajustar()
-        elif self._origen:
-            self._al_origen()
+        firma = self._firma_vista() if self.controlador is None else None
+        if firma is not None and firma == self._firma_encuadre:
+            pass  # al simular, si lo dibujado y la vista no cambian, el encuadre es el de antes (rehacerlo repinta y renotifica)
+        else:
+            self._actualizar_escena()
+            if not self._manual:
+                self.ajustar()
+            elif self._origen:
+                self._al_origen()
+            self._firma_encuadre = self._firma_vista() if self.controlador is None else None
         if self._manual and self.controlador is not None:
             self._barras()  # lo dibujado cambió: puede haber dejado de caber, o de sobrar la barra
         self.vista_cambiada.emit()
+
+    @staticmethod
+    def huella_estado(S: dict[str, Any]) -> dict[str, Any]:
+        """Lo que del estado de la simulación cambia el dibujo (el reloj y la traza se muestran fuera de él), copiado."""
+        return copy.deepcopy({k: v for k, v in S.items() if k not in ("time", "timeUs", "trace", "nextEvent", "nextEventUs")})
+
+    def _firma_vista(self) -> tuple[Any, ...]:
+        """Todo de lo que depende el encuadre automático: lo dibujado, el tamaño de la vista, su zoom y su estado."""
+        c, a = self._contenido, self.area_minima
+        rect = lambda r: None if r is None else (r.x(), r.y(), r.width(), r.height())  # noqa: E731
+        v = self.viewport()
+        return (rect(c), rect(a), v.width(), v.height(), self.isVisible(), self._manual, self._origen, self.transform().m11())
 
     def _quitar_provisionales(self) -> None:
         """Las marcas provisionales (lazo, imán, destino, cajas rojas, anclas) viven en la escena fuera del modelo visual: el dibujo

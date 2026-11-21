@@ -128,11 +128,12 @@ class EscenaIncrementalReal(TestCase):
         self.igual_que_el_dibujo_directo()
 
     def test_SESC26_play_y_stop_dejan_la_escena_como_el_dibujo_directo(self):
-        """REQ-SIM-01: al entrar en simulación el registro se vacía y al volver a edición se rehace la escena entera."""
+        """REQ-SIM-01: Play y Stop pasan por la escena incremental (E4: también al simular hay registro) y la dejan como el dibujo
+        directo."""
         from tools.entorno_v2_e0 import bombear, play
         play(self.w)
         bombear()
-        self.assertIsNone(self.sc.modelo)
+        self.assertIsNotNone(self.sc.modelo)
         self.igual_que_el_dibujo_directo()
         self.w.a_ejecutar.trigger()
         bombear()

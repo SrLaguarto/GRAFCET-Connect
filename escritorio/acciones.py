@@ -401,7 +401,7 @@ class PanelAccion(QWidget):
     def _previsualizar(self) -> None:
         """La frase y el aviso: lo último que no se pudo guardar, la variable que no vale para este tipo o un X… del valor,
         la condición o el evento que puede ser dos etapas (todo en naranja)."""
-        if self.e is None or self.aid is None:
+        if not self._viva():
             return
         self.frase.setText(self.frase_explicativa())
         if self._rechazado is not None:
@@ -429,6 +429,10 @@ class PanelAccion(QWidget):
         if tipo in CONTINUAS and kind != "bool":
             return f"una acción continua necesita una variable booleana y «{nombre}» no lo es"
         return ""
+
+    def _viva(self) -> bool:
+        """Hay edición y la acción del panel sigue existiendo (no la quitó un deshacer ni cambió de ID al aplicar)."""
+        return self.e is not None and self.e.existe_accion(self.aid)
 
     # -- los datos ---------------------------------------------------------------------------------
     def datos(self) -> dict[str, str]:
@@ -465,13 +469,13 @@ class PanelAccion(QWidget):
         t = texto.strip()
         for v, b in self.fichas.items():
             b.setChecked(t == v)
-        if not self._llenando and self.e is not None and self.aid is not None:
+        if not self._llenando and self._viva():
             self.frase.setText(self.frase_explicativa())
 
     def _aplicar(self, campo: str = "") -> bool:
         """Aplica lo que hay en los campos a la acción, como una operación de deshacer. Si no se puede (un valor a medias,
         un nombre que no vale), el motivo sale en naranja, parpadea el campo y no cambia nada. Devuelve si se aplicó."""
-        if self._llenando or self.e is None or self.aid is None:
+        if self._llenando or not self._viva():
             return False
         d = self.datos()
         if d["tipo"] in DISPARADOR and campo != "valor":
@@ -486,6 +490,11 @@ class PanelAccion(QWidget):
             self.parpadeo.iniciar({campo or "variable"})
             return False
         self._rechazado = None
+        if not self._viva():  # al aplicar, la acción cambió de ID (de acción del modelo a borrador o al revés): se la sigue
+            nueva = self.e.accion_activa()
+            if not self.e.existe_accion(nueva):
+                return True
+            self.aid = nueva
         self._previsualizar()  # (la edición ya repintó el panel con el aviso de antes: una acción suelta sigue siendo borrador)
         if self._reparo():  # la variable no vale para este tipo: se aplica, y el aviso (naranja) parpadea
             self.parpadeo.iniciar({"variable"})

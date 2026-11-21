@@ -48,6 +48,11 @@ class _Acciones:
     def _es_borrador(self, ident: str | None) -> bool:
         return any(b["id"] == ident for b in self.ed.draft_actions())
 
+    def existe_accion(self, ident: str | None) -> bool:
+        """Si `ident` es hoy una acción del modelo o un borrador (al aplicar un cambio, una acción puede pasar de una cosa a la otra
+        y cambiar de ID)."""
+        return ident is not None and (self._es_borrador(ident) or any(a["id"] == ident for a in self.ed.model["actions"]))
+
     def _borrador(self, did: str) -> dict[str, Any]:
         return next(b for b in self.ed.draft_actions() if b["id"] == did)
 

@@ -4933,6 +4933,30 @@ class Interfaz(unittest.TestCase):
         self.assertTrue(igual("(a OR b) AND NOT c", "(a OR b) AND (NOT c)") and igual("((a))", "a"))
         self.assertFalse(igual("(a OR b) AND c", "a OR b AND c"))
 
+    def test_SEDI300_vaciar_el_valor_con_bloques_no_deja_al_panel_con_una_accion_que_ya_no_existe(self):
+        """REQ-EDT-09: al vaciar el valor de una acción memorizada, la acción pasa de acción del modelo a borrador y cambia de
+        ID; el panel la sigue (o se calla) y no lanza un `KeyError` desde el hueco de los bloques ni al pintar la frase."""
+        e, ids, ts = self.secuencial()
+        e.nueva_variable("DEC", "internal", {"kind": "decimal", "scale": 2})
+        d = self.anadir_accion(ids["1"], "activacion", "DEC", "1")
+        antes = d.aid
+        self.assertTrue(e.existe_accion(antes))
+        errores = []
+        anterior, sys.excepthook = sys.excepthook, lambda *a: errores.append(a)
+        self.addCleanup(setattr, sys, "excepthook", anterior)
+        d.prog.lienzo.poner_arbol(None)
+        d.prog.cambiado.emit("")  # el hueco de los bloques avisa al panel
+        d._desde_bloques("")
+        d.valor.setText("2")
+        self.assertEqual(errores, [])
+        self.assertNotEqual(d.aid, antes, "la acción es ahora un borrador, con otro ID")
+        self.assertTrue(d.e.existe_accion(d.aid))
+        self.assertFalse(e.existe_accion(antes))
+        d.e.deshacer()
+        d.e.deshacer()
+        d.valor.setText("3")  # con la acción desaparecida (deshacer), el panel no lanza nada
+        self.assertEqual(errores, [])
+
     def test_SEDI120_dibujo_del_bloque_parentesis_y_de_las_operaciones_anidadas(self):
         """REQ-EDT-02: el bloque «( )» se dibuja con un paréntesis a cada lado, tan altos como lo que encierra (también si
         se apila); las operaciones aritméticas encadenadas se leen de izquierda a derecha con el operador entre sus

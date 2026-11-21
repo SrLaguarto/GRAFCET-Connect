@@ -40,21 +40,19 @@ class NavegacionYEscena(TestCase):
             c.comprobar(self.w, momento=f"sin el filtro, modo {modo}")
             self.assertTrue(all(i.isVisible() and i.opacity() == 1 for i in self.sc.items()))
 
-    def test_SESC42_un_texto_reutilizado_por_la_simulacion_no_conserva_ocultacion_ni_opacidad(self):
-        """REQ-SIM-01: la reserva de textos devuelve ítems visibles y opacos aunque quedaran ocultos o atenuados (H3)."""
-        from PySide6.QtGui import QColor, QFont
-        from escritorio.textos_diagrama import EscenaDiagrama
-        sc = EscenaDiagrama(None)
-        sc.comenzar_dibujo()
-        t = sc.texto("hola", QColor("black"), QFont("Arial"))
-        sc.addItem(t)
-        t.setVisible(False)
-        t.setOpacity(0.18)
-        sc.comenzar_dibujo()
-        reutilizado = sc.texto("hola", QColor("black"), QFont("Arial"))
-        self.assertIs(reutilizado, t)
-        self.assertTrue(reutilizado.isVisible() or reutilizado.scene() is None)
-        self.assertEqual(reutilizado.opacity(), 1.0)
-        sc.addItem(reutilizado)
-        self.assertTrue(reutilizado.isVisible())
-        sc.terminar_dibujo()
+    def test_SESC42_la_escena_ya_no_guarda_textos_reservados_y_un_texto_nuevo_nace_visible_y_opaco(self):
+        """REQ-SIM-01: sin reserva de textos (H3 retirada de raíz), cada texto es nuevo, visible y opaco, y tras un filtro de parcial
+        y volver a redibujar en simulación ninguno hereda el estado de otra pasada."""
+        from escritorio.escena.escena import EscenaIncremental
+        from tools import choque_escena as c
+        from tools.entorno_v2_e0 import bombear, play
+        self.assertFalse(hasattr(EscenaIncremental, "texto"))
+        self.assertFalse(hasattr(EscenaIncremental, "vaciar_textos"))
+        nav = self.w.navegacion
+        play(self.w)
+        bombear()
+        nav.parcial.setCurrentIndex(2)
+        nav.parcial.setCurrentIndex(0)
+        self.w.refrescar()
+        c.comprobar(self.w, momento="simulación tras el filtro")
+        self.assertTrue(all(i.isVisible() and i.opacity() == 1 for i in self.sc.items()))
