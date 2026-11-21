@@ -63,12 +63,15 @@ Diseño en `artifacts/v2_e4/DISENO_E4.md` (fuera del repositorio).
 - **`grafcet/` no se toca:** el motor cuesta ~1 ms por paso. El tiempo está en rehacer la escena entera, en el modelo
   visual y en las tablas de Variables y Temporizadores.
 - **P-IMP-171 se mantiene:** el lienzo sigue con repintado completo.
+- **El modelo visual se sigue construyendo entero** en cada cambio. No se reconstruye solo lo que cambia: ganaría poco
+  (~2 ms de 9,5 por paso en GEMMA) y obligaría a mantener las dependencias de cada elemento. Solo se replantea si un
+  proyecto real se nota lento, midiendo antes en esa máquina.
 - **Se adelantan de E6 a E4, tras su paso 1:**
   - `test_ad118` y `SCD51`, que dependen de ficheros que solo hay en la carpeta de la 1.x. `test_ad118` ni siquiera
     llega a ejecutarse en la suite: sus 7 pruebas solo se han pasado a mano.
   - El `KeyError` de `_desde_bloques` (`escritorio/acciones.py`): el editor de bloques avisa a una acción que ya no está en
-    el modelo. Sale en cada suite, y el único cierre brusco de E3 ocurrió justo después. Si también está en la 1.x, el
-    responsable decide si se arregla allí.
+    el modelo. Sale en cada suite, y el único cierre brusco de E3 ocurrió justo después. También está en la 1.x: queda
+    pendiente allí (21-nov), como la ayuda emergente. Se hará después, si la 1.x sigue en uso.
 
 ## Metas
 

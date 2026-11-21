@@ -59,5 +59,5 @@ class RefrescoConexion:
                  estado.get("temporal"), self.w._escala)
         if firma == self.tablas:
             return False
-        self.tablas = deepcopy(firma)
+        self.tablas = firma  # (sin copia: `Vista.state()` da objetos nuevos cada vez y nadie los cambia después)
         return True

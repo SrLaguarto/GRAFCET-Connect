@@ -142,9 +142,14 @@ def actualizar(items: list[Any], antes: Descriptor, ahora: Descriptor) -> bool:
         item.setBrush(_relleno(relleno))
         _cabecera(item, z, tip, parcial, elementos)
     elif tipo == "texto":
-        if ahora[1:4] != antes[1:4]:
+        if ahora[3] != antes[3]:  # otra letra: se sustituye
             return False
-        _, _, _, _, x, arriba, z, tip, parcial, elementos = ahora
+        _, contenido, color, _, x, arriba, z, tip, parcial, elementos = ahora
+        if color != antes[2]:  # el color primero y luego el contenido, como lo crea `texto_nuevo`
+            from .. import diagrama as dg
+            item.setDefaultTextColor(QColor(dg.COL[color]))
+        if contenido != antes[1]:
+            item.setHtml(contenido)
         item.setPos(x, arriba)
         _cabecera(item, z, tip, parcial, elementos)
     elif tipo == "comentario":

@@ -8,29 +8,18 @@ from . import estilo
 PARCIAL_ITEM = 42
 
 
-def registros(M, S):
+def registros_base(M):
+    """Lo de los registros que solo depende del documento (identificador, nombre, tipo, parcial y caja de cada elemento; de las etapas,
+    transiciones y macroetapas, también el propio elemento, para decir su estado): es lo caro y no cambia al simular."""
     from .diagrama import SX, H, cajas_parciales, _ancho_accion, _geometria_acciones, parciales_dibujo
     nombres = M.get('names', {})
-    activos, virtuales = set(S.get('situation') or []), set(S.get('virtual') or [])
-    forzados = {f['target'] for f in S.get('forces', [])}
     salida = []
-    def agregar(i, nombre, tipo, parcial, caja, estado=''):
-        salida.append(dict(id=i, nombre=str(nombre), tipo=tipo, parcial=parcial or 'g', caja=caja,
-                           texto=f'{tipo} {nombre}' + (f' · {estado}' if estado else '') +
-                                 (f' · parcial {nombres.get(parcial, parcial)}' if parcial else '')))
+    def agregar(i, nombre, tipo, parcial, caja, elemento=None):
+        salida.append(dict(id=i, nombre=str(nombre), tipo=tipo, parcial=parcial or 'g', caja=caja, elemento=elemento, enparcial=parcial))
     for tipo, clave in (('Etapa', 'steps'), ('Transición', 'transitions'), ('Macroetapa', 'macros')):
         for e in M.get(clave, []):
-            estado = []
-            if e.get('initial'): estado.append('inicial')
-            if (e.get('partial') or 'g') in forzados: estado.append('parcial forzado')
-            if e['id'] in activos: estado.append('activa')
-            if e['id'] in virtuales: estado.append('transitoria')
-            if tipo == 'Transición':
-                estado += ['antes: ' + ', '.join(nombres.get(i, i) for i in e.get('pre', [])),
-                           'después: ' + ', '.join(nombres.get(i, i) for i in e.get('post', []))]
-                if S.get('transitions', {}).get(e['id'], {}).get('forced'): estado.append('parcial forzado')
             agregar(e['id'], e.get('label', nombres.get(e['id'], e['id'])), tipo, e.get('partial'),
-                    QRectF(e['x']+SX-H, e['y']-H, 2*H, 2*H), ', '.join(estado))
+                    QRectF(e['x']+SX-H, e['y']-H, 2*H, 2*H), e)
             if clave == 'steps':
                 for a, x, y, w in _geometria_acciones(e['x']+SX, e['y'], e.get('actions', []), e.get('actionLayout', 'fila'))[0]:
                     agregar(a['id'], ''.join(t['t'] for t in a.get('text', [])), 'Acción', e.get('partial'), QRectF(x, y-H, w, 2*H))
@@ -45,6 +34,31 @@ def registros(M, S):
         if not a.get('etapa'):
             agregar(a['id'], ''.join(t['t'] for t in a.get('text', [])) or '?', 'Acción en borrador', a.get('partial'),
                     QRectF(a['x']+SX, a['y']-H, _ancho_accion(a), 2*H))
+    return salida
+
+
+def registros(M, S, base=None):
+    """Los registros de la navegación (uno por elemento, con su texto y su caja). `base` es `registros_base(M)` si ya se calculó."""
+    nombres = M.get('names', {})
+    activos, virtuales = set(S.get('situation') or []), set(S.get('virtual') or [])
+    forzados = {f['target'] for f in S.get('forces', [])}
+    salida = []
+    for b in (registros_base(M) if base is None else base):
+        e, tipo, parcial = b['elemento'], b['tipo'], b['enparcial']
+        estado = []
+        if e is not None:
+            if e.get('initial'): estado.append('inicial')
+            if (e.get('partial') or 'g') in forzados: estado.append('parcial forzado')
+            if e['id'] in activos: estado.append('activa')
+            if e['id'] in virtuales: estado.append('transitoria')
+            if tipo == 'Transición':
+                estado += ['antes: ' + ', '.join(nombres.get(i, i) for i in e.get('pre', [])),
+                           'después: ' + ', '.join(nombres.get(i, i) for i in e.get('post', []))]
+                if S.get('transitions', {}).get(e['id'], {}).get('forced'): estado.append('parcial forzado')
+        estado = ', '.join(estado)
+        salida.append(dict(id=b['id'], nombre=b['nombre'], tipo=tipo, parcial=b['parcial'], caja=b['caja'],
+                           texto=f"{tipo} {b['nombre']}" + (f' · {estado}' if estado else '') +
+                                 (f' · parcial {nombres.get(parcial, parcial)}' if parcial else '')))
     return salida
 
 
@@ -91,8 +105,18 @@ class Navegacion(QFrame):
         self.buscador.hide(); self.aviso_corto.hide(); self.hide(); self.resultados=[]; self.indice=-1
         vista.navegacion = self
 
+    @staticmethod
+    def _del_estado(S):
+        """De lo que da el estado, lo único que usan los registros (`registros`): activas, transitorias, parciales forzados y transiciones forzadas."""
+        return (tuple(S.get('situation') or ()), tuple(S.get('virtual') or ()), tuple(f['target'] for f in S.get('forces', [])),
+                tuple(i for i, t in (S.get('transitions') or {}).items() if t.get('forced')))
+
     def actualizar(self, M, S):
-        self.M, self.S = M, S; self.datos = registros(M, S)
+        self.M, self.S = M, S
+        previo, clave = getattr(self, '_registrado', None), self._del_estado(S)
+        if previo is None or previo[0] is not M or previo[1] != clave:  # (los registros solo cambian con el documento o con esto del estado)
+            base = previo[2] if previo is not None and previo[0] is M else registros_base(M)  # (y lo caro, solo con el documento)
+            self.datos = registros(M, S, base); self._registrado = (M, clave, base)
         partes = dict.fromkeys([d['parcial'] for d in self.datos if d['parcial']])
         firma = tuple((pid, M.get('names', {}).get(pid, pid)) for pid in partes)
         if firma != getattr(self, '_partes', None):

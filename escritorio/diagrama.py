@@ -15,8 +15,8 @@ el motor a través de grafcet.view.Vista; aquí solo se pinta.
 """
 from __future__ import annotations
 
-import copy
 import html
+from collections.abc import Callable
 from typing import Any
 
 from .anclaje import AnclajeVentana
@@ -59,7 +59,37 @@ FONT = "Arial"
 Z_FRAME, Z_LINK, Z_BAR, Z_STEP = 0, 1, 2, 3
 GROSOR_NEGADO = 1.25     # grosor de la barra de una variable negada (Qt no deja regular el del sobrerrayado del texto)
 TMR_TAM = 10            # tamaño del tiempo transcurrido de un temporizador, que se dibuja encima de su duración
-_ANCHOS: dict[tuple[Any, ...], float] = {}  # lo que mide cada texto (`_Pintor.ancho`): los marcos lo piden a cada movimiento del ratón
+class Memoria:
+    """Memoria de medidas de texto (funciones puras de su clave) con tope: al llenarse se vacía y las medidas se recalculan al pedirlas.
+    La clave de cada medida lleva todo de lo que depende (contenido, tamaño, negrita, monoespaciada, ancho y `QFont.key()` de la letra con la
+    que se mide). `Memoria.activa = False` mide siempre de nuevo: es el camino de referencia de la prueba de equivalencia (SESC88)."""
+    activa = True
+    todas: list["Memoria"] = []
+
+    def __init__(self, tope: int) -> None:
+        self.datos: dict[tuple[Any, ...], Any] = {}
+        self.tope = tope
+        Memoria.todas.append(self)
+
+    def obtener(self, clave: tuple[Any, ...], medir: Callable[[], Any]) -> Any:
+        if not Memoria.activa:
+            return medir()
+        try:
+            return self.datos[clave]
+        except KeyError:
+            pass
+        if len(self.datos) >= self.tope:
+            self.datos.clear()
+        valor = self.datos[clave] = medir()
+        return valor
+
+    @staticmethod
+    def vaciar() -> None:
+        for m in Memoria.todas:
+            m.datos.clear()
+
+
+_ANCHOS = Memoria(50000)  # lo que mide cada texto (`_Pintor.ancho`): los marcos lo piden a cada movimiento del ratón
 
 
 def _html(segs: list[dict[str, Any]] | None, sobrerrayado: bool = True, verdaderos: set[str] | None = None) -> str:
@@ -188,8 +218,7 @@ class _Pintor:
         """Lo que ocupa un texto, sin dibujarlo."""
         if not segs:
             return 0.0
-        clave = (tuple((s["t"], bool(s.get("s"))) for s in segs), size, bold)
-        if clave not in _ANCHOS:
+        def medir() -> float:
             font = QFont(FONT)
             font.setPixelSize(size)
             font.setBold(bold)
@@ -197,8 +226,13 @@ class _Pintor:
             item.document().setDocumentMargin(0)
             item.setFont(font)
             item.setHtml(_html(segs, False))
-            _ANCHOS[clave] = item.boundingRect().width()
-        return _ANCHOS[clave]
+            return item.boundingRect().width()
+        clave = (tuple((s["t"], bool(s.get("s"))) for s in segs), size, bold, _CLAVES_LETRA.get((size, bold, False)) or _letra(size, bold, False)[1])
+        if Memoria.activa:  # (la ruta caliente: los marcos piden esto a cada movimiento del ratón)
+            ancho = _ANCHOS.datos.get(clave)
+            if ancho is not None:
+                return ancho
+        return _ANCHOS.obtener(clave, medir)
 
     @staticmethod
     def _limites(item: QGraphicsTextItem, segs: list[dict[str, Any]]) -> list[float]:
@@ -216,23 +250,24 @@ class _Pintor:
         """Lo mismo para un texto sin dibujar (las posiciones se miden desde su origen)."""
         if not segs:
             return [0.0]
-        font = QFont(FONT)
-        font.setPixelSize(size)
-        font.setBold(bold)
-        item = QGraphicsTextItem()
-        item.document().setDocumentMargin(0)
-        item.setFont(font)
-        item.setHtml(_html(segs, False))
-        item.boundingRect()  # compone el texto
-        return _Pintor._limites(item, segs)
+        contenido = _html(segs, False)
+
+        def medir() -> list[float]:
+            font = QFont(FONT)
+            font.setPixelSize(size)
+            font.setBold(bold)
+            item = QGraphicsTextItem()
+            item.document().setDocumentMargin(0)
+            item.setFont(font)
+            item.setHtml(contenido)
+            item.boundingRect()  # compone el texto
+            return _Pintor._limites(item, segs)
+        return list(_LIMITES_TEXTO.obtener(("sin dibujar", contenido, size, bold, _letra(size, bold, False)[1], tuple(len(sg["t"]) for sg in segs)), medir))
 
     @staticmethod
     def ascenso(size: int, bold: bool = False) -> float:
         """Lo que sube el texto de ese tamaño por encima de su línea base."""
-        font = QFont(FONT)
-        font.setPixelSize(size)
-        font.setBold(bold)
-        return QFontMetricsF(font).ascent()
+        return _ascenso_texto(size, bold, False)
 
     def seg(self, t: str) -> list[dict[str, Any]]:
         return [{"t": t}]
@@ -246,43 +281,62 @@ class _Pintor:
         self._put(item, z + 0.02, None)
 
 
+_LETRAS: dict[tuple[int, bool, bool], tuple[QFont, str]] = {}  # cada letra con la que se dibuja y su `QFont.key()` (la clave de sus medidas)
+_CLAVES_LETRA: dict[tuple[int, bool, bool], str] = {}  # solo las claves, para la ruta caliente de `_Pintor.ancho`
+
+
+def _letra(size: int, bold: bool = False, mono: bool = False) -> tuple[QFont, str]:
+    clave = (size, bold, mono)
+    letra = _LETRAS.get(clave)
+    if letra is None:
+        font = QFont("Consolas" if mono else FONT)
+        if mono:
+            font.setStyleHint(QFont.StyleHint.Monospace)
+            font.setFixedPitch(True)
+        font.setPixelSize(size)
+        font.setBold(bold)
+        letra = _LETRAS[clave] = (font, font.key())
+        _CLAVES_LETRA[clave] = letra[1]
+    return letra
+
+
 def _fuente(size: int, bold: bool = False, mono: bool = False) -> QFont:
-    font = QFont("Consolas" if mono else FONT)
-    if mono:
-        font.setStyleHint(QFont.StyleHint.Monospace)
-        font.setFixedPitch(True)
-    font.setPixelSize(size)
-    font.setBold(bold)
-    return font
+    return QFont(_letra(size, bold, mono)[0])
 
 
-_MEDIDAS_TEXTO: dict[tuple[Any, ...], tuple[float, float]] = {}  # ancho y alto de un texto enriquecido (función pura de su clave)
+_MEDIDAS_TEXTO = Memoria(50000)  # ancho y alto de un texto enriquecido (función pura de su clave)
+_LIMITES_TEXTO = Memoria(20000)  # dónde empieza cada segmento de un texto (depende de su contenido y de cuánto mide cada segmento)
+_ASCENSOS = Memoria(1000)
 
 
 def _medir_texto(contenido: str, size: int, bold: bool, mono: bool) -> tuple[float, float]:
-    clave = (contenido, size, bold, mono)
-    if clave not in _MEDIDAS_TEXTO:
+    def medir() -> tuple[float, float]:
         r = texto_nuevo(contenido, QColor(), _fuente(size, bold, mono)).boundingRect()
-        _MEDIDAS_TEXTO[clave] = (r.width(), r.height())
-    return _MEDIDAS_TEXTO[clave]
+        return (r.width(), r.height())
+    return _MEDIDAS_TEXTO.obtener((contenido, size, bold, mono, _letra(size, bold, mono)[1]), medir)
 
 
 def _limites_texto(contenido: str, size: int, bold: bool, mono: bool, segs: list[dict[str, Any]]) -> list[float]:
-    return _Pintor._limites(texto_nuevo(contenido, QColor(), _fuente(size, bold, mono)), segs)
+    medir = lambda: _Pintor._limites(texto_nuevo(contenido, QColor(), _fuente(size, bold, mono)), segs)  # noqa: E731
+    return list(_LIMITES_TEXTO.obtener((contenido, size, bold, mono, _letra(size, bold, mono)[1], tuple(len(sg["t"]) for sg in segs)), medir))
 
 
 def _ascenso_texto(size: int, bold: bool, mono: bool) -> float:
-    return QFontMetricsF(_fuente(size, bold, mono)).ascent()
+    return _ASCENSOS.obtener((size, bold, mono, _letra(size, bold, mono)[1]), lambda: QFontMetricsF(_fuente(size, bold, mono)).ascent())
+
+
+def _letra_comentario() -> QFont:
+    font = QFont(FONT)
+    font.setPixelSize(12)
+    font.setItalic(True)
+    return font
 
 
 def _item_comentario(texto: str, ancho: float = ANCHO_COMENTARIO) -> QGraphicsTextItem:
     """El texto de un comentario ya compuesto (sin escena): lo dibuja `_Pintor.comentario` y lo mide `medida_comentario`."""
-    font = QFont(FONT)
-    font.setPixelSize(12)
-    font.setItalic(True)
     item = QGraphicsTextItem()
     item.document().setDocumentMargin(0)
-    item.setFont(font)
+    item.setFont(_letra_comentario())
     item.setDefaultTextColor(QColor(COL["muted"]))
     item.setPlainText(f"“{texto}”")
     item.setTextWidth(ancho)
@@ -291,16 +345,19 @@ def _item_comentario(texto: str, ancho: float = ANCHO_COMENTARIO) -> QGraphicsTe
     return item
 
 
-_MEDIDAS_COMENTARIO: dict[tuple[str, float], tuple[float, float]] = {}
+_MEDIDAS_COMENTARIO = Memoria(5000)
+_CLAVE_COMENTARIO: list[str] = []  # la `QFont.key()` de la letra de los comentarios (se calcula una vez)
 
 
 def medida_comentario(texto: str, ancho: float = ANCHO_COMENTARIO) -> tuple[float, float]:
     """Ancho y alto que ocupa un comentario dibujado con `_Pintor.comentario`."""
-    clave = (texto, ancho)
-    if clave not in _MEDIDAS_COMENTARIO:
+    if not _CLAVE_COMENTARIO:
+        _CLAVE_COMENTARIO.append(_letra_comentario().key())
+
+    def medir() -> tuple[float, float]:
         r = _item_comentario(texto, ancho).boundingRect()
-        _MEDIDAS_COMENTARIO[clave] = (r.width(), r.height())
-    return _MEDIDAS_COMENTARIO[clave]
+        return (r.width(), r.height())
+    return _MEDIDAS_COMENTARIO.obtener((texto, ancho, _CLAVE_COMENTARIO[0]), medir)
 
 
 def servicios() -> Servicios:
@@ -447,7 +504,8 @@ def elemento_en(M: dict[str, Any], p: QPointF) -> str | None:
     return geo_seleccion.elemento_en(M, p.toTuple(), _Pintor.ancho, anotacion)
 
 
-def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], naranja: set[str] = frozenset()) -> None:
+def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], naranja: set[str] = frozenset(),
+             marcos: dict[str, dict[str, float]] | None = None) -> None:
     """Edición: enlaces en borrador, elementos en cuestión (rojo discontinuo), selección con sus tiradores y, mientras
     parpadean tras un error, los elementos afectados en naranja (las acciones, en su caja)."""
     pos = posiciones(M)
@@ -470,7 +528,8 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
     trans = orientaciones(M)
     rutas = {e["id"]: e for e in enlaces(M)}
     barras = {b["id"]: b for b in M.get("bars", [])}
-    marcos = cajas_parciales(M, pos)  # un parcial (recinto, expansión) seleccionado o en cuestión se remarca en su marco
+    if marcos is None:  # (el recorrido ya los calculó: una sola vez por dibujo)
+        marcos = cajas_parciales(M, pos)  # un parcial (recinto, expansión) seleccionado o en cuestión se remarca en su marco
     for ident, color, width in [(i, "err", 1.8) for i in marcados] + [(i, "accent", 1.6) for i in sel]:
         pt.parcial = pertenencia.get(ident)
         pt.entrar(("realce", "marcado" if color == "err" else "seleccion", ident))
@@ -606,7 +665,7 @@ def _recorrer(pt: Any, M: dict[str, Any], S: dict[str, Any], sel: set[str] | Non
     blk = S.get("blocked")
     reached = set(blk["reached"]) if blk else set()
     roles = _colores_elementos(M, S)
-    _marcos(pt, M, pos, dependencias, roles)
+    marcos = _marcos(pt, M, pos, dependencias, roles)
     tmp = _temporizadores(S)
     marcadas = {i for i in (sel or set()) if i.startswith(("accion:", "parte:"))} | {f"parpadeo:{i}" for i in (naranja or ())}
     link = pt.pen("text")
@@ -766,7 +825,7 @@ def _recorrer(pt: Any, M: dict[str, Any], S: dict[str, Any], sel: set[str] | Non
                   (M.get("actionLayouts") or {}).get(g, "fila"), suelto=True, grupo=g)
     pt.parcial = None
     if sel or marcados or naranja or M.get("drafts"):
-        _realces(pt, M, set(sel or ()), set(marcados or ()), set(naranja or ()))
+        _realces(pt, M, set(sel or ()), set(marcados or ()), set(naranja or ()), marcos)
     return cajas
 
 
@@ -776,7 +835,8 @@ def cajas_parciales(M: dict[str, Any], pos: dict[str, tuple[float, float]] | Non
     return geo_marcos.cajas_parciales(M, pos, medir=_Pintor.ancho)
 
 
-def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]], dependencias: bool = False, roles: dict[str, str] | None = None) -> None:
+def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]], dependencias: bool = False,
+            roles: dict[str, str] | None = None) -> dict[str, dict[str, float]]:
     """Parciales según las figuras de la norma: recinto (marco continuo, con el nombre de la encapsulante arriba y el del
     recinto abajo, a caballo del trazo, sobre un fondo del color del lienzo), parcial (marco redondeado con su nombre; un hijo
     dentro de su padre) y expansión (trazos discontinuos de la macroetapa a su entrada y a su salida, sin marco). Esos trazos
@@ -817,6 +877,7 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]],
         else:
             pt.rect(b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"], pt.pen(roles.get(p["id"], "muted"), 1.2), Z_FRAME, radius=16)
             pt.text(b["x0"] + 30, b["y1"] + 5, pt.seg(p["label"]), 14, roles.get(p["id"], "text"), Z_FRAME, halo=True)
+    return cajas
 
 
 def _ancho_accion(a: dict[str, Any]) -> float:
@@ -2004,8 +2065,10 @@ class VistaDiagrama(QGraphicsView):
 
     @staticmethod
     def huella_estado(S: dict[str, Any]) -> dict[str, Any]:
-        """Lo que del estado de la simulación cambia el dibujo (el reloj y la traza se muestran fuera de él), copiado."""
-        return copy.deepcopy({k: v for k, v in S.items() if k not in ("time", "timeUs", "trace", "nextEvent", "nextEventUs")})
+        """Lo que del estado de la simulación cambia el dibujo (el reloj y la traza se muestran fuera de él). Sin copia profunda: cada
+        `Vista.state()` da objetos nuevos y el motor no cambia en el sitio los que comparte (ni nadie cambia el estado que recibe); lo prueban
+        SESC86 y SESC87."""
+        return {k: v for k, v in S.items() if k not in ("time", "timeUs", "trace", "nextEvent", "nextEventUs")}
 
     def _firma_vista(self) -> tuple[Any, ...]:
         """Todo de lo que depende el encuadre automático: lo dibujado, el tamaño de la vista, su zoom y su estado."""

@@ -10,6 +10,8 @@ operación y otra se disparan también los redibujados automáticos (pasos del p
   ESC-3  la escena coincide con una reconstrucción completa desde cero (`diagrama.dibujar_directo`, el dibujo ítem a ítem sin modelo visual, sobre una escena nueva): posiciones,
          trazos, textos, apilado, `cajas_acciones`, `uniones_acciones` y `cajas_ordenes`;
   ESC-4  `Edicion.M` coincide con el que daría una reconstrucción nueva desde el modelo, y `enlaces(M)` con el cálculo en limpio;
+  ESC-6..9  (simulación) tablas, traza, entradas y atajo del dibujo frente a su rutina completa;
+  ESC-10 los registros de la navegación coinciden con calcularlos de nuevo;
   EXC    una operación lanza una excepción que no es un aviso o rechazo de la propia interfaz.
 
 La secuencia se guarda como datos (objetivos por ordinal, no por id: los ids son UUID al abrir un .grafnet), de modo que se
@@ -638,10 +640,23 @@ def comprobar_simulacion(w, momento):
     comprobar_atajo(w, momento)
 
 
+def comprobar_navegacion(w, momento):
+    """ESC-10: los registros de la navegación (que `actualizar` no recalcula si no cambia el documento ni lo que usa del estado) son los de
+    calcularlos de nuevo con el documento y el estado de ahora."""
+    from escritorio.navegacion import registros
+    nav = w.diagrama.navegacion
+    if nav is None or getattr(nav, "M", None) is None:
+        return
+    S = w.v.state() if w.modo == "simular" and w.v is not None and w.v.s is not None else nav.S
+    if registros(nav.M, S) != nav.datos:
+        raise Fallo("ESC-10", "los registros de la navegación no son los de calcularlos de nuevo", momento=momento)
+
+
 def comprobar(w, lite=False, huella=True, modelo=True, momento=""):
     comprobar_objetos(w, momento)
     if lite:
         return
+    comprobar_navegacion(w, momento)
     if huella:
         comprobar_huella(w, momento)
     comprobar_simulacion(w, momento)

@@ -555,6 +555,8 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self._espera_escala.setSingleShot(True)
         self._espera_escala.timeout.connect(self._escala_tras_la_rafaga)
         self._escala = "normal"  # la escala de letra y de controles de ahora (estilo.escala_para): cambia sola con el tamaño
+        self._previa_traza: list[tuple[str, str]] | None = None  # lo que enseña la traza (texto y tipo de cada fila)
+        self._previo_tablas: tuple[Any, ...] | None = None  # filas y aspecto con los que se dejaron las tablas de estado (`_variables`)
         estilo.activar_escala("normal")
         self._muy_estrecho = False
         self._ancho_forzado = 0  # por debajo de este ancho «Reiniciar» va como icono (lo fija `_vigilar_barra` si no cabe con texto)
@@ -1304,7 +1306,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         t.verticalHeader().setVisible(False)
         t.verticalHeader().setDefaultSectionSize(estilo.ALTO_FILA)
         t.verticalHeader().setMinimumSectionSize(estilo.ALTO_FILA_COMPACTA)
-        t.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        t.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)  # (el alto de cada fila lo pone `ajustar_tabla`: con ResizeToContents, cada celda que cambia hace que Qt mida todas las filas)
         t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         t.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)  # elegir una fila pone su texto entero en la barra de estado
         t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -1338,6 +1340,11 @@ class Ventana(ArchivosProyecto, QMainWindow):
         """La tabla mide la cabecera más sus filas (con el alto que pide el texto partido): así no necesita barra propia y el
         panel, si hace falta, se desplaza una sola vez."""
         t.resizeRowsToContents()
+        Ventana._alto_tabla(t)
+
+    @staticmethod
+    def _alto_tabla(t: QTableWidget) -> None:
+        """El alto de la tabla: su cabecera y sus filas tal como están (sin volver a medirlas)."""
         alto = t.horizontalHeader().height() + sum(t.rowHeight(r) for r in range(t.rowCount())) + 2 * t.frameWidth() + 4
         if t.height() != alto or t.minimumHeight() != alto:
             t.setFixedHeight(alto)
@@ -3265,23 +3272,65 @@ class Ventana(ArchivosProyecto, QMainWindow):
         self.l_lect.setToolTip("El documento usa ajustes de simulación distintos de los habituales"
                                if changed else "")
 
+    @staticmethod
+    def _filas_tablas(M: dict[str, Any], S: dict[str, Any], nombre: Callable[[str], str]) -> tuple[list[tuple[str, ...]], list[tuple[str, ...]]]:
+        """Las filas de «Salidas y variables» y de «Temporizadores» que da el estado (cada una acaba en el nombre del color de su celda)."""
+        outs = S.get("outputs") or {}
+        rows = [(nombre(k), "salida continua", "ON" if o["value"] else "OFF", ", ".join(nombre(c) for c in o["contributors"]),
+                 "ok" if o["value"] else "muted") for k, o in outs.items()]
+        rows += [(nombre(k), "memorizada", str(v), "", "text") for k, v in (S.get("values") or {}).items()
+                 if k not in M["inputs"] and k not in outs]
+        temp = S.get("temporal") or {}
+        filas_t = [(t["where"], t["estado"], t["lleva"], t["preset"],
+                    "readout" if t["estado"] == "contando" else "ok" if t["estado"] == "vencido" else "muted") for t in temp.values()]
+        return rows, filas_t
+
+    def _clave_tablas(self) -> tuple[Any, ...]:
+        """De lo que, además de las filas, depende el aspecto de las tablas: su ancho y su letra (el reparto de columnas y el alto de las filas)."""
+        return (self.t_vars.viewport().width(), self.t_temp.viewport().width(), self.t_vars.font().key(), self.t_temp.font().key(),
+                self._escala)
+
     def _variables(self, M: dict[str, Any], S: dict[str, Any]) -> None:
+        """Las tablas de Variables y Temporizadores. Si no cambia ninguna fila ni el ancho, no se toca nada; si cambia el texto o el color
+        de algunas filas (lo habitual al simular), solo se rehacen esas filas y su alto (todas, si cambian los que contribuyen a una salida); si
+        cambian los nombres de la primera columna o el número de filas, la rutina completa (`_variables_completo`, la que vigila ESC-6)."""
         if not self.refresco_conexion.tablas_cambiadas(M, S):
             return
-        outs = S.get("outputs") or {}
-        rows = [(self.nombre(k), "salida continua", "ON" if o["value"] else "OFF", ", ".join(self.nombre(c) for c in o["contributors"]),
-                 "ok" if o["value"] else "muted") for k, o in outs.items()]
-        rows += [(self.nombre(k), "memorizada", str(v), "", "text") for k, v in (S.get("values") or {}).items()
-                 if k not in M["inputs"] and k not in outs]
+        rows, filas_t = self._filas_tablas(M, S, self.nombre)
+        clave, previo = self._clave_tablas(), self._previo_tablas
+        mismos_nombres = (previo is not None and previo[2] == clave and len(previo[0]) == len(rows) and len(previo[1]) == len(filas_t)
+                          and all(a[0] == b[0] for a, b in zip(previo[0], rows))
+                          and all(a[0] == b[0] for a, b in zip(previo[1], filas_t)))
+        if not mismos_nombres:
+            self._variables_completo(M, S)
+        else:
+            cambio = False
+            for t, ahora, antes, col_color, cifras in ((self.t_vars, rows, previo[0], 2, (2,)), (self.t_temp, filas_t, previo[1], 1, (2, 3))):
+                if ahora == antes:
+                    continue
+                self._filas(t, ahora, col_color, cifras)
+                if t is self.t_vars and any(a[3] != b[3] for a, b in zip(ahora, antes))                         and self._del_vars[1].fijar(self._textos_columna(t, 3)):
+                    t.resizeRowsToContents()  # (otros nombres que distinguir entre sí: pueden cambiar las líneas de cualquier fila)
+                else:
+                    for r, (a, b) in enumerate(zip(ahora, antes)):
+                        if a != b:
+                            t.resizeRowToContents(r)
+                self._alto_tabla(t)
+                cambio = True
+            if cambio:
+                self._alto_entradas(tablas=False)
+        self._previo_tablas = (rows, filas_t, clave)
+
+    def _variables_completo(self, M: dict[str, Any], S: dict[str, Any]) -> None:
+        """La rutina completa de las tablas: lo rehace todo (filas, contextos de nombres, reparto de columnas, alto de filas y de la caja de
+        entradas). Es el camino de referencia de la incremental (`_variables`)."""
+        rows, filas_t = self._filas_tablas(M, S, self.nombre)
         self._filas(self.t_vars, rows, cifras=(2,))
         self._del_vars[0].fijar(self._textos_columna(self.t_vars, 0))
         self._del_vars[1].fijar(self._textos_columna(self.t_vars, 3))
         self._reparto[0].aplicar()  # (con los nombres de ahora: el reparto busca que quepan en dos líneas)
-        temp = S.get("temporal") or {}
-        self.c_temp.setVisible(bool(temp))
-        self._filas(self.t_temp, [(t["where"], t["estado"], t["lleva"], t["preset"],
-                                   "readout" if t["estado"] == "contando" else "ok" if t["estado"] == "vencido" else "muted")
-                                  for t in temp.values()], 1, cifras=(2, 3))
+        self.c_temp.setVisible(bool(S.get("temporal") or {}))
+        self._filas(self.t_temp, filas_t, 1, cifras=(2, 3))
         self._del_temp.fijar(self._textos_columna(self.t_temp, 0))
         self._reparto[1].aplicar()
         self.ajustar_tabla(self.t_vars)
@@ -3298,7 +3347,7 @@ class Ventana(ArchivosProyecto, QMainWindow):
         resto = caja.y() + (caja.height() - tabla.height()) + estilo.E2  # (lo de arriba, lo del marco de la caja, el botón y el margen de abajo)
         self.variables.fijar_alto_maximo(alto - resto)
 
-    def _alto_entradas(self) -> None:
+    def _alto_entradas(self, tablas: bool = True) -> None:
         """F2: la caja «Entradas» mide lo que sus botones, salvo que así no dejara ver, bajo ella, al menos cuatro filas (o todas, si hay
         menos) de «Salidas y variables»: entonces se desplaza por dentro, con ese alto máximo."""
         sc = self.sc_entradas
@@ -3307,13 +3356,14 @@ class Ventana(ArchivosProyecto, QMainWindow):
             return
         self._ajustando_entradas = True
         try:
-            self._poner_alto_entradas(sc, vista)
+            self._poner_alto_entradas(sc, vista, tablas)
         finally:
             self._ajustando_entradas = False
 
-    def _poner_alto_entradas(self, sc: QScrollArea, vista: int) -> None:
-        self.ajustar_tabla(self.t_vars)  # (con sus filas al día: el alto de la tabla y el de sus filas han de concordar)
-        self.ajustar_tabla(self.t_temp)
+    def _poner_alto_entradas(self, sc: QScrollArea, vista: int, tablas: bool = True) -> None:
+        if tablas:  # (con sus filas al día: el alto de la tabla y el de sus filas han de concordar; quien ya las ajustó lo dice)
+            self.ajustar_tabla(self.t_vars)
+            self.ajustar_tabla(self.t_temp)
         lay = self.cont_rejilla.layout()
         ancho_ref = self.scroll.width() - 2 * self.scroll.frameWidth()  # (el del panel sin su barra: con ella oscilaría; no se mide el visor)
         natural = max(lay.totalHeightForWidth(max(ancho_ref - 2 * estilo.E1, 60)), lay.sizeHint().height())
@@ -3365,12 +3415,43 @@ class Ventana(ArchivosProyecto, QMainWindow):
                     item.setForeground(QColor(COL[color]))
 
     def _traza(self, S: dict[str, Any]) -> None:
+        """La traza (los últimos registros, `Vista.state`): al avanzar la ventana de 60 se quitan por arriba los que salen y se añaden por abajo
+        los nuevos; si no hay solape con lo que había, se rehace entera (`_traza_completa`)."""
+        filas = [(f"{r['time']:>9}   {r['text']}", r["kind"]) for r in S.get("trace", [])]
+        previa = self._previa_traza
+        if previa is not None and self.traza.count() == len(previa):
+            if filas == previa:
+                self.traza.scrollToBottom()
+                return
+            for k in range(1, len(previa)):  # k: cuántos salen por arriba
+                if previa[k:] == filas[:len(previa) - k]:
+                    for _ in range(k):
+                        self.traza.takeItem(0)
+                    for fila in filas[len(previa) - k:]:
+                        self._poner_fila_traza(*fila)
+                    self.traza.scrollToBottom()
+                    self._previa_traza = filas
+                    return
+            if previa and len(filas) >= len(previa) and filas[:len(previa)] == previa:  # solo se añade
+                for fila in filas[len(previa):]:
+                    self._poner_fila_traza(*fila)
+                self.traza.scrollToBottom()
+                self._previa_traza = filas
+                return
+        self._traza_completa(S)
+        self._previa_traza = filas
+
+    def _poner_fila_traza(self, texto: str, tipo: str) -> None:
+        item = QListWidgetItem(texto)
+        if tipo in TRAZA:
+            item.setForeground(QColor(COL[TRAZA[tipo]]))
+        self.traza.addItem(item)
+
+    def _traza_completa(self, S: dict[str, Any]) -> None:
+        """La traza hecha de cero: la referencia de `_traza`."""
         self.traza.clear()
         for r in S.get("trace", []):
-            item = QListWidgetItem(f"{r['time']:>9}   {r['text']}")
-            if r["kind"] in TRAZA:
-                item.setForeground(QColor(COL[TRAZA[r["kind"]]]))
-            self.traza.addItem(item)
+            self._poner_fila_traza(f"{r['time']:>9}   {r['text']}", r["kind"])
         self.traza.scrollToBottom()
 
     # -- guardar ------------------------------------------------------------------------------

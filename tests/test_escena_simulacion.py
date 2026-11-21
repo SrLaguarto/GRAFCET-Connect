@@ -83,10 +83,83 @@ class OraculosDeSimulacion(TestCase):
             return original(self, *a, **k)
         f = self.ejecutar(mock.patch.object(VistaDiagrama, "mostrar", sin_dibujar_al_simular))
         self.assertIsNotNone(f)
-        self.assertIn(f.tipo, ("ESC-9", "ESC-3"))
+        self.assertIn(f.tipo, ("ESC-9", "ESC-3", "ESC-10"))  # (sin dibujar, la navegación tampoco se pone al día: ESC-10 salta antes)
 
     def test_SESC85_un_tramo_largo_de_simulacion_al_azar_pasa_todos_los_oraculos(self):
         """REQ-SIM-01: 120 operaciones al azar sobre GEMMA, con tramos largos en simulación, no dan ningún fallo."""
         from tools import choque_escena as c
         from tools.entorno_v2_e0 import GEMMA
         self.assertIsNone(c.ejecutar_nuevo(GEMMA, c.generar(13, 120)))
+
+
+@skipUnless(QT, "requiere PySide6")
+class PanelesDeSimulacion(TestCase):
+    """V2-E4, paso 4: las huellas sin copia profunda y los paneles de simulación que solo tocan lo que cambia."""
+
+    def pasos(self, w, n=12):
+        from copy import copy
+        from tools.banco_rendimiento import _buscar_cambio
+        from tools.entorno_v2_e0 import bombear, paso
+        hechos = 0
+        for _ in range(n):
+            guion = _buscar_cambio(w.v)
+            if guion is None:
+                continue
+            for op, args in guion:
+                paso(w, op, **args)
+                bombear()
+            hechos += 1
+        return hechos
+
+    def test_SESC86_el_estado_no_cambia_despues_de_darse_ni_lo_cambia_quien_lo_recibe(self):
+        """REQ-SIM-01: cada `Vista.state()` da objetos nuevos que nada cambia después (ni el motor al avanzar ni los paneles al leerlos):
+        por eso las huellas del estado no necesitan copia profunda."""
+        from copy import deepcopy
+        from grafcet.view import Vista
+        from tools.entorno_v2_e0 import GEMMA, bombear, play, ventana
+        dadas = []
+        original = Vista.state
+
+        def registra(self):
+            S = original(self)
+            dadas.append((S, deepcopy(S)))
+            return S
+        with ventana() as w, mock.patch.object(Vista, "state", registra):
+            self.assertTrue(w.abrir_ruta(GEMMA))
+            play(w)
+            self.assertGreater(self.pasos(w, 10), 4)
+            w.refrescar()
+            bombear()
+        self.assertGreater(len(dadas), 8)
+        for i, (S, copia) in enumerate(dadas):
+            self.assertEqual(S, copia, f"el estado dado en la llamada {i} cambió después")
+
+    def test_SESC87_las_tablas_la_traza_y_la_navegacion_solo_rehacen_lo_que_cambia(self):
+        """REQ-SIM-01: al simular, la rutina completa de las tablas, la traza hecha de cero y la parte de los registros de la navegación que solo depende del documento no se
+        rehacen en cada paso (y los oráculos ESC-6, ESC-7 y ESC-10 dan lo mismo que ellas)."""
+        from escritorio import navegacion
+        from escritorio.ventana import Ventana
+        from tools import choque_escena as c
+        from tools.entorno_v2_e0 import GEMMA, play, ventana
+        cuentas = {"completo": 0, "traza": 0, "registros": 0, "refrescos": 0}
+
+        def contar(clave, original):
+            def f(*a, **k):
+                cuentas[clave] += 1
+                return original(*a, **k)
+            return f
+        with ventana() as w:
+            self.assertTrue(w.abrir_ruta(GEMMA))
+            play(w)
+            with mock.patch.object(Ventana, "_variables_completo", contar("completo", Ventana._variables_completo)), \
+                    mock.patch.object(Ventana, "_traza_completa", contar("traza", Ventana._traza_completa)), \
+                    mock.patch.object(navegacion, "registros_base", contar("registros", navegacion.registros_base)), \
+                    mock.patch.object(Ventana, "refrescar", contar("refrescos", Ventana.refrescar)):
+                hechos = self.pasos(w, 12)
+                c.comprobar_tablas(w, "t")
+                c.comprobar_traza(w, "t")
+                c.comprobar_navegacion(w, "t")
+        self.assertGreater(hechos, 4)
+        self.assertLess(cuentas["completo"], cuentas["refrescos"] // 2)
+        self.assertLess(cuentas["traza"], cuentas["refrescos"] // 2)
+        self.assertLess(cuentas["registros"], cuentas["refrescos"])
