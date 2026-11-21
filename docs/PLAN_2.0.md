@@ -155,6 +155,31 @@ Después de cada etapa:
    (muchas cintas, cilindros y etapas temporizadas) y su proyecto, por conexión directa y por Modbus, comparando
    con la 1.1.x. La escena y su proyecto quedan fuera del repositorio.
 
+## Después de la 2.0
+
+Cambios visibles o de semántica que no entran en la 2.0 (que no cambia nada visible). Se hacen al terminar E8.
+
+- **Botón de pausa** (21-nov): un tercer estado, entre Play y Stop.
+  - Play.
+  - Pausa: congela y luego continúa donde estaba.
+  - Stop: todo a cero y vuelve a editar, como hoy.
+
+  Revisa P-IMP-60 y P-IMP-67 («Pausa = todo a 0 hasta nuevo Play»). El responsable decide:
+  - qué hacen las salidas en pausa con el simulador de planta (mantenerse o pasar a cero);
+  - si se congelan el tiempo y los temporizadores;
+  - qué pasa con las entradas que cambian durante la pausa;
+  - si se puede forzar o editar en pausa.
+
+  E7 deja preparado en el ciclo el hueco para ese estado, sin nada visible.
+- **Rediseño de las emergentes de Propiedades:** propuesta acordada en `artifacts/rediseno_emergentes/PROPUESTA.md`, fuera
+  del repositorio, con dos cuestiones menores abiertas.
+- **Bases temporales ampliadas** (decidido el 21-nov):
+  - P-IMP-18 se extiende a internas, salidas y mezclas.
+  - El flanco sigue sin admitirse como base, con un aviso claro.
+  - Toca `grafcet/`, así que lleva su fila P-IMP y la actualización de la documentación.
+- **Arreglos pendientes en la 1.x**, si sigue en uso: la ayuda emergente que borraba objetos y el `KeyError` de
+  `_desde_bloques`. Ya están hechos en la 2.0.
+
 ## Riesgos
 
 - **Detalles finos sin prueba.** Muchos P-IMP corrigen síntomas de dibujo. Se mitiga con el banco de imágenes
