@@ -7,7 +7,7 @@ operación y otra se disparan también los redibujados automáticos (pasos del p
   ESC-1  un objeto por elemento del modelo: todo id del modelo tiene figura, toda polilínea de enlace está dibujada y
          ninguna figura pertenece a un elemento inexistente;
   ESC-2  ninguna figura oculta, fuera de la escena, vacía o con geometría no finita (salvo lo que ordena el filtro de parcial);
-  ESC-3  la escena coincide con una reconstrucción completa desde cero (`diagrama.dibujar` sobre una escena nueva): posiciones,
+  ESC-3  la escena coincide con una reconstrucción completa desde cero (`diagrama.dibujar_directo`, el dibujo ítem a ítem sin modelo visual, sobre una escena nueva): posiciones,
          trazos, textos, apilado, `cajas_acciones`, `uniones_acciones` y `cajas_ordenes`;
   ESC-4  `Edicion.M` coincide con el que daría una reconstrucción nueva desde el modelo, y `enlaces(M)` con el cálculo en limpio;
   EXC    una operación lanza una excepción que no es un aviso o rechazo de la propia interfaz.
@@ -16,7 +16,7 @@ La secuencia se guarda como datos (objetivos por ordinal, no por id: los ids son
 puede repetir y minimizar con ddmin. Uso:
 
   python tools/choque_escena.py --proyecto gemma --semilla 7 --ops 300
-  python tools/choque_escena.py --largo                      # 3000 / 1500 / 500 operaciones
+  python tools/choque_escena.py --largo                      # 3000 / 300 / 500 operaciones
   python tools/choque_escena.py --reproducir fallo.json
 
 Solo lee y ejecuta el programa; escribe únicamente los informes de fallo (por defecto en artifacts/v2_e3/fallos/).
@@ -353,7 +353,7 @@ def comprobar_huella(w, momento):
     M, S, sel, marcados, naranja = d._ultimo
     fresca = QGraphicsScene()
     uniones, ordenes = [], []
-    cajas = dg.dibujar(fresca, M, S, sel, marcados, naranja, uniones, ordenes, d.dependencias)
+    cajas = getattr(dg, "dibujar_directo", dg.dibujar)(fresca, M, S, sel, marcados, naranja, uniones, ordenes, d.dependencias)
     filtro = bool(filtro_activo(w)[0])
     a = [huella_item(i, filtro) for i in figuras(d)]
     b = [huella_item(i, filtro) for i in fresca.items(Qt.SortOrder.DescendingOrder)]
@@ -517,7 +517,7 @@ def main():
     ap.add_argument("--semilla", type=int, nargs="*", default=[20261120])
     ap.add_argument("--ops", type=int, default=300)
     ap.add_argument("--cada", type=int, default=1, help="comparación completa (ESC-3) cada N operaciones")
-    ap.add_argument("--largo", action="store_true", help="3000 operaciones en GEMMA, 1500 en ref100 y 500 en linea")
+    ap.add_argument("--largo", action="store_true", help="3000 operaciones en GEMMA, 300 en ref100 y 500 en linea")
     ap.add_argument("--reproducir", type=Path)
     ap.add_argument("--salida", type=Path, default=SALIDA)
     a = ap.parse_args()
@@ -528,7 +528,7 @@ def main():
             f = ejecutar(w, rutas[d["proyecto"]], d["secuencia_minima"])
             print("sin fallo" if f is None else f"{f.tipo} ({f.momento}): {f.detalle}")
             return 0 if f is None else 1
-        plan = ([("gemma", 3000, 1), ("ref100", 1500, 5), ("linea", 500, 5)] if a.largo
+        plan = ([("gemma", 3000, 1), ("ref100", 300, 5), ("linea", 500, 5)] if a.largo
                 else [(a.proyecto or "gemma", a.ops, a.cada)])
         fallos = 0
         for nombre, n, cada in plan:

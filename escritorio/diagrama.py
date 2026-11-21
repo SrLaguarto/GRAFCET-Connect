@@ -45,6 +45,7 @@ from .geometria.enlaces import _ajustar_enlaces, enlaces, simul_d
 from .geometria.marcos import _dependencia_cajas, _dependencias_recinto, parciales_dibujo
 from .geometria.seleccion import _segmento
 from .geometria.textos import pos_comentario_e, pos_comentario_t
+from .escena.descriptores import Grabadora, Servicios
 from .textos_diagrama import EscenaDiagrama, texto_nuevo
 
 MARK = 7       # divisiones de la macroetapa
@@ -95,6 +96,13 @@ class _Pintor:
         self.verdaderos: set[str] = set()
         self.parcial = None
         self.elementos = ()
+
+    def entrar(self, clave: tuple[str, ...]) -> None:
+        """Marca el elemento que se dibuja a continuación (lo usa `Grabadora`; el dibujo directo no agrupa)."""
+
+    def notas(self, M: dict[str, Any], seleccion: set[str]) -> None:
+        from .anotaciones import dibujar as dibujar_anotaciones
+        dibujar_anotaciones(self.sc, M, seleccion)
 
     @staticmethod
     def pen(color: str, width: float = 1.6, dash: tuple[float, float] | None = None) -> QPen:
@@ -147,12 +155,7 @@ class _Pintor:
         """Texto con la línea base en y (como en SVG); devuelve su anchura."""
         if not segs:
             return 0.0
-        font = QFont("Consolas" if mono else FONT)
-        if mono:
-            font.setStyleHint(QFont.StyleHint.Monospace)
-            font.setFixedPitch(True)
-        font.setPixelSize(size)
-        font.setBold(bold)
+        font = _fuente(size, bold, mono)
         contenido, tinta = _html(segs, False, self.verdaderos), QColor(COL[color])
         item = self.sc.texto(contenido, tinta, font) if isinstance(self.sc, EscenaDiagrama) else texto_nuevo(
             contenido, tinta, font)
@@ -242,6 +245,35 @@ class _Pintor:
         self._put(item, z + 0.02, None)
 
 
+def _fuente(size: int, bold: bool = False, mono: bool = False) -> QFont:
+    font = QFont("Consolas" if mono else FONT)
+    if mono:
+        font.setStyleHint(QFont.StyleHint.Monospace)
+        font.setFixedPitch(True)
+    font.setPixelSize(size)
+    font.setBold(bold)
+    return font
+
+
+_MEDIDAS_TEXTO: dict[tuple[Any, ...], tuple[float, float]] = {}  # ancho y alto de un texto enriquecido (función pura de su clave)
+
+
+def _medir_texto(contenido: str, size: int, bold: bool, mono: bool) -> tuple[float, float]:
+    clave = (contenido, size, bold, mono)
+    if clave not in _MEDIDAS_TEXTO:
+        r = texto_nuevo(contenido, QColor(), _fuente(size, bold, mono)).boundingRect()
+        _MEDIDAS_TEXTO[clave] = (r.width(), r.height())
+    return _MEDIDAS_TEXTO[clave]
+
+
+def _limites_texto(contenido: str, size: int, bold: bool, mono: bool, segs: list[dict[str, Any]]) -> list[float]:
+    return _Pintor._limites(texto_nuevo(contenido, QColor(), _fuente(size, bold, mono)), segs)
+
+
+def _ascenso_texto(size: int, bold: bool, mono: bool) -> float:
+    return QFontMetricsF(_fuente(size, bold, mono)).ascent()
+
+
 def _item_comentario(texto: str, ancho: float = ANCHO_COMENTARIO) -> QGraphicsTextItem:
     """El texto de un comentario ya compuesto (sin escena): lo dibuja `_Pintor.comentario` y lo mide `medida_comentario`."""
     font = QFont(FONT)
@@ -268,6 +300,15 @@ def medida_comentario(texto: str, ancho: float = ANCHO_COMENTARIO) -> tuple[floa
         r = _item_comentario(texto, ancho).boundingRect()
         _MEDIDAS_COMENTARIO[clave] = (r.width(), r.height())
     return _MEDIDAS_COMENTARIO[clave]
+
+
+def servicios() -> Servicios:
+    """Lo que la `Grabadora` necesita de Qt para medir."""
+    return Servicios(
+        contenido=lambda segs, verdaderos: _html(segs, False, verdaderos), negados=_negados, medir=_medir_texto,
+        limites_de=_limites_texto, ancho=_Pintor.ancho, limites=_Pintor.limites, ascenso=_Pintor.ascenso,
+        ascenso_texto=_ascenso_texto, alto_comentario=lambda texto, ancho: medida_comentario(texto, ancho)[1],
+        grosor_negado=GROSOR_NEGADO, ancho_comentario=ANCHO_COMENTARIO)
 
 
 def rects_comentarios(M: dict[str, Any]) -> list[tuple[str, QRectF]]:
@@ -416,6 +457,7 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
     etapas = {s["id"] for s in M["steps"]} | {m["id"] for m in M.get("macros", [])}
     for d in M.get("drafts", []):
         pt.parcial = pertenencia.get(d.get("from"))
+        pt.entrar(("realce", "borrador", d["id"]))
         seg = _segmento(M, pos, d)
         if seg:
             (x1, y1), (x2, y2) = seg
@@ -430,6 +472,7 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
     marcos = cajas_parciales(M, pos)  # un parcial (recinto, expansión) seleccionado o en cuestión se remarca en su marco
     for ident, color, width in [(i, "err", 1.8) for i in marcados] + [(i, "accent", 1.6) for i in sel]:
         pt.parcial = pertenencia.get(ident)
+        pt.entrar(("realce", "marcado" if color == "err" else "seleccion", ident))
         if ident in marcos:
             b = marcos[ident]
             pt.rect(b["x0"] - 6, b["y0"] - 6, b["x1"] - b["x0"] + 12, b["y1"] - b["y0"] + 12, pt.pen(color, width, (5, 3)), Z_EDIT)
@@ -460,6 +503,7 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
                 pt.rect(cx - 3, cy - 3, 6, 6, pt.pen("accent", 1), Z_EDIT + 0.1, "panel")
     for ident in sorted(naranja):  # parpadeo naranja de un error
         pt.parcial = pertenencia.get(ident)
+        pt.entrar(("realce", "parpadeo", ident))
         if ident in marcos:
             b = marcos[ident]
             pt.rect(b["x0"] - 8, b["y0"] - 8, b["x1"] - b["x0"] + 16, b["y1"] - b["y0"] + 16, pt.pen("glow", 3.5), Z_EDIT + 0.5)
@@ -519,15 +563,47 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     rectángulo de cada orden de forzado ({id, etapa, rect}: no son acciones, pero también se señalan con el ratón).
     `dependencias` (como en tools/dibujo.js) dibuja los trazos discontinuos que unen una macroetapa con su expansión y una
     encapsulante con sus recintos; por defecto no se dibujan. Mostrarlos u ocultarlos no cambia ninguna otra cosa."""
+    from .escena import realizador
+    from .escena.modelo_visual import construir
+    mv = construir(M, S, sel, marcados, naranja, dependencias)
     reutiliza = isinstance(scene, EscenaDiagrama)
     if reutiliza:
         scene.comenzar_dibujo()
     else:
         scene.clear()
+    realizador.todo(scene, mv)
+    if reutiliza:
+        scene.terminar_dibujo()
+    if uniones is not None:
+        uniones.extend(mv.uniones)
+    if ordenes is not None:
+        ordenes.extend(mv.ordenes)
+    return mv.cajas
+
+
+def dibujar_directo(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: set[str] | None = None,
+            marcados: set[str] | None = None, naranja: set[str] | None = None,
+            uniones: list[dict[str, Any]] | None = None, ordenes: list[dict[str, Any]] | None = None,
+            dependencias: bool = False) -> list[dict[str, Any]]:
+    """Lo mismo que `dibujar`, pintando ítem a ítem con `_Pintor` (sin pasar por el modelo visual): es el dibujo de referencia."""
+    reutiliza = isinstance(scene, EscenaDiagrama)
+    if reutiliza:
+        scene.comenzar_dibujo()
+    else:
+        scene.clear()
+    cajas = _recorrer(_Pintor(scene), M, S, sel, marcados, naranja, uniones, ordenes, dependencias)
+    if reutiliza:
+        scene.terminar_dibujo()
+    return cajas
+
+
+def _recorrer(pt: Any, M: dict[str, Any], S: dict[str, Any], sel: set[str] | None, marcados: set[str] | None,
+              naranja: set[str] | None, uniones: list[dict[str, Any]] | None, ordenes: list[dict[str, Any]] | None,
+              dependencias: bool) -> list[dict[str, Any]]:
+    """El recorrido del dibujo, sobre un `_Pintor` (crea los ítems) o una `Grabadora` (anota descriptores): decide qué se dibuja
+    y dónde; lo comparten los dos destinos."""
     cajas: list[dict[str, Any]] = []
-    from .anotaciones import dibujar as dibujar_anotaciones
-    dibujar_anotaciones(scene,M,sel or set())
-    pt = _Pintor(scene)
+    pt.notas(M, sel or set())
     pt.verdaderos = {k for k, v in S.get("truth", {}).items() if v is True}
     pertenencia = parciales_dibujo(M)
     nombre = M.get("names", {}).get  # los ID internos nunca se muestran: etapas, parciales y macroetapas, por su nombre
@@ -535,8 +611,6 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     pos.update({m["id"]: (m["x"] + SX, m["y"]) for m in M.get("macros", [])})
     hay_elementos = pos or M["transitions"] or M.get("draftActions") or M.get("bars")
     if not hay_elementos and not any(c.get("vacio") for c in M.get("partials") or []):
-        if reutiliza:
-            scene.terminar_dibujo()
         return cajas  # (un grafcet parcial recién soltado, con su marco vacío, es lo único que puede haber que dibujar)
     # Enlace ascendente: por la izquierda del parcial de la transición, no de todo el dibujo
     situation, virtual = set(S.get("situation") or []), set(S.get("virtual") or [])
@@ -551,6 +625,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     for t in M["transitions"]:
         pt.elementos = (t["id"],)
         pt.parcial = t.get("partial") or "g"
+        pt.entrar(("transicion", t["id"]))
         tx, ty = t["x"] + SX, t["y"]
         ob = (S.get("transitions") or {}).get(t["id"], {})
         trazo = pt.pen(roles.get(t["id"], "text"))
@@ -599,6 +674,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
             derecha = _estado_temporal(pt, x0, yb, t.get("cond"), 14, t.get("conditionRef"), tmp, Z_BAR, tip)
             _valores_variables(pt, x0, yb, t, S, M.get("names", {}), Z_BAR, tip)
             if t.get("comment"):
+                pt.entrar(("comentario", t["id"]))
                 pt.comentario(*pos_comentario_t(t, tx, ty, w, derecha), t["comment"], Z_BAR)
             continue
         pt.line(tx - TB, ty, tx + TB, ty, pt.pen(color, width), Z_BAR, tip)
@@ -609,10 +685,12 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         derecha = _estado_temporal(pt, tx + TB + 8, ty + 5, t.get("cond"), 14, t.get("conditionRef"), tmp, Z_BAR, tip)
         _valores_variables(pt, tx + TB + 8, ty + 5, t, S, M.get("names", {}), Z_BAR, tip)
         if t.get("comment"):  # a la derecha de la receptividad (o de la transición, si no tiene)
+            pt.entrar(("comentario", t["id"]))
             pt.comentario(*pos_comentario_t(t, tx, ty, w, derecha), t["comment"], Z_BAR)
     for b in M.get("bars", []):  # barras de simultaneidad (doble trazo) y de alternativa (trazo simple), con sus conectores
         pt.elementos = (b["id"],)
         pt.parcial = pertenencia[b["id"]]
+        pt.entrar(("barra", b["id"]))
         bx, by, w, h = barra(b)
         trazo = pt.pen(roles.get(b["id"], "text"))
         tipo = "Simultaneidad" if b["kind"] == "Y" else "Alternativa"
@@ -623,6 +701,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     for e in enlaces(M):
         pt.elementos = tuple(i for i in (e.get("sid"), e.get("tid")) if i)
         pt.parcial = pertenencia.get(e.get("tid") or e.get("sid"))
+        pt.entrar(("enlace", e["id"]))
         color_enlace = _color_enlace(M, roles, e)
         pt.poly([(float(x), float(y)) for x, y in e["pts"]], pt.pen(color_enlace), Z_LINK)
         for flecha in e["arrows"]:
@@ -630,6 +709,7 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     for s in M["steps"]:
         pt.elementos = (s["id"],)
         pt.parcial = s.get("partial") or "g"
+        pt.entrar(("etapa", s["id"]))
         x, y = pos[s["id"]]
         sid = s["id"]
         stale, act = bool(blk) and sid in situation, not blk and sid in situation
@@ -676,11 +756,13 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
         _acciones(pt, x, y, acciones, S, tmp, cajas, s["id"], marcadas, s.get("actionLayout", "fila"),
                   uniones=uniones, resaltar=f"enlaceacc:{s['id']}" in (sel or ()), ordenes=ordenes)
         if s.get("comment"):  # a la derecha de la etapa, o de su última acción si las tiene
+            pt.entrar(("comentario", s["id"]))
             cajas_ = _geometria_acciones(x, y, acciones, s.get("actionLayout", "fila"))[0]
             pt.comentario(*pos_comentario_e(x, y, max([ax + w for _, ax, _, w in cajas_] + [x + H])), s["comment"], Z_STEP)
     for m in M.get("macros", []):  # macroetapa: divisiones horizontales superior e inferior
         pt.elementos = (m["id"],)
         pt.parcial = m.get("partial") or "g"
+        pt.entrar(("macro", m["id"]))
         x, y = pos[m["id"]]
         act = bool((S.get("macros") or {}).get(m["id"]))
         tip = (f"Macroetapa {nombre(m['id'], m['id'])} (expansión {nombre(m['expansion'], m['expansion'])}): "
@@ -697,8 +779,6 @@ def dibujar(scene: QGraphicsScene, M: dict[str, Any], S: dict[str, Any], sel: se
     pt.parcial = None
     if sel or marcados or naranja or M.get("drafts"):
         _realces(pt, M, set(sel or ()), set(marcados or ()), set(naranja or ()))
-    if reutiliza:
-        scene.terminar_dibujo()
     return cajas
 
 
@@ -720,6 +800,7 @@ def _marcos(pt: _Pintor, M: dict[str, Any], pos: dict[str, tuple[float, float]],
 
     for p in parts:
         pt.parcial = p["id"]
+        pt.entrar(("marco", p["id"]))
         if p["kind"] == "expansion":
             m = next((x for x in M.get("macros", []) if x["id"] == p.get("macro")), None)
             if not dependencias or not m or m["entry"] not in pos or m["exit"] not in pos:
@@ -771,6 +852,7 @@ def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S:
         return
     anteriores = pt.elementos
     pt.elementos = tuple(a["id"] for a in actions) + ((etapa,) if etapa else ())
+    pt.entrar(("acciones", etapa or f"grupo:{grupo}"))
     colocadas, union = _geometria_acciones(x, y, actions, disposicion, suelto)
     linea = pt.pen("active" if etapa in (S.get("situation") or []) and not S.get("blocked") else "text")
     for tramo in union:
@@ -783,6 +865,7 @@ def _acciones(pt: _Pintor, x: float, y: float, actions: list[dict[str, Any]], S:
     cabeza = actions[0].get("id", "")
     for a, ax, cy, w in colocadas:
         pt.elementos = (a["id"],)
+        pt.entrar(("accion", a["id"]))
         _caja_accion(pt, ax, cy, a, S, tmp, cajas, etapa, marcadas, suelta=suelto, ancho=w, grupo=grupo, cabeza=cabeza,
                      ordenes=ordenes)
     pt.elementos = anteriores

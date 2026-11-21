@@ -89,22 +89,29 @@ def _pixmap(data):
     return p
 
 
+def dibujar_nota(scene,n,seleccionada):
+    """Una nota de texto o imagen y, si está seleccionada, su borde y su tirador; devuelve los ítems que ha creado."""
+    items=[]
+    r=rect(n);base=QGraphicsRectItem(r);base.setPen(QPen(Qt.PenStyle.NoPen));base.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    base.setZValue(.2);base.setToolTip("Texto" if n["kind"]=="text" else n.get("name","Imagen"));scene.addItem(base);items.append(base)
+    if n["kind"]=="text":
+        base.setFlag(QGraphicsItem.GraphicsItemFlag.ItemClipsChildrenToShape)
+        t=QGraphicsTextItem();scene.addItem(t);t.setParentItem(base);t.setPlainText(n.get("text",""));f=QFont(n.get("font","Arial"));f.setPixelSize(round(n.get("size",18)))
+        t.setFont(f);t.setDefaultTextColor(QColor(n.get("color","#172e4d")));t.document().setDocumentMargin(0)
+        t.setTextWidth(max(1,r.width()-8));t.setPos(r.left()+4,r.top()+4);items.append(t)
+    else:
+        pm=_pixmap(n["data"])
+        if not pm.isNull():
+            p=QGraphicsPixmapItem(pm,base);k=min(r.width()/pm.width(),r.height()/pm.height());p.setScale(k)
+            p.setPos(r.left()+(r.width()-pm.width()*k)/2,r.top()+(r.height()-pm.height()*k)/2)
+            p.setTransformationMode(Qt.TransformationMode.SmoothTransformation);items.append(p)
+    if seleccionada:
+        borde=scene.addRect(r,QPen(QColor("#1f6feb"),1.4,Qt.PenStyle.DashLine));borde.setZValue(10)
+        h=scene.addRect(r.right()-4,r.bottom()-4,8,8,QPen(QColor("#1f6feb"),1.4),QBrush(QColor("white")))
+        h.setZValue(11);h.setToolTip("Arrastre para cambiar el tamaño");items.extend((borde,h))
+    return items
+
+
 def dibujar(scene,M,seleccion):
     for n in M.get("annotations",[]):
-        r=rect(n);base=QGraphicsRectItem(r);base.setPen(QPen(Qt.PenStyle.NoPen));base.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        base.setZValue(.2);base.setToolTip("Texto" if n["kind"]=="text" else n.get("name","Imagen"));scene.addItem(base)
-        if n["kind"]=="text":
-            base.setFlag(QGraphicsItem.GraphicsItemFlag.ItemClipsChildrenToShape)
-            t=QGraphicsTextItem();scene.addItem(t);t.setParentItem(base);t.setPlainText(n.get("text",""));f=QFont(n.get("font","Arial"));f.setPixelSize(round(n.get("size",18)))
-            t.setFont(f);t.setDefaultTextColor(QColor(n.get("color","#172e4d")));t.document().setDocumentMargin(0)
-            t.setTextWidth(max(1,r.width()-8));t.setPos(r.left()+4,r.top()+4)
-        else:
-            pm=_pixmap(n["data"])
-            if not pm.isNull():
-                p=QGraphicsPixmapItem(pm,base);k=min(r.width()/pm.width(),r.height()/pm.height());p.setScale(k)
-                p.setPos(r.left()+(r.width()-pm.width()*k)/2,r.top()+(r.height()-pm.height()*k)/2)
-                p.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
-        if n["id"] in seleccion:
-            borde=scene.addRect(r,QPen(QColor("#1f6feb"),1.4,Qt.PenStyle.DashLine));borde.setZValue(10)
-            h=scene.addRect(r.right()-4,r.bottom()-4,8,8,QPen(QColor("#1f6feb"),1.4),QBrush(QColor("white")))
-            h.setZValue(11);h.setToolTip("Arrastre para cambiar el tamaño")
+        dibujar_nota(scene,n,n["id"] in seleccion)
