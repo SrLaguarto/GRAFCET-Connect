@@ -213,7 +213,7 @@ class Defectos(BaseQt):
     def test_SRED16_ningun_singleshot_de_la_ventana_sin_objeto_de_contexto(self):
         """REQ-EDT-09 (R1): los temporizadores de un disparo de la ventana llevan `self` como contexto (si la ventana se destruye antes de
         que salten no llaman a objetos C++ ya borrados)."""
-        fuente = (Path(__file__).resolve().parents[1] / "escritorio" / "ventana.py").read_text(encoding="utf-8")
+        fuente = "".join(f.read_text(encoding="utf-8") for f in sorted((Path(__file__).resolve().parents[1] / "escritorio" / "ventana").glob("*.py")))  # (V2-E5: la ventana es un paquete)
         sin_contexto = re.findall(r"QTimer\.singleShot\((?!300,|1500,)\d+,\s*(?:lambda|self\.[_a-z]\w*\s*\))", fuente)
         self.assertEqual(sin_contexto, [])
 

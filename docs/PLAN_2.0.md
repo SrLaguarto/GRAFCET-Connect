@@ -114,7 +114,7 @@ La caché de rutas y la reutilización de textos de AD desaparecen cuando la esc
 | E2 | Edición partida: `Edicion` como fachada con sus piezas | Codex |
 | E3 | Escena incremental en edición | Implementador y verificador |
 | E4 | Simulación incremental | Implementador y verificador |
-| E5 | Ventana partida: controladores | Codex |
+| E5 | Ventana partida: controladores | Implementador y verificador (el responsable lo cambió el 21-nov; antes, Codex) |
 | E6 | Limpieza: código muerto, pruebas rápidas, documentación de la arquitectura, medida final. Además: dejar una sola de las dos memorias de validación (la de la edición, del paso 7 de E3, y la del núcleo, del paso 9), y dejar la comprobación de los documentos sellados como opción permanente, que se pasa con la suite antes de publicar | Codex y documentador |
 
 Después de cada etapa:

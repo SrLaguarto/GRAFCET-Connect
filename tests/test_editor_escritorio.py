@@ -7315,7 +7315,7 @@ class Interfaz(unittest.TestCase):
         """REQ-EDT-02, REQ-SIM-03 (P-IMP-66): «Guardar el dibujo como imagen» dibuja con el estado actual del botón «Mostrar
         dependencias»: apagado, sin los trazos discontinuos macroetapa-expansión; encendido, con ellos; al editar y en Play."""
         from PySide6.QtGui import QImage
-        from escritorio import ventana as modulo
+        from escritorio.ventana import menus as modulo  # (V2-E5: `guardar_imagen` vive en la pieza de menús)
         from escritorio.diagrama import imagen
         w, d = self.w, self.w.diagrama
         w.cargar_ejemplo("macroetapa")
