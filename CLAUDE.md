@@ -19,6 +19,7 @@ subagentes. Los subagentes de proyecto están en `.claude/agents/`:
 | `implementador` | Sonnet | Programa, corrige y añade pruebas | Código y pruebas del encargo |
 | `verificador` | Sonnet | Revisa y prueba de forma independiente | Nada (solo lectura y ejecución de pruebas) |
 | `documentador` | Haiku | Documentación técnica y tareas sencillas | Solo documentación escrita a mano |
+| `resolvedor` | Opus, esfuerzo máximo | Problemas técnicos delicados que, si no, el coordinador consultaría al responsable: diagnóstico con evidencia y propuesta | Nada del repositorio (solo experimentos en `artifacts/`) |
 
 Se usan **subagentes convencionales** (herramienta Agent con `subagent_type`). No se crean agent teams.
 
@@ -38,9 +39,13 @@ Se usan **subagentes convencionales** (herramienta Agent con `subagent_type`). N
 7. **Sin escrituras simultáneas:** dos agentes no modifican a la vez los mismos ficheros. Asigna ficheros a cada
    encargo y no lances en paralelo encargos que se solapen (el `verificador` no escribe, así que puede revisar
    mientras el `documentador` trabaja en documentación).
-8. **No invoques subagentes sin necesidad:** una consulta, una lectura o un cambio trivial los hace el coordinador
+8. **El `resolvedor`** se llama solo ante un problema técnico delicado que el coordinador no puede cerrar con
+   seguridad. Por ejemplo: un fallo intermitente, un cierre brusco, un problema de hilos o una causa que no se deja
+   reproducir. Es el caso en que, si no, preguntaría al responsable. No sustituye al responsable en las decisiones de
+   producto, de semántica ni en las cuestiones U.
+9. **No invoques subagentes sin necesidad:** una consulta, una lectura o un cambio trivial los hace el coordinador
    directamente.
-9. **Registro de autoría:** en modificaciones significativas, el cuerpo del commit lleva una sección «Agentes» que
+10. **Registro de autoría:** en modificaciones significativas, el cuerpo del commit lleva una sección «Agentes» que
    dice qué agente hizo cada tarea (por ejemplo: «Implementación: implementador. Verificación: verificador.
    Documentación: documentador. Plan y validación: coordinador»).
 
