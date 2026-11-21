@@ -41,10 +41,14 @@ def texto_del_control(objeto, evento):
         return texto if isinstance(texto, str) else ""
     if isinstance(padre, QGraphicsView):
         item = padre.itemAt(evento.pos())
-        while item is not None:
+        if item is not None:
             if item.toolTip():
                 return item.toolTip()
-            item = item.parentItem()
+            # La ayuda de un ítem hijo (la nota de texto o de imagen) es la de su raíz. No se sube con `parentItem()`: en PySide6,
+            # llamarlo en un ítem sin padre lo deja como propiedad de Python y, al morir su envoltorio, lo borra de la escena.
+            raiz = item.topLevelItem()
+            if raiz is not item and raiz.toolTip():
+                return raiz.toolTip()
     return ""
 
 

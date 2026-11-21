@@ -55,13 +55,28 @@ class Grabadora:
         self.elementos: tuple[str, ...] = ()
         self.secuencia: list[tuple[Clave, Descriptor]] = []
         self.objetos: dict[Clave, list[Descriptor]] = {}
-        self.actual: Clave = ("sin_grupo",)
+        self.actual: Clave = ("sin_grupo",)   # la clave real del grupo actual (con sufijo si se repite)
+        self._base: Clave = ("sin_grupo",)    # la que se pidió
+        self._cerradas: set[Clave] = set()
+        self._veces: dict[Clave, int] = {}
 
     # --- grupos
     def entrar(self, clave: Clave) -> Clave:
-        """Lo que se anote desde ahora pertenece al objeto `clave`; devuelve el grupo anterior (para volver a él con `entrar`)."""
-        previo, self.actual = self.actual, clave
-        self.objetos.setdefault(clave, [])
+        """Lo que se anote desde ahora pertenece al objeto `clave`; devuelve el grupo anterior (para volver a él con `entrar`).
+
+        Cada clave es única y contigua: si se vuelve a entrar en un grupo del que ya se salió habiendo anotado algo, el grupo nuevo
+        se llama `(*clave, "#2")`, `"#3"`… (así la diferencia por clave y el apilado nunca ven un objeto partido en dos)."""
+        previo = self._base
+        if clave == self._base:
+            return previo
+        if self.objetos.get(self.actual):
+            self._cerradas.add(self._base)
+        real = clave
+        if clave in self._cerradas:
+            self._veces[clave] = self._veces.get(clave, 1) + 1
+            real = (*clave, f"#{self._veces[clave]}")
+        self._base, self.actual = clave, real
+        self.objetos.setdefault(real, [])
         return previo
 
     def _anotar(self, descriptor: Descriptor) -> None:

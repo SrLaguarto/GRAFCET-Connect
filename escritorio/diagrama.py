@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, 
 
 from . import estilo
 from .ayudas_emergentes import mostrar_ayuda
-from .elementos_lupa import DATO_ELEMENTOS
+from .elementos_lupa import DATO_ELEMENTOS, DATO_PARCIAL
 from .geometria import base as geo_base, marcos as geo_marcos, seleccion as geo_seleccion, textos as geo_textos
 from .geometria.acciones import acciones_etapa, ancho_accion, extra as _extra, geometria_acciones, grupos_sueltos
 from .geometria.base import (
@@ -46,6 +46,7 @@ from .geometria.marcos import _dependencia_cajas, _dependencias_recinto, parcial
 from .geometria.seleccion import _segmento
 from .geometria.textos import pos_comentario_e, pos_comentario_t
 from .escena.descriptores import Grabadora, Servicios
+from .escena.escena import EscenaIncremental
 from .textos_diagrama import EscenaDiagrama, texto_nuevo
 
 MARK = 7       # divisiones de la macroetapa
@@ -114,7 +115,7 @@ class _Pintor:
         return p
 
     def _put(self, item: Any, z: float, tip: str | None) -> Any:
-        item.setData(42, self.parcial)
+        item.setData(DATO_PARCIAL, self.parcial)
         item.setData(DATO_ELEMENTOS, self.elementos)
         item.setZValue(z)
         if tip:
@@ -1272,7 +1273,7 @@ class VistaDiagrama(QGraphicsView):
     def __init__(self) -> None:
         super().__init__()
         self.anclaje = None
-        self.setScene(EscenaDiagrama(self))
+        self.setScene(EscenaIncremental(self))
         self.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         # Repintado completo (P-IMP-171, AA2/AA3): con escala fraccionaria el repintado parcial dejaba cajas y textos
         # sin pintar. Medido en artifacts/aa_117/MEDICION_REPINTADO.md: nunca pasa de 10 ms por fotograma.
@@ -1962,6 +1963,12 @@ class VistaDiagrama(QGraphicsView):
         self._leer_dependencias()
         if self.controlador is None and sel is None: sel = self.seleccion_navegacion
         self._ultimo = (M, S, sel, marcados, naranja)
+        escena = self.scene()
+        incremental = self.controlador is not None and isinstance(escena, EscenaIncremental)
+        if incremental:
+            from .escena.modelo_visual import construir
+            mv = construir(M, S, sel, marcados, naranja, self.dependencias)  # si falla, la escena queda como estaba
+            self._quitar_provisionales()
         self.goma = None
         self.cuadro = None
         self._marcas = []
@@ -1970,8 +1977,12 @@ class VistaDiagrama(QGraphicsView):
         self.iman = None
         self.destino = None
         self.prohibidos = []
-        self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados, naranja, self.uniones_acciones, self.cajas_ordenes,
-                                      self.dependencias)
+        if incremental:
+            escena.aplicar(mv)
+            self.cajas_acciones, self.uniones_acciones, self.cajas_ordenes = mv.cajas, mv.uniones, mv.ordenes
+        else:
+            self.cajas_acciones = dibujar(self.scene(), M, S, sel, marcados, naranja, self.uniones_acciones, self.cajas_ordenes,
+                                          self.dependencias)
         if self.navegacion: self.navegacion.actualizar(M, S)
         r = self.scene().itemsBoundingRect()
         self._contenido = r if not r.isEmpty() else None
@@ -1984,6 +1995,17 @@ class VistaDiagrama(QGraphicsView):
         if self._manual and self.controlador is not None:
             self._barras()  # lo dibujado cambió: puede haber dejado de caber, o de sobrar la barra
         self.vista_cambiada.emit()
+
+    def _quitar_provisionales(self) -> None:
+        """Las marcas provisionales (lazo, imán, destino, cajas rojas, anclas) viven en la escena fuera del modelo visual: el dibujo
+        completo las destruía con `clear`; aquí se retiran a mano."""
+        sc = self.scene()
+        for it in [*self._marcas, self.goma, self.cuadro, self.iman, self.destino, *self.prohibidos]:
+            try:
+                if it is not None and it.scene() is sc:
+                    sc.removeItem(it)
+            except RuntimeError:
+                pass  # ya destruido con la escena
 
     def guardar_encuadre(self) -> tuple:
         """Fija el zoom y un punto en coordenadas de pantalla durante un cambio de paneles/modo."""

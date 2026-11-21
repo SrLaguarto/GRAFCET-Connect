@@ -51,7 +51,8 @@ class Grabadora_(TestCase):
         self.assertEqual(len(g.secuencia), 3)
 
     def test_SESC03_grupos_en_orden_de_aparicion(self):
-        """REQ-EDT-01: lo anotado pertenece al grupo actual y el orden de los grupos es el de su primer descriptor."""
+        """REQ-EDT-01: lo anotado pertenece al grupo actual y el orden de los grupos es el de su primer descriptor; volver a un
+        grupo del que se salió abre otro con clave propia (cada clave es contigua)."""
         g = Grabadora(servicios_falsos())
         g.entrar(("etapa", "s1"))
         g.line(0, 0, 1, 1, g.pen("text"), 1)
@@ -61,10 +62,12 @@ class Grabadora_(TestCase):
         g.circle(0, 0, 1, "active", 3)
         g.entrar(("etapa", "s2"))
         g.line(0, 0, 2, 2, g.pen("text"), 1)
-        self.assertEqual(g.orden, (("etapa", "s1"), ("comentario", "s1"), ("etapa", "s2")))
-        self.assertEqual([d[0] for d in g.objetos[("etapa", "s1")]], ["linea", "elipse"])
+        segundo = ("etapa", "s1", "#2")
+        self.assertEqual(g.orden, (("etapa", "s1"), ("comentario", "s1"), segundo, ("etapa", "s2")))
+        self.assertEqual([d[0] for d in g.objetos[("etapa", "s1")]], ["linea"])
+        self.assertEqual([d[0] for d in g.objetos[segundo]], ["elipse"])
         self.assertEqual(g.objetos[("comentario", "s1")][0][:5], ("comentario", "hola", 240.0, 10, 10.0))
-        self.assertEqual([c for c, _ in g.secuencia], [("etapa", "s1"), ("comentario", "s1"), ("etapa", "s1"), ("etapa", "s2")])
+        self.assertEqual([c for c, _ in g.secuencia], [("etapa", "s1"), ("comentario", "s1"), segundo, ("etapa", "s2")])
 
     def test_SESC04_notas_congeladas(self):
         """REQ-EDT-01: una nota se anota como datos inmutables con su selección."""

@@ -1,4 +1,5 @@
 """Propiedad de los ítems del dibujo para aislar un elemento en la lupa."""
+DATO_PARCIAL = 42    # `data` de cada ítem del dibujo con el parcial al que pertenece (lo lee Navegacion.filtrar)
 DATO_ELEMENTOS = 43
 
 

@@ -32,6 +32,8 @@ import json
 import sys
 import traceback
 
+import shiboken6
+
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -306,6 +308,9 @@ def comprobar_objetos(w, momento):
     for i in cosas:
         if i.scene() is not sc:
             raise Fallo("ESC-2", f"ítem fuera de la escena: {type(i).__name__}", momento=momento)
+        if shiboken6.ownedByPython(i):  # su envoltorio lo borraría de la escena al morir (p. ej. tras llamar a `parentItem()`)
+            raise Fallo("ESC-2", f"ítem de la escena que PySide da por propiedad de Python: {type(i).__name__} {i.data(43)}",
+                        momento=momento)
         oculto_esperado = bool(pid and i.data(42) and i.data(42) != pid and modo == "ocultar")
         if i.isVisible() == oculto_esperado:
             raise Fallo("ESC-2", f"{type(i).__name__} {'oculto' if oculto_esperado is False else 'visible'} sin motivo "
@@ -323,6 +328,7 @@ def comprobar_objetos(w, momento):
             raise Fallo("ESC-2", f"rectángulo vacío ({i.data(43)})", momento=momento)
     if w.modo != "editar":
         return
+    registro(w, cosas, momento)
     ids, rutas, marcos = esperados(e)
     presentes = set()
     for i in cosas:
@@ -342,6 +348,32 @@ def comprobar_objetos(w, momento):
     for pts in rutas:
         if _sin_repetidos(tuple((_num(x), _num(y)) for x, y in pts)) not in dibujadas:
             raise Fallo("ESC-1", f"un enlace no está dibujado: {pts[:2]}…", momento=momento)
+
+
+def registro(w, cosas, momento):
+    """ESC-1 sobre la escena incremental (si la hay): un objeto por clave del modelo visual, con todos sus ítems en la escena, y
+    ningún ítem suelto fuera del registro."""
+    sc = w.diagrama.scene()
+    nodos = getattr(sc, "nodos", None)
+    if nodos is None or sc.modelo is None or w.diagrama._ultimo is None:
+        return
+    from escritorio.escena.modelo_visual import construir
+    M, S, sel, marcados, naranja = w.diagrama._ultimo
+    mv = construir(M, S, sel, marcados, naranja, w.diagrama.dependencias)
+    if set(nodos) != set(mv.objetos) or tuple(sc.modelo.orden) != mv.orden:
+        falta, sobra = set(mv.objetos) - set(nodos), set(nodos) - set(mv.objetos)
+        raise Fallo("ESC-1", f"el registro de la escena no tiene un objeto por elemento: faltan {sorted(falta)[:3]}, sobran "
+                             f"{sorted(sobra)[:3]}", momento=momento)
+    propios = set()
+    for clave, nodo in nodos.items():
+        if [d for d, _ in nodo] != list(mv.objetos[clave]) or not all(items for _, items in nodo):
+            raise Fallo("ESC-1", f"el objeto {clave} no coincide con su modelo visual o tiene un descriptor sin ítems", momento=momento)
+        for _, items in nodo:
+            propios |= {id(i) for i in items}
+    sueltos = [i for i in cosas if id(i) not in propios]
+    if sueltos:
+        raise Fallo("ESC-1", f"{len(sueltos)} ítems en la escena que no son de ningún objeto (p. ej. {type(sueltos[0]).__name__} "
+                             f"{sueltos[0].data(43)})", momento=momento)
 
 
 def comprobar_huella(w, momento):
@@ -455,14 +487,23 @@ def ejecutar(w, ruta, secuencia, cada=1, modelo_cada=1, tope_s=None):
     return None
 
 
-def ddmin(w, ruta, secuencia, tipo, presupuesto_s=180, **kw):
-    """Minimiza la secuencia manteniendo el mismo tipo de fallo; se detiene al agotar el presupuesto."""
+def ejecutar_nuevo(ruta, secuencia, **kw):
+    """Repite la secuencia en una ventana nueva (escena, vista, ajustes y proyecto desde cero): es la única comprobación que vale
+    para decir que un fallo se reproduce."""
+    with ventana() as w:
+        return ejecutar(w, ruta, secuencia, **kw)
+
+
+def ddmin(ruta, secuencia, tipo, presupuesto_s=300, **kw):
+    """Minimiza la secuencia manteniendo el mismo tipo de fallo. Cada candidato se prueba en una ventana nueva, así que solo se acepta
+    una reducción que se reproduce desde cero (el estado de la vista o de la escena que dejó una prueba anterior no cuenta). Se
+    detiene al agotar el presupuesto y devuelve lo reducido hasta entonces."""
     limite = perf_counter() + presupuesto_s
 
     def falla(s):
         if perf_counter() > limite:
             return False
-        f = ejecutar(w, ruta, s, **kw)
+        f = ejecutar_nuevo(ruta, s, **kw)
         return f is not None and f.tipo == tipo
 
     n = 2
@@ -486,24 +527,39 @@ def ddmin(w, ruta, secuencia, tipo, presupuesto_s=180, **kw):
     return secuencia
 
 
-def informe(proyecto, semilla, f, minima, ruta_json):
+def informe(proyecto, semilla, f, minima, ruta_json, **extra):
     datos = {"proyecto": proyecto, "semilla": semilla, "tipo": f.tipo, "momento": f.momento, "detalle": f.detalle,
-             "indice_en_la_secuencia_completa": f.indice, "secuencia_minima": minima,
+             "indice_en_la_secuencia_completa": f.indice, "secuencia_minima": minima, **extra,
              "repetir": f"python tools/choque_escena.py --reproducir {ruta_json}"}
     ruta_json.parent.mkdir(parents=True, exist_ok=True)
     ruta_json.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
     return datos
 
 
-def correr(nombre, ruta, semilla, n, cada=1, modelo_cada=1, minimizar_s=180, salida=SALIDA, w=None):
-    """Genera, ejecuta y, si falla, minimiza y escribe el informe. Devuelve (fallo, datos)."""
+def correr(nombre, ruta, semilla, n, cada=1, modelo_cada=1, minimizar_s=300, salida=SALIDA, w=None):
+    """Genera, ejecuta y, si falla, lo confirma desde cero, lo minimiza y escribe el informe. Devuelve (fallo, datos).
+
+    La secuencia del informe falla siempre al repetirla en una ventana nueva (`--reproducir`). Si ni siquiera la secuencia completa
+    hasta el fallo se reproduce desde cero (depende de algo que no es la secuencia), se guarda esa secuencia completa y el informe
+    lo dice (`reproducido_desde_cero: false`); si el ddmin no consigue reducir, se guarda la completa (`reducida: false`)."""
     secuencia = generar(semilla, n)
-    f = ejecutar(w, ruta, secuencia, cada, modelo_cada)
+    if w is None:
+        f = ejecutar_nuevo(ruta, secuencia, cada=cada, modelo_cada=modelo_cada)
+    else:
+        f = ejecutar(w, ruta, secuencia, cada, modelo_cada)
     if f is None:
         return None, None
     corta = secuencia[:f.indice + 1]
-    minima = ddmin(w, ruta, corta, f.tipo, minimizar_s, cada=1, modelo_cada=1)
-    return f, informe(nombre, semilla, f, minima, Path(salida) / f"fallo_{nombre}_{semilla}_{f.tipo}.json")
+    destino = Path(salida) / f"fallo_{nombre}_{semilla}_{f.tipo}.json"
+    desde_cero = ejecutar_nuevo(ruta, corta, cada=1, modelo_cada=1)
+    if desde_cero is None or desde_cero.tipo != f.tipo:
+        return f, informe(nombre, semilla, f, corta, destino, reproducido_desde_cero=False, reducida=False,
+                          nota="la secuencia completa hasta el fallo no lo reproduce en una ventana nueva")
+    minima = ddmin(ruta, corta, f.tipo, minimizar_s, cada=1, modelo_cada=1)
+    final = ejecutar_nuevo(ruta, minima, cada=1, modelo_cada=1)
+    if final is None or final.tipo != f.tipo:
+        minima = corta
+    return f, informe(nombre, semilla, desde_cero, minima, destino, reproducido_desde_cero=True, reducida=len(minima) < len(corta))
 
 
 def proyectos(temporal):
@@ -521,11 +577,11 @@ def main():
     ap.add_argument("--reproducir", type=Path)
     ap.add_argument("--salida", type=Path, default=SALIDA)
     a = ap.parse_args()
-    with TemporaryDirectory(prefix="choque-") as tmp, ventana() as w:
+    with TemporaryDirectory(prefix="choque-") as tmp:
         rutas = proyectos(tmp)
         if a.reproducir:
             d = json.loads(a.reproducir.read_text(encoding="utf-8"))
-            f = ejecutar(w, rutas[d["proyecto"]], d["secuencia_minima"])
+            f = ejecutar_nuevo(rutas[d["proyecto"]], d["secuencia_minima"])
             print("sin fallo" if f is None else f"{f.tipo} ({f.momento}): {f.detalle}")
             return 0 if f is None else 1
         plan = ([("gemma", 3000, 1), ("ref100", 300, 5), ("linea", 500, 5)] if a.largo
@@ -534,7 +590,7 @@ def main():
         for nombre, n, cada in plan:
             for semilla in a.semilla:
                 t = perf_counter()
-                f, datos = correr(nombre, rutas[nombre], semilla, n, cada=cada, modelo_cada=cada, salida=a.salida, w=w)
+                f, datos = correr(nombre, rutas[nombre], semilla, n, cada=cada, modelo_cada=cada, salida=a.salida)
                 print(f"{nombre} semilla {semilla}: {n} operaciones en {perf_counter() - t:.0f} s: "
                       + ("sin fallos" if f is None else f"FALLO {f.tipo} -> {datos['repetir']}"), flush=True)
                 fallos += f is not None
