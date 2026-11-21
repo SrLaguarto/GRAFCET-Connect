@@ -51,7 +51,8 @@ TIPOS = ("continua", "condicionada", "activacion", "desactivacion", "evento")
 PESOS = (("anadir_etapa", 4), ("anadir_transicion", 2), ("anadir_accion", 5), ("anadir_debajo", 1), ("mover", 8),
          ("borrar", 3), ("deshacer", 6), ("rehacer", 3), ("pegar", 3), ("equidistanciar", 2), ("texto_accion", 3),
          ("condicion", 3), ("renombrar", 2), ("comentario", 2), ("flecha", 1), ("girar", 1), ("zoom", 2),
-         ("errores", 1), ("dependencias", 1), ("filtro", 1), ("play", 1), ("sim_paso", 3), ("stop", 2))
+         ("errores", 1), ("dependencias", 1), ("filtro", 1), ("play", 1), ("sim_paso", 2), ("stop", 6),
+         ("propiedades", 5), ("cerrar_propiedades", 1))
 AUTOMATICOS = ("parpadeo", "redibujar_edicion", "redibujar_senal", "refrescar_modbus", "refrescar", "mostrar_ultimo",
                "eventos", "refrescar_edicion")
 
@@ -119,6 +120,22 @@ def aplicar(w, r):
         return
     if sim:
         return  # en simulación no se edita
+    if op == "propiedades":
+        tipo = r["v"] % 3
+        if tipo == 0 and ids["transiciones"]:
+            w.editar_condicion(_elige(ids["transiciones"], k))
+        elif tipo == 1 and ids["etapas"]:
+            w.editar_etiqueta(_elige(ids["etapas"], k))
+        elif e.ed.model["actions"]:
+            a = _elige(e.ed.model["actions"], k)
+            w.editar_accion(a["stepRef"], a["id"])
+        bombear()
+        return
+    if op == "cerrar_propiedades":
+        if w.flot.abierto:
+            w.flot._cerrar(False)
+        bombear()
+        return
     todos = ids["etapas"] + ids["transiciones"]
     if op in ("anadir_etapa", "anadir_transicion"):
         base = _elige(todos, k)
@@ -328,6 +345,7 @@ def comprobar_objetos(w, momento):
             raise Fallo("ESC-2", f"texto vacío o sin tamaño ({i.data(43)})", momento=momento)
         if isinstance(i, QGraphicsRectItem) and i.rect().isEmpty() and i.rect().width() == 0 and i.rect().height() == 0:
             raise Fallo("ESC-2", f"rectángulo vacío ({i.data(43)})", momento=momento)
+    comprobar_lupa(w, momento)
     if w.modo != "editar":
         return
     registro(w, cosas, momento)
@@ -350,6 +368,41 @@ def comprobar_objetos(w, momento):
     for pts in rutas:
         if _sin_repetidos(tuple((_num(x), _num(y)) for x, y in pts)) not in dibujadas:
             raise Fallo("ESC-1", f"un enlace no está dibujado: {pts[:2]}…", momento=momento)
+
+
+def comprobar_lupa(w, momento):
+    """La lupa de Propiedades (si está a la vista): su escena incremental cumple lo mismo que el lienzo: un objeto por clave del
+    modelo visual, todo en la escena, visible y de nadie más, y coincide con el dibujo directo del mismo modelo (ESC-1 a ESC-3;
+    ESC-4 y ESC-5 son del modelo y los comprueba el lienzo)."""
+    flot = w.flot
+    if flot.principal is None or not flot.principal.isVisible():
+        return
+    lupa = flot.principal.lupa
+    sc = lupa._escena
+    if lupa._modelo is None or sc.modelo is None:
+        return
+    from escritorio import diagrama as dg
+    from escritorio.escena.modelo_visual import construir
+    cosas = sc.items(Qt.SortOrder.DescendingOrder)
+    for i in cosas:
+        if i.scene() is not sc or not i.isVisible() or shiboken6.ownedByPython(i):
+            raise Fallo("ESC-2", f"lupa: ítem fuera de la escena, oculto o de Python: {type(i).__name__} {i.data(43)}", momento=momento)
+    mv = construir(lupa._modelo, {}, None, None, None, lupa._dependencias)
+    if set(sc.nodos) != set(mv.objetos) or tuple(sc.modelo.orden) != mv.orden:
+        raise Fallo("ESC-1", "lupa: el registro de la escena no tiene un objeto por elemento", momento=momento)
+    propios = set()
+    for clave, nodo in sc.nodos.items():
+        if [d for d, _ in nodo] != list(mv.objetos[clave]) or not all(items for _, items in nodo):
+            raise Fallo("ESC-1", f"lupa: el objeto {clave} no coincide con su modelo visual", momento=momento)
+        for _, items in nodo:
+            propios |= {id(i) for i in items}
+    if any(id(i) not in propios for i in cosas):
+        raise Fallo("ESC-1", "lupa: ítems en la escena que no son de ningún objeto", momento=momento)
+    fresca = QGraphicsScene()
+    dg.dibujar_directo(fresca, lupa._modelo, {}, None, None, None, [], [], lupa._dependencias)
+    if [huella_item(i, False) for i in cosas] != [huella_item(i, False) for i in fresca.items(Qt.SortOrder.DescendingOrder)]:
+        raise Fallo("ESC-3", "lupa: la escena no coincide con el dibujo directo de su modelo", momento=momento)
+    fresca.clear()
 
 
 def registro(w, cosas, momento):

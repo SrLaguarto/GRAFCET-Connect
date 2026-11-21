@@ -6,13 +6,15 @@ from typing import Any
 from PySide6.QtCore import QEvent, QLineF, QObject, QPoint, QPointF, QRect, QRectF, QSignalBlocker, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QTransform
 from PySide6.QtWidgets import (
-    QApplication, QGraphicsScene, QLabel, QLineEdit, QPlainTextEdit, QTextEdit,
+    QApplication, QLabel, QLineEdit, QPlainTextEdit, QTextEdit,
     QBoxLayout, QFrame, QHBoxLayout, QLayout, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
 from .interaccion_propiedades import ArrastrePropiedades
 from . import estilo
-from .diagrama import ANCLA, COL, EVOLUCION_HORIZONTAL, Z_BAR, Z_EDIT, dibujar, orientaciones, posiciones
+from .diagrama import ANCLA, COL, EVOLUCION_HORIZONTAL, Z_BAR, Z_EDIT, orientaciones, posiciones
+from .escena.escena import EscenaIncremental
+from .escena.modelo_visual import construir
 from .paneles import TituloSeccion, pintar_marcador
 from .propiedades import ANCHO_COLUMNA, PanelPropiedades
 from .elementos_lupa import ocultar_vecinos
@@ -41,7 +43,7 @@ class Lupa(QWidget):
         super().__init__()
         self.vista = vista
         self.origen = QRectF()
-        self._escena = QGraphicsScene(self)
+        self._escena = EscenaIncremental(self)  # aplica solo la diferencia del modelo visual, como el lienzo
         self._modelo = None
         self._dependencias = None
         self.elemento = None
@@ -72,7 +74,7 @@ class Lupa(QWidget):
     def preparar_dibujo(self, modelo: dict[str, Any], dependencias: bool) -> None:
         if modelo is self._modelo and dependencias == self._dependencias:
             return
-        dibujar(self._escena, modelo, {}, dependencias=dependencias)
+        self._escena.aplicar(construir(modelo, {}, None, None, None, dependencias))  # (si construir falla, la escena queda como estaba)
         self._modelo, self._dependencias = modelo, dependencias
 
     def paintEvent(self, evento: Any) -> None:  # noqa: N802
@@ -86,9 +88,9 @@ class Lupa(QWidget):
             return
         escena = self._escena
         minimo = Z_BAR if self.tallo_transicion is not None else float("-inf")
-        ocultos = ocultar_vecinos(escena, self.elemento, Z_EDIT, minimo)
-        p = QPainter(self)
+        p = QPainter(self)  # antes de ocultar: si falla, no quedan vecinos ocultos (la escena incremental no los rehace)
         p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        ocultos = ocultar_vecinos(escena, self.elemento, Z_EDIT, minimo)
         try:
             t = self.transformar()
             destino = t.mapRect(self.origen)
