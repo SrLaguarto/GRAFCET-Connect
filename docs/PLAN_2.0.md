@@ -213,7 +213,9 @@ Cambios visibles o de semántica que no entran en la 2.0 (que no cambia nada vis
   - **Posible botón:** «crear en el GRAFCET todas las variables de la maqueta».
   - **Proyectos existentes:** en principio son iguales; cambia la forma de interactuar. Queda por comprobar en el formato
     guardado.
-  - **Abierto:** qué hace Play con variables sin enlace.
+  - **Play con variables sin enlace:** avisa con un mensaje claro y deja ejecutar igualmente. El sentido del mensaje:
+    «Hay variables sin enlazar con el simulador de planta. Si no las enlazas, el GRAFCET se ejecutará, pero el simulador
+    no se moverá correctamente. Corrígelo en la pestaña E/S». Debe listar esas variables y ofrecer ejecutar igualmente.
 - **Arreglos pendientes en la 1.x**, si sigue en uso: la ayuda emergente que borraba objetos y el `KeyError` de
   `_desde_bloques`. Ya están hechos en la 2.0.
 
