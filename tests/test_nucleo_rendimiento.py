@@ -1,5 +1,6 @@
 """SNUC01..SNUC10: los cambios de rendimiento del núcleo (V2-E3, paso 9) no cambian ningún resultado."""
 import copy
+import os
 import json
 import sys
 import unittest
@@ -57,6 +58,9 @@ class EquivalenciaConElNucleoAnterior(unittest.TestCase):
 
 
 class HuellaUnaVezPorCambio(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(mock.patch.dict(os.environ)); os.environ.pop("GRAFCONNECT_COMPROBAR_SELLOS", None)  # (cuenta lo que la memoria evita: la comprobación de sellos recalcula a propósito)
+
     def test_SNUC02_un_documento_del_editor_no_recalcula_su_huella_al_validarse(self):
         """REQ-DAT-02: la revisión del modelo compilado es la de siempre, pero sin volver a calcular la huella de un documento que el
         editor ya selló."""
@@ -118,6 +122,9 @@ class HuellaUnaVezPorCambio(unittest.TestCase):
 
 
 class ValidarUnaVez(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(mock.patch.dict(os.environ)); os.environ.pop("GRAFCONNECT_COMPROBAR_SELLOS", None)  # (cuenta lo que la memoria evita: la comprobación de sellos recalcula a propósito)
+
     def test_SNUC05_validar_dos_veces_lo_mismo_valida_una_y_da_resultados_independientes(self):
         """REQ-CR-04: un documento del editor validado dos veces con las mismas lecturas se valida una vez; ambos resultados son
         iguales a los de una copia sin sellar y modificar uno no cambia el otro."""

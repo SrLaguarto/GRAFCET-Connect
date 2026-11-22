@@ -97,8 +97,6 @@ ESCALA = "normal"
 T_BASE = T_PEQUENA = T_TITULO = T_SECCION = T_CHIP = T_CIFRA = 0
 ALTO_CONTROL = ALTO_CONTROL_COMPACTO = ALTO_BARRA = ALTO_BARRA_COMPACTA = ALTO_FILA = ALTO_ENTRADA = ALTO_FILA_COMPACTA = 0
 T_ES = ALTO_FILA_ES = ANCHO_INTERIOR_ES = 0
-ALTO_DIBUJO_ZOOM = 360  # por debajo de este alto de dibujo útil, los controles del zoom van en la fila del título y no flotan sobre él
-ALTO_PROPS_ZOOM = 260  # y con Propiedades abierto y su panel al menos así de alto (el de una transición pide ≈ 340 px; el de una etapa, ≈ 180)
 
 
 HISTERESIS_ESCALA = 40  # px: ya en la escala grande, no se vuelve a la normal hasta bajar tanto del umbral (arrastrar el borde justo por él no la reaplica una y otra vez)
@@ -568,10 +566,3 @@ def forma_luz(estado: str, diametro: int = 14) -> QPixmap:
     return pm
 
 
-def estilo_chip(modo: str) -> str:
-    """El chip de modo de la cabecera del dibujo: relleno y texto en mayúsculas, para que el estado no dependa del color."""
-    relleno, texto = {"simular": (SIMULACION, BLANCO), "editar": (EDICION, BLANCO),
-                      "lectura": (TINTA_2, BLANCO), "aviso": (AVISO_FONDO, AVISO), "error": (ERROR, BLANCO)}.get(modo, (TINTA_2, BLANCO))
-    borde = AVISO_BORDE if modo == "aviso" else relleno
-    return (f"background:{relleno}; color:{texto}; border:1px solid {borde}; border-radius:{R_S}px; "
-            f"font-family:{FAMILIA_TITULO}; font-size:{T_CHIP}px; font-weight:700")

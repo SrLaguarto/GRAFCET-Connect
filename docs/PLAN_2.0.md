@@ -73,6 +73,11 @@ Diseño en `artifacts/v2_e4/DISENO_E4.md` (fuera del repositorio).
     el modelo. Sale en cada suite, y el único cierre brusco de E3 ocurrió justo después. También está en la 1.x: queda
     pendiente allí (21-nov), como la ayuda emergente. Se hará después, si la 1.x sigue en uso.
 
+## Pruebas del responsable con E/S reales
+
+- **E4 y E5** (21-nov, con la copia fija del commit 3016030): bien por conexión directa, con un ejercicio de clase, y por
+  Modbus, con una estación propia. Queda pendiente la comparación con `Linea larga` frente a la 1.1.7, que se hará en E7.
+
 ## Decisiones para E7 (21-nov-2026)
 
 El responsable decide hacerla. Va después de E6. El cierre que antes estaba en E6 (documentación de la arquitectura,
@@ -92,6 +97,10 @@ ejecutable y medida final) pasa a E8, para que recoja también E7.
   - retraso de entrada a salida;
   - con y sin carga, y por las dos conexiones;
   - incluye la resolución del temporizador de Windows (~15,6 ms).
+- **Metas** (confirmadas por el responsable el 21-nov), medidas con un servidor de prueba, `Linea larga` dibujando y un
+  periodo de 10 ms:
+  - intervalo entre lecturas: mediana ≤ 11 ms y P95 ≤ 15 ms;
+  - espera de la red al motor (`leer_espera_ms` y `escribir_espera_ms`): P95 ≤ 3 ms.
 - **Diseño con esfuerzo Máx.** En Python, los hilos se turnan (GIL). Si un hilo no basta para la regularidad que se
   busca, se valora un proceso aparte, y eso lo decide el responsable.
 - Tras E7, el responsable prueba otra vez con E/S reales.
@@ -142,7 +151,7 @@ La caché de rutas y la reutilización de textos de AD desaparecen cuando la esc
 | E5 | Ventana partida: controladores | Implementador y verificador (el responsable lo cambió el 21-nov; antes, Codex) |
 | E6 | Limpieza: código muerto (con una herramienta propia que se pueda repetir), una sola de las dos memorias de validación (la de la edición, del paso 7 de E3, y la del núcleo, del paso 9), comprobación opcional y permanente de los documentos sellados y compatibilidad del `.grafnet` entre la 1.x y la 2.0 | Implementador y verificador (antes, Codex y documentador) |
 | E7 | Ciclo de E/S independiente: el motor y la E/S en un hilo de control propio, con su reloj; la pantalla dibuja fotos del estado y le pasa las órdenes del usuario | Implementador y verificador |
-| E8 | Cierre: segunda pasada de código muerto, documentación de la arquitectura y sus reglas en `CLAUDE.md`, resultados de pruebas y trazabilidad regenerados, ejecutable de prueba, medida final, prueba final del responsable con E/S reales y decisión sobre la meta de «mover una etapa» | Implementador, documentador y verificador |
+| E8 | Cierre: segunda pasada de código muerto, documentación de la arquitectura y sus reglas en `CLAUDE.md`, resultados de pruebas y trazabilidad regenerados, ejecutable de prueba, medida final, prueba final del responsable con E/S reales y decisión sobre la meta de «mover una etapa». Además, medir por fases el arrastre desde una etapa o una transición que crea una acción o una transición en `Linea larga` (el responsable nota un pequeño retardo, 21-nov) y quitar lo que sobre en los fotogramas intermedios, sin reconstruir por elementos | Implementador, documentador y verificador |
 
 Después de cada etapa:
 
@@ -177,6 +186,8 @@ Cambios visibles o de semántica que no entran en la 2.0 (que no cambia nada vis
   - P-IMP-18 se extiende a internas, salidas y mezclas.
   - El flanco sigue sin admitirse como base, con un aviso claro.
   - Toca `grafcet/`, así que lleva su fila P-IMP y la actualización de la documentación.
+- **Revisar U-06** (21-nov): el responsable considera absurdo el límite de 4 vencimientos simultáneos; con proyectos de
+  muchas copias iguales (escena de prueba de 18 estaciones) detiene el motor. Es una cuestión U: la decide el responsable.
 - **Arreglos pendientes en la 1.x**, si sigue en uso: la ayuda emergente que borraba objetos y el `KeyError` de
   `_desde_bloques`. Ya están hechos en la 2.0.
 

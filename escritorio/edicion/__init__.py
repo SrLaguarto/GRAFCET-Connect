@@ -129,7 +129,6 @@ class Edicion(
         self.diagrama: Any = None
         self.parpadeo = Parpadeo(self)  # lo que parpadea en naranja tras un error
         self.parpadeo.cambia.connect(self.realces)
-        self._memo_validacion: list[tuple[Any, ...]] = []  # (modelo, presentación, resultado) de las últimas validaciones: ver `_validacion`
         self.arrastre: dict[str, Any] | None = None  # id, desplazamiento del agarre, posición actual, si se movió
         self.enlace: dict[str, Any] | None = None    # punto de unión de origen de un enlace que se está trazando
         self.flecha = "flow"

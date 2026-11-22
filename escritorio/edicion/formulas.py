@@ -110,13 +110,3 @@ class _Formulas:
         """Aviso para el panel o el diálogo si algún `X…` puede ser dos etapas; vacío si no."""
         return " ".join(f"{x} puede ser la etapa E{x[1:]} o la etapa {x[1:]}: se usa E{x[1:]}; para la otra escriba "
                         f"active(`{x[1:]}`)." for x in self.ambiguas(*textos))
-
-    def vista_norma(self, texto: str) -> list[dict[str, Any]] | None:
-        """Segmentos de la notación de la norma de una condición o evento que se interpreta (vacío o con error: None)."""
-        if not texto.strip():
-            return None
-        try:
-            meaning, diag = self.ed._make_expr(self.ed.model, self._n(texto), None)
-        except Exception:  # un texto a medias no debe romper el diálogo
-            return None
-        return None if diag is not None else norm(meaning["meaning"], True, self.nombres)

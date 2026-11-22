@@ -17,7 +17,6 @@ from PySide6.QtWidgets import QApplication, QProxyStyle, QStyle, QStyleOptionMen
 from . import estilo
 
 SEPARACION = 4  # entre el icono y el texto (lo que deja Qt)
-RELLENO_ICONO = 8  # Qt reserva para el icono su ancho más 8 px (4 a cada lado)
 
 
 def _boton_con_icono_y_texto(pintor: Any) -> QToolButton | None:

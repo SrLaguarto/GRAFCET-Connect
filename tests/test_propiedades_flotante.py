@@ -633,9 +633,10 @@ class PropiedadesFlotante(unittest.TestCase):
             self.assertEqual(len(v.lupa.senales), 2 if v.condicion.isVisible() else 0)
 
     def mover_etapa(self, c, ident, y):
-        for s in c.e.ed.model["steps"]:
-            if s["id"] == ident:
-                s["y"] = y
+        # (V2-E6: por el editor, que crea un documento nuevo; antes se cambiaba `y` en el sitio en un documento sellado)
+        x = next(s["x"] for s in c.e.M["steps"] if s["id"] == ident)
+        c.e.ed.move(ident, x, y)
+        c.e.cambia()
         c.e.cambiado.emit()
 
     def test_SPFL33_lupa_de_transicion_y_etapa_sin_trozos_vecinos(self):

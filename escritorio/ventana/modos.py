@@ -465,10 +465,6 @@ class Modos:
         except (OSError,ValueError,RuntimeError) as exc:QMessageBox.warning(self,'Enviar a plano',str(exc))
         finally:d.deleteLater()
 
-    def abrir_hojas(self):
-        self._mostrar_pagina("planos")
-        self.panel_planos.lista.setFocus()
-
     def mostrar_hoja(self,ident):
         self.panel_planos.mostrar(ident)
         self._mostrar_pagina("planos",False)

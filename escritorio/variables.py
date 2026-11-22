@@ -68,7 +68,6 @@ def estilo_combo() -> str:
     return f"QComboBox {{ padding: 0px 1px 0px 3px; min-height: 0; font-size: {estilo.T_PEQUENA}px; }} QComboBox::drop-down {{ width: 14px; }}"
 
 
-ESTILO_COMBO = estilo_combo()
 
 
 def _clave_tipo(t: dict[str, Any]) -> tuple[Any, ...]:

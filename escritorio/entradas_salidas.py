@@ -99,7 +99,6 @@ def estilo_panel(escala: str = "normal") -> str:
 """
 
 
-ESTILO_PANEL = estilo_panel()
 
 
 def mezclar(color, nivel):
@@ -879,7 +878,6 @@ class PanelES(QWidget):
     probar = Signal()
     guardar = Signal()
     cargar_archivo = Signal()
-    abrir_prueba = Signal()
     volver = Signal()
     estado_cambiado = Signal(str, str)  # (estado, mensaje): lo que enseña el indicador de la barra de simulación
     detalle = Signal(str)  # el nombre entero (y canal, tipo) de la fila que señala el puntero: la ventana lo pone en su barra de estado
@@ -1471,9 +1469,6 @@ class PanelES(QWidget):
             libre = max(1050, self.window().width() - 40)
             self.dialogo_config.resize(min(libre, max(1050, pide + max(hueco, 60))), 680)
 
-    def _cerrar_configuracion(self):
-        self.dialogo_config.close()
-
     def mostrar_tiempos(self, medidas, ultima_parada=None):
         """Cadencia observada y duración del intercambio, sin confundirlas con la parada física. Se guarda en `tiempos`
         (texto y tooltip), que permanece oculto."""
@@ -1750,12 +1745,6 @@ class PanelES(QWidget):
             else:
                 conservadas.append(s)
         return (replace(config, senales=conservadas) if recolocar else config), recolocar
-
-    def marcar_pendiente(self, pendiente):
-        """Con la conexión viva el mapa en uso no cambia: se avisa de que hay variables nuevas o cambiadas por ver."""
-        if pendiente != self.pendiente:
-            self.pendiente = pendiente
-            self._pintar_nota()
 
     def _pintar_nota(self):
         partes = (self.aviso_host, self.aviso, self.avisos_escala, self.pista_canales, "Hay variables nuevas o cambiadas: se verán al desconectar" if self.pendiente else "")

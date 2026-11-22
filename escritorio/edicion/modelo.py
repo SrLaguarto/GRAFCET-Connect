@@ -336,10 +336,6 @@ class _Modelo:
         self.ed.set_initial(sid, inicial)
         self.cambia()
 
-    def tipo_barra(self, bid: str, tipo: str) -> None:
-        self.ed.set_bar_kind(bid, tipo)
-        self.cambia()
-
     def mostrar_etiqueta(self, tid: str, visible: bool) -> None:
         x, y = posiciones(self.M)[tid][0] - SX, posiciones(self.M)[tid][1]
         self.ed.set_label_visible(tid, visible, (x, y))

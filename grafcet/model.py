@@ -8,6 +8,7 @@ Requisitos: REQ-MOD-01..07, REQ-EXP-01, REQ-ACT-04, REQ-JER-03, REQ-DAT-01, REQ-
 from __future__ import annotations
 
 import copy
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -299,6 +300,30 @@ def sellar(doc: dict[str, Any], revision: str) -> None:
         del _SELLADOS[next(iter(_SELLADOS))]
 
 
+COMPROBAR_SELLOS = "GRAFCONNECT_COMPROBAR_SELLOS"  # con esta variable a «1», cada acierto de la memoria se comprueba (solo pruebas y antes de publicar)
+
+
+class SelloRoto(RuntimeError):
+    """Un documento sellado (que el editor da por inmutable) ya no coincide con lo que se recordó de él: alguien lo modificó en el sitio."""
+
+
+def _comprobar_sello(doc: dict[str, Any], opt: dict[str, str], sello: list[Any], guardado: "ValidationResult | None") -> None:
+    """Recalcula la revisión y, si había un resultado recordado, los diagnósticos del documento sellado y falla si no coinciden con lo sellado.
+    Solo con `GRAFCONNECT_COMPROBAR_SELLOS=1`; no cambia nada de lo que devuelve `validate_model`."""
+    revision = compute_revision(doc)
+    if revision != sello[1]:
+        raise SelloRoto(f"El documento sellado {doc.get('id')!r} se modificó en el sitio: su revisión sellada es {sello[1]} y ahora es {revision}. "
+                        "Los documentos del editor son inmutables (cada cambio crea otro): quien lo toca debe crear una copia.")
+    if guardado is None:
+        return
+    nuevo = _validar(doc, opt, None)
+    if (nuevo.diagnostics != guardado.diagnostics or nuevo.capabilities != guardado.capabilities
+            or (nuevo.model is None) != (guardado.model is None)
+            or (nuevo.model is not None and nuevo.model.revision != guardado.model.revision)):
+        raise SelloRoto(f"El documento sellado {doc.get('id')!r} da otros diagnósticos que los recordados al validarlo: se modificó en el sitio "
+                        "(o su memoria de validación está desfasada).")
+
+
 def _copiar(r: "ValidationResult") -> "ValidationResult":
     return ValidationResult([copy.copy(d) for d in r.diagnostics], r.model, set(r.capabilities))
 
@@ -311,8 +336,13 @@ def validate_model(doc: dict[str, Any], options: dict[str, str] | None = None) -
     if sello is None or sello[0] is not doc:
         return _validar(doc, opt, None)
     clave = tuple(sorted(opt.items()))
+    comprobar = os.environ.get(COMPROBAR_SELLOS) == "1"
     if clave in sello[2]:
+        if comprobar:
+            _comprobar_sello(doc, opt, sello, sello[2][clave])
         return _copiar(sello[2][clave])
+    if comprobar:
+        _comprobar_sello(doc, opt, sello, None)
     resultado = _validar(doc, opt, sello[1])
     sello[2][clave] = _copiar(resultado)
     return resultado

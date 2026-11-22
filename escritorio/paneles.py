@@ -175,11 +175,6 @@ class ChipModo(EtiquetaElidida):
             self._reajustar()
         return resultado
 
-    def fijar_marcador(self, marcador: str) -> None:
-        if marcador != self.marcador:
-            self.marcador = marcador
-            self.update()
-
     def paintEvent(self, evento) -> None:  # noqa: N802
         QFrame.paintEvent(self, evento)  # el relleno, el borde y el radio de la hoja de estilo
         p = QPainter(self)
@@ -267,12 +262,6 @@ class EtiquetaAyuda(QLabel):
         self.mostrar_texto = True  # la ventana lo apaga cuando el texto se enseña en otro sitio (la fila de la ayuda desplegada) o no hay sitio
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-
-    def fijar_lineas(self, lineas: int) -> None:
-        if lineas != self.lineas:
-            self.lineas = lineas
-            self.updateGeometry()
-            self.update()
 
     def truncada(self, ancho: int | None = None) -> bool:
         """¿Necesita más de `lineas` líneas con ese ancho (por omisión, el de ahora)? Entonces su última línea acaba en «…» y la ventana

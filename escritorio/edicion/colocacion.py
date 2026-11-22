@@ -152,10 +152,6 @@ class _Colocacion:
                 return [qt]
         return malas
 
-    @staticmethod
-    def _toca(a: QRectF, b: QRectF) -> bool:
-        return geo_choques.toca(Rect(*a.getRect()), Rect(*b.getRect()))
-
     def _libre(self, zona: QRectF) -> bool:
         """Si la zona del dibujo no toca ningún elemento (etapas, macroetapas, transiciones, barras, acciones) ni marco."""
         rect = Rect(*zona.getRect())

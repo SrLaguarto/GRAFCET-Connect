@@ -1,4 +1,5 @@
 """SESC50..SESC58: validar una vez por cambio, arrastre sin rehacer la `Vista` y parpadeo que solo toca sus realces (V2-E3, paso 7)."""
+import os
 from importlib.util import find_spec
 from unittest import TestCase, mock, skipUnless
 
@@ -16,6 +17,7 @@ class EdicionIncremental(TestCase):
         reiniciar(self.w, GEMMA)
         self.e, self.d = self.w.edicion, self.w.diagrama
         self.sc = self.d.scene()
+        self.enterContext(mock.patch.dict(os.environ)); os.environ.pop("GRAFCONNECT_COMPROBAR_SELLOS", None)  # (cuenta lo que la memoria evita: la comprobación de sellos recalcula a propósito)
 
     def punto(self, ident, dx=0):
         from PySide6.QtCore import QPointF
@@ -29,9 +31,10 @@ class EdicionIncremental(TestCase):
     # --- E-1: validar una vez por cambio
     def test_SESC50_los_diagnosticos_no_vuelven_a_validar_el_mismo_modelo(self):
         """REQ-EDT-09: pedir los diagnósticos varias veces sobre los mismos documentos valida una sola vez; tras un cambio, otra."""
-        from grafcet.editor import Editor
+        import grafcet.model as modelo
         e = self.e
-        with mock.patch.object(Editor, "validate", autospec=True, side_effect=Editor.validate) as validar:
+        # (V2-E6: la memoria es la del núcleo, así que se cuenta la validación de verdad, `_validar`, no `Editor.validate`)
+        with mock.patch.object(modelo, "_validar", side_effect=modelo._validar) as validar:
             a = e.diagnosticos()
             b = e.diagnosticos()
             self.assertEqual(a, b)
@@ -45,19 +48,19 @@ class EdicionIncremental(TestCase):
     def test_SESC51_deshacer_y_rehacer_usan_la_validacion_recordada_y_dan_lo_mismo(self):
         """REQ-EDT-09: deshacer y rehacer vuelven a documentos ya validados: no se valida otra vez y los diagnósticos son idénticos a
         los de una validación nueva."""
-        from grafcet.editor import Editor
+        import grafcet.model as modelo
         e = self.e
         inicial = e.diagnosticos()
         e.ed.add_step("g", "99", at=(1500, 3000))
         e.cambia()
         cambiado = e.diagnosticos()
-        with mock.patch.object(Editor, "validate", autospec=True, side_effect=Editor.validate) as validar:
+        with mock.patch.object(modelo, "_validar", side_effect=modelo._validar) as validar:
             e.deshacer()
             self.assertEqual(e.diagnosticos(), inicial)
             e.rehacer()
             self.assertEqual(e.diagnosticos(), cambiado)
             self.assertEqual(validar.call_count, 0)
-        e._memo_validacion = []
+        modelo._SELLADOS.clear()  # (olvida lo validado: una validación nueva da lo mismo)
         self.assertEqual(e.diagnosticos(), cambiado)
 
     # --- E-2: el arrastre no rehace la Vista

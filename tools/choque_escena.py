@@ -524,12 +524,13 @@ def comprobar_modelo(w, momento):
 
 
 def comprobar_diagnosticos(w, momento):
-    """ESC-5: los diagnósticos que da la memoria de la validación son los de validar de nuevo."""
+    """ESC-5: los diagnósticos que da la memoria de la validación (la del núcleo) son los de validar de nuevo."""
     e = w.edicion
     if w.modo != "editar":
         return
     memoria = e.diagnosticos()
-    e._memo_validacion = []
+    import grafcet.model as modelo
+    modelo._SELLADOS.clear()  # (olvida lo validado: la validación siguiente es nueva)
     if memoria != e.diagnosticos():
         raise Fallo("ESC-5", "los diagnósticos memorizados no coinciden con una validación nueva", momento=momento)
 

@@ -119,9 +119,6 @@ class _MotorMini(QIconEngine):
         super().__init__()
         self.clave = clave
 
-    def clone(self):
-        return _MotorMini(self.clave)
-
     def paint(self, pintor, rect, modo, estado):
         pintor.save()
         pintor.translate(rect.x(), rect.y())

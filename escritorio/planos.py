@@ -350,10 +350,6 @@ class PaginaPlanos(QWidget):
         n=self.lista.count();i=self.lista.currentRow()
         self.editor.pagina.setText(f'Hoja {i+1} de {n}');self.editor.anterior.setEnabled(i>0);self.editor.siguiente.setEnabled(i<n-1)
 
-    def pasar_hoja(self,delta):
-        i=self.lista.currentRow()+delta
-        if 0<=i<self.lista.count():self.lista.setCurrentRow(i)
-
     def nueva_hoja(self):
         from .hojas import CrearHoja
         e=self.ventana.edicion;d=CrearHoja(e,self);d.setWindowTitle('Añadir hoja al plano')

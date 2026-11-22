@@ -1130,7 +1130,6 @@ def estilo_barra_zoom() -> str:
     f"QFrame#barraZoom[compacta=\"true\"] QToolButton {{ min-width: 28px; padding: 0 2px }} "
     f"QFrame#barraZoom[compacta=\"true\"] QToolButton[tecl=\"true\"]:focus {{ padding: 0 1px }} "
     f"QFrame#barraZoom[compacta=\"true\"] QLabel {{ min-width: 38px }}")
-ESTILO_BARRA_ZOOM = estilo_barra_zoom()
 
 
 class _BarraZoom(QFrame):

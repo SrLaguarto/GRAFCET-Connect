@@ -104,8 +104,6 @@ class _Enlaces:
     def _num(v: float) -> str:
         return str(int(v)) if v == int(v) else str(v)
 
-    _rango_tramo = staticmethod(geo_enlaces.rango_tramo)
-
     def _pegar_a_paralelo(self, valor: float, vertical: bool, propio: str, rango: tuple[float, float]) -> float:
         return geo_enlaces.pegar_a_paralelo(enlaces(self.M), valor, vertical, propio, rango)
 
@@ -122,8 +120,6 @@ class _Enlaces:
 
     def _barra(self, ident: str | None) -> dict[str, Any] | None:
         return next((b for b in self.M.get("bars", []) if b["id"] == ident), None)
-
-    _sumar = staticmethod(geo_enlaces.sumar_coordenada)
 
     def _rutas_con_grupo(self, ids: set[str], dx: float, dy: float) -> dict[str, dict[str, Any]]:
         return geo_enlaces.rutas_con_grupo(self.ed.link_styles(), ids, dx, dy)

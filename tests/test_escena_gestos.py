@@ -1,4 +1,5 @@
 """SESC70..SESC75: una construcción y un dibujo por evento, huella sin recalcular tras abrir y nada sin actualizar (V2-E3, paso 10)."""
+import os
 from contextlib import ExitStack
 from importlib.util import find_spec
 from unittest import TestCase, mock, skipUnless
@@ -16,6 +17,7 @@ class PorGesto(TestCase):
         self.addCleanup(self.contexto.__exit__, None, None, None)
         reiniciar(self.w, GEMMA)
         self.e, self.d = self.w.edicion, self.w.diagrama
+        self.enterContext(mock.patch.dict(os.environ)); os.environ.pop("GRAFCONNECT_COMPROBAR_SELLOS", None)  # (cuenta lo que la memoria evita: la comprobación de sellos recalcula a propósito)
 
     def contar(self):
         """Parchea y devuelve los contadores: construcciones del modelo visual (lienzo y lupa), dibujos del lienzo, refrescos de la
