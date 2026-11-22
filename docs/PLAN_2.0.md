@@ -188,6 +188,17 @@ Cambios visibles o de semántica que no entran en la 2.0 (que no cambia nada vis
   - Toca `grafcet/`, así que lleva su fila P-IMP y la actualización de la documentación.
 - **Revisar U-06** (21-nov): el responsable considera absurdo el límite de 4 vencimientos simultáneos; con proyectos de
   muchas copias iguales (escena de prueba de 18 estaciones) detiene el motor. Es una cuestión U: la decide el responsable.
+- **Conexión automática** (22-nov, para revisar): conectar sola al detectar el simulador de planta, sin arrancar nunca la
+  ejecución (sigue haciendo falta Play). Cambia P-IMP-50 y P-IMP-51 («no conecta automáticamente»); lo decide el
+  responsable.
+- **Revisar la conexión directa con la maqueta en edición** (22-nov). En un examen, los alumnos editaban la maqueta y el
+  GRAFCET a la vez:
+  - al cambiar algo en la maqueta se perdían referencias;
+  - las E/S huérfanas costaban de eliminar;
+  - quedaban GRAFCET con variables que ya no existían;
+  - esperaban que funcionara como Modbus.
+
+  Hay que estudiar qué pasa hoy en cada caso y proponer un comportamiento fácil de entender. Lo decide el responsable.
 - **Arreglos pendientes en la 1.x**, si sigue en uso: la ayuda emergente que borraba objetos y el `KeyError` de
   `_desde_bloques`. Ya están hechos en la 2.0.
 
