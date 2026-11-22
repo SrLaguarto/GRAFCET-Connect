@@ -72,6 +72,25 @@ Reglas:
 - **No declares conformidad** con IEC 60848 ni con UNE-EN 60848.
 - No uses otros productos como oráculo (REQ-CR-04).
 
+## Arquitectura (2.0)
+
+Detalle, capas, hilos y mapa de módulos en `docs/ARQUITECTURA.md`. Reglas al cambiar código:
+
+- **Capas.** `grafcet/` no importa nada del proyecto. `conexion/` solo importa `grafcet/`. `escritorio/` importa `grafcet/` y
+  `conexion/`. Ningún módulo del programa importa `tools/`.
+- **Sin Qt** en `grafcet/` ni en `conexion/`, ni en `escritorio/geometria/` ni en `escritorio/escena/descriptores.py`,
+  `diferencia.py` y `modelo_visual.py`. Qt del dibujo solo en `escritorio/escena/realizador.py` y `escena.py`.
+- **Hilo de control.** El motor (`Session`) y el `Coordinador` solo los toca quien tiene el candado de control
+  (`conexion/hilos.py`, `Candado`; en la ventana, `self.candado`). Las órdenes al hilo de control (`CicloES`) van solo por
+  su interfaz (`arrancar`, `parar`, `pedir_ejecucion`, `despertar`, `tomar_avisos`, `ciclo`), y bajo el candado cuando toca.
+- **No dibujar con el candado cogido.** La pantalla copia el estado con el candado y dibuja después, sin él. Tampoco se
+  retiene el candado durante un diálogo, un dibujo o una espera de red.
+- **Guarda de hilos.** Los cambios que toquen el motor o el coordinador desde la pantalla se prueban con
+  `GRAFCONNECT_COMPROBAR_HILOS=1` (pruebas de conexión y `tools/choque_conexion.py`).
+- **`grafcet/` no se toca** sin autorización del responsable. Si un cambio de escritorio parece exigirlo, se pregunta antes.
+- **Banco de imágenes idéntico.** Cada cambio que afecte al dibujo deja las mismas imágenes que la referencia
+  (`python tools/banco_imagenes.py generar CARPETA` y `comparar`, contra `artifacts/v2_e3/imagenes_7400f0c/`).
+
 ## Comprobaciones
 
 ```bash

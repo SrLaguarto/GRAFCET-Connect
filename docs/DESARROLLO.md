@@ -149,9 +149,16 @@ python tools/banco_de_pruebas.py --abrir --comparar
 | `grafcet/editor.py` | Operaciones de edición sin interfaz | EDT-01..07, 09, 14; MOD-03, MOD-06 |
 | `grafcet/builder.py`, `examples.py`, `view.py` | Constructor de modelos, ejemplos y vista común del banco, el comparador y el simulador (P-IMP-29) | SIM-02, SIM-03, DAT-02 |
 | `escritorio/` | Simulador de escritorio con Qt (PySide6) y su dibujo; `tools/construir_ejecutable.py` hace el `.exe` portable y el instalador (P-IMP-103) | EDT-01, SIM-03, PLT-03 |
+| `conexion/` | Comunicación con la planta, sin Qt: Modbus TCP y conexión directa (`adaptador*.py`, `modbus.py`, `intercambio_directo.py`), coordinador (`coordinador.py`) y hilo de control del ciclo con su candado (`ciclo.py`, `hilos.py`) | P-IMP-50 |
+| `escritorio/geometria/` | Geometría pura, sin Qt: posiciones, cajas de acciones y comentarios, choques, huecos, equidistancia y enlaces | — |
+| `escritorio/escena/` | Escena incremental: descriptores y modelo visual puros, diferencia entre dos modelos, realizador y `EscenaIncremental` (única parte con Qt del dibujo, junto a `escena.py`) | — |
+| `escritorio/edicion/` | Fachada `Edicion` (`__init__.py`) y sus partes: modelo, selección, gestos, arrastre, enlaces, acciones, grupos, jerarquía, forzados, historial y diagnósticos | EDT-01 |
+| `escritorio/ventana/` | Fachada `Ventana` (`__init__.py`) y sus mixins: menús, archivos, simulación, E/S (`es.py`), modos y vista | — |
 | `spec/clasificacion.py` | Clasificación de requisitos y tratamiento de casos | U-12 (propuesta) |
 | `tools/banco_de_pruebas.py`, `comparador.html`, `decisiones.py`, `dibujo.js` | Banco de pruebas y comparador de decisiones (no es la interfaz del producto) | SEM-09, NOR-02 |
 | `tests/` | Casos T-01…T-26 del documento 11 y suplementarios S-xx | — |
+
+Capas (`grafcet/`, `conexion/`, `escritorio/`), hilos, candado y dónde va cada cambio: [ARQUITECTURA.md](ARQUITECTURA.md).
 
 
 ## Selección, salto y repetición (corrección del paso 3, P-IMP-33)

@@ -93,6 +93,8 @@ ejecutable y medida final) pasa al cierre (E9), para que recoja también E7 y E8
   - El motor y la E/S solo los toca el hilo de control.
   - La pantalla lee fotos inmutables del estado y le pasa las órdenes del usuario (entradas, Play, Stop, Reiniciar,
     forzados) por una cola.
+  - **Como quedó** (diseño de E7, `docs/ARQUITECTURA.md`): un candado único; la pantalla copia el estado bajo el candado
+    y dibuja sin él, y las órdenes son llamadas síncronas bajo el mismo candado, sin cola.
 - **Misma semántica.** Se mantiene lo decidido sobre el intercambio: orden de lectura y escritura, lotes, cuándo se
   escriben las salidas. Lo que no esté decidido se pregunta. `grafcet/` no se toca salvo que el diseño lo justifique y
   el responsable lo decida.
@@ -151,8 +153,8 @@ escritorio/
               acciones y grupos, diagnósticos y órdenes de deshacer
   ventana/    Ventana se queda como fachada; detrás: archivos, simulación, E/S (Modbus y
               directa), vista y modos, menús
-  (E7)        hilo de control: el motor y la E/S con su propio reloj; publica fotos del estado
-              y recibe las órdenes de la pantalla por una cola (el nombre y el sitio, en el diseño)
+  (E7)        hilo de control: el motor y la E/S con su propio reloj; la pantalla copia el estado
+              bajo un candado único y le da las órdenes por llamadas síncronas (conexion/ciclo.py)
 ```
 
 Paneles, Propiedades, Planos y el resto se quedan donde están. Solo se agrupan si sale de forma natural.
@@ -252,6 +254,6 @@ Cambios visibles o de semántica que no entran en la 2.0 (que no cambia nada vis
 - **Hilos (E7).** Un dato que tocan a la vez el hilo de control y la pantalla da fallos intermitentes, los más difíciles
   de reproducir. Se mitiga con estas medidas:
   - el motor tiene un solo dueño;
-  - la pantalla solo lee fotos inmutables;
-  - las órdenes van por una cola;
+  - la pantalla copia el estado bajo un candado único y dibuja sin él;
+  - las órdenes son síncronas bajo el mismo candado (guarda `GRAFCONNECT_COMPROBAR_HILOS=1`);
   - hay pruebas de estrés y de choque con una conexión simulada.
