@@ -19,7 +19,8 @@ subagentes. Los subagentes de proyecto están en `.claude/agents/`:
 | `implementador` | Sonnet | Programa, corrige y añade pruebas | Código y pruebas del encargo |
 | `verificador` | Sonnet | Revisa y prueba de forma independiente | Nada (solo lectura y ejecución de pruebas) |
 | `documentador` | Haiku | Documentación técnica y tareas sencillas | Solo documentación escrita a mano |
-| `resolvedor` | Opus, esfuerzo máximo | Problemas técnicos delicados que, si no, el coordinador consultaría al responsable: diagnóstico con evidencia y propuesta | Nada del repositorio (solo experimentos en `artifacts/`) |
+| `resolvedor` | Opus, esfuerzo extra alto | Problemas técnicos delicados que, si no, el coordinador consultaría al responsable: diagnóstico con evidencia y propuesta | Nada del repositorio (solo experimentos en `artifacts/`) |
+| `sensei` | Opus, esfuerzo máximo | Último recurso: un problema que el `resolvedor` no ha podido cerrar, o uno excepcionalmente grave | Nada del repositorio (solo experimentos en `artifacts/`) |
 
 Se usan **subagentes convencionales** (herramienta Agent con `subagent_type`). No se crean agent teams.
 
@@ -42,7 +43,8 @@ Se usan **subagentes convencionales** (herramienta Agent con `subagent_type`). N
 8. **El `resolvedor`** se llama solo ante un problema técnico delicado que el coordinador no puede cerrar con
    seguridad. Por ejemplo: un fallo intermitente, un cierre brusco, un problema de hilos o una causa que no se deja
    reproducir. Es el caso en que, si no, preguntaría al responsable. No sustituye al responsable en las decisiones de
-   producto, de semántica ni en las cuestiones U.
+   producto, de semántica ni en las cuestiones U. El `sensei` (esfuerzo máximo, muy costoso) es el último recurso: solo
+   si el `resolvedor` no ha podido cerrar el problema o si este es excepcionalmente grave.
 9. **No invoques subagentes sin necesidad:** una consulta, una lectura o un cambio trivial los hace el coordinador
    directamente.
 10. **Registro de autoría:** en modificaciones significativas, el cuerpo del commit lleva una sección «Agentes» que

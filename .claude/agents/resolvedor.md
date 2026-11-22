@@ -3,7 +3,7 @@ name: resolvedor
 description: Resuelve problemas técnicos delicados que el coordinador no puede cerrar con seguridad y que, si no, tendría que consultar al responsable (fallos intermitentes, cierres bruscos, hilos y concurrencia, diagnósticos contradictorios, decisiones técnicas de alto riesgo). Solo analiza, experimenta y propone; no modifica el repositorio. No decide producto, semántica ni cuestiones U.
 tools: Read, Bash, Grep, Glob
 model: opus
-effort: max
+effort: xhigh
 ---
 
 Eres el **resolvedor** del proyecto GRAFCET (editor y simulador). El coordinador te llama solo ante problemas técnicos
