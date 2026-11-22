@@ -5,6 +5,10 @@
 Mismo funcionamiento que la 1.1.x, con el código de `escritorio/` ordenado por responsabilidades y el dibujo
 incremental. **Sin funciones nuevas ni cambios visibles.** Solo cambia lo de detrás.
 
+**Única excepción** (el responsable, 22-nov-2026): el rediseño de las ventanas emergentes de Propiedades entra en la 2.0
+(etapa E8). Las reglas 2, 4 y 5 siguen valiendo para el lienzo y el formato: el rediseño cambia las ventanas, no el dibujo
+ni el `.grafnet`.
+
 ## Decisiones del responsable (20-nov-2026)
 
 - **Por etapas.** Cada etapa deja el programa funcionando y la suite completa en verde. No se reescribe desde cero.
@@ -81,7 +85,7 @@ Diseño en `artifacts/v2_e4/DISENO_E4.md` (fuera del repositorio).
 ## Decisiones para E7 (21-nov-2026)
 
 El responsable decide hacerla. Va después de E6. El cierre que antes estaba en E6 (documentación de la arquitectura,
-ejecutable y medida final) pasa a E8, para que recoja también E7.
+ejecutable y medida final) pasa al cierre (E9), para que recoja también E7 y E8.
 
 - **Objetivo:** que el ciclo con el simulador de planta, por conexión directa o por Modbus, no espere nunca al dibujo, y
   sea regular aunque el equipo esté cargado (el simulador de planta y otros programas abiertos).
@@ -151,7 +155,8 @@ La caché de rutas y la reutilización de textos de AD desaparecen cuando la esc
 | E5 | Ventana partida: controladores | Implementador y verificador (el responsable lo cambió el 21-nov; antes, Codex) |
 | E6 | Limpieza: código muerto (con una herramienta propia que se pueda repetir), una sola de las dos memorias de validación (la de la edición, del paso 7 de E3, y la del núcleo, del paso 9), comprobación opcional y permanente de los documentos sellados y compatibilidad del `.grafnet` entre la 1.x y la 2.0 | Implementador y verificador (antes, Codex y documentador) |
 | E7 | Ciclo de E/S independiente: el motor y la E/S en un hilo de control propio, con su reloj; la pantalla dibuja fotos del estado y le pasa las órdenes del usuario | Implementador y verificador |
-| E8 | Cierre: segunda pasada de código muerto, documentación de la arquitectura y sus reglas en `CLAUDE.md`, resultados de pruebas y trazabilidad regenerados, ejecutable de prueba, medida final, prueba final del responsable con E/S reales y decisión sobre la meta de «mover una etapa». Además, medir por fases el arrastre desde una etapa o una transición que crea una acción o una transición en `Linea larga` (el responsable nota un pequeño retardo, 21-nov) y quitar lo que sobre en los fotogramas intermedios, sin reconstruir por elementos | Implementador, documentador y verificador |
+| E8 | Rediseño de las ventanas emergentes de Propiedades (transición; acciones condicionada, memorizada y por evento) y del selector de variable del lienzo, según `artifacts/rediseno_emergentes/PROPUESTA.md` y `maquetas.html`, fuera del repositorio. Entra en la 2.0 por decisión del responsable (22-nov). Las dos cuestiones abiertas quedan fuera de la 2.0 (22-nov): ni saltos de línea en el comentario ni vista previa distinta de la fórmula a medias, que sigue con el texto sin interpretar («? OR ?») | Implementador y verificador |
+| E9 | Cierre: segunda pasada de código muerto, documentación de la arquitectura y sus reglas en `CLAUDE.md`, resultados de pruebas y trazabilidad regenerados, ejecutable de prueba, medida final, prueba final del responsable con E/S reales y decisión sobre la meta de «mover una etapa». Además, medir por fases el arrastre desde una etapa o una transición que crea una acción o una transición en `Linea larga` (el responsable nota un pequeño retardo, 21-nov) y quitar lo que sobre en los fotogramas intermedios, sin reconstruir por elementos | Implementador, documentador y verificador |
 
 Después de cada etapa:
 
@@ -160,13 +165,13 @@ Después de cada etapa:
 3. Medidas comparadas.
 4. Revisión del coordinador y commit en `v2`.
 5. El responsable puede probar desde el código.
-6. Tras E4, E5, E7 y E8, además, el responsable prueba a mano con E/S reales: una escena larga del simulador de planta
+6. Tras E4, E5, E7, E8 y E9, además, el responsable prueba a mano con E/S reales: una escena larga del simulador de planta
    (muchas cintas, cilindros y etapas temporizadas) y su proyecto, por conexión directa y por Modbus, comparando
    con la 1.1.x. La escena y su proyecto quedan fuera del repositorio.
 
 ## Después de la 2.0
 
-Cambios visibles o de semántica que no entran en la 2.0 (que no cambia nada visible). Se hacen al terminar E8.
+Cambios visibles o de semántica que no entran en la 2.0 (que no cambia nada visible, salvo las emergentes de E8). Se hacen al terminar E9.
 
 - **Botón de pausa** (21-nov): un tercer estado, entre Play y Stop.
   - Play.
@@ -180,8 +185,8 @@ Cambios visibles o de semántica que no entran en la 2.0 (que no cambia nada vis
   - si se puede forzar o editar en pausa.
 
   E7 deja preparado en el ciclo el hueco para ese estado, sin nada visible.
-- **Rediseño de las emergentes de Propiedades:** propuesta acordada en `artifacts/rediseno_emergentes/PROPUESTA.md`, fuera
-  del repositorio, con dos cuestiones menores abiertas.
+- **Restos del rediseño de las emergentes** (22-nov): saltos de línea reales en el comentario (Mayús+Intro; cambian el dibujo y
+  lo guardado) y vista previa de una fórmula a medias con la notación del dibujo («? + ?» en lugar de «? OR ?», también en el lienzo).
 - **Bases temporales ampliadas** (decidido el 21-nov):
   - P-IMP-18 se extiende a internas, salidas y mezclas.
   - El flanco sigue sin admitirse como base, con un aviso claro.
