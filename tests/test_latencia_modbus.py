@@ -105,7 +105,9 @@ class LatenciaQtTests(unittest.TestCase):
         fin = time.monotonic() + segundos
         while not condicion():
             self.app.processEvents()
-            if time.monotonic() >= fin:
+            # (V2-E7: una sola pasada de `processEvents` puede durar más que el plazo, p. ej. si destruye una ventana anterior, y entonces
+            # la condición ya se cumple: se mira otra vez antes de dar el fallo)
+            if time.monotonic() >= fin and not condicion():
                 self.fail("No llegó la respuesta Modbus: " + self.w.modbus.mensaje)
             time.sleep(.001)
 
@@ -135,22 +137,24 @@ class LatenciaQtTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, servidor(lambda p: b"\x02\x01\x01" if p[0] == 2 else p[:5]) as sc:
             w = self.abrir(tmp, sc, 2000)
             try:
-                w.a_ejecutar.setChecked(True)
-                w.rt.stop()
-                w._tick()  # termina el descarte de la sesión anterior
-                w.modbus.proxima = 0
+                from conexion.adaptador import Adaptador
                 hilos = []
-                aplicar = w.modbus.adaptador.aplicar
-                def registrar(muestra):
+                aplicar = Adaptador.aplicar
+                def registrar(adaptador, muestra):
                     hilos.append(threading.get_ident())
-                    return aplicar(muestra)
-                with patch.object(w.modbus.adaptador, "aplicar", registrar), patch.object(w, "refrescar") as dibujar:
-                    w._ultimo_refresco_modbus = time.perf_counter()
-                    w._tick()  # envía lectura; el resto lo hacen las respuestas
-                    w._proxima_lectura.stop()
-                    self.esperar(lambda: w.modbus.escritos.get("motor") is True, 1)
-                    self.assertEqual(hilos, [threading.get_ident()])
-                    self.assertLessEqual(dibujar.call_count, 1)
+                    return aplicar(adaptador, muestra)
+                # (V2-E7: Play despierta al hilo de control, que lee, aplica y escribe sin esperar a ningún `_tick`: se vigila la clase, porque el
+                # adaptador de la sesión nueva no existe hasta Play)
+                with patch.object(Adaptador, "aplicar", registrar):
+                    w.a_ejecutar.setChecked(True)
+                    w.rt.stop()
+                    with patch.object(w, "refrescar") as dibujar:
+                        w._ultimo_refresco_modbus = time.perf_counter()
+                        self.esperar(lambda: w.modbus.escritos.get("motor") is True, 1)
+                # (V2-E7: el dueño del motor durante la conexión es el hilo de control, no el de la pantalla)
+                self.assertEqual(set(hilos), {w.ciclo._hilo.ident})  # (puede aplicar más de una muestra: el hilo no espera al sondeo)
+                self.assertNotIn(threading.get_ident(), hilos)
+                self.assertLessEqual(dibujar.call_count, 1)
                 self.assertTrue(w.v.s.z.values["sensor"])
                 for clave in ("leer_red_ms", "leer_espera_ms", "evolucion_ms", "escribir_red_ms", "ciclo_ms"):
                     self.assertGreaterEqual(w.modbus.medidas[clave], 0)
@@ -159,6 +163,33 @@ class LatenciaQtTests(unittest.TestCase):
                 w.rt.stop()
                 self.esperar(lambda: w.modbus.escritos.get("motor") is False, 1)
                 print("\nMedidas locales (ms):", {k: round(v, 3) for k, v in w.modbus.medidas.items()})
+            finally:
+                self.cerrar()
+
+    def test_SRED18_el_estado_final_de_la_conexion_siempre_se_pinta(self):
+        """REQ-SIM-03 (E7): si el cierre de la conexión termina justo entre la lectura de `activo` y el refresco, la pantalla no para su reloj sin haber
+        pintado el estado final: el siguiente refresco lo pinta y entonces para."""
+        with tempfile.TemporaryDirectory() as tmp, servidor(lambda p: b"" if p[0] == 2 else p[:5]) as sc:
+            w = self.abrir(tmp, sc, 20)
+            try:
+                m = w.modbus
+                self.assertTrue(w.ciclo.vivo and w.rt.isActive())
+                original = w._refrescar_modbus
+
+                def refrescar_y_cerrar():
+                    original()  # pinta «cerrando»…
+                    m.estado, m.mensaje = "desconectado", "Desconectado · salidas a cero"  # …y el cierre acaba justo ahora
+                with patch.object(w.ciclo, "ciclo"):  # el hilo de control no toca el estado: la intercalación la fijamos nosotros
+                    with w.candado:
+                        m.estado, m.mensaje = "cerrando", "Desconectando · salidas a cero…"
+                    with patch.object(w, "_refrescar_modbus", refrescar_y_cerrar):
+                        w._tick()
+                        self.assertTrue(w.rt.isActive(), "no se para el reloj antes de pintar el final")
+                        self.assertNotIn("Desconectado", w.panel_es.estado.toolTip())
+                        w._tick()
+                self.assertFalse(w.rt.isActive())
+                self.assertIn("Desconectado", w.panel_es.estado.toolTip())
+                self.assertFalse(w.ciclo.vivo)
             finally:
                 self.cerrar()
 
@@ -242,7 +273,8 @@ class LatenciaQtTests(unittest.TestCase):
                     self.esperar(lambda:len(marcas)>=40,5)
                     intervalos=[(b-a)*1000 for a,b in zip(marcas[3:],marcas[4:])]
                     self.assertTrue(all(t>0 for t in intervalos))
-                    self.assertEqual(w.rt.interval(),periodo)
+                    self.assertEqual(w.rt.interval(),100)  # (V2-E7: el reloj de la pantalla solo atiende novedades y refresca; el periodo lo lleva el hilo de control)
+                    self.assertTrue(w.ciclo.vivo)
                     self.assertTrue(w.modbus.en_marcha)
                     self.assertFalse(w.modbus.fallo_motor)
                     ordenados=sorted(intervalos)
@@ -319,7 +351,7 @@ class LatenciaQtTests(unittest.TestCase):
             w=self.abrir(tmp,sc,5)
             try:
                 w.a_ejecutar.setChecked(True);self.esperar(lambda:w.modbus.escritos.get("motor") is True)
-                w.rt.stop();w._proxima_lectura.stop()
+                w.rt.stop();w._proxima_lectura.stop();w.ciclo.parar()  # (V2-E7: congelar el ciclo es parar el hilo de control)
                 w.v.s.advance_to(w.v.s.z.time+1000);w.refrescar()
                 with patch.object(w.diagrama,"mostrar",wraps=w.diagrama.mostrar) as dibujar:
                     w.v.s.advance_to(w.v.s.z.time+1000);w.refrescar()

@@ -11,7 +11,7 @@ from PySide6.QtCore import QSize, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QFileDialog
 from conexion.configuracion import ARCHIVO, CANALES_INICIALES, Configuracion, aviso_host, normalizar_host
-from .constantes import ERRORES
+from .constantes import ERRORES, TICK_MS
 
 
 class ConexionES:
@@ -26,6 +26,21 @@ class ConexionES:
     def _refrescar_modbus(self):
         self.refresco_conexion.actualizar()
 
+    def _despertar_ciclo(self) -> None:
+        """Lo llama el trabajador de red (otro hilo) al terminar una petición: despierta al hilo de control, que atiende la respuesta ya."""
+        self.ciclo.despertar()
+
+    def _error_ciclo(self, exc: BaseException) -> None:
+        """Lo llama el hilo de control (sin Qt) si un ciclo lanza una excepción: la conexión pasa a error, como un fallo de red, y se avisa a la pantalla."""
+        with self.candado:
+            m = self.modbus
+            m.estado, m.mensaje = "error", m._mensaje_de_error(exc, "")
+            m.en_marcha = m.reiniciando = False
+            m._cero_al_cerrar = None
+            if m.cliente is not None:
+                m.cliente.cerrar()
+        self._respuesta_modbus.notificar()
+
     def _raiz_modbus(self):
         if (self.modo == "editar" or self.fuente.get("tipo") == "editor") and self.edicion:
             return self.edicion.ruta
@@ -33,7 +48,8 @@ class ConexionES:
 
     def _persistir_mapa_modbus(self, config):
         if self.modbus.activo:
-            self.modbus.reasignar(config,self.panel_es.doc)
+            with self.candado:
+                self.modbus.reasignar(config,self.panel_es.doc)
         raiz = self._raiz_modbus()
         if raiz and self.panel_es.doc:
             try:
@@ -83,13 +99,14 @@ class ConexionES:
         """Otro modelo con la conexión viva: TCP se conserva, pero lo que el modelo anterior hubiera escrito ya no lo controla
         nadie (cero) y la lectura sigue con el mapa del modelo nuevo, cuyas salidas asignadas también se ponen a cero (el
         coordinador junta los dos ceros en uno)."""
-        anterior = self.modbus.adaptador  # no depende de lo ya confirmado: una escritura en vuelo puede haber llegado a la planta
-        if anterior is not None and (anterior.salidas or getattr(anterior, "salidas_control", [])):
-            self.modbus.pausar(diagnostico=True)
-        try:
-            self.modbus.observar(self.panel_es.config, doc)
-        except ERRORES as exc:
-            self.modbus.mensaje = f"Conectado · el mapa de este modelo no es válido: {exc}"
+        with self.candado:
+            anterior = self.modbus.adaptador  # no depende de lo ya confirmado: una escritura en vuelo puede haber llegado a la planta
+            if anterior is not None and (anterior.salidas or getattr(anterior, "salidas_control", [])):
+                self.modbus.pausar(diagnostico=True)
+            try:
+                self.modbus.observar(self.panel_es.config, doc)
+            except ERRORES as exc:
+                self.modbus.mensaje = f"Conectado · el mapa de este modelo no es válido: {exc}"
 
     def _guardar_config_modbus(self):
         try:
@@ -219,7 +236,9 @@ class ConexionES:
         if mismo:
             cambio=p.firma(doc)!=p.firma_modelo
             p.actualizar(doc)
-            if cambio and self.modbus.activo:self.modbus.reasignar(p.config,doc)
+            if cambio and self.modbus.activo:
+                with self.candado:
+                    self.modbus.reasignar(p.config,doc)
         else:
             self._cargar_config_modbus(doc)
         self._autoasignar_nuevas_es()
@@ -293,12 +312,14 @@ class ConexionES:
         en_play = self.a_ejecutar.isChecked() and not prueba  # P-IMP-172: al conectar en Play, se vuelve a Play
         try:
             self._parar_sin_cambiar_vista()
-            self.modbus.iniciar(config, sesion, prueba, documento=self.panel_es.doc)
+            with self.candado:
+                self.modbus.iniciar(config, sesion, prueba, documento=self.panel_es.doc)
+            self.ciclo.arrancar()  # el hilo de control lleva el ciclo mientras haya conexión
             self.panel_es.config = config
             self.panel_es._dibujar()
             self.panel_es.ocupado(True)
             self.panel_es.estado.setText(self.modbus.mensaje)
-            self.rt.setInterval(config.periodo_ms)
+            self.rt.setInterval(TICK_MS)  # el reloj de la pantalla ya no marca el periodo de la conexión: solo atiende las novedades y refresca
             self._iniciar_reloj()
             self.rt.start()
         except (ValueError, RuntimeError) as exc:
@@ -328,14 +349,18 @@ class ConexionES:
         finally:self._conservar_vista_al_parar=anterior
 
     def _desconectar_modbus(self):
-        anterior = getattr(self, "_conservar_vista_al_parar", False)
-        self._conservar_vista_al_parar = True
-        try:
-            self.a_ejecutar.setChecked(False)
-        finally:
-            self._conservar_vista_al_parar = anterior
-            self._sincronizar_boton_es()
-        self.modbus.desconectar()
+        # Con el candado todo el rato (única orden que lo retiene durante un refresco): Stop y Desconectar son una sola orden del usuario y el hilo de
+        # control no puede meter entre las dos un fallo de red que la deje en «error» en vez de «desconectado».
+        with self.candado:
+            anterior = getattr(self, "_conservar_vista_al_parar", False)
+            self._conservar_vista_al_parar = True
+            try:
+                self.a_ejecutar.setChecked(False)
+            finally:
+                self._conservar_vista_al_parar = anterior
+                self._sincronizar_boton_es()
+            self.modbus.desconectar()
+        self.ciclo.despertar()
         self.panel_es.estado.setText(self.modbus.mensaje)
         self.rt.start()
 

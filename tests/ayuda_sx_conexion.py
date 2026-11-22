@@ -58,6 +58,7 @@ def cerrar(c, servidor):
     c.w._mostrar_panel("inferior", False)
     c.w.rt.stop()
     c.w._proxima_lectura.stop()
+    c.w.ciclo.parar()  # (V2-E7: este cierre lo lleva la función a mano, sin el hilo de control)
     c.w.modbus.desconectar()
     limite = monotonic() + 5
     while c.w.modbus.activo and monotonic() < limite:

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QApplication, QGroupBox, QHeaderView, QLabel, QLi
 from grafcet.engine import Session
 from grafcet.profile import SEMANTIC_OPTIONS, normalize_options
 from grafcet.view import Vista, t_trunc
+from conexion.hilos import SESION, proteger
 from .constantes import ARRIBA_CAJA, ERRORES, ESTADOS, TICK_MS, TITULO, TRAZA
 from .dialogos import _icono_barra
 from .widgets import _BotonEntrada
@@ -87,7 +88,8 @@ class Simulacion:
         a la planta si hay conexión."""
         self._mostrar_pagina(False)
         if not self.a_ejecutar.isChecked():
-            self.modbus.pausar(diagnostico=True)
+            with self.candado:
+                self.modbus.pausar(diagnostico=True)
             if self.v is None:
                 return  # Todavía no hay una simulación cuyo estado refrescar.
             self._sin_estado()
@@ -135,6 +137,7 @@ class Simulacion:
             QMessageBox.warning(self, TITULO, "El grafcet no compila con las lecturas de interpretación activas, no se puede "
                                 "simular todavía:\n\n" + "\n".join(lineas[:8]) + ("\n…" if len(lineas) > 8 else ""))
             return False
+        proteger(nueva.s, SESION, self.candado, "Session")  # con GRAFCONNECT_COMPROBAR_HILOS=1: el motor solo lo toca quien tiene el candado
         if not self.modbus.activo:
             contactos={vid:True for (proyecto,vid),nc in self._entradas_nc.items() if proyecto==self._proyecto and nc and vid in nueva.s.cm.variables}
             if contactos:nueva.act("fijar",{"cambios":contactos})
@@ -145,7 +148,8 @@ class Simulacion:
             try:
                 config = self.panel_es.obtener()
                 config.validar(e.ed.model)  # lo editado puede haber dejado el mapa sin variable o de otro tipo
-                self.modbus.vincular(nueva.s, config, e.ed.model)
+                with self.candado:
+                    self.modbus.vincular(nueva.s, config, e.ed.model)
             except ERRORES as exc:
                 texto = f"No se puede ejecutar con la conexión y las asignaciones actuales: {exc}. Revise la asignación; la conexión se conserva."
                 self.modbus.mensaje = texto
@@ -483,7 +487,8 @@ class Simulacion:
             if not getattr(self, "_conservar_vista_al_parar", False):
                 self._mostrar_pagina(False)
             if not on:
-                self.modbus.pausar()
+                with self.candado:
+                    self.modbus.pausar()
                 if self.edicion is None:
                     self._establecer_edicion(self._edicion_desde_fuente() if self.v else Edicion.nuevo())
             self._poner_modo()
@@ -492,9 +497,15 @@ class Simulacion:
                 self.refrescar()  # las tablas dejan de enseñar la sesión anterior y las entradas se deshabilitan
             if on:
                 self.refrescar()
+            with self.candado:
+                if self.modbus.activo:
+                    self.modbus.solicitar_ejecucion(on)
+                self.ciclo.pedir_ejecucion(on)  # lo que hace el ciclo con el motor lo decide esto, en un solo sitio (E7)
             if self.modbus.activo:
-                self.modbus.solicitar_ejecucion(on)
-                self._proxima_lectura.start(1)  # Play/Stop no esperan al sondeo configurado.
+                if self.ciclo.vivo:
+                    self.ciclo.despertar()  # Play/Stop no esperan al sondeo configurado.
+                else:
+                    self._proxima_lectura.start(1)
             if on or self.modbus.activo:  # con la conexión viva el temporizador sigue en Pausa: observa las entradas
                 self._iniciar_reloj()
                 self.rt.start()
@@ -513,9 +524,10 @@ class Simulacion:
     def _vigilar_motor(self) -> bool:
         """En Play, si el motor deja de estar en situación estable (inestable o detenido por un diagnóstico): se para, pasa a
         Pausa/edición y se cuenta por qué. Devuelve si ha parado."""
-        s = self.v.s if self.v else None
-        if s is None or s.status == "pausada-estable":
-            return False
+        with self.candado:  # (E7: con el candado el motor no está a medio ciclo: su estado es el de después de aplicar la muestra, no «ejecutando»)
+            s = self.v.s if self.v else None
+            if s is None or s.status == "pausada-estable":
+                return False
         self._avisar_motor(self.v)
         self.a_ejecutar.setChecked(False)
         return True
@@ -525,12 +537,14 @@ class Simulacion:
         evoluciones): aviso modal, una sola vez por episodio. Otro diagnóstico: mensaje en la barra de estado (o aviso, si
         era al arrancar). Con Modbus vivo, lo que ya se estuviera controlando pasa a estado seguro (cero) sin cerrar la
         conexión. Los detalles se quedan entre los diagnósticos del panel de edición."""
-        d = vista._diag(vista.s.diagnostics[-1]) if vista.s.diagnostics else None  # con nombres, no ID internos
+        with self.candado:  # (E7: lo que se lee del motor para contar el aviso, con el candado)
+            d = vista._diag(vista.s.diagnostics[-1]) if vista.s.diagnostics else None  # con nombres, no ID internos
+            evoluciones = [r for r in vista.s.trace.records if r["kind"] == "evolucion"]
         inestable = d is not None and d["code"] == "D-LIM-EVOL"
         m = self.modbus
         if m.activo and (inestable or not al_arrancar) and (m.adaptador.sesion is not None or m.escritos):
-            m.pausar(diagnostico=True)
-        evoluciones = [r for r in vista.s.trace.records if r["kind"] == "evolucion"]
+            with self.candado:
+                m.pausar(diagnostico=True)
         motivos = motivo_parada(d["code"], d["message"], evoluciones, vista.names) if d else []
         self._avisos_ejecucion = motivos
         if motivos:
@@ -561,29 +575,12 @@ class Simulacion:
         self._marca_reloj_ns = self._resto_reloj_ns = 0
 
     def _tick(self) -> None:
+        if self.modbus.activo or self.ciclo.vivo:  # (con el hilo de control vivo, la pantalla atiende también el último aviso: error o fin de la conexión)
+            self._atender_conexion()
+            return
         marca = self.reloj.nsecsElapsed() if self.reloj.isValid() else 0
         us, self._resto_reloj_ns = divmod(max(0, marca - self._marca_reloj_ns) + self._resto_reloj_ns, 1000)
         self._marca_reloj_ns = marca
-        if self.modbus.activo:
-            ejecutar = (self.a_ejecutar.isChecked() and self.modbus.estado == "conectado"
-                        and not self.modbus.reiniciando and self.modbus.adaptador.sesion is not None)
-            if ejecutar and self.modbus.en_marcha and self.v and self.v.s and self.v.s.status == "pausada-estable":
-                self.v.s.advance_to(self.v.s.z.time + us)
-            self.modbus.tick(ejecutar)
-            if self.a_ejecutar.isChecked():
-                self._vigilar_motor()
-                if self.modbus.estado in ("error", "desconectado", "diagnostico") or self.modbus.adaptador.sesion is None:
-                    self._parar_sin_cambiar_vista()
-            self._proxima_lectura.stop()
-            if (self.modbus.estado == "conectado" and not self.modbus.fallo_motor
-                    and self.modbus.futuro is None):
-                espera = max(1, ceil((self.modbus.proxima - perf_counter()) * 1000))
-                self._proxima_lectura.start(espera)
-            self._refrescar_modbus()
-            if not self.modbus.activo:
-                self.rt.setInterval(TICK_MS)
-                self.rt.stop()
-            return
         if not self.a_ejecutar.isChecked():  # Pausa sin conexión: el reloj no tiene nada que avanzar
             self.rt.stop()
             self.rt.setInterval(TICK_MS)
@@ -593,6 +590,31 @@ class Simulacion:
             return
         if not self._vigilar_motor():
             self._act("avanzar", us=us)
+
+    def _atender_conexion(self) -> None:
+        """Con conexión (E7): el ciclo de E/S lo lleva el hilo de control (`conexion.ciclo`); la pantalla solo atiende sus novedades: si el motor se ha parado
+        o la conexión se ha caído pasa a Pausa y lo cuenta, refresca (como mucho a 10 Hz) y, si la conexión ha terminado, para el hilo. Sin hilo de control
+        vivo (nadie lo ha arrancado: p. ej. una prueba que usa el coordinador a mano) el ciclo se hace aquí, como siempre, con el candado."""
+        m = self.modbus
+        activo = m.activo  # se decide una vez, ANTES de refrescar: el refresco copia el estado después y es, como mínimo, igual de reciente. Si la conexión
+        # ya había acabado, ese refresco pinta el estado final y se puede parar; si acaba mientras se refresca, el reloj sigue y el próximo `_tick` lo pinta.
+        if not self.ciclo.vivo:
+            self.ciclo.ciclo()
+        self.ciclo.tomar_avisos()
+        if self.a_ejecutar.isChecked():
+            self._vigilar_motor()
+            if m.estado in ("error", "desconectado", "diagnostico") or m.adaptador.sesion is None:
+                self._parar_sin_cambiar_vista()
+        if not self.ciclo.vivo:
+            self._proxima_lectura.stop()
+            if m.estado == "conectado" and not m.fallo_motor and m.futuro is None:
+                espera = max(1, ceil((m.proxima - perf_counter()) * 1000))
+                self._proxima_lectura.start(espera)
+        self._refrescar_modbus()
+        if not activo:
+            self.ciclo.parar()  # (sin el candado: el hilo puede estar esperándolo)
+            self.rt.setInterval(TICK_MS)
+            self.rt.stop()
 
     def _fijar_ancho_boton_play(self) -> None:
         """El botón de Play mide lo del más ancho de sus dos estados (Play, Stop) y su contenido va centrado en los dos (`_centrar_play`). El ancho sale
@@ -627,7 +649,8 @@ class Simulacion:
     def refrescar(self) -> None:
         if self.a_ejecutar.isChecked() and self._vigilar_motor():
             return
-        M, S = self.v.model, self.v.state()
+        with self.candado:  # la foto del estado del motor, con el candado; se dibuja sin él (E7)
+            M, S = self.v.model, self.v.state()
         simulando = self.modo == "simular"  # al editar, el dibujo, el estado y el título son los de la edición
         if simulando:
             label, color = ESTADOS.get(S["status"], (S["status"], "muted"))

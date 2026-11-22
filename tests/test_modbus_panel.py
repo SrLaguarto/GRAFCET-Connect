@@ -26,6 +26,12 @@ def ajustes_de_prueba(tmp):
 
 
 @unittest.skipUnless(QT, "Falta PySide6")
+
+def _estado(w):
+    """El estado del motor como lo lee la pantalla: con el candado cogido (V2-E7: el hilo de control puede estar avanzándolo)."""
+    with w.candado:
+        return w.v.state()
+
 class PanelTests(unittest.TestCase):
     def test_SFIO25_arrastre_desde_tarjeta_asignada(self):
         """REQ-SIM-03: el gesto comienza sobre la tarjeta, no solo sobre la lista."""
@@ -311,7 +317,7 @@ class PanelTests(unittest.TestCase):
                 w.a_ejecutar.setChecked(False)
                 for fila in range(3):
                     w.panel_es.tabla.cellWidget(fila, 0).setChecked(False)
-                with mock.patch.object(w.modbus,"iniciar") as iniciar:
+                with w.candado, mock.patch.object(w.modbus,"iniciar") as iniciar:  # (V2-E7: `patch` mira el atributo protegido: con el candado)
                     w._conectar_modbus()
                 self.assertFalse(iniciar.call_args.args[0].senales)
                 self.assertFalse(w.modbus.activo)
@@ -401,6 +407,9 @@ class PanelTests(unittest.TestCase):
         def responder(p):
             if p[0] == 15:
                 escrituras.append((int.from_bytes(p[1:3], "big"), p[6] & 1))
+            if p[0] == 4:  # (V2-E7: el ciclo ya no espera al reloj de la pantalla y lee en cuanto cambia el mapa: las entradas numéricas necesitan una respuesta de verdad)
+                n = int.from_bytes(p[3:5], "big")
+                return bytes([4, 2 * n]) + bytes(2 * n)
             return b"\x02\x01\x01" if p[0] == 2 else p[:5]
         return responder
 
@@ -562,8 +571,9 @@ class PanelTests(unittest.TestCase):
                 anterior = w.v.s
                 w.reiniciar()  # en Pausa: solo vuelve a pedir el cero
                 self.assertFalse(w.modbus.reiniciando)
-                w.a_ejecutar.setChecked(True)  # inmediato: sin dar tiempo a que termine el cero
-                self.assertTrue(w.modbus.reiniciando, "Play vincula una sesión nueva: primero espera, y lee sus entradas")
+                with w.candado:  # (V2-E7: el hilo de control ciclaría entre el Play y la comprobación; con el candado cogido no)
+                    w.a_ejecutar.setChecked(True)  # inmediato: sin dar tiempo a que termine el cero
+                    self.assertTrue(w.modbus.reiniciando, "Play vincula una sesión nueva: primero espera, y lee sus entradas")
                 self.assertTrue(w.a_ejecutar.isChecked())
                 esperar(lambda: not w.modbus.reiniciando and w.modbus.en_marcha)
                 for _ in range(15):  # varios tics más: Play no se desmarca solo
@@ -1147,7 +1157,8 @@ class PanelTests(unittest.TestCase):
                                                        senales=[Senal("sensor", "discrete", 0)]))
                 self.assertEqual(w.ajustes.value("modbus/host", "nada"), "nada", "escribir en el panel no recuerda nada")
                 w._conectar_modbus()
-                self._esperar(app, w, lambda: w.modbus.estado == "conectado")
+                # (V2-E7: el estado lo cambia el hilo de control y la pantalla lo recuerda en su siguiente refresco: se espera a las dos cosas)
+                self._esperar(app, w, lambda: w.modbus.estado == "conectado" and w.ajustes.value("modbus/host") is not None)
                 self.assertEqual((w.ajustes.value("modbus/host"), w.ajustes.value("modbus/puerto", type=int),
                                   w.ajustes.value("modbus/unidad", type=int)), ("127.0.0.1", sc.puerto, 7))
                 self.assertEqual(Path(w.ajustes.fileName()).parent, Path(tmp), "los ajustes de la prueba, no los del usuario")
@@ -1189,7 +1200,7 @@ class PanelTests(unittest.TestCase):
                 w.panel_es.cargar(m.doc, Configuracion(host="127.0.0.1", puerto=sc.puerto, unidad=3, periodo_ms=20,
                                                        senales=[Senal("sensor", "discrete", 0)]))
                 w._conectar_modbus(prueba=True)
-                self._esperar(app, w, lambda: w.modbus.mensaje.startswith("Conexión probada"))
+                self._esperar(app, w, lambda: w.modbus.mensaje.startswith("Conexión probada") and w.ajustes.value("modbus/host") is not None)  # (V2-E7: la pantalla lo recuerda en su refresco)
                 self.assertFalse(w.modbus.activo)
                 self.assertEqual((w.ajustes.value("modbus/host"), w.ajustes.value("modbus/puerto", type=int),
                                   w.ajustes.value("modbus/unidad", type=int)), ("127.0.0.1", sc.puerto, 3))
@@ -1296,11 +1307,11 @@ class PanelTests(unittest.TestCase):
                 # Play: situación inicial en la planta
                 w.a_ejecutar.setChecked(True)
                 esperar(lambda: w.modbus.escritos == {"motor": True, "luz": False, "vel": 150})
-                self.assertEqual(w.v.state()["situation"], ["E0"])
+                self.assertEqual(_estado(w)["situation"], ["E0"])
                 # el sensor se activa: evoluciona a E1
                 sensor[0] = 1
                 esperar(lambda: w.modbus.escritos == {"motor": False, "luz": True, "vel": 150})
-                self.assertEqual(w.v.state()["situation"], ["E1"])
+                self.assertEqual(_estado(w)["situation"], ["E1"])
                 self.assertGreater(w.t_vars.rowCount(), 0)
                 # Pausa: todo a 0
                 w.a_ejecutar.setChecked(False)
@@ -1309,8 +1320,8 @@ class PanelTests(unittest.TestCase):
                 ultimas = {(t, d): v for t, d, v in escrituras}
                 self.assertEqual((ultimas[("coil", 0)], ultimas[("coil", 1)], ultimas[("holding", 0)]), (0, 0, 0),
                                  "lo último que recibió la planta en cada coil y holding asignada es 0")
-                self.assertEqual(w.v.state().get("situation", []), [], "sin etapas activas")
-                self.assertEqual(w.v.state().get("temporal", {}), {}, "sin temporizadores")
+                self.assertEqual(_estado(w).get("situation", []), [], "sin etapas activas")
+                self.assertEqual(_estado(w).get("temporal", {}), {}, "sin temporizadores")
                 self.assertEqual((w.t_vars.rowCount(), w.t_temp.rowCount(), w.traza.count()), (0, 0, 0),
                                  "las tablas no enseñan la sesión anterior")
                 n = len(escrituras)
@@ -1328,7 +1339,7 @@ class PanelTests(unittest.TestCase):
                 w.a_ejecutar.setChecked(True)
                 self.assertIsNot(w.v.s, anterior)
                 esperar(lambda: w.modbus.escritos == {"motor": True, "luz": False, "vel": 150})
-                self.assertEqual(w.v.state()["situation"], ["E0"])
+                self.assertEqual(_estado(w)["situation"], ["E0"])
                 self.assertIs(w.modbus.cliente._socket, socket)
                 # Pausa y Play con el sensor a 1: arranca en E0 y lee antes las entradas de la conexión: evoluciona a E1
                 w.a_ejecutar.setChecked(False)
@@ -1336,7 +1347,7 @@ class PanelTests(unittest.TestCase):
                 sensor[0] = 1
                 w.a_ejecutar.setChecked(True)
                 esperar(lambda: w.modbus.escritos == {"motor": False, "luz": True, "vel": 150})
-                self.assertEqual(w.v.state()["situation"], ["E1"])
+                self.assertEqual(_estado(w)["situation"], ["E1"])
                 self.assertIs(w.v.s.z.values["sensor"], True)
                 w.a_ejecutar.setChecked(False)
                 esperar(lambda: w.modbus.escritos == cero)
@@ -1354,21 +1365,21 @@ class PanelTests(unittest.TestCase):
             try:
                 w.a_ejecutar.setChecked(True)
                 w.botones["sensor"].click()
-                self.assertEqual(w.v.state()["situation"], ["E1"])
-                self.assertEqual({k: x["value"] for k, x in w.v.state()["outputs"].items()}, {"motor": False, "luz": True})
+                self.assertEqual(_estado(w)["situation"], ["E1"])
+                self.assertEqual({k: x["value"] for k, x in _estado(w)["outputs"].items()}, {"motor": False, "luz": True})
                 w.a_ejecutar.setChecked(False)
-                self.assertEqual((w.v.state().get("situation", []), w.v.state().get("outputs", {}), w.v.state().get("values", {})),
+                self.assertEqual((_estado(w).get("situation", []), _estado(w).get("outputs", {}), _estado(w).get("values", {})),
                                  ([], {}, {}), "sin etapas, sin salidas y sin valores")
                 self.assertEqual((w.t_vars.rowCount(), w.t_temp.rowCount(), w.traza.count()), (0, 0, 0))
                 w.reiniciar()
-                self.assertEqual(w.v.state().get("situation", []), [])
+                self.assertEqual(_estado(w).get("situation", []), [])
                 self.assertFalse(w.a_ejecutar.isChecked())
                 w.a_ejecutar.setChecked(True)
-                self.assertEqual(w.v.state()["situation"], ["E0"], "Play: sesión nueva desde la situación inicial")
+                self.assertEqual(_estado(w)["situation"], ["E0"], "Play: sesión nueva desde la situación inicial")
                 self.assertEqual(w.botones["sensor"].text(), "sensor = 0")
                 w.a_ejecutar.setChecked(False)
                 w.a_ejecutar.setChecked(True)
-                self.assertEqual(w.v.state()["situation"], ["E0"])
+                self.assertEqual(_estado(w)["situation"], ["E0"])
                 w.a_ejecutar.setChecked(False)
             finally:
                 w.a_ejecutar.setChecked(False)
@@ -1391,14 +1402,14 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(w.modo, "simular")
                 w._conectar_modbus(prueba=True)
                 self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (False, "editar"))
-                self.assertEqual(w.v.state().get("situation", []), [])
+                self.assertEqual(_estado(w).get("situation", []), [])
                 esperar(lambda: w.modbus.mensaje.startswith("Conexión probada"))
                 self.assertEqual(escrituras, [], "probar no escribe actuadores")
                 w.a_ejecutar.setChecked(True)
                 self.assertEqual(w.modo, "simular")
                 w._conectar_modbus()
                 self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (False, "editar"))
-                self.assertEqual(w.v.state().get("situation", []), [])
+                self.assertEqual(_estado(w).get("situation", []), [])
                 esperar(lambda: w.modbus.estado == "conectado")
                 # P-IMP-172: conectar en Play pasa por Pausa (con su cero) y, ya conectado, vuelve a Play desde las iniciales
                 self.assertEqual(escrituras[:3], [("coil", 0, 0), ("coil", 1, 0), ("holding", 0, 0)], "conectar en Pausa: primero el cero")
@@ -1423,7 +1434,7 @@ class PanelTests(unittest.TestCase):
                     esperar(lambda: aviso.call_count == 1)
                     esperar(lambda: w.modbus.escritos == {"motor": False} and len(escrituras) > n and escrituras[-1] == ("coil", 0, 0))
                 self.assertEqual((w.a_ejecutar.isChecked(), w.modo, aviso.call_count), (False, "editar", 1))
-                self.assertEqual(w.v.state().get("situation", []), [], "sin etapas activas tras el diagnóstico")
+                self.assertEqual(_estado(w).get("situation", []), [], "sin etapas activas tras el diagnóstico")
                 self.assertTrue(w.modbus.activo)
             finally:
                 self._cerrar(app, w)
@@ -1448,7 +1459,7 @@ class PanelTests(unittest.TestCase):
                 esperar(lambda: w.modbus.estado == "error")
                 esperar(lambda: not w.a_ejecutar.isChecked())
                 self.assertEqual(w.modo, "editar")
-                self.assertEqual(w.v.state().get("situation", []), [])
+                self.assertEqual(_estado(w).get("situation", []), [])
                 self.assertIn("Salidas no garantizadas", w.modbus.mensaje)
                 self.assertFalse(w.modbus.activo)
                 self.assertEqual((w.t_vars.rowCount(), w.t_temp.rowCount()), (0, 0))
@@ -1510,7 +1521,7 @@ class PanelTests(unittest.TestCase):
                 cliente = w.modbus.cliente
                 vivo[0] = False
                 w._desconectar_modbus()
-                esperar(lambda: not w.modbus.activo)
+                esperar(lambda: not w.modbus.activo and not w.ciclo.vivo)  # (V2-E7: la pantalla pinta el final cuando atiende el último aviso del hilo de control y lo para)
                 self.assertIsNone(cliente._socket, "se cierra igual")
                 self.assertIn("salidas no garantizadas", w.modbus.mensaje.lower())
                 self.assertIn("salidas no garantizadas", w.panel_es.estado.toolTip().lower(), "y el panel lo dice")
@@ -1644,7 +1655,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(escribe[:3], [("coil", 0, 0), ("coil", 1, 1), ("holding", 0, 150)],
                                  "la primera escritura ya lleva el sensor: motor a 0, luz a 1 y la consigna")
                 self.assertNotIn(("coil", 0, 1), escribe, "el motor de la situación inicial nunca llega a la planta")
-                self.assertEqual(w.v.state()["situation"], ["E1"])
+                self.assertEqual(_estado(w)["situation"], ["E1"])
                 # Reiniciar en Play: sesión nueva (E0) que, con el sensor a 1, evoluciona a E1 antes de escribir nada
                 n = len(eventos)
                 w.reiniciar()
@@ -1652,7 +1663,7 @@ class PanelTests(unittest.TestCase):
                 fin = time.monotonic() + .1
                 esperar(lambda: time.monotonic() >= fin)
                 self.assertNotIn(("escribir", "coil", 0, 1), eventos[n:], "Reiniciar tampoco escribe antes de leer")
-                self.assertEqual(w.v.state()["situation"], ["E1"])
+                self.assertEqual(_estado(w)["situation"], ["E1"])
                 w.a_ejecutar.setChecked(False)
                 esperar(lambda: w.modbus.escritos == cero)
             finally:
@@ -1753,16 +1764,16 @@ class PanelTests(unittest.TestCase):
                 p.cargar(m.doc, self._mapa_pausa(m.doc, 502))
                 w.refrescar()
                 self.assertEqual((w.modo, w.a_ejecutar.isChecked()), ("editar", False))
-                self.assertEqual(w.v.state().get("situation", []), [])
+                self.assertEqual(_estado(w).get("situation", []), [])
                 self.assertEqual((w.t_vars.rowCount(), w.t_temp.rowCount(), w.traza.count()), (0, 0, 0))
                 self.assertFalse(any(b.isEnabled() for b in w.botones.values()), "sin sesión, las entradas no responden")
                 self.assertEqual([p.indicadores[v][1].text() for v in ("sensor", "motor", "luz", "vel")],
                                  ["", "", "", "—"])
                 self.assertEqual({p.indicadores[v][0].nivel for v in ("motor", "luz", "vel")}, {NIVEL_ASIGNADO})
                 w.a_ejecutar.setChecked(True)  # Play: situación inicial (E0: motor y la consigna memorizada)
-                self.assertEqual(w.v.state()["situation"], ["E0"])
+                self.assertEqual(_estado(w)["situation"], ["E0"])
                 self.assertEqual(p.indicadores["motor"][0].nivel, NIVEL_ACTIVO)
-                self.assertEqual(p.indicadores["vel"][1].text(), str(w.v.state()["values"]["vel"]))
+                self.assertEqual(p.indicadores["vel"][1].text(), str(_estado(w)["values"]["vel"]))
                 self.assertNotEqual(p.indicadores["vel"][1].text(), "—")
                 w.a_ejecutar.setChecked(False)
                 self.assertEqual(p.indicadores["vel"][1].text(), "—", "y Pausa vuelve a dejarlo sin estado")

@@ -75,7 +75,8 @@ class Archivos:
         (como tras Play y Pausa: ni etapas activas ni valores en las tablas; Play arranca la sesión). La conexión Modbus, si
         la hay, no se cierra: se conserva el TCP y las salidas pasan a 0 (Pausa)."""
         self._generacion_encuadre = getattr(self, "_generacion_encuadre", 0) + 1
-        self.modbus.pausar()
+        with self.candado:
+            self.modbus.pausar()
         self._marcar_play(False)
         self._aviso_inestable_sesion = None
         self._avisos_ejecucion = []
@@ -149,7 +150,9 @@ class Archivos:
             self._transicion_ui = True
             self.a_ejecutar.setChecked(False)
             self.rt.stop()
-            self.modbus.cerrar()
+            self.ciclo.parar()  # el hilo de control antes que el cierre del coordinador
+            with self.candado:
+                self.modbus.cerrar()
             event.accept()
         else:
             event.ignore()

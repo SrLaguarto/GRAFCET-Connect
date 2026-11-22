@@ -11,6 +11,7 @@ from __future__ import annotations
 # flake8: noqa: F401
 import copy
 import html
+import weakref
 import json
 import os
 import re
@@ -18,6 +19,7 @@ from time import perf_counter
 from math import ceil
 from pathlib import Path
 from typing import Any
+from shiboken6 import isValid
 from PySide6.QtCore import QObject, Signal, QEvent, QElapsedTimer, QSettings, Qt, QTimer, QSize, QRectF, QPointF, QPoint, QUrl
 from PySide6.QtGui import (QDesktopServices, QCursor, QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter,
                            QPainterPath, QPen, QPixmap, QFont, QFontMetrics)
@@ -58,7 +60,9 @@ from ..paneles import (PanelPlegable, DivisorPlegable, PilaActual, EtiquetaAyuda
 from ..variables import PanelVariables
 from ..entradas_salidas import CONEXION_INICIAL, PanelES
 from conexion.configuracion import ARCHIVO, CANALES_INICIALES, Configuracion, aviso_host, normalizar_host
+from conexion.ciclo import CicloES
 from conexion.coordinador import Coordinador
+from conexion.hilos import COORDINADOR, SESION, Candado, proteger
 from ..archivos import ArchivosProyecto
 from .. import sello
 from .constantes import (ALTO_TRAZA, ANCHO_DERECHO, ANCHO_DERECHO_BASE, ARRIBA_CAJA, ARRIBA_VARIABLES, AVISO, AYUDA_EDICION,
@@ -118,9 +122,15 @@ class Ventana(Menus, Archivos, Simulacion, ConexionES, Modos, VistaVentana, Arch
         self._auto_plegados: set[str] = set()  # paneles que el modo compacto ha plegado solo (y volverá a abrir)
         self.modo = "editar"  # solo cambia con Play (simular) y Pausa (editar)
         self.solo_lectura = False
+        # E7: el ciclo de E/S lo lleva un hilo de control (`conexion.ciclo`) con el candado; la pantalla solo atiende sus novedades y refresca
+        self.candado = Candado()
         self._respuesta_modbus = _RespuestaModbus(self)
         self._respuesta_modbus.lista.connect(self._tick, Qt.ConnectionType.QueuedConnection)
-        self.modbus = Coordinador(self._respuesta_modbus.notificar)
+        self.modbus = Coordinador(self._despertar_ciclo)  # el trabajador de red despierta al hilo de control, no a la pantalla
+        proteger(self.modbus, COORDINADOR, self.candado, "Coordinador")
+        ref = weakref.ref(self)  # el hilo de control no mantiene viva la ventana ni sigue si desaparece
+        self.ciclo = CicloES(lambda: getattr(ref(), "modbus", None), self.candado, al_novedad=self._respuesta_modbus.notificar, al_error=self._error_ciclo,
+                             sigue_vivo=lambda: ref() is not None and isValid(ref()))
         self._proxima_lectura = QTimer(self)
         self._proxima_lectura.setSingleShot(True)
         self._proxima_lectura.setTimerType(Qt.TimerType.PreciseTimer)

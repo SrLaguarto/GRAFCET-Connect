@@ -17,6 +17,12 @@ if QT:
     from PySide6.QtTest import QTest
 
 
+
+def _estado(w):
+    """El estado del motor como lo lee la pantalla: con el candado cogido (V2-E7: el hilo de control puede estar avanzándolo)."""
+    with w.candado:
+        return w.v.state()
+
 class MapaVivo(unittest.TestCase):
     def test_SMAP01_cero_anterior_antes_de_publicar_mapa_sin_cerrar_tcp(self):
         """REQ-SIM-03: las peticiones en vuelo terminan con su mapa; se confirma cero antes de sustituirlo."""
@@ -87,7 +93,7 @@ class InterfazMapaVivo(BaseQt):
     def test_SMAP02_altas_renombres_bajas_y_arrastre_conectado(self):
         """REQ-EDT-07, REQ-SIM-03: las variables y el mapa cambian en vivo conservando la asignación al renombrar."""
         w=self.activar();e=w.edicion;p=w.panel_es
-        with patch.object(w.modbus,'reasignar') as cambiar:
+        with w.candado,patch.object(w.modbus,'reasignar') as cambiar:  # (V2-E7: `patch` mira el atributo protegido: con el candado)
             e.nueva_variable('a','input');e.nueva_variable('motor','output');e.nueva_variable('mem','internal')
             self.assertEqual({v['name'] for v in p.variables},{'a','motor'})
             self.assertEqual(len(p.config.senales),2)
@@ -144,10 +150,10 @@ class InterfazMapaVivo(BaseQt):
         w=self.w;e=w.edicion;e.ed.add_step('g','1',True);e.cambia()
         w.a_ejecutar.setChecked(True);w.rt.stop();w.mostrar_es()
         for error in (None,ValueError('rechazada'),RuntimeError('timeout')):
-            with patch.object(w.modbus,'iniciar',side_effect=error):
+            with w.candado,patch.object(w.modbus,'iniciar',side_effect=error):  # (V2-E7: ídem)
                 w._conectar_modbus();w.rt.stop()
                 self.assertEqual(w.paginas_es.currentIndex(),1)
-        with patch.object(w.modbus,'desconectar'):w._desconectar_modbus();w.rt.stop()
+        with w.candado,patch.object(w.modbus,'desconectar'):w._desconectar_modbus();w.rt.stop()
         self.assertEqual(w.paginas_es.currentIndex(),1)
 
     def test_SMAP07_contacto_nc_menu_presion_y_suelta(self):
@@ -162,14 +168,14 @@ class InterfazMapaVivo(BaseQt):
             next(a for a in menu.actions() if a.text()=='Normalmente cerrado (NC)').trigger();menu.close()
         QTimer.singleShot(0,elegir)
         QApplication.sendEvent(b,QContextMenuEvent(QContextMenuEvent.Reason.Mouse,b.rect().center(),b.mapToGlobal(b.rect().center())))
-        self.assertTrue(w.v.state()['values'][p]);self.assertEqual(w.v.state()['situation'],[fin])
-        QTest.mousePress(b,Qt.MouseButton.LeftButton);self.assertFalse(w.v.state()['values'][p]);self.assertEqual(w.v.state()['situation'],[a])
-        QTest.mouseRelease(b,Qt.MouseButton.LeftButton);self.assertTrue(w.v.state()['values'][p])
+        self.assertTrue(_estado(w)['values'][p]);self.assertEqual(_estado(w)['situation'],[fin])
+        QTest.mousePress(b,Qt.MouseButton.LeftButton);self.assertFalse(_estado(w)['values'][p]);self.assertEqual(_estado(w)['situation'],[a])
+        QTest.mouseRelease(b,Qt.MouseButton.LeftButton);self.assertTrue(_estado(w)['values'][p])
         QTest.mouseClick(b,Qt.MouseButton.LeftButton,Qt.KeyboardModifier.ControlModifier)
-        self.assertFalse(w.v.state()['values'][p]);self.assertTrue(b.enclavado)
-        QTest.mouseClick(b,Qt.MouseButton.LeftButton);self.assertTrue(w.v.state()['values'][p])
+        self.assertFalse(_estado(w)['values'][p]);self.assertTrue(b.enclavado)
+        QTest.mouseClick(b,Qt.MouseButton.LeftButton);self.assertTrue(_estado(w)['values'][p])
         w.a_ejecutar.setChecked(False);w.a_ejecutar.setChecked(True);w.rt.stop()
-        self.assertTrue(w.v.state()['values'][p])
+        self.assertTrue(_estado(w)['values'][p])
 
     def test_SMAP08_red_correcta_rechazada_timeout_y_caida_no_cambian_pagina(self):
         """REQ-SIM-03: los resultados asíncronos de red conservan E/S, también con error o caída."""
@@ -183,7 +189,7 @@ class InterfazMapaVivo(BaseQt):
             for fallo in (None,ConnectionRefusedError('rechazada'),TimeoutError('timeout')):
                 w.modbus=Coordinador()
                 with patch('conexion.coordinador.ClienteModbus',Cliente):w._conectar_modbus()
-                w.rt.stop()
+                w.rt.stop();w.ciclo.parar()  # (V2-E7: la prueba lleva el ciclo a mano con `_tick`: sin hilo de control, el ciclo se hace en `_tick`)
                 limite=time.monotonic()+2
                 while w.modbus.estado=='conectando' and time.monotonic()<limite:
                     w._tick();QApplication.processEvents();time.sleep(.001)

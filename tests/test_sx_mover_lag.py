@@ -116,7 +116,8 @@ class IntercambioX(unittest.TestCase):
             limites = []
             for _ in range(30):
                 inicio = time.perf_counter()
-                c.w.modbus.tick()
+                with c.w.candado:  # (V2-E7: el coordinador se toca con el candado)
+                    c.w.modbus.tick()
                 limites.append((time.perf_counter() - inicio) * 1000)
                 QTest.qWait(5)
         self.assertTrue(hilos)
