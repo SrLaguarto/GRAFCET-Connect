@@ -53,6 +53,7 @@ class Servidor:
         self.escrituras: list[tuple[float, int]] = []
         self.protegidas = protegidas or set()
         self.activas: list[int] = []  # direcciones de entradas discretas que cambia el servidor
+        self.cortada = False  # con True cierra cada conexión al primer mensaje (la red cortada: `tools/choque_conexion.py`)
         self.azar = Random(semilla)
         self._parar = threading.Event()
         servidor = self
@@ -74,6 +75,8 @@ class Servidor:
                 while True:
                     cabecera = recibir(7)
                     if cabecera is None:
+                        return
+                    if servidor.cortada:
                         return
                     tid, _, n, unidad = struct.unpack(">HHHB", cabecera)
                     pdu = recibir(n - 1)
@@ -349,21 +352,36 @@ def medir(proyecto: str, periodo: int, condicion: str, segundos: float, calentam
             intervalos = [(b - a) * 1000 for a, b in zip(lecturas, lecturas[1:])]
             gc.callbacks.remove(al_gc)
             por_gc = {}
+            max_tramo: dict[str, dict[int, float]] = {}  # por generación y por tramo: la recolección más larga
             for t, g, ms in recolecciones:
                 if t >= marca:
                     por_gc.setdefault(str(g), []).append(ms)
-            por_gc = {g: {"n": len(v), "max_ms": round(max(v), 2), "total_ms": round(sum(v), 1), **({"duraciones_ms": [round(x, 1) for x in v]} if g == "2" else {})} for g, v in sorted(por_gc.items())}
+                    if tramos:
+                        k = int((t - marca) // tramos)
+                        max_tramo.setdefault(str(g), {})[k] = max(max_tramo.get(str(g), {}).get(k, 0.0), ms)
+            por_gc = {g: {"n": len(v), "max_ms": round(max(v), 2), "total_ms": round(sum(v), 1), **({"max_por_tramo_ms": [round(max_tramo[g].get(k, 0.0), 1) for k in range(int(segundos // tramos))]} if tramos else {}), **({"duraciones_ms": [round(x, 1) for x in v]} if g == "2" else {})} for g, v in sorted(por_gc.items())}
             por_tramos = []
             if tramos:
                 tiempos = lecturas[1:]  # (cada intervalo, en el instante de su lectura final)
                 for k in range(int(segundos // tramos)):
                     dentro = [i for t, i in zip(tiempos, intervalos) if marca + k * tramos <= t < marca + (k + 1) * tramos]
                     por_tramos.append({"desde_s": k * tramos, **resumen(dentro)})
-            return {"proyecto": proyecto, "periodo_ms": periodo, "condicion": condicion, "segundos": segundos,
+            resultado = {"proyecto": proyecto, "periodo_ms": periodo, "condicion": condicion, "segundos": segundos,
                     "tramos": por_tramos, "memoria": muestras_memoria, "gc": por_gc,
                     "intervalo_entre_lecturas_ms": resumen(intervalos), "leer_espera_ms": resumen(historia.get("leer_espera_ms", [])),
                     "escribir_espera_ms": resumen(historia.get("escribir_espera_ms", [])), "ciclo_ms": resumen(historia.get("ciclo_ms", [])),
                     "refrescos": cuenta["refrescos"], "dibujos": cuenta["dibujos"], "pagina_es": bool(w.a_es.isChecked()), "lecturas": len(lecturas), "estado": w.modbus.estado, "mensaje": w.modbus.mensaje}
+            if tramos:  # memoria tras desconectar (el gc se descongela), sin y con una recolección completa
+                w.a_ejecutar.setChecked(False)
+                w._desconectar_modbus()
+                for _ in range(50):
+                    app.processEvents()
+                    time.sleep(0.002)
+                tras = {"memoria_mb": memoria_mb(), "congelados": gc.get_freeze_count(), "objetos_gc": len(gc.get_objects())}
+                gc.collect()
+                tras.update(memoria_tras_collect_mb=memoria_mb(), objetos_tras_collect=len(gc.get_objects()))
+                resultado["tras_desconectar"] = tras
+            return resultado
         finally:
             for c in cargas:
                 c.kill()

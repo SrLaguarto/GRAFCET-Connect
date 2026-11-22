@@ -239,5 +239,111 @@ class EstadoConTrazaLarga(unittest.TestCase):
         self.assertLess(despues, antes * 2 + 0.002, f"state() con 40.000 registros de más: {despues * 1000:.2f} ms frente a {antes * 1000:.2f} ms")
 
 
+def _manual_input_lenta(self, changes):
+    """`Session.manual_input` como era antes de E7 paso 4 (recorría todos los lotes): la referencia de la prueba."""
+    from grafcet.diagnostics import Diagnostic, DiagnosticError
+    from grafcet.scenario import Batch
+    if self.status != "pausada-estable":
+        raise RuntimeError("las entradas manuales se admiten en pausa estable")
+    at = self.z.time
+    used = [b.ordinal for b in self.batches if b.time == at]
+    b = Batch(f"manual-{len(self.trace.records) + 1}", at, (max(used) + 1) if used else 0, tuple(sorted(changes.items())), "manual")
+    for vid in changes:
+        if self.cm.variables[vid].role != "input":
+            raise DiagnosticError(Diagnostic("D-ESCRITURA-ROL", f"{vid} no es entrada", element=vid))
+    idx = next((i for i, x in enumerate(self.batches) if i >= self.z.next_batch and (x.time, x.ordinal) > (b.time, b.ordinal)),
+               len(self.batches))
+    self.batches.insert(idx, b)
+    self._log("entrada-manual", timeUs=str(at), batch=b.to_dict(self.cm))
+    return b
+
+
+class ManualInputPorLaCola(unittest.TestCase):
+    def sesiones(self):
+        from grafcet.engine import Session
+        ed = Editor(new_grafcet_document("rend"), ids=IdGenerator("r-"))
+        a = ed.add_step("g", "0", True, at=(240, 100))
+        b = ed.add_step("g", "1", at=(240, 440))
+        c = ed.add_step("g", "2", at=(240, 780))
+        x = ed.add_variable("A", "input", {"kind": "bool"})
+        y = ed.add_variable("B", "input", {"kind": "bool"})
+        ed.add_transition("g", "A", [a], [b], at=(240, 270))
+        ed.add_transition("g", "B", [b], [c], at=(240, 610))
+        pendientes = [(5_000_000, 0, {x: True}), (5_000_000, 1, {y: True}), (9_000_000, 0, {x: False}), (20_000_000, 0, {y: False})]
+        v = Vista(ed.model["id"], "t", "", lambda: (ed.model, layout_from_presentation(ed.presentation)), {}, batches=pendientes)
+        _ = v.s
+
+        class Lenta(Session):
+            manual_input = _manual_input_lenta
+        lenta = Lenta(v.s.cm, v.s.scenario, v.s.ctl.budget, options=v.s.options)
+        lenta.start()
+        rapida = Session(v.s.cm, v.s.scenario, v.s.ctl.budget, options=v.s.options)
+        rapida.start()
+        return rapida, lenta, x, y
+
+    def test_SNUC12_manual_input_da_lo_mismo_que_la_version_que_recorria_todos_los_lotes(self):
+        """REQ-SIM-01: `manual_input` (por la cola de la lista de lotes) coincide con la referencia lenta: ordinal, posición en `batches` y traza,
+        con muchas llamadas, varias en el mismo instante, con lotes de escenario pendientes y tras avanzar el tiempo."""
+        from random import Random
+        for semilla in range(6):
+            azar = Random(semilla)
+            rapida, lenta, x, y = self.sesiones()
+            self.assertTrue(rapida._lotes_ordenados)
+            for paso in range(120):
+                if azar.random() < 0.35:
+                    destino = rapida.z.time + azar.choice((0, 1_000_000, 3_000_000, 6_000_000))
+                    for s in (rapida, lenta):
+                        if s.status == "pausada-estable":
+                            s.advance_to(destino)
+                else:
+                    cambios = {azar.choice((x, y)): azar.random() < 0.5}
+                    resultados = []
+                    for s in (rapida, lenta):
+                        try:
+                            resultados.append(s.manual_input(cambios))
+                        except RuntimeError as exc:
+                            resultados.append(str(exc))
+                    self.assertEqual(resultados[0], resultados[1], (semilla, paso))
+                self.assertEqual([(b.id, b.time, b.ordinal, b.changes, b.origin) for b in rapida.batches],
+                                 [(b.id, b.time, b.ordinal, b.changes, b.origin) for b in lenta.batches], (semilla, paso))
+                self.assertEqual(rapida.z.next_batch, lenta.z.next_batch)
+                self.assertEqual(rapida.trace.records, lenta.trace.records, (semilla, paso))
+
+    def test_SNUC13_si_los_lotes_no_estan_ordenados_manual_input_busca_por_toda_la_lista(self):
+        """REQ-SIM-01: una lista de lotes sin ordenar (una instantánea restaurada no la comprueba) no usa el atajo y da lo que daba la versión lenta."""
+        from grafcet.engine import Session
+        from grafcet.scenario import Batch
+        rapida, _, x, _y = self.sesiones()
+        desordenados = [Batch("b0", 8_000_000, 0, ((x, True),)), Batch("b1", 2_000_000, 0, ((x, False),))]
+        s = Session(rapida.cm, rapida.scenario, rapida.ctl.budget, batches=desordenados, options=rapida.options)
+        self.assertFalse(s._lotes_ordenados)
+        s.start()
+        t = Session(rapida.cm, rapida.scenario, rapida.ctl.budget, batches=list(desordenados), options=rapida.options)
+        t.manual_input = _manual_input_lenta.__get__(t)
+        t.start()
+        for k in range(4):
+            self.assertEqual(s.manual_input({x: k % 2 == 0}), t.manual_input({x: k % 2 == 0}))
+            self.assertEqual(s.batches, t.batches)
+
+    def test_SNUC14_el_coste_de_manual_input_no_crece_con_los_lotes_ya_procesados(self):
+        """REQ-SIM-01: con 40.000 lotes procesados de más, una llamada a `manual_input` cuesta como con 400."""
+        from time import perf_counter
+        from grafcet.scenario import Batch
+        costes = {}
+        for n in (400, 40_000):
+            rapida, _, x, _y = self.sesiones()
+            procesados = [Batch(f"p{i}", i, 0, (), "escenario") for i in range(n)]
+            rapida.batches = procesados + rapida.batches
+            rapida.z.next_batch += n
+            rapida.z.time = n + 10
+            mejor = float("inf")
+            for k in range(30):
+                t = perf_counter()
+                rapida.manual_input({x: k % 2 == 0})
+                mejor = min(mejor, perf_counter() - t)
+            costes[n] = mejor
+        self.assertLess(costes[40_000], costes[400] * 3 + 0.0005, costes)
+
+
 if __name__ == "__main__":
     unittest.main()

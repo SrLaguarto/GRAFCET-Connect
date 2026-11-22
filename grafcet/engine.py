@@ -759,6 +759,9 @@ class Session:
         self.options = normalize_options(options)
         self.ctl = Control(budget, options=self.options)
         self.batches = list(batches if batches is not None else scenario.batches)
+        # Los lotes vienen ordenados por (instante, ordinal) sin repetir (`scenario.parse_scenario` lo exige, D-LOTE) y `manual_input` los inserta en su sitio; una
+        # instantánea restaurada trae los suyos sin esa comprobación: si no están ordenados, `manual_input` busca por toda la lista, como siempre.
+        self._lotes_ordenados = all((x.time, x.ordinal) < (y.time, y.ordinal) for x, y in zip(self.batches, self.batches[1:]))
         self.trace = Trace({"runId": run_id, "modelRevision": cm.revision, "scenario": scenario.id,
                             "semanticProfile": profile_ref(self.options), "timeUnit": "us",
                             "limits": {"evolutionBudget": budget}, "parentRun": parent})
@@ -1034,14 +1037,27 @@ class Session:
         if self.status != "pausada-estable":
             raise RuntimeError("las entradas manuales se admiten en pausa estable")
         at = self.z.time
-        used = [b.ordinal for b in self.batches if b.time == at]
+        if self._lotes_ordenados:  # por la cola: el coste no crece con los lotes ya procesados (la conexión con E/S mete uno por cambio de entrada)
+            used = []
+            for x in reversed(self.batches):
+                if x.time < at:
+                    break
+                if x.time == at:
+                    used.append(x.ordinal)
+        else:
+            used = [b.ordinal for b in self.batches if b.time == at]
         b = Batch(f"manual-{len(self.trace.records) + 1}", at, (max(used) + 1) if used else 0,
                   tuple(sorted(changes.items())), "manual")
         for vid in changes:
             if self.cm.variables[vid].role != "input":
                 raise DiagnosticError(Diagnostic("D-ESCRITURA-ROL", f"{vid} no es entrada", element=vid))
-        idx = next((i for i, x in enumerate(self.batches) if i >= self.z.next_batch and (x.time, x.ordinal) > (b.time, b.ordinal)),
-                   len(self.batches))
+        if self._lotes_ordenados:
+            idx = len(self.batches)
+            while idx > self.z.next_batch and (self.batches[idx - 1].time, self.batches[idx - 1].ordinal) > (b.time, b.ordinal):
+                idx -= 1
+        else:
+            idx = next((i for i, x in enumerate(self.batches) if i >= self.z.next_batch and (x.time, x.ordinal) > (b.time, b.ordinal)),
+                       len(self.batches))
         self.batches.insert(idx, b)
         self._log("entrada-manual", timeUs=str(at), batch=b.to_dict(self.cm))
         return b
