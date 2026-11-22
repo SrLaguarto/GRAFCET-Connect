@@ -4,6 +4,7 @@ import sys
 import threading
 import time
 import unittest
+from unittest import mock
 from types import SimpleNamespace
 
 from conexion.ciclo import CicloES, Espera
@@ -229,6 +230,42 @@ class CicloSinQt(unittest.TestCase):
         self.assertEqual(modulo._gil["vivos"], antes)
         if antes == 0:
             self.assertEqual(sys.getswitchinterval(), previo)
+
+    def test_SCIC13_el_gc_se_congela_con_el_primer_hilo_y_se_descongela_con_el_ultimo(self):
+        """REQ-SIM-03: mientras haya algún hilo de control el gc tiene congelado lo vivo (sus recolecciones completas paraban todos los hilos);
+        con dos hilos se descongela solo al parar el último."""
+        import gc
+        from conexion import ciclo as modulo
+        if modulo._gil["vivos"] != 0:
+            self.skipTest("hay otros hilos de control vivos")
+        a, b = self.preparar(), self.preparar()
+        base = gc.get_freeze_count()
+        a.arrancar()
+        self.addCleanup(a.parar)
+        congelados = gc.get_freeze_count()
+        self.assertGreater(congelados, base)
+        b.arrancar()
+        self.addCleanup(b.parar)
+        a.parar()
+        self.assertGreater(gc.get_freeze_count(), 0, "queda un hilo: sigue congelado")
+        b.parar()
+        self.assertEqual(gc.get_freeze_count(), 0)
+
+    def test_SCIC14_el_hilo_vuelve_a_congelar_el_gc_cada_REFREEZE_S_y_no_si_es_cero(self):
+        """REQ-SIM-03: mientras haya conexión el hilo de control vuelve a congelar el gc cada `REFREEZE_S` (la traza acumulada sale de las
+        recolecciones completas); con 0 solo congela al arrancar."""
+        import time
+        from conexion import ciclo as modulo
+        if modulo._gil["vivos"] != 0:
+            self.skipTest("hay otros hilos de control vivos")
+        for intervalo, minimo, maximo in ((0.05, 3, 1000), (0.0, 1, 1)):
+            c = self.preparar()
+            with mock.patch.object(modulo, "REFREEZE_S", intervalo), mock.patch.object(modulo.gc, "freeze") as congelar:
+                c.arrancar()
+                time.sleep(0.5)
+                c.parar()
+            self.assertGreaterEqual(congelar.call_count, minimo, intervalo)
+            self.assertLessEqual(congelar.call_count, maximo, intervalo)
 
 
 class PrecisionDeLaEspera(unittest.TestCase):

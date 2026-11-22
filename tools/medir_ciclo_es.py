@@ -19,6 +19,7 @@ from argparse import SUPPRESS as argparse_suppress, ArgumentParser
 from pathlib import Path
 from random import Random
 from statistics import median
+import gc
 import json
 import os
 import socketserver
@@ -264,7 +265,25 @@ def cargar_proyecto(w, proyecto: str, servidor: Servidor, periodo: int):
     return config
 
 
-def medir(proyecto: str, periodo: int, condicion: str, segundos: float, calentamiento: float = 1.0, aparte: bool = False) -> dict:
+def memoria_mb() -> float:
+    """Memoria física del proceso (Windows: conjunto de trabajo; en otros sistemas, 0)."""
+    if sys.platform != "win32":
+        return 0.0
+    import ctypes
+    from ctypes import wintypes
+
+    class Contadores(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD), ("fallos", wintypes.DWORD)] + [(n, ctypes.c_size_t) for n in (
+            "pico", "trabajo", "pico_paginado", "paginado", "pico_no_paginado", "no_paginado", "archivo", "pico_archivo")]
+    c = Contadores()
+    c.cb = ctypes.sizeof(c)
+    ctypes.windll.kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    ctypes.windll.psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Contadores), wintypes.DWORD]
+    ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(c), c.cb)
+    return round(c.trabajo / 1048576, 1)
+
+
+def medir(proyecto: str, periodo: int, condicion: str, segundos: float, calentamiento: float = 1.0, aparte: bool = False, tramos: float = 0) -> dict:
     from PySide6.QtCore import QEventLoop, QSettings, QTimer
     from PySide6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication([])
@@ -302,6 +321,24 @@ def medir(proyecto: str, periodo: int, condicion: str, segundos: float, calentam
             w.a_ejecutar.setChecked(True)
             w._mostrar_pagina(condicion == "sin_dibujo")  # (después de Play: la página que se mide)
             bucle = QEventLoop()
+            muestras_memoria: list[dict] = []
+            recolecciones: list[tuple[float, int, float]] = []  # (instante, generación, ms) de cada pasada del gc
+            inicio_gc = [0.0]
+
+            def al_gc(fase, info):
+                if fase == "start":
+                    inicio_gc[0] = time.perf_counter()
+                else:
+                    recolecciones.append((inicio_gc[0], info["generation"], (time.perf_counter() - inicio_gc[0]) * 1000))
+            gc.callbacks.append(al_gc)
+
+            def muestra():
+                muestras_memoria.append({"t": round(time.perf_counter() - marca, 1), "memoria_mb": memoria_mb(), "objetos_gc": len(gc.get_objects()),
+                                         "congelados": gc.get_freeze_count(), "traza": len(w.v.s.trace.records) if getattr(w, "v", None) is not None and w.v.s is not None else None})
+            temporizador_memoria = QTimer()
+            if tramos:
+                temporizador_memoria.timeout.connect(muestra)
+                temporizador_memoria.start(int(tramos * 1000))
             QTimer.singleShot(int((calentamiento + segundos) * 1000), bucle.quit)
             marca = time.perf_counter() + calentamiento
             QTimer.singleShot(int(calentamiento * 1000), lambda: (historia.clear(), servidor.peticiones.clear(), servidor.escrituras.clear(), cuenta.update(refrescos=0, dibujos=0)))
@@ -310,7 +347,20 @@ def medir(proyecto: str, periodo: int, condicion: str, segundos: float, calentam
             vistas = [(t, f, d) for t, f, d in servidor.recoger() if t >= marca]
             lecturas = [t for t, f, d in vistas if vistas and (f, d) == (vistas[0][1], vistas[0][2])]
             intervalos = [(b - a) * 1000 for a, b in zip(lecturas, lecturas[1:])]
+            gc.callbacks.remove(al_gc)
+            por_gc = {}
+            for t, g, ms in recolecciones:
+                if t >= marca:
+                    por_gc.setdefault(str(g), []).append(ms)
+            por_gc = {g: {"n": len(v), "max_ms": round(max(v), 2), "total_ms": round(sum(v), 1), **({"duraciones_ms": [round(x, 1) for x in v]} if g == "2" else {})} for g, v in sorted(por_gc.items())}
+            por_tramos = []
+            if tramos:
+                tiempos = lecturas[1:]  # (cada intervalo, en el instante de su lectura final)
+                for k in range(int(segundos // tramos)):
+                    dentro = [i for t, i in zip(tiempos, intervalos) if marca + k * tramos <= t < marca + (k + 1) * tramos]
+                    por_tramos.append({"desde_s": k * tramos, **resumen(dentro)})
             return {"proyecto": proyecto, "periodo_ms": periodo, "condicion": condicion, "segundos": segundos,
+                    "tramos": por_tramos, "memoria": muestras_memoria, "gc": por_gc,
                     "intervalo_entre_lecturas_ms": resumen(intervalos), "leer_espera_ms": resumen(historia.get("leer_espera_ms", [])),
                     "escribir_espera_ms": resumen(historia.get("escribir_espera_ms", [])), "ciclo_ms": resumen(historia.get("ciclo_ms", [])),
                     "refrescos": cuenta["refrescos"], "dibujos": cuenta["dibujos"], "pagina_es": bool(w.a_es.isChecked()), "lecturas": len(lecturas), "estado": w.modbus.estado, "mensaje": w.modbus.mensaje}
@@ -350,6 +400,9 @@ def main() -> int:
     ap.add_argument("--periodos", default="5,10,20")
     ap.add_argument("--condiciones", default=",".join(CONDICIONES))
     ap.add_argument("--segundos", type=float, default=10)
+    ap.add_argument("--tramos", type=float, default=0, help="segundos por tramo: el intervalo por tramos y la memoria cada tramo (corridas largas)")
+    ap.add_argument("--gc", default="produccion", choices=["produccion", "solo_arranque", "ninguno"], help="variante del gc en el hilo de control: produccion = freeze al "
+                    "arrancar y cada REFREEZE_S; solo_arranque = solo al arrancar; ninguno = sin freeze")
     ap.add_argument("--salida", type=Path)
     ap.add_argument("--servidor-aparte", action="store_true", help="el servidor de prueba en otro proceso (sin compartir el GIL con la ventana)")
     ap.add_argument("--servir", action="store_true", help=argparse_suppress)
@@ -357,6 +410,13 @@ def main() -> int:
     args = ap.parse_args()
     if args.servir:
         return servir()
+    if args.gc != "produccion":  # variantes de medida del gc
+        import gc as _gc
+        from conexion import ciclo as _ciclo
+        if args.gc == "solo_arranque":
+            _ciclo.REFREEZE_S = 0.0
+        else:
+            _gc.freeze = _gc.unfreeze = lambda: None
     if args.humo:
         proyectos, periodos, condiciones, segundos = ["gemma"], [10], ["sin_dibujo", "con_dibujo"], 3.0
     else:
@@ -366,7 +426,7 @@ def main() -> int:
     for proyecto in proyectos:
         for periodo in periodos:
             for condicion in condiciones:
-                fila = medir(proyecto, periodo, condicion, segundos, aparte=args.servidor_aparte)
+                fila = medir(proyecto, periodo, condicion, segundos, aparte=args.servidor_aparte, tramos=args.tramos)
                 filas.append(fila)
                 print(json.dumps({k: fila[k] for k in ("proyecto", "periodo_ms", "condicion", "intervalo_entre_lecturas_ms", "refrescos", "dibujos", "estado")}, ensure_ascii=False), flush=True)
     texto = tabla(filas)

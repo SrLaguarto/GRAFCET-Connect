@@ -191,5 +191,53 @@ class SesionAlUsarla(unittest.TestCase):
         self.assertEqual(w.start_diags, [])
 
 
+class _Registros(list):
+    """Lista de la traza que no deja recorrerla de principio a fin (`state()` solo necesita su cola)."""
+    recorridos = 0
+
+    def __iter__(self):
+        type(self).recorridos += 1
+        return super().__iter__()
+
+
+class EstadoConTrazaLarga(unittest.TestCase):
+    def test_SNUC11_state_no_recorre_la_traza_entera_y_su_coste_no_crece_con_ella(self):
+        """REQ-SIM-01: `Vista.state()` busca la última evolución desde el final de la traza (que llega a 10^6 registros, D-TRAZA-LIM):
+        con unos 40.000 registros la salida es la misma y el coste no crece."""
+        from time import perf_counter
+        ed = Editor(new_grafcet_document("rend"), ids=IdGenerator("r-"))
+        a = ed.add_step("g", "0", True, at=(240, 100))
+        b = ed.add_step("g", "1", at=(240, 440))
+        marcha = ed.add_variable("Marcha", "input", {"kind": "bool"})
+        ed.add_transition("g", "Marcha", [a], [b], at=(240, 270))
+        v = vista(ed)
+        v.s.manual_input({marcha: True})  # franquea: la traza acaba con una evolución real
+        while v.s.status != "pausada-estable" or v.s.next_stimulus() is not None:
+            v.s.step_external()
+        corta = v.state()
+        self.assertTrue(any(r["kind"] == "evolucion" for r in v.s.trace.records))
+
+        def coste():
+            mejor = float("inf")
+            for _ in range(15):
+                t = perf_counter()
+                v.state()
+                mejor = min(mejor, perf_counter() - t)
+            return mejor
+        antes = coste()
+        evolucion = next(r for r in v.s.trace.records if r["kind"] == "evolucion")
+        relleno = [dict(evolucion, cleared=["relleno"]) for _ in range(40000)]  # (distinta de la última: si se leyera una del relleno, se vería)
+        registros = _Registros(relleno + list(v.s.trace.records))
+        v.s.trace.records = registros
+        _Registros.recorridos = 0
+        larga = v.state()
+        self.assertEqual(_Registros.recorridos, 0, "state() no debe recorrer la traza entera")
+        self.assertTrue(corta["lastCleared"])
+        self.assertEqual(larga["lastCleared"], corta["lastCleared"])
+        self.assertEqual({k: x for k, x in larga.items() if k != "trace"}, {k: x for k, x in corta.items() if k != "trace"})
+        despues = coste()
+        self.assertLess(despues, antes * 2 + 0.002, f"state() con 40.000 registros de más: {despues * 1000:.2f} ms frente a {antes * 1000:.2f} ms")
+
+
 if __name__ == "__main__":
     unittest.main()

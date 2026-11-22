@@ -773,6 +773,33 @@ class Zoom(unittest.TestCase):
             self.assertTrue(self.visible().contains(c), modo)
             self.assertGreaterEqual(d.viewport().height() - en_vista.bottom(), dg.MARGEN_AJUSTE - 2, f"{modo}: y abajo, el margen de siempre")
 
+    def test_SEDI331_el_pellizco_del_panel_tactil_acerca_y_aleja_anclado_a_los_dedos_y_el_resto_de_eventos_del_visor_sigue_su_curso(self):
+        """REQ-UX-01: el gesto nativo de zoom se atiende en el visor (filtro de eventos, no una sobrecarga de `viewportEvent`
+        que meta todo el pintado de la vista en una llamada de Python con el GIL cogido, E7); lo demás sigue su curso."""
+        from PySide6.QtCore import QEvent
+        from PySide6.QtGui import QNativeGestureEvent, QPointingDevice
+        d = self.d
+        d.ajustar()
+        self.app.processEvents()
+        antes = d.escala()
+        pos = QPointF(300, 200)
+        ev = QNativeGestureEvent(Qt.NativeGestureType.ZoomNativeGesture, QPointingDevice.primaryPointingDevice(), 2, pos,
+                                 d.viewport().mapToGlobal(pos), pos, 0.5, QPointF(0, 0))
+        self.assertTrue(QApplication.sendEvent(d.viewport(), ev))
+        self.assertAlmostEqual(d.escala(), antes * 1.5, places=3)
+        self.assertTrue(d._manual)
+        # un pellizco que alejara más de la cuenta se queda en el mínimo de 0,2 del factor
+        otro = QNativeGestureEvent(Qt.NativeGestureType.ZoomNativeGesture, QPointingDevice.primaryPointingDevice(), 2, pos,
+                                   d.viewport().mapToGlobal(pos), pos, -2.0, QPointF(0, 0))
+        QApplication.sendEvent(d.viewport(), otro)
+        self.assertLess(d.escala(), antes * 1.5)
+        # otro gesto nativo (giro) no hace zoom
+        e1 = d.escala()
+        giro = QNativeGestureEvent(Qt.NativeGestureType.RotateNativeGesture, QPointingDevice.primaryPointingDevice(), 2, pos,
+                                   d.viewport().mapToGlobal(pos), pos, 10.0, QPointF(0, 0))
+        QApplication.sendEvent(d.viewport(), giro)
+        self.assertEqual(d.escala(), e1)
+
 
 def ejemplo(clave):
     """La vista de uno de los ejemplos de la aplicación («macroetapa», «encapsulacion»…)."""

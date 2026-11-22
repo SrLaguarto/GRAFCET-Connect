@@ -20,6 +20,7 @@ cuanto alguien llama a `despertar`, lo que ocurra antes. Fuera de Windows, `Even
 """
 from collections.abc import Callable
 from time import perf_counter, perf_counter_ns, sleep
+import gc
 import sys
 import threading
 
@@ -30,6 +31,7 @@ ESPERA_ACTIVA_MAX = 0.25  # s: lo máximo que duerme el hilo sin nada que hacer 
 ESPERA_MINIMA = 0.0002    # s: nunca gira sin dormir
 INTERVALO_NOVEDADES = 0.1  # s: como mucho 10 avisos por segundo a la pantalla
 INTERVALO_GIL = 0.0005     # s: el intervalo de cambio de hilo de Python mientras haya hilo de control (por defecto 5 ms): ver `_ajustar_gil`
+REFREEZE_S = 10.0          # s: cada cuánto vuelve a congelar el gc el hilo de control (lo acumulado, sobre todo la traza, sale de las recolecciones); 0 = nunca
 
 _gil = {"vivos": 0, "previo": None}  # cuántos hilos de control hay y el intervalo de cambio que había antes del primero
 _gil_candado = threading.Lock()
@@ -37,18 +39,23 @@ _gil_candado = threading.Lock()
 
 def _ajustar_gil(arrancar: bool) -> None:
     """Mientras haya algún hilo de control, el intervalo de cambio del GIL baja a 0,5 ms: el hilo de control no espera hasta 5 ms a que la pantalla suelte
-    Python (en un dibujo, que es Python casi todo) cada vez que vuelve de la red. Al parar el último se deja como estaba."""
+    Python (en un dibujo, que es Python casi todo) cada vez que vuelve de la red. Al parar el último se deja como estaba.
+    Con el primero también se congela lo vivo del gc (`gc.freeze`): una recolección completa de 36-40 ms, cada ~2,5 s, paraba
+    todos los hilos y fijaba el máximo del intervalo (E7); al parar el último se descongela. Mientras tanto, cada hilo vuelve a
+    congelar cada `REFREEZE_S` (en `_bucle`): la traza, que crece sin parar, haría crecer también esas recolecciones (de 3 a 65 ms en 5 min)."""
     with _gil_candado:
         if arrancar:
             if _gil["vivos"] == 0:
                 _gil["previo"] = sys.getswitchinterval()
                 sys.setswitchinterval(INTERVALO_GIL)
+                gc.freeze()  # lo vivo hasta ahora sale de las recolecciones: una gen2 de 36-40 ms paraba todos los hilos
             _gil["vivos"] += 1
         else:
             _gil["vivos"] = max(0, _gil["vivos"] - 1)
             if _gil["vivos"] == 0 and _gil["previo"] is not None:
                 sys.setswitchinterval(_gil["previo"])
                 _gil["previo"] = None
+                gc.unfreeze()
 
 
 class Espera:
@@ -246,6 +253,7 @@ class CicloES:
 
     def _bucle(self) -> None:
         espera = self._espera  # la de este hilo: si luego se arranca otro, tendrá la suya
+        proximo_congelado = perf_counter() + REFREEZE_S
         try:
             while not self._parar:
                 if self.sigue_vivo is not None and not self.sigue_vivo():
@@ -256,6 +264,9 @@ class CicloES:
                     if self.al_error is not None:
                         self.al_error(exc)
                 self._avisar()
+                if REFREEZE_S > 0 and perf_counter() >= proximo_congelado:
+                    gc.freeze()  # lo acumulado desde la última vez (la traza) sale también de las recolecciones
+                    proximo_congelado = perf_counter() + REFREEZE_S
                 espera.esperar(self._plazo())
         finally:
             # Al acabar, por `parar` o porque `sigue_vivo` ya no se cumple: libera la espera, quita la marca de hilo de control y devuelve el

@@ -24,7 +24,7 @@ from .anclaje import AnclajeVentana
 from grafcet import routing
 from grafcet.routing import NORMAL, SENTIDO, TALLO_T, orientacion, punto_t
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, QSettings, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, QPainter, QPainterPath, QPen,
                            QPalette, QPixmap, QRegion)
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QListWidget, QHBoxLayout, QLabel,
@@ -1298,6 +1298,26 @@ class SelectorAccion(QComboBox):
             self.setFocus(Qt.FocusReason.OtherFocusReason)
 
 
+class _FiltroGesto(QObject):
+    """El pellizco de un panel táctil (gesto nativo de zoom, macOS y Linux) acerca o aleja anclado a los dedos.
+
+    Es un filtro de eventos del visor y no una sobrecarga de `viewportEvent`: esa obligaba a que todo el pintado de la vista
+    (unos 12 ms) pasara por una llamada de Python, que retiene el GIL, y con una conexión el hilo de control no avanzaba
+    mientras tanto (E7). Del resto de eventos, incluido el pintado, no se ocupa: devuelve False y sigue su curso en C++."""
+
+    def __init__(self, vista: "VistaDiagrama") -> None:
+        super().__init__(vista)
+        self._vista = vista
+
+    def eventFilter(self, obj: Any, event: Any) -> bool:  # noqa: N802
+        if event.type() == QEvent.Type.NativeGesture and event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
+            self._vista._origen = False
+            self._vista.zoom(max(0.2, 1.0 + event.value()), event.position())
+            event.accept()
+            return True
+        return False
+
+
 class VistaDiagrama(QGraphicsView):
     """Vista del dibujo. Se ajusta a la ventana hasta que se hace zoom; desde entonces el zoom se mantiene al
     refrescar y solo «Centrar todo» (`ajustar`: Ctrl+0, o el doble clic al simular) vuelve a encajar y centrar todo lo
@@ -1320,6 +1340,8 @@ class VistaDiagrama(QGraphicsView):
     def __init__(self) -> None:
         super().__init__()
         self.anclaje = None
+        self._filtro_gesto = _FiltroGesto(self)  # el pellizco del panel táctil, sin sobrecargar `viewportEvent` (ver _FiltroGesto)
+        self.viewport().installEventFilter(self._filtro_gesto)
         self.setScene(EscenaIncremental(self))
         self.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         # Repintado completo (P-IMP-171, AA2/AA3): con escala fraccionaria el repintado parcial dejaba cajas y textos
@@ -2310,15 +2332,6 @@ class VistaDiagrama(QGraphicsView):
             h.setValue(h.value() - dx)
             v.setValue(v.value() - dy)
         event.accept()
-
-    def viewportEvent(self, event: Any) -> bool:  # noqa: N802
-        """El pellizco de un panel táctil (gesto nativo de zoom, macOS y Linux) acerca o aleja anclado a los dedos."""
-        if event.type() == QEvent.Type.NativeGesture and event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
-            self._origen = False
-            self.zoom(max(0.2, 1.0 + event.value()), event.position())
-            event.accept()
-            return True
-        return super().viewportEvent(event)
 
     def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802
         if self.controlador is not None:

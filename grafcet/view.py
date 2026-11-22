@@ -500,7 +500,7 @@ class Vista:
         if s.z is None:
             return out
         obs = s.observe()
-        evo = [r for r in s.trace.records if r["kind"] == "evolucion"]
+        ultima_evolucion = next((r for r in reversed(s.trace.records) if r["kind"] == "evolucion"), None)  # desde el final: la traza llega a 10^6
         closed = next((r["kind"] for r in reversed(s.trace.records) if r["kind"] in ("estable", "fallo", "limite")), None)
         last_stable = next((r for r in reversed(s.trace.records) if r["kind"] == "estable" and "reason" not in r), None)
         contexto = next((r for r in reversed(s.trace.records) if r["kind"] == "contexto"), None)
@@ -528,7 +528,7 @@ class Vista:
                                  for k, v in obs["values"].items()},
             "temporal": self._ocurrencias({k: self._temporizador(k, v, obs["timeUs"])
                                            for k, v in obs["temporal"].items()}),
-            "lastCleared": evo[-1]["cleared"] if evo and closed == "estable" else [],  # un contexto fallido no franquea
+            "lastCleared": ultima_evolucion["cleared"] if ultima_evolucion and closed == "estable" else [],  # un contexto fallido no franquea
             "trace": [x for x in (describe(r, self.texts, self.names) for r in s.trace.records[-60:]) if x],
             "nextEvent": self._next(), "nextEventUs": self._next_us(),
             "blocked": self._blocked(closed),
