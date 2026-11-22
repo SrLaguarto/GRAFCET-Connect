@@ -199,6 +199,11 @@ Cambios visibles o de semántica que no entran en la 2.0 (que no cambia nada vis
   - esperaban que funcionara como Modbus.
 
   Hay que estudiar qué pasa hoy en cada caso y proponer un comportamiento fácil de entender. Lo decide el responsable.
+
+  Idea del responsable: que la conexión directa funcione como la de Modbus.
+  - Dentro, como en el panel del PLC, aparecen los nombres de las señales de la maqueta en lugar de «Input 1, 2, 3».
+  - Fuera quedan las variables del GRAFCET, que se crean al traerlas.
+  - Si una señal desaparece de la maqueta, la variable se mantiene y se vuelve a enlazar arrastrando, igual que en Modbus.
 - **Arreglos pendientes en la 1.x**, si sigue en uso: la ayuda emergente que borraba objetos y el `KeyError` de
   `_desde_bloques`. Ya están hechos en la 2.0.
 
