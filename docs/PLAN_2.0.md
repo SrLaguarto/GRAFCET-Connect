@@ -109,6 +109,23 @@ ejecutable y medida final) pasa al cierre (E9), para que recoja también E7 y E8
   busca, se valora un proceso aparte, y eso lo decide el responsable.
 - Tras E7, el responsable prueba otra vez con E/S reales.
 
+## Decisiones para E8 y E9 (22-nov-2026)
+
+- **E8, franja para todas:** la vista previa en franja centrada se aplica a todas las ventanas de Propiedades (también
+  etapa, enlace, barra, macroetapa, orden, parcial y texto o imagen), con una sola disposición en el código.
+- **E8, «Etiquetas de transiciones» en Ver sin campo nuevo:** la casilla se deriva del `labelVisible` que ya hay por
+  transición (marcada si todas se ven) y la transición nueva nace como estén las demás; en un proyecto sin transiciones,
+  oculta, como hoy. El `.grafnet` no cambia.
+- **E8, decisiones del coordinador:**
+  - el comentario es de una línea: Intro confirma, Mayús+Intro no inserta salto y los saltos pegados pasan a espacios;
+  - «Faltan N huecos» en gris cuando la fórmula solo tiene huecos, con los huecos resaltados en el área de bloques y no
+    en la vista previa;
+  - la franja tiene un tope de alto proporcional a la ventana;
+  - el ancho de la lista se recuerda en la configuración del programa, no en el proyecto;
+  - módulo nuevo `escritorio/partes_propiedades.py`.
+- **E9, `Vista.state()`:** el responsable autoriza recordar la última evolución en lugar de buscarla en la traza, solo por
+  rendimiento y con el mismo resultado (el máximo de la conexión de 30 min sube de 19 a 73 ms mientras el P95 sigue plano).
+
 ## Metas
 
 Proyecto de referencia, Qt offscreen a 1366 × 768, mediana tras calentamiento.
