@@ -204,6 +204,16 @@ Cambios visibles o de semántica que no entran en la 2.0 (que no cambia nada vis
   - Dentro, como en el panel del PLC, aparecen los nombres de las señales de la maqueta en lugar de «Input 1, 2, 3».
   - Fuera quedan las variables del GRAFCET, que se crean al traerlas.
   - Si una señal desaparece de la maqueta, la variable se mantiene y se vuelve a enlazar arrastrando, igual que en Modbus.
+
+  Respuestas del responsable (22-nov):
+  - **Identidad:** la señal se reconoce por su identificador interno, que nunca se muestra. Si se borra en la maqueta y se
+    crea otra, aparece como señal nueva.
+  - **Variable sin enlace:** se ve en naranja.
+  - **Reenlace:** siempre a mano, arrastrando, igual que en Modbus.
+  - **Posible botón:** «crear en el GRAFCET todas las variables de la maqueta».
+  - **Proyectos existentes:** en principio son iguales; cambia la forma de interactuar. Queda por comprobar en el formato
+    guardado.
+  - **Abierto:** qué hace Play con variables sin enlace.
 - **Arreglos pendientes en la 1.x**, si sigue en uso: la ayuda emergente que borraba objetos y el `KeyError` de
   `_desde_bloques`. Ya están hechos en la 2.0.
 
