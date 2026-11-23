@@ -32,48 +32,6 @@ class AvisoFormula(EtiquetaElidida):
         pintor.end()
 
 
-class FlujoCategorias(FlowLayout):
-    """Evita una última fila con una categoría suelta cuando caben repartidas en dos."""
-
-    def __init__(self, padre, separacion):
-        super().__init__(padre, separacion)
-        self.una_fila = False
-
-    def _filas(self, ancho):
-        if self.una_fila:
-            return [[i for i in self._items if i.widget() is None or not i.widget().isHidden()]]
-        filas = [[]]
-        usado = 0
-        for item in self._items:
-            if item.widget() is not None and item.widget().isHidden():
-                continue
-            w = item.sizeHint().width()
-            if filas[-1] and usado + self.sep + w > ancho:
-                filas.append([])
-                usado = 0
-            usado += w + (self.sep if filas[-1] else 0)
-            filas[-1].append(item)
-        if len(filas) > 1 and len(filas[-1]) == 1 and len(filas[-2]) >= 3:
-            anterior = filas[-2][-1]
-            ultimo = filas[-1][0]
-            if anterior.sizeHint().width() + self.sep + ultimo.sizeHint().width() <= ancho:
-                filas[-1].insert(0, filas[-2].pop())
-        return filas
-
-    def _colocar(self, rect, solo_medir):
-        y = rect.y()
-        for fila in self._filas(rect.width()):
-            x = rect.x()
-            alto = max((item.sizeHint().height() for item in fila), default=0)
-            for item in fila:
-                tamano = item.sizeHint()
-                if not solo_medir:
-                    item.setGeometry(QRect(QPoint(x, y), tamano))
-                x += tamano.width() + self.sep
-            y += alto + self.sep
-        return max(0, y - self.sep - rect.y())
-
-
 class FilaValor(FlowLayout):
     """Selector y fichas centrados entre sí; el valor baja entero cuando falta ancho."""
 

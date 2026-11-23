@@ -233,18 +233,6 @@ class PanelInterior(QFrame):
         conmutador = self.conmutador.sizeHint().height() if self.conmutador is not None and not self.conmutador.isHidden() else 0
         return max(self.titulo.sizeHint().height(), conmutador, estilo.ALTO_BARRA_COMPACTA if otros else 0)
 
-    def alto_necesario(self, justo: bool = False) -> int:
-        """Altura del contenido al ancho real, incluido el pie de fórmula y la cabecera. `justo`: lo que pide el contenido en su mínimo (la
-        tarjeta de una acción sin valor numérico: sin sumar el alto de las demás páginas del panel)."""
-        self.lay_cuerpo.invalidate()
-        ancho = max(1, self.scroll.viewport().width())
-        contenido = self.cuerpo.minimumSizeHint().height() if justo else max(self.cuerpo.sizeHint().height(), self.cuerpo.minimumSizeHint().height())
-        if self.lay_cuerpo.hasHeightForWidth() and not justo:
-            contenido = max(contenido, self.lay_cuerpo.totalHeightForWidth(ancho))
-        margenes = self.layout().contentsMargins()
-        cabecera = self.alto_titulo() + self.layout().spacing()
-        return contenido + cabecera + margenes.top() + margenes.bottom() + estilo.E1 + 2  # (+2: el borde)
-
 
 class VentanaFlotante(QFrame):
     """Un marco sobre el área de trabajo completa: vista previa discreta y editores amplios."""
