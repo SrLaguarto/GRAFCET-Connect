@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 try:
     from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSettings, Qt
     from PySide6.QtGui import QWheelEvent
-    from PySide6.QtWidgets import QApplication, QPushButton, QToolButton, QWidget
+    from PySide6.QtWidgets import QApplication, QBoxLayout, QPushButton, QToolButton, QWidget
     from tools import hoja_contactos as HC
     from escritorio import bloques, estilo
     from escritorio.flotantes import AMPLIACION_MAXIMA, VentanaFlotante
@@ -320,8 +320,8 @@ class PropiedadesFlotante(unittest.TestCase):
                 f = c.w.flot
                 v, p = f.principal, f.panel
                 self.assertGreater(v.width(), c.w.width() * .85)
-                self.assertGreater(v.columna.width(), v.lupa.width() * 3)
-                self.assertGreater(p.accion.prog.width(), v.lupa.width() * 2)
+                self.assertGreater(v.columna.width(), v.width() * .9)  # E8: la franja ocupa el ancho; el formulador, todo el de la tarjeta
+                self.assertGreater(p.accion.prog.width(), v.columna.width() * .4)
                 self.assertLessEqual(v.lupa.transformar().m11(), AMPLIACION_MAXIMA)
                 self.assertEqual(v.accion.scroll.horizontalScrollBar().maximum(), 0)
                 self.assertTrue(p.accion.variable.isVisible())
@@ -429,9 +429,10 @@ class PropiedadesFlotante(unittest.TestCase):
         de color BORDE debajo."""
         for c, v in self.casos():
             lupa, columna = v.lupa.geometry(), v.columna.geometry()
+            ultimo = v.pie.geometry() if v.pie.isVisible() else columna  # E8: la vista previa arriba (o, en dos tarjetas, a un lado) y, al pie, el pie
             izq = v.cuerpo.mapTo(v, lupa.topLeft()).x()
             der = v.width() - v.cuerpo.mapTo(v, columna.topRight()).x() - 1
-            abajo = v.height() - v.cuerpo.mapTo(v, lupa.bottomLeft()).y() - 1
+            abajo = v.height() - v.cuerpo.mapTo(v, ultimo.bottomLeft()).y() - 1
             arriba = v.cuerpo.mapTo(v, lupa.topLeft()).y() - (v.linea.geometry().bottom() + 1)
             self.assertEqual([izq, der, abajo, arriba], [estilo.E4] * 4)
             self.assertEqual(v.cabecera.height(), estilo.ALTO_CONTROL + 2 * estilo.E2)
@@ -479,7 +480,10 @@ class PropiedadesFlotante(unittest.TestCase):
             imagen = v.lupa.grab().toImage()
             self.assertEqual(self.color(imagen, 0, v.lupa.height() // 2), estilo.BORDE)
             self.assertEqual(self.color(imagen, estilo.E1, v.lupa.height() // 2), estilo.SUPERFICIE)
-            self.assertEqual(v.columna.geometry().left() - v.lupa.geometry().right() - 1, estilo.E6)
+            if v.cuerpo.layout().direction() == QBoxLayout.Direction.LeftToRight:  # (provisional: dos tarjetas, hasta E8-P6)
+                self.assertEqual(v.columna.geometry().left() - v.lupa.geometry().right() - 1, estilo.E6)
+            else:  # franja: el hueco hasta la tarjeta es E3
+                self.assertEqual(v.columna.geometry().top() - v.lupa.geometry().bottom() - 1, estilo.E3)
             self.assertFalse(v.findChildren(QWidget, "enlacesFlotantes"))
             if v.condicion.isVisible():
                 self.assertEqual([color for _, color in v.lupa.senales],

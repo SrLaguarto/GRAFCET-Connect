@@ -19,11 +19,13 @@ from .paneles import TituloSeccion, pintar_marcador
 from .propiedades import ANCHO_COLUMNA, PanelPropiedades
 from .elementos_lupa import ocultar_vecinos
 from .medidas_propiedades import ancho_maximo, margen_horizontal
+from .partes_propiedades import PiePropiedades
 
 AMPLIACION_MAXIMA = 1.25
+FRANJA_FRACCION = 0.25  # lo más alto que es la vista previa: una cuarta parte del alto del área de trabajo (E8)
 MEDIO_TRAZO = 0.8  # la mitad del trazo de 1,6 px de las cajas del dibujo
-SENAL_CONDICION = estilo.ACENTO
-SENAL_ACCION = estilo.TINTA_2
+SENAL_CONDICION = estilo.SENAL_CONDICION
+SENAL_ACCION = estilo.SENAL_ACCION
 ALFA_RESALTADO = 0.18
 
 MARCO = 1  # el borde de la ventana: el layout empieza dentro de él
@@ -50,6 +52,8 @@ class Lupa(QWidget):
         self.tallo_transicion: QLineF | None = None
         self.senales: list[tuple[QRectF, str]] = []
         self.recorte: list[QRectF] = []  # rectángulos de la escena que se pintan; vacío: todo lo que cae en `origen`
+        self.margen = estilo.E2  # el aire alrededor del elemento (en columna, E3)
+        self.texto_esquina = ""  # «Etapa N» en la esquina inferior derecha de la franja: solo informa (acciones)
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -60,7 +64,7 @@ class Lupa(QWidget):
     def transformar(self) -> QTransform:
         if self.origen.isEmpty():
             return QTransform()
-        margen = estilo.E3
+        margen = self.margen
         ancho = max(1, self.width() - 2 * margen)
         alto = max(1, self.height() - 2 * margen)
         escala = min(AMPLIACION_MAXIMA, ancho / self.origen.width(), alto / self.origen.height())
@@ -85,6 +89,7 @@ class Lupa(QWidget):
         marco.drawRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5), estilo.R_M, estilo.R_M)
         marco.end()
         if self.origen.isEmpty():
+            self._pintar_esquina()
             return
         escena = self._escena
         minimo = Z_BAR if self.tallo_transicion is not None else float("-inf")
@@ -126,6 +131,17 @@ class Lupa(QWidget):
             for item in ocultos:
                 item.show()
             p.end()
+        self._pintar_esquina()
+
+    def _pintar_esquina(self) -> None:
+        if not self.texto_esquina:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        p.setPen(QColor(estilo.TINTA_2))
+        p.drawText(self.rect().adjusted(estilo.E3, estilo.E3, -estilo.E3, -estilo.E3),
+                   Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom, self.texto_esquina)
+        p.end()
 
 
 class TituloSenal(TituloSeccion):
@@ -246,9 +262,9 @@ class VentanaFlotante(QFrame):
         self.linea.setFixedHeight(1)
         raiz.addWidget(self.linea)
         self.cuerpo = QWidget()
-        fila_cuerpo = QHBoxLayout(self.cuerpo)
+        fila_cuerpo = QVBoxLayout(self.cuerpo)  # la vista previa en franja arriba, la tarjeta de edición debajo y, al pie, lo que se usa poco
         fila_cuerpo.setContentsMargins(estilo.E4 - MARCO, estilo.E4, estilo.E4 - MARCO, estilo.E4 - MARCO)
-        fila_cuerpo.setSpacing(estilo.E6)
+        fila_cuerpo.setSpacing(estilo.E3)
         self.lupa = Lupa(vista)
         fila_cuerpo.addWidget(self.lupa)
         self.columna = QWidget()
@@ -260,6 +276,9 @@ class VentanaFlotante(QFrame):
         paneles.addWidget(self.condicion, 1)
         paneles.addWidget(self.accion, 1)
         fila_cuerpo.addWidget(self.columna, 1)
+        self.pie = PiePropiedades()
+        fila_cuerpo.addWidget(self.pie)
+        self.pie.hide()
         raiz.addWidget(self.cuerpo, 1)
         self.hide()
 
@@ -295,6 +314,7 @@ class GestorFlotantes(QObject):
         self._colocar_pendiente = False
         self._vigilando = False
         self._tamano = QSize()
+        self._franja = 0  # el alto de la vista previa en este momento
         self.arrastre = None
         self._clic_fuera = False
         self._ocultando = False
@@ -310,6 +330,7 @@ class GestorFlotantes(QObject):
         self.principal = VentanaFlotante(self.superficie, self.vista)
         self.arrastre = ArrastrePropiedades(self.principal, self.w)
         self.principal.accion.lay_cuerpo.addWidget(self.panel)
+        self.principal.pie.poner(self.panel.t_etiqueta, self.panel.t_mostrar, self.panel.t_comentario)
         self.panel.show()
         self.panel.destino_bloques = self.principal.condicion.lay_cuerpo
         self.principal.cerrar_pedido.connect(self.cerrar)
@@ -420,7 +441,7 @@ class GestorFlotantes(QObject):
         if not isinstance(receptor, QWidget) or receptor.window() is not self.principal:
             return False
         modificadores = evento.modifiers()
-        multilinea = isinstance(receptor, (QPlainTextEdit, QTextEdit))
+        multilinea = isinstance(receptor, (QPlainTextEdit, QTextEdit)) and not getattr(receptor, "una_linea", False)  # (el comentario: una línea)
         if modificadores != (Qt.KeyboardModifier.ControlModifier if multilinea else Qt.KeyboardModifier.NoModifier):
             return False
         if self._cancela_con_esc(receptor):
@@ -444,6 +465,8 @@ class GestorFlotantes(QObject):
         if self._escala != (w._hoja_escala, estilo.ESCALA):
             self._escala = (w._hoja_escala, estilo.ESCALA)
             self.panel.escalar(w._hoja_escala)
+            self.principal.pie.setStyleSheet(w._hoja_escala + estilo.campos_compactos())  # (el pie no cuelga del panel: sus campos, igual de altos)
+            self.principal.pie.escalar()
             self.principal.escalar()
         self.panel_actual()
         p, v = self.panel, self.principal
@@ -454,8 +477,12 @@ class GestorFlotantes(QObject):
         v.titulo.setText(p.titulo.text())
         v.condicion.setVisible(dividida)
         v.condicion.indicar_parte(SENAL_CONDICION if dividida else None)
-        v.accion.indicar_parte(SENAL_ACCION if dividida else None)
+        # la tarjeta de una sola parte también lleva la barra de su parte: receptividad en el color de la condición, acción en el suyo
+        v.accion.indicar_parte(SENAL_ACCION if dividida or p.pagina == "accion" else SENAL_CONDICION if p.pagina == "transicion" else None)
         v.accion.titulo.setText("Acción" if dividida else p.titulo.text().removeprefix("Propiedades · "))
+        if p.pagina == "transicion":
+            v.accion.titulo.setText("Receptividad")  # la tarjeta de una sola parte lleva el nombre de la parte
+        v.pie.setVisible(p.pagina == "transicion")  # etiqueta y comentario, al pie
         if dividida:
             evento = p.objetivo_bloques()[2] == "evento"
             v.titulo.setText("Propiedades · Acción por evento" if evento else "Propiedades · Acción condicionada")
@@ -558,9 +585,33 @@ class GestorFlotantes(QObject):
         return [(v.accion, z["elemento"])] if z else []
 
     def _marco_ventana(self) -> int:
-        """Lo que la ventana gasta sin contar las tarjetas: cabecera, su línea, márgenes del cuerpo y borde."""
+        """Lo que la ventana gasta sin contar las tarjetas: cabecera, su línea, márgenes del cuerpo, borde, la vista previa en franja y, si lo
+        hay, el pie (con el comentario de una línea: si crece, el formulador cede el alto)."""
         v = self.principal
-        return v.cabecera.height() + 1 + 2 * estilo.E4 + 2 * MARCO
+        hueco = v.cuerpo.layout().spacing()
+        franja = 0 if self._lateral() else self._franja + hueco
+        pie = v.pie.alto_nominal() + hueco if v.pie.isVisibleTo(v) else 0
+        return v.cabecera.height() + 1 + 2 * estilo.E4 + 2 * MARCO + franja + pie
+
+    def _lateral(self) -> bool:
+        """PROVISIONAL (hasta E8-P6): con dos tarjetas a la vez (condicionada y por evento) la vista previa sigue a un lado; en cuanto la
+        condición y la acción se editen una cada vez, también va en franja y esto desaparece."""
+        return self.panel._bloques_fuera
+
+    def _disposicion(self, alto_franja: int) -> None:
+        """La vista previa arriba, en franja de ancho completo, o (provisional, ver `_lateral`) en columna a la izquierda."""
+        v = self.principal
+        lateral = self._lateral()
+        v.cuerpo.layout().setDirection(QBoxLayout.Direction.LeftToRight if lateral else QBoxLayout.Direction.TopToBottom)
+        v.cuerpo.layout().setSpacing(estilo.E6 if lateral else estilo.E3)
+        v.lupa.margen = estilo.E3 if lateral else estilo.E2
+        if lateral:
+            v.lupa.setMinimumHeight(0)
+            v.lupa.setMaximumHeight(16777215)
+        else:
+            v.lupa.setMinimumWidth(0)
+            v.lupa.setMaximumWidth(16777215)
+            v.lupa.setFixedHeight(alto_franja)
 
     def _marco_tarjeta(self) -> int:
         """Lo que una tarjeta gasta sin contar su contenido: borde, márgenes y título con su hueco."""
@@ -595,12 +646,15 @@ class GestorFlotantes(QObject):
         contenido = max(p.minimumSizeHint().height(), (filas + 2) * estilo.ALTO_CONTROL)
         tope = max(1, disponible.height() - estilo.E6)
         alto = contenido + self._marco_ventana() + self._marco_tarjeta()
-        return min(tope, round(alto * 1.2) if p.pagina == "transicion" else alto)
+        if p.pagina == "transicion":  # (el 20 % de más es de la tarjeta del formulador, no de la vista previa ni del pie)
+            return min(tope, round((contenido + self._marco_tarjeta()) * 1.2) + self._marco_ventana())
+        return min(tope, alto, int((disponible.height() + 2 * estilo.E6) * .75))  # (el dibujo de alrededor: nunca más de tres cuartas partes del área)
 
     def _componer(self) -> None:
         """La vista previa cede sitio al formulador; los campos se apilan solo si falta ancho."""
         v, p = self.principal, self.panel
-        v.lupa.setFixedWidth(min(12 * estilo.E4, max(8 * estilo.E4, v.width() // 6)))
+        if self._lateral():
+            v.lupa.setFixedWidth(min(12 * estilo.E4, max(8 * estilo.E4, v.width() // 6)))
         disponible = v.columna.width() - 4 * estilo.E2
         vertical = p.pagina == "transicion" or disponible < 36 * estilo.E4
         direccion = QBoxLayout.Direction.TopToBottom if vertical else QBoxLayout.Direction.LeftToRight
@@ -638,6 +692,15 @@ class GestorFlotantes(QObject):
                 v.accion.setMaximumHeight(inferior)
                 v.columna.layout().setStretch(1, 0)
         v.columna.layout().activate()
+
+    def _alto_franja(self, area: QRect, origen: QRectF) -> int:
+        """El alto de la vista previa: el del elemento ampliado hasta el 125 % más su margen, con un mínimo y un tope proporcional al área."""
+        v_margen = self.principal.lupa.margen
+        minimo = estilo.ALTO_CONTROL + 2 * estilo.E3
+        if origen.isEmpty():
+            return minimo
+        tope = max(minimo, round(area.height() * FRANJA_FRACCION))
+        return max(minimo, min(round(origen.height() * AMPLIACION_MAXIMA) + 2 * v_margen, tope))
 
     def _origen_lupa(self, zonas: list[tuple[PanelInterior, QRectF]]) -> QRectF:
         origen = QRectF()
@@ -714,6 +777,10 @@ class GestorFlotantes(QObject):
         try:
             v = self.principal
             area = self._area()
+            zonas = self._zonas()
+            origen = self._origen_lupa(zonas)
+            self._franja = self._alto_franja(area, origen)
+            self._disposicion(self._franja)
             self._dimensionar(area)
             lugar = QRect(v.pos(), self._tamano)
             if not self.arrastre.movida:
@@ -727,12 +794,12 @@ class GestorFlotantes(QObject):
             self._repartir_paneles()
             self.arrastre.limitar()
             self.geometrias = {"principal": QRect(v.geometry())}
-            zonas = self._zonas()
             v.lupa.preparar_dibujo(self.w.edicion.M, self.vista.dependencias)
             v.lupa.origen = self._origen_lupa(zonas)
             v.lupa.elemento = self.panel.ident
             v.lupa.tallo_transicion = self._tallo_transicion(v.lupa.origen)
             v.lupa.recorte = self._recorte(v.lupa.origen)
+            v.lupa.texto_esquina = self.panel.accion.b_etapa.text() if self.panel.pagina == "accion" else ""
             v.lupa.update()
             self._senales_lupa()
             v.raise_()

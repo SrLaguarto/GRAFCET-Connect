@@ -227,6 +227,88 @@ def mover(raiz: dict[str, Any] | None, origen: tuple[str, ...], destino: tuple[s
     return _sin_marca(soltar(marcada, destino, obtener(raiz, origen)))
 
 
+# -- modificadores (NOT, ↑, ↓), envolver y huecos pendientes: operaciones puras del formulador (E8) --------------------------
+# NOT, ↑ y ↓ son nodos que envuelven a otro (`no`, `sube`, `baja`): no cambian el modelo ni lo que se escribe. Sobre una ficha se
+# aplican en el orden en que se pulsan (`↑(NOT a)` es NOT y luego ↑; `NOT ↑a`, ↑ y luego NOT). Una «cadena» es el bloque con todos
+# sus modificadores seguidos: la ficha que el usuario ve y a la que se aplican.
+MODIFICADORES = ("no", "sube", "baja")
+
+
+def cadena_modificadores(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> tuple[tuple[str, ...], list[str]]:
+    """La cadena de modificadores que contiene el bloque (o el hueco) de `ruta`: sube mientras el padre sea `no`, `sube` o `baja` y baja
+    por los que lleva dentro. Devuelve la ruta del más externo y las clases de los modificadores de dentro afuera (vacía: el bloque no
+    lleva ninguno). Desde cualquier eslabón de la cadena, o desde el bloque de dentro, da lo mismo; la ruta del bloque de dentro es
+    `externa + ("a",) * len(mods)`."""
+    while ruta and obtener(raiz, ruta[:-1])["k"] in MODIFICADORES:
+        ruta = ruta[:-1]
+    mods: list[str] = []
+    n = obtener(raiz, ruta)
+    while n is not None and n["k"] in MODIFICADORES:
+        mods.append(n["k"])
+        n = n["a"]
+    return ruta, mods[::-1]
+
+
+def alternar_modificador(raiz: dict[str, Any] | None, ruta: tuple[str, ...], clase: str) -> dict[str, Any] | None:
+    """Pulsa NOT, ↑ o ↓ sobre la ficha de `ruta` (un bloque cualquiera, su cadena de modificadores o un hueco). NOT: si ya lo lleva, se
+    quita; si no, se pone por fuera. Flanco: si ya lleva ese mismo, se quita; si lleva el otro, lo cambia (↑ por ↓) en su sitio; si no
+    lleva ninguno, se pone por fuera. Sobre un hueco deja el modificador con su hueco (`NOT ?`). La ruta del bloque más externo no
+    cambia. Una clase que no es modificador no hace nada. Devuelve un árbol nuevo."""
+    if clase not in MODIFICADORES:
+        return raiz
+    externa, mods = cadena_modificadores(raiz, ruta)
+    nueva = list(mods)
+    if clase == "no":
+        if "no" in nueva:
+            nueva.remove("no")
+        else:
+            nueva.append("no")
+    else:
+        flancos = [i for i, m in enumerate(nueva) if m != "no"]
+        if not flancos:
+            nueva.append(clase)
+        elif nueva[flancos[0]] == clase:
+            del nueva[flancos[0]]
+        else:
+            nueva[flancos[0]] = clase
+    nodo = obtener(raiz, externa + ("a",) * len(mods))
+    for m in nueva:
+        nodo = nuevo(m, a=copy.deepcopy(nodo))
+    return con_nodo(raiz, externa, nodo)
+
+
+def envolver(raiz: dict[str, Any] | None, ruta: tuple[str, ...], clase: str) -> dict[str, Any] | None:
+    """Envuelve el bloque (o el hueco) de `ruta` en un bloque nuevo de `clase`, que lo lleva en su primer hueco: «Envolver ( … )»
+    (`par`), «temporizar» (`temp`), NOT, ↑, ↓. Es lo que `soltar` hace con un bloque de esa clase sobre uno ocupado. Una clase sin
+    huecos no hace nada."""
+    envoltorio = nuevo(clase)
+    h = primer_hueco(envoltorio)
+    if clase not in ENVUELVEN or h is None:
+        return raiz
+    return con_nodo(raiz, ruta, con_nodo(envoltorio, h, obtener(raiz, ruta)))
+
+
+def desenvolver(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> dict[str, Any] | None:
+    """«Quitar paréntesis», «Quitar retardo», quitar un modificador: el bloque de `ruta` (`par`, `temp`, `no`, `sube` o `baja`) se
+    sustituye por el que lleva dentro, o por un hueco si estaba vacío. Con cualquier otro bloque no hace nada."""
+    n = obtener(raiz, ruta)
+    if n is None or n["k"] not in ("par", "temp", *MODIFICADORES):
+        return raiz
+    return con_nodo(raiz, ruta, n["a"])
+
+
+def faltan(raiz: dict[str, Any] | None) -> int:
+    """Cuántos huecos le faltan a la fórmula: los que `arbol_a_texto` escribe como «?» (huecos vacíos y fichas sin nombre). Sin fórmula
+    (raíz vacía) no falta nada: no hay qué completar."""
+    def cuenta(n: dict[str, Any] | None) -> int:
+        if n is None:
+            return 1
+        k = n["k"]
+        propio = (k in ("var", "etapa", "vnum", "cmp") and not n["n"]) or (k == "texto" and not n["s"].strip())
+        return int(propio) + sum(cuenta(n[c]) for c in hijos(n))
+    return 0 if raiz is None else cuenta(raiz)
+
+
 def con_texto(n: dict[str, Any] | None) -> bool:
     """Si el árbol tiene algún bloque de texto (para releerlo cuando cambian las variables)."""
     return n is not None and (n["k"] == "texto" or any(con_texto(n[c]) for c in hijos(n)))

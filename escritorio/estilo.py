@@ -62,6 +62,8 @@ CONFIRMAR_HOVER = "#1b5149"
 PARPADEO = "#2f8a91"       # el tono claro del parpadeo de «+ Añadir hoja»: blanco encima, 4,1:1
 
 TIPO_BOOL, TIPO_DECIMAL, TIPO_ENTERA, TIPO_CUALQUIERA = "#22a342", "#008add", "#d96a0c", "#6d837b"  # la barrita de tipo de variable (E/S)
+ORIGEN_MEMORIA = "#7a3e8e"  # ciruela: la barra de origen de las fichas de memoria (7,2:1 sobre blanco); ni aviso ni tipo entero
+SENAL_CONDICION, SENAL_ACCION = ACENTO, TINTA_2  # el color de cada parte de Propiedades: receptividad, condición y evento / acción
 SENAL_TENUE, SENAL_ASIGNADA = "#cbd2d5", "#7c8a90"  # la barrita sin señal y asignada (3,5:1 sobre blanco con su contorno)
 RESALTADO = "#e8f5ef"      # fila de variable resaltada en E/S (una prueba fija este tono)
 ASIGNACION = "#c1e8dc"     # la zona de un canal donde caería la variable que se arrastra

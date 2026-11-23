@@ -128,7 +128,7 @@ class RematesAccion(QObject):
 
     def mostrar(self, activa):
         self.activa = activa
-        self.cabecera.setVisible(activa)
+        self.cabecera.setVisible(False)  # («Etapa N» va en la esquina de la vista previa: `Lupa.texto_esquina`)
         self._columna()
 
     def _columna(self):

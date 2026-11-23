@@ -2090,9 +2090,10 @@ class Interfaz(unittest.TestCase):
         derecha = p.pagina_bloques
         for campo in (p.t_texto, p.t_vista, p.t_dibujo, p.t_crear, p.t_estado):
             self.assertTrue(derecha.isAncestorOf(campo), "están a su derecha")
-        self.assertTrue(all(izq.isAncestorOf(campo) for campo in (p.t_etiqueta, p.t_mostrar, p.t_comentario)))
+        pie = w.flot.principal.pie  # E8: etiqueta, «Mostrar etiqueta» y comentario ya no van en la columna del panel, sino al pie de la ventana
+        self.assertTrue(all(pie.isAncestorOf(campo) for campo in (p.t_etiqueta, p.t_mostrar, p.t_comentario)))
         self.assertTrue(w.flot.principal.isAncestorOf(derecha))
-        self.assertEqual(sorted(x.text() for x in izq.findChildren(QLabel) if x.text() in ("Etiqueta", "Texto", "Escrito", "Se dibuja")),
+        self.assertEqual(sorted(x.text() for x in pie.findChildren(QLabel) if x.text() in ("Etiqueta", "Texto", "Escrito", "Se dibuja")),
                          ["Etiqueta"])
         self.assertEqual(p.t_texto.text(), "marcha")
         self.assertTrue(p.t_texto.isReadOnly(), "se ve pero no se edita")

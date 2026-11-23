@@ -66,10 +66,11 @@ class Propiedades111(unittest.TestCase):
             f = c.w.flot
             filas = 11 if estilo.ESCALA == "grande" else 9
             necesario = max(p.minimumSizeHint().height(), (filas + 2) * estilo.ALTO_CONTROL)
-            tope = round((necesario + f._marco_ventana() + f._marco_tarjeta()) * 1.2)
+            tope = round((necesario + f._marco_tarjeta()) * 1.2) + f._marco_ventana()  # (E8: el 20 % es de la tarjeta; la franja y el pie suman aparte)
             self.assertLessEqual(v.height(), tope)
             self.assertLess(v.height(), f._area().height() - 2 * estilo.E6)
-            self.assertEqual(v.lupa.height(), v.accion.height())
+            self.assertLessEqual(v.lupa.height(), max(estilo.ALTO_CONTROL + 2 * estilo.E3, round(f._area().height() * .25)))  # E8: franja, no columna
+            self.assertGreaterEqual(v.lupa.width(), v.accion.width())
             centro = v.lupa.transformar().map(v.lupa.origen.center())
             self.assertLessEqual(abs(centro.y() - v.lupa.height() / 2), 1)
             alturas.append(v.height())

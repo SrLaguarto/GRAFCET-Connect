@@ -66,7 +66,7 @@ class PropiedadesMas(unittest.TestCase):
             self.assertGreaterEqual(r.width(), p.t_mostrar.fontMetrics().horizontalAdvance(p.t_mostrar.text()))
             self.assertGreater(p.t_comentario.width(), p.t_etiqueta.width() * 2)
             self.assertLessEqual(p.t_mostrar.geometry().right(), p.t_mostrar.parentWidget().width())
-            self.assertLessEqual(abs(p.t_comentario.geometry().right() + 1 - p.izq.width()), 1)
+            self.assertLessEqual(abs(p.t_comentario.geometry().right() + 1 - p.t_comentario.parentWidget().width()), 1)  # E8: al pie, a todo el ancho
             c.w._mostrar_panel("inferior", False)
 
     def test_SXM3_altura_moderada_y_aire_alrededor(self):
@@ -75,7 +75,7 @@ class PropiedadesMas(unittest.TestCase):
             c, p, v = self.contexto(ancho=ancho, alto=alto)
             self.assertGreater(v.height(), anterior)
             self.assertLess(v.height(), c.w.flot._area().height() - 2 * estilo.E6)
-            self.assertGreater(p.prog.lienzo.height(), 288 if ancho == 1366 else 372)
+            self.assertGreater(p.prog.lienzo.height(), 250 if ancho == 1366 else 372)  # E8: la franja y el pie le quitan algo de alto a 1366×768
             c.w._mostrar_panel("inferior", False)
 
     def test_SXM4_aviso_vacio_y_lupa_se_conservan(self):
@@ -95,7 +95,7 @@ class PropiedadesMas(unittest.TestCase):
         self.assertTrue(v.windowFlags() & Qt.WindowType.NoDropShadowWindowHint)
         imagen = v.grab().toImage()
         dpr = imagen.devicePixelRatio()
-        for x, y in ((5, 5), (400, 25), (150, 100)):
+        for x, y in ((5, 5), (400, 25), (5, 100)):  # E8: (150, 100) cae ahora en la franja blanca de la vista previa; (5, 100), en el margen del cuerpo
             color = imagen.pixelColor(round(x * dpr), round(y * dpr))
             self.assertEqual(color.alpha(), 255)
             self.assertEqual(color.name(), estilo.FONDO)

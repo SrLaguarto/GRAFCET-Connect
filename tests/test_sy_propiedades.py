@@ -61,7 +61,8 @@ class PropiedadesY(unittest.TestCase):
                 with self.subTest(tipo=tipo, ancho=ancho):
                     c, p, v = self.contexto(tipo, ancho, alto)
                     disponible = c.w.paginas_es.height() - 2 * estilo.E6
-                    alto_por_tipo = {"transicion": 558, "activacion_numerica": 465}
+                    alto_por_tipo = {(683, 768): {"transicion": 577, "activacion_numerica": 486},
+                                     (960, 1032): {"transicion": 679, "activacion_numerica": 593}}[(ancho, alto)]  # E8: con franja y pie (E3 de aire bajo el filete)
                     self.assertEqual((v.width(), v.height()), (esperado, alto_por_tipo.get(tipo, disponible)))
                     self.doCleanups()
 
@@ -130,7 +131,7 @@ class PropiedadesY(unittest.TestCase):
 
     def test_SY7_altos_a_pantalla_completa_se_ajustan_al_area_actual(self):
         """Las alturas de una tarjeta se conservan. Dos tarjetas aprovechan el área con sus márgenes."""
-        fijos = {"transicion": 664, "activacion_numerica": 553}
+        fijos = {"transicion": 786, "activacion_numerica": 681}  # E8: con la vista previa en franja y el pie (E3 de aire bajo el filete)
         for ancho, alto in ((1920, 1080), (2560, 1440)):
             for tipo in (*fijos, "condicionada"):
                 c, p, v = self.contexto(tipo, ancho, alto)

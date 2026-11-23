@@ -44,6 +44,7 @@ from .paneles import EtiquetaGrupos, TituloSeccion
 from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
 from .remates_propiedades import AvisoFormula, RematesAccion
+from .partes_propiedades import CampoComentario
 from .paneles import PilaActual, PilaActualSolo
 from .diagrama import ACT_MIN, COL, H, MARK, TB, VACIO_H, VACIO_W, _html
 from .edicion import COLOCACIONES, CONTINUAS, Parpadeo
@@ -692,7 +693,7 @@ class PanelPropiedades(QWidget):
         self.t_mostrar = CasillaPropiedades("Mostrar etiqueta")
         self.t_mostrar.setToolTip("Dibujar la etiqueta (t1) junto a la transición")
         self.t_mostrar.clicked.connect(lambda on: self.e.mostrar_etiqueta(self.ident, on))
-        self.t_comentario = QLineEdit()
+        self.t_comentario = CampoComentario()  # una línea guardada; se ve en varias si no cabe, crece y se estira
         self.t_comentario.setPlaceholderText("sin comentario")
         self.t_comentario.setToolTip("Comentario de la transición: se dibuja entre comillas a la derecha de su receptividad "
                                      "(no entra en la simulación)")
@@ -849,7 +850,7 @@ class PanelPropiedades(QWidget):
         self.titulo.setText(f"Propiedades · {titulo}" if titulo else "Propiedades")
         self.izq.setCurrentIndex({None: 0, "etapa": 1, "transicion": 2, "accion": 3, "enlace": 0, "barra": 0, "macro": 4,
                                   "orden": 4, "marco": 4}[kind])
-        self.izq.setVisible(kind in ("etapa", "transicion", "accion", "macro", "orden", "marco"))
+        self.izq.setVisible(kind in ("etapa", "accion", "macro", "orden", "marco"))  # (la transición: sus campos van al pie de la ventana)
         self.ficha_izq.mostrar(e, vivo if kind in ("macro", "orden", "marco") else None)
         if kind == "macro":
             self.ficha_izq.botones["Renombrar…"].hide()

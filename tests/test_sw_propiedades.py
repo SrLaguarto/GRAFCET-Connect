@@ -62,8 +62,7 @@ class PropiedadesW(unittest.TestCase):
                     self.assertGreaterEqual(indicador.left(), 1)
                     etiquetas = [x for x in p.t_mostrar.parentWidget().findChildren(QLabel)
                                  if x.text() in ("Etiqueta", "Comentario")]
-                    self.assertEqual(len(etiquetas), 2)
-                    self.assertEqual(etiquetas[0].x(), etiquetas[1].x())
+                    self.assertEqual(len(etiquetas), 2)  # E8: el pie rotula la etiqueta y el comentario, uno junto a su campo (ya no en una columna común)
                     self.assertGreater(p.t_mostrar.x(), p.t_etiqueta.geometry().right())
                 c.w._mostrar_panel("inferior", False)
 
