@@ -7,7 +7,7 @@ from PySide6.QtCore import QEvent, QLineF, QObject, QPoint, QPointF, QRect, QRec
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QTransform
 from PySide6.QtWidgets import (
     QApplication, QLabel, QLineEdit, QPlainTextEdit, QTextEdit,
-    QBoxLayout, QFrame, QHBoxLayout, QLayout, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+    QBoxLayout, QFrame, QHBoxLayout, QLayout, QScrollArea, QSizePolicy, QStackedLayout, QToolButton, QVBoxLayout, QWidget,
 )
 
 from .interaccion_propiedades import ArrastrePropiedades
@@ -19,7 +19,9 @@ from .paneles import TituloSeccion, pintar_marcador
 from .propiedades import ANCHO_COLUMNA, PanelPropiedades
 from .elementos_lupa import ocultar_vecinos
 from .medidas_propiedades import ancho_maximo, margen_horizontal
-from .partes_propiedades import PiePropiedades
+from .partes_propiedades import ConmutadorPartes, PiePropiedades
+from .edicion import CONTINUAS
+from grafcet.expressions import is_event_positive
 
 AMPLIACION_MAXIMA = 1.25
 FRANJA_FRACCION = 0.25  # lo más alto que es la vista previa: una cuarta parte del alto del área de trabajo (E8)
@@ -39,7 +41,10 @@ EVENTOS_FONDO = {
 
 
 class Lupa(QWidget):
-    """Recorte no interactivo de la escena real, sin las capas de edición de Z_EDIT en adelante."""
+    """Recorte de la escena real, sin las capas de edición de Z_EDIT en adelante. Solo responde a un clic en la marca o en la caja de una
+    acción de dos partes (`parte_pulsada`): cambia la parte que se edita."""
+
+    parte_pulsada = Signal(str)  # «formula» (la marca: condición o evento) o «accion» (la caja)
 
     def __init__(self, vista: Any) -> None:
         super().__init__()
@@ -50,7 +55,8 @@ class Lupa(QWidget):
         self._dependencias = None
         self.elemento = None
         self.tallo_transicion: QLineF | None = None
-        self.senales: list[tuple[QRectF, str]] = []
+        self.senales: list[tuple[QRectF, str, bool]] = []  # (zona de la escena, color, es la caja): la parte que se edita, en su color; la otra, en gris
+        self.partes: list[tuple[QRectF, str]] = []  # (zona de la escena, parte) donde un clic cambia de parte
         self.recorte: list[QRectF] = []  # rectángulos de la escena que se pintan; vacío: todo lo que cae en `origen`
         self.margen = estilo.E2  # el aire alrededor del elemento (en columna, E3)
         self.texto_esquina = ""  # «Etapa N» en la esquina inferior derecha de la franja: solo informa (acciones)
@@ -60,6 +66,20 @@ class Lupa(QWidget):
 
     def wheelEvent(self, evento: Any) -> None:  # noqa: N802
         evento.accept()
+
+    def mousePressEvent(self, evento: Any) -> None:  # noqa: N802
+        """Un clic sobre la marca o la caja de la acción elige esa parte (la caja gana si se solapan)."""
+        evento.accept()
+        if evento.button() != Qt.MouseButton.LeftButton or not self.partes or self.origen.isEmpty():
+            return
+        inversa, ok = self.transformar().inverted()
+        if not ok:
+            return
+        punto = inversa.map(evento.position())
+        for zona, parte in sorted(self.partes, key=lambda x: x[1] != "accion"):
+            if zona.contains(punto):
+                self.parte_pulsada.emit(parte)
+                return
 
     def transformar(self) -> QTransform:
         if self.origen.isEmpty():
@@ -117,12 +137,12 @@ class Lupa(QWidget):
             p.setClipping(False)
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
             p.setPen(Qt.PenStyle.NoPen)
-            for rectangulo, color in self.senales:
+            for rectangulo, color, es_caja in self.senales:
                 relleno = QColor(color)
                 relleno.setAlphaF(ALFA_RESALTADO)
                 p.setBrush(relleno)
                 zona = self.transformar().mapRect(rectangulo)
-                if color == SENAL_ACCION:
+                if es_caja:
                     p.drawRect(zona)
                 else:
                     p.drawRoundedRect(zona.adjusted(-estilo.E1, -estilo.E1, estilo.E1, estilo.E1), estilo.R_M, estilo.R_M)
@@ -169,6 +189,7 @@ class PanelInterior(QFrame):
         raiz.setContentsMargins(estilo.E3, estilo.E3, estilo.E3, estilo.E3)  # (más el borde de 1 px de la hoja)
         raiz.setSpacing(estilo.E2)  # T3
         self.senal: str | None = None
+        self.conmutador: QWidget | None = None  # el conmutador de partes de una acción de dos partes (lo pone la ventana)
         self.titulo = TituloSenal()
         self.titulo.setObjectName("tituloPropiedades")
         self.fila_titulo = QHBoxLayout()  # el título y, a la derecha, las herramientas del formulador (`Programador.adoptar_herramientas`)
@@ -205,8 +226,12 @@ class PanelInterior(QFrame):
             p.end()
 
     def alto_titulo(self) -> int:
-        """Alto de la franja del título: el del título o el de las herramientas del formulador, si las lleva."""
-        return max(self.titulo.sizeHint().height(), estilo.ALTO_BARRA_COMPACTA if self.fila_titulo.count() > 1 else 0)
+        """Alto de la franja del título: el del título (o el del conmutador de partes, que ocupa su lugar) o el de las herramientas del
+        formulador, si las lleva."""
+        otros = [it.widget() for it in (self.fila_titulo.itemAt(i) for i in range(self.fila_titulo.count()))
+                 if it.widget() is not None and it.widget() not in (self.titulo, self.conmutador)]
+        conmutador = self.conmutador.sizeHint().height() if self.conmutador is not None and not self.conmutador.isHidden() else 0
+        return max(self.titulo.sizeHint().height(), conmutador, estilo.ALTO_BARRA_COMPACTA if otros else 0)
 
     def alto_necesario(self, justo: bool = False) -> int:
         """Altura del contenido al ancho real, incluido el pie de fórmula y la cabecera. `justo`: lo que pide el contenido en su mínimo (la
@@ -276,13 +301,21 @@ class VentanaFlotante(QFrame):
         self.lupa = Lupa(vista)
         fila_cuerpo.addWidget(self.lupa)
         self.columna = QWidget()
-        paneles = QVBoxLayout(self.columna)
-        paneles.setContentsMargins(0, 0, 0, 0)
-        paneles.setSpacing(estilo.E3)
+        self.paneles = QStackedLayout(self.columna)  # las dos partes de una acción comparten la misma celda: una a la vez (P-IMP-173)
+        self.paneles.setContentsMargins(0, 0, 0, 0)
         self.condicion = PanelInterior()
         self.accion = PanelInterior()
-        paneles.addWidget(self.condicion, 1)
-        paneles.addWidget(self.accion, 1)
+        self.paneles.addWidget(self.condicion)
+        self.paneles.addWidget(self.accion)
+        self.paneles.setCurrentWidget(self.accion)
+        self.conmutadores: dict[PanelInterior, ConmutadorPartes] = {}
+        for tarjeta in (self.condicion, self.accion):  # cada tarjeta lleva el suyo, en el lugar del título; los dos van a la par
+            c = ConmutadorPartes([("formula", "Condición", SENAL_CONDICION), ("accion", "Acción", SENAL_ACCION)])
+            tarjeta.conmutador = c
+            tarjeta.fila_titulo.insertWidget(0, c)
+            tarjeta.fila_titulo.insertStretch(2, 1)
+            c.hide()
+            self.conmutadores[tarjeta] = c
         fila_cuerpo.addWidget(self.columna, 1)
         self.pie = PiePropiedades()
         fila_cuerpo.addWidget(self.pie)
@@ -323,6 +356,8 @@ class GestorFlotantes(QObject):
         self._vigilando = False
         self._tamano = QSize()
         self._franja = 0  # el alto de la vista previa en este momento
+        self._parte = "formula"  # la parte que se edita de una acción de dos partes: «formula» (condición o evento) o «accion»
+        self._parte_de: str | None = None  # la acción a la que corresponde `_parte`
         self.arrastre = None
         self._clic_fuera = False
         self._ocultando = False
@@ -338,13 +373,16 @@ class GestorFlotantes(QObject):
         self.principal = VentanaFlotante(self.superficie, self.vista)
         self.arrastre = ArrastrePropiedades(self.principal, self.w)
         self.principal.accion.lay_cuerpo.addWidget(self.panel)
-        self.principal.pie.poner(self.panel.t_etiqueta, self.panel.t_mostrar, self.panel.t_comentario)
+        self.principal.pie.poner(self.panel.t_etiqueta, None, self.panel.t_comentario)
         self.panel.show()
         self.panel.destino_bloques = self.principal.condicion.lay_cuerpo
         self.principal.cerrar_pedido.connect(self.cerrar)
         self.panel.prog.franja_cambiada.connect(self.colocar)
         self.panel.accion.prog.franja_cambiada.connect(self.colocar)
         self.panel.alto_cambiado.connect(self.colocar)
+        self.principal.lupa.parte_pulsada.connect(self.elegir_parte)
+        for c in self.principal.conmutadores.values():
+            c.elegida.connect(self.elegir_parte)
         self.vista.vista_cambiada.connect(self.colocar)
         self.panel.setEnabled(self.activo())
 
@@ -368,6 +406,7 @@ class GestorFlotantes(QObject):
         if not self.abierto:
             from .sesion_propiedades import SesionPropiedades
             self._sesion = SesionPropiedades(self.w.edicion)
+            self._parte = "formula"  # una sesión nueva empieza por la condición o el evento (salvo que se pida otra parte: `parte_pedida`)
         self.abierto = True
         self.actualizar()
 
@@ -391,6 +430,7 @@ class GestorFlotantes(QObject):
             sesion.terminar(confirmar)
         if self.w.edicion is not None:
             self.w.edicion.parte_editada = None
+            self.w.edicion.parte_pedida = None
         self.ocultar()
 
     def tras_gesto(self, antes: tuple, despues: tuple) -> None:
@@ -483,19 +523,24 @@ class GestorFlotantes(QObject):
             return
         dividida = p._bloques_fuera
         v.titulo.setText(p.titulo.text())
-        v.condicion.setVisible(dividida)
         v.condicion.indicar_parte(SENAL_CONDICION if dividida else None)
         # la tarjeta de una sola parte también lleva la barra de su parte: receptividad en el color de la condición, acción en el suyo
         v.accion.indicar_parte(SENAL_ACCION if dividida or p.pagina == "accion" else SENAL_CONDICION if p.pagina == "transicion" else None)
-        v.accion.titulo.setText("Acción" if dividida else p.titulo.text().removeprefix("Propiedades · "))
-        if p.pagina == "transicion":
-            v.accion.titulo.setText("Receptividad")  # la tarjeta de una sola parte lleva el nombre de la parte
+        v.accion.titulo.setText("Receptividad" if p.pagina == "transicion" else "Acción" if p.pagina in ("accion", "vacio") or dividida
+                                else p.titulo.text().removeprefix("Propiedades · "))
         v.pie.setVisible(p.pagina == "transicion")  # etiqueta y comentario, al pie
+        pedida, w_e = self.w.edicion.parte_pedida, self.w.edicion
+        w_e.parte_pedida = None
         if dividida:
             evento = p.objetivo_bloques()[2] == "evento"
-            v.titulo.setText("Propiedades · Acción por evento" if evento else "Propiedades · Acción condicionada")
             v.condicion.titulo.setText("Evento" if evento else "Condición")
+            for c in v.conmutadores.values():
+                c.botones["formula"].setText("Evento" if evento else "Condición")
+                c.botones["formula"].setAccessibleName("Editar evento" if evento else "Editar condición")
+            if pedida in ("formula", "accion"):
+                self._parte = pedida
             p.l_bloques.hide()
+        self._mostrar_parte(dividida)
         if not v.isVisible():
             self.arrastre.movida = False
             self.arrastre.inicio = None
@@ -512,6 +557,44 @@ class GestorFlotantes(QObject):
         if not self._colocar_pendiente:  # (una sola recolocación diferida aunque se refresque varias veces en la misma vuelta)
             self._colocar_pendiente = True
             QTimer.singleShot(0, self, self._colocar_diferido)
+
+    def _mostrar_parte(self, dividida: bool) -> None:
+        """Una acción de dos partes enseña una tarjeta cada vez (la parte elegida) con su conmutador en el lugar del título; con una sola parte,
+        la tarjeta de siempre. Las dos comparten la misma celda: la ventana no cambia de tamaño al conmutar (P-IMP-173)."""
+        v = self.principal
+        v.paneles.setCurrentWidget(v.condicion if dividida and self._parte == "formula" else v.accion)
+        for tarjeta, c in v.conmutadores.items():
+            c.setVisible(dividida)
+            tarjeta.titulo.setVisible(not dividida)
+            c.poner(self._parte)
+        self._avisar_partes(dividida)
+
+    def _avisar_partes(self, dividida: bool) -> None:
+        """El punto de aviso del conmutador en la parte a la que le falta algo (las mismas reglas del borrador: sin variable, sin condición o
+        evento, sin valor, o una fórmula con huecos o con errores)."""
+        v, p, e = self.principal, self.panel, self.w.edicion
+        falta = {"formula": False, "accion": False}
+        if dividida and p.objetivo_bloques() is not None:
+            _, aid, campo = p.objetivo_bloques()
+            texto = p.t_texto.text().strip()
+            from .bloques import faltan
+            falta["formula"] = (not texto or faltan(p.prog.lienzo.arbol) > 0 or e.comprobar(aid, texto) is not None
+                                or (campo == "evento" and not is_event_positive(e.significado(aid, texto))))
+            d = p.accion.datos()
+            falta["accion"] = not d["variable"] or (p.accion.clave_tipo not in CONTINUAS and not d.get("valor", "").strip())
+        for c in v.conmutadores.values():
+            for clave, f in falta.items():
+                c.avisar(clave, f)
+
+    def elegir_parte(self, clave: str) -> None:
+        """El usuario pide otra parte (el conmutador o un clic en la marca o la caja de la vista previa): se enseña su tarjeta y el foco pasa a ella."""
+        if clave == self._parte or not self.abierto or not self.panel._bloques_fuera:
+            return
+        self._parte = clave
+        self._mostrar_parte(True)
+        p = self.panel
+        (p.prog.lienzo if clave == "formula" else p.accion.variable).setFocus(Qt.FocusReason.OtherFocusReason)
+        self.colocar()
 
     def _colocar_diferido(self) -> None:
         self._colocar_pendiente = False
@@ -604,29 +687,16 @@ class GestorFlotantes(QObject):
         hay, el pie (con el comentario de una línea: si crece, el formulador cede el alto)."""
         v = self.principal
         hueco = v.cuerpo.layout().spacing()
-        franja = 0 if self._lateral() else self._franja + hueco
         pie = v.pie.alto_nominal() + hueco if v.pie.isVisibleTo(v) else 0
-        return v.cabecera.height() + 1 + 2 * estilo.E4 + 2 * MARCO + franja + pie
-
-    def _lateral(self) -> bool:
-        """PROVISIONAL (hasta E8-P6): con dos tarjetas a la vez (condicionada y por evento) la vista previa sigue a un lado; en cuanto la
-        condición y la acción se editen una cada vez, también va en franja y esto desaparece."""
-        return self.panel._bloques_fuera
+        return v.cabecera.height() + 1 + 2 * estilo.E4 + 2 * MARCO + self._franja + hueco + pie
 
     def _disposicion(self, alto_franja: int) -> None:
-        """La vista previa arriba, en franja de ancho completo, o (provisional, ver `_lateral`) en columna a la izquierda."""
+        """La vista previa arriba, en franja de ancho completo, y debajo la tarjeta de edición."""
         v = self.principal
-        lateral = self._lateral()
-        v.cuerpo.layout().setDirection(QBoxLayout.Direction.LeftToRight if lateral else QBoxLayout.Direction.TopToBottom)
-        v.cuerpo.layout().setSpacing(estilo.E6 if lateral else estilo.E3)
-        v.lupa.margen = estilo.E3 if lateral else estilo.E2
-        if lateral:
-            v.lupa.setMinimumHeight(0)
-            v.lupa.setMaximumHeight(16777215)
-        else:
-            v.lupa.setMinimumWidth(0)
-            v.lupa.setMaximumWidth(16777215)
-            v.lupa.setFixedHeight(alto_franja)
+        v.lupa.margen = estilo.E2
+        v.lupa.setMinimumWidth(0)
+        v.lupa.setMaximumWidth(16777215)
+        v.lupa.setFixedHeight(alto_franja)
 
     def _marco_tarjeta(self) -> int:
         """Lo que una tarjeta gasta sin contar su contenido: borde, márgenes y título con su hueco."""
@@ -668,10 +738,8 @@ class GestorFlotantes(QObject):
     def _componer(self) -> None:
         """La vista previa cede sitio al formulador; los campos se apilan solo si falta ancho."""
         v, p = self.principal, self.panel
-        if self._lateral():
-            v.lupa.setFixedWidth(min(12 * estilo.E4, max(8 * estilo.E4, v.width() // 6)))
         disponible = v.columna.width() - 4 * estilo.E2
-        vertical = p.pagina == "transicion" or disponible < 36 * estilo.E4
+        vertical = p.pagina in ("transicion", "accion") or disponible < 36 * estilo.E4  # (la acción: «Variable := Valor» y, debajo, el valor)
         direccion = QBoxLayout.Direction.TopToBottom if vertical else QBoxLayout.Direction.LeftToRight
         p.cuerpo.layout().setDirection(direccion)
         p.cuerpo.layout().setSpacing(estilo.E3)
@@ -685,28 +753,6 @@ class GestorFlotantes(QObject):
         p.cuerpo.layout().setAlignment(p.izq, Qt.AlignmentFlag.AlignTop)
         p.cuerpo.layout().setStretch(0, 0)
         p.cuerpo.layout().setStretch(1, 1)
-        for interior in (v.condicion, v.accion):
-            interior.setMinimumHeight(0)
-            interior.setMaximumHeight(16777215)
-        v.columna.layout().setStretch(0, 1)
-        v.columna.layout().setStretch(1, 1)
-
-    def _repartir_paneles(self) -> None:
-        """Reserva contenido real antes de repartir el espacio libre entre los dos editores."""
-        v, p = self.principal, self.panel
-        if not p._bloques_fuera:
-            return
-        superior = v.condicion.alto_necesario()
-        inferior = v.accion.alto_necesario(justo=not p.accion.caja_numerica.isVisibleTo(p))
-        separacion = v.columna.layout().spacing()
-        requerido = superior + inferior + separacion
-        if requerido <= v.columna.height():
-            v.condicion.setMinimumHeight(superior)
-            v.accion.setMinimumHeight(inferior)
-            if not p.accion.caja_numerica.isVisibleTo(p):
-                v.accion.setMaximumHeight(inferior)
-                v.columna.layout().setStretch(1, 0)
-        v.columna.layout().activate()
 
     def _alto_franja(self, area: QRect, origen: QRectF) -> int:
         """El alto de la vista previa: el del elemento ampliado hasta el 125 % más su margen, con un mínimo y un tope proporcional al área."""
@@ -773,14 +819,19 @@ class GestorFlotantes(QObject):
         ]
 
     def _senales_lupa(self) -> None:
+        """Una acción de dos partes: la parte que se edita, resaltada en su color; la otra, en gris (`DESHABILITADO`). Un clic en cualquiera de las
+        dos la elige (`Lupa.mousePressEvent`)."""
         v, p = self.principal, self.panel
-        v.lupa.senales = []
+        v.lupa.senales, v.lupa.partes = [], []
         if p._bloques_fuera:
             caja = self.w.edicion.accion_en_id(p.ident)
             if caja is not None:
-                if caja.get("marca"):
-                    v.lupa.senales.append((QRectF(*caja["marca"]), SENAL_CONDICION))
-                v.lupa.senales.append((QRectF(*caja["rect"]), SENAL_ACCION))
+                marca = QRectF(*caja["marca"]) if caja.get("marca") else None
+                if marca is not None:
+                    v.lupa.senales.append((marca, SENAL_CONDICION if self._parte == "formula" else estilo.DESHABILITADO, False))
+                    v.lupa.partes.append((marca.adjusted(-estilo.E1, -estilo.E1, estilo.E1, estilo.E1), "formula"))
+                v.lupa.senales.append((QRectF(*caja["rect"]), SENAL_ACCION if self._parte == "accion" else estilo.DESHABILITADO, True))
+                v.lupa.partes.append((QRectF(*caja["rect"]), "accion"))
         v.lupa.update()
 
     def colocar(self) -> None:
@@ -806,7 +857,6 @@ class GestorFlotantes(QObject):
             self._componer()
             v.cuerpo.layout().activate()
             v.columna.layout().activate()
-            self._repartir_paneles()
             self.arrastre.limitar()
             self.geometrias = {"principal": QRect(v.geometry())}
             v.lupa.preparar_dibujo(self.w.edicion.M, self.vista.dependencias)

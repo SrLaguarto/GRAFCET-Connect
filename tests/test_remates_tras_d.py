@@ -90,6 +90,8 @@ class RematesTrasD(BaseQt):
     def test_SREM205_fila_valor_centrada_y_salto_al_estrechar(self):
         for flotante in (True,):
             w, e, p, aid = self.preparar("evento", flotante)
+            w.flot.elegir_parte("accion")  # (E8: una parte cada vez)
+            QApplication.processEvents()
             pa = p.accion
             controles = [pa.variable, pa.l_fichas, *pa.fichas.values()]
             centros = [x.mapToGlobal(x.rect().center()).y() for x in controles]
@@ -105,14 +107,14 @@ class RematesTrasD(BaseQt):
             caja.show()
             for _ in range(4):
                 QApplication.processEvents()
+            # (E8: «Variable := Valor» es una sola fila que no salta de línea: aquí se comprueba que sigue siendo una fila)
             fichas, variable = prueba.caja_fichas, prueba.variable
-            self.assertGreaterEqual(fichas.y() - variable.geometry().bottom() - 1, estilo.E2)
-            self.assertEqual(fichas.x(), variable.x())
+            self.assertGreater(fichas.x(), variable.x())
+            self.assertLessEqual(abs(fichas.geometry().center().y() - variable.geometry().center().y()), 1)
 
     def test_SREM206_relleno_interior_de_los_dos_selectores(self):
         w, e, p, aid = self.preparar("evento")
-        opcion, campo = p.accion.variable.rectangulo_texto()
-        self.assertGreaterEqual(campo.left() - opcion.rect.left(), estilo.E2, "el texto, a E2 del borde del desplegable, no del de la caja")
+        # (E8: la caja de la ventana se pinta con `menu_variable.pintar_caja`, sin el rectángulo de texto de la caja de acción)
         with mock.patch.object(SelectorAccion, "showPopup"):
             w.diagrama.abrir_selector((100, 100, 100, 44), [("aux", "aux", True)], "aux", lambda _: None)
             QApplication.processEvents()

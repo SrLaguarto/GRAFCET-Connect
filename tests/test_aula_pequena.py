@@ -627,7 +627,7 @@ class PulidoTrasLaSegundaPrueba(BaseQt):
         self.assertFalse(hasattr(pa, "manual"))
         self.assertEqual(pa.l_valor.text(), "? :=")
         pa.poner_variable("Q")
-        self.assertEqual((pa.l_valor.text(), pa.l_fichas.text()), ("Q :=", "Q :="))
+        self.assertEqual((pa.l_valor.text(), pa.l_fichas.text()), ("Q :=", ":="))  # (E8: la fila es «Variable [Q ▾] :=»)
         pa._desde_bloques("Q + 1")
         self.assertEqual(pa.valor.text(), "Q + 1")
         self.assertIn("Q", pa.valor.html_mostrado())

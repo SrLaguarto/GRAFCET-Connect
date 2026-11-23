@@ -51,6 +51,7 @@ from .edicion import COLOCACIONES, CONTINUAS, Parpadeo
 
 NARANJA = COL["glow"]
 from .edicion import MAX_ETIQUETA_ETAPA  # noqa: E402
+GRIS_HUECOS = f"color: {estilo.TINTA_2}"  # «Falta 1 hueco» / «Faltan N huecos»: gris, no error
 ANCHO_COLUMNA = 230  # la columna estrecha de campos del panel de opciones
 NOMBRES = {"etapa": "Etapa", "transicion": "Transición", "simultaneidad": "Simultaneidad", "accion:continua": "Acción",
            "macroetapa": "Macroetapa", "encapsulante": "Encapsulante", "parcial": "Grafcet parcial", "forzado": "Forzado"}
@@ -82,6 +83,8 @@ AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: a
                      "la etapa hasta ella), soltándola sobre la etapa o pegándola a su fila de acciones; unida y completa, "
                      "mientras esa etapa está activa impone esa situación al parcial. Supr la quita. Hace falta otro parcial "
                      "(un grafcet parcial, un recinto o una macroetapa) al que forzar"}
+TITULOS_ACCION = {"activacion": "Acción al activar", "desactivacion": "Acción al desactivar", "condicionada": "Acción condicionada",
+                  "evento": "Acción por evento", "limitada": "Acción limitada"}  # el título de la ventana de cada tipo de acción (E8)
 NOMBRES.update({"etapa_inicial": "Etapa inicial", "accion:continua": "Continua",
                 "accion:condicionada": "Condicionada", "accion:activacion": "Al activar",
                 "accion:desactivacion": "Al desactivar", "accion:evento": "Por evento"})
@@ -359,6 +362,7 @@ class PanelPropiedades(QWidget):
         self.cabecera.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 4)
         for prog in (self.prog, self.accion.prog):
             prog.escalar()
+        self.accion.escalar()
         for ficha in (self.ficha_izq, self.ficha_etapa):
             ficha.escalar()
 
@@ -680,9 +684,6 @@ class PanelPropiedades(QWidget):
         w = QWidget()
         self.t_etiqueta = QLineEdit()
         self.t_etiqueta.editingFinished.connect(lambda: self._renombrar(self.t_etiqueta))
-        self.t_mostrar = CasillaPropiedades("Mostrar etiqueta")
-        self.t_mostrar.setToolTip("Dibujar la etiqueta (t1) junto a la transición")
-        self.t_mostrar.clicked.connect(lambda on: self.e.mostrar_etiqueta(self.ident, on))
         self.t_comentario = CampoComentario()  # una línea guardada; se ve en varias si no cabe, crece y se estira
         self.t_comentario.setPlaceholderText("sin comentario")
         self.t_comentario.setToolTip("Comentario de la transición: se dibuja entre comillas a la derecha de su receptividad "
@@ -830,11 +831,12 @@ class PanelPropiedades(QWidget):
         self.vacio.setVisible(kind is None)
         self.pagina = kind or "vacio"  # qué opciones se muestran: etapa, transicion, accion, enlace, barra o vacio
         # el título dice solo el tipo («Propiedades · Transición»): el nombre ya se ve en el dibujo y se edita en el campo «Etiqueta»
+        titulo_accion = TITULOS_ACCION.get(e.datos_accion(aid)["tipo"], "Acción") if e is not None and kind == "accion" else "Acción"
         titulo = {"etapa": "Etapa", "transicion": "Transición", "enlace": "Enlace" if vivo else "", "barra": "Barra" if vivo else "",
                   "macro": "Macroetapa",
                   "orden": "Orden de forzado" + (" sin completar" if e.es_orden_suelta(vivo) else ""),
                   "marco": "Parcial" if vivo else "",
-                  "accion": "Acción",
+                  "accion": titulo_accion,
                   None: "" if len(sel) < 2 else f"{len(sel)} elementos seleccionados"}[kind] if e is not None else ""
         self.titulo.setText(f"Propiedades · {titulo}" if titulo else "Propiedades")
         self.izq.setCurrentIndex({None: 0, "etapa": 1, "transicion": 2, "accion": 3, "enlace": 0, "barra": 0, "macro": 4,
@@ -900,7 +902,6 @@ class PanelPropiedades(QWidget):
             t = next(t for t in e.M["transitions"] if t["id"] == vivo)
             self._poner(self.t_etiqueta, t["label"])
             self._poner(self.t_comentario, e.comentario(vivo))
-            self.t_mostrar.setChecked(t.get("showLabel", True))
             self.der.setCurrentIndex(2)
         elif kind == "barra":
             b = next(b for b in e.M["bars"] if b["id"] == vivo)
@@ -968,7 +969,7 @@ class PanelPropiedades(QWidget):
     # -- receptividad ------------------------------------------------------------------------------
     def _previsualizar(self) -> None:
         self._previsualizar_texto()
-        colores_error = (f"color: {COL['err']}", f"color: {NARANJA}")
+        colores_error = (f"color: {COL['err']}", f"color: {NARANJA}", GRIS_HUECOS)
         malo = self.t_estado.styleSheet() in colores_error and bool(self.t_estado.text())
         if malo != self.t_estado.isVisibleTo(self.caja_formula):
             self.t_estado.setVisible(malo)
@@ -981,6 +982,8 @@ class PanelPropiedades(QWidget):
         ident = o[1]
         tr = o[0] == "transicion"
         cosa = "Receptividad" if tr else "Condición" if o[2] == "condicion" else "Evento"
+        huecos = self.prog.faltan_huecos()
+        self.prog.marcar_huecos(huecos > 0)  # los huecos vacíos se remarcan en el área
         faltan = e.sin_declarar(ident, texto) if texto else []
         pintado = html.escape(texto)
         for n in faltan:  # las variables que no existen, en naranja
@@ -989,7 +992,10 @@ class PanelPropiedades(QWidget):
         self.t_vista.setText(pintado or "<i>vacía</i>")
         self.t_crear.setVisible(bool(faltan))
         self.t_dibujo.setText("")
-        if not texto:
+        if huecos:  # a medias: no es un error, es lo que falta por rellenar (en gris; el rojo queda para los errores de verdad)
+            self.t_estado.setText("Falta 1 hueco" if huecos == 1 else f"Faltan {huecos} huecos")
+            self.t_estado.setStyleSheet(GRIS_HUECOS)
+        elif not texto:
             self.t_estado.setText("Vacía: la transición no compila." if tr else
                                   f"Vacía: sin {'condición' if o[2] == 'condicion' else 'evento'}, la acción no se simula.")
             self.t_estado.setStyleSheet(f"color: {COL['err'] if tr else COL['muted']}")

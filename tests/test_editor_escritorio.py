@@ -728,12 +728,14 @@ class Interfaz(unittest.TestCase):
 
         def textos():
             return [it.toPlainText() for it in w.diagrama.scene().items() if hasattr(it, "toPlainText")]
-        self.assertFalse(p.t_mostrar.isChecked())
+        w._sincronizar_menu_dibujo()  # (E8: la casilla «Mostrar etiqueta» pasó a Ver > Etiquetas de transiciones)
+        self.assertFalse(w.a_ver_etiquetas.isChecked())
         self.assertNotIn("(t2)", textos())
         self.assertNotIn("(t1)", textos())
-        p.t_mostrar.click()  # marca explícitamente
+        w.a_ver_etiquetas.trigger()  # marca explícitamente
         self.assertIn("(t2)", textos())
-        p.t_mostrar.click()  # desmarca
+        w._sincronizar_menu_dibujo()
+        w.a_ver_etiquetas.trigger()  # desmarca
         self.assertNotIn("(t2)", textos())
         self.assertNotIn("(t1)", textos())
         with mock.patch("escritorio.ventana.QFileDialog.getSaveFileName", return_value=(str(Path(self.tmp.name)/"guardado.grafnet"),"")):
@@ -2091,7 +2093,7 @@ class Interfaz(unittest.TestCase):
         for campo in (p.t_texto, p.t_vista, p.t_dibujo, p.t_crear, p.t_estado):
             self.assertTrue(derecha.isAncestorOf(campo), "están a su derecha")
         pie = w.flot.principal.pie  # E8: etiqueta, «Mostrar etiqueta» y comentario ya no van en la columna del panel, sino al pie de la ventana
-        self.assertTrue(all(pie.isAncestorOf(campo) for campo in (p.t_etiqueta, p.t_mostrar, p.t_comentario)))
+        self.assertTrue(all(pie.isAncestorOf(campo) for campo in (p.t_etiqueta, p.t_comentario)))
         self.assertTrue(w.flot.principal.isAncestorOf(derecha))
         self.assertEqual(sorted(x.text() for x in pie.findChildren(QLabel) if x.text() in ("Etiqueta", "Texto", "Escrito", "Se dibuja")),
                          ["Etiqueta"])
@@ -4555,7 +4557,10 @@ class Interfaz(unittest.TestCase):
         self.assertIsNone(e.poner_accion(ids["0"], {"tipo": "evento", "variable": "CT", "valor": "CT + 1", "evento": "↑I02"}))
         w.editar_accion(ids["0"], e.acciones(ids["0"])[0]["id"])
         QApplication.processEvents()
-        self.assertTrue(p.accion.caja_valor.isVisible() and p.pagina_bloques.isVisible())
+        self.assertTrue(p.pagina_bloques.isVisible() and not p.accion.caja_valor.isVisible())  # (E8: una parte cada vez; abre por el evento)
+        w.flot.elegir_parte("accion")
+        QApplication.processEvents()
+        self.assertTrue(p.accion.caja_valor.isVisible() and not p.pagina_bloques.isVisible())
         self.assertLessEqual(p.minimumSizeHint().width(), w.flot.principal.width())
 
     def _con_accion_por_evento(self):

@@ -99,7 +99,7 @@ class Acabados(BaseQt):
         m=M().var("y","output").var("z","output").step("1",True).cont("1","y")
         e=Edicion.desde(m.doc,{"1":(100,100)},"Selector");aid=m.doc["actions"][0]["id"]
         p=PanelAccion();self.addCleanup(p.deleteLater);self.addCleanup(p.hide);p.mostrar(e,aid);p.resize(330,250);p.show();QTest.qWait(20)
-        c=p.variable;self.assertGreaterEqual(c.height(),62)
+        c=p.variable;self.assertGreaterEqual(c.height(),20)  # E8: el desplegable deja de ser caja de acción (62 px): altura de un control
         pm=QPixmap(c.size());QWidget.render(c,pm)
         QTest.mouseClick(c,Qt.MouseButton.LeftButton);QTest.qWait(20)
         indice=c.model().index(c.findData("z"),0)

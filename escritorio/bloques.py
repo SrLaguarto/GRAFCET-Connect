@@ -696,6 +696,7 @@ class Motor:
         self.fuente = fuente
         self.vars: dict[str, tuple[str, str]] = {}
         self.etapas: list[str] = []
+        self.resaltar_huecos = False  # los huecos vacíos de una fórmula a medias se remarcan (en gris azulado, no en rojo)
         # La letra de las fichas lleva su familia explícita: con `QFont()` (la de la plataforma) se medía con una y se pintaba con
         # otra (en el pintor, el dispositivo le pone la de la hoja de estilo) y el texto se salía de la ficha: «ʼin», «narch».
         self.f = QFont(estilo.FUENTE)
@@ -1151,9 +1152,10 @@ class Motor:
     def pintar(self, p: QPainter, c: _Caja, ox: float, oy: float, padre: QColor | None = None,
                objetivo: tuple | None = None) -> None:
         r = QRectF(ox, oy, c.w, c.h)
-        if c.nodo is None:  # un hueco: caja hundida y punteada
-            p.setPen(QPen(QColor(estilo.BORDE_CONTROL), 1.2, Qt.PenStyle.DashLine))
-            p.setBrush(QColor(estilo.SUPERFICIE))
+        if c.nodo is None:  # un hueco: caja hundida y punteada (resaltado, con el acento: «falta rellenarlo»)
+            p.setPen(QPen(QColor(estilo.ACENTO if self.resaltar_huecos else estilo.BORDE_CONTROL), 1.8 if self.resaltar_huecos else 1.2,
+                          Qt.PenStyle.DashLine))
+            p.setBrush(QColor(estilo.ACENTO_SUAVE if self.resaltar_huecos else estilo.SUPERFICIE))
             p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), R_PIEZA, R_PIEZA)
         else:
             fondo = self._pintar_caja(p, c, r, padre)
@@ -1776,6 +1778,12 @@ class AreaBloques(_Superficie):
     def arbol(self) -> dict[str, Any] | None:
         return self._raices[0]
 
+    def marcar_huecos(self, resaltar: bool) -> None:
+        """Remarca (o no) los huecos vacíos del área: la fórmula está a medias y se avisa de lo que falta."""
+        if resaltar != self.motor.resaltar_huecos:
+            self.motor.resaltar_huecos = resaltar
+            self.update()
+
     def poner_arbol(self, arbol: dict[str, Any] | None) -> None:
         self._raices = [copy.deepcopy(arbol)]
         self._bloque_sel = None
@@ -2326,8 +2334,8 @@ class Programador(QWidget):
         self.al_rehacer: Callable[[], Any] | None = None
         self._pila: list[Any] = []
         self._rehecho: list[Any] = []
-        # El catálogo ocupa todo el alto a la izquierda (el alto de la ventana de Propiedades no sobra: así se ven al menos seis fichas); a
-        # su derecha, la banda de categorías (con las herramientas Copiar fórmula, Pegar y Limpiar), el área y el aviso
+        # Arriba, la banda de categorías a todo el ancho; debajo, el catálogo a la izquierda (al menos seis fichas visibles) y, a su derecha,
+        # el área y el aviso
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
         raiz.setSpacing(5)
@@ -2644,6 +2652,13 @@ class Programador(QWidget):
             return
         self._avisar("")
         self._fijar_arbol(nuevo_)
+
+    def faltan_huecos(self) -> int:
+        """Cuántos huecos le faltan a la fórmula del área (0 sin fórmula)."""
+        return faltan(self.lienzo.arbol)
+
+    def marcar_huecos(self, resaltar: bool) -> None:
+        self.lienzo.marcar_huecos(resaltar)
 
     def _fijar_arbol(self, arbol: dict[str, Any] | None) -> None:
         self.lienzo.poner_arbol(arbol)

@@ -23,16 +23,17 @@ from __future__ import annotations
 from html import escape as _escapar
 from typing import Any, Callable
 
-from PySide6.QtCore import QEvent, Qt, QRect, QRectF
-from PySide6.QtGui import QColor, QPainter, QPen, QFont, QTextDocument
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtGui import QPainter, QTextDocument
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QPushButton, QVBoxLayout, QWidget, QStylePainter, QStyleOptionComboBox, QStyleOptionFrame, QStyle)
+                               QPushButton, QVBoxLayout, QWidget, QStyleOptionFrame, QStyle)
 
 from . import estilo
-from .bloques import COLORES, Programador, sin_comillas
+from .bloques import Programador, sin_comillas
 from .diagrama import COL, _html
 from .edicion import CONTINUAS, DISPARADOR, Edicion, Parpadeo
 from .variables import nombre_tipo
+from .menu_variable import ROL_PAPEL, ROL_TIPO, ComboMenu, ancho_menu, pintar_caja, tipo_a_mostrar
 from .paneles import EtiquetaElidida
 from .remates_propiedades import FilaValor
 
@@ -40,12 +41,16 @@ ANCHO_MAX_VARIABLE = 260
 
 SIN_VARIABLES = "(sin variables: créelas en la tabla de variables)"  # la lista de variables, si no hay ninguna que valga
 TIPO_CORTO = {"bool": "Bool", "int": "Ent", "decimal": "Dec", "duration": "Dur"}  # el tipo en la lista de variables de la acción
-ALTO_SELECTOR = 62  # alto del selector de variable (dibujado como una caja de acción); nada debe dejarlo por debajo
-ESTILO_FICHA = (f"QPushButton {{ background: {COLORES['comparacion']}; color: white; font-weight: 600; border: 2px solid "
-                f"transparent; border-radius: {estilo.R_M}px; padding: 4px 24px; }}"
-                f"QPushButton:checked {{ border: 3px solid {estilo.AVISO_BORDE}; }}"
+# El «1» y el «0» del valor de una memorizada (maqueta v3): dos botones pegados; el elegido, relleno del color de la acción (sin borde de aviso)
+ESTILO_FICHA = (f"QPushButton {{ background: {estilo.SUPERFICIE}; color: {estilo.TINTA}; font-weight: 600; border: 1px solid "
+                f"{estilo.BORDE_CONTROL}; padding: 0 {estilo.E3}px; min-width: {2 * estilo.E4}px; }}"
+                f"QPushButton[lado=\"izq\"] {{ border-top-left-radius: {estilo.R_S}px; border-bottom-left-radius: {estilo.R_S}px; "
+                f"border-top-right-radius: 0; border-bottom-right-radius: 0; }}"
+                f"QPushButton[lado=\"der\"] {{ border-top-right-radius: {estilo.R_S}px; border-bottom-right-radius: {estilo.R_S}px; "
+                f"border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 0; }}"
+                f"QPushButton:checked {{ background: {estilo.SENAL_ACCION}; color: white; border-color: {estilo.SENAL_ACCION}; }}"
                 f"QPushButton:disabled {{ background: {estilo.FONDO}; color: {estilo.DESHABILITADO}; "
-                f"border: 2px solid {estilo.BORDE}; }}")
+                f"border-color: {estilo.BORDE}; }}")
 
 
 
@@ -109,9 +114,10 @@ class CajaFormula(QLineEdit):
         doc.drawContents(p)
 
 
-class _ComboVariable(QComboBox):
+class _ComboVariable(ComboMenu):
     """Lista de variables: su texto (`currentText`) es el nombre de la variable elegida, no el de la fila; `setCurrentText`
-    elige una variable por su nombre."""
+    elige una variable por su nombre. Caja y menú son los comunes (`menu_variable`): barra del color del origen, nombre y flecha;
+    el menú agrupa en Salidas y Memorias."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -123,58 +129,26 @@ class _ComboVariable(QComboBox):
         if evento.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange) and self.count():
             self.ajustar_ancho()
 
-    def rectangulo_texto(self):
-        opcion = QStyleOptionComboBox()
-        self.initStyleOption(opcion)
-        opcion.rect = QRect(26 + estilo.E2, 11, max(20, self.width() - 34 - estilo.E2), self.height() - 22)
-        opcion.frame = False
-        campo = self.style().subControlRect(
-            QStyle.ComplexControl.CC_ComboBox, opcion, QStyle.SubControl.SC_ComboBoxEditField, self)
-        campo.setLeft(max(campo.left(), opcion.rect.left() + estilo.E2))  # (el texto, a E2 del borde del propio desplegable)
-        return opcion, campo
-
     def paintEvent(self, _evento):
-        p = QStylePainter(self)
-        p.setRenderHint(p.RenderHint.Antialiasing)
-        caja = QRectF(26, 7, max(40, self.width() - 28), self.height() - 14)
-        p.setPen(QPen(QColor(COL["text"]), 1.6))
-        p.setBrush(QColor(COL["glow"] if self.property("parpadeando") else COL["panel"]))
-        p.drawLine(0, self.height() // 2, 26, self.height() // 2)
-        p.drawRect(caja)
-        opcion, campo = self.rectangulo_texto()
-        texto = self.currentData() or "?"
-        opcion.currentText = ""
-        p.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opcion)
-        p.setFont(self.font())
-        p.setPen(QColor(estilo.TINTA))
-        corto = self.fontMetrics().elidedText(texto, Qt.TextElideMode.ElideRight, campo.width())
-        p.drawText(campo, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, corto)
-        if corto != texto:
-            self.setToolTip(texto)
+        i = self.currentIndex()
+        papel = (self.itemData(i, ROL_PAPEL) or "") if i >= 0 else ""
+        pintar_caja(self, self.currentText(), papel, bool(self.property("parpadeando")), "?")
 
     def ancho_lista(self) -> int:
         """La lista conserva el ancho de la caja si cabe, o crece para leer las opciones enteras."""
-        vista = self.view()
-        texto = max((vista.fontMetrics().horizontalAdvance(self.itemText(i)) for i in range(self.count())), default=0)
-        extra = 2 * estilo.E3 + vista.verticalScrollBar().sizeHint().width() + 2 * vista.frameWidth()
-        return max(self.width(), texto + extra)
+        return ancho_menu(self)
 
     def ajustar_ancho(self) -> None:
         """Reserva el nombre, el tipo de la lista, la flecha y los márgenes; la caja tiene tope de 260 px."""
-        texto = max((self.view().fontMetrics().horizontalAdvance(self.itemText(i))
+        texto = max((self.fontMetrics().horizontalAdvance(self.itemText(i))
                      for i in range(self.count())), default=0)
         extra_lista = 2 * estilo.E3 + self.view().verticalScrollBar().sizeHint().width() + 2 * self.view().frameWidth()
         nombre = max((self.fontMetrics().horizontalAdvance(self.itemData(i))
                       for i in range(self.count())
                       if isinstance(self.itemData(i), str) and self.itemData(i)), default=0)
-        extra_caja = 26 + 4 * estilo.E2 + estilo.ALTO_CONTROL
+        extra_caja = 6 * estilo.E2 + estilo.ALTO_CONTROL
         self.setFixedWidth(min(ANCHO_MAX_VARIABLE, max(120, texto + extra_lista, nombre + extra_caja)))
         self.updateGeometry()
-
-    def showPopup(self) -> None:  # noqa: N802
-        self.view().setMinimumWidth(self.ancho_lista())
-        self.view().doItemsLayout()
-        super().showPopup()
 
     def currentText(self) -> str:  # noqa: N802
         d = self.currentData()
@@ -216,21 +190,23 @@ class PanelAccion(QWidget):
         f.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         f.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         lay.addLayout(f)
+        # Una sola fila (maqueta v3): «Variable [variable ▾] := [1 | 0]»; con una variable numérica, el valor se arma debajo, en la misma tarjeta
         self.variable = _ComboVariable()
-        self.variable.setMinimumHeight(ALTO_SELECTOR)
         self.variable.setObjectName("selectorVariableAccion")
-        # Su hoja de estilo no se toca más (el parpadeo lo pinta `paintEvent`): sustituirla deja el min-height:18px
-        # general
-        self.variable.setStyleSheet(f"QComboBox#selectorVariableAccion {{ min-height:{ALTO_SELECTOR}px; padding:0; }}")
         self.variable.setAccessibleName("Variable de la acción")
         self.variable.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.variable.setMinimumContentsLength(8)
         self.variable.al_poner = self.poner_variable
         self.variable.activated.connect(self._elegir_variable)
         self.fila_variable = QWidget()
-        self.disposicion_variable = FilaValor(self.fila_variable)
+        self.disposicion_variable = QHBoxLayout(self.fila_variable)
+        self.disposicion_variable.setContentsMargins(0, 0, 0, 0)
+        self.disposicion_variable.setSpacing(estilo.E2)
+        self.l_variable = QLabel("Variable")
+        self.l_variable.setStyleSheet(f"color: {estilo.TINTA_2}; background: transparent")
+        self.disposicion_variable.addWidget(self.l_variable)
         self.disposicion_variable.addWidget(self.variable)
-        f.addRow("Variable", self.fila_variable)
+        f.addRow(self.fila_variable)
         self.l_limite = QLabel("Límite de tiempo (3s, 500ms…)")
         self.limite = QLineEdit()
         self.limite.setPlaceholderText("3s")
@@ -244,24 +220,27 @@ class PanelAccion(QWidget):
         self.caja_valor = QWidget()
         vl = QVBoxLayout(self.caja_valor)
         vl.setContentsMargins(0, 0, 0, 0)
+        self.l_fichas = QLabel(":=")  # el «:=» de la fila; «Q :=» (la variable de la acción) queda en `l_valor`
+        self.l_fichas.setStyleSheet(f"color: {estilo.TINTA}; font-weight: 600; background: transparent")
+        self.disposicion_variable.addWidget(self.l_fichas)
         self.caja_fichas = QWidget()
         fl = QHBoxLayout(self.caja_fichas)
         fl.setContentsMargins(0, 0, 0, 0)
-        fl.setSpacing(estilo.E2)
-        self.l_fichas = EtiquetaElidida("? :=", ancho_maximo=230)  # «Q :=»: la variable de la acción
-        fl.addWidget(self.l_fichas)
+        fl.setSpacing(0)
         self.grupo_fichas = QButtonGroup(self)
         self.fichas: dict[str, QPushButton] = {}
-        for v in ("1", "0"):
+        for v, lado in (("1", "izq"), ("0", "der")):
             b = QPushButton(v)
             b.setCheckable(True)
+            b.setProperty("lado", lado)
             b.setStyleSheet(ESTILO_FICHA)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.clicked.connect(lambda _=False, v=v: self._poner_valor(v))
             self.grupo_fichas.addButton(b)
             self.fichas[v] = b
             fl.addWidget(b)
-        fl.addStretch(1)
         self.disposicion_variable.addWidget(self.caja_fichas)
+        self.disposicion_variable.addStretch(1)
         self.caja_numerica = QWidget()
         nl = QVBoxLayout(self.caja_numerica)
         nl.setContentsMargins(0, 0, 0, 0)
@@ -271,16 +250,21 @@ class PanelAccion(QWidget):
         self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()  # Ctrl+Z deshace la operación
         self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()
         nl.addWidget(self.prog, 1)
-        fila = QHBoxLayout()
-        self.valor = CajaFormula()  # el valor, con la notación del dibujo; se arma con los bloques
+        # El texto del valor lo guarda este campo (oculto: el valor se ve en el formulador y en el dibujo, no en un segundo cuadro)
+        self.valor = CajaFormula()
         self.valor.formato = self._formato_valor
-        self.valor.setPlaceholderText("el valor se arma con bloques (CT + 1, 5…)")
         self.valor.textChanged.connect(self._valor_cambiado)
-        self.l_valor = QLabel("? :=")  # «Q :=», sin paréntesis; «? :=» mientras no hay variable
-        fila.addWidget(self.l_valor)
-        fila.addWidget(self.valor, 1)
-        nl.addLayout(fila)
+        self.valor.setParent(self.caja_numerica)
+        self.valor.hide()
+        self.l_valor = QLabel("? :=", self.caja_numerica)  # «Q :=», sin paréntesis; «? :=» mientras no hay variable (oculta)
+        self.l_valor.hide()
         vl.addWidget(self.caja_numerica, 1)
+
+    def escalar(self) -> None:
+        """La caja de la variable y los botones 1 y 0 miden lo que un control de la escala activa."""
+        self.variable.setFixedHeight(estilo.ALTO_CONTROL)
+        for b in self.fichas.values():
+            b.setFixedHeight(estilo.ALTO_CONTROL)
 
     # -- rellenar ----------------------------------------------------------------------------------
     def mostrar(self, e: Any, aid: str) -> None:
@@ -345,6 +329,9 @@ class PanelAccion(QWidget):
         c.clear()
         for texto, dato, habilitado in opciones_variable(v, ofrecidas, self._elegida):
             c.addItem(texto, dato)
+            if dato in v:  # el origen (la barra) y el tipo corto donde varía (el menú común, `menu_variable`)
+                c.setItemData(c.count() - 1, v[dato][0], ROL_PAPEL)
+                c.setItemData(c.count() - 1, tipo_a_mostrar(TIPO_CORTO.get(v[dato][1]) or nombre_tipo({"kind": v[dato][1]})), ROL_TIPO)
             if not habilitado:
                 c.model().item(c.count() - 1).setEnabled(False)
         c.setCurrentIndex(max(0, c.findData(self._elegida)))
@@ -362,9 +349,10 @@ class PanelAccion(QWidget):
         for w in (self.l_limite, self.limite):
             w.setVisible(clave == "limitada")
         self._rellenar_variables()
-        for etiqueta in (self.l_valor, self.l_fichas):
-            etiqueta.setText(f"{self._elegida or '?'} :=")
+        self.l_valor.setText(f"{self._elegida or '?'} :=")
+        self.l_fichas.setVisible(not continua)
         self.caja_valor.setVisible(not continua)
+        self.escalar()
         booleana = self._tipo_variable() in ("", "bool")
         for boton in self.fichas.values():
             boton.setEnabled(bool(self._elegida))
@@ -505,6 +493,6 @@ class PanelAccion(QWidget):
         activos = self.parpadeo.activos()
         for clave, w in (("variable", self.variable), ("valor", self.valor), ("limite", self.limite)):
             w.setProperty("parpadeando", clave in activos)
-            if w is not self.variable:  # el selector se pinta solo con la propiedad: ver ALTO_SELECTOR
+            if w is not self.variable:  # el selector se pinta solo con la propiedad `parpadeando` (`menu_variable.pintar_caja`)
                 w.setStyleSheet(f"background: {COL['glow']}" if clave in activos else "")
             w.update()

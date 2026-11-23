@@ -80,6 +80,8 @@ class Propiedades111(unittest.TestCase):
         """REQ-EDT-02: sin variable, 1/0 inertes; numérica solo después de elegirla, abajo y flotante."""
         for flotante in (True,):
             c, p, v = self.contexto()
+            c.w.flot.elegir_parte("accion")  # (E8: la acción por evento abre por el evento; el valor está en «Acción»)
+            HC._bombear(4)
             if not flotante:
                 HC._bombear(4)
                 p = c.w.props
@@ -91,7 +93,8 @@ class Propiedades111(unittest.TestCase):
             a = p.accion
             self.assertTrue(a.caja_fichas.isVisible())
             self.assertFalse(a.caja_numerica.isVisible())
-            self.assertEqual(a.l_fichas.text(), "? :=")
+            self.assertEqual(a.l_fichas.text(), ":=")
+            self.assertEqual(a.l_valor.text(), "? :=")  # (E8: la fila es «Variable [▾] :=»)
             for boton in a.fichas.values():
                 self.assertFalse(boton.isEnabled())
                 self.assertIn("primero", boton.toolTip())
@@ -117,8 +120,7 @@ class Propiedades111(unittest.TestCase):
         HC._bombear(4)
         self.assertEqual(combo.view().window().width(), combo.width())
         combo.hidePopup()
-        _, rect = combo.rectangulo_texto()
-        self.assertLessEqual(combo.fontMetrics().horizontalAdvance("Cinta6M1"), rect.width())
+        self.assertLessEqual(combo.fontMetrics().horizontalAdvance("Cinta6M1"), combo.width() - 2 * estilo.E4)  # (E8: la caja se pinta con `pintar_caja`)
         anterior = combo.width()
         combo.setStyleSheet(combo.styleSheet() +
                            f"QComboBox#selectorVariableAccion {{ font-size: {estilo.T_BASE + 3}px; }}")
@@ -131,8 +133,7 @@ class Propiedades111(unittest.TestCase):
         self.assertEqual(combo.width(), ANCHO_MAX_VARIABLE)
         combo.grab()
         self.assertEqual(combo.toolTip(), largo)
-        _, rect = combo.rectangulo_texto()
-        texto = combo.fontMetrics().elidedText(largo, Qt.TextElideMode.ElideRight, rect.width())
+        texto = combo.fontMetrics().elidedText(largo, Qt.TextElideMode.ElideRight, combo.width() - 4 * estilo.E4)
         self.assertIn("…", texto)
         self.assertGreater(combo.ancho_lista(), combo.width())
 
@@ -191,10 +192,13 @@ class Propiedades111(unittest.TestCase):
         for tipo in ("condicionada", "evento"):
             c, p, v = self.contexto(tipo)
             self.assertFalse(v.findChildren(QWidget, "enlacesFlotantes"))
-            self.assertEqual([color for _, color in v.lupa.senales], [SENAL_CONDICION, SENAL_ACCION])
+            self.assertEqual([color for _, color, _ in v.lupa.senales], [SENAL_CONDICION, estilo.DESHABILITADO])  # (E8: la parte que se edita, en su color; la otra, en gris)
             self.assertGreaterEqual(ALFA_RESALTADO, .15)
             self.assertLessEqual(ALFA_RESALTADO, .20)
-            for tarjeta, color in ((v.condicion, SENAL_CONDICION), (v.accion, SENAL_ACCION)):
+            for parte, tarjeta, color in (("formula", v.condicion, SENAL_CONDICION), ("accion", v.accion, SENAL_ACCION)):
+                c.w.flot.elegir_parte(parte)  # (E8: una tarjeta cada vez)
+                HC._bombear(4)
+                self.assertTrue(tarjeta.isVisible())
                 self.assertEqual(tarjeta.titulo.senal, color)
                 imagen = tarjeta.grab().toImage()
                 self.assertEqual(imagen.pixelColor(2, tarjeta.height() // 2).name(), color)

@@ -264,7 +264,10 @@ class _Modelo:
     def poner_transicion(self, p: QPointF, pedir: bool = False) -> str:
         """Una transición sin receptividad (pendiente: D-EXP-PENDIENTE) en el punto dado, en el parcial de su marco. La
         receptividad se escribe después, en el panel de propiedades o con doble clic."""
-        tid, _ = self.ed.add_transition(self.parcial_en(p), "", at=self._modelo(p), label=self.ed.next_label("transition"))
+        visibles = self.etiquetas_visibles()
+        with self.ed.group("crear transición"):
+            tid, _ = self.ed.add_transition(self.parcial_en(p), "", at=self._modelo(p), label=self.ed.next_label("transition"))
+            self.etiqueta_como_las_demas(tid, visibles, self._modelo(p))
         self.sel = [tid]
         self.cambia()
         if pedir:
@@ -336,10 +339,30 @@ class _Modelo:
         self.ed.set_initial(sid, inicial)
         self.cambia()
 
-    def mostrar_etiqueta(self, tid: str, visible: bool) -> None:
-        x, y = posiciones(self.M)[tid][0] - SX, posiciones(self.M)[tid][1]
-        self.ed.set_label_visible(tid, visible, (x, y))
+    def etiquetas_visibles(self) -> bool:
+        """El estado de «Etiquetas de transiciones» (menú Ver), derivado del dibujo: marcado si hay transiciones y todas dibujan su etiqueta."""
+        ocultas = self.ed.hidden_labels()
+        ids = [t["id"] for t in self.M["transitions"]]
+        return bool(ids) and not any(i in ocultas for i in ids)
+
+    def poner_etiquetas(self, visible: bool) -> None:
+        """«Etiquetas de transiciones»: muestra u oculta la etiqueta de todas las transiciones, como una sola operación de deshacer. Es solo
+        dibujo (`labelVisible` de la presentación): el modelo no cambia."""
+        pos = posiciones(self.M)
+        ocultas = self.ed.hidden_labels()
+        cambiar = [t["id"] for t in self.M["transitions"] if (t["id"] in ocultas) == visible and t["id"] in pos]
+        if not cambiar:
+            return
+        with self.ed.group("mostrar las etiquetas de las transiciones" if visible else "ocultar las etiquetas de las transiciones"):
+            for tid in cambiar:
+                self.ed.set_label_visible(tid, visible, (pos[tid][0] - SX, pos[tid][1]))
         self.cambia()
+
+    def etiqueta_como_las_demas(self, tid: str, visibles: bool, at: tuple[float, float]) -> None:
+        """La transición nueva nace como estén las demás: con la etiqueta a la vista si todas las demás la tienen (`visibles`, calculado antes de
+        crearla) y oculta si no hay otras o alguna la oculta. Se llama dentro de la misma operación que la crea."""
+        if visibles:
+            self.ed.set_label_visible(tid, True, at)
 
     def proyecto(self) -> Project:
         project = copy.deepcopy(self.proyecto_base) if self.proyecto_base else new_project(self.ed.model["id"], self.titulo)

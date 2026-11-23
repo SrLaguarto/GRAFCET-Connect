@@ -193,10 +193,12 @@ class _Enlaces:
         while self._ocupado(x, y):
             y += paso
         ed, parcial = self.ed, self.parcial_de(base)  # lo que nace de un elemento es de su parcial
+        visibles = self.etiquetas_visibles()
         with ed.group("abrir rama"):
             if es_paso:
                 nuevo, _ = ed.add_transition(parcial, "", [base] if abajo else [], [] if abajo else [base], at=(x, y),
                                              label=ed.next_label("transition"))
+                self.etiqueta_como_las_demas(nuevo, visibles, (x, y))
             else:
                 nuevo = ed.add_step(parcial, ed.next_label("step"), at=(x, y))
                 ed.connect(base, nuevo) if abajo else ed.connect(nuevo, base)
@@ -228,8 +230,11 @@ class _Enlaces:
         if pos[fin][1] - pos[ini][1] < 2 * DY or self._ocupado(tx, ty):
             self.saltar(ini, fin)
             return
-        tid, _ = self.ed.add_transition(self.parcial_de(ini), "", [ini], [fin], at=(tx, ty),
-                                        label=self.ed.next_label("transition"))
+        visibles = self.etiquetas_visibles()
+        with self.ed.group("crear transición"):
+            tid, _ = self.ed.add_transition(self.parcial_de(ini), "", [ini], [fin], at=(tx, ty),
+                                            label=self.ed.next_label("transition"))
+            self.etiqueta_como_las_demas(tid, visibles, (tx, ty))
         self.sel = [tid]
         self.informar("Transición nueva entre las dos etapas: escriba su receptividad en las propiedades (doble clic en ella).")
         self.cambia()
@@ -243,8 +248,11 @@ class _Enlaces:
         y = ajustar(pos[origen][1] + DY)
         while (x, y) in ocupados:
             x -= 160
-        tid, _ = self.ed.add_transition(self.parcial_de(origen), "", [origen], [destino], at=(x, y),
-                                        label=self.ed.next_label("transition"))
+        visibles = self.etiquetas_visibles()
+        with self.ed.group("crear transición"):
+            tid, _ = self.ed.add_transition(self.parcial_de(origen), "", [origen], [destino], at=(x, y),
+                                            label=self.ed.next_label("transition"))
+            self.etiqueta_como_las_demas(tid, visibles, (x, y))
         self.sel = [tid]
         tipo = "Repetición de secuencia" if pos[destino][1] <= pos[origen][1] else "Salto de secuencia"
         self.informar(tipo + ": escriba su receptividad en las propiedades (doble clic en ella).")
@@ -400,8 +408,10 @@ class _Enlaces:
         x, y = posiciones(self.M)[ident][0] - SX, posiciones(self.M)[ident][1]
         ed, parcial = self.ed, self.parcial_de(ident)  # lo de debajo es del parcial de lo seleccionado
         if ident in self._pasos():
+            visibles = self.etiquetas_visibles()
             with ed.group("añadir debajo"):
                 tid, _ = ed.add_transition(parcial, "", [ident], at=(x, y + DY), label=ed.next_label("transition"))
+                self.etiqueta_como_las_demas(tid, visibles, (x, y + DY))
                 nid = ed.add_step(parcial, ed.next_label("step"), at=(x, y + 2 * DY))
                 ed.connect(tid, nid)
             self.sel = [nid]

@@ -55,17 +55,11 @@ class PropiedadesMas(unittest.TestCase):
                     c.w._mostrar_panel("inferior", False)
 
     def test_SXM2_campos_sin_corte_y_comentario_largo(self):
-        """REQ-EDT-02: etiqueta y casilla comparten fila; el comentario ocupa el ancho del panel."""
+        """REQ-EDT-02: etiqueta y comentario comparten fila al pie; el comentario ocupa el ancho del pie (E8: sin casilla «Mostrar etiqueta»)."""
         for ancho in (853, 960, 1366):
             c, p, v = self.contexto(ancho=ancho)
-            self.assertLessEqual(abs(p.t_etiqueta.geometry().center().y() - p.t_mostrar.geometry().center().y()), 1)
-            self.assertGreater(p.t_mostrar.x(), p.t_etiqueta.geometry().right())
-            op = QStyleOptionButton()
-            p.t_mostrar.initStyleOption(op)
-            r = p.t_mostrar.style().subElementRect(QStyle.SubElement.SE_CheckBoxContents, op, p.t_mostrar)
-            self.assertGreaterEqual(r.width(), p.t_mostrar.fontMetrics().horizontalAdvance(p.t_mostrar.text()))
+            self.assertGreater(p.t_comentario.x(), p.t_etiqueta.geometry().right())
             self.assertGreater(p.t_comentario.width(), p.t_etiqueta.width() * 2)
-            self.assertLessEqual(p.t_mostrar.geometry().right(), p.t_mostrar.parentWidget().width())
             self.assertLessEqual(abs(p.t_comentario.geometry().right() + 1 - p.t_comentario.parentWidget().width()), 1)  # E8: al pie, a todo el ancho
             c.w._mostrar_panel("inferior", False)
 

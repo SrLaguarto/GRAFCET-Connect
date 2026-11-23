@@ -156,9 +156,10 @@ class PropiedadesFlotante(unittest.TestCase):
         self.abrir_accion(aid, sid)
         f = self.w.flot
         self.assertEqual([v.titulo.text() for v in self.ventanas()], ["Propiedades · Acción condicionada"])
-        self.assertLess(f.principal.condicion.geometry().bottom(), f.principal.accion.geometry().top())
+        # E8 (conmutador): una tarjeta cada vez, en la misma celda; empieza por la condición
+        self.assertTrue(f.principal.condicion.isVisible() and not f.principal.accion.isVisible())
         self.comprobar_colocacion(2)
-        self.assertTrue(f.panel.prog.isVisible() and f.panel.accion.variable.isVisible())
+        self.assertTrue(f.panel.prog.isVisible() and not f.panel.accion.variable.isVisible())
         self.assertIs(f.panel.pagina_bloques.parentWidget(), f.principal.condicion.cuerpo)
         f.panel._desde_bloques("paro")
         self.assertEqual(self.e.datos_accion(aid)["condicion"], "paro")
@@ -168,6 +169,7 @@ class PropiedadesFlotante(unittest.TestCase):
         ]
         self.assertIn("paro", "".join(textos), "el dibujo muestra la condición nueva")
         imagen_antes = f.principal.lupa.grab().toImage()
+        f.elegir_parte("accion")
         f.panel.accion.poner_variable("aux")
         HC._bombear(8)
         self.assertNotEqual(imagen_antes, f.principal.lupa.grab().toImage())
@@ -189,7 +191,8 @@ class PropiedadesFlotante(unittest.TestCase):
         f = self.w.flot
         self.assertEqual([v.titulo.text() for v in self.ventanas()], ["Propiedades · Acción por evento"])
         self.comprobar_colocacion(2)
-        self.assertTrue(f.panel.accion.caja_valor.isVisible(), "la ventana «Acción» lleva el valor")
+        f.elegir_parte("accion")
+        self.assertTrue(f.panel.accion.caja_valor.isVisible(), "la parte «Acción» lleva el valor")
         f.panel._desde_bloques("↓marcha")
         self.assertEqual(self.e.datos_accion(aid)["evento"], "↓marcha")
         textos = [
@@ -383,6 +386,7 @@ class PropiedadesFlotante(unittest.TestCase):
                         c.w._abrir_opciones()
                         HC._bombear(10)
                         f = c.w.flot
+                        f.elegir_parte("accion")  # (E8: una parte cada vez; el valor y la variable están en «Acción»)
                         f.panel.accion.poner_variable("hh" if tipo == "evento" else "aux")
                         f.panel._desde_bloques("marcha" if tipo == "evento" else "")
                         HC._bombear(10)
@@ -390,7 +394,7 @@ class PropiedadesFlotante(unittest.TestCase):
                         self.assertEqual(scroll.verticalScrollBar().maximum(), 0)
                         campos = [f.panel.accion.variable]
                         if tipo == "evento":
-                            campos.append(f.panel.accion.valor)
+                            campos.append(f.panel.accion.prog)  # (el valor se arma en el formulador de la tarjeta; el cuadro de texto ya no se ve)
                         for campo in campos:
                             rectangulo = QRect(campo.mapTo(scroll.viewport(), QPoint()), campo.size())
                             self.assertTrue(scroll.viewport().rect().contains(rectangulo))
@@ -462,9 +466,10 @@ class PropiedadesFlotante(unittest.TestCase):
                     g = h.geometry()
                     self.assertGreaterEqual(min(g.left(), g.top(), t.width() - g.right() - 1, t.height() - g.bottom() - 1),
                                             estilo.E3, (t.objectName(), h.objectName() or type(h).__name__))
-                self.assertTrue(t.rect().contains(t.titulo.geometry()), "el título va dentro de la tarjeta")
-                self.assertEqual(t.scroll.geometry().top() - t.titulo.geometry().bottom() - 1, estilo.E2)
-                self.assertLess(t.titulo.geometry().top(), t.height() // 3)
+                cabecera = t.conmutador if t.conmutador is not None and t.conmutador.isVisible() else t.titulo  # (el conmutador ocupa el lugar del título)
+                self.assertTrue(t.rect().contains(cabecera.geometry()), "el título va dentro de la tarjeta")
+                self.assertEqual(t.scroll.geometry().top() - t.fila_titulo.geometry().bottom() - 1, estilo.E2)
+                self.assertLess(cabecera.geometry().top(), t.height() // 3)
                 imagen = t.grab().toImage()
                 fondos.add(self.color(imagen, estilo.E1, t.height() // 2))
                 self.assertEqual(self.color(imagen, t.width() // 2, 0), estilo.BORDE, "borde de 1 px")
@@ -480,14 +485,11 @@ class PropiedadesFlotante(unittest.TestCase):
             imagen = v.lupa.grab().toImage()
             self.assertEqual(self.color(imagen, 0, v.lupa.height() // 2), estilo.BORDE)
             self.assertEqual(self.color(imagen, estilo.E1, v.lupa.height() // 2), estilo.SUPERFICIE)
-            if v.cuerpo.layout().direction() == QBoxLayout.Direction.LeftToRight:  # (provisional: dos tarjetas, hasta E8-P6)
-                self.assertEqual(v.columna.geometry().left() - v.lupa.geometry().right() - 1, estilo.E6)
-            else:  # franja: el hueco hasta la tarjeta es E3
-                self.assertEqual(v.columna.geometry().top() - v.lupa.geometry().bottom() - 1, estilo.E3)
+            self.assertEqual(v.columna.geometry().top() - v.lupa.geometry().bottom() - 1, estilo.E3)  # franja: el hueco hasta la tarjeta es E3
             self.assertFalse(v.findChildren(QWidget, "enlacesFlotantes"))
             if v.condicion.isVisible():
-                self.assertEqual([color for _, color in v.lupa.senales],
-                                 [v.condicion.senal, v.accion.senal])
+                # (la parte que se edita, en su color; la otra, en gris)
+                self.assertEqual([color for _, color, _ in v.lupa.senales], [v.condicion.senal, estilo.DESHABILITADO])
 
     def test_SPFL26_ningun_texto_recortado(self):
         """REQ-EDT-02: el texto de cada etiqueta y botón visible cabe en su ancho, o acaba en «…» con ayuda emergente."""
@@ -523,8 +525,9 @@ class PropiedadesFlotante(unittest.TestCase):
                     if imagen.pixelColor(px, py).lightness() < 100:
                         unido = primera and abs(py - r.center().y()) <= 2 * esc + 2
                         self.assertTrue(unido, ("trazo ajeno a la izquierda de la caja", px, py))
+            corner = v.lupa.fontMetrics().horizontalAdvance(v.lupa.texto_esquina) + 2 * estilo.E3 if v.lupa.texto_esquina else 0  # («Etapa N», abajo a la derecha)
             for py in range(int(r.top() - medio), int(r.bottom() + medio) + 1):  # en las filas de sus líneas de arriba y abajo
-                for px in range(der, imagen.width()):
+                for px in range(der, imagen.width() - corner):
                     self.assertGreaterEqual(imagen.pixelColor(px, py).lightness(), 100, ("rebaba a la derecha de la caja", px, py))
                 for px in range(max(izq - 3, 0), izq):
                     if abs(py - r.center().y()) > 2 * esc + 2:
@@ -543,8 +546,11 @@ class PropiedadesFlotante(unittest.TestCase):
         """REQ-EDT-09: cada resaltado de la lupa corresponde al rectángulo real y al color de su tarjeta."""
         for c, v in self.casos(("evento", "condicionada")):
             caja = c.e.accion_en_id(c.w.flot.panel.ident)
-            self.assertEqual(v.lupa.senales, [(QRectF(*caja["marca"]), v.condicion.senal),
-                                             (QRectF(*caja["rect"]), v.accion.senal)])
+            self.assertEqual(v.lupa.senales, [(QRectF(*caja["marca"]), v.condicion.senal, False),
+                                             (QRectF(*caja["rect"]), estilo.DESHABILITADO, True)])
+            c.w.flot.elegir_parte("accion")
+            self.assertEqual(v.lupa.senales, [(QRectF(*caja["marca"]), estilo.DESHABILITADO, False),
+                                             (QRectF(*caja["rect"]), v.accion.senal, True)])
 
     # -- encargo 18: ventana más limpia (sin fila Fórmula, aviso ni frase), más alto para los bloques, grupos plegables, lupa recortada y Esc
     def con_entradas(self, c, n=8):
@@ -574,7 +580,7 @@ class PropiedadesFlotante(unittest.TestCase):
                     p = f.panel
                     aid = self.accion_de(c, "evento")
                     self.assertFalse(p.t_estado.isVisible(), "correcto: nada")
-                    c.e.poner_texto_accion(aid, "evento", "3s/?")
+                    c.e.poner_texto_accion(aid, "evento", "(marcha")  # (un error de verdad: un hueco, «3s/?», ya no es rojo sino gris, P11)
                     HC._bombear(12)
                     e = p.t_estado
                     self.assertTrue(e.isVisible())

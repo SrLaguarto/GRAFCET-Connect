@@ -48,9 +48,12 @@ Tabla breve de los módulos que más se tocan. No es un inventario completo.
 | `escritorio/edicion/` | `Edicion` (fachada) y sus partes (sección 3) |
 | `escritorio/ventana/` | `Ventana` (fachada) y sus mixins (sección 3) |
 | `escritorio/refresco_conexion.py` | Refresco de catálogo, tiempos y muestra de la conexión en pantalla |
-| `escritorio/bloques.py` | Programador por bloques de receptividades, condiciones y eventos |
+| `escritorio/bloques.py` | Programador por bloques de receptividades, condiciones y eventos: motor de fichas, catálogo, área, herramientas y modelo de modificadores (E8). La banda de categorías está en `banda_bloques.py` |
+| `escritorio/banda_bloques.py` | `BandaBloques` y `BotonBloque` (E8): la banda de categorías del programador por bloques, con un botón por bloque que admite clic y arrastre. Crea el bloque y avisa; el programador decide dónde va |
+| `escritorio/partes_propiedades.py` | Piezas de la ventana de Propiedades rediseñada (E8): `CampoComentario` (comentario de una línea que crece y se estira), `PiePropiedades` (etiqueta y comentario) y `ConmutadorPartes` («Condición \| Acción», «Evento \| Acción»), que `flotantes.py` monta en cada tarjeta |
+| `escritorio/menu_variable.py` | El menú común de variable (E8): `ComboMenu`, base del desplegable nativo de Qt de la ventana y del lienzo; `DelegadoMenu` (grupos Salidas y Memorias, barra de origen, tipo corto donde varía) y `FiltroMenu` (filtro con más de 12 variables). No crea variables |
 | `escritorio/propiedades.py`, `variables.py`, `entradas_salidas.py`, `paneles.py` | Paneles: Propiedades, Variables, E/S y los plegables |
-| `escritorio/flotantes.py`, `ayudas_emergentes.py` | Ventanas emergentes y ayudas |
+| `escritorio/flotantes.py`, `ayudas_emergentes.py` | Ventanas emergentes y ayudas. `flotantes.py` es la ventana de Propiedades (E8): franja con la vista previa, conmutador de partes y pie |
 | `escritorio/archivos.py`, `proyecto_archivo.py` | Archivo único `.grafnet` y su sello |
 | `escritorio/simulador.py` | Punto de entrada del programa de escritorio |
 
@@ -259,15 +262,18 @@ Play y Stop: `pedir_ejecucion(on)` y `despertar()`. Lo que hace el ciclo con el 
 | Gestos, selección, arrastre, enlaces, acciones, grupos, deshacer | `escritorio/edicion/<parte>.py` | La fachada `edicion/__init__.py` solo une las partes. |
 | Menús, archivos, simulación, E/S, modos, vista de la ventana | `escritorio/ventana/<mixin>.py` | `ventana/__init__.py` solo crea y conecta controles. |
 | Refresco de la conexión en pantalla | `escritorio/refresco_conexion.py` | Copia con el candado; dibuja sin él. |
-| Propiedades de transición y acción (E8) | `escritorio/propiedades.py`, `flotantes.py`, `bloques.py` | En curso (sección 8). |
+| Propiedades de transición y acción (E8) | `escritorio/propiedades.py`, `flotantes.py`, `partes_propiedades.py`, `acciones.py`, `bloques.py`, `banda_bloques.py` | Hecho en E8 (sección 8). |
+| Menú común de variable (ventana y lienzo) | `escritorio/menu_variable.py`; `acciones.py` (`_ComboVariable`) y `diagrama.py` (`SelectorAccion`) lo usan | Un solo componente en los dos sitios. |
+| Etiquetas de transiciones (Ver) | `escritorio/edicion/modelo.py` (`poner_etiquetas`, `etiqueta_como_las_demas`), `escritorio/ventana/menus.py` | La casilla sale de `labelVisible`; no hay campo nuevo. |
 | Paneles (Variables, E/S, plegables) | `escritorio/variables.py`, `entradas_salidas.py`, `paneles.py` | |
 | Ayudas emergentes | `escritorio/ayudas_emergentes.py` | |
 | Bancos, medidas, choque, comparador | `tools/` | Nada del programa importa `tools/`. |
 
 ## 8. Pendientes y límites
 
-- **E8 en curso.** El rediseño de Propiedades (franja, pie y pestañas) aún no está cerrado. Cuando se cierre, este
-  documento se actualiza con los módulos nuevos que añada. No se documentan aquí como hechos.
+- **E8 implementado, cierre pendiente.** El rediseño de Propiedades (franja, pie, conmutador, banda y menú común) está
+  hecho en sus cuatro tramos; falta el cierre (P14: hoja de contactos, pruebas de las herramientas de `docs/`). Los
+  módulos nuevos de E8 son `banda_bloques.py`, `partes_propiedades.py` y `menu_variable.py`.
 - **Reglas de importación sin prueba automática.** Ver la sección 1.
 - **Camino de dibujo completo** (`realizador.todo`): uso por confirmar.
 - **Órdenes con conexión.** Son síncronas (con el candado), no una cola. El plan de E7 hablaba de «fotos inmutables» y de

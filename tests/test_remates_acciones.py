@@ -5,6 +5,7 @@ from conexion.adaptador import leer_entradas, escribir_salidas, _bloques
 from conexion.configuracion import Configuracion, Senal
 from grafcet.editor import Editor, new_grafcet_document
 from grafcet.view import norm
+from escritorio import estilo
 from test_editor_cadenas import BaseQt, QT
 from test_dibujo_vista import vista, dibujo, texto
 from grafcet.builder import M
@@ -129,7 +130,7 @@ class RematesQt(BaseQt):
     def test_SCOR07_selector_no_se_comprime_por_el_estilo(self):
         """REQ-EDT-02: el estilo general no comprime el selector dibujado como una acción."""
         w,e,s=self.preparar();d=e.anadir_accion(s);w.editar_accion(s,d);QApplication.processEvents()
-        self.assertGreaterEqual(w.props.accion.variable.height(),62)
+        self.assertEqual(w.props.accion.variable.height(),estilo.ALTO_CONTROL)  # (E8: el desplegable deja de ser caja de acción; altura de un control)
         self.assertGreaterEqual(w._minimo_panel('inferior'),w.props.layout().totalHeightForWidth(w.props.width()))
 
     def test_SCOR11_selector_de_variable_no_se_aplasta_tras_parpadear_ni_con_el_panel_alto_o_bajo(self):
@@ -141,9 +142,7 @@ class RematesQt(BaseQt):
         acc=w.props.accion;total=sum(w.vsplit.sizes())
         def comprobar(contexto):
             QApplication.processEvents()
-            self.assertGreaterEqual(acc.variable.height(),acc.valor.height(),contexto)
-            self.assertGreaterEqual(acc.variable.height(),acc.valor.sizeHint().height(),contexto)
-            self.assertGreaterEqual(acc.variable.height(),62,contexto)
+            self.assertEqual(acc.variable.height(),estilo.ALTO_CONTROL,contexto)  # (E8: altura de un control; el cuadro del valor ya no se ve)
         for alto in (w._minimo_panel('inferior'),w._minimo_panel('inferior')+200):
             w.vsplit.setSizes([total-alto,alto]);comprobar(f'alto {alto}')
             acc.parpadeo.iniciar({'variable'});comprobar(f'parpadeando con alto {alto}')

@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, 
 
 from . import estilo
 from .ayudas_emergentes import mostrar_ayuda
+from .menu_variable import ROL_PAPEL, ComboMenu, ancho_menu
 from .elementos_lupa import DATO_ELEMENTOS, DATO_PARCIAL
 from .geometria import base as geo_base, marcos as geo_marcos, seleccion as geo_seleccion, textos as geo_textos
 from .geometria.acciones import acciones_etapa, ancho_accion, extra as _extra, geometria_acciones, grupos_sueltos
@@ -1156,82 +1157,18 @@ class _BarraZoom(QFrame):
 
 
 MARCADORES_SELECTOR = ("Elija la variable…", "Elija variable…", "Variable…", "…")  # el marcador del desplegable sin variable: el primero que cabe
-MARGEN_OPCION, HUECO_PAPEL = 8, 6  # margen interior de cada opción del desplegable y espacio entre el nombre y su papel
 # Sangría del texto y zona de la flecha del desplegable sobre la acción.
 SELECTOR_PAD_IZQ, SELECTOR_FLECHA = estilo.E2, 18
 
 
-class _OpcionConPapel(QStyledItemDelegate):
-    """Las opciones del desplegable sobre una acción: el nombre a la izquierda y su papel («S», «M») entre paréntesis a la derecha."""
-
-    @staticmethod
-    def _separador(index: Any) -> bool:
-        return index.data(Qt.ItemDataRole.AccessibleDescriptionRole) == "separator"
-
-    def sizeHint(self, option: Any, index: Any) -> QSize:  # noqa: N802
-        if self._separador(index):
-            return QSize(option.rect.width(), 7)  # una línea fina con poco margen, no una fila entera
-        tam = super().sizeHint(option, index)
-        return QSize(0, tam.height())  # (sin ancho propio: la lista mide lo que el cuadro, y el nombre se acorta con «…»)
-
-    @staticmethod
-    def _nombre_y_papel(index: Any) -> tuple[str, str]:
-        return index.data(Qt.ItemDataRole.DisplayRole).rsplit("  (", 1)[0], index.data(Qt.ItemDataRole.UserRole + 1) or ""
-
-    @staticmethod
-    def _hueco_nombre(fm: Any, rect: Any, papel: str) -> int:
-        """Lo que queda para el nombre en una fila: su ancho menos el margen de cada lado y el papel «(S)» con un espacio."""
-        return rect.width() - 2 * MARGEN_OPCION - (fm.horizontalAdvance(f"({papel})") + HUECO_PAPEL if papel else 0)
-
-    def helpEvent(self, event: Any, view: Any, option: Any, index: Any) -> bool:  # noqa: N802
-        """La ayuda emergente solo sale si el nombre está acortado, y entonces lo da entero."""
-        nombre, papel = self._nombre_y_papel(index)
-        if event.type() == QEvent.Type.ToolTip and papel and not self._separador(index):
-            if option.fontMetrics.horizontalAdvance(nombre) > self._hueco_nombre(option.fontMetrics, option.rect, papel):
-                mostrar_ayuda(event.globalPos(), nombre, view)
-            else:
-                QToolTip.hideText()
-            return True
-        return super().helpEvent(event, view, option, index)
-
-    def paint(self, painter: Any, option: Any, index: Any) -> None:
-        if self._separador(index):
-            painter.save()
-            painter.setPen(QColor(estilo.BORDE_CONTROL))
-            y = option.rect.center().y()
-            painter.drawLine(option.rect.left() + 6, y, option.rect.right() - 6, y)
-            painter.restore()
-            return
-        papel = index.data(Qt.ItemDataRole.UserRole + 1)
-        if not papel:
-            super().paint(painter, option, index)
-            return
-        opt = QStyleOptionViewItem(option)
-        self.initStyleOption(opt, index)
-        opt.text = ""
-        estilo_ = opt.widget.style() if opt.widget else QApplication.style()
-        estilo_.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, opt.widget)
-        r = opt.rect.adjusted(MARGEN_OPCION, 0, -MARGEN_OPCION, 0)
-        painter.save()
-        painter.setFont(opt.font)
-        painter.setPen(opt.palette.color(QPalette.ColorGroup.Normal if index.flags() & Qt.ItemFlag.ItemIsEnabled else QPalette.ColorGroup.Disabled,
-                                         QPalette.ColorRole.HighlightedText if opt.state & QStyle.StateFlag.State_Selected else QPalette.ColorRole.Text))
-        nombre, _ = self._nombre_y_papel(index)
-        nombre = opt.fontMetrics.elidedText(nombre, Qt.TextElideMode.ElideRight, max(0, self._hueco_nombre(opt.fontMetrics, opt.rect, papel)))
-        painter.drawText(r, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, nombre)
-        x = r.left() + opt.fontMetrics.horizontalAdvance(nombre) + HUECO_PAPEL  # el papel justo tras el nombre (sin columna a la derecha)
-        painter.drawText(QRect(x, r.top(), max(0, r.right() - x + 1), r.height()), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                         f"({papel})")
-        painter.restore()
-
-
-class SelectorAccion(QComboBox):
+class SelectorAccion(ComboMenu):
     """El desplegable que sale sobre una acción del dibujo (doble clic en una continua). Se cierra solo al elegir, con Esc, con un clic fuera o al
-    perder el foco; `cerrado` avisa de ello para quitarlo."""
+    perder el foco; `cerrado` avisa de ello para quitarlo. Su lista es el menú común de variable (`menu_variable`): Salidas y Memorias, con la
+    barra de origen y, con más de 12, filtro."""
     cerrado = Signal()
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, rotulos_propios=True)
         from .cierre_selector_accion import CierreSelectorAccion
         self.cierre = CierreSelectorAccion(self)
         self._reclamado = False
@@ -1250,18 +1187,8 @@ class SelectorAccion(QComboBox):
         p.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opt)
 
     def ancho_lista(self) -> int:
-        """El ancho de la lista desplegada: el del cuadro, o lo justo para la opción más larga (nombre, hueco y «(S)»/«(M)», con su margen) si
-        no cabe en él. Nunca reserva huecos: con nombres cortos mide lo que el cuadro."""
-        fm = self.view().fontMetrics()
-        pide = 0
-        for i in range(self.count()):
-            nombre, papel = _OpcionConPapel._nombre_y_papel(self.model().index(i, 0))
-            if nombre:
-                pide = max(pide, fm.horizontalAdvance(nombre) + 2 * MARGEN_OPCION
-                           + (fm.horizontalAdvance(f"({papel})") + HUECO_PAPEL if papel else 0))
-        barra = self.view().verticalScrollBar()
-        extra = barra.sizeHint().width() if self.count() > self.maxVisibleItems() else 0
-        return max(self.width(), pide + extra + 2 * self.view().frameWidth() + 2)
+        """El ancho de la lista desplegada: el del cuadro, o lo justo para el nombre más largo (con su barra y su tipo, y el margen). Nunca reserva huecos."""
+        return ancho_menu(self)
 
     def showPopup(self) -> None:  # noqa: N802
         """La lista desplegada empieza donde el cuadro y mide lo que él, salvo que un nombre no quepa: entonces lo justo para el más largo
@@ -2217,11 +2144,10 @@ class VistaDiagrama(QGraphicsView):
         r = self.mapFromScene(QRectF(x, y, w, h)).boundingRect()
         cb = SelectorAccion(self.viewport())
         cb.setAccessibleName("Variable de la acción")
-        cb.setItemDelegate(_OpcionConPapel(cb))
         for texto, dato, habilitada, *papel in opciones:
             cb.addItem(texto, dato)
             if papel and papel[0]:
-                cb.setItemData(cb.count() - 1, papel[0], Qt.ItemDataRole.UserRole + 1)
+                cb.setItemData(cb.count() - 1, papel[0], ROL_PAPEL)
             if not habilitada:
                 cb.model().item(cb.count() - 1).setEnabled(False)
         cb.setStyleSheet(f"QComboBox {{ padding:0 2px 0 {SELECTOR_PAD_IZQ}px; }} QComboBox:focus {{ padding:0 1px 0 {SELECTOR_PAD_IZQ - 1}px; }} "

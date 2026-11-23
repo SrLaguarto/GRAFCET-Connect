@@ -7,7 +7,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from PySide6.QtCore import QEvent, QPointF, QSignalBlocker, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, QSignalBlocker, Qt
+from PySide6.QtGui import QCursor
 from PySide6.QtTest import QTest
 from escritorio import estilo
 from escritorio.acciones import PanelAccion
@@ -55,6 +56,9 @@ def comprobar(c, tipo):
         assert not combo.testAttribute(Qt.WidgetAttribute.WA_SetStyle), "No debe imponer un estilo propio"
         factor = float(os.environ["QT_SCALE_FACTOR"])
         assert abs(panel.devicePixelRatioF() - factor) < 0.02, panel.devicePixelRatioF()
+        # (con la caja ya de altura normal, la lista cae encima y su fila queda junto al último sitio del cursor: Qt ignora la suelta durante medio
+        # segundo si está a menos de 9 px de donde se pulsó; el cursor del sistema se aparta antes de abrir)
+        QCursor.setPos(combo.mapToGlobal(QPoint(2, 2)))
         QTest.mouseClick(combo, Qt.MouseButton.LeftButton, pos=combo.rect().center())
         bombear()
         assert combo.view().isVisible(), "El ratón debe abrir la lista"

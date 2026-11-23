@@ -213,7 +213,8 @@ class Ventana(unittest.TestCase):
         self.assertFalse(v.condicion.isVisible())
         self.assertEqual(v.accion.titulo.text(), "Receptividad")
         self.assertTrue(v.pie.isVisible())
-        for campo in (p.t_etiqueta, p.t_mostrar, p.t_comentario):
+        self.assertFalse(hasattr(p, "t_mostrar"), "E8: «Mostrar etiqueta» sale de la ventana (Ver > Etiquetas de transiciones)")
+        for campo in (p.t_etiqueta, p.t_comentario):
             self.assertTrue(campo.isVisible())
             self.assertIs(campo.parentWidget(), v.pie)
         self.assertGreater(v.pie.geometry().top(), v.columna.geometry().bottom())

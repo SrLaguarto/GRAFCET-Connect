@@ -47,23 +47,15 @@ class PropiedadesW(unittest.TestCase):
         for ancho, alto in ((1366, 768), (2000, 1250), (960, 1032)):
             with self.subTest(ancho=ancho):
                 c, p, v = self.contexto(ancho=ancho, alto=alto)
+                # (E8: sin la casilla «Mostrar etiqueta» no queda casilla en la ventana de la transición: el foco se prueba en la etiqueta)
                 for foco in (False, True):
-                    p.t_mostrar.setProperty("tecl", foco)
-                    p.t_mostrar.style().unpolish(p.t_mostrar)
-                    p.t_mostrar.style().polish(p.t_mostrar)
-                    p.t_mostrar.setFocus()
+                    p.t_etiqueta.setFocus() if foco else p.t_etiqueta.clearFocus()
                     HC._bombear(3)
                     self.assertEqual(regla_C6(v), [])
-                    op = QStyleOptionButton()
-                    p.t_mostrar.initStyleOption(op)
-                    indicador = p.t_mostrar.style().subElementRect(
-                        QStyle.SubElement.SE_CheckBoxIndicator, op, p.t_mostrar,
-                    )
-                    self.assertGreaterEqual(indicador.left(), 1)
-                    etiquetas = [x for x in p.t_mostrar.parentWidget().findChildren(QLabel)
+                    etiquetas = [x for x in p.t_etiqueta.parentWidget().findChildren(QLabel)
                                  if x.text() in ("Etiqueta", "Comentario")]
                     self.assertEqual(len(etiquetas), 2)  # E8: el pie rotula la etiqueta y el comentario, uno junto a su campo (ya no en una columna común)
-                    self.assertGreater(p.t_mostrar.x(), p.t_etiqueta.geometry().right())
+                    self.assertGreater(p.t_comentario.x(), p.t_etiqueta.geometry().right())
                 c.w._mostrar_panel("inferior", False)
 
     def test_SW2_clic_fuera_se_consume(self):
@@ -186,10 +178,13 @@ class PropiedadesW(unittest.TestCase):
             HC._bombear(6)
             self.assertEqual(regla_C6(v), [])
         c.w._mostrar_panel("inferior", False)
-        c.e.seleccionar([c.ids["transiciones"][0]])
-        c.w._abrir_opciones()
-        HC._bombear(6)
-        casilla = p.t_mostrar
+        # (E8: «Mostrar etiqueta» ya no existe y la ventana no deja otra casilla a la vista: se prueba que la regla detecta un indicador desplazado
+        # fuera con una casilla de la propia ventana)
+        from escritorio.interaccion_propiedades import CasillaPropiedades
+        casilla = CasillaPropiedades("Casilla de prueba", v.cuerpo)
+        casilla.move(estilo.E4, estilo.E4)
+        casilla.show()
+        HC._bombear(3)
         self.assertTrue(casilla.isVisible())
         antes = casilla.pos()
         casilla.move(-10, casilla.y())

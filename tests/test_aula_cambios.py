@@ -779,7 +779,8 @@ class PanelesMasCompactos(BaseQt):
         self.assertEqual(v.accion.titulo.text(), "Acción")
         self.assertEqual(v.condicion.titulo.text(), "Condición")
         self.assertTrue(v.condicion.isVisible())
-        self.assertLess(v.condicion.geometry().bottom(), v.accion.geometry().top())
+        self.assertFalse(v.accion.isVisible(), "E8: una tarjeta cada vez (conmutador Condición | Acción), en la misma celda")
+        self.assertTrue(v.conmutadores[v.condicion].isVisible())
 
 
 @unittest.skipUnless(QT, "requiere PySide6")

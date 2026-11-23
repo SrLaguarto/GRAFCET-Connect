@@ -29,15 +29,18 @@ class Interfaz(BaseQt):
         self.w.hide();super().tearDown();QApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 
     def test_SETI02_opcion_desmarcada_y_etiqueta_oculta_al_colocar(self):
-        """REQ-EDT-02, REQ-EDT-09: la ficha crea una transición oculta; el clic en Mostrar etiqueta la activa y se puede deshacer."""
+        """REQ-EDT-02, REQ-EDT-09: la ficha crea una transición oculta; «Ver > Etiquetas de transiciones» la muestra y se puede deshacer (E8: la casilla de
+        la ventana pasó al menú)."""
         w,e=self.vacio();w.resize(1366,768);w.show();QTest.qWait(10)
         e.colocar("transicion",QPointF(200,180));t=e.sel[0];e.seleccionar([t]);w.editar_condicion(t);QApplication.processEvents()
-        self.assertFalse(w.props.t_mostrar.isChecked());self.assertFalse(e.M["transitions"][0]["showLabel"])
+        self.assertFalse(hasattr(w.props,"t_mostrar"));self.assertFalse(e.M["transitions"][0]["showLabel"])
         textos=lambda:[it.toPlainText() for it in w.diagrama.scene().items() if hasattr(it,"toPlainText")]
         self.assertNotIn("(t1)",textos())
-        self.assertTrue(w.props.t_mostrar.isVisible())
-        QTest.mouseClick(w.props.t_mostrar,Qt.MouseButton.LeftButton,pos=QPoint(8,w.props.t_mostrar.height()//2))
+        w._sincronizar_menu_dibujo()
+        self.assertTrue(w.a_ver_etiquetas.isEnabled());self.assertFalse(w.a_ver_etiquetas.isChecked())
+        w.a_ver_etiquetas.trigger()
         self.assertTrue(e.M["transitions"][0]["showLabel"]);self.assertIn("(t1)",textos())
+        w._sincronizar_menu_dibujo();self.assertTrue(w.a_ver_etiquetas.isChecked())
         e.deshacer();self.assertFalse(e.M["transitions"][0]["showLabel"]);self.assertNotIn("(t1)",textos())
 
     def test_SETI03_guardar_y_abrir_conserva_una_visible_y_otra_oculta(self):

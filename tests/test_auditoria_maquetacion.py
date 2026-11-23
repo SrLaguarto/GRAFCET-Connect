@@ -28,10 +28,10 @@ TAMANOS = ((1366, 768), (2000, 1250), (960, 1032))
 # Excepciones revisables: (regla, subcadena del hallazgo, motivo). Un hallazgo que contenga la subcadena y sea de esa regla no falla.
 EXCEPCIONES: list[tuple[str, str, str]] = [
     ("C1", "_BotonEntrada", "la entrada de la simulación crece con las líneas de su nombre largo (se parte por los «_» en 2 o 3 líneas; clase `_BotonEntrada`)"),
-    ("C1", "selectorVariableAccion", "el selector de variable de la acción se dibuja como una caja de acción de 62 px, a propósito (`ALTO_SELECTOR` de acciones.py)"),
+    ("C1", "_BotonParte#", "los botones del conmutador de partes (Condición | Acción) van dentro de su estuche y son más bajos que un token a propósito: la maqueta v3 los dibuja compactos (E8)"),
     ("C1", "QPushButton#[Encuadrar", "los botones de la ficha de jerarquía son más bajos (20 px) a propósito: varias filas en una columna estrecha sin que crezca el panel (comentario de `FichaJerarquia`)"),
     ("C1", "QPushButton#[Renombrar", "los botones de la ficha de jerarquía son más bajos (20 px) a propósito: varias filas en una columna estrecha sin que crezca el panel (comentario de `FichaJerarquia`)"),
-    ("C1", "QPushButton#[1]", "las fichas «1» y «0» del valor de una acción memorizada (`ESTILO_FICHA`, con su borde de 3 px al marcarse) son más altas que el token a propósito: son el valor que se elige (pantalla «flot_accion_evento»)"),
+    ("C1", "QPushButton#[1]", "las fichas «1» y «0» del valor de una acción memorizada (`ESTILO_FICHA`) son más bajas o más altas que el token a propósito: son el valor que se elige (pantalla «flot_accion_evento»)"),
     ("C1", "QPushButton#[0]", "ídem: la ficha «0» del valor de una acción memorizada"),
     ("M4", "«Entradas»", "las cajas de la columna de simulación (Entradas, Salidas y variables) llevan sus tablas de borde a borde: a 218 px de panel no caben las cuatro columnas con 16 px más de margen (SRED13); la guía M4 no las lista"),
     ("M4", "«Salidas y variables»", "ídem: la tabla de estado va de borde a borde del panel de simulación (SRED13)"),

@@ -151,7 +151,8 @@ class OtrosInterfaz(BaseQt):
     def test_SOTR09_accion_por_evento_reserva_mas_espacio_al_evento(self):
         """REQ-EDT-09: en una acción por evento el editor del evento es claramente mayor que el del valor."""
         w,e=self.preparar();w._abrir_opciones();n=e.ed.add_draft_action((200,140),{'tipo':'evento'});e.sel=[n];e.cambia();QApplication.processEvents()
-        p=w.props;self.assertTrue(p.accion.caja_valor.isVisible());self.assertTrue(p.pagina_bloques.isVisible())
+        p=w.props;self.assertTrue(p.pagina_bloques.isVisible())  # E8: una parte cada vez; la ventana abre por el evento
+        self.assertFalse(p.accion.caja_valor.isVisible())
         self.assertGreater(p.pagina_bloques.width(),2*p.accion.caja_valor.width())
 
     def test_SOTR10_qt_y_js_dibujan_notas_y_proyecto_se_reabre(self):

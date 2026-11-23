@@ -131,7 +131,7 @@ class SelectorAccion(BaseQt):
             self.assertAlmostEqual(w.diagrama.escala(), zoom, places=2)
             marco = cb.view().parentWidget()
             fm = cb.view().fontMetrics()
-            pide = fm.horizontalAdvance(largo) + fm.horizontalAdvance("(S)") + 2 * 8 + 12
+            pide = fm.horizontalAdvance(largo) + 2 * 8 + 3 + estilo.E2 + 12  # (E8: menú común: sin «(S)»; barra de origen y margen)
             self.assertGreaterEqual(marco.width(), cb.width(), zoom)
             self.assertLessEqual(marco.width(), max(cb.width(), pide) + 8, (zoom, "sin huecos: lo justo"))
             interior = round(caja["rect"][2] * max(zoom, 1.0)) - 2 * max(2, round(2 * max(zoom, 1.0)))
@@ -154,11 +154,11 @@ class SelectorAccion(BaseQt):
                 opt = QStyleOptionViewItem()
                 opt.rect, opt.font = rect, vista.font()
                 opt.fontMetrics = vista.fontMetrics()
-                with mock.patch("escritorio.diagrama.QToolTip.showText") as ayuda:
+                with mock.patch("escritorio.menu_variable.mostrar_ayuda") as ayuda:
                     d.helpEvent(QHelpEvent(QEvent.Type.ToolTip, QPoint(5, 5), QPoint(5, 5)), vista, opt, vista.model().index(i, 0))
                 if nombre in (largo, "fe"):
                     ayuda.assert_not_called()
-                    self.assertLessEqual(opt.fontMetrics.horizontalAdvance(nombre), d._hueco_nombre(opt.fontMetrics, rect, "S"), (zoom, nombre))
+                    self.assertLessEqual(opt.fontMetrics.horizontalAdvance(nombre), d.hueco_nombre(opt.fontMetrics, rect, ""), (zoom, nombre))
             w.diagrama.cerrar_selector()
         self.assertIsNotNone(base)
 

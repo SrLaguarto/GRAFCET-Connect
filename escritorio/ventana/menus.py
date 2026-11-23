@@ -94,9 +94,12 @@ class Menus:
         self.a_ver_dependencias = self._accion(
             "Mostrar dependencias", lambda on: self.diagrama.mostrar_dependencias(on), marcable=True)
         self.a_ver_errores = self._accion("Mostrar errores", self._errores_desde_menu, marcable=True)
+        self.a_ver_etiquetas = self._accion("Etiquetas de transiciones", self._etiquetas_desde_menu, marcable=True)
+        self.a_ver_etiquetas.setToolTip("Dibujar u ocultar la etiqueta (t1, t2…) de todas las transiciones")
         ver.addSeparator()
         ver.addAction(self.a_ver_dependencias)
         ver.addAction(self.a_ver_errores)
+        ver.addAction(self.a_ver_etiquetas)
         ver.aboutToShow.connect(self._sincronizar_menu_dibujo)
         ver.addSeparator()
         ver.addAction(self._accion("&Acercar", lambda: self.diagrama.acercar(), ["Ctrl+=", "Ctrl++"]))
@@ -350,7 +353,18 @@ class Menus:
         self._marcar_errores(on, False)
         self._alternar_errores(on)
 
+    def _etiquetas_desde_menu(self, on: bool) -> None:
+        """«Ver > Etiquetas de transiciones»: una operación de deshacer que muestra u oculta la etiqueta de todas las transiciones."""
+        if self.edicion is not None and self.modo == "editar" and not self.solo_lectura:
+            self.edicion.poner_etiquetas(on)
+
     def _sincronizar_menu_dibujo(self) -> None:
+        e = self.edicion
+        editable = e is not None and self.modo == "editar" and not self.solo_lectura and bool(e.M["transitions"])
+        self.a_ver_etiquetas.blockSignals(True)
+        self.a_ver_etiquetas.setChecked(bool(editable and e.etiquetas_visibles()) if e is not None and self.modo == "editar" else False)
+        self.a_ver_etiquetas.blockSignals(False)
+        self.a_ver_etiquetas.setEnabled(editable)
         self.a_ver_dependencias.setChecked(self.diagrama.dependencias)
         self.a_ver_dependencias.setEnabled(self.a_dependencias.isEnabled())
         self.a_ver_errores.setChecked(self.b_errores.isChecked())

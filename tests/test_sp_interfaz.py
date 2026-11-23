@@ -214,8 +214,7 @@ class InterfazP(unittest.TestCase):
             try:
                 hc._flotante("transicion")(c)
                 p = c.w.flot.panel
-                casilla = p.t_mostrar
-                self.assertGreaterEqual(casilla.width(), casilla.fontMetrics().horizontalAdvance(casilla.text()) + 22)
+                self.assertFalse(hasattr(p, "t_mostrar"))  # E8: la casilla pasó a Ver > Etiquetas de transiciones
                 if ancho == 1366:  # (E8: la banda de categorías, en dos filas como mucho; ya no hay una fila de pestañas)
                     ys = {b.mapTo(p.prog, QPoint()).y() for b in p.prog.categorias.values()}
                     self.assertLessEqual(len(ys), 2)

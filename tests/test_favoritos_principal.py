@@ -299,18 +299,19 @@ class FavoritosPrincipal(unittest.TestCase):
     def test_SH120_ayuda_directa_del_selector_recortado_se_ajusta(self):
         from PySide6.QtCore import QRect
         from PySide6.QtWidgets import QListWidget, QStyleOptionViewItem
-        from escritorio.diagrama import _OpcionConPapel
+        from escritorio.menu_variable import DelegadoMenu, ROL_PAPEL
         w = self.crear(tam=(960, 1032))
         largo = "VARIABLE_MUY_LARGA_" * 12
         vista = QListWidget(w)
         vista.addItem(largo + "  (S)")
-        vista.item(0).setData(Qt.ItemDataRole.UserRole + 1, "S")
+        vista.item(0).setData(Qt.ItemDataRole.UserRole, largo)  # (E8: el menú común toma el nombre del dato)
+        vista.item(0).setData(ROL_PAPEL, "S")
         opcion = QStyleOptionViewItem()
         opcion.rect = QRect(0, 0, 90, 30)
         opcion.fontMetrics = vista.fontMetrics()
         punto = w.screen().availableGeometry().bottomRight() - QPoint(5, 5)
         evento = QHelpEvent(QEvent.Type.ToolTip, QPoint(5, 5), punto)
-        delegado = _OpcionConPapel(vista)
+        delegado = DelegadoMenu(vista, True)
         self.assertTrue(delegado.helpEvent(evento, vista, opcion, vista.model().index(0, 0)))
         self.comprobar_ayuda_directa(w, largo)
 

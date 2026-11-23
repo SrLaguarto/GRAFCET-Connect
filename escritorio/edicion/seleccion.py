@@ -11,6 +11,8 @@ from .constantes import CON_CONDICION
 
 
 class _Seleccion:
+    parte_pedida: str | None = None  # la parte de una acción de dos partes que pidió el doble clic: «formula» (la marca) o «accion» (la caja); la ventana la consume
+
     def seleccionar(self, ids: list[str]) -> None:
         """Selecciona exactamente estos elementos (el panel de diagnósticos, «Ir a…»): ya no hay una acción señalada, así que
         Supr borra lo seleccionado y no una acción de antes."""
@@ -94,12 +96,18 @@ class _Seleccion:
         if n := self.anotacion(elemento_en(self.M,p)):
             self.editar_anotacion(n["id"]);return True
         caja = self.accion_en(p)
+        en_marca = False
+        if not caja and (caja := self.marca_en(p)):  # doble clic en la marca (la banderita de la condición o el evento)
+            en_marca = True
         if caja:  # doble clic en una acción: se edita (una orden sin completar, con el diálogo de la orden)
+            self.parte_pedida = None
             if caja.get("forzado"):
                 self.configurar_orden(caja["id"])
             elif self.datos_accion(caja["id"])["tipo"] == "continua" and hasattr(self.diagrama, "abrir_selector"):
                 self.desplegar_variable(caja)  # una continua (sin condición, evento ni asignación): solo falta su variable, y se elige sobre la propia acción
             else:
+                if self.datos_accion(caja["id"])["tipo"] in (*CON_CONDICION, "evento"):  # dos partes: se abre la que se pulsó
+                    self.parte_pedida = "formula" if en_marca else "accion"
                 self.pedir_accion(caja["etapa"] or None, caja["id"])
             return True
         orden = self.orden_en(p)
@@ -119,6 +127,15 @@ class _Seleccion:
         elif ident in cajas_parciales(self.M) and self._es_parcial_suelto(ident):  # en el marco de un parcial suelto: lo renombra
             self.renombrar_parcial(ident)
         return True
+
+    def marca_en(self, p: QPointF) -> dict[str, Any] | None:
+        """La caja de acción cuya marca (la banderita de su condición o su evento) está bajo el puntero."""
+        for c in getattr(self.diagrama, "cajas_acciones", None) or []:
+            if c.get("marca"):
+                x, y, w, h = c["marca"]
+                if x <= p.x() <= x + w and y <= p.y() <= y + h:
+                    return c
+        return None
 
     def accion_en(self, p: QPointF) -> dict[str, Any] | None:
         """La caja de acción bajo el puntero, tal como quedó en el dibujo ({id, etapa, rect, borrador, suelta, grupo,
