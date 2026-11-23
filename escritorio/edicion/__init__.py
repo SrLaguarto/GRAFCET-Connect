@@ -107,6 +107,7 @@ class Edicion(
         self.proyecto_base: Project | None = None
         self.nombres: dict[str, str] = {}
         self._cursor_borde = False
+        self._cajas_gesto: tuple[dict[str, Any], dict[str, dict[str, float]]] | None = None  # ver `_cajas_del_gesto`
         self.archivo: Path | None = None  # el .grafnet de donde viene o donde se guardó
         self.contenedor: Any = None  # su ProyectoArchivo (área temporal, sello y huella)
         self.info_archivo: dict | None = None  # metadatos de ese archivo ({} si es anterior a la 1.0); None: sin guardar

@@ -239,6 +239,91 @@ class EstadoConTrazaLarga(unittest.TestCase):
         self.assertLess(despues, antes * 2 + 0.002, f"state() con 40.000 registros de más: {despues * 1000:.2f} ms frente a {antes * 1000:.2f} ms")
 
 
+def _ultima_evolucion_antigua(registros):
+    """La búsqueda de `Vista.state()` antes de E9: hacia atrás por toda la traza (la referencia de las pruebas)."""
+    return next((r for r in reversed(registros) if r["kind"] == "evolucion"), None)
+
+
+class _Contados(list):
+    """Lista de la traza que cuenta cuántos registros se leen por índice (lo que hace `_ultima_evolucion`)."""
+    lecturas = 0
+
+    def __getitem__(self, i):
+        type(self).lecturas += 1
+        return super().__getitem__(i)
+
+
+class UltimaEvolucionRecordada(unittest.TestCase):
+    def preparar(self):
+        ed = Editor(new_grafcet_document("rend"), ids=IdGenerator("r-"))
+        a = ed.add_step("g", "0", True, at=(240, 100))
+        b = ed.add_step("g", "1", at=(240, 440))
+        marcha = ed.add_variable("Marcha", "input", {"kind": "bool"})
+        otra = ed.add_variable("Otra", "input", {"kind": "bool"})
+        ed.add_transition("g", "Marcha", [a], [b], at=(240, 270))
+        ed.add_transition("g", "NOT Marcha", [b], [a], at=(240, 610))
+        return ed, marcha, otra
+
+    @staticmethod
+    def mover(v, var, valor):
+        v.s.manual_input({var: valor})
+        while v.s.status != "pausada-estable" or v.s.next_stimulus() is not None:
+            v.s.step_external()
+
+    def test_SNUC15_la_ultima_evolucion_recordada_coincide_con_la_busqueda_antigua(self):
+        """REQ-SIM-01: `Vista.state()` da la misma última evolución que la búsqueda hacia atrás de antes, en cada paso de una secuencia
+        al azar y tras cambiar de sesión (Reiniciar), sustituir la traza por otra o acortarla."""
+        from random import Random
+        from grafcet.engine import Session
+        for semilla in range(5):
+            azar = Random(semilla)
+            ed, marcha, otra = self.preparar()
+            v = vista(ed)
+            manipulada = False
+            for paso in range(80):
+                dado = azar.random()
+                if dado < 0.08:  # Reiniciar: otra sesión con otra traza
+                    v.s = Session(v.s.cm, v.s.scenario, v.s.ctl.budget, options=v.s.options)
+                    v.s.start()
+                    manipulada = False
+                elif dado < 0.14:  # traza sustituida por una copia
+                    v.s.trace.records = list(v.s.trace.records)
+                elif dado < 0.2:  # traza acortada en su sitio
+                    del v.s.trace.records[azar.randrange(len(v.s.trace.records) + 1):]
+                    manipulada = True
+                elif dado < 0.26:  # traza acortada y vuelta a crecer con otros registros
+                    del v.s.trace.records[azar.randrange(len(v.s.trace.records) + 1):]
+                    for _ in range(azar.randrange(1, 6)):
+                        v.s.trace.add(azar.choice(("contexto", "estable", "evolucion")), cleared=[f"x{paso}"])
+                    manipulada = True
+                elif v.s.status == "pausada-estable":
+                    self.mover(v, azar.choice((marcha, otra)), azar.random() < 0.5)
+                recs = v.s.trace.records
+                esperado = _ultima_evolucion_antigua(recs)
+                self.assertIs(v._ultima_evolucion(recs), esperado, (semilla, paso))
+                self.assertIs(v._ultima_evolucion(recs), esperado, (semilla, paso))  # una segunda vez, ya con la memoria
+                if not manipulada and v.s.z is not None:  # (con registros inventados state() no tiene de dónde leer el resto)
+                    cierre = next((r["kind"] for r in reversed(recs) if r["kind"] in ("estable", "fallo", "limite")), None)
+                    self.assertEqual(v.state()["lastCleared"], esperado["cleared"] if esperado and cierre == "estable" else [], (semilla, paso))
+
+    def test_SNUC16_el_coste_de_state_no_crece_con_la_traza_si_la_situacion_no_cambia(self):
+        """REQ-SIM-01: con miles de registros sin evolución, cada `Vista.state()` lee de la traza solo los registros nuevos (unos pocos), no
+        todos los de después de la última evolución."""
+        ed, marcha, otra = self.preparar()
+        v = vista(ed)
+        self.mover(v, marcha, True)  # una evolución real, y después solo entradas que no franquean nada
+        v.s.trace.records = _Contados(v.s.trace.records)
+        v.state()
+        maximo = 0
+        for k in range(1500):
+            self.mover(v, otra, k % 2 == 0)
+            _Contados.lecturas = 0
+            v.state()
+            maximo = max(maximo, _Contados.lecturas)
+        self.assertGreater(len(v.s.trace.records), 4000)
+        self.assertLess(maximo, 12, f"state() leyó hasta {maximo} registros por llamada")
+
+
 def _manual_input_lenta(self, changes):
     """`Session.manual_input` como era antes de E7 paso 4 (recorría todos los lotes): la referencia de la prueba."""
     from grafcet.diagnostics import Diagnostic, DiagnosticError

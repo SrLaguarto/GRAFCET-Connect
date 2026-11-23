@@ -256,14 +256,44 @@ def _separar_lazos(M, out, pos):
         x0 = original[2][0]
         preferida = x0 < min(original[0][0],original[-1][0])
         candidatos = [x0] + [x for n in range(len(lazos)+2) for x in (izquierda-26*n,derecha+26*n)]
-        def puntuar(x):
-            pts = [original[0],original[1],(x,original[2][1]),(x,original[3][1]),original[4],original[5]]
-            choques = sum(1 for ident,l,t,r,b in cajas if ident not in (e["tid"],e["sid"])
-                          for a,z in zip(pts,pts[1:]) if
-                          (a[0] == z[0] and l < a[0] < r and max(min(a[1],z[1]),t) < min(max(a[1],z[1]),b)) or
-                          (a[1] == z[1] and t < a[1] < b and max(min(a[0],z[0]),l) < min(max(a[0],z[0]),r)))
-            return (choques, cortes(pts,e), (x < min(original[0][0],original[-1][0])) != preferida, abs(x-x0)), pts
-        _, e["pts"] = min((puntuar(x) for x in candidatos), key=lambda v:v[0])
+        # (solo rendimiento: el mismo resultado que puntuar cada candidato por entero; ver tests/test_routing_lazos.py)
+        # La puntuación es (choques, cortes, lado, distancia) y gana la menor: los choques con cajas se cuentan primero para todos los
+        # candidatos, con lo que no depende de x (los dos tramos de los extremos, y la lista de cajas que cada tramo puede tocar), y los cortes,
+        # que cuestan más, solo se calculan para los candidatos que empatan en el mínimo de choques.
+        propias = (e["tid"], e["sid"])
+        validas = [c for c in cajas if c[0] not in propias]
+        o0, o1, o2, o3, o4, o5 = original
+        y2, y3 = o2[1], o3[1]
+
+        def cuenta(a, z, lista):
+            n = 0
+            for _i, l, t, r, b in lista:
+                if ((a[0] == z[0] and l < a[0] < r and max(min(a[1], z[1]), t) < min(max(a[1], z[1]), b)) or
+                        (a[1] == z[1] and t < a[1] < b and max(min(a[0], z[0]), l) < min(max(a[0], z[0]), r))):
+                    n += 1
+            return n
+        fijos_n = cuenta(o0, o1, validas) + cuenta(o4, o5, validas)  # los tramos que no dependen de x
+        horizontal_1 = [c for c in validas if c[2] < y2 < c[4]] if o1[1] == y2 else []   # (solo estas pueden tocar un tramo horizontal a esa altura)
+        horizontal_3 = [c for c in validas if c[2] < y3 < c[4]] if y3 == o4[1] else []
+        vertical_2 = [c for c in validas if max(min(y2, y3), c[2]) < min(max(y2, y3), c[4])] if y2 != y3 else validas
+
+        def choques(x):
+            p2, p3 = (x, y2), (x, y3)
+            n = fijos_n
+            n += cuenta(o1, p2, validas) if x == o1[0] else cuenta(o1, p2, horizontal_1)
+            n += cuenta(p3, o4, validas) if x == o4[0] else cuenta(p3, o4, horizontal_3)
+            return n + cuenta(p2, p3, vertical_2)
+        choques_de = [choques(x) for x in candidatos]
+        minimo = min(choques_de)
+        mejor = None
+        for x, n in zip(candidatos, choques_de):
+            if n != minimo:
+                continue
+            pts = [o0, o1, (x, y2), (x, y3), o4, o5]
+            clave = (n, cortes(pts, e), (x < min(o0[0], o5[0])) != preferida, abs(x - x0))
+            if mejor is None or clave < mejor[0]:
+                mejor = (clave, pts)
+        e["pts"] = mejor[1]
         fijos.append(e)
         envolventes[id(e)] = envolvente(e["pts"])
 

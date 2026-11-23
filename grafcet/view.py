@@ -124,6 +124,15 @@ def _patron_ids(ids: tuple[str, ...]) -> "re.Pattern[str]":
     return re.compile(r"(?<!\w)(" + "|".join(re.escape(i) for i in ids) + r")(?!\w)")
 
 
+def _base_simple(x: dict[str, Any]) -> bool:
+    """La base de un retardo se escribe sin paréntesis si es un operando simple: una variable, una etapa, un valor, una comparación (ya va entre
+    corchetes), un flanco (que lleva los suyos) o la negación de un operando simple."""
+    op = x["operator"]
+    if op == "not":
+        return _base_simple(x["operands"][0])
+    return op in ("ref", "active", "activePartial", "activeMacro", "lit", "rise", "fall", *_CMP)
+
+
 def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = None,
          key: str | None = None) -> list[dict[str, Any]]:
     """Notación estática; con `key`, añade referencias de lectura para el color de cada subexpresión."""
@@ -134,7 +143,11 @@ def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = Non
     def lado(i: int) -> list[dict[str, Any]]:
         x = m["operands"][i]
         segs = hijo(i)
-        return _paren(segs) if _PREC.get(x["operator"], 9) < _PREC[op] else segs
+        pc, pp = _PREC.get(x["operator"], 9), _PREC.get(op, 0)
+        # Con la misma precedencia, el hijo derecho de una operación no asociativa lleva paréntesis (a − (b + c), a / (b · c), a · (b / c)):
+        # sin ellos se leería de izquierda a derecha y cambiaría el valor.
+        derecho = i == 1 and pc == pp and (op in ("sub", "div") or (op == "mul" and x["operator"] == "div"))
+        return _paren(segs) if pc < pp or derecho else segs
     if op == "lit":
         lit = m["literal"]
         if lit["type"] == "bool":
@@ -162,12 +175,14 @@ def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = Non
     elif op == "delay":
         d1, base, d2 = m["operands"]
         out = hijo(1)
+        if not _base_simple(base):  # 3s/(a + b), no 3s/a + b
+            out = _paren(out)
         if int(d1["literal"]["value"]):
             out = hijo(0) + [_seg("/")] + out
         if int(d2["literal"]["value"]):
             out += [_seg("/")] + hijo(2)
     elif op == "neg":
-        out = [_seg("−")] + hijo(0)
+        out = [_seg("−")] + (_paren(hijo(0)) if m["operands"][0]["operator"] in _PREC and m["operands"][0]["operator"] not in _CMP else hijo(0))
     elif op in _CMP:
         out = [_seg("[")] + lado(0) + [_seg(f" {_CMP[op]} ")] + lado(1) + [_seg("]")]
     else:
@@ -286,6 +301,7 @@ class Vista:
         res.diagnostics.extend(validar_barras(doc, self.bars))
         self.compile_diags = [d for d in res.diagnostics if d.blocks_start]
         self._s: Session | None = None
+        self._evo: tuple[list[dict[str, Any]], int, dict[str, Any] | None, dict[str, Any] | None] | None = None  # ver _ultima_evolucion
         self._start_diags: list = []
         self._arrancada = True  # (nada que arrancar si no hay sesión)
         if res.can_simulate:
@@ -488,6 +504,26 @@ class Vista:
             valores[f"@limit:{a['id']}"] = not valores[key]
         return valores
 
+    def _ultima_evolucion(self, registros: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """Último registro `evolucion` de la traza sin recorrerla entera en cada refresco (la traza llega a 10^6): se recuerda
+        hasta dónde se ha mirado y cuál fue la última; solo se examinan los registros añadidos desde entonces. La memoria vale
+        mientras sea la misma lista y su último registro mirado siga en su sitio; con otra sesión, un reinicio o una traza
+        sustituida o acortada se busca de nuevo desde el final, como siempre."""
+        n = len(registros)
+        c = self._evo
+        if c is not None and c[0] is registros and c[1] <= n and (c[1] == 0 or registros[c[1] - 1] is c[2]):
+            desde, ultima = c[1], c[3]
+        else:
+            desde, ultima = 0, None
+        i = n - 1
+        while i >= desde:
+            if registros[i]["kind"] == "evolucion":
+                ultima = registros[i]
+                break
+            i -= 1
+        self._evo = (registros, n, registros[n - 1] if n else None, ultima)
+        return ultima
+
     def state(self) -> dict[str, Any]:
         s = self.s
         out: dict[str, Any] = {"truth": {}}
@@ -500,7 +536,7 @@ class Vista:
         if s.z is None:
             return out
         obs = s.observe()
-        ultima_evolucion = next((r for r in reversed(s.trace.records) if r["kind"] == "evolucion"), None)  # desde el final: la traza llega a 10^6
+        ultima_evolucion = self._ultima_evolucion(s.trace.records)
         closed = next((r["kind"] for r in reversed(s.trace.records) if r["kind"] in ("estable", "fallo", "limite")), None)
         last_stable = next((r for r in reversed(s.trace.records) if r["kind"] == "estable" and "reason" not in r), None)
         contexto = next((r for r in reversed(s.trace.records) if r["kind"] == "contexto"), None)

@@ -16,11 +16,13 @@ def _segmento(M: dict[str, Any], pos: dict[str, Punto], d: dict[str, Any]) -> tu
 
 
 def anclas(
-    M: dict[str, Any], ident: str, pos: dict[str, tuple[float, float]] | None = None
+    M: dict[str, Any], ident: str, pos: dict[str, tuple[float, float]] | None = None, *,
+    pasos: set[str] | None = None, transiciones: dict[str, dict[str, Any]] | None = None
 ) -> list[dict[str, Any]]:
     """Puntos de unión de un elemento: etapa y transición, arriba (entra el enlace) y abajo (sale); la etapa, además, en
     el centro de su lado derecho (de ahí salen las acciones); una acción suelta (la primera de su grupo), a la
-    izquierda."""
+    izquierda. `pasos` (los ID de las etapas) y `transiciones` (por ID) son solo para no buscarlos en cada llamada cuando se piden las
+    de todos los elementos (`ancla_en`): el resultado es el mismo."""
     for b in M.get("bars", []):
         if b["id"] == ident:
             bx, by, w, h = barra(b)
@@ -34,7 +36,7 @@ def anclas(
     if ident not in pos:
         return []
     x, y = pos[ident]
-    t = next((t for t in M["transitions"] if t["id"] == ident), None)
+    t = next((t for t in M["transitions"] if t["id"] == ident), None) if transiciones is None else transiciones.get(ident)
     arriba, abajo = H, H
     if t is not None:
         arriba = ANCLA_S + simul_d(t, x, y, _otros_t(t, pos, -1), -1) - SIMUL if t.get("simulPre") else ANCLA
@@ -44,7 +46,7 @@ def anclas(
                 {"id": ident, "lado": "abajo", "pos": punto_t(t, x, y, abajo)}]
     out = [{"id": ident, "lado": "arriba", "pos": (x, y - arriba)},
            {"id": ident, "lado": "abajo", "pos": (x, y + abajo)}]
-    if any(st["id"] == ident for st in M["steps"]):
+    if (ident in pasos) if pasos is not None else any(st["id"] == ident for st in M["steps"]):
         out.append({"id": ident, "lado": "der", "pos": (x + H, y)})
     return out
 
@@ -58,10 +60,13 @@ def ancla_en(M: dict[str, Any], p: Punto, radio: float = RADIO_ANCLA, sin_der: b
     ocupadas = {s["id"] for s in M["steps"] if s["actions"]}
     ocupadas.update(d["etapa"] for d in M.get("draftActions", []) if d.get("etapa"))
     cuadrados = {s["id"] for s in M["steps"]} | {s["id"] for s in M.get("macros", [])}
-    for ident, (cx, cy) in posiciones(M).items():
+    pos = posiciones(M)  # una sola vez: `anclas` la rehace entera si no se la dan (y se llama por cada elemento)
+    pasos = {s["id"] for s in M["steps"]}
+    transiciones = {t["id"]: t for t in M["transitions"]}
+    for ident, (cx, cy) in pos.items():
         if ident in cuadrados and Rect(cx - H + 2, cy - H + 2, 2 * H - 4, 2 * H - 4).contiene(p):
             continue  # dentro de la caja se selecciona o arrastra; los puntos de enlace quedan fuera
-        for a in anclas(M, ident):
+        for a in anclas(M, ident, pos, pasos=pasos, transiciones=transiciones):
             if a["lado"] == "der" and sin_der:
                 continue
             d = ((a["pos"][0] - p[0]) ** 2 + (a["pos"][1] - p[1]) ** 2) ** 0.5
@@ -84,13 +89,17 @@ def ancla_en(M: dict[str, Any], p: Punto, radio: float = RADIO_ANCLA, sin_der: b
     return best[1] if best else None
 
 
-def marco_en(M: dict[str, Any], p: Punto, borde: float = 6, *, medir: MedirTexto) -> str | None:
+def marco_en(M: dict[str, Any], p: Punto, borde: float = 6, *, medir: MedirTexto,
+             cajas: dict[str, dict[str, float]] | None = None) -> str | None:
     """El parcial cuyo marco (recinto o parcial; la expansión no tiene) se toca en el punto: su borde, a `borde` o
     menos, o
     su nombre. Dentro del marco, lejos del borde, no hay nada que agarrar: ahí se suelta, se traza el lazo… Si hay
     varios,
     el más pequeño."""
-    cajas = cajas_parciales(M, medir=medir)
+    if not any(part["kind"] in ("enclosure", "partial") for part in M.get("partials") or []):
+        return None  # sin recintos ni parciales con marco no hay nada que tocar: no se calculan las cajas
+    if cajas is None:  # (quien lo pide muchas veces sobre el mismo dibujo, como un arrastre, las trae ya calculadas)
+        cajas = cajas_parciales(M, medir=medir)
     mejor: tuple[float, str] | None = None
     for part in M.get("partials") or []:
         b = cajas.get(part["id"])
@@ -113,7 +122,7 @@ def marco_en(M: dict[str, Any], p: Punto, borde: float = 6, *, medir: MedirTexto
 
 
 def elemento_en(M: dict[str, Any], p: Punto, medir: MedirTexto,
-                anotacion_en: Callable[[], str | None]) -> str | None:
+                anotacion_en: Callable[[], str | None], cajas: dict[str, dict[str, float]] | None = None) -> str | None:
     """El elemento bajo un punto del dibujo: etapa, transición (su trazo), enlace en borrador, enlace o, al final y solo
     en su borde o su nombre, el marco de un parcial."""
     pos = posiciones(M)
@@ -142,4 +151,4 @@ def elemento_en(M: dict[str, Any], p: Punto, medir: MedirTexto,
     for e in enlaces(M):  # los enlaces, al final: lo que hay encima manda
         if any(_distancia(p, a, b) <= 7 for a, b in zip(e["pts"], e["pts"][1:])):
             return e["id"]
-    return anotacion_en() or marco_en(M, p, medir=medir)
+    return anotacion_en() or marco_en(M, p, medir=medir, cajas=cajas)

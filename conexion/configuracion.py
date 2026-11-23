@@ -74,10 +74,6 @@ class Configuracion:
     filtro_senales: list[dict] = field(default_factory=list)
     recordar_filtro: bool = False
 
-    def fijar_escalas_simulador(self):
-        for s in self.senales:
-            s.escala = "1" if s.formato == "BOOL" else "100"
-
     def validar(self, doc: dict):
         if self.modo == "directo":
             from .configuracion_directa import validar

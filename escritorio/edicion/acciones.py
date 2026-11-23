@@ -447,13 +447,15 @@ class _Acciones:
         def hacer() -> None:
             nonlocal did
             did = self.ed.add_draft_action((ajustar(x + H + ACT_LINK), ajustar(y)), {"etapa": sid})
-        motivo = self._atomico("añadir acción", hacer)
+        # La vista es la de ahora (se llama desde un gesto o un menú sobre lo dibujado): no se rehace antes, y `_atomico` no emite: se emite una
+        # sola vez, con la selección ya puesta (la vista que dejó `_atomico` es la última: no se vuelve a rehacer).
+        motivo = self._atomico("añadir acción", hacer, vista_actual=True, emitir=False)
         if motivo:
             self.rechazar(motivo, sid)
             self.cambiado.emit()
             return ""
         self.sel, self.accion, self.ver_accion = [sid], did, True
-        self.cambia()
+        self.cambia(reconstruir=False)
         self.pedir_accion(sid, did)
         return did
 

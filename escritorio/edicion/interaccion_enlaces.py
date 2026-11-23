@@ -200,10 +200,11 @@ class _Enlaces:
             else:
                 nuevo = ed.add_step(parcial, ed.next_label("step"), at=(x, y))
                 ed.connect(base, nuevo) if abajo else ed.connect(nuevo, base)
-            self._unir_cercanos({nuevo})  # y, si su otro punto queda muy cerca de uno libre compatible, también se une (P-IMP-114)
+            # y, si su otro punto queda muy cerca de uno libre compatible, también se une (P-IMP-114)
+            unido = self._unir_cercanos({nuevo})  # (ya rehízo la vista con el elemento en su sitio: si no unió nada, esa es la de ahora)
         self.sel = [nuevo]
         self.informar("Rama abierta: " + ("escriba la receptividad en las propiedades (doble clic en la transición)." if es_paso else "etapa nueva."))
-        self.cambia()
+        self.cambia(reconstruir=unido)
         return nuevo
 
     def _ocupado(self, x: float, y: float, margen: float = 45) -> bool:

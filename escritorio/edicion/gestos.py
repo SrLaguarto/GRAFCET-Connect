@@ -92,6 +92,7 @@ class _Gestos:
         """Empieza el gesto del ratón y avisa a `tras_gesto(antes, despues)`: si pulsar ya cambia lo que mostraba el panel de
         opciones, la ventana lo esconde en ese momento (sin fijar), sin enseñar antes la página nueva."""
         self._clave_antes = self.clave_panel()
+        self._cajas_gesto = None
         if self.mensaje in (MSG_SOLAPE, MSG_SOLAPE_PARCIAL):  # el aviso de una ficha ya soltada no sigue a la vista
             self.mensaje = ""
             self.cambiado.emit()
@@ -105,6 +106,7 @@ class _Gestos:
         pulsar y de lo que muestra al soltar (lo que cambia al soltar, como una selección con lazo)."""
         antes, self._clave_antes = self._clave_antes, None
         resultado = self._soltar(p, event)
+        self._cajas_gesto = None
         if antes is not None and self.tras_gesto is not None:
             self.tras_gesto(antes, self.clave_panel())
         return resultado
@@ -362,11 +364,19 @@ class _Gestos:
         """El punto de unión al que llegaría un enlace soltado en p: el más cercano, o el de una acción suelta bajo el
         puntero. El de la derecha de una etapa solo vale para el enlace de una acción."""
         destino = ancla_en(self.M, p, sin_der=origen is not None and origen["lado"] != "izq")
-        if destino is None and self._elemento_sin_marco(p) is None:
+        if destino is None and self._elemento_sin_marco(p, self._cajas_del_gesto() if origen is not None else None) is None:
             caja = self.accion_en(p)
             if caja and caja.get("suelta"):
                 destino = anclas(self.M, caja["cabeza"])[0]  # una acción de un grupo suelto: el grupo entero
         return destino
+
+    def _cajas_del_gesto(self) -> dict[str, dict[str, float]]:
+        """Las cajas de los parciales del dibujo de ahora, calculadas una vez por gesto: mientras se arrastra un enlace el modelo no
+        cambia y en cada fotograma solo se mueve el puntero. Vale mientras `self.M` sea el mismo; `soltar` y `prensar` la sueltan."""
+        memo = self._cajas_gesto
+        if memo is None or memo[0] is not self.M:
+            memo = self._cajas_gesto = (self.M, cajas_parciales(self.M))
+        return memo[1]
 
     def _soltar(self, p: QPointF, event: Any = None) -> bool:
         if self.lazo:

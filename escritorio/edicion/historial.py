@@ -33,7 +33,9 @@ class _Historial:
         if antes_de_notificar is not None:
             antes_de_notificar()
         # `vista_al_final`: `fn` ya dejó la vista como queda (acabó con `reconstruir`); `emitir` falso: quien llama emite él, tras su mensaje
-        self.cambia(reconstruir=not ((vista_actual and hueco) or vista_al_final), emitir=emitir)
+        # Con `hueco`, `_asegurar_hueco` acaba con la vista rehecha (y `_despejar` la rehace tras cada desplazamiento): rehacerla otra vez
+        # daría la misma, salvo que `antes_de_notificar` toque el modelo o las posiciones. Cada `reconstruir` cuesta ~0,75 s en un proyecto de 108 etapas.
+        self.cambia(reconstruir=not ((hueco and (vista_actual or antes_de_notificar is None)) or vista_al_final), emitir=emitir)
         if self._encima:  # no se pudo abrir hueco: se deja como está, con un aviso que no es un error
             self.informar(MSG_ENCIMA)
             self.parpadear(self._encima)

@@ -1,13 +1,14 @@
 """Guarda de hilos del ciclo de E/S (V2-E7, paso 0). Sin Qt.
 
-El motor (`Session`) y el `Coordinador` los tocará un solo hilo a la vez: el candado de control (`Candado`, reentrante). Esta guarda
+El motor (`Session`) y el `Coordinador` los toca un solo hilo a la vez: el candado de control (`Candado`, reentrante). Esta guarda
 comprueba que se cumple. Solo con la variable `GRAFCONNECT_COMPROBAR_HILOS=1`; sin ella, `proteger` no toca el objeto y no cuesta nada.
 
 Con la guarda activa y el hilo de control vivo (`candado.control_vivo`), cualquier lectura o escritura de un atributo o método protegido desde
 un hilo que no tiene el candado lanza `AccesoSinCandado`, con el nombre del objeto, el del atributo y el del hilo. Mientras no haya hilo de
-control (hoy, o después de pararlo) no se exige nada.
+control (antes de arrancarlo o después de pararlo) no se exige nada.
 
-Uso (lo hará el hilo de control cuando exista):
+Uso: la ventana (`escritorio/ventana/`) crea el `Candado` y protege el motor y el coordinador con `proteger`; el hilo de control (`CicloES`, en
+`conexion/ciclo.py`) pone `candado.control_vivo` a verdadero al arrancar y a falso al terminar (lo que hace `hilo_de_control`):
 
     candado = Candado()
     proteger(coordinador, ("tick", "estado", "medidas", ...), candado, "Coordinador")

@@ -71,10 +71,10 @@ class _Seleccion:
         out += [n["id"] for n in self.M.get("annotations",[]) if r.contains(rect_anotacion(n))]
         return out
 
-    def _elemento_sin_marco(self, p: QPointF) -> str | None:
+    def _elemento_sin_marco(self, p: QPointF, cajas: dict[str, dict[str, float]] | None = None) -> str | None:
         """El elemento bajo el punto, salvo el marco de un parcial (su borde o su nombre, que se selecciona pero no es un
         elemento al que unir nada): para soltar un enlace, soltar ahí es soltar en un hueco."""
-        ident = elemento_en(self.M, p)
+        ident = elemento_en(self.M, p, cajas)
         return None if ident is not None and any(q["id"] == ident for q in self.M["partials"]) else ident
 
     def explicito(self, f: Callable[..., Any], *args: Any) -> Any:

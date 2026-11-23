@@ -125,6 +125,13 @@ ejecutable y medida final) pasa al cierre (E9), para que recoja también E7 y E8
   - la franja tiene un tope de alto proporcional a la ventana;
   - el ancho de la lista se recuerda en la configuración del programa, no en el proyecto;
   - módulo nuevo `escritorio/partes_propiedades.py`.
+- **E8, alcance (22-nov, tras aprobar la maqueta v3 de `artifacts/rediseno_emergentes/maquetas.html`):** entra todo lo
+  visual y lo que no cambia el modelo de la fórmula (fichas nuevas, catálogo siempre visible, colores de parte, conmutador
+  con clic en la franja, menú común, modificadores NOT/↑/↓ sobre la ficha, temporizador con base de expresión, copiar,
+  pegar y limpiar). Pasan a la **2.1** la lista plana de «y»/«o» con conectores y la multiselección con Ctrl+clic para
+  envolver: cambian la conversión entre fichas y texto guardado, y se harán con su prueba de ida y vuelta.
+- **E9, paréntesis en el dibujo de fórmulas** (22-nov, solo en la 2.0): el hijo derecho de resta y división y la base de
+  varios operandos de un retardo llevan paréntesis; hoy se pierden y lo dibujado no coincide con lo calculado.
 - **E9, `Vista.state()`:** el responsable autoriza recordar la última evolución en lugar de buscarla en la traza, solo por
   rendimiento y con el mismo resultado (el máximo de la conexión de 30 min sube de 19 a 73 ms mientras el P95 sigue plano).
 
@@ -140,6 +147,9 @@ Proyecto de referencia, Qt offscreen a 1366 × 768, mediana tras calentamiento.
 
 «Mover una etapa» se mide por gesto: pulsar, mover y soltar, tres dibujos. Al cerrar la 2.0, el responsable decide si
 la meta es por gesto o por fotograma (al cerrar E3, en GEMMA: unos 31 ms por fotograma y 93 por gesto).
+**Decidido (22-nov):** por fotograma. Lo que el responsable nota es el arrastre que crea una acción, una transición o una
+etapa nueva (la línea de trazos va con retraso), así que se mide el fotograma de movimiento de esos gestos, con objetivo
+≤ 16 ms en `Linea larga` y GEMMA.
 
 ## Arquitectura de llegada
 

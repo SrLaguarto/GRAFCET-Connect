@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 MAX_META_INT = 2**31 - 1
@@ -22,7 +23,13 @@ class CanonicalError(ValueError):
     pass
 
 
+_ESPECIAL = re.compile(r'["\\\x00-\x1f\ud800-\udfff]')  # lo que `_string` escapa o rechaza
+
+
 def _string(s: str, out: list[str]) -> None:
+    if _ESPECIAL.search(s) is None:  # (solo rendimiento: casi todas las cadenas, y las claves, no llevan nada que escapar)
+        out.append('"' + s + '"')
+        return
     out.append('"')
     for ch in s:
         o = ord(ch)

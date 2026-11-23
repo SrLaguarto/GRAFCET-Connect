@@ -494,14 +494,14 @@ def marco_en(M: dict[str, Any], p: QPointF, borde: float = 6) -> str | None:
     return geo_seleccion.marco_en(M, p.toTuple(), borde, medir=_Pintor.ancho)
 
 
-def elemento_en(M: dict[str, Any], p: QPointF) -> str | None:
+def elemento_en(M: dict[str, Any], p: QPointF, cajas: dict[str, dict[str, float]] | None = None) -> str | None:
     from .anotaciones import en
 
     def anotacion() -> str | None:
         n = en(M, p)
         return n["id"] if n else None
 
-    return geo_seleccion.elemento_en(M, p.toTuple(), _Pintor.ancho, anotacion)
+    return geo_seleccion.elemento_en(M, p.toTuple(), _Pintor.ancho, anotacion, cajas)
 
 
 def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], naranja: set[str] = frozenset(),
