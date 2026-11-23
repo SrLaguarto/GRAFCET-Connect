@@ -68,16 +68,16 @@ class Paneles(BaseQt):
 
 
     def test_SPAN06_editor_compacto_util_a_1000_y_categorias_accesibles(self):
-        """REQ-EDT-09: los controles de la flotante y sus categorías caben a 1000×600."""
+        """REQ-EDT-09: los controles de la flotante y la banda de sus categorías caben a 1000×600 (E8: cuatro categorías, sin pestañas)."""
         w, e = self.preparar(1000, 600)
         w._abrir_opciones()
         QApplication.processEvents()
         p = w.props
         self.assertTrue(w.flot.hay_ventanas())
         self.assertGreater(p.prog.lienzo.parentWidget().height(), 40)
-        self.assertEqual(len(p.prog.categorias), 5)
-        zona = p.prog._sc_carpetas.viewport()
-        for boton in p.prog.categorias.values():
+        self.assertEqual(len(p.prog.categorias), 4)
+        zona = p.prog.banda
+        for boton in list(p.prog.categorias.values()) + [b for bs in p.prog.banda.botones.values() for b in bs]:
             self.assertTrue(boton.isVisible())
             caja = QRect(boton.mapTo(zona, QPoint()), boton.size())
             self.assertTrue(zona.rect().contains(caja), boton.text())

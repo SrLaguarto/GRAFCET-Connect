@@ -216,9 +216,9 @@ class InterfazP(unittest.TestCase):
                 p = c.w.flot.panel
                 casilla = p.t_mostrar
                 self.assertGreaterEqual(casilla.width(), casilla.fontMetrics().horizontalAdvance(casilla.text()) + 22)
-                if ancho == 1366:
+                if ancho == 1366:  # (E8: la banda de categorías, en dos filas como mucho; ya no hay una fila de pestañas)
                     ys = {b.mapTo(p.prog, QPoint()).y() for b in p.prog.categorias.values()}
-                    self.assertEqual(len(ys), 1)
+                    self.assertLessEqual(len(ys), 2)
             finally:
                 c.cerrar()
 

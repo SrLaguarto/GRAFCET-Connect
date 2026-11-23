@@ -1,10 +1,10 @@
 """Programador por bloques de receptividades y condiciones (P-IMP-38).
 
-La expresión se arma con bloques de colores que se arrastran desde una paleta (Operadores, Constantes, Entradas, Salidas,
-Etapas, Memorias, Comparaciones, Temporizadores) y encajan unos dentro de otros. Las condiciones son bloques hexagonales:
+La expresión se arma con bloques que se arrastran (o se pulsan) desde el catálogo de variables y etapas y desde la banda de
+categorías (Operadores, Temporizadores, Comparaciones, Constantes) y encajan unos dentro de otros. Las condiciones son fichas:
 una variable booleana o una etapa (con un desplegable para elegir cuál), «y» y «o» con dos huecos, «no» y los flancos ↑ ↓
-que envuelven a otro bloque, las constantes 1 (verdadero) y 0 (falso), «temporizar» (t1 y t2 como en la norma: 3s/X1,
-X1/2s) y la comparación de una variable numérica con un valor.
+que envuelven a otro bloque (sobre una variable, se dibujan como una sola ficha), las constantes 1 (verdadero) y 0 (falso),
+«temporizar» (t1 y t2 como en la norma: 3s/X1, X1/2s) y la comparación de una variable numérica con un valor.
 
 Los bloques solo escriben el texto en la notación del usuario (↑a, X1, 3s/X1, NOT, AND, OR, 1/0), que es lo que se
 guarda y lo que el núcleo analiza como siempre (grafcet/notation.py y grafcet/expressions.py no cambian). La primera
@@ -610,33 +610,67 @@ def arbol_a_texto(n: dict[str, Any] | None) -> str:
 
 
 # -- dibujo ------------------------------------------------------------------------------------------------
-COLORES = {"entrada": "#278B87", "salida": "#43845E", "interna": "#B27A39", "etapa": "#7773AA",
-           "operador": "#486078", "comparacion": "#398C9E", "tiempo": "#A38636", "texto": "#6B7280", "error": "#C0392B",
+# Las fichas de la maqueta v3 (E8): una booleana es una ficha con chaflán de 45° y una barra de 4 px del color de su origen
+# (entrada, salida, etapa o memoria); una numérica, una cápsula con su punto de origen; la comparación va entre corchetes; la
+# constante, hundida; «temporizar», un contenedor discontinuo con su insignia (t/X, X/t); «y» y «o», contenedores sobrios con un
+# conector de su color entre un operando y el siguiente. Cambia el dibujo, no el modelo: los huecos, las rutas y los bloques son
+# los de siempre.
+COLORES = {"entrada": estilo.ACENTO, "salida": estilo.SIMULACION, "interna": estilo.ORIGEN_MEMORIA, "etapa": estilo.EDICION,
+           "operador": "#486078", "comparacion": "#398C9E", "tiempo": "#A38636", "texto": "#6B7280", "error": estilo.ERROR,
            "y": "#5F7F0B", "o": "#B83DBA",  # «y» (oliva) y «o» (fucsia): operadores, pero cada uno con su color
-           "constante": "#8A5A44"}  # las fichas 1 (verdadero) y 0 (falso): su propia carpeta, no se pierden entre los operadores
-CATEGORIAS = (("variables", "Variables"), ("operador", "Operadores"), ("tiempo", "Temporizadores"),
-              ("comparacion", "Comparaciones"), ("constante", "Constantes"))
-CATEGORIAS_VALOR = (("vnum", "Variables"), ("aritm", "Operadores"), ("numero", "Número"))  # modo «valor»
+           "constante": "#8A5A44"}  # las fichas 1 (verdadero) y 0 (falso): su propia categoría, no se pierden entre los operadores
+CATEGORIAS_BANDA = (("operador", "Operadores"), ("tiempo", "Temp."), ("comparacion", "Comp."),
+                    ("constante", "Const."))  # (abreviadas para caber en una fila; el nombre entero sale en su ayuda)  # la banda de botones del programador de condiciones
+CATEGORIAS_BANDA_VALOR = (("aritm", "Operadores"), ("numero", "Const."))  # la del programador de valores (modo «valor»)
 _PAPEL_CAT = {"input": "entrada", "output": "salida", "internal": "interna"}
-PADX, PADX_PILA, PADV, GAP, FILA = 10, 7, 3, 4, 3  # relleno lateral y vertical de un bloque, hueco entre piezas y entre filas
+TAG_ORIGEN = {"entrada": "E", "salida": "S", "interna": "M"}  # la letra de origen de una ficha (las etapas ya se llaman X1, X2…)
+PADX, PADX_PILA, PADV, GAP, FILA = 8, 6, 4, 4, 4  # relleno lateral y vertical de un contenedor, hueco entre piezas y entre filas
 ALTO = 20  # alto de las piezas (desplegables, campos)
-HUECO_W, HUECO_H = 34, 22
-PAREN_W = 10  # ancho de cada paréntesis del bloque «( )»; miden lo que el bloque que encierran
+HUECO_W, HUECO_H = 34, 24
+PAREN_W = 8  # ancho de cada paréntesis del bloque «( )»; miden lo que el bloque que encierran
+PAD_PAR, GAP_PAR = 4, 3  # relleno y hueco del bloque «( )»: poco, porque se anida mucho
 SANGRIA = {"no": 8, "sube": 8, "baja": 8, "temp": 8}  # el hijo de un bloque que envuelve, algo hundido
-PUNTA = 8  # cuánto entra la punta de un hexágono
+CHAFLAN = 5  # lado del chaflán de una ficha
+BARRA = 4  # ancho de la barra de origen
+RELLENO_FICHA = 6
+R_PIEZA = 4  # radio de las cajas pequeñas (huecos, campos de texto, el hueco pendiente)
 MARGEN = 6
 MIME = "application/x-grafcet-bloque"
 MIME_FORMULA = "application/x-grafcet-formula"
+MIME_TIPO = "application/x-grafcet-formula-tipo"  # de qué programador viene lo copiado: «condicion» o «valor» (lo mira el botón Pegar)
 _ARRASTRE = {"resuelto": False}  # el arrastre en curso (solo hay uno): si algún programador lo recibió
+
+
+def alto_ficha() -> int:
+    """Alto de una ficha: 28 px a escala normal (los controles compactos menos 2), con la escala de la aplicación."""
+    return estilo.ALTO_CONTROL_COMPACTO - 2
+
+
+def ficha_cadena(n: dict[str, Any] | None) -> tuple[list[str], dict[str, Any] | None] | None:
+    """Si el bloque se dibuja como **una sola ficha** con sus modificadores: (los modificadores de fuera adentro, la variable o etapa de
+    dentro o None si es un hueco pendiente). Solo si lleva como mucho un NOT y un flanco; con más (una fórmula guardada así) o sobre otra
+    cosa que una variable o una etapa, se dibuja como contenedor. Un hueco sin modificadores no es una ficha."""
+    mods: list[str] = []
+    while n is not None and n["k"] in MODIFICADORES:
+        mods.append(n["k"])
+        n = n["a"]
+    if (n is None and not mods) or (n is not None and n["k"] not in ("var", "etapa")):
+        return None
+    if mods.count("no") > 1 or sum(m != "no" for m in mods) > 1:
+        return None
+    return mods, n
 
 
 class _Pieza:
     """Una pieza ya medida de un bloque: texto, desplegable o campo."""
-    __slots__ = ("tipo", "clave", "texto", "vacio", "w", "h", "completo")
+    __slots__ = ("tipo", "clave", "texto", "vacio", "w", "h", "completo", "ruta", "extra")
 
-    def __init__(self, tipo: str, clave: str, texto: str, vacio: bool, w: float, h: float, completo: str = "") -> None:
+    def __init__(self, tipo: str, clave: str, texto: str, vacio: bool, w: float, h: float, completo: str = "",
+                 ruta: tuple | None = None, extra: Any = None) -> None:
         self.tipo, self.clave, self.texto, self.vacio, self.w, self.h = tipo, clave, texto, vacio, w, h
         self.completo = completo  # el texto entero, si el que se ve está recortado con «…» (sale en la ayuda emergente)
+        self.ruta = ruta  # la ruta del bloque al que responde (si no es el de la caja que la contiene: una ficha con modificadores)
+        self.extra = extra  # la letra de origen de una ficha con su color: (letra, color)
 
 
 class _Caja:
@@ -646,7 +680,11 @@ class _Caja:
         self.nodo, self.ruta, self.w, self.h, self.cat = nodo, ruta, w, h, cat
         self.items: list[tuple[float, float, Any]] = []
         self.fantasmas: list[tuple[QRectF, tuple, dict[str, Any]]] = []  # operaciones en línea: sin dibujo propio, pero con sitio
-        self.sin_fondo = False  # no pinta su hexágono (el de fuera ya los rodea): una operación dentro de un paréntesis
+        self.sin_fondo = False  # no pinta su fondo (el de fuera ya los rodea): una operación dentro de un paréntesis
+        self.forma = ""  # cómo se dibuja: ficha, hundida, capsula, pendiente, texto, y, o, temp, cadena, par, ar
+        self.destino = ruta  # el sitio que recibe lo que se suelta encima (en una ficha con modificadores, la variable de dentro)
+        self.mods: list[str] = []  # los modificadores de una ficha o de una cadena, de fuera adentro
+        self.negada = ""  # una ficha con NOT: «todo» si la barra cubre también el flanco, «nombre» si solo la variable
 
 
 class Motor:
@@ -659,15 +697,30 @@ class Motor:
         self.vars: dict[str, tuple[str, str]] = {}
         self.etapas: list[str] = []
         # La letra de las fichas lleva su familia explícita: con `QFont()` (la de la plataforma) se medía con una y se pintaba con
-        # otra (en el pintor, el dispositivo le pone la de la hoja de estilo) y el texto se salía del hexágono: «ʼin», «narch».
+        # otra (en el pintor, el dispositivo le pone la de la hoja de estilo) y el texto se salía de la ficha: «ʼin», «narch».
         self.f = QFont(estilo.FUENTE)
         self.f.setPixelSize(12)
         self.fb = QFont(self.f)
         self.fb.setBold(True)
-        self.m, self.mb = QFontMetricsF(self.f), QFontMetricsF(self.fb)
+        self.fs = QFont(self.f)  # el nombre de una variable: seminegrita, como la maqueta
+        self.fs.setWeight(QFont.Weight.DemiBold)
+        self.fm = QFont(estilo.FUENTE_MONO)  # cifras, insignias y campos
+        self.fm.setPixelSize(12)
+        self.fm.setBold(True)
+        self.fg = QFont(self.fm)
+        self.fg.setPixelSize(14)
+        self.fp = QFont(self.fm)  # el paréntesis de un temporizador
+        self.fp.setPixelSize(17)
+        self.m, self.mb, self.ms = QFontMetricsF(self.f), QFontMetricsF(self.fb), QFontMetricsF(self.fs)
+        self.mm, self.mg, self.mp = QFontMetricsF(self.fm), QFontMetricsF(self.fg), QFontMetricsF(self.fp)
+        # la letra de cada estilo de texto suelto: (fuente, medidas, ancho extra de la caja que lo lleva)
+        self._est = {"": (self.fb, self.mb, 0), "y": (self.fb, self.mb, 12), "o": (self.fb, self.mb, 12),
+                     "barra": (self.fg, self.mg, 0), "pp": (self.fp, self.mp, 0), "br": (self.fg, self.mg, 0),
+                     "op": (self.fg, self.mg, 0), "ins": (self.fm, self.mm, 12), "insw": (self.fm, self.mm, 12),
+                     "pf": (self.fm, self.mm, 10), "pend": (self.fb, self.mb, 0), "const": (self.fg, self.mg, 0)}
         self.nat: dict[tuple, float] = {}
         self.botones = True  # el «+» del «y» y el «o»: en la paleta no hay
-        self.fijo = False  # en la paleta, una ficha por elemento: el nombre ya va elegido y no lleva desplegable (▾)
+        self.fijo = False  # en el catálogo, una ficha por elemento: el nombre ya va elegido y no lleva desplegable (▾)
 
     def reiniciar(self) -> None:
         self.vars, self.etapas = self.fuente()
@@ -675,6 +728,13 @@ class Motor:
         self.recortadas: list[tuple[QRectF, str]] = []  # (sitio, texto entero) de las piezas con el texto recortado
 
     # -- qué lleva cada bloque
+    @staticmethod
+    def _insignia(n: dict[str, Any]) -> tuple[str, str]:
+        """Cómo se escribe un retardo (t/X, X/t, t1/X/t2) y su estilo; sin tiempos, la advertencia de que no escribe nada."""
+        if n["t1"] and n["t2"]:
+            return "t1/X/t2", "ins"
+        return ("t/X", "ins") if n["t1"] else ("X/t", "ins") if n["t2"] else ("sin retardo", "insw")
+
     def elementos(self, n: dict[str, Any]) -> list[tuple]:
         k = n["k"]
         visible = etapa_visible(n["n"]) if k == "etapa" else n.get("n")  # (una etapa se ve «X1», «X0fsd», como en la fórmula y en el dibujo)
@@ -683,27 +743,30 @@ class Motor:
         if k in ("var", "etapa"):
             return [("drop", "n", visible or "elegir")]
         if k == "const":
-            return [("txt", "", str(n["v"]))]
+            return [("txt", "const", str(n["v"]))]
         if k in ("y", "o"):
             hs = hijos(n)
             out: list[tuple] = []
             for i, c in enumerate(hs):
                 if i:
-                    out.append(("txt", "", "y" if k == "y" else "o"))
+                    out.append(("txt", k, "· Y" if k == "y" else "+ O"))
                 out.append(("hijo", c))
             if self.botones and len(hs) < MAX_ENTRADAS:
                 out.append(("boton", "mas", "+"))
             return out
-        if k == "no":
-            return [("txt", "", "no"), ("hijo", "a")]
-        if k in ("sube", "baja"):
-            return [("txt", "", "flanco ↑" if k == "sube" else "flanco ↓"), ("hijo", "a")]
+        if k in MODIFICADORES:  # una cadena de modificadores sobre algo que no es una variable: sus insignias y, a su lado, lo que modifica
+            mods, _ = self._cadena(n)
+            return [("mod", m, {"no": "NOT", "sube": "↑", "baja": "↓"}[m]) for m in mods] + [("hijo", ("a",) * len(mods))]
         if k == "temp":
-            return [("txt", "", "temporizar"), ("campo", "t1", n["t1"], "t1"), ("txt", "", "/"), ("hijo", "a"),
-                    ("txt", "", "/"), ("campo", "t2", n["t2"], "t2")]
+            t, estilo_ins = self._insignia(n)
+            base = _efectivo(n["a"])
+            parens = not (_atomo(base) or (base is not None and base["k"] in MODIFICADORES and _atomo(base["a"])))
+            return ([("txt", estilo_ins, t), ("campo", "t1", n["t1"], "t1"), ("txt", "barra", "/")]
+                    + ([("txt", "pp", "(")] if parens else []) + [("hijo", "a")] + ([("txt", "pp", ")")] if parens else [])
+                    + [("txt", "barra", "/"), ("campo", "t2", n["t2"], "t2")])
         if k == "cmp":
-            return [("drop", "n", n["n"] or "elegir"), ("drop", "op", OP_VISIBLE[n["op"]]),
-                    ("campo", "v", n["v"], "valor")]
+            return [("txt", "br", "["), ("drop", "n", n["n"] or "elegir"), ("drop", "op", OP_VISIBLE[n["op"]]),
+                    ("campo", "v", n["v"], "valor"), ("txt", "br", "]")]
         if k == "num":
             return [("campo", "v", n["v"], "número")]
         if k == "vnum":
@@ -713,6 +776,15 @@ class Motor:
         if k == "par":
             return [("paren", "izq", "("), ("hijo", "a"), ("paren", "der", ")")]
         return [("campo", "s", n["s"], "texto")]
+
+    @staticmethod
+    def _cadena(n: dict[str, Any] | None) -> tuple[list[str], dict[str, Any] | None]:
+        """Los modificadores de fuera adentro y el bloque (o el hueco) que modifican."""
+        mods: list[str] = []
+        while n is not None and n["k"] in MODIFICADORES:
+            mods.append(n["k"])
+            n = n["a"]
+        return mods, n
 
     def categoria(self, n: dict[str, Any]) -> str:
         k = n["k"]
@@ -744,27 +816,44 @@ class Motor:
     def pieza(self, e: tuple, maxw: float = 100000) -> _Pieza:
         tipo = e[0]
         if tipo == "txt":
-            vis = self.mb.elidedText(e[2], Qt.TextElideMode.ElideRight, maxw) if maxw < 100000 else e[2]
-            return _Pieza("txt", "", vis, False, self.mb.horizontalAdvance(vis), 16, e[2] if vis != e[2] else "")
+            fuente, medidas, extra = self._est.get(e[1], self._est[""])
+            vis = medidas.elidedText(e[2], Qt.TextElideMode.ElideRight, maxw) if maxw < 100000 else e[2]
+            return _Pieza("txt", e[1], vis, False, medidas.horizontalAdvance(vis) + extra, ALTO, e[2] if vis != e[2] else "")
         if tipo == "boton":
-            return _Pieza("boton", e[1], e[2], False, 22, ALTO)
+            return _Pieza("boton", e[1], e[2], False, 22, 22)
+        if tipo == "mod":  # la insignia de un flanco o de una negación sobre una cadena: se pulsa para cambiarla o quitarla
+            return _Pieza("mod", e[1], e[2], False, self.mm.horizontalAdvance(e[2]) + 12, ALTO)
         if tipo == "paren":
             return _Pieza("paren", e[1], e[2], False, PAREN_W, 16)
         texto = e[2] or (e[3] if tipo == "campo" else "")
         vacio = tipo == "campo" and not e[2]
-        extra = 22 if tipo == "drop" else 12
-        vis = self.m.elidedText(texto, Qt.TextElideMode.ElideRight, max(maxw - extra, 20))
-        return _Pieza(tipo, e[1], vis, vacio, max(30 if tipo == "campo" else 0, self.m.horizontalAdvance(vis) + extra), ALTO,
+        if tipo == "campo":
+            vis = self.mm.elidedText(texto, Qt.TextElideMode.ElideRight, max(maxw - 14, 20))
+            return _Pieza(tipo, e[1], vis, vacio, max(36, self.mm.horizontalAdvance(vis) + 16), ALTO, texto if vis != texto else "")
+        metricas = self.mm if e[1] == "op" else self.ms
+        extra = 14 if e[1] == "op" else 18  # el desplegable lleva su ▾; el operador de una comparación, una caja pequeña
+        vis = metricas.elidedText(texto, Qt.TextElideMode.ElideRight, max(maxw - extra, 20))
+        return _Pieza(tipo, e[1], vis, vacio, metricas.horizontalAdvance(vis) + extra + (6 if e[1] == "op" else 0), ALTO,
                       texto if vis != texto else "")
 
     def natural(self, n: dict[str, Any] | None, ruta: tuple) -> float:
         if n is None:
             return HUECO_W
         if ruta not in self.nat:
-            ws = [self.natural(*self._sub(n, e[1], ruta)) if e[0] == "hijo" else self.pieza(e).w
-                  for e in self.elementos(n)]
-            self.nat[ruta] = 2 * PADX + sum(ws) + GAP * (len(ws) - 1)
+            if n["k"] == "par":
+                w = 2 * PAD_PAR + 2 * PAREN_W + 2 * GAP_PAR + self.natural(n["a"], ruta + ("a",))
+            elif self._es_simple(n):
+                w = self._caja_simple(n, ruta, 10 ** 6).w
+            else:
+                ws = [self.natural(*self._sub(n, e[1], ruta)) if e[0] == "hijo" else self.pieza(e).w for e in self.elementos(n)]
+                w = 2 * PADX + sum(ws) + GAP * (len(ws) - 1)
+            self.nat[ruta] = w
         return self.nat[ruta]
+
+    @staticmethod
+    def _es_simple(n: dict[str, Any]) -> bool:
+        """Si el bloque se dibuja como una ficha o una cápsula de una sola fila (sin bloques dentro)."""
+        return n["k"] in ("const", "cmp", "num", "vnum", "texto") or ficha_cadena(n) is not None
 
     def caja(self, n: dict[str, Any] | None, ruta: tuple, ancho: float) -> _Caja:
         if n is None:
@@ -773,8 +862,13 @@ class Motor:
             return self._caja_par(n, ruta, ancho)
         if n["k"] == "ar":
             return self._caja_ar(n, ruta, ancho)
+        if self._es_simple(n):
+            return self._caja_simple(n, ruta, ancho)
         elems = self.elementos(n)
         c = _Caja(n, ruta, 0, 0, self.categoria(n))
+        c.forma = "cadena" if n["k"] in MODIFICADORES else n["k"]
+        if n["k"] in MODIFICADORES:
+            c.mods = self._cadena(n)[0]
         if self.natural(n, ruta) <= ancho:  # todo en una fila
             x, partes = PADX, []
             for e in elems:
@@ -785,6 +879,31 @@ class Motor:
             c.h = max(p.h for _, p in partes) + 2 * PADV
             c.w = x - GAP + PADX
             c.items = [(x, (c.h - p.h) / 2, p) for x, p in partes]
+            return c
+        if n["k"] in ("y", "o"):  # no caben en una fila: los operandos y conectores fluyen, saltando de línea solo cuando no caben
+            px = PADX_PILA
+            interior = max(ancho - 2 * px, 40)
+            partes = []
+            for e in elems:
+                partes.append(self.caja(*self._sub(n, e[1], ruta), min(self.natural(*self._sub(n, e[1], ruta)), interior))
+                              if e[0] == "hijo" else self.pieza(e))
+            lineas: list[list[Any]] = [[]]
+            x = 0.0
+            for i, p in enumerate(partes):
+                if lineas[-1] and x + p.w > interior:
+                    lineas.append([])
+                    x = 0.0
+                lineas[-1].append(p)
+                x += p.w + GAP
+            y, derecha = float(PADV), 0.0
+            for linea in lineas:
+                h, x = max(p.h for p in linea), float(px)
+                for p in linea:
+                    c.items.append((x, y + (h - p.h) / 2, p))
+                    x += p.w + GAP
+                derecha = max(derecha, x - GAP)
+                y += h + FILA
+            c.h, c.w = y - FILA + PADV, derecha + px
             return c
         px = PADX_PILA  # apilado, menos relleno: así caben más niveles en poco ancho
         interior = max(ancho - 2 * px, 40)
@@ -824,22 +943,97 @@ class Motor:
         c.h, c.w = y - FILA + PADV, derecha + px
         return c
 
+    def _caja_simple(self, n: dict[str, Any], ruta: tuple, ancho: float) -> _Caja:
+        """Una ficha (variable o etapa, con sus modificadores si los lleva), una constante, una comparación, una cápsula numérica o un
+        texto: una sola fila de alto fijo. Con una ficha con modificadores, el bloque es el más externo de la cadena (el que se arrastra
+        y se selecciona) y las piezas responden a la variable de dentro."""
+        k, alto = n["k"], alto_ficha() - (6 if self.fijo else 0)  # (en el catálogo, filas más compactas)
+        if k in MODIFICADORES or k in ("var", "etapa"):
+            return self._caja_ficha(n, ruta, ancho, alto)
+        c = _Caja(n, ruta, 0, alto, self.categoria(n))
+        elems = self.elementos(n)
+        if k == "const":
+            c.forma, x0 = "hundida", 12
+        elif k == "cmp":
+            c.forma, x0 = "ficha", RELLENO_FICHA
+        elif k in ("num", "vnum"):
+            c.forma, x0 = "capsula", 10 + 6 + 4  # el punto de origen
+        else:
+            c.forma, x0 = "texto", 6
+        piezas = [self.pieza(e, max(ancho - 2 * x0 - 6, 24) if k != "cmp" else 100000) for e in elems]
+        if self.fijo and k == "vnum" and n["n"]:  # en el catálogo, el nombre ya va elegido
+            vis = self.ms.elidedText(n["n"], Qt.TextElideMode.ElideRight, max(ancho - x0 - 8, 24))
+            piezas = [_Pieza("txt", "nom", vis, False, self.ms.horizontalAdvance(vis), ALTO, n["n"] if vis != n["n"] else "")]
+        x = float(x0)
+        for p in piezas:
+            c.items.append((x, (alto - p.h) / 2, p))
+            x += p.w + (2 if k == "cmp" else 0)
+        c.w = x - (2 if k == "cmp" else 0) + (x0 if k in ("const", "cmp", "texto") else 8)
+        return c
+
+    def _caja_ficha(self, n: dict[str, Any], ruta: tuple, ancho: float, alto: float) -> _Caja:
+        mods, hoja = self._cadena(n)
+        destino = ruta + ("a",) * len(mods)
+        c = _Caja(n, ruta, 0, alto, self.categoria(hoja) if hoja is not None else "operador")
+        c.destino, c.mods = destino, mods
+        flanco = next((m for m in mods if m != "no"), None)
+        if hoja is None:  # «[NOT | pulsa o arrastra variable…]»: la ficha que espera su variable
+            c.forma = "pendiente"
+            sufijo = " ".join({"no": "NOT", "sube": "↑", "baja": "↓"}[m] for m in mods)
+            p1 = self.pieza(("txt", "pf", sufijo))
+            p2 = self.pieza(("txt", "pend", "pulsa o arrastra variable…"), max(ancho - p1.w - 24, 40))
+            c.items = [(8, (alto - p1.h) / 2, p1), (8 + p1.w + 6, (alto - p2.h) / 2, p2)]
+            c.w = 8 + p1.w + 6 + p2.w + 8
+            return c
+        c.forma = "ficha"
+        if "no" in mods:
+            c.negada = "todo" if flanco is not None and mods.index("no") < mods.index(flanco) else "nombre"
+        x = float(BARRA + RELLENO_FICHA)
+        if flanco is not None:
+            ins = _Pieza("mod", flanco, "↑" if flanco == "sube" else "↓", False, 22, ALTO, ruta=destino)
+            c.items.append((x, (alto - ins.h) / 2, ins))
+            x += ins.w + GAP
+        nombre = etapa_visible(hoja["n"]) if hoja["k"] == "etapa" else hoja["n"]
+        tag = "" if hoja["k"] == "etapa" else TAG_ORIGEN.get(c.cat, TAG_ORIGEN.get(_PAPEL_CAT.get(hoja.get("papel"), ""), ""))
+        ancho_tag = (self.mb.horizontalAdvance(tag) + GAP) if tag else 0.0
+        fila = self.fijo and bool(hoja["n"])  # en el catálogo: una fila con la letra de origen a la derecha
+        flecha = 0 if fila else 18
+        disponible = max(ancho - x - RELLENO_FICHA - ancho_tag - flecha, 20)
+        texto = nombre or "elegir"
+        vis = self.ms.elidedText(texto, Qt.TextElideMode.ElideRight, disponible)
+        w = (0 if fila else ancho_tag) + self.ms.horizontalAdvance(vis) + flecha
+        tipo = "txt" if fila else "drop"
+        p = _Pieza(tipo, "nom" if tipo == "txt" else "n", vis, not nombre, w, ALTO, texto if vis != texto else "",
+                   ruta=destino, extra=(tag if not fila else "", COLORES[c.cat]) if tag or c.cat else None)
+        c.items.append((x, (alto - p.h) / 2, p))
+        c.w = x + p.w + RELLENO_FICHA
+        if fila:
+            if tag:
+                c.w += ancho_tag
+            if ancho < 10 ** 5:
+                c.w = max(c.w, ancho)
+            if tag:
+                t = _Pieza("txt", "tagd", tag, False, ancho_tag - GAP, ALTO, extra=(tag, COLORES[c.cat]))
+                c.items.append((c.w - RELLENO_FICHA - t.w, (alto - t.h) / 2, t))
+        return c
+
     def _caja_par(self, n: dict[str, Any], ruta: tuple, ancho: float) -> _Caja:
         """El bloque «( )»: un paréntesis a cada lado del bloque que encierra, tan altos como él (también si éste se apila)."""
         clave = ruta + ("a",)
-        interior = max(ancho - 2 * PADX - 2 * PAREN_W - 2 * GAP, 40)
+        interior = max(ancho - 2 * PAD_PAR - 2 * PAREN_W - 2 * GAP_PAR, 40)
         h = self.caja(n["a"], clave, min(self.natural(n["a"], clave), interior))
         h.sin_fondo = n["a"] is not None and n["a"]["k"] == "ar"  # una operación dentro de «( )»: ya está rodeada
-        c = _Caja(n, ruta, PADX + 2 * PAREN_W + 2 * GAP + h.w + PADX, h.h + 2 * PADV, self.categoria(n))
-        c.items = [(PADX, PADV, _Pieza("paren", "izq", "(", False, PAREN_W, h.h)),
-                   (PADX + PAREN_W + GAP, PADV, h),
-                   (PADX + PAREN_W + 2 * GAP + h.w, PADV, _Pieza("paren", "der", ")", False, PAREN_W, h.h))]
+        c = _Caja(n, ruta, 2 * PAD_PAR + 2 * PAREN_W + 2 * GAP_PAR + h.w, h.h + 2 * PADV, self.categoria(n))
+        c.forma = "par"
+        c.items = [(PAD_PAR, PADV, _Pieza("paren", "izq", "(", False, PAREN_W, h.h)),
+                   (PAD_PAR + PAREN_W + GAP_PAR, PADV, h),
+                   (PAD_PAR + PAREN_W + 2 * GAP_PAR + h.w, PADV, _Pieza("paren", "der", ")", False, PAREN_W, h.h))]
         return c
 
     @staticmethod
     def _sub(n: dict[str, Any], clave: str | tuple, ruta: tuple) -> tuple[dict[str, Any] | None, tuple]:
         """El bloque (o hueco) de un hijo y su ruta. La clave es la del hijo, o un camino de claves (las operaciones
-        aritméticas puestas en línea, ver `_plano`)."""
+        aritméticas puestas en línea, ver `_plano`; los modificadores de una cadena)."""
         camino = clave if isinstance(clave, tuple) else (clave,)
         return obtener(n, camino), ruta + camino
 
@@ -851,7 +1045,7 @@ class Motor:
         """Los elementos de una operación aritmética, con puestas en línea las operaciones encadenadas que, escritas, no
         llevan paréntesis (la de la izquierda de igual o mayor precedencia, la de la derecha de mayor): `a - b + c` se ve
         «a − b + c», de izquierda a derecha, y no con bloques uno dentro de otro. Una que sí los lleva queda como un bloque
-        dentro. Devuelve los elementos (`("hijo", camino)` o `("txt", "", operador)`) y las operaciones en línea
+        dentro. Devuelve los elementos (`("hijo", camino)` o `("txt", "op", operador)`) y las operaciones en línea
         (camino, nodo, primer elemento, último + 1)."""
         elems: list[tuple] = []
         fantasmas: list[tuple] = []
@@ -860,7 +1054,7 @@ class Motor:
             pr, desde = self._prec_ar(m), len(elems)
             for clave, req in (("a", pr), ("b", pr + 1)):
                 if clave == "b":
-                    elems.append(("txt", "", OP_ARIT[m["op"]]))
+                    elems.append(("txt", "op", OP_ARIT[m["op"]]))
                 h = m[clave]
                 if h is not None and h["k"] == "ar" and self._prec_ar(h) >= req:
                     rec(h, camino + (clave,))
@@ -876,6 +1070,7 @@ class Motor:
         operador al final de una (va con el operando que le sigue)."""
         elems, fantasmas = self._plano(n)
         c = _Caja(n, ruta, 0, 0, self.categoria(n))
+        c.forma = "ar"
         px = PADX if self.natural(n, ruta) <= ancho else PADX_PILA
         interior = max(ancho - 2 * px, 40)
         partes: list[Any] = []
@@ -931,82 +1126,205 @@ class Motor:
             if it.completo:
                 self.recortadas.append((QRectF(ox + x, oy + y, it.w, it.h), it.completo))
             if it.tipo not in ("txt", "paren"):
-                piezas.append((QRectF(ox + x, oy + y, it.w, it.h), it.tipo, c.ruta, it.clave))
+                piezas.append((QRectF(ox + x, oy + y, it.w, it.h), it.tipo, it.ruta or c.ruta, it.clave))
 
     # -- dibujo
     @staticmethod
-    def hexagono(r: QRectF) -> QPolygonF:
-        d, cy = min(PUNTA, r.height() / 2), r.center().y()
-        return QPolygonF([QPointF(r.left(), cy), QPointF(r.left() + d, r.top()), QPointF(r.right() - d, r.top()),
-                          QPointF(r.right(), cy), QPointF(r.right() - d, r.bottom()), QPointF(r.left() + d, r.bottom())])
+    def poligono_ficha(r: QRectF) -> QPolygonF:
+        """El contorno de una ficha: un rectángulo con los cuatro vértices cortados a 45°."""
+        ch = min(CHAFLAN, r.height() / 2, r.width() / 2)
+        return QPolygonF([QPointF(r.left() + ch, r.top()), QPointF(r.right() - ch, r.top()), QPointF(r.right(), r.top() + ch),
+                          QPointF(r.right(), r.bottom() - ch), QPointF(r.right() - ch, r.bottom()),
+                          QPointF(r.left() + ch, r.bottom()), QPointF(r.left(), r.bottom() - ch), QPointF(r.left(), r.top() + ch)])
+
+    @staticmethod
+    def trazo_seleccion(p: QPainter, r: QRectF, grosor: float = 2.4) -> None:
+        """El contorno de lo seleccionado o de donde caería lo que se arrastra: el trazo del acento."""
+        p.setPen(QPen(QColor(estilo.ACENTO), grosor))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(r, 6, 6)
+
+    def _fondo_hijo(self, padre: QColor | None) -> QColor:
+        """Los contenedores anidados alternan dos fondos para distinguirse unos de otros."""
+        return QColor(estilo.FONDO if padre is not None and QColor(padre) == QColor(estilo.SUPERFICIE_2) else estilo.SUPERFICIE_2)
 
     def pintar(self, p: QPainter, c: _Caja, ox: float, oy: float, padre: QColor | None = None,
                objetivo: tuple | None = None) -> None:
         r = QRectF(ox, oy, c.w, c.h)
-        if c.nodo is None:  # un hueco: hexágono hundido y punteado
-            fondo = QColor(padre).darker(165) if padre else QColor("#EEF0F4")
-            borde = QColor(padre).lighter(185) if padre else QColor("#8BBCAF")
-            p.setPen(QPen(borde, 1.2, Qt.PenStyle.DashLine))
-            p.setBrush(fondo)
-            p.drawPolygon(self.hexagono(r.adjusted(0.5, 0.5, -0.5, -0.5)))
+        if c.nodo is None:  # un hueco: caja hundida y punteada
+            p.setPen(QPen(QColor(estilo.BORDE_CONTROL), 1.2, Qt.PenStyle.DashLine))
+            p.setBrush(QColor(estilo.SUPERFICIE))
+            p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), R_PIEZA, R_PIEZA)
         else:
-            color = QColor(COLORES[c.cat])
-            if not c.sin_fondo:
-                p.setPen(QPen(color.darker(145), 1.2))
-                p.setBrush(color)
-                p.drawPolygon(self.hexagono(r.adjusted(0.5, 0.5, -0.5, -0.5)))
+            fondo = self._pintar_caja(p, c, r, padre)
             for x, y, it in c.items:
                 if isinstance(it, _Caja):
-                    self.pintar(p, it, ox + x, oy + y, color, objetivo)
+                    self.pintar(p, it, ox + x, oy + y, fondo, objetivo)
                 else:
-                    self._pintar_pieza(p, it, QRectF(ox + x, oy + y, it.w, it.h))
-        if objetivo is not None and c.ruta == objetivo:  # el sitio donde caería lo que se arrastra
-            p.setPen(QPen(QColor("#FFD43B"), 2.6))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawPolygon(self.hexagono(r.adjusted(-0.5, -0.5, 0.5, 0.5)))
+                    self._pintar_pieza(p, it, QRectF(ox + x, oy + y, it.w, it.h), c)
+        if objetivo is not None and (c.ruta == objetivo or c.destino == objetivo):  # el sitio donde caería lo que se arrastra
+            self.trazo_seleccion(p, r.adjusted(-0.5, -0.5, 0.5, 0.5), 2.6)
         for fr, ruta, _ in c.fantasmas:  # una operación puesta en línea que recibiría lo arrastrado: se remarca su tramo
             if objetivo is not None and ruta == objetivo:
-                p.setPen(QPen(QColor("#FFD43B"), 2.6))
-                p.setBrush(Qt.BrushStyle.NoBrush)
-                p.drawRoundedRect(fr.translated(ox, oy), 6, 6)
+                self.trazo_seleccion(p, fr.translated(ox, oy), 2.6)
 
-    def _pintar_pieza(self, p: QPainter, it: _Pieza, r: QRectF) -> None:
-        if it.tipo == "txt":
+    def _pintar_caja(self, p: QPainter, c: _Caja, r: QRectF, padre: QColor | None) -> QColor | None:
+        """El fondo y el contorno del bloque, según su forma; devuelve el fondo que ven sus hijos."""
+        forma, cat = c.forma, c.cat
+        error = cat == "error"
+        ra = r.adjusted(0.5, 0.5, -0.5, -0.5)
+        if forma in ("ficha", "hundida"):
+            p.setPen(QPen(QColor(estilo.ERROR if error else estilo.BORDE_CONTROL), 1))
+            p.setBrush(QColor(estilo.ERROR_FONDO if error else estilo.SUPERFICIE_2 if forma == "hundida" else estilo.SUPERFICIE))
+            contorno = self.poligono_ficha(ra)
+            p.drawPolygon(contorno)
+            if forma == "ficha" and c.mods is not None and c.nodo is not None and c.cat in COLORES and c.items \
+                    and (c.items[-1][2].tipo in ("drop", "txt") and c.items[-1][2].clave in ("n", "nom")):
+                camino = QPainterPath()
+                camino.addPolygon(contorno)
+                p.save()
+                p.setClipPath(camino)
+                p.fillRect(QRectF(r.left(), r.top(), BARRA, r.height()), QColor(COLORES[cat]))
+                p.restore()
+            if c.negada == "todo":  # la barra de la negación cubre el flanco y la variable
+                p.fillRect(QRectF(r.left() + 8, r.top() + 2, r.width() - 14, 2), QColor(estilo.TINTA))
+            return padre
+        if forma == "capsula":
+            p.setPen(QPen(QColor(estilo.ERROR if error else estilo.BORDE_CONTROL), 1))
+            p.setBrush(QColor(estilo.ERROR_FONDO if error else estilo.SUPERFICIE))
+            p.drawRoundedRect(ra, r.height() / 2, r.height() / 2)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(COLORES.get(cat, COLORES["texto"])))
+            p.drawEllipse(QPointF(r.left() + 13, r.center().y()), 3, 3)
+            return padre
+        if forma == "pendiente":
+            p.setPen(QPen(QColor(estilo.ACENTO), 1.5, Qt.PenStyle.DashLine))
+            p.setBrush(QColor(estilo.ACENTO_SUAVE))
+            p.drawRoundedRect(ra, R_PIEZA, R_PIEZA)
+            return padre
+        if forma == "texto":
+            p.setPen(QPen(QColor(estilo.ERROR if error else estilo.BORDE_CONTROL), 1))
+            p.setBrush(QColor(estilo.ERROR_FONDO if error else estilo.SUPERFICIE_2))
+            p.drawRoundedRect(ra, R_PIEZA, R_PIEZA)
+            return padre
+        if c.sin_fondo:
+            return padre
+        fondo = QColor(estilo.SUPERFICIE) if forma == "temp" else self._fondo_hijo(padre)
+        if forma in ("y", "o"):
+            p.setPen(QPen(QColor(COLORES[forma]), 1.2))
+        elif forma == "temp":
+            p.setPen(QPen(QColor(estilo.TINTA_3), 1.2, Qt.PenStyle.DashLine))
+        else:
+            p.setPen(QPen(QColor(estilo.BORDE_CONTROL), 1))
+        p.setBrush(fondo)
+        p.drawRoundedRect(ra, 14 if forma == "ar" else 6, 14 if forma == "ar" else 6)
+        if forma == "cadena" and "no" in c.mods:  # una negación sobre un bloque: la barra superior sobre todo él
+            p.fillRect(QRectF(r.left() + 3, r.top(), r.width() - 6, 3), QColor(estilo.TINTA))
+        return fondo
+
+    def _pintar_pieza(self, p: QPainter, it: _Pieza, r: QRectF, c: _Caja | None = None) -> None:
+        tinta, borde = QColor(estilo.TINTA), QColor(estilo.BORDE_CONTROL)
+        centro = Qt.AlignmentFlag.AlignCenter
+        if it.tipo == "txt" and it.clave == "tagd":  # la letra de origen, a la derecha de la fila del catálogo
             p.setFont(self.fb)
-            p.setPen(QColor("#FFFFFF"))
+            p.setPen(QColor(it.extra[1]))
             p.drawText(r, Qt.AlignmentFlag.AlignCenter, it.texto)
             return
-        if it.tipo == "paren":  # un paréntesis alto y curvo, en blanco
+        if it.tipo == "txt" and it.clave == "nom":  # el nombre de una ficha del catálogo (sin desplegable)
+            self._pintar_nombre(p, it, r, c, False)
+            return
+        if it.tipo == "txt":
+            fuente = self._est.get(it.clave, self._est[""])[0]
+            p.setFont(fuente)
+            if it.clave in ("y", "o"):  # el conector de un «y» o un «o»: una pastilla con la letra de su color
+                p.setPen(QPen(QColor(estilo.BORDE), 1))
+                p.setBrush(QColor(estilo.SUPERFICIE))
+                p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
+                p.setPen(QColor(COLORES[it.clave]))
+            elif it.clave in ("ins", "insw", "pf"):
+                aviso = it.clave == "insw"
+                p.setPen(QPen(QColor(estilo.AVISO_BORDE), 1) if aviso else Qt.PenStyle.NoPen)
+                p.setBrush(QColor(estilo.AVISO_FONDO if aviso else estilo.EDICION if it.clave == "ins" else estilo.SUPERFICIE))
+                p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 3, 3)
+                p.setPen(QColor(estilo.AVISO if aviso else "#FFFFFF" if it.clave == "ins" else estilo.TINTA))
+            elif it.clave in ("barra", "pp", "br"):
+                p.setPen(QColor(estilo.TINTA_3))
+            elif it.clave == "pend":
+                p.setPen(QColor(estilo.ACENTO_OSCURO))
+            elif it.clave == "op":
+                p.setPen(QColor(estilo.TINTA_2))
+            else:
+                p.setPen(tinta)
+            p.drawText(r, centro, it.texto)
+            return
+        if it.tipo == "paren":  # un paréntesis alto y curvo
             izq = it.clave == "izq"
             punta, panza = (r.right() - 2, r.left() + 1.5) if izq else (r.left() + 2, r.right() - 1.5)
             camino = QPainterPath(QPointF(punta, r.top() + 1))
             camino.cubicTo(QPointF(panza, r.top() + r.height() * 0.28), QPointF(panza, r.bottom() - r.height() * 0.28),
                            QPointF(punta, r.bottom() - 1))
-            p.setPen(QPen(QColor("#FFFFFF"), 2.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            p.setPen(QPen(QColor(estilo.TINTA_3), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawPath(camino)
             return
         if it.tipo == "boton":  # «+» añade un hueco
-            p.setPen(QPen(QColor(255, 255, 255, 200), 1.2))
-            p.setBrush(QColor(255, 255, 255, 60))
-            p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 5, 5)
+            p.setPen(QPen(borde, 1, Qt.PenStyle.DashLine))
+            p.setBrush(QColor(estilo.SUPERFICIE))
+            p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
             p.setFont(self.fb)
-            p.setPen(QColor("#FFFFFF"))
-            p.drawText(r, Qt.AlignmentFlag.AlignCenter, it.texto)
+            p.setPen(QColor(estilo.TINTA_2))
+            p.drawText(r, centro, it.texto)
             return
-        p.setPen(QPen(QColor(0, 0, 0, 70), 1))
-        p.setBrush(QColor("#FFFFFF"))
-        p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 5, 5)
-        p.setFont(self.f)
-        if it.tipo == "drop":
-            p.setPen(QColor("#1F2937"))
-            p.drawText(QRectF(r.left() + 6, r.top(), r.width() - 18, r.height()),
-                       Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, it.texto)
-            p.setPen(QColor("#6B7280"))
+        if it.tipo == "mod":  # la insignia de un flanco (↑, ↓) o de una negación: se pulsa para cambiarla
+            p.setPen(QPen(borde, 1))
+            p.setBrush(QColor(estilo.SUPERFICIE_2))
+            p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
+            p.setFont(self.fm)
+            p.setPen(tinta)
+            p.drawText(r, centro, it.texto)
+            return
+        if it.tipo == "campo":  # un valor o un retardo que se teclea: una pastilla
+            p.setPen(QPen(borde, 1))
+            p.setBrush(QColor(estilo.SUPERFICIE_2))
+            p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), r.height() / 2, r.height() / 2)
+            p.setFont(self.fm)
+            p.setPen(QColor(estilo.TINTA_3 if it.vacio else estilo.TINTA))
+            p.drawText(r.adjusted(5, 0, -5, 0), centro, it.texto)
+            return
+        if it.clave == "op":  # el operador de una comparación: una caja pequeña con su ▾
+            p.setPen(QPen(borde, 1))
+            p.setBrush(QColor(estilo.SUPERFICIE_2))
+            p.drawRoundedRect(r.adjusted(0.5, 2.5, -0.5, -2.5), 3, 3)
+            p.setFont(self.fm)
+            p.setPen(tinta)
+            p.drawText(QRectF(r.left() + 2, r.top(), r.width() - 12, r.height()), centro, it.texto)
+            p.setFont(self.f)
+            p.setPen(QColor(estilo.TINTA_3))
+            p.drawText(QRectF(r.right() - 12, r.top(), 10, r.height()), centro, "▾")
+            return
+        self._pintar_nombre(p, it, r, c, True)
+
+    def _pintar_nombre(self, p: QPainter, it: _Pieza, r: QRectF, c: _Caja | None, desplegable: bool) -> None:
+        """El nombre de una variable, etapa o cantidad: su letra de origen (si la ficha la lleva), el texto y, si se elige, la ▾."""
+        x = r.left()
+        if it.extra and it.extra[0]:
+            p.setFont(self.fb)
+            p.setPen(QColor(it.extra[1]))
+            ancho = self.mb.horizontalAdvance(it.extra[0])
+            p.drawText(QRectF(x, r.top(), ancho, r.height()), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, it.extra[0])
+            x += ancho + GAP
+        p.setFont(self.fs)
+        p.setPen(QColor(estilo.ERROR if c is not None and c.cat == "error" and c.forma in ("ficha", "capsula") else estilo.TINTA))
+        fin = r.right() - (16 if desplegable else 0)
+        texto = QRectF(x, r.top(), max(fin - x, 1), r.height())
+        p.drawText(texto, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, it.texto)
+        if c is not None and c.negada and it.extra is not None:  # la barra de la negación sobre el nombre
+            ancho_texto = min(self.ms.horizontalAdvance(it.texto), texto.width())
+            p.fillRect(QRectF(x, r.top() + 2, ancho_texto, 2), QColor(estilo.TINTA))
+        if desplegable:
+            p.setFont(self.f)
+            p.setPen(QColor(estilo.TINTA_3))
             p.drawText(QRectF(r.right() - 16, r.top(), 12, r.height()), Qt.AlignmentFlag.AlignCenter, "▾")
-        else:
-            p.setPen(QColor("#9CA3AF" if it.vacio else "#1F2937"))
-            p.drawText(r.adjusted(5, 0, -5, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, it.texto)
 
     def pixmap(self, n: dict[str, Any], ancho: float = 240, dpr: float = 1.0) -> QPixmap:
         """El bloque tal como se ve, para llevarlo pegado al puntero al arrastrarlo."""
@@ -1021,6 +1339,23 @@ class Motor:
         self.pintar(p, c, 2, 2)
         p.end()
         return pm
+
+
+GUIA = "pulsa o arrastra un bloque…"  # lo que dice el área vacía
+_REJILLA: list[QPixmap] = []
+
+
+def _rejilla() -> QPixmap:
+    """El mosaico de 16 px con un punto, que da el fondo del área."""
+    if not _REJILLA:
+        pm = QPixmap(16, 16)
+        pm.fill(QColor(estilo.SUPERFICIE))
+        p = QPainter(pm)
+        p.setPen(QColor(estilo.BORDE))
+        p.drawPoint(1, 1)
+        p.end()
+        _REJILLA.append(pm)
+    return _REJILLA[0]
 
 
 class _Editor(QLineEdit):
@@ -1038,6 +1373,8 @@ class _Superficie(QWidget):
     """Un lienzo con bloques: los dibuja al ancho disponible (crece en alto, sin barras), abre el desplegable o el
     campo de la pieza donde se hace clic y arrastra el bloque de donde se pulsa."""
     avisa = Signal(str)
+    arrastrando = Signal(bool)  # empieza y termina el arrastre de un bloque de aquí (el área avisa de que soltarlo fuera lo quita)
+    elegido = Signal(object)  # se pulsó un bloque (sin arrastrarlo): su nodo (el catálogo lo inserta en la fórmula)
     mueve = False  # arrastrar un bloque lo saca de aquí (el área); en la paleta, lo copia
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "") -> None:
@@ -1174,10 +1511,10 @@ class _Superficie(QWidget):
 
     # -- dibujo
     def _fondo(self, p: QPainter) -> None:
-        p.fillRect(self.rect(), QColor("#FFFFFF"))
-        p.setPen(QPen(QColor("#C3C9D6"), 1))
+        p.fillRect(self.rect(), QColor(estilo.SUPERFICIE))
+        p.setPen(QPen(QColor(estilo.BORDE), 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
+        p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), estilo.R_M, estilo.R_M)
 
     def paintEvent(self, event: Any) -> None:  # noqa: N802
         self._calcular(self.width())
@@ -1200,10 +1537,28 @@ class _Superficie(QWidget):
         return min(dentro)[1] if dentro else None
 
     def ruta_en(self, pos: QPointF) -> tuple | None:
-        """El sitio (hueco o bloque) más interior bajo el puntero: donde caería un bloque soltado ahí."""
+        """El sitio (hueco o bloque) más interior bajo el puntero: donde caería un bloque soltado ahí. Sobre una ficha con modificadores,
+        la variable de dentro (o su hueco pendiente): lo soltado la sustituye y los modificadores se quedan."""
         self._calcular(self.width())
         dentro = [(r.width() * r.height(), ruta) for r, ruta, n in self._bloques if r.contains(pos)]
-        return min(dentro)[1] if dentro else None
+        return self._destino(min(dentro)[1]) if dentro else None
+
+    def _destino(self, ruta: tuple) -> tuple:
+        """El sitio que recibe lo soltado sobre el bloque de `ruta`: el mismo, salvo en una ficha con modificadores (se dibuja como una
+        sola ficha), donde es la variable de dentro."""
+        i, r = self._partir(ruta)
+        try:
+            n = obtener(self._raices[i], r)
+        except (KeyError, IndexError):
+            return ruta
+        if n is None or n["k"] not in MODIFICADORES:
+            return ruta
+        ficha = ficha_cadena(n)
+        return ruta if ficha is None else tuple(ruta) + ("a",) * len(ficha[0])
+
+    def _ruta_arrastre(self, ruta: tuple) -> tuple:
+        """Qué se lleva al arrastrar desde `ruta`: el bloque tal cual (en el área, una ficha con modificadores se lleva entera)."""
+        return ruta
 
     def _completo_en(self, pos: QPointF) -> str:
         """El texto entero de la pieza recortada («…») que hay bajo el puntero, o vacío."""
@@ -1240,7 +1595,7 @@ class _Superficie(QWidget):
             return
         ruta = que[2] if es_pieza else que
         self._pulsado = None
-        self._arrastrar(tuple(ruta))
+        self._arrastrar(tuple(self._ruta_arrastre(tuple(ruta))))
 
     def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802
         if self._pulsado is None:
@@ -1253,10 +1608,21 @@ class _Superficie(QWidget):
                 self._menu(ruta, clave, r)
             elif tipo == "boton":
                 self._boton(ruta, clave)
+            elif tipo == "mod":
+                self._modificador(ruta, clave)
             else:
                 self._abrir_editor(r, ruta, clave)
+        elif que is not None:
+            self._pulsado_bloque(tuple(que))
 
     def _boton(self, ruta: tuple, clave: str) -> None:
+        pass
+
+    def _modificador(self, ruta: tuple, clase: str) -> None:
+        pass
+
+    def _pulsado_bloque(self, ruta: tuple) -> None:
+        """Un clic sobre un bloque, sin pieza: en el catálogo, lo elige para insertarlo."""
         pass
 
     def _menu(self, ruta: tuple, clave: str, r: QRectF) -> None:
@@ -1306,7 +1672,13 @@ class _Superficie(QWidget):
         drag.setPixmap(self.motor.pixmap(nodo, 240, self.devicePixelRatioF()))
         drag.setHotSpot(QPoint(12, 12))
         _ARRASTRE["resuelto"] = False
-        ejecutar_arrastre(drag, self.window())
+        if self.mueve:
+            self.arrastrando.emit(True)
+        try:
+            ejecutar_arrastre(drag, self.window())
+        finally:
+            if self.mueve:
+                self.arrastrando.emit(False)
         if self.mueve and not _ARRASTRE["resuelto"] and not self.rect().contains(self.mapFromGlobal(QCursor.pos())):
             self.quitar(tuple(r))  # soltado fuera del área: se quita
         self._pulsado = None
@@ -1317,16 +1689,17 @@ class _Superficie(QWidget):
 
 
 class PaletaBloques(_Superficie):
-    """Los bloques de una categoría, uno tras otro (pasan de línea). Sus desplegables y campos se pueden cambiar antes de
-    arrastrar el bloque."""
+    """El catálogo: una ficha por cada variable (o etapa) que existe, una tras otra (pasan de línea) o en columna. Ya van elegidas: se
+    arrastran tal cual o se pulsan para insertarlas en la fórmula (`elegido`). Los operadores, temporizadores, comparaciones y constantes
+    están en la banda de categorías (`banda_bloques.py`)."""
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "",
                  columna: bool = False, valor: bool = False) -> None:
         super().__init__(fuente, grupo)
         self.motor.botones = False
         self.motor.fijo = True
-        self.valor = valor  # las categorías de un valor numérico (número, variables, operadores)
-        self.clave = "numero" if valor else "entrada"
+        self.valor = valor  # el catálogo de un valor numérico: sus variables numéricas
+        self.clave = "vnum" if valor else "entrada"
         self.columna = columna  # uno debajo de otro (el programador); si no, uno tras otro, pasando de línea
         self.una_fila = False  # uno tras otro sin pasar de línea (el programador en una ventana baja: el área se desplaza a los lados)
         self.cargar(self.clave)
@@ -1336,7 +1709,7 @@ class PaletaBloques(_Superficie):
         for i, n in enumerate(self._raices):
             c = self.motor.caja(n, (i,), min(self.motor.natural(n, (i,)), ancho - 2 * MARGEN))
             if x > MARGEN and (self.columna or (not self.una_fila and x + c.w > ancho - MARGEN)):
-                x, y, lh = float(MARGEN), y + lh + GAP * 2, 0.0
+                x, y, lh = float(MARGEN), y + lh + (2 if self.columna else GAP * 2), 0.0
             out.append((c, x, y))
             x += c.w + GAP * 2
             lh = max(lh, c.h)
@@ -1348,40 +1721,29 @@ class PaletaBloques(_Superficie):
         return [(0, int(x), "") if x.isdigit() else (1, 0, x.lower()) for x in re.split(r"(\d+)", nombre) if x]
 
     def cargar(self, clave: str) -> None:
-        """Pone los bloques de la categoría con las variables y etapas del modelo. Entradas, salidas, memorias, etapas y
-        variables numéricas llevan una ficha por cada elemento que existe (etapas por número, variables por nombre), ya
-        elegido, que se arrastra tal cual; sin elementos, un bloque vacío. Lo elegido en el desplegable de comparaciones
-        y el retardo escrito se conservan si siguen valiendo."""
+        """Pone las fichas de la clave (entradas, salidas, memorias, etapas o variables numéricas) con las variables y etapas del
+        modelo: una por cada elemento que existe (etapas por número, variables por nombre), ya elegido, que se arrastra tal cual;
+        sin elementos, una ficha vacía."""
         self.clave = clave
         self.motor.reiniciar()
         v, etapas = self.motor.vars, list(dict.fromkeys(self.motor.etapas))
-        previo = {n["k"]: n for n in self._raices if n is not None} if getattr(self, "_clave_previa", None) == clave else {}
-        self._clave_previa = clave
-        if clave == "numero":
-            nodos = [nuevo("num", v=(previo.get("num") or {}).get("v", "1"))]
-        elif clave == "vnum":
+        if clave == "vnum":
             numericas = sorted((nom for nom, (_, t) in v.items() if t != "bool"), key=self._orden)
             nodos = [nuevo("vnum", n=nom) for nom in numericas] or [nuevo("vnum", n=None)]
-        elif clave == "aritm":
-            nodos = [nuevo("ar", op=o) for o in OP_ARIT] + [nuevo("par")]
         elif clave in PAPEL:
             validas = sorted((nom for nom, (r, t) in v.items() if r == PAPEL[clave] and t == "bool"), key=self._orden)
             nodos = [var(nom, PAPEL[clave]) for nom in validas] or [var(None, PAPEL[clave])]
-        elif clave == "etapa":
+        else:
             por_numero = lambda x: (0, int(x[1:]), "") if re.fullmatch(r"X\d+", x) else (1, 0, x.lower())  # noqa: E731
             nodos = [nuevo("etapa", n=x) for x in sorted(etapas, key=por_numero)] or [nuevo("etapa", n=None)]
-        elif clave == "operador":
-            nodos = [nuevo("y"), nuevo("o"), nuevo("no"), nuevo("par"), nuevo("sube"), nuevo("baja")]
-        elif clave == "constante":  # «1» (verdadero, siempre) y «0» (falso, nunca): se guardan como true y false
-            nodos = [nuevo("const", v=1), nuevo("const", v=0)]
-        elif clave == "comparacion":
-            numericas = [nom for nom, (_, t) in v.items() if t != "bool"]
-            c = previo.get("cmp") or nuevo("cmp")
-            nodos = [{**c, "n": c["n"] if c["n"] in numericas else (numericas[0] if numericas else None)}]
-        else:
-            nodos = [previo.get("temp") and {**previo["temp"], "a": None} or nuevo("temp")]
         self._raices = nodos
         self.invalidar()
+
+    def _pulsado_bloque(self, ruta: tuple) -> None:
+        i, r = self._partir(ruta)
+        nodo = obtener(self._raices[i], r)
+        if nodo is not None and (nodo.get("n") or nodo["k"] not in ("var", "etapa", "vnum")):
+            self.elegido.emit(copy.deepcopy(nodo))
 
     def bloques(self) -> list[dict[str, Any]]:
         return copy.deepcopy([n for n in self._raices if n is not None])
@@ -1392,6 +1754,7 @@ class AreaBloques(_Superficie):
     (de la paleta o de ella misma) y los arrastres de una pieza a otra. `modificado` se emite en cada cambio hecho
     con el ratón o con las operaciones de abajo; `poner_arbol` no lo emite."""
     modificado = Signal()
+    seleccion_cambiada = Signal()  # se eligió o se dejó de elegir un bloque
     mueve = True
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "",
@@ -1402,6 +1765,9 @@ class AreaBloques(_Superficie):
         self.previo: dict[str, Any] | None = None
         self._bloque_sel: tuple | None = None
         self._hueco_sel: tuple | None = None  # el hueco vacío seleccionado (se quita con Supr)
+        self._propio = False  # se arrastra un bloque de aquí
+        self._fuera = False  # y el puntero está fuera del área: soltarlo lo quita
+        self.arrastrando.connect(self._al_arrastrar)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.setAcceptDrops(True)
         self.setToolTip("Para quitar un bloque, arrástrelo fuera o pulse Supr")
@@ -1420,8 +1786,7 @@ class AreaBloques(_Superficie):
 
     def _maqueta(self, ancho: float) -> tuple[list[tuple[_Caja, float, float]], float]:
         if self.arbol is None:
-            c = _Caja(None, (0,), min(max(HUECO_W, self.motor.m.horizontalAdvance("arrastre aquí un bloque") + 30),
-                                      ancho - 2 * MARGEN), 28)
+            c = _Caja(None, (0,), min(max(HUECO_W, self.motor.m.horizontalAdvance(GUIA) + 30), ancho - 2 * MARGEN), alto_ficha())
         else:
             c = self.motor.caja(self.arbol, (0,), ancho - 2 * MARGEN)
         return [(c, float(MARGEN), float(MARGEN))], c.h + 2 * MARGEN
@@ -1448,13 +1813,108 @@ class AreaBloques(_Superficie):
             ruta = ()
         ruta = tuple(ruta)
         try:
-            nueva = mover(self.arbol, tuple(origen), ruta) if origen is not None else soltar(self.arbol, ruta, nodo)
+            if origen is None and nodo["k"] in MODIFICADORES and nodo["a"] is None \
+                    and ficha_cadena(obtener(self.arbol, ruta)) is not None:
+                nueva = alternar_modificador(self.arbol, ruta, nodo["k"])  # sobre una ficha o su hueco pendiente: se aplica a la ficha
+            else:
+                nueva = mover(self.arbol, tuple(origen), ruta) if origen is not None else soltar(self.arbol, ruta, nodo)
         except KeyError:
             return False
         if nueva == self.arbol:
             return False
         self._fijar(0, nueva)
         return True
+
+    def sustituir(self, nodo: dict[str, Any] | None) -> bool:
+        """Pone `nodo` como toda la fórmula (Pegar, Limpiar, una constante sola). Devuelve si cambió algo."""
+        if nodo == self.arbol:
+            return False
+        self._fijar(0, nodo)
+        return True
+
+    def limpiar(self) -> bool:
+        """Vacía la fórmula."""
+        return self.sustituir(None)
+
+    def _sitio_elegido(self) -> tuple | None:
+        """La ruta del modelo del hueco o del bloque seleccionado (con su variable, si es una ficha con modificadores), o None."""
+        sel = self._hueco_sel if self._hueco_sel is not None else self._bloque_sel
+        return None if sel is None else tuple(self._destino(sel)[1:])
+
+    def _elegir_ficha(self, ruta: tuple, siempre: bool = False) -> None:
+        """Deja seleccionada la ficha con modificadores que contiene `ruta` (para seguir aplicándole modificadores o rellenar su hueco). Con
+        `siempre`, también la que se quedó sin ellos."""
+        try:
+            externa, mods = cadena_modificadores(self.arbol, tuple(ruta))
+            ficha = ficha_cadena(obtener(self.arbol, externa))
+        except KeyError:
+            return
+        if (mods or siempre) and ficha is not None:
+            self._bloque_sel = (0,) + tuple(externa)
+            self.setFocus()
+            self.update()
+            self.seleccion_cambiada.emit()
+
+    def insertar(self, nodo: dict[str, Any]) -> bool:
+        """Pulsar un bloque del catálogo o de la banda: lo pone en el hueco o el bloque seleccionado (un bloque que envuelve envuelve al
+        elegido; uno que no, lo sustituye) y, sin elección, en el primer hueco libre (o de raíz si la fórmula está vacía). Una constante
+        sin elección es la fórmula entera (P-IMP-69). Si no hay sitio, avisa y no inserta. Devuelve si cambió algo."""
+        if nodo["k"] in MODIFICADORES and nodo["a"] is None:
+            return self.aplicar_modificador(nodo["k"])
+        ruta = self._sitio_elegido()
+        if ruta is None:
+            if nodo["k"] == "const":
+                return self.sustituir(nodo)
+            ruta = () if self.arbol is None else primer_hueco(self.arbol)
+            if ruta is None:
+                self.avisa.emit("No queda ningún hueco libre: elija un bloque de la fórmula para sustituirlo o quítelo.")
+                return False
+        if not self.soltar(ruta, nodo):
+            return False
+        self._elegir_ficha(ruta)
+        return True
+
+    def aplicar_modificador(self, clase: str) -> bool:
+        """NOT, ↑ o ↓ sobre la ficha elegida, en el orden en que se pulsan. Sin elección, un modificador con su hueco pendiente en el
+        primer hueco libre («NOT ?»), que la siguiente variable pulsada rellena."""
+        ruta = self._sitio_elegido()
+        if ruta is None:
+            ruta = () if self.arbol is None else primer_hueco(self.arbol)
+            if ruta is None:
+                self.avisa.emit("No queda ningún hueco libre: elija una ficha para aplicarle el modificador.")
+                return False
+        try:
+            nueva = alternar_modificador(self.arbol, ruta, clase)
+            externa = cadena_modificadores(self.arbol, ruta)[0]
+        except KeyError:
+            return False
+        if nueva == self.arbol:
+            return False
+        self._fijar(0, nueva)
+        self._elegir_ficha(externa, True)
+        return True
+
+    def _modificador(self, ruta: tuple, clase: str) -> None:
+        """Se pulsó la insignia de una ficha: un flanco pasa al otro (↑ por ↓), la negación se quita."""
+        r = tuple(self._partir(ruta)[1])
+        if clase != "no":
+            clase = "baja" if clase == "sube" else "sube"
+        nueva = alternar_modificador(self.arbol, r, clase)
+        if nueva != self.arbol:
+            externa = cadena_modificadores(self.arbol, r)[0]
+            self._fijar(0, nueva)
+            self._elegir_ficha(externa, True)
+
+    def _ruta_arrastre(self, ruta: tuple) -> tuple:
+        """Una ficha con modificadores se lleva entera, venga el arrastre de donde venga de ella."""
+        i, r = self._partir(ruta)
+        try:
+            externa, mods = cadena_modificadores(self._raices[i], tuple(r))
+            if mods and ficha_cadena(obtener(self._raices[i], externa)) is not None:
+                return (i,) + tuple(externa)
+        except (KeyError, IndexError):
+            pass
+        return ruta
 
     def quitar(self, ruta: tuple) -> None:
         ruta = tuple(ruta)
@@ -1501,6 +1961,30 @@ class AreaBloques(_Superficie):
         self.previo = self._raices[i]
         super()._fijar(i, nueva)
         self.modificado.emit()
+        self.seleccion_cambiada.emit()
+
+    def envolver_elegido(self) -> bool:
+        """«Envolver ( … )»: el bloque elegido pasa a ir entre paréntesis."""
+        ruta = self._sitio_elegido()
+        if ruta is None or obtener(self.arbol, ruta) is None:
+            return False
+        nueva = envolver(self.arbol, ruta, "par")
+        self._fijar(0, nueva)
+        self._bloque_sel = (0,) + tuple(ruta)
+        self.seleccion_cambiada.emit()
+        self.update()
+        return True
+
+    def quitar_elegido(self) -> bool:
+        """«Quitar (Supr)»: quita el bloque elegido."""
+        sel = self._bloque_sel
+        if sel is None:
+            return False
+        self.quitar(sel)
+        return True
+
+    def hay_seleccion(self) -> bool:
+        return self._bloque_sel is not None
 
     def mousePressEvent(self, event: Any) -> None:  # noqa: N802
         super().mousePressEvent(event)
@@ -1515,6 +1999,42 @@ class AreaBloques(_Superficie):
                 self._hueco_sel = tuple(ruta)
                 self.setFocus()
         self.update()
+        self.seleccion_cambiada.emit()
+
+    def copiar_formula(self) -> bool:
+        """Copia la fórmula entera al portapapeles (el formato que lee «Pegar» y Ctrl+V, en esta y en otras ventanas)."""
+        if self.arbol is None:
+            return False
+        datos = QMimeData()
+        datos.setData(MIME_FORMULA, arbol_a_texto(self.arbol).encode("utf-8"))
+        datos.setData(MIME_TIPO, self._tipo().encode())
+        QApplication.clipboard().setMimeData(datos)
+        return True
+
+    def _tipo(self) -> str:
+        return "valor" if self.valor else "condicion"
+
+    def formula_del_portapapeles(self, estricto: bool = True) -> dict[str, Any] | None:
+        """El bloque que hay copiado, leído con las reglas de esta área (una condición no se pega en un valor ni al revés). None si no hay
+        nada copiado o no vale aquí."""
+        datos = QApplication.clipboard().mimeData()
+        if datos is None or not datos.hasFormat(MIME_FORMULA):
+            return None
+        if estricto and datos.hasFormat(MIME_TIPO) and bytes(datos.data(MIME_TIPO)).decode() != self._tipo():
+            return None  # (el botón Pegar no pega una condición en un valor ni al revés)
+        analizar = texto_a_arbol_valor if self.valor else texto_a_arbol
+        try:
+            return analizar(bytes(datos.data(MIME_FORMULA)).decode("utf-8"), *self._datos())
+        except ValueError:
+            return None
+
+    def puede_pegar(self) -> bool:
+        return self.formula_del_portapapeles() is not None
+
+    def pegar_formula(self) -> bool:
+        """El botón «Pegar»: la fórmula copiada sustituye a la entera (Ctrl+V pega en el hueco o el bloque elegido)."""
+        nodo = self.formula_del_portapapeles()
+        return nodo is not None and self.sustituir(nodo)
 
     def _portapapeles_formula(self, evento: Any) -> bool:
         portapapeles = QApplication.clipboard()
@@ -1524,18 +2044,12 @@ class AreaBloques(_Superficie):
             if bloque is not None:
                 datos = QMimeData()
                 datos.setData(MIME_FORMULA, arbol_a_texto(bloque).encode("utf-8"))
+                datos.setData(MIME_TIPO, self._tipo().encode())
                 portapapeles.setMimeData(datos)
             return True
         if not evento.matches(QKeySequence.StandardKey.Paste):
             return False
-        datos = portapapeles.mimeData()
-        if datos is None or not datos.hasFormat(MIME_FORMULA):
-            return True
-        analizar = texto_a_arbol_valor if self.valor else texto_a_arbol
-        try:
-            nodo = analizar(bytes(datos.data(MIME_FORMULA)).decode("utf-8"), *self._datos())
-        except ValueError:
-            return True
+        nodo = self.formula_del_portapapeles(False)  # (Ctrl+V pega lo que haya, como siempre)
         if nodo is not None:
             ruta = self._hueco_sel or self._bloque_sel or (0,)
             self.soltar(ruta[1:], nodo)
@@ -1599,7 +2113,15 @@ class AreaBloques(_Superficie):
 
     def dragEnterEvent(self, event: Any) -> None:  # noqa: N802
         if event.mimeData().hasFormat(MIME):
+            self._fuera = False
+            self.update()
             event.acceptProposedAction()
+
+    def _al_arrastrar(self, en_curso: bool) -> None:
+        """Empieza o acaba el arrastre de un bloque de esta área: mientras dura, el borde se pone rojo si el puntero sale (soltarlo fuera
+        lo quita)."""
+        self._propio, self._fuera = en_curso, False
+        self.update()
 
     def dragMoveEvent(self, event: Any) -> None:  # noqa: N802
         d = self._datos_mime(event.mimeData())
@@ -1616,6 +2138,7 @@ class AreaBloques(_Superficie):
     def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802
         self._objetivo = None
         self._resalte_mas = None
+        self._fuera = self._propio
         self.update()
 
     def _mas_en(self, pos: QPointF) -> tuple | None:
@@ -1641,23 +2164,28 @@ class AreaBloques(_Superficie):
             self.soltar(None if ruta is None else tuple(ruta[1:]), d["nodo"], origen)
         self.update()
 
+    def _fondo(self, p: QPainter) -> None:
+        """Un lienzo de puntos (la rejilla de la maqueta); con un bloque en arrastre fuera de él, el borde en rojo."""
+        p.fillRect(self.rect(), QColor(estilo.SUPERFICIE))
+        p.drawTiledPixmap(QRect(1, 1, self.width() - 2, self.height() - 2), _rejilla(), QPoint(-1, -1))
+        fuera = self._propio and self._fuera
+        p.setPen(QPen(QColor(estilo.ERROR if fuera else estilo.BORDE), 2 if fuera else 1))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), estilo.R_M, estilo.R_M)
+
     def _extra(self, p: QPainter) -> None:
         if self._hueco_sel is not None or self._bloque_sel is not None:
             seleccion = self._hueco_sel if self._hueco_sel is not None else self._bloque_sel
             r = next((r for r, ruta, n in self._bloques if ruta == seleccion), None)
             if r is not None:
-                p.setPen(QPen(QColor("#FFD43B"), 2.2))
-                p.setBrush(Qt.BrushStyle.NoBrush)
-                p.drawPolygon(self.motor.hexagono(r.adjusted(-0.5, -0.5, 0.5, 0.5)))
+                self.motor.trazo_seleccion(p, r.adjusted(-0.5, -0.5, 0.5, 0.5), 2.2)
         if getattr(self, "_resalte_mas", None) is not None:  # el «+» donde caería lo que se arrastra
-            p.setPen(QPen(QColor("#FFD43B"), 2.6))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawRoundedRect(self._resalte_mas.adjusted(-1, -1, 1, 1), 5, 5)
+            self.motor.trazo_seleccion(p, self._resalte_mas.adjusted(-1, -1, 1, 1), 2.6)
         if self.arbol is None:
             c, x, y = self._cajas[0]
             p.setFont(self.motor.f)
-            p.setPen(QColor("#6B7385"))
-            p.drawText(QRectF(x, y, c.w, c.h), Qt.AlignmentFlag.AlignCenter, "arrastre aquí un bloque")
+            p.setPen(QColor(estilo.TINTA_3))
+            p.drawText(QRectF(x, y, c.w, c.h), Qt.AlignmentFlag.AlignCenter, GUIA)
 
 
 # -- el programador: paleta y área ------------------------------------------------------------------
@@ -1723,19 +2251,6 @@ class FlowLayout(QLayout):
         return y + alto - r.y()
 
 
-def _circulo(color: str, d: int = 14) -> QPixmap:
-    """El círculo de color de una carpeta de la paleta."""
-    pm = QPixmap(d, d)
-    pm.fill(Qt.GlobalColor.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(QPen(QColor(color).darker(140), 1))
-    p.setBrush(QColor(color))
-    p.drawEllipse(QRectF(1, 1, d - 2, d - 2))
-    p.end()
-    return pm
-
-
 def _desplazable(w: QWidget, ancho: int | None = None) -> QScrollArea:
     """Una columna que se desplaza en vertical si no cabe (nunca en horizontal)."""
     sc = QScrollArea()
@@ -1748,17 +2263,57 @@ def _desplazable(w: QWidget, ancho: int | None = None) -> QScrollArea:
     return sc
 
 
+class AsaAncho(QWidget):
+    """El borde arrastrable del catálogo: entre éste y el área, una franja fina que cambia el ancho del catálogo al arrastrarla."""
+    movida = Signal(int)  # el ancho que se pide para el catálogo
+    soltada = Signal(int)  # el ancho con que se quedó
+
+    def __init__(self, catalogo: QWidget) -> None:
+        super().__init__()
+        self.catalogo = catalogo
+        self._inicio: tuple[int, int] | None = None
+        self.setFixedWidth(estilo.E2)
+        self.setCursor(Qt.CursorShape.SplitHCursor)
+        self.setToolTip("Arrastre para cambiar el ancho del catálogo")
+        self.setAccessibleName("Borde del catálogo")
+
+    def paintEvent(self, event: Any) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setPen(QPen(QColor(estilo.ACENTO if self._inicio is not None else estilo.BORDE_CONTROL), 1.5, Qt.PenStyle.SolidLine,
+                      Qt.PenCapStyle.RoundCap))
+        x, h = self.width() / 2, self.height()
+        p.drawLine(QPointF(x, h / 2 - 10), QPointF(x, h / 2 + 10))
+        p.end()
+
+    def mousePressEvent(self, event: Any) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._inicio = (int(event.globalPosition().x()), self.catalogo.width())
+            self.update()
+
+    def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802
+        if self._inicio is not None:
+            self.movida.emit(self._inicio[1] + int(event.globalPosition().x()) - self._inicio[0])
+
+    def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802
+        if self._inicio is not None:
+            self._inicio = None
+            self.update()
+            self.soltada.emit(self.catalogo.width())
+
+
 class Programador(QWidget):
-    """Programador por bloques: categorías en una franja horizontal desplazable; debajo, los bloques de la categoría elegida
-    en una columna arrastrable y, a su derecha, el
-    área de trabajo con la fórmula (en línea si cabe) con el aviso. `fuente()` devuelve las
-    variables {nombre: (papel, tipo)} y las etapas (en notación X) del modelo en curso. `cambiado(texto)` se emite en
-    cada cambio hecho con bloques (no al llamar a `poner`). Con `historial`, Ctrl+Z y Ctrl+Mayús+Z deshacen y rehacen
-    los cambios de bloques; sin él, el deshacer lo pone quien lo usa (`al_deshacer`, `al_rehacer`)."""
+    """Programador por bloques: a la izquierda, el catálogo de variables y etapas, siempre a la vista y con un borde arrastrable; a su
+    derecha, la banda de categorías (Operadores, Temporizadores, Comparaciones, Constantes: clic o arrastre, y las herramientas Copiar
+    fórmula, Pegar y Limpiar) y, debajo, el área de trabajo con la fórmula (en línea si cabe) con el aviso. `fuente()` devuelve las
+    variables {nombre: (papel, tipo)} y las etapas (en notación X) del modelo en curso. `cambiado(texto)` se emite en cada cambio
+    hecho con bloques (no al llamar a `poner`). Con `historial`, Ctrl+Z y Ctrl+Mayús+Z deshacen y rehacen los cambios de bloques; sin
+    él, el deshacer lo pone quien lo usa (`al_deshacer`, `al_rehacer`)."""
 
     cambiado = Signal(str)
-    franja_cambiada = Signal()  # la franja de categorías cambió de alto (al cambiar de ancho): el panel que lo contiene puede necesitar más
-    PALETA_MIN, PALETA_MAX = 110, 240  # la columna de bloques mide lo justo para el más ancho, entre estos límites
+    franja_cambiada = Signal()  # la banda cambió de alto (al cambiar de ancho): el panel que lo contiene puede necesitar más
+    PALETA_MIN, PALETA_INICIAL, PALETA_MAX = 110, 170, 360  # el ancho del catálogo: el de apertura y los límites del borde arrastrable
+    CLAVE_ANCHO = "formulador/ancho_catalogo"  # donde se recuerda (`QSettings`), compartido por todos los programadores
+    CUERPO_MIN = 68  # alto mínimo del catálogo y el área
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], historial: bool = False,
                  grupo: str | None = None, valor: bool = False, compacto: bool = False) -> None:
@@ -1766,120 +2321,229 @@ class Programador(QWidget):
         self.fuente, self.historial, self.valor = fuente, historial, valor
         self.compacto = compacto
         self._elemento_seleccionado = None
-        self.lista_categorias = CATEGORIAS_VALOR if valor else CATEGORIAS
         self.grupo = grupo or f"programador-{id(self)}"
         self.al_deshacer: Callable[[], Any] | None = None
         self.al_rehacer: Callable[[], Any] | None = None
         self._pila: list[Any] = []
         self._rehecho: list[Any] = []
-        self.cat_en_cabecera = False  # las categorías van en la fila de cabecera del panel que contiene al programador (`categorias_en_cabecera`)
+        # El catálogo ocupa todo el alto a la izquierda (el alto de la ventana de Propiedades no sobra: así se ven al menos seis fichas); a
+        # su derecha, la banda de categorías (con las herramientas Copiar fórmula, Pegar y Limpiar), el área y el aviso
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
         raiz.setSpacing(5)
-        lay = QBoxLayout(QBoxLayout.Direction.LeftToRight)  # (la paleta a la izquierda; en ventanas bajas, encima: `modo_fila`)
+        lay = QBoxLayout(QBoxLayout.Direction.LeftToRight)  # (en ventanas bajas, el catálogo encima: `modo_fila`)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
+        lay.setSpacing(0)
         self._lay_cuerpo = lay
         self.en_fila = False
-        # Franja superior: categorías, con desplazamiento horizontal en paneles estrechos.
-        carpetas = QWidget()
-        from .remates_propiedades import FlujoCategorias
-        cl = FlowLayout(carpetas, 2) if valor else FlujoCategorias(carpetas, 2)
-        cl.setContentsMargins(0, 0, 2, 0)
-        self._flujo_carpetas = cl
-        self.categorias: dict[str, QPushButton] = {}
-        for clave, titulo in self.lista_categorias:
-            b = QPushButton(titulo)
-            b.setCheckable(True)
-            b.setAutoExclusive(True)
-            categoria_color = {"numero": "comparacion", "vnum": "interna", "aritm": "operador"}.get(clave, clave)
-            color = estilo.TINTA_2 if clave == "variables" else COLORES[categoria_color]
-            b.setIcon(_circulo(color))
-            b.setIconSize(QSize(10, 10))
-            b.setToolTip(titulo)
+        from .banda_bloques import BandaBloques, BotonCompacto
+        # Las herramientas (Copiar fórmula, Pegar, Limpiar) van en una fila sobre la banda, a la derecha; la ventana de Propiedades las lleva
+        # a la franja del título de su tarjeta (`adoptar_herramientas`) y esta fila se oculta
+        self._fila_herr = QWidget()
+        fh = QHBoxLayout(self._fila_herr)
+        fh.setContentsMargins(0, 0, 0, 0)
+        fh.setSpacing(6)
+        fh.addStretch(1)
+        self.herramientas = QWidget(self)
+        hl = QHBoxLayout(self.herramientas)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(6)
+        self._adoptada = False
+        self.b_copiar = BotonCompacto("Copiar fórmula", self.herramientas)
+        self.b_pegar = BotonCompacto("Pegar", self.herramientas)
+        self.b_limpiar = BotonCompacto("Limpiar", self.herramientas)
+        for b, ayuda in ((self.b_copiar, "Copia la fórmula entera (Ctrl+C copia el bloque elegido)"),
+                         (self.b_pegar, "Pega la fórmula copiada, sustituyendo la actual (Ctrl+V la pega en el hueco o el bloque elegido)"),
+                         (self.b_limpiar, "Vacía la fórmula")):
+            b.setToolTip(ayuda)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)  # objetivo táctil de 32 px
-            b.setStyleSheet(self._hoja_categoria())
-            b.clicked.connect(lambda _=False, c=clave: self.elegir_categoria(c))
-            cl.addWidget(b)
-            self.categorias[clave] = b
-        self._sc_carpetas = _desplazable(carpetas)
-        self._sc_carpetas.setObjectName("categoriasBloques")
-        self._sc_carpetas.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: white; }")
-        self._sc_carpetas.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._sc_carpetas.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._sc_carpetas.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 16)  # los botones y, debajo, la barra de desplazamiento de 12
-        self._raiz = raiz
-        raiz.addWidget(self._sc_carpetas)
-        raiz.addLayout(lay, 1)
-        # columna 2: los bloques de la categoría elegida
+        self.banda = BandaBloques(fuente, self.grupo, valor)
+        # Un valor numérico solo tiene «Limpiar» (como la maqueta): lo que se arma es corto y no se copia de una ventana a otra
+        for b in ([self.b_limpiar] if valor else [self.b_copiar, self.b_pegar, self.b_limpiar]):
+            hl.addWidget(b)
+        fh.addWidget(self.herramientas)
+        self.banda.anadir_herramientas([self.b_copiar, self.b_pegar, self.b_limpiar], flujo=False)
+        if valor:
+            self.b_copiar.hide()
+            self.b_pegar.hide()
+        self.categorias = self.banda.categorias  # los rótulos de las categorías de la banda, por su clave
+        self.banda.alto_cambiado.connect(self._banda_cambiada)
+        # El catálogo: su título y, debajo, las fichas
         if valor:
             self.paleta = PaletaBloques(fuente, self.grupo, columna=True, valor=True)
         else:
             from .paleta_variables import PaletaVariables
             self.paleta = PaletaVariables(fuente, self.grupo, columna=True)
+        self.paleta.elegido.connect(self._elegido)
         self._sc_paleta = _desplazable(self.paleta)
-        lay.addWidget(self._sc_paleta)
+        self.t_catalogo = QLabel("Variables numéricas" if valor else "Variables y etapas")
+        self.t_catalogo.setStyleSheet(f"color: {estilo.TINTA_2}; font-weight: 600; background: transparent; padding: 0 {estilo.E1}px;")
+        self.t_catalogo.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._col_catalogo = QWidget()
+        col = QVBoxLayout(self._col_catalogo)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(estilo.E1)
+        col.addWidget(self.t_catalogo)
+        col.addWidget(self._sc_paleta, 1)
+        lay.addWidget(self._col_catalogo)
+        self.asa = AsaAncho(self._col_catalogo)
+        self.asa.movida.connect(self.poner_ancho_catalogo)
+        self.asa.soltada.connect(self._recordar_ancho)
+        lay.addWidget(self.asa)
         if not valor:
             self.paleta.geometria_cambiada.connect(self._medir_paleta)
-        # columna 3: el área de trabajo y, debajo, el aviso
+        # El área de trabajo y, debajo, el aviso
         derecha = QVBoxLayout()
         derecha.setSpacing(4)
+        raiz.addWidget(self._fila_herr)
+        raiz.addWidget(self.banda)  # la banda a todo el ancho, sobre el catálogo y el área (como la maqueta)
+        raiz.addLayout(lay, 1)
         self.lienzo = AreaBloques(fuente, self.grupo, valor)
         self.lienzo.modificado.connect(self._tras_cambio)
         self.lienzo.avisa.connect(self._avisar)
+        self.lienzo.arrastrando.connect(self._arrastrando)
         derecha.addWidget(_desplazable(self.lienzo), 1)  # el área es la que crece
         pie = QHBoxLayout()
         self.pie = pie
         pie.setContentsMargins(0, 0, 0, 0)
         self.aviso = QLabel()
         self.aviso.setWordWrap(True)
-        self.aviso.setStyleSheet("color: #B45309")
+        self._estilo_aviso(False)
         self.aviso.setVisible(False)
         self.aviso.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)  # no impone su ancho
         pie.addWidget(self.aviso, 1)
-        pie.addStretch(1)
+        from .banda_bloques import BotonCompacto
+        self.b_envolver = BotonCompacto("Envolver ( … )", self)
+        self.b_quitar = BotonCompacto("Quitar (Supr)", self)
+        self.b_envolver.setToolTip("Envuelve el bloque elegido entre paréntesis")
+        self.b_quitar.setToolTip("Quita el bloque elegido (también Supr, o arrastrarlo fuera)")
+        self.banda.anadir_herramientas([self.b_envolver, self.b_quitar], flujo=False)  # (solo su tamaño)
+        pie.addWidget(self.b_envolver, 0, Qt.AlignmentFlag.AlignRight)
+        pie.addWidget(self.b_quitar, 0, Qt.AlignmentFlag.AlignRight)
         derecha.addLayout(pie)
         lay.addLayout(derecha, 1)
-        self.setMinimumHeight(116 if compacto else 112)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.banda.insertar.connect(self.lienzo.insertar)
+        self.b_copiar.clicked.connect(self.lienzo.copiar_formula)
+        self.b_pegar.clicked.connect(self.lienzo.pegar_formula)
+        self.b_limpiar.clicked.connect(self.lienzo.limpiar)
+        self.b_envolver.clicked.connect(self.lienzo.envolver_elegido)
+        self.b_quitar.clicked.connect(self.lienzo.quitar_elegido)
+        self.lienzo.seleccion_cambiada.connect(self._herramientas_al_dia)
+        self.lienzo.modificado.connect(self._herramientas_al_dia)
+        QApplication.clipboard().dataChanged.connect(self._herramientas_al_dia)
         if historial:
             for atajo, f in (("Ctrl+Z", self.deshacer), ("Ctrl+Shift+Z", self.rehacer), ("Ctrl+Y", self.rehacer)):
                 s = QShortcut(QKeySequence(atajo), self)
                 s.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
                 s.activated.connect(f)
-        self.elegir_categoria("numero" if valor else "variables")
+        self.poner_ancho_catalogo(self._ancho_recordado())
+        self.escalar()
+        self._cargar_paleta("vnum" if valor else "variables")
 
-    @staticmethod
-    def _hoja_categoria() -> str:
-        return (f"QPushButton {{ text-align: left; padding: 0 {estilo.E1}px; border: 1px solid transparent; "
-                f"border-radius: {estilo.R_S}px; background: transparent; min-height: {estilo.ALTO_CONTROL_COMPACTO - 2}px; }}"
-                f"QPushButton:hover {{ background: {estilo.HOVER}; }}"
-                f"QPushButton:pressed {{ background: {estilo.PULSADO}; }}"
-                f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 {estilo.E1 - 1}px; "
-                f"min-height: {estilo.ALTO_CONTROL_COMPACTO - 4}px; }}"
-                f"QPushButton:checked {{ color: {estilo.TINTA}; background: {estilo.ACENTO_SUAVE}; border: 1px solid {estilo.ACENTO}; }}")
+    # -- herramientas y aspecto
+    def adoptar_herramientas(self, anfitrion: QLayout) -> None:
+        """Lleva las herramientas (Copiar fórmula, Pegar, Limpiar) a `anfitrion` (la franja del título de una tarjeta) y quita su fila."""
+        if not self._adoptada or self.herramientas.parentWidget() is not anfitrion.parentWidget():
+            anfitrion.addWidget(self.herramientas)
+        self._adoptada = True
+        self._fila_herr.hide()
+        self.herramientas.setVisible(self.isVisible())
+
+    def showEvent(self, event: Any) -> None:  # noqa: N802
+        super().showEvent(event)
+        if self._adoptada:
+            self.herramientas.show()
+        self.poner_ancho_catalogo(self._ancho_recordado())
+        self._cargar_paleta(self.paleta.clave)
+        self._herramientas_al_dia()
+
+    def hideEvent(self, event: Any) -> None:  # noqa: N802
+        super().hideEvent(event)
+        if self._adoptada:
+            self.herramientas.hide()
 
     def escalar(self) -> None:
-        """Cambió la escala de letra y de controles: las categorías miden lo que su escala y la franja se reparte otra vez."""
-        for b in self.categorias.values():
-            b.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
-            b.setStyleSheet(self._hoja_categoria())
-        self._flujo_carpetas.invalidate()
-        self._ajustar_franja()
+        """Cambió la escala de letra y de controles: los botones y la banda se miden otra vez."""
+        self.banda.escalar()
+        self.lienzo.invalidar()
+        self.paleta.invalidar()
+        self._herramientas_al_dia()
+        self.updateGeometry()
+
+    def _herramientas_al_dia(self, *_: Any) -> None:
+        """Copiar y Limpiar valen con una fórmula; Pegar, con una fórmula copiada que sirva en esta área."""
+        hay = self.lienzo.arbol is not None
+        self.b_copiar.setEnabled(hay)
+        self.b_limpiar.setEnabled(hay)
+        self.b_pegar.setEnabled(self.lienzo.puede_pegar())
+        self.b_envolver.setEnabled(self.lienzo.hay_seleccion())
+        self.b_quitar.setEnabled(self.lienzo.hay_seleccion())
+
+    def _banda_cambiada(self) -> None:
+        self.updateGeometry()
+        self.franja_cambiada.emit()
+
+    def _estilo_aviso(self, arrastre: bool) -> None:
+        """El aviso del pie: ámbar para un aviso; mientras se arrastra un bloque fuera del área, el aviso de que soltarlo lo quita."""
+        if arrastre:
+            self.aviso.setStyleSheet(f"color: {estilo.ERROR}; background: {estilo.ERROR_FONDO}; border: 1px dashed {estilo.ERROR}; "
+                                     f"border-radius: {estilo.R_S}px; padding: 2px {estilo.E2}px; font-weight: 600;")
+        else:
+            self.aviso.setStyleSheet("color: #B45309")
+
+    def _arrastrando(self, en_curso: bool) -> None:
+        """Mientras se arrastra un bloque del área, el pie dice que soltarlo fuera lo quita (`ERROR_FONDO`); al soltar, se retira."""
+        if en_curso:
+            self._estilo_aviso(True)
+            self.aviso.setText("Suelta fuera del lienzo para quitar este bloque")
+            self.aviso.setVisible(True)
+        else:
+            self._estilo_aviso(False)
+            self._poner_aviso("")
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return False  # (la banda ajusta su propio alto y avisa con `franja_cambiada`; el alto no depende del ancho que se le dé)
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        return QSize((180 if self.en_fila else self._sc_paleta.width() + 180), 116 if self.compacto else 112)
+        alto = self.banda.height() + 5 + (0 if self._adoptada else self._fila_herr.sizeHint().height() + 5) + (self.CUERPO_MIN + 4 if self.compacto else self.CUERPO_MIN)
+        return QSize((180 if self.en_fila else self._col_catalogo.width() + self.asa.width() + 180), alto)
 
     def sizeHint(self) -> QSize:  # noqa: N802
         natural = super().sizeHint()
-        if self.valor:
-            return natural
         return QSize(natural.width(), self.minimumSizeHint().height())
 
+    # -- el catálogo: su ancho (con borde arrastrable) y su disposición
+    @staticmethod
+    def _ajustes() -> Any:
+        from .paleta_variables import PaletaVariables
+        return PaletaVariables.ajustes
+
+    def _ancho_recordado(self) -> int:
+        ajustes = self._ajustes()
+        try:
+            return int(ajustes.value(self.CLAVE_ANCHO, self.PALETA_INICIAL)) if ajustes is not None else self.PALETA_INICIAL
+        except (TypeError, ValueError):
+            return self.PALETA_INICIAL
+
+    def poner_ancho_catalogo(self, ancho: int) -> None:
+        """Ancho del catálogo, entre `PALETA_MIN` y `PALETA_MAX` (y sin quitarle al área sus 180 px)."""
+        tope = self.PALETA_MAX if self.width() < 400 else max(self.PALETA_MIN, min(self.PALETA_MAX, self.width() - 180 - self.asa.width()))
+        ancho = max(self.PALETA_MIN, min(int(ancho), tope))
+        if self.en_fila or ancho == self._col_catalogo.width():
+            return
+        self._col_catalogo.setFixedWidth(ancho)
+        self.updateGeometry()
+
+    def _recordar_ancho(self, ancho: int) -> None:
+        ajustes = self._ajustes()
+        if ajustes is not None:
+            ajustes.setValue(self.CLAVE_ANCHO, int(ancho))
+            ajustes.sync()
+
     def modo_fila(self, fila: bool) -> None:
-        """Con la ventana baja (P1) la paleta de bloques va **en una sola fila** sobre el área, con desplazamiento horizontal, en vez de en
-        una columna a su izquierda: el panel necesita así mucho menos alto. `en_fila` dice cuál está activo."""
+        """Con la ventana baja (P1) el catálogo va **en una sola fila** sobre el área, con desplazamiento horizontal, en vez de en una
+        columna a su izquierda: el panel necesita así mucho menos alto. `en_fila` dice cuál está activo."""
         if fila == self.en_fila:
             return
         self.en_fila = fila
@@ -1887,41 +2551,46 @@ class Programador(QWidget):
         self.paleta.columna, self.paleta.una_fila = not fila, fila
         self._sc_paleta.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded if fila else Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._sc_paleta.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff if fila else Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.asa.setVisible(not fila)
+        self.t_catalogo.setVisible(not fila)
         if not fila:
             self._sc_paleta.setMinimumHeight(0)
             self._sc_paleta.setMaximumHeight(16777215)
             self.paleta.setMinimumWidth(80)
             self._sc_paleta.setMinimumWidth(0)
             self._sc_paleta.setMaximumWidth(16777215)
+            self._col_catalogo.setMaximumWidth(16777215)
+            self._col_catalogo.setMinimumWidth(0)
+            self.poner_ancho_catalogo(self._ancho_recordado())
+        else:
+            self._col_catalogo.setMinimumWidth(0)
+            self._col_catalogo.setMaximumWidth(16777215)
         self._cargar_paleta(self.paleta.clave)
         self.updateGeometry()
         self.franja_cambiada.emit()
 
     # -- paleta
     def _cargar_paleta(self, clave: str) -> None:
-        """Pone los bloques de la categoría y ajusta la columna a su bloque más ancho (más el margen y la barra)."""
+        """Pone las fichas del catálogo (las variables y etapas, o las numéricas)."""
         self.paleta.cargar(clave)
         self._medir_paleta()
 
     def _medir_paleta(self) -> None:
-        m = self.paleta.motor
-        natural = max([m.natural(n, (i,)) for i, n in enumerate(self.paleta._raices)] or [0])
-        if self.en_fila:  # una fila: el ancho es el de todos los bloques juntos (la paleta se desplaza a los lados) y el alto, el de una fila más la barra
-            self.paleta.invalidar()
-            self.paleta.setMinimumWidth(int(self.paleta.ancho_necesario(10 ** 5)))
-            ancho = 10 ** 5
-            if not self.valor and self.paleta.clave == "variables" and not self.paleta.bloques():
-                ancho = max(80, self._sc_paleta.viewport().width())
-            alto = self.paleta.heightForWidth(ancho) + self._sc_paleta.horizontalScrollBar().sizeHint().height()
-            if self._sc_paleta.minimumHeight() != alto:
-                self._sc_paleta.setFixedHeight(alto)
-                self.franja_cambiada.emit()
+        if not self.en_fila:  # en columna, el ancho es el que dejó el borde arrastrable
             return
-        self._sc_paleta.setFixedWidth(int(min(max(natural + 2 * MARGEN + 16, self.PALETA_MIN), self.PALETA_MAX)))
+        self.paleta.invalidar()  # una fila: el ancho es el de todas las fichas juntas (el catálogo se desplaza a los lados) y el alto, el de una fila más la barra
+        self.paleta.setMinimumWidth(int(self.paleta.ancho_necesario(10 ** 5)))
+        ancho = 10 ** 5
+        if not self.valor and self.paleta.clave == "variables" and not self.paleta.bloques():
+            ancho = max(80, self._sc_paleta.viewport().width())
+        alto = self.paleta.heightForWidth(ancho) + self._sc_paleta.horizontalScrollBar().sizeHint().height()
+        if self._sc_paleta.minimumHeight() != alto:
+            self._sc_paleta.setFixedHeight(alto)
+            self.franja_cambiada.emit()
 
-    def elegir_categoria(self, clave: str) -> None:
-        self.categorias[clave].setChecked(True)
-        self._cargar_paleta(clave)
+    def _elegido(self, nodo: dict[str, Any]) -> None:
+        """Se pulsó una ficha del catálogo: va a la fórmula."""
+        self.lienzo.insertar(nodo)
 
     def seleccionar_elemento(self, identificador) -> None:
         """Vacía la búsqueda al cambiar de elemento, aunque su fórmula coincida."""
@@ -1936,56 +2605,6 @@ class Programador(QWidget):
         if cajon == "etapa":
             return [(etapa_visible(x), x) for x in dict.fromkeys(etapas)]
         return [(n, n) for n, (r, t) in variables.items() if r == PAPEL[cajon] and t == "bool"]
-
-    def showEvent(self, event: Any) -> None:  # noqa: N802
-        super().showEvent(event)
-        self._cargar_paleta(self.paleta.clave)
-
-    def resizeEvent(self, event: Any) -> None:
-        super().resizeEvent(event)
-        self._ajustar_franja()
-
-    def ancho_categorias(self) -> int:
-        """Lo que miden todas las categorías en una sola fila."""
-        botones = list(self.categorias.values())
-        return sum(b.sizeHint().width() for b in botones) + self._flujo_carpetas.spacing() * (len(botones) - 1) + 4
-
-    def categorias_en_cabecera(self, destino: QBoxLayout | None, posicion: int = 1) -> None:
-        """Con `destino` (la fila de cabecera de un panel), las categorías van **en esa fila**, en una sola línea y sin barra, y el programador
-        se queda con la paleta y el área; con `None` vuelven a su fila propia sobre la paleta (donde pasan a dos filas si no caben)."""
-        if (destino is not None) == self.cat_en_cabecera:
-            if destino is not None:
-                self._sc_carpetas.setFixedWidth(self.ancho_categorias())
-            return
-        self.cat_en_cabecera = destino is not None
-        sc = self._sc_carpetas
-        if destino is not None:
-            self._raiz.removeWidget(sc)
-            destino.insertWidget(posicion, sc)
-            sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-            sc.setFixedSize(self.ancho_categorias(), estilo.ALTO_CONTROL_COMPACTO)
-        else:
-            sc.parentWidget().layout().removeWidget(sc)
-            self._raiz.insertWidget(0, sc)
-            sc.setMinimumWidth(0)
-            sc.setMaximumWidth(16777215)
-            sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        sc.show()
-        self._flujo_carpetas.invalidate()
-        self._ajustar_franja()
-        self.updateGeometry()
-        self.franja_cambiada.emit()
-
-    def _ajustar_franja(self) -> None:
-        if self.cat_en_cabecera:  # en la cabecera: una fila de 32 px y del ancho de todas las categorías
-            self._sc_carpetas.setFixedSize(self.ancho_categorias(), estilo.ALTO_CONTROL_COMPACTO)
-            return
-        # la franja de categorías mide lo que sus filas: una si caben todas, dos o más si no (nunca barra ni botón cortado)
-        ancho = max(self._sc_carpetas.viewport().width(), 60)
-        alto = max(30, self._flujo_carpetas.heightForWidth(ancho) + 4)
-        if alto != self._sc_carpetas.height():
-            self._sc_carpetas.setFixedHeight(alto)
-            self.franja_cambiada.emit()
 
     def refrescar(self) -> None:
         """Las variables o las etapas del modelo cambiaron (se creó, renombró, quitó o cambió de papel o tipo una
@@ -2028,6 +2647,7 @@ class Programador(QWidget):
 
     def _fijar_arbol(self, arbol: dict[str, Any] | None) -> None:
         self.lienzo.poner_arbol(arbol)
+        self._herramientas_al_dia()
 
     def _avisar(self, texto: str) -> None:
         self._poner_aviso(texto)

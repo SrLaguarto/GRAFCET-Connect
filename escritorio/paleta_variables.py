@@ -223,11 +223,11 @@ class PaletaVariables(PaletaBloques):
             alto_fila = alto_titulo if self.una_fila else 0
             for i in range(inicio, inicio + cantidad):
                 nodo = self._raices[i]
-                ancho_caja = min(self.motor.natural(nodo, (i,)), ancho - 2 * margen)
+                ancho_caja = (ancho - 2 * margen) if self.columna else min(self.motor.natural(nodo, (i,)), ancho - 2 * margen)  # (en columna, filas a todo el ancho)
                 caja = self.motor.caja(nodo, (i,), ancho_caja)
                 if x > margen and not self.una_fila and (self.columna or x + caja.w > ancho - margen):
                     x = float(margen)
-                    y += alto_fila + estilo.E2
+                    y += alto_fila + (2 if self.columna else estilo.E2)  # (en columna, las fichas del catálogo más juntas)
                     alto_fila = 0
                 cajas.append((caja, x, y))
                 x += caja.w + estilo.E2

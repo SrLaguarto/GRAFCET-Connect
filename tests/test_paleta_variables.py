@@ -32,16 +32,16 @@ class PaletaVariables(unittest.TestCase):
         self.addCleanup(p.close)
         return p
 
-    def test_SPVU01_pestanas_y_grupos_en_orden(self):
+    def test_SPVU01_catalogo_siempre_visible_banda_y_grupos_en_orden(self):
         p = self.programador({"I10": ("input", "bool"), "I2": ("input", "bool"),
                               "M": ("internal", "bool"), "Q": ("output", "bool")}, ["X10", "X2"])
+        # (E8: sin pestañas; el catálogo está siempre a la vista y las cuatro categorías de la banda son rótulos con sus botones)
         self.assertEqual([b.text() for b in p.categorias.values()],
-                         ["Variables", "Operadores", "Temporizadores", "Comparaciones", "Constantes"])
+                         ["Operadores", "Temp.", "Comp.", "Const."])
+        self.assertEqual(p.t_catalogo.text(), "Variables y etapas")
         self.assertEqual(p.paleta.clave, "variables")
         self.assertEqual([(c, t) for c, t, _, _ in p.paleta.grupos], list(GRUPOS))
         self.assertEqual([n["n"] for n in p.paleta.bloques()], ["I2", "I10", "X2", "X10", "M", "Q"])
-        pixmap = p.categorias["variables"].icon().pixmap(10, 10).toImage()
-        self.assertEqual(pixmap.pixelColor(5, 5).name(), estilo.TINTA_2)
 
     def test_SPVU02_grupos_vacios_no_tienen_titulo_ni_ficha(self):
         p = self.programador({"M": ("internal", "bool"), "CT": ("internal", "int")})
@@ -56,7 +56,7 @@ class PaletaVariables(unittest.TestCase):
         QApplication.processEvents()
         paleta = p.paleta
         aviso = paleta.mensaje
-        self.assertEqual(p._sc_paleta.width(), p.PALETA_MIN)
+        self.assertEqual(p._sc_paleta.width(), p.PALETA_INICIAL)  # (el catálogo mide 170 px al abrirse; el borde se arrastra)
         self.assertEqual(aviso.text(), MENSAJE_VACIO)
         self.assertNotIn("…", aviso.text())
         self.assertTrue(aviso.wordWrap())
@@ -113,10 +113,10 @@ class PaletaVariables(unittest.TestCase):
 
     def test_SPVU06_programador_numerico_no_cambia(self):
         p = self.programador({"CT": ("internal", "int")}, valor=True)
-        self.assertEqual(list(p.categorias), ["vnum", "aritm", "numero"])
-        self.assertEqual(p.paleta.clave, "numero")
+        self.assertEqual(list(p.categorias), ["aritm", "numero"], "la banda del valor: Operadores y Constantes")
+        self.assertEqual(p.categorias["numero"].toolTip(), "Constantes")
+        self.assertEqual(p.paleta.clave, "vnum")
         self.assertIs(type(p.paleta), bloques.PaletaBloques)
-        p.elegir_categoria("vnum")
         self.assertEqual([n["n"] for n in p.paleta.bloques()], ["CT"])
 
     def test_SPVU07_subtitulos_en_columna_fluido_y_una_fila(self):
@@ -146,10 +146,8 @@ class PaletaVariables(unittest.TestCase):
         self.assertEqual(p.paleta.bloques(), [])
         p.paleta.filtro.setText("final")
         self.assertEqual([n["n"] for n in p.paleta.bloques()], ["active(Final)"])
-        p.elegir_categoria("operador")
         p.seleccionar_elemento("otra transicion")
-        self.assertEqual([n["k"] for n in p.paleta.bloques()], ["y", "o", "no", "par", "sube", "baja"])
-        p.elegir_categoria("variables")
+        self.assertEqual([p.banda.nodo(b.clave)["k"] for b in p.banda.botones["operador"]], ["no", "sube", "baja", "par", "y", "o"])
         variables.pop("I2")
         variables["Marcha"] = variables.pop("I3")
         p.refrescar()

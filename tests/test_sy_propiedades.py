@@ -11,7 +11,7 @@ os.environ.setdefault("QT_QPA_FONTDIR", "C:/Windows/Fonts")
 os.environ.setdefault("GRAFCONNECT_SIN_ACTUALIZAR", "1")
 
 try:
-    from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
+    from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
     from PySide6.QtGui import QColor, QPen
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QStyle, QStyleOptionButton
@@ -62,27 +62,24 @@ class PropiedadesY(unittest.TestCase):
                     c, p, v = self.contexto(tipo, ancho, alto)
                     disponible = c.w.paginas_es.height() - 2 * estilo.E6
                     alto_por_tipo = {(683, 768): {"transicion": 577, "activacion_numerica": 486},
-                                     (960, 1032): {"transicion": 679, "activacion_numerica": 593}}[(ancho, alto)]  # E8: con franja y pie (E3 de aire bajo el filete)
+                                     (960, 1032): {"transicion": 688, "activacion_numerica": 601}}[(ancho, alto)]  # E8: con franja y pie (E3 de aire bajo el filete) y las herramientas del formulador en la franja del título (28 px en vez de 20)
                     self.assertEqual((v.width(), v.height()), (esperado, alto_por_tipo.get(tipo, disponible)))
                     self.doCleanups()
 
     def test_SY3_centrada_y_categorias_enteras_a_pantalla_completa(self):
-        """Una sola fila de categorías completas dentro de su columna con el ancho nuevo."""
+        """La ventana centrada y la banda de categorías entera dentro de su columna con el ancho nuevo (E8: la banda sustituye a las pestañas;
+        cambia el soporte de la comprobación, no lo que se exige)."""
         for ancho, alto in ((1366, 768), (1920, 1080), (2560, 1440)):
             for tipo in ("transicion", "condicionada", "evento"):
                 with self.subTest(tipo=tipo, ancho=ancho):
                     c, p, v = self.contexto(tipo, ancho, alto)
                     self.assertLessEqual((v.geometry().center() - c.w.flot._area().center()).manhattanLength(), 2)
-                    botones = list(p.prog.categorias.values())
-                    self.assertEqual(len({b.y() for b in botones}), 1)
-                    self.assertFalse(p.categorias_una_fila.no_cabe)
-                    for b in botones:
-                        op = QStyleOptionButton()
-                        b.initStyleOption(op)
-                        r = b.style().subElementRect(QStyle.SubElement.SE_PushButtonContents, op, b)
-                        pide = b.fontMetrics().horizontalAdvance(b.text()) + b.iconSize().width() + 9
-                        self.assertGreaterEqual(r.width(), pide)
-                        self.assertTrue(b.parentWidget().rect().contains(b.geometry()))
+                    banda = p.prog.banda
+                    elementos = list(p.prog.categorias.values()) + [b for bs in banda.botones.values() for b in bs]
+                    for w in elementos:
+                        self.assertTrue(w.isVisible(), w.text())
+                        self.assertTrue(banda.rect().contains(QRect(w.mapTo(banda, QPoint()), w.size())), w.text())
+                        self.assertGreaterEqual(w.width(), w.fontMetrics().horizontalAdvance(w.text()), w.text())
                     self.doCleanups()
 
     def test_SY4_etapas_y_macroetapas_conservan_su_ancho_menor(self):
@@ -131,7 +128,7 @@ class PropiedadesY(unittest.TestCase):
 
     def test_SY7_altos_a_pantalla_completa_se_ajustan_al_area_actual(self):
         """Las alturas de una tarjeta se conservan. Dos tarjetas aprovechan el área con sus márgenes."""
-        fijos = {"transicion": 786, "activacion_numerica": 681}  # E8: con la vista previa en franja y el pie (E3 de aire bajo el filete)
+        fijos = {"transicion": 800, "activacion_numerica": 693}  # E8: con la vista previa en franja y el pie (E3 de aire bajo el filete)
         for ancho, alto in ((1920, 1080), (2560, 1440)):
             for tipo in (*fijos, "condicionada"):
                 c, p, v = self.contexto(tipo, ancho, alto)

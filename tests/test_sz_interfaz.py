@@ -160,12 +160,12 @@ class InterfazZ(unittest.TestCase):
     def test_SZ4_orden_y_categoria_inicial(self):
         """REQ-EDT-02: ambos programadores siguen el mismo orden relativo."""
         from escritorio.bloques import Programador
-        for valor, esperado in ((False, ['Variables', 'Operadores', 'Temporizadores', 'Comparaciones', 'Constantes']),
-                                (True, ['Variables', 'Operadores', 'Número'])):
+        for valor, esperado in ((False, ['Operadores', 'Temp.', 'Comp.', 'Const.']),
+                                (True, ['Operadores', 'Const.'])):  # (E8: la banda; el catálogo ya no es una pestaña)
             p = Programador(lambda: ({}, []), valor=valor)
             self.addCleanup(p.deleteLater)
-            self.assertEqual([t for k, t in p.lista_categorias], esperado)
-            self.assertTrue(p.categorias["numero" if valor else "variables"].isChecked())
+            self.assertEqual([r.text() for r in p.categorias.values()], esperado)
+            self.assertEqual(p.paleta.clave, "vnum" if valor else "variables")
 
     def test_SZ5_ejemplos_solo_como_archivos_sin_firma(self):
         """REQ-EDT-10: se instalan una vez y abren como cualquier otro proyecto."""
@@ -238,7 +238,7 @@ class InterfazZ(unittest.TestCase):
     def test_SZ8_categorias_en_todas_las_propiedades(self):
         """REQ-EDT-02: las ventanas reales utilizan el orden común sin perder sus controles."""
         from escritorio.bloques import Programador
-        orden = ['Variables', 'Operadores', 'Temporizadores', 'Comparaciones', 'Constantes', 'Número']
+        orden = ['Operadores', 'Temp.', 'Comp.', 'Const.']
         for tipo in ('transicion', 'condicionada', 'evento', 'activacion', 'desactivacion',
                      'activacion_numerica', 'evento_numerico'):
             with self.subTest(tipo=tipo):
@@ -247,7 +247,7 @@ class InterfazZ(unittest.TestCase):
                     HC._flotante(tipo)(c)
                     self.assertTrue(c.w.flot.principal.isVisible())
                     for prog in c.w.flot.panel.findChildren(Programador):
-                        titulos = [t for k, t in prog.lista_categorias]
+                        titulos = [r.text() for r in prog.categorias.values()]
                         self.assertEqual(titulos, sorted(titulos, key=orden.index))
                 finally:
                     c.cerrar()

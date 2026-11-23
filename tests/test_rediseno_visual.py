@@ -124,16 +124,18 @@ class RedisenoVisual(BaseQt):
         self.assertEqual(set(ts[t0]["postRefs"]),set(etapas));self.assertEqual(set(ts[t1]["preRefs"]),set(etapas))
         self.assertTrue(all(b["kind"]=="Y" for b in e.ed.bars()))
 
-    def test_SVIS15_carpetas_por_uso_en_panel(self):
-        """REQ-EDT-02, REQ-EDT-07: el orden por uso es el de siempre y cada carpeta sigue cargando sus bloques."""
+    def test_SVIS15_categorias_por_uso_en_panel(self):
+        """REQ-EDT-02, REQ-EDT-07: el orden por uso es el de siempre; la banda de categorías (sin pestañas: el catálogo está siempre a la
+        vista) ofrece los botones de cada una y cada botón crea su bloque."""
         w,e=self.vacio();p=w.props.prog
-        claves = ["variables", "operador", "tiempo", "comparacion", "constante"]
-        titulos = ["Variables", "Operadores", "Temporizadores", "Comparaciones", "Constantes"]
+        claves = ["operador", "tiempo", "comparacion", "constante"]
+        titulos = ["Operadores", "Temp.", "Comp.", "Const."]
         for prog in (p,):
             self.assertEqual(list(prog.categorias),claves)
             self.assertEqual([b.text() for b in prog.categorias.values()],titulos)
+            self.assertEqual(prog.paleta.clave,"variables","el catálogo, siempre a la vista")
             for clave in claves:
-                prog.categorias[clave].click()
-                self.assertEqual(prog.paleta.clave,clave)
-                self.assertTrue(prog.categorias[clave].isChecked())
-                self.assertEqual(sum(b.isChecked() for b in prog.categorias.values()),1)
+                self.assertTrue(prog.banda.botones[clave])
+                for b in prog.banda.botones[clave]:
+                    self.assertEqual(prog.banda.nodo(b.clave)["k"], {"no":"no","sube":"sube","baja":"baja","par":"par","y":"y","o":"o",
+                                     "retardo_activar":"temp","retardo_desactivar":"temp","cmp":"cmp","uno":"const","cero":"const"}[b.clave])

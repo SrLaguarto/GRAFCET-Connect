@@ -171,7 +171,11 @@ class PanelInterior(QFrame):
         self.senal: str | None = None
         self.titulo = TituloSenal()
         self.titulo.setObjectName("tituloPropiedades")
-        raiz.addWidget(self.titulo)
+        self.fila_titulo = QHBoxLayout()  # el título y, a la derecha, las herramientas del formulador (`Programador.adoptar_herramientas`)
+        self.fila_titulo.setContentsMargins(0, 0, 0, 0)
+        self.fila_titulo.setSpacing(estilo.E2)
+        self.fila_titulo.addWidget(self.titulo, 1)
+        raiz.addLayout(self.fila_titulo)
         self.scroll = QScrollArea()
         self.scroll.setObjectName("scrollTarjeta")
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -200,6 +204,10 @@ class PanelInterior(QFrame):
             p.fillRect(QRect(1, estilo.R_M, 3, max(0, self.height() - 2 * estilo.R_M)), QColor(self.senal))
             p.end()
 
+    def alto_titulo(self) -> int:
+        """Alto de la franja del título: el del título o el de las herramientas del formulador, si las lleva."""
+        return max(self.titulo.sizeHint().height(), estilo.ALTO_BARRA_COMPACTA if self.fila_titulo.count() > 1 else 0)
+
     def alto_necesario(self, justo: bool = False) -> int:
         """Altura del contenido al ancho real, incluido el pie de fórmula y la cabecera. `justo`: lo que pide el contenido en su mínimo (la
         tarjeta de una acción sin valor numérico: sin sumar el alto de las demás páginas del panel)."""
@@ -209,7 +217,7 @@ class PanelInterior(QFrame):
         if self.lay_cuerpo.hasHeightForWidth() and not justo:
             contenido = max(contenido, self.lay_cuerpo.totalHeightForWidth(ancho))
         margenes = self.layout().contentsMargins()
-        cabecera = self.titulo.sizeHint().height() + self.layout().spacing()
+        cabecera = self.alto_titulo() + self.layout().spacing()
         return contenido + cabecera + margenes.top() + margenes.bottom() + estilo.E1 + 2  # (+2: el borde)
 
 
@@ -491,6 +499,13 @@ class GestorFlotantes(QObject):
         if not v.isVisible():
             self.arrastre.movida = False
             self.arrastre.inicio = None
+        from .bloques import Programador
+        for prog in (p.prog, p.accion.prog):  # las herramientas de cada formulador, en la franja del título de su tarjeta
+            tarjeta = prog.parentWidget()
+            while tarjeta is not None and not isinstance(tarjeta, PanelInterior):
+                tarjeta = tarjeta.parentWidget()
+            if tarjeta is not None:
+                prog.adoptar_herramientas(tarjeta.fila_titulo)
         v.show()
         self._vigilar(True)
         self.colocar()
@@ -615,7 +630,7 @@ class GestorFlotantes(QObject):
 
     def _marco_tarjeta(self) -> int:
         """Lo que una tarjeta gasta sin contar su contenido: borde, márgenes y título con su hueco."""
-        t = self.principal.accion.titulo.sizeHint().height()
+        t = self.principal.accion.alto_titulo()
         return t + estilo.E2 + 2 * estilo.E3 + 2
 
     def _dimensionar(self, area: QRect) -> None:

@@ -361,7 +361,6 @@ class PanelPropiedades(QWidget):
             prog.escalar()
         for ficha in (self.ficha_izq, self.ficha_etapa):
             ficha.escalar()
-        self._ubicar_categorias()
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
         """El ancho mínimo no pasa de `ANCHO_MINIMO`: al abrirse (y mientras sus páginas aún no se han repartido) el panel llegó a
@@ -468,9 +467,6 @@ class PanelPropiedades(QWidget):
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
-        self.categorias_una_fila = None
-        from .propiedades_ampliadas import CategoriasUnaFila
-        self.categorias_una_fila = CategoriasUnaFila(self.prog)
         self.cabecera.hide()  # (el título y el cierre los pone la ventana flotante)
         # La lupa ya enseña la fórmula; los errores permanecen bajo los bloques.
         self._l_formula.hide()
@@ -490,12 +486,6 @@ class PanelPropiedades(QWidget):
             self.destino_bloques.addWidget(self.pagina_bloques)
         else:
             self._hl_prog.insertWidget(1, self.pagina_bloques, 3)
-
-    # -- categorías de bloques en la cabecera -------------------------------------------------------
-
-    def _ubicar_categorias(self) -> None:
-        for prog in (self.prog, self.accion.prog):
-            prog.categorias_en_cabecera(None)
 
     # -- páginas -----------------------------------------------------------------------------------
     def _programacion(self) -> QWidget:
@@ -786,7 +776,7 @@ class PanelPropiedades(QWidget):
             self._mostrado=("anotacion",vivo);self.ident=vivo;self.pagina="anotacion"
             self._objetivo=None;self._anterior=None;self._ver_bloques(None)
             self.accion.caja_valor.hide();self.cuerpo.show();self.vacio.hide();self.izq.hide()
-            self.der.setCurrentIndex(5);self.der.show();self.msg.clear();self._ubicar_categorias()
+            self.der.setCurrentIndex(5);self.der.show();self.msg.clear()
             self.titulo.setText("Propiedades · "+("Texto" if n["kind"]=="text" else "Imagen"))
             self.nota_resumen.setText(n.get("text","") if n["kind"]=="text" else n.get("name","Imagen"))
             self.nota_editar.setText("Editar texto…" if n["kind"]=="text" else "Cambiar imagen…")
@@ -814,7 +804,6 @@ class PanelPropiedades(QWidget):
             self.titulo.setText("Propiedades · Acción")
             self.msg.hide()
             self._remates_accion.mostrar(False)
-            self._ubicar_categorias()
             return
         kind = ("accion" if aid else
                 "enlace" if "|" in vivo else
@@ -948,7 +937,6 @@ class PanelPropiedades(QWidget):
         self.msg.setText("")
         self.msg.hide()
         self._remates_accion.mostrar(kind == "accion")
-        self._ubicar_categorias()
 
     @staticmethod
     def _poner(campo: QLineEdit, texto: str) -> None:

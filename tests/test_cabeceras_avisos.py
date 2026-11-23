@@ -44,7 +44,7 @@ class CabecerasYAvisos(BaseQt):
         from grafcet.notation import x_etapa
         etapas = [x_etapa("0fsd"), x_etapa("a b"), "X1", x_etapa("Inicio")]
         prog = Programador(lambda: ({}, etapas))
-        prog.elegir_categoria("variables")
+        prog.refrescar()
         visibles = [prog.paleta.motor.elementos(n)[0][2] for n in prog.paleta.bloques()]
         self.assertEqual(sorted(visibles), sorted(["X0fsd", "Xa b", "X1", "XInicio"]))
         self.assertEqual([t for t, _ in prog.opciones("etapa")], ["X0fsd", "Xa b", "X1", "XInicio"])

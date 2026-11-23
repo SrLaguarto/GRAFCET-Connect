@@ -131,12 +131,13 @@ class RematesTrasD(BaseQt):
                 for tipo in ("transicion", "condicionada", "evento"):
                     with self.subTest(ancho=ancho, flotante=flotante, tipo=tipo):
                         w, e, p, aid = self.preparar(tipo, flotante, ancho, alto)
-                        botones = p.prog.categorias.values()
+                        # E8: la banda (cuatro categorías con sus botones y las herramientas) en una, dos o tres filas según el ancho; nunca
+                        # una categoría partida ni un rótulo suelto al final de una fila (va con su primer botón)
+                        botones = list(p.prog.categorias.values())
                         filas = Counter(b.mapToGlobal(QPoint()).y() for b in botones)
                         self.assertTrue(all(b.isVisible() for b in botones))
-                        if ancho >= 1366:
-                            self.assertEqual(len(filas), 1)
-                        else:
-                            self.assertLessEqual(len(filas), 2)
-                            if len(filas) == 2:
-                                self.assertGreaterEqual(min(filas.values()), 2)
+                        self.assertLessEqual(len(filas), 3)
+                        for rotulo in botones:
+                            primero = next(b for b in p.prog.banda.botones[next(k for k, r in p.prog.categorias.items() if r is rotulo)])
+                            self.assertEqual(rotulo.mapToGlobal(QPoint()).y() + rotulo.height() // 2,
+                                             primero.mapToGlobal(QPoint()).y() + primero.height() // 2, "el rótulo, con su primer botón")

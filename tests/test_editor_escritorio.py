@@ -2025,7 +2025,7 @@ class Interfaz(unittest.TestCase):
         e.seleccionar([ts["t1"]])
         w._abrir_opciones()
         prog = w.props.prog
-        prog.elegir_categoria("variables")
+        prog.refrescar()
         def salidas():
             return [b for b in prog.paleta.bloques() if b.get("papel") == "output"]
         self.assertEqual(salidas(), [], "sin salidas, el grupo no se ofrece")
@@ -2053,7 +2053,7 @@ class Interfaz(unittest.TestCase):
         self.assertIsNone(e.quitar_variable(next(x["id"] for x in e.ed.model["variables"] if x["name"] == "Q06")))
         self.assertEqual(prog.opciones("salida"), [("Motor", "Motor")])
         # «Crear las que faltan»
-        prog.elegir_categoria("variables")
+        prog.refrescar()
         w.props.t_texto.setText("nueva_in AND marcha")
         w.props._previsualizar()
         self.assertFalse(w.props.t_crear.isHidden())
@@ -2061,17 +2061,17 @@ class Interfaz(unittest.TestCase):
         self.assertIn(("nueva_in", "nueva_in"), prog.opciones("entrada"))
 
     def test_SEDI67_carpetas_en_su_orden_y_temporizadores(self):
-        """REQ-EDT-02: Variables, Operadores, Temporizadores, Comparaciones y Constantes, en ese orden;
-        la categoría «Tiempo» se llama «Temporizadores»."""
-        from escritorio.bloques import CATEGORIAS, Programador
+        """REQ-EDT-02: la banda: Operadores, Temporizadores, Comparaciones y Constantes, en ese orden (el catálogo de Variables y
+        etapas ya no es una pestaña: está siempre a la vista); la categoría «Tiempo» se llama «Temporizadores»."""
+        from escritorio.bloques import CATEGORIAS_BANDA, Programador
         e, ids, ts = self.secuencial()
-        textos = ["Variables", "Operadores", "Temporizadores", "Comparaciones", "Constantes"]
-        self.assertEqual([t for _, t in CATEGORIAS], textos)
+        textos = ["Operadores", "Temp.", "Comp.", "Const."]  # (abreviados; el nombre entero, en la ayuda emergente)
+        self.assertEqual([t for _, t in CATEGORIAS_BANDA], textos)
         prog = self.w.props.prog
         self.assertEqual([b.text() for b in prog.categorias.values()], textos)
         self.assertNotIn("Tiempo", [b.text() for b in prog.categorias.values()])
-        self.assertEqual(prog.categorias["tiempo"].text(), "Temporizadores")
-        self.assertEqual(prog.paleta.clave, "variables")
+        self.assertEqual(prog.categorias["tiempo"].toolTip(), "Temporizadores")
+        self.assertEqual(prog.paleta.clave, "variables", "el catálogo, siempre a la vista")
 
     def test_SEDI68_receptividad_en_el_panel_con_texto_de_solo_lectura(self):
         """REQ-EDT-02: toda la receptividad está a la derecha del panel de opciones (texto de la fórmula, «Escrito», «Se
@@ -4213,13 +4213,14 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((arbol["k"], arbol["op"], arbol["a"], arbol["b"]), ("ar", "+", {"k": "vnum", "n": "CT"}, {"k": "num", "v": "1"}))
         self.assertTrue(d.valor.isReadOnly(), "el valor se arma con bloques: no se edita a mano")
         self.assertFalse(hasattr(d, "manual"))
-        # la paleta corta: Variables, Operadores, Número
-        self.assertEqual([c for c, _ in d.prog.lista_categorias], ["vnum", "aritm", "numero"])
-        d.prog.elegir_categoria("vnum")
+        # el catálogo de variables numéricas y la banda corta: Operadores y Constantes (la antigua pestaña «Número»)
+        self.assertEqual([(c, r.text()) for c, r in d.prog.categorias.items()], [("aritm", "Operadores"), ("numero", "Const.")])
+        d.prog.refrescar()
         self.assertEqual([n["n"] for n in d.prog.paleta._raices], ["CT"], "una ficha por variable numérica, de cualquier papel")
-        d.prog.elegir_categoria("aritm")
-        self.assertEqual([n["op"] if n["k"] == "ar" else n["k"] for n in d.prog.paleta._raices],
+        self.assertEqual([n["op"] if n["k"] == "ar" else n["k"] for n in map(d.prog.banda.nodo, ("mas", "menos", "por", "entre", "par"))],
                          ["+", "-", "*", "/", "par"], "los cuatro operadores y el paréntesis")
+        self.assertEqual([b.text() for b in d.prog.banda.botones["aritm"]], ["+", "−", "×", "÷", "( … )"])
+        self.assertEqual([b.text() for b in d.prog.banda.botones["numero"]], ["Número"])
         # con bloques: CT * 2 - 1, anidado (un operador sobre otro lo envuelve); lo a medias no se guarda
         d._desde_bloques("")
         lienzo = d.prog.lienzo
@@ -4266,9 +4267,8 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(len(e.ed.undo_stack), n, "no se guardó nada")
         # un número editado desde el área de la paleta o con el campo, en el propio bloque
         d.valor.setText("")
-        d.prog.elegir_categoria("numero")
-        d.prog.colocar(d.prog.paleta.bloques()[0])
-        self.assertEqual(d.valor.text(), "1")
+        d.prog.banda.botones["numero"][0].click()
+        self.assertEqual(d.valor.text(), "1", "el botón «Número» pone un número 1 en la fórmula")
 
     def test_SEDI106_frase_explicativa_y_condicion_con_bloques_al_lado(self):
         """REQ-ACT-01, REQ-EDT-02: arriba del panel de la acción, una frase la explica según su tipo; la condición (o el
@@ -4465,7 +4465,7 @@ class Interfaz(unittest.TestCase):
         w._abrir_opciones()
         e.seleccionar([ts["t1"]])
         prog = w.props.prog
-        prog.elegir_categoria("variables")
+        prog.refrescar()
         def fichas(papel):
             return [b for b in prog.paleta.bloques() if b["k"] == "etapa" and papel == "etapa"
                     or b.get("papel") == papel]
@@ -4475,13 +4475,13 @@ class Interfaz(unittest.TestCase):
         self.assertFalse([x for x in prog.paleta._piezas if x[1] == "drop"], "sin desplegable")
         for n in range(11, 41):
             e.poner_etapa(QPointF(900, 20 * n))
-        prog.elegir_categoria("variables")
+        prog.refrescar()
         w.props.prog.paleta.invalidar()
         QApplication.processEvents()
         self.assertGreater(prog._sc_paleta.verticalScrollBar().maximum(), 0, "con muchas fichas, desplazamiento vertical")
-        prog.elegir_categoria("variables")
+        prog.refrescar()
         self.assertEqual([b["n"] for b in fichas("output")], ["alfa", "zeta"], "por nombre")
-        prog.elegir_categoria("variables")
+        prog.refrescar()
         self.assertEqual([b["n"] for b in fichas("input")], ["I2", "I10", "marcha", "paro"])
         # cada ficha se arrastra con su elemento ya elegido (el área conserva el desplegable)
         prog.lienzo.soltar((), fichas("input")[2])
@@ -4491,7 +4491,7 @@ class Interfaz(unittest.TestCase):
         self.assertTrue([x for x in prog.lienzo._piezas if x[1] == "drop"], "los bloques puestos conservan su ▾")
         # al día en el acto
         e.nueva_variable("Q9", "output")
-        prog.elegir_categoria("variables")
+        prog.refrescar()
         self.assertEqual([b["n"] for b in fichas("output")], ["alfa", "Q9", "zeta"])
         vid = next(v["id"] for v in e.ed.model["variables"] if v["name"] == "Q9")
         self.assertIsNone(e.cambiar_variable(vid, nombre="Bomba"))
@@ -4506,7 +4506,7 @@ class Interfaz(unittest.TestCase):
         e.nueva_variable("CT", "internal", {"kind": "int"})
         e.nueva_variable("AA", "output", {"kind": "int"})
         d = self.anadir_accion(ids["1"], "activacion")
-        d.prog.elegir_categoria("vnum")
+        d.prog.refrescar()
         self.assertEqual([b["n"] for b in d.prog.paleta.bloques()], ["AA", "CT"])
 
     def test_SEDI112_panel_de_opciones_etapa_transicion_y_encaje_a_1360x860(self):
@@ -4648,7 +4648,7 @@ class Interfaz(unittest.TestCase):
         pv.elegir(fila, 2, {"kind": "int"})
         d.poner_variable("Nueva")
         self.assertFalse(d.caja_numerica.isHidden())
-        d.prog.elegir_categoria("vnum")
+        d.prog.refrescar()
         self.assertEqual([b["n"] for b in d.prog.paleta.bloques()], ["Nueva"], "y en el programador del valor")
         self.assertIsNone(e.cambiar_variable(vid, nombre="Otra"))
         self.assertEqual([b["n"] for b in d.prog.paleta.bloques()], ["Otra"])
@@ -4861,8 +4861,7 @@ class Interfaz(unittest.TestCase):
         # la receptividad de una transición: (a OR b) AND NOT c, con el bloque
         e.seleccionar([ts["t1"]])
         p, prog = w.props, w.props.prog
-        prog.elegir_categoria("operador")
-        par = next((n for n in prog.paleta.bloques() if n["k"] == "par"), None)
+        par = prog.banda.nodo("par")  # el botón «( … )» de Operadores
         self.assertEqual(par, {"k": "par", "a": None})
         prog.lienzo.soltar((), nuevo("y"))
         prog.lienzo.soltar(("a",), par)
@@ -4887,8 +4886,7 @@ class Interfaz(unittest.TestCase):
         prog.poner("a OR b")
         # el valor de una acción: ((CT - 5 + N5) * 1 / 1) + 1
         d = self.anadir_accion(ids["1"], "activacion", "DEC")  # la división da un decimal
-        d.prog.elegir_categoria("aritm")
-        self.assertEqual([n["k"] for n in d.prog.paleta.bloques()], ["ar"] * 4 + ["par"])
+        self.assertEqual([n["k"] for n in map(d.prog.banda.nodo, ("mas", "menos", "por", "entre", "par"))], ["ar"] * 4 + ["par"])
         lienzo = d.prog.lienzo
         d._desde_bloques("")
         lienzo.soltar((), nuevo("ar", op="+"))
@@ -4928,7 +4926,7 @@ class Interfaz(unittest.TestCase):
         w.editar_accion(ids["1"], aid)
         self.assertEqual(w.props.prog.texto(), "(a OR b) AND NOT c")
         self.assertEqual(w.props.prog.lienzo.arbol["a"]["k"], "par")
-        self.assertEqual(w.props.prog.categorias["operador"].text(), "Operadores")
+        self.assertEqual(w.props.prog.categorias["operador"].text(), "Operadores")  # (la banda; el catálogo ya no es una pestaña)
         # el significado no cambia: los paréntesis solo agrupan
         igual = lambda x, y: parse(a_nucleo(x, [], acc), lambda c, n: n) == parse(a_nucleo(y, [], acc), lambda c, n: n)  # noqa: E731
         self.assertTrue(igual("(a OR b) AND NOT c", "(a OR b) AND (NOT c)") and igual("((a))", "a"))
@@ -7383,9 +7381,8 @@ class Interfaz(unittest.TestCase):
         a = prog.lienzo
         self.assertEqual(prog.texto(), "")
         self.assertFalse(e.ed.validate().can_simulate, "una transición nueva queda pendiente")
-        prog.elegir_categoria("constante")
-        self.assertEqual(prog.categorias["constante"].text(), "Constantes")
-        uno, cero = prog.paleta.bloques()
+        self.assertEqual(prog.categorias["constante"].toolTip(), "Constantes")
+        uno, cero = prog.banda.nodo("uno"), prog.banda.nodo("cero")  # los botones «1» y «0» de la banda
         self.assertEqual([(b["k"], b["v"]) for b in (uno, cero)], [("const", 1), ("const", 0)])
 
         def arrastrar(nodo, sobre_la_raiz=False):
@@ -7424,8 +7421,7 @@ class Interfaz(unittest.TestCase):
         vid = next(v["id"] for v in e.ed.model["variables"] if v["name"] == "marcha")
         e.seleccionar([t])
         prog = w.props.prog
-        prog.elegir_categoria("constante")
-        uno, cero = prog.paleta.bloques()
+        uno, cero = prog.banda.nodo("uno"), prog.banda.nodo("cero")
         m = var("marcha")
         casos = [  # (gestos: dónde se suelta qué, texto, guardado, ¿franquea con marcha = 0?, ¿y con marcha = 1?)
             ([((), nuevo("y")), (("a",), uno), (("b",), m)], "1 AND marcha", "true AND marcha", False, True),
@@ -7655,84 +7651,72 @@ class Bloques(unittest.TestCase):
         self.assertEqual(p.texto(), "CT + 1 > 3")
 
     def test_SEDI54_paleta_por_categorias(self):
-        """REQ-EDT-02, REQ-EDT-07: cinco categorías con su color (las constantes 1 y 0, en la suya); las memorias
-        son las variables de papel «internal»; sus desplegables se llenan con las variables y etapas del modelo."""
-        from escritorio.bloques import CATEGORIAS, COLORES, PAPEL
+        """REQ-EDT-02, REQ-EDT-07: el catálogo (una ficha por variable y etapa, con el color de su origen) y la banda de cuatro categorías
+        con su color (las constantes 1 y 0, en la suya); las memorias son las variables de papel «internal»; sus desplegables se llenan
+        con las variables y etapas del modelo. (Aspecto y organización: la banda sustituye a las pestañas; el contenido es el mismo.)"""
+        from escritorio import estilo
+        from escritorio.bloques import CATEGORIAS_BANDA, COLORES, PAPEL
         p = self.prog()
-        self.assertEqual([t for _, t in CATEGORIAS],
-                         ["Variables", "Operadores", "Temporizadores", "Comparaciones", "Constantes"])
-        self.assertEqual(len({COLORES[c] for c, _ in CATEGORIAS if c != "variables"}), 4)
+        self.assertEqual([t for _, t in CATEGORIAS_BANDA], ["Operadores", "Temp.", "Comp.", "Const."])
+        self.assertEqual(len({COLORES[c] for c, _ in CATEGORIAS_BANDA}), 4)
         self.assertEqual(PAPEL["interna"], "internal")
-        self.assertEqual([b.toolTip() for b in p.categorias.values()], [t for _, t in CATEGORIAS])
-        # una ficha por elemento (etapas por número, variables por nombre), ya elegido; las comparaciones, un bloque
-        esperado = {"entrada": [("var", "marcha", "input"), ("var", "paro", "input")],
-                    "salida": [("var", "Motor 1", "output"), ("var", "Q00", "output")],
-                    "interna": [("var", "M1", "internal")],
-                    "etapa": [("etapa", "X0", None), ("etapa", "X1", None), ("etapa", "active(Inicio)", None)],
-                    "comparacion": [("cmp", "CT", None)]}
-        combinado = sum((esperado[c] for c in ("entrada", "etapa", "interna", "salida")), [])
-        for clave, fichas in (("variables", combinado), ("comparacion", esperado["comparacion"])):
-            p.elegir_categoria(clave)
-            self.assertEqual([(b["k"], b["n"], b.get("papel")) for b in p.paleta.bloques()], fichas)
-            self.assertTrue(p.categorias[clave].isChecked())
-        p.elegir_categoria("operador")
-        self.assertEqual([b["k"] for b in p.paleta.bloques()], ["y", "o", "no", "par", "sube", "baja"],
-                         "con el bloque «( )» (P-IMP-46); las constantes ya no van entre los operadores")
-        p.elegir_categoria("constante")
-        self.assertEqual([(b["k"], b["v"]) for b in p.paleta.bloques()], [("const", 1), ("const", 0)])
-        p.elegir_categoria("tiempo")
-        self.assertEqual([(b["k"], b["t1"], b["t2"]) for b in p.paleta.bloques()], [("temp", "3s", "")])
+        self.assertEqual([r.text() for r in p.categorias.values()], [t for _, t in CATEGORIAS_BANDA])
+        self.assertEqual((COLORES["entrada"], COLORES["salida"], COLORES["etapa"], COLORES["interna"]),
+                         (estilo.ACENTO, estilo.SIMULACION, estilo.EDICION, estilo.ORIGEN_MEMORIA), "el color de cada origen")
+        # una ficha por elemento (etapas por número, variables por nombre), ya elegido
+        combinado = [("var", "marcha", "input"), ("var", "paro", "input"), ("etapa", "X0", None), ("etapa", "X1", None),
+                     ("etapa", "active(Inicio)", None), ("var", "M1", "internal"), ("var", "Motor 1", "output"), ("var", "Q00", "output")]
+        self.assertEqual([(b["k"], b["n"], b.get("papel")) for b in p.paleta.bloques()], combinado)
+        # lo que crea cada botón de la banda
+        self.assertEqual([b.text() for b in p.banda.botones["operador"]], ["NOT", "↑", "↓", "( … )", "Y", "O"])
+        self.assertEqual([p.banda.nodo(b.clave)["k"] for b in p.banda.botones["operador"]], ["no", "sube", "baja", "par", "y", "o"],
+                         "con el bloque «( )» (P-IMP-46) y los botones «Y» y «O»; las constantes no van entre los operadores")
+        self.assertEqual([(p.banda.nodo(b.clave)["k"], p.banda.nodo(b.clave)["v"]) for b in p.banda.botones["constante"]],
+                         [("const", 1), ("const", 0)])
+        self.assertEqual([(p.banda.nodo(b.clave)["k"], p.banda.nodo(b.clave)["t1"], p.banda.nodo(b.clave)["t2"])
+                          for b in p.banda.botones["tiempo"]], [("temp", "3s", ""), ("temp", "", "3s")], "t/X y X/t")
+        self.assertEqual([(p.banda.nodo(b.clave)["k"], p.banda.nodo(b.clave)["n"]) for b in p.banda.botones["comparacion"]], [("cmp", "CT")],
+                         "la comparación trae la primera variable numérica")
         self.assertEqual(p.opciones("interna"), [("M1", "M1")], "las memorias booleanas")
         self.assertEqual(p.opciones("etapa"), [("X0", "X0"), ("X1", "X1"), ("XInicio", "active(Inicio)")], "se ve «XInicio»; lo que se guarda es active(Inicio)")
-        # las fichas de elementos no llevan desplegable (▾); lo escrito en el temporizador se conserva
-        p.elegir_categoria("variables")
+        # las fichas de elementos no llevan desplegable (▾)
         self.assertFalse([x for x in p.paleta._piezas if x[1] == "drop"])
-        p.elegir_categoria("tiempo")
-        p.paleta.editar_campo((0,), "t1", "1s")
-        p.elegir_categoria("tiempo")
-        self.assertEqual(p.paleta.bloques()[0]["t1"], "1s")
         # Sin variables ni etapas: sin fichas vacías.
         from escritorio.bloques import Programador
         vacio = Programador(lambda: ({}, []))
         self.assertEqual(vacio.paleta.bloques(), [])
-        # el modelo cambia (se crea una memoria): la paleta se llena otra vez
+        # el modelo cambia (se crea una memoria): el catálogo se llena otra vez
         self.VARS = {**self.VARS, "M2": ("internal", "bool")}
-        p.elegir_categoria("variables")
+        p.refrescar()
         self.assertEqual(p.opciones("interna"), [("M1", "M1"), ("M2", "M2")])
         memorias = [b["n"] for b in p.paleta.bloques() if b.get("papel") == "internal"]
-        self.assertEqual(memorias, ["M1", "M2"], "la paleta se llena otra vez")
+        self.assertEqual(memorias, ["M1", "M2"], "el catálogo se llena otra vez")
 
     def test_SEDI64_categorias_horizontales_y_bloques_en_columna(self):
-        """REQ-EDT-02: categorías en una franja horizontal (las cinco, con su color), debajo la columna de
-        bloques de la categoría elegida (uno debajo de otro) y, ocupando el resto, el área de trabajo con la papelera."""
+        """REQ-EDT-02: el catálogo, una columna de fichas (una debajo de otra) a la izquierda; a su derecha, la banda de categorías (las
+        cuatro, con sus botones) y, bajo ella y ocupando el resto, el área de trabajo. (Aspecto y organización: la banda sustituye a las
+        pestañas y el catálogo ocupa todo el alto, que no sobra.)"""
         from PySide6.QtWidgets import QPushButton
         p = self.prog()
-        p.resize(900, 300)
+        p.resize(1400, 340)  # (ancho en que las cuatro categorías caben en una fila; a menos, la banda pasa a dos o tres)
         p.show()
         QApplication.processEvents()
-        bs = list(p.categorias.values())
-        self.assertEqual(len(bs), 5)
-        self.assertTrue(all(isinstance(b, QPushButton) and not b.icon().isNull() for b in bs))
-        pos = [b.mapTo(p, b.rect().topLeft()) for b in bs]
-        self.assertEqual(len({q.y() for q in pos}), 1, "categorías en una franja horizontal")
+        rotulos = list(p.categorias.values())
+        self.assertEqual(len(rotulos), 4)
+        pos = [r.mapTo(p, r.rect().topLeft()) for r in rotulos]
+        self.assertEqual(len({q.y() for q in pos}), 1, "categorías en una fila")
         self.assertEqual(sorted(q.x() for q in pos), [q.x() for q in pos], "orden de izquierda a derecha")
-        self.assertGreater(p.paleta.mapTo(p, p.paleta.rect().topLeft()).y(), pos[0].y() + bs[0].height(),
-                           "las fichas, debajo de las categorías")
+        self.assertTrue(all(isinstance(b, QPushButton) for bs in p.banda.botones.values() for b in bs))
+        self.assertGreaterEqual(p.paleta.mapTo(p, p.paleta.rect().topLeft()).y(), pos[0].y() + rotulos[0].height(), "el catálogo, bajo la banda")
+        self.assertGreaterEqual(p.lienzo.mapTo(p, p.lienzo.rect().topLeft()).y(), pos[0].y() + rotulos[0].height(), "y el área, bajo la banda")
         self.assertGreater(p.lienzo.mapTo(p, p.lienzo.rect().topLeft()).x(),
-                           p.paleta.mapTo(p, p.paleta.rect().topLeft()).x(), "y el área, a la derecha de la paleta")
+                           p.paleta.mapTo(p, p.paleta.rect().topLeft()).x(), "y el área, a la derecha del catálogo")
         self.assertGreater(p.lienzo.width(), 300, "el área ocupa el resto")
-        p.elegir_categoria("operador")
-        QApplication.processEvents()
         cajas = sorted(p.paleta._cajas, key=lambda c: c[2])
-        self.assertEqual(len(cajas), 6, "y, o, no, ( ) y los flancos")
-        self.assertEqual(len({x for _, x, _ in cajas}), 1, "los bloques, en una columna")
-        self.assertEqual([c[2] for c in cajas], sorted({y for _, _, y in cajas}), "uno debajo de otro")
-        p.elegir_categoria("constante")
-        QApplication.processEvents()
-        self.assertEqual(len(p.paleta._cajas), 2, "las constantes 1 y 0, en su carpeta y a la vista sin desplazarse")
-        p.elegir_categoria("comparacion")
-        self.assertEqual([b["k"] for b in p.paleta.bloques()], ["cmp"], "elegir una carpeta muestra sus bloques")
-        self.assertTrue(p.categorias["comparacion"].isChecked())
+        self.assertGreaterEqual(len(cajas), 6, "las fichas del catálogo")
+        self.assertEqual(len({x for _, x, _ in cajas}), 1, "las fichas, en una columna")
+        self.assertEqual([c[2] for c in cajas], sorted({y for _, _, y in cajas}), "una debajo de otra")
+        self.assertEqual(len(p.banda.botones["constante"]), 2, "las constantes 1 y 0, en su categoría y a la vista sin desplazarse")
         # con fórmula larga: en línea si cabe, apilada si no
         p.poner("(↑marcha AND NOT X0) OR (3s/X1 AND CT >= 3)")
         a = p.lienzo
@@ -7743,7 +7727,7 @@ class Bloques(unittest.TestCase):
     def test_SEDI56_cabe_a_200_px_y_crece_en_alto(self):
         """REQ-EDT-02: el área y la paleta caben a 200 px sin barra horizontal; el área crece en alto al estrecharse y
         los bloques se apilan; la paleta suelta (en línea, no la del programador) pasa de línea."""
-        from escritorio.bloques import AreaBloques, PaletaBloques
+        from escritorio.bloques import AreaBloques, PaletaBloques, var
         p = self.prog()
         p.poner("(↑marcha AND NOT X0) OR (3s/X1 AND CT >= 3)")
         self.assertLessEqual(p.paleta.minimumSizeHint().width(), 200)
@@ -7754,13 +7738,13 @@ class Bloques(unittest.TestCase):
         self.assertGreater(h[330], h[1000], h)
         for w in (200, 250, 330, 700):
             self.assertLessEqual(area.ancho_necesario(w), w, f"a {w} px los bloques no se salen")
-        p.elegir_categoria("operador")
-        suelta = PaletaBloques(lambda: (self.VARS, self.ETAPAS))
-        suelta.cargar("operador")
+        suelta = PaletaBloques(lambda: ({f"salida_larga_{i}": ("output", "bool") for i in range(6)}, []))
+        suelta.cargar("salida")  # (el catálogo suelto, en línea: sus fichas, que ya no incluyen los operadores de la banda)
         self.assertGreater(suelta.heightForWidth(200), suelta.heightForWidth(700), "la paleta en línea pasa de línea")
         self.assertLessEqual(p.paleta.ancho_necesario(200), 200)
-        p.elegir_categoria("tiempo")
-        self.assertLessEqual(p.paleta.ancho_necesario(200), 200, "el bloque temporizar también cabe")
+        temporizado = AreaBloques(lambda: (self.VARS, self.ETAPAS))
+        temporizado.poner_arbol({**p.banda.nodo("retardo_activar"), "a": var("marcha", "input")})
+        self.assertLessEqual(temporizado.ancho_necesario(200), 200, "el bloque temporizar también cabe")
         # una pila profunda de «y» a 200 px
         profundo = " AND ".join(f"(marcha OR NOT paro AND Q00 AND X{i % 2})" for i in range(4))
         p.poner(profundo)
@@ -7989,10 +7973,10 @@ class Bloques(unittest.TestCase):
         p.poner("marcha OR paro OR Q00 OR M1 OR X1")
         self.assertEqual((p.lienzo.arbol["k"], hijos(p.lienzo.arbol), p.texto()),
                          ("o", ("a", "b", "c", "d", "e"), "marcha OR paro OR Q00 OR M1 OR X1"))
-        # en la paleta no hay botones
+        # en el catálogo no hay botones; los botones «Y» y «O» de la banda crean los dos bloques
         self.assertFalse(p.paleta.motor.botones)
-        p.elegir_categoria("operador")
         self.assertFalse([x for x in p.paleta._piezas if x[1] == "boton"])
+        self.assertEqual([p.banda.nodo(c)["k"] for c in ("y", "o")], ["y", "o"])
         p.close()
 
 

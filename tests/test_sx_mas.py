@@ -12,7 +12,7 @@ os.environ.setdefault("QT_QPA_FONTDIR", "C:/Windows/Fonts")
 os.environ.setdefault("GRAFCONNECT_SIN_ACTUALIZAR", "1")
 
 try:
-    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtCore import QPoint, QPointF, QRect, Qt
     from PySide6.QtWidgets import QGraphicsTextItem, QStyle, QStyleOptionButton
     from PySide6.QtTest import QTest
     from tools import hoja_contactos as HC
@@ -32,26 +32,26 @@ class PropiedadesMas(unittest.TestCase):
         HC._flotante(tipo)(c)
         return c, c.w.flot.panel, c.w.flot.principal
 
-    def test_SXM1_cinco_categorias_enteras_en_una_fila(self):
-        """REQ-EDT-02: en las tres ventanas las cinco pestañas caben, también a media pantalla real."""
+    def test_SXM1_banda_de_categorias_entera(self):
+        """REQ-EDT-02: en las tres ventanas, la banda de categorías (Operadores, Temporizadores, Comparaciones y Constantes, con sus botones y
+        las herramientas) cabe entera, también a media pantalla real: nada queda cortado y, si no caben en una fila, pasan a otra.
+        (E8: la banda sustituye a las cinco pestañas, que ya no existen; cambia el soporte de la comprobación, no lo que se exige.)"""
         for ancho, alto in ((853, 1019), (960, 1032), (1366, 768), (1920, 1080)):
             for tipo in ("transicion", "condicionada", "evento"):
                 with self.subTest(ancho=ancho, tipo=tipo):
                     c, p, v = self.contexto(tipo, ancho, alto)
-                    botones = list(p.prog.categorias.values())
-                    self.assertEqual([b.text() for b in botones],
-                                     ["Variables", "Operadores", "Temporizadores", "Comparaciones", "Constantes"])
-                    self.assertFalse(p.categorias_una_fila.no_cabe)
-                    self.assertEqual(len({b.y() for b in botones}), 1)
-                    for b in botones:
-                        op = QStyleOptionButton()
-                        b.initStyleOption(op)
-                        contenido = b.style().subElementRect(QStyle.SubElement.SE_PushButtonContents, op, b)
-                        texto = b.fontMetrics().horizontalAdvance(b.text())
-                        self.assertGreaterEqual(contenido.width(), texto + b.iconSize().width() + 9)
-                        self.assertTrue(b.parentWidget().rect().contains(b.geometry()))
-                    for a, b in zip(botones, botones[1:]):
-                        self.assertLess(a.geometry().right(), b.geometry().left())
+                    banda = p.prog.banda
+                    rotulos = list(p.prog.categorias.values())
+                    self.assertEqual([r.text() for r in rotulos], ["Operadores", "Temp.", "Comp.", "Const."])
+                    botones = [b for bs in banda.botones.values() for b in bs]
+                    for w in rotulos + botones:
+                        self.assertTrue(w.isVisible(), w.text())
+                        self.assertTrue(banda.rect().contains(QRect(w.mapTo(banda, QPoint()), w.size())), w.text())
+                        self.assertGreaterEqual(w.width(), w.fontMetrics().horizontalAdvance(w.text()), w.text())
+                    rects = [QRect(w.mapTo(banda, QPoint()), w.size()) for w in botones]
+                    for i, a in enumerate(rects):
+                        for b in rects[i + 1:]:
+                            self.assertFalse(a.intersects(b), "los botones no se pisan")
                     c.w._mostrar_panel("inferior", False)
 
     def test_SXM2_campos_sin_corte_y_comentario_largo(self):
@@ -75,7 +75,8 @@ class PropiedadesMas(unittest.TestCase):
             c, p, v = self.contexto(ancho=ancho, alto=alto)
             self.assertGreater(v.height(), anterior)
             self.assertLess(v.height(), c.w.flot._area().height() - 2 * estilo.E6)
-            self.assertGreater(p.prog.lienzo.height(), 250 if ancho == 1366 else 372)  # E8: la franja y el pie le quitan algo de alto a 1366×768
+            # E8: la franja, el pie y la banda (sobre el área; el catálogo ocupa todo el alto a su lado) le quitan algo de alto a 1366×768
+            self.assertGreater(p.prog.lienzo.height(), 180 if ancho == 1366 else 330)
             c.w._mostrar_panel("inferior", False)
 
     def test_SXM4_aviso_vacio_y_lupa_se_conservan(self):
