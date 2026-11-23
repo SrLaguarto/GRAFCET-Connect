@@ -1,9 +1,9 @@
 {
- "date": "2026-11-19T13:10:08+01:00",
+ "date": "2026-11-23T14:24:09+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 1609,
+ "total": 1856,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -158,7 +158,7 @@
     "REQ-EDT-02",
     "REQ-EDT-03"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-03: al equidistanciar, la doble línea de una divergencia (bajo su transición) y la de una"
+   "summary": "REQ-EDT-02, REQ-EDT-03: el hueco exterior de la doble línea se aproxima al de una etapa ordinaria."
   },
   {
    "test": "test_ab117.EncargoAB.test_SAB3c_tools_dibujo_js_dibuja_la_doble_linea_como_qt",
@@ -167,7 +167,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: tools/dibujo.js y escritorio/diagrama.py colocan igual la doble línea de una transición con hueco de dos pasos."
+   "summary": "REQ-EDT-02: el navegador y Qt dibujan el mismo doble trazo y los enlaces llegan a él."
   },
   {
    "test": "test_ab117.EncargoAB.test_SAB4_el_comentario_de_una_transicion_de_retorno_esta_junto_a_ella_y_la_sigue",
@@ -338,6 +338,55 @@
     "REQ-EDT-09"
    ],
    "summary": "REQ-EDT-09: icono rojo junto al texto, debajo del zoom, manteniendo clic en diagnóstico y espacios transparentes."
+  },
+  {
+   "test": "test_ad118.InterfazAD.test_SAD1_rutas_vigentes_al_editar_y_cambiar_de_proyecto",
+   "case": "S-AD1",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_ad118.InterfazAD.test_SAD1_saltos_retornos_orientaciones_y_ruta_manual_recalculan",
+   "case": "S-AD1",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_ad118.InterfazAD.test_SAD1_textos_se_reusan_y_se_actualizan_al_renombrar_y_parar",
+   "case": "S-AD1",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_ad118.InterfazAD.test_SAD1_una_escena_y_limite_holgado_al_anadir_con_100_etapas",
+   "case": "S-AD1",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_ad118.InterfazAD.test_SAD2_el_aviso_enumera_etapas_en_orden_natural_y_sin_repetir",
+   "case": "S-AD2",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_ad118.InterfazAD.test_SAD3_la_ventana_no_salta_al_completar_o_editar_acciones",
+   "case": "S-AD3",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_ad118.InterfazAD.test_SAD4_dos_pasos_en_simultaneidad_con_acciones_normales",
+   "case": "S-AD4",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
   },
   {
    "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU01_el_panel_de_una_etapa_de_un_recinto_tiene_la_casilla_enlace_de_activacion",
@@ -743,6 +792,42 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-EDT-02: una etapa sola arrastrada a un marco pasa a ser suyo; sacarla a un hueco la mueve pero sigue siendo del"
+  },
+  {
+   "test": "test_arrastre_enlace.Fotogramas.test_SARR01_ancla_en_da_lo_mismo_que_la_version_que_rehacia_las_posiciones_por_elemento",
+   "case": "S-ARR01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: `ancla_en` coincide con la versión de antes en puntos al azar y sobre los puntos de unión de cada elemento, con y sin `sin_der`."
+  },
+  {
+   "test": "test_arrastre_enlace.Fotogramas.test_SARR02_marco_en_con_las_cajas_ya_calculadas_da_lo_mismo_y_sin_parciales_con_marco_no_las_calcula",
+   "case": "S-ARR02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: `marco_en` y `elemento_en` con las cajas de los parciales traídas dan lo mismo que sin ellas; un modelo sin recintos ni parciales no las calcula."
+  },
+  {
+   "test": "test_arrastre_enlace.Fotogramas.test_SARR03_un_arrastre_de_enlace_calcula_las_cajas_de_los_parciales_una_vez",
+   "case": "S-ARR03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: en los fotogramas de un arrastre de enlace, el destino se busca sin recalcular las cajas de los parciales en cada uno."
+  },
+  {
+   "test": "test_arrastre_enlace.Fotogramas.test_SARR04_soltar_una_creacion_rehace_la_vista_lo_justo_y_deja_la_misma_que_rehacerla_otra_vez",
+   "case": "S-ARR04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: al soltar un enlace que crea una acción o una transición, la vista se rehace como mucho dos veces (antes, cuatro) y la que queda"
   },
   {
    "test": "test_asignar_con_clics.AsignarConClics.test_SFIO80_clic_en_la_variable_y_en_el_canal_la_asigna_como_al_soltarla",
@@ -2100,6 +2185,20 @@
    "summary": "REQ-EDT-09: un aviso largo deja una frase corta en la lista y el texto completo para la ayuda emergente."
   },
   {
+   "test": "test_banco_rendimiento.BancoRendimiento.test_edicion_se_mide_aunque_no_haya_cambios_de_situacion",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_banco_rendimiento.BancoRendimiento.test_entradas_booleanas_por_nombre",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
    "test": "test_barra_favoritos.Favoritos.test_SFAV01_predeterminados_iconos_y_ayuda",
    "case": "S-FAV01",
    "outcome": "pasa",
@@ -2266,6 +2365,116 @@
     "REQ-UX-01"
    ],
    "summary": "REQ-UX-01: «Volver» lleva icono de flecha y texto, mide el alto de los botones de la cabecera y tiene ayuda sin atajo; el icono de"
+  },
+  {
+   "test": "test_bloques_modificadores.ContarHuecos.test_SP8M20_faltan",
+   "case": "S-P8M20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: cuenta los huecos que la fórmula escribe como «?»: huecos vacíos y fichas sin nombre."
+  },
+  {
+   "test": "test_bloques_modificadores.ContarHuecos.test_SP8M21_coincide_con_los_interrogantes_del_texto",
+   "case": "S-P8M21",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el número de huecos es el de «?» que escribe `arbol_a_texto`."
+  },
+  {
+   "test": "test_bloques_modificadores.EnvolverDesenvolver.test_SP8M10_envolver_en_grupo_y_en_retardo",
+   "case": "S-P8M10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: «Envolver ( … )» y «temporizar» sobre un bloque dan el texto de los bloques puestos a mano."
+  },
+  {
+   "test": "test_bloques_modificadores.EnvolverDesenvolver.test_SP8M11_desenvolver_quita_parentesis_y_retardo",
+   "case": "S-P8M11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: «Quitar paréntesis» y «Quitar retardo» devuelven el bloque de dentro, y envolver y desenvolver se anulan."
+  },
+  {
+   "test": "test_bloques_modificadores.EnvolverDesenvolver.test_SP8M12_lo_que_no_se_puede_no_cambia",
+   "case": "S-P8M12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: desenvolver una ficha o un «y» (varios huecos) y envolver con una clase sin hueco dejan el árbol igual."
+  },
+  {
+   "test": "test_bloques_modificadores.Modificadores.test_SP8M01_las_seis_combinaciones_sobre_una_variable",
+   "case": "S-P8M01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: NOT, ↑ y ↓ en los dos órdenes: el orden en que se pulsan es el orden en que se aplican."
+  },
+  {
+   "test": "test_bloques_modificadores.Modificadores.test_SP8M02_reaplicar_quita_y_el_otro_flanco_cambia",
+   "case": "S-P8M02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: NOT y el flanco, pulsados otra vez, se quitan; ↑ sobre una ficha con ↓ cambia el flanco sin tocar NOT."
+  },
+  {
+   "test": "test_bloques_modificadores.Modificadores.test_SP8M03_sobre_un_grupo_y_un_retardo",
+   "case": "S-P8M03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: sobre un «y», un grupo o un retardo se obtiene el texto de siempre (NOT (a AND b), ↑(3s/a)…)."
+  },
+  {
+   "test": "test_bloques_modificadores.Modificadores.test_SP8M04_dentro_de_otro_bloque_y_la_ruta_se_conserva",
+   "case": "S-P8M04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el modificador se aplica a la ficha de una ruta interior; sobre la ficha o sobre cualquier eslabón de su"
+  },
+  {
+   "test": "test_bloques_modificadores.Modificadores.test_SP8M05_cadena_modificadores",
+   "case": "S-P8M05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la cadena sube mientras el padre sea no, ↑ o ↓; devuelve la ruta del más externo y los modificadores"
+  },
+  {
+   "test": "test_bloques_modificadores.Modificadores.test_SP8M06_hueco_pendiente_con_modificador",
+   "case": "S-P8M06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: sobre un hueco, el modificador deja un bloque con su hueco («[NOT | pulsa o arrastra variable…]»); al"
+  },
+  {
+   "test": "test_bloques_modificadores.Modificadores.test_SP8M07_no_toca_el_original_ni_acepta_clases_ajenas",
+   "case": "S-P8M07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: las operaciones devuelven un árbol nuevo; una clase que no es modificador no hace nada."
   },
   {
    "test": "test_borradores_huerfanos.BorradoDeBorradores.test_SDBR01_borrar_las_dos_transiciones_de_la_barra_incluye_el_borrador",
@@ -2581,6 +2790,61 @@
    "summary": "REQ-EDT-09: durante el arranque (`ventana.main`) solo recibe `Show` la ventana principal, que se pide maximizada y transparente hasta"
   },
   {
+   "test": "test_canonico_rapido.CanonicoRapido.test_SCAN01_las_cadenas_dan_lo_mismo_con_y_sin_el_atajo",
+   "case": "S-CAN01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-05"
+   ],
+   "summary": "REQ-DAT-05: cadenas al azar con comillas, barras, controles, sustitutos aislados, acentos y emojis se escriben (o se rechazan) igual que antes."
+  },
+  {
+   "test": "test_canonico_rapido.CanonicoRapido.test_SCAN02_el_texto_canonico_y_el_digest_de_un_documento_no_cambian",
+   "case": "S-CAN02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-05",
+    "REQ-DAT-08"
+   ],
+   "summary": "REQ-DAT-05, REQ-DAT-08: el texto canónico y el digest de los documentos de GEMMA y de Linea larga coinciden con los de la versión anterior."
+  },
+  {
+   "test": "test_capas.Capas.test_SCAP01_el_nucleo_no_importa_escritorio_conexion_tools_ni_qt",
+   "case": "S-CAP01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ARQ-01"
+   ],
+   "summary": "REQ-ARQ-01: `grafcet/` solo usa la biblioteca estándar y no importa `escritorio`, `conexion`, `tools` ni Qt."
+  },
+  {
+   "test": "test_capas.Capas.test_SCAP02_conexion_no_importa_escritorio_tools_ni_qt",
+   "case": "S-CAP02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ARQ-01"
+   ],
+   "summary": "REQ-ARQ-01: `conexion/` no importa `escritorio`, `tools` ni Qt."
+  },
+  {
+   "test": "test_capas.Capas.test_SCAP03_las_piezas_sin_qt_de_escritorio_no_importan_qt",
+   "case": "S-CAP03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ARQ-01"
+   ],
+   "summary": "REQ-ARQ-01: `escritorio/geometria/` y `descriptores.py`, `diferencia.py` y `modelo_visual.py` de la escena no importan Qt."
+  },
+  {
+   "test": "test_capas.Capas.test_SCAP04_el_programa_no_importa_tools",
+   "case": "S-CAP04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ARQ-01"
+   ],
+   "summary": "REQ-ARQ-01: nada de `grafcet/`, `conexion/` ni `escritorio/` importa `tools/`."
+  },
+  {
    "test": "test_capsulas_dependencias.CapsulasDependencias.test_SVIS06_dos_decimales_sin_cambiar_lleva_ni_preset",
    "case": "S-VIS06",
    "outcome": "pasa",
@@ -2629,6 +2893,151 @@
     "REQ-TMP-01"
    ],
    "summary": "REQ-TMP-01, REQ-SIM-03: JS sitúa el tiempo sobre la aparición exacta y ancla a izquierda o derecha según el retardo."
+  },
+  {
+   "test": "test_choque_conexion.ChoqueConexion.test_SCHC01_una_secuencia_corta_con_conexion_no_da_fallos",
+   "case": "S-CHC01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: 12 operaciones al azar (conectar, Play, ediciones, mapa en vivo, red cortada...) con la guarda de hilos no dan fallos"
+  },
+  {
+   "test": "test_choque_conexion.ChoqueConexion.test_SCHC02_un_hilo_de_control_que_no_se_para_se_detecta",
+   "case": "S-CHC02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: si al desconectar el hilo de control sigue vivo, la herramienta lo dice (CON-2 o CON-3)."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC01_avanza_el_reloj_antes_de_aplicar_y_solo_si_toca",
+   "case": "S-CIC01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03",
+    "REQ-TMP-02"
+   ],
+   "summary": "REQ-SIM-03, REQ-TMP-02 (P-IMP-50): el ciclo avanza el reloj lógico antes de `tick` y solo si el motor está en marcha y estable."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC02_el_reloj_conserva_las_fracciones_de_microsegundo",
+   "case": "S-CIC02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-TMP-02"
+   ],
+   "summary": "REQ-TMP-02: muchos ciclos cortos suman el tiempo real transcurrido, sin perder el resto de cada uno."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC03_despierta_en_cuanto_termina_una_peticion",
+   "case": "S-CIC03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: con un plazo lejano, `despertar` (lo que hace el trabajador de red al acabar) pone el ciclo en marcha enseguida."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC04_planifica_con_el_periodo",
+   "case": "S-CIC04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: con periodo de 10 ms el ciclo se repite cada ~10 ms, no cada 15,6 ms (la resolución de un `Event.wait`)."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC05_para_limpio",
+   "case": "S-CIC05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: `parar` espera al hilo, `vivo` cambia y el candado deja de marcar hilo de control; se puede arrancar otra vez."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC06_una_excepcion_llega_a_la_pantalla_y_no_mata_el_hilo",
+   "case": "S-CIC06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: lo que lance un ciclo se pasa a `al_error`; el hilo sigue vivo y sigue ciclando."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC07_ejecutar_se_decide_en_un_solo_sitio_y_lo_fija_la_pantalla",
+   "case": "S-CIC07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: `pedir_ejecucion(False)` hace que el ciclo llame a `tick(False)` y no avance el reloj."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC08_avisa_de_motor_parado_y_de_conexion_caida",
+   "case": "S-CIC08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: con Play pedido, el ciclo apunta `motor_parado` y `conexion_caida` para que la pantalla los atienda; sin Play no avisa."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC09_avisa_a_la_pantalla_como_mucho_10_veces_por_segundo",
+   "case": "S-CIC09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: con un ciclo de 5 ms, las novedades para la pantalla no pasan de ~10 por segundo, salvo un cambio de estado."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC11_un_hilo_que_acaba_solo_libera_la_espera_el_gil_y_la_marca",
+   "case": "S-CIC11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: si el hilo acaba porque `sigue_vivo` ya no se cumple (sin pasar por `parar`), cierra su espera, quita la marca de hilo de control y"
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC12_parar_cierra_la_espera",
+   "case": "S-CIC12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: `parar` deja cerrada la espera del hilo (sus manejadores del sistema) y el intervalo del GIL como estaba."
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC13_el_gc_se_congela_con_el_primer_hilo_y_se_descongela_con_el_ultimo",
+   "case": "S-CIC13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: mientras haya algún hilo de control el gc tiene congelado lo vivo (sus recolecciones completas paraban todos los hilos);"
+  },
+  {
+   "test": "test_ciclo_es.CicloSinQt.test_SCIC14_el_hilo_vuelve_a_congelar_el_gc_cada_REFREEZE_S_y_no_si_es_cero",
+   "case": "S-CIC14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: mientras haya conexión el hilo de control vuelve a congelar el gc cada `REFREEZE_S` (la traza acumulada sale de las"
+  },
+  {
+   "test": "test_ciclo_es.PrecisionDeLaEspera.test_SCIC10_espera_con_precision_y_despierta_al_momento",
+   "case": "S-CIC10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: `Espera.esperar(5 ms)` tarda ~5 ms (no 16) y `despertar` la corta enseguida, aunque falten segundos."
   },
   {
    "test": "test_clic_exterior_tras_arrastre.CapturaPopup.test_SXC2_no_roba_la_captura_de_un_desplegable_abierto",
@@ -2714,7 +3123,7 @@
   {
    "test": "test_conexion_directa_integracion.Limites.test_SCD51_ficheros_del_encargo_sin_nombre_comercial",
    "case": "S-CD51",
-   "outcome": "pasa",
+   "outcome": "omitida",
    "requirements": [],
    "summary": ""
   },
@@ -3691,6 +4100,15 @@
    "summary": "REQ-SIM-03, REQ-EDT-02: «Centrar todo» deja arriba, además del margen de siempre, el alto del recuadro de los controles del"
   },
   {
+   "test": "test_dibujo_vista.Zoom.test_SEDI331_el_pellizco_del_panel_tactil_acerca_y_aleja_anclado_a_los_dedos_y_el_resto_de_eventos_del_visor_sigue_su_curso",
+   "case": "S-EDI331",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: el gesto nativo de zoom se atiende en el visor (filtro de eventos, no una sobrecarga de `viewportEvent`"
+  },
+  {
    "test": "test_distancias_referencias.DistanciasReferenciasInterfaz.test_SDRF03_anadir_automatico_y_equidistanciar_comparten_60_y_deshacer",
    "case": "S-DRF03",
    "outcome": "pasa",
@@ -3729,6 +4147,208 @@
     "REQ-EDT-03"
    ],
    "summary": "REQ-EDT-03: el dibujo automático deja 60 entre etapa y transición, 120 entre etapas; no cambia el modelo."
+  },
+  {
+   "test": "test_e8_tramo3.Abrir.test_SP8C20_doble_clic_en_la_marca_abre_la_condicion_y_en_la_caja_la_accion",
+   "case": "S-P8C20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-EDT-02, REQ-UX-01: el doble clic en la marca abre Condición o Evento; en la caja, Acción."
+  },
+  {
+   "test": "test_e8_tramo3.Conmutador.test_SP8C10_un_solo_formulador_a_la_vez_y_la_ventana_no_cambia_de_tamano",
+   "case": "S-P8C10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, P-IMP-173: Evento | Acción: una tarjeta cada vez, en la misma celda; al conmutar la ventana no cambia de tamaño."
+  },
+  {
+   "test": "test_e8_tramo3.Conmutador.test_SP8C11_la_condicionada_dice_condicion",
+   "case": "S-P8C11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la parte de fórmula de una condicionada se llama «Condición», la de una acción por evento, «Evento»."
+  },
+  {
+   "test": "test_e8_tramo3.Conmutador.test_SP8C12_clic_en_la_marca_o_en_la_caja_de_la_franja_cambia_de_parte",
+   "case": "S-P8C12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un clic en la marca de la vista previa elige la condición o el evento; en la caja, la acción. La parte que no se edita va en gris."
+  },
+  {
+   "test": "test_e8_tramo3.Conmutador.test_SP8C13_punto_de_aviso_en_la_parte_incompleta",
+   "case": "S-P8C13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el punto de aviso del conmutador marca la parte a la que le falta algo."
+  },
+  {
+   "test": "test_e8_tramo3.Conmutador.test_SP8C14_esc_e_intro_funcionan_en_las_dos_pestanas",
+   "case": "S-P8C14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: Esc cierra la ventana sin guardar y Intro la cierra guardando, tanto con la condición como con la acción a la vista."
+  },
+  {
+   "test": "test_e8_tramo3.Conmutador.test_SP8C15_el_foco_pasa_a_la_parte_elegida",
+   "case": "S-P8C15",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: al conmutar, el foco pasa a la tarjeta que se enseña (el área de bloques o la variable)."
+  },
+  {
+   "test": "test_e8_tramo3.Conmutador.test_SP8C16_sin_lateral",
+   "case": "S-P8C16",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la vista previa va siempre en franja (ya no existe el reparto lateral provisional)."
+  },
+  {
+   "test": "test_e8_tramo3.Etiquetas.test_SP8C50_ver_etiquetas_deriva_de_labelVisible_y_se_deshace_de_una_vez",
+   "case": "S-P8C50",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-05"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-05: «Etiquetas de transiciones» (Ver) se marca si todas las transiciones dibujan su etiqueta; cambiarla es una sola"
+  },
+  {
+   "test": "test_e8_tramo3.Etiquetas.test_SP8C51_la_transicion_nueva_nace_como_estan_las_demas",
+   "case": "S-P8C51",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: con las etiquetas a la vista, la transición nueva nace visible; con alguna oculta, o sin ninguna, nace oculta; todo en la misma"
+  },
+  {
+   "test": "test_e8_tramo3.Etiquetas.test_SP8C52_sin_transiciones_la_opcion_esta_desactivada",
+   "case": "S-P8C52",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: sin transiciones no hay estado que marcar: la opción de Ver se desactiva y la primera transición nace oculta."
+  },
+  {
+   "test": "test_e8_tramo3.Etiquetas.test_SP8C53_la_ventana_ya_no_tiene_mostrar_etiqueta",
+   "case": "S-P8C53",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: «Mostrar etiqueta» sale de la ventana de la transición (lo reemplaza «Etiquetas de transiciones» de Ver)."
+  },
+  {
+   "test": "test_e8_tramo3.Huecos.test_SP8C40_falta_un_hueco_en_gris_con_huecos_resaltados",
+   "case": "S-P8C40",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, P-IMP-155: una fórmula con huecos dice «Falta 1 hueco» o «Faltan N huecos» en gris y remarca los huecos del área; el rojo"
+  },
+  {
+   "test": "test_e8_tramo3.Huecos.test_SP8C41_un_error_real_sigue_en_rojo",
+   "case": "S-P8C41",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: lo que no es un hueco (una sintaxis rota) sigue en rojo."
+  },
+  {
+   "test": "test_e8_tramo3.Memorizadas.test_SP8C01_titulos_exactos_de_las_acciones",
+   "case": "S-P8C01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-EDT-02, REQ-UX-01: el título de la ventana dice el tipo de acción: al activar, al desactivar, condicionada y por evento."
+  },
+  {
+   "test": "test_e8_tramo3.Memorizadas.test_SP8C02_titulo_de_la_limitada_heredada",
+   "case": "S-P8C02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: una acción limitada (de ficheros antiguos) se titula «Acción limitada»."
+  },
+  {
+   "test": "test_e8_tramo3.Memorizadas.test_SP8C03_la_fila_variable_asigna_valor_esta_en_una_fila_y_el_elegido_va_relleno",
+   "case": "S-P8C03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-EDT-02, REQ-UX-01: `Variable [▾] := [1 | 0]` en una sola fila de la tarjeta; el valor elegido, relleno del color de la acción y sin el"
+  },
+  {
+   "test": "test_e8_tramo3.Memorizadas.test_SP8C04_sin_variable_1_y_0_desactivados",
+   "case": "S-P8C04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, P-IMP-156: sin variable, `? :=` con 1 y 0 desactivados."
+  },
+  {
+   "test": "test_e8_tramo3.Memorizadas.test_SP8C05_con_variable_numerica_el_valor_se_arma_en_la_misma_tarjeta",
+   "case": "S-P8C05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: con una variable numérica, el valor se arma con el formulador de la misma tarjeta, bajo la fila; no hay un segundo cuadro"
+  },
+  {
+   "test": "test_e8_tramo3.Menu.test_SP8C30_menu_agrupado_con_tipo_corto_donde_varia",
+   "case": "S-P8C30",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, P-IMP-154: el menú de la variable agrupa en Salidas y Memorias, con la barra de origen y el tipo corto solo donde varía."
+  },
+  {
+   "test": "test_e8_tramo3.Menu.test_SP8C31_el_lienzo_usa_el_mismo_menu_y_solo_booleanas",
+   "case": "S-P8C31",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: el desplegable sobre la acción continua usa la misma lista (delegado y vista) y solo ofrece booleanas."
+  },
+  {
+   "test": "test_e8_tramo3.Menu.test_SP8C32_filtro_con_mas_de_doce_variables",
+   "case": "S-P8C32",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con más de 12 variables, lo que se escribe filtra la lista; con 12 o menos, no hay filtro."
   },
   {
    "test": "test_editor_cadenas.AvisosConNombres.test_SEDI310_el_cuadro_de_no_compila_y_el_panel_dicen_los_nombres_aunque_los_nombres_esten_desfasados",
@@ -4411,7 +5031,7 @@
     "REQ-EDT-02",
     "REQ-EDT-07"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-07: cinco categorías con su color (las constantes 1 y 0, en la suya); las memorias"
+   "summary": "REQ-EDT-02, REQ-EDT-07: el catálogo (una ficha por variable y etapa, con el color de su origen) y la banda de cuatro categorías"
   },
   {
    "test": "test_editor_escritorio.Bloques.test_SEDI56_cabe_a_200_px_y_crece_en_alto",
@@ -4438,7 +5058,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: categorías en una franja horizontal (las cinco, con su color), debajo la columna de"
+   "summary": "REQ-EDT-02: el catálogo, una columna de fichas (una debajo de otra) a la izquierda; a su derecha, la banda de categorías (las"
   },
   {
    "test": "test_editor_escritorio.Bloques.test_SEDI97_y_y_o_de_varias_entradas",
@@ -5453,6 +6073,15 @@
    "summary": "REQ-EDT-02, REQ-EDT-03: mover y ocultar la flecha son presentación; un arrastre, un deshacer. La flecha sigue"
   },
   {
+   "test": "test_editor_escritorio.Interfaz.test_SEDI300_vaciar_el_valor_con_bloques_no_deja_al_panel_con_una_accion_que_ya_no_existe",
+   "case": "S-EDI300",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: al vaciar el valor de una acción memorizada, la acción pasa de acción del modelo a borrador y cambia de"
+  },
+  {
    "test": "test_editor_escritorio.Interfaz.test_SEDI30_recolocar_retorno_y_mover_etapa",
    "case": "S-EDI30",
    "outcome": "pasa",
@@ -5695,7 +6324,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: Variables, Operadores, Temporizadores, Comparaciones y Constantes, en ese orden;"
+   "summary": "REQ-EDT-02: la banda: Operadores, Temporizadores, Comparaciones y Constantes, en ese orden (el catálogo de Variables y"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI68_receptividad_en_el_panel_con_texto_de_solo_lectura",
@@ -6516,6 +7145,708 @@
    "summary": "REQ-EDT-09: al marcar «Mostrar errores» la lista de mensajes aparece desplegada («N errores ▾»); el enlace la pliega; al desmarcar y volver"
   },
   {
+   "test": "test_escena_choque.ChoqueEscena.test_SESC90_choque_guia_gemma",
+   "case": "S-ESC90",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: 50 ediciones al azar sobre la guía GEMMA, con comprobación completa tras cada paso."
+  },
+  {
+   "test": "test_escena_choque.ChoqueEscena.test_SESC91_choque_proyecto_generado_de_100_etapas",
+   "case": "S-ESC91",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: 16 ediciones al azar sobre el proyecto de referencia de 100 etapas."
+  },
+  {
+   "test": "test_escena_choque.ChoqueEscena.test_SESC92_choque_linea_larga",
+   "case": "S-ESC92",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: 16 ediciones al azar sobre Linea larga (111 etapas)."
+  },
+  {
+   "test": "test_escena_choque.ChoqueEscena.test_SESC93_la_secuencia_es_determinista_y_serializable",
+   "case": "S-ESC93",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: la misma semilla da la misma secuencia, hecha solo de datos."
+  },
+  {
+   "test": "test_escena_choque.ChoqueEscena.test_SESC94_un_fallo_provocado_se_detecta_y_se_minimiza",
+   "case": "S-ESC94",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: si el dibujo pierde una figura, la prueba lo detecta, deja un JSON reproducible con una secuencia mínima"
+  },
+  {
+   "test": "test_escena_choque.ChoqueEscena.test_SESC95_la_minimizacion_solo_acepta_lo_que_se_reproduce_desde_cero",
+   "case": "S-ESC95",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un fallo que depende del estado de la vista (aquí, «dependencias» apagadas) se minimiza sin perder la"
+  },
+  {
+   "test": "test_escena_descriptores.GrabadoraConQt.test_SESC04b_cada_figura_directa_tiene_su_descriptor",
+   "case": "S-ESC04b",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: sobre la guía GEMMA, la grabadora anota tantos descriptores de cada tipo como ítems crea el dibujo directo"
+  },
+  {
+   "test": "test_escena_descriptores.Grabadora_.test_SESC01_primitivas_con_parcial_y_elementos",
+   "case": "S-ESC01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: cada primitiva queda anotada como una tupla comparable, con su parcial y sus elementos."
+  },
+  {
+   "test": "test_escena_descriptores.Grabadora_.test_SESC02_texto_devuelve_su_ancho_y_anota_negacion_y_halo",
+   "case": "S-ESC02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: un texto anota su sitio según el ancla, la barra de cada tramo negado y el fondo del rótulo."
+  },
+  {
+   "test": "test_escena_descriptores.Grabadora_.test_SESC03_grupos_en_orden_de_aparicion",
+   "case": "S-ESC03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: lo anotado pertenece al grupo actual y el orden de los grupos es el de su primer descriptor; volver a un"
+  },
+  {
+   "test": "test_escena_descriptores.Grabadora_.test_SESC04_notas_congeladas",
+   "case": "S-ESC04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: una nota se anota como datos inmutables con su selección."
+  },
+  {
+   "test": "test_escena_diferencia.DiferenciaPura.test_SESC10_sin_anterior_todo_son_altas",
+   "case": "S-ESC10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: el primer modelo visual es todo altas, sin bajas ni cambios."
+  },
+  {
+   "test": "test_escena_diferencia.DiferenciaPura.test_SESC11_altas_bajas_y_cambios_con_su_forma",
+   "case": "S-ESC11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: altas, bajas y cambiadas, y si lo cambiado conserva el número y el tipo de sus descriptores."
+  },
+  {
+   "test": "test_escena_diferencia.DiferenciaPura.test_SESC12_sin_cambios_la_diferencia_esta_vacia",
+   "case": "S-ESC12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: dos modelos visuales iguales no dan ninguna tarea."
+  },
+  {
+   "test": "test_escena_diferencia.DiferenciaPura.test_SESC13_orden_cambiado",
+   "case": "S-ESC13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: solo se reordenan los objetos que se mueven, no todos los que quedan detrás."
+  },
+  {
+   "test": "test_escena_diferencia.DiferenciaReal.test_SESC14_mover_una_etapa_cambia_su_objeto_y_lo_que_la_rodea",
+   "case": "S-ESC14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: mover una etapa cambia su objeto, el de sus acciones y los enlaces que la tocan, sin altas ni bajas."
+  },
+  {
+   "test": "test_escena_diferencia.DiferenciaReal.test_SESC15_anadir_y_borrar_una_accion",
+   "case": "S-ESC15",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: añadir una acción da de alta su objeto (sin bajas) y borrarla lo da de baja."
+  },
+  {
+   "test": "test_escena_diferencia.DiferenciaReal.test_SESC16_deshacer_y_rehacer_devuelven_exactamente_el_modelo_visual_anterior",
+   "case": "S-ESC16",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: deshacer deja un modelo visual idéntico al de antes de la operación, y rehacer al de después."
+  },
+  {
+   "test": "test_escena_diferencia.DiferenciaReal.test_SESC17_cambiar_un_texto_y_la_seleccion",
+   "case": "S-ESC17",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: cambiar una receptividad toca su transición y poco más; seleccionar solo cambia realces y marcas."
+  },
+  {
+   "test": "test_escena_diferencia.DiferenciaReal.test_SESC18_equidistanciar_y_una_secuencia_al_azar_cumplen_la_propiedad",
+   "case": "S-ESC18",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: tras Equidistanciar y tras 40 operaciones al azar, `aplicar(diferencia(a, b), a)` es siempre `b`."
+  },
+  {
+   "test": "test_escena_edicion.EdicionIncremental.test_SESC50_los_diagnosticos_no_vuelven_a_validar_el_mismo_modelo",
+   "case": "S-ESC50",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: pedir los diagnósticos varias veces sobre los mismos documentos valida una sola vez; tras un cambio, otra."
+  },
+  {
+   "test": "test_escena_edicion.EdicionIncremental.test_SESC51_deshacer_y_rehacer_usan_la_validacion_recordada_y_dan_lo_mismo",
+   "case": "S-ESC51",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: deshacer y rehacer vuelven a documentos ya validados: no se valida otra vez y los diagnósticos son idénticos a"
+  },
+  {
+   "test": "test_escena_edicion.EdicionIncremental.test_SESC52_un_fotograma_del_arrastre_no_rehace_la_vista_y_da_el_mismo_modelo",
+   "case": "S-ESC52",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: pulsar y mover una etapa no construye ninguna `Vista`; soltar construye una; y el `M` de cada fotograma es el"
+  },
+  {
+   "test": "test_escena_edicion.EdicionIncremental.test_SESC53_los_arrastres_de_otro_tipo_rehacen_la_vista",
+   "case": "S-ESC53",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: un arrastre que no es de posiciones (aquí, el tramo de un enlace) sigue rehaciendo la `Vista` en cada fotograma"
+  },
+  {
+   "test": "test_escena_edicion.EdicionIncremental.test_SESC54_soltar_una_etapa_reconstruye_y_refresca_una_sola_vez",
+   "case": "S-ESC54",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: un arrastre entero hace una `Vista` y un refresco de la ventana al soltar (y uno al pulsar, por la"
+  },
+  {
+   "test": "test_escena_edicion.EdicionIncremental.test_SESC55_un_paso_del_parpadeo_solo_cambia_realces_y_marcas",
+   "case": "S-ESC55",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: cada paso del parpadeo aplica a la escena solo objetos de realce o marcas de una acción, nunca etapas,"
+  },
+  {
+   "test": "test_escena_edicion.EdicionIncremental.test_SESC56_el_parpadeo_no_retira_las_marcas_provisionales_de_un_gesto",
+   "case": "S-ESC56",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: el lazo, o las cajas rojas, siguen en la escena tras un paso del parpadeo, y un redibujado normal sí las retira."
+  },
+  {
+   "test": "test_escena_edicion.EdicionIncremental.test_SESC57_el_parpadeo_deja_la_escena_como_el_dibujo_directo",
+   "case": "S-ESC57",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: tras cada paso del parpadeo (con y sin filtro de parcial) la escena coincide con el dibujo directo."
+  },
+  {
+   "test": "test_escena_gestos.PorGesto.test_SESC70_tras_abrir_un_proyecto_ningun_gesto_recalcula_la_huella",
+   "case": "S-ESC70",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: mover (que solo cambia la presentación), deshacer y rehacer, sobre un proyecto recién abierto, no calculan"
+  },
+  {
+   "test": "test_escena_gestos.PorGesto.test_SESC71_cada_evento_de_un_arrastre_construye_y_dibuja_una_vez",
+   "case": "S-ESC71",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: pulsar, cada fotograma y soltar hacen un `mostrar` y un `construir`; soltar rehace la `Vista` una vez y"
+  },
+  {
+   "test": "test_escena_gestos.PorGesto.test_SESC72_deshacer_rehacer_receptividad_y_anadir_acciones_hacen_un_refresco_y_un_dibujo",
+   "case": "S-ESC72",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: deshacer, rehacer, cambiar una receptividad y añadir una acción desde el borde de otra: un `mostrar`, un"
+  },
+  {
+   "test": "test_escena_gestos.PorGesto.test_SESC73_equidistanciar_hace_un_refresco_y_dos_vistas_y_deja_todo_al_dia",
+   "case": "S-ESC73",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: Equidistanciar refresca la ventana una vez (con su mensaje) y rehace la `Vista` dos veces (antes 4), y"
+  },
+  {
+   "test": "test_escena_gestos.PorGesto.test_SESC74_con_propiedades_abiertas_la_lupa_y_los_paneles_siguen_al_cambio",
+   "case": "S-ESC74",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: con Propiedades flotante abierta sobre una transición, cambiar su receptividad, deshacer y rehacer construyen"
+  },
+  {
+   "test": "test_escena_gestos.PorGesto.test_SESC75_varias_actualizaciones_en_la_misma_vuelta_recolocan_una_sola_vez_despues",
+   "case": "S-ESC75",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: la recolocación diferida de Propiedades no se encadena: tres refrescos seguidos dejan una sola pendiente."
+  },
+  {
+   "test": "test_escena_incremental.ClavesUnicas.test_SESC20_una_clave_que_reaparece_pasa_a_ser_otra_y_cada_grupo_es_contiguo",
+   "case": "S-ESC20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: al volver a entrar en un grupo del que se salió, el grupo nuevo tiene clave propia (`#2`, `#3`…)."
+  },
+  {
+   "test": "test_escena_incremental.ClavesUnicas.test_SESC21_un_grupo_sin_descriptores_no_cuenta_como_salida",
+   "case": "S-ESC21",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: entrar y salir sin dibujar nada no obliga a renombrar la clave."
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC22_mover_una_etapa_solo_crea_lo_que_cambia_y_deja_el_resto_como_estaba",
+   "case": "S-ESC22",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: tras mover una etapa se crean muy pocos ítems, los de lo lejano conservan su identidad y la escena es la"
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC23_si_construir_falla_la_escena_queda_como_estaba",
+   "case": "S-ESC23",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: una excepción al construir el modelo visual no deja la escena a medias (H1)."
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC24_si_aplicar_falla_se_rehace_la_escena_entera",
+   "case": "S-ESC24",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: un fallo al aplicar la diferencia rehace la escena por completo y la deja como el dibujo directo."
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC25_las_marcas_provisionales_se_retiran_al_redibujar",
+   "case": "S-ESC25",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: el lazo, el imán y las anclas no sobreviven a un redibujado ni se duplican."
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC26_play_y_stop_dejan_la_escena_como_el_dibujo_directo",
+   "case": "S-ESC26",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: Play y Stop pasan por la escena incremental (E4: también al simular hay registro) y la dejan como el dibujo"
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC27_equidistanciar_rehace_por_lotes_y_queda_igual",
+   "case": "S-ESC27",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: cuando cambia casi todo, se rehace la escena y el resultado coincide con el dibujo directo."
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC28_los_proyectos_reales_no_necesitan_claves_repetidas",
+   "case": "S-ESC28",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: en GEMMA, el proyecto generado y Linea larga ninguna clave del modelo visual lleva sufijo `#n`."
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC29_sin_el_apilado_la_prueba_de_choque_lo_detecta",
+   "case": "S-ESC29",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: si `_apilar` no coloca los ítems nuevos, el orden entre ítems de igual `z` difiere del dibujo directo y la"
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC30_ningun_item_de_la_escena_pasa_a_ser_propiedad_de_python",
+   "case": "S-ESC30",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: tras mover, alternar dependencias y volver de la simulación, ningún ítem de la escena es propiedad de"
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC31_la_ayuda_emergente_no_borra_items_de_la_escena",
+   "case": "S-ESC31",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: pasar el ratón por un ítem sin ayuda (una línea de enlace) no lo deja como propiedad de Python ni lo borra de"
+  },
+  {
+   "test": "test_escena_incremental.EscenaIncrementalReal.test_SESC32_el_apilado_de_igual_z_es_el_del_dibujo_completo_con_cualquier_secuencia",
+   "case": "S-ESC32",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: con muchos objetos de igual `z`, altas, bajas, cambios y reordenamientos al azar dejan el apilado"
+  },
+  {
+   "test": "test_escena_lupa.LupaChoque.test_SESC65_la_prueba_de_choque_detecta_un_fallo_en_la_lupa_y_pasa_sin_el",
+   "case": "S-ESC65",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: si la lupa pierde una figura, ESC-3 lo detecta; con 60 operaciones al azar y la lupa abierta a ratos, sin el"
+  },
+  {
+   "test": "test_escena_lupa.LupaIncremental.test_SESC60_la_lupa_usa_una_escena_incremental_y_coincide_con_el_dibujo_directo",
+   "case": "S-ESC60",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: la lupa tiene registro de objetos y su escena es la del dibujo directo del modelo del editor."
+  },
+  {
+   "test": "test_escena_lupa.LupaIncremental.test_SESC61_un_cambio_pequeno_solo_crea_lo_que_cambia_y_conserva_los_demas_items",
+   "case": "S-ESC61",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: mover una etapa crea muy pocos ítems en la lupa, los de lo lejano conservan su identidad y no se rehace."
+  },
+  {
+   "test": "test_escena_lupa.LupaIncremental.test_SESC62_un_modelo_igual_no_toca_la_escena_y_la_misma_identidad_no_redibuja",
+   "case": "S-ESC62",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: preparar el dibujo con el mismo modelo no hace nada; con otro modelo de igual contenido, la diferencia"
+  },
+  {
+   "test": "test_escena_lupa.LupaIncremental.test_SESC63_si_construir_falla_la_lupa_conserva_su_escena_y_su_modelo",
+   "case": "S-ESC63",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: una excepción al construir deja la escena de la lupa y su modelo como estaban."
+  },
+  {
+   "test": "test_escena_lupa.LupaIncremental.test_SESC64_pintar_la_lupa_no_deja_items_ocultos_y_su_imagen_es_la_del_dibujo_directo",
+   "case": "S-ESC64",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: `paintEvent` oculta los vecinos mientras pinta y los restituye; la imagen de la lupa es idéntica a la que daba"
+  },
+  {
+   "test": "test_escena_modelo_visual.ModeloVisual.test_SESC05_realizar_el_modelo_visual_da_la_misma_escena_que_el_dibujo_directo",
+   "case": "S-ESC05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: en GEMMA, el proyecto generado y Linea larga, con selección, marcas, parpadeo y dependencias, la escena"
+  },
+  {
+   "test": "test_escena_modelo_visual.ModeloVisual.test_SESC06_dibujar_y_el_dibujo_directo_dan_lo_mismo_en_edicion_y_en_simulacion",
+   "case": "S-ESC06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: `dibujar` (por descriptores) coincide con `dibujar_directo` sobre la escena del diagrama, también con el"
+  },
+  {
+   "test": "test_escena_modelo_visual.ModeloVisual.test_SESC07_cada_grupo_es_contiguo_y_cada_elemento_tiene_su_objeto",
+   "case": "S-ESC07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: los descriptores de un objeto son contiguos en el orden de dibujo, ninguno queda sin grupo y todo"
+  },
+  {
+   "test": "test_escena_modelo_visual.ModeloVisual.test_SESC08_construir_es_determinista_y_no_cambia_el_modelo",
+   "case": "S-ESC08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: dos construcciones seguidas son iguales y `M` no se modifica."
+  },
+  {
+   "test": "test_escena_modelo_visual.ModeloVisual.test_SESC09_el_modelo_visual_se_puede_construir_sin_figuras_en_la_escena",
+   "case": "S-ESC09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: construir no crea ítems en ninguna escena (solo mide textos)."
+  },
+  {
+   "test": "test_escena_navegacion.NavegacionYEscena.test_SESC40_sin_filtro_mostrar_no_recorre_la_escena_para_filtrar",
+   "case": "S-ESC40",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: sin filtro de parcial, redibujar no recorre todos los ítems de la escena (nada que ocultar ni atenuar)."
+  },
+  {
+   "test": "test_escena_navegacion.NavegacionYEscena.test_SESC41_el_filtro_se_aplica_y_se_retira_del_todo_aunque_se_redibuje_entre_medias",
+   "case": "S-ESC41",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: con el filtro puesto, los ítems de otros parciales se ocultan o atenúan también tras redibujar; al quitarlo"
+  },
+  {
+   "test": "test_escena_navegacion.NavegacionYEscena.test_SESC42_la_escena_ya_no_guarda_textos_reservados_y_un_texto_nuevo_nace_visible_y_opaco",
+   "case": "S-ESC42",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: sin reserva de textos (H3 retirada de raíz), cada texto es nuevo, visible y opaco, y tras un filtro de parcial"
+  },
+  {
+   "test": "test_escena_rutas.EnlacesSinCache.test_SESC43_no_queda_cache_global_de_rutas",
+   "case": "S-ESC43",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: ya no existen `rutas_diagrama`, `geometria.rutas` ni el nombre `rutas` en la fachada de Edicion."
+  },
+  {
+   "test": "test_escena_rutas.EnlacesSinCache.test_SESC44_enlaces_lee_el_modelo_sin_recalcular_el_recorrido",
+   "case": "S-ESC44",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: tras reconstruir, `enlaces(M)` no vuelve a llamar a `routing.enlaces`, por muchas veces que se pida."
+  },
+  {
+   "test": "test_escena_rutas.EnlacesSinCache.test_SESC45_reconstruir_calcula_el_recorrido_una_sola_vez",
+   "case": "S-ESC45",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: una reconstrucción hace una sola llamada a `routing.enlaces` (la de la `Vista`) cuando no hay nombres con"
+  },
+  {
+   "test": "test_escena_rutas.EnlacesSinCache.test_SESC46_quitar_comillas_dice_si_cambio_algo",
+   "case": "S-ESC46",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: `quitar_comillas_vista` devuelve si cambió algún texto (entonces el recorrido se recalcula)."
+  },
+  {
+   "test": "test_escena_rutas.EnlacesSinCache.test_SESC47_enlaces_coincide_con_el_calculo_en_limpio_tras_cualquier_operacion",
+   "case": "S-ESC47",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: tras 40 operaciones al azar, `enlaces(M)` es el cálculo en limpio y `recalcular` lo rehace tras tocar `M`"
+  },
+  {
+   "test": "test_escena_rutas.EnlacesSinCache.test_SESC48_un_modelo_sin_enlaces_calculados_se_resuelve_sin_recordar",
+   "case": "S-ESC48",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: el modelo de una vista de simulación (que trae `links` pero no `enlaces`) y uno hecho a mano se resuelven"
+  },
+  {
+   "test": "test_escena_rutas.EnlacesSinCache.test_SESC49_un_dibujo_vinculado_solo_pinta_los_enlaces_de_su_seleccion",
+   "case": "S-ESC49",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: la copia filtrada de una selección (hojas y planos) no conserva los recorridos de toda la vista: `enlaces` da"
+  },
+  {
+   "test": "test_escena_rutas.EnlacesSinCache.test_SESC50_un_documento_de_hoja_vacio_no_dibuja_enlaces",
+   "case": "S-ESC50",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: `DocumentoHoja` vacía las listas del modelo y no puede conservar los recorridos de la vista completa."
+  },
+  {
+   "test": "test_escena_rutas.EnlacesSinCache.test_SESC51_los_recorridos_valen_solo_con_las_mismas_listas",
+   "case": "S-ESC51",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-01"
+   ],
+   "summary": "REQ-EDT-01: sustituir `links`, etapas, transiciones, barras o estilos invalida `M[\"enlaces\"]`; copiar `M` lo conserva."
+  },
+  {
+   "test": "test_escena_simulacion.OraculosDeSimulacion.test_SESC80_las_operaciones_de_simulacion_existen_cambian_la_situacion_y_pasan",
+   "case": "S-ESC80",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: `sim_fijar`, `sim_cambio`, `sim_reiniciar`, `sim_filtro` y `navegar` están en el generador; sobre GEMMA la"
+  },
+  {
+   "test": "test_escena_simulacion.OraculosDeSimulacion.test_SESC81_el_oraculo_de_las_tablas_detecta_una_celda_con_otro_color",
+   "case": "S-ESC81",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: ESC-6 detecta una tabla que no coincide con la de la rutina completa (aquí, una celda con otro color)."
+  },
+  {
+   "test": "test_escena_simulacion.OraculosDeSimulacion.test_SESC82_el_oraculo_de_la_traza_detecta_una_fila_de_mas",
+   "case": "S-ESC82",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: ESC-7 detecta una traza que no es la de construirla de cero."
+  },
+  {
+   "test": "test_escena_simulacion.OraculosDeSimulacion.test_SESC83_el_oraculo_de_las_entradas_detecta_un_boton_con_otro_texto",
+   "case": "S-ESC83",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: ESC-8 detecta un botón de entrada que no refleja el estado."
+  },
+  {
+   "test": "test_escena_simulacion.OraculosDeSimulacion.test_SESC84_el_oraculo_del_atajo_detecta_un_dibujo_que_no_se_actualiza",
+   "case": "S-ESC84",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: ESC-9 (H5) detecta una escena que se queda con un estado viejo porque no se dibuja."
+  },
+  {
+   "test": "test_escena_simulacion.OraculosDeSimulacion.test_SESC85_un_tramo_largo_de_simulacion_al_azar_pasa_todos_los_oraculos",
+   "case": "S-ESC85",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: 120 operaciones al azar sobre GEMMA, con tramos largos en simulación, no dan ningún fallo."
+  },
+  {
+   "test": "test_escena_simulacion.PanelesDeSimulacion.test_SESC86_el_estado_no_cambia_despues_de_darse_ni_lo_cambia_quien_lo_recibe",
+   "case": "S-ESC86",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: cada `Vista.state()` da objetos nuevos que nada cambia después (ni el motor al avanzar ni los paneles al leerlos):"
+  },
+  {
+   "test": "test_escena_simulacion.PanelesDeSimulacion.test_SESC87_las_tablas_la_traza_y_la_navegacion_solo_rehacen_lo_que_cambia",
+   "case": "S-ESC87",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: al simular, la rutina completa de las tablas, la traza hecha de cero y la parte de los registros de la navegación que solo depende del documento no se"
+  },
+  {
    "test": "test_etiquetas_transiciones.Interfaz.test_SETI02_opcion_desmarcada_y_etiqueta_oculta_al_colocar",
    "case": "S-ETI02",
    "outcome": "pasa",
@@ -6523,7 +7854,7 @@
     "REQ-EDT-02",
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-09: la ficha crea una transición oculta; el clic en Mostrar etiqueta la activa y se puede deshacer."
+   "summary": "REQ-EDT-02, REQ-EDT-09: la ficha crea una transición oculta; «Ver > Etiquetas de transiciones» la muestra y se puede deshacer (E8: la casilla de"
   },
   {
    "test": "test_etiquetas_transiciones.Interfaz.test_SETI03_guardar_y_abrir_conserva_una_visible_y_otra_oculta",
@@ -6544,6 +7875,42 @@
     "REQ-EDT-05"
    ],
    "summary": "REQ-EDT-02, REQ-EDT-05: la transición colocada nace sin etiqueta visible y se deshace en una operación."
+  },
+  {
+   "test": "test_fallos_119.DesplegableConRatonPulsado.test_SF119_10_la_suelta_del_doble_clic_no_cierra_la_lista_y_un_clic_normal_elige",
+   "case": "S-F119",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: la suelta sin pulsación previa que llega a la lista recién abierta se ignora; luego un clic normal elige y cierra."
+  },
+  {
+   "test": "test_fallos_119.SenalBorradaDirecta.test_SF119_01_entrada_borrada_marca_la_union_y_sigue_conectado",
+   "case": "S-F119",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-CON-01"
+   ],
+   "summary": "REQ-CON-01: borrar en el simulador una entrada unida no tira la conexión: la unión queda «señal no encontrada»."
+  },
+  {
+   "test": "test_fallos_119.SenalBorradaDirecta.test_SF119_02_salida_borrada_marca_la_union_y_sigue_conectado",
+   "case": "S-F119",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-CON-01"
+   ],
+   "summary": "REQ-CON-01: lo mismo al escribir una salida cuyo id ya no existe (404)."
+  },
+  {
+   "test": "test_fallos_119.SenalBorradaDirecta.test_SF119_03_id_ausente_de_la_respuesta_de_lectura",
+   "case": "S-F119",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-CON-01"
+   ],
+   "summary": "REQ-CON-01: un id unido que falta en la respuesta (sin error) se trata igual."
   },
   {
    "test": "test_favoritos_principal.FavoritosPrincipal.test_SH101_iconos_margen_mitad_y_fila_sin_crecer",
@@ -6728,11 +8095,422 @@
    "summary": "REQ-EDT-11: la vista de la hoja sin documento (cambio de hoja, hoja no válida) responde a ratón y a punto_hoja sin error."
   },
   {
+   "test": "test_flancos_actividad.FlancosActividad.test_SFA01_recinto_activacion_encapsulada",
+   "case": "S-FA01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03",
+    "REQ-JER-03"
+   ],
+   "summary": "REQ-EVT-03, REQ-JER-03: al activarse la encapsulante 72, su etapa de activación 60 pasa a 61 con ↑X72."
+  },
+  {
+   "test": "test_flancos_actividad.FlancosActividad.test_SFA02_fin_de_ciclo_c_y_flanco_descendente",
+   "case": "S-FA02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03"
+   ],
+   "summary": "REQ-EVT-03: con c, 101b→100 se franquea justo tras 4→0; si c llega más tarde, ya no."
+  },
+  {
+   "test": "test_flancos_actividad.FlancosActividad.test_SFA03_sin_flanco_al_arrancar",
+   "case": "S-FA03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03",
+    "REQ-SEM-01"
+   ],
+   "summary": "REQ-EVT-03, REQ-SEM-01: las etapas iniciales no producen ↑X al arrancar."
+  },
+  {
+   "test": "test_flancos_actividad.FlancosActividad.test_SFA04_solo_la_evolucion_inmediata",
+   "case": "S-FA04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03"
+   ],
+   "summary": "REQ-EVT-03: el flanco no vale en evoluciones posteriores ni en contextos posteriores."
+  },
+  {
+   "test": "test_flancos_actividad.FlancosActividad.test_SFA05_bucle_de_flancos_llega_al_limite",
+   "case": "S-FA05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03",
+    "REQ-SEM-07"
+   ],
+   "summary": "REQ-EVT-03, REQ-SEM-07: A→B con ↑XA y B→A con ↑XB acaba en D-LIM-EVOL."
+  },
+  {
+   "test": "test_flancos_actividad.FlancosActividad.test_SFA06_validador",
+   "case": "S-FA06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03"
+   ],
+   "summary": "REQ-EVT-03: se admiten ↑X, ↓X y ↑(X1·X2); siguen bloqueados internas, temporales y mezclas."
+  },
+  {
+   "test": "test_flancos_actividad.FlancosActividad.test_SFA07_activacion_por_forzado",
+   "case": "S-FA07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03",
+    "REQ-JER-06"
+   ],
+   "summary": "REQ-EVT-03, REQ-JER-06: la activación que provoca un forzado produce el flanco en la evolución siguiente."
+  },
+  {
+   "test": "test_flancos_actividad.FlancosActividad.test_SFA08_accion_por_evento_con_flanco_de_actividad_bloqueada",
+   "case": "S-FA08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-ACT-02",
+    "REQ-EVT-03"
+   ],
+   "summary": "REQ-EVT-03, REQ-ACT-02: una acción por evento con ↑X queda bloqueada (U-03), no se ignora en silencio."
+  },
+  {
+   "test": "test_flancos_actividad.FlancosActividad.test_SFA09_transicion_fuente_con_flanco_de_actividad_bloqueada",
+   "case": "S-FA09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EVT-03",
+    "REQ-MOD-04"
+   ],
+   "summary": "REQ-EVT-03, REQ-MOD-04: una transición fuente con ↑X queda bloqueada (U-03)."
+  },
+  {
    "test": "test_foco_propiedades.FocoPropiedades.test_SFOC01_foco_en_los_bloques_de_una_transicion",
    "case": "S-FOC01",
    "outcome": "pasa",
    "requirements": [],
    "summary": "Con la barra abajo y una transición elegida, poner el foco en sus bloques no lanza IndexError (la transición no tiene"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B01_ficha_con_modificadores_es_una_sola_caja",
+   "case": "S-P8B01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: una variable con NOT, ↑ o ↓ se dibuja como una sola ficha (no cajas anidadas), con su insignia y la barra de la"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B02_la_insignia_alterna_el_flanco_y_la_ficha_se_arrastra_entera",
+   "case": "S-P8B02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: pulsar la insignia ↑ de una ficha la cambia por ↓ (y al revés); arrastrar la ficha se lleva sus modificadores."
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B03_cada_origen_con_su_color_y_barra",
+   "case": "S-P8B03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-07"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-07: entrada ACENTO, salida SIMULACION, etapa EDICION y memoria ORIGEN_MEMORIA, en los colores y en la barra de 4 px"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B04_temporizador_contenedor_y_conectores_y_o",
+   "case": "S-P8B04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el temporizador es un contenedor con su insignia (t/X, X/t, t1/X/t2; «sin retardo» avisa), con paréntesis solo si la"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B05_comparacion_en_ficha_y_constantes",
+   "case": "S-P8B05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la comparación va entre corchetes, con sus tres piezas (variable, operador, valor); la constante es una ficha hundida."
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B06_hueco_pendiente_se_pinta_y_se_rellena_al_soltar",
+   "case": "S-P8B06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: «NOT ?» es la ficha pendiente; una variable soltada encima la rellena y conserva el NOT; un NOT soltado sobre una"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B10_banda_cada_boton_inserta_su_bloque",
+   "case": "S-P8B10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-EDT-02, REQ-UX-01: cada botón de la banda, pulsado con la fórmula vacía, pone su bloque; «Y» y «O» están en Operadores."
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B11_banda_arrastre_de_cada_boton_a_un_hueco",
+   "case": "S-P8B11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: cada botón se arrastra: lleva su bloque y, soltado sobre un hueco, lo coloca."
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B12_boton_pulsado_y_movido_arrastra_en_vez_de_insertar",
+   "case": "S-P8B12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un botón de la banda con clic inserta; con el ratón pulsado y movido, arrastra y no inserta."
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B13_catalogo_siempre_visible_sin_pestanas_y_borde_arrastrable",
+   "case": "S-P8B13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-EDT-02, REQ-UX-01: el catálogo de variables y etapas no es una pestaña (está siempre a la vista, 170 px al abrirse); su borde"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B14_filtro_del_catalogo_con_mas_de_doce",
+   "case": "S-P8B14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el catálogo ofrece el filtro con más de doce elementos y no antes."
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B15_banda_cabe_entera_y_pasa_de_fila",
+   "case": "S-P8B15",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: todas las categorías y sus botones caben dentro de la banda, a cualquier ancho (si no caben en una fila, pasan a otra)."
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B20_copiar_pegar_y_limpiar",
+   "case": "S-P8B20",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: «Copiar fórmula» copia la entera; «Pegar» la sustituye; «Limpiar» la vacía; Ctrl+Z deshace cada cosa."
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B21_ctrl_c_y_ctrl_v_conservan_su_conducta",
+   "case": "S-P8B21",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: Ctrl+C copia el bloque elegido; Ctrl+V lo pega en el hueco o el bloque elegido (el botón Pegar sustituye todo)."
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B22_clic_en_el_catalogo_inserta",
+   "case": "S-P8B22",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: pulsar una ficha del catálogo la pone en el bloque o hueco elegido y, sin elección, en el primer hueco libre; sin"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B23_modificadores_desde_la_banda_en_el_orden_en_que_se_pulsan",
+   "case": "S-P8B23",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: NOT sin selección deja «NOT ?»; la variable pulsada después la rellena; sobre una ficha elegida, NOT, ↑ y ↓ se aplican"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B24_constantes_1_y_0_segun_la_decision_del_responsable",
+   "case": "S-P8B24",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, P-IMP-69: con el lienzo vacío, o sin hueco elegido, «1» y «0» son la fórmula entera; sobre un hueco elegido se combinan"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B30_aviso_al_arrastrar_fuera_y_el_bloque_se_quita",
+   "case": "S-P8B30",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: mientras se arrastra un bloque del área, el pie avisa (ERROR_FONDO) de que soltarlo fuera lo quita y el borde se pone"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B40_modo_valor_con_capsulas_y_banda_numerica",
+   "case": "S-P8B40",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el programador de un valor lleva el catálogo de variables numéricas (cápsulas con el punto de su origen) y una banda con"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B41_el_texto_guardado_no_cambia",
+   "case": "S-P8B41",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el texto que escribe el formulador es el de siempre (el arreglo es de aspecto): una fórmula con todas las clases de"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B50_ningun_boton_del_formulador_con_el_texto_recortado",
+   "case": "S-P8B50",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: en la ventana de Propiedades a 1366×768 y a 1920×1080, todos los botones y rótulos del formulador (banda, herramientas"
+  },
+  {
+   "test": "test_formulas_ida_y_vuelta.FormulasIdaYVuelta.test_SP8F01_corpus_completo",
+   "case": "S-P8F01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el corpus son las 467 fórmulas de los .grafnet de pruebas y los ejemplos (si cambia, se revisa)."
+  },
+  {
+   "test": "test_formulas_ida_y_vuelta.FormulasIdaYVuelta.test_SP8F02_todo_se_analiza_y_conserva_el_significado",
+   "case": "S-P8F02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: texto -> bloques -> texto da el mismo significado en el núcleo, en todas."
+  },
+  {
+   "test": "test_formulas_ida_y_vuelta.FormulasIdaYVuelta.test_SP8F03_idempotente_y_normalizaciones_conocidas",
+   "case": "S-P8F03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: escribir dos veces da lo mismo que escribir una; solo cambian las normalizaciones conocidas."
+  },
+  {
+   "test": "test_formulas_ida_y_vuelta.FormulasIdaYVuelta.test_SP8F04_abrir_no_cambia_lo_guardado",
+   "case": "S-P8F04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: `poner` muestra el texto guardado como bloques sin emitir `cambiado` (no escribe nada al abrir)."
+  },
+  {
+   "test": "test_formulas_ida_y_vuelta.FormulasIdaYVuelta.test_SP8F05_al_azar_con_semilla_fija",
+   "case": "S-P8F05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-02, REQ-EDT-09: 10 000 fórmulas al azar (Y, O, NOT, flancos, grupos, retardos, comparaciones, constantes,"
+  },
+  {
+   "test": "test_formulas_parentesis.Parentesis.test_SPAR01_los_hijos_derechos_no_asociativos_llevan_parentesis_y_los_demas_no",
+   "case": "S-PAR01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EXP-01"
+   ],
+   "summary": "REQ-EXP-01: `a − (b + c)`, `a / (b · c)` y `a · (b / c)` se dibujan con paréntesis; `a − b + c`, `(a + b) − c`, `a · (b + c)` y los asociativos, como siempre."
+  },
+  {
+   "test": "test_formulas_parentesis.Parentesis.test_SPAR02_lo_dibujado_vuelve_a_dar_el_mismo_significado",
+   "case": "S-PAR02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EXP-01"
+   ],
+   "summary": "REQ-EXP-01: el texto dibujado de una fórmula aritmética, tecleado de nuevo, da el mismo árbol (ida y vuelta por el texto)."
+  },
+  {
+   "test": "test_formulas_parentesis.Parentesis.test_SPAR03_la_base_de_un_retardo_lleva_parentesis_si_no_es_un_operando_simple",
+   "case": "S-PAR03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-TMP-03"
+   ],
+   "summary": "REQ-TMP-03: `3s/(p + q)` se dibuja con paréntesis; una variable, una etapa, un flanco o una negación de un operando simple, sin ellos."
+  },
+  {
+   "test": "test_formulas_parentesis.Parentesis.test_SPAR04_un_retardo_dibujado_vuelve_a_dar_el_mismo_significado",
+   "case": "S-PAR04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-TMP-03"
+   ],
+   "summary": "REQ-TMP-03: el texto dibujado de un retardo sobre una base compuesta, tecleado de nuevo, da el mismo árbol."
+  },
+  {
+   "test": "test_geometria.Geometria.test_ajuste_de_simultaneidad_y_pegado_a_tramo_paralelo",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_geometria.Geometria.test_banderita_de_evento_no_aumenta_el_paso",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_geometria.Geometria.test_cajas_de_receptividad_y_comentario_de_transicion_girada",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_geometria.Geometria.test_choque_desplazamiento_por_rejilla_y_hueco_para_pegar",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_geometria.Geometria.test_equidistancia_reserva_la_columna_de_acciones",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_geometria.Geometria.test_gemma_posiciones_anclas_marcos_y_enlaces",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_geometria.Geometria.test_grupo_pegado_en_su_orden_y_colocacion_en_columna",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
   },
   {
    "test": "test_grafnet_interfaz.GrafnetInterfaz.test_SGFN08_ctrl_s_guardar_como_y_nombre_con_asterisco",
@@ -6875,6 +8653,51 @@
     "REQ-DAT-02"
    ],
    "summary": "REQ-DAT-02: un archivo con el contenido cambiado sin re-sellar no se rechaza: abre como sin_firma."
+  },
+  {
+   "test": "test_guarda_hilos.GuardaDeHilos.test_SHIL01_sin_la_variable_no_toca_el_objeto",
+   "case": "S-HIL01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: sin `GRAFCONNECT_COMPROBAR_HILOS=1`, `proteger` no cambia el objeto ni cuesta nada, aunque haya hilo de control."
+  },
+  {
+   "test": "test_guarda_hilos.GuardaDeHilos.test_SHIL02_con_la_variable_pero_sin_hilo_de_control_no_se_exige_nada",
+   "case": "S-HIL02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: con la variable y sin hilo de control vivo (hoy, o tras pararlo) cualquier hilo puede tocar el objeto."
+  },
+  {
+   "test": "test_guarda_hilos.GuardaDeHilos.test_SHIL03_con_hilo_de_control_vivo_tocarlo_sin_el_candado_falla_con_un_error_claro",
+   "case": "S-HIL03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: con el hilo de control vivo, leer, escribir o llamar sin el candado lanza `AccesoSinCandado` (con el objeto, el atributo y el"
+  },
+  {
+   "test": "test_guarda_hilos.GuardaDeHilos.test_SHIL04_el_candado_solo_vale_para_el_hilo_que_lo_tiene",
+   "case": "S-HIL04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: que un hilo tenga el candado no autoriza a otro."
+  },
+  {
+   "test": "test_guarda_hilos.GuardaDeHilos.test_SHIL05_funciona_con_un_coordinador_real_y_se_puede_quitar",
+   "case": "S-HIL05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03: sobre un `Coordinador` real, su estado y sus medidas exigen el candado con el hilo de control vivo; `desproteger` lo deja igual."
   },
   {
    "test": "test_iconos_coherencia_k.CoherenciaK.test_SK101_quince_anchos_comunes_y_margen_en_tres_dpr",
@@ -7720,6 +9543,15 @@
     "REQ-SIM-03"
    ],
    "summary": "REQ-SIM-03: el diagnóstico conserva la entrada previa a la salida a cero, no una muestra posterior."
+  },
+  {
+   "test": "test_latencia_modbus.LatenciaQtTests.test_SRED18_el_estado_final_de_la_conexion_siempre_se_pinta",
+   "case": "S-RED18",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-03"
+   ],
+   "summary": "REQ-SIM-03 (E7): si el cierre de la conexión termina justo entre la lectura de `activo` y el refresco, la pantalla no para su reloj sin haber"
   },
   {
    "test": "test_lazo_marcos.LazoMarcos.test_SLAZ01_parcial_vacio_se_selecciona_se_mueve_y_se_borra",
@@ -8874,6 +10706,33 @@
    "summary": "REQ-SIM-03, REQ-EDT-07 (P-IMP-67): si una variable asignada pasa a «interna», el panel avisa de que «ya no es de"
   },
   {
+   "test": "test_modelo_visual_memoria.MemoriaDeMedidas.test_SESC88_construir_con_memoria_es_construir_sin_ella_en_todos_los_proyectos",
+   "case": "S-ESC88",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DIB-01"
+   ],
+   "summary": "REQ-DIB-01: `modelo_visual.construir` da el mismo modelo con la memoria de medidas (en frío y en caliente) que midiendo siempre de"
+  },
+  {
+   "test": "test_modelo_visual_memoria.MemoriaDeMedidas.test_SESC89_la_memoria_tiene_tope_y_su_clave_lleva_la_letra",
+   "case": "S-ESC89",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DIB-01"
+   ],
+   "summary": "REQ-DIB-01: la memoria de medidas se vacía al llegar a su tope (sigue midiendo bien) y su clave incluye `QFont.key()`: la misma"
+  },
+  {
+   "test": "test_modelo_visual_memoria.TextosEnElSitio.test_SESC90_un_texto_actualizado_en_el_sitio_se_ve_igual_que_creado_de_nuevo",
+   "case": "S-ESC90",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DIB-01"
+   ],
+   "summary": "REQ-DIB-01: un texto cuyo contenido o color cambian se actualiza en el ítem que ya está en la escena y da la misma imagen, al"
+  },
+  {
    "test": "test_navegacion_accesibilidad.FiltroWeb.test_SNAV04_filtro_web_como_qt",
    "case": "S-NAV04",
    "outcome": "pasa",
@@ -9180,6 +11039,150 @@
    "summary": "REQ-EDT-02, REQ-EDT-07: un nombre con guion en una comparación, un flanco, una temporización y como operando de la"
   },
   {
+   "test": "test_nucleo_rendimiento.EquivalenciaConElNucleoAnterior.test_SNUC01_los_resumenes_coinciden_con_los_del_nucleo_anterior",
+   "case": "S-NUC01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-CR-04"
+   ],
+   "summary": "REQ-CR-04: sobre los ejemplos de aula, los fixtures, GEMMA, el proyecto de 100 etapas y Linea larga, la revisión, los"
+  },
+  {
+   "test": "test_nucleo_rendimiento.EstadoConTrazaLarga.test_SNUC11_state_no_recorre_la_traza_entera_y_su_coste_no_crece_con_ella",
+   "case": "S-NUC11",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: `Vista.state()` busca la última evolución desde el final de la traza (que llega a 10^6 registros, D-TRAZA-LIM):"
+  },
+  {
+   "test": "test_nucleo_rendimiento.HuellaUnaVezPorCambio.test_SNUC02_un_documento_del_editor_no_recalcula_su_huella_al_validarse",
+   "case": "S-NUC02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: la revisión del modelo compilado es la de siempre, pero sin volver a calcular la huella de un documento que el"
+  },
+  {
+   "test": "test_nucleo_rendimiento.HuellaUnaVezPorCambio.test_SNUC03_un_documento_sin_sellar_sigue_calculando_su_huella",
+   "case": "S-NUC03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: una copia del documento (nadie promete que no se toque) calcula su revisión como siempre."
+  },
+  {
+   "test": "test_nucleo_rendimiento.HuellaUnaVezPorCambio.test_SNUC04_la_huella_recordada_vale_tras_deshacer_y_rehacer",
+   "case": "S-NUC04",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: tras deshacer y rehacer, la revisión validada es la del documento que toca."
+  },
+  {
+   "test": "test_nucleo_rendimiento.HuellaUnaVezPorCambio.test_SNUC09_el_documento_inicial_del_editor_tambien_esta_sellado",
+   "case": "S-NUC09",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: un proyecto recién abierto (sin ninguna operación todavía) no recalcula la huella al validarse, y el editor sigue"
+  },
+  {
+   "test": "test_nucleo_rendimiento.HuellaUnaVezPorCambio.test_SNUC10_un_borrador_reparado_al_abrir_tambien_se_sella_con_su_copia",
+   "case": "S-NUC10",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-02"
+   ],
+   "summary": "REQ-DAT-02: si el editor repara el documento al abrirlo (copia y quita un enlace huérfano), sella la copia que usa."
+  },
+  {
+   "test": "test_nucleo_rendimiento.ManualInputPorLaCola.test_SNUC12_manual_input_da_lo_mismo_que_la_version_que_recorria_todos_los_lotes",
+   "case": "S-NUC12",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: `manual_input` (por la cola de la lista de lotes) coincide con la referencia lenta: ordinal, posición en `batches` y traza,"
+  },
+  {
+   "test": "test_nucleo_rendimiento.ManualInputPorLaCola.test_SNUC13_si_los_lotes_no_estan_ordenados_manual_input_busca_por_toda_la_lista",
+   "case": "S-NUC13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: una lista de lotes sin ordenar (una instantánea restaurada no la comprueba) no usa el atajo y da lo que daba la versión lenta."
+  },
+  {
+   "test": "test_nucleo_rendimiento.ManualInputPorLaCola.test_SNUC14_el_coste_de_manual_input_no_crece_con_los_lotes_ya_procesados",
+   "case": "S-NUC14",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: con 40.000 lotes procesados de más, una llamada a `manual_input` cuesta como con 400."
+  },
+  {
+   "test": "test_nucleo_rendimiento.SesionAlUsarla.test_SNUC07_la_vista_no_arranca_la_sesion_hasta_que_se_usa",
+   "case": "S-NUC07",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: construir una `Vista` crea la sesión pero no la arranca; pedir `s` o `start_diags` la arranca una sola vez."
+  },
+  {
+   "test": "test_nucleo_rendimiento.SesionAlUsarla.test_SNUC08_reemplazar_la_sesion_o_los_diagnosticos_conserva_su_significado",
+   "case": "S-NUC08",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: asignar `s` o `start_diags` (lo hace la ventana al conectar) y un modelo que no compila siguen funcionando."
+  },
+  {
+   "test": "test_nucleo_rendimiento.UltimaEvolucionRecordada.test_SNUC15_la_ultima_evolucion_recordada_coincide_con_la_busqueda_antigua",
+   "case": "S-NUC15",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: `Vista.state()` da la misma última evolución que la búsqueda hacia atrás de antes, en cada paso de una secuencia"
+  },
+  {
+   "test": "test_nucleo_rendimiento.UltimaEvolucionRecordada.test_SNUC16_el_coste_de_state_no_crece_con_la_traza_si_la_situacion_no_cambia",
+   "case": "S-NUC16",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-SIM-01"
+   ],
+   "summary": "REQ-SIM-01: con miles de registros sin evolución, cada `Vista.state()` lee de la traza solo los registros nuevos (unos pocos), no"
+  },
+  {
+   "test": "test_nucleo_rendimiento.ValidarUnaVez.test_SNUC05_validar_dos_veces_lo_mismo_valida_una_y_da_resultados_independientes",
+   "case": "S-NUC05",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-CR-04"
+   ],
+   "summary": "REQ-CR-04: un documento del editor validado dos veces con las mismas lecturas se valida una vez; ambos resultados son"
+  },
+  {
+   "test": "test_nucleo_rendimiento.ValidarUnaVez.test_SNUC06_lecturas_distintas_se_validan_por_separado",
+   "case": "S-NUC06",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-CR-04"
+   ],
+   "summary": "REQ-CR-04: la memoria distingue las lecturas con que se valida."
+  },
+  {
    "test": "test_orden_acciones_estable.OrdenAcciones.test_SOA01_completar_derecha_no_la_adelanta",
    "case": "S-OA01",
    "outcome": "pasa",
@@ -9291,7 +11294,7 @@
    "summary": "REQ-EDT-02, REQ-EDT-03: pulsar y arrastrar conserva MIME, imagen compartida y punto de colocación con zoom y DPR."
   },
   {
-   "test": "test_paleta_variables.PaletaVariables.test_SPVU01_pestanas_y_grupos_en_orden",
+   "test": "test_paleta_variables.PaletaVariables.test_SPVU01_catalogo_siempre_visible_banda_y_grupos_en_orden",
    "case": "S-PVU01",
    "outcome": "pasa",
    "requirements": [],
@@ -9443,7 +11446,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: los controles de la flotante y sus categorías caben a 1000×600."
+   "summary": "REQ-EDT-09: los controles de la flotante y la banda de sus categorías caben a 1000×600 (E8: cuatro categorías, sin pestañas)."
   },
   {
    "test": "test_paneles_plegables.Paneles.test_SPAN07_preferencias_de_plegado_se_recuperan_en_otra_ventana",
@@ -9481,6 +11484,144 @@
     "REQ-EDT-09"
    ],
    "summary": "REQ-EDT-09: el lateral abierto conserva el ancho elegido sin absorber el dibujo al volver de E/S."
+  },
+  {
+   "test": "test_partes_propiedades.Piezas.test_SP801_el_comentario_es_de_una_linea",
+   "case": "S-P801",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-EDT-02, REQ-UX-01: un salto pegado pasa a un espacio, Intro y Mayús+Intro no escriben un salto."
+  },
+  {
+   "test": "test_partes_propiedades.Piezas.test_SP802_el_comentario_crece_con_el_texto_y_se_estira",
+   "case": "S-P802",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: ajusta al ancho, crece hasta LINEAS_COMENTARIO, después se desplaza y se estira desde la esquina."
+  },
+  {
+   "test": "test_partes_propiedades.Piezas.test_SP803_foco_fuera_confirma",
+   "case": "S-P803",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: `editingFinished` sale al perder el foco, como un campo de una línea."
+  },
+  {
+   "test": "test_partes_propiedades.Piezas.test_SP804_conmutador_de_partes",
+   "case": "S-P804",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el botón pulsado cambia de parte y avisa; `poner` cambia sin avisar; el punto de aviso es por parte."
+  },
+  {
+   "test": "test_partes_propiedades.Piezas.test_SP805_pie_con_etiqueta_y_comentario",
+   "case": "S-P805",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: el pie coloca etiqueta, casilla y comentario en una fila, con el comentario a la derecha."
+  },
+  {
+   "test": "test_partes_propiedades.Piezas.test_SP806_pie_de_la_maqueta_v3",
+   "case": "S-P806",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: el pie rotula «Etiqueta» y «Comentario» junto a sus campos, la etiqueta mide 62 px y los rótulos se centran con su campo."
+  },
+  {
+   "test": "test_partes_propiedades.Piezas.test_SP807_conmutador_con_los_colores_de_parte",
+   "case": "S-P807",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: el botón activo se rellena con el color de su parte; el desactivado, en DESHABILITADO; el punto de aviso se ve."
+  },
+  {
+   "test": "test_partes_propiedades.Piezas.test_SP808_tokens_nuevos_de_estilo",
+   "case": "S-P808",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01: `ORIGEN_MEMORIA` es la ciruela de la maqueta (distinta de AVISO y de los tipos) y las señales de parte, las de siempre."
+  },
+  {
+   "test": "test_partes_propiedades.Ventana.test_SP810_la_vista_previa_es_una_franja_de_ancho_completo_y_con_tope",
+   "case": "S-P810",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: la lupa va arriba, ocupa el ancho de la ventana, mide su elemento (hasta el 125 %) y nunca pasa del tope de alto."
+  },
+  {
+   "test": "test_partes_propiedades.Ventana.test_SP811_etapa_n_va_en_la_esquina_de_la_franja",
+   "case": "S-P811",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: «Etapa N» solo informa, en la esquina inferior derecha de la vista previa, y no en el panel."
+  },
+  {
+   "test": "test_partes_propiedades.Ventana.test_SP812_la_transicion_es_una_tarjeta_receptividad_con_el_pie",
+   "case": "S-P812",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-EDT-02, REQ-UX-01: tarjeta «Receptividad» con el formulador ancho; etiqueta y comentario al pie, fuera de la tarjeta."
+  },
+  {
+   "test": "test_partes_propiedades.Ventana.test_SP813_el_comentario_largo_no_cambia_el_tamano_de_la_ventana",
+   "case": "S-P813",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02, P-IMP-173: al crecer el comentario la ventana conserva su tamaño y es el formulador el que cede el alto."
+  },
+  {
+   "test": "test_partes_propiedades.Ventana.test_SP814_intro_confirma_y_guarda_el_comentario_en_una_linea_y_esc_no",
+   "case": "S-P814",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01, P-IMP-170: Intro en el comentario confirma y cierra; Mayús+Intro no escribe un salto; Esc deshace la sesión."
+  },
+  {
+   "test": "test_partes_propiedades.Ventana.test_SP815_el_comentario_pegado_con_saltos_se_guarda_en_una_linea",
+   "case": "S-P815",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: un salto pegado pasa a un espacio y lo guardado es una sola línea."
+  },
+  {
+   "test": "test_partes_propiedades.Ventana.test_SP816_ventana_fondo_tarjeta_gris_y_franja_blanca",
+   "case": "S-P816",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02",
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01, REQ-EDT-02: la ventana lleva FONDO (como la lupa de siempre), la tarjeta SUPERFICIE_2 con la barra de 3 px de su parte"
   },
   {
    "test": "test_pilotos_zoom.PilotosZoom.test_SL101_circulo_esquinas_transparentes_y_dentro_de_fila",
@@ -11326,14 +13467,14 @@
    "summary": "REQ-EDT-02, REQ-MOD-03: una sola ficha con ayuda conserva los gestos de apertura y cierre de simultaneidad."
   },
   {
-   "test": "test_rediseno_visual.RedisenoVisual.test_SVIS15_carpetas_por_uso_en_panel",
+   "test": "test_rediseno_visual.RedisenoVisual.test_SVIS15_categorias_por_uso_en_panel",
    "case": "S-VIS15",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-02",
     "REQ-EDT-07"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-07: el orden por uso es el de siempre y cada carpeta sigue cargando sus bloques."
+   "summary": "REQ-EDT-02, REQ-EDT-07: el orden por uso es el de siempre; la banda de categorías (sin pestañas: el catálogo está siempre a la"
   },
   {
    "test": "test_remates_acciones.RematesNucleo.test_SCOR01_copiar_continua_sola_conserva_tipo",
@@ -11642,6 +13783,24 @@
    "summary": "REQ-MOD-03, REQ-EDT-02: los retornos hacia una sincronización no atraviesan etapas ni otras transiciones."
   },
   {
+   "test": "test_routing_lazos.LazosIguales.test_SRUT01_los_recorridos_coinciden_con_los_de_la_version_anterior_en_los_proyectos_de_referencia",
+   "case": "S-RUT01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-06"
+   ],
+   "summary": "REQ-DAT-06: `routing.enlaces` da los mismos recorridos que con la versión anterior de `_separar_lazos` en GEMMA y en Linea larga tal como están."
+  },
+  {
+   "test": "test_routing_lazos.LazosIguales.test_SRUT02_los_recorridos_coinciden_con_disposiciones_al_azar",
+   "case": "S-RUT02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-DAT-06"
+   ],
+   "summary": "REQ-DAT-06: lo mismo con disposiciones al azar de los dos proyectos (muchos retornos, cruces y carriles)."
+  },
+  {
    "test": "test_selector_accion.SelectorAccion.test_SSEL01_doble_clic_en_una_continua_abre_el_desplegable_dentro_de_la_accion",
    "case": "S-SEL01",
    "outcome": "pasa",
@@ -11714,6 +13873,33 @@
     "REQ-EDT-09"
    ],
    "summary": "REQ-EDT-09: con un nombre corto («fe») y uno largo, a zoom 50 %, 100 % y 160 %, el cuadro nunca mide más que el interior de la acción"
+  },
+  {
+   "test": "test_sellos.SellosComprobados.test_SSEL01_con_la_variable_un_documento_sellado_modificado_en_el_sitio_se_detecta",
+   "case": "S-SEL01",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con `GRAFCONNECT_COMPROBAR_SELLOS=1`, `validate_model` recalcula la revisión y los diagnósticos en cada acierto de su"
+  },
+  {
+   "test": "test_sellos.SellosComprobados.test_SSEL02_sin_la_variable_no_se_comprueba_nada",
+   "case": "S-SEL02",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: sin la variable, `validate_model` no recalcula nada: devuelve lo recordado aunque el documento se hubiera tocado."
+  },
+  {
+   "test": "test_sellos.SellosComprobados.test_SSEL03_con_la_variable_las_ediciones_normales_pasan",
+   "case": "S-SEL03",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-09"
+   ],
+   "summary": "REQ-EDT-09: con la variable activa, las operaciones del editor (que crean documentos nuevos y los sellan) y deshacer y rehacer no"
   },
   {
    "test": "test_servidor_web.ArchivosServidor.test_SM101_firma_directa_ninguna_y_varias",
@@ -13159,13 +15345,13 @@
    "summary": "REQ-EDT-02: la doble línea sola se dibuja y conserva su caja al añadir y quitar otro elemento."
   },
   {
-   "test": "test_sx_mas.PropiedadesMas.test_SXM1_cinco_categorias_enteras_en_una_fila",
+   "test": "test_sx_mas.PropiedadesMas.test_SXM1_banda_de_categorias_entera",
    "case": "S-XM1",
    "outcome": "pasa",
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: en las tres ventanas las cinco pestañas caben, también a media pantalla real."
+   "summary": "REQ-EDT-02: en las tres ventanas, la banda de categorías (Operadores, Temporizadores, Comparaciones y Constantes, con sus botones y"
   },
   {
    "test": "test_sx_mas.PropiedadesMas.test_SXM2_campos_sin_corte_y_comentario_largo",
@@ -13174,7 +15360,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: etiqueta y casilla comparten fila; el comentario ocupa el ancho del panel."
+   "summary": "REQ-EDT-02: etiqueta y comentario comparten fila al pie; el comentario ocupa el ancho del pie (E8: sin casilla «Mostrar etiqueta»)."
   },
   {
    "test": "test_sx_mas.PropiedadesMas.test_SXM3_altura_moderada_y_aire_alrededor",
@@ -13330,7 +15516,7 @@
    "case": "S-Y3",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "Una sola fila de categorías completas dentro de su columna con el ancho nuevo."
+   "summary": "La ventana centrada y la banda de categorías entera dentro de su columna con el ancho nuevo (E8: la banda sustituye a las pestañas;"
   },
   {
    "test": "test_sy_propiedades.PropiedadesY.test_SY4_etapas_y_macroetapas_conservan_su_ancho_menor",
@@ -14249,6 +16435,27 @@
   {
    "test": "test_t21_t26_producto.Simulacion.test_T23f_instantanea_dentro_de_un_recorrido",
    "case": "T-23f",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_v2_e0.Bancos.test_genera_dos_imagenes_y_compara",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_v2_e0.Bancos.test_muestra_de_cada_operacion",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_v2_e0.ProyectoReferencia.test_construye_valida_y_simula_diez_pasos",
+   "case": null,
    "outcome": "pasa",
    "requirements": [],
    "summary": ""

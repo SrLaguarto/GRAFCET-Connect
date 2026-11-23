@@ -25,9 +25,10 @@ Base normativa declarada: IEC 60848 edición 3.0 (2013-02-27), adopción UNE-EN 
 | `acciones.memorizadas` — Acciones memorizadas al activar, desactivar o por evento | provisional (especificada, sin contraste normativo) | I (U-01) | REQ-ACT-02 |
 | `acciones.salidas-continuas-leidas` — Leer salidas continuas en expresiones: valor según la situación del momento, también la inestable | provisional (especificada, sin contraste normativo) | decisión del responsable, comparador 27-10-2026, 8.2 C (cierra H-10) | REQ-ACT-01 |
 | `escenario.predicado-parada` — Condición de parada por predicado observador | pendiente / bloqueada | P: no implementada en esta iteración | REQ-SIM-02 |
+| `eventos.actividad` — Flancos sobre actividad (etapas, parciales, macroetapas): verdaderos solo en la evolución inmediatamente siguiente a la que cambió el operando, aunque sea fugaz; al arrancar no hay flancos | provisional (especificada, sin contraste normativo) | decisión del responsable, chat 20-11-2026, U-03 (flancos sobre actividad) | REQ-EVT-03 |
 | `eventos.entradas` — Flancos sobre proposiciones de entradas en la primera evolución del contexto | provisional (especificada, sin contraste normativo) | I (U-01) | REQ-EVT-01 |
 | `eventos.franqueamiento` — Eventos de franqueamiento como disparadores | pendiente / bloqueada | U-03 | REQ-EVT-03 |
-| `eventos.internos` — Flancos sobre actividad, variables internas o condiciones temporales | pendiente / bloqueada | U-03 | REQ-EVT-03 |
+| `eventos.internos` — Flancos sobre variables internas, condiciones temporales u operandos que mezclan entradas con actividad o con internas | pendiente / bloqueada | U-03 | REQ-EVT-03 |
 | `eventos.recorrido` — Un evento solo franquea las transiciones validadas antes de él; una acción por evento solo se ejecuta si su etapa estaba activa antes y no sale con él | provisional (especificada, sin contraste normativo) | decisión del responsable, comparador 27-10-2026, 5.1 «situación anterior» (seleccionable, P-IMP-15), 5.2 B y 5.3 A | REQ-EVT-03, REQ-SEM-09 |
 | `evolucion.ordinaria` — Validación, receptividad, cambio conjunto, simultaneidad y relación S'=(S\D)∪A | provisional (especificada, sin contraste normativo) | I (U-01) | REQ-SEM-02, REQ-SEM-03, REQ-SEM-04 |
 | `inicio.acciones-activacion` — Acciones al activar de las etapas iniciales: se ejecutan al arrancar | provisional (especificada, sin contraste normativo) | decisión del responsable, hoja 08 1.1 A | REQ-ACT-02 |
@@ -71,6 +72,7 @@ Base normativa declarada: IEC 60848 edición 3.0 (2013-02-27), adopción UNE-EN 
 
 ## Materias excluidas por cuestiones críticas abiertas (REQ-NOR-02)
 
+- `eventos.actividad`: decisión del responsable, chat 20-11-2026, U-03 (flancos sobre actividad)
 - `eventos.franqueamiento`: U-03
 - `eventos.internos`: U-03
 
