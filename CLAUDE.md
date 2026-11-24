@@ -90,6 +90,26 @@ Detalle, capas, hilos y mapa de módulos en `docs/ARQUITECTURA.md`. Reglas al ca
 - **Banco de imágenes idéntico.** Cada cambio que afecte al dibujo deja las mismas imágenes que la referencia
   (`python tools/banco_imagenes.py generar CARPETA` y `comparar`, contra `artifacts/v2_e3/imagenes_7400f0c/`).
 
+## Relevo entre sesiones
+
+Esta carpeta la usan distintas sesiones, una cada vez. Una sesión puede cortarse en cualquier momento, por ejemplo al
+agotarse el crédito, así que el estado del trabajo vive en el repositorio y no en el chat.
+
+- **Al empezar:** lee `ESTADO_TRABAJO.md` (en la raíz) y ejecuta `git status` y `git log --oneline -5`. Sigue desde
+  «Siguiente paso». Si lo que ves en git no coincide con el fichero, manda git: dilo y corrige el fichero.
+- **Después de cada paso,** no solo al final, actualiza `ESTADO_TRABAJO.md`:
+  - qué está hecho;
+  - qué queda a medias y en qué ficheros;
+  - el siguiente paso exacto;
+  - qué falta comprobar;
+  - las decisiones nuevas del responsable.
+
+  Añade además una línea en «Registro de sesiones».
+- **Commits pequeños y frecuentes,** uno por paso terminado, con la suite en verde y los ficheros añadidos por su nombre.
+  Nunca se hace commit de algo roto: si queda a medias, se describe en `ESTADO_TRABAJO.md`.
+- **Nunca se hace commit de** `ESTADO_TRABAJO.md`, `AGENTS.md`, `artifacts/`, `.codex/`, `build/` ni `dist/`.
+- **Decisiones:** las decisiones del responsable que aparecen en `ESTADO_TRABAJO.md` mandan sobre los planes antiguos.
+
 ## Comprobaciones
 
 ```bash
