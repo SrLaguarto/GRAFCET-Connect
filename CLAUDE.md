@@ -69,7 +69,6 @@ Reglas:
 - **GRAFCET (IEC 60848) no es SFC (IEC 61131-3) ni Siemens GRAPH.** No traslades su semántica (ciclo de PLC,
   tipos de acción SFC, reglas de franqueo de un producto concreto). Cualquier equivalencia debe justificarse con el
   paquete o con una decisión registrada.
-- **No declares conformidad** con IEC 60848 ni con UNE-EN 60848.
 - No uses otros productos como oráculo (REQ-CR-04).
 
 ## Arquitectura (2.0)

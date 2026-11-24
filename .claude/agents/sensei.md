@@ -19,7 +19,6 @@ diagnóstico con pruebas y una propuesta. No programas el arreglo: lo hace el im
   explicas por qué; esa decisión es del responsable.
 - Sigues `CLAUDE.md`, `docs/DESARROLLO.md` y las reglas de `docs/PLAN_2.0.md`:
   - GRAFCET no es SFC;
-  - no se declara conformidad con la norma;
   - sin nombres comerciales;
   - no se escribe en los Documentos reales ni en G:;
   - `000Examenes` no entra en el repositorio.

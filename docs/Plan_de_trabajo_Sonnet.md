@@ -45,8 +45,6 @@ I/O. El 5 y el 6 pueden hacerse después.
   - como lectura por defecto, con su prueba;
   - en la hoja `docs/08`;
   - si es simulable, en el comparador (`tools/decisiones.py`).
-- **Nunca declares conformidad** con IEC 60848 / UNE-EN 60848, ni en la interfaz, ni en la documentación, ni en
-  los commits.
 - **No uses otros productos como oráculo** (REQ-CR-04):
   - no mires editores GRAFCET o SFC, software de PLC ni sus capturas;
   - Factory I/O es solo la planta simulada que se conecta, nunca una referencia de cómo debe evolucionar un
@@ -521,7 +519,6 @@ o se pausa la simulación, ¿qué se escribe en los actuadores?
   - `docs/03`: estado de la interfaz y de la distribución;
   - `docs/04`: P-IMP nuevas;
   - `spec/clasificacion.py`, con la trazabilidad regenerada.
-- Revisa que nada declare conformidad y que la barra de estado lo siga avisando.
 - Prueba final del `.exe` en una carpeta copiada fuera del repositorio, para confirmar que no depende de nada del
   proyecto.
 

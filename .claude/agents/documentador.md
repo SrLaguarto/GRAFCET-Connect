@@ -30,7 +30,6 @@ coordinador, a partir de la información que te da y de lo que ya está en el re
 
 - **No inventes requisitos, decisiones ni resultados.** Documenta solo lo que el coordinador te indique o lo que
   esté comprobado en el repositorio. Si falta información, pregúntala en tu informe en lugar de suponerla.
-- **Nunca declares conformidad** con IEC 60848 ni con UNE-EN 60848.
 - **GRAFCET no es SFC/GRAPH:** no describas el comportamiento con conceptos de IEC 61131-3 SFC o Siemens GRAPH salvo
   que el coordinador te dé la equivalencia justificada.
 - **Idioma:** español, con el tono y el formato del documento que editas. Cambia lo mínimo necesario.
