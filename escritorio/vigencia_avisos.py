@@ -33,7 +33,7 @@ def texto_seleccion(edicion):
     descripcion = edicion.descripcion_jerarquia(ident)
     if descripcion:
         if edicion._es_parcial_suelto(ident):
-            descripcion += (": suelte etapas y transiciones dentro de su marco para rellenarlo; una orden de "
+            descripcion += (": suelta etapas y transiciones dentro de su marco para rellenarlo; una orden de "
                             "forzado de otra etapa puede forzarlo («Forzado» en la paleta).")
         return descripcion
     borrador = next((b for b in edicion.ed.draft_actions() if b["id"] == ident), None)

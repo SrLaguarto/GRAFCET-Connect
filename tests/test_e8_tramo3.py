@@ -76,8 +76,14 @@ class Memorizadas(Base):
         self.assertTrue(v.subcabecera.isVisible() and v.caja_dest.isVisible())
         for w in (a.l_asignacion, a.l_var_bool, a.l_fichas, a.caja_fichas):
             self.assertIs(w.parentWidget(), a.tarjeta_asignacion)
-        ys = {w.geometry().center().y() for w in (a.l_asignacion, a.l_var_bool, a.l_fichas, a.caja_fichas)}
-        self.assertLessEqual(max(ys) - min(ys), 2, "los cuatro, a la misma altura")
+        # (la píldora de la variable se oculta cuando la variable vive en la subcabecera: un widget oculto conserva la
+        # geometría de la última vez que se mostró y no cuenta; los que se ven, sí)
+        vistos = [w for w in (a.l_asignacion, a.l_var_bool, a.l_fichas, a.caja_fichas) if w.isVisibleTo(a.tarjeta_asignacion)]
+        self.assertGreaterEqual(len(vistos), 3)
+        ys = {w.geometry().center().y() for w in vistos}
+        self.assertLessEqual(max(ys) - min(ys), 2, "los que se ven, a la misma altura")
+        self.assertEqual({b.mapTo(a.tarjeta_asignacion, b.rect().center()).y() for b in a.fichas.values()},
+                         {a.l_fichas.geometry().center().y()}, "el 1 y el 0, a la altura de «:=»")
         self.assertEqual(a.l_fichas.text(), ":=")
         a.fichas["1"].click()
         _bombear()
@@ -337,7 +343,7 @@ class Menu(Base):
         c.w.diagrama.cerrar_selector()
 
     def test_SP8C32_desplegable_sin_filtro_visual(self):
-        """Decisión Ciclo 3: el desplegable de variables no activa filtro ni «Filtrar…» aunque haya más de 12 variables."""
+        """Tanda C2: el desplegable activa el filtro con más de 10 variables."""
         from escritorio.menu_variable import ComboMenu
         HC.aplicacion()
         combo = ComboMenu()
@@ -345,10 +351,10 @@ class Menu(Base):
         for i in range(UMBRAL_FILTRO + 3):
             combo.addItem(f"var{i:02d}", f"var{i:02d}")
             combo.setItemData(combo.count() - 1, "output", ROL_PAPEL)
-        self.assertFalse(combo.con_filtro())
+        self.assertTrue(combo.con_filtro())
 
     def test_SP8C33_rotulo_filtro_combomenu_no_se_muestra(self):
-        """Decisión Ciclo 3: al abrir ComboMenu con más de `UMBRAL_FILTRO` variables no aparece el rótulo «Filtrar…»."""
+        """Tanda C2: con más de `UMBRAL_FILTRO` variables aparece el rótulo «Filtrar…»."""
         from escritorio.menu_variable import ComboMenu
         HC.aplicacion()
         combo = ComboMenu()
@@ -361,7 +367,7 @@ class Menu(Base):
         _bombear()
         combo.showPopup()
         _bombear(4)
-        self.assertIsNone(combo.filtro_menu.etiqueta)
+        self.assertEqual(combo.filtro_menu.etiqueta.text(), "Filtrar…")
         combo.hidePopup()
         combo.hide()
 

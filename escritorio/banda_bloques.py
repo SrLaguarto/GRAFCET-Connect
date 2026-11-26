@@ -1,7 +1,7 @@
 """La banda superior derecha del editor de bloques (`.op-ribbon` del diseño 2.0.1).
 
 En modo booleano muestra:
-  Insertar: [( … )] [● Temporizador] [● = ≠ < ≥] | [1] [0]   ···   [Copiar] [Pegar] [↶] [↷] [Limpiar]
+  Insertar: [( … )] [Temporizador] [● = ≠ < ≥] | [1] [0]   ···   [Copiar] [Pegar] [↶] [↷] [Limpiar]
 
 En modo valor numérico muestra:
   Insertar: [( … )] [+ Constante]                            ···   [Copiar] [Pegar] [↶] [↷] [Limpiar]
@@ -13,8 +13,8 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
-from PySide6.QtCore import QEvent, QMimeData, QPoint, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QDrag, QFont, QFontMetricsF, QIcon, QPainter
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QDrag, QFont, QFontMetricsF, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 from . import estilo
@@ -45,14 +45,12 @@ BOTONES = {
 }
 
 _COLOR_PUNTO = {
-    "temp": "#b45309",
     "cmp": "#0369a1",
 }
 
 
 def _icono_punto(color: str) -> QIcon:
-    """Punto de color de 7×7 px para los botones Temporizador y Comparación (`.pill-dot`)."""
-    from PySide6.QtGui import QPixmap
+    """Punto de color para el botón Comparación."""
     pm = QPixmap(16, 16)
     pm.setDevicePixelRatio(2.0)
     pm.fill(Qt.GlobalColor.transparent)
@@ -61,6 +59,29 @@ def _icono_punto(color: str) -> QIcon:
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(QColor(color))
     p.drawEllipse(0, 0, 7, 7)
+    p.end()
+    return QIcon(pm)
+
+
+def _icono_temporizador() -> QIcon:
+    """Trazo del juego de la aplicación a 2×. Su original revisable está en recursos/temporizador.svg."""
+    lado = estilo.E4
+    pm = QPixmap(2 * lado, 2 * lado)
+    pm.setDevicePixelRatio(2)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.scale(lado / 24, lado / 24)
+    p.setPen(QPen(QColor(estilo.TINTA), 1.75, Qt.PenStyle.SolidLine,
+                  Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    p.drawEllipse(QRectF(4, 6, 16, 16))
+    p.drawLine(QPointF(9, 2), QPointF(15, 2))
+    p.drawLine(QPointF(12, 2), QPointF(12, 6))
+    p.drawLine(QPointF(18, 8), QPointF(20, 6))
+    aguja = QPainterPath(QPointF(12, 10))
+    aguja.lineTo(12, 14)
+    aguja.lineTo(15, 14)
+    p.drawPath(aguja)
     p.end()
     return QIcon(pm)
 
@@ -99,7 +120,10 @@ class BotonBloque(BotonCompacto):
         self.setAccessibleName(rotulo)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._origen: QPoint | None = None
-        if clave in _COLOR_PUNTO:
+        if clave == "temp":
+            self.setIcon(_icono_temporizador())
+            self.setIconSize(QSize(estilo.E4, estilo.E4))
+        elif clave in _COLOR_PUNTO:
             self.setIcon(_icono_punto(_COLOR_PUNTO[clave]))
             self.setIconSize(QSize(8, 8))
         f = QFont(self.font())
@@ -281,7 +305,7 @@ class BandaBloques(QFrame):
             f.setPixelSize(12)
             f.setWeight(QFont.Weight.DemiBold)
             b.setFont(f)
-            icono_w = 14 if not b.icon().isNull() else 0
+            icono_w = b.iconSize().width() + estilo.E1 if not b.icon().isNull() else 0
             ancho = max(round(QFontMetricsF(f).horizontalAdvance(b.text())) + 20 + icono_w, alto)
             b.poner_tam(ancho, alto)
         for b in self._herramientas:

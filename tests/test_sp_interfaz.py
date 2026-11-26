@@ -128,7 +128,7 @@ class InterfazP(unittest.TestCase):
             p.lienzo._bloque_sel = (0,)
             QTest.keyClick(p.lienzo, tecla)
             self.assertEqual(p.texto(), "")
-            self.assertIn("arrástrelo fuera", p.lienzo.toolTip())
+            self.assertIn("arrástralo fuera", p.lienzo.toolTip())
 
     def test_SP115_arrastrar_fuera_quita_el_bloque(self):
         from escritorio import bloques

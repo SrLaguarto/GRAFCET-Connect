@@ -4,10 +4,12 @@ from functools import lru_cache
 from pathlib import Path
 from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QColor, QFont, QImage, QPixmap, QPen, QBrush
-from PySide6.QtWidgets import (QColorDialog, QDialog, QDialogButtonBox, QFileDialog,
+from PySide6.QtWidgets import (QColorDialog, QDialog, QFileDialog, QFrame, QHBoxLayout,
     QFontComboBox, QFormLayout, QGraphicsItem, QGraphicsPixmapItem, QGraphicsRectItem,
     QGraphicsTextItem, QPlainTextEdit, QPushButton, QVBoxLayout)
 from .campos_medidos import SpinMedido as QSpinBox
+from . import estilo
+from .estilo_dialogos import PieDialogo, aplicar_escala_dialogo
 
 
 def rect(n):
@@ -24,7 +26,7 @@ def importar_imagen(padre=None):
     datos=Path(nombre).read_bytes();imagen=QImage.fromData(datos)
     if imagen.isNull():raise ValueError("No se puede leer esta imagen PNG o JPG")
     mime="image/png" if datos.startswith(b"\x89PNG\r\n\x1a\n") else "image/jpeg" if datos.startswith(b"\xff\xd8") else None
-    if mime is None:raise ValueError("Elija una imagen PNG o JPG")
+    if mime is None:raise ValueError("Elige una imagen PNG o JPG")
     w=min(280,max(40,imagen.width()))
     return {"name":Path(nombre).name,"data":"data:"+mime+";base64,"+base64.b64encode(datos).decode("ascii"),
             "width":w,"height":w*imagen.height()/imagen.width()}
@@ -32,6 +34,7 @@ def importar_imagen(padre=None):
 
 def editar_texto(n, padre=None):
     d = QDialog(padre)
+    aplicar_escala_dialogo(d)
     d.setWindowTitle("Editar texto")
     d.resize(540, 360)
     layout = QVBoxLayout(d)
@@ -45,6 +48,16 @@ def editar_texto(n, padre=None):
     tam.setValue(round(n.get("size", 18)))
     tam.setToolTip("Tamaño del texto en píxeles")
     color = QPushButton()
+    color.setAutoDefault(False)
+    color.setAccessibleName("Elegir color del texto")
+    muestra = QFrame()
+    muestra.setObjectName("muestraColorTexto")
+    muestra.setFixedSize(estilo.E6, estilo.E6)
+    fila_color = QHBoxLayout()
+    fila_color.setSpacing(estilo.E2)
+    fila_color.addWidget(muestra)
+    fila_color.addWidget(color)
+    fila_color.addStretch()
     elegido = [n.get("color", "#172e4d")]
 
     def actualizar():
@@ -53,7 +66,9 @@ def editar_texto(n, padre=None):
         texto.setFont(letra)
         texto.setStyleSheet("color:" + elegido[0])
         color.setText(elegido[0])
-        color.setStyleSheet("color:" + elegido[0])
+        muestra.setStyleSheet(
+            f"background:{elegido[0]}; border:1px solid {estilo.BORDE_CONTROL}; border-radius:{estilo.R_S}px"
+        )
 
     def elegir():
         nuevo_color = QColorDialog.getColor(QColor(elegido[0]), d, "Color del texto")
@@ -64,13 +79,10 @@ def editar_texto(n, padre=None):
     color.clicked.connect(elegir)
     fuente.currentFontChanged.connect(lambda _: actualizar())
     tam.valueChanged.connect(lambda _: actualizar())
-    for etiqueta, widget in (("Fuente", fuente), ("Tamaño", tam), ("Color", color)):
+    for etiqueta, widget in (("Fuente", fuente), ("Tamaño", tam), ("Color", fila_color)):
         form.addRow(etiqueta, widget)
     layout.addLayout(form)
-    botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-    botones.accepted.connect(d.accept)
-    botones.rejected.connect(d.reject)
-    layout.addWidget(botones)
+    layout.addWidget(PieDialogo().conectar(d))
     actualizar()
     if n.get("text") == "Texto":
         texto.selectAll()
@@ -108,7 +120,7 @@ def dibujar_nota(scene,n,seleccionada):
     if seleccionada:
         borde=scene.addRect(r,QPen(QColor("#1f6feb"),1.4,Qt.PenStyle.DashLine));borde.setZValue(10)
         h=scene.addRect(r.right()-4,r.bottom()-4,8,8,QPen(QColor("#1f6feb"),1.4),QBrush(QColor("white")))
-        h.setZValue(11);h.setToolTip("Arrastre para cambiar el tamaño");items.extend((borde,h))
+        h.setZValue(11);h.setToolTip("Arrastra para cambiar el tamaño");items.extend((borde,h))
     return items
 
 

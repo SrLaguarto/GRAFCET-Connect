@@ -59,9 +59,12 @@ class Menus:
             if not boton.accessibleDescription(): boton.setAccessibleDescription(boton.toolTip() or boton.accessibleName())
         for nombre in ('derecho', 'inferior'):
             self._plegables[nombre].setAccessibleName({'derecho': 'Variables y simulación', 'inferior': 'Traza'}[nombre])
-            self._plegables[nombre].setAccessibleDescription('Panel plegable. Use su cabecera para ocultarlo o su pestaña para recuperarlo.')
+            self._plegables[nombre].setAccessibleDescription('Panel plegable. Usa su cabecera para ocultarlo o su pestaña para recuperarlo.')
 
     def _menus(self) -> None:
+        self.paginas_es = None
+        self.panel_planos = None
+        self.destino_traer = None
         bar = self.menuBar()
         archivo = bar.addMenu("&Proyecto")
         self.a_nuevo = self._accion("&Nuevo proyecto", self.nuevo, "Ctrl+N")
@@ -81,7 +84,7 @@ class Menus:
         archivo.addAction("&Salir", self.close).setShortcut(QKeySequence.StandardKey.Quit)
         # Un solo control de ejecución: Simular arranca tiempo real (traza abajo, sin paleta) y Stop detiene y vuelve a editar
         self.a_ejecutar = self._accion("Simular", self._ejecutar, "F5", marcable=True)
-        self.a_ejecutar.setToolTip("Simular: iniciar una simulación nueva · Stop: detener y dejar todo a 0 (F5)")
+        self.a_ejecutar.setToolTip("Simular: iniciar una simulación nueva · Detener: detener y dejar todo a 0 (F5)")
         self.a_reiniciar = self._accion("Reiniciar", self.reiniciar, "Ctrl+R")
         self.a_reiniciar.setToolTip("Volver a la situación inicial; en Play sigue en Play (Ctrl+R)")
         ver = bar.addMenu("&Ver")
@@ -308,16 +311,33 @@ class Menus:
 
     def _actualizar_portapapeles(self, *args: Any) -> None:
         e = self.edicion
-        disponible = e is not None and not getattr(self,"solo_lectura",False) and self.modo == "editar" and not self.destino_traer and not self._foco_portapapeles() and (not hasattr(self,"paginas_es") or self.paginas_es.currentIndex()!=2)
+        base = (
+            e is not None
+            and not self.solo_lectura
+            and self.modo == "editar"
+            and not self.destino_traer
+            and not self._foco_portapapeles()
+        )
+        en_planos = self.paginas_es is not None and self.paginas_es.currentIndex() == 2
+        if en_planos and self.panel_planos is not None:
+            puede_copiar, puede_pegar = self.panel_planos.estado_portapapeles()
+            self.a_copiar.setEnabled(base and puede_copiar)
+            self.a_cortar.setEnabled(base and puede_copiar)
+            self.a_pegar.setEnabled(base and puede_pegar)
+            self.a_enviar_lamina.setEnabled(False)
+            return
+        disponible = base and not en_planos
         self.a_copiar.setEnabled(disponible and bool(e.sel))
         self.a_cortar.setEnabled(disponible and bool(e.sel))
         self.a_pegar.setEnabled(disponible and self._portapapeles is not None)
-        if hasattr(self,"a_enviar_lamina"):self.a_enviar_lamina.setEnabled(disponible and bool(e.sel))
+        self.a_enviar_lamina.setEnabled(disponible and bool(e.sel))
 
     def _portapapeles_accion(self, operacion: str, punto: Any = None) -> bool:
         e = self.edicion
         if e is None or self.modo != "editar" or self._foco_portapapeles() or self.destino_traer:
             return False
+        if self.paginas_es is not None and self.paginas_es.currentIndex() == 2 and self.panel_planos is not None:
+            return self.panel_planos.portapapeles_texto(operacion, punto)
         from ..bloques import MIME_FORMULA
         clipboard = QApplication.clipboard()
         datos = clipboard.mimeData()
@@ -419,7 +439,7 @@ class Menus:
         if r.estado == "nueva":
             self._avisar_version_nueva(r)  # al arrancar y a mano, el mismo diálogo (no se guarda nada al descartarlo)
         elif manual:
-            texto = ("Ya tiene la última versión de GRAFCET Connect." if r.estado == "al_dia" else
+            texto = ("Ya tienes la última versión de GRAFCET Connect." if r.estado == "al_dia" else
                      "No se ha podido comprobar: sin conexión o sin respuesta del servidor.")
             QMessageBox.information(self, TITULO, texto)
 

@@ -14,7 +14,7 @@ def validar(config, doc):
     except ValueError:
         patron = r"(?=.{1,253}\Z)[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?"
         if not re.fullmatch(patron, host) or ".." in host:
-            raise ValueError("Servidor inválido: escriba un nombre o una dirección IP, sin ruta ni protocolo")
+            raise ValueError("Servidor inválido: escribe un nombre o una dirección IP, sin ruta ni protocolo")
     for valor, minimo, maximo in ((config.puerto, 1, 65535), (config.periodo_ms, 5, 10000),
                                  (config.timeout_ms, 10, 10000)):
         if type(valor) is not int or not minimo <= valor <= maximo:

@@ -288,17 +288,17 @@ class _Acciones:
         m, nombre = self.ed.model, d.get("variable", "").strip()
         var = next((v for v in m["variables"] if v["name"] == nombre), None)
         if not nombre:
-            return "Elija la variable sobre la que actúa."
+            return "Elige la variable sobre la que actúa."
         if var is None and crear is None:
             return f"La variable «{nombre}» no existe."
         if var is None and (motivo := self.motivo_nombre(nombre)):
             return motivo
         if d["tipo"] in DISPARADOR and not d.get("valor", "").strip():
-            return "Escriba el valor que se asigna (1 o 0 para una booleana; un número o una cuenta como CT + 1)."
+            return "Escribe el valor que se asigna (1 o 0 para una booleana; un número o una cuenta como CT + 1)."
         if d["tipo"] == "limitada" and normalizar_duracion(d.get("limite", "")) is None:
-            return "Límite de tiempo no válido: escriba «3s», «500ms»…"
+            return "Límite de tiempo no válido: escribe «3s», «500ms»…"
         if d["tipo"] == "limitada" and not self._limite_us(d.get("limite", "")):
-            return "Escriba el límite de tiempo de la acción (por ejemplo 3s)."
+            return "Escribe el límite de tiempo de la acción (por ejemplo 3s)."
         sin_texto = bool({"condición", "evento"} & set(self.faltan({**d, "variable": nombre}, self.parcial_de(sid))))
 
         def hacer() -> None:
@@ -383,7 +383,7 @@ class _Acciones:
                 if diag is not None:
                     return f"{nombre} no es válido: {self.sust(diag.message)}"
         if d["tipo"] == "limitada" and d.get("limite", "").strip() and normalizar_duracion(d["limite"]) is None:
-            return "Límite de tiempo no válido: escriba «3s», «500ms»…"
+            return "Límite de tiempo no válido: escribe «3s», «500ms»…"
         return None
 
     def _campos_borrador(self, d: dict[str, str], vid: str | None) -> dict[str, Any]:

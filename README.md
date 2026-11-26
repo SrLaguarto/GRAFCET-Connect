@@ -1,8 +1,8 @@
 # GRAFCET Connect
 
-Editor y simulador de GRAFCET, basado en IEC 60848, con conexión Modbus TCP a simuladores de procesos.
+Editor y simulador de GRAFCET, basado en IEC 60848, con conexión Modbus TCP a simuladores de fábricas.
 
-Pensado para quien aprende, enseña o trabaja con automatización. Permite dibujar un grafcet, simularlo con entradas pulsables, documentarlo en planos con cajetín y, si hace falta, conectarlo a un simulador de procesos por Modbus TCP. Es una herramienta de aprendizaje y consulta: no es una declaración de conformidad con la norma.
+Pensado para quien aprende, enseña o trabaja con automatización. Permite dibujar un grafcet, simularlo con entradas pulsables, documentarlo en planos con cajetín y, si hace falta, conectarlo a un simulador de fábricas por Modbus TCP. Es una herramienta de aprendizaje y consulta: no es una declaración de conformidad con la norma.
 
 **Contenido:** [Características](#características) · [Descargar e instalar](#descargar-e-instalar) · [Primeros pasos](#primeros-pasos) · [Ejemplos](#ejemplos) · [Preguntas frecuentes](#preguntas-frecuentes) · [Comunicar un fallo](#comunicar-un-fallo) · [Licencia](#licencia) · [Para desarrolladores](#para-desarrolladores)
 
@@ -22,34 +22,36 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 
 ### Simulación
 
-- Play (F5) simula en tiempo real y Stop vuelve a editar. Reiniciar (Ctrl+R) vuelve a la situación inicial. Cada Play empieza desde la situación inicial.
+- **Simular** (F5) simula en tiempo real y **Detener** vuelve a editar. Reiniciar (Ctrl+R) vuelve a la situación inicial. Cada simulación empieza desde la situación inicial.
 - Las entradas son pulsadores: un clic para pulsar, Ctrl+clic para enclavar y clic derecho para interruptor. Las numéricas se escriben.
 - Las etapas activas se ven en el dibujo; las salidas, las variables y las entradas, en el panel lateral; la traza, en el panel inferior.
-- Los temporizadores muestran el tiempo transcurrido y una marca al vencer.
+- Los temporizadores muestran, en una cápsula azul, el tiempo transcurrido y una marca al vencer.
+- En la consola de la derecha, los valores booleanos son pastillas 0 / 1 y la columna «Etapas» dice qué etapas activan cada salida continua. La traza usa notación GRAFCET en español.
 - En la simulación, el cambio de una entrada vale de uno en uno.
 - Los avisos usan vocabulario GRAFCET. Los diagnósticos se resumen en el panel de la derecha.
 
 ### Documentación y planos
 
-- Pestaña **PLANOS**: hojas con cajetín, con **+ Añadir hoja**, **Traer GRAFCET** (copia a una hoja los elementos seleccionados) y **Añadir texto**.
+- Pestaña **PLANOS**: hojas con cajetín, con **+ Añadir otra hoja** (un clic, hereda el formato de la hoja activa; al eliminar una hoja, un aviso con **Deshacer** la recupera), **Traer GRAFCET** (copia a una hoja los elementos seleccionados) y **Añadir texto**.
 - **Importar plantillas de lámina** con el botón **▾** junto a **Plantilla**, en el panel derecho de PLANOS (**Importar plantilla…**). Se admiten:
   - **DXF**: el cajetín y sus campos pasan a ser editables.
   - **PDF**: se elige la página; los textos extraíbles son editables y el resto queda como fondo.
   - **SVG**: queda como fondo, sin campos editables.
   - **JSON** de GRAFCET Connect: una plantilla guardada antes.
 - Plantillas predeterminadas A4 (vertical), A3 (horizontal y vertical) y A2, A1 y A0 en ambas orientaciones. Desde ese mismo botón **▾** también se edita una plantilla, se usa la estándar o se quita. **Formato** y **Orientación** filtran las plantillas que se ofrecen, así que nunca quedan contradictorias.
-- El cajetín (180 × 36 mm) incluye dibujado y comprobado (fecha, autor y firma), razón social, escala, nombre del plano, número, «sustituye a» y «sustituido por».
-- **Proyecto > Exportar…** genera PDF o SVG (un SVG por hoja si hay varias). **Proyecto > Imprimir…** (Ctrl+P) imprime las hojas.
+- El cajetín (180 × 36 mm) incluye dibujado y comprobado (fecha, autor y firma), razón social, escala (por defecto «S/E»), nombre del plano, número, «sustituye a» y «sustituido por».
+- **Proyecto > Exportar…** genera un PDF con todas las hojas (o solo la hoja actual) o SVG (un SVG por hoja si hay varias). **Proyecto > Imprimir…** (Ctrl+P) imprime las hojas.
 - **Proyecto > Guardar el dibujo como imagen…** guarda el grafcet como PNG.
 
-### Conexión con simuladores de procesos
+### Conexión con simuladores de fábricas
 
 - Cliente Modbus TCP. El botón **E/S externas** de la barra abre la asignación: sensores a la izquierda y actuadores a la derecha.
 - La fila de pestañas (GRAFCET, PLANOS) muestra, a la derecha del todo, la luz de conexión: verde si está conectada, gris si no lo está y rojo si hay un error. Es la entrada a **E/S externas**: un clic la abre (y queda resaltada mientras se ve); GRAFCET o PLANOS vuelven.
 - **Configuración** reúne la IP, el puerto (502 por defecto), el esclavo y los canales del servidor (por defecto, 16 digitales y 4 numéricos, con offset y cantidad ajustables).
 - Las variables nuevas se asignan solas a canales libres. También se pueden arrastrar a otro canal, y se quitan con la ×.
 - **Conexión directa (simulador de fábricas).** En **E/S externas**, el título del marco central elige entre «Modbus TCP» y «Conexión directa». En directo no hace falta PLC ni driver: se pone el servidor (por defecto `localhost:7410`, el servidor web del simulador activado y su driver en «Ninguno»), **Traer E/S** lee las señales con sus nombres y crea las variables, y cada variable se une a su señal arrastrándola. Un proyecto nuevo empieza en conexión directa. Las señales internas del simulador no se traen (lista editable en «Opciones avanzadas»), y al cambiar de escena el grupo **De otra escena** quita de una vez las uniones viejas y las variables que ya no se usan.
-- **Conectar** pone a cero las salidas asignadas antes de la primera lectura. **Desconectar / editar** escribe el cero antes de cerrar la conexión.
+- **Conectar** pone a cero las salidas asignadas antes de la primera lectura. **Desconectar** escribe el cero antes de cerrar la conexión.
+- Al conectarte, la pastilla muestra el servidor y el puerto. Si falla, una banda de error da el motivo: corrige la causa y pulsa **Reintentar**.
 - Las señales analógicas se llevan a variables Decimal con 2 decimales. Una variable Entera que recibe un valor con decimales se redondea al entero más cercano y lo indica con un aviso.
 
 ### Proyectos y archivos
@@ -58,30 +60,30 @@ Pensado para quien aprende, enseña o trabaja con automatización. Permite dibuj
 - Una sola ventana del programa por usuario: abrir otro archivo (o el programa otra vez) lo lleva a la ventana que ya está abierta, preguntando antes si hay cambios sin guardar. Los planos exportados se guardan por defecto en `Documentos\GrafConnect\Planos`.
 - **Proyecto > Nuevo proyecto** (Ctrl+N), **Abrir…** (Ctrl+O), **Guardar** (Ctrl+S) y **Guardar como…** (Ctrl+Mayús+S).
 - La firma del archivo indica si lo guardó esta versión sin cambios. No impide abrir ni guardar archivos sin firma. Véase [Preguntas frecuentes](#preguntas-frecuentes).
-- **Proyecto > Propiedades del archivo…** muestra el autor (editable), las fechas, las versiones y la firma.
+- **Proyecto > Propiedades del archivo…** muestra el autor (editable), las fechas, las versiones, la firma y el historial de autores con sus fechas (solo lectura). Puedes copiar la ruta completa del archivo.
 - Se guarda periódicamente una copia de recuperación.
 
 ## Descargar e instalar
 
-Descargue el instalador de la última versión: [GRAFCET-Connect-setup.exe](https://github.com/SrLaguarto/GRAFCET-Connect/releases/latest/download/GRAFCET-Connect-setup.exe). Este enlace siempre baja la versión más reciente. Las notas de cada versión están en [Releases](https://github.com/SrLaguarto/GRAFCET-Connect/releases).
+Descarga el instalador de la última versión: [GRAFCET-Connect-setup.exe](https://github.com/SrLaguarto/GRAFCET-Connect/releases/latest/download/GRAFCET-Connect-setup.exe). Este enlace siempre baja la versión más reciente. Las notas de cada versión están en [Releases](https://github.com/SrLaguarto/GRAFCET-Connect/releases).
 
 - **Requisitos:** Windows 10 o Windows 11 de 64 bits. No necesita conexión a internet para funcionar.
-- **Instalación:** por defecto se instala en Archivos de programa, lo que pide permisos de administrador. Si no los tiene, el instalador ofrece instalarlo solo para su usuario. Crea el acceso en el menú Inicio, ofrece un acceso en el escritorio (desmarcado por defecto) y asocia los archivos `.grafnet` (marcado por defecto).
-- **Aviso de Windows:** la primera vez puede aparecer «Windows protegió su PC», porque el programa no lleva firma digital de código. Pulse «Más información» y después «Ejecutar de todas formas». Esto ocurre también con el instalador.
+- **Instalación:** por defecto se instala en Archivos de programa, lo que pide permisos de administrador. Si no los tienes, el instalador ofrece instalarlo solo para tu usuario. Crea el acceso en el menú Inicio, ofrece un acceso en el escritorio (desmarcado por defecto) y asocia los archivos `.grafnet` (marcado por defecto).
+- **Aviso de Windows:** la primera vez puede aparecer «Windows protegió su PC», porque el programa no lleva firma digital de código. Pulsa «Más información» y después «Ejecutar de todas formas». Esto ocurre también con el instalador.
 - **Actualizaciones:** al arrancar, el programa consulta en segundo plano si hay una versión nueva publicada en GitHub y lo avisa con una ventana con «Descargar» y «Ahora no»; «Ahora no» solo la cierra, y vuelve a salir en cada arranque hasta que se actualice. Se desactiva en **Ajustes > Buscar actualizaciones al arrancar**. Sin conexión no hace nada, y no descarga ni instala nada. **Ayuda > Buscar actualizaciones…** comprueba a mano.
 - **Desinstalación:** desde Configuración > Aplicaciones.
 
 ## Primeros pasos
 
-1. **Dibujar.** Abra un ejemplo desde su carpeta (véase [Ejemplos](#ejemplos)) o cree un proyecto con **Proyecto > Nuevo proyecto**. Arrastre elementos desde la barra de favoritos y únalos desde sus puntos de unión. Las variables se crean en la tabla de variables, con «Nueva E», «Nueva S» o «Nueva M». **Edición > Añadir debajo** (Ctrl+Intro) agiliza el dibujo.
-2. **Simular.** Pulse **Play** (F5) y pulse las entradas del panel lateral. Para volver a editar, pulse **Stop**. Con **Reiniciar** (Ctrl+R) vuelve a la situación inicial.
-3. **Documentar e importar una plantilla.** Abra la pestaña **PLANOS**, pulse **+ Añadir hoja** y elija la plantilla. Para usar una propia, pulse **▾** junto a **Plantilla** (panel derecho) e **Importar plantilla…**, y elija un DXF, un PDF, un SVG o un JSON de GRAFCET Connect. Para exportar, use **Proyecto > Exportar…**.
-4. **Conectar por Modbus.** Pulse **E/S externas**, abra **Configuración** para poner la IP, el puerto y el esclavo de su simulador de procesos, y asigne las variables a los canales. Después pulse **Conectar** y, luego, **Play**. La guía paso a paso está en [docs/PRIMERA_CONEXION_MODBUS.md](docs/PRIMERA_CONEXION_MODBUS.md).
+1. **Dibujar.** Abre un ejemplo desde su carpeta (véase [Ejemplos](#ejemplos)) o crea un proyecto con **Proyecto > Nuevo proyecto**. Arrastra elementos desde la barra de favoritos y únelos desde sus puntos de unión. Las variables se crean en la tabla de variables, con «+ Entrada», «+ Salida» o «+ Memoria». **Edición > Añadir debajo** (Ctrl+Intro) agiliza el dibujo.
+2. **Simular.** Pulsa **Simular** (F5) y pulsa las entradas del panel lateral. Para volver a editar, pulsa **Detener**. Con **Reiniciar** (Ctrl+R) vuelves a la situación inicial.
+3. **Documentar e importar una plantilla.** Abre la pestaña **PLANOS**, pulsa **+ Añadir hoja** y elige la plantilla. Para usar una propia, pulsa **▾** junto a **Plantilla** (panel derecho) e **Importar plantilla…**, y elige un DXF, un PDF, un SVG o un JSON de GRAFCET Connect. Para exportar, usa **Proyecto > Exportar…**.
+4. **Conectar por Modbus.** Pulsa **E/S externas**, abre **Configuración** para poner la IP, el puerto y el esclavo de tu simulador de fábricas, y asigna las variables a los canales. Después pulsa **Conectar** y, luego, **Simular**. La guía paso a paso está en [docs/PRIMERA_CONEXION_MODBUS.md](docs/PRIMERA_CONEXION_MODBUS.md).
 5. **Guardar y firmar.** **Guardar** (Ctrl+S) guarda el proyecto con su dibujo. **Proyecto > Propiedades del archivo…** muestra los datos y la firma.
 
 | Acción | Atajo |
 |---|---|
-| Play / Stop | F5 |
+| Simular / Detener | F5 |
 | Reiniciar | Ctrl+R |
 | Deshacer / rehacer | Ctrl+Z / Ctrl+Y |
 | Cortar, copiar, pegar | Ctrl+X, Ctrl+C, Ctrl+V |
@@ -99,7 +101,7 @@ Descargue el instalador de la última versión: [GRAFCET-Connect-setup.exe](http
 
 ## Ejemplos
 
-Los ejemplos son 23 archivos `.grafnet` editables, listos para simular. Se instalan al arrancar el programa en la carpeta `Documentos\GRAFCET Connect\GRAFCET\Ejemplos`. Para abrir uno, use **Proyecto > Abrir…** y elíjalo en esa carpeta. Se abren como «Archivo sin firma», porque no los guardó esta versión: son archivos normales, que puede modificar y guardar. Si modifica o borra un ejemplo, el programa no lo vuelve a copiar.
+Los ejemplos son 23 archivos `.grafnet` editables, listos para simular. Se instalan al arrancar el programa en la carpeta `Documentos\GRAFCET Connect\GRAFCET\Ejemplos`. Para abrir uno, usa **Proyecto > Abrir…** y elígelo en esa carpeta. Se abren como «Archivo sin firma», porque no los guardó esta versión: son archivos normales, que puedes modificar y guardar. Si modificas o borras un ejemplo, el programa no lo vuelve a copiar.
 
 ![Captura de GRAFCET Connect con el ejemplo «Simultaneidad»](docs/imagenes/captura_aula_simultaneidad.png)
 
@@ -108,7 +110,7 @@ Los ejemplos son 23 archivos `.grafnet` editables, listos para simular. Se insta
 ## Preguntas frecuentes
 
 **¿Necesita internet?**
-No. El programa funciona sin conexión. Solo usa la red si se conecta a un simulador de procesos (por Modbus TCP o por conexión directa), en la dirección que se configure.
+No. El programa funciona sin conexión. Solo usa la red si se conecta a un simulador de fábricas (por Modbus TCP o por conexión directa), en la dirección que se configure.
 
 **¿Por qué avisa Windows?**
 El programa no lleva firma digital de código. Windows lo muestra la primera vez. Véase [Descargar e instalar](#descargar-e-instalar).
@@ -117,14 +119,14 @@ El programa no lleva firma digital de código. Windows lo muestra la primera vez
 Un sello que indica si el archivo `.grafnet` lo guardó esta versión del programa sin cambios. Un archivo sin firma se abre y se guarda con normalidad; la barra de estado lo indica y sigue sin firma al guardarlo.
 
 **¿Por qué una variable Entera se redondea?**
-Un simulador de procesos puede enviar valores con decimales. Una variable Entera los redondea al entero más cercano y avisa. Para conservar el valor exacto, use una variable Decimal con 2 decimales.
+Un simulador de fábricas puede enviar valores con decimales. Una variable Entera los redondea al entero más cercano y avisa. Para conservar el valor exacto, usa una variable Decimal con 2 decimales.
 
 **¿Es gratis?**
 El programa se distribuye con licencia GPL-3.0, que permite usarlo, estudiarlo, modificarlo y redistribuirlo. Para usos que la GPL no permita, el autor ofrece licencias comerciales bajo petición (véase [Licencia](#licencia)).
 
 ## Comunicar un fallo
 
-Los fallos y las sugerencias se comunican en las [Issues de GitHub](https://github.com/SrLaguarto/GRAFCET-Connect/issues). Indique la versión (**Ayuda > Acerca de GRAFCET Connect…**, que tiene el botón **Comunicar un fallo**) y los pasos para reproducirlo.
+Los fallos y las sugerencias se comunican en las [Issues de GitHub](https://github.com/SrLaguarto/GRAFCET-Connect/issues). Indica la versión (**Ayuda > Acerca de GRAFCET Connect…**, que tiene el botón **Comunicar un fallo**) y los pasos para reproducirlo.
 
 ## Licencia
 

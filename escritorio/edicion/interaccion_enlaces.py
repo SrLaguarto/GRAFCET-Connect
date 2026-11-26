@@ -178,7 +178,7 @@ class _Enlaces:
         if t is not None and t["postRefs" if abajo else "preRefs"]:
             self.rechazar(f"«{self._nom(base)}» ya tiene una etapa {'siguiente' if abajo else 'anterior'}: "
                           "para otra más hace falta una simultaneidad (elemento de la paleta); para una alternativa, "
-                          "abra la rama desde la etapa.", base)
+                          "abre la rama desde la etapa.", base)
             self.cambiado.emit()
             return None
         if not es_paso and t is None:
@@ -205,7 +205,7 @@ class _Enlaces:
             # y, si su otro punto queda muy cerca de uno libre compatible, también se une (P-IMP-114)
             unido = self._unir_cercanos({nuevo})  # (ya rehízo la vista con el elemento en su sitio: si no unió nada, esa es la de ahora)
         self.sel = [nuevo]
-        self.informar("Rama abierta: " + ("escriba la receptividad en las propiedades (doble clic en la transición)." if es_paso else "etapa nueva."))
+        self.informar("Rama abierta: " + ("escribe la receptividad en las propiedades (doble clic en la transición)." if es_paso else "etapa nueva."))
         self.cambia(reconstruir=unido)
         return nuevo
 
@@ -235,7 +235,7 @@ class _Enlaces:
             tid, _ = self.ed.add_transition(self.parcial_de(ini), "", [ini], [fin], at=(tx, ty))
             self.etiqueta_como_las_demas(tid, visibles, (tx, ty))
         self.sel = [tid]
-        self.informar("Transición nueva entre las dos etapas: escriba su receptividad en las propiedades (doble clic en ella).")
+        self.informar("Transición nueva entre las dos etapas: escribe su receptividad en las propiedades (doble clic en ella).")
         self.cambia()
 
     def saltar(self, origen: str, destino: str) -> str:
@@ -253,7 +253,7 @@ class _Enlaces:
             self.etiqueta_como_las_demas(tid, visibles, (x, y))
         self.sel = [tid]
         tipo = "Repetición de secuencia" if pos[destino][1] <= pos[origen][1] else "Salto de secuencia"
-        self.informar(tipo + ": escriba su receptividad en las propiedades (doble clic en ella).")
+        self.informar(tipo + ": escribe su receptividad en las propiedades (doble clic en ella).")
         self.cambia()
         return tid
 
@@ -337,7 +337,7 @@ class _Enlaces:
         paso = 1 if sentido in ("horario", "derecha", "der") or (isinstance(sentido, int) and sentido > 0) else -1
         ids = self._transiciones_sel(transiciones)
         if not ids:
-            self.informar("Seleccione una transición para girarla.")
+            self.informar("Selecciona una transición para girarla.")
             self.cambiado.emit()
             return False
         orden = self.ed.TRANSITION_ORIENTATIONS
@@ -370,7 +370,7 @@ class _Enlaces:
                     self.borrador_simultaneidad(origen, t["id"])
                     return
                 self.rechazar(f"«{self._nom(t['id'])}» ya tiene una etapa {'anterior' if pre else 'siguiente'}: "
-                              "varias en una misma transición son una simultaneidad; arrastre el elemento «Simultaneidad» "
+                              "varias en una misma transición son una simultaneidad; arrastra el elemento «Simultaneidad» "
                               "de la paleta junto al punto de unión de la transición.", t["id"], origen, destino)
                 self.cambiado.emit()
                 return
@@ -399,7 +399,7 @@ class _Enlaces:
     def anadir_debajo(self) -> str | None:
         """Con una etapa seleccionada: transición y etapa enlazadas debajo. Con una transición: la etapa que sigue."""
         if len(self.sel) != 1 or self.sel[0] not in posiciones(self.M):
-            self.mensaje = "Seleccione una etapa o una transición."
+            self.mensaje = "Selecciona una etapa o una transición."
             self.cambiado.emit()
             return None
         ident = self.sel[0]

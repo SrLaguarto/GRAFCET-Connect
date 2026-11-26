@@ -141,20 +141,19 @@ class PulidoES(BaseQt):
         self.assertEqual(led.nivel, NIVEL_ASIGNADO)
 
     def test_SESP08_cabecera_colorea_todos_los_estados_sin_perder_texto(self):
-        """REQ-SIM-03: estado inicial neutro, estable verde, fallo y desconexión con el fondo original, con mensaje conservado."""
+        """REQ-SIM-03: conexión en pastilla y error en su propia banda, con el mensaje completo disponible."""
         w, p = self.modelo()
-        for estado, mensaje, visual in (("desconectado", "Desconectado", "neutro"),
-                                         ("conectado", "Conectado", "conectado"),
-                                         ("error", "Conexión perdida", "neutro"),
-                                         ("desconectado", "Desconectado", "neutro")):
+        for estado, mensaje in (("desconectado", "Desconectado"), ("conectado", "Conectado"),
+                                ("error", "Conexión perdida"), ("desconectado", "Desconectado")):
             p.mostrar_estado(estado, mensaje)
-            self.assertEqual(p.cabecera.property("estadoVisual"), visual)
-            self.assertEqual(p.estado.text(), mensaje)
+            self.assertEqual(p.fila_estado.property("fallo"), estado == "error")
+            self.assertEqual(p.estado.toolTip(), mensaje)
+            self.assertEqual(p.estado.text(), "" if estado == "conectado" else mensaje)
 
     def test_SESP09_no_hay_controles_del_bloque_inferior_ni_prueba_guiada(self):
-        """REQ-SIM-03: la configuración no ofrece Aplicar, cargar/guardar archivos, probar, guía ni Cerrar inferior."""
+        """REQ-SIM-03: la configuración no ofrece Aplicar, cargar/guardar archivos, probar ni guía."""
         w, p = self.modelo()
-        prohibidos = {"Aplicar mapa", "Cargar configuración…", "Guardar configuración…", "Probar conexión", "Abrir prueba guiada", "Cerrar"}
+        prohibidos = {"Aplicar mapa", "Cargar configuración…", "Guardar configuración…", "Probar conexión", "Abrir prueba guiada"}
         self.assertFalse(prohibidos & {b.text() for b in p.findChildren(QPushButton)})
         self.assertFalse(any(a.text() == "Abrir prueba guiada" for a in w.findChildren(QAction)))
         self.assertTrue(p.b_conectar.isVisibleTo(p)); self.assertTrue(p.b_configuracion.isVisibleTo(p))
@@ -179,7 +178,7 @@ class PulidoES(BaseQt):
         before = ruta.read_bytes()
         self.assertTrue(w.abrir_ruta(fixture_grafnet(raiz)))
         self.assertIn("No se pudo cargar", p.estado.text())
-        self.assertEqual(p.cabecera.property("estadoVisual"), "neutro")
+        self.assertTrue(p.fila_estado.property("fallo"))
         self.assertEqual(ruta.read_bytes(), before)
 
     def test_SESP12_preferencias_invalidas_vuelven_a_valores_validos(self):

@@ -17,6 +17,7 @@ try:
                                    QGroupBox, QHeaderView, QLabel, QLineEdit, QPushButton, QScrollBar, QSpinBox, QTableWidget, QToolBar,
                                    QToolButton, QWidget)
     from escritorio import estilo
+    from escritorio.variables import PAPELES as PAPELES_VARIABLES
     from escritorio.paneles import CajaSeccion, EtiquetaAyuda, EtiquetaElidida
     from test_alturas_controles import desbordes, solapes
     QT = True
@@ -242,7 +243,8 @@ def regla_T3(raiz):
 
 
 def _alturas_token():
-    return {estilo.ALTO_CONTROL, estilo.ALTO_CONTROL_COMPACTO, estilo.ALTO_BARRA, estilo.ALTO_BARRA_COMPACTA}
+    # ALTO_ESTANDAR (32 px, T0b): altura de los botones de diálogo («Cerrar» de la cabecera común) en cualquier escala
+    return {estilo.ALTO_CONTROL, estilo.ALTO_CONTROL_COMPACTO, estilo.ALTO_BARRA, estilo.ALTO_BARRA_COMPACTA, estilo.ALTO_ESTANDAR}
 
 
 def regla_C1(raiz):
@@ -383,6 +385,10 @@ def regla_TB1(raiz):
                     pide.append(fm.horizontalAdvance(it.text()) + 16)
                 if cw is not None:
                     pide.append(cw.sizeHint().width())
+            if c == 1 and t.item(0, 0) is not None and hasattr(t.itemDelegate(), "panel"):
+                # tabla de Variables: la columna Papel se reserva para la opción más larga (el desplegable puede cambiar la fila, p. ej. la
+                # fila en blanco muestra «Entrada» pero el usuario puede elegir «Memoria»), no para lo que muestre la fila de ahora
+                pide.extend(fm.horizontalAdvance(texto) + 16 for _, texto in PAPELES_VARIABLES)
             if t.columnWidth(c) > max(pide) + 16:
                 out.append(f"{t.objectName() or 'tabla'} columna {c}: mide {t.columnWidth(c)}, pide {max(pide)}")
     return out

@@ -11,16 +11,17 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QRectF, QSize, Qt
+from PySide6.QtCore import QEvent, QModelIndex, QObject, QPoint, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import (QApplication, QComboBox, QLabel, QSizePolicy, QStyle, QStyledItemDelegate,
                                QStyleOptionComboBox, QStyleOptionViewItem, QStylePainter, QToolTip)
 
 from . import estilo
 from .ayudas_emergentes import mostrar_ayuda
+from .componentes_comunes import acotar_desplegable, pintar_barra_papel
 
-UMBRAL_FILTRO = 12  # con más variables que estas, el menú se puede filtrar escribiendo
-MARGEN, ANCHO_BARRA, HUECO = 8, 3, 6  # margen de cada fila, barra de origen y hueco entre el nombre y el tipo
+UMBRAL_FILTRO = 10
+MARGEN, ANCHO_BARRA, HUECO = estilo.E2, round(estilo.BARRA_PAPEL_ANCHO), estilo.R_CONTROL
 ROL_PAPEL = Qt.ItemDataRole.UserRole + 1  # «output»/«internal» (o «S»/«M»): el origen de la variable de la fila
 ROL_TIPO = Qt.ItemDataRole.UserRole + 2  # el tipo corto que se enseña a su derecha (vacío: booleana, no varía)
 GRUPOS = {"output": "Salidas", "internal": "Memorias"}
@@ -33,8 +34,8 @@ def clave_papel(papel: str) -> str:
 
 
 def color_papel(papel: str) -> str:
-    """El color de la barra de origen: salida, verde de la simulación; memoria, ciruela."""
-    return {"output": estilo.SIMULACION, "internal": estilo.ORIGEN_MEMORIA}.get(clave_papel(papel), estilo.TINTA_2)
+    """El color semántico de la barra de origen de la variable."""
+    return estilo.color_papel_variable(papel, estilo.TINTA_2)
 
 
 def tipo_a_mostrar(tipo_corto: str) -> str:
@@ -66,10 +67,14 @@ class DelegadoMenu(QStyledItemDelegate):
         if not self.rotulos_propios or not es_variable(indice):
             return ""
         grupo = clave_papel(indice.data(ROL_PAPEL) or "")
-        if indice.row() > 0:
-            antes = indice.model().index(indice.row() - 1, 0)
+        vista = self.parent()
+        for fila in range(indice.row() - 1, -1, -1):
+            if vista.isRowHidden(fila):
+                continue
+            antes = indice.model().index(fila, 0)
             if es_variable(antes) and clave_papel(antes.data(ROL_PAPEL) or "") == grupo:
                 return ""
+            break
         return GRUPOS.get(grupo, "")
 
     def _alto_fila(self, fm: QFontMetrics) -> int:
@@ -106,7 +111,7 @@ class DelegadoMenu(QStyledItemDelegate):
         fm = opt.fontMetrics
         habil = bool(indice.flags() & Qt.ItemFlag.ItemIsEnabled)
         p.save()
-        p.fillRect(opt.rect, QColor("#ffffff"))  # fondo blanco sólido (evita popups negros en Windows sobre VentanaFlotante translúcida)
+        p.fillRect(opt.rect, QColor(estilo.SUPERFICIE))  # evita popups negros sobre VentanaFlotante translúcida
         p.setFont(opt.font)
         if es_cabecera(indice):
             p.setPen(QColor(estilo.TINTA_3))
@@ -134,10 +139,8 @@ class DelegadoMenu(QStyledItemDelegate):
             p.drawRoundedRect(QRectF(fila).adjusted(3, 1, -3, -1), estilo.R_S, estilo.R_S)
         nombre = indice.data(Qt.ItemDataRole.UserRole)
         tipo = tipo_a_mostrar(indice.data(ROL_TIPO) or "")
-        barra = QRectF(fila.left() + MARGEN, fila.top() + estilo.E2, ANCHO_BARRA, fila.height() - 2 * estilo.E2)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(color_papel(indice.data(ROL_PAPEL) or "") if habil else estilo.DESHABILITADO))
-        p.drawRoundedRect(barra, 1.5, 1.5)
+        if habil:
+            pintar_barra_papel(p, fila.left() + MARGEN, fila.center().y(), indice.data(ROL_PAPEL))
         x = fila.left() + MARGEN + ANCHO_BARRA + estilo.E2
         p.setPen(QColor(estilo.TINTA if habil else estilo.DESHABILITADO))
         corto = fm.elidedText(nombre, Qt.TextElideMode.ElideRight, max(0, self.hueco_nombre(fm, fila, tipo)))
@@ -167,11 +170,11 @@ class FiltroMenu(QObject):
         n = modelo.rowCount()
         visibles = [True] * n
         if texto:
-            clave = texto.lower()
+            clave = texto.casefold()
             for i in range(n):
                 ind = modelo.index(i, 0)
                 if es_variable(ind):
-                    visibles[i] = clave in ind.data(Qt.ItemDataRole.UserRole).lower()
+                    visibles[i] = clave in ind.data(Qt.ItemDataRole.UserRole).casefold()
             for i in range(n):  # un rótulo sin variables visibles detrás (hasta el siguiente rótulo) se esconde
                 if es_cabecera(modelo.index(i, 0)):
                     k, hay = i + 1, False
@@ -182,13 +185,25 @@ class FiltroMenu(QObject):
         for i in range(n):
             if vista.isRowHidden(i) == visibles[i]:  # (solo se toca lo que cambia)
                 vista.setRowHidden(i, not visibles[i])
+        if texto:
+            actual = vista.currentIndex()
+            if not actual.isValid() or not es_variable(actual) or vista.isRowHidden(actual.row()):
+                candidata = next((modelo.index(i, 0) for i in range(n) if visibles[i]
+                                  and es_variable(modelo.index(i, 0))
+                                  and modelo.index(i, 0).flags() & Qt.ItemFlag.ItemIsEnabled), QModelIndex())
+                vista.setCurrentIndex(candidata)
         if self.etiqueta is not None:
             self.etiqueta.setText(texto or FILTRO)
             self.etiqueta.setStyleSheet(f"color: {estilo.TINTA if texto else estilo.TINTA_3}; background: {estilo.SUPERFICIE}; "
                                         f"border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_S}px; padding: 1px {estilo.E2}px;")
 
     def eventFilter(self, objeto: Any, evento: Any) -> bool:  # noqa: N802
-        if evento.type() == QEvent.Type.KeyPress and self.combo.con_filtro()                 and not evento.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier):
+        atajo = Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier
+        if (evento.type() == QEvent.Type.KeyPress and self.combo.con_filtro()
+                and not evento.modifiers() & atajo):
+            if (self.filtro and evento.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+                    and not self.combo.view().currentIndex().isValid()):
+                return True
             texto = evento.text()
             if evento.key() == Qt.Key.Key_Backspace:
                 self.poner_filtro(self.filtro[:-1])
@@ -225,13 +240,20 @@ class ComboMenu(QComboBox):
         self.delegado = DelegadoMenu(self.view(), rotulos_propios)
         self.view().setItemDelegate(self.delegado)
         self.view().setStyleSheet(
-            f"QAbstractItemView {{ background: #ffffff; color: {estilo.TINTA}; border: 1px solid #7b8a9c; "
+            f"QAbstractItemView {{ background: {estilo.SUPERFICIE}; color: {estilo.TINTA}; "
+            f"border: 1px solid {estilo.BORDE_CONTROL}; "
             f"outline: 0; selection-background-color: {estilo.ACENTO_SUAVE}; selection-color: {estilo.TINTA}; }}"
         )
         self.filtro_menu = FiltroMenu(self)
 
     def con_filtro(self) -> bool:
-        """Retirado el rótulo/filtro superior por decisión de interfaz (`Cositas.docx`)."""
+        """Las cabeceras y los marcadores no cuentan como opciones de variable."""
+        total = 0
+        modelo = self.model()
+        for i in range(self.count()):
+            total += es_variable(modelo.index(i, 0))
+            if total > UMBRAL_FILTRO:
+                return True
         return False
 
     def _preparar_filtro(self) -> None:
@@ -250,7 +272,7 @@ class ComboMenu(QComboBox):
             f.etiqueta.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
             f.etiqueta.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             marco.layout().insertWidget(0, f.etiqueta, 0)
-        f.etiqueta.setFixedHeight(max(24, f.etiqueta.fontMetrics().height() + 8))
+        f.etiqueta.setFixedHeight(estilo.ALTO_COMPACTO)
         marco.layout().setStretchFactor(self.view(), 1)
         f.etiqueta.show()
         f.poner_filtro("")
@@ -258,6 +280,7 @@ class ComboMenu(QComboBox):
     def showPopup(self) -> None:  # noqa: N802
         """La lista empieza donde el cuadro y mide lo que él (o lo justo para el nombre más largo): el ancho se fija antes de mostrarla, para que
         no se redimensione ya abierta."""
+        acotar_desplegable(self, estilo.ALTO_MAX_DESPLEGABLE - 2)
         ancho = ancho_menu(self)
         self.view().setMinimumWidth(ancho)
         self.view().doItemsLayout()
@@ -265,7 +288,7 @@ class ComboMenu(QComboBox):
         marco = self.view().parentWidget()
         if marco is not None and marco.isWindow():
             marco.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
-            marco.setStyleSheet("background: #ffffff; border: 1px solid #7b8a9c;")
+            marco.setStyleSheet(f"background: {estilo.SUPERFICIE}; border: 1px solid {estilo.BORDE_CONTROL};")
             marco.setFixedWidth(ancho)
         super().showPopup()
         if marco is not None and marco.isWindow() and marco.x() != self.mapToGlobal(QPoint(0, 0)).x():
@@ -297,9 +320,7 @@ def pintar_caja(combo: QComboBox, nombre: str, papel: str, parpadeando: bool = F
     p.drawRoundedRect(caja, estilo.R_S, estilo.R_S)
     x = zona.left() + estilo.E2 + 2
     if nombre:
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(color_papel(papel)))
-        p.drawRoundedRect(QRectF(x, zona.top() + estilo.E2, ANCHO_BARRA, zona.height() - 2 * estilo.E2), 1.5, 1.5)
+        pintar_barra_papel(p, x, zona.center().y(), papel)
         x += ANCHO_BARRA + estilo.E2
     flecha = QRect(int(zona.right()) - 20, 0, 18, combo.height())
     opcion = QStyleOptionComboBox()

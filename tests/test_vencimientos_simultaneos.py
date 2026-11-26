@@ -532,7 +532,7 @@ class MensajeLlano(unittest.TestCase):
         mensaje, correccion = vencimientos_en_palabras(d, doc, display_names(doc))
         self.assertEqual(mensaje, "Las transiciones t1 y t2 (tras X0) tienen temporizadores que vencen en el mismo instante "
                                   "y el resultado depende de cuál vaya primero.")
-        self.assertEqual(correccion, "Use tiempos distintos o evite que compitan por la misma etapa.")
+        self.assertEqual(correccion, "Usa tiempos distintos o evita que compitan por la misma etapa.")
         for texto in (mensaje, correccion):
             self.assertNotRegex(texto, r"e-[0-9a-f]{8}")
             self.assertNotIn("Ajustes de simulación", texto)

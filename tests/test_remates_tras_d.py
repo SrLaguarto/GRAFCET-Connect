@@ -96,7 +96,7 @@ class RematesTrasD(BaseQt):
             # 2.0.1: la variable vive en la subcabecera alineada con su rótulo; la asignación `:= [1 | 0]` vive centrada en `tarjeta_asignacion`
             centros_sub = [x.mapToGlobal(x.rect().center()).y() for x in (v.l_dest, pa.variable)]
             self.assertLessEqual(max(centros_sub) - min(centros_sub), 2)
-            controles = [pa.l_asignacion, pa.l_var_bool, pa.l_fichas, *pa.fichas.values()]
+            controles = [x for x in (pa.l_asignacion, pa.l_var_bool, pa.l_fichas, *pa.fichas.values()) if x.isVisible()]
             centros = [x.mapToGlobal(x.rect().center()).y() for x in controles]
             self.assertLessEqual(max(centros) - min(centros), 2)
             caja = QWidget()

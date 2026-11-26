@@ -14,6 +14,14 @@ PREDETERMINADOS = (
     "accion:activacion", "accion:desactivacion", "accion:evento", "forzado", "macroetapa", "encapsulante",
     "parcial", "texto", "imagen",
 )
+GRUPOS_FAVORITOS = (
+    ("etapa_inicial", "etapa", "transicion", "simultaneidad"),
+    ("accion:continua", "accion:condicionada", "accion:activacion", "accion:desactivacion", "accion:evento", "forzado"),
+    ("macroetapa", "encapsulante", "parcial"),
+    ("texto", "imagen"),
+)
+_INICIOS_GRUPO = {"accion:continua", "macroetapa", "texto"}
+ANCHO_SEPARADOR = 7
 LADO_MINI = 24
 FACTOR_MINI = LADO_MINI / 20
 
@@ -227,6 +235,7 @@ class BarraFavoritos(QWidget):
         self._menu = None
         self._visibles = []
         self.ocultos = []
+        self._separadores: list[int] = []
         ajustes.remove(self.CLAVE_AJUSTES)
         ajustes.remove("favoritos/visible")
         ajustes.remove("paletas/favoritos_principal_v1")
@@ -251,25 +260,51 @@ class BarraFavoritos(QWidget):
         return max(estilo.ALTO_BARRA, self.lado_icono + estilo.E1)
 
     def sizeHint(self):
-        return QSize(len(self.orden) * self.ancho_boton() + 2 * estilo.E2, estilo.ALTO_BARRA)
+        separadores = sum(1 for clave in self.orden[1:] if clave in _INICIOS_GRUPO)
+        return QSize(len(self.orden) * self.ancho_boton() + separadores * ANCHO_SEPARADOR + 2 * estilo.E2, estilo.ALTO_BARRA)
 
     def minimumSizeHint(self):
         return QSize(self.ancho_boton() + 2 * estilo.E2, estilo.ALTO_BARRA)
 
+    def _posicionar(self, lista):
+        ancho = self.ancho_boton()
+        x = estilo.E2
+        pos = []
+        seps = []
+        for idx, clave in enumerate(lista):
+            if idx > 0 and clave in _INICIOS_GRUPO:
+                seps.append(x + ANCHO_SEPARADOR // 2)
+                x += ANCHO_SEPARADOR
+            pos.append((clave, x))
+            x += ancho
+        return pos, seps, x
+
     def _disponer(self):
         ancho = self.ancho_boton()
-        capacidad = max(0, (self.width() - 2 * estilo.E2) // ancho)
-        hay_desborde = capacidad < len(self.orden)
-        cantidad = max(0, capacidad - int(hay_desborde))
+        limite = max(0, self.width() - estilo.E2)
+        pos, seps, fin = self._posicionar(self.orden)
+        if fin <= limite:
+            cantidad = len(self.orden)
+        else:
+            cantidad = 0
+            pos, seps = [], []
+            for k in range(len(self.orden) - 1, -1, -1):
+                p, s, fin_k = self._posicionar(self.orden[:k])
+                if fin_k + ancho <= limite:
+                    cantidad, pos, seps = k, p, s
+                    break
+        hay_desborde = cantidad < len(self.orden)
         self._visibles = self.orden[:cantidad]
         self.ocultos = self.orden[cantidad:]
+        self._separadores = seps
         for clave, boton in self.botones.items():
             boton.setVisible(clave in self._visibles)
         alto = max(1, self.height() - 6)
-        for i, clave in enumerate(self._visibles):
-            self.botones[clave].setGeometry(estilo.E2 + i * ancho, 3, ancho, alto)
+        for clave, x in pos:
+            self.botones[clave].setGeometry(x, 3, ancho, alto)
         self.desborde.setVisible(hay_desborde)
-        self.desborde.setGeometry(estilo.E2 + cantidad * ancho, 3, ancho, alto)
+        x_desb = (pos[-1][1] + ancho) if pos else estilo.E2
+        self.desborde.setGeometry(x_desb, 3, ancho, alto)
         self.update()
 
     def resizeEvent(self, evento):
@@ -289,6 +324,10 @@ class BarraFavoritos(QWidget):
         pintor.setPen(QPen(QColor(estilo.BORDE_FUERTE), 1))
         pintor.setBrush(QColor(estilo.SUPERFICIE))
         pintor.drawRoundedRect(r, estilo.R_M, estilo.R_M)
+        if self._separadores:
+            pintor.setPen(QPen(QColor(estilo.BORDE_FUERTE), 1))
+            for x in self._separadores:
+                pintor.drawLine(x, 7, x, self.height() - 7)
         pintor.end()
 
     def foco(self):

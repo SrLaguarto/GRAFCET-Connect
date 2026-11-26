@@ -16,7 +16,9 @@ from PySide6.QtWidgets import (QAbstractButton, QApplication, QDialog, QFrame, Q
                                QListWidget, QScrollArea, QSizePolicy, QTableWidget, QVBoxLayout, QWidget)
 from .constantes import (ALTO_TRAZA, ANCHO_DERECHO, ANCHO_DERECHO_BASE, ARRIBA_CAJA, ARRIBA_VARIABLES, AVISO, ESPERA_ARRANQUE,
                          ESPERA_ESCALA, HUECO_FRANJA, NOMBRE_MIN_TABLA, UMBRAL_DERECHO)
-from .widgets import _AjustaBanda, _AjustaCabecera, _BotonEntrada, _DelegadoAbreviado, _DelegadoValorConsola, _SalidaRaton, _VigilaAlto
+from .simulacion import _DelegadoEtapasConsola, _DelegadoNombrePapel, _DelegadoPastillaConsola
+from .widgets import (_AjustaBanda, _AjustaCabecera, _BotonEntrada, _DelegadoAbreviado, _DelegadoValorConsola,
+                      _FirmaEstado, _SalidaRaton, _VigilaAlto)
 
 
 class VistaVentana:
@@ -71,9 +73,14 @@ class VistaVentana:
         # Panel inferior: al simular, la traza; al editar, las opciones de lo seleccionado
         self.traza = QListWidget()
         self.traza.setWordWrap(True)
-        from ..traza_panel import CajaTraza
+        self.traza.setFrameShape(QFrame.Shape.NoFrame)
+        self.traza.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        from ..traza_panel import CajaTraza, DelegadoTraza
+        self.traza.setItemDelegate(DelegadoTraza(self.traza))
         caja_traza = CajaTraza()
-        QVBoxLayout(caja_traza).addWidget(self.traza)
+        lay_traza = QVBoxLayout(caja_traza)
+        lay_traza.setContentsMargins(0, 4, 0, 6)
+        lay_traza.addWidget(self.traza)
         self._props = PanelPropiedades()
         self._props.setObjectName("panelPropiedadesFlotante")
         self._props.setParent(self)
@@ -86,7 +93,7 @@ class VistaVentana:
         der = QWidget()
         der.setObjectName("consolaSimulacion")
         self.lado = QVBoxLayout(der)
-        self.lado.setContentsMargins(estilo.E1, estilo.E1, estilo.E1, estilo.E1)
+        self.lado.setContentsMargins(10, estilo.E2, 10, estilo.E2)
         self.lado.setSpacing(estilo.E1)
         self.diag = QLabel()
         self.diag.setWordWrap(True)
@@ -127,25 +134,25 @@ class VistaVentana:
         # Las columnas a la vista: el ancho del panel es fijo, así que **manda la del nombre** (≥ 96 px, `ReparteColumnas`): las demás se
         # abrevian antes de que baje de ahí («Modo» pasa a «cont.»/«mem.»; «Estado», a «par.»/«cont.»/«venc.»), **ninguna desaparece**,
         # los nombres se parten por los «_» en las líneas que hagan falta y la tabla mide lo que sus filas: sin barras anidadas
-        self.t_vars = self._tabla(["Variable", "Modo", "Valor", "Contribuyen"], (None, 46, 32, 70))
+        self.t_vars = self._tabla(["Variable", "Modo", "Valor", "Etapas"], (None, 46, 34, 58))
         self.t_vars.horizontalHeaderItem(1).setToolTip("Salida continua o memorizada")
-        self.t_vars.setItemDelegateForColumn(1, _DelegadoAbreviado({"salida continua": "continua", "memorizada": "memoria"}, self.t_vars,
+        self.t_vars.setItemDelegateForColumn(1, _DelegadoAbreviado({"salida continua": "continua"}, self.t_vars,
                                                                    {"salida continua": "cont.", "memorizada": "mem."}))
         self.t_vars.horizontalHeaderItem(3).setToolTip(
-            "Acciones que contribuyen a la salida, con el nombre que les da el modelo (la etapa o, si no lo tienen, su identificador a.etapa.salida.n)")
-        self.t_vars.horizontalHeader().abreviaturas = {"Contribuyen": "Contrib.", "Contrib.": "Contr."}
-        self._del_vars = (DelegadoNombres(self.t_vars, (0,)), DelegadoNombres(self.t_vars, (3,), lineas=2))  # nombres partidos sin que dos se lean igual
+            "Etapas cuyas acciones contribuyen a la salida")
+        self.t_vars.horizontalHeader().abreviaturas = {"Etapas": "Etap."}
+        self._del_vars = (_DelegadoNombrePapel(self.t_vars, (0,)), _DelegadoEtapasConsola(self.t_vars, (3,), lineas=2))
         self.t_vars.setItemDelegateForColumn(0, self._del_vars[0])
-        self.t_vars.setItemDelegateForColumn(2, _DelegadoValorConsola(self.t_vars))
+        self.t_vars.setItemDelegateForColumn(2, _DelegadoPastillaConsola(self.t_vars))
         self.t_vars.setItemDelegateForColumn(3, self._del_vars[1])
         lay.addWidget(self.t_vars)
         self.t_vars.currentCellChanged.connect(self._detalle_del_foco)
         self.c_temp, lay = self._caja("Temporizadores")
-        self.t_temp = self._tabla(["Dónde", "Estado", "Lleva", "Preset"], (None, 54, 36, 42))
+        self.t_temp = self._tabla(["Dónde", "Estado", "Lleva", "Consigna"], (None, 54, 36, 42))
         self.t_temp.horizontalHeaderItem(2).setToolTip("Tiempo transcurrido")
         self.t_temp.horizontalHeaderItem(3).setToolTip("Duración programada")
         self.t_temp.setItemDelegateForColumn(1, _DelegadoAbreviado({}, self.t_temp, {"parado": "par.", "contando": "cont.", "vencido": "venc."}))
-        self.t_temp.horizontalHeader().abreviaturas = {"Estado": "Est."}
+        self.t_temp.horizontalHeader().abreviaturas = {"Estado": "Est.", "Consigna": "Cons."}
         self._del_temp = DelegadoNombres(self.t_temp, (0,))
         self.t_temp.setItemDelegateForColumn(0, self._del_temp)
         lay.addWidget(self.t_temp)
@@ -198,7 +205,6 @@ class VistaVentana:
         pl.addWidget(cab_vars)
         self.variables = PanelVariables()
         self.variables.detalle.connect(self._detallar)
-        self.variables.conteo.connect(lambda n: self.l_cont_vars.setText(str(n)))
         self.l_resumen = QLabel()  # resumen accesible para la validación, sin bloque lateral
         self.l_resumen.hide()
         self.lista_diag = self.diagrama.lista_diagnosticos
@@ -252,8 +258,18 @@ class VistaVentana:
             for n, c, titulo in (("derecho", self.derecho, "Variables"), ("inferior", self.inferior, "Traza"))
         }
         self._tamanos_paneles = {"derecho": self.ancho_derecho, "inferior": ALTO_TRAZA}
+        self.vsplit = DivisorPlegable(Qt.Orientation.Vertical)
+        self.vsplit.addWidget(izq)
+        self.vsplit.addWidget(self._plegables["inferior"])
+        self.vsplit.configurar(1, "inferior", 1, self._plegables["inferior"])
+        self.vsplit.setCollapsible(0, False)
+        self.vsplit.setCollapsible(1, False)  # el panel inferior se pliega con su flecha, no arrastrando: nunca por debajo de lo que pide
+        self.vsplit.setHandleWidth(4)
+        self.vsplit.setStretchFactor(0, 1)  # al agrandar la ventana crece el dibujo; el panel inferior conserva su altura
+        self.vsplit.setStretchFactor(1, 0)
+        self.vsplit.setSizes([520, ALTO_TRAZA])
         self.split = DivisorPlegable(Qt.Orientation.Horizontal)
-        self.split.addWidget(izq)
+        self.split.addWidget(self.vsplit)
         self.split.addWidget(self._plegables["derecho"])
         self.split.configurar(1, "derecho", 1, self._plegables["derecho"])
         self.split.setStretchFactor(0, 1)
@@ -262,61 +278,79 @@ class VistaVentana:
         self._derecho_a_mano = False  # el usuario movió el divisor: su ancho no se vuelve a tocar al cambiar de tamaño la ventana
         self.split.splitterMoved.connect(lambda *_: setattr(self, "_derecho_a_mano", True))
         self.split.setSizes([880, 460])
-        self.vsplit = DivisorPlegable(Qt.Orientation.Vertical)
-        self.vsplit.addWidget(self.split)
-        self.vsplit.addWidget(self._plegables["inferior"])
-        self.vsplit.configurar(1, "inferior", 1, self._plegables["inferior"])
+        self.split.setContentsMargins(0, 0, 0, 0)
         for divisor in (self.split, self.vsplit):
             divisor.plegar.connect(self._plegar_desde_divisor)
             divisor.abrir.connect(self._abrir_desde_tiron)
-        self.vsplit.setCollapsible(0, False)
-        self.vsplit.setCollapsible(1, False)  # el panel inferior se pliega con su flecha, no arrastrando: nunca por debajo de lo que pide
-        self.vsplit.setHandleWidth(4)
-        self.split.setContentsMargins(0, 0, 0, 0)
-        self.vsplit.setStretchFactor(0, 1)  # al agrandar la ventana crece el dibujo; el panel inferior conserva su altura
-        self.vsplit.setStretchFactor(1, 0)
-        self.vsplit.setSizes([520, ALTO_TRAZA])
-        self.setCentralWidget(self.vsplit)
-        # Barra de estado: aviso de conformidad, lecturas distintas de las decididas, instante lógico
+        self.setCentralWidget(self.split)
+        self._preparar_barra_estado()
+
+    def _preparar_barra_estado(self) -> None:
         sb = self.statusBar()
-        self.l_aviso = QLabel(AVISO)
-        self.l_lect = QLabel()
-        self.l_lect.setStyleSheet(f"color: {estilo.AVISO}; font-weight: 600")
-        self.l_reloj = QLabel()
-        self.l_reloj.setStyleSheet(f"font-weight: 600; color: {estilo.TINTA}; font-family: {estilo.FAMILIA_MONO}")
-        self.l_reloj.setMinimumWidth(0)
-        self.l_reloj.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)  # mide lo que su texto: nunca pierde caracteres
-        self._ancho_reloj = 0  # lo más ancho que ha llegado a ser el texto del reloj (el reloj solo crece, para que la barra no baile)
-        # Lo fijo de la izquierda (conformidad, detalle y firma) va en UNA zona: `QStatusBar` esconde sus widgets al enseñar un mensaje
-        # temporal, pero otros textos (la firma, el detalle) se mostraban a su aire por encima del mensaje. Con una sola zona, al haber
-        # mensaje se esconde entera y lo que se muestre dentro de ella no se ve hasta que el mensaje se va.
+        # Los mensajes temporales se muestran en el centro. QStatusBar conserva su temporizador y su señal.
+        sb.setStyleSheet("QStatusBar { color: transparent; }")
         self.zona_estado = QWidget()
         self.zona_estado.setObjectName("zonaEstado")
         zona = QHBoxLayout(self.zona_estado)
-        zona.setContentsMargins(0, 0, 0, 0)
-        zona.setSpacing(6)
-        zona.addWidget(self.l_aviso)
-        # La línea de detalle: el nombre entero (y papel, tipo, valor…) de la entrada, la variable o la fila que tiene el foco o está
-        # elegida; los nombres largos se elidén por el medio en las listas y aquí se leen enteros, sin pasar el ratón por encima.
-        self.l_detalle = EtiquetaElidida(ancho_maximo=10 ** 6, modo=Qt.TextElideMode.ElideMiddle)
-        self.l_detalle.setStyleSheet(f"color: {estilo.TINTA}; font-weight: 600")
-        self.l_detalle.setAccessibleName("Detalle")
-        self.l_detalle.hide()
-        zona.addWidget(self.l_detalle, 1)
-        self.l_firma = QLabel()  # «Archivo sin firma»: discreto y permanente mientras el archivo abierto no tenga firma válida
+        zona.setContentsMargins(estilo.E3, 0, estilo.E3, 0)
+        zona.setSpacing(estilo.E3)
+        fija = QHBoxLayout()
+        fija.setSpacing(estilo.E2)
+        self.l_aviso = QLabel(AVISO)
+        self.l_aviso.setStyleSheet(f"color: {estilo.TINTA_2}")
+        fija.addWidget(self.l_aviso)
+        separador = QLabel("·")
+        separador.setStyleSheet(f"color: {estilo.TINTA_2}")
+        separador.hide()
+        fija.addWidget(separador)
+        self.l_firma = _FirmaEstado(separador)
         self.l_firma.setStyleSheet(f"color: {estilo.TINTA_2}")
         self.l_firma.hide()
-        zona.addWidget(self.l_firma)
-        sb.addWidget(self.zona_estado, 1)
-        # el mensaje temporal sustituye al texto fijo mientras dura (si no, se dibujan uno encima del otro)
+        fija.addWidget(self.l_firma)
+        zona.addLayout(fija)
+
+        centro = QHBoxLayout()
+        centro.setSpacing(estilo.E2)
+        self.l_lect = EtiquetaElidida()
+        self.l_lect.minimo = 0
+        self.l_lect.setStyleSheet(f"color: {estilo.AVISO}; font-weight: 600")
+        centro.addWidget(self.l_lect)
+        self._detalle_estado = QWidget()
+        detalle = QHBoxLayout(self._detalle_estado)
+        detalle.setContentsMargins(0, 0, 0, 0)
+        self.l_detalle = EtiquetaElidida(modo=Qt.TextElideMode.ElideMiddle)
+        self.l_detalle.setStyleSheet(f"color: {estilo.TINTA}; font-weight: 600")
+        self.l_detalle.setAccessibleName("Detalle")
+        self.l_detalle.destroyed.connect(self._desconectar_detalle_de_foco)
+        self.l_detalle.hide()
+        detalle.addWidget(self.l_detalle)
+        centro.addWidget(self._detalle_estado, 1)
+        self.l_mensaje_estado = EtiquetaElidida()
+        self.l_mensaje_estado.setStyleSheet(f"color: {estilo.TINTA}; font-weight: 600")
+        self.l_mensaje_estado.setAccessibleName("Mensaje de estado")
+        self.l_mensaje_estado.hide()
+        centro.addWidget(self.l_mensaje_estado, 1)
+        zona.addLayout(centro, 1)
+
+        self.l_reloj = QLabel()
+        self.l_reloj.setStyleSheet(f"color: {estilo.TINTA}")
+        self.l_reloj.setFont(estilo.fuente_tabular(px=estilo.T_CIFRA, negrita=True, mono=False))
+        self.l_reloj.setMinimumWidth(0)
+        self.l_reloj.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        self._ancho_reloj = 0  # ancho máximo que ha pedido el texto durante la simulación
+        zona.addWidget(self.l_reloj)
+        sb.addPermanentWidget(self.zona_estado, 1)
         sb.messageChanged.connect(self._mensaje_de_estado)
-        sb.addPermanentWidget(self.l_lect)
-        sb.addPermanentWidget(self.l_reloj)
+
+    def _desconectar_detalle_de_foco(self) -> None:
+        app = QApplication.instance()
+        if app is not None:
+            app.focusChanged.disconnect(self._detalle_del_foco)
 
     def _mensaje_de_estado(self, texto: str) -> None:
-        """Con un mensaje temporal en la barra de estado, el texto fijo de la izquierda cede su sitio; sin él, vuelve."""
-        self.l_aviso.setVisible(not texto)
-        self.zona_estado.setVisible(not texto)
+        self.l_mensaje_estado.setText(texto)
+        self.l_mensaje_estado.setVisible(bool(texto))
+        self._detalle_estado.setVisible(not texto)
 
     def _paneles(self) -> None:
         """Recupera la visibilidad de Variables y Traza y conecta sus tiradores."""
@@ -324,6 +358,7 @@ class VistaVentana:
         self.visibilidad_paneles = VisibilidadPaneles(self)
         self.flechas = {n: p.cerrar for n, p in self._plegables.items()}
         self.pestanas = {n: p.pestana for n, p in self._plegables.items()}
+        self.variables.conteo.connect(self._contar_variables)
         for nombre, panel in self._plegables.items():
             panel.alternar.connect(lambda n=nombre: self.visibilidad_paneles.alternar(n))
             panel.desplegar.connect(lambda tamano,n=nombre:self._abrir_desde_tiron(n,tamano))
@@ -362,8 +397,8 @@ class VistaVentana:
             self._tamanos_paneles[nombre] = getattr(panel, "tamano_recordado", None) or actual
             panel.tamano_recordado = None
         panel.mostrar(visible)
-        self.pestanas[nombre].setText({"derecho": "Variables" if editar else "Simulación",
-                                      "inferior": "Traza"}[nombre])
+        if nombre == "derecho":
+            self._texto_pestana_derecha(editar)
         if visible != anterior:
             tamano = max(self._minimo_panel(nombre), self._tamanos_paneles[nombre]) if visible else panel.GROSOR_PESTANA
             divisor = self.split if nombre == "derecho" else self.vsplit
@@ -382,6 +417,14 @@ class VistaVentana:
             self.ajustes.setValue(f"paneles/{nombre}", visible)
         if nombre == "inferior":
             self._zoom_diferido()  # (con Propiedades abierto, el zoom va en la cabecera)
+
+    def _contar_variables(self, cuenta: int) -> None:
+        self.l_cont_vars.setText(str(cuenta))
+        self._texto_pestana_derecha(self.modo == "editar" and self.edicion is not None and not self.solo_lectura)
+
+    def _texto_pestana_derecha(self, editar: bool) -> None:
+        texto = f"Variables · {self.l_cont_vars.text()}" if editar else "Simulación"
+        self.pestanas["derecho"].setText(texto)
 
     def _minimo_panel(self, nombre):
         if nombre != "inferior":
@@ -430,7 +473,7 @@ class VistaVentana:
         )
         self._estilo_ayuda()
         self.navegacion.escalar()
-        self.l_reloj.setStyleSheet(f"font-weight: 600; color: {estilo.TINTA}; font-family: {estilo.FAMILIA_MONO}; font-size: {estilo.T_CIFRA}px")
+        self.l_reloj.setFont(estilo.fuente_tabular(px=estilo.T_CIFRA, negrita=True, mono=False))
         self.estado.escalar()
         for b in self.botones.values():
             if isinstance(b, _BotonEntrada):
@@ -624,7 +667,7 @@ class VistaVentana:
     def _ancho_barra_edicion(self, con_texto: bool) -> int:
         """Lo que pide la barra de edición con las palabras de sus botones o solo con iconos (se mide una vez por escala)."""
         cache = self.__dict__.setdefault("_anchos_edicion", {})
-        clave = (con_texto, estilo.ESCALA)
+        clave = (con_texto, estilo.ESCALA, self._compacto[0])
         if clave not in cache:
             self._textos_en_barras(con_texto)
             for barra in (self.tb_edit, self.tb_vista_der):
@@ -634,13 +677,9 @@ class VistaVentana:
         return cache[clave]
 
     def _repartir_textos_barra(self) -> None:
-        """B2: Dependencias y Errores llevan palabras si caben junto a Play.
-        Si falta sitio, y siempre en pantalla partida, conservan el icono y la ayuda."""
-        ancho, alto = self._compacto
-        con = False
-        if not ancho:
-            libre = (self.herramientas_grafcet.width() if self.herramientas_grafcet.isVisible() else self.width()) - 4 * estilo.E2
-            con = alto or self._ancho_barra_edicion(True) + self.tb_sim.sizeHint().width() <= libre
+        """Mantiene Dependencias y Errores con texto mientras quepan junto a Play."""
+        libre = self.herramientas_grafcet.width() if self.herramientas_grafcet.isVisible() else self.width()
+        con = self._ancho_barra_edicion(True) + self.tb_sim.sizeHint().width() <= libre - 4 * estilo.E2
         antes = getattr(self, "_texto_en_barra", None)
         self._texto_en_barra = con
         self._textos_en_barras(con)
@@ -650,12 +689,13 @@ class VistaVentana:
                 barra.updateGeometry()
 
     def _textos_en_barras(self, con_texto: bool) -> None:
-        """Dependencias y Errores llevan texto cuando cabe; en pantalla partida, solo icono y ayuda.
-        Los restantes botones de edición son siempre de solo icono."""
+        """Dependencias y Errores muestran sus rótulos cortos cuando hay espacio."""
         forma = Qt.ToolButtonStyle.ToolButtonTextBesideIcon if con_texto else Qt.ToolButtonStyle.ToolButtonIconOnly
-        for a in (self.a_dependencias, self.a_errores):
+        rotulos = ("Dependencias", "Errores") if self._compacto[0] else ("Mostrar dependencias", "Mostrar errores")
+        for a, rotulo in zip((self.a_dependencias, self.a_errores), rotulos):
             w = self.tb_vista_der.widgetForAction(a)
             if w is not None:
+                w.setText(rotulo)
                 w.setToolButtonStyle(forma)
         self.diagrama.b_dependencias.setToolButtonStyle(forma)
 

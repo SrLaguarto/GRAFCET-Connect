@@ -611,7 +611,7 @@ class PropiedadesFlotante(unittest.TestCase):
                     aid = p.objetivo_bloques()[1]
                     self.assertFalse(p.t_estado.isVisible())
                     self.assertNotIn("papelera", vars(p.prog))
-                    self.assertIn("pulse Supr", p.prog.lienzo.toolTip())
+                    self.assertIn("pulsa Supr", p.prog.lienzo.toolTip())
                     self.assertTrue(p.prog.texto())
                     p.prog.lienzo.quitar((0,))
                     HC._bombear(8)

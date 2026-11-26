@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html
 from .. import estilo, sello
+from ..estilo_dialogos import PieDialogo, aplicar_escala_dialogo
 from typing import Any
 from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QDesktopServices, QIcon
@@ -19,13 +20,14 @@ class DialogoForzado(QDialog):
 
     def __init__(self, parent: QWidget, datos: dict[str, Any]) -> None:
         super().__init__(parent)
+        aplicar_escala_dialogo(self)
         self.datos = datos
         actual = datos.get("actual")
         self.setWindowTitle("Editar orden de forzado" if actual else "Forzar un parcial")
         self.resize(420, 460)
         lay = QVBoxLayout(self)
         nota = QLabel(f"Orden de forzado de la etapa {html.escape(datos['origen'])}: mientras esa etapa esté activa, impone una "
-                      "situación al parcial que elija.")
+                      "situación al parcial que elijas.")
         nota.setWordWrap(True)
         lay.addWidget(nota)
         form = QFormLayout()
@@ -49,10 +51,7 @@ class DialogoForzado(QDialog):
         lay.addWidget(self.l_etapas)
         self.etapas = QListWidget()
         lay.addWidget(self.etapas, 1)
-        botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        botones.accepted.connect(self.accept)
-        botones.rejected.connect(self.reject)
-        lay.addWidget(botones)
+        lay.addWidget(PieDialogo().conectar(self))
         if actual:
             self.destino.setCurrentIndex(max(0, self.destino.findData(actual["destino"])))
         self.formas[actual["forma"] if actual and actual["forma"] in self.formas else "explicit"].setChecked(True)
@@ -97,7 +96,6 @@ class AcercaDe(QDialog):
         self.setWindowTitle(f"Acerca de {TITULO}")
         self.setMinimumWidth(460)
         self.setStyleSheet(f"QDialog {{ background: {estilo.FONDO} }} QLabel {{ color: {estilo.TINTA} }}")
-        from ..estilo_dialogos import aplicar_escala_dialogo
         aplicar_escala_dialogo(self)
         lay = QVBoxLayout(self)
         lay.setSpacing(8)
@@ -113,7 +111,7 @@ class AcercaDe(QDialog):
         self.l_licencia = QLabel(f"{TITULO} es software libre y de código abierto, publicado con la licencia GPL-3.0. "
                                  f"Su código está en <a href=\"{URL_CODIGO}\">GitHub</a>.<br><br>"
                                  "Para usarlo en un producto o servicio que no pueda cumplir la GPL-3.0, el "
-                                 "autor ofrece licencias comerciales: pídalas a través de GitHub.")
+                                 "autor ofrece licencias comerciales: pídelas a través de GitHub.")
         self.l_licencia.setWordWrap(True)
         self.l_licencia.linkActivated.connect(self.abrir)
         lay.addWidget(self.l_licencia)

@@ -18,7 +18,7 @@ CLAVE_ANTERIOR = "anterior"  # variable de una salida del mapa anterior en un ce
 
 def explicar_fallo(exc) -> str:
     """Una primera frase corta y legible, sin códigos, para los fallos de red habituales (conexión anulada o reiniciada
-    por el simulador de procesos, rechazada, tiempo agotado); cadena vacía si no se reconoce (el mensaje sigue siendo el técnico).
+    por el simulador de fábricas, rechazada, tiempo agotado); cadena vacía si no se reconoce (el mensaje sigue siendo el técnico).
     Solo explica: no decide nada del estado ni del comportamiento."""
     causa = exc.__cause__ if isinstance(exc.__cause__, OSError) else exc
     texto = str(exc)
@@ -26,14 +26,14 @@ def explicar_fallo(exc) -> str:
     if codigo is None and (m := re.search(r"WinError (\d+)", texto)):
         codigo = int(m.group(1))
     if codigo in WINERROR_CORTADA or isinstance(causa, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
-        return "El simulador de procesos cerró la conexión"
+        return "El simulador de fábricas cerró la conexión"
     if codigo == WINERROR_RECHAZADA or isinstance(causa, ConnectionRefusedError):
-        return ("El simulador de procesos no acepta la conexión: compruebe que está en marcha, "
-                "con el servidor Modbus activo, y la IP")
+        return ("El simulador de fábricas no acepta la conexión: comprueba que está en marcha, "
+                "que el servidor Modbus está activo y que la IP es correcta")
     if codigo == WINERROR_TIEMPO or isinstance(causa, TimeoutError) or "Tiempo de espera Modbus agotado" in texto:
-        return "El simulador de procesos no ha respondido a tiempo"
+        return "El simulador de fábricas no ha respondido a tiempo"
     if "El servidor cerró la conexión" in texto:
-        return "El simulador de procesos cerró la conexión"
+        return "El simulador de fábricas cerró la conexión"
     return ""
 
 
@@ -42,7 +42,7 @@ class Coordinador:
     def _mensaje_de_error(exc, frase) -> str:
         """El texto de la conexión detenida: la frase legible, el aviso de salidas y, si es un fallo de red, el detalle."""
         if isinstance(exc, ErrorConversion):
-            return f"{frase}. Salidas no garantizadas. Pulse Conectar para reanudar."
+            return f"{frase}. Salidas no garantizadas. Pulsa Conectar para reanudar."
         if frase:
             return f"{frase}. Salidas no garantizadas. Pulsa Conectar para reanudar. Detalle: {exc}"
         return f"Conexión detenida: {exc}. Salidas no garantizadas."
@@ -84,7 +84,7 @@ class Coordinador:
             self.en_marcha = False
             if self.estado == "conectado":
                 self.mensaje = ("Conectado · leyendo sensores antes de ejecutar…" if ejecutar else
-                                "Conectado · Stop · salidas a cero")
+                                "Conectado · En pausa · salidas a cero")
             # Una lectura enviada antes de Ejecutar no sirve para reanudar.
             self._descartar_lectura = ejecutar and self.futuro is not None and self.fase == "leer"
             self._ejecutar = ejecutar
@@ -161,7 +161,7 @@ class Coordinador:
         if self.estado == "diagnostico":
             self.estado = "conectado"
         if self.estado == "conectado":
-            self.mensaje = "Conectado · Stop · salidas a cero · edición habilitada"
+            self.mensaje = "Conectado · En pausa · salidas a cero · edición habilitada"
 
     def reasignar(self, config, documento):
         """Publica un mapa completo entre peticiones; el TCP y la sesión se conservan."""
@@ -220,7 +220,7 @@ class Coordinador:
         """Conecta y, salvo en la prueba, deja a 0 todas las salidas asignadas (coils y holding) antes de leer las entradas:
         también sin sesión (Pausa), porque en Pausa todo está a 0. La prueba no escribe nada."""
         if self.activo or self.futuro is not None:
-            raise RuntimeError("Desconecte antes de cambiar la conexión")
+            raise RuntimeError("Desconecta antes de cambiar la conexión")
         self._mapa_pendiente=None
         self._documento=deepcopy(documento)
         self.adaptador = self._adaptador(config, sesion) if sesion is not None else self._monitor(config, documento)
@@ -313,10 +313,10 @@ class Coordinador:
                         self.estado, self.mensaje = "desconectado", "Conexión probada; no se han escrito actuadores"
                     elif fase == "inicio":
                         self.muestra = resultado
-                        self.estado, self.mensaje = "conectado", "Conectado · actuadores a cero · pulse Play"
+                        self.estado, self.mensaje = "conectado", "Conectado · actuadores a cero · pulsa Play"
                         self.escritos = self.adaptador.valores_salida(cero=True)
                         if self.adaptador.sesion is None:  # Pausa: lo asignado ya está a 0 y solo se observan las entradas
-                            self.mensaje = ("Conectado · Stop · salidas a cero · observando las entradas" if self.escritos else
+                            self.mensaje = ("Conectado · En pausa · salidas a cero · observando las entradas" if self.escritos else
                                             "Conectado · observación de entradas · sin salidas asignadas")
                     elif fase == "leer":
                         cambios = {k: v for k, v in resultado.items() if k in self.muestra and self.muestra[k] != v}
@@ -355,7 +355,7 @@ class Coordinador:
                             self.medidas["ciclo_ms"] = (marcas["fin"] - self._inicio_ciclo) * 1000
                             self.medidas["ciclo_max_ms"] = max(self.medidas.get("ciclo_max_ms", 0), self.medidas["ciclo_ms"])
                         if fase == "cero":
-                            self.mensaje = "Motor detenido · cero confirmado · desconecte y corrija el diagnóstico"
+                            self.mensaje = "Motor detenido · cero confirmado · desconecta y corrige el diagnóstico"
                     elif fase == "cerrar":
                         self.estado, self.mensaje = "desconectado", "Desconectado · salidas no garantizadas"
                     elif fase == "seguras":
@@ -425,7 +425,7 @@ class Coordinador:
         if self.adaptador.sesion is not None and self.adaptador.sesion.status != "pausada-estable" and not self.fallo_motor:
             self.fallo_motor = self.cero_pendiente = True
             self.en_marcha = False
-            self.estado, self.mensaje = "diagnostico", "Motor detenido · solicitando cero · reconecte para continuar"
+            self.estado, self.mensaje = "diagnostico", "Motor detenido · solicitando cero · reconecta para continuar"
         if self.futuro is not None:
             return
         if self.cero_pendiente:

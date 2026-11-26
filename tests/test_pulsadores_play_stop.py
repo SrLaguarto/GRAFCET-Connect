@@ -103,7 +103,7 @@ class PulsadoresYControl(BaseQt):
             QTest.mouseClick(w.botones[p], Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier)
             manual.assert_not_called()
         self.assertEqual(w.v.state(), before)
-        self.assertIn("Play/Stop", w.aviso.text())
+        self.assertIn("Simular/Detener", w.aviso.text())
 
     def test_SPUL05_soltar_fuera_del_boton_no_deja_entrada_activa(self):
         """REQ-SIM-02: soltar el pulsador fuera de su rectángulo también devuelve la entrada a 0."""
@@ -134,9 +134,9 @@ class PulsadoresYControl(BaseQt):
     def test_SCTL01_play_stop_muestran_texto_icono_y_conservan_su_comportamiento(self):
         """REQ-SIM-03, REQ-SIM-04: Play inicia y Stop deja todo sin estado; solo cambian los rótulos e iconos."""
         w, p, q, *_ = self.preparar()
-        self.assertEqual(w.a_ejecutar.text(), "Stop")
+        self.assertEqual(w.a_ejecutar.text(), "Detener")
         stop = w.a_ejecutar.icon().pixmap(24, 24).toImage()
-        self.assertIn("Stop", w.a_ejecutar.toolTip()); self.assertNotIn("Pausa", w.a_ejecutar.toolTip())
+        self.assertIn("Detener", w.a_ejecutar.toolTip()); self.assertNotIn("Pausa", w.a_ejecutar.toolTip())
         w.a_ejecutar.setChecked(False)
         self.assertEqual((w.a_ejecutar.text(), w.modo), ("Simular", "editar"))
         self.assertEqual(w.v.state().get("situation", []), [])

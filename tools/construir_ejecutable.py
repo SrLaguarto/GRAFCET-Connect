@@ -29,8 +29,9 @@ try:
     from tools.clave_construccion import obtener_clave, fuentes_aisladas, ErrorClave
 except ModuleNotFoundError:
     from clave_construccion import obtener_clave, fuentes_aisladas, ErrorClave
-# QtSvg y QtPrintSupport se incluyen para exportar e imprimir láminas.
-EXCLUIR = ["tkinter", "unittest", "PySide6.QtNetwork", "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtPdf",
+# QtSvg y QtPrintSupport se incluyen para exportar e imprimir láminas. QtNetwork no se excluye: lo usa
+# escritorio/instancia_unica.py (una sola ventana por usuario, desde la 1.1.1); sin él el EXE de PyInstaller no arranca.
+EXCLUIR = ["tkinter", "unittest", "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtPdf",
            "PySide6.QtOpenGL", "PySide6.QtMultimedia", "PySide6.QtWebEngineCore"]
 
 

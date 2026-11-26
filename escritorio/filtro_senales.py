@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QHBoxLayout,
 
 from conexion import filtro_directo as filtro
 from . import estilo
+from .componentes_comunes import CabeceraDialogo, PieDialogo
 from .estilo_config_es import crear_tarjeta, hoja_dialogo_es
 
 AYUDA_UNIDAS = "Las señales ya unidas siguen mostrándose y funcionando, aunque estén marcadas en esta lista."
@@ -30,8 +31,13 @@ class ConfiguracionDirecta(QDialog):
         self._ancho_objetivo = min(840, max(500, controlador.panel.window().width() - 32))
         self.setMinimumWidth(500)
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(16, 14, 16, 14)
-        raiz.setSpacing(10)
+        raiz.setContentsMargins(0, 0, 0, 0)
+        raiz.setSpacing(0)
+        raiz.addWidget(CabeceraDialogo(self.windowTitle()))
+        contenido = QVBoxLayout()
+        contenido.setContentsMargins(estilo.E4, estilo.E3, estilo.E4, estilo.E3)
+        contenido.setSpacing(estilo.E2)
+        raiz.addLayout(contenido, 1)
         tarjeta_tiempos, lay_tiempos = crear_tarjeta("Tiempos de lectura", self)
         fila_tiempos = QHBoxLayout()
         fila_tiempos.setContentsMargins(0, 0, 0, 0)
@@ -52,23 +58,14 @@ class ConfiguracionDirecta(QDialog):
             fila_tiempos.addLayout(col)
         fila_tiempos.addStretch(1)
         lay_tiempos.addLayout(fila_tiempos)
-        raiz.addWidget(tarjeta_tiempos)
+        contenido.addWidget(tarjeta_tiempos)
         self.avanzado = QWidget()
         self._crear_avanzado()
-        raiz.addWidget(self.avanzado, 1)
-        pie = QHBoxLayout()
-        pie.setContentsMargins(0, 2, 0, 0)
-        pie.setSpacing(8)
-        pie.addStretch(1)
-        self.b_cancelar = QPushButton("Cancelar")
-        self.b_cancelar.clicked.connect(self.reject)
-        self.b_aceptar = QPushButton("Aceptar")
-        estilo.poner(self.b_aceptar, primario=True)
-        self.b_aceptar.setDefault(True)
-        self.b_aceptar.clicked.connect(self.accept)
-        pie.addWidget(self.b_cancelar)
-        pie.addWidget(self.b_aceptar)
-        raiz.addLayout(pie)
+        contenido.addWidget(self.avanzado, 1)
+        pie = PieDialogo().conectar(self)
+        self.b_cancelar = pie.boton_cancelar
+        self.b_aceptar = pie.boton_aceptar
+        raiz.addWidget(pie)
         self.rellenar()
         self.layout().activate()
         self.adjustSize()
@@ -99,7 +96,7 @@ class ConfiguracionDirecta(QDialog):
         self.identidad.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.identidad.setMinimumWidth(100)
         self.identidad.addItem("", "")
-        self.identidad.lineEdit().setPlaceholderText("ID o elija una señal de la última lectura")
+        self.identidad.lineEdit().setPlaceholderText("ID o elige una señal de la última lectura")
         for senal in self.catalogo:
             self.identidad.addItem(f'{senal["name"]} · {senal["type"]}', senal["id"])
         self.b_anadir = QPushButton("Añadir")

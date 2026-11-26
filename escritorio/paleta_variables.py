@@ -13,7 +13,7 @@ from . import estilo
 from .bloques import COLORES, PAPEL, PaletaBloques, etapa_visible, nuevo, var
 
 GRUPOS = (("entrada", "Entradas"), ("etapa", "Etapas"), ("interna", "Memorias"), ("salida", "Salidas"))
-MENSAJE_VACIO = "No hay variables ni etapas. Créelas en el panel Variables o añada etapas al dibujo."
+MENSAJE_VACIO = "No hay variables ni etapas. Créalas en el panel Variables o añade etapas al dibujo."
 CLAVE_PLEGADOS = "formulador/plegados"  # los grupos plegados, por su papel («entrada,salida»): lo comparten todas las paletas
 
 

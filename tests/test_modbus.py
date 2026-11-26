@@ -1,4 +1,4 @@
-"""Pruebas locales del transporte, sin simulador de procesos ni dependencias externas."""
+"""Pruebas locales del transporte, sin simulador de fábricas ni dependencias externas."""
 import socketserver
 import struct
 import threading

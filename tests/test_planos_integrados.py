@@ -166,7 +166,7 @@ class PlanosIntegrados(BaseQt):
             d.destino.setCurrentIndex(d.destino.findData(ident));d.accept();return QDialog.DialogCode.Accepted
         with patch.object(CrearHoja,'exec',elegir):w.a_enviar_lamina.trigger()
         p=w.panel_planos;self.assertEqual(len(e.ed.sheet_links()),1);self.assertEqual(len(p.graficos),2)
-        p.elegir_grafico(1);p.tamano.setValue(150);self.assertEqual([g['porcentaje'] for g in p.graficos],[100,150]);self.assertEqual(p.editor.documento.escala_rotulo,'Varias')
+        p.elegir_grafico(1);p.tamano.setValue(150);self.assertEqual([g['porcentaje'] for g in p.graficos],[100,150]);self.assertEqual(p.editor.documento.escala_rotulo,'S/E')
         w._mostrar_pagina(False);e.ed.rename(s,'Actualizada');e.cambia();w.mostrar_hoja(ident)
         self.assertEqual([g['modelo']['steps'][0]['label'] for g in p.editor.modelo['_graficos']],['Actualizada','Actualizada'])
 

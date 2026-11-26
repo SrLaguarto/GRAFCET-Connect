@@ -87,7 +87,7 @@ class NavegacionTeclado(BaseQt):
         QTest.mouseClick(n.anterior,Qt.MouseButton.LeftButton); self.assertEqual(e.sel,primero)
         n.buscar.setFocus(); self.tecla(n.buscar,Qt.Key.Key_Return); self.assertEqual(n.contador.text(),'2/2')
         self.tecla(n.buscar,Qt.Key.Key_Return,Qt.KeyboardModifier.ShiftModifier); self.assertEqual(e.sel,primero)
-        n.buscar.selectAll(); QTest.keyClicks(n.buscar,'No existe'); self.assertEqual(n.contador.text(),'0/0'); self.assertFalse(n.siguiente.isEnabled())
+        n.buscar.selectAll(); QTest.keyClicks(n.buscar,'No existe'); self.assertEqual(n.contador.text(),'Sin resultados'); self.assertFalse(n.siguiente.isEnabled())
         self.assertEqual(e.ed.model,antes)
 
     def test_SNAV07_textos_de_atajos_y_menu_sin_seleccionar(self):

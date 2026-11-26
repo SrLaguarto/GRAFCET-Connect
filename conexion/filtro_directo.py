@@ -34,7 +34,7 @@ def excluida(config, senal):
 def anadir(config, identidad, catalogo):
     identidad = identidad.strip().lower()
     if not id_valido(identidad):
-        raise ValueError("Escriba un ID válido: 32 cifras hexadecimales en grupos 8-4-4-4-12")
+        raise ValueError("Escribe un ID válido: 32 cifras hexadecimales en grupos 8-4-4-4-12")
     if any(f["id"].lower() == identidad and not f.get("quitada", False) for f in config.filtro_senales):
         raise ValueError("Ese ID ya está en la lista")
     config.filtro_senales = [f for f in config.filtro_senales if f["id"].lower() != identidad]

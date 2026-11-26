@@ -1,11 +1,16 @@
 """Página de Planos integrada en la ventana: hojas, lienzo y propiedades."""
-from PySide6.QtCore import Qt,QSize,QTimer,QEvent,QPointF,QRect,QRectF
-from PySide6.QtGui import QAction,QIcon,QPixmap,QPainter,QPen,QColor
-from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QToolBar,QToolButton,QFrame,
-    QSplitter,QListView,QListWidget,QListWidgetItem,QComboBox,QMenu,QMessageBox,QInputDialog,QDoubleSpinBox,QScrollArea,QFormLayout,QPushButton,QStyledItemDelegate,QStyle,QSizePolicy)
+import copy
+from PySide6.QtCore import Qt, QSize, QTimer, QEvent, QPointF, QRect, QRectF, QDate
+from PySide6.QtGui import QAction, QIcon, QPixmap, QPainter, QPen, QColor
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QToolBar, QToolButton, QFrame, QSplitter, QListView,
+    QListWidget, QListWidgetItem, QComboBox, QMenu, QMessageBox, QInputDialog, QDoubleSpinBox, QScrollArea,
+    QFormLayout, QPushButton, QStyledItemDelegate, QStyle, QSizePolicy,
+)
+from grafcet.laminas import FORMATOS, ajustes_lamina
 from . import estilo
 from .bloques import FlowLayout
-from .laminas import DialogoLaminas
+from .laminas import DialogoLaminas, DocumentoHoja, exportar_pdf_documentos
 from .planos_controles import ControlesPlanos, AVISO_NO_CABE
 
 _ACTUAL=object()
@@ -70,6 +75,9 @@ def estilo_planos() -> str:
         f"QLabel#seccionPropiedadesPlanos, QLabel#tituloPropiedadesGrafico {{ color:{estilo.ACENTO};"
         f" font-family:{estilo.FAMILIA_TITULO}; font-size:{estilo.T_SECCION}px;"
         f" font-weight:700; background:transparent; }}"
+        f"QFrame#avisoDeshacerHoja {{ background:{estilo.SUPERFICIE};"
+        f" border:1px solid {estilo.BORDE_FUERTE}; border-radius:{estilo.R_M}px; }}"
+        f"QFrame#avisoDeshacerHoja QLabel {{ color:{estilo.TINTA}; background:transparent; }}"
         f"QWidget#paginaPlanos QSplitter::handle {{ background:transparent; width:8px; }}"
     )
 
@@ -186,6 +194,9 @@ class PaginaPlanos(QWidget):
         self._hoja_base = ""
         self.setStyleSheet(estilo_planos())
         self.aplicando=False;self.cargando=False;self.automatico=True;self.factor_zoom=1.;self.graficos=[];self.pan=None;self.grafico_actual=0
+        self._habilitadas = {}
+        self._portapapeles_texto = None
+        self._pegados_consecutivos = 0
         self.parpadeos_hoja=0
         self.t_hoja=QTimer(self)
         self.t_hoja.setInterval(350)
@@ -208,11 +219,48 @@ class PaginaPlanos(QWidget):
         caja_btn=QHBoxLayout();caja_btn.setContentsMargins(8,2,8,0);caja_btn.addWidget(self.b_hoja);l.addLayout(caja_btn)
         l.addStretch(1)
         self.scroll_hojas=QScrollArea();self.scroll_hojas.setObjectName("scrollHojasPlanos");self.scroll_hojas.setFocusPolicy(Qt.FocusPolicy.NoFocus);self.scroll_hojas.setWidgetResizable(True);self.scroll_hojas.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.scroll_hojas.setMinimumWidth(160);self.scroll_hojas.setMaximumWidth(215);self.scroll_hojas.setWidget(lateral);self.divisor.addWidget(self.scroll_hojas);self.cuerpo=QWidget();self.cuerpo.setObjectName("cuerpoPlanos");self.cuerpo.setAttribute(Qt.WidgetAttribute.WA_StyledBackground,True);self.layout_editor=QVBoxLayout(self.cuerpo);self.layout_editor.setContentsMargins(0,0,0,0)
+        self._crear_aviso_deshacer()
         self.vacio=MesaVaciaPlanos(self.nueva_hoja);self.layout_editor.addWidget(self.vacio)
         self.divisor.addWidget(self.cuerpo);self.divisor.setStretchFactor(0,0);self.divisor.setStretchFactor(1,1);self.divisor.setSizes([160,1100])
         self.lista.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.lista.customContextMenuRequested.connect(self.menu_hoja)
         self.lista.currentRowChanged.connect(self.elegir);self.actualizar_acciones()
         self.estilo_boton_hoja()
+
+    def _crear_aviso_deshacer(self):
+        self.aviso_deshacer_hoja = QFrame(self.cuerpo)
+        self.aviso_deshacer_hoja.setObjectName("avisoDeshacerHoja")
+        self.aviso_deshacer_hoja.hide()
+        fila = QHBoxLayout(self.aviso_deshacer_hoja)
+        fila.setContentsMargins(12, 6, 12, 6)
+        fila.setSpacing(estilo.E2)
+        self.l_deshacer_hoja = QLabel()
+        self.l_deshacer_hoja.setWordWrap(True)
+        fila.addWidget(self.l_deshacer_hoja, 1)
+        self.b_deshacer_hoja = QPushButton("Deshacer")
+        self.b_deshacer_hoja.setToolTip("Recupera la hoja eliminada (Ctrl+Z)")
+        self.b_deshacer_hoja.setFixedHeight(estilo.ALTO_CONTROL)
+        from .campos_medidos import ajustar_boton
+        ajustar_boton(self.b_deshacer_hoja)
+        self.b_deshacer_hoja.clicked.connect(self._deshacer_hoja_eliminada)
+        fila.addWidget(self.b_deshacer_hoja)
+        self.layout_editor.addWidget(self.aviso_deshacer_hoja)
+        self.deshacer_hoja_timer = QTimer(self)
+        self.deshacer_hoja_timer.setSingleShot(True)
+        self.deshacer_hoja_timer.setInterval(8000)
+        self.deshacer_hoja_timer.timeout.connect(self._ocultar_deshacer_hoja)
+
+    def _mostrar_deshacer_hoja(self, nombre):
+        self.l_deshacer_hoja.setText(f"Hoja «{nombre}» eliminada.")
+        self.aviso_deshacer_hoja.show()
+        self.deshacer_hoja_timer.start()
+
+    def _ocultar_deshacer_hoja(self):
+        self.deshacer_hoja_timer.stop()
+        self.aviso_deshacer_hoja.hide()
+
+    def _deshacer_hoja_eliminada(self):
+        self._ocultar_deshacer_hoja()
+        self.ventana.historial_plano(False)
 
     def escalar(self, hoja_base: str | None = None):
         """Actualiza la hoja de estilos y los mínimos con la escala de la ventana."""
@@ -221,6 +269,9 @@ class PaginaPlanos(QWidget):
         self.setStyleSheet((self._hoja_base + "\n" if self._hoja_base else "") + estilo_planos())
         self.titulo.setMinimumHeight(estilo.ALTO_CONTROL)
         self.b_hoja.setFixedHeight(estilo.ALTO_CONTROL)
+        self.b_deshacer_hoja.setFixedHeight(estilo.ALTO_CONTROL)
+        from .campos_medidos import ajustar_boton
+        ajustar_boton(self.b_deshacer_hoja)
         self.vacio.escalar()
         self.estilo_boton_hoja()
 
@@ -260,44 +311,107 @@ class PaginaPlanos(QWidget):
         return menu
 
     def eliminar_hoja(self):
-        item=self.lista.currentItem()
-        if item is None or self.origen is not self.ventana.edicion:return
-        ident=item.data(Qt.ItemDataRole.UserRole);fila=self.lista.currentRow();e=self.origen
-        self.aplicar();self.liberar_editor()
-        if self.ventana.destino_traer==(e,ident):self.ventana.destino_traer=None;self.ventana.aviso_traer.hide()
-        e.ed.delete_sheet(ident);e.cambia()
-        hojas=e.ed.sheet_links();destino=hojas[min(fila,len(hojas)-1)]['id'] if hojas else None
-        self.mostrar(destino);self.lista.setFocus()
+        item = self.lista.currentItem()
+        if item is None or self.origen is not self.ventana.edicion:
+            return
+        ident = item.data(Qt.ItemDataRole.UserRole)
+        nombre = item.text()
+        fila = self.lista.currentRow()
+        e = self.origen
+        self.aplicar()
+        self.liberar_editor()
+        if self.ventana.destino_traer == (e, ident):
+            self.ventana.destino_traer = None
+            self.ventana.aviso_traer.hide()
+        e.ed.delete_sheet(ident)
+        e.cambia()
+        hojas = e.ed.sheet_links()
+        destino = hojas[min(fila, len(hojas) - 1)]["id"] if hojas else None
+        self.mostrar(destino)
+        if self.ventana.modo == "editar":
+            self._mostrar_deshacer_hoja(nombre)
+        if destino is not None:
+            self.lista.setFocus()
+        else:
+            self.vacio.b_crear_primera.setFocus()
 
-    def mover_hoja(self,delta):
-        item=self.lista.currentItem()
-        if item is None or self.origen is not self.ventana.edicion:return
-        ident=item.data(Qt.ItemDataRole.UserRole);e=self.origen;self.aplicar()
-        if e.ed.move_sheet(ident,delta):e.cambia();self.mostrar(ident);self.lista.setFocus()
+    def mover_hoja(self, delta):
+        item = self.lista.currentItem()
+        if item is None or self.origen is not self.ventana.edicion:
+            return
+        ident = item.data(Qt.ItemDataRole.UserRole)
+        e = self.origen
+        self.aplicar()
+        if e.ed.move_sheet(ident, delta):
+            e.cambia()
+            self.mostrar(ident)
+            self.lista.setFocus()
 
     def eliminar_grafico(self):
-        if not self.editor or not self.editor.vista.seleccionado or not self.graficos:return
-        i=self.editor.vista.capa
-        if not 0<=i<len(self.graficos):return
-        self.aplicar();del self.graficos[i]
-        e=self.ventana.edicion;e.ed.set_page_graphics(self.hoja_id,self.graficos);e.cambia();self.mostrar(self.hoja_id)
+        if not self.editor or not self.editor.vista.seleccionado or not self.graficos:
+            return
+        if self.ventana.modo != "editar":
+            return
+        i = self.editor.vista.capa
+        if not 0 <= i < len(self.graficos):
+            return
+        self.aplicar()
+        del self.graficos[i]
+        self.editor.vista.seleccionado = False
+        self.grafico_actual = max(0, min(i, len(self.graficos) - 1))
+        self.editor.vista.capa = self.grafico_actual if self.graficos else -1
+        if self.graficos:
+            self.tamano.blockSignals(True)
+            self.tamano.setValue(self.graficos[self.grafico_actual]["porcentaje"])
+            self.tamano.blockSignals(False)
+        if not self.editor.editando_plantilla:
+            self.editor.propiedades.setCurrentIndex(0)
+        self.actualizar_grafico()
+        self.guardar_timer.stop()
+        e = self.ventana.edicion
+        e.ed.set_page_graphics(self.hoja_id, self.graficos)
+        e.cambia()
+        self.ventana._titulo_ventana()
+        self.actualizar_acciones()
+        self.actualizar_titulo()
+        self.miniatura()
 
-    def mostrar(self,ident=_ACTUAL):
-        if self.cargando:return
-        e=self.ventana.edicion
-        if ident is _ACTUAL:ident=self.hoja_id if self.origen is e else None
+    def mostrar(self, ident=_ACTUAL):
+        if self.cargando:
+            return
+        self._ocultar_deshacer_hoja()
+        e = self.ventana.edicion
+        if ident is _ACTUAL:
+            ident = self.hoja_id if self.origen is e else None
         if self.origen is not e:
-            self.guardar_timer.stop();self.liberar_editor();self.hoja_id=None;self.graficos=[];self.pan=None
-        self.aplicar();self.cargando=True
+            self.guardar_timer.stop()
+            self.liberar_editor()
+            self.hoja_id = None
+            self.graficos = []
+            self.pan = None
+        self.aplicar()
+        self.cargando = True
         try:
-            self.origen=e;self.lista.blockSignals(True);self.lista.clear()
-            hojas=e.ed.sheet_links() if e else []
+            self.origen = e
+            self.lista.blockSignals(True)
+            self.lista.clear()
+            hojas = e.ed.sheet_links() if e else []
             for h in hojas:
-                item=QListWidgetItem(icono_planos(),h['nombre']);item.setData(Qt.ItemDataRole.UserRole,h['id']);self.lista.addItem(item)
-            if not any(h['id']==ident for h in hojas):ident=hojas[0]['id'] if hojas else None
-            fila=next((i for i in range(self.lista.count()) if self.lista.item(i).data(Qt.ItemDataRole.UserRole)==ident),-1)
-            self.ajustar_lista();self.lista.setCurrentRow(fila);self.lista.blockSignals(False);self.cargar(ident)
-        finally:self.cargando=False
+                item = QListWidgetItem(icono_planos(), h["nombre"])
+                item.setData(Qt.ItemDataRole.UserRole, h["id"])
+                self.lista.addItem(item)
+            if not any(h["id"] == ident for h in hojas):
+                ident = hojas[0]["id"] if hojas else None
+            fila = next(
+                (i for i in range(self.lista.count()) if self.lista.item(i).data(Qt.ItemDataRole.UserRole) == ident),
+                -1,
+            )
+            self.ajustar_lista()
+            self.lista.setCurrentRow(fila)
+            self.lista.blockSignals(False)
+            self.cargar(ident)
+        finally:
+            self.cargando = False
         self.estilo_boton_hoja()
 
     ACENTO_HOJA = estilo.ACENTO  # el acento de la interfaz (el de los títulos de esta página)
@@ -355,8 +469,18 @@ class PaginaPlanos(QWidget):
                     e.ed.set_sheet_link(ident,valores)
                     e.ed.set_page_graphics(ident,self.graficos)
                     e.cambia();self.ventana._titulo_ventana()
-            self.editor=DialogoLaminas(modelo,estado,cfg,guardar,self.cuerpo,self.ventana.diagrama.dependencias,integrado=True)
-            self.editor.centrar=self.centrar_grafico;self.editor.vista.colocar=self.colocar;self.editor.vista.elegir_capa=self.elegir_grafico;self.editor.vista.eliminar_grafico=self.eliminar_grafico
+            self.editor = DialogoLaminas(
+                modelo, estado, cfg, guardar, self.cuerpo, self.ventana.diagrama.dependencias, integrado=True
+            )
+            self.editor.documentos_proyecto = self.documentos_hojas
+            self.editor.centrar = self.centrar_grafico
+            self.editor.vista.colocar = self.colocar
+            self.editor.vista.elegir_capa = self.elegir_grafico
+            self.editor.vista.eliminar_grafico = self.eliminar_grafico
+            self.editor.vista.editable = self.ventana.modo == "editar"
+            self.editor.vista.menu_contextual = self._abrir_menu_lienzo
+            self.editor.vista.accion_portapapeles = self.portapapeles_texto
+            self.editor.seleccion_texto_cambiada.connect(self.ventana._actualizar_portapapeles)
             self.editor.propiedades.addWidget(self.propiedades_grafico)
             self.editor.nombre_plano=nombre;self.layout_editor.addWidget(self.editor);self.vacio.hide()
             self.editor.modificado.connect(self.cambiado);self.editor.area.viewport().installEventFilter(self);self.editor.vista.installEventFilter(self)
@@ -396,11 +520,26 @@ class PaginaPlanos(QWidget):
             self.titulo.setText(self.editor.nombre_plano+(' *' if pendiente else ''))
 
     def actualizar_acciones(self):
-        e=self.ventana.edicion;ed=self.editor
-        self.a_hoja.setEnabled(e is not None);self.vacio.b_crear_primera.setEnabled(e is not None)
-        self.a_nueva.setEnabled(ed is not None and self.ventana.modo=='editar');self.tamano.setEnabled(ed is not None and bool(self.graficos))
-        for a,b in ((self.a_exportar,'b_exportar'),(self.a_imprimir,'b_imprimir'),(self.a_centrar,'b_centrar')):a.setEnabled(ed is not None and getattr(ed,b).isEnabled())
-        self.a_texto.setEnabled(ed is not None)
+        e = self.ventana.edicion
+        ed = self.editor
+        editar = self.ventana.modo == "editar"
+        estado = {
+            self.a_hoja: e is not None,
+            self.vacio.b_crear_primera: e is not None,
+            self.a_nueva: ed is not None and editar,
+            self.tamano: ed is not None and bool(self.graficos),
+            self.a_exportar: ed is not None and ed.b_exportar.isEnabled(),
+            self.a_imprimir: ed is not None and ed.b_imprimir.isEnabled(),
+            self.a_centrar: ed is not None and ed.b_centrar.isEnabled(),
+            self.a_texto: ed is not None and editar,
+        }
+        self._habilitadas = {accion: bool(activo) for accion, activo in estado.items()}
+        for control, activo in estado.items():
+            control.setEnabled(bool(activo))
+        if ed is not None:
+            ed.vista.editable = editar
+        if self.ventana.panel_planos is self:
+            self.ventana._actualizar_portapapeles()
 
     def miniatura(self,todas=False):
         if not self.editor or not self.editor.documento or self.origen is not self.ventana.edicion:return
@@ -500,14 +639,226 @@ class PaginaPlanos(QWidget):
         n=self.lista.count();i=self.lista.currentRow()
         self.editor.pagina.setText(f'Hoja {i+1} de {n}');self.editor.anterior.setEnabled(i>0);self.editor.siguiente.setEnabled(i<n-1)
 
-    def nueva_hoja(self):
-        from .hojas import CrearHoja
-        e=self.ventana.edicion;d=CrearHoja(e,self);d.setWindowTitle('Añadir hoja al plano')
+    def _cargar_tecnica_limpia(self, formato, orientacion, margen):
+        from grafcet.plantillas_tecnicas import plantilla_tecnica, sin_rotulos_auxiliares
+        from .carpetas import predeterminada
         try:
-            if not d.exec():return
-            self.aplicar();cfg=d.configuracion or d.valores();cfg.update(modo='escala',escala=1.,offset_mm=[0.,0.])
-            ident=e.ed.add_plan_page(None,cfg,d.nombre.text().strip() or None);e.cambia();self.mostrar(ident);QTimer.singleShot(0,self,lambda:self.scroll_hojas.verticalScrollBar().setValue(self.scroll_hojas.verticalScrollBar().maximum()))
-        finally:d.deleteLater()
+            plantilla = sin_rotulos_auxiliares(predeterminada(formato, orientacion, margen))
+            plantilla["primitives"] = [
+                t for t in plantilla["primitives"]
+                if not (t.get("omit_empty") and t.get("field") in ("proyecto", "revision", "hoja", "libre"))
+            ]
+            return plantilla
+        except (OSError, ValueError):
+            w, h = FORMATOS.get(formato, FORMATOS["A4"])
+            w, h = (h, w) if orientacion == "horizontal" else (w, h)
+            return plantilla_tecnica(w, h, margen)
+
+    def _plantilla_heredada(self, base):
+        if base is None:
+            return self._cargar_tecnica_limpia("A4", "vertical", 10.)
+        formato = base["formato"]
+        orientacion = base["orientacion"]
+        margen = float(base["margen_mm"])
+        previa = base.get("plantilla")
+        propia = previa is not None and (previa.get("source") != "GrafConnect" or previa.get("zone") is not None)
+        if propia:
+            return copy.deepcopy(previa)
+        return self._cargar_tecnica_limpia(formato, orientacion, margen)
+
+    def _ajustes_nueva_hoja(self, e):
+        hojas = e.ed.sheet_links()
+        if self.editor is not None:
+            base = self.editor.valores()
+        elif hojas:
+            activa = next((h for h in hojas if h["id"] == self.hoja_id), hojas[-1])
+            base = copy.deepcopy(activa["ajustes"])
+        else:
+            base = None
+        formato = base["formato"] if base is not None else "A4"
+        orientacion = base["orientacion"] if base is not None else "vertical"
+        margen = float(base["margen_mm"]) if base is not None else 10.
+        campos = copy.deepcopy(base["campos"] if base is not None else e.ed.sheet_settings()["campos"])
+        por_defecto = (
+            ("titulo", e.titulo),
+            ("proyecto", e.titulo),
+            ("fecha", QDate.currentDate().toString("yyyy-MM-dd")),
+        )
+        for clave, valor in por_defecto:
+            if not campos.get(clave):
+                campos[clave] = valor
+        return ajustes_lamina({
+            "formato": formato,
+            "orientacion": orientacion,
+            "margen_mm": margen,
+            "modo": "escala",
+            "escala": 1.,
+            "offset_mm": [0., 0.],
+            "plantilla": self._plantilla_heredada(base),
+            "campos": campos,
+        })
+
+    def _nombre_nueva_hoja(self, hojas):
+        usados = {h["nombre"] for h in hojas}
+        n = len(hojas) + 1
+        while f"Hoja {n}" in usados:
+            n += 1
+        return f"Hoja {n}"
+
+    def nueva_hoja(self):
+        e = self.ventana.edicion
+        if e is None:
+            return
+        self._ocultar_deshacer_hoja()
+        self.aplicar()
+        cfg = self._ajustes_nueva_hoja(e)
+        nombre = self._nombre_nueva_hoja(e.ed.sheet_links())
+        ident = e.ed.add_plan_page(None, cfg, nombre)
+        e.cambia()
+        self.mostrar(ident)
+        QTimer.singleShot(
+            0,
+            self,
+            lambda: self.scroll_hojas.verticalScrollBar().setValue(self.scroll_hojas.verticalScrollBar().maximum()),
+        )
+
+    def documentos_hojas(self):
+        """Construye los documentos de todas las hojas del proyecto en orden."""
+        self.aplicar()
+        e = self.ventana.edicion
+        hojas = e.ed.sheet_links() if e else []
+        if not hojas:
+            return [self.editor.documento] if self.editor and self.editor.documento else []
+        estado = {} if self.ventana.modo == "editar" or self.ventana.v is None else self.ventana.v.state()
+        dependencias = self.ventana.diagrama.dependencias
+        docs = []
+        for h in hojas:
+            if self.editor and self.editor.documento and h["id"] == self.hoja_id:
+                docs.append(self.editor.documento)
+                continue
+            try:
+                docs.append(DocumentoHoja(self.modelo_hoja(h), estado, h["ajustes"], dependencias))
+            except ValueError as exc:
+                raise ValueError(f"La hoja «{h['nombre']}» no se puede exportar: {exc}") from exc
+        return docs
+
+    def exportar_pdf_proyecto(self, ruta, solo_actual=False):
+        """Exporta a PDF todas las hojas del proyecto o solo la activa."""
+        if solo_actual and self.editor and self.editor.documento:
+            docs = [self.editor.documento]
+        else:
+            docs = self.documentos_hojas()
+        titulo = self.editor.ajustes["campos"]["titulo"] if self.editor else ""
+        return exportar_pdf_documentos(docs, ruta, titulo)
+
+    def estado_portapapeles(self):
+        """Indica si hay un texto seleccionado para copiar/cortar y si hay uno en portapapeles para pegar."""
+        if self.editor is None or self.editor.editor_textos is None or self.ventana.modo != "editar":
+            return False, False
+        return self.editor.editor_textos.actual is not None, self._portapapeles_texto is not None
+
+    def portapapeles_texto(self, operacion, punto=None):
+        """Copia, corta o pega un texto sobre la hoja activa de forma reversible."""
+        if self.editor is None or self.editor.editor_textos is None or self.ventana.modo != "editar":
+            return False
+        t = self.editor.editor_textos
+        if operacion in ("copiar", "cortar"):
+            copia = t.copiar_actual()
+            if copia is None:
+                return False
+            self._portapapeles_texto = copia
+            self._pegados_consecutivos = 0 if operacion == "cortar" else 1
+            if operacion == "cortar":
+                t.eliminar()
+            self.ventana._actualizar_portapapeles()
+            return True
+        if operacion != "pegar" or self._portapapeles_texto is None:
+            return False
+        nuevo = copy.deepcopy(self._portapapeles_texto)
+        ancho, alto = self.editor.plantilla["size"]
+        if punto is not None:
+            x, y = float(punto.x()), float(punto.y())
+        else:
+            paso = 5.0 * self._pegados_consecutivos
+            x = float(nuevo["x"]) + paso
+            y = float(nuevo["y"]) + paso
+            self._pegados_consecutivos += 1
+        nuevo["x"] = max(1.0, min(max(1.0, float(ancho) - 1.0), x))
+        nuevo["y"] = max(1.0, min(max(1.0, float(alto) - 1.0), y))
+        self.editor.vista.seleccionado = False
+        t.insertar_texto(nuevo)
+        self.editor.vista.setFocus()
+        self.editor.vista.update()
+        self.ventana._actualizar_portapapeles()
+        return True
+
+    def crear_menu_lienzo(self, pos_vista):
+        """Construye el menú contextual del lienzo de Planos según el elemento bajo el puntero."""
+        if self.editor is None or self.editor.documento is None or self.editor.documento.total != 1:
+            return None
+        vista = self.editor.vista
+        t = self.editor.editor_textos
+        punto = vista.punto_hoja(QPointF(pos_vista))
+        editable = self.ventana.modo == "editar"
+        item = next((i for i in reversed(t.items) if i.contains(i.mapFromScene(punto))), None) if t else None
+        if item is not None:
+            return self._menu_texto_lienzo(vista, t, item, punto, editable)
+        d = self.editor.documento
+        capa = next((i for i in reversed(range(len(d.capas))) if d.capas[i].destino(0).contains(punto)), -1)
+        if capa >= 0:
+            return self._menu_grafcet_lienzo(vista, t, capa, punto, editable)
+        return self._menu_vacio_lienzo(vista, t, punto, editable)
+
+    def _menu_texto_lienzo(self, vista, t, item, punto, editable):
+        vista.seleccionado = False
+        t.elegir(t.items.index(item))
+        vista.update()
+        menu = QMenu(vista)
+        a_cortar = menu.addAction("Cortar", lambda: self.portapapeles_texto("cortar"))
+        a_copiar = menu.addAction("Copiar", lambda: self.portapapeles_texto("copiar"))
+        destino = QPointF(punto.x() + 5.0, punto.y() + 5.0)
+        a_pegar = menu.addAction("Pegar", lambda: self.portapapeles_texto("pegar", destino))
+        menu.addSeparator()
+        a_eliminar = menu.addAction("Eliminar", t.eliminar)
+        for accion in (a_cortar, a_copiar, a_eliminar):
+            accion.setEnabled(editable)
+        a_pegar.setEnabled(editable and self._portapapeles_texto is not None)
+        return menu
+
+    def _menu_grafcet_lienzo(self, vista, t, capa, punto, editable):
+        if t is not None:
+            t.elegir(-1)
+        vista.capa = capa
+        vista.seleccionado = True
+        self.elegir_grafico(capa)
+        menu = QMenu(vista)
+        a_centrar = menu.addAction("Centrar", self.centrar_grafico)
+        a_centrar.setEnabled(self.editor.b_centrar.isEnabled())
+        a_pegar = menu.addAction("Pegar", lambda: self.portapapeles_texto("pegar", punto))
+        a_pegar.setEnabled(editable and self._portapapeles_texto is not None)
+        menu.addSeparator()
+        a_quitar = menu.addAction("Eliminar del plano", self.eliminar_grafico)
+        a_quitar.setEnabled(editable)
+        return menu
+
+    def _menu_vacio_lienzo(self, vista, t, punto, editable):
+        if t is not None:
+            t.elegir(-1)
+        vista.seleccionado = False
+        if not self.editor.editando_plantilla:
+            self.editor.propiedades.setCurrentIndex(0)
+        vista.update()
+        menu = QMenu(vista)
+        a_pegar = menu.addAction("Pegar", lambda: self.portapapeles_texto("pegar", punto))
+        a_pegar.setEnabled(editable and self._portapapeles_texto is not None)
+        a_texto = menu.addAction("Añadir texto", self.editor.anadir_texto)
+        a_texto.setEnabled(editable)
+        return menu
+
+    def _abrir_menu_lienzo(self, pos_vista, pos_global):
+        menu = self.crear_menu_lienzo(pos_vista)
+        if menu is not None:
+            menu.exec(pos_global)
 
     def traer(self):
         self.ventana.preparar_traer(self.hoja_id)

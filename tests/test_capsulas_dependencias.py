@@ -103,11 +103,14 @@ var tx={children:[100,300,500].map(x=>({getBBox:()=>({x:x,width:20})}))};
 timerText(parent,tx,[{t:'3s'},{t:'3s'},{t:'2s'}],100,'e',{temporal:{t:%s}});
 JSON.stringify(volcar(parent));""" % json.dumps(t)
             r=eng.evaluate(code); self.assertFalse(r.isError(),r.toString()); g=json.loads(r.toString())["hijos"][0]
-            (tx,)=g["hijos"]
-            self.assertEqual(tx["tag"],"text")
+            # La cápsula azul (C1) va debajo del texto, que es lo que se alinea con la duración; sobresale 5 px por cada lado
+            pill,tx=g["hijos"]
+            self.assertEqual((pill["tag"],pill["attrs"]["class"],tx["tag"]),("rect","timer-pill","text"))
             self.assertEqual((tx["attrs"]["x"],tx["attrs"]["text-anchor"]),(cx-10,"start"))
+            self.assertEqual((pill["attrs"]["x"],pill["attrs"]["x"]+pill["attrs"]["width"]),(cx-15,cx-15+8*6+10))
             t["off"]=True
             r=eng.evaluate(code.replace(json.dumps({k:v for k,v in t.items() if k!="off"}),json.dumps(t)))
             self.assertFalse(r.isError(),r.toString())
-            tx=json.loads(r.toString())["hijos"][0]["hijos"][0]
+            pill,tx=json.loads(r.toString())["hijos"][0]["hijos"]
             self.assertEqual((tx["attrs"]["x"],tx["attrs"]["text-anchor"]),(cx+10,"end"))
+            self.assertEqual(pill["attrs"]["x"]+pill["attrs"]["width"],cx+15)

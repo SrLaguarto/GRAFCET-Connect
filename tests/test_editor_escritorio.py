@@ -1834,7 +1834,7 @@ class Interfaz(unittest.TestCase):
         QApplication.processEvents()
         self.assertEqual(w.props.titulo.text(), "Propiedades")
         self.assertTrue(not w.props.prog.isVisible() and w.props.pagina == "vacio")
-        self.assertEqual(w.props.l_vacio.text(), "Haga clic en un elemento del dibujo para ver y cambiar sus opciones.")
+        self.assertEqual(w.props.l_vacio.text(), "Haz clic en un elemento del dibujo para ver y cambiar sus opciones.")
         e.seleccionar([ts["t2"]])
         self.assertEqual((w.props.prog.texto(), w.props.prog.isVisible(), w.props.pagina), ("paro", True, "transicion"))
         self.assertIn("t2", w.props.l_bloques.text())
@@ -2642,8 +2642,7 @@ class Interfaz(unittest.TestCase):
         self.assertIn(COL_ERR, w.ayuda.styleSheet())
 
     def test_SEDI76b_el_mensaje_de_seleccion_no_se_pinta_encima_de_la_firma_ni_del_detalle(self):
-        """REQ-EDT-09: con un mensaje temporal (la selección) en la barra de estado, ni «Conforme a IEC 60848» ni «Archivo sin firma» ni la
-        línea de detalle se ven en su sitio, aunque se pidan mostrar mientras dura; al irse el mensaje vuelven, sin tocarse entre sí."""
+        """REQ-EDT-09: el mensaje temporal ocupa el centro y deja visibles la conformidad y la firma."""
         from PySide6.QtCore import QRect
         w = self.w
         w.resize(1200, 700)
@@ -2655,7 +2654,8 @@ class Interfaz(unittest.TestCase):
         w.l_firma.setVisible(True)
         QApplication.processEvents()
         zona = w.zona_estado
-        antes = [(x.isVisible(), x.geometry()) for x in (w.l_aviso, w.l_detalle, w.l_firma)]
+        antes = [(x.isVisible(), QRect(x.mapTo(sb, x.rect().topLeft()), x.size()))
+                 for x in (w.l_aviso, w.l_detalle, w.l_firma)]
         self.assertTrue(all(v for v, _ in antes))
         for a_, b_ in ((0, 1), (1, 2), (0, 2)):
             self.assertFalse(antes[a_][1].intersects(antes[b_][1]), "en reposo, uno al lado de otro")
@@ -2664,12 +2664,13 @@ class Interfaz(unittest.TestCase):
         w._indicar_firma(w.edicion)
         w.l_firma.setVisible(True)
         QApplication.processEvents()
-        zona_mensaje = QRect(0, 0, sb.fontMetrics().horizontalAdvance(sb.currentMessage()) + 12, sb.height())
-        visibles = [c for c in sb.findChildren(QLabel) if c.isVisible() and c not in (w.l_lect, w.l_reloj)
+        mensaje = w.l_mensaje_estado
+        zona_mensaje = QRect(mensaje.mapTo(sb, mensaje.rect().topLeft()), mensaje.size())
+        visibles = [c for c in sb.findChildren(QLabel) if c.isVisible() and c is not mensaje
                     and sb.rect().intersects(QRect(c.mapTo(sb, c.rect().topLeft()), c.size()))]
         for c in visibles:
             self.assertFalse(QRect(c.mapTo(sb, c.rect().topLeft()), c.size()).intersects(zona_mensaje), (c.text(), "pisa el mensaje"))
-        self.assertFalse(zona.isVisible())
+        self.assertFalse(w.l_detalle.isVisible())
         sb.clearMessage()
         QApplication.processEvents()
         self.assertTrue(zona.isVisible() and w.l_aviso.isVisible())
@@ -2825,7 +2826,7 @@ class Interfaz(unittest.TestCase):
             self.assertFalse(w.guardar())
             archivo.assert_not_called()
             aviso.assert_not_called()
-        self.assertEqual(e.mensaje, "Hay una variable sin nombre: escríbale un nombre o quítela")
+        self.assertEqual(e.mensaje, "Hay una variable sin nombre: escríbele un nombre o quítala")
         self.assertEqual(pv.msg.text(), e.mensaje)
         self.assertEqual(pv.parpadeo.ids, {pv._clave_fila(pv._pend[0])})
         # quitarla: solo la fila de la interfaz, sin tocar el modelo ni deshacer
@@ -4120,10 +4121,10 @@ class Interfaz(unittest.TestCase):
             self.assertEqual(tabs.currentIndex(),i)
 
     def test_SEDI266_estado_de_conexion_completo_en_pastilla_sin_segunda_fila(self):
-        """REQ-SIM-03, G4: error completo en la señal y ayuda de la pastilla, sin ampliar la cabecera."""
+        """REQ-SIM-03, G4: la banda muestra el error entero a distintos anchos sin pisar el cuerpo."""
         from PySide6.QtWidgets import QFrame
         from escritorio.entradas_salidas import PanelES
-        largo = ("El simulador de procesos cerró o anuló la conexión (WinError 10053). Salidas no garantizadas. "
+        largo = ("El simulador de fábricas cerró o anuló la conexión (WinError 10053). Salidas no garantizadas. "
                  "Pulsa Conectar para reanudar. Detalle: [WinError 10053] Se ha anulado una conexión establecida "
                  "por el software en su equipo host")
         p = PanelES()
@@ -4145,14 +4146,13 @@ class Interfaz(unittest.TestCase):
                 p.resize(ancho, 600)
                 for _ in range(3):
                     self.app.processEvents()
-                self.assertFalse(p.fila_estado.isVisible())
-                self.assertFalse(p.estado.isVisible() or p.check.isVisible())
-                self.assertEqual(banda.height(), corto)
+                self.assertGreaterEqual(p.estado.height(), p.estado.heightForWidth(p.estado.width()))
+                self.assertGreater(banda.height(), corto)
                 cuerpo = p.lienzo.mapTo(p, p.lienzo.rect().topLeft()).y()
                 self.assertLessEqual(banda.geometry().bottom(), cuerpo, "sin pisar el cuerpo")
             p.mostrar_estado("conectado", "Conectado · Ejecutando")
             self.app.processEvents()
-            self.assertEqual((p.estado.text(), p.check.text(), banda.height()), ("Conectado", "✓", corto))
+            self.assertEqual(p.pastilla_conexion.text(), f"● Conectado · {p.config.host}:{p.config.puerto}")
         finally:
             p.close()
             p.deleteLater()
@@ -4632,7 +4632,8 @@ class Interfaz(unittest.TestCase):
             w._mostrar_panel("inferior", True)
             QApplication.processEvents()
             self.assertTrue(w.traza.isVisible())
-            self.assertEqual(w.inferior.width(), w.centralWidget().width())
+            self.assertEqual(w.inferior.width(), w.vsplit.width())
+            self.assertLess(w.inferior.width(), w.centralWidget().width())
             antes = w.inferior.height()
             w.vsplit.moveSplitter(w.vsplit.sizes()[0] - 30, 1)
             QApplication.processEvents()

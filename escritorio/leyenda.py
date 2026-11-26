@@ -19,7 +19,9 @@ from grafcet.builder import M
 from grafcet.view import Vista
 
 from . import estilo
+from .componentes_comunes import CabeceraDialogo
 from .diagrama import COL, SX, dibujar
+from .estilo_dialogos import aplicar_escala_dialogo
 
 ESCALA = 0.9  # tamaño de las miniaturas respecto al dibujo
 ANCHO_MINIATURA = 190  # columna de las imágenes: todas centradas en el mismo ancho
@@ -240,12 +242,12 @@ SECCIONES: tuple[tuple[str, tuple[Entrada, ...]], ...] = (
                 "grafcet. {*} es la actual, {INIT} la inicial y { } la vacía.", _orden_forzado),
     )),
     ("Temporizadores", (
-        Entrada("Temporizador contando", "Sobre la duración («3 s») aparece el tiempo que lleva contado.",
+        Entrada("Temporizador contando", "Sobre la duración («3 s») aparece el tiempo que lleva contado en una cápsula azul.",
                 _temporizador_contando),
-        Entrada("Temporizador vencido", "Cuando se cumple el tiempo sale «3 s ✓».", _temporizador_vencido),
+        Entrada("Temporizador vencido", "Cuando se cumple el tiempo la cápsula muestra «3,00 s ✓».", _temporizador_vencido),
     )),
     ("Ratón y teclado", (
-        Entrada("Ver el estado", "Pase el ratón por una etapa o una transición para ver su estado."),
+        Entrada("Ver el estado", "Pasa el ratón por una etapa o una transición para ver su estado."),
         Entrada("Acercar y alejar", "Ctrl + rueda del ratón o el pellizco del panel táctil hacen zoom "
                 "alrededor del puntero. La rueda sola desplaza el dibujo arriba y abajo; Mayús + rueda, en horizontal; con dos dedos del panel táctil, en los dos ejes. "
                 "También se mueve arrastrándolo con el botón central."),
@@ -323,8 +325,11 @@ class Leyenda(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Leyenda del dibujo")
+        aplicar_escala_dialogo(self)
         self.resize(760, 620)
         self.setMinimumWidth(520)
+        self.cabecera = CabeceraDialogo("Leyenda del dibujo", self, mostrar_cerrar=True)
+        self.cabecera.cerrar_pedido.connect(self.close)
         contenido = QWidget()
         lay = QVBoxLayout(contenido)
         for titulo, entradas in SECCIONES:
@@ -337,4 +342,6 @@ class Leyenda(QDialog):
         self.zona.setWidget(contenido)
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
-        raiz.addWidget(self.zona)
+        raiz.setSpacing(0)
+        raiz.addWidget(self.cabecera)
+        raiz.addWidget(self.zona, 1)

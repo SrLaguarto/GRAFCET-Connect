@@ -90,7 +90,7 @@ class VariablesPegar(BaseQt):
         self.assertEqual(t.item(r, 2).background().color().name(), ROJO_SUAVE)
         self.assertNotEqual(t.item(r, 0).background().color().name(), ROJO_SUAVE)
         self.assertEqual(t.item(r, 1).foreground().color().name(), "#c62828")
-        self.assertIn("Papel no reconocido: «SalIdo». Use Entrada, Salida o Memoria.", t.item(r, 1).toolTip())
+        self.assertIn("Papel no reconocido: «SalIdo». Usa Entrada, Salida o Memoria.", t.item(r, 1).toolTip())
         self.assertIn("Tipo no reconocido: «Buleano»", t.item(r, 2).toolTip())
         self.assertEqual(pv.sin_nombre(), 1)
         self.assertFalse(any(f.get("blanca") for f in pv._filas), "con variables, sin muestra")

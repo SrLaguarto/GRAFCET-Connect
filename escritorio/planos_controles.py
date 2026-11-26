@@ -9,7 +9,7 @@ from . import estilo
 from .campos_medidos import DecimalMedido
 
 AVISO_NO_CABE = (
-    "El GRAFCET no cabe en esta hoja. Cambie el tamaño de la hoja a uno más grande "
+    "El GRAFCET no cabe en esta hoja. Cambia el tamaño de la hoja a uno más grande "
     "(p. ej. A3) o la orientación."
 )
 
@@ -51,6 +51,7 @@ class ComboZoom(QComboBox):
 class ControlesPlanos:
     def __init__(self, pagina, raiz):
         self.p = pagina
+        self._slots_secundarias = {}
         self._barra(raiz)
         self._grafico()
 
@@ -64,11 +65,21 @@ class ControlesPlanos:
         p.a_hoja = QAction("+ Añadir otra hoja", p)
         p.a_hoja.triggered.connect(p.nueva_hoja)
         p.a_nueva = p.barra.addAction("Traer GRAFCET", p.traer)
-        p.a_centrar = p.barra.addAction("Centrar GRAFCET", lambda: p.editor and p.editor.centrar())
-        p.a_texto = p.barra.addAction("Añadir texto", lambda: p.editor and p.editor.anadir_texto())
+        slot_centrar = lambda: p.editor and p.editor.centrar()
+        slot_texto = lambda: p.editor and p.editor.anadir_texto()
+        slot_exportar = lambda: p.editor and p.editor.exportar()
+        slot_imprimir = lambda: p.editor and p.editor.imprimir()
+        p.a_centrar = p.barra.addAction("Centrar", slot_centrar)
+        p.a_texto = p.barra.addAction("Añadir texto", slot_texto)
         p.barra.addSeparator()
-        p.a_exportar = p.barra.addAction("Exportar…", lambda: p.editor and p.editor.exportar())
-        p.a_imprimir = p.barra.addAction("Imprimir…", lambda: p.editor and p.editor.imprimir())
+        p.a_exportar = p.barra.addAction("Exportar…", slot_exportar)
+        p.a_imprimir = p.barra.addAction("Imprimir…", slot_imprimir)
+        self._slots_secundarias = {
+            p.a_centrar: slot_centrar,
+            p.a_texto: slot_texto,
+            p.a_exportar: slot_exportar,
+            p.a_imprimir: slot_imprimir,
+        }
         self.menu_mas = QMenu(p.barra)
         self.b_mas = QToolButton()
         self.b_mas.setText("Más")
@@ -83,6 +94,12 @@ class ControlesPlanos:
         p._espaciador_barra.setStyleSheet("background: transparent;")
         p._espaciador_barra.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.acc_espaciador = p.barra.addWidget(p._espaciador_barra)
+        self._crear_caja_zoom()
+        self.acc_zoom = p.barra.addWidget(p.caja_zoom)
+        raiz.addWidget(p.barra)
+
+    def _crear_caja_zoom(self):
+        p = self.p
         p.caja_zoom = QFrame(p.barra)
         p.caja_zoom.setObjectName("barraZoomPlanos")
         zl = QHBoxLayout(p.caja_zoom)
@@ -117,8 +134,6 @@ class ControlesPlanos:
         )
         for widget in (p.b_menos_zoom, p.zoom_combo, p.b_mas_zoom, p.b_encajar_zoom):
             zl.addWidget(widget)
-        self.acc_zoom = p.barra.addWidget(p.caja_zoom)
-        raiz.addWidget(p.barra)
 
     def _grafico(self):
         p = self.p
@@ -148,10 +163,11 @@ class ControlesPlanos:
         form.addRow(p.b_eliminar_grafico)
 
     def _rellenar_mas(self):
+        self.p.actualizar_acciones()
         self.menu_mas.clear()
         for accion in self.secundarias():
-            copia = self.menu_mas.addAction(accion.text(), accion.trigger)
-            copia.setEnabled(accion.isEnabled())
+            copia = self.menu_mas.addAction(accion.text(), self._slots_secundarias[accion])
+            copia.setEnabled(self.p._habilitadas.get(accion, False))
 
     def secundarias(self):
         p = self.p

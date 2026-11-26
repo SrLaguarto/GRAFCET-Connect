@@ -28,16 +28,26 @@ SUPERFICIE_2 = "#f7f9fc"   # cabeceras de tabla, barras secundarias
 SUPERFICIE_3 = "#f1f5f9"   # estuches segmentados y barra de estado
 BORDE = "#d4dde8"          # separadores y marcos decorativos
 BORDE_FUERTE = "#b6c4d4"   # borde suave de botones secundarios y cápsulas
-BORDE_CONTROL = "#7b8a9c"  # borde de un control (3,5:1 sobre blanco)
+BORDE_CONTROL = "#7b8a9c"  # borde de un control (3,5:1 sobre blanco y >= 3:1 sobre SUPERFICIE_2)
+BORDE_SUAVE = "#cbd5e1"    # borde fino de tarjetas, cabeceras y pastilla inactiva (#10)
+BORDE_MEDIO = "#94a3b8"    # borde medio de marcos de diálogo y desplegables (#10)
+CABECERA_PANEL = "#e2e8f0" # cabecera de panel lateral y pastillas de recuento (#10)
+DIVISOR_PANEL = "#e2e8f0"  # línea divisoria interior en cabeceras y pies de diálogo
+SUPERFICIE_PIE_DIALOGO = "#fafbfd"  # banda inferior de diálogo (#10)
 DESHABILITADO = "#7c8896"  # texto de lo no disponible (la norma exime de contraste a lo deshabilitado)
 HOVER = "#e4ecf3"          # pasar el puntero por un control sin relleno
 PULSADO = "#d3dfea"
 
 ACENTO = "#0b6e75"         # petróleo: lo accionable, un solo acento por zona (6:1 con texto blanco)
 ACENTO_OSCURO = "#095259"
-ACENTO_HOVER = "#0d8189"
+ACENTO_HOVER = "#095a60"   # hover primario unificado (#10; 7,6:1 con texto blanco)
 ACENTO_SUAVE = "#cfeee6"   # relleno de lo seleccionado o activo (menta; una prueba fija este tono en el icono marcado)
-ACENTO_BORDE = "#8fcdd1"
+ACENTO_BORDE = "#8fd3c3"   # borde de selección menta (#10)
+PRIMARIO = ACENTO
+PRIMARIO_HOVER = ACENTO_HOVER
+SELECCION_FONDO = ACENTO_SUAVE
+SELECCION_BORDE = ACENTO_BORDE
+SELECCION_TEXTO = "#0b4f54"
 
 EDICION = "#2f3b4a"        # tinta pizarra, neutra: el programa está en edición; no compite con el acento petróleo (blanco encima: 11,3:1)
 SIMULACION = "#157a35"     # verde máquina de la simulación en marcha (blanco encima: 5,4:1)
@@ -64,7 +74,23 @@ CONFIRMAR_HOVER = "#1b5149"
 PARPADEO = "#2f8a91"       # el tono claro del parpadeo de «+ Añadir hoja»: blanco encima, 4,1:1
 
 TIPO_BOOL, TIPO_DECIMAL, TIPO_ENTERA, TIPO_CUALQUIERA = "#22a342", "#008add", "#d96a0c", "#6d837b"  # la barrita de tipo de variable (E/S)
-ORIGEN_MEMORIA = "#7a3e8e"  # ciruela: la barra de origen de las fichas de memoria (7,2:1 sobre blanco); ni aviso ni tipo entero
+ORIGEN_MEMORIA = "#6d28d9"  # morado unificado con PAPEL_MEMORIA para fichas de memoria en Propiedades (#4/#10)
+PAPEL_ENTRADA = "#15747b"   # papel semántico de variable de entrada (#10)
+PAPEL_SALIDA = SIMULACION   # papel semántico de variable de salida (#157a35, #10)
+PAPEL_MEMORIA = "#6d28d9"   # papel semántico de variable interna / memoria (#10)
+COLORES_PAPEL = {"input": PAPEL_ENTRADA, "output": PAPEL_SALIDA, "internal": PAPEL_MEMORIA}
+
+BOOL_0_FONDO = SUPERFICIE_3  # pastilla booleana 0 (#f1f5f9, #10)
+BOOL_0_BORDE = BORDE_SUAVE   # borde de pastilla booleana 0 (#cbd5e1, #10)
+BOOL_0_TEXTO = "#64748b"     # cifra de pastilla booleana 0 (#10)
+BOOL_1_FONDO = "#dcfce7"     # pastilla booleana 1 (#10)
+BOOL_1_BORDE = "#86efac"     # borde de pastilla booleana 1 (#10)
+BOOL_1_TEXTO = "#15803d"     # cifra de pastilla booleana 1 (#10)
+
+PELIGRO_FONDO = "#fef2f2"    # botón secundario destructivo suave (#10)
+PELIGRO_BORDE = "#fca5a5"
+PELIGRO_TEXTO = "#b91c1c"
+
 SENAL_CONDICION, SENAL_ACCION = ACENTO, TINTA_2  # el color de cada parte de Propiedades: receptividad, condición y evento / acción
 SENAL_TENUE, SENAL_ASIGNADA = "#cbd2d5", "#7c8a90"  # la barrita sin señal y asignada (3,5:1 sobre blanco con su contorno)
 RESALTADO = "#e8f5ef"      # fila de variable resaltada en E/S (una prueba fija este tono)
@@ -77,12 +103,19 @@ LUZ = {"conectada": SIMULACION, "desconectada": "#6f7f92", "error": "#c62828"}  
 
 # -- espaciado (ritmo de 4 y 8), radios, tipografía, alturas -------------------------------------------------------
 E1, E2, E3, E4, E6 = 4, 8, 12, 16, 24
-R_S, R_M, R_L = 4, 8, 12
+R_S, R_CONTROL, R_M, R_L = 4, 6, 8, 12
+ALTO_ESTANDAR = 32         # altura de referencia para botones de diálogo y controles estándar (#10)
+ALTO_COMPACTO = 30         # altura compacta / escala normal (#10)
+ALTO_MAX_DESPLEGABLE = 300 # tope vertical para listas desplegables (#10)
+BARRA_PAPEL_ANCHO = 3.5    # barra semántica de papel de variable: 3,5 × 16 px (#10)
+BARRA_PAPEL_ALTO = 16.0
+BARRA_PAPEL_RADIO = 1.75
 FUENTE = "Segoe UI"
 FUENTE_TITULO = "Bahnschrift"  # tipografía técnica de Windows para títulos, rótulos de sección y chip (reserva: Segoe UI)
 FUENTE_MONO = "Consolas"      # cifras: tiempos, valores y porcentaje
 FAMILIA_TITULO = f'"{FUENTE_TITULO}", "{FUENTE}"'
 FAMILIA_MONO = f'"{FUENTE_MONO}", "Courier New"'
+FAMILIA_TABULAR = FAMILIA_MONO  # cifras de ancho fijo en hojas Qt sin propiedades CSS ajenas a QSS
 ANCHO_BARRA = 10           # barras de desplazamiento
 
 # Dos escalas de letra y controles que cambian con el tamaño de la ventana (`activar_escala`).
@@ -158,11 +191,11 @@ def _familia(selectores: str, alto: int, pad_h: int, extra: str = "", pad_extra:
 _PLANTILLA = Template("""
 QWidget { font-family:"$fuente"; font-size:${t_base}px; color:$tinta; }
 QMainWindow, QDialog { background:$fondo; }
-QToolTip { background:$superficie; color:$tinta; border:1px solid $borde_fuerte; border-radius:6px; padding:6px 8px; }
+QToolTip { background:$superficie; color:$tinta; border:1px solid $borde_fuerte; border-radius:${r_control}px; padding:6px 8px; }
 QWidget#panelDibujo, QWidget#panelVariables, QWidget#consolaSimulacion { background:$superficie; border:0; border-radius:0; }
 QLabel#tituloConsola { color:$tinta_3; font-size:11px; font-weight:700; letter-spacing:0.4px; background:transparent; }
 QFrame#cabeceraPanel { background:$superficie_2; border:0; border-bottom:1px solid $borde; }
-QLabel#badgePanel { font-family:$familia_mono; font-size:10.5px; font-weight:600; color:$tinta_2; background:#e2e8f0; border-radius:8px; padding:1px 6px; }
+QLabel#badgePanel { font-family:$familia_mono; font-size:10.5px; font-weight:600; color:$tinta_2; background:$cabecera_panel; border-radius:8px; padding:1px 6px; }
 QWidget#panelPropiedades { background:$superficie; border:1px solid $borde; border-radius:${r_m}px; }
 QLabel#tituloPanel { font-family:$familia_titulo; font-size:12.5px; font-weight:700; color:$tinta; border:0; background:transparent; }
 QWidget#cabeceraPropiedades { background:$superficie_2; border-radius:${r_s}px; }
@@ -277,6 +310,8 @@ QPushButton[primario="true"]:hover { background:$acento_hover; border-color:$ace
 QPushButton[primario="true"]:pressed { background:$acento_oscuro; }
 QPushButton[primario="true"][tecl="true"]:focus { border:2px dashed $blanco; }
 QPushButton[primario="true"]:disabled { background:$pulsado; color:$deshabilitado; border-color:$borde; }
+QPushButton[pieDialogo="true"] { min-height:${alto_estandar_menos}px; max-height:${alto_estandar_menos}px; border-radius:${r_control}px; padding:0 14px; }
+QPushButton[pieDialogo="true"][tecl="true"]:focus { min-height:${alto_estandar_menos4}px; max-height:${alto_estandar_menos4}px; padding:0 13px; }
 QPushButton[entrada="true"] { text-align:left; padding:0 10px; border:2px solid $borde_fuerte; border-radius:6px; background:$superficie; color:$tinta; font-weight:600; min-height:${alto_entrada}px; }
 QPushButton[entrada="true"]:hover { border-color:$acento; }
 QPushButton[entrada="true"][tecl="true"]:focus { border:2px dashed $foco; padding:0 10px; min-height:${alto_entrada}px; }
@@ -344,14 +379,15 @@ def hoja_global(compacto_alto: bool = False) -> str:
         fuente=FUENTE, t_base=T_BASE, t_pequena=T_PEQUENA, t_titulo=T_TITULO, t_seccion=T_SECCION,
         tinta=TINTA, tinta_2=TINTA_2, tinta_3=TINTA_3, blanco=BLANCO, fondo=FONDO, superficie=SUPERFICIE,
         superficie_2=SUPERFICIE_2, superficie_3=SUPERFICIE_3, borde=BORDE, borde_fuerte=BORDE_FUERTE,
-        borde_control=BORDE_CONTROL, deshabilitado=DESHABILITADO, hover=HOVER,
+        borde_control=BORDE_CONTROL, cabecera_panel=CABECERA_PANEL, deshabilitado=DESHABILITADO, hover=HOVER,
         pulsado=PULSADO, acento=ACENTO, acento_oscuro=ACENTO_OSCURO, acento_hover=ACENTO_HOVER, acento_suave=ACENTO_SUAVE,
         acento_borde=ACENTO_BORDE, simulacion=SIMULACION, simulacion_suave=SIMULACION_SUAVE, foco=FOCO,
-        r_s=R_S, r_m=R_M, fondo_pestanas=FONDO, edicion=EDICION, ok=OK, error=ERROR, error_fondo=ERROR_FONDO,
+        r_s=R_S, r_control=R_CONTROL, r_m=R_M, fondo_pestanas=FONDO, edicion=EDICION, ok=OK, error=ERROR, error_fondo=ERROR_FONDO,
         familia_titulo=FAMILIA_TITULO, familia_mono=FAMILIA_MONO, foco_fuerte=FOCO_FUERTE, simulacion_hover=SIMULACION_HOVER, simulacion_borde=SIMULACION_BORDE, alto_entrada=ALTO_ENTRADA - 4, alto_tb_f2=alto_tb - 9,
         radio_pastilla=alto_tb // 2, alto_pastilla=alto_tb - 5, alto_pastilla_foco=alto_tb - 7, alto_tb=alto_tb, alto_tb_c=alto_tb - 5, alto_tb_f=alto_tb - 7,
         pad_menu=3 if compacto_alto else 4, pad_item=6 if compacto_alto else 8,
         pad_tab=3 if not compacto_alto else 2, pad_barra=2 if compacto_alto else 4, alto_menos=alto - 2, alto_menos4=alto - 4,
+        alto_estandar_menos=ALTO_ESTANDAR - 2, alto_estandar_menos4=ALTO_ESTANDAR - 4,
         alto_fila=ALTO_FILA_COMPACTA if compacto_alto else ALTO_FILA, ancho_barra=ANCHO_BARRA,
         familia_entradas=_familia("QLineEdit, QComboBox", alto, 8),
         familia_botones=_familia("QPushButton", alto, 12, teclado=True),
@@ -387,6 +423,44 @@ def fuente(px: int | None = None, negrita: bool = False, titulo: bool = False, m
     f.setPixelSize(px or T_BASE)
     f.setBold(negrita)
     return f
+
+
+def fuente_tabular(px: int | None = None, negrita: bool = False, mono: bool = True) -> QFont:
+    """Letra con cifras tabulares (0–9 de idéntico avance horizontal) para contadores, pastillas 0/1 y tiempos."""
+    from PySide6.QtGui import QFontMetrics
+    if not mono and hasattr(QFont, "Tag"):
+        f = fuente(px=px, negrita=negrita, mono=False)
+        tag = QFont.Tag.fromString("tnum")
+        if tag is not None:
+            f.setFeature(tag, 1)
+            fm = QFontMetrics(f)
+            if len({fm.horizontalAdvance(str(d)) for d in range(10)}) == 1:
+                return f
+    return fuente(px=px or T_CIFRA, negrita=negrita, mono=True)
+
+
+def qss_tabular() -> str:
+    """Fragmento QSS para cifras tabulares sin usar propiedades CSS desconocidas por Qt."""
+    return f"font-family:{FAMILIA_TABULAR};"
+
+
+_ALIASES_PAPEL = {
+    "input": "input", "entrada": "input", "entradas": "input", "e": "input", "in": "input",
+    "output": "output", "salida": "output", "salidas": "output", "s": "output", "out": "output",
+    "internal": "internal", "interna": "internal", "internas": "internal", "memoria": "internal", "memorias": "internal", "m": "internal", "mem": "internal",
+}
+
+
+def clave_papel_variable(papel: str | None) -> str:
+    """Normaliza un identificador de papel de variable a `'input'`, `'output'`, `'internal'` o `''`."""
+    if not papel:
+        return ""
+    return _ALIASES_PAPEL.get(str(papel).strip().lower(), "")
+
+
+def color_papel_variable(papel: str | None, reserva: str = TINTA_3) -> str:
+    """Color semántico (#10) para el papel de una variable: Entrada `#15747b`, Salida `#157a35`, Memoria `#6d28d9`."""
+    return COLORES_PAPEL.get(clave_papel_variable(papel), reserva)
 
 
 # -- propiedades dinámicas ------------------------------------------------------------------------------------------

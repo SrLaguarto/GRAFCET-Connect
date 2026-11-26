@@ -31,10 +31,10 @@ class AyudaLecturaES(QWidget):
         instrucciones = ""
         if self.servidor_ausente:
             if activable:
-                instrucciones = "Pulse «Activar el servidor web». "
+                instrucciones = "Pulsa «Activar el servidor web». "
             instrucciones += (
-                "Reinicie el simulador de fábricas con el driver en «Ninguno» "
-                "y pulse «Volver a leer»."
+                "Reinicia el simulador de fábricas con el controlador en «Ninguno» "
+                "y pulsa «Volver a leer»."
             )
         self.etiqueta.setText(mensaje + ("\n\n" + instrucciones if instrucciones else ""))
         self.etiqueta.setToolTip(self.etiqueta.text())

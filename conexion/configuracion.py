@@ -42,7 +42,7 @@ def aviso_host(texto) -> str:
     if not isinstance(texto, str) or not (texto := texto.strip()) or es_ipv4(texto) or texto.lower() == "localhost" \
             or es_ipv4(normalizar_host(texto)) and normalizar_host(texto) != CONEXION_INICIAL[0]:
         return ""
-    return f"La dirección guardada ({texto}) no es una IP. Escriba la IP del servidor."
+    return f"La dirección guardada ({texto}) no es una IP. Escribe la IP del servidor."
 
 
 @dataclass

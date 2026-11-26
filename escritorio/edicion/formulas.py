@@ -108,5 +108,5 @@ class _Formulas:
 
     def aviso_ambiguas(self, *textos: str) -> str:
         """Aviso para el panel o el diálogo si algún `X…` puede ser dos etapas; vacío si no."""
-        return " ".join(f"{x} puede ser la etapa E{x[1:]} o la etapa {x[1:]}: se usa E{x[1:]}; para la otra escriba "
+        return " ".join(f"{x} puede ser la etapa E{x[1:]} o la etapa {x[1:]}: se usa E{x[1:]}; para la otra escribe "
                         f"active(`{x[1:]}`)." for x in self.ambiguas(*textos))

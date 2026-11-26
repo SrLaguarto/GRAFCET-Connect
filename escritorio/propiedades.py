@@ -30,8 +30,8 @@ from typing import Any, Callable
 
 from PySide6.QtCore import QEvent, QMimeData, QObject, QPoint, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QIcon, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QFormLayout, QGridLayout, QHBoxLayout, QLabel,
-                               QLineEdit, QListWidget, QListWidgetItem, QPushButton, QSizePolicy,
+from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
+                               QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QSizePolicy,
                                QStackedWidget, QToolButton, QVBoxLayout, QWidget)
 
 from grafcet.routing import TALLO_T
@@ -40,6 +40,7 @@ from grafcet.view import norm
 
 from .interaccion_propiedades import CasillaPropiedades
 from . import estilo
+from .componentes_comunes import acotar_desplegable
 from .paneles import EtiquetaGrupos, TituloSeccion
 from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
@@ -53,30 +54,31 @@ NARANJA = COL["glow"]
 from .edicion import MAX_ETIQUETA_ETAPA  # noqa: E402
 GRIS_HUECOS = f"color: {estilo.TINTA_2}"  # «Falta 1 hueco» / «Faltan N huecos»: gris, no error
 ANCHO_COLUMNA = 230  # la columna estrecha de campos del panel de opciones
+ANCHO_CONTROL_ETAPA = 320  # ancho uniforme de los campos de Etapa y Macroetapa (#4)
 NOMBRES = {"etapa": "Etapa", "transicion": "Transición", "simultaneidad": "Simultaneidad", "accion:continua": "Acción",
            "macroetapa": "Macroetapa", "encapsulante": "Encapsulante", "parcial": "Grafcet parcial", "forzado": "Forzado"}
-AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: arrástrela al dibujo",
+AYUDAS = {"etapa": "Etapa: arrástrala al dibujo", "transicion": "Transición: arrástrala al dibujo",
           "simultaneidad": "Barra de simultaneidad: une varias etapas a una transición, o una transición "
                            "a varias etapas. Se ensancha estirando de sus extremos.",
-          "accion:continua": "Acción continua: se cumple mientras la etapa está activa. Arrástrela al dibujo (queda suelta, con «?»); "
+          "accion:continua": "Acción continua: se cumple mientras la etapa está activa. Arrástrala al dibujo (queda suelta, con «?»); "
                              "se une a una etapa arrastrando desde su punto de unión de la izquierda hasta la etapa, o pegándola al "
                              "lado de otra acción. Para otro tipo (condicionada, al activar, al desactivar, por evento), botón "
                              "derecho sobre la acción, «Tipo de acción»",
-          "macroetapa": "Macroetapa: arrástrela al dibujo y crea la macroetapa con su expansión, "
-                        "con la etapa de entrada y la de salida a su derecha. Suelte etapas y transiciones dentro de la "
+          "macroetapa": "Macroetapa: arrástrala al dibujo y crea la macroetapa con su expansión, "
+                        "con la etapa de entrada y la de salida a su derecha. Suelta etapas y transiciones dentro de la "
                         "expansión para rellenarla; botón derecho en la macroetapa, «Encuadrar la expansión», para verla "
                         "(«Mostrar dependencias», en la barra de herramientas, dibuja los trazos que la unen a la macroetapa)",
-          "encapsulante": "Etapa encapsulante: arrástrela al dibujo, o convierta una etapa con el botón "
+          "encapsulante": "Etapa encapsulante: arrástrala al dibujo, o convierte una etapa con el botón "
                           "derecho, «Tipo de etapa». Botón derecho en la encapsulante, «Añadir recinto…», crea un "
                           "recinto; se rellena soltando "
                           "etapas dentro de su marco, y «Enlace de activación» en una de ellas la marca (*); «Encuadrar el "
                           "recinto» lo muestra",
-          "parcial": "Grafcet parcial: arrástrelo a un hueco del dibujo y crea un grafcet parcial "
-                     "vacío, con nombre propio (G1, G2…) y un marco vacío. Suelte etapas y transiciones dentro de su marco "
+          "parcial": "Grafcet parcial: arrástralo a un hueco del dibujo y crea un grafcet parcial "
+                     "vacío, con nombre propio (G1, G2…) y un marco vacío. Suelta etapas y transiciones dentro de su marco "
                      "para rellenarlo; «Renombrar…» (botón derecho o doble clic en su marco) le cambia el nombre, y una orden "
                      "de forzado («Forzado») de una etapa de otro parcial puede forzarlo. No se pone encima de otro "
                      "elemento ni de otro marco",
-          "forzado": "Orden de forzado: arrástrela al dibujo como una acción; queda suelta («G?{?}») y "
+          "forzado": "Orden de forzado: arrástrala al dibujo como una acción; queda suelta («G?{?}») y "
                      "no se simula. Doble clic en ella (o su panel de opciones) abre el diálogo para elegir el parcial al que "
                      "fuerza, la forma (explícita, la situación actual, vacía o inicial) y, si es explícita, sus etapas. Se une "
                      "a una etapa arrastrando desde su punto de unión de la izquierda hasta la etapa (o desde el lado derecho de "
@@ -89,13 +91,13 @@ TITULOS_ACCION = {"continua": "Acción continua", "activacion": "Acción al acti
 NOMBRES.update({"etapa_inicial": "Etapa inicial", "accion:continua": "Continua",
                 "accion:condicionada": "Condicionada", "accion:activacion": "Al activar",
                 "accion:desactivacion": "Al desactivar", "accion:evento": "Por evento"})
-AYUDAS["etapa_inicial"] = "Etapa inicial: arrástrela al dibujo. Se crea con el doble cuadrado de etapa inicial."
+AYUDAS["etapa_inicial"] = "Etapa inicial: arrástrala al dibujo. Se crea con el doble cuadrado de etapa inicial."
 for t in ("continua", "condicionada", "activacion", "desactivacion", "evento"):
-    AYUDAS["accion:" + t] = ("Acción " + NOMBRES["accion:" + t].lower() + ": arrástrela al dibujo; "
-                            "únala a una etapa desde su punto de unión y configúrela con doble clic.")
+    AYUDAS["accion:" + t] = ("Acción " + NOMBRES["accion:" + t].lower() + ": arrástrala al dibujo; "
+                            "únela a una etapa desde su punto de unión y configúrala con doble clic.")
 NOMBRES.update({"texto":"Texto", "imagen":"Imagen"})
-AYUDAS.update({"texto":"Cuadro de texto: arrástrelo al dibujo. Doble clic para elegir texto, fuente, tamaño y color. Estire su esquina para cambiar el cuadro.",
-               "imagen":"Imagen PNG o JPG: arrástrela al dibujo y elija un archivo. Estire su esquina para cambiar el tamaño conservando sus proporciones."})
+AYUDAS.update({"texto":"Cuadro de texto: arrástralo al dibujo. Doble clic para elegir texto, fuente, tamaño y color. Estira su esquina para cambiar el cuadro.",
+               "imagen":"Imagen PNG o JPG: arrástrala al dibujo y elige un archivo. Estira su esquina para cambiar el tamaño conservando sus proporciones."})
 COLOCABLES = (
     "etapa", "etapa_inicial", "transicion", "simultaneidad", "accion:continua", "accion:condicionada",
     "accion:activacion", "accion:desactivacion", "accion:evento", "encapsulante", "macroetapa",
@@ -247,10 +249,11 @@ def _formulario(w: QWidget) -> QFormLayout:
 
 
 def _desplegable() -> QComboBox:
-    """Desplegable que no impone su ancho al panel."""
+    """Desplegable que no impone su ancho al panel y queda acotado a 300 px."""
     c = QComboBox()
     c.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
     c.setMinimumContentsLength(6)
+    acotar_desplegable(c)
     return c
 
 
@@ -279,6 +282,11 @@ class FichaJerarquia(QWidget):
         self.texto.setWordWrap(True)
         self.texto.setStyleSheet("font-weight: 600")
         lay.addWidget(self.texto)
+        self.nota = QLabel()
+        self.nota.setWordWrap(True)
+        self.nota.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px;")
+        self.nota.hide()
+        lay.addWidget(self.nota)
         self.caja = QWidget()
         self.flujo = FlowLayout(self.caja, 4)
         lay.addWidget(self.caja)
@@ -295,9 +303,13 @@ class FichaJerarquia(QWidget):
         ancho = self.caja.width()
         if ancho > 0 and not self.caja.isHidden():
             alto = self.flujo.heightForWidth(ancho)
-            if self.caja.minimumHeight() != alto:
+            sp = self.layout().spacing()
+            extra_texto = (self.texto.heightForWidth(self.width()) + sp) if not self.texto.isHidden() else 0
+            extra_nota = (self.nota.heightForWidth(self.width()) + sp) if not self.nota.isHidden() else 0
+            min_total = extra_texto + extra_nota + alto
+            if self.caja.minimumHeight() != alto or self.minimumHeight() != min_total:
                 self.caja.setMinimumHeight(alto)
-                self.setMinimumHeight((self.texto.heightForWidth(self.width()) + self.layout().spacing() if not self.texto.isHidden() else 0) + alto)  # (la ficha lo pide entero al panel)
+                self.setMinimumHeight(min_total)
                 self.layout().invalidate()
                 self.updateGeometry()
                 self.alto_cambiado.emit()
@@ -437,21 +449,43 @@ class PanelPropiedades(QWidget):
         pagina = QWidget()
         lh = QVBoxLayout(pagina)
         lh.setContentsMargins(0, 0, 0, 0)
+        lh.setSpacing(estilo.E3)
         self.m_etiqueta = QLineEdit()
+        self.m_etiqueta.setFixedWidth(ANCHO_CONTROL_ETAPA)
         self.m_etiqueta.setAccessibleName("Nombre de la macroetapa")
         self.m_etiqueta.editingFinished.connect(lambda: self._renombrar(self.m_etiqueta))
-        self.m_formulario = QWidget()
-        mf = QFormLayout(self.m_formulario)
-        mf.setContentsMargins(0, 0, 0, 0)
-        mf.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
-        mf.addRow("Etiqueta", self.m_etiqueta)
+        self.m_tipo = _desplegable()
+        self.m_tipo.setFixedWidth(ANCHO_CONTROL_ETAPA)
+        self.m_tipo.setAccessibleName("Tipo de etapa de la macroetapa")
+        for tipo_m in ("Etapa", "Encapsulante", "Macroetapa"):
+            self.m_tipo.addItem(tipo_m, tipo_m)
+        self.m_tipo.activated.connect(self._cambiar_tipo_macro)
         self.m_comentario = QLineEdit()
+        self.m_comentario.setFixedWidth(ANCHO_CONTROL_ETAPA)
         self.m_comentario.setAccessibleName("Comentario de la macroetapa")
         self.m_comentario.setPlaceholderText("sin comentario")
         self.m_comentario.editingFinished.connect(lambda: self._comentar(self.m_comentario))
+        self.m_formulario = QWidget()
+        mf = QFormLayout(self.m_formulario)
+        mf.setContentsMargins(0, 0, 0, 0)
+        mf.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        mf.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        mf.addRow("Etiqueta", self.m_etiqueta)
+        mf.addRow("Tipo", self.m_tipo)
         mf.addRow("Comentario", self.m_comentario)
         lh.addWidget(self.m_formulario)
-        lh.addWidget(self.ficha_izq)
+        self.tarjeta_macro = QFrame()
+        self.tarjeta_macro.setObjectName("tarjetaExpansion")
+        self.tarjeta_macro.setStyleSheet(
+            f"QFrame#tarjetaExpansion {{ background: transparent; border: 0; }}"
+            f"QFrame#tarjetaExpansion[tarjeta=\"true\"] {{ background: {estilo.SUPERFICIE_2}; "
+            f"border: 1px solid {estilo.BORDE_SUAVE}; border-radius: {estilo.R_M}px; }}"
+        )
+        self._lay_tarjeta_macro = QVBoxLayout(self.tarjeta_macro)
+        self._lay_tarjeta_macro.setContentsMargins(0, 0, 0, 0)
+        self._lay_tarjeta_macro.setSpacing(estilo.E2)
+        self._lay_tarjeta_macro.addWidget(self.ficha_izq)
+        lh.addWidget(self.tarjeta_macro)
         lh.addStretch(1)
         self.izq.addWidget(pagina)
         cuerpo.addWidget(self.izq)
@@ -563,13 +597,13 @@ class PanelPropiedades(QWidget):
         o = self._objetivo
         return self.e.texto_usuario(o[1]) if o[0] == "transicion" else self.e.texto_accion(o[1], o[2])
 
-    TEXTO_VACIO = "Haga clic en un elemento del dibujo para ver y cambiar sus opciones."
+    TEXTO_VACIO = "Haz clic en un elemento del dibujo para ver y cambiar sus opciones."
     AYUDA_JERARQUIA = {
-        "macro": "Macroetapa: doble clic en ella (o «Encuadrar la expansión») encaja su expansión en la vista y la resalta; suelte "
+        "macro": "Macroetapa: doble clic en ella (o «Encuadrar la expansión») encaja su expansión en la vista y la resalta; suelta "
                  "etapas y transiciones dentro de su zona para rellenarla.",
         "expansion": "Expansión: sus etapas y transiciones son suyas; la entrada y la salida unen con la macroetapa. «Encuadrar "
                      "la macroetapa» la encaja en la vista.",
-        "enclosure": "Recinto: suelte etapas dentro de su marco para rellenarlo; en una de ellas, «Enlace de activación» la marca. "
+        "enclosure": "Recinto: suelta etapas dentro de su marco para rellenarlo; en una de ellas, «Enlace de activación» la marca. "
                      "Vacío, su borde se arrastra para moverlo.",
         "root": "Grafcet parcial: sus etapas y transiciones son suyas; lo que se suelta dentro de su marco, también. Vacío, su "
                 "borde se arrastra para moverlo; «Renombrar…» (o doble clic) le cambia el nombre, y una orden de forzado "
@@ -594,16 +628,20 @@ class PanelPropiedades(QWidget):
         f = _formulario(w)
         self.s_etiqueta = QLineEdit()
         self.s_etiqueta.setMaxLength(MAX_ETIQUETA_ETAPA)  # más no cabe en el cuadro de la etapa
+        self.s_etiqueta.setFixedWidth(ANCHO_CONTROL_ETAPA)
         self.s_etiqueta.editingFinished.connect(lambda: self._renombrar(self.s_etiqueta))
         self.s_tipo = _desplegable()
+        self.s_tipo.setFixedWidth(ANCHO_CONTROL_ETAPA)
         self.s_tipo.addItem("Normal", False)
         self.s_tipo.addItem("Inicial", True)
         self.s_tipo.activated.connect(lambda _: self.e.tipo_etapa(self.ident, self.s_tipo.currentData()))
         self.s_comentario = QLineEdit()
+        self.s_comentario.setFixedWidth(ANCHO_CONTROL_ETAPA)
         self.s_comentario.setPlaceholderText("sin comentario")
         self.s_comentario.setToolTip("Comentario de la etapa: se dibuja entre comillas a su derecha (no entra en la simulación)")
         self.s_comentario.editingFinished.connect(lambda: self._comentar(self.s_comentario))
         self.s_colocacion = _desplegable()
+        self.s_colocacion.setFixedWidth(ANCHO_CONTROL_ETAPA)
         for valor, texto in COLOCACIONES:
             self.s_colocacion.addItem(texto, valor)
         self.s_colocacion.setToolTip("Cómo se colocan las acciones de la etapa en el dibujo")
@@ -745,7 +783,7 @@ class PanelPropiedades(QWidget):
         self.b_unidos.setWordWrap(True)
         q = QPushButton("Quitar la barra")
         q.clicked.connect(lambda: self.e.borrar())
-        ayuda = QLabel("Arrastre de un extremo para ensancharla; de un punto de unión sale un enlace.")
+        ayuda = QLabel("Arrastra de un extremo para ensancharla; de un punto de unión sale un enlace.")
         ayuda.setWordWrap(True)
         f.addWidget(QLabel("<b>Tipo</b>"))
         f.addWidget(self.b_tipo)
@@ -825,7 +863,20 @@ class PanelPropiedades(QWidget):
         self.izq.setVisible(kind in ("etapa", "accion", "macro", "orden", "marco"))  # (la transición: sus campos van al pie de la ventana)
         self.ficha_izq.mostrar(e, vivo if kind in ("macro", "orden", "marco") else None)
         if kind == "macro":
-            self.ficha_izq.botones["Renombrar…"].hide()
+            self.m_tipo.blockSignals(True)
+            self.m_tipo.setCurrentIndex(max(0, self.m_tipo.findData("Macroetapa")))
+            self.m_tipo.blockSignals(False)
+            for ocultar in ("Etapa", "Encapsulante", "Macroetapa", "Renombrar…"):
+                if ocultar in self.ficha_izq.botones:
+                    self.ficha_izq.botones[ocultar].hide()
+            self.ficha_izq.nota.setText(self.AYUDA_JERARQUIA["macro"])
+            self.ficha_izq.nota.show()
+            estilo.poner(self.tarjeta_macro, tarjeta=True)
+            self._lay_tarjeta_macro.setContentsMargins(estilo.E3, estilo.E2, estilo.E3, estilo.E2)
+        else:
+            self.ficha_izq.nota.hide()
+            estilo.poner(self.tarjeta_macro, tarjeta=False)
+            self._lay_tarjeta_macro.setContentsMargins(0, 0, 0, 0)
         self.ficha_etapa.mostrar(e, vivo if kind == "etapa" else None)
         self.l_vacio.setText("Enlace de la etapa con sus acciones: Supr (o botón derecho, «Eliminar el enlace») las separa de la "
                              "etapa; quedan sueltas e independientes, cada una donde estaba."
@@ -849,7 +900,7 @@ class PanelPropiedades(QWidget):
             self.prog.poner(guardado)
             self._previsualizar()
         self._anterior = self._objetivo
-        self.der.setVisible(kind != "etapa"
+        self.der.setVisible(kind not in ("etapa", "macro")
                             and not (kind == "accion" and self.continua)
                             and not (kind == "accion" and self._bloques_fuera and not memorizada))
         if kind == "etapa":
@@ -893,8 +944,8 @@ class PanelPropiedades(QWidget):
             self.der.setCurrentIndex(4)
         elif kind == "enlace":
             tid, sid, rol = vivo.split("|")
-            self.l_enlace.setText(f"{e.nombre(vivo)}<br>Arrastre la flecha a lo largo del enlace. "
-                                  "Arrastre los cuadrados para recolocar los tramos. "
+            self.l_enlace.setText(f"{e.nombre(vivo)}<br>Arrastra la flecha a lo largo del enlace. "
+                                  "Arrastra los cuadrados para recolocar los tramos. "
                                   "La flecha sigue el sentido del enlace; los ajustes de dibujo no cambian la "
                                   "simulación.")
             from .diagrama import enlaces
@@ -926,6 +977,15 @@ class PanelPropiedades(QWidget):
     def _poner(campo: QLineEdit, texto: str) -> None:
         if not campo.hasFocus() and campo.text() != texto:
             campo.setText(texto)
+
+    def _cambiar_tipo_macro(self, _: int = 0) -> None:
+        destino = self.m_tipo.currentData()
+        if destino and destino != "Macroetapa":
+            self.ficha_izq._pulsar(destino)
+            if self.pagina == "macro":
+                self.m_tipo.blockSignals(True)
+                self.m_tipo.setCurrentIndex(max(0, self.m_tipo.findData("Macroetapa")))
+                self.m_tipo.blockSignals(False)
 
     def _comentar(self, campo: QLineEdit) -> None:
         """El comentario de la etapa o transición mostrada: una operación de deshacer al confirmar."""
@@ -998,7 +1058,7 @@ class PanelPropiedades(QWidget):
         else:
             d = e.comprobar(ident, texto)
             if d is None and cosa == "Evento" and not is_event_positive(e.significado(ident, texto)):
-                self.t_estado.setText("Esto es una condición, no un evento válido. Elija un flanco de subida (↑) o de bajada (↓).")
+                self.t_estado.setText("Esto es una condición, no un evento válido. Elige un flanco de subida (↑) o de bajada (↓).")
                 self.t_estado.setStyleSheet(f"color: {COL['err']}")
                 self.t_dibujo.setText(_html(norm(e.significado(ident, texto), True, e.nombres)))
                 return

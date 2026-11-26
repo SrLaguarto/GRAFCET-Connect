@@ -4,24 +4,235 @@ from __future__ import annotations
 import copy
 import html
 from .. import estilo
+from ..componentes_comunes import pintar_barra_papel, pintar_pastilla_booleana
 from ..diagrama import COL
 from ..edicion import Edicion, sin_codigos
 from ..mensajes import amable, motivo_parada, vencimientos_en_palabras
-from ..paneles import CabeceraCompacta, ContextoNombres
+from ..paneles import CabeceraCompacta, ContextoNombres, DelegadoNombres
 from math import ceil
 from time import perf_counter
 from typing import Any
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QColor, QFontMetrics
+from PySide6.QtCore import QRectF, QSize, QTimer, Qt
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (QApplication, QGroupBox, QHeaderView, QLabel, QLineEdit, QListWidgetItem, QMenu, QMessageBox,
-                               QPushButton, QScrollArea, QTableWidget, QTableWidgetItem)
+                               QPushButton, QScrollArea, QStyle, QStyleOptionButton, QStylePainter,
+                               QStyledItemDelegate, QTableWidget, QTableWidgetItem)
 from grafcet.engine import Session
+from grafcet.notation import x_etapa
 from grafcet.profile import SEMANTIC_OPTIONS, normalize_options
 from grafcet.view import Vista, t_trunc
 from conexion.hilos import SESION, proteger
 from .constantes import ARRIBA_CAJA, ERRORES, ESTADOS, TICK_MS, TITULO, TRAZA
 from .dialogos import _icono_barra
 from .widgets import TablaConsola, _BotonEntrada
+
+
+ROL_PAPEL_CONSOLA = int(Qt.ItemDataRole.UserRole) + 11
+ROL_BOOLEANO_CONSOLA = int(Qt.ItemDataRole.UserRole) + 12
+_ANCHO_PASTILLA = 28
+_CHIPS_ETAPA_BG = "#dcfce7"
+_CHIPS_ETAPA_BORDE = "#86efac"
+_CHIPS_ETAPA_TEXTO = "#166534"
+
+
+class _BotonEntradaPastilla(_BotonEntrada):
+    """Botón de entrada en simulación que muestra el estado booleano como pastilla `0`/`1` a la derecha."""
+
+    def _ancho_texto(self) -> int:
+        return max(24, self.width() - 2 * 10 - 2 * 2 - self.iconSize().width() - 8 - _ANCHO_PASTILLA)
+
+    def paintEvent(self, event: Any) -> None:  # noqa: N802
+        del event
+        painter = QStylePainter(self)
+        opcion = QStyleOptionButton()
+        self.initStyleOption(opcion)
+        if " = " not in opcion.text:
+            painter.drawControl(QStyle.ControlElement.CE_PushButton, opcion)
+            return
+
+        nombre, _, valor = self.text().rpartition(" = ")
+        lineas = self.lineas_visibles()
+        icono = QIcon(opcion.icon)
+        tam_icono = QSize(opcion.iconSize)
+        opcion.text = ""
+        opcion.icon = QIcon()
+        painter.drawControl(QStyle.ControlElement.CE_PushButton, opcion)
+
+        contenido = self.rect().adjusted(10, 2, -10, -2)
+        izq = contenido.left()
+        if not icono.isNull():
+            rect_ico = QRectF(izq, self.height() / 2.0 - tam_icono.height() / 2.0, tam_icono.width(), tam_icono.height()).toRect()
+            icono.paint(painter, rect_ico, Qt.AlignmentFlag.AlignCenter)
+            izq += tam_icono.width() + 6
+
+        rect_pastilla = QRectF(
+            contenido.right() - _ANCHO_PASTILLA + 1,
+            contenido.top() + (contenido.height() - 20.0) / 2.0,
+            26.0,
+            20.0,
+        )
+        ancho_nombre = max(20, int(rect_pastilla.left() - izq - 8))
+        painter.save()
+        painter.setFont(self.font())
+        painter.setPen(opcion.palette.buttonText().color())
+        if len(lineas) == 1:
+            r_nombre = QRectF(izq, contenido.top(), ancho_nombre, contenido.height())
+            nombre_elidido = painter.fontMetrics().elidedText(nombre, Qt.TextElideMode.ElideMiddle, int(r_nombre.width()))
+            painter.drawText(r_nombre, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), nombre_elidido)
+        else:
+            lineas_sin_valor = list(lineas)
+            sufijo = f" = {valor}"
+            if lineas_sin_valor[-1].endswith(sufijo):
+                lineas_sin_valor[-1] = lineas_sin_valor[-1][:-len(sufijo)]
+            if not lineas_sin_valor[-1].strip() and len(lineas_sin_valor) > 1:
+                lineas_sin_valor.pop()
+            r_nombre = QRectF(izq, contenido.top(), ancho_nombre, contenido.height())
+            painter.drawText(r_nombre, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), "\n".join(lineas_sin_valor))
+        painter.restore()
+        pintar_pastilla_booleana(painter, rect_pastilla, valor == "1")
+
+
+_COLORES_COL: dict[str, QColor] = {}
+_ESTILOS_FILA_TABLA: dict[str, tuple[QPen, QColor]] = {}
+
+
+def _color_col(nombre: str) -> QColor:
+    c = _COLORES_COL.get(nombre)
+    if c is None:
+        c = QColor(COL[nombre])
+        _COLORES_COL[nombre] = c
+    return c
+
+
+class _TablaConsolaSim(TablaConsola):
+    """Tabla de consola de simulación que destaca filas activas tanto con `1` como con `ON`."""
+
+    def paintEvent(self, event: Any) -> None:  # noqa: N802
+        if not _ESTILOS_FILA_TABLA:
+            _ESTILOS_FILA_TABLA["sel"] = (QPen(QColor(estilo.ACENTO), 1), QColor(estilo.ACENTO_SUAVE))
+            _ESTILOS_FILA_TABLA["activa"] = (QPen(QColor(estilo.SIMULACION_BORDE), 1), QColor(estilo.SIMULACION_SUAVE))
+            _ESTILOS_FILA_TABLA["normal"] = (QPen(QColor(estilo.BORDE), 1), QColor(estilo.SUPERFICIE_2))
+        p = QPainter(self.viewport())
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        vp_w = self.viewport().width()
+        vp_h = self.viewport().height()
+        fila_sel = self.currentRow()
+        sel_model = self.selectionModel()
+        es_vars = self.columnCount() == 4
+        for r in range(self.rowCount()):
+            y = self.rowViewportPosition(r)
+            if y > vp_h:
+                break
+            h = self.rowHeight(r)
+            if y + h < 0 or h <= 4:
+                continue
+            val_item = self.item(r, 2) if self.columnCount() > 2 else None
+            es_salida_activa = (
+                es_vars
+                and self.item(r, 1) is not None
+                and self.item(r, 1).text() == "salida continua"
+                and val_item is not None
+                and val_item.text() in ("1", "ON")
+            )
+            seleccionada = r == fila_sel and sel_model is not None and sel_model.isRowSelected(r)
+            clave = "sel" if seleccionada else ("activa" if es_salida_activa else "normal")
+            pen, brush = _ESTILOS_FILA_TABLA[clave]
+            rect = QRectF(1.5, y + 2.5, max(4, vp_w - 3), max(4, h - 5))
+            p.setPen(pen)
+            p.setBrush(brush)
+            p.drawRoundedRect(rect, 5, 5)
+        p.end()
+        QTableWidget.paintEvent(self, event)
+
+
+class _DelegadoNombrePapel(DelegadoNombres):
+    """Pinta la barra de color semántica `3,5 × 16 px` del papel junto al nombre de la variable."""
+
+    MARGEN_BARRA = 11
+
+    def paint(self, painter: Any, option: Any, index: Any) -> None:  # noqa: N802
+        papel = index.data(ROL_PAPEL_CONSOLA)
+        if papel:
+            pintar_barra_papel(painter, option.rect.left() + 4, option.rect.center().y(), str(papel))
+            desplazada = type(option)(option)
+            desplazada.rect = option.rect.adjusted(self.MARGEN_BARRA, 0, 0, 0)
+            super().paint(painter, desplazada, index)
+            return
+        super().paint(painter, option, index)
+
+    def initStyleOption(self, option: Any, index: Any) -> None:  # noqa: N802
+        super().initStyleOption(option, index)
+        papel = index.data(ROL_PAPEL_CONSOLA)
+        if papel and index.column() in self.columnas and option.text:
+            fm = QFontMetrics(option.font)
+            ancho = max(24, option.rect.width() - self.MARGEN_BARRA - self._margen())
+            option.text = "\n".join(self.contexto.lineas(str(index.data() or ""), fm, ancho, self.max_lineas))
+            option.textElideMode = Qt.TextElideMode.ElideNone
+
+    def ancho_para(self, lineas: int, fm: QFontMetrics) -> int:
+        base = super().ancho_para(lineas, fm)
+        return base + self.MARGEN_BARRA if base else 0
+
+
+class _DelegadoPastillaConsola(QStyledItemDelegate):
+    """Pinta valores booleanos como pastilla `0`/`1` y numéricos con cifras tabulares."""
+
+    def paint(self, painter: Any, option: Any, index: Any) -> None:  # noqa: N802
+        texto = str(index.data() or "").strip()
+        es_bool = index.data(ROL_BOOLEANO_CONSOLA)
+        if es_bool is None and texto in ("0", "1", "ON", "OFF", "True", "False"):
+            es_bool = True
+        if es_bool and texto in ("0", "1", "ON", "OFF", "True", "False"):
+            activo = texto in ("1", "ON", "True")
+            pintar_pastilla_booleana(painter, option.rect, activo)
+            return
+        painter.save()
+        painter.setFont(estilo.fuente_tabular(px=estilo.T_CIFRA))
+        tinta = index.data(Qt.ItemDataRole.ForegroundRole)
+        color = tinta.color() if hasattr(tinta, "color") else (tinta if isinstance(tinta, QColor) else QColor(estilo.TINTA))
+        painter.setPen(color)
+        painter.drawText(option.rect.adjusted(2, 0, -2, 0), int(Qt.AlignmentFlag.AlignCenter), texto)
+        painter.restore()
+
+
+class _DelegadoEtapasConsola(DelegadoNombres):
+    """Pinta chips `X2` en la columna «Etapas» (o un guion discreto `—` en reposo)."""
+
+    def paint(self, painter: Any, option: Any, index: Any) -> None:  # noqa: N802
+        texto = str(index.data() or "").strip()
+        if not texto or texto == "—":
+            painter.save()
+            painter.setFont(estilo.fuente(estilo.T_PEQUENA))
+            painter.setPen(QColor(estilo.TINTA_3))
+            painter.drawText(option.rect.adjusted(2, 0, -4, 0),
+                             int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter), "—")
+            painter.restore()
+            return
+        etiquetas = [t.strip() for t in texto.split(",") if t.strip()]
+        if not etiquetas or any(len(t) > 7 for t in etiquetas):
+            super().paint(painter, option, index)
+            return
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        f = estilo.fuente_tabular(px=max(10, estilo.T_PEQUENA - 1), negrita=True, mono=False)
+        painter.setFont(f)
+        fm = QFontMetrics(f)
+        alto_chip = min(19.0, max(15.0, option.rect.height() - 6.0))
+        y = option.rect.top() + (option.rect.height() - alto_chip) / 2.0
+        x_der = float(option.rect.right() - 4)
+        for et in reversed(etiquetas):
+            w_chip = min(float(option.rect.width() - 4), fm.horizontalAdvance(et) + 10.0)
+            x = x_der - w_chip
+            if x < option.rect.left() + 1:
+                break
+            caja = QRectF(x, y, w_chip, alto_chip)
+            painter.setPen(QPen(QColor(_CHIPS_ETAPA_BORDE), 1.0))
+            painter.setBrush(QColor(_CHIPS_ETAPA_BG))
+            painter.drawRoundedRect(caja, 4.0, 4.0)
+            painter.setPen(QColor(_CHIPS_ETAPA_TEXTO))
+            painter.drawText(caja, int(Qt.AlignmentFlag.AlignCenter), et)
+            x_der = x - 3.0
+        painter.restore()
 
 
 class Simulacion:
@@ -43,7 +254,7 @@ class Simulacion:
         """Tabla de estado del panel derecho. `anchos`: el de cada columna (None: la que se lleva lo que sobra). Texto de 12 px,
         sin barras de desplazamiento propias (`ajustar_tabla` le da el alto de sus filas), el texto largo se parte en dos líneas
         o se elide con «…» y va entero en la ayuda de la celda."""
-        t = TablaConsola(0, len(cols))
+        t = _TablaConsolaSim(0, len(cols))
         t.setProperty("consola", True)
         t.setHorizontalHeader(CabeceraCompacta(Qt.Orientation.Horizontal, t))  # (pinta el texto de la cabecera sin los márgenes de más de la de Qt)
         t.setHorizontalHeaderLabels(cols)
@@ -160,7 +371,7 @@ class Simulacion:
                 with self.candado:
                     self.modbus.vincular(nueva.s, config, e.ed.model)
             except ERRORES as exc:
-                texto = f"No se puede ejecutar con la conexión y las asignaciones actuales: {exc}. Revise la asignación; la conexión se conserva."
+                texto = f"No se puede ejecutar con la conexión y las asignaciones actuales: {exc}. Revisa la asignación; la conexión se conserva."
                 self.modbus.mensaje = texto
                 self.panel_es.mostrar_estado(self.modbus.estado, texto)
                 QMessageBox.warning(self, TITULO, texto)
@@ -179,34 +390,35 @@ class Simulacion:
 
     def _planes_vars(self) -> list[dict[str, Any]]:
         """Los repartos de «Salidas y variables», de más a menos completo (el nombre manda: ver `ReparteColumnas`): todo entero; «Modo» abreviado
-        («cont.», «mem.»); y, por último, la cabecera «Contrib.». **Ninguna columna se esconde** (P13 rechazada)."""
+        («cont.», «mem.»); y, por último, la cabecera «Etap.». **Ninguna columna se esconde** (P13 rechazada)."""
         fm, cifras, cab = self._medidas_tabla()
-        valor = max(cab("Valor"), cifras.horizontalAdvance("False") + 8)  # (una memoria booleana sin salida enseña «False»: que no se corte)
-        contribuyen, corta = cab("Contribuyen"), cab("Contrib.")
+        valor = max(cab("Valor"), 32)
+        etapas, corta = max(cab("Etapas"), 42), cab("Etap.")
         modo_corto = max(cab("Modo"), fm.horizontalAdvance("cont.") + 7, fm.horizontalAdvance("mem.") + 7)
-        modo = max(cab("Modo"), fm.horizontalAdvance("continua") + 7, fm.horizontalAdvance("memoria") + 7)
-        return [{"anchos": {1: modo, 2: valor, 3: contribuyen}, "modo_corto": False},
-                {"anchos": {1: modo_corto, 2: valor, 3: contribuyen}, "modo_corto": True},
+        modo = max(cab("Modo"), fm.horizontalAdvance("continua") + 7, fm.horizontalAdvance("memorizada") + 7)
+        return [{"anchos": {1: modo, 2: valor, 3: etapas}, "modo_corto": False},
+                {"anchos": {1: modo_corto, 2: valor, 3: etapas}, "modo_corto": True},
                 {"anchos": {1: modo_corto, 2: valor, 3: corta}, "modo_corto": True},
-                # el más apretado (panel de 218 px con barra vertical): sin barra a los lados, con el nombre en unos 90 px
-                {"anchos": {1: max(cab("Modo") - 2, fm.horizontalAdvance("mem.") + 5), 2: max(cifras.horizontalAdvance("False") + 4, cab("Valor") - 2),
-                            3: fm.horizontalAdvance("Contr.") + 3}, "modo_corto": True, "apretado": True}]
+                # el más apretado (panel de 218 px con barra vertical): el nombre conserva al menos 84 px sin desplazamiento horizontal
+                {"anchos": {1: max(cab("Modo") - 2, fm.horizontalAdvance("mem.") + 4), 2: max(30, cab("Valor") - 2),
+                            3: fm.horizontalAdvance("Etap.") + 3}, "modo_corto": True, "apretado": True}]
 
     def _elegir_plan_vars(self, plan: dict[str, Any]) -> None:
         self.t_vars.itemDelegateForColumn(1).corto = plan["modo_corto"]
 
     def _planes_temp(self) -> list[dict[str, Any]]:
-        """Los repartos de «Temporizadores» (P-IMP-30: dónde, estado, lleva, preset): «Estado» entero («parado», «contando», «vencido») o
-        abreviado («par.», «cont.», «venc.», con su color) y, por último, la cabecera «Est.». **Ninguna columna se esconde.**"""
+        """Los repartos de «Temporizadores» (P-IMP-30: dónde, estado, lleva, consigna): «Estado» entero («parado», «contando», «vencido») o
+        abreviado («par.», «cont.», «venc.», con su color) y, por último, la cabecera «Est.» y «Cons.». **Ninguna columna se esconde.**"""
         fm, cifras, cab = self._medidas_tabla()
         tiempo = cifras.horizontalAdvance("12,5 s") + 8
-        lleva, preset = max(cab("Lleva"), tiempo), max(cab("Preset"), tiempo)
+        lleva, consigna = max(cab("Lleva"), tiempo), max(cab("Consigna"), tiempo)
         estado = max(cab("Estado"), fm.horizontalAdvance("contando") + 7)
         corto = max(cab("Est."), *(fm.horizontalAdvance(t) + 7 for t in ("par.", "cont.", "venc.")))
-        return [{"anchos": {1: estado, 2: lleva, 3: preset}, "corto": False},
-                {"anchos": {1: max(cab("Estado"), corto), 2: lleva, 3: preset}, "corto": True},
-                {"anchos": {1: corto, 2: lleva, 3: preset}, "corto": True},
-                {"anchos": {1: corto, 2: max(cab("Lleva") - 2, cifras.horizontalAdvance("0,0 s") + 4), 3: max(cab("Preset") - 2, cifras.horizontalAdvance("0,0 s") + 4)},
+        return [{"anchos": {1: estado, 2: lleva, 3: consigna}, "corto": False},
+                {"anchos": {1: max(cab("Estado"), corto), 2: lleva, 3: consigna}, "corto": True},
+                {"anchos": {1: corto, 2: lleva, 3: consigna}, "corto": True},
+                {"anchos": {1: corto, 2: max(cab("Lleva") - 2, cifras.horizontalAdvance("0,0 s") + 4),
+                            3: max(cab("Cons.") - 2, cifras.horizontalAdvance("0,0 s") + 4)},
                  "corto": True, "apretado": True}]
 
     def _elegir_plan_temp(self, plan: dict[str, Any]) -> None:
@@ -287,7 +499,7 @@ class Simulacion:
     # -- acciones de simulación -------------------------------------------------------------------
     def _act(self, op: str, **body: Any) -> None:
         if self.modbus.activo:
-            self.aviso.setText("Con E/S externas use Play/Stop; desconecte para depurar manualmente")
+            self.aviso.setText("Con E/S externas usa Simular/Detener; desconecta para depurar manualmente")
             self.aviso.setVisible(True)
             return
         if self.v is None:
@@ -328,7 +540,7 @@ class Simulacion:
                 self.botones[var] = b
                 fila += 1
                 continue
-            b = _BotonEntrada()
+            b = _BotonEntradaPastilla()
             b.interruptor = self._tipos_entrada.get((self._proyecto, var), False)
             b.nc = self._entradas_nc.get((self._proyecto,var),False)
             self._ayuda_entrada(b)
@@ -459,7 +671,7 @@ class Simulacion:
         self.a_ejecutar.blockSignals(True)
         self.a_ejecutar.setChecked(on)
         self.a_ejecutar.blockSignals(False)
-        self.a_ejecutar.setText("Stop" if on else "Simular")
+        self.a_ejecutar.setText("Detener" if on else "Simular")
         self.a_ejecutar.setIcon(_icono_barra("stop" if on else "play", estilo.BLANCO))
         self._centrar_play(on)
 
@@ -570,11 +782,11 @@ class Simulacion:
                 self._aviso_inestable_sesion = vista.s
                 self._avisar_inestable(motivos[-1][0] if motivos else "")
         elif al_arrancar:
-            QMessageBox.warning(self, TITULO, "No se puede ejecutar: revise los diagnósticos del grafcet."
+            QMessageBox.warning(self, TITULO, "No se puede ejecutar: revisa los diagnósticos del grafcet."
                                 + (f"\n\n{amable(d['message'], d['code'])}" if d else ""))
         else:
             texto = motivos[0][0] if motivos else "Simulación detenida."
-            self.statusBar().showMessage(f"{texto} Vea el motivo en la lista de diagnósticos.", 12000)
+            self.statusBar().showMessage(f"{texto} Consulta el motivo en la lista de diagnósticos.", 12000)
 
     def _avisar_inestable(self, causa: str = "") -> None:
         """Ventana modal con un solo botón; no abre un bucle de eventos propio (se llama desde el temporizador). `causa` es
@@ -675,7 +887,7 @@ class Simulacion:
             label, color = ESTADOS.get(S["status"], (S["status"], "muted"))
             # el estado del motor se dice con las mismas palabras de siempre (estable, en recorrido…), en mayúsculas
             self._poner_chip({"err": "error", "virt": "aviso"}.get(color, "simular"), f"SIMULACIÓN · {label.upper()}",
-                             f"Simulación en curso, {label}. Stop detiene y vuelve a editar")
+                             f"Simulación en curso, {label}. Detener detiene y vuelve a editar")
             self.ayuda.setText(M["help"]);self.ayuda.setToolTip(M["help"])
         stable, rec = S["status"] == "pausada-estable", S["status"] == "pausada-recorrido"
         self._diagnostico(S, rec)
@@ -748,7 +960,7 @@ class Simulacion:
         if S["status"] == "no-compilable":
             items = "".join(f"<li>{e(amable(sin_codigos(d['message']), d['code']))}<br><i>{e(d.get('correction', ''))}</i></li>"
                             for d in S.get("diagnostics", []))
-            self.diag.setText(f"<b>El programa no puede compilarse</b><ul>{items}</ul>Corrija el modelo; no se ejecuta "
+            self.diag.setText(f"<b>El programa no puede compilarse</b><ul>{items}</ul>Corrige el modelo; no se ejecuta "
                               "nada hasta entonces.")
             self.diag.show()
             return
@@ -766,7 +978,7 @@ class Simulacion:
         if S["status"] == "error":
             text += ("<p>El motor no aproxima: conserva la última situación estable"
                      + (f" {{{e(', '.join(self.nombre(i) for i in blk['lastStable']))}}}, que <b>no</b> es el resultado del lote" if blk else "")
-                     + ". Pulse «Reiniciar» (Ctrl+R) para seguir.</p>")
+                     + ". Pulsa «Reiniciar» (Ctrl+R) para seguir.</p>")
         else:
             text += "<p>Queda un contexto pendiente: puede completarse evolución a evolución.</p>"
         self.diag.setText(text)
@@ -780,22 +992,65 @@ class Simulacion:
                                if changed else "")
 
     @staticmethod
-    def _filas_tablas(M: dict[str, Any], S: dict[str, Any], nombre: Callable[[str], str]) -> tuple[list[tuple[str, ...]], list[tuple[str, ...]]]:
+    def _accion_a_etapa(M: dict[str, Any]) -> dict[str, str]:
+        """Mapa `id_accion -> etiqueta X` de la etapa a la que pertenece (cuando se puede derivar)."""
+        mapa: dict[str, str] = {}
+        for s in M.get("steps", []):
+            et = x_etapa(str(s.get("label") or s.get("id") or ""))
+            for a in s.get("actions", []):
+                aid = a.get("id")
+                if aid and et:
+                    mapa[aid] = et
+        return mapa
+
+    @staticmethod
+    def _filas_tablas(M: dict[str, Any], S: dict[str, Any], nombre: Callable[[str], str],
+                      etapa_de: dict[str, str] | None = None) -> tuple[list[tuple[str, ...]], list[tuple[str, ...]]]:
         """Las filas de «Salidas y variables» y de «Temporizadores» que da el estado (cada una acaba en el nombre del color de su celda)."""
         outs = S.get("outputs") or {}
-        rows = [(nombre(k), "salida continua", "ON" if o["value"] else "OFF", ", ".join(nombre(c) for c in o["contributors"]),
-                 "ok" if o["value"] else "muted") for k, o in outs.items()]
-        rows += [(nombre(k), "memorizada", str(v), "", "text") for k, v in (S.get("values") or {}).items()
-                 if k not in M["inputs"] and k not in outs]
+        if etapa_de is None:
+            etapa_de = Simulacion._accion_a_etapa(M)
+        rows = []
+        for k, o in outs.items():
+            etapas = list(dict.fromkeys(etapa_de.get(c, nombre(c)) for c in o["contributors"]))
+            rows.append((nombre(k), "salida continua", "1" if o["value"] else "0",
+                         ", ".join(etapas) if etapas else "—", "ok" if o["value"] else "muted"))
+        for k, v in (S.get("values") or {}).items():
+            if k in M["inputs"] or k in outs:
+                continue
+            es_bool = isinstance(v, bool)
+            val_txt = ("1" if v else "0") if es_bool else str(v).replace(".", ",")
+            color = ("ok" if v else "muted") if es_bool else "text"
+            rows.append((nombre(k), "memorizada", val_txt, "—", color))
         temp = S.get("temporal") or {}
         filas_t = [(t["where"], t["estado"], t["lleva"], t["preset"],
                     "readout" if t["estado"] == "contando" else "ok" if t["estado"] == "vencido" else "muted") for t in temp.values()]
         return rows, filas_t
 
+    @staticmethod
+    def _meta_vars(M: dict[str, Any], S: dict[str, Any]) -> list[tuple[str, bool]]:
+        """Metadatos visuales `(papel, es_booleana)` por fila de «Salidas y variables»."""
+        outs = S.get("outputs") or {}
+        meta: list[tuple[str, bool]] = [("output", True) for _ in outs]
+        for k, v in (S.get("values") or {}).items():
+            if k not in M["inputs"] and k not in outs:
+                meta.append(("internal", isinstance(v, bool)))
+        return meta
+
     def _clave_tablas(self) -> tuple[Any, ...]:
         """De lo que, además de las filas, depende el aspecto de las tablas: su ancho y su letra (el reparto de columnas y el alto de las filas)."""
         return (self.t_vars.viewport().width(), self.t_temp.viewport().width(), self.t_vars.font().key(), self.t_temp.font().key(),
                 self._escala)
+
+    def _mapa_etapas(self, M: dict[str, Any]) -> dict[str, str]:
+        pasos = M.get("steps", ())
+        n_pasos = len(pasos)
+        cache = getattr(self, "_cache_accion_etapa", None)
+        if cache is not None and cache[0] is M and cache[1] == n_pasos:
+            return cache[2]
+        mapa = Simulacion._accion_a_etapa(M)
+        self._cache_accion_etapa = (M, n_pasos, mapa)
+        return mapa
 
     def _variables(self, M: dict[str, Any], S: dict[str, Any]) -> None:
         """Las tablas de Variables y Temporizadores. Si no cambia ninguna fila ni el ancho, no se toca nada; si cambia el texto o el color
@@ -803,7 +1058,8 @@ class Simulacion:
         cambian los nombres de la primera columna o el número de filas, la rutina completa (`_variables_completo`, la que vigila ESC-6)."""
         if not self.refresco_conexion.tablas_cambiadas(M, S):
             return
-        rows, filas_t = self._filas_tablas(M, S, self.nombre)
+        rows, filas_t = self._filas_tablas(M, S, self.nombre, self._mapa_etapas(M))
+        meta_vars = self._meta_vars(M, S)
         clave, previo = self._clave_tablas(), self._previo_tablas
         mismos_nombres = (previo is not None and previo[2] == clave and len(previo[0]) == len(rows) and len(previo[1]) == len(filas_t)
                           and all(a[0] == b[0] for a, b in zip(previo[0], rows))
@@ -812,27 +1068,31 @@ class Simulacion:
             self._variables_completo(M, S)
         else:
             cambio = False
-            for t, ahora, antes, col_color, cifras in ((self.t_vars, rows, previo[0], 2, (2,)), (self.t_temp, filas_t, previo[1], 1, (2, 3))):
-                if ahora == antes:
+            prev_meta = previo[3] if len(previo) > 3 else None
+            for t, ahora, antes, col_color, cifras, meta in (
+                    (self.t_vars, rows, previo[0], 2, (2,), meta_vars),
+                    (self.t_temp, filas_t, previo[1], 1, (2, 3), None)):
+                if ahora == antes and (meta is None or meta == prev_meta):
                     continue
-                self._filas(t, ahora, col_color, cifras)
-                if t is self.t_vars and any(a[3] != b[3] for a, b in zip(ahora, antes))                         and self._del_vars[1].fijar(self._textos_columna(t, 3)):
+                self._filas(t, ahora, col_color, cifras, meta=meta)
+                if t is self.t_vars and any(a[3] != b[3] for a, b in zip(ahora, antes)) and self._del_vars[1].fijar(self._textos_columna(t, 3)):
                     t.resizeRowsToContents()  # (otros nombres que distinguir entre sí: pueden cambiar las líneas de cualquier fila)
                 else:
                     for r, (a, b) in enumerate(zip(ahora, antes)):
-                        if a != b:
+                        if a != b or (meta is not None and (prev_meta is None or meta[r] != prev_meta[r])):
                             t.resizeRowToContents(r)
                 self._alto_tabla(t)
                 cambio = True
             if cambio:
                 self._alto_entradas(tablas=False)
-        self._previo_tablas = (rows, filas_t, clave)
+        self._previo_tablas = (rows, filas_t, clave, meta_vars)
 
     def _variables_completo(self, M: dict[str, Any], S: dict[str, Any]) -> None:
         """La rutina completa de las tablas: lo rehace todo (filas, contextos de nombres, reparto de columnas, alto de filas y de la caja de
         entradas). Es el camino de referencia de la incremental (`_variables`)."""
-        rows, filas_t = self._filas_tablas(M, S, self.nombre)
-        self._filas(self.t_vars, rows, cifras=(2,))
+        rows, filas_t = self._filas_tablas(M, S, self.nombre, self._mapa_etapas(M))
+        meta_vars = self._meta_vars(M, S)
+        self._filas(self.t_vars, rows, cifras=(2,), meta=meta_vars)
         self._del_vars[0].fijar(self._textos_columna(self.t_vars, 0))
         self._del_vars[1].fijar(self._textos_columna(self.t_vars, 3))
         self._reparto[0].aplicar()  # (con los nombres de ahora: el reparto busca que quepan en dos líneas)
@@ -872,15 +1132,17 @@ class Simulacion:
             self.ajustar_tabla(self.t_vars)
             self.ajustar_tabla(self.t_temp)
         lay = self.cont_rejilla.layout()
+        m_lado = self.lado.contentsMargins()
+        margen_h = m_lado.left() + m_lado.right()
         ancho_ref = self.scroll.width() - 2 * self.scroll.frameWidth()  # (el del panel sin su barra: con ella oscilaría; no se mide el visor)
-        natural = max(lay.totalHeightForWidth(max(ancho_ref - 2 * estilo.E1, 60)), lay.sizeHint().height())
+        natural = max(lay.totalHeightForWidth(max(ancho_ref - margen_h, 60)), lay.sizeHint().height())
         t = self.t_vars
         visibles = min(t.rowCount(), 4)
         de_las_filas = (t.horizontalHeader().height() + sum(t.rowHeight(r) for r in range(visibles)) + 2 * t.frameWidth() + 4) if t.rowCount() else t.height()
         # «lo demás» del panel: el alto de las cajas «Entradas» (sin el desplazable) y «Salidas y variables» (con solo las filas que se han de ver),
         # el aviso de diagnóstico si se ve y los márgenes, calculado a un ancho de referencia (no de la geometría repartida, que llega tarde, ni
         # de lo que pide el diseño con una barra a un lado: las dos hacían oscilar el alto)
-        ancho_caja = ancho_ref - 2 * estilo.E1
+        ancho_caja = ancho_ref - margen_h
         entradas, salidas = self._cajas_lado[0], self._cajas_lado[1]
 
         def alto_caja(caja: QGroupBox) -> int:
@@ -890,7 +1152,7 @@ class Simulacion:
         cajas = [alto_caja(entradas) - sc.height(), alto_caja(salidas) - (t.height() - de_las_filas)]
         if self.diag.isVisibleTo(self):
             cajas.insert(0, self.diag.heightForWidth(ancho_caja))
-        resto = sum(cajas) + (len(cajas) - 1) * self.lado.spacing() + 2 * estilo.E1
+        resto = sum(cajas) + (len(cajas) - 1) * self.lado.spacing() + m_lado.top() + m_lado.bottom()
         tope = max(vista - resto, 3 * estilo.ALTO_CONTROL_COMPACTO)  # (nunca menos de unos tres botones)
         alto = min(natural, tope)
         sc.setFixedHeight(alto)
@@ -901,16 +1163,18 @@ class Simulacion:
         return [t.item(r, c).text() for r in range(t.rowCount()) if t.item(r, c) is not None]
 
     @staticmethod
-    def _filas(t: QTableWidget, rows: list[tuple[str, ...]], col_color: int = 2, cifras: tuple[int, ...] = ()) -> None:
+    def _filas(t: QTableWidget, rows: list[tuple[str, ...]], col_color: int = 2, cifras: tuple[int, ...] = (),
+               meta: list[tuple[str, bool]] | None = None) -> None:
         """Rellena la tabla (el texto de cada celda es el entero; `cifras` son las columnas que van en la letra técnica)."""
         t.setRowCount(len(rows))
         for i, (*cells, color) in enumerate(rows):
+            papel_fila, bool_fila = meta[i] if meta and i < len(meta) else (None, None)
             for j, c in enumerate(cells):
                 item = t.item(i, j)
                 if item is None:
                     item = QTableWidgetItem(c)
                     if j in cifras:
-                        item.setFont(estilo.fuente(estilo.T_CIFRA, mono=True))  # las cifras (valor, tiempo, preset) en la letra técnica
+                        item.setFont(estilo.fuente(estilo.T_CIFRA, mono=True))  # las cifras (valor, tiempo, consigna) en la letra técnica
                     item.setData(Qt.ItemDataRole.UserRole, c)
                     item.setToolTip(c)  # el texto entero, aunque la celda lo recorte
                     t.setItem(i, j, item)
@@ -918,8 +1182,15 @@ class Simulacion:
                     item.setText(c)
                     item.setData(Qt.ItemDataRole.UserRole, c)
                     item.setToolTip(c)
-                if j == col_color and item.foreground().color() != QColor(COL[color]):
-                    item.setForeground(QColor(COL[color]))
+                if meta is not None:
+                    if j == 0 and item.data(ROL_PAPEL_CONSOLA) != papel_fila:
+                        item.setData(ROL_PAPEL_CONSOLA, papel_fila)
+                    if j == 2 and item.data(ROL_BOOLEANO_CONSOLA) != bool_fila:
+                        item.setData(ROL_BOOLEANO_CONSOLA, bool_fila)
+                if j == col_color:
+                    c_col = _color_col(color)
+                    if item.foreground().color() != c_col:
+                        item.setForeground(c_col)
 
     def _traza(self, S: dict[str, Any]) -> None:
         """La traza (los últimos registros, `Vista.state`): al avanzar la ventana de 60 se quitan por arriba los que salen y se añaden por abajo

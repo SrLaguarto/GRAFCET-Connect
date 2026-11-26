@@ -2,9 +2,24 @@
 from __future__ import annotations
 
 from typing import Any
-from PySide6.QtCore import QPointF
-from ..diagrama import cajas_parciales, elemento_en, orientaciones, icono_accion
+from PySide6.QtCore import QPointF, Qt
+from PySide6.QtGui import QIcon, QPainter, QPixmap
+from ..diagrama import cajas_parciales, elemento_en, orientaciones
 from .constantes import COLOCACIONES, TEXTO_INICIAL, TEXTO_LIMITADA, TEXTO_ORDEN, TIPOS_ACCION, TIPOS_ETAPA
+
+
+def _icono_tipo_accion(tipo: str) -> QIcon:
+    """Icono uniforme de 20×20 px con el trazo del programa para «Tipo de acción»."""
+    from ..favoritos import LADO_MINI, pintar_mini
+    lado = 20
+    pm = QPixmap(lado * 2, lado * 2)
+    pm.setDevicePixelRatio(2)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.scale(lado / LADO_MINI, lado / LADO_MINI)
+    pintar_mini(p, "forzado" if tipo == "forzado" else f"accion:{tipo}")
+    p.end()
+    return QIcon(pm)
 
 
 class _Menus:
@@ -147,8 +162,8 @@ class _Menus:
         """El submenú «Tipo de acción» de una orden de forzado (del modelo o sin completar): los cinco tipos de acción
         con su icono y «Orden de forzado», marcada. Elegir un tipo de acción la convierte en una acción de su misma
         etapa."""
-        sub = [(texto, lambda t=t: self.orden_a_accion(oid, t), icono_accion(t)) for t, texto in TIPOS_ACCION]
-        sub.append((TEXTO_ORDEN, lambda: None, icono_accion("forzado")))
+        sub = [(texto, lambda t=t: self.orden_a_accion(oid, t), _icono_tipo_accion(t)) for t, texto in TIPOS_ACCION]
+        sub.append((TEXTO_ORDEN, lambda: None, _icono_tipo_accion("forzado")))
         self.menu_marcadas.add(TEXTO_ORDEN)
         return [("Tipo de acción", sub)]
 
@@ -183,8 +198,8 @@ class _Menus:
         textos = dict(TIPOS_ACCION)
         if actual == "limitada":  # la de un fichero antiguo: una condicionada con límite de tiempo
             textos["condicionada"] = TEXTO_LIMITADA
-        sub = [(textos[t], lambda t=t: self.tipo_accion(aid, t), icono_accion(t)) for t, _ in TIPOS_ACCION]
-        sub.append((TEXTO_ORDEN, lambda: self.accion_a_orden(aid), icono_accion("forzado")))
+        sub = [(textos[t], lambda t=t: self.tipo_accion(aid, t), _icono_tipo_accion(t)) for t, _ in TIPOS_ACCION]
+        sub.append((TEXTO_ORDEN, lambda: self.accion_a_orden(aid), _icono_tipo_accion("forzado")))
         self.menu_marcadas = {textos["condicionada" if actual == "limitada" else actual]}
         out: list[tuple[str, Any]] = [("Tipo de acción", sub), ("-", None),
                                       ("Editar…", lambda: self.explicito(self.pedir_accion, sid, aid))]

@@ -168,18 +168,21 @@ def ej_repeticion() -> tuple[M, dict]:
 
 
 EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
-    "seleccion": ("Selección de secuencia", "Desde 5, active solo a para ir a 6, o solo b para ir a 7. "
-                  "Las dos transiciones salen de una línea común. En Stop puede cambiar las condiciones a a y NOT a.", ej_seleccion),
-    "salto": ("Salto de etapas", "Desde 1, active saltar para ir directamente a 4. La rama lateral contiene su propia transición.", ej_salto),
-    "repeticion": ("Repetición de secuencia", "Active inicio para ir a 2; desactívelo. Active avance para ir a 3 y desactívelo. "
-                   "Active repetir para volver a 2, o fin para ir a 4. El retorno lleva una flecha ascendente automática.", ej_repeticion),
+    "seleccion": ("Selección de secuencia", "Desde 5, activa solo a para ir a 6, o solo b para ir a 7. "
+                  "Las dos transiciones salen de una línea común. Pulsa Detener para cambiar las condiciones a a y NOT a.",
+                  ej_seleccion),
+    "salto": ("Salto de etapas", "Desde 1, activa saltar para ir directamente a 4. "
+              "La rama lateral contiene su propia transición.", ej_salto),
+    "repeticion": ("Repetición de secuencia", "Activa inicio para ir a 2 y desactívalo. "
+                   "Activa avance para ir a 3 y desactívalo. Activa repetir para volver a 2, o fin para ir a 4. "
+                   "El retorno lleva una flecha ascendente automática.", ej_repeticion),
     "alternativas": ("Alternativas y salto de secuencia", "E0 → E1 → E2 → E3 con dos alternativas: «rapida» salta de E0 a E2 "
                      "(salto de secuencia) y «repetir» devuelve de E2 a E1 (rama que vuelve: dos ramas llegan a E1 y a "
-                     "E2). Pulse «marcha» o «rapida» desde E0; en E2, «fin2» sigue y «repetir» vuelve. Pulse Stop "
-                     "para ver cómo está construido y abrir sus propias ramas arrastrando de un punto de unión a un "
+                     "E2). Pulsa «marcha» o «rapida» desde E0; en E2, «fin2» sigue y «repetir» vuelve. Pulsa Detener "
+                     "para ver cómo está construido y abrir tus propias ramas arrastrando de un punto de unión a un "
                      "hueco (crea el elemento siguiente) o a un enlace (la rama se une ahí).", ej_alternativas),
-    "temporizada": ("Secuencia con temporización", "Pulse «marcha»: E1 activa el motor; a los 3 s pasa a E2 (luz, "
-                    "ciclos+1). «fin» vuelve a E0. Pruebe a soltar «marcha» y poner «fin»=1 antes de los 3 s: E2 es "
+    "temporizada": ("Secuencia con temporización", "Pulsa «marcha»: E1 activa el motor; a los 3 s pasa a E2 (luz, "
+                    "ciclos+1). «fin» vuelve a E0. Prueba a soltar «marcha» y poner «fin»=1 antes de los 3 s: E2 es "
                     "una etapa inestable (sin luz, pero ciclos+1 se ejecuta). Con «marcha»=1 y «fin»=1, E1 sale y vuelve "
                     "a entrar en el mismo instante sin interrumpir su duración (P-IMP-18): el temporizador sigue vencido, "
                     "el ciclo se repite sin fin en tiempo cero y el motor lo corta con D-LIM-EVOL.", ej_temporizada),
@@ -192,7 +195,7 @@ EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
                  "cuenta dos veces. Con n ≥ 3 se enciende «alarma». «borrar» pone n a 0.", ej_contador),
     "bloqueo-u03": ("Flanco en el recorrido (U-03)", "Dos transiciones seguidas con ↑p. Con la lectura por defecto, "
                     "«situación anterior» (comparador, 5.1), una subida de p solo franquea t y se queda en B. En las "
-                    "lecturas de interpretación (Ajustes en el simulador; Opciones en el banco) puede probar «recorrido» "
+                    "lecturas de interpretación (Ajustes en el simulador; Opciones en el banco) puedes probar «recorrido» "
                     "(llega a C; con «reinicio»=1 gira sin fin).", ej_bloqueo_u03),
     "contador-inestable": ("Contador con etapa inestable", "Ejemplo del responsable. I00 lleva a 1. Cada bajada de I02 "
                            "pasa por 2, que suma 1 a CT al activarse y, mientras CT < 3, vuelve a 1 en el mismo instante: 2 "
@@ -210,7 +213,7 @@ EJEMPLOS: dict[str, tuple[str, str, Callable[[], tuple[M, dict]]]] = {
                       "q: vuelve a H y se activa K, la etapa marcada con *, no I ni la última situación. r mueve el contenido a "
                       "J y enciende la luz.", ej_encapsulacion),
     "forzado": ("Forzado (jerarquía)", "f activa H y la orden G{B} lleva el parcial G a {B}. Mientras H está activa, G no "
-                "evoluciona aunque pulse a, b o c. Al quitar f se retira la orden y G sigue desde B.", ej_forzado),
+                "evoluciona aunque pulses a, b o c. Al quitar f se retira la orden y G sigue desde B.", ej_forzado),
     "conflicto": ("Conflicto de escritura al compilar", "t activa B y C en la misma evolución; B escribe z:=1 y C z:=2. "
                   "Es un conflicto seguro: el programa no puede compilarse.", ej_conflicto),
     "conflicto-ejecucion": ("Conflicto de escritura en ejecución", "t y u son independientes, pero ambas dependen de p: "

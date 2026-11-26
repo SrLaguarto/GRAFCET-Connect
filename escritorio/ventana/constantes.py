@@ -26,7 +26,7 @@ AYUDA_EDICION = {
                    "rejilla, y no encima de otro elemento); de un punto de unión (arriba o abajo de una etapa o transición, "
                    "a la derecha de una etapa) sale un enlace. Supr borra; Ctrl+Z y Ctrl+Y deshacen y rehacen. Los "
                    "elementos y las acciones nuevos se arrastran desde la paleta de la izquierda; otro tipo de acción, con botón derecho "
-                   "sobre ella. Para quitar un bloque, arrástrelo fuera o pulse Supr.",
+                   "sobre ella. Para quitar un bloque, arrástralo fuera o pulsa Supr.",
 }
 NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar"}
 AVISO = "Conforme a IEC 60848"

@@ -149,7 +149,7 @@ class InterfazCentro(AyudaWebBase):
                 self.assertTrue(dialogo.ayuda_servidor.boton.isVisible())
                 self.assertTrue(dialogo.ayuda_lectura.isVisible())
                 self.assertTrue(etiqueta.wordWrap())
-                for texto in ("Activar el servidor web", "Reinicie", "«Ninguno»", "Volver a leer"):
+                for texto in ("Activar el servidor web", "Reinicia", "«Ninguno»", "Volver a leer"):
                     self.assertIn(texto, etiqueta.text())
                 self.assertNotIn("…", etiqueta.text())
                 necesario = etiqueta.heightForWidth(etiqueta.width())
@@ -171,7 +171,7 @@ class InterfazCentro(AyudaWebBase):
         self.assertEqual((carpeta / "auto.cfg").read_bytes(), b"app.web_server = True\r\n")
         self.assertIn("Hecho", etiqueta.text())
         self.assertIn("Volver a leer", dialogo.estado.text())
-        self.assertNotIn("Pulse «Activar", etiqueta.text())
+        self.assertNotIn("Pulsa «Activar", etiqueta.text())
 
     def test_SU7_volver_a_leer_catalogo_http_oculta_ayuda_y_muestra_tablas(self):
         self.solo_escenas()

@@ -2533,8 +2533,8 @@ class AvisosConNombres(BaseQt):
         w, e, d = self.barra_con_tres()
         lineas = e.resumen(e.diagnosticos())
         borradores = [x for x in lineas if "Enlace en borrador" in x]
-        self.assertEqual(borradores, ["Enlace en borrador entre las etapas 2 y 0: dos etapas no pueden ir seguidas. Bórrelo o ponga una transición en medio.",
-                                      "Enlace en borrador entre las etapas 1 y 0: dos etapas no pueden ir seguidas. Bórrelo o ponga una transición en medio."])
+        self.assertEqual(borradores, ["Enlace en borrador entre las etapas 2 y 0: dos etapas no pueden ir seguidas. Bórralo o pon una transición en medio.",
+                                      "Enlace en borrador entre las etapas 1 y 0: dos etapas no pueden ir seguidas. Bórralo o pon una transición en medio."])
         for x in lineas:
             self.assertNotRegex(x, self.INTERNO)
         # el cuadro que sale al pulsar Play
@@ -2645,7 +2645,7 @@ class AvisosConNombres(BaseQt):
         fantasma = "s-" + "0123456789abcdef" * 2
         # los textos propios, tal cual lo escriba la aplicación o los pase quien los pase
         propios = ["Una acción suelta se une a la etapa y se pega a la otra", modulo.MSG_ORDEN_SUELTA, modulo.MSG_SOLAPE,
-                   modulo.MSG_SIN_SITIO, modulo.MSG_SIN_DESTINO, "Una acción se une a una etapa: suelte el enlace sobre ella."]
+                   modulo.MSG_SIN_SITIO, modulo.MSG_SIN_DESTINO, "Una acción se une a una etapa: suelta el enlace sobre ella."]
         for texto in propios:
             e.informar(texto)
             self.assertEqual((e.mensaje, e.mensaje_info), (texto, True))

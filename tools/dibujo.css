@@ -1,9 +1,9 @@
 /* Estilos comunes del banco de pruebas y del comparador de decisiones */
 :root{--bg:#f6f7f9;--panel:#fff;--text:#1d2330;--muted:#6b7385;--line:#d6dae3;--accent:#1f6feb;--accent-soft:#dbe8ff;
---sim:#40d641;--sim-soft:#e4f9e4;--truth:#40d641;--history:#1a7f1b;--ok:#1a7f37;--ok-soft:#dcf5e3;--warn:#9a6700;--err:#c62828;--err-soft:#fdecea;--virt:#8250df;--glow:#e36209}
+--sim:#40d641;--sim-soft:#e4f9e4;--truth:#40d641;--history:#1a7f1b;--ok:#1a7f37;--ok-soft:#dcf5e3;--warn:#9a6700;--err:#c62828;--err-soft:#fdecea;--virt:#8250df;--glow:#e36209;--timer-bg:#eff6ff;--timer-border:#93c5fd;--timer-text:#1d4ed8}
 @media (prefers-color-scheme:dark){:root{--bg:#0f1218;--panel:#171b23;--text:#e4e7ee;--muted:#9099ab;--line:#2c3340;
 --sim-soft:#18391e;--truth:#40d641;--history:#72d973;--accent:#5b9dff;--accent-soft:#1c2d4d;--ok:#3fb950;--ok-soft:#163222;--warn:#d29922;--err:#ff6b6b;--err-soft:#3a1d1d;
---virt:#b392f0;--glow:#f0883e}}
+--virt:#b392f0;--glow:#f0883e;--timer-bg:#1c2d4d;--timer-border:#5b9dff;--timer-text:#93c5fd}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
 header{padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
 header h1{font-size:16px;margin:0}header .note{color:var(--muted);font-size:12px}
@@ -43,8 +43,9 @@ svg.grafcet{width:100%;height:auto;display:block;font-family:Arial,"Helvetica Ne
 .comentario{fill:var(--muted);font-size:12px;font-style:italic}.tdes{fill:var(--text);font-size:13px}.tcond{fill:var(--text);font-size:14px}
 .act rect{fill:var(--panel);stroke:var(--text);stroke-width:1.6}.act.on rect{fill:var(--sim-soft);stroke:var(--sim);stroke-width:2.6}
 text.variable-value{font-size:10px;font-weight:400;font-family:ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;fill:#326dcb;stroke:none}
-text.timer{font-size:10px;font-weight:400;font-family:ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;stroke:none}
-.timer-state.run text,.timer-state.done text{fill:#326dcb}
+text.timer{font-size:10px;font-weight:700;font-family:ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;stroke:none}
+.timer-pill{fill:var(--timer-bg);stroke:var(--timer-border);stroke-width:1}
+.timer-state.run text,.timer-state.done text{fill:var(--timer-text)}
 .sync-gap{fill:var(--panel);stroke:none}
 .verdadero{fill:var(--truth)}
 .neg{stroke:var(--text);stroke-width:1.25;fill:none}

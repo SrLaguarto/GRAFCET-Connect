@@ -4,13 +4,14 @@ from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QEvent, QPoint, QRect, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QHeaderView, QLabel, QPushButton, QScrollArea,
-                               QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
+                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from conexion.http_directo import ClienteDirecto
 from . import estilo
+from .estilo_dialogos import CabeceraDialogo, PieDialogo, aplicar_escala_dialogo
 from .interaccion_propiedades import ArrastrePropiedades
 from .medidas_propiedades import ancho_maximo, margen_horizontal
-from .paneles import EtiquetaElidida, TituloSeccion
+from .paneles import EtiquetaElidida
 from .traer_modelo import Propuestas, interna, nombre_visible, traer
 
 
@@ -23,7 +24,7 @@ class DialogoTraer(QDialog):
         self.setWindowTitle("Traer E/S del simulador de fábricas")
         self.setModal(True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setStyleSheet(estilo.hoja_global())
+        aplicar_escala_dialogo(self)
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="traer-es")
         self.futuro = None
         self.propuestas = None
@@ -33,7 +34,11 @@ class DialogoTraer(QDialog):
         self.otra_escena = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(estilo.E2, estilo.E2, estilo.E2, estilo.E2)
-        layout.addWidget(self._crear_cabecera())
+        self.cabecera = CabeceraDialogo(self.windowTitle(), mostrar_cerrar=True)
+        self.cabecera.cerrar_pedido.connect(self.reject)
+        self.cabecera.boton_cerrar.setAccessibleName("Cerrar Traer E/S")
+        self.titulo = self.cabecera.etiqueta_titulo
+        layout.addWidget(self.cabecera)
         self.arrastre = ArrastrePropiedades(self, self.anfitrion)
         from .resumen_escena import ResumenEscena
         self.resumen_escena = ResumenEscena()
@@ -57,15 +62,15 @@ class DialogoTraer(QDialog):
         self.ayuda_servidor.texto_cambiado.connect(self.ayuda_lectura.actualizar)
         scroll.setWidget(self.zona)
         layout.addWidget(scroll, 1)
-        fila = QHBoxLayout()
+        pie = PieDialogo(texto_aceptar="Traer 0", alto_botones=estilo.ALTO_CONTROL)
+        pie.rechazado.connect(self.reject)
+        pie.aceptado.connect(self.importar)
+        self.b_traer = pie.boton_aceptar
         self.b_leer = QPushButton("Volver a leer")
-        cancelar = QPushButton("Cancelar")
-        self.b_traer = QPushButton("Traer 0")
-        self.b_traer.setProperty("primario", True)
-        fila.addWidget(self.b_leer)
-        fila.addStretch()
-        fila.addWidget(cancelar)
-        fila.addWidget(self.b_traer)
+        self.b_leer.setAutoDefault(False)
+        self.b_leer.setFixedHeight(estilo.ALTO_CONTROL)
+        estilo.poner(self.b_leer, pieDialogo=estilo.ALTO_CONTROL == estilo.ALTO_ESTANDAR)
+        pie.agregar_izquierda(self.b_leer)
         self.motivos = EtiquetaElidida()
         self.motivos.setWordWrap(False)
         self.motivos.setTextFormat(Qt.TextFormat.PlainText)
@@ -77,32 +82,13 @@ class DialogoTraer(QDialog):
         self.b_corregir.clicked.connect(self.corregir_nombres)
         aviso.addWidget(self.b_corregir)
         layout.addLayout(aviso)
-        layout.addLayout(fila)
+        layout.addWidget(pie)
         self.b_leer.clicked.connect(self.leer)
-        cancelar.clicked.connect(self.reject)
-        self.b_traer.clicked.connect(self.importar)
         self.timer = QTimer(self)
         self.timer.setInterval(20)
         self.timer.timeout.connect(self.recoger)
         self.finished.connect(self.cerrar_trabajo)
         self.leer()
-
-    def _crear_cabecera(self):
-        self.cabecera = QWidget()
-        fila = QHBoxLayout(self.cabecera)
-        fila.setContentsMargins(estilo.E1, 0, 0, 0)
-        self.titulo = TituloSeccion(self.windowTitle())
-        self.titulo.setObjectName("tituloPanel")
-        fila.addWidget(self.titulo, 1)
-        cerrar = QToolButton()
-        cerrar.setText("✕")
-        cerrar.setToolTip("Cerrar")
-        cerrar.setAccessibleName("Cerrar Traer E/S")
-        cerrar.setAutoRaise(True)
-        cerrar.setFixedSize(estilo.ALTO_CONTROL, estilo.ALTO_CONTROL)
-        cerrar.clicked.connect(self.reject)
-        fila.addWidget(cerrar)
-        return self.cabecera
 
     def paintEvent(self, evento):
         pintor = QPainter(self)

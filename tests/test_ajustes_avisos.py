@@ -208,20 +208,32 @@ class AjustesYAvisos(BaseQt):
     # -- 7 y 8: submenú marcado y «Acerca de» ------------------------------------------------------------------
     def test_SAJU09_la_opcion_marcada_del_submenu_tipo_de_etapa_se_distingue(self):
         """REQ-EDT-09: en «Tipo de etapa» el orden es Etapa, Etapa inicial, Encapsulante, Macroetapa y la fila marcada
-        se distingue con la marca, la negrita y un icono con fondo."""
+        se distingue con la marca ✓ (casilla marcada); el icono con fondo y la negrita se quitó (Carbon #9.1)."""
         w, e = self.vacio()
         s = e.poner_etapa(QPointF(260, 80))
         from escritorio.diagrama import posiciones
         menu = w.diagrama.menu_contextual(e.menu(QPointF(*posiciones(e.M)[s])))
         sub = next(a.menu() for a in menu.actions() if a.text() == "Tipo de etapa")
         self.assertEqual([a.text() for a in sub.actions()], ["Etapa", "Etapa inicial", "Encapsulante", "Macroetapa"])
-        self.assertEqual([(a.text(), a.isChecked(), a.font().bold()) for a in sub.actions()],
-                         [("Etapa", True, True), ("Etapa inicial", False, False), ("Encapsulante", False, False),
-                          ("Macroetapa", False, False)])
-        normal = sub.actions()[2].icon().pixmap(48, 48).toImage()
-        marcado = sub.actions()[0].icon().pixmap(48, 48).toImage()
-        self.assertEqual(marcado.pixelColor(8, 8).name(), "#cfeee6")
-        self.assertNotEqual(normal.pixelColor(8, 8).name(), "#cfeee6")
+        self.assertEqual([(a.text(), a.isCheckable(), a.isChecked(), a.font().bold()) for a in sub.actions()],
+                         [("Etapa", True, True, False), ("Etapa inicial", False, False, False),
+                          ("Encapsulante", False, False, False), ("Macroetapa", False, False, False)])  # solo la marcada lleva ✓
+        # La marca es la ✓ estándar del menú: desmarcar la fila cambia lo que se dibuja en ella (y solo en ella)
+        sub.ensurePolished()
+        sub.show()
+        self.app.processEvents()
+        marcada = sub.actions()[0]
+        con = sub.grab().toImage()
+        marcada.setChecked(False)
+        sub.repaint()
+        self.app.processEvents()
+        sin = sub.grab().toImage()
+        r = sub.actionGeometry(marcada)
+        self.assertNotEqual(con.copy(r), sin.copy(r), "la fila marcada lleva la ✓")
+        from PySide6.QtCore import QRect
+        resto = QRect(0, r.bottom() + 1, con.width(), con.height() - r.bottom() - 1)
+        self.assertEqual(con.copy(resto), sin.copy(resto), "las demás filas no cambian")
+        sub.close()
 
     def test_SAJU10_acerca_de_se_abre_desde_el_menu_ayuda_con_version_licencia_y_enlaces(self):
         """REQ-NOR-02: «Ayuda > Acerca de GRAFCET Connect…» abre un diálogo con la versión (la de escritorio.VERSION),

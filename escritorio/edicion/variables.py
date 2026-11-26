@@ -25,9 +25,9 @@ class _Variables:
             return f'"{nombre}" no puede ser nombre de variable: es una palabra de las fórmulas'
         if re.fullmatch(r"\d+(?:[.,]\d+)?\s*(?:us|µs|μs|ms|s)", nombre):
             return (f'"{nombre}" no puede ser nombre de variable: se leería como una duración (3s, 500ms…); '
-                    "añada alguna letra más, como 1S2")
+                    "añade alguna letra más, como 1S2")
         if re.fullmatch(r"\d+(?:[.,]\d+)?", nombre):
-            return f'"{nombre}" no puede ser nombre de variable: es solo un número; añada alguna letra, como 1M1'
+            return f'"{nombre}" no puede ser nombre de variable: es solo un número; añade alguna letra, como 1M1'
         if nombre != nombre.strip() or "  " in nombre:
             return (f'"{nombre}" no puede ser nombre de variable: lleva espacios al principio o al final, o dos espacios '
                     "seguidos; solo se admite un espacio entre palabras")

@@ -94,7 +94,7 @@ class ConexionES:
         self.panel_es.cargar(doc, config, avisos)
         self.panel_es.host.setToolTip(f"{origen}. Copia la dirección que muestra el software del servidor Modbus.")
         if fallo:
-            self.panel_es.mostrar_estado("error", fallo)
+            self.panel_es.mostrar_estado("error", fallo, reintentar=False)
         if self.modbus.activo and self.modbus.estado != "cerrando" and cambio:
             self._cambiar_modelo_modbus(doc)
 
@@ -308,7 +308,7 @@ class ConexionES:
         try:
             config = self.panel_es.obtener()
         except (ValueError, RuntimeError) as exc:
-            self.panel_es.estado.setText(f"No se pudo conectar: {exc}")
+            self.panel_es.mostrar_estado("error", f"No se pudo conectar: {exc}")
             return
         self._iniciar_conexion_modbus(config, None, prueba)
 
@@ -318,16 +318,17 @@ class ConexionES:
             self._parar_sin_cambiar_vista()
             with self.candado:
                 self.modbus.iniciar(config, sesion, prueba, documento=self.panel_es.doc)
+                estado, mensaje = self.modbus.estado, self.modbus.mensaje
             self.ciclo.arrancar()  # el hilo de control lleva el ciclo mientras haya conexión
             self.panel_es.config = config
             self.panel_es._dibujar()
             self.panel_es.ocupado(True)
-            self.panel_es.estado.setText(self.modbus.mensaje)
+            self.panel_es.mostrar_estado(estado, mensaje)
             self.rt.setInterval(TICK_MS)  # el reloj de la pantalla ya no marca el periodo de la conexión: solo atiende las novedades y refresca
             self._iniciar_reloj()
             self.rt.start()
         except (ValueError, RuntimeError) as exc:
-            self.panel_es.estado.setText(f"No se pudo conectar: {exc}")
+            self.panel_es.mostrar_estado("error", f"No se pudo conectar: {exc}")
             return
         if en_play:  # conecta en Pausa (P-IMP-60, con su cero) y, ya conectado, Play de nuevo desde las etapas iniciales
             self._replay_intentos = 100
@@ -364,8 +365,9 @@ class ConexionES:
                 self._conservar_vista_al_parar = anterior
                 self._sincronizar_boton_es()
             self.modbus.desconectar()
+            estado, mensaje = self.modbus.estado, self.modbus.mensaje
         self.ciclo.despertar()
-        self.panel_es.estado.setText(self.modbus.mensaje)
+        self.panel_es.mostrar_estado(estado, mensaje)
         self.rt.start()
 
     # -- indicador de la conexión externa -------------------------------------------------------

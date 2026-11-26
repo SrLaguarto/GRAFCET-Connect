@@ -463,7 +463,7 @@ class _Gestos:
                 if ident is not None and any(s["id"] == ident for s in self.M["steps"]):
                     destino = sorted(anclas(self.M, ident), key=lambda a: (a["pos"] - p).manhattanLength())[0]
                 else:
-                    self.rechazar("Una acción se une a una etapa: suelte el enlace sobre ella.", origen["id"])
+                    self.rechazar("Una acción se une a una etapa: suelta el enlace sobre ella.", origen["id"])
                     self.cambiado.emit()
                     return True
             if destino is None and ident and "|" in ident and ident.split("|")[2] in ("pre", "post"):

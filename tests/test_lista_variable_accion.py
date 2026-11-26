@@ -28,7 +28,7 @@ class ListaVariableAccion(unittest.TestCase):
 
     def test_SLVA02_la_lista_crece_hasta_la_opcion_mas_larga(self):
         c = _ComboVariable()
-        for texto in ("Elija la variable…", "Salidas", "   una salida de nombre bastante largo", "   y"):
+        for texto in ("Elige la variable…", "Salidas", "   una salida de nombre bastante largo", "   y"):
             c.addItem(texto, texto.strip())
         c.resize(90, 62)
         fm = c.view().fontMetrics()

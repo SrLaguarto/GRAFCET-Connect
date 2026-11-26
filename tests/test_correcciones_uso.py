@@ -77,11 +77,11 @@ class CorreccionesUso(BaseQt):
         self.assertEqual(p.config.senales[0].escala,"50")
 
     def test_SUSO04_botones_variables_caben_con_su_texto(self):
-        """REQ-EDT-07, REQ-EDT-09: la rejilla de dos columnas deja todo el texto visible con el ancho lateral habitual."""
+        """REQ-EDT-07, REQ-EDT-09: las altas en fila y Eliminar selección caben en el ancho lateral habitual."""
         w,e=self.vacio();w.resize(1366,768);w.show();self.app.processEvents();p=w.variables
         self.assertEqual(w.derecho.width(),w.ancho_derecho)
         botones=[*p.b_nuevas.values(),p.b_quitar]
-        self.assertEqual([b.text() for b in botones],["+ Entrada","+ Salida","+ Memoria","Eliminar"])
+        self.assertEqual([b.text() for b in botones], ["+ Entrada", "+ Salida", "+ Memoria", "Eliminar selección"])
         self.assertEqual(len({b.y() for b in botones}),2)
         for b in botones:
             opcion=QStyleOptionButton();b.initStyleOption(opcion)

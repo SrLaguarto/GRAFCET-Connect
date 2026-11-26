@@ -29,7 +29,7 @@ from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSiz
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QIcon, QImage, QPainter, QPainterPath, QPen,
                            QPalette, QPixmap, QRegion)
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGraphicsScene, QGraphicsTextItem, QGraphicsView, QListWidget, QHBoxLayout, QLabel,
-                               QMenu, QProxyStyle, QPushButton, QStyle, QStyledItemDelegate, QStyleOptionComboBox, QStyleOptionViewItem, QStylePainter,
+                               QMenu, QProxyStyle, QPushButton, QStyle, QStyledItemDelegate, QStyleOptionComboBox, QStyleOptionMenuItem, QStyleOptionViewItem, QStylePainter,
                                QToolButton, QToolTip, QWidget)
 
 from . import estilo
@@ -55,7 +55,8 @@ from .textos_diagrama import texto_nuevo
 MARK = 7       # divisiones de la macroetapa
 
 # Colores del tema claro de tools/dibujo.css: el dibujo es negro sobre blanco, como en la norma
-COL = {"readout": "#326dcb","panel": "#ffffff", "text": "#1d2330", "muted": "#6b7385", "accent": "#1f6feb", "accent_soft": "#dbe8ff",
+COL = {"readout": "#326dcb", "timer_bg": "#eff6ff", "timer_border": "#93c5fd", "timer_text": "#1d4ed8",
+       "panel": "#ffffff", "text": "#1d2330", "muted": "#6b7385", "accent": "#1f6feb", "accent_soft": "#dbe8ff",
        "ok": "#1a7f37", "active": "#40d641", "active_soft": "#e4f9e4", "true_text": "#40d641", "history": "#1a7f1b", "err": "#c62828", "aviso": "#eeb445", "virt": "#8250df", "glow": "#e36209"}
 FONT = "Arial"
 Z_FRAME, Z_LINK, Z_BAR, Z_STEP = 0, 1, 2, 3
@@ -418,26 +419,32 @@ def _duracion(segs: list[dict[str, Any]], t: dict[str, Any]) -> int | None:
 
 def _estado_temporal(pt: _Pintor, x: float, y: float, segs: list[dict[str, Any]] | None, size: int, ref: str | None,
                      tmp: dict[str, list[dict[str, Any]]], z: float, tip: str | None = None) -> float:
-    """Estado de los temporizadores de una receptividad, condición o evento, que se escribe con `size` desde `x` con su
-    línea base en `y`: el tiempo transcurrido («0,50 s») mientras cuenta, o «3,00 s ✓» al vencer, alineado al extremo de la
-    duración del temporizador (o de todo el texto, si no se encuentra) y por encima de su barra si está negada. Devuelve
-    hasta dónde llega por la derecha (0 si no se dibuja nada)."""
+    """Estado de los temporizadores de una receptividad, condición o evento, dibujado en una cápsula azul 6 px por encima
+    del texto (y de sus barras de negación si las hay). Devuelve hasta dónde llega por la derecha (0 si no se dibuja nada)."""
     lista = tmp.get(ref or "", []) if segs else []
     if not lista:
         return 0.0
     lim = pt.limites(segs, size)
     derecha = 0.0
+    asc_capsule = _ascenso_texto(TMR_TAM, True, True)
     for t in lista:
         i = _duracion(segs, t)
         a, b = (lim[0], lim[-1]) if i is None else (lim[i], lim[i + 1])
         niveles = _niveles_negado(segs if i is None else segs[i : i + 1])
-        base = y - pt.ascenso(size) - (3 + (niveles - 1) * PASO_NEGADO if niveles else 1)  # encima de las barras negadas
+        techo = y - pt.ascenso(size) - (3 + (niveles - 1) * PASO_NEGADO if niveles else 0)
+        y_abajo = techo - 6
         off = bool(t.get("off"))
         ancla = x + (b if off else a)
-        color = "readout"
-        w = pt.text(ancla, base - 1, pt.seg(t["shown"]), TMR_TAM, color, z, "end" if off else "start", tip,
-                    mono=True)
-        derecha = max(derecha, ancla if off else ancla + w)
+        segs_tmr = pt.seg(t["shown"])
+        tw, th = _medir_texto(_html(segs_tmr, False), TMR_TAM, True, True)
+        pw = tw + 10.0
+        ph = max(16.0, th + 4.0)
+        px = ancla + 5 - pw if off else ancla - 5  # el texto (no la cápsula) arranca en la duración: la cápsula sobresale 5 px
+        py = y_abajo - ph
+        pt.rect(px, py, pw, ph, pt.pen("timer_border", 1.0), z + 0.01, "timer_bg", tip, radius=ph / 2)
+        pt.text(px + pw / 2, py + (ph - th) / 2 + asc_capsule, segs_tmr, TMR_TAM, "timer_text", z + 0.01, "middle", tip,
+                bold=True, mono=True)
+        derecha = max(derecha, px + pw)
     return derecha
 
 
@@ -451,7 +458,7 @@ def _valores_variables(pt: _Pintor, x: float, y: float, t: dict[str, Any], S: di
     if not lecturas or not segs or not t.get("numericVars"):
         return
     lim = pt.limites(segs, 14)
-    base = y - pt.ascenso(14) - 3 - (TMR_EXTRA if t.get("tmr") else 0)
+    base = y - pt.ascenso(14) - 3 - (22 if t.get("tmr") else 0)  # 22 = la cápsula (16) y su separación (6)
     for vid in t["numericVars"]:
         valor, nombre = lecturas.get(vid), nombres.get(vid, vid)
         i = next((n for n, sg in enumerate(segs) if sg["t"] == nombre), None)
@@ -570,9 +577,9 @@ def _realces(pt: _Pintor, M: dict[str, Any], sel: set[str], marcados: set[str], 
             for h in rutas[ident]["handles"]:
                 x, y = h["pos"]
                 pt.rect(x-5, y-5, 10, 10, pt.pen("accent", 1.5), Z_EDIT+1, "panel",
-                        "Arrastre este cuadrado para recolocar el tramo")
+                        "Arrastra este cuadrado para recolocar el tramo")
             for f in rutas[ident]["arrows"]:
-                pt.poly(f["pts"], None, Z_EDIT+2, fill="accent", tip="Arrastre la flecha a lo largo del enlace")
+                pt.poly(f["pts"], None, Z_EDIT+2, fill="accent", tip="Arrastra la flecha a lo largo del enlace")
             continue
         if ident in barras:
             bx, by, w, h = barra(barras[ident])
@@ -1085,30 +1092,36 @@ def icono_accion(tipo: str, ancho: int = 84, alto: int = 64) -> QIcon:
     return QIcon(pm.scaled(ancho * 2, alto * 2, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
 
 
-def _icono_marcado(icono: QIcon, lado: int = 48) -> QIcon:
-    """El icono de la opción marcada de un submenú: el mismo dibujo sobre un fondo menta con borde, para que se distinga."""
-    pm = icono.pixmap(lado, lado)
-    marcado = QPixmap(pm.size())
-    marcado.setDevicePixelRatio(pm.devicePixelRatio())
-    marcado.fill(Qt.GlobalColor.transparent)
-    p = QPainter(marcado)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(QPen(QColor(estilo.ACENTO), 2))
-    p.setBrush(QColor(estilo.ACENTO_SUAVE))
-    ancho, alto = pm.width() / pm.devicePixelRatio(), pm.height() / pm.devicePixelRatio()
-    p.drawRoundedRect(QRectF(1, 1, ancho - 2, alto - 2), 5, 5)
-    p.drawPixmap(0, 0, pm)
-    p.end()
-    return QIcon(marcado)
+class _MenuConMarcas(QMenu):
+    """Un submenú con iconos: con la hoja de estilo global, Qt no dibuja la ✓ de una fila marcada que lleva icono, y sin ella el
+    tipo activo no se distingue. Aquí se dibuja la ✓ en el hueco de la derecha (28 px de relleno) de cada fila marcada."""
+
+    def paintEvent(self, event: Any) -> None:  # noqa: N802
+        super().paintEvent(event)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(QPen(QColor(estilo.ACENTO), 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        for a in self.actions():
+            if a.isCheckable() and a.isChecked():
+                r = self.actionGeometry(a)
+                x, y = r.right() - 20, r.center().y()
+                p.drawPolyline([QPointF(x, y), QPointF(x + 3.5, y + 3.5), QPointF(x + 9.5, y - 4)])
+        p.end()
 
 
 class _EstiloIconos(QProxyStyle):
-    """Iconos más grandes en un menú (los de los tipos de acción, que se ven dibujados: a 16 px no se reconocerían)."""
+    """Iconos de 20 px y filas de 32 px (`ALTO_ESTANDAR`) en un menú con los iconos de los tipos de acción; el tipo activo lleva la marca ✓ estándar."""
 
     def pixelMetric(self, metric: Any, option: Any = None, widget: Any = None) -> int:  # noqa: N802
         if metric == QStyle.PixelMetric.PM_SmallIconSize:
-            return 48
+            return 20
         return super().pixelMetric(metric, option, widget)
+
+    def sizeFromContents(self, tipo: Any, option: Any, size: Any, widget: Any = None) -> Any:  # noqa: N802
+        medida = super().sizeFromContents(tipo, option, size, widget)
+        if tipo == QStyle.ContentsType.CT_MenuItem and not medida.isEmpty() and medida.height() < estilo.ALTO_ESTANDAR                 and option.menuItemType != QStyleOptionMenuItem.MenuItemType.Separator:
+            medida.setHeight(estilo.ALTO_ESTANDAR)
+        return medida
 
 
 ZOOM_MIN, ZOOM_MAX, ZOOM_PASO = 0.1, 8.0, 1.15
@@ -1194,7 +1207,7 @@ class _BarraZoom(QFrame):
         return resultado
 
 
-MARCADORES_SELECTOR = ("Elija la variable…", "Elija variable…", "Variable…", "…")  # el marcador del desplegable sin variable: el primero que cabe
+MARCADORES_SELECTOR = ("Elige la variable…", "Elige variable…", "Variable…", "…")  # el marcador del desplegable sin variable: el primero que cabe
 # Sangría del texto y zona de la flecha del desplegable sobre la acción.
 SELECTOR_PAD_IZQ, SELECTOR_FLECHA = estilo.E2, 18
 
@@ -1333,6 +1346,10 @@ class VistaDiagrama(QGraphicsView):
         self._ajuste_pendiente = False  # se encajó el dibujo antes de que la vista se mostrara (con su tamaño final): al mostrarse o al primer cambio de tamaño se encaja de nuevo
         self._encuadrando: QRectF | None = None  # lo que acaba de encuadrarse, hasta que la ventana termina de recolocarse
         self._barra_zoom()
+        self.tarjeta_diagnosticos = QFrame(self)
+        self.tarjeta_diagnosticos.setObjectName("tarjetaDiagnosticos")
+        self.tarjeta_diagnosticos.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.tarjeta_diagnosticos.hide()
         self.lista_diagnosticos = QListWidget(self)
         self.lista_diagnosticos.setObjectName("listaDiagnosticos")
         self.lista_diagnosticos.setWordWrap(True)
@@ -1340,7 +1357,7 @@ class VistaDiagrama(QGraphicsView):
         self.lista_diagnosticos.setStyleSheet(
             "QListWidget { background:transparent; border:0; font-size:13px; } "
             f"QListWidget[tecl=\"true\"]:focus {{ border:2px dashed {estilo.FOCO}; }} "
-            f"QListWidget::item {{ background:rgba(255,255,255,235); color:{estilo.TINTA}; padding:2px; }}")
+            f"QListWidget::item {{ background:transparent; color:{estilo.TINTA}; padding:3px 4px; }}")
         self.lista_diagnosticos.hide()
         self.indicador_diagnosticos = QLabel(self)
         self.indicador_diagnosticos.setObjectName("indicadorDiagnosticos")
@@ -1645,21 +1662,20 @@ class VistaDiagrama(QGraphicsView):
                 menu.addSeparator()
                 continue
             if isinstance(accion, list):  # un submenú: sus opciones, con las marcadas del controlador
-                sub = menu.addMenu(texto)
-                if any(len(o) > 2 for o in accion):  # con iconos de verdad (dibujados): más grandes
-                    estilo = _EstiloIconos(sub.style())
-                    estilo.setParent(sub)
-                    sub.setStyle(estilo)
+                if any(len(o) > 2 for o in accion):  # con iconos de verdad (dibujados): de 20 px y filas de 32 px
+                    sub = _MenuConMarcas(texto, menu)
+                    menu.addMenu(sub)
+                    proxy = _EstiloIconos(sub.style())
+                    proxy.setParent(sub)
+                    sub.setStyle(proxy)
+                    sub.setStyleSheet(f"QMenu::item {{ padding: {(estilo.ALTO_ESTANDAR - 20) // 2}px 28px {(estilo.ALTO_ESTANDAR - 20) // 2}px 24px; }}")  # (icono de 20 + relleno = fila de 32)
+                else:
+                    sub = menu.addMenu(texto)
                 for t, f, *icono in accion:
                     a = sub.addAction(icono[0], t, f) if icono else sub.addAction(t, f)
                     if t in marcadas:
                         a.setCheckable(True)
                         a.setChecked(True)
-                        if icono:  # con iconos grandes la marca de la casilla no se ve: fila en negrita y icono con fondo
-                            fuente = a.font()
-                            fuente.setBold(True)
-                            a.setFont(fuente)
-                            a.setIcon(_icono_marcado(icono[0]))
                 continue
             a = menu.addAction(texto, accion) if accion is not None else menu.addAction(texto)
             a.setEnabled(accion is not None)
@@ -1881,9 +1897,37 @@ class VistaDiagrama(QGraphicsView):
             if lista.verticalScrollBar().isVisible():
                 region |= QRegion(lista.verticalScrollBar().geometry())
             lista.setMask(region)
+            if hasattr(self, "tarjeta_diagnosticos"):
+                tarjeta = self.tarjeta_diagnosticos
+                hay_aviso = boton.isVisibleTo(self)
+                if hay_aviso:
+                    x_izq = bx if self.indicador_diagnosticos.isVisibleTo(self) else boton.x() - 4
+                    izq = max(0, x_izq - 4)
+                    arriba = y0
+                    der = min(w - sb - 2, max(boton.geometry().right(), lista.geometry().right() if lista.isVisibleTo(self) else 0) + 6)
+                    abajo = (lista.y() + alto + 4) if lista.isVisibleTo(self) else (y0 + 40)
+                    tarjeta.setGeometry(izq, arriba, max(40, der - izq), max(32, abajo - arriba))
+                    tarjeta.setVisible(True)
+                    tarjeta.raise_()
+                else:
+                    tarjeta.hide()
             lista.raise_()
             boton.raise_()
             self.indicador_diagnosticos.raise_()
+
+    def _estilo_tarjeta_diagnosticos(self, modo: str) -> None:
+        if getattr(self, "_modo_tarjeta_diag", None) == modo or not hasattr(self, "tarjeta_diagnosticos"):
+            return
+        self._modo_tarjeta_diag = modo
+        paleta = {
+            "error": (estilo.PELIGRO_FONDO, estilo.PELIGRO_BORDE),
+            "aviso": (estilo.AVISO_FONDO, estilo.AVISO_BORDE),
+            "vacio": (estilo.SUPERFICIE_2, estilo.BORDE_SUAVE),
+        }
+        fondo, borde = paleta[modo]
+        self.tarjeta_diagnosticos.setStyleSheet(
+            f"QFrame#tarjetaDiagnosticos {{ background:{fondo}; border:1px solid {borde}; border-radius:{estilo.R_M}px; }}"
+        )
 
     def _estilo_resumen(self, color: str) -> None:
         """El resumen de incidencias es un enlace: sin recuadro ni fondo (tampoco al pasar el puntero ni al pulsar), con el texto y la flecha del
@@ -1907,16 +1951,21 @@ class VistaDiagrama(QGraphicsView):
         self.resumen_diagnosticos.setChecked(self.diagnosticos_abiertos)
         if vacio:  # «Mostrar errores» marcado y nada que avisar: «Sin errores» en tono neutro, sin triángulo ni flecha
             self._estilo_resumen(estilo.TINTA_2)
+            self._estilo_tarjeta_diagnosticos("vacio")
             self.resumen_diagnosticos.setText("Sin errores")
             self.resumen_diagnosticos.setToolTip("No hay errores ni avisos")
         else:
-            self._estilo_resumen(estilo.ERROR if "error" in resumen.lower() else estilo.AVISO)
+            es_error = "error" in resumen.lower()
+            self._estilo_resumen(estilo.ERROR if es_error else estilo.AVISO)
+            self._estilo_tarjeta_diagnosticos("error" if es_error else "aviso")
             self.resumen_diagnosticos.setText(f"{resumen}  {'▾' if self.diagnosticos_abiertos else '▸'}")
             self.resumen_diagnosticos.setToolTip(resumen + (" · clic para plegar la lista" if self.diagnosticos_abiertos else " · clic para ver los mensajes"))
         self.lista_diagnosticos.setVisible(visible and not vacio and self.diagnosticos_abiertos)
         self.resumen_diagnosticos.setVisible(visible)
         self.resumen_diagnosticos.setEnabled(not vacio)
         self.indicador_diagnosticos.setVisible(visible and not vacio)
+        if not visible and hasattr(self, "tarjeta_diagnosticos"):
+            self.tarjeta_diagnosticos.hide()
         self._colocar()
 
     def desplegar_diagnosticos(self, abierto: bool) -> None:

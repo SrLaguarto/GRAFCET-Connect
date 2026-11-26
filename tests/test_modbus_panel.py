@@ -233,7 +233,7 @@ class PanelTests(unittest.TestCase):
             self.assertNotEqual(p.check.text(), "✓")
             p.mostrar_estado("conectado", "Conectado · Ejecutando")
             self.assertEqual(p.check.text(), "✓")
-            self.assertEqual(p.estado.text(), "Conectado")
+            self.assertEqual(p.pastilla_conexion.text(), f"● Conectado · {p.config.host}:{p.config.puerto}")
             p.mostrar_estado("error", "Conexión perdida")
             self.assertEqual(p.check.text(), "✕")
             p.b_configuracion.click()
@@ -719,7 +719,7 @@ class PanelTests(unittest.TestCase):
                 .var("t", "input", "duration").var("q", "output").var("w", "output", "int").step("0", True).doc)
 
     def _panel_vista(self, app, ancho=1280, alto=720):
-        """Un panel mostrado con a, v, q y w asignados y los canales del simulador de procesos (8 + 8 + 2 + 2)."""
+        """Un panel mostrado con a, v, q y w asignados y los canales del simulador de fábricas (8 + 8 + 2 + 2)."""
         doc = self._doc_vista()
         c = Configuracion(host="192.168.1.133", puerto=502, unidad=1, modelo=doc["id"],
                           senales=[Senal("a", "discrete", 0), Senal("v", "input-register", 1, "INT16"),
@@ -1155,7 +1155,7 @@ class PanelTests(unittest.TestCase):
         """REQ-SIM-03: sin nada recordado ni mapa guardado, el panel propone 192.168.1.133, puerto 502 y esclavo 1; no se
         comparte el mismo valor inicial con la configuración de conexión."""
         app = QApplication.instance() or QApplication([])
-        self.assertEqual(Configuracion().host, "192.168.1.133", "valor inicial unificado con el simulador de procesos")
+        self.assertEqual(Configuracion().host, "192.168.1.133", "valor inicial unificado con el simulador de fábricas")
         p = PanelES()
         try:
             p.cargar(M().var("a").step("0", True).doc)

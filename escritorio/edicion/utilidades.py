@@ -58,4 +58,4 @@ def quitar_valores_iniciales(doc: dict[str, Any]) -> list[str]:
 
 def aviso_valores_iniciales(quitadas: list[str]) -> str:
     return (f"Valores iniciales quitados: {'; '.join(quitadas)}. En GRAFCET Connect todas las variables empiezan en 0; "
-            "si la condición necesita un número, escríbalo en la receptividad (por ejemplo C = 3).")
+            "si la condición necesita un número, escríbelo en la receptividad (por ejemplo C = 3).")

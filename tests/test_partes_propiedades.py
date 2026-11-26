@@ -166,8 +166,8 @@ class Piezas(unittest.TestCase):
                     self.assertNotEqual(img.pixelColor(x, y).name(), estilo.AVISO_BORDE, "no hay punto ámbar")
 
     def test_SP808_tokens_nuevos_de_estilo(self):
-        """REQ-UX-01: `ORIGEN_MEMORIA` es la ciruela de la maqueta (distinta de AVISO y de los tipos) y las señales de parte, las de siempre."""
-        self.assertEqual(estilo.ORIGEN_MEMORIA, "#7a3e8e")
+        """REQ-UX-01: `ORIGEN_MEMORIA` coincide con el morado unificado de memoria (distinto de AVISO y de los tipos) y las señales de parte, las de siempre."""
+        self.assertEqual(estilo.ORIGEN_MEMORIA, "#6d28d9")
         self.assertNotIn(estilo.ORIGEN_MEMORIA, (estilo.AVISO, estilo.AVISO_BORDE, estilo.TIPO_ENTERA, estilo.TIPO_DECIMAL, estilo.TIPO_BOOL))
         from escritorio.flotantes import SENAL_ACCION, SENAL_CONDICION
         self.assertEqual((SENAL_CONDICION, SENAL_ACCION), (estilo.ACENTO, estilo.TINTA_2))

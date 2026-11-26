@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from .. import estilo
 from ..laminas import VistaLamina
-from ..paneles import ContextoNombres, LINEAS_NOMBRE, partir_nombre
+from ..paneles import ContextoNombres, EtiquetaElidida, LINEAS_NOMBRE, partir_nombre
 from typing import Any
 from PySide6.QtCore import QEvent, QObject, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPen, QPixmap
@@ -16,6 +16,18 @@ def _ventana() -> type:
     """La clase `Ventana` (importada tarde: la ventana importa este módulo)."""
     from . import Ventana
     return Ventana
+
+
+class _FirmaEstado(EtiquetaElidida):
+    """La firma de la barra de estado y su separador se actualizan juntos."""
+
+    def __init__(self, separador) -> None:
+        super().__init__()
+        self.separador = separador
+
+    def setText(self, texto: str) -> None:  # noqa: N802
+        super().setText(texto)
+        self.separador.setVisible(bool(texto))
 
 
 class _BotonEntrada(QPushButton):

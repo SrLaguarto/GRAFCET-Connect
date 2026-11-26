@@ -193,7 +193,7 @@ class _Forzados:
         forma = eleccion.get("forma")
         etapas = list(eleccion.get("etapas") or []) if forma == "explicit" else None
         if forma == "explicit" and not etapas:
-            self.rechazar("Una orden explícita necesita al menos una etapa del parcial: elíjala, o use la forma «Vacía».",
+            self.rechazar("Una orden explícita necesita al menos una etapa del parcial: elígela, o usa la forma «Vacía».",
                           fid or sid)
             self.cambiado.emit()
             return None

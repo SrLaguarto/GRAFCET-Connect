@@ -37,7 +37,7 @@ class HostIPv4(unittest.TestCase):
     def test_SIP02_host_guardado_no_valido(self):
         """REQ-SIM-03: «localhost» se carga como 127.0.0.1; cualquier otro valor no válido, como la dirección inicial, pero con
         un aviso que lo dice (no se sustituye en silencio) y sin guardar la sustitución."""
-        self.assertEqual(aviso_host("plc.aula"), "La dirección guardada (plc.aula) no es una IP. Escriba la IP del servidor.")
+        self.assertEqual(aviso_host("plc.aula"), "La dirección guardada (plc.aula) no es una IP. Escribe la IP del servidor.")
         self.assertIn("fe80::1", aviso_host(" fe80::1 "))
         for bueno in ("10.1.2.3", "localhost", " LocalHost ", "", None, 5):
             self.assertEqual(aviso_host(bueno), "", bueno)
@@ -57,7 +57,7 @@ class HostIPv4(unittest.TestCase):
             datos["host"] = "plc.aula"
             ruta.write_text(json.dumps(datos), encoding="utf-8")
             c = Configuracion.cargar(ruta, doc)
-            self.assertEqual((c.host, c.aviso_host), (CONEXION_INICIAL[0], "La dirección guardada (plc.aula) no es una IP. Escriba la IP del servidor."))
+            self.assertEqual((c.host, c.aviso_host), (CONEXION_INICIAL[0], "La dirección guardada (plc.aula) no es una IP. Escribe la IP del servidor."))
             self.assertEqual(json.loads(ruta.read_text(encoding="utf-8"))["host"], "plc.aula")
             Configuracion.cargar(ruta, doc)  # (y cargarlo no lo toca)
             self.assertEqual(json.loads(ruta.read_text(encoding="utf-8"))["host"], "plc.aula")
@@ -159,7 +159,7 @@ class CampoIP(BaseQt):
         p.aviso_host_defecto = self.w._aviso_host_recordado
         p.cargar(p.doc)
         self.assertEqual(p.host.text(), CONEXION_INICIAL[0])
-        self.assertIn("La dirección guardada (plc.aula) no es una IP. Escriba la IP del servidor.", p.estado.nota)
+        self.assertIn("La dirección guardada (plc.aula) no es una IP. Escribe la IP del servidor.", p.estado.nota)
         p.host.setText("10.0.0.9")
         self.assertTrue(p._aplicar())
         self.assertEqual(p.aviso_host, "")

@@ -73,7 +73,7 @@ QPushButton#botonAhoraNo {{ background:{estilo.SUPERFICIE}; color:{estilo.TINTA}
         self.l_instalada, self.l_disponible = QLabel(instalada), QLabel(disponible)
         self.l_instalada.setObjectName("versionInstalada")
         self.l_disponible.setObjectName("versionDisponible")
-        for columna_, etiqueta, numero in ((0, "Tiene instalada", self.l_instalada), (2, "Disponible", self.l_disponible)):
+        for columna_, etiqueta, numero in ((0, "Tienes instalada", self.l_instalada), (2, "Disponible", self.l_disponible)):
             rotulo = QLabel(etiqueta)
             rotulo.setObjectName("etiquetaVersion")
             self.rejilla.addWidget(rotulo, 0, columna_, Qt.AlignmentFlag.AlignHCenter)

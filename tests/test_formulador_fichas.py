@@ -113,12 +113,12 @@ class FormuladorFichas(unittest.TestCase):
         self.assertEqual(arbol_a_texto(mime["datos"]["nodo"]), "NOT ↑marcha")
 
     def test_SP8B03_cada_origen_con_su_color_y_barra(self):
-        """REQ-EDT-02, REQ-EDT-07: entrada ACENTO, salida SIMULACION, etapa EDICION y memoria ámbar (#b45309), en los colores y en la barra
-        lateral de la ficha (se mira el píxel)."""
+        """REQ-EDT-02, REQ-EDT-07: el color de cada origen se ve en la barra lateral de la ficha."""
         self.assertEqual((COLORES["entrada"], COLORES["salida"], COLORES["etapa"], COLORES["interna"]),
-                         (estilo.ACENTO, estilo.SIMULACION, estilo.EDICION, "#b45309"))
+                         (estilo.ACENTO, estilo.SIMULACION, estilo.EDICION, estilo.PAPEL_MEMORIA))
         p = self.programador()
-        for texto, color in (("marcha", estilo.ACENTO), ("Motor", estilo.SIMULACION), ("X0", estilo.EDICION), ("M1", "#b45309")):
+        for texto, color in (("marcha", estilo.ACENTO), ("Motor", estilo.SIMULACION),
+                             ("X0", estilo.EDICION), ("M1", estilo.PAPEL_MEMORIA)):
             with self.subTest(texto):
                 p.poner(texto)
                 imagen = p.lienzo.grab().toImage()

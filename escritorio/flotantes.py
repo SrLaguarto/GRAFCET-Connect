@@ -835,11 +835,23 @@ class GestorFlotantes(QObject):
         disponible = area.adjusted(margen, estilo.E6, -margen, -estilo.E6)
         disponible.setWidth(min(disponible.width(), 920))
         es_continua = self.panel.pagina == "accion" and self.panel.accion.clave_tipo == "continua"
-        es_editor = self.panel.pagina == "transicion" or (self.panel.pagina == "accion" and not es_continua)
+        es_bool_simple = (
+            self.panel.pagina == "accion"
+            and self.panel.accion.clave_tipo in ("activacion", "desactivacion")
+            and not self.panel.accion.caja_numerica.isVisibleTo(self.panel.accion.caja_valor)
+        )
+        es_editor = (
+            self.panel.pagina == "transicion"
+            or (self.panel.pagina == "accion" and not es_continua and not es_bool_simple)
+        )
         if es_editor:
             # Altura estable de 332 px para el cuerpo (.editor-grid / .stable-panel) para que nunca salte al cambiar de variable o pestaña
             alto_objetivo = self._marco_ventana() + 332
             self._tamano = QSize(disponible.width(), min(disponible.height(), max(alto_objetivo, 460)))
+        elif es_bool_simple:
+            alto_cuerpo = max(84, self.panel.accion.panel_booleano.sizeHint().height() + 2)
+            alto_objetivo = self._marco_ventana() + alto_cuerpo
+            self._tamano = QSize(disponible.width(), min(disponible.height(), alto_objetivo))
         else:
             sub_ancho = self.principal.subcabecera.sizeHint().width() + 2 * estilo.E3 if not self.principal.subcabecera.isHidden() else 0
             ancho = min(disponible.width(), max(min(40 * estilo.E4, disponible.width()), sub_ancho))
@@ -848,7 +860,8 @@ class GestorFlotantes(QObject):
                 campos = self.panel.izq.sizeHint().height()
                 if self.panel.der.isVisibleTo(self.panel):
                     campos += self.panel.der.sizeHint().height() + estilo.E3
-                contenido = max(self.panel.sizeHint().height(), campos) + 28
+                extra = 44 if self.panel.pagina in ("etapa", "macro") else 28
+                contenido = max(self.panel.sizeHint().height(), campos) + extra
             else:
                 contenido = 0
             alto = contenido + self._marco_ventana()
@@ -858,7 +871,7 @@ class GestorFlotantes(QObject):
         """Los editores ocupan todo el ancho sin márgenes internos; las fichas simples conservan columna."""
         v, p = self.principal, self.panel
         disponible = v.columna.width() - 4 * estilo.E2
-        vertical = p.pagina in ("transicion", "accion") or disponible < 36 * estilo.E4
+        vertical = p.pagina in ("transicion", "accion", "etapa", "macro") or disponible < 36 * estilo.E4
         direccion = QBoxLayout.Direction.TopToBottom if vertical else QBoxLayout.Direction.LeftToRight
         p.cuerpo.layout().setDirection(direccion)
         p.cuerpo.layout().setSpacing(0 if p.pagina in ("transicion", "accion") else estilo.E3)

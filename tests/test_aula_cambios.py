@@ -311,7 +311,7 @@ class EtapasConElMismoNumero(BaseQt):
         self.assertEqual({x["label"] for x in e.M["steps"] if x["id"] in (s2, s3)}, {"3"}, "el dibujo enseña «3» en las dos")
         diags = [d for d in e.diagnosticos() if d["code"] == "D-NOMBRE-COLISION"]
         self.assertEqual(len(diags), 1)
-        self.assertEqual(diags[0]["message"], "Hay dos etapas con el número 3: cambie una.")
+        self.assertEqual(diags[0]["message"], "Hay dos etapas con el número 3: cambia una.")
         self.assertEqual(set(diags[0]["targets"]), {s2, s3})
         self.assertTrue(diags[0]["blocks"])
         self.assertLessEqual({s2, s3}, e.marcados())
@@ -321,7 +321,7 @@ class EtapasConElMismoNumero(BaseQt):
         from unittest import mock
         with mock.patch("escritorio.ventana.QMessageBox.warning", lambda *a: avisos.append(a[2])):
             self.assertFalse(w._preparar_sesion())
-        self.assertIn("Hay dos etapas con el número 3: cambie una.", avisos[0])
+        self.assertIn("Hay dos etapas con el número 3: cambia una.", avisos[0])
 
     def test_SAUC06_las_expresiones_siguen_ligadas_por_id_y_al_renombrar_de_vuelta_todo_cuadra(self):
         """REQ-MOD-06: mientras el número está repetido, X2 y X3 siguen ligadas a sus etapas; al corregirlo, el texto se reescribe."""
@@ -461,7 +461,7 @@ class UnirEnlacesConLibertad(BaseQt):
             self.assertEqual(len(diag), 1)
             self.assertTrue(diag[0]["blocks"])
             self.assertIn("llega a la transición", diag[0]["message"])
-            self.assertIn("ya tiene otra etapa anterior: use una barra de simultaneidad.", diag[0]["message"])
+            self.assertIn("ya tiene otra etapa anterior: usa una barra de simultaneidad.", diag[0]["message"])
             self.assertIn("simultaneidad", e.mensaje)
             self.assertNotIn("Una rama se une", e.mensaje)
             e.deshacer()

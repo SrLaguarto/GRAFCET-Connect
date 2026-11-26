@@ -88,8 +88,9 @@ Detalle, capas, hilos y mapa de módulos en `docs/ARQUITECTURA.md`. Reglas al ca
   `GRAFCONNECT_COMPROBAR_HILOS=1` (pruebas de conexión y `tools/choque_conexion.py`).
 - **`grafcet/` no se toca** sin autorización del responsable. Si un cambio de escritorio parece exigirlo, se pregunta antes.
 - **Banco de imágenes idéntico.** Cada cambio que afecte al dibujo deja las mismas imágenes que la referencia
-  (`python tools/banco_imagenes.py generar CARPETA` y `comparar`, contra `artifacts/v2_cierre/imagenes_2.0/`, fijada por
-  el responsable el 26-nov-2026 al cierre de la 2.0; la anterior era `artifacts/v2_e3/imagenes_7400f0c/`).
+  (`python tools/banco_imagenes.py generar CARPETA` y `comparar`, contra `artifacts/v2_cierre/imagenes_2.0_final/`, fijada
+  por el responsable el 26-nov-2026 tras los retoques de Carbon y el ajuste de la cápsula del temporizador. Cambian 22
+  capturas respecto a `imagenes_2.0`: la cápsula del temporizador y la tarjeta de avisos).
 
 ## Relevo entre sesiones
 

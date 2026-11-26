@@ -142,12 +142,12 @@ class _Diagnosticos:
             n = len(grupo)
             etiqueta = self.ed.get(grupo[0])["label"]
             que = "número" if etiqueta.isdigit() else "nombre"
-            mensaje = (f"Hay dos etapas con el {que} {etiqueta}: cambie una." if n == 2 else
-                       f"Hay {n} etapas con el {que} {etiqueta}: deje solo una con ese {que}.")
+            mensaje = (f"Hay dos etapas con el {que} {etiqueta}: cambia una." if n == 2 else
+                       f"Hay {n} etapas con el {que} {etiqueta}: deja solo una con ese {que}.")
             out.append({"code": "D-NOMBRE-COLISION", "message": mensaje,
-                        "correction": "Cambie el número de una de las etapas marcadas (en Propiedades, o con doble clic en ella)",
+                        "correction": "Cambia el número de una de las etapas marcadas (en Propiedades, o con doble clic en ella)",
                         "severity": "error", "blocks": True, "question": None, "element": grupo[0], "target": grupo[0],
-                        "targets": list(grupo)})
+                        "targets": list(grupo), "completo": True})
         rep_t = self._grupos_transiciones_repetidas()
         for grupo in rep_t:
             etiqueta = transition_effective_label(self.ed.get(grupo[0]))
@@ -156,10 +156,10 @@ class _Diagnosticos:
             lista = f"{', '.join(tras[:-1])}{y}{tras[-1]}"
             mensaje = f"Transición {etiqueta} repetida {lista}."
             out.append({"code": "D-NOMBRE-COLISION", "message": mensaje,
-                        "correction": "Cambie la etiqueta de una de ellas (doble clic en la transición, o en Propiedades) "
-                                      "o vacíela para que se numere sola",
+                        "correction": "Cambia la etiqueta de una de ellas (doble clic en la transición, o en Propiedades) "
+                                      "o vacíala para que se numere sola",
                         "severity": "error", "blocks": True, "question": None, "element": grupo[0], "target": grupo[0],
-                        "targets": list(grupo)})
+                        "targets": list(grupo), "completo": True})
         enrepetidas = {i for g in (*repetidas, *rep_t) for i in g}
         for d in self.ed.validate().diagnostics:  # (la memoria de la validación es la del núcleo: `grafcet.model.sellar`)
             if d.code == "D-NOMBRE-COLISION" and d.element in enrepetidas:
@@ -170,8 +170,8 @@ class _Diagnosticos:
                 texto = sin_comillas(self.texto_accion(evento["id"], "evento"))
                 mensaje = (f"Acción por evento de {self._nom(evento['targetRef'])} en la etapa {self._nom(evento['stepRef'])}: "
                            f"el disparador «{texto}» debe ser un evento, no solo una condición booleana.")
-                correccion = "Elija el evento que deba disparar la acción: flanco de subida (↑) o de bajada (↓) de la variable."
-                mensaje += " Use un flanco de subida (↑) o de bajada (↓), según lo que necesite."
+                correccion = "Elige el evento que deba disparar la acción: flanco de subida (↑) o de bajada (↓) de la variable."
+                mensaje += " Usa un flanco de subida (↑) o de bajada (↓), según lo que necesites."
             if d.code == "D-EXP-PENDIENTE":
                 mensaje = self._texto_expresion_pendiente(mensaje, self.dibujable(d.element))
             if d.code == "D-SIMULTANEIDAD":
@@ -186,7 +186,7 @@ class _Diagnosticos:
                         or (d.code == "D-ALTERNANCIA" and self._es_enlace_borrador(d.element))})
         if self.ignorados:
             out.append({"code": "AVISO", "severity": "advertencia", "blocks": False, "question": None, "element": None,
-                        "target": None, "correction": "Se descartó al abrir; vuelva a colocar la acción si hacía falta",
+                        "target": None, "correction": "Se descartó al abrir; vuelve a colocar la acción si hacía falta",
                         "message": "Se ignoró un borrador de acción dañado" if self.ignorados == 1
                         else f"Se ignoraron {self.ignorados} borradores de acción dañados"})
         for b in self.ed.draft_actions():  # diagnósticos de la edición: los borradores no están en el modelo ejecutable
@@ -197,8 +197,8 @@ class _Diagnosticos:
                             "target": b["id"],
                             "message": "Orden de forzado sin configurar suelta" if suelta else
                             f"Orden de forzado sin configurar en la etapa {self.nombre(b['etapa'])} ({', '.join(falta)})",
-                            "correction": "Una la orden a una etapa con un enlace desde su punto de unión izquierdo"
-                            if suelta else "Elija su parcial destino y su forma con «Configurar orden de forzado…» (botón derecho "
+                            "correction": "Une la orden a una etapa con un enlace desde su punto de unión izquierdo"
+                            if suelta else "Elige su parcial destino y su forma con «Configurar orden de forzado…» (botón derecho "
                             "en ella, o doble clic)"})
                 continue
             out.append({"code": "D-ACCION-PENDIENTE", "severity": "bloqueo",
@@ -206,8 +206,8 @@ class _Diagnosticos:
                         "message": "Acción sin configurar suelta" if suelta else
                         f"Acción sin configurar en la etapa {self.nombre(b['etapa'])} "
                         f"({', '.join(self.faltan(self._datos_borrador(b), self._parcial_borrador(b)))})",
-                        "correction": "Una la acción a una etapa con un enlace desde su punto de unión izquierdo"
-                        if suelta else "Complete la acción con «Editar…» (botón derecho en ella)"})
+                        "correction": "Une la acción a una etapa con un enlace desde su punto de unión izquierdo"
+                        if suelta else "Completa la acción con «Editar…» (botón derecho en ella)"})
         return out
 
     def _lados_cruzados(self, barra_id: str | None) -> str:
@@ -223,7 +223,7 @@ class _Diagnosticos:
             return ""
         quien = ", ".join(self._nom(i) for i, _ in mal)
         return (f" {quien} {'está' if len(mal) == 1 else 'están'} unida{'' if len(mal) == 1 else 's'} por el lado contrario al que "
-                "se ve (su línea da la vuelta a la barra): quítela de la barra y vuelva a unirla desde su salida, si va antes de la "
+                "se ve (su línea da la vuelta a la barra): quítala de la barra y vuelve a unirla desde su salida, si va antes de la "
                 "barra, o a su entrada, si va después.")
 
     def _es_enlace_borrador(self, ident: str | None) -> bool:

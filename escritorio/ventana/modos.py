@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import re
 from .. import estilo
 from ..diagrama import COL
 from ..edicion import Edicion
@@ -224,7 +225,7 @@ class Modos:
         self._marcas_diagnostico = e.marcados_de(diags) if self.b_errores.isChecked() else set()
         self.diagrama.mostrar(e.M, {}, e.seleccion_dibujo(), self._marcas_diagnostico, e.parpadeo.activos())
         if getattr(self, "solo_lectura", False):
-            self._poner_chip("lectura", "EJEMPLO · SOLO LECTURA", "Ejemplo de solo lectura: se puede simular; para editar, abra un proyecto o cree uno nuevo")
+            self._poner_chip("lectura", "EJEMPLO · SOLO LECTURA", "Ejemplo de solo lectura: se puede simular; para editar, abre un proyecto o crea uno nuevo")
         else:
             self._poner_chip("editar", "EDICIÓN", "Modo edición: Simular inicia la simulación")
         self.ayuda.setToolTip(self._ayuda if getattr(self,"solo_lectura",False) else AYUDA_EDICION[e.herramienta])
@@ -250,11 +251,12 @@ class Modos:
         self.l_resumen.setStyleSheet(f"color: {COL['ok'] if not bloq else COL['err']}")
         self.lista_diag.clear()
         for d in diags:
-            nombre = f"{e.nombre(d['target'])}: " if d["target"] else ""
+            etiqueta_obj = e.nombre(d["target"]) if d["target"] else ""
+            nombre = f"{etiqueta_obj}: " if d["target"] else ""
             if d["code"] == "D-TIPO-EVENTO" and d["message"].startswith("Acción por evento"):
                 nombre = ""
-            if d.get("completo"):
-                nombre = ""  # el aviso ya nombra el enlace o la barra: no se repite delante
+            if d.get("completo") or (etiqueta_obj and re.search(rf"\b{re.escape(etiqueta_obj)}\b", d["message"])):
+                nombre = ""  # el aviso ya nombra el elemento: no se duplica delante
             mensaje = d["message"] if nombre else d["message"][:1].upper() + d["message"][1:]
             principal, completo = partir(f"{nombre}{mensaje}")
             item = QListWidgetItem(principal)

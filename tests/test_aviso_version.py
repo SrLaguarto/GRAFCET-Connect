@@ -87,7 +87,7 @@ class AvisoVersionNueva(unittest.TestCase):
         self.assertEqual(d.width(), 440)
         self.assertTrue(d.isModal())
         textos = {l.text() for l in d.findChildren(QLabel)}
-        for t in ("Hay una versión nueva", "GRAFCET Connect tiene una actualización disponible.", "Tiene instalada", "Disponible", "→"):
+        for t in ("Hay una versión nueva", "GRAFCET Connect tiene una actualización disponible.", "Tienes instalada", "Disponible", "→"):
             self.assertIn(t, textos)
         self.assertEqual((d.l_instalada.text(), d.l_disponible.text()), (APP_VERSION, "999.0.0"))
         self.assertEqual([b.text() for b in d.findChildren(QAbstractButton)], ["Ahora no", "Descargar"])

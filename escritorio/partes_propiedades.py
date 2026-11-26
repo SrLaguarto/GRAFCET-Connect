@@ -36,7 +36,7 @@ class _Agarre(QWidget):
         self._origen: tuple[int, int] | None = None
         self.setFixedSize(LADO_AGARRE, LADO_AGARRE)
         self.setCursor(Qt.CursorShape.SizeVerCursor)
-        self.setToolTip("Arrastre para estirar el comentario")
+        self.setToolTip("Arrastra para estirar el comentario")
 
     def paintEvent(self, evento: Any) -> None:  # noqa: N802
         p = QPainter(self)
@@ -312,7 +312,7 @@ class CampoEtiquetaTransicion(QLineEdit):
         self.setReadOnly(True)
         self.setToolTip(
             "Etiqueta automática (t1, t2…). Doble clic para escribir una manual; "
-            "si la deja vacía volverá a ser automática."
+            "si la dejas vacía volverá a ser automática."
         )
 
     def _repulir(self) -> None:

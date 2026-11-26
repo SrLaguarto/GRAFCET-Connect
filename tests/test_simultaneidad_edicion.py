@@ -78,7 +78,7 @@ class BarrasAlEditar(BaseQt):
         self.assertEqual(len(barra_), 1, textos)
         self.assertTrue(barra_[0].startswith("Simultaneidad 1 tiene a la vez la etapa 2 y la transición t1 por abajo."), barra_[0])
         item = next(w.lista_diag.item(i) for i in range(w.lista_diag.count()) if "Simultaneidad 1" in w.lista_diag.item(i).text())
-        self.assertIn("quite de la barra lo que sobre", item.toolTip())  # (la frase larga se parte: el resto, en la ayuda)
+        self.assertIn("quita de la barra lo que sobre", item.toolTip())  # (la frase larga se parte: el resto, en la ayuda)
         self.assertEqual(barra_[0].count("Simultaneidad 1"), 1)
         for x in textos:
             self.assertNotRegex(x, r"[a-z]-[0-9a-f]{32}")
@@ -95,7 +95,7 @@ class BarrasAlEditar(BaseQt):
         w.refrescar_edicion()
         textos = [w.lista_diag.item(i).text() for i in range(w.lista_diag.count())]
         self.assertIn("Enlace en borrador entre las etapas 1 y 0: dos etapas no pueden ir seguidas. "
-                      "Bórrelo o ponga una transición en medio.", textos)
+                      "Bórralo o pon una transición en medio.", textos)
         self.assertEqual(sum("borrador" in x.lower() for x in textos), 1)
 
     def test_SSIM04_lo_que_no_existe_se_limpia_al_abrir_y_no_avisa(self):
@@ -490,10 +490,10 @@ class BarraSuelta(BaseQt):
         e.cambia()
         w.refrescar_edicion()
         (d,) = self.avisos(e)
-        self.assertEqual(d["message"], "Simultaneidad 1 no tiene nada conectado. Únala o bórrela.")
+        self.assertEqual(d["message"], "Simultaneidad 1 no tiene nada conectado. Únela o bórrala.")
         self.assertEqual((d["severity"], d["blocks"], d["target"]), ("advertencia", False, b))
         textos = [w.lista_diag.item(i).text() for i in range(w.lista_diag.count())]
-        self.assertIn("Simultaneidad 1 no tiene nada conectado. Únala o bórrela.", textos)
+        self.assertIn("Simultaneidad 1 no tiene nada conectado. Únela o bórrala.", textos)
         self.assertEqual(sum("Simultaneidad 1" in x for x in textos), 1)
         for x in textos:
             self.assertNotRegex(x, r"[a-z]-[0-9a-f]{32}")
@@ -515,7 +515,7 @@ class BarraSuelta(BaseQt):
         e.ed.bar_link(barra, "arriba", a)
         e.cambia()
         (d,) = self.avisos(e)
-        self.assertEqual(d["message"], "Simultaneidad 1 no tiene nada conectado por abajo. Únala o bórrela.")
+        self.assertEqual(d["message"], "Simultaneidad 1 no tiene nada conectado por abajo. Únela o bórrala.")
         self.assertFalse(d["blocks"])
         self.arrastrar(e, (e, barra, "abajo"), (e, t, "arriba"))
         self.assertEqual(self.avisos(e), [])
@@ -523,7 +523,7 @@ class BarraSuelta(BaseQt):
         e.ed.bar_link(barra, "abajo", t)
         e.cambia()
         (d,) = self.avisos(e)
-        self.assertEqual(d["message"], "Simultaneidad 1 no tiene nada conectado por arriba. Únala o bórrela.")
+        self.assertEqual(d["message"], "Simultaneidad 1 no tiene nada conectado por arriba. Únela o bórrala.")
         self.assertFalse(d["blocks"])
 
     def test_SSIM17_la_barra_de_alternativa_tambien_avisa_y_lo_ya_borrado_no_cuenta(self):

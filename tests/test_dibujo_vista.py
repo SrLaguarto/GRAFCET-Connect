@@ -247,10 +247,10 @@ class DibujoTemporizador(unittest.TestCase):
         r = etiqueta.sceneBoundingRect()
         self.assertAlmostEqual(r.left(), inicio, delta=.01)
         base = r.top() + dg._Pintor.ascenso(dg.TMR_TAM)
-        self.assertTrue(0 < cond.pos().y() - base <= 4)
+        self.assertTrue(0 < cond.pos().y() - base <= 12, "el tiempo va encima del texto, dentro de su cápsula a 6 px")
         self.assertGreater(inicio, cond.pos().x() + 10, "se localiza midiendo el token")
         self.assertEqual(etiqueta.font().pixelSize(), 10)
-        self.assertEqual(etiqueta.defaultTextColor().name(), dg.COL["readout"])
+        self.assertEqual(etiqueta.defaultTextColor().name(), dg.COL["timer_text"])
         # Antes de empezar no hay nada; al vencer, «3,00 s ✓» en el mismo sitio y de otro color
         sc0, _ = dibujo(vista(m, lay))
         colores = {dg.COL["accent"], dg.COL["true_text"]}
@@ -258,7 +258,7 @@ class DibujoTemporizador(unittest.TestCase):
         v.act("avanzar", {"us": 2_000_000})
         sc1, _ = dibujo(v)
         hecho = texto(sc1, "3,00 s ✓")
-        self.assertEqual(hecho.defaultTextColor().name(), dg.COL["readout"])
+        self.assertEqual(hecho.defaultTextColor().name(), dg.COL["timer_text"])
         self.assertAlmostEqual(hecho.pos().x(), inicio, delta=1.0)
 
     def test_SEDI208_si_no_se_localiza_la_duracion_se_alinea_con_toda_la_receptividad(self):
@@ -309,7 +309,7 @@ class DibujoTemporizador(unittest.TestCase):
             etiqueta = next(it for it in textos(sc) if it.toPlainText() == "0,50 s"
                             and abs(it.pos().x() - inicio) < .01)
             base = etiqueta.pos().y() + dg._Pintor.ascenso(dg.TMR_TAM)
-            self.assertTrue(0 < cond.pos().y() - base <= 4, (plano, cond.pos().y() - base))
+            self.assertTrue(0 < cond.pos().y() - base <= 12, (plano, cond.pos().y() - base))  # cápsula a 6 px (C1)
 
     def test_SEDI211_el_tiempo_de_una_accion_con_retardo_no_pisa_la_caja_de_arriba(self):
         """REQ-SIM-03: en una columna de acciones, el tiempo transcurrido de la segunda cabe en el hueco que la disposición le

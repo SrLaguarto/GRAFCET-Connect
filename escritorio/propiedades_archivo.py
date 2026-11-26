@@ -6,11 +6,14 @@ import getpass
 import os
 from pathlib import Path
 import sys
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QMessageBox, QVBoxLayout,
-                               QWidget)
-from grafcet.contenedor import FORMATO_VERSION
-from . import VERSION, sello
+from PySide6.QtCore import QRegularExpression, Qt
+from PySide6.QtGui import QRegularExpressionValidator
+from PySide6.QtWidgets import (QApplication, QDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
+                               QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget)
+from grafcet.contenedor import FORMATO_VERSION, HISTORIAL_AUTORES, MAX_AUTOR
+from . import VERSION, estilo, sello
+from .estilo_dialogos import CabeceraDialogo, PieDialogo, aplicar_escala_dialogo
+from .paneles import EtiquetaElidida, TituloSeccion
 
 ALGORITMO = "HMAC-SHA256"
 ANTIGUO = "desconocida (archivo anterior a la 1.0)"
@@ -35,6 +38,7 @@ class Propiedades:
     programa: str
     instalado: str
     editable: bool
+    historial: tuple[str, ...] = ()
 
 
 def autor_por_defecto() -> str:
@@ -64,6 +68,13 @@ def _fecha(iso: str | None, falta: str) -> str:
         return datetime.fromisoformat(iso).astimezone().strftime("%d/%m/%Y %H:%M")
     except ValueError:
         return falta
+
+
+def _linea_autor(entrada: dict) -> str:
+    desde = datetime.fromisoformat(entrada['desde']).strftime('%d-%m-%Y')
+    hasta = datetime.fromisoformat(entrada['hasta']).strftime('%d-%m-%Y')
+    autor = entrada['autor'] or 'Sin autor'
+    return f'{autor} · {desde} → {hasta}'
 
 
 def huella_agrupada(huella: str) -> str:
@@ -110,7 +121,7 @@ def recopilar(e, editable: bool = True) -> Propiedades:
     programa, instalado = descripcion_programa()
     return Propiedades(
         nombre=e.archivo.name if e.archivo else "sin guardar",
-        ruta=str(e.archivo.parent) if e.archivo else "sin guardar",
+        ruta=str(e.archivo) if e.archivo else "sin guardar",
         autor=autor_para_guardar(e),
         creado=_fecha(info.get("creado"), "Se fijará al guardar" if nuevo else ANTIGUO),
         modificado=_fecha(info.get("modificado"), "sin guardar" if nuevo else ANTIGUO),
@@ -118,11 +129,13 @@ def recopilar(e, editable: bool = True) -> Propiedades:
         version_guardado=info.get("version_guardado") or ("sin guardar" if nuevo else ANTIGUO),
         formato=str(FORMATO_VERSION),
         sello=sello_texto, algoritmo=algoritmo, huella=huella,
-        programa=programa, instalado=instalado, editable=editable)
+        programa=programa, instalado=instalado, editable=editable,
+        historial=tuple(_linea_autor(entrada) for entrada in info.get(HISTORIAL_AUTORES, ())))
 
 
 def _etiqueta(texto: str) -> QLabel:
     et = QLabel(texto)
+    et.setTextFormat(Qt.TextFormat.PlainText)
     et.setWordWrap(True)
     et.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     return et
@@ -133,20 +146,64 @@ class PropiedadesArchivo(QDialog):
 
     def __init__(self, datos: Propiedades, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        from .estilo_dialogos import aplicar_escala_dialogo
         aplicar_escala_dialogo(self)
         self.setWindowTitle("Propiedades del archivo")
-        self.setMinimumWidth(520)
+        self.setFixedWidth(500)
+        self.resize(500, min(620, self.screen().availableGeometry().height() - 2 * estilo.E6))
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(CabeceraDialogo(self.windowTitle()))
+
+        contenido = QWidget()
+        cuerpo = QVBoxLayout(contenido)
+        cuerpo.setContentsMargins(estilo.E4, estilo.E3, estilo.E4, estilo.E3)
+        cuerpo.setSpacing(estilo.E3)
+        cuerpo.addLayout(self._datos_proyecto(datos))
+        cuerpo.addWidget(TituloSeccion("Datos técnicos"))
+        cuerpo.addLayout(self._datos_tecnicos(datos))
+        cuerpo.addStretch()
+
+        zona = QScrollArea()
+        zona.setWidgetResizable(True)
+        zona.setFrameShape(QFrame.Shape.NoFrame)
+        zona.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        zona.setWidget(contenido)
+        lay.addWidget(zona, 1)
+        lay.addWidget(PieDialogo(texto_aceptar="Cerrar", mostrar_cancelar=False).conectar(self))
+
+    def _datos_proyecto(self, datos: Propiedades) -> QFormLayout:
         form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        form.addRow("Archivo", _etiqueta(datos.nombre))
+        fila_ruta = QHBoxLayout()
+        self.ruta = EtiquetaElidida(datos.ruta, modo=Qt.TextElideMode.ElideMiddle)
+        self.ruta.setTextFormat(Qt.TextFormat.PlainText)
+        fila_ruta.addWidget(self.ruta, 1)
+        self.b_copiar = QPushButton("Copiar")
+        self.b_copiar.setAccessibleName("Copiar la ruta del archivo")
+        self.b_copiar.setAutoDefault(False)
+        self.b_copiar.setEnabled(datos.ruta != "sin guardar")
+        self.b_copiar.clicked.connect(lambda: QApplication.clipboard().setText(datos.ruta))
+        fila_ruta.addWidget(self.b_copiar)
+        form.addRow("Ruta", fila_ruta)
+
         self.c_autor = QLineEdit(datos.autor)
-        self.c_autor.setMaxLength(200)
+        patron = QRegularExpression(f".{{0,{MAX_AUTOR}}}")
+        self.c_autor.setValidator(QRegularExpressionValidator(patron, self.c_autor))
         self.c_autor.setReadOnly(not datos.editable)
         self.c_autor.setAccessibleName("Autor")
-        filas = [("Archivo", datos.nombre), ("Ruta", datos.ruta)]
-        for nombre, valor in filas:
-            form.addRow(nombre + ":", _etiqueta(valor))
-        form.addRow("Autor:", self.c_autor)
+        form.addRow("Autor", self.c_autor)
+        if datos.historial:
+            historial = _etiqueta("\n".join(datos.historial))
+            historial.setAccessibleName("Historial de autores")
+            form.addRow("Historial de autores", historial)
+        return form
+
+    @staticmethod
+    def _datos_tecnicos(datos: Propiedades) -> QFormLayout:
+        form = QFormLayout()
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         filas = [("Fecha de creación", datos.creado), ("Última edición", datos.modificado),
                  ("Creado con la versión", datos.version_creacion),
                  ("Guardado por última vez con la versión", datos.version_guardado),
@@ -155,12 +212,8 @@ class PropiedadesArchivo(QDialog):
             filas += [("Algoritmo del sello", datos.algoritmo), ("Huella del contenido", datos.huella)]
         filas += [("Este programa", datos.programa), ("Instalado el", datos.instalado)]
         for nombre, valor in filas:
-            form.addRow(nombre + ":", _etiqueta(valor))
-        lay.addLayout(form)
-        botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        botones.button(QDialogButtonBox.StandardButton.Close).setText("Cerrar")
-        botones.rejected.connect(self.reject)
-        lay.addWidget(botones)
+            form.addRow(nombre, _etiqueta(valor))
+        return form
 
     def autor(self) -> str:
         return self.c_autor.text().strip()

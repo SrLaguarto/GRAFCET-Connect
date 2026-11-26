@@ -1,7 +1,7 @@
 """Contenedor GRAFNET: ZIP versionado, sello canónico y sustitución atómica. Sin Qt."""
 from __future__ import annotations
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import io
@@ -19,6 +19,9 @@ FORMATO_VERSION = 1
 CAMPOS_INFO = ('autor', 'creado', 'modificado', 'version_creacion', 'version_guardado')
 MAX_INFO = 4096
 MAX_CAMPO_INFO = 500
+MAX_AUTOR = 60
+MAX_HISTORIAL_AUTORES = 20
+HISTORIAL_AUTORES = 'historial_autores'
 MAX_BYTES = 512 * 1024 * 1024
 MAX_ENTRADAS = 10000
 
@@ -131,7 +134,38 @@ def _info_valida(datos: bytes | None) -> dict:
             except ValueError:
                 return {}
         limpia[campo] = valor
+    historial = _historial_valido(info.get(HISTORIAL_AUTORES))
+    if historial:
+        limpia[HISTORIAL_AUTORES] = historial
     return limpia
+
+
+def _fecha_historial(valor: str) -> datetime:
+    fecha = datetime.fromisoformat(valor)
+    return fecha if fecha.tzinfo is not None else fecha.replace(tzinfo=timezone.utc)
+
+
+def _historial_valido(historial) -> list[dict]:
+    """Valida el campo por separado y devuelve copias en orden de guardado."""
+    if not isinstance(historial, list) or len(historial) > MAX_HISTORIAL_AUTORES:
+        return []
+    resultado = []
+    for entrada in historial:
+        if not isinstance(entrada, dict) or entrada.keys() != {'autor', 'desde', 'hasta'}:
+            return []
+        if not isinstance(entrada['autor'], str) or len(entrada['autor']) > MAX_AUTOR:
+            return []
+        desde, hasta = entrada['desde'], entrada['hasta']
+        if not all(isinstance(fecha, str) and len(fecha) <= 42 for fecha in (desde, hasta)):
+            return []
+        try:
+            entrada['autor'].encode('utf-8')
+            if _fecha_historial(desde) > _fecha_historial(hasta):
+                return []
+        except ValueError:
+            return []
+        resultado.append(entrada.copy())
+    return resultado
 
 
 def huella(entradas: dict) -> str:
@@ -151,22 +185,51 @@ def huella(entradas: dict) -> str:
 def construir_info(previa: dict | None, autor: str, version: str, ahora: datetime | None = None) -> dict:
     """Metadatos de un guardado. `previa` None = proyecto nuevo (se fijan creado y version_creacion); un dict, aunque
     esté vacío (archivo anterior a la 1.0), conserva lo que traiga y no inventa lo que falte."""
-    ahora = ahora or datetime.now().astimezone()
+    fecha = (ahora or datetime.now().astimezone()).isoformat(timespec='seconds')
+    autor = _texto_utf8(autor[:MAX_AUTOR])
+    version = _texto_utf8(version[:MAX_CAMPO_INFO])
     info = {'autor': autor}
     if previa is None:
-        info['creado'] = ahora.isoformat(timespec='seconds')
+        info['creado'] = fecha
         info['version_creacion'] = version
     else:
         for campo in ('creado', 'version_creacion'):
             if campo in previa:
-                info[campo] = previa[campo]
-    info['modificado'] = ahora.isoformat(timespec='seconds')
+                info[campo] = _texto_utf8(previa[campo])
+    info['modificado'] = fecha
     info['version_guardado'] = version
+    historial = _historial_valido((previa or {}).get(HISTORIAL_AUTORES))
+    if historial and historial[-1]['autor'] == autor:
+        historial[-1]['hasta'] = max(historial[-1]['hasta'], fecha, key=_fecha_historial)
+    else:
+        historial.append({'autor': autor, 'desde': fecha, 'hasta': fecha})
+    if len(historial) > MAX_HISTORIAL_AUTORES:
+        del historial[1:len(historial) - MAX_HISTORIAL_AUTORES + 1]
+    info[HISTORIAL_AUTORES] = historial
+    _ajustar_tamano_info(info)
     return info
 
 
+def _texto_utf8(texto: str) -> str:
+    return texto.encode('utf-8', errors='replace').decode('utf-8')
+
+
+def _ajustar_tamano_info(info: dict) -> None:
+    historial = info[HISTORIAL_AUTORES]
+    while len(historial) > 2 and len(serializar_info(info)) >= MAX_INFO:
+        del historial[1]
+    # Un campo antiguo de versión puede ocupar muchos bytes en JSON. Reserva espacio para ambos extremos del historial.
+    for campo in ('version_creacion', 'version_guardado'):
+        exceso = len(serializar_info(info)) - MAX_INFO + 1
+        if exceso > 0 and campo in info:
+            info[campo] = info[campo][:-exceso]
+
+
 def serializar_info(info: dict) -> bytes:
-    return (json.dumps(info, ensure_ascii=False, indent=2, sort_keys=True) + '\n').encode('utf-8')
+    legible = (json.dumps(info, ensure_ascii=False, indent=2, sort_keys=True) + '\n').encode('utf-8')
+    if len(legible) < MAX_INFO:
+        return legible
+    return (json.dumps(info, ensure_ascii=False, separators=(',', ': '), sort_keys=True) + '\n').encode('utf-8')
 
 
 @dataclass

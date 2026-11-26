@@ -317,7 +317,7 @@ class Ventana(unittest.TestCase):
         self.assertIn("F5", atajos)
         # Play: simula, el tiempo real corre
         w.a_ejecutar.setChecked(True)
-        self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("simular", "Stop", True))
+        self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("simular", "Detener", True))
         self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (0, 0), "entradas y traza")
         self.assertFalse(w.favoritos.isVisibleTo(w))
         self.assertFalse(hasattr(self.w, "b_tiempo"), "ya no hay botones de tiempo lógico")
@@ -575,7 +575,7 @@ class Ventana(unittest.TestCase):
         filas = [[w.t_vars.item(i, j).text() for j in range(2)] for i in range(w.t_vars.rowCount())]
         self.assertEqual(filas, [["motor", "salida continua"]])
         self.assertEqual(w.t_temp.item(0, 0).text(), "transición t2")
-        self.assertEqual(w.t_vars.item(0, 3).text(), "E1")
+        self.assertEqual(w.t_vars.item(0, 3).text(), "X1")
         textos = [it.toPlainText() for it in w.diagrama.scene().items() if hasattr(it, "toPlainText")]
         for esperado in ("E0", "E1", "motor", "marcha"):
             self.assertIn(esperado, textos)
@@ -623,7 +623,7 @@ class Ventana(unittest.TestCase):
         w._act("avanzar", us=1)
         self.assertEqual((w.t_temp.item(0, 2).text(), w.l_reloj.text().split(" · ")[0]), ("1,24 s", "τ = 1,24 s"))
         self.assertEqual(w.t_temp.item(0, 3).text(), "3 s")
-        self.assertEqual(w.a_ejecutar.text(), "Stop")
+        self.assertEqual(w.a_ejecutar.text(), "Detener")
         self.assertFalse(w.a_ejecutar.icon().isNull(), "el símbolo se muestra ahora como icono de la barra")
         w.a_ejecutar.setChecked(False)
         self.assertEqual(w.a_ejecutar.text(), "Simular")

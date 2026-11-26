@@ -26,22 +26,22 @@ COLOCACIONES = (("fila", "En fila, pegadas"), ("fila-separada", "En fila, separa
                 ("columna", "En columna"))
 PARPADEO_MS, PARPADEO_PASOS = 250, 6  # tres parpadeos en 1,5 s: encendido al empezar y en los pasos 2 y 4
 MSG_SOLAPE = "No se puede poner encima de otro elemento"
-MSG_ACCION_SUELTA = ("Acción suelta: arrástrela hasta una etapa (desde el punto de unión de su izquierda) para unirla, "
-                     "o péguela al lado de otra acción.")
-MSG_SOLAPE_PARCIAL = "Un grafcet parcial nuevo no se pone encima de otro elemento ni de otro marco: suéltelo en un hueco"
-MSG_ENCIMA = "Las acciones quedan encima de otro elemento: apártelo"  # aviso (no error): no se pudo abrir hueco
+MSG_ACCION_SUELTA = ("Acción suelta: arrástrala hasta una etapa (desde el punto de unión de su izquierda) para unirla, "
+                     "o pégala al lado de otra acción.")
+MSG_SOLAPE_PARCIAL = "Un grafcet parcial nuevo no se pone encima de otro elemento ni de otro marco: suéltalo en un hueco"
+MSG_ENCIMA = "Las acciones quedan encima de otro elemento: apártalo"  # aviso (no error): no se pudo abrir hueco
 RECINTO_DX = 140  # del centro de la encapsulante al borde izquierdo del marco de su recinto vacío
 RECINTO_PASO = 40  # hueco entre dos marcos vacíos seguidos
 ENCUADRE = 3 * H  # semilado del cuadrado que se encuadra alrededor de una etapa o macroetapa (la encapsulante, la macroetapa)
 FORMAS_FORZADO = (("explicit", "Explícita"), ("current", "La situación actual"), ("empty", "Vacía"), ("initial", "Inicial"))
 MARGEN_SUELTA = 2 * H  # lo que se agranda, a la derecha y debajo, la zona de suelta de un parcial no raíz: una etapa de ancho y de alto
-MSG_SIN_SITIO = "No hay sitio libre a la derecha para la expansión: suelte la macroetapa en un hueco más despejado"
+MSG_SIN_SITIO = "No hay sitio libre a la derecha para la expansión: suelta la macroetapa en un hueco más despejado"
 INTERNO = re.compile(r"(?<![\w-])[a-z]-[0-9a-f]{32}(?![\w-])")  # el ID que crea grafcet.ids.IdGenerator: no es para mostrar
 _CODIGO = r"(?:[DUH]-[A-Z0-9][A-Z0-9-]*|REQ-[A-Z]+-[0-9]+|P-IMP-[0-9]+)"
 CODIGOS = re.compile(rf"\s*\({_CODIGO}(?:\s*[,;]\s*{_CODIGO})*\)|\b{_CODIGO}\s*:\s*|\s*\b{_CODIGO}\b"
                      r"|\s*\[[a-z]+(?:[.-][a-z0-9]+)+\]")  # códigos internos y etiquetas de capacidad
-MSG_ORDEN_SIN_ETAPAS = "Una orden explícita necesita al menos una etapa del parcial: elíjala, o use la forma «Vacía»."
-MSG_SIN_DESTINO = "No hay otro parcial al que forzar: cree un recinto, una macroetapa o un grafcet parcial."
-MSG_EQUIDISTANCIA = "No se puede equidistanciar: algo quedaría encima de otro elemento; apártelo antes"
-MSG_ORDEN_SUELTA = ("Orden de forzado suelta: no se simula. Elija su parcial destino con doble clic (o en el panel de opciones) y "
-                    "arrástrela hasta una etapa (desde el punto de unión de su izquierda) para unirla, o péguela al lado de otra acción.")
+MSG_ORDEN_SIN_ETAPAS = "Una orden explícita necesita al menos una etapa del parcial: elígela, o usa la forma «Vacía»."
+MSG_SIN_DESTINO = "No hay otro parcial al que forzar: crea un recinto, una macroetapa o un grafcet parcial."
+MSG_EQUIDISTANCIA = "No se puede equidistanciar: algo quedaría encima de otro elemento; apártalo antes"
+MSG_ORDEN_SUELTA = ("Orden de forzado suelta: no se simula. Elige su parcial destino con doble clic (o en el panel de opciones) y "
+                    "arrástrala hasta una etapa (desde el punto de unión de su izquierda) para unirla, o pégala al lado de otra acción.")

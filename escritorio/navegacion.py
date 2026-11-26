@@ -1,11 +1,29 @@
 """Navegación de la vista: búsqueda compacta, filtros y lista textual, sin editar el modelo."""
-from PySide6.QtCore import QEvent, QRectF, Qt
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
-                              QListWidget, QListWidgetItem, QToolButton, QVBoxLayout, QWidget)
+                               QListWidget, QListWidgetItem, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 from . import estilo
+from .componentes_comunes import CabeceraDialogo, acotar_desplegable
+from .estilo_dialogos import aplicar_escala_dialogo
 
 PARCIAL_ITEM = 42
+
+
+def _icono_lupa() -> QIcon:
+    """Icono de lupa de un solo trazo a 2× DPR para la caja de búsqueda."""
+    lado = 16
+    pm = QPixmap(lado * 2, lado * 2)
+    pm.setDevicePixelRatio(2)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(QPen(QColor(estilo.TINTA_2), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    p.drawEllipse(QRectF(2.5, 2.5, 7.5, 7.5))
+    p.drawLine(QPointF(8.8, 8.8), QPointF(13.2, 13.2))
+    p.end()
+    return QIcon(pm)
 
 
 def registros_base(M):
@@ -67,31 +85,48 @@ class Navegacion(QFrame):
         super().__init__(); self.vista = vista; self.datos = []; self.actual = None
         self.setAccessibleName('Navegación del GRAFCET')
         self.setAccessibleDescription('Buscar y recorrer elementos; filtrar parciales sin alterar la simulación.')
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         fila = QHBoxLayout(self); fila.setContentsMargins(0,0,0,0); fila.setSpacing(4)
-        self.buscador = QFrame(); controles = QHBoxLayout(self.buscador); controles.setContentsMargins(0,0,0,0); controles.setSpacing(3)
-        self.buscar = QLineEdit(); self.buscar.setFixedWidth(210); self.buscar.setPlaceholderText('Buscar… (Ctrl+F)')
+        self.buscador = QFrame()
+        self.buscador.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        controles = QHBoxLayout(self.buscador); controles.setContentsMargins(0,0,0,0); controles.setSpacing(4)
+        self.buscar = QLineEdit(); self.buscar.setFixedWidth(210); self.buscar.setPlaceholderText('Buscar elemento… (Ctrl+F)')
+        self._accion_lupa = self.buscar.addAction(_icono_lupa(), QLineEdit.ActionPosition.LeadingPosition)
         self.buscar.setAccessibleName('Buscar elemento por nombre')
         self.buscar.setAccessibleDescription('Intro o flecha abajo: siguiente resultado. Mayús+Intro o flecha arriba: anterior. Esc cierra.')
         self.buscar.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)  # como los botones de al lado: la fila de la cabecera no cambia al abrirlo
-        self.buscar.setStyleSheet(f'QLineEdit {{ min-height: 0px; padding: 0 8px; }} QLineEdit:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 7px; }}')
+        self.buscar.setStyleSheet(f'QLineEdit {{ min-height: 0px; padding: 0 8px 0 4px; }} QLineEdit:focus {{ border: 2px dashed {estilo.FOCO}; padding: 0 7px 0 3px; }}')
         self.buscar.installEventFilter(self); controles.addWidget(self.buscar)
-        self.contador = QLabel('0/0'); self.contador.setMinimumWidth(40); controles.addWidget(self.contador)
+        self.contador = QLabel('')
+        self.contador.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.contador.hide()
+        controles.addWidget(self.contador)
         self.anterior = QToolButton(); self.anterior.setText('↑'); self.anterior.setToolTip('Resultado anterior (Mayús+Intro)')
         self.siguiente = QToolButton(); self.siguiente.setText('↓'); self.siguiente.setToolTip('Resultado siguiente (Intro)')
         self.cerrar = QToolButton(); self.cerrar.setText('×'); self.cerrar.setToolTip('Cerrar búsqueda (Esc)')
         for boton in (self.anterior,self.siguiente,self.cerrar):
             boton.setAccessibleName(boton.toolTip()); boton.setAccessibleDescription(boton.toolTip()); controles.addWidget(boton)
             boton.setFixedSize(estilo.ALTO_CONTROL_COMPACTO, estilo.ALTO_CONTROL_COMPACTO)  # objetivos táctiles de 32 px
-            boton.setStyleSheet(f'QToolButton {{ font-size: 16px; font-weight: 600; border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_S}px; background: {estilo.SUPERFICIE}; }} '
+            boton.setStyleSheet(f'QToolButton {{ font-size: 16px; font-weight: 600; border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_CONTROL}px; background: {estilo.SUPERFICIE}; }} '
                                 f'QToolButton:hover {{ background: {estilo.HOVER}; }} QToolButton:disabled {{ color: {estilo.DESHABILITADO}; border-color: {estilo.BORDE}; }} '
                                 f'QToolButton[tecl="true"]:focus {{ border: 2px dashed {estilo.FOCO}; }}')
         fila.addWidget(self.buscador)
         self.aviso_corto=QToolButton(); self.aviso_corto.setToolTip('Ver filtro y lista de elementos'); fila.addWidget(self.aviso_corto)
         self.aviso_corto.clicked.connect(self.abrir_opciones)
-        self.opciones=QDialog(self); self.opciones.setWindowTitle('Navegación del GRAFCET'); self.opciones.resize(600,300)
-        l=QVBoxLayout(self.opciones); filtros=QHBoxLayout(); l.addLayout(filtros)
-        self.parcial=QComboBox(); self.parcial.addItem('Todos los parciales',None); self.parcial.setAccessibleName('Parcial visible'); filtros.addWidget(self.parcial)
-        self.modo=QComboBox(); self.modo.addItem('Atenuar el resto','atenuar'); self.modo.addItem('Mostrar solo este parcial','ocultar'); self.modo.setAccessibleName('Modo de filtro'); filtros.addWidget(self.modo)
+        self.opciones=QDialog(self); self.opciones.setWindowTitle('Navegación del GRAFCET'); self.opciones.resize(600,340)
+        aplicar_escala_dialogo(self.opciones)
+        raiz_opc=QVBoxLayout(self.opciones); raiz_opc.setContentsMargins(0,0,0,0); raiz_opc.setSpacing(0)
+        self.cabecera_opciones=CabeceraDialogo('Navegación del GRAFCET', self.opciones,
+                                               subtitulo='Filtra parciales y recorre elementos sin alterar la simulación',
+                                               mostrar_cerrar=True)
+        self.cabecera_opciones.cerrar_pedido.connect(self.opciones.close)
+        raiz_opc.addWidget(self.cabecera_opciones)
+        cuerpo_opc=QWidget(self.opciones)
+        l=QVBoxLayout(cuerpo_opc); l.setContentsMargins(estilo.E4,estilo.E3,estilo.E4,estilo.E4); l.setSpacing(estilo.E2)
+        raiz_opc.addWidget(cuerpo_opc, 1)
+        filtros=QHBoxLayout(); filtros.setSpacing(estilo.E2); l.addLayout(filtros)
+        self.parcial=QComboBox(); self.parcial.addItem('Todos los parciales',None); self.parcial.setAccessibleName('Parcial visible'); acotar_desplegable(self.parcial); filtros.addWidget(self.parcial)
+        self.modo=QComboBox(); self.modo.addItem('Atenuar el resto','atenuar'); self.modo.addItem('Mostrar solo este parcial','ocultar'); self.modo.setAccessibleName('Modo de filtro'); acotar_desplegable(self.modo); filtros.addWidget(self.modo)
         self.b_lista=QToolButton(); self.b_lista.setText('Lista de elementos'); self.b_lista.setCheckable(True); l.addWidget(self.b_lista)
         self.aviso=QLabel(); self.aviso.setWordWrap(True); l.addWidget(self.aviso)
         self.lista=QListWidget(); self.lista.setAccessibleName('Lista estructural de elementos y relaciones')
@@ -150,13 +185,35 @@ class Navegacion(QFrame):
                 if evento.key() in (Qt.Key.Key_Up,Qt.Key.Key_Down): self.avanzar(-1 if evento.key()==Qt.Key.Key_Up else 1); return True
         return super().eventFilter(objeto,evento)
 
+    def _actualizar_contador(self, texto_buscado, total):
+        if not texto_buscado:
+            self.contador.setText('')
+            self.contador.setAccessibleName('Sin búsqueda activa')
+            self.contador.hide()
+        elif total == 0:
+            self.contador.setText('Sin resultados')
+            self.contador.setAccessibleName('Sin resultados')
+            self.contador.setStyleSheet(
+                f'QLabel {{ font-size: 11px; font-weight: 600; color: {estilo.AVISO}; '
+                f'background: {estilo.AVISO_FONDO}; border: 1px solid {estilo.AVISO_BORDE}; '
+                f'border-radius: 9px; padding: 1px 8px; }}'
+            )
+            self.contador.show()
+        else:
+            self.contador.setText(f'{self.indice + 1}/{total}')
+            self.contador.setAccessibleName(f'Resultado {self.indice + 1} de {total}')
+            self.contador.setStyleSheet(
+                f'QLabel {{ font-family: {estilo.FAMILIA_TABULAR}; font-size: {estilo.T_PEQUENA}px; '
+                f'color: {estilo.TINTA_2}; background: transparent; border: 0; padding: 0 4px; }}'
+            )
+            self.contador.show()
+
     def _listar(self,*args):
         texto=self.buscar.text().casefold().strip()
         self.resultados=[d for d in self.datos if texto and texto in d['nombre'].casefold()]
         ids=[d['id'] for d in self.resultados]
         self.indice=ids.index(self.actual) if self.actual in ids else (-1 if not ids else 0)
-        self.contador.setText(f'{self.indice+1}/{len(ids)}')
-        self.contador.setAccessibleName(f'Resultado {self.indice+1} de {len(ids)}')
+        self._actualizar_contador(texto, len(ids))
         for boton in (self.anterior,self.siguiente): boton.setEnabled(bool(ids))
         self.lista.clear()
         if not self.b_lista.isChecked(): self.lista.hide(); return
@@ -171,7 +228,7 @@ class Navegacion(QFrame):
 
     def _mostrar_resultado(self):
         self.ir(self.resultados[self.indice]['id'],enfocar=False)
-        self.contador.setText(f'{self.indice+1}/{len(self.resultados)}')
+        self._actualizar_contador(self.buscar.text().casefold().strip(), len(self.resultados))
 
     def avanzar(self,paso):
         if self.resultados:

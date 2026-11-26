@@ -163,7 +163,7 @@ class Interfaz(BaseQt):
         d = w._diag_llano(crudo)
         self.assertTrue(d["message"].startswith("Las transiciones t1 y t2 (tras X0)"), d["message"])
         self.assertNotIn("Ajustes de simulación", d["message"] + d["correction"])
-        self.assertEqual(d["correction"], "Use tiempos distintos o evite que compitan por la misma etapa.")
+        self.assertEqual(d["correction"], "Usa tiempos distintos o evita que compitan por la misma etapa.")
         motivos = motivo_parada(d["code"], d["message"], [], w.v.names)
         self.assertIn("t1 y t2", motivos[0][0])
         w.v = None

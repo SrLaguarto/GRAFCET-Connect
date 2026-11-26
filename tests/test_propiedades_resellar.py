@@ -70,7 +70,8 @@ class Metadatos(unittest.TestCase):
             self.assertEqual(info['autor'], 'Ana')
             self.assertEqual((info['version_creacion'], info['version_guardado']), (APP_VERSION, APP_VERSION))
             self.assertEqual(datetime.fromisoformat(info['creado']).tzinfo is not None, True)
-            self.assertEqual(set(info), {'autor', 'creado', 'modificado', 'version_creacion', 'version_guardado'})
+            self.assertEqual(set(info), {'autor', 'creado', 'modificado', 'version_creacion', 'version_guardado',
+                                         'historial_autores'})
         finally:
             abierto.cerrar()
 

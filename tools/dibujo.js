@@ -23,7 +23,7 @@ const ACT_CANAL = 7;  // de la derivación a la segunda columna de una matriz, p
 const MARK = 7;       // marcas internas de la encapsulante y divisiones de la macroetapa
 const GROSOR_NEGADO = 1.25;  // grosor de la barra de una variable negada (el sobrerrayado del texto no se puede engrosar)
 const PASO_NEGADO = 2.5;     // separación vertical entre barras de negaciones apiladas
-const TMR_EXTRA = 12;     // lo que sube por encima de la condición o el evento de una acción con temporizador
+const TMR_EXTRA = 14;    // lo que sube por encima de la condición o el evento de una acción con temporizador
 const MARGEN_MARCO_X = 26;  // lo que se separa el marco de un parcial de todo lo que dibuja de él, a izquierda y derecha...
 const MARGEN_MARCO_Y = 22;  // ... y por arriba y por abajo (el mismo de siempre alrededor de sus etapas)
 const TALLO_T = 24;       // tramo recto de una transición sin etapa anterior o siguiente (grafcet/routing.py)
@@ -121,9 +121,9 @@ function comentario(g, x, yc, texto) {
 function nameOf(M, id) { return ((M && M.names) || {})[id] ?? id; }
 
 // Estado de los temporizadores de una expresión (Vista.state().temporal): el tiempo transcurrido «0,50 s» mientras cuenta
-// y «3,00 s ✓» al vencer, alineado al extremo de la duración del temporizador (la nth-ésima aparición de su «token» en
-// el texto `tx`, escrito con los segmentos `segs`; si no se encuentra, encima de todo el texto) y por encima de su barra
-// si está negada. `y` es la línea base del texto. Devuelve hasta dónde llega por la derecha (0 si no dibuja nada).
+// y «3,00 s ✓» al vencer, en una cápsula azul 6 px por encima de la duración del temporizador (la nth-ésima aparición
+// de su «token» en el texto `tx`, escrito con los segmentos `segs`; si no se encuentra, encima de todo el texto) y de su
+// barra si está negada. `y` es la línea base del texto. Devuelve hasta dónde llega por la derecha (0 si no dibuja nada).
 function timerText(parent, tx, segs, y, ref, S) {
   const size = parseFloat(getComputedStyle(tx).fontSize);
   let derecha = 0;
@@ -133,12 +133,20 @@ function timerText(parent, tx, segs, y, ref, S) {
     const caja = i === undefined ? tx.getBBox() : tx.children[i].getBBox();
     const tramo = i === undefined ? (segs || []) : [segs[i]];
     const niveles = tramo.reduce((m, s) => Math.max(m, Array.isArray(s.neg) && s.neg.length ? s.neg.length : (s.o ? 1 : 0)), 0);
-    const extraNeg = niveles ? (3 + (niveles - 1) * PASO_NEGADO) : 1;
-    const base = y - ascenso(size) - extraNeg, off = !!t.off;
-    const x = caja.x + (off ? caja.width : 0);
+    const extraNeg = niveles ? (3 + (niveles - 1) * PASO_NEGADO) : 0;
+    const techo = y - ascenso(size) - extraNeg, yAbajo = techo - 6, off = !!t.off;
+    const ancla = caja.x + (off ? caja.width : 0);
     const grupo = el("g", {class: `timer-state ${t.estado === "contando" ? "run" : "done"}`}, parent);
-    const texto = txt(grupo, x, base - 1, t.shown, {"text-anchor": off ? "end" : "start", class: "timer"});
-    derecha = Math.max(derecha, off ? x : x + texto.getComputedTextLength());
+    // La cápsula va primero (debajo del texto) y se dimensiona cuando se conoce el ancho del texto, que arranca (o acaba, si
+    // es el tiempo de desconexión) en la duración: la cápsula sobresale 5 px por cada lado, como en Qt.
+    const ph = 16, py = yAbajo - ph;
+    const pill = el("rect", {x: ancla, y: py, width: 0, height: ph, rx: ph / 2, ry: ph / 2, class: "timer-pill"}, grupo);
+    const texto = txt(grupo, ancla, py + ph / 2 + 3.5, t.shown, {"text-anchor": off ? "end" : "start", class: "timer"});
+    const tw = texto.getComputedTextLength ? texto.getComputedTextLength() : String(t.shown || "").length * 6;
+    const pw = tw + 10, px = off ? ancla + 5 - pw : ancla - 5;
+    pill.setAttribute("x", px);
+    pill.setAttribute("width", pw);
+    derecha = Math.max(derecha, px + pw);
   });
   return derecha;
 }
@@ -260,7 +268,7 @@ function drawDiagram(svg, M, S, opciones = {}) {
     // nombre y por encima del texto (y de la duración de un temporizador); igual que `_valores_variables` de escritorio/diagrama.py
     const lecturas = S.variableReadouts || {};
     if (t.cond && t.cond.length && (t.numericVars || []).length && Object.keys(lecturas).length) {
-      const base = yc - ascenso(14) - 3 - (t.tmr ? TMR_EXTRA : 0);
+      const base = yc - ascenso(14) - 3 - (t.tmr ? 22 : 0);
       t.numericVars.forEach(vid => {
         const valor = lecturas[vid], i = t.cond.findIndex(sg => sg.t === nameOf(M, vid));
         if (valor === undefined || i < 0 || !tc.children[i]) return;

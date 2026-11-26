@@ -8,10 +8,10 @@ from conexion import servidor_web_simulador as servidor
 from conexion.http_directo import AVISO_SIN_SERVIDOR
 from . import estilo
 
-HECHO = "Hecho. Reinicie el simulador y pulse Conectar."
-YA_ACTIVO = "Ábralo o reinícielo, con el driver en «Ninguno»."  # (su servidor web ya está activado en auto.cfg)
+HECHO = "Hecho. Reinicia el simulador y pulsa Conectar."
+YA_ACTIVO = "Ábrelo o reinícialo, con el controlador en «Ninguno»."  # (su servidor web ya está activado en auto.cfg)
 FALTA = "su servidor web no está activado."  # (el botón de al lado dice qué hacer)
-MANUAL = "active app.web_server = True en su auto.cfg y reinicie el simulador"
+MANUAL = "activa app.web_server = True en su auto.cfg y reinicia el simulador"
 
 
 def no_responde(mensaje):

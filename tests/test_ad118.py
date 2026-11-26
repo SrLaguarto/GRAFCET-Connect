@@ -157,7 +157,7 @@ class InterfazAD(BaseQt):
         e.cambia()
         aviso = next(d for d in e.diagnosticos() if d["code"] == "D-MODO-SALIDA")
         self.assertEqual(aviso["message"],
-                         "Tope 1 recibe acciones continuas (X2, X4 y X10) y memorizadas (X1) a la vez: use solo un tipo.")
+                         "Tope 1 recibe acciones continuas (X2, X4 y X10) y memorizadas (X1) a la vez: usa solo un tipo.")
         self.assertEqual(aviso["element"], vid)
         self.assertTrue(aviso["blocks"])
         self.assertFalse(ed.validate().can_simulate)

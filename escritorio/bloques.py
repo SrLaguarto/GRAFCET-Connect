@@ -1053,7 +1053,8 @@ def arbol_a_texto(n: dict[str, Any] | None) -> str:
 # constante, hundida; «temporizar», un contenedor discontinuo con su insignia (t/X, X/t); «y» y «o», contenedores sobrios con un
 # conector de su color entre un operando y el siguiente. Cambia el dibujo, no el modelo: los huecos, las rutas y los bloques son
 # los de siempre.
-COLORES = {"entrada": "#0b6e75", "salida": "#157a35", "interna": "#b45309", "etapa": "#2f3b4a",
+COLORES = {"entrada": estilo.ACENTO, "salida": estilo.SIMULACION, "interna": estilo.PAPEL_MEMORIA,
+           "etapa": estilo.EDICION,
            "operador": "#486078", "comparacion": "#0369a1", "tiempo": "#b45309", "texto": "#6B7280", "error": estilo.ERROR,
            "y": "#16263a", "o": "#075985",
            "constante": "#4a5b6e"}
@@ -1069,6 +1070,7 @@ SANGRIA = {"no": 8, "sube": 8, "baja": 8, "temp": 8}
 CHAFLAN = 5
 BARRA = 5
 RELLENO_FICHA = 7
+ANCHO_MAX_FICHA = 240
 R_PIEZA = 4
 MARGEN = 12
 MIME = "application/x-grafcet-bloque"
@@ -1455,9 +1457,11 @@ class Motor:
         k = n["k"]
         alto = 26 if self.fijo else alto_ficha()
         if k in MODIFICADORES or k in ("var", "etapa"):
-            return self._caja_ficha(n, ruta, ancho, alto)
+            return self._caja_ficha(n, ruta, min(ancho, ANCHO_MAX_FICHA), alto)
+        if k == "vnum":
+            ancho = min(ancho, ANCHO_MAX_FICHA)
         if self.fijo and k == "vnum":  # fila plana del catálogo numérico (.var-row)
-            c = _Caja(n, ruta, 0, alto, "comparacion")
+            c = _Caja(n, ruta, 0, alto, self.categoria(n))
             c.forma = "catalogo"
             nombre = n.get("n") or "elegir"
             tipo_raw = self.vars.get(nombre, ("", ""))[1]
@@ -1485,7 +1489,8 @@ class Motor:
             c.forma, x0 = "capsula", 18  # punto azul + hueco
         else:
             c.forma, x0 = "texto", 6
-        piezas = [self.pieza(e, max(ancho - 2 * x0 - 6, 24) if k != "cmp" else 100000) for e in elems]
+        hueco = ancho - x0 - 10 if k == "vnum" else ancho - 2 * x0 - 6
+        piezas = [self.pieza(e, max(hueco, 24) if k != "cmp" else 100000) for e in elems]
         x = float(x0)
         for p in piezas:
             c.items.append((x, (alto - p.h) / 2, p))
@@ -1526,7 +1531,7 @@ class Motor:
             ins = _Pieza("mod", flanco, "↑" if flanco == "sube" else "↓", False, 19.0, 19.0, ruta=destino)
             c.items.append((x, (alto - ins.h) / 2, ins))
             x += ins.w + 5
-        disponible = max(ancho - x - RELLENO_FICHA - 2, 20.0)
+        disponible = max(ancho - x - RELLENO_FICHA - 4, 20.0)
         texto = nombre or "elegir"
         vis = self.ms.elidedText(texto, Qt.TextElideMode.ElideRight, disponible)
         w = self.ms.horizontalAdvance(vis) + 2
@@ -1772,7 +1777,7 @@ class Motor:
             p.setBrush(QColor(fondo_col))
             p.drawRoundedRect(ra, 14, 14)
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor("#0369a1"))
+            p.setBrush(QColor(COLORES.get(cat, estilo.TINTA_2)))
             p.drawEllipse(QPointF(r.left() + 10.5, r.center().y()), 3.0, 3.0)
             return padre
         if forma == "pendiente":
@@ -2087,13 +2092,13 @@ class _Superficie(QWidget):
         if n["k"] == "temp":
             d = normalizar_duracion(texto)
             if d is None:
-                self.avisa.emit("Retardo no válido: escriba «3s», «500ms» o déjelo vacío.")
+                self.avisa.emit("Retardo no válido: escribe «3s», «500ms» o déjalo vacío.")
                 return False
             n[clave] = d
         elif n["k"] == "num":
             v = texto.strip().replace(",", ".")
             if not re.fullmatch(r"-?\d+(?:\.\d+)?", v):
-                self.avisa.emit("Escriba un número (por ejemplo 5 o 2.5).")
+                self.avisa.emit("Escribe un número (por ejemplo 5 o 2.5).")
                 return False
             n[clave] = v
         elif n["k"] == "cmp":
@@ -2108,10 +2113,10 @@ class _Superficie(QWidget):
                 canon = t.replace(",", ".")
                 if tipo_var == "int":
                     if not re.fullmatch(r"-?\d+", canon):
-                        self.avisa.emit("Valor no válido: la variable es entera, escriba un número entero.")
+                        self.avisa.emit("Valor no válido: la variable es entera, escribe un número entero.")
                         return False
                 elif not re.fullmatch(r"-?\d+(?:\.\d+)?", canon):
-                    self.avisa.emit("Valor no válido: escriba un número (por ejemplo 10 o 2,5).")
+                    self.avisa.emit("Valor no válido: escribe un número (por ejemplo 10 o 2,5).")
                     return False
                 n["v"] = canon
         else:
@@ -2255,7 +2260,7 @@ class _Superficie(QWidget):
         for texto, valor in ops:
             menu.addAction(texto, lambda v=valor: self.elegir(ruta, clave, v))
         if not ops:
-            menu.addAction("(no hay ninguna: créela en el panel Variables)").setEnabled(False)
+            menu.addAction("(no hay ninguna: créala en el panel Variables)").setEnabled(False)
         menu.exec(self.mapToGlobal(r.bottomLeft().toPoint()))
 
     def _abrir_editor(self, r: QRectF, ruta: tuple, clave: str) -> None:
@@ -2431,7 +2436,7 @@ class AreaBloques(_Superficie):
         self.arrastrando.connect(self._al_arrastrar)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.setAcceptDrops(True)
-        self.setToolTip("Para quitar un bloque, arrástrelo fuera o pulse Supr")
+        self.setToolTip("Para quitar un bloque, arrástralo fuera o pulsa Supr")
 
     @property
     def arbol(self) -> dict[str, Any] | None:
@@ -2828,7 +2833,7 @@ class AreaBloques(_Superficie):
             if clase == "no":
                 nueva_par, ruta_grupo = envolver_varios(self.arbol, rutas)
                 if nueva_par == self.arbol or ruta_grupo is None:
-                    self.avisa.emit("Para negar varios bloques a la vez, elija operandos seguidos.")
+                    self.avisa.emit("Para negar varios bloques a la vez, elige operandos seguidos.")
                     return False
                 nueva = alternar_modificador(nueva_par, ruta_grupo, "no")
                 self._fijar(0, nueva)
@@ -2864,7 +2869,7 @@ class AreaBloques(_Superficie):
         if ruta is None:
             ruta = () if self.arbol is None else primer_hueco(self.arbol)
             if ruta is None:
-                self.avisa.emit("No queda ningún hueco libre: elija una ficha para aplicarle el modificador.")
+                self.avisa.emit("No queda ningún hueco libre: elige una ficha para aplicarle el modificador.")
                 return False
         if clase in ("sube", "baja") and _es_dentro_de_temp(self.arbol, ruta):
             self.avisa.emit(AVISO_FLANCO_TEMP)
@@ -2968,7 +2973,7 @@ class AreaBloques(_Superficie):
             rutas = [tuple(self._partir(s)[1]) for s in self._bloques_sel]
             nueva, ruta_grupo = envolver_varios(self.arbol, rutas)
             if nueva == self.arbol or ruta_grupo is None:
-                self.avisa.emit("Para envolver varios bloques entre paréntesis, elija operandos seguidos.")
+                self.avisa.emit("Para envolver varios bloques entre paréntesis, elige operandos seguidos.")
                 return False
             self._fijar(0, nueva)
             self._bloque_sel = (0,) + tuple(ruta_grupo)
@@ -3594,7 +3599,7 @@ class AsaAncho(QWidget):
         self._inicio: tuple[int, int] | None = None
         self.setFixedWidth(estilo.E2)
         self.setCursor(Qt.CursorShape.SplitHCursor)
-        self.setToolTip("Arrastre para cambiar el ancho del catálogo")
+        self.setToolTip("Arrastra para cambiar el ancho del catálogo")
         self.setAccessibleName("Borde del catálogo")
 
     def paintEvent(self, event: Any) -> None:  # noqa: N802
@@ -3662,7 +3667,8 @@ class BarraContextual(QFrame):
         self.lienzo = lienzo
         self.setObjectName("barraContextual")
         self.setStyleSheet(
-            f"QFrame#barraContextual {{ background: #ffffff; border: 1px solid #8fcdd1; border-radius: 6px; }}"
+            f"QFrame#barraContextual {{ background: {estilo.SUPERFICIE_2}; border: 0; "
+            f"border-radius: {estilo.R_CONTROL}px; }}"
             f"QFrame#barraContextual QLabel#ctxTexto {{ color: #4a5b6e; font-size: 11.5px; background: transparent; border: 0; }}"
             f"QFrame#barraContextual QPushButton {{ min-height: 23px; max-height: 25px; padding: 0 9px; border-radius: 4px; "
             f"border: 1px solid #cdd6e0; background: #f6f8fb; color: #4a5b6e; font-size: 11.5px; font-weight: 600; }}"

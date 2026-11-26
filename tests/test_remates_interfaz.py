@@ -28,7 +28,7 @@ class Remates(BaseQt):
 
 
     def test_SREM02_variables_ajustan_filas_y_botones_debajo_con_limite(self):
-        """REQ-EDT-07, REQ-EDT-09: cabecera plana con contador, tabla edge-to-edge que se expande verticalmente, pie fijo con botones 2×2 y desplazamiento interno con muchas filas."""
+        """REQ-EDT-07, REQ-EDT-09: contador, altas en una fila, eliminación aparte y desplazamiento interno."""
         w,e=self.editor();p=w.variables
         pie=p.findChild(QObject,"pieVariables")
         self.assertIsNotNone(pie)
@@ -39,7 +39,8 @@ class Remates(BaseQt):
         self.assertGreaterEqual(p.tabla.height(),natural)
         self.assertLessEqual(pie.y()-p.tabla.geometry().bottom(),2)
         botones=list(p.b_nuevas.values())+[p.b_quitar]
-        for b in botones:self.assertGreaterEqual(b.width(),b.fontMetrics().horizontalAdvance(b.text())+16)
+        for b in botones:
+            self.assertGreaterEqual(b.width(), b.minimumSizeHint().width())
         alto_dos=p.tabla.height()
         for i in range(45):e.ed.add_variable("q"+str(i),"input",{"kind":"bool"})
         e.cambia();QTest.qWait(20)

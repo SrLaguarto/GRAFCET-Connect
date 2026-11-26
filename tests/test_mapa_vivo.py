@@ -119,7 +119,7 @@ class InterfazMapaVivo(BaseQt):
         self.assertFalse(p.terminales)
         p.restablecer_canales()
         self.assertEqual(p.obtener().canales,CANALES_INICIALES)
-        self.assertEqual(p.b_restaurar_canales.text(),'Restablecer canales: 16 digitales y 4 numéricos')
+        self.assertEqual(p.b_restaurar_canales.text(),'Restablecer canales por defecto')
         self.assertEqual([(x['offset'],x['cantidad']) for x in p.obtener().canales.values()],[(0,16),(0,16),(0,4),(0,4)])
 
     def test_SMAP04_ayuda_siempre_en_pie_y_nunca_ventana(self):

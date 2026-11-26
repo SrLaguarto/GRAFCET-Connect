@@ -52,7 +52,7 @@ def _avisar(tipo, valor, rastro):
     _mostrando = True
     try:
         QMessageBox.warning(None, "GRAFCET Connect", "No se ha podido completar la orden por un error inesperado: "
-                            f"{_resumen(valor)}{donde}\n\nPuede comunicarlo en GitHub (Ayuda > Acerca de > Comunicar un fallo).")
+                            f"{_resumen(valor)}{donde}\n\nPuedes comunicarlo en GitHub (Ayuda > Acerca de > Comunicar un fallo).")
     finally:
         _mostrando = False
 

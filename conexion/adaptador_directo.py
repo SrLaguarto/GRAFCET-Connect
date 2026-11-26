@@ -52,7 +52,7 @@ class AdaptadorDirecto(Adaptador):
             usado = redondear_escolar(valor) if variable.type.kind == "int" else valor
             return check_fits(variable.type, usado)
         except (ValueError, OverflowError, DiagnosticError) as exc:
-            mensaje = f"El valor {raw} no cabe en «{variable.name}». Revise sus decimales y dominio."
+            mensaje = f"El valor {raw} no cabe en «{variable.name}». Revisa sus decimales y dominio."
             raise ErrorConversion(mensaje) from exc
 
     def _anotar_redondeo(self, senal, variable, raw, valor):

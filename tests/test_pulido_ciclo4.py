@@ -79,7 +79,7 @@ class PulidoCiclo4Qt(BaseQt):
         w.rt.stop()
         _bombear()
         self.assertEqual(w.modo, "simular")
-        self.assertEqual(w.a_ejecutar.text(), "Stop")
+        self.assertEqual(w.a_ejecutar.text(), "Detener")
         self.assertEqual(boton.width(), ancho)
         w.a_ejecutar.setChecked(False)
         _bombear()

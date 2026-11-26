@@ -40,7 +40,7 @@ class Paneles(BaseQt):
         """REQ-EDT-09: cada cabecera pliega y la pestaña nombrada recupera su panel, con menú y ajustes coherentes."""
         w,e=self.preparar()
         self.assertFalse(w.diagrama._bordes)
-        for n,texto in (("derecho", "Variables"),):
+        for n,texto in (("derecho", f"Variables · {w.l_cont_vars.text()}"),):
             self.assertTrue(w.flechas[n].isVisible())
             QTest.mouseClick(w.flechas[n],Qt.MouseButton.LeftButton);QApplication.processEvents()
             self.assertTrue(w._panel(n).isHidden());self.assertTrue(w.pestanas[n].isVisible())
@@ -108,7 +108,7 @@ class Paneles(BaseQt):
         self.assertTrue(w.favoritos.isVisible())
         self.assertTrue(w.derecho.isHidden())
         self.assertTrue(w.inferior.isHidden())
-        self.assertEqual(w.pestanas["derecho"].text(),"Variables")
+        self.assertEqual(w.pestanas["derecho"].text(), f"Variables · {w.l_cont_vars.text()}")
         self.assertEqual(w.vsplit.sizes(),antes)
 
 

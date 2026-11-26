@@ -4,12 +4,17 @@ from PySide6.QtWidgets import QFileDialog,QMessageBox
 from conexion.configuracion import ARCHIVO
 from grafcet.diagnostics import DiagnosticError
 from . import sello
+from .estilo_dialogos import instalar_dialogos_qt
 from .propiedades_archivo import autor_para_guardar
 from .proyecto_archivo import abrir_grafnet,guardar_grafnet
 
 
 class ArchivosProyecto:
     CLAVE_CARPETA='archivos/ultima_carpeta'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        instalar_dialogos_qt()
 
     def carpeta_proyectos(self):
         """Donde empiezan «Abrir» y «Guardar como»: la última carpeta con la que se abrió o guardó un .grafnet; si ya no existe

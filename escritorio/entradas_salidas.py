@@ -14,11 +14,12 @@ from fractions import Fraction
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QStackedWidget, QFrame, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
-                               QDialog, QDialogButtonBox, QListWidget, QListWidgetItem,
+                               QDialog, QListWidget, QListWidgetItem,
                                QAbstractItemView, QMenu, QApplication, QGridLayout, QStyle,
                                QStyledItemDelegate, QScrollBar)
 
 from . import estilo
+from .componentes_comunes import CabeceraDialogo, PieDialogo
 from .estilo_config_es import crear_tarjeta, hoja_dialogo_es
 from .campos_medidos import LineaMedida, SpinMedido
 from .pilotos_es import pintar_piloto, tamano_piloto
@@ -66,8 +67,12 @@ def estilo_panel(escala: str = "normal") -> str:
     QWidget#conexionES QLabel#valorES {{ color:#4a5b6e; font-size:{e["T_ES"]}px; font-family:{estilo.FAMILIA_MONO}; font-weight:600; }}
     QWidget#conexionES QLabel#tituloPLC {{ color:{estilo.ACENTO}; font-family:{estilo.FAMILIA_TITULO}; font-size:{e["T_SECCION"]}px; font-weight:600; padding:6px; }}
     QFrame#cabeceraES {{ background:#f7f9fc; border:0; border-bottom:1px solid #cdd6e0; }}
-    QFrame#cabeceraES[estadoVisual="conectado"] {{ background:#e4f7ea; border-bottom:2px solid {estilo.SIMULACION}; }}
     QFrame#cabeceraES QWidget {{ background:transparent; }}
+    QFrame#cabeceraES QFrame#filaEstadoES[fallo="true"] {{ background:{estilo.ERROR_FONDO};
+        border-top:1px solid {estilo.PELIGRO_BORDE}; }}
+    QFrame#cabeceraES QLabel#pastillaConexionES {{ background:{estilo.SIMULACION_SUAVE}; color:{estilo.OK};
+        border:1px solid {estilo.SIMULACION_BORDE}; border-radius:{estilo.R_L}px;
+        padding:{estilo.E1}px {estilo.E2}px; font-weight:600; }}
     QFrame#cabeceraES QFrame#sepCabeceraES {{ background:#cdd6e0; border:0; }}
     QFrame#cabeceraES QComboBox {{ background:#ffffff; color:#16263a; border:1px solid #b8c6d6; border-radius:5px;
         padding:0 8px; font-size:{e["T_ES"]}px; font-weight:600; }}
@@ -150,7 +155,7 @@ def encaja(variable, area):
 
 
 def aviso_escala(variable, senal):
-    """Aviso (ámbar) si una variable Entera va a un registro con escala distinta de 1, como la del simulador de procesos (100):
+    """Aviso (ámbar) si una variable Entera va a un registro con escala distinta de 1, como la del simulador de fábricas (100):
     la planta manda valores con decimales y una Entera los redondea. Solo para lo que el programa RECIBE (entradas): una salida
     Entera con escala 100 (5 → 500) no pierde nada. Cadena vacía si no hay nada que avisar."""
     if variable is None or senal is None or variable["role"] != "input" or variable["type"]["kind"] != "int"             or senal.formato == "BOOL":
@@ -161,14 +166,14 @@ def aviso_escala(variable, senal):
         return ""
     if escala == 1:
         return ""
-    return ("El simulador de procesos manda este valor con decimales: se redondeará al entero más cercano. "
-            "Para el valor exacto, ponga la variable como Decimal (2 decimales).")
+    return ("El simulador de fábricas manda este valor con decimales: se redondeará al entero más cercano. "
+            "Para el valor exacto, pon la variable como Decimal (2 decimales).")
 
 
 def aviso_redondeo(recibido, usado):
     """El aviso (ámbar) de una Entera que ya ha recibido un valor con decimales y lo ha redondeado."""
-    return (f"El simulador de procesos ha enviado {texto_numero(recibido)} y la variable es Entera: se usa "
-            f"{texto_numero(usado)}. Para el valor exacto, póngala como Decimal (2 decimales).")
+    return (f"El simulador de fábricas ha enviado {texto_numero(recibido)} y la variable es Entera: se usa "
+            f"{texto_numero(usado)}. Para el valor exacto, ponla como Decimal (2 decimales).")
 
 
 def areas_variable(variable):
@@ -268,13 +273,13 @@ def _pintar_variable(p, rect, texto, color, activa, derecha, resaltado=False, le
         br = QRect(card.right() - 21, cy - 8, 16, 16)
         p.setPen(QPen(QColor(estilo.SIMULACION_BORDE), 1))
         p.setBrush(QColor(estilo.SIMULACION_SUAVE))
-        p.drawRoundedRect(br, 4, 4)
+        p.drawRoundedRect(br, estilo.R_S, estilo.R_S)
         fc = QFont(fuente)
         fc.setPixelSize(max(10, (letra or ESCALAS_ES["normal"]) - 2))
         fc.setWeight(QFont.Weight.Bold)
         p.setFont(fc)
         p.setPen(QColor(estilo.SIMULACION))
-        p.drawText(br, Qt.AlignmentFlag.AlignCenter, "C")
+        p.drawText(br, Qt.AlignmentFlag.AlignCenter, "✓")
 
 
 ESCALAS_ES = {"normal": estilo.ESCALAS["normal"]["T_ES"], "grande": estilo.ESCALAS["grande"]["T_ES"]}  # letra de las filas, por escala
@@ -791,7 +796,8 @@ class EstadoConexion(QLabel):
 
     def __init__(self):
         super().__init__()
-        self.nota, self._texto = "", ""
+        self.nota, self._texto, self._estado = "", "", "desconectado"
+        self.setTextFormat(Qt.TextFormat.PlainText)
         self.setWordWrap(True)
         self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
@@ -801,11 +807,17 @@ class EstadoConexion(QLabel):
             self.nota = nota
             self.setText(self._texto)
 
+    def presentar(self, estado, texto):
+        self._estado = estado
+        self.setText(texto)
+
     def setText(self, texto):
         self._texto = texto
         self.setToolTip(texto + (f" · {self.nota}" if self.nota else ""))
-        if texto.startswith("Conectado"):
-            corto = "Conectado"
+        if self._estado in ("error", "diagnostico"):
+            corto = texto
+        elif self._estado == "conectado" and texto.startswith("Conectado"):
+            corto = ""  # la pastilla identifica la conexión; aquí siguen las notas del mapa
         elif texto.startswith(("Prueba preparada", "Mapa aplicado", "Configuración guardada", "Mapa cargado")):
             corto = "Desconectado"
         elif texto.startswith("Desconectado"):
@@ -814,7 +826,7 @@ class EstadoConexion(QLabel):
             corto = "Conexión probada"
         else:
             corto = texto
-        super().setText(corto + (f" · {self.nota}" if self.nota else ""))
+        super().setText(" · ".join(t for t in (corto, self.nota) if t))
 
 
 class _SinRueda:
@@ -1085,7 +1097,6 @@ class PanelES(QWidget):
         # Cabecera: volver y título arriba; debajo, el estado de la conexión, que hace salto de línea y nunca se corta.
         # Los botones de Conectar y Configuración se añaden a la fila de arriba más abajo.
         banda = self.cabecera = QFrame()
-        banda.setProperty("estadoVisual", "neutro")
         banda.setObjectName("cabeceraES")
         banda.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         cabeza = QVBoxLayout(banda)
@@ -1111,26 +1122,35 @@ class PanelES(QWidget):
         self._slot_selector.setSpacing(0)
         cabecera.addLayout(self._slot_selector)
         cabecera.addStretch()
-        fila_estado = QWidget()
+        fila_estado = self.fila_estado = QFrame()
+        fila_estado.setObjectName("filaEstadoES")
         fe = QHBoxLayout(fila_estado)
-        fe.setContentsMargins(16, 0, 16, 7)
-        fe.setSpacing(6)
+        fe.setContentsMargins(estilo.E4, estilo.E1, estilo.E4, estilo.E1)
+        fe.setSpacing(estilo.E2)
+        self.pastilla_conexion = QLabel()
+        self.pastilla_conexion.setObjectName("pastillaConexionES")
+        self.pastilla_conexion.setTextFormat(Qt.TextFormat.PlainText)
+        fe.addWidget(self.pastilla_conexion, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.pastilla_conexion.hide()
         self.check = QLabel("●")
         self.check.setFixedSize(16, 16)
         self.check.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.check.setStyleSheet(f"color:{estilo.TINTA_3}; font-size:{self.letra}px")
-        fe.addWidget(self.check, 0, Qt.AlignmentFlag.AlignTop)
+        fe.addWidget(self.check, 0, Qt.AlignmentFlag.AlignVCenter)
         self.estado = EstadoConexion()
         self.estado.setText("Desconectado")
         self.estado.setStyleSheet(f"color:{estilo.TINTA_2}")
-        fe.addWidget(self.estado, 1)
+        fe.addWidget(self.estado, 2)
+        self.b_reintentar = QPushButton("Reintentar")
+        self.b_reintentar.clicked.connect(self.conectar)
+        self.b_reintentar.hide()
+        fe.addWidget(self.b_reintentar)
         self.tiempos = QLabel()
         self.tiempos.setTextFormat(Qt.TextFormat.PlainText)
         self.tiempos.hide()
         fe.addWidget(self.tiempos)
         cabeza.addWidget(fila_alta)
-        self.fila_estado = fila_estado
-        fila_estado.setParent(banda)
+        cabeza.addWidget(fila_estado)
         fila_estado.hide()
         self.b_configuracion = QPushButton("Configuración")
         self.b_configuracion.setToolTip("Servidor Modbus, cantidad de canales y asignaciones")
@@ -1249,9 +1269,15 @@ class PanelES(QWidget):
         self.dialogo_config.setMinimumWidth(520)
         self.dialogo_config.setSizeGripEnabled(False)
         self.dialogo_config.setStyleSheet(estilo.hoja_global() + hoja_dialogo_es())
-        ajustes = QVBoxLayout(self.dialogo_config)
-        ajustes.setContentsMargins(16, 14, 16, 14)
-        ajustes.setSpacing(10)
+        marco_config = QVBoxLayout(self.dialogo_config)
+        marco_config.setContentsMargins(0, 0, 0, 0)
+        marco_config.setSpacing(0)
+        self.cabecera_config = CabeceraDialogo(self.dialogo_config.windowTitle())
+        marco_config.addWidget(self.cabecera_config)
+        ajustes = self._ajustes_config = QVBoxLayout()
+        ajustes.setContentsMargins(estilo.E4, estilo.E3, estilo.E4, estilo.E3)
+        ajustes.setSpacing(estilo.E2)
+        marco_config.addLayout(ajustes, 1)
         self.config_widget = QWidget()
         configuracion = QVBoxLayout(self.config_widget)
         configuracion.setContentsMargins(0, 0, 0, 0)
@@ -1303,7 +1329,8 @@ class PanelES(QWidget):
             rejilla_canales.addWidget(offset, fila, 1, Qt.AlignmentFlag.AlignLeft)
             rejilla_canales.addWidget(cantidad, fila, 2, Qt.AlignmentFlag.AlignLeft)
         lay_canales.addLayout(rejilla_canales)
-        self.b_restaurar_canales = QPushButton("Restablecer canales: 16 digitales y 4 numéricos")
+        self.b_restaurar_canales = QPushButton("Restablecer canales por defecto")
+        self.b_restaurar_canales.setToolTip("16 digitales y 4 numéricos")
         self.b_restaurar_canales.clicked.connect(self.restablecer_canales)
         rejilla_canales.addWidget(self.b_restaurar_canales, 5, 0, 1, 3, Qt.AlignmentFlag.AlignRight)
         self.ayuda_canales = QLabel("Copia el desplazamiento y la cantidad del software del servidor. Estos ajustes no modifican el servidor.")
@@ -1348,7 +1375,7 @@ class PanelES(QWidget):
         self.b_conectar = QPushButton("Conectar")
         self.b_conectar.clicked.connect(self.conectar)
         self.b_conectar.setProperty("primario", True)  # el botón principal de la cabecera
-        self.b_desconectar = QPushButton("Desconectar / editar")
+        self.b_desconectar = QPushButton("Desconectar")
         self.b_desconectar.clicked.connect(self.desconectar)
         self.b_desconectar.setEnabled(False)
         for b in (self.b_configuracion, self.b_conectar, self.b_desconectar):
@@ -1359,6 +1386,9 @@ class PanelES(QWidget):
         self.error_config.setStyleSheet(f"color:{estilo.ERROR}")
         ajustes.addWidget(self.error_config)
         self.error_config.hide()
+        self.pie_config = PieDialogo(texto_aceptar="Cerrar", mostrar_cancelar=False)
+        self.pie_config.aceptado.connect(self.dialogo_config.close)
+        marco_config.addWidget(self.pie_config)
         self.host.editingFinished.connect(self._config_editada)
         for widget in (self.puerto, self.unidad, self.periodo, self.timeout):
             widget.valueChanged.connect(self._config_editada)
@@ -1657,7 +1687,7 @@ class PanelES(QWidget):
         self._anchos_controles()
         tabla = self.tabla
         pide = sum(tabla.columnWidth(c) for c in range(tabla.columnCount()) if not tabla.isColumnHidden(c)) + tabla.verticalHeader().width() + 2 * tabla.frameWidth()
-        margenes = self.dialogo_config.layout().contentsMargins()
+        margenes = self._ajustes_config.contentsMargins()
         # márgenes del diálogo, de la tarjeta avanzada (14 + 14 + 2 de borde) y la barra de desplazamiento vertical
         extra = margenes.left() + margenes.right() + 30 + self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
         d = self.dialogo_config
@@ -1674,9 +1704,10 @@ class PanelES(QWidget):
         d = self.dialogo_config
         self.config_widget.layout().activate()
         d.layout().activate()
-        lay = d.layout()
+        lay = self._ajustes_config
         m = lay.contentsMargins()
         pide = self.config_widget.sizeHint().height() + m.top() + m.bottom()
+        pide += self.cabecera_config.sizeHint().height() + self.pie_config.sizeHint().height()
         if not self.error_config.isHidden():
             pide += self.error_config.sizeHint().height() + lay.spacing()
         pide += 2 * self.zona_config.frameWidth()
@@ -1734,24 +1765,45 @@ class PanelES(QWidget):
         self.tiempos.setToolTip("\n".join(lineas))
         # La línea queda oculta: la medida se conserva (texto y detalle), pero no se enseña al alumno.
 
-    def mostrar_estado(self, estado, mensaje):
-        mensaje = self.directa.ayuda_servidor.mostrar(mensaje, self.config.modo == "directo" and estado == "error")
-        self.estado.setText(mensaje)
+    def mostrar_estado(self, estado, mensaje, *, reintentar=True):
+        texto = self.directa.ayuda_servidor.mostrar(mensaje, self.config.modo == "directo" and estado == "error")
+        aviso_salidas = "Salidas no garantizadas."
+        if aviso_salidas in mensaje and aviso_salidas not in texto:
+            texto = f"{texto.rstrip('. ')}. {aviso_salidas}"
+        mensaje = texto
+        self.estado.presentar(estado, mensaje)
         conectado = estado == "conectado"
         self._hubo_conexion |= conectado
-        visual = "conectado" if conectado else "neutro"
-        self.cabecera.setProperty("estadoVisual", visual)
-        self.cabecera.style().unpolish(self.cabecera)
-        self.cabecera.style().polish(self.cabecera)
-        self.cabecera.update()
         fallo = estado in ("error", "diagnostico")
+        estilo.poner(self.fila_estado, fallo=fallo)
+        if conectado:
+            host = self.config.host
+            if ":" in host:
+                host = f"[{host}]"
+            texto = f"● Conectado · {host}:{self.config.puerto}"
+            pastilla = self.pastilla_conexion
+            pastilla.setText(texto)
+            pastilla.setToolTip(f"{texto}\n{mensaje}")
+            pastilla.ensurePolished()
+            ancho = pastilla.fontMetrics().horizontalAdvance(texto) + 2 * (estilo.E2 + 1)
+            tope = self.minimumSizeHint().width() // 2
+            pastilla.setWordWrap(ancho > tope)
+            pastilla.setMaximumWidth(tope)
+            pastilla.setMinimumWidth(min(ancho, tope))
+        self.pastilla_conexion.setVisible(conectado)
+        self.check.setVisible(not conectado)
         self.check.setText("✓" if conectado else "✕" if fallo else "●")
-        self.check.setStyleSheet(f"background:{estilo.OK if conectado else estilo.ERROR if fallo else 'transparent'}; "
-                                 f"color:{'white' if conectado or fallo else estilo.TINTA_3}; "
-                                 f"border-radius:{estilo.R_M}px; font-size:{self.letra}px; font-weight:600")
+        self.check.setStyleSheet(
+            f"background:{estilo.ERROR if fallo else 'transparent'}; "
+            f"color:{estilo.BLANCO if fallo else estilo.TINTA_3}; "
+            f"border-radius:{estilo.R_M}px; font-size:{self.letra}px; font-weight:600"
+        )
         self.check.setToolTip(mensaje)
-        self.estado.setStyleSheet(f"color:{estilo.OK if conectado else estilo.ERROR if fallo else estilo.AVISO if self._hubo_conexion else estilo.TINTA_2}; font-weight:600")
-        self.estado.setVisible(True)
+        color = estilo.ERROR if fallo else estilo.AVISO if self._hubo_conexion and not conectado else estilo.TINTA_2
+        self.estado.setStyleSheet(f"color:{color}; font-weight:600")
+        self.b_reintentar.setVisible(estado == "error" and reintentar and not mensaje.startswith("Desconectado"))
+        self.b_reintentar.setEnabled(self.doc is not None and not self.conectado)
+        self.fila_estado.setVisible(estado != "desconectado" or mensaje != "Desconectado")
         self.estado_cambiado.emit(estado, mensaje)
 
     def admite(self, vid, area):
@@ -2000,7 +2052,7 @@ class PanelES(QWidget):
         try:
             c = self.obtener()
         except ValueError as exc:
-            self.mostrar_estado("error", f"Mapa inválido: {exc}")
+            self.mostrar_estado("error", f"Mapa inválido: {exc}", reintentar=False)
             self.error_config.setText(f"Mapa inválido: {exc}")
             self.error_config.show()
             self._ajustar_alto_dialogo()
@@ -2009,12 +2061,14 @@ class PanelES(QWidget):
             self.error_config.clear()
             self.error_config.hide()
             self._ajustar_alto_dialogo()
+            if not self.conectado:
+                self.mostrar_estado("desconectado", "Configuración actualizada · desconectado. Pulsa «Conectar».")
         self.config = c
         self.escalas_base.update({f"{s.area}:{s.direccion}": s.escala for s in c.senales})
         self.aviso = ""  # el usuario ya ha actuado sobre el mapa
         self.aviso_host = ""  # (y ha puesto la IP, que obtener() ya validó)
         self._dibujar()
-        if not getattr(self,"conectado",False):
+        if not self.conectado and self.b_reintentar.isHidden():
             self.estado.setText("Configuración actualizada · desconectado. Pulsa «Conectar».")
         self.aplicar.emit(c)
         return True
@@ -2173,6 +2227,7 @@ class PanelES(QWidget):
 
         self.b_conectar.setVisible(not on)
         self.b_desconectar.setVisible(on)
+        self.b_reintentar.setEnabled(self.doc is not None and not on)
         self.config_widget.setEnabled(not on)
         for b in (self.b_conectar,):
             b.setEnabled(not on)

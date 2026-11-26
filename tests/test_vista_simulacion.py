@@ -108,14 +108,14 @@ class VistaSimulacion(BaseQt):
         self.assertEqual(w.botones["sensor"].text(),"sensor = 0");self.assertTrue(w.botones["fin"].isChecked())
 
     def test_SMOD08_cabecera_es_solo_verde_o_color_original(self):
-        """REQ-SIM-03: desconexión y fallo restauran el fondo neutro manteniendo sus mensajes."""
+        """REQ-SIM-03: el color se limita a la pastilla de conexión y a la banda de error."""
         w,d=self.preparar();p=w.panel_es;w._mostrar_pagina(True);self.procesar()
         inicial=p.cabecera.palette().color(QPalette.ColorRole.Window)
         p.mostrar_estado("conectado","Conectado");self.procesar()
-        self.assertNotEqual(p.cabecera.palette().color(QPalette.ColorRole.Window),inicial)
+        self.assertEqual(p.cabecera.palette().color(QPalette.ColorRole.Window),inicial)
         for estado in ("error","desconectado","diagnostico"):
             p.mostrar_estado(estado,"Aviso "+estado);self.procesar()
-            self.assertEqual(p.cabecera.property("estadoVisual"),"neutro")
+            self.assertEqual(p.fila_estado.property("fallo"), estado in ("error", "diagnostico"))
             self.assertEqual(p.cabecera.palette().color(QPalette.ColorRole.Window),inicial)
             self.assertEqual(p.estado.text(),"Aviso "+estado)
 

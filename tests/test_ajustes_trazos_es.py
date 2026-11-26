@@ -60,17 +60,18 @@ class Trazos(unittest.TestCase):
             self.assertIn('.sync-gap{fill:var(--panel);stroke:none}',(ROOT/'tools/dibujo.css').read_text())
 
     def test_SAFI03_lecturas_de_variables_y_tiempos_en_azul_sin_cambiar_verdaderos(self):
-        """REQ-SIM-03, REQ-TMP-01: valor y tiempo en #326DCB, incluso al vencer; expresiones verdaderas conservan su verde."""
+        """REQ-SIM-03, REQ-TMP-01: el valor, en #326DCB; el tiempo, en el azul de su cápsula (#1D4ED8, C1), incluso al vencer;
+        expresiones verdaderas conservan su verde."""
         m,lay=modelo_temporizado();v=corriendo(m,lay)
         for avance,shown in ((0,"1,00 s"),(2_000_000,"3,00 s ✓")):
             if avance:v.act("avanzar",{"us":avance})
-            sc,_=dibujo(v);self.assertEqual(texto(sc,shown).defaultTextColor().name(),"#326dcb")
+            sc,_=dibujo(v);self.assertEqual(texto(sc,shown).defaultTextColor().name(),dg.COL["timer_text"].lower())
         m=M().var("p").var("n","internal","int").step("A",True).stored("A","n","event","n+1",event="rise(p)")
         v=vista(m,{"A":(100,100)});v.act("fijar",{"cambios":{"p":True}})
         sc,_=dibujo(v);self.assertEqual(texto(sc,"1").defaultTextColor().name(),"#326dcb")
-        self.assertNotEqual(dg.COL["readout"],dg.COL["true_text"])
+        self.assertNotEqual(dg.COL["readout"],dg.COL["true_text"]);self.assertEqual(dg.COL["timer_text"],"#1d4ed8")
         css=(ROOT/'tools/dibujo.css').read_text()
-        self.assertIn('.timer-state.run text,.timer-state.done text{fill:#326dcb}',css)
+        self.assertIn('.timer-state.run text,.timer-state.done text{fill:var(--timer-text)}',css);self.assertIn('--timer-text:#1d4ed8',css)
         self.assertRegex(css,r'text.variable-value\{[^}]*fill:#326dcb')
         self.assertNotIn('.act.on text.variable-value',css)
 

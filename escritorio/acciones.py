@@ -39,18 +39,20 @@ from .remates_propiedades import FilaValor
 
 ANCHO_MAX_VARIABLE = 260
 
-SIN_VARIABLES = "(sin variables: créelas en la tabla de variables)"  # la lista de variables, si no hay ninguna que valga
+SIN_VARIABLES = "(sin variables: créalas en la tabla de variables)"  # la lista de variables, si no hay ninguna que valga
 TIPO_CORTO = {"bool": "Bool", "int": "Ent", "decimal": "Dec", "duration": "Dur"}  # el tipo en la lista de variables de la acción
 # El «1» y el «0» del valor de una memorizada (maqueta v3): dos botones pegados; el elegido, relleno del color de la acción (sin borde de aviso)
-ESTILO_FICHA = (f"QPushButton {{ background: #ffffff; color: #4a5b6e; font-size: 13px; font-weight: 700; border: 1px solid #7b8a9c; "
+ESTILO_FICHA = (f"QPushButton {{ background: {estilo.SUPERFICIE}; color: {estilo.TINTA_2}; font-size: {estilo.T_BASE}px; "
+                f"font-weight: 700; border: 1px solid {estilo.BORDE_CONTROL}; border-radius: 0; "
                 f"padding: 4px 16px; min-width: 38px; min-height: 26px; }}"
-                f"QPushButton[lado=\"izq\"] {{ border-top-left-radius: 6px; border-bottom-left-radius: 6px; "
-                f"border-top-right-radius: 0; border-bottom-right-radius: 0; }}"
-                f"QPushButton[lado=\"der\"] {{ border-top-right-radius: 6px; border-bottom-right-radius: 6px; "
-                f"border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 0; }}"
-                f"QPushButton:hover:!checked:enabled {{ background: #e4ecf3; color: #16263a; }}"
-                f"QPushButton:checked {{ background: {estilo.ACENTO}; color: #ffffff; border-color: {estilo.ACENTO_OSCURO}; }}"
-                f"QPushButton:disabled {{ background: #f6f8fb; color: #a0aec0; border-color: #cdd6e0; }}")
+                f"QPushButton[lado=\"izq\"] {{ border-top-left-radius: {estilo.R_CONTROL}px; "
+                f"border-bottom-left-radius: {estilo.R_CONTROL}px; }}"
+                f"QPushButton[lado=\"der\"] {{ border-top-right-radius: {estilo.R_CONTROL}px; "
+                f"border-bottom-right-radius: {estilo.R_CONTROL}px; border-left: 0; }}"
+                f"QPushButton:hover:!checked:enabled {{ background: {estilo.HOVER}; color: {estilo.TINTA}; }}"
+                f"QPushButton:checked {{ background: {estilo.PRIMARIO}; color: {estilo.BLANCO}; border-color: {estilo.ACENTO_OSCURO}; }}"
+                f"QPushButton:checked:hover {{ background: {estilo.PRIMARIO_HOVER}; border-color: {estilo.ACENTO_OSCURO}; }}"
+                f"QPushButton:disabled {{ background: {estilo.SUPERFICIE_2}; color: {estilo.DESHABILITADO}; border-color: {estilo.BORDE_SUAVE}; }}")
 
 
 
@@ -227,25 +229,27 @@ class PanelAccion(QWidget):
         self.panel_booleano = QFrame()
         self.panel_booleano.setObjectName("panelAsignacionBool")
         self.panel_booleano.setStyleSheet(
-            "QFrame#panelAsignacionBool { background: #fbfdff; border: 0; }"
-            "QFrame#tarjetaAsignacion { background: #ffffff; border: 1px solid #cdd6e0; border-radius: 8px; }"
-            "QFrame#tarjetaAsignacion[vacia=\"true\"] { border-style: dashed; border-color: #9aa9ba; }"
-            "QLabel#pildoraVarBool { background: #f6f8fb; border: 1px solid #cdd6e0; border-radius: 5px; "
-            "padding: 4px 10px; font-weight: 600; font-size: 13.5px; color: #16263a; }"
+            f"QFrame#panelAsignacionBool {{ background: {estilo.SUPERFICIE_2}; border: 0; }}"
+            f"QFrame#tarjetaAsignacion {{ background: {estilo.SUPERFICIE}; border: 1px solid {estilo.BORDE_SUAVE}; "
+            f"border-radius: {estilo.R_M}px; }}"
+            f"QFrame#tarjetaAsignacion[vacia=\"true\"] {{ border-style: dashed; border-color: {estilo.BORDE_MEDIO}; }}"
+            f"QLabel#pildoraVarBool {{ background: {estilo.SUPERFICIE_2}; border: 1px solid {estilo.BORDE_SUAVE}; "
+            f"border-radius: {estilo.R_S}px; padding: 4px 10px; font-weight: 600; font-size: {estilo.T_BASE}px; "
+            f"color: {estilo.TINTA}; }}"
         )
         pbl = QVBoxLayout(self.panel_booleano)
-        pbl.setContentsMargins(24, 24, 24, 24)
-        pbl.setSpacing(12)
+        pbl.setContentsMargins(estilo.E4, estilo.E2, estilo.E4, estilo.E2)
+        pbl.setSpacing(estilo.E2)
         pbl.addStretch(1)
 
         self.tarjeta_asignacion = QFrame()
         self.tarjeta_asignacion.setObjectName("tarjetaAsignacion")
         tal = QHBoxLayout(self.tarjeta_asignacion)
-        tal.setContentsMargins(20, 12, 20, 12)
-        tal.setSpacing(12)
+        tal.setContentsMargins(estilo.E4, estilo.E2, estilo.E4, estilo.E2)
+        tal.setSpacing(estilo.E2)
         self.l_asignacion = QLabel("Asignación")
-        self.l_asignacion.setStyleSheet("font-size: 12px; color: #5b6b7d; background: transparent;")
-        self.l_var_bool = QLabel("Elija…")
+        self.l_asignacion.setStyleSheet(f"font-size: {estilo.T_PEQUENA}px; color: {estilo.TINTA_3}; background: transparent;")
+        self.l_var_bool = QLabel("Elige…")
         self.l_var_bool.setObjectName("pildoraVarBool")
         self.l_fichas = QLabel(":=")
         self.l_fichas.setStyleSheet(f"color: {estilo.ACENTO}; font-family: {estilo.FAMILIA_MONO}; font-size: 15px; font-weight: 700; background: transparent;")
@@ -273,10 +277,10 @@ class PanelAccion(QWidget):
         tal.addWidget(self.caja_fichas)
         pbl.addWidget(self.tarjeta_asignacion, 0, Qt.AlignmentFlag.AlignCenter)
 
-        self.l_nota_bool = QLabel("Seleccione arriba la variable destino y elija el valor booleano (1 o 0).")
+        self.l_nota_bool = QLabel("Elige arriba la variable destino y elige el valor booleano (1 o 0).")
         self.l_nota_bool.setWordWrap(True)
         self.l_nota_bool.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.l_nota_bool.setStyleSheet("font-size: 12px; color: #5b6b7d; background: transparent;")
+        self.l_nota_bool.setStyleSheet(f"font-size: {estilo.T_PEQUENA}px; color: {estilo.TINTA_3}; background: transparent;")
         pbl.addWidget(self.l_nota_bool)
         pbl.addStretch(1)
         vl.addWidget(self.panel_booleano, 1)
@@ -365,7 +369,7 @@ class PanelAccion(QWidget):
         if firma == self._firma:
             return
         self._firma = firma
-        self.variable.setToolTip(SIN_VARIABLES if not ofrecidas else "Seleccione la salida o memoria de la acción")
+        self.variable.setToolTip(SIN_VARIABLES if not ofrecidas else "Elige la salida o memoria de la acción")
         c = self.variable
         c.blockSignals(True)
         c.clear()
@@ -401,17 +405,18 @@ class PanelAccion(QWidget):
         booleana = self._tipo_variable() in ("", "bool")
         for boton in self.fichas.values():
             boton.setEnabled(bool(self._elegida))
-            boton.setToolTip("" if self._elegida else "Elija primero la variable de la acción")
+            boton.setToolTip("" if self._elegida else "Elige primero la variable de la acción")
         self.panel_booleano.setVisible(not continua and booleana)
         self.caja_fichas.setVisible(not continua and booleana)
         self.caja_valor.setMaximumWidth(16777215)
         self.caja_numerica.setVisible(not continua and not booleana)
         vacia = not self._elegida
-        self.l_var_bool.setText(self._elegida if self._elegida else "Elija…")
+        self.l_var_bool.setText(self._elegida if self._elegida else "Elige…")
+        self.l_var_bool.setVisible(not self._variable_adoptada)
         self.l_nota_bool.setText(
-            "Seleccione arriba una variable booleana o numérica para configurar la asignación."
+            "Elige arriba una variable booleana o numérica para configurar la asignación."
             if vacia else
-            "Elija el valor booleano (1 o 0) que tomará la variable al ejecutarse la acción."
+            "Elige el valor booleano (1 o 0) que tomará la variable al ejecutarse la acción."
         )
         if bool(self.tarjeta_asignacion.property("vacia")) != vacia:
             self.tarjeta_asignacion.setProperty("vacia", vacia)

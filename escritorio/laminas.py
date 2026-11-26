@@ -112,9 +112,9 @@ class DocumentoLaminas:
 
     @property
     def escala_rotulo(self):
-        if self.ajustes['campos']['escala']:return self.ajustes['campos']['escala']
-        if self.ajustes['modo']=='ajustar':return 'Ajuste a hoja'
-        return ('1:'+format(self.ajustes['escala'],'.6g')).replace('.',',')
+        if self.ajustes["campos"]["escala"]:
+            return self.ajustes["campos"]["escala"]
+        return "S/E"
 
     def fuente(self,indice):
         y,x=divmod(indice,len(self.xs));a,b=self.xs[x];c,d=self.ys[y]
@@ -288,109 +288,318 @@ class DocumentoHoja(DocumentoLaminas):
         self.total=1
     @property
     def escala_rotulo(self):
-        if self.ajustes['campos']['escala']:return self.ajustes['campos']['escala']
-        escalas={round(1/c.ajustes['escala'],6) for c in self.capas}
-        if len(escalas)>1:return 'Varias'
-        if not escalas:return ''
-        valor=escalas.pop()
-        return (f'{valor:g}:1' if valor>=1 else f'1:{1/valor:g}').replace('.',',')
-    def campos(self,indice):
-        campos=super().campos(indice);campos['hoja']=self.ajustes['campos']['hoja'].replace('{n}',str(self.numero)).replace('{m}',str(self.hojas));return campos
-    def destino(self,indice):
+        if self.ajustes["campos"]["escala"]:
+            return self.ajustes["campos"]["escala"]
+        return "S/E"
+
+    def campos(self, indice):
+        campos = super().campos(indice)
+        campos["hoja"] = self.ajustes["campos"]["hoja"].replace("{n}", str(self.numero)).replace("{m}", str(self.hojas))
+        return campos
+
+    def destino(self, indice):
         return QRectF(self.contenido)
-    def _dibujo(self,p,indice):
-        for d in self.capas:d._dibujo(p,0)
+
+    def _dibujo(self, p, indice):
+        for d in self.capas:
+            d._dibujo(p, 0)
+
+
+def exportar_pdf_documentos(documentos, ruta, titulo=""):
+    """Exporta una lista de documentos de hoja en un único archivo PDF multipágina."""
+    if not documentos:
+        raise ValueError("No hay hojas para exportar")
+
+    def escribir(tmp):
+        writer = QPdfWriter(tmp)
+        writer.setResolution(300)
+        writer.setPageLayout(documentos[0].layout())
+        writer.setTitle(titulo)
+        writer.setCreator("GRAFCET Connect")
+        p = QPainter()
+        if not p.begin(writer):
+            raise OSError("No se pudo iniciar la salida del plano")
+        try:
+            primera = True
+            for doc in documentos:
+                for indice in range(doc.total):
+                    if not primera:
+                        writer.setPageLayout(doc.layout())
+                        if not writer.newPage():
+                            raise OSError("No se pudo crear una nueva hoja")
+                    primera = False
+                    p.save()
+                    p.scale(writer.logicalDpiX() / 25.4, writer.logicalDpiY() / 25.4)
+                    doc.pintar(p, indice)
+                    p.restore()
+        finally:
+            p.end()
+        del writer
+
+    documentos[0]._atomico(ruta, escribir)
+    return [Path(ruta)]
 
 
 class VistaLamina(QWidget):
-    def __init__(self,parent=None):
-        super().__init__(parent);self.documento=None;self.indice=0;self.setMinimumSize(120,120);self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.colocar=lambda offset:None;self.arrastre=None;self.seleccionado=False;self.capa=0;self.elegir_capa=lambda i:None;self.eliminar_grafico=lambda:None;self.textos=None;self.nuevo_texto=False;self.zona=False;self.inicio_texto=None;self.inicio_zona=None
-    def paintEvent(self,event):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.documento = None
+        self.indice = 0
+        self.setMinimumSize(120, 120)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.colocar = lambda offset: None
+        self.arrastre = None
+        self.seleccionado = False
+        self.capa = 0
+        self.elegir_capa = lambda i: None
+        self.eliminar_grafico = lambda: None
+        self.textos = None
+        self.nuevo_texto = False
+        self.zona = False
+        self.inicio_texto = None
+        self.inicio_zona = None
+        self.editable = True
+        self.menu_contextual = None
+        self.accion_portapapeles = None
+        self.deseleccionar_todo = None
+
+    def paintEvent(self, event):
         self._pintar_hoja()
-        if self.hasFocus() and self.property('tecl')==True:  # el anillo de foco de teclado, como el de los demás controles (`FocoTeclado`)
-            p=QPainter(self);p.setPen(QPen(QColor(estilo.FOCO),2,Qt.PenStyle.DashLine));p.setBrush(Qt.BrushStyle.NoBrush);p.drawRect(self.rect().adjusted(1,1,-1,-1));p.end()
+        if self.hasFocus() and self.property("tecl") == True:
+            p = QPainter(self)
+            p.setPen(QPen(QColor(estilo.FOCO), 2, Qt.PenStyle.DashLine))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(self.rect().adjusted(1, 1, -1, -1))
+            p.end()
+
     def _pintar_hoja(self):
-        p=QPainter(self);p.fillRect(self.rect(),QColor(estilo.MESA))
-        d=self.documento
-        if d is None:return
-        escala=min((self.width()-24)/d.ancho,(self.height()-24)/d.alto)
-        p.translate((self.width()-d.ancho*escala)/2,(self.height()-d.alto*escala)/2);p.scale(escala,escala);d.pintar(p,self.indice)
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(estilo.MESA))
+        d = self.documento
+        if d is None:
+            return
+        escala = min((self.width() - 24) / d.ancho, (self.height() - 24) / d.alto)
+        p.translate((self.width() - d.ancho * escala) / 2, (self.height() - d.alto * escala) / 2)
+        p.scale(escala, escala)
+        d.pintar(p, self.indice)
         if self.textos and self.textos.actual:
-            p.save();item=self.textos.actual;p.translate(item.pos());p.rotate(item.rotation());p.setPen(QPen(QColor('#326dcb'),1/escala,Qt.PenStyle.DashLine));p.setBrush(Qt.BrushStyle.NoBrush);p.drawRect(item.boundingRect());p.restore()
+            p.save()
+            item = self.textos.actual
+            p.translate(item.pos())
+            p.rotate(item.rotation())
+            p.setPen(QPen(QColor("#326dcb"), 1 / escala, Qt.PenStyle.DashLine))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(item.boundingRect())
+            p.restore()
         if self.zona and self.textos:
-            r=self.textos.plantilla.get('zone') or self.textos.plantilla.get('detected_zone')
-            if r:p.setPen(QPen(QColor('#326dcb'),1/escala,Qt.PenStyle.DashLine));p.setBrush(Qt.BrushStyle.NoBrush);p.drawRect(QRectF(*r))
+            r = self.textos.plantilla.get("zone") or self.textos.plantilla.get("detected_zone")
+            if r:
+                p.setPen(QPen(QColor("#326dcb"), 1 / escala, Qt.PenStyle.DashLine))
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawRect(QRectF(*r))
         if self.inicio_zona:
-            p.setPen(QPen(QColor('#326dcb'),1/escala,Qt.PenStyle.DashLine));p.drawRect(QRectF(*self.inicio_zona).normalized())
+            p.setPen(QPen(QColor("#326dcb"), 1 / escala, Qt.PenStyle.DashLine))
+            p.drawRect(QRectF(*self.inicio_zona).normalized())
         if self.seleccionado:
-            p.setPen(QPen(QColor('#326dcb'),1/escala,Qt.PenStyle.DashLine));p.setBrush(Qt.BrushStyle.NoBrush);p.drawRect(d.capas[self.capa].destino(0) if hasattr(d,'capas') and d.capas else d.destino(self.indice))
-    def punto_hoja(self,punto):
-        d=self.documento
-        if d is None:return QPointF(-1e9,-1e9)  # (sin hoja cargada: un punto fuera de cualquier cosa)
-        escala=min((self.width()-24)/d.ancho,(self.height()-24)/d.alto)
-        return QPointF((punto.x()-(self.width()-d.ancho*escala)/2)/escala,(punto.y()-(self.height()-d.alto*escala)/2)/escala)
-    def mousePressEvent(self,event):
-        d=self.documento
-        if d and d.total==1 and event.button()==Qt.MouseButton.LeftButton:
-            p=self.punto_hoja(event.position())
+            p.setPen(QPen(QColor("#326dcb"), 1 / escala, Qt.PenStyle.DashLine))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            caja = d.capas[self.capa].destino(0) if hasattr(d, "capas") and d.capas else d.destino(self.indice)
+            p.drawRect(caja)
+
+    def punto_hoja(self, punto):
+        d = self.documento
+        if d is None:
+            return QPointF(-1e9, -1e9)
+        escala = min((self.width() - 24) / d.ancho, (self.height() - 24) / d.alto)
+        ox = (self.width() - d.ancho * escala) / 2
+        oy = (self.height() - d.alto * escala) / 2
+        return QPointF((punto.x() - ox) / escala, (punto.y() - oy) / escala)
+
+    def mousePressEvent(self, event):
+        d = self.documento
+        if d and d.total == 1 and event.button() == Qt.MouseButton.LeftButton:
+            p = self.punto_hoja(event.position())
             if self.textos:
-                t=self.textos
-                if self.nuevo_texto:
-                    t.blockSignals(True);t.anadir();t.actual.t.update(x=p.x(),y=p.y());t.actual.sincronizar();t.blockSignals(False);t.movido();self.nuevo_texto=False;self.unsetCursor();return
-                if self.zona and t.vista.zona:self.inicio_zona=(p,p);return
-                item=next((i for i in reversed(t.items) if i.contains(i.mapFromScene(p))),None)
+                t = self.textos
+                if self.nuevo_texto and self.editable:
+                    t.blockSignals(True)
+                    t.anadir()
+                    t.actual.t.update(x=p.x(), y=p.y())
+                    t.actual.sincronizar()
+                    t.blockSignals(False)
+                    self.seleccionado = False
+                    t.movido()
+                    self.nuevo_texto = False
+                    self.unsetCursor()
+                    return
+                if self.zona and t.vista.zona and self.editable:
+                    self.inicio_zona = (p, p)
+                    return
+                item = next((i for i in reversed(t.items) if i.contains(i.mapFromScene(p))), None)
                 t.elegir(t.items.index(item) if item else -1)
-                if item:self.inicio_texto=(p,item.t['x'],item.t['y']);self.seleccionado=False;self.update();return
-            if hasattr(d,'capas'):
-                self.capa=next((i for i in reversed(range(len(d.capas))) if d.capas[i].destino(0).contains(p)),-1)
-                self.seleccionado=self.capa>=0
-                if self.seleccionado:self.elegir_capa(self.capa)
-            else:self.seleccionado=d.destino(0).contains(p)
-            self.update()
+                if item:
+                    if self.editable:
+                        self.inicio_texto = (p, item.t["x"], item.t["y"])
+                    self.seleccionado = False
+                    self.update()
+                    return
+            self._seleccionar_grafcet_en(d, p)
             if self.seleccionado:
-                capa=d.capas[self.capa] if hasattr(d,'capas') else d
-                self.arrastre=(p,capa.destino(0),list(capa.ajustes['offset_mm']));self.setCursor(Qt.CursorShape.ClosedHandCursor);return
+                return
         super().mousePressEvent(event)
-    def mouseMoveEvent(self,event):
+
+    def _seleccionar_grafcet_en(self, d, p):
+        if hasattr(d, "capas"):
+            self.capa = next((i for i in reversed(range(len(d.capas))) if d.capas[i].destino(0).contains(p)), -1)
+            self.seleccionado = self.capa >= 0
+            if self.seleccionado:
+                self.elegir_capa(self.capa)
+        else:
+            self.seleccionado = d.destino(0).contains(p)
+        self.update()
+        if self.seleccionado and self.editable:
+            capa = d.capas[self.capa] if hasattr(d, "capas") else d
+            self.arrastre = (p, capa.destino(0), list(capa.ajustes["offset_mm"]))
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+
+    def mouseDoubleClickEvent(self, event):
+        d = self.documento
+        if d and d.total == 1 and event.button() == Qt.MouseButton.LeftButton and self.editable and self.textos:
+            p = self.punto_hoja(event.position())
+            t = self.textos
+            item = next((i for i in reversed(t.items) if i.contains(i.mapFromScene(p))), None)
+            if item is not None:
+                self.inicio_texto = None
+                self.seleccionado = False
+                t.elegir(t.items.index(item))
+                t.enfocar_contenido()
+                self.update()
+                event.accept()
+                return
+        super().mouseDoubleClickEvent(event)
+
+    def mouseMoveEvent(self, event):
         if self.documento is None:
-            self.inicio_zona=self.inicio_texto=self.arrastre=None;super().mouseMoveEvent(event);return  # (la hoja cambió bajo un arrastre)
-        if self.inicio_zona:self.inicio_zona=(self.inicio_zona[0],self.punto_hoja(event.position()));self.update();return
-        if self.inicio_texto:
-            p,x,y=self.inicio_texto;delta=self.punto_hoja(event.position())-p;t=self.textos.actual
-            t.t.update(x=x+delta.x(),y=y+delta.y());t.sincronizar();self.documento.plantilla.p=self.textos.plantilla;self.update();return
-        if self.arrastre:
-            p,r,offset=self.arrastre;d=self.documento
-            if hasattr(d,'capas'):d=d.capas[self.capa]
-            delta=self.punto_hoja(event.position())-p
-            dx=max(d.contenido.left()-r.left(),min(delta.x(),d.contenido.right()-r.right()))
-            dy=max(d.contenido.top()-r.top(),min(delta.y(),d.contenido.bottom()-r.bottom()))
-            nuevo=d.ajustar_posicion(r.translated(dx,dy),r);delta=nuevo.topLeft()-r.topLeft()
-            d.ajustes['offset_mm']=[offset[0]+delta.x(),offset[1]+delta.y()];self.update();return
-        super().mouseMoveEvent(event)
-    def mouseReleaseEvent(self,event):
-        if self.documento is None:
-            self.inicio_zona=self.inicio_texto=self.arrastre=None;super().mouseReleaseEvent(event);return
+            self.inicio_zona = self.inicio_texto = self.arrastre = None
+            super().mouseMoveEvent(event)
+            return
         if self.inicio_zona:
-            self.mouseMoveEvent(event);r=QRectF(*self.inicio_zona).normalized().intersected(QRectF(0,0,self.documento.ancho,self.documento.alto));self.inicio_zona=None
-            if r.width()>=5 and r.height()>=5:self.textos.poner_zona(list(r.getRect()))
-            self.update();return
-        if self.inicio_texto:self.mouseMoveEvent(event);self.inicio_texto=None;self.textos.movido();return
+            self.inicio_zona = (self.inicio_zona[0], self.punto_hoja(event.position()))
+            self.update()
+            return
+        if self.inicio_texto:
+            p, x, y = self.inicio_texto
+            delta = self.punto_hoja(event.position()) - p
+            t = self.textos.actual
+            t.t.update(x=x + delta.x(), y=y + delta.y())
+            t.sincronizar()
+            self.documento.plantilla.p = self.textos.plantilla
+            self.update()
+            return
         if self.arrastre:
-            self.mouseMoveEvent(event);self.arrastre=None;self.unsetCursor();d=self.documento.capas[self.capa] if hasattr(self.documento,'capas') else self.documento
-            self.colocar(list(d.ajustes['offset_mm']));return
+            p, r, offset = self.arrastre
+            d = self.documento
+            if hasattr(d, "capas"):
+                d = d.capas[self.capa]
+            delta = self.punto_hoja(event.position()) - p
+            dx = max(d.contenido.left() - r.left(), min(delta.x(), d.contenido.right() - r.right()))
+            dy = max(d.contenido.top() - r.top(), min(delta.y(), d.contenido.bottom() - r.bottom()))
+            nuevo = d.ajustar_posicion(r.translated(dx, dy), r)
+            delta = nuevo.topLeft() - r.topLeft()
+            d.ajustes["offset_mm"] = [offset[0] + delta.x(), offset[1] + delta.y()]
+            self.update()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self.documento is None:
+            self.inicio_zona = self.inicio_texto = self.arrastre = None
+            super().mouseReleaseEvent(event)
+            return
+        if self.inicio_zona:
+            self.mouseMoveEvent(event)
+            caja_hoja = QRectF(0, 0, self.documento.ancho, self.documento.alto)
+            r = QRectF(*self.inicio_zona).normalized().intersected(caja_hoja)
+            self.inicio_zona = None
+            if r.width() >= 5 and r.height() >= 5:
+                self.textos.poner_zona(list(r.getRect()))
+            self.update()
+            return
+        if self.inicio_texto:
+            _, x0, y0 = self.inicio_texto
+            self.mouseMoveEvent(event)
+            self.inicio_texto = None
+            actual = self.textos.actual
+            if actual and (abs(actual.t["x"] - x0) > 1e-9 or abs(actual.t["y"] - y0) > 1e-9):
+                self.textos.movido()
+            return
+        if self.arrastre:
+            self.mouseMoveEvent(event)
+            self.arrastre = None
+            self.unsetCursor()
+            d = self.documento.capas[self.capa] if hasattr(self.documento, "capas") else self.documento
+            self.colocar(list(d.ajustes["offset_mm"]))
+            return
         super().mouseReleaseEvent(event)
-    def keyPressEvent(self,event):
-        if self.textos and self.textos.actual and event.key() in (Qt.Key.Key_Delete,Qt.Key.Key_Backspace):self.textos.eliminar();return
-        if self.seleccionado and event.key()==Qt.Key.Key_Delete:self.eliminar_grafico();return
+
+    def contextMenuEvent(self, event):
+        if self.menu_contextual is not None:
+            self.menu_contextual(event.pos(), event.globalPos())
+            event.accept()
+            return
+        super().contextMenuEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape and self.deseleccionar_todo is not None:
+            self.deseleccionar_todo()
+            event.accept()
+            return
+        if self.editable and self._manejar_tecla_edicion(event):
+            event.accept()
+            return
         super().keyPressEvent(event)
-    def sizeHint(self):return QSize(800,600)
+
+    def _manejar_tecla_edicion(self, event):
+        clave = event.key()
+        flechas = (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down)
+        if self.textos and self.textos.actual and clave in flechas:
+            paso = 10.0 if (event.modifiers() & Qt.KeyboardModifier.ShiftModifier) else 1.0
+            dx, dy = {
+                Qt.Key.Key_Left: (-paso, 0.0),
+                Qt.Key.Key_Right: (paso, 0.0),
+                Qt.Key.Key_Up: (0.0, -paso),
+                Qt.Key.Key_Down: (0.0, paso),
+            }[clave]
+            self.textos.desplazar_actual(dx, dy)
+            if self.documento is not None:
+                self.documento.plantilla.p = self.textos.plantilla
+            self.update()
+            return True
+        if self.accion_portapapeles is not None and (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+            op = {Qt.Key.Key_C: "copiar", Qt.Key.Key_X: "cortar", Qt.Key.Key_V: "pegar"}.get(clave)
+            if op is not None:
+                self.accion_portapapeles(op)
+                return True
+        if self.textos and self.textos.actual and clave in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self.textos.eliminar()
+            return True
+        if self.seleccionado and clave == Qt.Key.Key_Delete:
+            self.eliminar_grafico()
+            return True
+        return False
+
+    def sizeHint(self):
+        return QSize(800, 600)
 
 
 class DialogoLaminas(QDialog):
-    modificado=Signal()
-    def __init__(self,modelo,estado,ajustes,aplicar,parent=None,dependencias=False,integrado=False):
-        super().__init__(parent,Qt.WindowType.Widget if integrado else Qt.WindowType.Dialog);self.integrado=integrado;
+    modificado = Signal()
+    seleccion_texto_cambiada = Signal()
+
+    def __init__(self, modelo, estado, ajustes, aplicar, parent=None, dependencias=False, integrado=False):
+        super().__init__(parent, Qt.WindowType.Widget if integrado else Qt.WindowType.Dialog)
+        self.integrado = integrado
+        self.documentos_proyecto = None
         if integrado:self.setParent(parent,Qt.WindowType.Widget);self.setWindowFlags(Qt.WindowType.Widget)
         self.setWindowTitle('Planos · vista previa')
         self.resize(1240, 700)
@@ -477,11 +686,12 @@ class DialogoLaminas(QDialog):
         for k in CAMPOS:
             campo=QLineEdit(self.ajustes['campos'][k]);campo.setMaxLength(1000);self.campos[k]=campo;form.addRow(ROTULOS[k],campo)
         self.campos['hoja'].setToolTip('{n}: número de hoja; {m}: total de hojas')
-        self.campos['escala'].setPlaceholderText('Automática si se deja vacío')
+        self.campos['escala'].setPlaceholderText('S/E si se deja vacío')
         self.guardar_ajustes=QPushButton('Aplicar al proyecto');form.addRow(self.guardar_ajustes)
         from .campos_medidos import ajustar_boton
         ajustar_boton(self.guardar_ajustes)
         self.vista=VistaLamina();self.vista.colocar=self.colocar
+        self.vista.deseleccionar_todo = self.deseleccionar
         if integrado:
             from .planos_plantillas import area_integrada
             area_integrada(self, centro, scroll)
@@ -495,7 +705,9 @@ class DialogoLaminas(QDialog):
         self.anterior = QPushButton('← Anterior')
         self.siguiente = QPushButton('Siguiente →')
         self.pagina = QLabel()
-        self.b_centrar=QPushButton('Centrar GRAFCET');nav.addWidget(self.b_centrar);self.b_centrar.clicked.connect(self.centrar)
+        self.b_centrar = QPushButton("Centrar")
+        nav.addWidget(self.b_centrar)
+        self.b_centrar.clicked.connect(self.centrar)
         nav.addWidget(self.anterior);nav.addWidget(self.pagina);nav.addWidget(self.siguiente);nav.addStretch(1)
         self.b_exportar=QPushButton('Exportar…');self.b_imprimir=QPushButton('Imprimir…');cerrar=QPushButton('Cerrar')
         for w in (self.b_exportar,self.b_imprimir,cerrar):nav.addWidget(w)
@@ -578,6 +790,7 @@ class DialogoLaminas(QDialog):
         self.b_imprimir.setEnabled(self.documento is not None)
         if self.editor_textos and self.documento:
             self.editor_textos.campos.update(self.documento.campos(0))
+            self.editor_textos.refrescar_campos()
         self.guardar_ajustes.setEnabled(self.documento is not None)
         self.b_centrar.setEnabled(self.documento is None or self.documento.total == 1)
         self.ir(self.indice)
@@ -601,26 +814,59 @@ class DialogoLaminas(QDialog):
         if forzar or cfg!=self.inicial:self.aplicar_callback(cfg);self.inicial=copy.deepcopy(cfg)
 
     def exportar(self):
-        d=self.documento
-        if d is None:return
+        d = self.documento
+        if d is None:
+            return
         from .carpetas import asegurar_carpetas
-        try:inicial=str(asegurar_carpetas()['laminas']/'plano.pdf')
-        except OSError as exc:QMessageBox.warning(self,'Exportar plano',str(exc));return
-        nombre,filtro=QFileDialog.getSaveFileName(self,'Exportar plano',inicial,'Documento PDF (*.pdf);;Dibujo SVG (*.svg)')
-        if not nombre:return
-        ruta=Path(nombre);svg='SVG' in filtro
-        extension='.svg' if svg else '.pdf'
-        if ruta.suffix.lower() in ('.pdf','.svg'):ruta=ruta.with_suffix(extension)
-        elif ruta.suffix.lower()!=extension:ruta=ruta.with_name(ruta.name+extension)
-        rutas=d.rutas_svg(ruta) if svg else [ruta]
-        if any(p.exists() for p in rutas) and QMessageBox.question(self,'Exportar plano','Se sobrescribirán archivos existentes. ¿Continuar?')!=QMessageBox.StandardButton.Yes:return
         try:
-            if svg:d.exportar_svg(ruta)
-            else:d.exportar_pdf(ruta)
+            inicial = str(asegurar_carpetas()["laminas"] / "plano.pdf")
+        except OSError as exc:
+            QMessageBox.warning(self, "Exportar plano", str(exc))
+            return
+        varias = self.integrado and self.documentos_proyecto is not None
+        filtro_def = (
+            "Documento PDF — todas las hojas (*.pdf);;Documento PDF — hoja actual (*.pdf);;Dibujo SVG (*.svg)"
+            if varias else
+            "Documento PDF (*.pdf);;Dibujo SVG (*.svg)"
+        )
+        nombre, filtro = QFileDialog.getSaveFileName(self, "Exportar plano", inicial, filtro_def)
+        if not nombre:
+            return
+        ruta = Path(nombre)
+        svg = "SVG" in filtro
+        extension = ".svg" if svg else ".pdf"
+        if ruta.suffix.lower() in (".pdf", ".svg"):
+            ruta = ruta.with_suffix(extension)
+        elif ruta.suffix.lower() != extension:
+            ruta = ruta.with_name(ruta.name + extension)
+        rutas = d.rutas_svg(ruta) if svg else [ruta]
+        if any(p.exists() for p in rutas):
+            aviso = "Se sobrescribirán archivos existentes. ¿Continuar?"
+            pregunta = QMessageBox.question(self, "Exportar plano", aviso)
+            if pregunta != QMessageBox.StandardButton.Yes:
+                return
+        self._ejecutar_exportacion(d, ruta, svg, varias and "hoja actual" not in filtro.lower())
+
+    def _ejecutar_exportacion(self, d, ruta, svg, todas_pdf):
+        try:
+            if svg:
+                d.exportar_svg(ruta)
+                total = d.total
+            elif todas_pdf:
+                docs = self.documentos_proyecto()
+                exportar_pdf_documentos(docs, ruta, self.ajustes["campos"]["titulo"])
+                total = sum(doc.total for doc in docs)
+            else:
+                d.exportar_pdf(ruta)
+                total = d.total
             self.aplicar()
-            extra = ' (un SVG por hoja)' if svg and d.total > 1 else ''
-            self._fijar_error(f'Exportadas {d.total} hojas en {ruta.parent}{extra}')
-        except (OSError,ValueError,RuntimeError) as exc:QMessageBox.warning(self,'Exportar plano',str(exc))
+            if total == 1:
+                self._fijar_error(f"Exportada 1 hoja en {ruta.parent}")
+            else:
+                extra = " (un SVG por hoja)" if svg else ""
+                self._fijar_error(f"Exportadas {total} hojas en {ruta.parent}{extra}")
+        except (OSError, ValueError, RuntimeError) as exc:
+            QMessageBox.warning(self, "Exportar plano", str(exc))
 
     def imprimir(self):
         if self.documento is None:return
@@ -670,30 +916,63 @@ class DialogoLaminas(QDialog):
     def preparar_textos(self):
         from .plantillas import EditorPlantilla
         if self.editor_textos:
-            viejo=self.editor_textos;self.propiedades.removeWidget(viejo.panel_propiedades);viejo.panel_propiedades.deleteLater();viejo.deleteLater()
-        t=EditorPlantilla(self.plantilla,self.documento.campos(0) if self.documento else {k:w.text() for k,w in self.campos.items()},self,solo_texto=True)
+            viejo = self.editor_textos
+            self.propiedades.removeWidget(viejo.panel_propiedades)
+            viejo.panel_propiedades.deleteLater()
+            viejo.deleteLater()
+        campos = self.documento.campos(0) if self.documento else {k: w.text() for k, w in self.campos.items()}
+        t = EditorPlantilla(self.plantilla, campos, self, solo_texto=True)
         t.hide()
         t.vista.hide()
-        scroll=t.layout().itemAt(0).widget()
+        scroll = t.layout().itemAt(0).widget()
         t.layout().removeWidget(scroll)
-        t.panel_propiedades=scroll
+        t.panel_propiedades = scroll
+        t._panel_scroll = scroll
         scroll.setFixedWidth(self.propiedades.width() - 4)
-        self.propiedades.addWidget(scroll);self.editor_textos=t;self.vista.textos=t
+        self.propiedades.addWidget(scroll)
+        self.editor_textos = t
+        self.vista.textos = t
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.widget().layout().setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
-        t.nuevo.hide()
-        t.fuente.setMinimumContentsLength(8);t.fuente.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon);t.fuente.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Fixed)
-        t.botones_dialogo.hide()
-        t.lista.hide();label=scroll.widget().layout().labelForField(t.lista)
-        if label:label.hide()
-        t.nuevo.clicked.disconnect();t.nuevo.clicked.connect(self.anadir_texto)
+        form_texto = scroll.widget().layout()
+        form_texto.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        for fila in (t.lista, t._fila_botones, t.enlace, t.sugerencia, t.botones_dialogo):
+            form_texto.setRowVisible(fila, False)
+        t.fuente.setMinimumContentsLength(8)
+        t.fuente.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        t.fuente.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        t.nuevo.clicked.disconnect()
+        t.nuevo.clicked.connect(self.anadir_texto)
         t.modificado.connect(self.textos_cambiados)
-        t.seleccionado.connect(lambda:self.propiedades.setCurrentWidget(
-            t.panel_propiedades if t.actual or self.editando_plantilla else self.propiedades.widget(0)))
-        t.elegir(-1);self.propiedades.setCurrentIndex(0)
+        t.seleccionado.connect(self._al_seleccionar_texto)
+        t.seleccionado.connect(self.seleccion_texto_cambiada.emit)
+        t.elegir(-1)
+        self.propiedades.setCurrentIndex(0)
         self.vista.zona = self.editando_plantilla
         t.controles.mostrar_zona(self.editando_plantilla)
         self.actualizar_campos()
+
+    def _al_seleccionar_texto(self):
+        t = self.editor_textos
+        if t is None:
+            return
+        if t.actual or self.editando_plantilla:
+            self.propiedades.setCurrentWidget(t.panel_propiedades)
+        else:
+            self.propiedades.setCurrentIndex(0)
+
+    def deseleccionar(self):
+        """Quita la selección activa en el lienzo y vuelve a las propiedades de la hoja."""
+        if self.vista.nuevo_texto:
+            self.vista.nuevo_texto = False
+            self.vista.unsetCursor()
+            self._fijar_error(self.aviso_biblioteca)
+        if self.editor_textos and self.editor_textos.actual is not None:
+            self.editor_textos.elegir(-1)
+        self.vista.seleccionado = False
+        if self.integrado and not self.editando_plantilla:
+            self.propiedades.setCurrentIndex(0)
+        self.vista.setFocus()
+        self.vista.update()
 
     def actualizar_campos(self):
         if not self.integrado:return
@@ -703,9 +982,10 @@ class DialogoLaminas(QDialog):
             if label:label.setVisible(bool(estandar))
 
     def textos_cambiados(self):
-        self.plantilla=copy.deepcopy(self.editor_textos.plantilla);self.actualizar();self.aplicar()
-        self.propiedades.setCurrentWidget(self.editor_textos.panel_propiedades
-            if self.editor_textos.actual or self.editando_plantilla else self.propiedades.widget(0))
+        self.plantilla = copy.deepcopy(self.editor_textos.plantilla)
+        self.actualizar()
+        self.aplicar()
+        self._al_seleccionar_texto()
 
     def anadir_texto(self):
         self.vista.nuevo_texto = True
@@ -796,10 +1076,14 @@ class DialogoLaminas(QDialog):
             p=plantilla_tecnica(*PREDETERMINADAS[nombre]);guardar_plantilla(destino,p);self.establecer_plantilla(p)
         except (OSError,ValueError) as exc:QMessageBox.warning(self,'Restaurar plantilla',str(exc))
 
-    def keyPressEvent(self,event):
+    def keyPressEvent(self, event):
         if self.integrado:
-            if event.key()==Qt.Key.Key_Escape:self.vista.seleccionado=False;self.vista.update();event.accept();return
-            QWidget.keyPressEvent(self,event);return
+            if event.key() == Qt.Key.Key_Escape and not self.editando_plantilla:
+                self.deseleccionar()
+                event.accept()
+                return
+            QWidget.keyPressEvent(self, event)
+            return
         super().keyPressEvent(event)
 
     def closeEvent(self,event):

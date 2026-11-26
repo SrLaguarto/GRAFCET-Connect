@@ -86,7 +86,7 @@ class SelectorAccion(BaseQt):
                 marcador = cb.placeholderText()
                 self.assertLessEqual(QFontMetrics(cb.font()).horizontalAdvance(marcador), cb.width() - 6 - 18 - 2, (ancho, zoom, marcador))
                 if zoom == 2.5:
-                    self.assertEqual(marcador, "Elija la variable…")
+                    self.assertEqual(marcador, "Elige la variable…")
             w.diagrama.cerrar_selector()
 
     def test_SSEL06_un_nombre_que_no_cabe_se_acorta_y_la_ayuda_emergente_lo_da_entero(self):

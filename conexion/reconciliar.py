@@ -22,7 +22,7 @@ def reconciliar(config, documento, catalogo):
                 senal = candidatas[0]
                 avisos.append(f"«{variable['name']}»: se ha vuelto a unir a «{union.nombre}» por nombre, tipo y papel")
             else:
-                union.motivo = ("Hay varias señales coincidentes; vuelva a unir arrastrando" if len(candidatas) > 1
+                union.motivo = ("Hay varias señales coincidentes; vuelve a unir arrastrando" if len(candidatas) > 1
                                 else "señal no encontrada")
         if senal is not None:
             if senal["type"].lower() != union.tipo.lower():

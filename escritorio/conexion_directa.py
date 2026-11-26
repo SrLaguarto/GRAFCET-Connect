@@ -2,13 +2,16 @@
 from copy import deepcopy
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
-from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
-                               QLineEdit, QListWidgetItem,
-                               QPushButton, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QListWidgetItem, QPushButton
+from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
 
 from conexion.configuracion import Configuracion
 from conexion.uniones import Union
 from . import estilo
+
+AYUDA_MODBUS = "Arrastra una variable a su canal o haz clic en la variable y luego en el canal."
+AYUDA_DIRECTA = ("Arrastra una variable a su señal o haz clic en la variable y luego en la señal. "
+                "Pon el controlador en «Ninguno» para la conexión directa.")
 
 
 class PilaModos(QStackedWidget):
@@ -32,6 +35,7 @@ class PanelDirecto(QObject):
     @staticmethod
     def _estado_neutro(panel):
         """Tras activar el servidor web, el aviso deja de verse como error (queda en tinta, con el punto neutro)."""
+        estilo.poner(panel.fila_estado, fallo=False)
         panel.check.setText("●")
         panel.check.setStyleSheet(f"background:transparent; color:{estilo.TINTA_3}; border-radius:{estilo.R_M}px; "
                                   f"font-size:{panel.letra}px; font-weight:600")
@@ -64,7 +68,6 @@ class PanelDirecto(QObject):
         self.config_directa = Configuracion(host="localhost", puerto=7410, modo="directo")
         self.cargando = False
         from .campos_medidos import ComboMedido
-        from PySide6.QtWidgets import QLabel
         self.selector = ComboMedido()
         self.selector.addItem("Modbus TCP/IP", "modbus")
         self.selector.addItem("Conexión directa (simulador de fábricas)", "directo")
@@ -83,19 +86,11 @@ class PanelDirecto(QObject):
         layout = QVBoxLayout(contenedor)
         layout.setContentsMargins(12, 10, 12, 12)
         layout.setSpacing(8)
-        self.pista_etapa = QLabel(
-            "Haz clic en una variable de la izquierda o derecha y luego en un canal del PLC para enlazar (o arrastra)."
-        )
-        self.pista_etapa.setObjectName("ayudaES")
-        self.pista_etapa.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.pista_etapa.setWordWrap(True)
-        layout.addWidget(self.pista_etapa)
         layout.addWidget(self.paginas, 1)
         scroll.setWidget(contenedor)
         panel.lienzo.layout().itemAtPosition(0, 0).widget().hide()
         panel.lienzo.layout().setContentsMargins(0, 4, 0, 4)
         self._crear_panel()
-        panel.cabecera.layout().addWidget(panel.fila_estado)
         self._crear_escena()
 
     def _crear_escena(self):
@@ -135,12 +130,14 @@ class PanelDirecto(QObject):
         if nuevo is not None:
             nuevo.modelo = self.panel.doc["id"]
         self.panel.cargar(self.panel.doc, deepcopy(nuevo))
+        self.panel.mostrar_estado("desconectado", "Desconectado")
         self.panel.aplicar.emit(self.panel.config)
 
     def seleccionar(self, modo):
         self.cargando = True
         self.selector.setCurrentIndex(1 if modo == "directo" else 0)
         self.paginas.setCurrentIndex(1 if modo == "directo" else 0)
+        self.panel.ayuda_vacio.setText(AYUDA_DIRECTA if modo == "directo" else AYUDA_MODBUS)
         self.paginas.updateGeometry()
         self.paginas.parentWidget().layout().invalidate()
         self.ajustar_alto()
@@ -152,10 +149,7 @@ class PanelDirecto(QObject):
             self._uniones_pendientes = None
             self.resumen_escena.hide()
             self.b_quitar_sin_senal.hide()
-            self.panel.fila_estado.hide()
             self.panel.resumen.setMinimumWidth(0)
-            self.panel.ayuda_vacio.setText("Arrastra las variables a las entradas y salidas.")
-            self.panel.ayuda_vacio.show()
 
     def eventFilter(self, objeto, evento):
         if evento.type() == QEvent.Type.Resize and objeto is self.viewport:
@@ -229,9 +223,6 @@ class PanelDirecto(QObject):
         self.panel.resumen.setText(f"{len(self.panel.config.uniones)} uniones")
         ancho = self.panel.resumen.fontMetrics().horizontalAdvance(self.panel.resumen.text())
         self.panel.resumen.setMinimumWidth(ancho + estilo.E2)
-        self.panel.ayuda_vacio.setText(
-            "Arrastre una variable a su señal. Botón derecho para quitar la unión. "
-            "Ponga el driver del simulador en «Ninguno» para la conexión directa.")
         self.panel.ayuda_vacio.show()
         self.aplicar_estilo()
         self._firma_dibujo = self._firma(self.panel.doc)
@@ -314,7 +305,7 @@ class PanelDirecto(QObject):
 
     def abrir_traer(self):
         if self.edicion is None:
-            self.panel.estado.setText("Abra un proyecto editable para traer E/S")
+            self.panel.estado.setText("Abre un proyecto editable para traer E/S")
             return
         from .traer_dialogo import DialogoTraer
         self.dialogo_traer = DialogoTraer(self)

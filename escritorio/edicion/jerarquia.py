@@ -49,7 +49,7 @@ class _Jerarquia:
         ids = hecho[0]
         self.sel, self.accion = [ids.macro], None
         self.informar(f"Macroetapa {etiqueta} con su expansión a la derecha: de la entrada {self.nombres.get(ids.entry, '?')} "
-                      f"a la salida {self.nombres.get(ids.exit, '?')}. Suelte etapas y transiciones dentro de ella para "
+                      f"a la salida {self.nombres.get(ids.exit, '?')}. Suelta etapas y transiciones dentro de ella para "
                       "rellenarla (botón derecho en la macroetapa, «Encuadrar la expansión», para verla).")
         self.cambiado.emit()
         return ids.macro
@@ -79,7 +79,7 @@ class _Jerarquia:
             self.cambiado.emit()
             return None
         self.sel, self.accion = [hecho[0]], None
-        self.informar(f"Grafcet parcial {nombre}: suelte etapas y transiciones dentro de su marco para rellenarlo; una orden de "
+        self.informar(f"Grafcet parcial {nombre}: suelta etapas y transiciones dentro de su marco para rellenarlo; una orden de "
                       "forzado de otra etapa puede forzarlo («Forzado» en la paleta).")
         self.cambiado.emit()
         return hecho[0]
@@ -208,7 +208,7 @@ class _Jerarquia:
             self.cambiado.emit()
             return None
         self.sel, self.accion = [hecho[0].partial], None
-        self.informar(f"Recinto {nombre} de la encapsulante {self._nom(sid)}: suelte etapas dentro de su marco "
+        self.informar(f"Recinto {nombre} de la encapsulante {self._nom(sid)}: suelta etapas dentro de su marco "
                       "para rellenarlo; botón derecho en una etapa suya, «Enlace de activación», la marca (*).")
         self.cambiado.emit()
         return hecho[0].partial
