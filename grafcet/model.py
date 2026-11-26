@@ -15,7 +15,7 @@ from typing import Any
 from . import expressions as ex
 from .canonical import digest
 from .diagnostics import Diagnostic, DiagnosticError, has_blocking
-from .ids import label_key, valid_id, valid_label
+from .ids import label_key, transition_effective_label, valid_id, valid_label
 from . import hierarchy
 from .profile import blocked, normalize_options, unsupported
 from .timeutil import parse_time_field
@@ -106,8 +106,15 @@ class TemporalSpec:
     d1: int
     d2: int
     base: ex.Node
-    base_kind: str  # inputs | active
+    base_kind: str  # inputs | active | general
     base_step: str | None
+    base_steps: frozenset[str] = frozenset()
+    depth: int = 0
+
+
+def _delay_depth(n: ex.Node) -> int:
+    sub = max((_delay_depth(k) for k in n.kids), default=0)
+    return (1 + sub) if n.op == "delay" else sub
 
 
 @dataclass
@@ -580,7 +587,17 @@ def _validar(doc: dict[str, Any], opt: dict[str, str], revision: str | None) -> 
 
     # Transiciones (REQ-MOD-02, REQ-MOD-04, REQ-SEM-02)
     transitions: dict[str, Transition] = {}
+    trans_labels_in_partial: dict[tuple[str, str], str] = {}
     for tid, t in raw_trans.items():
+        lbl = transition_effective_label(t)
+        if lbl:
+            tk = (t["partialRef"], label_key(lbl))
+            if tk in trans_labels_in_partial:
+                v.add("D-NOMBRE-COLISION",
+                      f"etiqueta de transición «{lbl}» repetida en el parcial {t['partialRef']}",
+                      tid, otro=trans_labels_in_partial[tk])
+            else:
+                trans_labels_in_partial[tk] = tid
         pre = v.ref_set(t["preRefs"], tid, "preRefs")
         post = v.ref_set(t["postRefs"], tid, "postRefs")
         ok = True
@@ -737,13 +754,20 @@ def _validar(doc: dict[str, Any], opt: dict[str, str], revision: str | None) -> 
                     v.d.append(blocked("temporal.delay-cero", "delay con retardo de conexión nulo", user))
                 continue
             bs = ex.support(base)
+            if bs.events:
+                continue  # ya diagnosticado en ex.typecheck con D-TIPO-EVENTO
             if base.op == "active":
-                temporals[tn.key] = TemporalSpec(tn.key, eid, d1.value, d2.value, base, "active", base.ref)
-            elif not (bs.steps or bs.partials or bs.macros or bs.elapsed or bs.temporals or bs.events) \
-                    and bs.vars <= inputs:
+                temporals[tn.key] = TemporalSpec(
+                    tn.key, eid, d1.value, d2.value, base, "active", base.ref, frozenset({base.ref}), 0
+                )
+            elif not (bs.steps or bs.partials or bs.macros or bs.elapsed or bs.temporals) and bs.vars <= inputs:
                 temporals[tn.key] = TemporalSpec(tn.key, eid, d1.value, d2.value, base, "inputs", None)
             else:
-                v.d.append(unsupported("temporal.base-compuesta", "base temporal compuesta o no limitada a entradas", user))
+                v.caps.add("temporal.base-compuesta")
+                temporals[tn.key] = TemporalSpec(
+                    tn.key, eid, d1.value, d2.value, base, "general", None,
+                    frozenset(bs.steps), _delay_depth(base),
+                )
 
     # Jerarquía: estructura, propiedad única, ciclos, coherencia inicial (REQ-MOD-07, REQ-JER-03)
     _validate_hierarchy(v, partials, raw_steps, forces, macros, expansions, enclosures)
@@ -816,6 +840,9 @@ def _validar(doc: dict[str, Any], opt: dict[str, str], revision: str | None) -> 
     for ts in temporals.values():
         if ts.base_kind == "active":
             cm.step_dependents.setdefault(ts.base_step, set()).add(f"condición temporal {ts.key}")
+        elif ts.base_kind == "general":
+            for sid in ts.base_steps:
+                cm.step_dependents.setdefault(sid, set()).add(f"condición temporal {ts.key}")
     for coll in (cm.continuous_by_target.values(), cm.stored_by_step.values()):
         for lst in coll:
             lst.sort(key=lambda a: a.id)

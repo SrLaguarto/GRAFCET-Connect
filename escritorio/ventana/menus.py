@@ -79,9 +79,9 @@ class Menus:
         archivo.addAction("Propiedades del archi&vo…", lambda *_: propiedades_archivo.abrir(self))
         archivo.addSeparator()
         archivo.addAction("&Salir", self.close).setShortcut(QKeySequence.StandardKey.Quit)
-        # Un solo control de ejecución: Play simula (traza abajo, sin paleta) y Pausa detiene y vuelve a editar
-        self.a_ejecutar = self._accion("Play", self._ejecutar, "F5", marcable=True)
-        self.a_ejecutar.setToolTip("Play: iniciar una simulación nueva · Stop: detener y dejar todo a 0 (F5)")
+        # Un solo control de ejecución: Simular arranca tiempo real (traza abajo, sin paleta) y Stop detiene y vuelve a editar
+        self.a_ejecutar = self._accion("Simular", self._ejecutar, "F5", marcable=True)
+        self.a_ejecutar.setToolTip("Simular: iniciar una simulación nueva · Stop: detener y dejar todo a 0 (F5)")
         self.a_reiniciar = self._accion("Reiniciar", self.reiniciar, "Ctrl+R")
         self.a_reiniciar.setToolTip("Volver a la situación inicial; en Play sigue en Play (Ctrl+R)")
         ver = bar.addMenu("&Ver")
@@ -206,7 +206,7 @@ class Menus:
         self.luz_es.setCursor(Qt.CursorShape.PointingHandCursor)
         self.luz_es.setProperty("abierta", False)
         self.luz_es.clicked.connect(lambda: self.mostrar_es())
-        self.fila_pestanas.layout().addWidget(self.luz_es)
+        self.estuche_vistas.layout().addWidget(self.luz_es)
         self._luz_es("desconectado", "")
         self.addToolBar(self.tb_sim)
         self.tb_conexion = QToolBar("Conexión")
@@ -235,19 +235,25 @@ class Menus:
         self.tb_edit.setIconSize(QSize(20, 20))
         self.tb_edit.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self._acciones_solo_icono = []
-        for grupo in ((self.a_deshacer, "Deshacer", "Ctrl+Z"), (self.a_rehacer, "Rehacer", "Ctrl+Y")),                      ((self.a_cortar, "Cortar", "Ctrl+X"), (self.a_copiar, "Copiar", "Ctrl+C"), (self.a_pegar, "Pegar", "Ctrl+V"),
+        for grupo in ((self.a_deshacer, "Deshacer", "Ctrl+Z"), (self.a_rehacer, "Rehacer", "Ctrl+Y")), ((self.a_cortar, "Cortar", "Ctrl+X"), (self.a_copiar, "Copiar", "Ctrl+C"), (self.a_pegar, "Pegar", "Ctrl+V"),
                       (self.a_borrar, "Borrar la selección", "Supr")):
+            if self._acciones_solo_icono:
+                self.tb_edit.addSeparator()
             for a, nombre, atajo in grupo:
                 a.setToolTip(f"{nombre} ({atajo})")
                 self.tb_edit.addAction(a)
                 self.tb_edit.widgetForAction(a).setAccessibleName(nombre)
                 self._acciones_solo_icono.append(a)
-            self.tb_edit.addSeparator()
+        self.tb_vista_der = QToolBar("Vista derecha")
+        self.tb_vista_der.setObjectName("barraVistaDer")
+        self.tb_vista_der.setMovable(False)
+        self.tb_vista_der.setIconSize(QSize(18, 18))
+        self.tb_vista_der.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         boton = self.diagrama.b_dependencias
         boton.setIcon(_icono_barra("dependencias"))
         boton.setAccessibleName("Mostrar dependencias")
         boton.setStyleSheet("")  # hereda el estilo común de la barra
-        self.a_dependencias = self.tb_edit.addWidget(boton)  # (al simular, los botones de edición siguen ahí, desactivados)
+        self.a_dependencias = self.tb_vista_der.addWidget(boton)
         self.a_dependencias.setVisible(True)
         self.a_dependencias.setEnabled(True)
         boton.show()
@@ -260,17 +266,18 @@ class Menus:
         self.b_errores.setAccessibleName("Mostrar errores")
         self.b_errores.toggled.connect(self._alternar_errores)
         self._errores_auto = False  # lo marcó un Play fallido (y se desmarca solo al desaparecer los errores), no el usuario
-        self.a_errores = self.tb_edit.addWidget(self.b_errores)
+        self.a_errores = self.tb_vista_der.addWidget(self.b_errores)
         self._a_errores = (self.a_errores,)
         self.a_errores.setVisible(True)
         self._textos_en_barras(True)
         self.addToolBar(self.tb_edit)
+        self.addToolBar(self.tb_vista_der)
         self.tb_proyecto.hide()
         self.herramientas_grafcet=QWidget()
         self.herramientas_grafcet.setObjectName("herramientasGrafcet")
         self.herramientas_grafcet.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.herramientas_grafcet.setProperty("modo", "editar")  # la hoja global la tiñe de verde al simular
-        fila=QHBoxLayout(self.herramientas_grafcet);fila.setContentsMargins(estilo.E2,estilo.E1,estilo.E2,estilo.E1);fila.setSpacing(estilo.E2)
+        fila=QHBoxLayout(self.herramientas_grafcet);fila.setContentsMargins(10,5,10,5);fila.setSpacing(6)
         from ..separadores_barra import SeparadorBarra
         for numero, barra in enumerate((self.tb_sim, self.tb_edit)):
             if numero:
@@ -279,9 +286,15 @@ class Menus:
             fila.addWidget(barra)
             barra.show()
         fila.addStretch(1)
-        self.centralWidget().layout().insertWidget(1,self.herramientas_grafcet)
+        self.removeToolBar(self.tb_vista_der)
+        fila.addWidget(self.tb_vista_der)
+        self.tb_vista_der.show()
+        self.centralWidget().layout().insertWidget(2, self.herramientas_grafcet)
         from ..cabecera_favoritos import UbicaModo
-        self._ubica_modo = UbicaModo(self.estado, self.fila_pestanas, self.pestanas_vistas, self.luz_es)
+        self._ubica_modo = UbicaModo(
+            self.estado, self.fila_pestanas, self.pestanas_vistas, self.luz_es,
+            menu_cluster=self.menu_cluster, estuche=self.estuche_vistas,
+        )
         self._acciones_edicion(False)
 
     # -- edición: modos, herramientas y diálogos ---------------------------------------------------

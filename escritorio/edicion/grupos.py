@@ -119,37 +119,54 @@ class _Grupos:
         self._tras_pegar(ids, sid, promovidas)
 
     def _separar_todas(self, sid: str) -> list[str]:
-        """Las acciones de la etapa dejan de estar unidas a ella: quedan sueltas e independientes (sin grupo), cada una
-        donde estaba y sin solaparse. Una acción del modelo pasa a ser un borrador con todos sus datos. Devuelve sus ID
-        nuevos."""
+        """Las acciones de la etapa dejan de estar unidas a ella: una sola queda suelta sin grupo; dos o más quedan
+        en un grupo suelto conservando colocación y posición, así al re-unir la primera se unen todas. Devuelve los ID."""
         cajas = [c for c in getattr(self.diagrama, "cajas_acciones", None) or [] if c["etapa"] == sid]
-        ordenes = [c for c in getattr(self.diagrama, "cajas_ordenes", None) or [] if c["etapa"] == sid]  # las órdenes del modelo
+        ordenes = [c for c in getattr(self.diagrama, "cajas_ordenes", None) or [] if c["etapa"] == sid]
         if not cajas and not ordenes:
             return []
-        orden = [c["id"] for c in cajas]
-        sitio = {c["id"]: (round(c["rect"][0] - SX), round(c["rect"][1] + H)) for c in cajas}
+        orden_etapa = orden_acciones.ids_etapa(self.ed, sid)
+        todas = sorted(
+            [(c, False) for c in cajas] + [(c, True) for c in ordenes],
+            key=lambda par: orden_etapa.index(par[0]["id"]) if par[0]["id"] in orden_etapa else len(orden_etapa),
+        )
+        base = (round(todas[0][0]["rect"][0] - SX), round(todas[0][0]["rect"][1] + H))
+        g = self.ed.ids.new("grupo") if len(todas) >= 2 else None
+        modo = self.colocacion(sid)
         nuevos: dict[str, str] = {}
-        for aid in orden:
-            if not self._es_borrador(aid):
-                datos = self.datos_accion(aid)
-                nuevos[aid] = self.ed.add_draft_action(sitio[aid], {
-                    "tipo": datos["tipo"], "variable": self.ed.get(aid)["targetRef"],
+        modelo: list[str] = []
+        cambios: dict[str, dict[str, Any]] = {}
+        for idx, (c, es_orden) in enumerate(todas):
+            cid = c["id"]
+            pos = base if g is not None else (round(c["rect"][0] - SX), round(c["rect"][1] + H))
+            if es_orden:
+                fuerza = next(o for o in self.ed.model["forces"] if o["id"] == cid)
+                datos = {"tipo": "forzado", "destino": fuerza["targetPartialRef"], "forma": fuerza["targetKind"],
+                         "etapas": list(fuerza.get("targetSteps", []))}
+                did = self.ed.add_draft_action(pos, datos)
+                nuevos[cid] = did
+                if g is not None:
+                    cambios[did] = {"etapa": None, "grupo": g, "orden": idx}
+                self.ed.delete_force(cid)
+            elif self._es_borrador(cid):
+                cambios[cid] = {"etapa": None, "grupo": g, "orden": idx if g is not None else None,
+                                "x": pos[0], "y": pos[1]}
+            else:
+                datos = self.datos_accion(cid)
+                did = self.ed.add_draft_action(pos, {
+                    "tipo": datos["tipo"], "variable": self.ed.get(cid)["targetRef"],
                     **{k: datos[k] for k in ("condicion", "valor", "evento", "limite") if datos.get(k)}})
-        cambios = {aid: {"etapa": None, "grupo": None, "orden": None, "x": sitio[aid][0], "y": sitio[aid][1]}
-                   for aid in orden if self._es_borrador(aid)}
+                nuevos[cid] = did
+                if g is not None:
+                    cambios[did] = {"etapa": None, "grupo": g, "orden": idx}
+                modelo.append(cid)
         if cambios:
             self.ed.update_draft_actions(cambios)
-        modelo = [aid for aid in orden if aid in nuevos]
         if modelo:
             self.ed.delete(modelo)
-        for c in ordenes:  # una orden de forzado del modelo pasa a ser una orden suelta con todos sus datos
-            fuerza = next(o for o in self.ed.model["forces"] if o["id"] == c["id"])
-            datos = {"tipo": "forzado", "destino": fuerza["targetPartialRef"], "forma": fuerza["targetKind"],
-                     "etapas": list(fuerza.get("targetSteps", []))}
-            nuevos[c["id"]] = self.ed.add_draft_action((round(c["rect"][0] - SX), round(c["rect"][1] + H)), datos)
-            self.ed.delete_force(c["id"])
-            orden.append(c["id"])
-        return [nuevos.get(aid, aid) for aid in orden]
+        if g is not None and modo != "fila":
+            self.ed.set_action_layout(g, modo)
+        return [nuevos.get(c["id"], c["id"]) for c, _ in todas]
 
     def eliminar_enlace_acciones(self, sid: str) -> None:
         """«Eliminar el enlace»: separa las acciones de la etapa (una sola operación de deshacer)."""

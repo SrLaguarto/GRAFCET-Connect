@@ -10,7 +10,8 @@ from typing import Any
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
-from PySide6.QtWidgets import (QButtonGroup, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QSizePolicy, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QFrame, QHBoxLayout, QLabel, QLineEdit,
+                               QPlainTextEdit, QPushButton, QSizePolicy, QWidget)
 
 from . import estilo
 
@@ -18,7 +19,6 @@ LINEAS_COMENTARIO = 4  # lo que crece el comentario con su texto; más, se despl
 LINEAS_ESTIRADO = 12  # lo más que lo estira el usuario desde la esquina
 LADO_AGARRE = 12
 LADO_MARCA = 8  # el cuadradito de color de cada botón del conmutador
-LADO_AVISO = 7  # el punto de aviso
 ANCHO_ETIQUETA = 62  # el campo de la etiqueta de la transición («t1», «T12»…), como en la maqueta
 
 
@@ -145,43 +145,53 @@ class CampoComentario(QPlainTextEdit):
 
 
 class PiePropiedades(QWidget):
-    """Lo que se usa poco, al pie de la ventana, bajo un filete de 1 px (como la maqueta v3): «Etiqueta [t1]» a la izquierda y «Comentario» con
-    su campo a la derecha. Los rótulos van centrados con la primera línea de su campo. Los campos los crea el panel (`t_etiqueta`,
-    `t_comentario`…) y aquí se colocan; el pie no sabe de ediciones."""
+    """Franja `.comment-row` al pie de la ventana de Transición (`#f6f8fb`, borde superior `#cdd6e0`):
+    solo «Comentario» y su campo autoextensible (`Etiqueta` va arriba en la barra de título)."""
+
+    @staticmethod
+    def _hoja() -> str:
+        return (
+            "QWidget#piePropiedades { background: #f6f8fb; border: 0; border-top: 1px solid #cdd6e0; }"
+            "QWidget#piePropiedades QPlainTextEdit { background: #ffffff; border: 1px solid #cdd6e0; border-radius: 4px; "
+            "padding: 3px 8px; font-size: 12px; color: #16263a; }"
+            "QWidget#piePropiedades QPlainTextEdit:focus { border-color: #0b6e75; }"
+        )
 
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("piePropiedades")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(self._hoja())
         raiz = QHBoxLayout(self)
-        raiz.setContentsMargins(0, estilo.E3 + 1, 0, 0)  # (el filete y, bajo él, E3 de aire)
-        raiz.setSpacing(estilo.E2)
+        raiz.setContentsMargins(14, 8, 14, 8)
+        raiz.setSpacing(10)
         self._fila = raiz
         self.l_etiqueta = self._rotulo("Etiqueta")
+        self.l_etiqueta.hide()
         self.l_comentario = self._rotulo("Comentario")
         self.campos: tuple[QWidget, ...] = ()
 
     @staticmethod
     def _rotulo(texto: str) -> QLabel:
         r = QLabel(texto)
-        r.setStyleSheet(f"color: {estilo.TINTA_2}; background: transparent")
+        r.setStyleSheet("color: #5b6b7d; font-size: 11.5px; background: transparent;")
         return r
 
     def paintEvent(self, evento: Any) -> None:  # noqa: N802
-        p = QPainter(self)
-        p.setPen(QColor(estilo.BORDE))
-        p.drawLine(0, 0, self.width(), 0)
-        p.end()
+        super().paintEvent(evento)
 
-    def poner(self, etiqueta: QWidget, extra: QWidget | None, comentario: QWidget) -> None:
-        """Coloca el campo de la etiqueta (con una casilla opcional detrás) y el del comentario."""
+    def poner(self, etiqueta: QWidget | None, extra: QWidget | None, comentario: QWidget) -> None:
+        """Coloca el comentario en la franja inferior (si se pasa `etiqueta` en uso aislado, también la admite)."""
         self.campos = tuple(w for w in (etiqueta, extra, comentario) if w is not None)
         raiz = self._fila
-        raiz.addWidget(self.l_etiqueta, 0, Qt.AlignmentFlag.AlignTop)
-        etiqueta.setFixedWidth(ANCHO_ETIQUETA)
-        raiz.addWidget(etiqueta, 0, Qt.AlignmentFlag.AlignTop)
-        if extra is not None:
-            raiz.addWidget(extra, 0, Qt.AlignmentFlag.AlignTop)
-        raiz.addSpacing(estilo.E3)
+        if etiqueta is not None:
+            self.l_etiqueta.show()
+            raiz.addWidget(self.l_etiqueta, 0, Qt.AlignmentFlag.AlignTop)
+            etiqueta.setFixedWidth(ANCHO_ETIQUETA)
+            raiz.addWidget(etiqueta, 0, Qt.AlignmentFlag.AlignTop)
+            if extra is not None:
+                raiz.addWidget(extra, 0, Qt.AlignmentFlag.AlignTop)
+            raiz.addSpacing(estilo.E3)
         raiz.addWidget(self.l_comentario, 0, Qt.AlignmentFlag.AlignTop)
         raiz.addWidget(comentario, 1)
         for w in self.campos:
@@ -189,13 +199,11 @@ class PiePropiedades(QWidget):
         self.escalar()
 
     def escalar(self) -> None:
-        """Los rótulos miden lo que un campo de la escala activa, para quedar centrados con su primera línea."""
         for r in (self.l_etiqueta, self.l_comentario):
-            r.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
+            r.setFixedHeight(26)
 
     def alto_nominal(self) -> int:
-        """Lo que mide el pie con el comentario de una línea (lo que se reserva a la ventana; si el comentario crece, el formulador cede)."""
-        return estilo.ALTO_CONTROL + estilo.E3 + 1
+        return 44
 
 
 class _BotonParte(QPushButton):
@@ -205,7 +213,6 @@ class _BotonParte(QPushButton):
     def __init__(self, texto: str, color: str) -> None:
         super().__init__(texto)
         self.color = color
-        self.aviso = False
         self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
@@ -229,20 +236,22 @@ class _BotonParte(QPushButton):
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(estilo.HOVER))
             p.drawRoundedRect(zona, estilo.R_S, estilo.R_S)
-        marca = QRectF(zona.left() + estilo.E3, zona.center().y() - LADO_MARCA / 2, LADO_MARCA, LADO_MARCA)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor("white") if activo else color)
-        p.drawRoundedRect(marca, 2, 2)
+        if activo:
+            marca = QRectF(zona.left() + estilo.E3, zona.center().y() - LADO_MARCA / 2, LADO_MARCA, LADO_MARCA)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor("white"))
+            p.drawRoundedRect(marca, 2, 2)
         p.setPen(QColor("white") if activo else QColor(estilo.TINTA_2 if habil else estilo.DESHABILITADO))
         fuente = self.font()
         fuente.setBold(True)
         p.setFont(fuente)
-        texto = zona.adjusted(estilo.E3 + LADO_MARCA + estilo.E2 - 2, 0, -estilo.E3, 0)
-        p.drawText(texto, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.text())
-        if self.aviso:  # el punto de «a esta parte le falta algo», arriba a la derecha
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(estilo.AVISO_BORDE))
-            p.drawEllipse(QPointF(zona.right() - 2 - LADO_AVISO / 2, zona.top() + 2 + LADO_AVISO / 2), LADO_AVISO / 2, LADO_AVISO / 2)
+        if activo:
+            texto = zona.adjusted(estilo.E3 + LADO_MARCA + estilo.E2 - 2, 0, -estilo.E3, 0)
+            alineacion = Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
+        else:
+            texto = zona.adjusted(estilo.E3, 0, -estilo.E3, 0)
+            alineacion = Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter
+        p.drawText(texto, alineacion, self.text())
         if self.hasFocus():
             p.setPen(QPen(QColor(estilo.FOCO), 2, Qt.PenStyle.DashLine))
             p.setBrush(Qt.BrushStyle.NoBrush)
@@ -252,7 +261,7 @@ class _BotonParte(QPushButton):
 
 class ConmutadorPartes(QFrame):
     """Botones segmentados para elegir la parte que se edita: cada uno lleva el color de su parte y el activo va relleno. `elegida(clave)`
-    avisa de un cambio hecho por el usuario; `poner` lo cambia sin avisar. `avisar(clave, True)` pone el punto de aviso."""
+    avisa de un cambio hecho por el usuario; `poner` lo cambia sin avisar."""
 
     elegida = Signal(str)
 
@@ -293,9 +302,51 @@ class ConmutadorPartes(QFrame):
             for b in self.botones.values():
                 b.update()
 
-    def avisar(self, clave: str, falta: bool) -> None:
-        b = self.botones.get(clave)
-        if b is not None and b.aviso != falta:
-            b.aviso = falta
-            b.setToolTip("Falta algo en esta parte" if falta else "")
-            b.update()
+
+class CampoEtiquetaTransicion(QLineEdit):
+    """Etiqueta de transición bloqueada por defecto; doble clic la desbloquea para editar."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._texto_antes = ""
+        self.setReadOnly(True)
+        self.setToolTip(
+            "Etiqueta automática (t1, t2…). Doble clic para escribir una manual; "
+            "si la deja vacía volverá a ser automática."
+        )
+
+    def _repulir(self) -> None:
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
+    def desbloquear(self) -> None:
+        self._texto_antes = self.text()
+        if self.isReadOnly():
+            self.setReadOnly(False)
+            self._repulir()
+        self.setFocus()
+        self.selectAll()
+
+    def bloquear(self) -> None:
+        if not self.isReadOnly():
+            self.setReadOnly(True)
+            self.deselect()
+            self._repulir()
+
+    def mouseDoubleClickEvent(self, evento: Any) -> None:  # noqa: N802
+        self.desbloquear()
+        evento.accept()
+
+    def keyPressEvent(self, evento: Any) -> None:  # noqa: N802
+        if not self.isReadOnly() and evento.key() == Qt.Key.Key_Escape:
+            self.setText(self._texto_antes)
+            self.bloquear()
+            self.clearFocus()
+            evento.accept()
+            return
+        super().keyPressEvent(evento)
+
+    def focusOutEvent(self, evento: Any) -> None:  # noqa: N802
+        super().focusOutEvent(evento)
+        self.bloquear()

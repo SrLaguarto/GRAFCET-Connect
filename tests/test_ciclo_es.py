@@ -90,7 +90,11 @@ class CicloSinQt(unittest.TestCase):
             c.ciclo()
         fin = time.perf_counter_ns()
         total_us = self.coord.sesion.z.time
-        self.assertLessEqual(abs(total_us - (fin - inicio) / 1000), 5)  # a lo sumo las fracciones del último ciclo
+        # invariante exacto (cada ciclo avanza el reloj): lo avanzado más el resto pendiente es lo transcurrido hasta la
+        # última marca, al nanosegundo; no depende de lo que tarde el equipo entre esa marca y `fin`
+        self.assertEqual(total_us * 1000 + c._resto_ns, c._marca_ns - inicio)
+        self.assertLess(c._resto_ns, 1000)
+        self.assertLessEqual(total_us, (fin - inicio) / 1000)  # y nunca se cuenta más tiempo del real
 
     def test_SCIC03_despierta_en_cuanto_termina_una_peticion(self):
         """REQ-SIM-03: con un plazo lejano, `despertar` (lo que hace el trabajador de red al acabar) pone el ciclo en marcha enseguida."""

@@ -215,6 +215,9 @@ def _configuracion(c: Contexto) -> None:
     p = c.w.panel_es
     p.directa.selector.setCurrentIndex(0)
     _bombear(2)
+    from PySide6.QtCore import QRect
+    ventana = c.w.geometry()
+    p._pantalla_libre = lambda: QRect(0, 0, ventana.width(), ventana.height())  # (la pantalla de pruebas mide 800 px: se emula la del tamaño de la ventana)
     p.abrir_configuracion()
     p._alternar_avanzado()
     _bombear(10)

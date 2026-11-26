@@ -160,7 +160,7 @@ class PilotosZoom(unittest.TestCase):
         self.assertTrue(w.diagrama.l_zoom.isVisible())
         self.assertEqual(w.favoritos.ocultos, [])
         self.assertEqual(len(w.favoritos._visibles), 15)
-        self.assertEqual(w.favoritos.lado_icono, 30)
+        self.assertEqual(w.favoritos.lado_icono, 24)
         favoritos = w.favoritos.geometry()
         zoom = w.diagrama.barra.geometry()
         self.assertFalse(favoritos.intersects(zoom))

@@ -139,7 +139,12 @@ class Hallazgos(unittest.TestCase):
         s.advance_to(5 * S)
         self.assertTrue(s.z.outputs["y"], "vence a 5 s: la duración no se interrumpió")
         m2 = M().var("p").var("y", "output").step("A", True).cont("A", "y", "delay(1 s, active(A) AND p, 0 s)")
-        self.assertIn("D-CAPACIDAD-NO-SOPORTADA", {d.code for d in m2.validate().diagnostics}, "base compuesta: H-09 sigue")
+        s2 = Session(m2.compile(), scenario(m2.compile(), None, [(1 * S, 0, {"p": True})]))
+        s2.start()
+        s2.advance_to(1_999_999)
+        self.assertFalse(s2.z.outputs["y"], "base compuesta admitida (P-IMP-176): aún contando antes de 2 s")
+        s2.advance_to(2 * S)
+        self.assertTrue(s2.z.outputs["y"], "base compuesta active(A) AND p vence tras 1 s con ambos ciertos")
 
     def test_SH09b_etapa_que_sale_por_su_temporizador_y_reentra_no_se_estabiliza(self):
         """REQ-SEM-07, REQ-TMP-02: consecuencia de P-IMP-18; ciclo instantáneo sin fin, cortado con D-LIM-EVOL (doc. 04)."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 from PySide6.QtCore import QObject, QTimer, Signal
-from grafcet.ids import label_key
+from grafcet.ids import label_key, transition_effective_label
 from grafcet.view import display_names, force_situation, substitute
 from ..mensajes import amable, correccion_amable, mezcla_acciones
 from ..bloques import sin_comillas
@@ -148,7 +148,19 @@ class _Diagnosticos:
                         "correction": "Cambie el número de una de las etapas marcadas (en Propiedades, o con doble clic en ella)",
                         "severity": "error", "blocks": True, "question": None, "element": grupo[0], "target": grupo[0],
                         "targets": list(grupo)})
-        enrepetidas = {i for g in repetidas for i in g}
+        rep_t = self._grupos_transiciones_repetidas()
+        for grupo in rep_t:
+            etiqueta = transition_effective_label(self.ed.get(grupo[0]))
+            tras = [self._tras_etapas(tid) for tid in grupo]
+            y = ", y " if any(" y " in x for x in tras) else " y "
+            lista = f"{', '.join(tras[:-1])}{y}{tras[-1]}"
+            mensaje = f"Transición {etiqueta} repetida {lista}."
+            out.append({"code": "D-NOMBRE-COLISION", "message": mensaje,
+                        "correction": "Cambie la etiqueta de una de ellas (doble clic en la transición, o en Propiedades) "
+                                      "o vacíela para que se numere sola",
+                        "severity": "error", "blocks": True, "question": None, "element": grupo[0], "target": grupo[0],
+                        "targets": list(grupo)})
+        enrepetidas = {i for g in (*repetidas, *rep_t) for i in g}
         for d in self.ed.validate().diagnostics:  # (la memoria de la validación es la del núcleo: `grafcet.model.sellar`)
             if d.code == "D-NOMBRE-COLISION" and d.element in enrepetidas:
                 continue
@@ -262,11 +274,32 @@ class _Diagnosticos:
         marcar varios, como las etapas con el mismo número)."""
         return {t for d in diags if d["blocks"] for t in (d.get("targets") or [d["target"]]) if t}
 
+    def _tras_etapas(self, tid: str) -> str:
+        """Cómo se nombra una transición en un aviso: por las etapas que tiene encima («tras X11», «tras X11 y X12») o, si no tiene,
+        «en una transición fuente». La etapa se escribe como su variable (X + nombre; «E11» es X11), igual que en las receptividades."""
+        previas = []
+        for sid in self.ed.get(tid).get("preRefs", []):
+            nombre = self._nom(sid)
+            num = re.fullmatch(r"E(\d+)", nombre)
+            previas.append("X" + (num.group(1) if num else nombre))
+        if not previas:
+            return "en una transición fuente"
+        return "tras " + (previas[0] if len(previas) == 1 else ", ".join(previas[:-1]) + " y " + previas[-1])
+
     def _grupos_repetidos(self) -> list[list[str]]:
         """Las etapas de cada parcial que comparten número o nombre, agrupadas en el orden del modelo."""
         grupos: dict[tuple[str, str], list[str]] = {}
         for s in self.ed.model["steps"]:
             grupos.setdefault((s["partialRef"], label_key(s["label"])), []).append(s["id"])
+        return [g for g in grupos.values() if len(g) > 1]
+
+    def _grupos_transiciones_repetidas(self) -> list[list[str]]:
+        """Las transiciones de cada parcial con la misma etiqueta, agrupadas en orden del modelo."""
+        grupos: dict[tuple[str, str], list[str]] = {}
+        for t in self.ed.model["transitions"]:
+            lbl = transition_effective_label(t)
+            if lbl:
+                grupos.setdefault((t["partialRef"], label_key(lbl)), []).append(t["id"])
         return [g for g in grupos.values() if len(g) > 1]
 
     def parpadear(self, ids: Any, centrar: bool = True) -> None:

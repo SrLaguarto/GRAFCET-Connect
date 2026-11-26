@@ -46,6 +46,8 @@ class PanelDirecto(QObject):
         self.revision_dibujo = 0
         self._firma_dibujo = None
         self._valores_presentados = {}
+        self._clave_variables = None
+        self._uniones_pendientes = None
         self.edicion = None
         self.dialogo_traer = None
         self.dialogo_resumen = None
@@ -62,11 +64,12 @@ class PanelDirecto(QObject):
         self.config_directa = Configuracion(host="localhost", puerto=7410, modo="directo")
         self.cargando = False
         from .campos_medidos import ComboMedido
+        from PySide6.QtWidgets import QLabel
         self.selector = ComboMedido()
-        self.selector.addItem("Modbus TCP", "modbus")
+        self.selector.addItem("Modbus TCP/IP", "modbus")
         self.selector.addItem("Conexión directa (simulador de fábricas)", "directo")
         self.selector.setAccessibleName("Modo de conexión")
-        self.selector.setStyleSheet(f"QComboBox {{font-weight:600; color:{estilo.ACENTO};}}")
+        panel._slot_selector.addWidget(self.selector)
         self.paginas = PilaModos()
         scroll = panel._partes[1]
         self.scroll = scroll
@@ -78,13 +81,19 @@ class PanelDirecto(QObject):
         self.paginas.addWidget(self.widget)
         contenedor = QWidget()
         layout = QVBoxLayout(contenedor)
-        layout.setContentsMargins(estilo.E2, estilo.E1, estilo.E2, estilo.E1)
-        layout.setSpacing(estilo.E2)
-        layout.addWidget(self.selector, 0, Qt.AlignmentFlag.AlignHCenter)
+        layout.setContentsMargins(12, 10, 12, 12)
+        layout.setSpacing(8)
+        self.pista_etapa = QLabel(
+            "Haz clic en una variable de la izquierda o derecha y luego en un canal del PLC para enlazar (o arrastra)."
+        )
+        self.pista_etapa.setObjectName("ayudaES")
+        self.pista_etapa.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.pista_etapa.setWordWrap(True)
+        layout.addWidget(self.pista_etapa)
         layout.addWidget(self.paginas, 1)
         scroll.setWidget(contenedor)
         panel.lienzo.layout().itemAtPosition(0, 0).widget().hide()
-        panel.lienzo.layout().setContentsMargins(0, estilo.E2, 0, 2)
+        panel.lienzo.layout().setContentsMargins(0, 4, 0, 4)
         self._crear_panel()
         panel.cabecera.layout().addWidget(panel.fila_estado)
         self._crear_escena()
@@ -138,6 +147,9 @@ class PanelDirecto(QObject):
         self.cargando = False
         self.aplicar_estilo()
         if modo == "modbus":
+            self._clave_variables = None
+            self.dibujo._clave_layout = None
+            self._uniones_pendientes = None
             self.resumen_escena.hide()
             self.b_quitar_sin_senal.hide()
             self.panel.fila_estado.hide()
@@ -167,6 +179,7 @@ class PanelDirecto(QObject):
         self.panel.config = deepcopy(config)
         self.panel.variables = [v for v in doc["variables"] if v["role"] in ("input", "output")]
         self.panel.firma_modelo = self.panel.firma(doc)
+        self._uniones_pendientes = None
         self.seleccionar("directo")
         self.host.setText(config.host)
         self.puerto.setValue(config.puerto)
@@ -199,16 +212,20 @@ class PanelDirecto(QObject):
         except ValueError as exc:
             self.panel.estado.setText(str(exc))
             return
+        if self.firma_catalogo is not None and self.panel.config.modo == "directo":
+            firma_u = tuple((u.variable, u.id, u.nombre, u.motivo) for u in self.panel.config.uniones)
+            self._uniones_pendientes = firma_u
+            self.firma_catalogo = (self.firma_catalogo[0], firma_u)
         self.panel.aplicar.emit(self.panel.config)
 
     def dibujar(self):
         self.revision_dibujo += 1
-        self._valores_presentados.clear()
         self.panel.indicadores.clear()
         self.panel.indicadores_listas.clear()
-        self.panel.terminales.clear()
         self._variables()
-        self.dibujo.dibujar()
+        en_sitio = self.dibujo.dibujar()
+        if not en_sitio:
+            self._valores_presentados.clear()
         self.panel.resumen.setText(f"{len(self.panel.config.uniones)} uniones")
         ancho = self.panel.resumen.fontMetrics().horizontalAdvance(self.panel.resumen.text())
         self.panel.resumen.setMinimumWidth(ancho + estilo.E2)
@@ -226,22 +243,40 @@ class PanelDirecto(QObject):
         self.selector.medir()
 
     def _variables(self):
-        from .entradas_salidas import ROL_COLOR, COLOR_TIPO
+        from .entradas_salidas import ALTO_VARIABLE, ROL_ASIGNADA, ROL_COLOR, COLOR_TIPO
+        from PySide6.QtCore import QSize
+        alto_var = ALTO_VARIABLE + (2 if self.panel.escala == "grande" else 0)
+        conectadas = {u.variable for u in self.panel.config.uniones}
+        clave = (alto_var, tuple((v["id"], v["name"], v["role"], v["type"]["kind"]) for v in self.panel.variables))
+        total_items = self.panel.lista_entradas.count() + self.panel.lista_salidas.count()
+        if clave == self._clave_variables and total_items == len(self.panel.variables):
+            for lista in (self.panel.lista_entradas, self.panel.lista_salidas):
+                for idx in range(lista.count()):
+                    it = lista.item(idx)
+                    vid = it.data(Qt.ItemDataRole.UserRole)
+                    it.setData(ROL_ASIGNADA, vid in conectadas)
+                    self.panel.indicadores_listas[vid] = it
+                lista.viewport().update()
+            return
+        self._clave_variables = clave
         for papel, lista in (("input", self.panel.lista_entradas), ("output", self.panel.lista_salidas)):
             lista.clear()
             nombres = [v["name"] for v in self.panel.variables if v["role"] == papel]
             lista.contexto.fijar(nombres)
             titulo = "Sensores" if papel == "input" else "Actuadores"
-            self.panel.cuentas[papel].setText(
-                f"{titulo} <span style='color:{estilo.TINTA_2}; font-weight:400'>{len(nombres)}</span>")
+            self.panel.cuentas[papel].setText(titulo)
+            self.panel.badges[papel].setText(str(len(nombres)))
             for variable in self.panel.variables:
                 if variable["role"] != papel:
                     continue
                 item = QListWidgetItem(variable["name"])
+                item.setSizeHint(QSize(0, alto_var))
                 item.setData(Qt.ItemDataRole.UserRole, variable["id"])
                 item.setData(ROL_COLOR, COLOR_TIPO.get(variable["type"]["kind"]))
+                item.setData(ROL_ASIGNADA, variable["id"] in conectadas)
                 item.setToolTip(variable["name"])
                 lista.addItem(item)
+                self.panel.indicadores_listas[variable["id"]] = item
 
     def unir(self, variable_id, senal_id):
         variable = next((v for v in self.panel.variables if v["id"] == variable_id), None)
@@ -274,6 +309,8 @@ class PanelDirecto(QObject):
         self.selector.setEnabled(not on)
         self.host.setEnabled(not on)
         self.puerto.setEnabled(not on)
+        if not on:
+            self._uniones_pendientes = None
 
     def abrir_traer(self):
         if self.edicion is None:
@@ -329,28 +366,49 @@ class PanelDirecto(QObject):
         self.dialogo_resumen = cuadro
         cuadro.open()
 
-    def refrescar_catalogo(self, cliente):
+    def refrescar_catalogo(self, origen):
         from conexion.intercambio_directo import TransporteDirecto
-        if self.panel.config.modo != "directo" or not isinstance(cliente, TransporteDirecto):
+        if self.panel.config.modo != "directo":
+            return
+        if isinstance(origen, dict):
+            cliente = origen["cliente"]
+            modelo = origen["modelo"]
+            uniones_origen = origen["uniones"]
+            senales_lista = origen["senales"]
+            avisos_origen = origen["avisos"]
+        elif isinstance(origen, TransporteDirecto):
+            cliente = origen
+            modelo = origen.config.modelo
+            uniones_origen = origen.config.uniones
+            senales_lista = list(origen.senales.values())
+            avisos_origen = list(origen.avisos)
+        else:
             return
         anteriores = {u.variable: u.id for u in self.panel.config.uniones}
-        mismo_modelo = cliente.config.modelo == self.panel.doc["id"]
-        uniones = cliente.config.uniones if mismo_modelo else self.panel.config.uniones
-        firma = (tuple((s["id"], s["name"], s["type"], s["kind"]) for s in cliente.senales.values()),
-                 tuple((u.variable, u.id, u.nombre, u.motivo) for u in uniones))
+        mismo_modelo = modelo == self.panel.doc["id"]
+        uniones = uniones_origen if mismo_modelo else self.panel.config.uniones
+        firma_u = tuple((u.variable, u.id, u.nombre, u.motivo) for u in uniones)
+        if self._uniones_pendientes is not None:
+            if firma_u == self._uniones_pendientes:
+                self._uniones_pendientes = None
+            else:
+                uniones = self.panel.config.uniones
+                firma_u = self._uniones_pendientes
+                mismo_modelo = False
+        firma = (tuple((s["id"], s["name"], s["type"], s["kind"]) for s in senales_lista), firma_u)
         lectura = cliente is not self.cliente_catalogo or self.firma_catalogo is None
         lectura = lectura or firma[0] != self.firma_catalogo[0]
         if lectura or firma != self.firma_catalogo:
             if mismo_modelo:
                 self.panel.config.uniones = deepcopy(uniones)
             self.firma_catalogo = firma
-            self.catalogo = list(cliente.senales.values())
+            self.catalogo = list(senales_lista)
             from .escena_modelo import contar_reunidas
             self.catalogo_leido = True
             if lectura:
                 self.cliente_catalogo = cliente
                 self.reunidas_lectura = contar_reunidas(anteriores, self.panel.config)
-                self.avisos_lectura = list(cliente.avisos)
+                self.avisos_lectura = list(avisos_origen)
                 from conexion.filtro_directo import actualizar
                 actualizar(self.panel.config, self.catalogo)
             self.dibujar()

@@ -1,6 +1,6 @@
 """Reparto de la cabecera del dibujo y estado centrado en la fila de pestañas."""
-from PySide6.QtCore import QEvent, QObject, QRect, QTimer, Qt
-from PySide6.QtGui import QColor, QFont, QPainter
+from PySide6.QtCore import QEvent, QObject, QRect, QRectF, QSize, QTimer, Qt
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
 
 from PySide6.QtWidgets import QToolBar, QToolButton
 
@@ -9,10 +9,11 @@ from .paneles import ChipModo
 
 
 class EstadoModo(ChipModo):
-    MARCO = estilo.E4
+    MARCO = 22  # espacio izquierdo: 10px padding + 6px punto + 6px hueco
 
     def __init__(self):
         self.color_modo = estilo.ACENTO
+        self.modo_actual = "editar"
         super().__init__()
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self.setObjectName("estadoModo")
@@ -21,45 +22,69 @@ class EstadoModo(ChipModo):
     def escalar(self):
         self.setStyleSheet(
             f"background: transparent; border: none; color: {estilo.TINTA_2};"
-            f"font-size: {estilo.T_PEQUENA}px; font-weight: 600;")
-        fuente = QFont(self.font())
-        fuente.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1)
+            f"font-family: {estilo.FAMILIA_TITULO}; font-size: 11px; font-weight: 700;")
+        fuente = QFont(estilo.FUENTE_TITULO)
+        fuente.setPixelSize(11)
+        fuente.setBold(True)
+        fuente.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.8)
         self.setFont(fuente)
-        self.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
+        self.setFixedHeight(24)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        texto = self.elegida(self.tope)
+        ancho = self.fontMetrics().horizontalAdvance(texto) + self.MARCO + 12
+        return QSize(min(self.tope, max(ancho, 48)), self.height())
 
     def poner(self, modo, texto, ayuda):
+        self.modo_actual = modo
         self.color_modo = {
-            "editar": estilo.ACENTO, "lectura": estilo.TINTA_2, "simular": estilo.SIMULACION,
+            "editar": estilo.ACENTO, "lectura": estilo.TINTA_2, "simular": estilo.LED_CONSOLA,
             "aviso": estilo.AVISO, "error": estilo.ERROR,
         }.get(modo, estilo.TINTA_2)
         if self.text() != texto:
             self.setText(texto)
         self.setToolTip(ayuda)
         self.setAccessibleName(texto.capitalize())
+        self.updateGeometry()
         self.update()
 
     def paintEvent(self, evento):
         pintor = QPainter(self)
+        pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
+        sim = self.modo_actual == "simular"
+        fondo = QColor(21, 122, 53, 26) if sim else QColor(22, 38, 58, 12)
+        tinta = QColor(estilo.SIMULACION_HOVER if sim else estilo.TINTA_2)
+        r = QRectF(self.rect())
+        pintor.setPen(Qt.PenStyle.NoPen)
+        pintor.setBrush(fondo)
+        pintor.drawRoundedRect(r, estilo.R_S, estilo.R_S)
+        pintor.setBrush(QColor(self.color_modo))
+        dot_y = (self.height() - 6) / 2
+        if sim:
+            pintor.drawEllipse(QRectF(10, dot_y, 6, 6))
+        else:
+            pintor.drawRoundedRect(QRectF(10, dot_y, 6, 6), 1.5, 1.5)
         pintor.setFont(self.font())
-        pintor.setPen(QColor(estilo.TINTA_2))
-        rect = QRect(self.MARCO, 0, self.width() - self.MARCO, self.height())
+        pintor.setPen(tinta)
+        rect = QRect(self.MARCO, 0, max(1, self.width() - self.MARCO - 10), self.height())
         pintor.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self.elegida(self.width()))
-        pintor.fillRect(QRect(0, (self.height() - estilo.E2) // 2, estilo.E2, estilo.E2), QColor(self.color_modo))
         pintor.end()
 
 
 class UbicaModo(QObject):
-    def __init__(self, etiqueta, fila, pestanas, luz):
+    def __init__(self, etiqueta, fila, pestanas, luz, menu_cluster=None, estuche=None):
         super().__init__(fila)
         self.etiqueta = etiqueta
         self.fila = fila
         self.pestanas = pestanas
         self.luz = luz
+        self.menu_cluster = menu_cluster
+        self.estuche = estuche or pestanas
         self._pendiente = False
-        self._barras = []  # las barras de herramientas de la ventana, al existir (AC2: no buscar en toda la ventana en cada ajuste)
+        self._barras = []
         etiqueta.setParent(fila)
         etiqueta.show()
-        for widget in (fila, pestanas, luz, etiqueta):
+        for widget in filter(None, (fila, pestanas, luz, etiqueta, menu_cluster, estuche)):
             widget.installEventFilter(self)
         self.ajustar()
 
@@ -68,7 +93,7 @@ class UbicaModo(QObject):
                  QEvent.Type.DynamicPropertyChange)
         if objeto is self.fila and evento.type() == QEvent.Type.Resize:
             for barra in self._barras_toolbar():
-                if barra.objectName() not in ("barraEdicion", "barraSimulacion"):
+                if barra.objectName() not in ("barraEdicion", "barraSimulacion", "barraVistaDer"):
                     continue
                 for accion in barra.actions():
                     if accion.isSeparator():
@@ -79,22 +104,71 @@ class UbicaModo(QObject):
         return False
 
     def ajustar(self):
-        self._pendiente = False
-        self._extensiones()
-        fusion = bool(self.fila.property("fusion"))
-        self.fila.layout().setSpacing(estilo.E2 if fusion else 0)
-        self.etiqueta.setVisible(not fusion)
-        if fusion:
-            return
-        izquierda = self.pestanas.geometry().right() + estilo.E2
-        derecha = self.luz.x() - estilo.E2
-        self.etiqueta.fijar_tope(max(1, derecha - izquierda))
-        ancho = self.etiqueta.sizeHint().width()
-        x = (self.fila.width() - ancho) // 2
-        if x < izquierda or x + ancho > derecha:
-            x = izquierda
-        alto = self.etiqueta.height()
-        self.etiqueta.setGeometry(x, (self.fila.height() - alto) // 2, ancho, alto)
+        try:
+            self._extensiones()
+            fusion = bool(self.fila.property("fusion"))
+            lay = self.fila.layout()
+            self.etiqueta.setVisible(not fusion)
+            if self.menu_cluster is not None:
+                self.menu_cluster.setVisible(not fusion)
+            if fusion:
+                lay.setEnabled(True)
+                lay.setContentsMargins(estilo.E2, 2, estilo.E2, 2)
+                lay.setSpacing(estilo.E2)
+                return
+            w_fila = max(1, self.fila.width())
+            h_fila = max(1, self.fila.height())
+            # Posición manual precisa de las 3 zonas (izquierda: menú, centro: chip de modo, derecha: estuche vistas)
+            if self.menu_cluster is not None and self.estuche is not None:
+                lay.setEnabled(False)
+                if self.menu_cluster.layout() is not None:
+                    self.menu_cluster.layout().activate()
+                w_menu = self.menu_cluster.sizeHint().width()
+                h_menu = self.menu_cluster.sizeHint().height()
+                if self.estuche.layout() is not None:
+                    self.estuche.layout().activate()
+                w_estuche = self.estuche.sizeHint().width()
+                h_estuche = self.estuche.sizeHint().height()
+                self.etiqueta.fijar_tope(max(60, w_fila - w_estuche - 24))
+                w_chip = self.etiqueta.sizeHint().width()
+                h_chip = self.etiqueta.height()
+                x_estuche = max(10, w_fila - 10 - w_estuche)
+                x_ideal = (w_fila - w_chip) // 2
+                min_chip = 10 + w_menu + estilo.E2
+                max_chip = x_estuche - estilo.E2 - w_chip
+                if min_chip <= x_ideal <= max_chip:
+                    x_chip = x_ideal
+                    w_menu_real = w_menu
+                elif min_chip <= max_chip:
+                    x_chip = max(min_chip, min(x_ideal, max_chip))
+                    w_menu_real = w_menu
+                else:
+                    w_menu_real = max(32, min(w_menu, x_estuche - 2 * estilo.E2 - w_chip - 10))
+                    x_chip = max(10 + w_menu_real + estilo.E2, x_estuche - estilo.E2 - w_chip)
+                self.menu_cluster.setGeometry(10, (h_fila - h_menu) // 2, w_menu_real, h_menu)
+                self.etiqueta.setGeometry(x_chip, (h_fila - h_chip) // 2, w_chip, h_chip)
+                self.estuche.setGeometry(x_estuche, (h_fila - h_estuche) // 2, w_estuche, h_estuche)
+                return
+            w_luz = max(self.luz.minimumWidth(), self.luz.sizeHint().width())
+            w_nav = self.pestanas.sizeHint().width() + estilo.E2 + w_luz
+            self.etiqueta.fijar_tope(max(1, w_fila - w_nav - 3 * estilo.E2))
+            w_est = self.etiqueta.sizeHint().width()
+            x_ideal = (w_fila - w_nav) // 2
+            x_max = w_fila - estilo.E2 - w_est - estilo.E2 - w_nav
+            x_nav = max(estilo.E2, min(x_ideal, x_max))
+            if lay.contentsMargins().left() != x_nav:
+                lay.setContentsMargins(x_nav, 0, estilo.E2, 0)
+            lay.activate()
+            izquierda = self.luz.geometry().right() + 1 + estilo.E2
+            derecha = w_fila - estilo.E2
+            disponible = max(1, derecha - izquierda)
+            self.etiqueta.fijar_tope(disponible)
+            ancho = min(self.etiqueta.sizeHint().width(), disponible)
+            x = max(izquierda, derecha - ancho)
+            alto = self.etiqueta.height()
+            self.etiqueta.setGeometry(x, (h_fila - alto) // 2, ancho, alto)
+        finally:
+            self._pendiente = False
 
     def _barras_toolbar(self):
         if not self._barras:

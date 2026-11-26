@@ -39,11 +39,12 @@ def codigos(diags):
 
 def etiquetas(doc):
     """Nombre de cada elemento (variable, etapa, parcial, macroetapa, transición): los ID del editor no se comparan."""
+    nombres = display_names(doc)
     out = {v["id"]: v["name"] for v in doc["variables"]}
     for coll in ("steps", "partials"):
         out.update({x["id"]: x["label"] for x in doc[coll]})
     out.update({x["id"]: x["label"] for x in doc["hierarchy"]["macros"]})
-    out.update({t["id"]: t.get("label", t["id"]) for t in doc["transitions"]})
+    out.update({t["id"]: nombres.get(t["id"], t.get("label", t["id"])) for t in doc["transitions"]})
     return out
 
 

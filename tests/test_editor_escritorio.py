@@ -888,7 +888,7 @@ class Interfaz(unittest.TestCase):
         e.soltar(punto)
         self.assertEqual(len(e.ed.model["transitions"]), n + 1)
         salto = next(t for t in e.ed.model["transitions"] if t["id"] not in (ts["t1"], ts["t2"], t3, t4))
-        self.assertEqual((salto["preRefs"], salto["postRefs"], salto["label"]), ([ids["0"]], [e2], "t5"))
+        self.assertEqual((salto["preRefs"], salto["postRefs"], e.nombres[salto["id"]]), ([ids["0"]], [e2], "t5"))
         self.assertEqual(e.sel, [salto["id"]])
         # Una etapa soltada sobre el enlace de entrada de una transición no es una rama: queda como borrador (P-IMP-118)
         antes = len(e.ed.undo_stack)
@@ -1894,9 +1894,9 @@ class Interfaz(unittest.TestCase):
         e.nueva_variable("Q00", "output")
         self.assertIsNone(e.poner_accion(ids["1"], {"tipo": "continua", "variable": "Q00", "condicion": ""}))
         aid = e.acciones(ids["1"])[0]["id"]
-        w.editar_accion(ids["1"], aid)  # «Editar…»: la acción, en el panel
-        self.assertFalse(w.flot.hay_ventanas(), "la continua usa el selector sobre el dibujo")
-        self.assertEqual((w.props.pagina, w.props.continua, w.props.accion.aid), ("vacio", True, aid), "una continua: solo la frase")
+        w.editar_accion(ids["1"], aid)  # «Editar…»: la continua abre su ventana flotante con la variable
+        self.assertTrue(w.flot.hay_ventanas())
+        self.assertEqual((w.props.pagina, w.props.continua, w.props.accion.aid), ("accion", True, aid))
 
     def test_SEDI62_ficha_accion_en_la_paleta(self):
         """REQ-ACT-01, REQ-EDT-02: la paleta ofrece la ficha «Acción» (continua) con su figura (el lado izquierdo, bajo
@@ -2063,22 +2063,23 @@ class Interfaz(unittest.TestCase):
         self.assertIn(("nueva_in", "nueva_in"), prog.opciones("entrada"))
 
     def test_SEDI67_carpetas_en_su_orden_y_temporizadores(self):
-        """REQ-EDT-02: la banda: Operadores, Temporizadores, Comparaciones y Constantes, en ese orden (el catálogo de Variables y
-        etapas ya no es una pestaña: está siempre a la vista); la categoría «Tiempo» se llama «Temporizadores»."""
-        from escritorio.bloques import CATEGORIAS_BANDA, Programador
+        """REQ-EDT-02: la cinta 2.0.1 conserva el orden de claves (operador, tiempo, comparacion, constante) con prefijo «Insertar:» y el
+        botón «Temporizador» (no «Tiempo»); el catálogo de Variables y etapas está siempre a la vista."""
+        from escritorio.bloques import CATEGORIAS_BANDA
         e, ids, ts = self.secuencial()
-        textos = ["Operadores", "Temp.", "Comp.", "Const."]  # (abreviados; el nombre entero, en la ayuda emergente)
+        textos = ["Operadores", "Temp.", "Comp.", "Const."]  # (constante heredada de compatibilidad)
         self.assertEqual([t for _, t in CATEGORIAS_BANDA], textos)
         prog = self.w.props.prog
-        self.assertEqual([b.text() for b in prog.categorias.values()], textos)
-        self.assertNotIn("Tiempo", [b.text() for b in prog.categorias.values()])
-        self.assertEqual(prog.categorias["tiempo"].toolTip(), "Temporizadores")
+        self.assertEqual(list(prog.categorias), ["operador", "tiempo", "comparacion", "constante"])
+        self.assertEqual(prog.banda.l_prefijo.text(), "Insertar:")
+        self.assertEqual([b.text() for bs in prog.banda.botones.values() for b in bs],
+                         ["( … )", "Temporizador", "= ≠ < ≥", "1", "0"])
+        self.assertNotIn("Tiempo", [b.text() for bs in prog.banda.botones.values() for b in bs])
         self.assertEqual(prog.paleta.clave, "variables", "el catálogo, siempre a la vista")
 
     def test_SEDI68_receptividad_en_el_panel_con_texto_de_solo_lectura(self):
-        """REQ-EDT-02: toda la receptividad está a la derecha del panel de opciones (texto de la fórmula, «Escrito», «Se
-        dibuja» y «Crear las que faltan»); su columna estrecha de la izquierda solo lleva etiqueta, «Mostrar etiqueta» y
-        comentario. El texto se ve (con la notación del dibujo) pero no se edita: no hay «Escribir a mano»."""
+        """REQ-EDT-02: la receptividad se edita con bloques; en 2.0.1 la etiqueta va inline en la cabecera de la flotante y el comentario
+        en el pie; `t_texto` sigue sincronizado como solo lectura (oculto) y `caja_formula` solo aparece cuando hay error o faltan variables."""
         from escritorio import bloques
         w = self.w
         e, ids, ts = self.secuencial()
@@ -2088,15 +2089,19 @@ class Interfaz(unittest.TestCase):
         e.seleccionar([ts["t1"]])
         w._abrir_opciones()
         QApplication.processEvents()
-        izq = p.izq.widget(2)  # la columna de la transición, a la izquierda del panel de opciones
         derecha = p.pagina_bloques
         for campo in (p.t_texto, p.t_vista, p.t_dibujo, p.t_crear, p.t_estado):
             self.assertTrue(derecha.isAncestorOf(campo), "están a su derecha")
-        pie = w.flot.principal.pie  # E8: etiqueta, «Mostrar etiqueta» y comentario ya no van en la columna del panel, sino al pie de la ventana
-        self.assertTrue(all(pie.isAncestorOf(campo) for campo in (p.t_etiqueta, p.t_comentario)))
+        cabecera = w.flot.principal.cabecera
+        pie = w.flot.principal.pie
+        self.assertTrue(cabecera.isAncestorOf(p.t_etiqueta))
+        self.assertTrue(pie.isAncestorOf(p.t_comentario))
         self.assertTrue(w.flot.principal.isAncestorOf(derecha))
-        self.assertEqual(sorted(x.text() for x in pie.findChildren(QLabel) if x.text() in ("Etiqueta", "Texto", "Escrito", "Se dibuja")),
+        self.assertEqual(sorted(x.text() for x in w.flot.principal.caja_etiqueta.findChildren(QLabel) if x.text() == "Etiqueta"),
                          ["Etiqueta"])
+        self.assertEqual([x.text() for x in pie.findChildren(QLabel) if x.text() in ("Texto", "Escrito", "Se dibuja")], [])
+        self.assertTrue(p.t_texto.isHidden(), "la vista previa superior ya muestra la fórmula")
+        self.assertTrue(p.caja_formula.isHidden(), "sin error ni variables por declarar, caja_formula permanece oculta")
         self.assertEqual(p.t_texto.text(), "marcha")
         self.assertTrue(p.t_texto.isReadOnly(), "se ve pero no se edita")
         self.assertFalse(hasattr(p, "t_manual"), "sin «Escribir a mano»")
@@ -2112,10 +2117,12 @@ class Interfaz(unittest.TestCase):
         # lo que faltaba por crear, y el texto escrito de cómo se dibuja, están ahí
         p.t_texto.setText("↑nueva")
         p._previsualizar()
+        self.assertFalse(p.caja_formula.isHidden(), "con variables sin declarar, caja_formula se muestra")
         self.assertFalse(p.t_crear.isHidden())
         self.assertIn("nueva", p.t_vista.text())
         p.t_texto.setText("↑marcha")
         p._previsualizar()
+        self.assertTrue(p.caja_formula.isHidden(), "sin errores, caja_formula vuelve a ocultarse")
         self.assertIn("↑", p.t_dibujo.text())
         self.assertIn("correcta", p.t_estado.text())
 
@@ -2542,7 +2549,7 @@ class Interfaz(unittest.TestCase):
         e.pedir_accion = lambda sid, aid: pedidas.append((sid, aid))
         did = e.poner_accion_suelta(QPointF(500, 220))
         d = self.panel_accion(None, did)
-        self.assertEqual(w.props.titulo.text(), "Propiedades · Acción")
+        self.assertEqual(w.props.titulo.text(), "Propiedades · Acción continua")
         self.assertTrue(d.limite.isHidden())
         self.assertFalse(hasattr(d, "tipo"), "el panel no lleva lista de tipos: se cambia con botón derecho (P-IMP-46)")
         self.assertFalse(hasattr(d, "cond"), "sin programador dentro")
@@ -2583,7 +2590,7 @@ class Interfaz(unittest.TestCase):
         (b,) = e.ed.draft_actions()
         self.assertEqual((b["etapa"], b["tipo"], pedidas), (ids["0"], "continua", [(ids["0"], b["id"])]))
         d = self.panel_accion(ids["0"], b["id"])
-        self.assertEqual(w.props.titulo.text(), "Propiedades · Acción")  # (la etapa, sobre el área de bloques o en el panel de la acción)
+        self.assertEqual(w.props.titulo.text(), "Propiedades · Acción continua")  # (la etapa, sobre el área de bloques o en el panel de la acción)
         n = len(e.ed.undo_stack)
         d.variable.setCurrentText("Q00")
         self.assertEqual((e.ed.draft_actions(), len(e.ed.undo_stack), e.acciones(ids["0"])[0]["variable"]), ([], n + 1, "Q00"))
@@ -2633,6 +2640,39 @@ class Interfaz(unittest.TestCase):
         e.cambiado.emit()
         self.assertFalse(e.mensaje_info)
         self.assertIn(COL_ERR, w.ayuda.styleSheet())
+
+    def test_SEDI76b_el_mensaje_de_seleccion_no_se_pinta_encima_de_la_firma_ni_del_detalle(self):
+        """REQ-EDT-09: con un mensaje temporal (la selección) en la barra de estado, ni «Conforme a IEC 60848» ni «Archivo sin firma» ni la
+        línea de detalle se ven en su sitio, aunque se pidan mostrar mientras dura; al irse el mensaje vuelven, sin tocarse entre sí."""
+        from PySide6.QtCore import QRect
+        w = self.w
+        w.resize(1200, 700)
+        w.show()
+        QApplication.processEvents()
+        sb = w.statusBar()
+        w.l_firma.setText("Archivo sin firma")
+        w._detallar("Detalle de una fila")
+        w.l_firma.setVisible(True)
+        QApplication.processEvents()
+        zona = w.zona_estado
+        antes = [(x.isVisible(), x.geometry()) for x in (w.l_aviso, w.l_detalle, w.l_firma)]
+        self.assertTrue(all(v for v, _ in antes))
+        for a_, b_ in ((0, 1), (1, 2), (0, 2)):
+            self.assertFalse(antes[a_][1].intersects(antes[b_][1]), "en reposo, uno al lado de otro")
+        sb.showMessage("Acción Contador cajas (4)")
+        w._detallar("Otro detalle")  # (lo que muestre otro código mientras dura el mensaje)
+        w._indicar_firma(w.edicion)
+        w.l_firma.setVisible(True)
+        QApplication.processEvents()
+        zona_mensaje = QRect(0, 0, sb.fontMetrics().horizontalAdvance(sb.currentMessage()) + 12, sb.height())
+        visibles = [c for c in sb.findChildren(QLabel) if c.isVisible() and c not in (w.l_lect, w.l_reloj)
+                    and sb.rect().intersects(QRect(c.mapTo(sb, c.rect().topLeft()), c.size()))]
+        for c in visibles:
+            self.assertFalse(QRect(c.mapTo(sb, c.rect().topLeft()), c.size()).intersects(zona_mensaje), (c.text(), "pisa el mensaje"))
+        self.assertFalse(zona.isVisible())
+        sb.clearMessage()
+        QApplication.processEvents()
+        self.assertTrue(zona.isVisible() and w.l_aviso.isVisible())
 
     def test_SEDI77_borradores_danados_al_abrir(self):
         """REQ-DAT-01, REQ-EDT-09: un `draftActions` corrupto no rompe la apertura: se descartan los dañados (no son
@@ -3440,8 +3480,11 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((e.acciones(s1), e.ed.model["actions"]), ([], []))
         sueltas = sorted(e.ed.draft_actions(), key=lambda d: self._caja(d["id"])["rect"][1])  # de arriba abajo, como estaban
         self.assertEqual(len(sueltas), 4)
-        self.assertTrue(all("etapa" not in d and "grupo" not in d and "orden" not in d for d in sueltas))
-        self.assertEqual(e.ed.action_layouts(), {s1: "columna"}, "ya no hay grupo ni colocación de grupo")
+        grupo = sueltas[0].get("grupo")
+        self.assertTrue(grupo)
+        self.assertTrue(all("etapa" not in d and d.get("grupo") == grupo for d in sueltas))
+        self.assertEqual([d.get("orden") for d in sueltas], [0, 1, 2, 3])
+        self.assertEqual(e.ed.action_layouts(), {s1: "columna", grupo: "columna"})
         self.assertEqual(sorted(e.sel), sorted(d["id"] for d in sueltas))
         rects = [self._caja(d["id"])["rect"] for d in sueltas]
         for i, r in enumerate(rects):
@@ -3497,9 +3540,9 @@ class Interfaz(unittest.TestCase):
         s1 = ids["1"]
         p, prog = w.props, w.props.prog
         a1 = e.acciones(s1)[0]["id"]
-        # una continua no se programa
+        # una continua no programa condición/evento (solo selector flotante de variable)
         self.panel_accion(s1, a1)
-        self.assertEqual((p.pagina, p.continua, p.objetivo_bloques(), prog.isVisible()), ("vacio", True, None, False))
+        self.assertEqual((p.pagina, p.continua, p.objetivo_bloques(), prog.isVisible()), ("accion", True, None, False))
         # a condicionada: borrador con «?»; sus bloques, vacíos
         e.tipo_accion(a1, "condicionada")
         (b,) = e.ed.draft_actions()
@@ -4060,7 +4103,7 @@ class Interfaz(unittest.TestCase):
             if pesta==2:QTest.mouseClick(w.luz_es,Qt.MouseButton.LeftButton)  # a E/S se entra por la luz de conexión: su pestaña no se ve
             else:QTest.mouseClick(tabs,Qt.MouseButton.LeftButton,pos=tabs.tabRect(pesta).center())
             self.assertEqual(w.paginas_es.currentIndex(),indice);self.assertEqual(tabs.currentIndex(),pesta)
-        w.panel_es.b_volver.click();self.assertEqual((w.paginas_es.currentIndex(),tabs.currentIndex()),(0,0))
+        QTest.mouseClick(tabs,Qt.MouseButton.LeftButton,pos=tabs.tabRect(0).center());self.assertEqual((w.paginas_es.currentIndex(),tabs.currentIndex()),(0,0))
         w.mostrar_es();self.assertEqual(tabs.currentIndex(),2)
         w.cambiar_modo('simular');self.assertEqual((w.paginas_es.currentIndex(),tabs.currentIndex()),(0,0))
         w.cambiar_modo('editar');self.assertEqual(tabs.currentIndex(),0)
@@ -4131,13 +4174,13 @@ class Interfaz(unittest.TestCase):
         d = self.panel_accion(s1)
         datos = lambda: [d.variable.itemData(i) for i in range(d.variable.count())]  # noqa: E731
         self.assertEqual(d.ofrecidas(), ["Q00", "Q01", "Q02", "M1"], "continua: salidas y memorias booleanas, sin entradas")
-        self.assertEqual(datos(), ["", None, "Q00", "Q01", "Q02", None, "M1"])
+        self.assertEqual(datos(), [None, "Q00", "Q01", "Q02", None, "M1"])
         textos = [d.variable.itemText(i) for i in range(d.variable.count())]
-        self.assertEqual((textos[1], textos[5]), ("Salidas", "Memorias"))
+        self.assertEqual((textos[0], textos[4]), ("Salidas", "Memorias"))
         self.assertNotIn("Nueva variable…", textos)
         self.assertFalse(hasattr(d, "nueva_variable"), "ni método ni diálogo para crear variables desde la acción")
-        self.assertIn("(Bool)", textos[2], "el tipo, en corto (P-IMP-154)")
-        self.assertFalse(d.variable.model().item(1).isEnabled(), "los rótulos no se eligen")
+        self.assertIn("(Bool)", textos[1], "el tipo, en corto (P-IMP-154)")
+        self.assertFalse(d.variable.model().item(0).isEnabled(), "los rótulos no se eligen")
         self.poner_tipo(d, "condicionada")
         self.assertEqual(d.ofrecidas(), ["Q00", "Q01", "Q02", "M1"])
         self.w.editar_accion(s1, e.accion)
@@ -4180,7 +4223,8 @@ class Interfaz(unittest.TestCase):
         self.assertEqual(e.acciones(ids["1"])[-1]["variable"], "")
         e.nueva_variable("Q00", "output", {"kind": "bool"})
         self.assertEqual(d.ofrecidas(), ["Q00"])
-        self.assertEqual(d.variable.itemText(0), "Elija la variable…")
+        self.assertEqual(d.variable.itemText(0), "Salidas")
+        self.assertEqual(d.variable.currentText(), "")
         self.poner_tipo(d, "desactivacion")  # otro tipo conserva la lista
         self.assertEqual(d.ofrecidas(), ["Q00"])
 
@@ -4215,14 +4259,15 @@ class Interfaz(unittest.TestCase):
         self.assertEqual((arbol["k"], arbol["op"], arbol["a"], arbol["b"]), ("ar", "+", {"k": "vnum", "n": "CT"}, {"k": "num", "v": "1"}))
         self.assertTrue(d.valor.isReadOnly(), "el valor se arma con bloques: no se edita a mano")
         self.assertFalse(hasattr(d, "manual"))
-        # el catálogo de variables numéricas y la banda corta: Operadores y Constantes (la antigua pestaña «Número»)
-        self.assertEqual([(c, r.text()) for c, r in d.prog.categorias.items()], [("aritm", "Operadores"), ("numero", "Const.")])
+        # el catálogo de variables numéricas y la cinta 2.0.1: prefijo «CT :=» con «( … )» y «+ Constante»
+        self.assertEqual(list(d.prog.categorias), ["aritm", "numero"])
+        self.assertEqual(d.prog.banda.l_prefijo.text(), "CT :=")
         d.prog.refrescar()
         self.assertEqual([n["n"] for n in d.prog.paleta._raices], ["CT"], "una ficha por variable numérica, de cualquier papel")
         self.assertEqual([n["op"] if n["k"] == "ar" else n["k"] for n in map(d.prog.banda.nodo, ("mas", "menos", "por", "entre", "par"))],
-                         ["+", "-", "*", "/", "par"], "los cuatro operadores y el paréntesis")
-        self.assertEqual([b.text() for b in d.prog.banda.botones["aritm"]], ["+", "−", "×", "÷", "( … )"])
-        self.assertEqual([b.text() for b in d.prog.banda.botones["numero"]], ["Número"])
+                         ["+", "-", "*", "/", "par"], "compatibilidad de nodos aritméticos y paréntesis")
+        self.assertEqual([b.text() for b in d.prog.banda.botones["aritm"]], ["( … )"])
+        self.assertEqual([b.text() for b in d.prog.banda.botones["numero"]], ["+ Constante"])
         # con bloques: CT * 2 - 1, anidado (un operador sobre otro lo envuelve); lo a medias no se guarda
         d._desde_bloques("")
         lienzo = d.prog.lienzo
@@ -4485,12 +4530,17 @@ class Interfaz(unittest.TestCase):
         self.assertEqual([b["n"] for b in fichas("output")], ["alfa", "zeta"], "por nombre")
         prog.refrescar()
         self.assertEqual([b["n"] for b in fichas("input")], ["I2", "I10", "marcha", "paro"])
-        # cada ficha se arrastra con su elemento ya elegido (el área conserva el desplegable)
+        # cada ficha se arrastra con su elemento ya elegido (en 2.0.2 tampoco el temporizador lleva desplegable ▾: su hueco acepta bloques directos)
         prog.lienzo.soltar((), fichas("input")[2])
         self.assertEqual(prog.texto(), "marcha")
         prog.lienzo.invalidar()
         prog.lienzo._calcular(300)
-        self.assertTrue([x for x in prog.lienzo._piezas if x[1] == "drop"], "los bloques puestos conservan su ▾")
+        self.assertFalse([x for x in prog.lienzo._piezas if x[1] == "drop"], "ficha booleana limpia sin ▾")
+        prog.lienzo.soltar((), bloques.nuevo("temp", t1="5s", t2="", a=fichas("input")[2]))
+        prog.lienzo._calcular(300)
+        self.assertEqual(prog.texto(), "5s/marcha")
+        self.assertFalse([x for x in prog.lienzo._piezas if x[1] == "drop"], "temporizador sin ▾ interno: usa cajón de bloques")
+        self.assertTrue(any(ruta == (0, "a") for _, ruta, _ in prog.lienzo._bloques))
         # al día en el acto
         e.nueva_variable("Q9", "output")
         prog.refrescar()
@@ -4535,17 +4585,17 @@ class Interfaz(unittest.TestCase):
         self.assertFalse(p.s_acciones.isVisible());self.assertFalse(p.der.isVisible())
         self.assertLess(p.izq.x(),20,"los campos conservados quedan a la izquierda")
         w.editar_accion(ids["1"],e.acciones(ids["1"])[0]["id"])
-        self.assertEqual((p.pagina, p.continua), ("vacio", True), "una continua no lleva campos: solo la frase (encargo 12)")
+        self.assertEqual((p.pagina, p.continua), ("accion", True), "una continua muestra su tarjeta sin campos de condición (decisión 1A)")
         self.assertEqual(p.accion.b_etapa.text(), "Etapa 1", "solo informa de la etapa: no es un botón")
         from PySide6.QtWidgets import QPushButton
         self.assertNotIsInstance(p.accion.b_etapa, QPushButton)
-        self.assertEqual(p.pagina, "vacio")
+        self.assertEqual(p.pagina, "accion")
         e.seleccionar([ids["1"]])  # otra vez la etapa (la etiqueta no lleva a ella)
         QApplication.processEvents()
         self.assertEqual(p.pagina, "etapa")
         n = len(e.ed.draft_actions())
         e.colocar("accion:continua",QPointF(850,600))  # la paleta conserva la creación y las propiedades de acción
-        self.assertEqual((len(e.ed.draft_actions()), p.pagina, p.continua), (n + 1, "vacio", True))
+        self.assertEqual((len(e.ed.draft_actions()), p.pagina, p.continua), (n + 1, "accion", True))
         e.seleccionar([ts["t1"]])
         QApplication.processEvents()
         self.assertEqual(p.pagina, "transicion")
@@ -4595,6 +4645,8 @@ class Interfaz(unittest.TestCase):
     def test_SEDI122_opciones_sin_controles_cortados_ni_solapes(self):
         """REQ-EDT-09: valor y evento se muestran en la flotante sin cortes ni solapes."""
         from test_auditoria_maquetacion import REGLAS, permitida
+        # Controles compactos deliberados del diseño 2.0.1 (cinta de 26 px, buscador y botones del pie de diálogo de 28-30 px)
+        compactos_201 = ("BotonBloque#", "BotonCompacto#", "botonCancelarFlotante", "botonAceptarFlotante", "QLineEdit#[]")
         w = self.w
         e, ids, ts, aid = self._con_accion_por_evento()
         for tam in ((2000, 1000), (1366, 768)):
@@ -4604,7 +4656,10 @@ class Interfaz(unittest.TestCase):
             QApplication.processEvents()
             self.assertTrue(w.flot.hay_ventanas())
             for regla in ("M1", "M2", "C1", "C2"):
-                fallos = [h for h in REGLAS[regla](w.flot.principal) if not permitida(regla, h)]
+                fallos = [
+                    h for h in REGLAS[regla](w.flot.principal)
+                    if not permitida(regla, h) and not (regla == "C1" and any(k in h for k in compactos_201))
+                ]
                 self.assertEqual(fallos, [], (tam, regla, fallos))
             e.seleccionar([ts["t1"]])
             QApplication.processEvents()
@@ -4931,7 +4986,8 @@ class Interfaz(unittest.TestCase):
         w.editar_accion(ids["1"], aid)
         self.assertEqual(w.props.prog.texto(), "(a OR b) AND NOT c")
         self.assertEqual(w.props.prog.lienzo.arbol["a"]["k"], "par")
-        self.assertEqual(w.props.prog.categorias["operador"].text(), "Operadores")  # (la banda; el catálogo ya no es una pestaña)
+        self.assertEqual(w.props.prog.banda.l_prefijo.text(), "Insertar:")
+        self.assertEqual([b.text() for b in w.props.prog.banda.botones["operador"]], ["( … )"])
         # el significado no cambia: los paréntesis solo agrupan
         igual = lambda x, y: parse(a_nucleo(x, [], acc), lambda c, n: n) == parse(a_nucleo(y, [], acc), lambda c, n: n)  # noqa: E731
         self.assertTrue(igual("(a OR b) AND NOT c", "(a OR b) AND (NOT c)") and igual("((a))", "a"))
@@ -7386,7 +7442,7 @@ class Interfaz(unittest.TestCase):
         a = prog.lienzo
         self.assertEqual(prog.texto(), "")
         self.assertFalse(e.ed.validate().can_simulate, "una transición nueva queda pendiente")
-        self.assertEqual(prog.categorias["constante"].toolTip(), "Constantes")
+        self.assertEqual([b.text() for b in prog.banda.botones["constante"]], ["1", "0"])
         uno, cero = prog.banda.nodo("uno"), prog.banda.nodo("cero")  # los botones «1» y «0» de la banda
         self.assertEqual([(b["k"], b["v"]) for b in (uno, cero)], [("const", 1), ("const", 0)])
 
@@ -7518,7 +7574,7 @@ class Bloques(unittest.TestCase):
         self.assertEqual(a("X1/2s")["t2"], "2s")
         self.assertEqual(a("1.5s/X1")["t1"], "1500ms")
         self.assertEqual([a(x)["k"] for x in ("1", "0", "nada", "CT + 1 > 3", "marcha = 1", "X7", "CT")],
-                         ["const", "const", "texto", "texto", "texto", "texto", "texto"])
+                         ["const", "const", "texto", "cmp", "texto", "texto", "texto"])
         self.assertEqual(a("marcha AND paro")["a"], {"k": "var", "n": "marcha", "papel": "input"})
         self.assertEqual(a("Q00")["papel"], "output")
         self.assertEqual(a("M1")["papel"], "internal")
@@ -7545,8 +7601,11 @@ class Bloques(unittest.TestCase):
         self.assertEqual(p.texto(), "")
         self.assertFalse(area.soltar(None, var("marcha")) is False, "sin raíz, el área vacía la recibe")
         self.assertEqual(p.texto(), "marcha")
-        self.assertFalse(area.soltar(None, var("paro")), "con raíz, el área vacía no hace nada")
-        self.assertEqual(emitidos, ["marcha"])
+        self.assertTrue(area.soltar(None, var("paro")), "en 2.0.1 soltar un bloque nuevo sobre zona libre lo añade al carril")
+        self.assertEqual(p.texto(), "marcha AND paro")
+        self.assertFalse(area.soltar(None, var("paro"), origen=("a",)), "mover sobre zona libre no cambia nada")
+        area.poner_arbol(var("marcha"))
+        emitidos.clear()
         area.soltar((), nuevo("y"))  # y sobre «marcha»: marcha entra en su primer hueco
         self.assertEqual(p.texto(), "marcha AND ?")
         area.soltar(("b",), var("paro"))  # un hueco vacío
@@ -7574,28 +7633,26 @@ class Bloques(unittest.TestCase):
         self.assertEqual(p.texto(), "? OR NOT paro")
         self.assertFalse(area.soltar(("b", "a"), area.arbol["b"], origen=("b",)), "sobre algo suyo: nada")
         self.assertEqual(p.texto(), "? OR NOT paro")
-        # quitar: queda el hueco
+        # quitar en 2.0.1: elimina el bloque limpiamente sin dejar huecos `?`
         area.quitar(("b", "a"))
-        self.assertEqual(p.texto(), "? OR NOT ?")
-        area.quitar(("b",))
-        self.assertEqual(p.texto(), "? OR ?")
-        area.quitar(())
-        self.assertEqual((p.texto(), area.arbol), ("", None))
-        # P6: quitar la pieza por su ruta, igual que Supr o soltar fuera del área.
+        self.assertEqual(p.texto(), "")
         area.soltar(None, nuevo("y", a=var("marcha"), b=var("paro")))
         area.quitar((0, "b"))
-        self.assertEqual(p.texto(), "marcha AND ?")
+        self.assertEqual(p.texto(), "marcha")
         # y arrastrar fuera del área (sin papelera) quita lo mismo: `quitar` con la ruta de la superficie
-        area.quitar((0, "a"))
-        self.assertEqual(p.texto(), "? AND ?")
-        self.assertEqual(emitidos[-1], "? AND ?")
+        area.quitar((0,))
+        self.assertEqual(p.texto(), "")
+        self.assertEqual(emitidos[-1], "")
+        area.poner_arbol(nuevo("o", a=None, b=None))
         # el sitio bajo el puntero: el hueco o el bloque más interior
         from PySide6.QtCore import QPointF
         area.resize(300, 100)
         area._calcular(300)
         hueco_a = next(r for r, ruta, n in area._bloques if ruta == (0, "a"))
+        hueco_b = next(r for r, ruta, n in area._bloques if ruta == (0, "b"))
         self.assertEqual(area.ruta_en(hueco_a.center()), (0, "a"))
-        self.assertEqual(area.ruta_en(QPointF(hueco_a.left() - 2, hueco_a.center().y())), (0,), "el borde del «y»")
+        self.assertEqual(area.ruta_en(QPointF((hueco_a.right() + hueco_b.left()) / 2, hueco_a.center().y())), (0,),
+                         "el conector del «y» plano pertenece a (0,)")
         self.assertIsNone(area.ruta_en(QPointF(299, 99)))
 
     def test_SEDI51_desplegables_y_campos(self):
@@ -7640,16 +7697,16 @@ class Bloques(unittest.TestCase):
         area.elegir((), "op", "!=")
         self.assertEqual(p.texto(), "CT != 3")
         self.assertTrue(area.editar_campo((), "v", ""))
-        self.assertEqual(p.texto(), "CT != 0", "un valor vacío es 0")
-        self.assertFalse(area.editar_campo((), "v", "3 AND"), "un valor que no se lee se rechaza")
-        self.assertEqual(p.texto(), "CT != 0")
+        self.assertEqual(p.texto(), "CT != ?", "un valor vacío deja el marcador «Núm»")
         n_avisos = len(avisos)
-        for malo in ("a AND b", "marcha OR paro", "NOT marcha", "T > 2", "CT = CT"):
-            self.assertFalse(area.editar_campo((), "v", malo), malo + ": no es un operando numérico")
-        self.assertEqual((p.texto(), len(avisos)), ("CT != 0", n_avisos + 5))
-        for bueno in ("CT + 1", "T", "2.5", "2s", "(CT + 1)"):
-            self.assertTrue(area.editar_campo((), "v", bueno), bueno)
-        self.assertEqual(p.texto(), "CT != (CT + 1)", "el valor se escribe tal cual")
+        for malo in ("a AND b", "marcha OR paro", "NOT marcha", "T > 2", "CT = CT", "CT + 1", "T", "2.5", "2s", "(CT + 1)"):
+            self.assertFalse(area.editar_campo((), "v", malo), malo + ": no es un entero válido en CT")
+        self.assertEqual((p.texto(), len(avisos)), ("CT != ?", n_avisos + 10))
+        self.assertTrue(area.editar_campo((), "v", "12"))
+        self.assertEqual(p.texto(), "CT != 12")
+        area.elegir((), "n", "T")
+        self.assertTrue(area.editar_campo((), "v", "2,5"))
+        self.assertEqual(p.texto(), "T != 2.5")
         area.quitar(())
         area.soltar(None, nuevo("texto", s="nada"))
         self.assertTrue(area.editar_campo((), "s", "CT + 1 > 3"))
@@ -7665,23 +7722,25 @@ class Bloques(unittest.TestCase):
         self.assertEqual([t for _, t in CATEGORIAS_BANDA], ["Operadores", "Temp.", "Comp.", "Const."])
         self.assertEqual(len({COLORES[c] for c, _ in CATEGORIAS_BANDA}), 4)
         self.assertEqual(PAPEL["interna"], "internal")
-        self.assertEqual([r.text() for r in p.categorias.values()], [t for _, t in CATEGORIAS_BANDA])
+        self.assertEqual(list(p.categorias), [c for c, _ in CATEGORIAS_BANDA])
+        self.assertEqual(p.banda.l_prefijo.text(), "Insertar:")
         self.assertEqual((COLORES["entrada"], COLORES["salida"], COLORES["etapa"], COLORES["interna"]),
-                         (estilo.ACENTO, estilo.SIMULACION, estilo.EDICION, estilo.ORIGEN_MEMORIA), "el color de cada origen")
+                         (estilo.ACENTO, estilo.SIMULACION, estilo.EDICION, "#b45309"), "el color de cada origen")
         # una ficha por elemento (etapas por número, variables por nombre), ya elegido
         combinado = [("var", "marcha", "input"), ("var", "paro", "input"), ("etapa", "X0", None), ("etapa", "X1", None),
                      ("etapa", "active(Inicio)", None), ("var", "M1", "internal"), ("var", "Motor 1", "output"), ("var", "Q00", "output")]
         self.assertEqual([(b["k"], b["n"], b.get("papel")) for b in p.paleta.bloques()], combinado)
-        # lo que crea cada botón de la banda
-        self.assertEqual([b.text() for b in p.banda.botones["operador"]], ["NOT", "↑", "↓", "( … )", "Y", "O"])
-        self.assertEqual([p.banda.nodo(b.clave)["k"] for b in p.banda.botones["operador"]], ["no", "sube", "baja", "par", "y", "o"],
-                         "con el bloque «( )» (P-IMP-46) y los botones «Y» y «O»; las constantes no van entre los operadores")
+        # lo que crea cada botón de la cinta `.op-ribbon` 2.0.1
+        self.assertEqual([b.text() for b in p.banda.botones["operador"]], ["( … )"])
+        self.assertEqual([p.banda.nodo(b.clave)["k"] for b in p.banda.botones["operador"]], ["par"],
+                         "el bloque «( )» en la cinta; las constantes en su grupo separado")
         self.assertEqual([(p.banda.nodo(b.clave)["k"], p.banda.nodo(b.clave)["v"]) for b in p.banda.botones["constante"]],
                          [("const", 1), ("const", 0)])
         self.assertEqual([(p.banda.nodo(b.clave)["k"], p.banda.nodo(b.clave)["t1"], p.banda.nodo(b.clave)["t2"])
-                          for b in p.banda.botones["tiempo"]], [("temp", "3s", ""), ("temp", "", "3s")], "t/X y X/t")
-        self.assertEqual([(p.banda.nodo(b.clave)["k"], p.banda.nodo(b.clave)["n"]) for b in p.banda.botones["comparacion"]], [("cmp", "CT")],
-                         "la comparación trae la primera variable numérica")
+                          for b in p.banda.botones["tiempo"]], [("temp", "5s", "")], "botón Temporizador")
+        self.assertEqual([(p.banda.nodo(b.clave)["k"], p.banda.nodo(b.clave)["n"], p.banda.nodo(b.clave)["op"], p.banda.nodo(b.clave)["v"])
+                          for b in p.banda.botones["comparacion"]], [("cmp", "CT", ">=", "10")],
+                         "la comparación trae la primera variable numérica con >= 10")
         self.assertEqual(p.opciones("interna"), [("M1", "M1")], "las memorias booleanas")
         self.assertEqual(p.opciones("etapa"), [("X0", "X0"), ("X1", "X1"), ("XInicio", "active(Inicio)")], "se ve «XInicio»; lo que se guarda es active(Inicio)")
         # las fichas de elementos no llevan desplegable (▾)
@@ -7741,7 +7800,7 @@ class Bloques(unittest.TestCase):
         h = {w: area.heightForWidth(w) for w in (200, 260, 330, 700, 1000)}
         self.assertGreater(h[200], h[330], h)
         self.assertGreater(h[330], h[1000], h)
-        for w in (200, 250, 330, 700):
+        for w in (220, 250, 330, 700):
             self.assertLessEqual(area.ancho_necesario(w), w, f"a {w} px los bloques no se salen")
         suelta = PaletaBloques(lambda: ({f"salida_larga_{i}": ("output", "bool") for i in range(6)}, []))
         suelta.cargar("salida")  # (el catálogo suelto, en línea: sus fichas, que ya no incluyen los operadores de la banda)
@@ -7815,6 +7874,13 @@ class Bloques(unittest.TestCase):
             m = QMimeData()
             m.setData(bloques.MIME, json.dumps({"nodo": nodo, "grupo": grupo, "origen": origen}).encode())
             return m
+        # en 2.0.2 el temporizador `2s/marcha` tampoco lleva desplegable ▾: su base es un bloque/hueco directo en `(0, "a", "a")`
+        self.assertFalse([x for x in a._piezas if x[1] == "drop" and x[2][:2] == (0, "a")])
+        self.assertTrue(any(ruta == (0, "a", "a") for _, ruta, _ in a._bloques))
+        # con `2s/?`, el hueco interior `(0, "a", "a")` existe como sub-caja y recibe arrastres
+        p.poner("2s/? AND CT < 3")
+        QApplication.processEvents()
+        a._calcular(a.width())
         centro_ = lambda ruta: next(x for x in a._bloques if x[1] == ruta)[0].center()  # noqa: E731
         m = mime(bloques.var("paro"), "otro", None)
         with warnings.catch_warnings():  # el constructor con QPoint está marcado como obsoleto, pero es el que existe
@@ -7826,20 +7892,22 @@ class Bloques(unittest.TestCase):
         a.dropEvent(QDropEvent(centro_((0, "a", "a")), Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton,
                                Qt.KeyboardModifier.NoModifier))
         self.assertEqual((p.texto(), a._objetivo, bloques._ARRASTRE["resuelto"]), ("2s/paro AND CT < 3", None, True))
-        # del área al área, con su origen: se mueve
+        # del área al área, con su origen: al soltar sobre el centro del temporizador, lo mueve dentro sin dejar huecos `?`
         a._calcular(a.width())
         m = mime(a.arbol["b"], p.grupo, ["b"])
-        a.dropEvent(QDropEvent(centro_((0, "a", "a")), Qt.DropAction.MoveAction, m, Qt.MouseButton.LeftButton,
+        a.dropEvent(QDropEvent(centro_((0, "a")), Qt.DropAction.MoveAction, m, Qt.MouseButton.LeftButton,
                                Qt.KeyboardModifier.NoModifier))
-        self.assertEqual(p.texto(), "2s/(CT < 3) AND ?")
-        # de otro grupo, con origen: se copia y no se quita nada
+        self.assertEqual(p.texto(), "2s/(paro AND CT < 3)")
+        # de otro grupo, con origen: se copia en el borde derecho sin destruir el bloque
+        a._calcular(a.width())
+        rect_t = next(x[0] for x in a._bloques if x[1] == (0,))
         m = mime(bloques.var("marcha"), "otro", ["a"])
-        a.dropEvent(QDropEvent(centro_((0, "b")), Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton,
+        a.dropEvent(QDropEvent(QPointF(rect_t.right() - 2, rect_t.center().y()), Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton,
                                Qt.KeyboardModifier.NoModifier))
-        self.assertEqual(p.texto(), "2s/(CT < 3) AND marcha")
-        # P6: la pieza seleccionada se quita sin una papelera.
+        self.assertEqual(p.texto(), "2s/(paro AND CT < 3) AND marcha")
+        # P6: la pieza seleccionada se quita sin papelera y sin dejar huecos `?`.
         a.quitar((0, "a"))
-        self.assertEqual(p.texto(), "? AND marcha")
+        self.assertEqual(p.texto(), "marcha")
         # el área vacía recibe un bloque como raíz
         a.quitar(())
         a._calcular(a.width())
@@ -7910,7 +7978,7 @@ class Bloques(unittest.TestCase):
         for n in range(30):
             base = anadir_hueco(base, ())
         self.assertEqual(len(hijos(base)), bloques.MAX_ENTRADAS)
-        # el área: el «+» es una pieza de la superficie (sin «×» en los huecos)
+        # el área en 2.0.1: flujo plano sin botón «+»; las fichas se añaden directamente y los huecos sobrantes se quitan con Supr o menú
         p = self.prog()
         p.resize(500, 300)
         p.show()
@@ -7919,21 +7987,23 @@ class Bloques(unittest.TestCase):
         area = p.lienzo
         area._calcular(area.width())
         botones = lambda: [x for x in area._piezas if x[1] == "boton"]  # noqa: E731
-        self.assertEqual([x[3] for x in botones()], ["mas"])
+        self.assertEqual(botones(), [], "en 2.0.1 y/o no llevan botón «+»")
+        self.assertEqual(len(area.motor.conectores), 1, "conector clicable «+» entre los operandos")
         emitidos = []
         p.cambiado.connect(emitidos.append)
-        QTest.mouseClick(area, Qt.MouseButton.LeftButton, pos=botones()[0][0].center().toPoint())
+        self.assertTrue(area.anadir_hueco((0,)))
         self.assertEqual((p.texto(), emitidos), ("marcha OR paro OR ?", ["marcha OR paro OR ?"]))
-        self.assertEqual([x[3] for x in botones()], ["mas"], "solo el «+»: sin «×» en cada hueco")
-        QTest.mouseClick(area, Qt.MouseButton.LeftButton, pos=botones()[-1][0].center().toPoint())
+        self.assertTrue(area.anadir_hueco((0,)))
         self.assertEqual(p.texto(), "marcha OR paro OR ? OR ?")
         # un hueco vacío sobrante: se selecciona y Supr lo quita (el atajo de la ventana no se lo lleva)
+        area._calcular(area.width())
         hueco = lambda c: next(r for r, ruta, n in area._bloques if ruta == (0, c))  # noqa: E731
         QTest.mouseClick(area, Qt.MouseButton.LeftButton, pos=hueco("d").center().toPoint())
         self.assertEqual(area._hueco_sel, (0, "d"))
         QTest.keyClick(area, Qt.Key.Key_Delete)
         self.assertEqual(p.texto(), "marcha OR paro OR ?")
         # y con el botón derecho → «Quitar hueco»
+        area._calcular(area.width())
         self.assertTrue(area.hueco_quitable((0, "c")))
         self.assertFalse(area.hueco_quitable((0, "a")), "ocupado: no es un hueco")
         with mock.patch("escritorio.bloques.QMenu") as menu:
@@ -7944,35 +8014,15 @@ class Bloques(unittest.TestCase):
         accion()
         self.assertEqual(p.texto(), "marcha OR paro", "nunca baja de dos")
         self.assertFalse(area.hueco_quitable((0, "b")))
-        QTest.mouseClick(area, Qt.MouseButton.LeftButton, pos=botones()[-1][0].center().toPoint())
-        self.assertEqual(p.texto(), "marcha OR paro OR ?")
         self.assertEqual(len(p._pila), 0, "sin historial local: lo deshace quien lo usa")
-        # pulsar un botón y mover no arrastra el bloque
-        arrastres = []
-        with mock.patch.object(area, "_arrastrar", lambda ruta: arrastres.append(ruta)):
-            c = botones()[-1][0].center()
-            QTest.mousePress(area, Qt.MouseButton.LeftButton, pos=c.toPoint())
-            QTest.mouseMove(area, (c + QPointF(30, 30)).toPoint())
-        self.assertEqual(arrastres, [])
-        # soltar un bloque sobre el «+»: en un hueco nuevo, también uno del área
-        def mime(nodo, grupo, origen):
-            m = QMimeData()
-            m.setData(bloques.MIME, json.dumps({"nodo": nodo, "grupo": grupo, "origen": origen}).encode())
-            return m
-        mas = botones()[-1][0].center()
-        m = mime(var("M1", "internal"), "otro", None)
-        from PySide6.QtGui import QDragMoveEvent
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            area.dragMoveEvent(QDragMoveEvent(mas.toPoint(), Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton,
-                                              Qt.KeyboardModifier.NoModifier))
-        self.assertEqual((area._objetivo, area._resalte_mas is not None), (None, True), "el «+» se resalta, no el bloque")
-        area.dropEvent(QDropEvent(mas, Qt.DropAction.CopyAction, m, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+        # inserción directa al carril sin botón «+»
+        self.assertTrue(area.insertar(var("M1", "internal")))
+        self.assertEqual(p.texto(), "marcha OR paro AND M1")
+        # `soltar_en_mas` del área sigue funcionando sobre un «y»/«o»
+        p.poner("marcha OR paro OR ?")
+        self.assertTrue(area.soltar_en_mas((0,), var("M1", "internal")))
         self.assertEqual(p.texto(), "marcha OR paro OR ? OR M1")
-        area._calcular(area.width())
-        mas = botones()[-1][0].center()
-        m = mime(area.arbol["a"], p.grupo, ["a"])
-        area.dropEvent(QDropEvent(mas, Qt.DropAction.MoveAction, m, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+        self.assertTrue(area.soltar_en_mas((0,), area.arbol["a"], origen=("a",)))
         self.assertEqual(p.texto(), "paro OR ? OR M1 OR marcha", "movido desde el área: su hueco desaparece")
         # el texto vuelve a bloques con n huecos, y «Escribir» y los bloques coinciden
         p.poner("marcha OR paro OR Q00 OR M1 OR X1")

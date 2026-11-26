@@ -84,10 +84,13 @@ class ConexionES:
             config = configuracion_inicial(self._proyecto, doc, self._parametros_recordados["canales"])
         from ..conexion_ventana import preparar_carga
         preparar_carga(self, config)
-        if self.modbus.activo and self.modbus.estado != "cerrando":
+        with self.candado:
+            vivo = self.modbus.activo and self.modbus.estado != "cerrando" and self.modbus.cliente is not None
+            datos_cliente = (self.modbus.cliente.host, self.modbus.cliente.puerto, self.modbus.cliente.unidad) if vivo else None
+        if datos_cliente is not None:
             config = copy.deepcopy(config or configuracion_inicial(
                 self._proyecto, doc, self._parametros_recordados["canales"]))
-            config.host, config.puerto, config.unidad = self.modbus.cliente.host, self.modbus.cliente.puerto, self.modbus.cliente.unidad
+            config.host, config.puerto, config.unidad = datos_cliente
         self.panel_es.cargar(doc, config, avisos)
         self.panel_es.host.setToolTip(f"{origen}. Copia la dirección que muestra el software del servidor Modbus.")
         if fallo:
@@ -264,6 +267,7 @@ class ConexionES:
         self.a_es.blockSignals(False)
         self._aspecto_boton_es(es)
         indice=self.paginas_es.currentIndex()
+        pendiente = False
         if hasattr(self,'pestanas_vistas'):
             self.pestanas_vistas.blockSignals(True);self.pestanas_vistas.setCurrentIndex({0:0,1:2,2:1}[indice]);self.pestanas_vistas.blockSignals(False)
             self.luz_es.setProperty("abierta",indice==1);self.luz_es.style().unpolish(self.luz_es);self.luz_es.style().polish(self.luz_es)  # activa mientras se ve E/S
@@ -286,7 +290,7 @@ class ConexionES:
         """Texto, tooltip e icono del botón conmutador en cada una de sus dos vistas."""
         self.a_es.setText("Vista GRAFCET" if es else "E/S externas")
         self.a_es.setToolTip("Volver al dibujo GRAFCET" if es else
-                             "Conectar sensores y actuadores · se vuelve con este mismo botón o con la flecha ← del panel")
+                             "Conectar sensores y actuadores · se vuelve con este mismo botón o desde las pestañas superiores")
         self.a_es.setIcon(self._iconos_es[1 if es else 0])
 
     def _fijar_ancho_boton_es(self) -> None:
@@ -371,8 +375,11 @@ class ConexionES:
         texto = {"conectado": "conectada", "error": "error", "diagnostico": "error"}.get(estado, "desconectada")
         # la luz no depende solo del color: círculo con marca (conectada), círculo vacío (desconectada) o rombo con «!» (error)
         self.luz_es.setIcon(QIcon(estilo.forma_luz(texto)))
-        self.luz_es.setIconSize(QSize(14, 14))
-        self.luz_es.setText(f"{'E/S' if getattr(self, '_muy_estrecho', False) else 'E/S externas'}: {texto}")  # media pantalla: una palabra menos
-        self.luz_es.setToolTip((mensaje + "\n" if mensaje else "") + "Abrir E/S externas")
+        self.luz_es.setIconSize(QSize(12, 12))
+        etiqueta = "E/S" if getattr(self, "_muy_estrecho", False) else "E/S externas"
+        self.luz_es.setText(f"{etiqueta}: error" if texto == "error" else etiqueta)
+        self.luz_es.setToolTip((mensaje + "\n" if mensaje else "") + f"E/S externas: {texto} · clic para abrir")
         self.luz_es.setAccessibleName(f"E/S externas: {texto}")
         estilo.poner(self.luz_es, estadoLuz=texto)
+        if hasattr(self, "_ubica_modo"):
+            self._ubica_modo.ajustar()

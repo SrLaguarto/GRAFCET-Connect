@@ -3,7 +3,7 @@ import html
 import re
 
 from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QGuiApplication, QTextDocument
+from PySide6.QtGui import QFontMetrics, QGuiApplication, QTextDocument
 from PySide6.QtWidgets import QAbstractItemView, QApplication, QGraphicsView, QHeaderView, QToolTip, QWidget
 
 from . import estilo
@@ -12,12 +12,22 @@ ANCHO_MAXIMO = 400
 
 
 def ayuda_html(texto, nombre=None, ancho=ANCHO_MAXIMO):
-    texto = re.sub(r"\S{25,}", lambda m: "\u200b".join(
+    partido = re.sub(r"\S{25,}", lambda m: "\u200b".join(
         m.group()[i:i + 24] for i in range(0, len(m.group()), 24)), texto)
-    contenido = html.escape(texto).replace("\n", "<br>")
+    contenido = html.escape(partido).replace("\n", "<br>")
     if nombre:
         contenido = "<b>" + html.escape(nombre) + "</b> — " + contenido
-    return ('<qt><table width="' + str(max(80, ancho - 2 * estilo.E4))
+    celda = max(80, ancho - 2 * estilo.E4)
+    plana = (f"{nombre} — {texto}" if nombre else texto).replace("\u200b", "")
+    fm_tip = QFontMetrics(QToolTip.font())
+    fm_est = QFontMetrics(estilo.fuente())
+    largo = max(
+        (max(fm_tip.horizontalAdvance(linea), fm_est.horizontalAdvance(linea)) for linea in plana.split("\n")),
+        default=0,
+    )
+    if largo <= celda - 12:
+        return f"<qt>{contenido}</qt>"
+    return ('<qt><table width="' + str(celda)
             + '" cellpadding="0" cellspacing="0"><tr><td>' + contenido + '</td></tr></table></qt>')
 
 

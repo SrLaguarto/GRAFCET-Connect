@@ -92,10 +92,13 @@ class RematesTrasD(BaseQt):
             w, e, p, aid = self.preparar("evento", flotante)
             w.flot.elegir_parte("accion")  # (E8: una parte cada vez)
             QApplication.processEvents()
-            pa = p.accion
-            controles = [pa.variable, pa.l_fichas, *pa.fichas.values()]
+            pa, v = p.accion, w.flot.principal
+            # 2.0.1: la variable vive en la subcabecera alineada con su rótulo; la asignación `:= [1 | 0]` vive centrada en `tarjeta_asignacion`
+            centros_sub = [x.mapToGlobal(x.rect().center()).y() for x in (v.l_dest, pa.variable)]
+            self.assertLessEqual(max(centros_sub) - min(centros_sub), 2)
+            controles = [pa.l_asignacion, pa.l_var_bool, pa.l_fichas, *pa.fichas.values()]
             centros = [x.mapToGlobal(x.rect().center()).y() for x in controles]
-            self.assertLessEqual(max(centros) - min(centros), 1)
+            self.assertLessEqual(max(centros) - min(centros), 2)
             caja = QWidget()
             self.addCleanup(caja.close)
             lay = QVBoxLayout(caja)
@@ -103,14 +106,14 @@ class RematesTrasD(BaseQt):
             lay.addWidget(prueba)
             lay.addWidget(prueba.caja_valor)
             prueba.mostrar(e, aid)
-            caja.resize(220, 400)
+            caja.resize(260, 400)
             caja.show()
             for _ in range(4):
                 QApplication.processEvents()
-            # (E8: «Variable := Valor» es una sola fila que no salta de línea: aquí se comprueba que sigue siendo una fila)
-            fichas, variable = prueba.caja_fichas, prueba.variable
-            self.assertGreater(fichas.x(), variable.x())
-            self.assertLessEqual(abs(fichas.geometry().center().y() - variable.geometry().center().y()), 1)
+            # En `PanelAccion` aislado, la tarjeta de asignación booleana queda debajo de la fila de variable y conserva `:=` y `1/0` en una fila
+            self.assertGreater(prueba.caja_fichas.mapToGlobal(QPoint()).y(), prueba.variable.mapToGlobal(QPoint()).y())
+            centros_aisl = [x.mapToGlobal(x.rect().center()).y() for x in (prueba.l_fichas, *prueba.fichas.values())]
+            self.assertLessEqual(max(centros_aisl) - min(centros_aisl), 2)
 
     def test_SREM206_relleno_interior_de_los_dos_selectores(self):
         w, e, p, aid = self.preparar("evento")

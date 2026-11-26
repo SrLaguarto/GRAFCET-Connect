@@ -188,8 +188,11 @@ def imposed(h: HierarchyInfo, forces: dict[str, frozenset[str]]) -> dict[str, fr
 
 def _has_timing(h: HierarchyInfo, cm: Any, partial: str) -> bool:
     steps = h.partial_steps.get(partial, frozenset())
-    return any(ts.base_kind == "active" and ts.base_step in steps for ts in cm.temporals.values()) or \
-        any(a.limit_us is not None and a.step in steps for a in cm.actions.values())
+    return any(
+        (ts.base_kind == "active" and ts.base_step in steps)
+        or (ts.base_kind == "general" and bool(ts.base_steps & steps))
+        for ts in cm.temporals.values()
+    ) or any(a.limit_us is not None and a.step in steps for a in cm.actions.values())
 
 
 class HierarchyBlocked(Exception):

@@ -103,8 +103,6 @@ class _Seleccion:
             self.parte_pedida = None
             if caja.get("forzado"):
                 self.configurar_orden(caja["id"])
-            elif self.datos_accion(caja["id"])["tipo"] == "continua" and hasattr(self.diagrama, "abrir_selector"):
-                self.desplegar_variable(caja)  # una continua (sin condición, evento ni asignación): solo falta su variable, y se elige sobre la propia acción
             else:
                 if self.datos_accion(caja["id"])["tipo"] in (*CON_CONDICION, "evento"):  # dos partes: se abre la que se pulsó
                     self.parte_pedida = "formula" if en_marca else "accion"

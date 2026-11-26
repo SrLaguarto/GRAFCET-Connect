@@ -381,11 +381,13 @@ class PlanosIntegrados(BaseQt):
         w,e,s=self.preparar();ids=[self.crear_hoja(e,[s]) for _ in range(3)];p=self.pulsar_planos();QApplication.processEvents()
         def miniaturas():return [p.lista.item(i).icon().pixmap(QSize(116,82)).toImage() for i in range(p.lista.count())]
         antes=miniaturas();self.assertTrue(all(img.width()==116 and img.height()==82 for img in antes));p.zoom(.33);QApplication.processEvents();self.assertEqual(miniaturas(),antes)
-        self.assertGreaterEqual(p.b_hoja.y(),p.lista.geometry().bottom())
+        self.assertTrue(p.scroll_hojas.isAncestorOf(p.b_hoja))
+        self.assertTrue(p.b_hoja.isVisible())
+        self.assertEqual(p.b_hoja.text(), "+ Añadir otra hoja")
         with patch.object(CrearHoja,'exec',lambda d:(d.accept() or QDialog.DialogCode.Accepted)):p.a_hoja.trigger()
         QApplication.processEvents()
         self.assertEqual([p.lista.item(i).data(Qt.ItemDataRole.UserRole) for i in range(3)],ids);self.assertEqual(p.hoja_id,e.ed.sheet_links()[-1]['id']);self.assertEqual(p.lista.currentRow(),3)
-        self.assertTrue(all(img.width()==116 and img.height()==82 for img in miniaturas()));self.assertGreaterEqual(p.b_hoja.y(),p.lista.geometry().bottom())
+        self.assertTrue(all(img.width()==116 and img.height()==82 for img in miniaturas()));self.assertEqual(p.l_cont_hojas.text(),'4')
 
     def test_SPAG33_dxf_antiguo_recupera_interior_completo_sin_tocar_zona_manual(self):
         """REQ-DAT-02, REQ-EDT-11: DXF ya incorporado recupera marco/cajetín desde sus líneas; una zona manual se conserva."""
@@ -414,7 +416,7 @@ class PlanosIntegrados(BaseQt):
         from PySide6.QtSvg import QSvgRenderer
         w,e,s=self.preparar();self.crear_hoja(e);self.crear_hoja(e);p=self.pulsar_planos()
         for size in ((1366,768),(1000,600)):
-            w.resize(*size);QApplication.processEvents();r=p.lista.visualItemRect(p.lista.item(1));self.assertLess(r.bottom()+p.lista.spacing(),p.lista.viewport().height());self.assertGreaterEqual(p.b_hoja.y(),p.lista.geometry().bottom())
+            w.resize(*size);QApplication.processEvents();r=p.lista.visualItemRect(p.lista.item(1));self.assertLess(r.bottom()+p.lista.spacing(),p.lista.viewport().height());self.assertTrue(p.scroll_hojas.isAncestorOf(p.b_hoja));self.assertTrue(p.b_hoja.isVisible())
         self.assertTrue(QFile.exists(':/grafconnect/desplegar.svg'));self.assertTrue(QSvgRenderer(':/grafconnect/desplegar.svg').isValid());self.assertIn('QComboBox::drop-down',w.styleSheet());self.assertIn('width:24px',w.styleSheet());self.assertIn(':/grafconnect/desplegar.svg',w.styleSheet())
         p.a_nueva.trigger();self.assertEqual(w.b_confirmar_traer.objectName(),'confirmarSeleccionHoja');self.assertIn('background:#27665c',w.aviso_traer.styleSheet());self.assertIn('background:white',w.aviso_traer.styleSheet())
 
@@ -485,7 +487,7 @@ class PlanosIntegrados(BaseQt):
             p.lista.setStyleSheet(f'QListWidget {{font-size:{fuente}px;}}')
             for ancho,alto in ((1366,768),(1000,600)):
                 w.resize(ancho,alto);QApplication.processEvents();QApplication.processEvents();p.ajustar_lista();QApplication.processEvents()
-                ultimo=p.lista.visualItemRect(p.lista.item(4));self.assertLess(ultimo.bottom(),p.lista.viewport().height());self.assertGreaterEqual(ultimo.height(),82+p.lista.fontMetrics().height()+20);self.assertGreaterEqual(p.b_hoja.y(),p.lista.geometry().bottom())
+                ultimo=p.lista.visualItemRect(p.lista.item(4));self.assertLess(ultimo.bottom(),p.lista.viewport().height());self.assertGreaterEqual(ultimo.height(),82+p.lista.fontMetrics().height()+20)
                 p.scroll_hojas.ensureWidgetVisible(p.b_hoja);QApplication.processEvents();punto=p.b_hoja.mapTo(p.scroll_hojas.viewport(),QPoint(0,0));self.assertGreaterEqual(punto.y(),0);self.assertLessEqual(punto.y()+p.b_hoja.height(),p.scroll_hojas.viewport().height())
         self.assertEqual([h['id'] for h in e.ed.sheet_links()],ids)
 

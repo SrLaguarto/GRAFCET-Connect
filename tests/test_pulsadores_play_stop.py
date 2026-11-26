@@ -138,7 +138,7 @@ class PulsadoresYControl(BaseQt):
         stop = w.a_ejecutar.icon().pixmap(24, 24).toImage()
         self.assertIn("Stop", w.a_ejecutar.toolTip()); self.assertNotIn("Pausa", w.a_ejecutar.toolTip())
         w.a_ejecutar.setChecked(False)
-        self.assertEqual((w.a_ejecutar.text(), w.modo), ("Play", "editar"))
+        self.assertEqual((w.a_ejecutar.text(), w.modo), ("Simular", "editar"))
         self.assertEqual(w.v.state().get("situation", []), [])
         self.assertFalse(stop == w.a_ejecutar.icon().pixmap(24, 24).toImage())
         self.assertFalse(w.a_reiniciar.icon().isNull())

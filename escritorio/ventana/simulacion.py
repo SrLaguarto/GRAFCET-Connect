@@ -6,7 +6,7 @@ import html
 from .. import estilo
 from ..diagrama import COL
 from ..edicion import Edicion, sin_codigos
-from ..mensajes import amable, motivo_parada
+from ..mensajes import amable, motivo_parada, vencimientos_en_palabras
 from ..paneles import CabeceraCompacta, ContextoNombres
 from math import ceil
 from time import perf_counter
@@ -21,22 +21,34 @@ from grafcet.view import Vista, t_trunc
 from conexion.hilos import SESION, proteger
 from .constantes import ARRIBA_CAJA, ERRORES, ESTADOS, TICK_MS, TITULO, TRAZA
 from .dialogos import _icono_barra
-from .widgets import _BotonEntrada
+from .widgets import TablaConsola, _BotonEntrada
 
 
 class Simulacion:
-    """Simulación: Play, Stop y Reiniciar, `_act`, `refrescar`, las entradas, el reloj, el diagnóstico y las tablas de Variables y Temporizadores y la traza. Sin estado propio: usa los atributos de `Ventana` (la fachada) y llama a los demás métodos a través de `self`."""
+    """Simulación: Simular, Stop y Reiniciar, `_act`, `refrescar`, las entradas, el reloj, el diagnóstico y las tablas de Variables y Temporizadores y la traza. Sin estado propio: usa los atributos de `Ventana` (la fachada) y llama a los demás métodos a través de `self`."""
+
+    @staticmethod
+    def _hoja_consola() -> str:
+        """Hoja de estilo de las tablas de consola para mantener tarjetas transparentes y altura fija tras cambiar escala."""
+        return (
+            f'QTableWidget[consola="true"] {{ font-size: {estilo.T_PEQUENA}px; background: transparent; border: 0; gridline-color: transparent; }} '
+            f'QTableWidget[consola="true"][tecl="true"]:focus {{ border: 2px dashed {estilo.FOCO}; }} '
+            f"QHeaderView::section {{ font-size: {estilo.T_PEQUENA}px; font-weight: 400; padding: 4px 0; }} "
+            f'QTableWidget[consola="true"]::item {{ padding: 2px 0; background: transparent; }} '
+            f'QTableWidget[consola="true"]::item:selected {{ background: transparent; color: {estilo.TINTA}; }}'
+        )
 
     @staticmethod
     def _tabla(cols: list[str], anchos: tuple[int | None, ...] | None = None) -> QTableWidget:
         """Tabla de estado del panel derecho. `anchos`: el de cada columna (None: la que se lleva lo que sobra). Texto de 12 px,
         sin barras de desplazamiento propias (`ajustar_tabla` le da el alto de sus filas), el texto largo se parte en dos líneas
         o se elide con «…» y va entero en la ayuda de la celda."""
-        t = QTableWidget(0, len(cols))
+        t = TablaConsola(0, len(cols))
+        t.setProperty("consola", True)
         t.setHorizontalHeader(CabeceraCompacta(Qt.Orientation.Horizontal, t))  # (pinta el texto de la cabecera sin los márgenes de más de la de Qt)
         t.setHorizontalHeaderLabels(cols)
         t.verticalHeader().setVisible(False)
-        t.verticalHeader().setDefaultSectionSize(estilo.ALTO_FILA)
+        t.verticalHeader().setDefaultSectionSize(estilo.ALTO_FILA + 2)
         t.verticalHeader().setMinimumSectionSize(estilo.ALTO_FILA_COMPACTA)
         t.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)  # (el alto de cada fila lo pone `ajustar_tabla`: con ResizeToContents, cada celda que cambia hace que Qt mida todas las filas)
         t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -48,11 +60,8 @@ class Simulacion:
         t.setWordWrap(True)
         t.setTabKeyNavigation(False)  # el Tab sale de la tabla, no salta de celda en celda
         t.setShowGrid(False)
-        t.setAlternatingRowColors(True)
-        t.setStyleSheet(f"QTableWidget {{ font-size: {estilo.T_PEQUENA}px; border: 0; }} "
-                        f"QTableWidget[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; }} "  # (la hoja propia manda sobre la global: lleva su anillo)
-                        f"QHeaderView::section {{ font-size: {estilo.T_PEQUENA}px; font-weight: 400; padding: 4px 0; }} "  # (el texto lo pinta `CabeceraCompacta`, a 4 px: donde empieza el de las celdas)
-                        f"QTableWidget::item {{ padding: 0; }}")
+        t.setAlternatingRowColors(False)
+        t.setStyleSheet(Simulacion._hoja_consola())
         cab = t.horizontalHeader()
         cab.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         cab.setStretchLastSection(False)
@@ -362,12 +371,10 @@ class Simulacion:
         self._alto_entradas()
 
     def _densidad_lateral(self) -> None:
-        """En un cuarto de pantalla el panel de simulación gana alto (títulos de caja 4 px más bajos y sin margen inferior) para que se
-        vea también la fila de temporizadores sin desplazarse."""
+        """En un cuarto de pantalla el panel de simulación gana alto reduciendo el margen inferior entre bloques."""
         bajo = self._compacto[1]
         for caja in getattr(self, "_cajas_lado", []):
-            caja.setStyleSheet(f"QGroupBox {{ margin-top: {estilo.E1 * 5}px; }}" if bajo else "")
-            caja.layout().setContentsMargins(0, ARRIBA_CAJA, 0, 0 if bajo else estilo.E1)
+            caja.layout().setContentsMargins(0, 0, 0, 0 if bajo else estilo.E1)
 
     @staticmethod
     def _ayuda_entrada(b: _BotonEntrada) -> None:
@@ -452,7 +459,7 @@ class Simulacion:
         self.a_ejecutar.blockSignals(True)
         self.a_ejecutar.setChecked(on)
         self.a_ejecutar.blockSignals(False)
-        self.a_ejecutar.setText("Stop" if on else "Play")
+        self.a_ejecutar.setText("Stop" if on else "Simular")
         self.a_ejecutar.setIcon(_icono_barra("stop" if on else "play", estilo.BLANCO))
         self._centrar_play(on)
 
@@ -532,13 +539,22 @@ class Simulacion:
         self.a_ejecutar.setChecked(False)
         return True
 
+    def _diag_llano(self, d: dict[str, Any] | None, vista: Vista | None = None) -> dict[str, Any] | None:
+        """El diagnóstico de la sesión con su texto en lenguaje llano cuando hace falta el modelo para nombrar los elementos (hoy, los
+        vencimientos simultáneos cuyo resultado depende del orden: sus transiciones o acciones por su etiqueta y no por sus claves)."""
+        vista = vista or self.v
+        if d is None or vista is None:
+            return d
+        llano = vencimientos_en_palabras(d, vista.doc, vista.names)
+        return d if llano is None else {**d, "message": llano[0], "correction": llano[1]}
+
     def _avisar_motor(self, vista: Vista, al_arrancar: bool = False) -> None:
         """El motor no ha quedado en situación estable. Inestable (D-LIM-EVOL: no la alcanza dentro de su límite de
         evoluciones): aviso modal, una sola vez por episodio. Otro diagnóstico: mensaje en la barra de estado (o aviso, si
         era al arrancar). Con Modbus vivo, lo que ya se estuviera controlando pasa a estado seguro (cero) sin cerrar la
         conexión. Los detalles se quedan entre los diagnósticos del panel de edición."""
         with self.candado:  # (E7: lo que se lee del motor para contar el aviso, con el candado)
-            d = vista._diag(vista.s.diagnostics[-1]) if vista.s.diagnostics else None  # con nombres, no ID internos
+            d = self._diag_llano(vista._diag(vista.s.diagnostics[-1]), vista) if vista.s.diagnostics else None  # con nombres, no ID internos
             evoluciones = [r for r in vista.s.trace.records if r["kind"] == "evolucion"]
         inestable = d is not None and d["code"] == "D-LIM-EVOL"
         m = self.modbus
@@ -624,10 +640,13 @@ class Simulacion:
         self._relleno_play = {}
         boton.setStyleSheet("")
         contenido = {}
+        anchos_hint = []
         for on in (False, True):
             self._marcar_play(on)
-            contenido[on] = boton.sizeHint().width() - 2 - 2 * 16  # (el contenido: sin el borde ni el relleno de la hoja global)
-        ancho = max(max(contenido.values()) + 2 * 16 + 2, 92)
+            sh = boton.sizeHint().width()
+            anchos_hint.append(sh)
+            contenido[on] = max(0, sh - 2 - 2 * 13)  # (el contenido: sin el borde ni el relleno de la hoja global)
+        ancho = max(max(anchos_hint), max(contenido.values()) + 2 * 13 + 2, 96)
         self._relleno_play = {on: ((ancho - 2 - c) // 2, ancho - 2 - c - (ancho - 2 - c) // 2) for on, c in contenido.items()}
         boton.setFixedWidth(ancho)
         boton.resize(ancho, boton.height())
@@ -693,6 +712,8 @@ class Simulacion:
                               + (f" · próximo vencimiento: {S['nextEvent']}" if S.get("nextEvent") else ""))
         self._lecturas()
         self._variables(M, S)
+        if hasattr(self, "l_cont_sim"):
+            self.l_cont_sim.setText(str(len(M.get("inputs", ())) + self.t_vars.rowCount()))
         self._traza(S)
         if hasattr(self, "panel_es"):
             valores = dict(S.get("values", {}))
@@ -735,7 +756,7 @@ class Simulacion:
         if not ds:
             self.diag.hide()
             return
-        d, blk = ds[0], S.get("blocked")
+        d, blk = self._diag_llano(ds[0]), S.get("blocked")
         text = (f"<p>{e(amable(sin_codigos(d['message']), d['code']))}</p>"
                 f"<p><i>{e(d.get('correction', ''))}</i></p>")
         if blk:

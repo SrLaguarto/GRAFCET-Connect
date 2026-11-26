@@ -25,6 +25,7 @@ from .diagnostics import Diagnostic, DiagnosticError
 from .editor import _coord, new_presentation
 from .engine import Session, _Env
 from . import expressions as ex
+from .ids import INTERNAL_ID_RE, label_key, transition_effective_label
 from .model import validate_model
 from .timeutil import format_duration
 from .values import format_value, parse_value
@@ -53,7 +54,7 @@ def _dur(us: int) -> str:
     return format_duration(us, "s", "es-ES").replace(" ", "")
 
 
-_INTERNO = re.compile(r"[a-z]-[0-9a-f]{32}")  # el ID que crea grafcet.ids.IdGenerator: no es para mostrar
+_INTERNO = INTERNAL_ID_RE  # el ID que crea grafcet.ids.IdGenerator: no es para mostrar
 
 
 def force_situation(f: dict[str, Any], names: dict[str, str]) -> str:
@@ -87,15 +88,16 @@ def display_names(doc: dict[str, Any]) -> dict[str, str]:
             except KeyError:
                 sit = "{?}"
             out[f["id"]] = f"orden {plabel.get(f['targetPartialRef'], f['targetPartialRef'])}{sit} de "                            f"{out.get(f['sourceStepRef'], f['sourceStepRef'])}"
-    taken = {t["label"] for t in doc["transitions"] if t.get("label")}
-    for n, t in enumerate(doc["transitions"], 1):  # sin etiqueta, una transición del editor se numera: t1, t2…
-        name = t.get("label")
-        if not name and _INTERNO.fullmatch(t["id"]):
-            k = n
-            while f"t{k}" in taken:
-                k += 1
-            name = f"t{k}"
+    taken = {label_key(lbl) for t in doc["transitions"] if (lbl := transition_effective_label(t))}
+    auto = 1
+    for t in doc["transitions"]:  # sin etiqueta, una transición del editor se numera: t1, t2…
+        name = transition_effective_label(t)
+        if not name:
+            while f"t{auto}" in taken:
+                auto += 1
+            name = f"t{auto}"
             taken.add(name)
+            auto += 1
         out[t["id"]] = name or t["id"]
     for a in doc["actions"]:  # una acción del editor se nombra por su etapa (columna «Contribuyen»)
         if _INTERNO.fullmatch(a["id"]) and a["stepRef"] in out:
@@ -136,10 +138,19 @@ def _base_simple(x: dict[str, Any]) -> bool:
 def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = None,
          key: str | None = None) -> list[dict[str, Any]]:
     """Notación estática; con `key`, añade referencias de lectura para el color de cada subexpresión."""
-    names = names or {}
+    out = _norm(m, top, names or {}, key, [0])
+    if any(g["n"] > 0 for s in out for g in s.get("neg", ())):
+        return out
+    return [{k: v for k, v in s.items() if k != "neg"} for s in out]
+
+
+def _norm(m: dict[str, Any], top: bool, names: dict[str, str],
+          key: str | None, seq: list[int]) -> list[dict[str, Any]]:
     op = m["operator"]
+
     def hijo(i: int) -> list[dict[str, Any]]:
-        return norm(m["operands"][i], False, names, None if key is None else f"{key}.{i}")
+        return _norm(m["operands"][i], False, names, None if key is None else f"{key}.{i}", seq)
+
     def lado(i: int) -> list[dict[str, Any]]:
         x = m["operands"][i]
         segs = hijo(i)
@@ -168,10 +179,24 @@ def norm(m: dict[str, Any], top: bool = True, names: dict[str, str] | None = Non
             cuerpo = _paren(cuerpo)
         out = [_seg("↑" if op == "rise" else "↓")] + cuerpo
         if key is not None:
-            out = [dict(s, eval=[]) for s in out]
+            out = [
+                dict(
+                    s,
+                    eval=[],
+                    **({"neg": [dict(g, eval=[key]) for g in s["neg"]]} if "neg" in s else {}),
+                )
+                for s in out
+            ]
     elif op == "not":
         # La barra representa toda la negación: su color usa ese valor, no el del operando.
-        out = [dict(s, o=True, eval=[key]) if key is not None else dict(s, o=True) for s in hijo(0)]
+        h = hijo(0)
+        nivel = max((max((g["n"] for g in s.get("neg", ())), default=-1) for s in h), default=-1) + 1
+        seq[0] += 1
+        marca = {"id": seq[0], "n": nivel, "eval": [key] if key is not None else []}
+        out = [
+            dict(s, o=True, neg=[*s.get("neg", ()), marca], **({"eval": [key]} if key is not None else {}))
+            for s in h
+        ]
     elif op == "delay":
         d1, base, d2 = m["operands"]
         out = hijo(1)

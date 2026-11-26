@@ -19,7 +19,7 @@ from typing import Any, Callable, Iterable, Iterator, NamedTuple
 
 from . import expressions as ex
 from .diagnostics import Diagnostic, DiagnosticError
-from .ids import IdGenerator, label_key, valid_label
+from .ids import IdGenerator, label_key, transition_effective_label, valid_label
 from .model import ValidationResult, compute_revision, sellar, validate_model
 from .profile import FORMAT_VERSION
 from .values import TypeSpec, format_value, parse_type, parse_value, zero
@@ -1258,9 +1258,9 @@ class Editor:
     def rename(self, ident: str, new_name: str, repetida: bool = False) -> list[str]:
         """Cambia etiqueta o nombre; conserva el ID y actualiza el texto de los usos.
 
-        Con `repetida` (solo etapas, P-IMP-118) el número de una etapa puede coincidir con el de otra del parcial: es un
-        estado de edición, no un modelo válido (`validate` da D-NOMBRE-COLISION y no se puede simular). Mientras hay
-        etiquetas repetidas, el texto de las expresiones que usan una etapa repetida no se reescribe: siguen ligadas por
+        Con `repetida` (etapas y transiciones, P-IMP-118) una etiqueta puede coincidir con otra del mismo parcial:
+        es un estado de edición, no un modelo válido (`validate` da D-NOMBRE-COLISION y no se puede simular). Mientras
+        hay etiquetas de etapa repetidas, el texto de las expresiones que las usan no se reescribe: siguen ligadas por
         ID (`bindings`/`meaning`), nada se liga a la otra etapa. Al dejar de estar repetida, el texto se vuelve a escribir
         con los nombres actuales."""
         def fn(m: dict[str, Any], p: dict[str, Any]) -> list[str]:
@@ -1270,12 +1270,16 @@ class Editor:
             if coll not in ("variables", "steps", "transitions", "partials", "macros"):
                 raise DiagnosticError(Diagnostic("D-FORMATO", "este elemento no tiene nombre", element=ident))
             fld = "name" if coll == "variables" else "label"
-            scope_fld = {"variables": "scopeRef", "steps": "partialRef"}.get(coll)
-            if scope_fld and not (repetida and coll == "steps") and any(
-                    o is not it and o.get(scope_fld) == it[scope_fld] and label_key(o[fld]) == label_key(new_name)
-                    for o in m[coll]):
-                raise DiagnosticError(Diagnostic("D-NOMBRE-COLISION", f"«{new_name}» ya existe en el ámbito; el ID no cambia",
-                                                 element=ident))
+            scope_fld = {"variables": "scopeRef", "steps": "partialRef", "transitions": "partialRef"}.get(coll)
+            if scope_fld and not (repetida and coll in ("steps", "transitions")):
+                k_nuevo = label_key(new_name)
+                if any(o is not it and o.get(scope_fld) == it[scope_fld]
+                       and (lbl := transition_effective_label(o) if coll == "transitions" else o.get(fld))
+                       and isinstance(lbl, str) and label_key(lbl) == k_nuevo
+                       for o in m[coll]):
+                    raise DiagnosticError(Diagnostic("D-NOMBRE-COLISION",
+                                                     f"«{new_name}» ya existe en el ámbito; el ID no cambia",
+                                                     element=ident))
             if coll in ("partials", "macros"):  # el nombre de un parcial o de una macroetapa es único en el modelo
                 same = m["partials"] if coll == "partials" else m["hierarchy"]["macros"]
                 if any(o is not it and label_key(o["label"]) == label_key(new_name) for o in same):
@@ -1285,6 +1289,20 @@ class Editor:
             touched = self._resincronizar(m, ident)
             return touched
         return self._txn("renombrar", fn)
+
+    def clear_transition_label(self, ident: str) -> None:
+        """Quita la etiqueta manual de una transición para que vuelva a numerarse automáticamente."""
+        def fn(m: dict[str, Any], p: dict[str, Any]) -> None:
+            coll, it = self._index(m)[ident]
+            if coll != "transitions":
+                raise DiagnosticError(Diagnostic("D-FORMATO", "solo una transición vuelve a etiqueta automática",
+                                                 element=ident))
+            it.pop("label", None)
+
+        coll, it = self._index(self.model)[ident]
+        if coll == "transitions" and "label" not in it:
+            return
+        self._txn("etiqueta automática", fn)
 
     def _resincronizar(self, m: dict[str, Any], ident: str | None = None) -> list[str]:
         """Reescribe el texto de las expresiones que nombran una etapa con una etiqueta que ya no es la suya (o que usan
@@ -1329,6 +1347,16 @@ class Editor:
         grupos: dict[tuple[str, str], list[str]] = {}
         for s in m["steps"]:
             grupos.setdefault((s["partialRef"], label_key(s["label"])), []).append(s["id"])
+        return {i for g in grupos.values() if len(g) > 1 for i in g}
+
+    @staticmethod
+    def transiciones_repetidas(m: dict[str, Any]) -> set[str]:
+        """Los ID de transiciones con etiqueta repetida en el mismo parcial (D-NOMBRE-COLISION)."""
+        grupos: dict[tuple[str, str], list[str]] = {}
+        for t in m["transitions"]:
+            lbl = transition_effective_label(t)
+            if lbl:
+                grupos.setdefault((t["partialRef"], label_key(lbl)), []).append(t["id"])
         return {i for g in grupos.values() if len(g) > 1 for i in g}
 
     def change_variable(self, vid: str, **changes: Any) -> list[dict[str, str]]:
@@ -2042,8 +2070,14 @@ class Editor:
                        "fromRef", "toRef", "elementRef", "variable", "etapa", "grupo", "destino"}
             listkeys = {"stepRefs", "transitionRefs", "actionRefs", "preRefs", "postRefs", "activationRefs", "targetSteps",
                         "arriba", "abajo", "etapas"}
-            used = {coll: {label_key(x["label"]) for x in (m[coll] if coll in m else m["hierarchy"][coll]) if x.get("label")}
-                    for coll in ("steps", "transitions", "partials", "macros")}
+            used = {
+                coll: {
+                    label_key(lbl)
+                    for x in (m[coll] if coll in m else m["hierarchy"][coll])
+                    if (lbl := transition_effective_label(x) if coll == "transitions" else x.get("label"))
+                }
+                for coll in ("steps", "transitions", "partials", "macros")
+            }
             added: dict[str, list[dict[str, Any]]] = {}
             def remap(item: dict[str, Any]) -> dict[str, Any]:
                 new = copy.deepcopy(item)

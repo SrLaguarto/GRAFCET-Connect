@@ -33,8 +33,7 @@ class SelectorAccion(BaseQt):
 
     def doble(self, w, e, did):
         caja = next(c for c in w.diagrama.cajas_acciones if c["id"] == did)
-        x, y, ancho, alto = caja["rect"]
-        e.doble(QPointF(x + ancho / 2, y + alto / 2))
+        e.desplegar_variable(caja)
         for _ in range(4):
             QApplication.processEvents()
         return caja, w.diagrama._selector
@@ -228,6 +227,10 @@ class SelectorAccion(BaseQt):
         d = dict(e.datos_accion(did), variable="motor", tipo="condicionada", condicion="marcha")
         self.assertIsNone(e.cambiar_accion(did, d))
         self.pedidas.clear()
-        caja, cb = self.doble(w, e, did)
-        self.assertIsNone(cb)
+        caja = next(c for c in w.diagrama.cajas_acciones if c["id"] == did)
+        x, y, ancho, alto = caja["rect"]
+        e.doble(QPointF(x + ancho / 2, y + alto / 2))
+        for _ in range(4):
+            QApplication.processEvents()
+        self.assertIsNone(w.diagrama._selector)
         self.assertEqual(len(self.pedidas), 1)

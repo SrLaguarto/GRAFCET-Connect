@@ -13,8 +13,8 @@ from typing import Any, Callable
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
-from PySide6.QtWidgets import (QApplication, QComboBox, QLabel, QStyle, QStyledItemDelegate, QStyleOptionComboBox,
-                               QStyleOptionViewItem, QStylePainter, QToolTip)
+from PySide6.QtWidgets import (QApplication, QComboBox, QLabel, QSizePolicy, QStyle, QStyledItemDelegate,
+                               QStyleOptionComboBox, QStyleOptionViewItem, QStylePainter, QToolTip)
 
 from . import estilo
 from .ayudas_emergentes import mostrar_ayuda
@@ -50,10 +50,6 @@ def es_cabecera(indice: Any) -> bool:
 def es_variable(indice: Any) -> bool:
     dato = indice.data(Qt.ItemDataRole.UserRole)
     return isinstance(dato, str) and bool(dato)
-
-
-def cuantas_variables(combo: QComboBox) -> int:
-    return sum(1 for i in range(combo.count()) if es_variable(combo.model().index(i, 0)))
 
 
 class DelegadoMenu(QStyledItemDelegate):
@@ -110,6 +106,7 @@ class DelegadoMenu(QStyledItemDelegate):
         fm = opt.fontMetrics
         habil = bool(indice.flags() & Qt.ItemFlag.ItemIsEnabled)
         p.save()
+        p.fillRect(opt.rect, QColor("#ffffff"))  # fondo blanco sólido (evita popups negros en Windows sobre VentanaFlotante translúcida)
         p.setFont(opt.font)
         if es_cabecera(indice):
             p.setPen(QColor(estilo.TINTA_3))
@@ -227,10 +224,15 @@ class ComboMenu(QComboBox):
         super().__init__(parent)
         self.delegado = DelegadoMenu(self.view(), rotulos_propios)
         self.view().setItemDelegate(self.delegado)
+        self.view().setStyleSheet(
+            f"QAbstractItemView {{ background: #ffffff; color: {estilo.TINTA}; border: 1px solid #7b8a9c; "
+            f"outline: 0; selection-background-color: {estilo.ACENTO_SUAVE}; selection-color: {estilo.TINTA}; }}"
+        )
         self.filtro_menu = FiltroMenu(self)
 
     def con_filtro(self) -> bool:
-        return cuantas_variables(self) > UMBRAL_FILTRO
+        """Retirado el rótulo/filtro superior por decisión de interfaz (`Cositas.docx`)."""
+        return False
 
     def _preparar_filtro(self) -> None:
         """Con más de `UMBRAL_FILTRO` variables, el rótulo «Filtrar…» se pone sobre la lista; sin tantas, no hay."""
@@ -245,7 +247,11 @@ class ComboMenu(QComboBox):
             f.etiqueta = QLabel(FILTRO)
             f.etiqueta.setAccessibleName("Filtro de variables")
             f.etiqueta.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            marco.layout().insertWidget(0, f.etiqueta)
+            f.etiqueta.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+            f.etiqueta.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            marco.layout().insertWidget(0, f.etiqueta, 0)
+        f.etiqueta.setFixedHeight(max(24, f.etiqueta.fontMetrics().height() + 8))
+        marco.layout().setStretchFactor(self.view(), 1)
         f.etiqueta.show()
         f.poner_filtro("")
 
@@ -255,13 +261,15 @@ class ComboMenu(QComboBox):
         ancho = ancho_menu(self)
         self.view().setMinimumWidth(ancho)
         self.view().doItemsLayout()
+        self._preparar_filtro()
         marco = self.view().parentWidget()
         if marco is not None and marco.isWindow():
+            marco.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+            marco.setStyleSheet("background: #ffffff; border: 1px solid #7b8a9c;")
             marco.setFixedWidth(ancho)
         super().showPopup()
         if marco is not None and marco.isWindow() and marco.x() != self.mapToGlobal(QPoint(0, 0)).x():
             marco.move(self.mapToGlobal(QPoint(0, 0)).x(), marco.y())
-        self._preparar_filtro()
 
     def hidePopup(self) -> None:  # noqa: N802
         if self.filtro_menu.filtro:
@@ -270,13 +278,23 @@ class ComboMenu(QComboBox):
 
 
 def pintar_caja(combo: QComboBox, nombre: str, papel: str, parpadeando: bool = False, marcador: str = "") -> None:
-    """La caja cerrada de la variable en la ventana: borde fino, la barra del color de su origen, el nombre (o el marcador, apagado) y la flecha."""
+    """La caja cerrada de la variable en la ventana: borde único según foco/aviso, barra de origen, nombre y flecha."""
     p = QStylePainter(combo)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     zona = QRectF(combo.rect()).adjusted(.5, .5, -.5, -.5)
-    p.setPen(QPen(QColor(estilo.AVISO_BORDE if parpadeando else estilo.FOCO if combo.hasFocus() else estilo.BORDE_CONTROL), 1.2))
+    foco_tecl = combo.hasFocus() and bool(combo.property("tecl"))
+    foco_raton = combo.hasFocus() and not foco_tecl
+    if parpadeando:
+        pluma, caja = QPen(QColor(estilo.AVISO_BORDE), 1.5), zona
+    elif foco_tecl:
+        pluma, caja = QPen(QColor(estilo.FOCO), 2, Qt.PenStyle.DashLine), zona.adjusted(.5, .5, -.5, -.5)
+    elif foco_raton:
+        pluma, caja = QPen(QColor(estilo.ACENTO), 1.5), zona
+    else:
+        pluma, caja = QPen(QColor(estilo.BORDE_CONTROL), 1.2), zona
+    p.setPen(pluma)
     p.setBrush(QColor(estilo.AVISO_FONDO if parpadeando else estilo.SUPERFICIE if combo.isEnabled() else estilo.SUPERFICIE_2))
-    p.drawRoundedRect(zona, estilo.R_S, estilo.R_S)
+    p.drawRoundedRect(caja, estilo.R_S, estilo.R_S)
     x = zona.left() + estilo.E2 + 2
     if nombre:
         p.setPen(Qt.PenStyle.NoPen)
@@ -296,11 +314,9 @@ def pintar_caja(combo: QComboBox, nombre: str, papel: str, parpadeando: bool = F
     p.drawText(QRect(int(x), 0, max(0, flecha.left() - int(x)), combo.height()), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, corto)
     if corto != texto:
         combo.setToolTip(texto)
+    else:
+        combo.setToolTip("")
     p.setPen(QPen(QColor(estilo.TINTA_2), 1.6))
     cx, cy = flecha.center().x(), combo.height() / 2
     p.drawLine(QPoint(int(cx) - 4, int(cy) - 2), QPoint(int(cx), int(cy) + 2))
     p.drawLine(QPoint(int(cx), int(cy) + 2), QPoint(int(cx) + 4, int(cy) - 2))
-    if combo.hasFocus():
-        p.setPen(QPen(QColor(estilo.FOCO), 2, Qt.PenStyle.DashLine))
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRoundedRect(zona.adjusted(2, 2, -2, -2), estilo.R_S, estilo.R_S)

@@ -18,12 +18,11 @@ depende de la cuestión y se acepta; si difieren, se bloquea.
 """
 from __future__ import annotations
 
-import itertools
 from dataclasses import dataclass, field, replace
 from typing import Any, Generator, Iterable
 
 from . import expressions as ex
-from . import hierarchy
+from . import hierarchy, independencia
 from .diagnostics import Diagnostic, DiagnosticError
 from .model import Action, CompiledModel, TemporalSpec, constant_value
 from .profile import blocked, normalize_options, profile_ref
@@ -302,6 +301,31 @@ def _restart_duration(cm: CompiledModel, w: State, sid: str) -> None:
             w.temporal[key] = st
 
 
+def _sync_general_temporals(cm: CompiledModel, w: State, o: dict[str, str]) -> bool:
+    """Evalúa las bases temporales compuestas al cierre del instante (P-IMP-18 extendida, P-IMP-176)."""
+    generales = sorted(
+        ((k, s) for k, s in cm.temporals.items() if s.base_kind == "general"),
+        key=lambda kv: (kv[1].depth, kv[0]),
+    )
+    if not generales:
+        return False
+    cambio_visible = False
+    for _ in range(len(generales) + 1):
+        cambio_iter = False
+        env = _Env(cm, w, None, o)
+        for key, spec in generales:
+            st = w.temporal[key]
+            antes = st.value
+            nuevo = bool(ex.evaluate(spec.base, env))
+            _base_change(st, spec, nuevo, w.time, spec.expr, o["4.2"])
+            if st.value != antes:
+                cambio_iter = True
+                cambio_visible = True
+        if not cambio_iter:
+            break
+    return cambio_visible
+
+
 def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                 ) -> Generator[tuple[str, Any], None, Outcome]:
     """Procesa un estímulo hasta su cierre causal. Produce ("propuesta", E), ("aplicada", registro) y
@@ -434,7 +458,11 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                 w.since[sid] += w.time - max(t0, w.since[sid])
             for key, spec in cm.temporals.items():
                 st = w.temporal[key]
-                if spec.base_kind == "active" and spec.base_step in steps and st.start is not None:
+                en_congelado = bool(spec.base_steps) and (
+                    (spec.base_kind == "active" and spec.base_step in steps)
+                    or (spec.base_kind == "general" and spec.base_steps <= steps)
+                )
+                if en_congelado and st.start is not None:
                     shift = w.time - max(t0, st.start)
                     st.start += shift
                     if st.deadline is not None:
@@ -509,6 +537,10 @@ def run_context(cm: CompiledModel, z: State, stim: Stimulus, ctl: Control
                             proposals.append(a)
                             done_event_actions.append(a)
             if not fire and not proposals and not (hier.active and hierarchy.forcing_change(hier, s, w.forces, o)):
+                if any(spec.base_kind == "general" for spec in cm.temporals.values()):
+                    compute_outputs(cm, w, o, z.values if o["2.5"] == "B" else None, written)
+                    if _sync_general_temporals(cm, w, o):
+                        continue
                 break
             yield ("propuesta", (k, fire))
             ts = [cm.transitions[t] for t in fire]
@@ -655,24 +687,61 @@ def run_full(cm: CompiledModel, z: State, stim: Stimulus, budget: int = DEFAULT_
 
 def check_simultaneous_expiries(cm: CompiledModel, z: State, stim: Stimulus, budget: int,
                                 options: dict[str, str] | None = None) -> Diagnostic | None:
-    """Varios vencimientos en el mismo instante: se aceptan solo si el resultado no depende del orden (U-06)."""
-    keys = stim.expiring
-    if len(keys) < 2:
+    """Varios vencimientos en el mismo instante: se aceptan solo si el resultado no depende del orden (U-06, L-04).
+
+    Sin tope de vencimientos. Primero se reparten en grupos que no pueden afectarse entre sí (independencia.py); un
+    grupo de una sola clave no necesita comprobación. Dentro de cada grupo se recorren los subconjuntos de claves
+    nivel a nivel: los estados alcanzables aplicando de uno en uno las claves de cada subconjunto, sin repetir los
+    equivalentes. El conjunto de estados finales de todos los órdenes es el del grupo completo, así que el veredicto es
+    el de probar todas las permutaciones con n·2^(n-1) ejecuciones en vez de n!. Si aplicar el grupo junto no se
+    estabiliza no se opina: la ejecución real da su propio diagnóstico.
+    """
+    if len(stim.expiring) < 2:
         return None
-    if len(keys) > 4:
-        return blocked("temporal.coincidencias", f"{len(keys)} vencimientos simultáneos: demasiados para comparar órdenes")
-    ref = run_full(cm, z, stim, budget, options)
-    for perm in itertools.permutations(keys):
-        cur: State | None = z
-        for key in perm:
-            out = run_full(cm, cur, Stimulus("vencimiento", stim.time, None, (key,)), budget, options)
-            if out.status != "estable":
-                cur = None
-                break
-            cur = out.state
-        if ref.status != "estable" or cur is None or not cur.equivalent(ref.state):
-            return blocked("temporal.coincidencias", "vencimientos simultáneos cuyo resultado depende del orden "
-                           f"({', '.join(perm)})")
+    for grupo in independencia.grupos_de_vencimientos(cm, stim.expiring):
+        if len(grupo) < 2:
+            continue
+        ref = run_full(cm, z, Stimulus("vencimiento", stim.time, None, grupo), budget, options)
+        if ref.status != "estable":
+            return None
+        dg = _orden_del_grupo(cm, z, stim.time, grupo, ref.state, budget, options)
+        if dg is not None:
+            return dg
+    return None
+
+
+def _orden_del_grupo(cm: CompiledModel, z: State, t: int, grupo: tuple[str, ...], ref: State, budget: int,
+                     options: dict[str, str] | None) -> Diagnostic | None:
+    """Comprueba un grupo de 2 o más vencimientos: todos los órdenes deben dar el estado de aplicarlos juntos."""
+    def depende(orden: tuple[str, ...], otro: str) -> Diagnostic:
+        dg = blocked("temporal.coincidencias", "vencimientos simultáneos cuyo resultado depende del orden "
+                     f"({', '.join(orden)}{' frente a ' + otro if otro else ''}; grupo {', '.join(grupo)})")
+        dg.evidence["claves"] = ", ".join(grupo)  # las claves del grupo, para que la pantalla nombre los elementos (no cambia el texto)
+        return dg
+
+    n = len(grupo)
+    # nivel anterior: máscara de subconjunto → [(estado, orden con el que se llegó a él)], sin estados equivalentes
+    nivel: dict[int, list[tuple[State, tuple[str, ...]]]] = {0: [(z, ())]}
+    for _ in range(n):
+        siguiente: dict[int, list[tuple[State, tuple[str, ...]]]] = {}
+        for mask in sorted({m | (1 << i) for m in nivel for i in range(n) if not m & (1 << i)}):
+            alcanzados: list[tuple[State, tuple[str, ...]]] = []
+            for i in range(n):
+                if not mask & (1 << i):
+                    continue
+                for estado, orden in nivel[mask & ~(1 << i)]:
+                    out = run_full(cm, estado, Stimulus("vencimiento", t, None, (grupo[i],)), budget, options)
+                    if out.status != "estable":
+                        return depende(orden + (grupo[i],), "")
+                    if not any(out.state.equivalent(e) for e, _ in alcanzados):
+                        alcanzados.append((out.state, orden + (grupo[i],)))
+            siguiente[mask] = alcanzados
+        nivel = siguiente
+    finales = nivel[(1 << n) - 1]
+    if len(finales) > 1:
+        return depende(finales[0][1], ", ".join(finales[1][1]))
+    if not finales[0][0].equivalent(ref):
+        return depende(finales[0][1], "todos a la vez")
     return None
 
 
@@ -706,6 +775,9 @@ def initial_state(cm: CompiledModel, scenario: Scenario, options: dict[str, str]
             values[v.id] = v.initial if o["1.5"] == "B" else zero(v.type)
     w = State(s0, values, {}, {}, {}, {sid: 0 for sid in s0}, 0, 0, 0)
     for key, spec in sorted(cm.temporals.items()):
+        if spec.base_kind == "general":
+            w.temporal[key] = TState()
+            continue
         if spec.base_kind == "active":
             true_at_start = spec.base_step in s0
         else:
@@ -718,6 +790,9 @@ def initial_state(cm: CompiledModel, scenario: Scenario, options: dict[str, str]
             st.base = True
             _start_on(st, spec, 0)
         w.temporal[key] = st
+    if any(spec.base_kind == "general" for spec in cm.temporals.values()):
+        compute_outputs(cm, w, o)
+        _sync_general_temporals(cm, w, o)
     return w, []
 
 
@@ -743,6 +818,9 @@ def declared_state(cm: CompiledModel, situation: Iterable[str], values: dict[str
         if t.pre <= s and ex.evaluate(cm.exprs[t.cond].node, env):
             raise ValueError(f"estado declarado inestable: {t.id} es franqueable")
     compute_outputs(cm, w)
+    for key, spec in sorted(cm.temporals.items(), key=lambda kv: (kv[1].depth, kv[0])):
+        if spec.base_kind == "general" and ex.evaluate(spec.base, env):
+            raise ValueError("estado declarado con base temporal compuesta verdadera: declare su estado temporal")
     return w
 
 
@@ -833,7 +911,10 @@ class Session:
         deadlines: dict[int, list[str]] = self._limited_ends()
         for key, st in z.temporal.items():
             spec = self.cm.temporals[key]
-            if spec.base_kind == "active" and self.cm.steps[spec.base_step].partial in z.frozen:
+            congelado = bool(spec.base_steps) and all(
+                self.cm.steps[sid].partial in z.frozen for sid in spec.base_steps
+            )
+            if congelado:
                 continue  # 7.3 B: congelado mientras dura el forzado
             if st.deadline is not None:
                 deadlines.setdefault(st.deadline, []).append(key)
@@ -856,8 +937,21 @@ class Session:
         o, z = self.options, self.z
         after = dict(z.values)
         after.update(dict(nb.changes))
-        touched = [k for k in keys if k in z.temporal and self.cm.temporals[k].base_kind == "inputs"
-                   and bool(ex.evaluate(self.cm.temporals[k].base, _InputEnv(self.cm, after))) != z.temporal[k].base]
+        w_after = z.copy()
+        w_after.values = after
+        touched: list[str] = []
+        for k in keys:
+            if k not in z.temporal:
+                continue
+            spec = self.cm.temporals[k]
+            if spec.base_kind == "inputs":
+                val_after = bool(ex.evaluate(spec.base, _InputEnv(self.cm, after)))
+            elif spec.base_kind == "general":
+                val_after = bool(ex.evaluate(spec.base, _Env(self.cm, w_after, None, o)))
+            else:
+                continue
+            if val_after != z.temporal[k].base:
+                touched.append(k)
         expiry, batch = Stimulus("vencimiento", t, None, keys), Stimulus("lote", t, nb)
         if touched:
             if o["4.1"] == "detener":

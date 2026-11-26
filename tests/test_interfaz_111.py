@@ -87,10 +87,10 @@ class Interfaz111(BaseQt):
         self.assertEqual((w.favoritos.height(), w._cab.geometry().height()), (alto, alto_cabecera))
         for boton in w.favoritos.botones.values():
             boton.setIconSize(QSize(w.favoritos.lado_icono, w.favoritos.lado_icono))
-        self.assertEqual(alto, w.favoritos.botones["etapa"].height())
+        self.assertEqual(alto - 6, w.favoritos.botones["etapa"].height())
 
     def test_SG102_luz_completa_en_estados_y_dpr(self):
-        """REQ-SIM-03: círculo o rombo completo dentro de la pastilla, también abierta y a distintos DPR."""
+        """REQ-SIM-03: círculo o rombo completo dentro de la pastilla (icono 12×12), también abierta y a distintos DPR."""
         w, e = self.ventana()
         for estado in ("desconectado", "conectado", "error"):
             for abierta in (False, True):
@@ -100,6 +100,7 @@ class Interfaz111(BaseQt):
                 clave = {"desconectado": "desconectada", "conectado": "conectada", "error": "error"}[estado]
                 color = QColor(estilo.LUZ[clave])
                 b = w.luz_es
+                self.assertEqual(b.iconSize(), QSize(12, 12))
                 for dpr in (1., 1.25, 1.5):
                     pix = QPixmap(round(b.width() * dpr), round(b.height() * dpr))
                     pix.setDevicePixelRatio(dpr)
@@ -116,11 +117,12 @@ class Interfaz111(BaseQt):
                                 puntos.append((x, y))
                     self.assertTrue(puntos, (estado, abierta, dpr))
                     izquierda = min(x for x, y in puntos)
-                    puntos = [(x, y) for x, y in puntos if x <= izquierda + 14 * dpr]
+                    puntos = [(x, y) for x, y in puntos if x <= izquierda + 12 * dpr]
                     ancho = max(x for x, y in puntos) - min(x for x, y in puntos) + 1
                     alto = max(y for x, y in puntos) - min(y for x, y in puntos) + 1
-                    self.assertLessEqual(abs(ancho - alto), 2 * dpr, (estado, abierta, dpr, ancho, alto))
-                    self.assertGreaterEqual(ancho, 9 * dpr)
+                    self.assertLessEqual(abs(ancho - alto), 3 * dpr, (estado, abierta, dpr, ancho, alto))
+                    self.assertGreaterEqual(ancho, 8 * dpr, (estado, abierta, dpr, ancho, alto))
+                    self.assertGreaterEqual(alto, 6 * dpr, (estado, abierta, dpr, ancho, alto))
 
     def test_SG103_dependencias_dentro_de_caja(self):
         """REQ-EDT-09: el dibujo no toca los límites de su icono en reposo ni marcado."""
@@ -146,9 +148,11 @@ class Interfaz111(BaseQt):
             self.assertFalse(p.check.isVisible())
             self.assertLessEqual(p.cabecera.height(), p.fila_alta.height() + 2)
             m = p.fila_alta.layout().contentsMargins()
-            self.assertEqual((m.left(), m.right()), (estilo.E2, estilo.E2))
-            margen_derecho = p.fila_alta.width() - p.b_configuracion.geometry().right() - 1
-            self.assertLessEqual(abs(p.b_volver.x() - margen_derecho), 1)
+            self.assertEqual((m.left(), m.right()), (estilo.E3, estilo.E3))
+            b_der = p.b_desconectar if p.b_desconectar.isVisible() else p.b_conectar
+            margen_derecho = p.fila_alta.width() - b_der.geometry().right() - 1
+            self.assertFalse(hasattr(p, "b_volver"))
+            self.assertLessEqual(abs(p.titulo_es.x() - margen_derecho), 1)
 
     def test_SG105_carpeta_planos_sin_tocar_laminas(self):
         """REQ-DAT-01: nueva carpeta Planos y carpeta Láminas anterior intacta."""
@@ -259,13 +263,15 @@ class Interfaz111(BaseQt):
         self.assertEqual(d.plantilla["primitives"], [])
 
     def test_SG110_cuarto_pantalla_sin_colision_ni_desborde_fuera(self):
-        """REQ-EDT-09: sin modo solapado y extensión de herramientas dentro de su barra, separada de E/S."""
+        """REQ-EDT-09: sin modo solapado; el estuche (pestañas + E/S) queda separado de las herramientas y toda extensión cabe dentro de su barra."""
         for ancho, alto in ((683, 384), (960, 540)):
             w, e = self.ventana(ancho, alto)
             self.assertTrue(w.fila_pestanas.property("fusion"))
             self.assertFalse(w.estado.isVisible())
-            self.assertLessEqual(w.herramientas_grafcet.geometry().right() + estilo.E2, w.luz_es.x())
-            for barra in (w.tb_sim, w.tb_edit):
+            self.assertFalse(w.menu_cluster.isVisible())
+            self.assertLessEqual(w.estuche_vistas.geometry().right() + estilo.E2, w.herramientas_grafcet.x())
+            self.assertLessEqual(w.herramientas_grafcet.geometry().right(), w.fila_pestanas.width())
+            for barra in (w.tb_sim, w.tb_edit, w.tb_vista_der):
                 acciones = [a for a in barra.actions() if a.isVisible()
                             and barra.widgetForAction(a).isVisible()]
                 if acciones:

@@ -420,8 +420,11 @@ class _Acciones:
             if not b.get("etapa") or self._faltan_orden(b):
                 return False
             etapas = list(b.get("etapas", [])) if b["forma"] == "explicit" else None
+            orden = orden_acciones.ids_etapa(self.ed, b["etapa"])
             self.ed.add_force(b["etapa"], b["destino"], b["forma"], etapas)  # (un ciclo de forzado lo rechaza el núcleo)
+            nuevo = self.ed.model["forces"][-1]["id"]
             self.ed.delete_draft_actions([did])
+            orden_acciones.sustituir(self.ed, b["etapa"], orden, did, nuevo)
             return True
         d = self._datos_borrador(b)
         if not b.get("etapa") or self.faltan(d, self._parcial_borrador(b)):

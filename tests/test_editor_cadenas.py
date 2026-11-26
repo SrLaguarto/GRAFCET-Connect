@@ -25,7 +25,7 @@ from grafcet.diagnostics import DiagnosticError  # noqa: E402
 from grafcet.editor import Editor, new_grafcet_document  # noqa: E402
 from grafcet.ids import IdGenerator  # noqa: E402
 from grafcet.model import validate_model  # noqa: E402
-from grafcet.view import layout_from_presentation  # noqa: E402
+from grafcet.view import display_names, layout_from_presentation  # noqa: E402
 
 try:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -56,11 +56,12 @@ def posiciones(ed):
 
 def etiquetas(doc):
     """Nombre de cada elemento (variable, etapa, parcial, macroetapa, transición): los ID del editor no se comparan."""
+    nombres = display_names(doc)
     out = {v["id"]: v["name"] for v in doc["variables"]}
     for coll in ("steps", "partials"):
         out.update({x["id"]: x["label"] for x in doc[coll]})
     out.update({x["id"]: x["label"] for x in doc["hierarchy"]["macros"]})
-    out.update({t["id"]: t.get("label", t["id"]) for t in doc["transitions"]})
+    out.update({t["id"]: nombres.get(t["id"], t.get("label", t["id"])) for t in doc["transitions"]})
     return out
 
 
@@ -582,6 +583,8 @@ class BaseQt(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        if not getattr(self, "app", None):
+            self.app = QApplication.instance() or QApplication([])
         self.addCleanup(self.app.sendPostedEvents, None, QEvent.Type.DeferredDelete)
         self.tmp = tempfile.TemporaryDirectory()
         from escritorio.ventana import Ventana
@@ -1874,7 +1877,7 @@ class EncuadrarYDependencias(BaseQt):
         lay = d.barra.layout()
         self.assertEqual([lay.itemAt(i).widget() for i in range(lay.count())],
                          [d.b_menos, d.l_zoom, d.b_mas, d.b_ajustar, d.b_seleccion], "controles de zoom sin dependencias")
-        self.assertIs(b.parent(), w.tb_edit)
+        self.assertIs(b.parent(), w.tb_vista_der)
         self.assertTrue(b.isVisible())
         self.assertIn("dependencias", b.toolTip())
         # en edición: una macroetapa con su expansión y una encapsulante con su recinto

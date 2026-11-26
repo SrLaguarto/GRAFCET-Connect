@@ -44,7 +44,7 @@ from .paneles import EtiquetaGrupos, TituloSeccion
 from .acciones import CajaFormula, PanelAccion
 from .bloques import FlowLayout, Programador
 from .remates_propiedades import AvisoFormula, RematesAccion
-from .partes_propiedades import CampoComentario
+from .partes_propiedades import CampoComentario, CampoEtiquetaTransicion
 from .paneles import PilaActual, PilaActualSolo
 from .diagrama import ACT_MIN, COL, H, MARK, TB, VACIO_H, VACIO_W, _html
 from .edicion import COLOCACIONES, CONTINUAS, Parpadeo
@@ -83,8 +83,9 @@ AYUDAS = {"etapa": "Etapa: arrástrela al dibujo", "transicion": "Transición: a
                      "la etapa hasta ella), soltándola sobre la etapa o pegándola a su fila de acciones; unida y completa, "
                      "mientras esa etapa está activa impone esa situación al parcial. Supr la quita. Hace falta otro parcial "
                      "(un grafcet parcial, un recinto o una macroetapa) al que forzar"}
-TITULOS_ACCION = {"activacion": "Acción al activar", "desactivacion": "Acción al desactivar", "condicionada": "Acción condicionada",
-                  "evento": "Acción por evento", "limitada": "Acción limitada"}  # el título de la ventana de cada tipo de acción (E8)
+TITULOS_ACCION = {"continua": "Acción continua", "activacion": "Acción al activar",
+                  "desactivacion": "Acción al desactivar", "condicionada": "Acción condicionada",
+                  "evento": "Acción por evento", "limitada": "Acción limitada"}  # título de cada acción (1A)
 NOMBRES.update({"etapa_inicial": "Etapa inicial", "accion:continua": "Continua",
                 "accion:condicionada": "Condicionada", "accion:activacion": "Al activar",
                 "accion:desactivacion": "Al desactivar", "accion:evento": "Por evento"})
@@ -506,11 +507,9 @@ class PanelPropiedades(QWidget):
         hl.addWidget(self.pagina_bloques, 3)
         lay = QVBoxLayout(self.pagina_bloques)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(2)
-        self.l_bloques = QLabel()  # qué se edita («Condición de la acción Q (etapa 1)»): sobre el área de bloques, no en la cabecera
-        self.l_bloques.setStyleSheet(f"color: {estilo.TINTA_2}; background: transparent")
-        self.l_bloques.setWordWrap(True)
-        self.l_bloques.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        lay.setSpacing(0)
+        self.l_bloques = QLabel()
+        self.l_bloques.hide()
         lay.addWidget(self.l_bloques)
         self.fila_cabecera.addStretch(1)
         self.prog = Programador(lambda: self.e.fuente_bloques() if self.e is not None else ({}, []), compacto=True)
@@ -518,17 +517,18 @@ class PanelPropiedades(QWidget):
         self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()
         self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()
         lay.addWidget(self.prog, 1)
-        # Debajo del área, toda la receptividad: el texto de la fórmula (solo se ve, con la notación del dibujo), cómo
-        # se escribe, cómo se dibuja, el estado y «Crear las que faltan»
+        # Franja de aviso/error de fórmula: solo se muestra cuando hay un error o variables por crear
         self.caja_formula = QWidget()
-        g = QGridLayout(self.caja_formula)
-        g.setContentsMargins(0, 0, 0, 0)
-        g.setVerticalSpacing(estilo.E1)
-        self.t_texto = CajaFormula()  # no se edita: se ve con la notación del dibujo y la arman los bloques
+        self.caja_formula.setObjectName("cajaAvisoFormula")
+        self.caja_formula.setStyleSheet("QWidget#cajaAvisoFormula { background: #fff9ee; border-top: 1px solid #e6d3a7; }")
+        g = QHBoxLayout(self.caja_formula)
+        g.setContentsMargins(12, 4, 12, 4)
+        g.setSpacing(8)
+        self.t_texto = CajaFormula()
         self.t_texto.formato = self._formato_formula
         self.t_texto.setPlaceholderText("la fórmula se arma con bloques")
-        # (el texto escrito y el dibujado de la receptividad ya no se enseñan; `_previsualizar` los sigue calculando, y las
-        # pruebas los leen, en estas dos etiquetas ocultas)
+        self.t_texto.setParent(self.pagina_bloques)
+        self.t_texto.hide()
         self.t_vista = QLabel(self.pagina_bloques)
         self.t_vista.setTextFormat(Qt.TextFormat.RichText)
         self.t_dibujo = QLabel(self.pagina_bloques)
@@ -539,13 +539,11 @@ class PanelPropiedades(QWidget):
         self.t_crear = QPushButton("Crear las que faltan")
         self.t_crear.setToolTip("Declarar como entradas booleanas las variables que se usan y no existen")
         self.t_crear.clicked.connect(self._crear)
-        self._l_formula = QLabel("Fórmula")
-        g.addWidget(self._l_formula, 0, 0)
-        g.addWidget(self.t_texto, 0, 1)
-        self.t_texto.setMinimumWidth(48)
-        g.addWidget(self.t_estado, 1, 1, 1, 3)
-        g.addWidget(self.t_crear, 0, 2)
-        g.setColumnStretch(1, 1)
+        self._l_formula = QLabel("Fórmula", self.pagina_bloques)
+        self._l_formula.hide()
+        g.addWidget(self.t_estado, 1)
+        g.addWidget(self.t_crear, 0)
+        self.caja_formula.hide()
         lay.addWidget(self.caja_formula)
         self._ver_bloques(None)
         return w
@@ -554,7 +552,7 @@ class PanelPropiedades(QWidget):
         """El programador de la transición o de la acción (condición o evento), o nada si no hay que programar."""
         self.pagina_bloques.setVisible(titulo is not None)
         self.l_bloques.setText(titulo or "")
-        self.l_bloques.setVisible(titulo is not None and self.pagina != "transicion")  # el título ya dice «Transición t»
+        self.l_bloques.hide()
 
     def objetivo_bloques(self) -> tuple | None:
         """Lo que programan los bloques ahora: ("transicion", ID) o ("accion", ID, «condicion» o «evento»)."""
@@ -682,7 +680,7 @@ class PanelPropiedades(QWidget):
 
     def _transicion(self) -> QWidget:
         w = QWidget()
-        self.t_etiqueta = QLineEdit()
+        self.t_etiqueta = CampoEtiquetaTransicion()
         self.t_etiqueta.editingFinished.connect(lambda: self._renombrar(self.t_etiqueta))
         self.t_comentario = CampoComentario()  # una línea guardada; se ve en varias si no cabe, crece y se estira
         self.t_comentario.setPlaceholderText("sin comentario")
@@ -772,8 +770,11 @@ class PanelPropiedades(QWidget):
         accion = e.accion_activa() if e is not None else None
         self.prog.seleccionar_elemento((vivo, accion))
         if e is not None and (n := e.anotacion(vivo)):
-            for campo in (self.s_etiqueta,self.s_comentario,self.t_etiqueta,self.t_comentario):
-                campo.blockSignals(True);campo.clearFocus();campo.blockSignals(False)
+            for campo in (self.s_etiqueta, self.s_comentario, self.t_etiqueta, self.t_comentario):
+                campo.blockSignals(True)
+                campo.clearFocus()
+                campo.blockSignals(False)
+            self.t_etiqueta.bloquear()
             self._mostrado=("anotacion",vivo);self.ident=vivo;self.pagina="anotacion"
             self._objetivo=None;self._anterior=None;self._ver_bloques(None)
             self.accion.caja_valor.hide();self.cuerpo.show();self.vacio.hide();self.izq.hide()
@@ -783,29 +784,8 @@ class PanelPropiedades(QWidget):
             self.nota_editar.setText("Editar texto…" if n["kind"]=="text" else "Cambiar imagen…")
             self._remates_accion.mostrar(False)
             return
-        self.continua = False
         aid = e.accion_activa() if e is not None else None
-        if aid and e.datos_accion(aid)["tipo"] == "continua":  # una acción continua no se edita aquí: se despliega su variable con doble clic sobre ella
-            for campo in (self.s_etiqueta, self.s_comentario, self.t_etiqueta, self.t_comentario,
-                          self.m_etiqueta, self.m_comentario):
-                campo.blockSignals(True)
-                campo.clearFocus()
-                campo.blockSignals(False)
-            self.continua, self._mostrado, self.ident, self.pagina = True, ("accion", aid), aid, "vacio"
-            self.accion.mostrar(e, aid)  # (oculto, pero al día: sigue a la acción cuando cambia de borrador a acción del modelo)
-            self._objetivo = self._anterior = None
-            self._llevar_bloques(False)
-            self._ver_bloques(None)
-            self.accion.caja_valor.hide()
-            self.cuerpo.hide()
-            self.izq.hide()
-            self.vacio.setText(self.FRASE_CONTINUA)
-            self.l_vacio.setText(self.FRASE_CONTINUA)
-            self.vacio.show()
-            self.titulo.setText("Propiedades · Acción")
-            self.msg.hide()
-            self._remates_accion.mostrar(False)
-            return
+        self.continua = bool(aid and e.datos_accion(aid)["tipo"] == "continua")
         kind = ("accion" if aid else
                 "enlace" if "|" in vivo else
                 "barra" if any(b["id"] == vivo for b in e.M.get("bars", [])) else
@@ -821,6 +801,7 @@ class PanelPropiedades(QWidget):
                 campo.blockSignals(True)
                 campo.clearFocus()
                 campo.blockSignals(False)
+            self.t_etiqueta.bloquear()
         self._mostrado = (kind, ident)
         self.ident = ident
         self.m_formulario.setVisible(kind == "macro")
@@ -868,7 +849,9 @@ class PanelPropiedades(QWidget):
             self.prog.poner(guardado)
             self._previsualizar()
         self._anterior = self._objetivo
-        self.der.setVisible(kind != "etapa" and not (kind == "accion" and self._bloques_fuera and not memorizada))
+        self.der.setVisible(kind != "etapa"
+                            and not (kind == "accion" and self.continua)
+                            and not (kind == "accion" and self._bloques_fuera and not memorizada))
         if kind == "etapa":
             s = next(s for s in e.M["steps"] if s["id"] == vivo)
             self._poner(self.s_etiqueta, s["label"])
@@ -900,7 +883,7 @@ class PanelPropiedades(QWidget):
             self._llenando = False
         elif kind == "transicion":
             t = next(t for t in e.M["transitions"] if t["id"] == vivo)
-            self._poner(self.t_etiqueta, t["label"])
+            self._poner(self.t_etiqueta, t.get("label", e.nombres.get(vivo, "")))
             self._poner(self.t_comentario, e.comentario(vivo))
             self.der.setCurrentIndex(2)
         elif kind == "barra":
@@ -951,28 +934,38 @@ class PanelPropiedades(QWidget):
         self.e.poner_comentario(self.ident, campo.text())
 
     def _renombrar(self, campo: QLineEdit) -> None:
-        if self.ident is None or self.e.sel != [self.ident] or self.ident not in self.e.nombres \
-                or campo.text().strip() == self.e.nombres.get(self.ident):
-            return  # (el editingFinished puede llegar tarde: el elemento ya no es el mostrado, o ya no existe)
         if campo.isReadOnly():
             return
+        nuevo = campo.text().strip()
+        if self.ident is None or self.e.sel != [self.ident] or self.ident not in self.e.nombres:
+            return  # (el editingFinished puede llegar tarde: el elemento ya no es el mostrado, o ya no existe)
+        if nuevo == self.e.nombres.get(self.ident):
+            if campo is self.t_etiqueta:
+                campo.bloquear()
+            return
         if campo is self.m_etiqueta:
-            motivo = self.e.cambiar_nombre_macro(self.ident, campo.text().strip())
+            motivo = self.e.cambiar_nombre_macro(self.ident, nuevo)
         else:
-            motivo = self.e.renombrar(self.ident, campo.text().strip())
+            motivo = self.e.renombrar(self.ident, nuevo)
         if motivo:
             self.msg.setText(motivo)
             self.msg.show()
             self.msg.setStyleSheet(f"color: {COL['err']}")
             campo.setText(self.e.nombres.get(self.ident, ""))
+        elif campo is self.t_etiqueta:
+            campo.setText(self.e.nombres.get(self.ident, ""))
+        if campo is self.t_etiqueta:
+            campo.bloquear()
 
     # -- receptividad ------------------------------------------------------------------------------
     def _previsualizar(self) -> None:
         self._previsualizar_texto()
         colores_error = (f"color: {COL['err']}", f"color: {NARANJA}", GRIS_HUECOS)
         malo = self.t_estado.styleSheet() in colores_error and bool(self.t_estado.text())
-        if malo != self.t_estado.isVisibleTo(self.caja_formula):
-            self.t_estado.setVisible(malo)
+        mostrar_caja = malo or not self.t_crear.isHidden()
+        self.t_estado.setVisible(malo)
+        if mostrar_caja != self.caja_formula.isVisibleTo(self.pagina_bloques):
+            self.caja_formula.setVisible(mostrar_caja)
             self.alto_cambiado.emit()
 
     def _previsualizar_texto(self) -> None:

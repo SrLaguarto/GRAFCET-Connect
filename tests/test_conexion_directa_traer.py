@@ -122,14 +122,18 @@ class TraerES(unittest.TestCase):
             self.app.processEvents()
             time.sleep(0.005)
         self.assertIsNotNone(dialogo.propuestas)
-        self.assertEqual(len(dialogo.tablas), 3)
+        self.assertEqual(len(dialogo.tablas), 2)
+        self.assertTrue(dialogo.b_traer.isEnabled())
+        tabla, filas = dialogo.tablas[0]
+        self.assertTrue(filas[1].cambiado)
+        from escritorio import estilo
+        self.assertEqual(tabla.item(1, 2).foreground().color().name(), estilo.OK)
+        tabla.item(1, 2).setText("Xmotor inicio")
         self.assertFalse(dialogo.b_traer.isEnabled())
         self.assertIn("1 por corregir", dialogo.b_traer.text())
-        tabla, filas = dialogo.tablas[0]
         tabla.item(1, 2).setText("Inicio")
         self.assertTrue(filas[1].cambiado)
         self.assertTrue(dialogo.b_traer.isEnabled())
-        from escritorio import estilo
         self.assertEqual(tabla.item(1, 2).foreground().color().name(), estilo.OK)
 
     def test_SCD16_importacion_del_dialogo_y_deshacer_con_panel_conectado(self):

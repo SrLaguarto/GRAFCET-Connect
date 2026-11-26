@@ -41,6 +41,7 @@ class Servicios:
     alto_comentario: Callable[[str, float], float]
     grosor_negado: float
     ancho_comentario: float
+    paso_negado: float = 2.5
 
 
 def pluma(color: str, grosor: float = 1.6, discontinuo: tuple[float, float] | None = None) -> tuple[Any, ...]:
@@ -133,13 +134,23 @@ class Grabadora:
         tramos = sv.negados(segs)
         if tramos:
             lim = sv.limites_de(contenido, size, bold, mono, segs)
-            for i, j in tramos:
+            for tramo in tramos:
+                if len(tramo) == 2:
+                    i, j, nivel, ev = tramo[0], tramo[1], 0, None
+                else:
+                    i, j, nivel, ev = tramo
+                yb = top - nivel * sv.paso_negado
+                if ev is not None:
+                    verde = any(k in self.verdaderos for k in ev)
+                    self.line(x0 + lim[i], yb, x0 + lim[j], yb,
+                              self.pen("true_text" if verde else color, sv.grosor_negado), z + 0.03, tip)
+                    continue
                 while i < j:
                     verde = any(k in self.verdaderos for k in segs[i].get("eval", []))
                     fin = i + 1
                     while fin < j and any(k in self.verdaderos for k in segs[fin].get("eval", [])) == verde:
                         fin += 1
-                    self.line(x0 + lim[i], top, x0 + lim[fin], top,
+                    self.line(x0 + lim[i], yb, x0 + lim[fin], yb,
                               self.pen("true_text" if verde else color, sv.grosor_negado), z + 0.03, tip)
                     i = fin
         if halo:

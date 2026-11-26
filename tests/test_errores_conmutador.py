@@ -146,14 +146,16 @@ class MostrarErrores(BaseQt):
         self.assertEqual(w.diagrama.resumen_diagnosticos.text(), "Sin errores")
 
     def test_SERR05_el_boton_cabe_a_1366_y_oculta_el_texto_antes_que_el_boton(self):
-        """REQ-EDT-11: a 1366×768 la barra de edición cabe en su fila con el botón (con su texto, o solo con icono si no hay sitio) y a 1000×600
-        y 800×600 el botón sigue entero y visible (se oculta antes el texto)."""
+        """REQ-EDT-11: a 1366×768 la barra de comandos cabe en su fila con el botón en tb_vista_der (con texto, o solo icono si no hay sitio)
+        y a 1000×600 y 800×600 el botón sigue entero y visible (se oculta antes el texto)."""
         for ancho, alto in ((1366, 768), (1000, 600), (800, 600)):
             w, e = self.preparar(ancho, alto)
-            wd = w.tb_edit.widgetForAction(w.a_errores)
+            wd = w.tb_vista_der.widgetForAction(w.a_errores)
             self.assertTrue(wd.isVisible(), (ancho, alto))
-            self.assertTrue(w.tb_edit.rect().contains(wd.geometry()), (ancho, alto, wd.geometry(), w.tb_edit.rect()))
-            self.assertLessEqual(w.tb_sim.width() + w.tb_edit.sizeHint().width(), w.herramientas_grafcet.width(), (ancho, alto))
+            self.assertTrue(w.tb_vista_der.rect().contains(wd.geometry()), (ancho, alto, wd.geometry(), w.tb_vista_der.rect()))
+            self.assertLessEqual(w.tb_sim.width() + w.tb_edit.sizeHint().width() + w.tb_vista_der.sizeHint().width(),
+                                 w.herramientas_grafcet.width(), (ancho, alto))
+            self.assertLessEqual(w.tb_vista_der.geometry().right(), w.herramientas_grafcet.width(), (ancho, alto))
             w.hide()
 
     def test_SERR06_el_zoom_y_el_aviso_no_se_solapan_a_ningun_tamaño(self):

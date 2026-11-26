@@ -39,22 +39,22 @@ class TituloGrupo(QAbstractButton):
 
     def sizeHint(self):  # noqa: N802
         medidas = QFontMetricsF(self.paleta._fuente_titulo())
-        return QSize(int(medidas.horizontalAdvance(self.text())) + estilo.E4 + estilo.E2, int(medidas.height()))
+        return QSize(int(medidas.horizontalAdvance(self.text().upper())) + estilo.E4 + estilo.E2 + 4, int(medidas.height()))
 
     def paintEvent(self, evento):  # noqa: N802
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         cy = self.height() / 2
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(COLORES[self.papel]))
+        p.setBrush(QColor("#8a99aa"))
         if self.plegado:  # ▸
-            p.drawPolygon(QPolygonF([QPointF(1, cy - 4), QPointF(1, cy + 4), QPointF(7, cy)]))
+            p.drawPolygon(QPolygonF([QPointF(2, cy - 3.5), QPointF(2, cy + 3.5), QPointF(7, cy)]))
         else:  # ▾
-            p.drawPolygon(QPolygonF([QPointF(0, cy - 3), QPointF(8, cy - 3), QPointF(4, cy + 3)]))
+            p.drawPolygon(QPolygonF([QPointF(1, cy - 2.5), QPointF(7, cy - 2.5), QPointF(4, cy + 2.5)]))
         p.setFont(self.paleta._fuente_titulo())
-        p.setPen(QColor(estilo.TINTA_2))
-        p.drawText(QRectF(estilo.E4, 0, self.width() - estilo.E4, self.height()),
-                   int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), self.text())
+        p.setPen(QColor("#5b6b7d"))
+        p.drawText(QRectF(13, 0, self.width() - 13, self.height()),
+                   int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), self.text().upper())
         if self.hasFocus():
             p.setPen(QPen(QColor(estilo.FOCO), 2, Qt.PenStyle.DashLine))
             p.setBrush(Qt.BrushStyle.NoBrush)
@@ -81,9 +81,10 @@ class PaletaVariables(PaletaBloques):
         self.mensaje = None
         super().__init__(fuente, grupo, columna=columna)
         self.filtro = QLineEdit(self)
-        self.filtro.setPlaceholderText("Filtrar…")
+        self.filtro.setPlaceholderText("Filtrar variables…")
         self.filtro.setClearButtonEnabled(True)
         self.filtro.textChanged.connect(self._filtrar)
+        self.filtro_externo = False  # si el Programador coloca `filtro` en su cabecera fija (.catalog-search)
         self.mensaje = QLabel(MENSAJE_VACIO, self)
         self.mensaje.setWordWrap(True)
         self.mensaje.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
@@ -166,11 +167,8 @@ class PaletaVariables(PaletaBloques):
         total = sum(len(nodos) for _, _, nodos in self._todos)
         texto = ""
         if self.filtro is not None:
-            self.filtro.setVisible(self.clave == "variables" and total > 12)
-            if total <= 12:
-                self.filtro.blockSignals(True)
-                self.filtro.clear()
-                self.filtro.blockSignals(False)
+            if not self.filtro_externo:
+                self.filtro.setVisible(self.clave == "variables")
             texto = sin_acentos(self.filtro.text())
         self.grupos = []
         self._raices = []
@@ -192,48 +190,50 @@ class PaletaVariables(PaletaBloques):
 
     def _fuente_titulo(self):
         fuente = QFont(self.font())
-        fuente.setPixelSize(estilo.T_PEQUENA)
+        fuente.setPixelSize(10)
+        fuente.setBold(True)
+        fuente.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.5)
         return fuente
 
     def _maqueta(self, ancho):
         if self.clave != "variables":
             return super()._maqueta(ancho)
-        margen = estilo.E2
+        margen = 6
         x = float(margen)
         y = float(margen)
         self._titulos = []
         self._ancho_titulos = 0
-        if self.filtro is not None and not self.filtro.isHidden():
-            y += estilo.ALTO_CONTROL + estilo.E2
+        if self.filtro is not None and not self.filtro_externo and not self.filtro.isHidden():
+            y += 30 + margen
         if self.mensaje is not None and not self.mensaje.isHidden():
             alto = self.mensaje.heightForWidth(max(1, int(ancho - 2 * margen)))
             return [], y + alto + margen
         medidas = QFontMetricsF(self._fuente_titulo())
-        alto_titulo = medidas.height()
+        alto_titulo = max(18.0, medidas.height() + 4)
         cajas = []
         for papel, titulo, inicio, cantidad in self.grupos:
-            ancho_titulo = medidas.horizontalAdvance(titulo) + estilo.E4
+            ancho_titulo = medidas.horizontalAdvance(titulo.upper()) + 18
             if self.una_fila:
                 self._titulos.append((papel, titulo, QRectF(x, y, ancho_titulo, alto_titulo)))
                 x += ancho_titulo + estilo.E2
             else:
                 self._titulos.append((papel, titulo, QRectF(margen, y, ancho - 2 * margen, alto_titulo)))
-                y += alto_titulo + estilo.E2
+                y += alto_titulo + 2
                 x = float(margen)
             alto_fila = alto_titulo if self.una_fila else 0
             for i in range(inicio, inicio + cantidad):
                 nodo = self._raices[i]
-                ancho_caja = (ancho - 2 * margen) if self.columna else min(self.motor.natural(nodo, (i,)), ancho - 2 * margen)  # (en columna, filas a todo el ancho)
+                ancho_caja = (ancho - 2 * margen) if self.columna else min(self.motor.natural(nodo, (i,)), ancho - 2 * margen)
                 caja = self.motor.caja(nodo, (i,), ancho_caja)
                 if x > margen and not self.una_fila and (self.columna or x + caja.w > ancho - margen):
                     x = float(margen)
-                    y += alto_fila + (2 if self.columna else estilo.E2)  # (en columna, las fichas del catálogo más juntas)
+                    y += alto_fila + (2 if self.columna else estilo.E2)
                     alto_fila = 0
                 cajas.append((caja, x, y))
                 x += caja.w + estilo.E2
                 alto_fila = max(alto_fila, caja.h)
             if not self.una_fila:
-                y += alto_fila + estilo.E3
+                y += alto_fila + 8
         self._ancho_titulos = x + margen if self.una_fila else 0
         return cajas, y + (alto_fila if self.grupos and self.una_fila else 0) + margen
 
@@ -242,10 +242,10 @@ class PaletaVariables(PaletaBloques):
 
     def resizeEvent(self, evento):
         super().resizeEvent(evento)
-        margen = estilo.E2
+        margen = 6
         ancho = max(1, self.width() - 2 * margen)
-        if self.filtro is not None:
-            self.filtro.setGeometry(margen, margen, ancho, estilo.ALTO_CONTROL)
+        if self.filtro is not None and not self.filtro_externo:
+            self.filtro.setGeometry(margen, margen, ancho, 28)
         if self.mensaje is not None:
             alto = self.mensaje.heightForWidth(ancho)
             self.mensaje.setGeometry(margen, margen, ancho, max(1, alto))

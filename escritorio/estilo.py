@@ -24,8 +24,10 @@ TINTA_3 = "#5b6b7d"        # ayudas y rótulos discretos (4,9:1 sobre el fondo d
 BLANCO = "white"
 FONDO = "#eef2f6"          # fondo de la ventana
 SUPERFICIE = "#ffffff"     # tarjetas y paneles
-SUPERFICIE_2 = "#f6f8fb"   # cabeceras de tabla, zonas hundidas
-BORDE = "#cdd6e0"          # separadores y marcos decorativos
+SUPERFICIE_2 = "#f7f9fc"   # cabeceras de tabla, barras secundarias
+SUPERFICIE_3 = "#f1f5f9"   # estuches segmentados y barra de estado
+BORDE = "#d4dde8"          # separadores y marcos decorativos
+BORDE_FUERTE = "#b6c4d4"   # borde suave de botones secundarios y cápsulas
 BORDE_CONTROL = "#7b8a9c"  # borde de un control (3,5:1 sobre blanco)
 DESHABILITADO = "#7c8896"  # texto de lo no disponible (la norma exime de contraste a lo deshabilitado)
 HOVER = "#e4ecf3"          # pasar el puntero por un control sin relleno
@@ -67,6 +69,7 @@ SENAL_CONDICION, SENAL_ACCION = ACENTO, TINTA_2  # el color de cada parte de Pro
 SENAL_TENUE, SENAL_ASIGNADA = "#cbd2d5", "#7c8a90"  # la barrita sin señal y asignada (3,5:1 sobre blanco con su contorno)
 RESALTADO = "#e8f5ef"      # fila de variable resaltada en E/S (una prueba fija este tono)
 ASIGNACION = "#c1e8dc"     # la zona de un canal donde caería la variable que se arrastra
+LED_CONSOLA = "#22c55e"    # piloto LED encendido en la consola de simulación
 
 MESA = "#dfe5eb"           # el tablero sobre el que se ve una hoja de PLANOS o una plantilla (no es parte del dibujo)
 
@@ -80,7 +83,7 @@ FUENTE_TITULO = "Bahnschrift"  # tipografía técnica de Windows para títulos, 
 FUENTE_MONO = "Consolas"      # cifras: tiempos, valores y porcentaje
 FAMILIA_TITULO = f'"{FUENTE_TITULO}", "{FUENTE}"'
 FAMILIA_MONO = f'"{FUENTE_MONO}", "Courier New"'
-ANCHO_BARRA = 12           # barras de desplazamiento
+ANCHO_BARRA = 10           # barras de desplazamiento
 
 # Dos escalas de letra y controles que cambian con el tamaño de la ventana (`activar_escala`).
 # Normal: hasta 1366×768, controles de 30 px. Grande: letra base de 14 px y controles de 32 px,
@@ -89,11 +92,11 @@ ESCALAS = {
     "normal": dict(T_BASE=13, T_PEQUENA=12, T_TITULO=16, T_SECCION=14, T_CHIP=13, T_CIFRA=12,
                    ALTO_CONTROL=30, ALTO_CONTROL_COMPACTO=30, ALTO_BARRA=30, ALTO_BARRA_COMPACTA=28,
                    ALTO_FILA=30, ALTO_ENTRADA=32, ALTO_FILA_COMPACTA=28,
-                   T_ES=12, ALTO_FILA_ES=16, ANCHO_INTERIOR_ES=200),  # (vista de E/S: filas planas y compactas, P-IMP-63)
+                   T_ES=12, ALTO_FILA_ES=24, ANCHO_INTERIOR_ES=200),  # (vista de E/S 2.0.1: filas legibles y limpias)
     "grande": dict(T_BASE=14, T_PEQUENA=13, T_TITULO=19, T_SECCION=16, T_CHIP=15, T_CIFRA=14,
                    ALTO_CONTROL=32, ALTO_CONTROL_COMPACTO=32, ALTO_BARRA=34, ALTO_BARRA_COMPACTA=32,
                    ALTO_FILA=34, ALTO_ENTRADA=36, ALTO_FILA_COMPACTA=32,
-                   T_ES=14, ALTO_FILA_ES=18, ANCHO_INTERIOR_ES=236)}
+                   T_ES=14, ALTO_FILA_ES=26, ANCHO_INTERIOR_ES=236)}
 UMBRAL_GRANDE = (1600, 900)  # ancho y alto de la ventana a partir de los cuales rige la escala grande
 ESCALA = "normal"
 T_BASE = T_PEQUENA = T_TITULO = T_SECCION = T_CHIP = T_CIFRA = 0
@@ -138,92 +141,101 @@ def tamano_compacto(ancho: int, alto: int) -> tuple[bool, bool]:
 # -- hoja de estilo global ------------------------------------------------------------------------------------------
 def _familia(selectores: str, alto: int, pad_h: int, extra: str = "", pad_extra: tuple[int, int] = (0, 0),
              teclado: bool = False) -> str:
-    """Un control de `alto` px con borde de 1 px y, con el foco, borde discontinuo de 2 px que no mueve nada: el relleno y el
-    alto de contenido compensan el borde que crece (y `pad_extra`, el hueco de una flecha, p. ej. de un desplegable). Con
-    `teclado`, el anillo solo sale si la última entrada fue del teclado (propiedad `tecl`, ver `FocoTeclado`); sin él, siempre
-    que haya foco (los campos de texto: se escribe en ellos)."""
-    sufijo = '[tecl="true"]:focus' if teclado else ":focus"
-    selectores_foco = ", ".join(f"{s}{sufijo}" for s in (x.strip() for x in selectores.split(",")))
-    return (f"{selectores} {{ min-height:{alto - 2}px; padding:0 {pad_h + pad_extra[0]}px 0 {pad_h}px; {extra} }}\n"
-            f"{selectores_foco} {{ border:2px dashed {FOCO}; min-height:{alto - 4}px; "
-            f"padding:0 {pad_h - 1 + pad_extra[0]}px 0 {pad_h - 1}px; }}\n")
+    """Un control de `alto` px con borde de 1 px y, con el foco, borde de 2 px que no mueve nada: sólido de acento con
+    el ratón (salvo botones, que solo marcan foco por teclado) y discontinuo con el teclado (`tecl="true"`)."""
+    sel = [x.strip() for x in selectores.split(",")]
+    pad = f"0 {pad_h - 1 + pad_extra[0]}px 0 {pad_h - 1}px"
+    norm = f"{selectores} {{ min-height:{alto - 2}px; padding:0 {pad_h + pad_extra[0]}px 0 {pad_h}px; {extra} }}\n"
+    if teclado:
+        foco = ", ".join(f'{s}[tecl="true"]:focus' for s in sel)
+        return norm + f"{foco} {{ border:2px dashed {FOCO}; min-height:{alto - 4}px; padding:{pad}; }}\n"
+    foco_r = ", ".join(f"{s}:focus" for s in sel)
+    foco_t = ", ".join(f'{s}[tecl="true"]:focus' for s in sel)
+    return (norm + f"{foco_r} {{ border:2px solid {ACENTO}; min-height:{alto - 4}px; padding:{pad}; }}\n"
+            + f"{foco_t} {{ border:2px dashed {FOCO}; min-height:{alto - 4}px; padding:{pad}; }}\n")
 
 
 _PLANTILLA = Template("""
 QWidget { font-family:"$fuente"; font-size:${t_base}px; color:$tinta; }
 QMainWindow, QDialog { background:$fondo; }
-QToolTip { background:$tinta; color:$blanco; border:0; padding:6px 8px; }
-QWidget#panelDibujo, QWidget#panelVariables,
+QToolTip { background:$superficie; color:$tinta; border:1px solid $borde_fuerte; border-radius:6px; padding:6px 8px; }
+QWidget#panelDibujo, QWidget#panelVariables, QWidget#consolaSimulacion { background:$superficie; border:0; border-radius:0; }
+QLabel#tituloConsola { color:$tinta_3; font-size:11px; font-weight:700; letter-spacing:0.4px; background:transparent; }
+QFrame#cabeceraPanel { background:$superficie_2; border:0; border-bottom:1px solid $borde; }
+QLabel#badgePanel { font-family:$familia_mono; font-size:10.5px; font-weight:600; color:$tinta_2; background:#e2e8f0; border-radius:8px; padding:1px 6px; }
 QWidget#panelPropiedades { background:$superficie; border:1px solid $borde; border-radius:${r_m}px; }
-QLabel#tituloPanel { font-family:$familia_titulo; font-size:${t_titulo}px; font-weight:600; color:$tinta; border:0; }
+QLabel#tituloPanel { font-family:$familia_titulo; font-size:12.5px; font-weight:700; color:$tinta; border:0; background:transparent; }
 QWidget#cabeceraPropiedades { background:$superficie_2; border-radius:${r_s}px; }
 QLabel#tituloPropiedades { font-family:$familia_titulo; color:$acento; font-size:${t_seccion}px; font-weight:600; background:transparent; padding:3px 0; }
 QLabel#ayudaPropiedades { color:$tinta_3; padding:4px 8px; }
 
-QMenuBar { background:$superficie; padding:0 8px; border-bottom:1px solid $borde; }
-QMenuBar::item { padding:${pad_menu}px 12px; border-radius:${r_s}px; }
-QMenuBar::item:selected, QMenu::item:selected { background:$acento_suave; color:$tinta; }
+QMenuBar { background:transparent; padding:0; border:0; font-size:12px; color:$tinta_2; }
+QMenuBar::item { padding:4px 7px; border-radius:${r_s}px; color:$tinta_2; background:transparent; }
+QMenuBar::item:selected { background:$hover; color:$tinta; }
+QMenu::item:selected { background:$acento_suave; color:$tinta; }
 QMenu { background:$superficie; border:1px solid $borde_control; padding:4px; }
 QMenu::item { padding:${pad_item}px 28px ${pad_item}px 24px; border-radius:${r_s}px; }
 QMenu::item:disabled { color:$deshabilitado; }
 QMenu::separator { height:1px; background:$borde; margin:4px 8px; }
 
-QWidget#filaPestanas { background:$fondo_pestanas; }
+QWidget#filaPestanas { background:$superficie; border-bottom:1px solid $borde; }
 QWidget#filaPestanas[fusion="true"] { border-bottom:1px solid $borde; }
 QWidget#herramientasGrafcet[fusion="true"], QWidget#herramientasGrafcet[fusion="true"][modo="simular"] { background:transparent; border:0; }
+QFrame#estucheVistas { background:$superficie_3; border:1px solid $borde; border-radius:7px; }
 QTabBar#pestanasVistas { background:transparent; border:0; }
-QTabBar#pestanasVistas::tab { font-family:$familia_titulo; padding:${pad_tab}px 20px; margin:4px 4px 0 0; background:transparent;
-    color:$tinta_2; border:2px solid transparent; border-bottom:3px solid transparent; font-weight:600; border-top-left-radius:${r_m}px; border-top-right-radius:${r_m}px; }
-QTabBar#pestanasVistas::tab:selected { background:$superficie; color:$tinta; border-bottom:3px solid $acento; }
-QTabBar#pestanasVistas[estrecha="true"]::tab { padding:${pad_tab}px 10px; margin-right:2px; }
-QTabBar#pestanasVistas::tab:hover:!selected { background:$hover; color:$tinta; }
+QTabBar#pestanasVistas::tab { font-family:$familia_titulo; font-size:12px; padding:4px 12px; margin:0 1px 0 0; background:transparent;
+    color:$tinta_2; border:1px solid transparent; font-weight:600; border-radius:5px; }
+QTabBar#pestanasVistas::tab:selected { background:$superficie; color:$tinta; border:1px solid $borde_fuerte; }
+QTabBar#pestanasVistas[estrecha="true"]::tab { padding:4px 8px; margin-right:1px; }
+QTabBar#pestanasVistas::tab:hover:!selected { background:rgba(255,255,255,170); color:$tinta; }
 QTabBar#pestanasVistas::tab:disabled { color:$deshabilitado; }
-QTabBar#pestanasVistas[tecl="true"]::tab:selected:focus { border:2px dashed $foco; border-bottom:3px solid $acento; }
+QTabBar#pestanasVistas[tecl="true"]::tab:selected:focus { border:2px dashed $foco; }
 
-QWidget#bandaModo { background:transparent; }  /* (el enlace lo pinta `paneles.BandaModo`, con `edicion` o `simulacion` según su propiedad `modo`) */
-QToolButton#luzES { border:1px solid $borde_control; border-radius:${radio_pastilla}px; background:$superficie; color:$tinta;
-    padding:0 12px; min-height:${alto_pastilla}px; font-weight:400; }
-QToolButton#luzES:hover { background:$hover; border-color:$tinta_2; }
+QWidget#bandaModo { background:transparent; }
+QToolButton#luzES { font-family:$familia_titulo; font-size:12px; font-weight:600; border:1px solid transparent; border-radius:5px;
+    background:transparent; color:$tinta_2; padding:3px 12px; min-height:20px; }
+QToolButton#luzES:hover { background:rgba(255,255,255,170); color:$tinta; }
 QToolButton#luzES:pressed { background:$pulsado; }
-QToolButton#luzES[tecl="true"]:focus { border:2px dashed $foco; padding:0 11px; min-height:${alto_pastilla_foco}px; }
-QToolButton#luzES[estadoLuz="conectada"] { border:1px solid $ok; }
-QToolButton#luzES[estadoLuz="error"] { background:$error_fondo; border:2px solid $error; padding:0 11px; min-height:${alto_pastilla_foco}px; }
-QToolButton#luzES[abierta="true"] { background:$blanco; border:2px solid $tinta; padding:0 11px; min-height:${alto_pastilla_foco}px; font-weight:700; }  /* P-IMP-126: fondo blanco, borde oscuro, negrita */
-QWidget#herramientasGrafcet { background:$superficie; border-bottom:1px solid $borde; }
-QToolBar { background:transparent; border:0; spacing:8px; padding:0; margin:0; }
-QToolBar QToolButton { min-height:${alto_tb_c}px; padding:0 12px; border:1px solid transparent; border-radius:${r_s}px; color:$tinta; background:transparent; }
-QToolBar QToolButton:hover { background:$hover; border-color:$borde; }
+QToolButton#luzES[tecl="true"]:focus { border:2px dashed $foco; padding:2px 11px; }
+QToolButton#luzES[estadoLuz="conectada"] { color:$tinta; }
+QToolButton#luzES[estadoLuz="error"] { background:$error_fondo; border:1px solid $error; color:$error; }
+QToolButton#luzES[abierta="true"] { background:$superficie; border:1px solid $borde_fuerte; color:$tinta; font-weight:600; }
+QWidget#herramientasGrafcet { background:$superficie_2; border-bottom:1px solid $borde; }
+QToolBar { background:transparent; border:0; spacing:4px; padding:0; margin:0; }
+QToolBar QToolButton { min-height:${alto_tb_c}px; padding:0 9px; border:1px solid transparent; border-radius:6px; color:$tinta_2; background:transparent; font-weight:600; }
+QToolBar QToolButton:hover { background:$hover; color:$tinta; }
 QToolBar QToolButton:pressed { background:$pulsado; }
-QToolBar QToolButton:checked { background:$acento_suave; border-color:$acento; color:$tinta; }
+QToolBar QToolButton:checked { background:$acento_suave; border-color:$acento_borde; color:$acento_oscuro; }
 QToolBar QToolButton:disabled { color:$deshabilitado; background:transparent; border-color:transparent; }
-QToolBar QToolButton[tecl="true"]:focus { border:2px dashed $foco; min-height:${alto_tb_f}px; padding:0 11px; }
-QToolBar::separator { width:1px; background:$borde; margin:6px 4px; }
-QToolBar#barraSimulacion QToolButton#botonReiniciar { background:$superficie; border:1px solid $borde_control; }
-QToolBar#barraSimulacion QToolButton#botonReiniciar:hover { background:$hover; }
+QToolBar QToolButton[tecl="true"]:focus { border:2px dashed $foco; min-height:${alto_tb_f}px; padding:0 8px; }
+QToolBar::separator { width:1px; background:$borde; margin:5px 3px; }
+QToolBar#barraSimulacion QToolButton#botonReiniciar { background:$superficie; border:1px solid $borde_fuerte; color:$tinta; border-radius:6px; padding:0 10px; }
+QToolBar#barraSimulacion QToolButton#botonReiniciar:hover { background:$hover; border-color:$borde_control; }
 QToolBar#barraSimulacion QToolButton#botonReiniciar:pressed { background:$pulsado; }
-QToolBar#barraSimulacion QToolButton#botonReiniciar:disabled { border-color:$borde; }
+QToolBar#barraSimulacion QToolButton#botonReiniciar:disabled { border-color:$borde; color:$deshabilitado; }
 QToolBar#barraSimulacion QToolButton#botonReiniciar[tecl="true"]:focus { border:2px dashed $foco; }
-QToolBar#barraSimulacion QToolButton#botonPlay { font-family:$familia_titulo; background:$acento; color:$blanco; border:1px solid $acento_oscuro; font-weight:700;
-    padding:0 16px; }
-QToolBar#barraSimulacion QToolButton#botonPlay:hover { background:$acento_hover; }
+QToolBar#barraSimulacion QToolButton#botonPlay { font-family:$familia_titulo; background:$acento; color:$blanco; border:1px solid $acento_oscuro; font-weight:600;
+    border-radius:6px; padding:0 14px; }
+QToolBar#barraSimulacion QToolButton#botonPlay:hover { background:$acento_oscuro; }
 QToolBar#barraSimulacion QToolButton#botonPlay:pressed { background:$acento_oscuro; }
-QToolBar#barraSimulacion QToolButton#botonPlay:checked { background:$simulacion; border-color:$simulacion; color:$blanco; }
+QToolBar#barraSimulacion QToolButton#botonPlay:checked { background:$simulacion; border-color:$simulacion_hover; color:$blanco; }
 QToolBar#barraSimulacion QToolButton#botonPlay:checked:hover { background:$simulacion_hover; }
 QToolBar#barraSimulacion QToolButton#botonPlay:disabled { background:$pulsado; color:$deshabilitado; border-color:$borde; }
-QToolBar#barraSimulacion QToolButton#botonPlay[tecl="true"]:focus { border:3px dashed $foco_fuerte; padding:0 14px; min-height:${alto_tb_f2}px; }
-QToolBar#barraEdicion QToolButton, QToolBar#barraVista QToolButton { background:$superficie; border:1px solid $borde_control; min-width:${alto_tb}px; padding:0 5px; }  /* (B2: a media pantalla, con todos los botones de solo icono, la fila de herramientas cabe en 683 px) */
-QToolBar#barraEdicion QToolButton:hover, QToolBar#barraVista QToolButton:hover { background:$hover; border-color:$tinta_2; }
-QToolBar#barraEdicion QToolButton:pressed, QToolBar#barraVista QToolButton:pressed { background:$pulsado; }
-QToolBar#barraEdicion QToolButton:checked, QToolBar#barraVista QToolButton:checked { background:$acento_suave; border:2px solid $acento; padding:0 4px; }
-QToolBar#barraEdicion QToolButton:disabled, QToolBar#barraVista QToolButton:disabled { background:$superficie_2; border-color:$borde; }
-QToolBar#barraEdicion QToolButton[tecl="true"]:focus, QToolBar#barraVista QToolButton[tecl="true"]:focus { border:2px dashed $foco; padding:0 4px; }
-QToolBar#barraPlanos { padding:2px 0; spacing:4px; }
-QToolBar#barraPlanos QToolButton { background:$superficie; border:1px solid $borde_control; padding:0 10px; }
+QToolBar#barraSimulacion QToolButton#botonPlay[tecl="true"]:focus { border:3px dashed $foco_fuerte; padding:0 12px; min-height:${alto_tb_f2}px; }
+QToolBar#barraEdicion QToolButton, QToolBar#barraVistaDer QToolButton, QToolBar#barraVista QToolButton { background:transparent; border:1px solid transparent; border-radius:6px; min-width:${alto_tb}px; padding:0 7px; color:$tinta_2; font-weight:600; }
+QToolBar#barraEdicion QToolButton:hover, QToolBar#barraVistaDer QToolButton:hover, QToolBar#barraVista QToolButton:hover { background:$hover; border-color:transparent; color:$tinta; }
+QToolBar#barraEdicion QToolButton:pressed, QToolBar#barraVistaDer QToolButton:pressed, QToolBar#barraVista QToolButton:pressed { background:$pulsado; }
+QToolBar#barraEdicion QToolButton:checked, QToolBar#barraVistaDer QToolButton:checked, QToolBar#barraVista QToolButton:checked { background:$acento_suave; border:1px solid $acento_borde; color:$acento_oscuro; }
+QToolBar#barraEdicion QToolButton:disabled, QToolBar#barraVistaDer QToolButton:disabled, QToolBar#barraVista QToolButton:disabled { background:transparent; border-color:transparent; color:$deshabilitado; }
+QToolBar#barraEdicion QToolButton[tecl="true"]:focus, QToolBar#barraVistaDer QToolButton[tecl="true"]:focus, QToolBar#barraVista QToolButton[tecl="true"]:focus { border:2px dashed $foco; padding:0 6px; }
+QToolBar#barraPlanos { background:$superficie; border:1px solid $borde; border-radius:${r_m}px; padding:4px 8px; spacing:6px; }
+QToolBar#barraPlanos::separator { background:$borde; width:1px; margin:4px 6px; }
+QToolBar#barraPlanos QToolButton { background:$superficie; border:1px solid $borde_fuerte; border-radius:6px; color:$tinta; padding:0 10px; }
 QToolBar#barraPlanos QToolButton#bibliotecaPlanos { padding:0 32px 0 10px; }
-QToolBar#barraPlanos QToolButton:hover { background:$hover; border-color:$tinta_2; }
+QToolBar#barraPlanos QToolButton:hover { background:$hover; border-color:$borde_control; color:$tinta; }
 QToolBar#barraPlanos QToolButton:pressed { background:$pulsado; }
-QToolBar#barraPlanos QToolButton:checked { background:$acento_suave; border:2px solid $acento; padding:0 9px; }
-QToolBar#barraPlanos QToolButton:disabled { background:$superficie_2; border-color:$borde; }
+QToolBar#barraPlanos QToolButton:checked { background:$acento_suave; border:2px solid $acento; color:$acento_oscuro; padding:0 9px; }
+QToolBar#barraPlanos QToolButton:disabled { background:$superficie_2; border-color:$borde; color:$deshabilitado; }
 QToolBar#barraPlanos QToolButton[tecl="true"]:focus { border:2px dashed $foco; padding:0 9px; }
 QToolBar#barraConexion QToolButton { border:1px solid $acento_borde; background:$superficie; color:$acento; }
 QToolButton#bibliotecaPlanos { padding-right:28px; }
@@ -247,28 +259,29 @@ QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed, QSpinBox::down-b
 QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image:url(:/grafconnect/subir.svg); width:8px; height:5px; }
 QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image:url(:/grafconnect/desplegar.svg); width:8px; height:5px; }
 QSpinBox::up-arrow:disabled, QSpinBox::down-arrow:disabled, QDoubleSpinBox::up-arrow:disabled, QDoubleSpinBox::down-arrow:disabled { image:none; }
-QAbstractSpinBox QLineEdit, QAbstractSpinBox QLineEdit:focus { border:0; background:transparent; min-height:0; padding:0; margin:0; }
+QAbstractSpinBox QLineEdit, QAbstractSpinBox QLineEdit:focus { border:0; background:transparent; min-height:0; padding:0 0 0 4px; margin:0; }
 QComboBox::drop-down { subcontrol-origin:padding; subcontrol-position:top right; width:24px; border:0; background:transparent; }
 QComboBox::down-arrow { image:url(:/grafconnect/desplegar.svg); width:12px; height:8px; }
 QComboBox QAbstractItemView { background:$superficie; border:1px solid $borde_control; selection-background-color:$acento_suave; selection-color:$tinta; outline:0; }
 QComboBox QAbstractItemView::item { min-height:${alto_fila}px; padding:0 8px; }
 
-QPushButton { background:$superficie; border:1px solid $borde_control; border-radius:${r_s}px; color:$tinta; }
+QPushButton { background:$superficie; border:1px solid $borde_fuerte; border-bottom-color:#9fb0c4; border-radius:6px; color:$tinta; font-weight:500; }
 $familia_botones
-QPushButton:hover { background:$hover; border-color:$tinta_2; }
+QPushButton:hover { background:$hover; border-color:$borde_control; }
 QPushButton:pressed { background:$pulsado; }
 QPushButton:checked { background:$acento_suave; border-color:$acento; }
 QPushButton:disabled, QToolButton:disabled { color:$deshabilitado; }
 QPushButton:disabled { border-color:$borde; background:$superficie_2; }
-QPushButton[primario="true"] { background:$acento; color:$blanco; border-color:$acento_oscuro; font-weight:600; }
+QPushButton[primario="true"] { background:$acento; color:$blanco; border:1px solid $acento_oscuro; font-weight:600; }
 QPushButton[primario="true"]:hover { background:$acento_hover; border-color:$acento_oscuro; }
 QPushButton[primario="true"]:pressed { background:$acento_oscuro; }
 QPushButton[primario="true"][tecl="true"]:focus { border:2px dashed $blanco; }
 QPushButton[primario="true"]:disabled { background:$pulsado; color:$deshabilitado; border-color:$borde; }
-QPushButton[entrada="true"] { text-align:left; padding:0 10px; border:2px solid $borde_control; font-weight:600; min-height:${alto_entrada}px; }
+QPushButton[entrada="true"] { text-align:left; padding:0 10px; border:2px solid $borde_fuerte; border-radius:6px; background:$superficie; color:$tinta; font-weight:600; min-height:${alto_entrada}px; }
+QPushButton[entrada="true"]:hover { border-color:$acento; }
 QPushButton[entrada="true"][tecl="true"]:focus { border:2px dashed $foco; padding:0 10px; min-height:${alto_entrada}px; }
-QPushButton[entrada="true"][activa="true"] { background:$simulacion_suave; border:2px solid $simulacion; color:$tinta; }
-QPushButton[entrada="true"]:disabled { background:$superficie_2; color:$deshabilitado; }
+QPushButton[entrada="true"][activa="true"] { background:$simulacion_suave; border:2px solid $simulacion; color:$simulacion_hover; }
+QPushButton[entrada="true"]:disabled { background:$superficie_2; border-color:$borde; color:$deshabilitado; }
 QPushButton[entrada="true"][activa="true"]:disabled { background:$simulacion_suave; border:2px solid $simulacion_borde; color:$tinta_2; }
 QToolButton { border:1px solid transparent; border-radius:${r_s}px; background:transparent; }
 QToolButton:hover { background:$hover; }
@@ -284,7 +297,7 @@ QGraphicsView { border:2px solid transparent; }
 
 QGroupBox { font-family:$familia_titulo; background:$superficie; border:0; margin-top:24px; font-size:${t_seccion}px; font-weight:600; }
 QGroupBox::title { subcontrol-origin:margin; padding:3px 6px; color:$acento; }
-QGroupBox[seccion="true"]::title { padding:3px 6px 3px 22px; }  /* el hueco del cuadrado de etapa (paneles.CajaSeccion) */
+QGroupBox[seccion="true"]::title { padding:3px 6px; }  /* subsecciones limpias sin marcador (paneles.CajaSeccion) */
 QGroupBox#grupoVariables { font-size:${t_titulo}px; }
 QGroupBox#grupoVariables::title { color:$tinta; }
 QGroupBox QLabel, QGroupBox QPushButton, QGroupBox QTableWidget, QGroupBox QLineEdit, QGroupBox QComboBox, QGroupBox QCheckBox { font-family:"$fuente"; font-weight:400; font-size:${t_base}px; }
@@ -293,18 +306,21 @@ QTableWidget, QListWidget, QTreeWidget { background:$superficie; border:2px soli
 QHeaderView::section { background:$superficie_2; border:0; border-bottom:1px solid $borde; padding:6px 6px; color:$tinta_2; font-weight:600; }
 QScrollArea { border:0; background:transparent; }
 QScrollArea > QWidget > QWidget { background:$fondo; }  /* el contenido de un área desplazable, con el fondo de la ventana (no el gris de Qt) */
-QScrollBar:horizontal { height: ${ancho_barra}px; background:$borde; margin:0; border-radius:6px; }
-QScrollBar::handle:horizontal { background:$borde_control; min-width:36px; border-radius:5px; margin:1px; }
-QScrollBar::handle:horizontal:hover { background:$tinta_2; }
+QScrollBar:horizontal { height: ${ancho_barra}px; background:transparent; margin:0; border-radius:5px; }
+QScrollBar::handle:horizontal { background:$borde_fuerte; min-width:36px; border-radius:4px; margin:2px; }
+QScrollBar::handle:horizontal:hover { background:$borde_control; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width:0; }
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background:transparent; }
-QScrollBar:vertical { width: ${ancho_barra}px; background:$borde; margin:0; border-radius:6px; }
-QScrollBar::handle:vertical { background:$borde_control; min-height:36px; border-radius:5px; margin:1px; }
-QScrollBar::handle:vertical:hover { background:$tinta_2; }
+QScrollBar:vertical { width: ${ancho_barra}px; background:transparent; margin:0; border-radius:5px; }
+QScrollBar::handle:vertical { background:$borde_fuerte; min-height:36px; border-radius:4px; margin:2px; }
+QScrollBar::handle:vertical:hover { background:$borde_control; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background:transparent; }
-QSplitter::handle { background:$fondo; }
-QStatusBar { background:$fondo; color:$tinta_2; font-size:${t_pequena}px; }
+QSplitter::handle { background:transparent; }
+QSplitter::handle:horizontal { border-right:1px solid $borde; }
+QSplitter::handle:vertical { border-top:1px solid $borde; }
+QSplitter::handle:hover { background:$acento_suave; }
+QStatusBar { background:$superficie_3; border-top:1px solid $borde; color:$tinta_2; font-size:11px; min-height:26px; }
 QStatusBar::item { border:0; }
 QProgressBar { border:1px solid $borde_control; border-radius:${r_s}px; background:$superficie; text-align:center; }
 QProgressBar::chunk { background:$acento; }
@@ -319,17 +335,20 @@ def hoja_global(compacto_alto: bool = False) -> str:
     """La hoja de estilo de la ventana. La ventana usa siempre la de alturas normales (cambiarla al vuelo cuesta cerca de un
     segundo); `compacto_alto` baja las alturas de control a 32 px y queda para herramientas y maquetas."""
     from .campos_medidos import instalar
+    from .estilo_botones import instalar as instalar_botones
     instalar()
+    instalar_botones()
     alto = ALTO_CONTROL_COMPACTO if compacto_alto else ALTO_CONTROL
     alto_tb = ALTO_BARRA_COMPACTA if compacto_alto else ALTO_BARRA  # botones de las barras: 34 px, o 32 en un cuarto de pantalla
     t = dict(
         fuente=FUENTE, t_base=T_BASE, t_pequena=T_PEQUENA, t_titulo=T_TITULO, t_seccion=T_SECCION,
         tinta=TINTA, tinta_2=TINTA_2, tinta_3=TINTA_3, blanco=BLANCO, fondo=FONDO, superficie=SUPERFICIE,
-        superficie_2=SUPERFICIE_2, borde=BORDE, borde_control=BORDE_CONTROL, deshabilitado=DESHABILITADO, hover=HOVER,
+        superficie_2=SUPERFICIE_2, superficie_3=SUPERFICIE_3, borde=BORDE, borde_fuerte=BORDE_FUERTE,
+        borde_control=BORDE_CONTROL, deshabilitado=DESHABILITADO, hover=HOVER,
         pulsado=PULSADO, acento=ACENTO, acento_oscuro=ACENTO_OSCURO, acento_hover=ACENTO_HOVER, acento_suave=ACENTO_SUAVE,
         acento_borde=ACENTO_BORDE, simulacion=SIMULACION, simulacion_suave=SIMULACION_SUAVE, foco=FOCO,
         r_s=R_S, r_m=R_M, fondo_pestanas=FONDO, edicion=EDICION, ok=OK, error=ERROR, error_fondo=ERROR_FONDO,
-        familia_titulo=FAMILIA_TITULO, foco_fuerte=FOCO_FUERTE, simulacion_hover=SIMULACION_HOVER, simulacion_borde=SIMULACION_BORDE, alto_entrada=ALTO_ENTRADA - 4, alto_tb_f2=alto_tb - 9,
+        familia_titulo=FAMILIA_TITULO, familia_mono=FAMILIA_MONO, foco_fuerte=FOCO_FUERTE, simulacion_hover=SIMULACION_HOVER, simulacion_borde=SIMULACION_BORDE, alto_entrada=ALTO_ENTRADA - 4, alto_tb_f2=alto_tb - 9,
         radio_pastilla=alto_tb // 2, alto_pastilla=alto_tb - 5, alto_pastilla_foco=alto_tb - 7, alto_tb=alto_tb, alto_tb_c=alto_tb - 5, alto_tb_f=alto_tb - 7,
         pad_menu=3 if compacto_alto else 4, pad_item=6 if compacto_alto else 8,
         pad_tab=3 if not compacto_alto else 2, pad_barra=2 if compacto_alto else 4, alto_menos=alto - 2, alto_menos4=alto - 4,
@@ -340,17 +359,25 @@ def hoja_global(compacto_alto: bool = False) -> str:
     )
     hoja = _PLANTILLA.substitute(**t)
     # el desplegable deja sitio a su flecha (la zona `drop-down`, de 24 px); se escribe aparte para que `padding` no se pierda
-    hoja += f"QComboBox {{ padding-right:28px; }}\nQComboBox:focus {{ padding-right:27px; }}\n"
+    hoja += (
+        "QComboBox { padding-right:28px; }\n"
+        "QComboBox:focus, QComboBox[tecl=\"true\"]:focus { padding-right:27px; }\n"
+    )
     return hoja
 
 
 def campos_compactos(alto: int | None = None) -> str:
-    """Hoja local para paneles con poco alto: campos de texto y desplegables de `alto` px (por defecto, `ALTO_CONTROL_COMPACTO` de la
-    escala activa) en lugar de los de la hoja global, con el mismo foco discontinuo de 2 px sin que nada se mueva."""
+    """Hoja local para paneles con poco alto: campos y desplegables de `alto` px (por defecto, `ALTO_CONTROL_COMPACTO`)
+    con borde sólido de acento en ratón y discontinuo de foco en teclado."""
     alto = ALTO_CONTROL_COMPACTO if alto is None else alto
-    return (f"QLineEdit, QComboBox {{ min-height:{alto - 2}px; padding:0 8px; }} "
-            f"QLineEdit:focus, QComboBox:focus {{ border:2px dashed {FOCO}; min-height:{alto - 4}px; padding:0 7px; }} "
-            f"QComboBox {{ padding-right:28px; }} QComboBox:focus {{ padding-right:27px; }}")
+    return (
+        f"QLineEdit, QComboBox {{ min-height:{alto - 2}px; padding:0 8px; }} "
+        f"QLineEdit:focus, QComboBox:focus {{ border:2px solid {ACENTO}; min-height:{alto - 4}px; padding:0 7px; }} "
+        f'QLineEdit[tecl="true"]:focus, QComboBox[tecl="true"]:focus {{ border:2px dashed {FOCO}; '
+        f"min-height:{alto - 4}px; padding:0 7px; }} "
+        f"QComboBox {{ padding-right:28px; }} "
+        f'QComboBox:focus, QComboBox[tecl="true"]:focus {{ padding-right:27px; }}'
+    )
 
 
 def fuente(px: int | None = None, negrita: bool = False, titulo: bool = False, mono: bool = False) -> QFont:

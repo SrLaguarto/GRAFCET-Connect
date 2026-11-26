@@ -103,15 +103,15 @@ class Modos:
                 estilo.poner(w, modo=modo)
 
     def _fusionar_filas(self, fusionar: bool) -> None:
-        """Un cuarto de pantalla: las herramientas (Play, Reiniciar…) suben a la fila de las pestañas, entre ellas y la luz de
-        la conexión, y se gana una fila entera de alto para el dibujo."""
+        """Un cuarto de pantalla: las herramientas (Play, Reiniciar…) suben a la fila de las pestañas para ganar alto."""
         fila = self.herramientas_grafcet
+        lay = self.fila_pestanas.layout()
         if fusionar:
-            self.fila_pestanas.layout().insertWidget(1, fila)
+            lay.insertWidget(2, fila)
         else:
-            self.centralWidget().layout().insertWidget(1, fila)
-        fila.layout().setContentsMargins(0 if fusionar else estilo.E2, estilo.E1, 0 if fusionar else estilo.E2, estilo.E1)
-        fila.layout().setSpacing(estilo.E1 if fusionar else estilo.E2)  # en la fila de las pestañas cada píxel cuenta: caben las cuatro barras
+            self.centralWidget().layout().insertWidget(2, fila)
+        fila.layout().setContentsMargins(0 if fusionar else 10, 2 if fusionar else 5, 0 if fusionar else 10, 2 if fusionar else 5)
+        fila.layout().setSpacing(estilo.E1 if fusionar else 6)
         for w in (fila, self.fila_pestanas):
             estilo.poner(w, fusion=fusionar)
 
@@ -226,7 +226,7 @@ class Modos:
         if getattr(self, "solo_lectura", False):
             self._poner_chip("lectura", "EJEMPLO · SOLO LECTURA", "Ejemplo de solo lectura: se puede simular; para editar, abra un proyecto o cree uno nuevo")
         else:
-            self._poner_chip("editar", "EDICIÓN", "Modo edición: Play inicia la simulación")
+            self._poner_chip("editar", "EDICIÓN", "Modo edición: Simular inicia la simulación")
         self.ayuda.setToolTip(self._ayuda if getattr(self,"solo_lectura",False) else AYUDA_EDICION[e.herramienta])
         mensaje, info = e.texto_estado()
         from ..vigencia_avisos import presentar_estado

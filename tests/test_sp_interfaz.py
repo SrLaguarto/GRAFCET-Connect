@@ -71,7 +71,7 @@ class InterfazP(unittest.TestCase):
         selector = p.directa.selector
         ancho = selector.width()
         self.assertLess(ancho, selector.parentWidget().width())
-        self.assertLessEqual(abs(selector.geometry().center().x() - selector.parentWidget().rect().center().x()), 2)
+        self.assertIs(selector.parentWidget(), p.fila_alta)
         selector.setCurrentIndex(1)
         self.app.processEvents()
         self.assertEqual(selector.width(), ancho)
@@ -197,9 +197,9 @@ class InterfazP(unittest.TestCase):
                         self.assertEqual((marco.geometry(), p.geometry()), antes)
                         inicio = registro.eventos.index(QEvent.Type.Show)
                         posteriores = registro.eventos[inicio + 1:]
-                        # V: se conserva la lista nativa. Qt puede colocarla una vez después de Show.
+                        # V: se conserva la lista nativa. Qt puede colocarla y ComboMenu alinearla en x tras Show (sin redimensionar ni oscilar).
                         self.assertTrue(all(e == QEvent.Type.Move for e in posteriores))
-                        self.assertLessEqual(len(posteriores), 1)
+                        self.assertLessEqual(len(posteriores), 2)
                         registro.eventos.clear()
                         hc._bombear(8)
                         self.assertEqual(registro.eventos, [])
@@ -235,7 +235,6 @@ class InterfazP(unittest.TestCase):
                                          senal(identidad(2), "Sensor")]
                     d = ConfiguracionDirecta(p.directa)
                     c.extras.append(d)
-                    d.b_avanzado.setChecked(True)
                     d.show()
                     hc._bombear(4)
                     for regla in ("M1", "M2", "C1", "C2", "C5", "TB1", "TB2"):
@@ -261,6 +260,24 @@ class InterfazP(unittest.TestCase):
             for i in range(4):
                 motor = marco.terminales[identidad(10 + i)]
                 self.assertLess(motor.mapTo(marco, QPoint()).y(), entrada)
+
+    def test_SP132_dialogo_directa_abierto_tiempos_en_fila_y_orden_cancelar_aceptar(self):
+        """Ciclo 4 (C17a/C17b/C17c): `ConfiguracionDirecta` muestra directamente «Señales que no se traen», coloca Periodo y Tiempo de espera en 1 fila horizontal y ordena Cancelar | Aceptar."""
+        from PySide6.QtWidgets import QFrame
+        p = self.panel(True)
+        d = ConfiguracionDirecta(p.directa)
+        self.addCleanup(d.close)
+        d.show()
+        self.app.processEvents()
+        self.assertGreaterEqual(len(d.findChildren(QFrame, "tarjetaConfigES")), 2)
+        self.assertFalse(hasattr(d, "b_avanzado"))
+        self.assertTrue(d.avanzado.isVisible())
+        self.assertTrue(d.tabla.isVisible())
+        s_per, s_to = d.controles["periodo_ms"], d.controles["timeout_ms"]
+        self.assertLessEqual(abs(s_per.y() - s_to.y()), 2)
+        self.assertLess(s_per.x(), s_to.x())
+        self.assertLessEqual(abs(d.b_cancelar.y() - d.b_aceptar.y()), 2)
+        self.assertLess(d.b_cancelar.x(), d.b_aceptar.x())
 
 
 if __name__ == "__main__":

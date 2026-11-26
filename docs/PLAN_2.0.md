@@ -30,7 +30,9 @@ ni el `.grafnet`.
 2. **Imagen idéntica.** En cada etapa, el banco de imágenes de E0 debe dar las mismas imágenes antes y después:
    ejemplos, fixtures y proyecto de referencia, en edición y en simulación. Toda diferencia se explica o se corrige.
    Desde E4, la referencia es `artifacts/v2_e3/imagenes_7400f0c/`: la de E0 más las 8 de `Linea larga`, que E0 no tenía,
-   generada desde el commit 7400f0c.
+   generada desde el commit 7400f0c. Desde el cierre de la 2.0 (26-nov-2026), la referencia es
+   `artifacts/v2_cierre/imagenes_2.0/`, con las mismas 93 capturas y el encuadre de la ventana v2 (cabecera de 44 px).
+   El responsable la dio por buena tras revisar `artifacts/v2_cierre/comparacion_banco.html`.
 3. **`grafcet/` no se toca.** Si una medida demuestra que el cuello está en el núcleo, el responsable decide
    antes, y solo para rendimiento, sin cambiar la semántica.
 4. **`.grafnet` idéntico.** Un archivo guardado con la 2.0 abre en la 1.1.x, y al revés.

@@ -9,7 +9,7 @@ import tempfile
 
 ARCHIVO = "conexion-factoryio.json"
 CONEXION_INICIAL = ("192.168.1.133", 502, 1)
-CANALES_INICIALES = {a: {"offset": 0, "cantidad": 32 if a in ("discrete", "coil") else 12}
+CANALES_INICIALES = {a: {"offset": 0, "cantidad": 16 if a in ("discrete", "coil") else 4}
                      for a in ("discrete", "coil", "input-register", "holding")}
 ETIQUETA_CANAL = {"discrete": "Entrada", "input-register": "Entrada numérica", "coil": "Salida", "holding": "Salida numérica"}
 _IPV4 = re.compile(r"(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}")

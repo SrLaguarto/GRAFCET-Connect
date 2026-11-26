@@ -73,10 +73,11 @@ class FavoritosPrincipal(unittest.TestCase):
             alto = barra.height()
             lado = barra.botones["etapa"].iconSize().height()
             if tam[0] <= 960:
-                self.assertEqual(lado, 30, "L: conserva los quince favoritos a media pantalla")
+                self.assertEqual(lado, 24, "L: conserva los quince favoritos a media pantalla")
             else:
-                self.assertLessEqual(abs((alto - lado) - (alto - 24) / 2), 1)
-            self.assertGreater(alto - lado, 0)
+                esperado = max(20, min(26, round((alto - 6 + 24) / 2) - 2))
+                self.assertEqual(lado, esperado)
+            self.assertGreater(alto - 6 - lado, 0)
             for boton in barra.botones.values():
                 self.assertEqual(boton.iconSize(), QSize(lado, lado))
             cab = w._cab.geometry().height()
@@ -198,7 +199,7 @@ class FavoritosPrincipal(unittest.TestCase):
         for clave in COLOCABLES:
             for dpr in (1., 1.25, 1.5):
                 pix = icono_mini(clave).pixmap(QSize(lado, lado), dpr)
-                self.assertEqual(pix.size(), QSize(round(lado * dpr), round(lado * dpr)))
+                self.assertEqual(pix.size(), QSize(int(lado * dpr + 0.5), int(lado * dpr + 0.5)))
                 self.assertEqual(pix.devicePixelRatioF(), dpr)
                 self.assertTrue(pix.rect().adjusted(1, 1, -1, -1).contains(QRegion(pix.mask()).boundingRect()))
 

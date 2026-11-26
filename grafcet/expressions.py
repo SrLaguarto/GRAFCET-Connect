@@ -400,7 +400,11 @@ def typecheck(m: dict[str, Any], ctx: CheckContext) -> TypeInfo:
         if kids[1].kind != "bool":
             ctx.err("D-TIPO", "la condición de delay debe ser booleana")
         if kids[1].event:
-            ctx.err("D-TIPO-EVENTO", "un evento no puede ser condición base de delay")
+            ctx.err(
+                "D-TIPO-EVENTO",
+                "Un flanco (↑a) no puede usarse en una temporización, "
+                "ni a la conexión ni a la desconexión, porque dura un instante.",
+            )
         return TypeInfo("bool", "", False, True)
     if op in ("eq", "ne") and kids[0].kind == "bool" and kids[1].kind == "bool":
         return TypeInfo("bool", "", ev, tm)

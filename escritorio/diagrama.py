@@ -22,6 +22,7 @@ from typing import Any
 from .anclaje import AnclajeVentana
 
 from grafcet import routing
+from grafcet.ids import label_key
 from grafcet.routing import NORMAL, SENTIDO, TALLO_T, orientacion, punto_t
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, QSize, QSettings, Qt, QTimer, Signal
@@ -59,6 +60,7 @@ COL = {"readout": "#326dcb","panel": "#ffffff", "text": "#1d2330", "muted": "#6b
 FONT = "Arial"
 Z_FRAME, Z_LINK, Z_BAR, Z_STEP = 0, 1, 2, 3
 GROSOR_NEGADO = 1.25     # grosor de la barra de una variable negada (Qt no deja regular el del sobrerrayado del texto)
+PASO_NEGADO = 2.5        # separación vertical entre barras de negaciones apiladas
 TMR_TAM = 10            # tamaño del tiempo transcurrido de un temporizador, que se dibuja encima de su duración
 class Memoria:
     """Memoria de medidas de texto (funciones puras de su clave) con tope: al llenarse se vacía y las medidas se recalculan al pedirlas.
@@ -110,17 +112,32 @@ def _html(segs: list[dict[str, Any]] | None, sobrerrayado: bool = True, verdader
     return "".join(out)
 
 
-def _negados(segs: list[dict[str, Any]]) -> list[tuple[int, int]]:
-    """Tramos [i, j) de segmentos negados seguidos: la barra de la negación cubre cada tramo de una vez, aunque lleve
-    subíndices o signos dentro."""
-    out: list[tuple[int, int]] = []
+def _negados(segs: list[dict[str, Any]]) -> list[tuple[int, int, int, list[str] | None]]:
+    """Tramos [i, j, nivel, eval] de segmentos negados: cada tramo es una barra de negación sobre sus segmentos."""
+    if any(s.get("neg") for s in segs):
+        grupos: dict[int, list[Any]] = {}
+        for i, s in enumerate(segs):
+            for g in s.get("neg", ()):
+                if g["id"] not in grupos:
+                    grupos[g["id"]] = [i, i + 1, g["n"], g.get("eval", [])]
+                else:
+                    grupos[g["id"]][1] = i + 1
+        out = [(v[0], v[1], v[2], v[3]) for v in grupos.values()]
+        out.sort(key=lambda t: (t[2], t[0]))
+        return out
+    out_o: list[tuple[int, int, int, list[str] | None]] = []
     for i, s in enumerate(segs):
         if s.get("o"):
-            if out and out[-1][1] == i:
-                out[-1] = (out[-1][0], i + 1)
+            if out_o and out_o[-1][1] == i:
+                a, _b, n, ev = out_o[-1]
+                out_o[-1] = (a, i + 1, n, ev)
             else:
-                out.append((i, i + 1))
-    return out
+                out_o.append((i, i + 1, 0, None))
+    return out_o
+
+
+def _niveles_negado(segs: list[dict[str, Any]]) -> int:
+    return max((len(s.get("neg", ())) or (1 if s.get("o") else 0) for s in segs), default=0)
 
 
 class _Pintor:
@@ -201,13 +218,23 @@ class _Pintor:
         tramos = _negados(segs)
         if tramos:  # la barra de la negación: una línea propia sobre cada tramo negado, a la altura de arriba del texto
             lim = self._limites(item, segs)
-            for i, j in tramos:
+            for tramo in tramos:
+                if len(tramo) == 2:
+                    i, j, nivel, ev = tramo[0], tramo[1], 0, None
+                else:
+                    i, j, nivel, ev = tramo
+                yb = top - nivel * PASO_NEGADO
+                if ev is not None:
+                    verde = any(k in self.verdaderos for k in ev)
+                    self.line(x0 + lim[i], yb, x0 + lim[j], yb,
+                              self.pen("true_text" if verde else color, GROSOR_NEGADO), z + 0.03, tip)
+                    continue
                 while i < j:
                     verde = any(k in self.verdaderos for k in segs[i].get("eval", []))
                     fin = i + 1
                     while fin < j and any(k in self.verdaderos for k in segs[fin].get("eval", [])) == verde:
                         fin += 1
-                    self.line(x0 + lim[i], top, x0 + lim[fin], top,
+                    self.line(x0 + lim[i], yb, x0 + lim[fin], yb,
                               self.pen("true_text" if verde else color, GROSOR_NEGADO), z + 0.03, tip)
                     i = fin
         if halo:  # rótulo de marco: fondo blanco que corta el trazo, como paint-order en el SVG
@@ -367,7 +394,7 @@ def servicios() -> Servicios:
         contenido=lambda segs, verdaderos: _html(segs, False, verdaderos), negados=_negados, medir=_medir_texto,
         limites_de=_limites_texto, ancho=_Pintor.ancho, limites=_Pintor.limites, ascenso=_Pintor.ascenso,
         ascenso_texto=_ascenso_texto, alto_comentario=lambda texto, ancho: medida_comentario(texto, ancho)[1],
-        grosor_negado=GROSOR_NEGADO, ancho_comentario=ANCHO_COMENTARIO)
+        grosor_negado=GROSOR_NEGADO, ancho_comentario=ANCHO_COMENTARIO, paso_negado=PASO_NEGADO)
 
 
 def rects_comentarios(M: dict[str, Any]) -> list[tuple[str, QRectF]]:
@@ -403,8 +430,8 @@ def _estado_temporal(pt: _Pintor, x: float, y: float, segs: list[dict[str, Any]]
     for t in lista:
         i = _duracion(segs, t)
         a, b = (lim[0], lim[-1]) if i is None else (lim[i], lim[i + 1])
-        negado = any(s.get("o") for s in segs) if i is None else bool(segs[i].get("o"))
-        base = y - pt.ascenso(size) - (3 if negado else 1)  # la barra de la negación está arriba del texto, algo más gruesa
+        niveles = _niveles_negado(segs if i is None else segs[i : i + 1])
+        base = y - pt.ascenso(size) - (3 + (niveles - 1) * PASO_NEGADO if niveles else 1)  # encima de las barras negadas
         off = bool(t.get("off"))
         ancla = x + (b if off else a)
         color = "readout"
@@ -669,6 +696,12 @@ def _recorrer(pt: Any, M: dict[str, Any], S: dict[str, Any], sel: set[str] | Non
     marcos = _marcos(pt, M, pos, dependencias, roles)
     tmp = _temporizadores(S)
     marcadas = {i for i in (sel or set()) if i.startswith(("accion:", "parte:"))} | {f"parpadeo:{i}" for i in (naranja or ())}
+    gt: dict[tuple[str, str], list[str]] = {}
+    for t_ in M["transitions"]:
+        lbl = t_.get("label", "")
+        if lbl:
+            gt.setdefault((t_.get("partial") or "g", label_key(lbl)), []).append(t_["id"])
+    rep_trans = {i for g in gt.values() if len(g) > 1 for i in g}
     link = pt.pen("text")
     for t in M["transitions"]:
         pt.elementos = (t["id"],)
@@ -709,9 +742,14 @@ def _recorrer(pt: Any, M: dict[str, Any], S: dict[str, Any], sel: set[str] | Non
             color, width = "history", 3
         if blk and blk.get("element") == t["id"]:
             color, width = "err", 3
+        if t["id"] in rep_trans and color == "text":
+            color = "glow"
         tip = (f"Transición {t.get('label', t['id'])}: validada {'sí' if ob.get('validated') else 'no'}, receptividad "
                f"{'verdadera' if ob.get('receptivity') else 'falsa'}"
                + ("; su parcial está forzado y no evoluciona" if ob.get("forced") else ""))
+        if t["id"] in rep_trans:
+            hx, hy = (ALTO_T, TB + 6) if giro in EVOLUCION_HORIZONTAL else (TB + 6, ALTO_T)
+            pt.rect(tx - hx, ty - hy, 2 * hx, 2 * hy, pt.pen("glow", 2.0, (5, 3)), Z_EDIT, tip=tip)
         if giro in EVOLUCION_HORIZONTAL:  # trazo vertical; designación debajo y receptividad encima, horizontales y centradas
             pt.line(tx, ty - TB, tx, ty + TB, pt.pen(color, width), Z_BAR, tip)
             if t.get("showLabel", True):
@@ -1117,7 +1155,7 @@ ESTILO_FLECHA = (f"QToolButton {{ background: rgba(255,255,255,235); border: 1px
 def estilo_barra_zoom() -> str:
     """La hoja de los controles del zoom con la escala de letra y de controles de ahora (`estilo.activar_escala`)."""
     return (
-    f"QFrame#barraZoom {{ background: rgba(255,255,255,242); border: 1px solid {estilo.BORDE_CONTROL}; border-radius: {estilo.R_M}px }} "
+    f"QFrame#barraZoom {{ background: rgba(255,255,255,248); border: 1px solid {estilo.BORDE_FUERTE}; border-radius: {estilo.R_M}px }} "
     f"QFrame#barraZoom QToolButton {{ border: 1px solid transparent; border-radius: {estilo.R_S}px; padding: 0 8px; min-height: {estilo.ALTO_CONTROL_COMPACTO - 2}px; "
     f"min-width: {estilo.ALTO_CONTROL_COMPACTO - 2}px; font-size: {estilo.T_BASE}px; font-weight: 600; color: {estilo.TINTA}; background: transparent }} "
     f"QFrame#barraZoom QToolButton#pasoZoom {{ font-size: {estilo.T_TITULO}px; padding: 0 4px; }} "  # (más grande, la «+» y la «−» hacían la barra más alta que sus botones)
@@ -1388,10 +1426,6 @@ class VistaDiagrama(QGraphicsView):
         elif any(s['id'] == ident for s in c.M['steps']): c.pedir_etiqueta(ident)
         elif any(a['id'] == ident for a in c.ed.model['actions']) or c._es_borrador(ident):
             sid = next((s["id"] for s in c.M["steps"] if any(a["id"] == ident for a in s.get("actions", []))), None)
-            caja = c.accion_en_id(ident) if hasattr(c, "accion_en_id") else None
-            if caja is not None and c.datos_accion(ident)["tipo"] == "continua" and hasattr(self, "abrir_selector"):
-                c.seleccionar([ident]); c.desplegar_variable(caja)  # una continua: la variable se elige en el desplegable sobre ella (también con el teclado)
-                return
             c.pedir_accion(sid, ident)
             if hasattr(self.window(), "props_activo"): self.window().props_activo().accion.variable.setFocus()
         else:
@@ -1935,14 +1969,17 @@ class VistaDiagrama(QGraphicsView):
         """Las barras de desplazamiento solo con zoom manual: al ajustar el dibujo cabe entero y no hay nada que mover."""
         politica = Qt.ScrollBarPolicy.ScrollBarAlwaysOn if self._manual else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         horizontal = vertical = politica  # fijas: así la vista no cambia de tamaño al desplazarse o acercar
-        if self._manual and self.controlador is not None and self._contenido is not None:
-            # Al editar, el zoom es siempre «manual» (el dibujo no se reencaja solo), pero una barra solo sirve si lo dibujado no cabe
-            # en esa dirección: se decide con el tamaño entero de la vista (no con el que deja la barra), así no oscila.
-            k = self.escala() or 1.0
-            marco = 2 * self.frameWidth()
-            on, off = Qt.ScrollBarPolicy.ScrollBarAlwaysOn, Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-            horizontal = on if self._contenido.width() * k + MARGEN_AJUSTE > self.width() - marco else off
-            vertical = on if self._contenido.height() * k + MARGEN_AJUSTE > self.height() - marco else off
+        if self._manual and self.controlador is not None:
+            if self._contenido is None:
+                horizontal = vertical = Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            else:
+                # Al editar, el zoom es siempre «manual» (el dibujo no se reencaja solo), pero una barra solo sirve si
+                # lo dibujado no cabe en esa dirección: se decide con el tamaño entero de la vista (no el que deja la barra).
+                k = self.escala() or 1.0
+                marco = 2 * self.frameWidth()
+                on, off = Qt.ScrollBarPolicy.ScrollBarAlwaysOn, Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+                horizontal = on if self._contenido.width() * k + MARGEN_AJUSTE > self.width() - marco else off
+                vertical = on if self._contenido.height() * k + MARGEN_AJUSTE > self.height() - marco else off
         self.setHorizontalScrollBarPolicy(horizontal)
         self.setVerticalScrollBarPolicy(vertical)
         self._colocar()

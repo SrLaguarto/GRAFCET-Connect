@@ -8,6 +8,8 @@ import tempfile
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if Path("C:/Windows/Fonts").is_dir():  # (como las demás pruebas de pantalla: sin esto, offscreen mide con una letra de reserva más ancha y el módulo suelto falla)
+    os.environ.setdefault("QT_QPA_FONTDIR", "C:/Windows/Fonts")
 try:
     from PySide6.QtWidgets import QApplication
     from escritorio.entradas_salidas import NIVEL_ACTIVO, PanelES
@@ -245,6 +247,36 @@ class PanelTests(unittest.TestCase):
             p.deleteLater()
             app.processEvents()
 
+    def test_SFIO85_subtitulos_y_anchos_ip_puerto_5_cifras(self):
+        """IM3: las columnas conservan «Sensores»/«Actuadores» con subtítulo «Variables creadas en GRAFCET Connect», y el puerto admite 5 cifras."""
+        from PySide6.QtWidgets import QFrame
+        from escritorio import estilo
+        app = QApplication.instance() or QApplication([])
+        p = PanelES()
+        try:
+            estilo.activar_escala("normal")
+            p.escalar(estilo.hoja_global(), "normal")
+            p.cargar(M().var("s1").var("q1", "output").step("0", True).doc)
+            p.resize(1280, 720)
+            p.show()
+            for _ in range(3):
+                app.processEvents()
+            self.assertEqual(p.cuentas["input"].text(), "Sensores")
+            self.assertEqual(p.cuentas["output"].text(), "Actuadores")
+            self.assertEqual(p.subtitulos["input"].text(), "Variables creadas en GRAFCET Connect")
+            self.assertEqual(p.subtitulos["output"].text(), "Variables creadas en GRAFCET Connect")
+            self.assertEqual(p.lienzo.puerto.property("digitosColumna"), 5)
+            self.assertEqual(p.puerto.property("digitosColumna"), 5)
+            self.assertLessEqual(p.lienzo.edicion_destino.sizeHint().width(), 2 * p.ancho_interior)
+            self.assertGreaterEqual(p.lienzo.cabecera_marco.height(), p.lienzo.edicion_destino.sizeHint().height())
+            tarjetas = p.dialogo_config.findChildren(QFrame, "tarjetaConfigES")
+            self.assertGreaterEqual(len(tarjetas), 2)
+        finally:
+            p.dialogo_config.close()
+            p.close()
+            p.deleteLater()
+            app.processEvents()
+
     def test_SFIO17_etiquetas_y_direcciones_independientes(self):
         """REQ-SIM-03: etiquetas explicadas conservan claves de conexión y separan áreas."""
         app = QApplication.instance() or QApplication([])
@@ -292,7 +324,7 @@ class PanelTests(unittest.TestCase):
                 self.assertIn("PM y dos cintas", w.edicion.titulo)
                 self.assertIn(w.edicion.archivo.name,w.windowTitle())
                 self.assertEqual(w.paginas_es.currentIndex(), 1)
-                w.panel_es.b_volver.click()
+                w.a_es.trigger()
                 self.assertEqual(w.paginas_es.currentIndex(), 0)
                 w.a_es.trigger()
                 self.assertEqual(w.paginas_es.currentIndex(), 1)
@@ -504,7 +536,10 @@ class PanelTests(unittest.TestCase):
                 self._esperar(app,w,lambda:w.modbus.estado=="conectado")
                 socket=w.modbus.cliente._socket
                 self.assertIsNone(w.edicion.quitar_variable("luz"))
-                self._esperar(app,w,lambda:w.modbus._mapa_pendiente is None and w.modbus.fase!="mapa")
+                def mapa_depurado():  # (con el candado: el hilo de control publica el mapa nuevo y entre quitar el pendiente y marcar la fase «mapa» hay un hueco)
+                    with w.candado:
+                        return "luz" not in {s.variable for s in w.modbus.adaptador.config.senales} and w.modbus._mapa_pendiente is None
+                self._esperar(app,w,mapa_depurado)
                 self.assertNotIn("luz",{s.variable for s in w.modbus.adaptador.config.senales})
                 self.assertIn((1,False),escrituras)
                 with mock.patch("escritorio.ventana.QMessageBox.warning") as aviso:w.a_ejecutar.setChecked(True)
@@ -709,7 +744,7 @@ class PanelTests(unittest.TestCase):
         for ancho, alto in ((1280, 720), (1000, 600)):
             p = self._panel_vista(app, ancho, alto)
             try:
-                self.assertEqual(p.destino.text(), "(192.168.1.133:502)\nEsclavo ID:1")
+                self.assertEqual(p.destino.text(), "(192.168.1.133:502) · ID 1")
                 izq = [p.terminales[k].canal.text() for k in sorted(p.terminales, key=lambda k: (k[0] != "discrete", k[1]))
                        if k[0] in ("discrete", "input-register")]
                 der = [p.terminales[k].canal.text() for k in sorted(p.terminales, key=lambda k: (k[0] != "coil", k[1]))
@@ -728,10 +763,10 @@ class PanelTests(unittest.TestCase):
                     self.assertFalse(t.barrita_nombre.isVisibleTo(t), "sin barrita junto al nombre")
                     if lado == "izq":
                         self.assertLessEqual(caja_der, marco_izq, "el nombre queda fuera del PLC")
-                        self.assertGreater(caja_der, marco_izq - 12, "pegado al marco")
+                        self.assertGreater(caja_der, marco_izq - 18, "pegado al marco con hueco del cable")
                     else:
                         self.assertGreaterEqual(caja_izq, marco_der, "el nombre queda fuera del PLC")
-                        self.assertLess(caja_izq, marco_der + 12, "pegado al marco")
+                        self.assertLess(caja_izq, marco_der + 18, "pegado al marco con hueco del cable")
                 self.assertEqual(p.terminales[("discrete", 1)].nombre.text(), "", "sin asignar no hay texto fuera")
                 scroll = p.findChild(QScrollArea, "scrollES")
                 self.assertFalse(scroll.verticalScrollBar().isVisible(), f"{ancho}x{alto}: sin desplazamiento")
@@ -1811,3 +1846,46 @@ class PanelTests(unittest.TestCase):
                                  ["«sensor» ya no es de entrada ni de salida", "la variable de Salida 0 ya no existe"])
             finally:
                 self._cerrar(app, w)
+
+    def test_SFIO68_dialogo_de_configuracion_de_anchura_fija_y_que_solo_crece_hacia_abajo(self):
+        """REQ-SIM-03: el diálogo de Configuración Modbus mide siempre lo mismo de ancho (plegado o desplegado), queda centrado y, al
+        desplegar la tabla, solo cambia el alto (el borde superior no se mueve)."""
+        app = QApplication.instance() or QApplication([])
+        p = PanelES()
+        try:
+            p.cargar(M().var("a").var("b").var("q", "output").step("0", True).doc)
+            p.resize(1200, 700)
+            p.show()
+            for _ in range(3):
+                app.processEvents()
+            d = p.dialogo_config
+            p.abrir_configuracion()
+            for _ in range(3):
+                app.processEvents()
+            self.assertTrue(p.avanzado.isHidden())
+            antes = d.frameGeometry()
+            p._alternar_avanzado()
+            for _ in range(3):
+                app.processEvents()
+            despues = d.frameGeometry()
+            self.assertEqual((despues.width(), despues.left(), despues.top()), (antes.width(), antes.left(), antes.top()))
+            self.assertEqual(despues.center().x(), antes.center().x())
+            self.assertGreater(despues.height(), antes.height())
+            libre = p.screen().availableGeometry()
+            self.assertLessEqual(despues.width(), libre.width())
+            self.assertLessEqual(despues.bottom(), libre.bottom())
+            p._alternar_avanzado()
+            for _ in range(3):
+                app.processEvents()
+            plegado = d.frameGeometry()
+            self.assertEqual((plegado.width(), plegado.left(), plegado.top(), plegado.height()),
+                             (antes.width(), antes.left(), antes.top(), antes.height()))
+            # centrado en la ventana, salvo que la pantalla no dé más
+            if antes.left() > libre.left():
+                self.assertLessEqual(abs(antes.center().x() - p.window().frameGeometry().center().x()), 2)
+        finally:
+            p.dialogo_config.close()
+            p.close()
+            p.deleteLater()
+            app.processEvents()
+

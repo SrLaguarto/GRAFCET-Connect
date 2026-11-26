@@ -46,9 +46,10 @@ class Favoritos(BaseQt):
             self.assertEqual(boton.text(), "")
             self.assertFalse(boton.icon().isNull())
             self.assertIn("background: transparent", boton.styleSheet())
-            self.assertIn("border: none", boton.styleSheet())
+            self.assertIn("border: 1px solid transparent", boton.styleSheet())
+            self.assertIn("border-radius: 5px", boton.styleSheet())
             if clave in barra._visibles:
-                self.assertEqual(boton.height(), barra.height())
+                self.assertEqual(boton.height(), barra.height() - 6)
             self.assertEqual(boton.icon().actualSize(QSize(24, 24)), QSize(24, 24))
             self.assertEqual(boton.icon().pixmap(24, 24).size(), QSize(24, 24))
 
@@ -203,11 +204,15 @@ class Favoritos(BaseQt):
             self.assertNotEqual(estado.cursor().shape(), Qt.CursorShape.PointingHandCursor)
             self.assertIn("background: transparent", estado.styleSheet())
             self.assertIn(estilo.TINTA_2, estado.styleSheet())
-            self.assertGreater(estado.x(), w.pestanas_vistas.geometry().right())
-            self.assertLess(estado.geometry().right(), w.luz_es.x())
-            if ancho != 960:
-                self.assertLessEqual(abs(estado.geometry().center().x() - w.fila_pestanas.width() / 2), 1)
-        for modo, color in (("editar", estilo.ACENTO), ("simular", estilo.SIMULACION),
+            self.assertIs(w.pestanas_vistas.parentWidget(), w.estuche_vistas)
+            self.assertIs(w.luz_es.parentWidget(), w.estuche_vistas)
+            self.assertGreater(w.luz_es.x(), w.pestanas_vistas.geometry().right())
+            self.assertLess(estado.geometry().right(), w.estuche_vistas.x())
+            self.assertGreater(estado.x(), w.menu_cluster.geometry().right())
+            centro_modo = (estado.x() + estado.geometry().right()) / 2
+            self.assertLessEqual(abs(centro_modo - w.fila_pestanas.width() / 2), 2)
+            self.assertLessEqual(w.estuche_vistas.geometry().right(), w.fila_pestanas.width() - 9)
+        for modo, color in (("editar", estilo.ACENTO), ("simular", "#22c55e"),
                             ("aviso", estilo.AVISO), ("error", estilo.ERROR)):
             w._poner_chip(modo, "SIMULACIÓN · ESTABLE", "Descripción completa")
             self.assertEqual(w.estado.color_modo, color)
@@ -228,9 +233,23 @@ class Favoritos(BaseQt):
         w._poner_chip("simular", "SIMULACIÓN · ESTABLE", "Estado de la simulación")
         for _ in range(5):
             QApplication.processEvents()
-        izquierda = w.pestanas_vistas.geometry().right() + estilo.E2
-        self.assertEqual(w.estado.x(), izquierda)
-        self.assertLess(w.estado.geometry().right(), w.luz_es.x())
+        self.assertLess(w.estado.x(), (w.fila_pestanas.width() - w.estado.width()) // 2)
+        self.assertEqual(w.estado.geometry().right() + 1 + estilo.E2, w.estuche_vistas.x())
+        self.assertGreater(w.estado.x(), w.menu_cluster.geometry().right())
+        self.assertLessEqual(w.estuche_vistas.geometry().right(), w.fila_pestanas.width() - 9)
+
+    def test_SFAV14_sin_logo_y_menu_sin_plegar(self):
+        """IM4 & IM5: sin logo junto al menú, con menús visibles sin «» desde 1024 px."""
+        from PySide6.QtWidgets import QToolButton
+        w, _, _ = self.preparar(1024, 768)
+        self.assertFalse(hasattr(w, "l_logo"))
+        for ancho, alto in ((1024, 768), (1280, 720)):
+            w.resize(ancho, alto)
+            self.asentar_escala(w)
+            for _ in range(5):
+                QApplication.processEvents()
+            ext = w._menu_bar.findChild(QToolButton, "qt_menubar_ext_button")
+            self.assertTrue(ext is None or not ext.isVisible(), (ancho, ext and ext.isVisible()))
 
     def test_SFAV13_nuevo_orden_predeterminado_sin_sustituir_el_guardado(self):
         w, e, barra = self.preparar()

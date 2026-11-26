@@ -44,7 +44,7 @@ class RedisenoVisual(BaseQt):
         w.show()
         self.app.processEvents()
         b = w.diagrama.b_dependencias
-        self.assertIs(b.parent(), w.tb_edit)
+        self.assertIs(b.parent(), w.tb_vista_der)
         self.assertTrue(b.isVisible())
         self.assertTrue(w.diagrama.dependencias)
         e.ed.dirty = False
@@ -125,17 +125,16 @@ class RedisenoVisual(BaseQt):
         self.assertTrue(all(b["kind"]=="Y" for b in e.ed.bars()))
 
     def test_SVIS15_categorias_por_uso_en_panel(self):
-        """REQ-EDT-02, REQ-EDT-07: el orden por uso es el de siempre; la banda de categorías (sin pestañas: el catálogo está siempre a la
-        vista) ofrece los botones de cada una y cada botón crea su bloque."""
+        """REQ-EDT-02, REQ-EDT-07: el orden por uso es el de siempre; la cinta «Insertar:» (sin pestañas: el catálogo está siempre a la
+        vista) ofrece los botones de cada categoría y cada botón crea su bloque."""
         w,e=self.vacio();p=w.props.prog
         claves = ["operador", "tiempo", "comparacion", "constante"]
-        titulos = ["Operadores", "Temp.", "Comp.", "Const."]
         for prog in (p,):
             self.assertEqual(list(prog.categorias),claves)
-            self.assertEqual([b.text() for b in prog.categorias.values()],titulos)
+            self.assertEqual(prog.banda.l_prefijo.text(), "Insertar:")
             self.assertEqual(prog.paleta.clave,"variables","el catálogo, siempre a la vista")
             for clave in claves:
                 self.assertTrue(prog.banda.botones[clave])
                 for b in prog.banda.botones[clave]:
                     self.assertEqual(prog.banda.nodo(b.clave)["k"], {"no":"no","sube":"sube","baja":"baja","par":"par","y":"y","o":"o",
-                                     "retardo_activar":"temp","retardo_desactivar":"temp","cmp":"cmp","uno":"const","cero":"const"}[b.clave])
+                                     "temp":"temp","retardo_activar":"temp","retardo_desactivar":"temp","cmp":"cmp","uno":"const","cero":"const"}[b.clave])

@@ -99,7 +99,7 @@ class Defectos(BaseQt):
         r_boton = QRect(boton.mapTo(w, QPoint(0, 0)), boton.size())
         r_area = QRect(w.scroll.mapTo(w, QPoint(0, 0)), w.scroll.size())
         self.assertFalse(r_boton.intersects(r_area), (r_boton, r_area))
-        self.assertEqual(w.titulo_sim.text(), "Simulación")
+        self.assertEqual(w.titulo_sim.text(), "Consola de simulación")
 
     def test_SRED10_nombre_en_titulo_nativo_y_estado_en_pestanas(self):
         """Encargos D/G8: nombre en la ventana y modo visible salvo cuando se fusionan las herramientas."""
@@ -118,8 +118,9 @@ class Defectos(BaseQt):
             self.assertEqual(w.estado.isVisible(), visible)
             if visible:
                 self.assertIn("EDICIÓN", w.estado.elegida())
-                self.assertGreater(w.estado.x(), w.pestanas_vistas.geometry().right())
-                self.assertLess(w.estado.geometry().right(), w.luz_es.x())
+                self.assertGreater(w.luz_es.x(), w.pestanas_vistas.geometry().right())
+                self.assertGreater(w.estado.x(), w.menu_cluster.geometry().right())
+                self.assertLess(w.estado.geometry().right(), w.estuche_vistas.x())
 
     def test_SRED11_variables_a_un_cuarto_de_pantalla_lleva_una_sola_barra_vertical(self):
         """REQ-EDT-07, REQ-EDT-09 (F10): con muchas variables en un panel bajo, se desplaza la tabla o el panel, no los dos a la vez."""
@@ -396,8 +397,8 @@ class Defectos(BaseQt):
 
 
     def test_SRED25_ningun_panel_tapa_el_borde_de_otro(self):
-        """REQ-EDT-09: con Propiedades abierto (y plegado), el borde de las tarjetas de arriba —Elementos, el dibujo y Variables— y el de
-        Propiedades se ve entero en el `grab()` de la ventana: los píxeles de sus cuatro lados son del color del borde, a escala normal y grande."""
+        """REQ-EDT-09: los paneles planos (dibujo y Variables) no se solapan y muestran sus separadores limpios de `estilo.BORDE`
+        (divisor horizontal, cabecera y pie de Variables, y barra de estado) a escala normal y grande."""
         for ancho, alto in ((1366, 768), (2000, 1250)):
             w, e = self.vacio()
             ids = self.cadena(e)
@@ -412,18 +413,24 @@ class Defectos(BaseQt):
                 for _ in range(6):
                     QApplication.processEvents()
                 imagen = w.grab().toImage()
-                tarjetas = [("dibujo", w.diagrama.parentWidget()), ("Variables", w.derecho.widget(1).widget())]
-                if abierto:
-                    tarjetas.append(("Propiedades", w.props))
-                for nombre, t in tarjetas:
-                    r = QRect(t.mapTo(w, QPoint(0, 0)), t.size())
-                    if t.window() is not w or not t.isVisible():
-                        continue
-                    cx, cy = r.left() + r.width() // 2, r.top() + r.height() // 2
-                    for lado, (x, y) in (("arriba", (cx, r.top())), ("abajo", (cx, r.bottom())), ("izquierda", (r.left(), cy)), ("derecha", (r.right(), cy))):
-                        if nombre == "dibujo" and lado == "arriba":
-                            continue  # (el borde de arriba del dibujo lo lleva la franja de modo, a propósito)
-                        self.assertEqual(imagen.pixelColor(x, y).name(), estilo.BORDE, (ancho, alto, abierto, nombre, lado, x, y))
+                dib = w.diagrama.parentWidget()
+                var = w.derecho.widget(1).widget()
+                r_dib = QRect(dib.mapTo(w, QPoint(0, 0)), dib.size())
+                r_var = QRect(var.mapTo(w, QPoint(0, 0)), var.size())
+                self.assertFalse(r_dib.intersects(r_var), (ancho, alto, abierto, r_dib, r_var))
+                self.assertTrue(w.rect().contains(r_dib) and w.rect().contains(r_var))
+                # Separador vertical entre dibujo y Variables (borde derecho del divisor horizontal)
+                cy = r_dib.top() + r_dib.height() // 2
+                colores_divisor = [imagen.pixelColor(x, cy).name() for x in range(r_dib.right() + 1, r_var.left())]
+                self.assertIn(estilo.BORDE, colores_divisor, (ancho, alto, abierto, colores_divisor))
+                # Cabecera y pie fijos de Variables con sus filetes visibles
+                cab = var.findChild(object, "cabeceraPanel")
+                pie = var.findChild(object, "pieVariables")
+                cx_v = r_var.left() + r_var.width() // 2
+                y_cab = cab.mapTo(w, QPoint(0, cab.height() - 1)).y()
+                y_pie = pie.mapTo(w, QPoint(0, 0)).y()
+                self.assertEqual(imagen.pixelColor(cx_v, y_cab).name(), estilo.BORDE, (ancho, alto, abierto, "cabeceraPanel"))
+                self.assertEqual(imagen.pixelColor(cx_v, y_pie).name(), estilo.BORDE, (ancho, alto, abierto, "pieVariables"))
             w.hide()
 
 

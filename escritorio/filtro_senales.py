@@ -3,12 +3,13 @@ from copy import deepcopy
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QHBoxLayout,
                                QHeaderView, QLabel, QPushButton, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
 from conexion import filtro_directo as filtro
 from . import estilo
+from .estilo_config_es import crear_tarjeta, hoja_dialogo_es
 
 AYUDA_UNIDAS = "Las señales ya unidas siguen mostrándose y funcionando, aunque estén marcadas en esta lista."
 
@@ -18,53 +19,74 @@ class ConfiguracionDirecta(QDialog):
         super().__init__(controlador.panel)
         from .entradas_salidas import _SpinConfiguracion
         self.setWindowTitle("Configuración de conexión directa")
-        self.setStyleSheet(estilo.hoja_global())
+        self.setStyleSheet(estilo.hoja_global() + hoja_dialogo_es())
         self.config = deepcopy(controlador.panel.config)
         self.catalogo = controlador.catalogo
         if not self.config.filtro_senales:
             filtro.actualizar(self.config, self.catalogo)
         self.cambiando = False
         self.controles = {}
-        self.resize(min(840, max(500, controlador.panel.window().width() - 32)), 440)
+        self.etiquetas_tiempos = {}
+        self._ancho_objetivo = min(840, max(500, controlador.panel.window().width() - 32))
+        self.setMinimumWidth(500)
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(estilo.E2, estilo.E2, estilo.E2, estilo.E2)
-        form = QFormLayout()
+        raiz.setContentsMargins(16, 14, 16, 14)
+        raiz.setSpacing(10)
+        tarjeta_tiempos, lay_tiempos = crear_tarjeta("Tiempos de lectura", self)
+        fila_tiempos = QHBoxLayout()
+        fila_tiempos.setContentsMargins(0, 0, 0, 0)
+        fila_tiempos.setSpacing(24)
         for nombre, texto, minimo in (("periodo_ms", "Periodo (ms)", 5), ("timeout_ms", "Tiempo de espera (ms)", 10)):
+            col = QVBoxLayout()
+            col.setContentsMargins(0, 0, 0, 0)
+            col.setSpacing(4)
+            etiq = QLabel(texto)
+            etiq.setStyleSheet(f"color:{estilo.TINTA_2}; font-weight:600; font-size:{estilo.T_PEQUENA}px;")
             spin = _SpinConfiguracion()
             spin.setRange(minimo, 10000)
             spin.setValue(getattr(self.config, nombre))
             self.controles[nombre] = spin
-            form.addRow(texto, spin)
-        raiz.addLayout(form)
-        self.b_avanzado = QPushButton("Opciones avanzadas ›")
-        self.b_avanzado.setCheckable(True)
-        raiz.addWidget(self.b_avanzado, 0, Qt.AlignmentFlag.AlignLeft)
+            self.etiquetas_tiempos[nombre] = etiq
+            col.addWidget(etiq)
+            col.addWidget(spin, 0, Qt.AlignmentFlag.AlignLeft)
+            fila_tiempos.addLayout(col)
+        fila_tiempos.addStretch(1)
+        lay_tiempos.addLayout(fila_tiempos)
+        raiz.addWidget(tarjeta_tiempos)
         self.avanzado = QWidget()
         self._crear_avanzado()
-        raiz.addWidget(self.avanzado)
-        self.avanzado.hide()
-        self.b_avanzado.toggled.connect(self.avanzado.setVisible)
-        self.botones = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        self.botones.button(QDialogButtonBox.StandardButton.Ok).setText("Aceptar")
-        self.botones.button(QDialogButtonBox.StandardButton.Cancel).setText("Cancelar")
-        self.botones.accepted.connect(self.accept)
-        self.botones.rejected.connect(self.reject)
-        raiz.addWidget(self.botones)
+        raiz.addWidget(self.avanzado, 1)
+        pie = QHBoxLayout()
+        pie.setContentsMargins(0, 2, 0, 0)
+        pie.setSpacing(8)
+        pie.addStretch(1)
+        self.b_cancelar = QPushButton("Cancelar")
+        self.b_cancelar.clicked.connect(self.reject)
+        self.b_aceptar = QPushButton("Aceptar")
+        estilo.poner(self.b_aceptar, primario=True)
+        self.b_aceptar.setDefault(True)
+        self.b_aceptar.clicked.connect(self.accept)
+        pie.addWidget(self.b_cancelar)
+        pie.addWidget(self.b_aceptar)
+        raiz.addLayout(pie)
         self.rellenar()
+        self.layout().activate()
+        self.adjustSize()
+        alto_max = max(440, controlador.panel.window().height() - 48)
+        self.resize(self._ancho_objetivo, min(self.sizeHint().height(), alto_max))
 
     def _crear_avanzado(self):
-        layout = QVBoxLayout(self.avanzado)
-        layout.setContentsMargins(0, estilo.E2, 0, 0)
-        from .paneles import TituloSeccion
-        titulo = TituloSeccion("Señales que no se traen")
-        titulo.setToolTip(AYUDA_UNIDAS)
-        layout.addWidget(titulo)
+        exterior = QVBoxLayout(self.avanzado)
+        exterior.setContentsMargins(0, 0, 0, 0)
+        exterior.setSpacing(0)
+        tarjeta, layout = crear_tarjeta("Señales que no se traen", self.avanzado, AYUDA_UNIDAS)
+        exterior.addWidget(tarjeta)
         self.tabla = QTableWidget(0, 4)
         self.tabla.setHorizontalHeaderLabels(["Excluir", "ID", "Señal", "Tipo"])
         self.tabla.verticalHeader().hide()
         self.tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.tabla.setMinimumHeight(155)
+        self.tabla.setMinimumHeight(140)
         self.tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.tabla.setColumnWidth(0, 64)
         self.tabla.setColumnWidth(1, 270)

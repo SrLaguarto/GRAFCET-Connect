@@ -50,8 +50,47 @@ OP_ARIT = {"+": "+", "-": "−", "*": "×", "/": "÷"}  # operadores del program
 PAPEL = {"entrada": "input", "salida": "output", "interna": "internal"}  # categoría de la paleta -> papel
 _SIMPLE = re.compile(r"[^\W\d]\w*(?:\.[^\W\d]\w*)*")
 _RESERVADAS = KEYWORDS | set(FUNCS_REF) | set(FUNCS_EXPR) | {"delay"}
-_DURACION = re.compile(r"(\d+(?:[.,]\d+)?)\s*(us|µs|μs|ms|s)")
+_DURACION = re.compile(r"(\d+(?:[.,]\d+)?)\s*(us|µs|μs|ms|s)?")
 _TOP_PREC = {"or": 1, "and": 2, "not": 3, **{c: 4 for c in CMP.values()}}
+AVISO_FLANCO_TEMP = (
+    "Un flanco (↑a) no puede usarse en una temporización, "
+    "ni a la conexión ni a la desconexión, porque dura un instante."
+)
+
+
+def _contiene_flanco(n: dict[str, Any] | None) -> bool:
+    if n is None:
+        return False
+    if n["k"] in ("sube", "baja"):
+        return True
+    if n["k"] == "texto":
+        s = n.get("s", "")
+        return "↑" in s or "↓" in s or bool(re.search(r"\b(?:rise|fall)\s*\(", s))
+    return any(_contiene_flanco(n[c]) for c in hijos(n))
+
+
+def _es_dentro_de_temp(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> bool:
+    """True si `ruta` apunta dentro de la condición base (`a`) de un temporizador."""
+    if raiz is None or not ruta:
+        return False
+    for k in range(1, len(ruta) + 1):
+        if ruta[k - 1] != "a":
+            continue
+        try:
+            padre = obtener(raiz, ruta[:k - 1])
+        except KeyError:
+            return False
+        if padre is not None and padre["k"] == "temp":
+            return True
+    return False
+
+
+def _cmp_solo_lectura(n: dict[str, Any]) -> bool:
+    """True si una comparación guardada excede `[variable | operador | número]` y se abre en solo lectura."""
+    if n.get("izq"):
+        return True
+    v = (n.get("v") or "").strip()
+    return bool(v) and not bool(re.fullmatch(r"-?\d+(?:[.,]\d+)?", v))
 
 
 def nuevo(k: str, **campos: Any) -> dict[str, Any]:
@@ -297,6 +336,394 @@ def desenvolver(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> dict[str,
     return con_nodo(raiz, ruta, n["a"])
 
 
+def a_lista(n: dict[str, Any] | None) -> tuple[list[dict[str, Any] | None], list[str]]:
+    """Árbol de `y`/`o` -> (operandos, conectores entre ellos: 'y' o 'o'). Un `par` queda como un operando más."""
+    if n is None or n["k"] not in ("y", "o"):
+        return ([], []) if n is None else ([n], [])
+    if n["k"] == "y":
+        hs = [n[c] for c in hijos(n)]
+        return hs, ["y"] * (len(hs) - 1)
+    ops: list[dict[str, Any] | None] = []
+    cons: list[str] = []
+    for i, c in enumerate(hijos(n)):
+        if i:
+            cons.append("o")
+        h = n[c]
+        if h is not None and h["k"] == "y":
+            sub_ops, sub_cons = a_lista(h)
+            ops.extend(sub_ops)
+            cons.extend(sub_cons)
+        else:
+            ops.append(h)
+    return ops, cons
+
+
+def _tramos_lista(ops: list[dict[str, Any] | None], cons: list[str]) -> list[list[dict[str, Any] | None]]:
+    if not ops:
+        return []
+    tramos: list[list[dict[str, Any] | None]] = [[ops[0]]]
+    for op, c in zip(ops[1:], cons):
+        if c == "o":
+            tramos.append([op])
+        else:
+            tramos[-1].append(op)
+    return tramos
+
+
+def de_lista(ops: list[dict[str, Any] | None], cons: list[str]) -> dict[str, Any] | None:
+    """(operandos, conectores) -> árbol de `o` y `y` con la precedencia `OR < AND`."""
+    tramos = _tramos_lista(ops, cons)
+    if not tramos:
+        return None
+    nodos_o = [
+        t[0] if len(t) == 1 else nuevo("y", **{k: v for k, v in zip(_LETRAS, t[:MAX_ENTRADAS])})
+        for t in tramos
+    ]
+    if len(nodos_o) == 1:
+        return nodos_o[0]
+    return nuevo("o", **{k: v for k, v in zip(_LETRAS, nodos_o[:MAX_ENTRADAS])})
+
+
+def _raiz_yo(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> tuple[str, ...]:
+    """Sube desde `ruta` mientras esté en un `y` cuyo padre sea un `o` (la misma lista plana)."""
+    actual = tuple(ruta)
+    while actual:
+        n = obtener(raiz, actual)
+        padre = obtener(raiz, actual[:-1])
+        if n is not None and n["k"] == "y" and padre is not None and padre["k"] == "o":
+            actual = actual[:-1]
+        else:
+            break
+    return actual
+
+
+def _rutas_lista(raiz: dict[str, Any] | None, ruta_yo: tuple[str, ...]) -> list[tuple[str, ...]]:
+    """Las rutas en `raiz` de cada operando que devuelve `a_lista(obtener(raiz, ruta_yo))`."""
+    n = obtener(raiz, ruta_yo)
+    if n is None or n["k"] not in ("y", "o"):
+        return [] if n is None else [ruta_yo]
+    if n["k"] == "y":
+        return [ruta_yo + (c,) for c in hijos(n)]
+    out: list[tuple[str, ...]] = []
+    for c in hijos(n):
+        h = n[c]
+        if h is not None and h["k"] == "y":
+            out.extend(ruta_yo + (c, sc) for sc in hijos(h))
+        else:
+            out.append(ruta_yo + (c,))
+    return out
+
+
+def cambiar_conector_lista(raiz: dict[str, Any] | None, ruta: tuple[str, ...], indice: int) -> dict[str, Any] | None:
+    """Alterna entre `y` (`·`) y `o` (`+`) el conector `indice` en la lista plana `a_lista` del bloque `y`/`o` de `ruta`."""
+    n = obtener(raiz, ruta)
+    if n is None or n["k"] not in ("y", "o"):
+        return raiz
+    ops, cons = a_lista(n)
+    if not (0 <= indice < len(cons)):
+        return raiz
+    nuevos_cons = list(cons)
+    nuevos_cons[indice] = "o" if nuevos_cons[indice] == "y" else "y"
+    return con_nodo(raiz, ruta, de_lista(ops, nuevos_cons))
+
+
+def cambiar_conector(raiz: dict[str, Any] | None, ruta: tuple[str, ...], indice: int) -> dict[str, Any] | None:
+    """Alterna entre `y` (· Y) y `o` (+ O) el conector `indice` del bloque `y`/`o` de `ruta` (`OR < AND`)."""
+    n = obtener(raiz, ruta)
+    if n is None or n["k"] not in ("y", "o"):
+        return raiz
+    hs = hijos(n)
+    if not (0 <= indice < len(hs) - 1):
+        return raiz
+    if n["k"] == "o":
+        base = ruta
+        ops, cons = a_lista(n)
+        anteriores = sum(
+            len(hijos(n[c])) if n[c] is not None and n[c]["k"] == "y" else 1
+            for c in hs[:indice + 1]
+        )
+        pos = anteriores - 1
+    else:
+        base = _raiz_yo(raiz, ruta)
+        nodo_base = obtener(raiz, base)
+        ops, cons = a_lista(nodo_base)
+        desplazamiento = 0
+        if base != ruta:
+            clave_rama = ruta[len(base)]
+            for c in hijos(nodo_base):
+                if c == clave_rama:
+                    break
+                h = nodo_base[c]
+                desplazamiento += len(hijos(h)) if h is not None and h["k"] == "y" else 1
+        pos = desplazamiento + indice
+    if not (0 <= pos < len(cons)):
+        return raiz
+    nuevos_cons = list(cons)
+    nuevos_cons[pos] = "o" if nuevos_cons[pos] == "y" else "y"
+    tramos = _tramos_lista(ops, nuevos_cons)
+    if len(tramos) > MAX_ENTRADAS or any(len(t) > MAX_ENTRADAS for t in tramos):
+        return raiz
+    return con_nodo(raiz, base, de_lista(copy.deepcopy(ops), nuevos_cons))
+
+
+def a_lista_ar(n: dict[str, Any] | None) -> tuple[list[dict[str, Any] | None], list[str]]:
+    """Operación aritmética en línea -> (operandos, operadores entre ellos: '+', '-', '*', '/')."""
+    if n is None or n["k"] != "ar":
+        return ([], []) if n is None else ([n], [])
+    ops: list[dict[str, Any] | None] = []
+    cons: list[str] = []
+
+    def rec(m: dict[str, Any]) -> None:
+        pr = 5 if m["op"] in "+-" else 6
+        for clave, req in (("a", pr), ("b", pr + 1)):
+            if clave == "b":
+                cons.append(m["op"])
+            h = m[clave]
+            if h is not None and h["k"] == "ar" and (5 if h["op"] in "+-" else 6) >= req:
+                rec(h)
+            else:
+                ops.append(h)
+
+    rec(n)
+    return ops, cons
+
+
+def de_lista_ar(ops: list[dict[str, Any] | None], cons: list[str]) -> dict[str, Any] | None:
+    """(operandos, operadores) -> árbol de `ar` con precedencia (*, / antes que +, -) y asociatividad izquierda."""
+    if not ops:
+        return None
+    tramos: list[dict[str, Any] | None] = [ops[0]]
+    sumas: list[str] = []
+    for op, c in zip(ops[1:], cons):
+        if c in "+-":
+            sumas.append(c)
+            tramos.append(op)
+        else:
+            tramos[-1] = nuevo("ar", op=c, a=tramos[-1], b=op)
+    res = tramos[0]
+    for op, c in zip(tramos[1:], sumas):
+        res = nuevo("ar", op=c, a=res, b=op)
+    return res
+
+
+def cambiar_operador_ar(raiz: dict[str, Any] | None, ruta: tuple[str, ...], indice: int) -> dict[str, Any] | None:
+    """Cicla el operador `indice` (+ -> - -> * -> /) de la operación aritmética en línea de `ruta`."""
+    n = obtener(raiz, ruta)
+    if n is None or n["k"] != "ar":
+        return raiz
+    ops, cons = a_lista_ar(n)
+    if not (0 <= indice < len(cons)):
+        return raiz
+    orden = ("+", "-", "*", "/")
+    nuevos_cons = list(cons)
+    nuevos_cons[indice] = orden[(orden.index(nuevos_cons[indice]) + 1) % len(orden)]
+    return con_nodo(raiz, ruta, de_lista_ar(copy.deepcopy(ops), nuevos_cons))
+
+
+def envolver_varios(
+    raiz: dict[str, Any] | None,
+    rutas: list[tuple[str, ...]],
+) -> tuple[dict[str, Any] | None, tuple[str, ...] | None]:
+    """Envuelve entre paréntesis (`par`) varios operandos contiguos seleccionados de una misma lista `y`/`o`."""
+    limpias = [tuple(r) for r in rutas if r is not None]
+    if not limpias:
+        return raiz, None
+    if len(limpias) == 1:
+        r = limpias[0]
+        return (envolver(raiz, r, "par"), r) if obtener(raiz, r) is not None else (raiz, None)
+    base = _raiz_yo(raiz, limpias[0][:-1])
+    rutas_op = _rutas_lista(raiz, base)
+    indices = sorted(i for i, ro in enumerate(rutas_op) if any(ro == r or r[:len(ro)] == ro for r in limpias))
+    if len(indices) < 2:
+        return raiz, None
+    i0, i1 = indices[0], indices[-1]
+    if indices != list(range(i0, i1 + 1)):
+        return raiz, None
+    nodo_base = obtener(raiz, base)
+    ops, cons = a_lista(nodo_base)
+    if len(indices) == len(ops):
+        return envolver(raiz, base, "par"), base
+    sub_ops = copy.deepcopy(ops[i0:i1 + 1])
+    sub_cons = list(cons[i0:i1])
+    grupo = nuevo("par", a=de_lista(sub_ops, sub_cons))
+    nuevos_ops = copy.deepcopy(ops[:i0]) + [grupo] + copy.deepcopy(ops[i1 + 1:])
+    nuevos_cons = list(cons[:i0]) + list(cons[i1:])
+    nuevo_base = de_lista(nuevos_ops, nuevos_cons)
+    nueva_raiz = con_nodo(raiz, base, nuevo_base)
+    rutas_nuevas = _rutas_lista(nueva_raiz, base)
+    ruta_grupo = rutas_nuevas[i0] if i0 < len(rutas_nuevas) else base
+    return nueva_raiz, ruta_grupo
+
+
+def desenvolver_en(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> dict[str, Any] | None:
+    """Quita los paréntesis del `par` de `ruta`; si está dentro de un `y`/`o` y encierra un `y`/`o`, lo integra."""
+    n = obtener(raiz, ruta)
+    if n is None or n["k"] != "par":
+        return desenvolver(raiz, ruta)
+    hijo = n["a"]
+    if ruta and hijo is not None and hijo["k"] in ("y", "o"):
+        padre = obtener(raiz, ruta[:-1])
+        if padre is not None and padre["k"] in ("y", "o"):
+            base = _raiz_yo(raiz, ruta[:-1])
+            rutas_op = _rutas_lista(raiz, base)
+            if ruta in rutas_op:
+                idx = rutas_op.index(ruta)
+                ops, cons = a_lista(obtener(raiz, base))
+                sub_ops, sub_cons = a_lista(hijo)
+                nuevos_ops = copy.deepcopy(ops[:idx]) + copy.deepcopy(sub_ops) + copy.deepcopy(ops[idx + 1:])
+                nuevos_cons = list(cons[:idx]) + list(sub_cons) + list(cons[idx:])
+                tramos = _tramos_lista(nuevos_ops, nuevos_cons)
+                if len(tramos) <= MAX_ENTRADAS and all(len(t) <= MAX_ENTRADAS for t in tramos):
+                    return con_nodo(raiz, base, de_lista(nuevos_ops, nuevos_cons))
+    return desenvolver(raiz, ruta)
+
+
+def _rutas_ar(raiz: dict[str, Any] | None, base: tuple[str, ...]) -> list[tuple[str, ...]]:
+    """Las rutas en `raiz` de cada operando que devuelve `a_lista_ar(obtener(raiz, base))`."""
+    n = obtener(raiz, base)
+    if n is None or n["k"] != "ar":
+        return [] if n is None else [base]
+    out: list[tuple[str, ...]] = []
+
+    def rec(m: dict[str, Any], camino: tuple[str, ...]) -> None:
+        pr = 5 if m["op"] in "+-" else 6
+        for clave, req in (("a", pr), ("b", pr + 1)):
+            h = m[clave]
+            if h is not None and h["k"] == "ar" and (5 if h["op"] in "+-" else 6) >= req:
+                rec(h, camino + (clave,))
+            else:
+                out.append(camino + (clave,))
+
+    rec(n, base)
+    return out
+
+
+def _quitar_limpio(raiz: dict[str, Any] | None, ruta: tuple[str, ...]) -> dict[str, Any] | None:
+    """Elimina el bloque de `ruta` del carril SIN dejar huecos `?`: colapsa `y`/`o`/`ar` de 1 elemento, deja
+    `par(a=None)` si se vacía un grupo `( … )` y devuelve `None` si se quita la raíz."""
+    ruta = tuple(ruta)
+    if raiz is None or not ruta:
+        return None
+    try:
+        padre = obtener(raiz, ruta[:-1])
+    except KeyError:
+        return raiz
+    if padre is None:
+        return raiz
+    pk = padre["k"]
+    if pk in ("y", "o"):
+        base = _raiz_yo(raiz, ruta[:-1])
+        rutas_op = _rutas_lista(raiz, base)
+        if ruta in rutas_op:
+            idx = rutas_op.index(ruta)
+            ops, cons = a_lista(obtener(raiz, base))
+            ops = [copy.deepcopy(o) for i, o in enumerate(ops) if i != idx]
+            cons = list(cons)
+            if cons:
+                del cons[0 if idx == 0 else idx - 1]
+            nuevo_sub = de_lista(ops, cons) if ops else None
+            return con_nodo(raiz, base, nuevo_sub)
+    if pk == "ar":
+        otro = "b" if ruta[-1] == "a" else "a"
+        restante = copy.deepcopy(padre[otro])
+        return con_nodo(raiz, ruta[:-1], restante)
+    if pk == "par":
+        return con_nodo(raiz, ruta, None)
+    if pk == "temp":
+        return con_nodo(raiz, ruta, None)
+    if pk in MODIFICADORES:
+        ext, _ = cadena_modificadores(raiz, ruta)
+        return _quitar_limpio(raiz, ext)
+    return retirar(raiz, ruta)
+
+
+def _insertar_en_posicion(
+    raiz: dict[str, Any] | None,
+    base_cont: tuple[str, ...],
+    indice: int,
+    nodo: dict[str, Any],
+    valor: bool = False,
+) -> dict[str, Any] | None:
+    """Inserta `nodo` en el contenedor `base_cont` (`()` para raíz, `r_par + ('a',)` o `r_temp + ('a',)` para interior)
+    en la posición `indice` (`0..len`), conectándolo automáticamente con `·` (booleano) o `+` (aritmético)."""
+    copia = copy.deepcopy(nodo)
+    sub = raiz if not base_cont else obtener(raiz, base_cont)
+    if sub is None:
+        nuevo_sub = copia
+    elif valor:
+        ops, cons = a_lista_ar(sub)
+        idx = max(0, min(indice, len(ops)))
+        ops = [copy.deepcopy(o) for o in ops]
+        cons = list(cons)
+        ops.insert(idx, copia)
+        cons.insert(0 if idx == 0 else idx - 1, "+")
+        nuevo_sub = de_lista_ar(ops, cons)
+    else:
+        ops, cons = a_lista(sub)
+        idx = max(0, min(indice, len(ops)))
+        ops = [copy.deepcopy(o) for o in ops]
+        cons = list(cons)
+        ops.insert(idx, copia)
+        cons.insert(0 if idx == 0 else idx - 1, "y")
+        nuevo_sub = de_lista(ops, cons)
+    return nuevo_sub if not base_cont else con_nodo(raiz, base_cont, nuevo_sub)
+
+
+def _buscar_etiqueta(n: dict[str, Any] | None, ruta: tuple[str, ...] = ()) -> tuple[str, ...] | None:
+    if n is None:
+        return None
+    if n.get("_tag_mov"):
+        return ruta
+    for c in hijos(n):
+        hit = _buscar_etiqueta(n[c], ruta + (c,))
+        if hit is not None:
+            return hit
+    return None
+
+
+def _mover_en_posicion(
+    raiz: dict[str, Any] | None,
+    origen: tuple[str, ...],
+    base_cont: tuple[str, ...],
+    indice: int,
+    valor: bool = False,
+) -> dict[str, Any] | None:
+    """Mueve el bloque de `origen` al contenedor `base_cont` en la posición `indice` sin dejar huecos `?`."""
+    origen, base_cont = tuple(origen), tuple(base_cont)
+    if raiz is None or base_cont[:len(origen)] == origen:
+        return raiz
+    try:
+        nodo = copy.deepcopy(obtener(raiz, origen))
+    except KeyError:
+        return raiz
+    if nodo is None:
+        return raiz
+    rutas_dest = _rutas_ar(raiz, base_cont) if valor else _rutas_lista(raiz, base_cont)
+    if origen in rutas_dest:
+        orig_idx = rutas_dest.index(origen)
+        if orig_idx < indice:
+            indice -= 1
+        if orig_idx == indice:
+            return raiz
+    copia = copy.deepcopy(raiz)
+    etiquetado = False
+    if base_cont:
+        padre_cont = obtener(copia, base_cont[:-1])
+        if padre_cont is not None:
+            padre_cont["_tag_mov"] = True
+            etiquetado = True
+    sin_orig = _quitar_limpio(copia, origen)
+    if etiquetado:
+        ruta_padre = _buscar_etiqueta(sin_orig)
+        if ruta_padre is None:
+            return raiz
+        obtener(sin_orig, ruta_padre).pop("_tag_mov", None)
+        nuevo_base = ruta_padre + (base_cont[-1],)
+    else:
+        nuevo_base = ()
+    return _insertar_en_posicion(sin_orig, nuevo_base, indice, nodo, valor)
+
+
 def faltan(raiz: dict[str, Any] | None) -> int:
     """Cuántos huecos le faltan a la fórmula: los que `arbol_a_texto` escribe como «?» (huecos vacíos y fichas sin nombre). Sin fórmula
     (raíz vacía) no falta nada: no hay qué completar."""
@@ -304,7 +731,11 @@ def faltan(raiz: dict[str, Any] | None) -> int:
         if n is None:
             return 1
         k = n["k"]
-        propio = (k in ("var", "etapa", "vnum", "cmp") and not n["n"]) or (k == "texto" and not n["s"].strip())
+        propio = (
+            (k in ("var", "etapa", "vnum") and not n["n"])
+            or (k == "cmp" and not n.get("izq") and (not n["n"] or not (n.get("v") or "").strip()))
+            or (k == "texto" and not n["s"].strip())
+        )
         return int(propio) + sum(cuenta(n[c]) for c in hijos(n))
     return 0 if raiz is None else cuenta(raiz)
 
@@ -315,14 +746,17 @@ def con_texto(n: dict[str, Any] | None) -> bool:
 
 
 def normalizar_duracion(texto: str) -> str | None:
-    """«3 s» -> «3s»; vacío o 0 -> «» (sin retardo); lo que no es una duración, None."""
+    """«3 s» -> «3s»; «3» -> «3s» (asume segundos); vacío o 0 -> «» (sin retardo); lo que no es una duración, None."""
     t = texto.strip()
     if t in ("", "0"):
         return ""
     m = _DURACION.fullmatch(t)
     if not m:
         return None
-    return "" if float(m.group(1).replace(",", ".")) == 0 else re.sub(r"\s+", "", t)
+    if float(m.group(1).replace(",", ".")) == 0:
+        return ""
+    unidad = m.group(2) or "s"
+    return f"{m.group(1)}{unidad}"
 
 
 def sin_comillas(texto: str) -> str:
@@ -449,12 +883,14 @@ def _desde_significado(m: dict[str, Any], variables: dict[str, tuple[str, str]],
         return texto() if d1 is None or d2 is None else nuevo("temp", t1=d1, t2=d2, a=hijo(a))
     if op in CMP.values():
         izq, der = m["operands"]
+        op_txt = {v: k for k, v in CMP.items()}[op]
+        val_der = ("true" if der["literal"]["value"] else "false") if der["operator"] == "lit" \
+            and der["literal"]["type"] == "bool" else _crudo_de(der)
         nombre = izq["reference"] if izq["operator"] == "ref" else None
         if nombre == HUECO or (nombre in variables and variables[nombre][1] != "bool"):
-            return nuevo("cmp", n=None if nombre == HUECO else nombre,
-                         op={v: k for k, v in CMP.items()}[op],
-                         v=("true" if der["literal"]["value"] else "false") if der["operator"] == "lit"
-                         and der["literal"]["type"] == "bool" else _crudo_de(der))
+            return nuevo("cmp", n=None if nombre == HUECO else nombre, op=op_txt, v=val_der)
+        if izq["operator"] in ("add", "sub", "mul", "div", "neg", "grupo"):
+            return nuevo("cmp", n=None, izq=_crudo_de(izq), op=op_txt, v=val_der)
     return texto()
 
 
@@ -590,7 +1026,9 @@ def _crudo(n: dict[str, Any] | None) -> str:
             base = f"({_t(a)})"
         return "/".join(([n["t1"]] if n["t1"] else []) + [base] + ([n["t2"]] if n["t2"] else []))
     if k == "cmp":
-        return f"{_citar(n['n']) if n['n'] else '?'} {n['op']} {n['v'].strip() or '0'}"
+        lado_izq = n.get("izq") or (_citar(n["n"]) if n.get("n") else "?")
+        val_der = (n.get("v") or "").strip() or "?"
+        return f"{lado_izq} {n['op']} {val_der}"
     if k == "num":
         return n["v"].strip() or "0"
     if k == "vnum":
@@ -615,35 +1053,33 @@ def arbol_a_texto(n: dict[str, Any] | None) -> str:
 # constante, hundida; «temporizar», un contenedor discontinuo con su insignia (t/X, X/t); «y» y «o», contenedores sobrios con un
 # conector de su color entre un operando y el siguiente. Cambia el dibujo, no el modelo: los huecos, las rutas y los bloques son
 # los de siempre.
-COLORES = {"entrada": estilo.ACENTO, "salida": estilo.SIMULACION, "interna": estilo.ORIGEN_MEMORIA, "etapa": estilo.EDICION,
-           "operador": "#486078", "comparacion": "#398C9E", "tiempo": "#A38636", "texto": "#6B7280", "error": estilo.ERROR,
-           "y": "#5F7F0B", "o": "#B83DBA",  # «y» (oliva) y «o» (fucsia): operadores, pero cada uno con su color
-           "constante": "#8A5A44"}  # las fichas 1 (verdadero) y 0 (falso): su propia categoría, no se pierden entre los operadores
+COLORES = {"entrada": "#0b6e75", "salida": "#157a35", "interna": "#b45309", "etapa": "#2f3b4a",
+           "operador": "#486078", "comparacion": "#0369a1", "tiempo": "#b45309", "texto": "#6B7280", "error": estilo.ERROR,
+           "y": "#16263a", "o": "#075985",
+           "constante": "#4a5b6e"}
 CATEGORIAS_BANDA = (("operador", "Operadores"), ("tiempo", "Temp."), ("comparacion", "Comp."),
-                    ("constante", "Const."))  # (abreviadas para caber en una fila; el nombre entero sale en su ayuda)  # la banda de botones del programador de condiciones
-CATEGORIAS_BANDA_VALOR = (("aritm", "Operadores"), ("numero", "Const."))  # la del programador de valores (modo «valor»)
+                    ("constante", "Const."))
 _PAPEL_CAT = {"input": "entrada", "output": "salida", "internal": "interna"}
-TAG_ORIGEN = {"entrada": "E", "salida": "S", "interna": "M"}  # la letra de origen de una ficha (las etapas ya se llaman X1, X2…)
-PADX, PADX_PILA, PADV, GAP, FILA = 8, 6, 4, 4, 4  # relleno lateral y vertical de un contenedor, hueco entre piezas y entre filas
-ALTO = 20  # alto de las piezas (desplegables, campos)
+PADX, PADX_PILA, PADV, GAP, FILA = 6, 6, 4, 6, 6
+ALTO = 21
 HUECO_W, HUECO_H = 34, 24
-PAREN_W = 8  # ancho de cada paréntesis del bloque «( )»; miden lo que el bloque que encierran
-PAD_PAR, GAP_PAR = 4, 3  # relleno y hueco del bloque «( )»: poco, porque se anida mucho
-SANGRIA = {"no": 8, "sube": 8, "baja": 8, "temp": 8}  # el hijo de un bloque que envuelve, algo hundido
-CHAFLAN = 5  # lado del chaflán de una ficha
-BARRA = 4  # ancho de la barra de origen
-RELLENO_FICHA = 6
-R_PIEZA = 4  # radio de las cajas pequeñas (huecos, campos de texto, el hueco pendiente)
-MARGEN = 6
+PAREN_W = 9
+PAD_PAR, GAP_PAR = 7, 4
+SANGRIA = {"no": 8, "sube": 8, "baja": 8, "temp": 8}
+CHAFLAN = 5
+BARRA = 5
+RELLENO_FICHA = 7
+R_PIEZA = 4
+MARGEN = 12
 MIME = "application/x-grafcet-bloque"
 MIME_FORMULA = "application/x-grafcet-formula"
-MIME_TIPO = "application/x-grafcet-formula-tipo"  # de qué programador viene lo copiado: «condicion» o «valor» (lo mira el botón Pegar)
-_ARRASTRE = {"resuelto": False}  # el arrastre en curso (solo hay uno): si algún programador lo recibió
+MIME_TIPO = "application/x-grafcet-formula-tipo"
+_ARRASTRE = {"resuelto": False}
 
 
 def alto_ficha() -> int:
-    """Alto de una ficha: 28 px a escala normal (los controles compactos menos 2), con la escala de la aplicación."""
-    return estilo.ALTO_CONTROL_COMPACTO - 2
+    """Alto de una ficha en el carril: 29 px a escala normal (maqueta 2.0.1)."""
+    return 29 if estilo.ESCALA == "normal" else 31
 
 
 def ficha_cadena(n: dict[str, Any] | None) -> tuple[list[str], dict[str, Any] | None] | None:
@@ -715,27 +1151,27 @@ class Motor:
         self.m, self.mb, self.ms = QFontMetricsF(self.f), QFontMetricsF(self.fb), QFontMetricsF(self.fs)
         self.mm, self.mg, self.mp = QFontMetricsF(self.fm), QFontMetricsF(self.fg), QFontMetricsF(self.fp)
         # la letra de cada estilo de texto suelto: (fuente, medidas, ancho extra de la caja que lo lleva)
-        self._est = {"": (self.fb, self.mb, 0), "y": (self.fb, self.mb, 12), "o": (self.fb, self.mb, 12),
+        self._est = {"": (self.fb, self.mb, 0), "y": (self.fg, self.mg, 14), "o": (self.fg, self.mg, 14),
                      "barra": (self.fg, self.mg, 0), "pp": (self.fp, self.mp, 0), "br": (self.fg, self.mg, 0),
-                     "op": (self.fg, self.mg, 0), "ins": (self.fm, self.mm, 12), "insw": (self.fm, self.mm, 12),
+                     "op": (self.fg, self.mg, 14), "ins": (self.fm, self.mm, 12), "insw": (self.fm, self.mm, 12),
                      "pf": (self.fm, self.mm, 10), "pend": (self.fb, self.mb, 0), "const": (self.fg, self.mg, 0)}
         self.nat: dict[tuple, float] = {}
-        self.botones = True  # el «+» del «y» y el «o»: en la paleta no hay
-        self.fijo = False  # en el catálogo, una ficha por elemento: el nombre ya va elegido y no lleva desplegable (▾)
+        self.conectores: list[tuple[QRectF, tuple, str, int]] = []
+        self.botones = False  # sin botón «+»: las fichas se añaden directamente al carril
+        self.fijo = False  # en el catálogo: fila plana (.var-row) sin chaflán ni desplegable
+        self.activo: tuple | None = None
+        self.seleccionados: set[tuple] = set()
+        self.destino_par: tuple | None = None
+        self.hover_ruta: tuple | None = None
+        self.valor_modo: bool = False
 
     def reiniciar(self) -> None:
         self.vars, self.etapas = self.fuente()
         self.nat = {}
         self.recortadas: list[tuple[QRectF, str]] = []  # (sitio, texto entero) de las piezas con el texto recortado
+        self.conectores = []  # (sitio, ruta del contenedor, clave 'y'/'o'/'op', índice del conector)
 
     # -- qué lleva cada bloque
-    @staticmethod
-    def _insignia(n: dict[str, Any]) -> tuple[str, str]:
-        """Cómo se escribe un retardo (t/X, X/t, t1/X/t2) y su estilo; sin tiempos, la advertencia de que no escribe nada."""
-        if n["t1"] and n["t2"]:
-            return "t1/X/t2", "ins"
-        return ("t/X", "ins") if n["t1"] else ("X/t", "ins") if n["t2"] else ("sin retardo", "insw")
-
     def elementos(self, n: dict[str, Any]) -> list[tuple]:
         k = n["k"]
         visible = etapa_visible(n["n"]) if k == "etapa" else n.get("n")  # (una etapa se ve «X1», «X0fsd», como en la fórmula y en el dibujo)
@@ -750,28 +1186,31 @@ class Motor:
             out: list[tuple] = []
             for i, c in enumerate(hs):
                 if i:
-                    out.append(("txt", k, "· Y" if k == "y" else "+ O"))
+                    out.append(("txt", k, "·" if k == "y" else "+", i - 1))
                 out.append(("hijo", c))
-            if self.botones and len(hs) < MAX_ENTRADAS:
-                out.append(("boton", "mas", "+"))
             return out
         if k in MODIFICADORES:  # una cadena de modificadores sobre algo que no es una variable: sus insignias y, a su lado, lo que modifica
             mods, _ = self._cadena(n)
             return [("mod", m, {"no": "NOT", "sube": "↑", "baja": "↓"}[m]) for m in mods] + [("hijo", ("a",) * len(mods))]
         if k == "temp":
-            t, estilo_ins = self._insignia(n)
             base = _efectivo(n["a"])
             parens = not (_atomo(base) or (base is not None and base["k"] in MODIFICADORES and _atomo(base["a"])))
-            return ([("txt", estilo_ins, t), ("campo", "t1", n["t1"], "t1"), ("txt", "barra", "/")]
+            return ([("campo", "t1", n["t1"], "t1"), ("txt", "barra", "/")]
                     + ([("txt", "pp", "(")] if parens else []) + [("hijo", "a")] + ([("txt", "pp", ")")] if parens else [])
                     + [("txt", "barra", "/"), ("campo", "t2", n["t2"], "t2")])
         if k == "cmp":
-            return [("txt", "br", "["), ("drop", "n", n["n"] or "elegir"), ("drop", "op", OP_VISIBLE[n["op"]]),
-                    ("campo", "v", n["v"], "valor"), ("txt", "br", "]")]
+            op_v = OP_VISIBLE.get(n["op"], n["op"])
+            if _cmp_solo_lectura(n):
+                izq_txt = n.get("izq") or (etapa_visible(n["n"]) if n.get("n") in self.etapas else n.get("n")) or "?"
+                der_txt = (n.get("v") or "").replace(".", ",") or "0"
+                return [("txt", "br", "["), ("txt", "ro", f"{izq_txt} {op_v} {der_txt}"), ("txt", "br", "]")]
+            val_vis = (n.get("v") or "").replace(".", ",")
+            return [("txt", "br", "["), ("drop", "n", n["n"] or "elegir"), ("drop", "op", op_v),
+                    ("campo", "v", val_vis, "Núm"), ("txt", "br", "]")]
         if k == "num":
-            return [("campo", "v", n["v"], "número")]
+            return [("campo", "v", n["v"], "0")]
         if k == "vnum":
-            return [("drop", "n", n["n"] or "elegir")]
+            return [("txt", "nom", n["n"] or "elegir")] if not self.fijo else [("txt", "", n["n"] or "elegir")]
         if k == "ar":
             return self._plano(n)[0]
         if k == "par":
@@ -819,20 +1258,24 @@ class Motor:
         if tipo == "txt":
             fuente, medidas, extra = self._est.get(e[1], self._est[""])
             vis = medidas.elidedText(e[2], Qt.TextElideMode.ElideRight, maxw) if maxw < 100000 else e[2]
-            return _Pieza("txt", e[1], vis, False, medidas.horizontalAdvance(vis) + extra, ALTO, e[2] if vis != e[2] else "")
+            w = max(22.0, medidas.horizontalAdvance(vis) + extra) if e[1] in ("y", "o", "op") else medidas.horizontalAdvance(vis) + extra
+            h = 22.0 if e[1] in ("y", "o", "op") else ALTO
+            return _Pieza("txt", e[1], vis, False, w, h, e[2] if vis != e[2] else "",
+                          extra=e[3] if len(e) > 3 else None)
         if tipo == "boton":
             return _Pieza("boton", e[1], e[2], False, 22, 22)
-        if tipo == "mod":  # la insignia de un flanco o de una negación sobre una cadena: se pulsa para cambiarla o quitarla
-            return _Pieza("mod", e[1], e[2], False, self.mm.horizontalAdvance(e[2]) + 12, ALTO)
+        if tipo == "mod":  # la insignia de un flanco (↑, ↓) o de una negación sobre una cadena
+            return _Pieza("mod", e[1], e[2], False, max(19.0, self.mm.horizontalAdvance(e[2]) + 10), 19.0)
         if tipo == "paren":
-            return _Pieza("paren", e[1], e[2], False, PAREN_W, 16)
+            return _Pieza("paren", e[1], e[2], False, PAREN_W, 18)
         texto = e[2] or (e[3] if tipo == "campo" else "")
         vacio = tipo == "campo" and not e[2]
         if tipo == "campo":
             vis = self.mm.elidedText(texto, Qt.TextElideMode.ElideRight, max(maxw - 14, 20))
-            return _Pieza(tipo, e[1], vis, vacio, max(36, self.mm.horizontalAdvance(vis) + 16), ALTO, texto if vis != texto else "")
+            min_w = 38.0 if e[1] in ("t1", "t2") else 40.0
+            return _Pieza(tipo, e[1], vis, vacio, max(min_w, self.mm.horizontalAdvance(vis) + 12), ALTO, texto if vis != texto else "")
         metricas = self.mm if e[1] == "op" else self.ms
-        extra = 14 if e[1] == "op" else 18  # el desplegable lleva su ▾; el operador de una comparación, una caja pequeña
+        extra = 14 if e[1] == "op" else 16
         vis = metricas.elidedText(texto, Qt.TextElideMode.ElideRight, max(maxw - extra, 20))
         return _Pieza(tipo, e[1], vis, vacio, metricas.horizontalAdvance(vis) + extra + (6 if e[1] == "op" else 0), ALTO,
                       texto if vis != texto else "")
@@ -841,10 +1284,25 @@ class Motor:
         if n is None:
             return HUECO_W
         if ruta not in self.nat:
-            if n["k"] == "par":
-                w = 2 * PAD_PAR + 2 * PAREN_W + 2 * GAP_PAR + self.natural(n["a"], ruta + ("a",))
+            if n["k"] == "no" and n["a"] is not None and n["a"]["k"] in ("par", "temp", "cmp"):
+                w = self.natural(n["a"], ruta + ("a",))
+            elif n["k"] == "par":
+                extra_caret = 8.0 if ruta == self.destino_par else 0.0
+                inner_w = 22.0 if n["a"] is None else self.natural(n["a"], ruta + ("a",))
+                w = 2 * PAD_PAR + 2 * PAREN_W + 2 * GAP_PAR + inner_w + extra_caret
+            elif n["k"] in ("y", "o"):
+                ops, cons = a_lista(n)
+                rutas_ops = _rutas_lista(n, ())
+                ws = [self.natural(op, ruta + ro) for op, ro in zip(ops, rutas_ops)]
+                w = sum(ws) + len(cons) * 22.0 + GAP * (len(ws) + len(cons) - 1)
+            elif n["k"] == "temp":
+                w = self._caja_temp(n, ruta, 10 ** 6).w
             elif self._es_simple(n):
                 w = self._caja_simple(n, ruta, 10 ** 6).w
+            elif n["k"] == "ar":
+                elems, _ = self._plano(n)
+                ws = [self.natural(*self._sub(n, e[1], ruta)) if e[0] == "hijo" else self.pieza(e).w for e in elems]
+                w = sum(ws) + GAP * (len(ws) - 1)
             else:
                 ws = [self.natural(*self._sub(n, e[1], ruta)) if e[0] == "hijo" else self.pieza(e).w for e in self.elementos(n)]
                 w = 2 * PADX + sum(ws) + GAP * (len(ws) - 1)
@@ -856,13 +1314,86 @@ class Motor:
         """Si el bloque se dibuja como una ficha o una cápsula de una sola fila (sin bloques dentro)."""
         return n["k"] in ("const", "cmp", "num", "vnum", "texto") or ficha_cadena(n) is not None
 
+    def _caja_lista(self, n: dict[str, Any], ruta: tuple, ancho: float) -> _Caja:
+        """Flujo plano de operandos separados por botones conectores cuadrados `·` / `+` (sin caja contenedora)."""
+        ops, cons = a_lista(n)
+        rutas_ops = _rutas_lista(n, ())
+        c = _Caja(n, ruta, 0, 0, self.categoria(n))
+        c.forma = n["k"]
+        c.sin_fondo = True
+        partes: list[Any] = []
+        interior = max(ancho, 40.0)
+        for i, (op, ro) in enumerate(zip(ops, rutas_ops)):
+            if i > 0:
+                con_k = cons[i - 1]
+                partes.append(self.pieza(("txt", con_k, "·" if con_k == "y" else "+", i - 1)))
+            r_op = ruta + ro
+            partes.append(self.caja(op, r_op, min(self.natural(op, r_op), interior)))
+        lineas: list[list[Any]] = [[]]
+        x = 0.0
+        for p in partes:
+            if lineas[-1] and x + p.w > interior:
+                lineas.append([])
+                x = 0.0
+            lineas[-1].append(p)
+            x += p.w + GAP
+        y, derecha = 0.0, 0.0
+        for linea in lineas:
+            h = max(p.h for p in linea)
+            x = 0.0
+            for p in linea:
+                c.items.append((x, y + (h - p.h) / 2, p))
+                x += p.w + GAP
+            derecha = max(derecha, x - GAP)
+            y += h + FILA
+        c.h, c.w = max(0.0, y - FILA), derecha
+        return c
+
+    def _caja_temp(self, n: dict[str, Any], ruta: tuple, ancho: float) -> _Caja:
+        """Temporizador en ficha achaflanada: `[t1] / [hueco o expresión] / [t2]`."""
+        alto = alto_ficha()
+        base = n["a"]
+        c = _Caja(n, ruta, 0, 0, "tiempo")
+        c.forma = "ficha"
+        p_t1 = self.pieza(("campo", "t1", n["t1"], "t1"))
+        p_s1 = self.pieza(("txt", "barra", "/"))
+        p_s2 = self.pieza(("txt", "barra", "/"))
+        p_t2 = self.pieza(("campo", "t2", n["t2"], "t2"))
+        fijo = 2 * RELLENO_FICHA + p_t1.w + p_s1.w + p_s2.w + p_t2.w + 12
+        hijo = self.caja(base, ruta + ("a",), max(ancho - fijo, 40.0))
+        partes = [p_t1, p_s1, hijo, p_s2, p_t2]
+        c.h = max(alto, max(p.h for p in partes) + 6)
+        x = float(RELLENO_FICHA)
+        for p in partes:
+            c.items.append((x, (c.h - p.h) / 2, p))
+            x += p.w + 3
+        c.w = x - 3 + RELLENO_FICHA
+        return c
+
     def caja(self, n: dict[str, Any] | None, ruta: tuple, ancho: float) -> _Caja:
         if n is None:
             return _Caja(None, ruta, HUECO_W, HUECO_H)
+        if n["k"] == "no" and n["a"] is not None and n["a"]["k"] in ("par", "temp", "cmp"):
+            inner_k = n["a"]["k"]
+            if inner_k == "par":
+                c = self._caja_par(n["a"], ruta + ("a",), ancho)
+            elif inner_k == "temp":
+                c = self._caja_temp(n["a"], ruta + ("a",), ancho)
+            else:
+                c = self._caja_simple(n["a"], ruta + ("a",), ancho)
+            for _x, _y, it in c.items:
+                if isinstance(it, _Pieza) and it.ruta is None:
+                    it.ruta = ruta + ("a",)
+            c.ruta, c.nodo, c.negada = ruta, n, "todo"
+            return c
         if n["k"] == "par":
             return self._caja_par(n, ruta, ancho)
+        if n["k"] in ("y", "o"):
+            return self._caja_lista(n, ruta, ancho)
         if n["k"] == "ar":
             return self._caja_ar(n, ruta, ancho)
+        if n["k"] == "temp":
+            return self._caja_temp(n, ruta, ancho)
         if self._es_simple(n):
             return self._caja_simple(n, ruta, ancho)
         elems = self.elementos(n)
@@ -881,32 +1412,7 @@ class Motor:
             c.w = x - GAP + PADX
             c.items = [(x, (c.h - p.h) / 2, p) for x, p in partes]
             return c
-        if n["k"] in ("y", "o"):  # no caben en una fila: los operandos y conectores fluyen, saltando de línea solo cuando no caben
-            px = PADX_PILA
-            interior = max(ancho - 2 * px, 40)
-            partes = []
-            for e in elems:
-                partes.append(self.caja(*self._sub(n, e[1], ruta), min(self.natural(*self._sub(n, e[1], ruta)), interior))
-                              if e[0] == "hijo" else self.pieza(e))
-            lineas: list[list[Any]] = [[]]
-            x = 0.0
-            for i, p in enumerate(partes):
-                if lineas[-1] and x + p.w > interior:
-                    lineas.append([])
-                    x = 0.0
-                lineas[-1].append(p)
-                x += p.w + GAP
-            y, derecha = float(PADV), 0.0
-            for linea in lineas:
-                h, x = max(p.h for p in linea), float(px)
-                for p in linea:
-                    c.items.append((x, y + (h - p.h) / 2, p))
-                    x += p.w + GAP
-                derecha = max(derecha, x - GAP)
-                y += h + FILA
-            c.h, c.w = y - FILA + PADV, derecha + px
-            return c
-        px = PADX_PILA  # apilado, menos relleno: así caben más niveles en poco ancho
+        px = PADX_PILA
         interior = max(ancho - 2 * px, 40)
         sangria = SANGRIA.get(n["k"], 0)
         y, derecha, grupo = float(PADV), 0.0, []
@@ -945,31 +1451,46 @@ class Motor:
         return c
 
     def _caja_simple(self, n: dict[str, Any], ruta: tuple, ancho: float) -> _Caja:
-        """Una ficha (variable o etapa, con sus modificadores si los lleva), una constante, una comparación, una cápsula numérica o un
-        texto: una sola fila de alto fijo. Con una ficha con modificadores, el bloque es el más externo de la cadena (el que se arrastra
-        y se selecciona) y las piezas responden a la variable de dentro."""
-        k, alto = n["k"], alto_ficha() - (6 if self.fijo else 0)  # (en el catálogo, filas más compactas)
+        """Una ficha, constante, comparación, cápsula numérica o fila plana del catálogo."""
+        k = n["k"]
+        alto = 26 if self.fijo else alto_ficha()
         if k in MODIFICADORES or k in ("var", "etapa"):
             return self._caja_ficha(n, ruta, ancho, alto)
+        if self.fijo and k == "vnum":  # fila plana del catálogo numérico (.var-row)
+            c = _Caja(n, ruta, 0, alto, "comparacion")
+            c.forma = "catalogo"
+            nombre = n.get("n") or "elegir"
+            tipo_raw = self.vars.get(nombre, ("", ""))[1]
+            etiqueta_tipo = {"int": "INT", "decimal": "DEC", "duration": "DUR"}.get(tipo_raw, "")
+            ancho_tipo = (self.mb.horizontalAdvance(etiqueta_tipo) + 8) if etiqueta_tipo else 0.0
+            x = 27.0
+            disp = max(ancho - x - 8 - ancho_tipo, 24.0)
+            vis = self.m.elidedText(nombre, Qt.TextElideMode.ElideRight, disp)
+            p_nom = _Pieza("txt", "nom", vis, False, self.m.horizontalAdvance(vis), ALTO, nombre if vis != nombre else "")
+            c.items.append((x, (alto - p_nom.h) / 2, p_nom))
+            c.w = max(x + p_nom.w + 8 + ancho_tipo, ancho if ancho < 10 ** 5 else 0.0)
+            if etiqueta_tipo:
+                p_t = _Pieza("txt", "tagd", etiqueta_tipo, False, ancho_tipo - 4, ALTO, extra=(etiqueta_tipo, "#5b6b7d"))
+                c.items.append((c.w - 6 - p_t.w, (alto - p_t.h) / 2, p_t))
+            return c
         c = _Caja(n, ruta, 0, alto, self.categoria(n))
         elems = self.elementos(n)
         if k == "const":
-            c.forma, x0 = "hundida", 12
+            c.forma, x0 = "hundida", 11
         elif k == "cmp":
             c.forma, x0 = "ficha", RELLENO_FICHA
-        elif k in ("num", "vnum"):
-            c.forma, x0 = "capsula", 10 + 6 + 4  # el punto de origen
+        elif k == "num":
+            c.forma, x0 = "numconst", 4
+        elif k == "vnum":
+            c.forma, x0 = "capsula", 18  # punto azul + hueco
         else:
             c.forma, x0 = "texto", 6
         piezas = [self.pieza(e, max(ancho - 2 * x0 - 6, 24) if k != "cmp" else 100000) for e in elems]
-        if self.fijo and k == "vnum" and n["n"]:  # en el catálogo, el nombre ya va elegido
-            vis = self.ms.elidedText(n["n"], Qt.TextElideMode.ElideRight, max(ancho - x0 - 8, 24))
-            piezas = [_Pieza("txt", "nom", vis, False, self.ms.horizontalAdvance(vis), ALTO, n["n"] if vis != n["n"] else "")]
         x = float(x0)
         for p in piezas:
             c.items.append((x, (alto - p.h) / 2, p))
-            x += p.w + (2 if k == "cmp" else 0)
-        c.w = x - (2 if k == "cmp" else 0) + (x0 if k in ("const", "cmp", "texto") else 8)
+            x += p.w + (4 if k == "cmp" else 0)
+        c.w = x - (4 if k == "cmp" else 0) + (x0 if k in ("const", "cmp", "texto", "num") else 10)
         return c
 
     def _caja_ficha(self, n: dict[str, Any], ruta: tuple, ancho: float, alto: float) -> _Caja:
@@ -978,7 +1499,7 @@ class Motor:
         c = _Caja(n, ruta, 0, alto, self.categoria(hoja) if hoja is not None else "operador")
         c.destino, c.mods = destino, mods
         flanco = next((m for m in mods if m != "no"), None)
-        if hoja is None:  # «[NOT | pulsa o arrastra variable…]»: la ficha que espera su variable
+        if hoja is None:
             c.forma = "pendiente"
             sufijo = " ".join({"no": "NOT", "sube": "↑", "baja": "↓"}[m] for m in mods)
             p1 = self.pieza(("txt", "pf", sufijo))
@@ -986,49 +1507,60 @@ class Motor:
             c.items = [(8, (alto - p1.h) / 2, p1), (8 + p1.w + 6, (alto - p2.h) / 2, p2)]
             c.w = 8 + p1.w + 6 + p2.w + 8
             return c
+        nombre = etapa_visible(hoja["n"]) if hoja["k"] == "etapa" else hoja["n"]
+        if self.fijo and bool(hoja["n"]):  # catálogo izquierdo: fila plana (.var-row) sin chaflán ni letra derecha
+            c.forma = "catalogo"
+            x = 27.0  # 6 px margen + grip ⋮⋮ + 3 px barra + 7 px hueco
+            disponible = max(ancho - x - 8, 24.0)
+            vis = self.m.elidedText(nombre, Qt.TextElideMode.ElideRight, disponible)
+            p = _Pieza("txt", "nom", vis, False, self.m.horizontalAdvance(vis), ALTO, nombre if vis != nombre else "", ruta=destino)
+            c.items.append((x, (alto - p.h) / 2, p))
+            c.w = max(x + p.w + 8, ancho if ancho < 10 ** 5 else 0.0)
+            return c
+        # Carril derecho: ficha achaflanada limpia (barra de color + opcional ↑/↓ + nombre sin letra E/S/M ni ▾)
         c.forma = "ficha"
         if "no" in mods:
             c.negada = "todo" if flanco is not None and mods.index("no") < mods.index(flanco) else "nombre"
         x = float(BARRA + RELLENO_FICHA)
         if flanco is not None:
-            ins = _Pieza("mod", flanco, "↑" if flanco == "sube" else "↓", False, 22, ALTO, ruta=destino)
+            ins = _Pieza("mod", flanco, "↑" if flanco == "sube" else "↓", False, 19.0, 19.0, ruta=destino)
             c.items.append((x, (alto - ins.h) / 2, ins))
-            x += ins.w + GAP
-        nombre = etapa_visible(hoja["n"]) if hoja["k"] == "etapa" else hoja["n"]
-        tag = "" if hoja["k"] == "etapa" else TAG_ORIGEN.get(c.cat, TAG_ORIGEN.get(_PAPEL_CAT.get(hoja.get("papel"), ""), ""))
-        ancho_tag = (self.mb.horizontalAdvance(tag) + GAP) if tag else 0.0
-        fila = self.fijo and bool(hoja["n"])  # en el catálogo: una fila con la letra de origen a la derecha
-        flecha = 0 if fila else 18
-        disponible = max(ancho - x - RELLENO_FICHA - ancho_tag - flecha, 20)
+            x += ins.w + 5
+        disponible = max(ancho - x - RELLENO_FICHA - 2, 20.0)
         texto = nombre or "elegir"
         vis = self.ms.elidedText(texto, Qt.TextElideMode.ElideRight, disponible)
-        w = (0 if fila else ancho_tag) + self.ms.horizontalAdvance(vis) + flecha
-        tipo = "txt" if fila else "drop"
-        p = _Pieza(tipo, "nom" if tipo == "txt" else "n", vis, not nombre, w, ALTO, texto if vis != texto else "",
-                   ruta=destino, extra=(tag if not fila else "", COLORES[c.cat]) if tag or c.cat else None)
+        w = self.ms.horizontalAdvance(vis) + 2
+        p = _Pieza("txt", "nom", vis, not nombre, w, ALTO, texto if vis != texto else "", ruta=destino, extra=("", COLORES.get(c.cat, estilo.TINTA)))
         c.items.append((x, (alto - p.h) / 2, p))
-        c.w = x + p.w + RELLENO_FICHA
-        if fila:
-            if tag:
-                c.w += ancho_tag
-            if ancho < 10 ** 5:
-                c.w = max(c.w, ancho)
-            if tag:
-                t = _Pieza("txt", "tagd", tag, False, ancho_tag - GAP, ALTO, extra=(tag, COLORES[c.cat]))
-                c.items.append((c.w - RELLENO_FICHA - t.w, (alto - t.h) / 2, t))
+        c.w = x + p.w + RELLENO_FICHA + 2
         return c
 
     def _caja_par(self, n: dict[str, Any], ruta: tuple, ancho: float) -> _Caja:
-        """El bloque «( )»: un paréntesis a cada lado del bloque que encierra, tan altos como él (también si éste se apila)."""
+        """Grupo `( … )` recursivo con tinte azulado suave, paréntesis altos y caret turquesa si es el destino activo."""
         clave = ruta + ("a",)
-        interior = max(ancho - 2 * PAD_PAR - 2 * PAREN_W - 2 * GAP_PAR, 40)
-        h = self.caja(n["a"], clave, min(self.natural(n["a"], clave), interior))
-        h.sin_fondo = n["a"] is not None and n["a"]["k"] == "ar"  # una operación dentro de «( )»: ya está rodeada
-        c = _Caja(n, ruta, 2 * PAD_PAR + 2 * PAREN_W + 2 * GAP_PAR + h.w, h.h + 2 * PADV, self.categoria(n))
+        es_dest = ruta == self.destino_par
+        caret_w = 8.0 if es_dest else 0.0
+        interior = max(ancho - 2 * PAD_PAR - 2 * PAREN_W - 2 * GAP_PAR - caret_w, 40)
+        if n["a"] is None:
+            h = _Pieza("boton", "vacio_par", "…", True, 22.0, 22.0)
+            hw, hh = h.w, h.h
+        else:
+            h = self.caja(n["a"], clave, min(self.natural(n["a"], clave), interior))
+            h.sin_fondo = True
+            hw, hh = h.w, h.h
+        alto = max(hh, 29.0) + 2 * PADV
+        c = _Caja(n, ruta, 2 * PAD_PAR + 2 * PAREN_W + 2 * GAP_PAR + hw + caret_w, alto, self.categoria(n))
         c.forma = "par"
-        c.items = [(PAD_PAR, PADV, _Pieza("paren", "izq", "(", False, PAREN_W, h.h)),
-                   (PAD_PAR + PAREN_W + GAP_PAR, PADV, h),
-                   (PAD_PAR + PAREN_W + 2 * GAP_PAR + h.w, PADV, _Pieza("paren", "der", ")", False, PAREN_W, h.h))]
+        items: list[tuple[float, float, Any]] = [
+            (PAD_PAR, (alto - max(hh, 22.0)) / 2, _Pieza("paren", "izq", "(", False, PAREN_W, max(hh, 22.0))),
+            (PAD_PAR + PAREN_W + GAP_PAR, (alto - hh) / 2, h),
+        ]
+        x_der = PAD_PAR + PAREN_W + 2 * GAP_PAR + hw
+        if es_dest:
+            items.append((x_der, (alto - 18.0) / 2, _Pieza("txt", "caret", "|", False, 4.0, 18.0)))
+            x_der += caret_w
+        items.append((x_der, (alto - max(hh, 22.0)) / 2, _Pieza("paren", "der", ")", False, PAREN_W, max(hh, 22.0))))
+        c.items = items
         return c
 
     @staticmethod
@@ -1055,7 +1587,8 @@ class Motor:
             pr, desde = self._prec_ar(m), len(elems)
             for clave, req in (("a", pr), ("b", pr + 1)):
                 if clave == "b":
-                    elems.append(("txt", "op", OP_ARIT[m["op"]]))
+                    idx_op = sum(1 for x in elems if x[0] == "txt" and x[1] == "op")
+                    elems.append(("txt", "op", OP_ARIT[m["op"]], idx_op))
                 h = m[clave]
                 if h is not None and h["k"] == "ar" and self._prec_ar(h) >= req:
                     rec(h, camino + (clave,))
@@ -1067,13 +1600,12 @@ class Motor:
         return elems, fantasmas
 
     def _caja_ar(self, n: dict[str, Any], ruta: tuple, ancho: float) -> _Caja:
-        """Una operación aritmética: sus elementos en una fila si caben y, si no, en varias, pasando de línea sin dejar un
-        operador al final de una (va con el operando que le sigue)."""
+        """Flujo plano de operandos aritméticos separados por botones conectores (+, −, ×, ÷), sin caja externa."""
         elems, fantasmas = self._plano(n)
         c = _Caja(n, ruta, 0, 0, self.categoria(n))
         c.forma = "ar"
-        px = PADX if self.natural(n, ruta) <= ancho else PADX_PILA
-        interior = max(ancho - 2 * px, 40)
+        c.sin_fondo = True
+        interior = max(ancho, 40.0)
         partes: list[Any] = []
         for e in elems:
             if e[0] == "hijo":
@@ -1081,7 +1613,7 @@ class Motor:
                 partes.append(self.caja(nodo, r, min(self.natural(nodo, r), interior)))
             else:
                 partes.append(self.pieza(e))
-        unidades: list[list[int]] = []  # un operador va con el operando que le sigue
+        unidades: list[list[int]] = []
         for i, e in enumerate(elems):
             if unidades and elems[unidades[-1][-1]][0] == "txt":
                 unidades[-1].append(i)
@@ -1097,10 +1629,10 @@ class Motor:
             lineas[-1].extend(u)
             x += ancho_u + GAP
         rects: dict[int, tuple[float, float, float, float]] = {}
-        y, derecha = float(PADV), 0.0
+        y, derecha = 0.0, 0.0
         for linea in lineas:
             h = max(partes[i].h for i in linea)
-            x = float(px)
+            x = 0.0
             for i in linea:
                 p = partes[i]
                 c.items.append((x, y + (h - p.h) / 2, p))
@@ -1108,7 +1640,7 @@ class Motor:
                 x += p.w + GAP
             derecha = max(derecha, x - GAP)
             y += h + FILA
-        c.h, c.w = y - FILA + PADV, derecha + px
+        c.h, c.w = max(0.0, y - FILA), derecha
         for camino, nodo, desde, hasta in fantasmas:
             rs = [rects[i] for i in range(desde, hasta)]
             x0, y0 = min(r[0] for r in rs) - 3, min(r[1] for r in rs) - 2
@@ -1126,6 +1658,8 @@ class Motor:
                 continue
             if it.completo:
                 self.recortadas.append((QRectF(ox + x, oy + y, it.w, it.h), it.completo))
+            if it.tipo == "txt" and it.clave in ("y", "o", "op") and isinstance(it.extra, int):
+                self.conectores.append((QRectF(ox + x, oy + y, it.w, it.h), c.ruta, it.clave, it.extra))
             if it.tipo not in ("txt", "paren"):
                 piezas.append((QRectF(ox + x, oy + y, it.w, it.h), it.tipo, it.ruta or c.ruta, it.clave))
 
@@ -1152,11 +1686,12 @@ class Motor:
     def pintar(self, p: QPainter, c: _Caja, ox: float, oy: float, padre: QColor | None = None,
                objetivo: tuple | None = None) -> None:
         r = QRectF(ox, oy, c.w, c.h)
-        if c.nodo is None:  # un hueco: caja hundida y punteada (resaltado, con el acento: «falta rellenarlo»)
-            p.setPen(QPen(QColor(estilo.ACENTO if self.resaltar_huecos else estilo.BORDE_CONTROL), 1.8 if self.resaltar_huecos else 1.2,
-                          Qt.PenStyle.DashLine))
-            p.setBrush(QColor(estilo.ACENTO_SUAVE if self.resaltar_huecos else estilo.SUPERFICIE))
-            p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), R_PIEZA, R_PIEZA)
+        if c.nodo is None:
+            if c.ruta != (0,):  # el hueco raíz vacío lo pinta AreaBloques._extra como `.rail-empty-hint`
+                p.setPen(QPen(QColor(estilo.ACENTO if self.resaltar_huecos else estilo.BORDE_CONTROL), 1.8 if self.resaltar_huecos else 1.2,
+                              Qt.PenStyle.DashLine))
+                p.setBrush(QColor(estilo.ACENTO_SUAVE if self.resaltar_huecos else estilo.SUPERFICIE))
+                p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), R_PIEZA, R_PIEZA)
         else:
             fondo = self._pintar_caja(p, c, r, padre)
             for x, y, it in c.items:
@@ -1170,34 +1705,75 @@ class Motor:
             if objetivo is not None and ruta == objetivo:
                 self.trazo_seleccion(p, fr.translated(ox, oy), 2.6)
 
+    def _estado_sel(self, ruta: tuple) -> str:
+        """Estado visual de un bloque en el carril: 'multi', 'active' o ''."""
+        if len(self.seleccionados) > 1 and ruta in self.seleccionados:
+            return "multi"
+        if ruta == self.activo or ruta in self.seleccionados:
+            return "active"
+        return ""
+
     def _pintar_caja(self, p: QPainter, c: _Caja, r: QRectF, padre: QColor | None) -> QColor | None:
-        """El fondo y el contorno del bloque, según su forma; devuelve el fondo que ven sus hijos."""
+        """El fondo y el contorno del bloque según el diseño 2.0.1."""
         forma, cat = c.forma, c.cat
         error = cat == "error"
         ra = r.adjusted(0.5, 0.5, -0.5, -0.5)
+        sel = self._estado_sel(c.ruta)
+        if forma == "catalogo":  # fila plana del catálogo izquierdo (.var-row)
+            if c.ruta == self.hover_ruta:
+                p.setPen(QPen(QColor("#cdd6e0"), 1))
+                p.setBrush(QColor("#e4ecf3"))
+                p.drawRoundedRect(ra, 4, 4)
+            # grip ⋮⋮ (6 puntitos discretos)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor("#9aa9ba"))
+            cy = r.center().y()
+            for gx in (r.left() + 6.5, r.left() + 10.0):
+                for gy in (cy - 3.5, cy, cy + 3.5):
+                    p.drawEllipse(QPointF(gx, gy), 0.9, 0.9)
+            # franja vertical de 3×14 px del color del origen
+            p.setBrush(QColor(COLORES.get(cat, estilo.ACENTO)))
+            p.drawRoundedRect(QRectF(r.left() + 17.5, cy - 7.0, 3.0, 14.0), 1.5, 1.5)
+            return padre
         if forma in ("ficha", "hundida"):
-            p.setPen(QPen(QColor(estilo.ERROR if error else estilo.BORDE_CONTROL), 1))
-            p.setBrush(QColor(estilo.ERROR_FONDO if error else estilo.SUPERFICIE_2 if forma == "hundida" else estilo.SUPERFICIE))
+            borde_col = (estilo.ERROR if error else "#075985" if sel == "multi"
+                         else estilo.ACENTO if sel == "active" else "#aebfd1")
+            fondo_col = (estilo.ERROR_FONDO if error else "#edf6fc" if sel == "multi"
+                         else "#eef9f6" if sel == "active"
+                         else "#f6f8fb" if forma == "hundida" else "#ffffff")
+            p.setPen(QPen(QColor(borde_col), 1.5 if sel else 1.0))
+            p.setBrush(QColor(fondo_col))
             contorno = self.poligono_ficha(ra)
             p.drawPolygon(contorno)
-            if forma == "ficha" and c.mods is not None and c.nodo is not None and c.cat in COLORES and c.items \
-                    and (c.items[-1][2].tipo in ("drop", "txt") and c.items[-1][2].clave in ("n", "nom")):
+            # Franja lateral de color para variables y etapas booleanas
+            if forma == "ficha" and c.nodo is not None and c.cat in ("entrada", "salida", "interna", "etapa"):
                 camino = QPainterPath()
                 camino.addPolygon(contorno)
                 p.save()
                 p.setClipPath(camino)
                 p.fillRect(QRectF(r.left(), r.top(), BARRA, r.height()), QColor(COLORES[cat]))
                 p.restore()
-            if c.negada == "todo":  # la barra de la negación cubre el flanco y la variable
-                p.fillRect(QRectF(r.left() + 8, r.top() + 2, r.width() - 14, 2), QColor(estilo.TINTA))
+            if c.negada == "todo":  # barra superior sobre toda la ficha (NOT ↑x, NOT temp, NOT cmp)
+                x_ini = r.left() + (BARRA + 5 if c.cat in ("entrada", "salida", "interna", "etapa") else 7)
+                p.fillRect(QRectF(x_ini, r.top() + 3.0, max(4.0, r.right() - x_ini - 7.0), 1.8), QColor("#16263a"))
+            return padre
+        if forma == "numconst":  # constante numérica en el carril (`.num-const-wrap`)
+            if sel:
+                p.setPen(QPen(QColor("#075985" if sel == "multi" else estilo.ACENTO), 1.2))
+                p.setBrush(QColor("#edf6fc" if sel == "multi" else "#eef9f6"))
+                p.drawRoundedRect(ra, 14, 14)
             return padre
         if forma == "capsula":
-            p.setPen(QPen(QColor(estilo.ERROR if error else estilo.BORDE_CONTROL), 1))
-            p.setBrush(QColor(estilo.ERROR_FONDO if error else estilo.SUPERFICIE))
-            p.drawRoundedRect(ra, r.height() / 2, r.height() / 2)
+            borde_col = (estilo.ERROR if error else "#075985" if sel == "multi"
+                         else estilo.ACENTO if sel == "active" else "#96bdd6")
+            fondo_col = (estilo.ERROR_FONDO if error else "#edf6fc" if sel == "multi"
+                         else "#eef9f6" if sel == "active" else "#ffffff")
+            p.setPen(QPen(QColor(borde_col), 1.5 if sel else 1.0))
+            p.setBrush(QColor(fondo_col))
+            p.drawRoundedRect(ra, 14, 14)
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(COLORES.get(cat, COLORES["texto"])))
-            p.drawEllipse(QPointF(r.left() + 13, r.center().y()), 3, 3)
+            p.setBrush(QColor("#0369a1"))
+            p.drawEllipse(QPointF(r.left() + 10.5, r.center().y()), 3.0, 3.0)
             return padre
         if forma == "pendiente":
             p.setPen(QPen(QColor(estilo.ACENTO), 1.5, Qt.PenStyle.DashLine))
@@ -1205,44 +1781,73 @@ class Motor:
             p.drawRoundedRect(ra, R_PIEZA, R_PIEZA)
             return padre
         if forma == "texto":
-            p.setPen(QPen(QColor(estilo.ERROR if error else estilo.BORDE_CONTROL), 1))
-            p.setBrush(QColor(estilo.ERROR_FONDO if error else estilo.SUPERFICIE_2))
+            p.setPen(QPen(QColor(estilo.ERROR if error else "#aebfd1"), 1))
+            p.setBrush(QColor(estilo.ERROR_FONDO if error else "#f6f8fb"))
             p.drawRoundedRect(ra, R_PIEZA, R_PIEZA)
             return padre
         if c.sin_fondo:
             return padre
-        fondo = QColor(estilo.SUPERFICIE) if forma == "temp" else self._fondo_hijo(padre)
-        if forma in ("y", "o"):
-            p.setPen(QPen(QColor(COLORES[forma]), 1.2))
-        elif forma == "temp":
-            p.setPen(QPen(QColor(estilo.TINTA_3), 1.2, Qt.PenStyle.DashLine))
-        else:
-            p.setPen(QPen(QColor(estilo.BORDE_CONTROL), 1))
+        if forma == "par":  # grupo entre paréntesis recursivo (`.paren-group`)
+            es_dest = c.ruta == self.destino_par or (c.nodo is not None and c.nodo["k"] == "no" and c.ruta + ("a",) == self.destino_par)
+            odd = padre is not None and padre == QColor(232, 240, 248, 184)
+            if sel == "multi":
+                fondo = QColor(232, 244, 252, 217)
+                borde_col = "#075985"
+            elif es_dest:
+                fondo = QColor(235, 248, 246, 204)
+                borde_col = estilo.ACENTO
+            elif sel == "active":
+                fondo = QColor(235, 248, 246, 204)
+                borde_col = estilo.ACENTO_OSCURO
+            elif self.valor_modo:
+                fondo = QColor(229, 242, 250, 184)
+                borde_col = "#9bc0da"
+            else:
+                fondo = QColor(223, 234, 245, 199) if odd else QColor(232, 240, 248, 184)
+                borde_col = "#9db3ca" if odd else "#b3c4d6"
+            radio = 14 if self.valor_modo else 6
+            p.setPen(QPen(QColor(borde_col), 1.6 if (sel or es_dest) else 1.0))
+            p.setBrush(fondo)
+            p.drawRoundedRect(ra, radio, radio)
+            if c.negada == "todo":  # NOT ( … ): barra sólida de 2.8 px en el borde superior
+                p.fillRect(QRectF(r.left() + 2, r.top(), r.width() - 4, 2.8), QColor("#16263a"))
+            return fondo
+        fondo = self._fondo_hijo(padre)
+        p.setPen(QPen(QColor("#b3c4d6"), 1))
         p.setBrush(fondo)
-        p.drawRoundedRect(ra, 14 if forma == "ar" else 6, 14 if forma == "ar" else 6)
-        if forma == "cadena" and "no" in c.mods:  # una negación sobre un bloque: la barra superior sobre todo él
-            p.fillRect(QRectF(r.left() + 3, r.top(), r.width() - 6, 3), QColor(estilo.TINTA))
+        p.drawRoundedRect(ra, 6, 6)
+        if forma == "cadena" and "no" in c.mods:
+            p.fillRect(QRectF(r.left() + 3, r.top(), r.width() - 6, 2.8), QColor("#16263a"))
         return fondo
 
     def _pintar_pieza(self, p: QPainter, it: _Pieza, r: QRectF, c: _Caja | None = None) -> None:
-        tinta, borde = QColor(estilo.TINTA), QColor(estilo.BORDE_CONTROL)
+        tinta, borde = QColor("#16263a"), QColor("#b5c4d4")
         centro = Qt.AlignmentFlag.AlignCenter
-        if it.tipo == "txt" and it.clave == "tagd":  # la letra de origen, a la derecha de la fila del catálogo
-            p.setFont(self.fb)
-            p.setPen(QColor(it.extra[1]))
-            p.drawText(r, Qt.AlignmentFlag.AlignCenter, it.texto)
+        if it.tipo == "txt" and it.clave == "caret":  # cursor vertical turquesa dentro de un ( … ) activo
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(estilo.ACENTO))
+            p.drawRoundedRect(QRectF(r.left() + 0.5, r.top(), 2.5, r.height()), 1.2, 1.2)
             return
-        if it.tipo == "txt" and it.clave == "nom":  # el nombre de una ficha del catálogo (sin desplegable)
+        if it.tipo == "txt" and it.clave == "tagd":  # tipo numérico (INT / DEC) a la derecha en el catálogo
+            f = QFont(self.f)
+            f.setPixelSize(10)
+            f.setWeight(QFont.Weight.DemiBold)
+            p.setFont(f)
+            p.setPen(QColor(it.extra[1] if it.extra else "#5b6b7d"))
+            p.drawText(r, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, it.texto)
+            return
+        if it.tipo == "txt" and it.clave == "nom":
             self._pintar_nombre(p, it, r, c, False)
             return
         if it.tipo == "txt":
             fuente = self._est.get(it.clave, self._est[""])[0]
             p.setFont(fuente)
-            if it.clave in ("y", "o"):  # el conector de un «y» o un «o»: una pastilla con la letra de su color
-                p.setPen(QPen(QColor(estilo.BORDE), 1))
-                p.setBrush(QColor(estilo.SUPERFICIE))
+            if it.clave in ("y", "o", "op"):  # botón conector cuadrado `.conn-btn` (`·`, `+`, `−`, `×`, `÷`)
+                es_or = it.clave == "o"
+                p.setPen(QPen(QColor("#93b5d1" if es_or else "#c1cedc"), 1))
+                p.setBrush(QColor("#eef4fa" if es_or else "#e7eef5"))
                 p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
-                p.setPen(QColor(COLORES[it.clave]))
+                p.setPen(QColor("#075985" if es_or else "#16263a"))
             elif it.clave in ("ins", "insw", "pf"):
                 aviso = it.clave == "insw"
                 p.setPen(QPen(QColor(estilo.AVISO_BORDE), 1) if aviso else Qt.PenStyle.NoPen)
@@ -1250,83 +1855,82 @@ class Motor:
                 p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 3, 3)
                 p.setPen(QColor(estilo.AVISO if aviso else "#FFFFFF" if it.clave == "ins" else estilo.TINTA))
             elif it.clave in ("barra", "pp", "br"):
-                p.setPen(QColor(estilo.TINTA_3))
+                p.setPen(QColor("#5b6b7d"))
             elif it.clave == "pend":
                 p.setPen(QColor(estilo.ACENTO_OSCURO))
-            elif it.clave == "op":
-                p.setPen(QColor(estilo.TINTA_2))
             else:
                 p.setPen(tinta)
             p.drawText(r, centro, it.texto)
             return
-        if it.tipo == "paren":  # un paréntesis alto y curvo
+        if it.tipo == "paren":  # paréntesis curvos sobrios (`.paren-sym`)
             izq = it.clave == "izq"
             punta, panza = (r.right() - 2, r.left() + 1.5) if izq else (r.left() + 2, r.right() - 1.5)
             camino = QPainterPath(QPointF(punta, r.top() + 1))
             camino.cubicTo(QPointF(panza, r.top() + r.height() * 0.28), QPointF(panza, r.bottom() - r.height() * 0.28),
                            QPointF(punta, r.bottom() - 1))
-            p.setPen(QPen(QColor(estilo.TINTA_3), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            p.setPen(QPen(QColor("#5b6b7d"), 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawPath(camino)
             return
-        if it.tipo == "boton":  # «+» añade un hueco
-            p.setPen(QPen(borde, 1, Qt.PenStyle.DashLine))
-            p.setBrush(QColor(estilo.SUPERFICIE))
+        if it.tipo == "boton":  # `…` dentro de un grupo vacío (`.paren-add`)
+            p.setPen(QPen(QColor("#8fa0b3"), 1, Qt.PenStyle.DashLine))
+            p.setBrush(QColor(255, 255, 255, 224))
             p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
             p.setFont(self.fb)
-            p.setPen(QColor(estilo.TINTA_2))
+            p.setPen(QColor("#4a5b6e"))
             p.drawText(r, centro, it.texto)
             return
-        if it.tipo == "mod":  # la insignia de un flanco (↑, ↓) o de una negación: se pulsa para cambiarla
-            p.setPen(QPen(borde, 1))
-            p.setBrush(QColor(estilo.SUPERFICIE_2))
-            p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
+        if it.tipo == "mod":  # insignia turquesa `.mod-chip` (↑, ↓)
+            p.setPen(QPen(QColor("#9fd4d0"), 1))
+            p.setBrush(QColor("#e6f4f1"))
+            p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 3, 3)
             p.setFont(self.fm)
-            p.setPen(tinta)
+            p.setPen(QColor(estilo.ACENTO_OSCURO))
             p.drawText(r, centro, it.texto)
             return
-        if it.tipo == "campo":  # un valor o un retardo que se teclea: una pastilla
-            p.setPen(QPen(borde, 1))
-            p.setBrush(QColor(estilo.SUPERFICIE_2))
+        if it.tipo == "campo":  # pastilla editable in-situ (`.inline-input`, discontinua cuando está vacía)
+            es_num_cmp = c is not None and c.nodo is not None and c.nodo["k"] == "cmp" and it.clave == "v"
+            pen_style = Qt.PenStyle.DashLine if it.vacio else Qt.PenStyle.SolidLine
+            borde_c = QColor("#96bdd6") if es_num_cmp else borde
+            fondo_c = QColor("#ffffff" if es_num_cmp else "#fafcff" if it.vacio else "#f4f7fa")
+            p.setPen(QPen(borde_c, 1, pen_style))
+            p.setBrush(fondo_c)
             p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), r.height() / 2, r.height() / 2)
-            p.setFont(self.fm)
-            p.setPen(QColor(estilo.TINTA_3 if it.vacio else estilo.TINTA))
-            p.drawText(r.adjusted(5, 0, -5, 0), centro, it.texto)
+            f = QFont(self.fm)
+            f.setBold(not it.vacio)
+            p.setFont(f)
+            p.setPen(QColor("#7b8a9c" if it.vacio else "#16263a"))
+            p.drawText(r.adjusted(4, 0, -4, 0), centro, it.texto)
             return
-        if it.clave == "op":  # el operador de una comparación: una caja pequeña con su ▾
-            p.setPen(QPen(borde, 1))
-            p.setBrush(QColor(estilo.SUPERFICIE_2))
-            p.drawRoundedRect(r.adjusted(0.5, 2.5, -0.5, -2.5), 3, 3)
+        if it.clave == "op":  # operador de comparación en pastilla azul (`.mini-badge.cmp`)
+            p.setPen(QPen(QColor("#7dd3fc"), 1))
+            p.setBrush(QColor("#e0f2fe"))
+            p.drawRoundedRect(r.adjusted(0.5, 1.5, -0.5, -1.5), 3, 3)
             p.setFont(self.fm)
-            p.setPen(tinta)
+            p.setPen(QColor("#075985"))
             p.drawText(QRectF(r.left() + 2, r.top(), r.width() - 12, r.height()), centro, it.texto)
             p.setFont(self.f)
-            p.setPen(QColor(estilo.TINTA_3))
+            p.setPen(QColor("#075985"))
             p.drawText(QRectF(r.right() - 12, r.top(), 10, r.height()), centro, "▾")
             return
         self._pintar_nombre(p, it, r, c, True)
 
     def _pintar_nombre(self, p: QPainter, it: _Pieza, r: QRectF, c: _Caja | None, desplegable: bool) -> None:
-        """El nombre de una variable, etapa o cantidad: su letra de origen (si la ficha la lleva), el texto y, si se elige, la ▾."""
+        """Nombre limpio (sin letra E/S/M); sobrerrayado si está negado y ▾ solo en desplegables de temp/cmp."""
         x = r.left()
-        if it.extra and it.extra[0]:
-            p.setFont(self.fb)
-            p.setPen(QColor(it.extra[1]))
-            ancho = self.mb.horizontalAdvance(it.extra[0])
-            p.drawText(QRectF(x, r.top(), ancho, r.height()), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, it.extra[0])
-            x += ancho + GAP
-        p.setFont(self.fs)
-        p.setPen(QColor(estilo.ERROR if c is not None and c.cat == "error" and c.forma in ("ficha", "capsula") else estilo.TINTA))
-        fin = r.right() - (16 if desplegable else 0)
+        es_cat = c is not None and c.forma == "catalogo"
+        p.setFont(self.f if es_cat else self.fs)
+        p.setPen(QColor(estilo.ERROR if c is not None and c.cat == "error" and c.forma in ("ficha", "capsula") else "#16263a"))
+        fin = r.right() - (14 if desplegable else 0)
         texto = QRectF(x, r.top(), max(fin - x, 1), r.height())
         p.drawText(texto, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, it.texto)
-        if c is not None and c.negada and it.extra is not None:  # la barra de la negación sobre el nombre
+        if c is not None and c.negada == "nombre":  # barra superior solo sobre el nombre de la variable
             ancho_texto = min(self.ms.horizontalAdvance(it.texto), texto.width())
-            p.fillRect(QRectF(x, r.top() + 2, ancho_texto, 2), QColor(estilo.TINTA))
+            p.fillRect(QRectF(x, r.top() + 2.0, ancho_texto, 1.7), QColor("#16263a"))
         if desplegable:
             p.setFont(self.f)
-            p.setPen(QColor(estilo.TINTA_3))
-            p.drawText(QRectF(r.right() - 16, r.top(), 12, r.height()), Qt.AlignmentFlag.AlignCenter, "▾")
+            p.setPen(QColor("#64748b"))
+            p.drawText(QRectF(r.right() - 14, r.top(), 12, r.height()), Qt.AlignmentFlag.AlignCenter, "▾")
 
     def pixmap(self, n: dict[str, Any], ancho: float = 240, dpr: float = 1.0) -> QPixmap:
         """El bloque tal como se ve, para llevarlo pegado al puntero al arrastrarlo."""
@@ -1343,17 +1947,17 @@ class Motor:
         return pm
 
 
-GUIA = "pulsa o arrastra un bloque…"  # lo que dice el área vacía
+GUIA = "Pulsa o arrastra variables desde la paleta izquierda para construir la fórmula…"
 _REJILLA: list[QPixmap] = []
 
 
 def _rejilla() -> QPixmap:
-    """El mosaico de 16 px con un punto, que da el fondo del área."""
+    """El mosaico de 16 px con un punto sutil (`#fbfdff` + `#d5dfe9`), como `.block-rail`."""
     if not _REJILLA:
         pm = QPixmap(16, 16)
-        pm.fill(QColor(estilo.SUPERFICIE))
+        pm.fill(QColor("#fbfdff"))
         p = QPainter(pm)
-        p.setPen(QColor(estilo.BORDE))
+        p.setPen(QColor("#d5dfe9"))
         p.drawPoint(1, 1)
         p.end()
         _REJILLA.append(pm)
@@ -1378,6 +1982,7 @@ class _Superficie(QWidget):
     arrastrando = Signal(bool)  # empieza y termina el arrastre de un bloque de aquí (el área avisa de que soltarlo fuera lo quita)
     elegido = Signal(object)  # se pulsó un bloque (sin arrastrarlo): su nodo (el catálogo lo inserta en la fórmula)
     mueve = False  # arrastrar un bloque lo saca de aquí (el área); en la paleta, lo copia
+    margen: int = MARGEN
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "") -> None:
         super().__init__()
@@ -1406,7 +2011,7 @@ class _Superficie(QWidget):
         self._bloques, self._piezas = [], []
         for c, x, y in self._cajas:
             self.motor.registrar(c, x, y, self._bloques, self._piezas)
-        self._necesario = max([x + c.w for c, x, y in self._cajas] or [0]) + MARGEN
+        self._necesario = max([x + c.w for c, x, y in self._cajas] or [0]) + self.margen
         self._ancho = ancho
 
     def invalidar(self) -> None:
@@ -1466,20 +2071,12 @@ class _Superficie(QWidget):
         i, r = self._partir(ruta)
         nueva = copy.deepcopy(self._raices[i])
         n = obtener(nueva, r)
+        if n is not None and n["k"] == "cmp" and _cmp_solo_lectura(n):
+            return
         n[clave] = valor
         if n["k"] == "var" and valor in self.motor.vars:
             n["papel"] = self.motor.vars[valor][0]
         self._fijar(i, nueva)
-
-    @staticmethod
-    def _no_numerico(texto: str) -> bool:
-        """Si el valor escrito es, en el nivel superior, un operador lógico o una comparación (no un operando numérico)."""
-        try:
-            top = parse(a_nucleo(re.sub(r"`[^`]*`|\?", lambda m: HUECO if m.group(0) == "?" else m.group(0), texto),
-                                 booleana=False), lambda clase, nombre: nombre)["operator"]
-        except Exception:  # noqa: BLE001 - lo que no se analiza lo rechaza _validar con su motivo
-            return False
-        return top in ("and", "or", "not", *CMP.values())
 
     def editar_campo(self, ruta: tuple, clave: str, texto: str) -> bool:
         """Escribe en el campo de un bloque (t1 y t2 de «temporizar», el valor de una comparación, un texto). Un
@@ -1499,11 +2096,26 @@ class _Superficie(QWidget):
                 self.avisa.emit("Escriba un número (por ejemplo 5 o 2.5).")
                 return False
             n[clave] = v
-        elif n["k"] == "cmp" and clave == "v" and self._no_numerico(texto):
-            self.avisa.emit("No válido: el valor de una comparación es un número, un nombre o una operación aritmética.")
-            return False
+        elif n["k"] == "cmp":
+            if _cmp_solo_lectura(n) or clave != "v":
+                return False
+            t = texto.strip()
+            if not t:
+                n["v"] = ""
+            else:
+                self.motor.reiniciar()
+                tipo_var = self.motor.vars.get(n.get("n") or "", ("", ""))[1]
+                canon = t.replace(",", ".")
+                if tipo_var == "int":
+                    if not re.fullmatch(r"-?\d+", canon):
+                        self.avisa.emit("Valor no válido: la variable es entera, escriba un número entero.")
+                        return False
+                elif not re.fullmatch(r"-?\d+(?:\.\d+)?", canon):
+                    self.avisa.emit("Valor no válido: escriba un número (por ejemplo 10 o 2,5).")
+                    return False
+                n["v"] = canon
         else:
-            n[clave] = texto.strip() or ("0" if n["k"] == "cmp" else "")
+            n[clave] = texto.strip()
         motivo = self._validar(i, nueva)
         if motivo:
             self.avisa.emit(motivo)
@@ -1630,7 +2242,15 @@ class _Superficie(QWidget):
     def _menu(self, ruta: tuple, clave: str, r: QRectF) -> None:
         i, rr = self._partir(ruta)
         n = obtener(self._raices[i], rr)
+        if n is not None and n["k"] == "cmp" and _cmp_solo_lectura(n):
+            return
         menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background: #ffffff; color: #16263a; border: 1px solid #7b8a9c; border-radius: 6px; padding: 4px; }}"
+            f"QMenu::item {{ padding: 4px 18px 4px 12px; border-radius: 4px; font-size: 12px; }}"
+            f"QMenu::item:selected {{ background: #cfeee6; color: #095259; }}"
+            f"QMenu::separator {{ height: 1px; background: #e2e8f0; margin: 4px 6px; }}"
+        )
         ops = self.opciones_desplegable(n, clave)
         for texto, valor in ops:
             menu.addAction(texto, lambda v=valor: self.elegir(ruta, clave, v))
@@ -1641,9 +2261,18 @@ class _Superficie(QWidget):
     def _abrir_editor(self, r: QRectF, ruta: tuple, clave: str) -> None:
         i, rr = self._partir(ruta)
         ed = _Editor(self)
-        ed.setText(obtener(self._raices[i], rr)[clave])
+        nodo = obtener(self._raices[i], rr)
+        val_ini = (nodo.get("v") or "").replace(".", ",") if (nodo["k"] == "cmp" and clave == "v") else nodo[clave]
+        ed.setText(val_ini)
+        ed.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ed.setStyleSheet(
+            f"QLineEdit {{ min-height: 0; max-height: 22px; padding: 0 5px; border: 1.5px solid {estilo.ACENTO}; "
+            f"border-radius: 10px; background: #ffffff; color: #16263a; "
+            f"font-family: {estilo.FAMILIA_MONO}; font-size: 12px; font-weight: 600; }}"
+            f"QLineEdit:focus {{ min-height: 0; max-height: 22px; padding: 0 5px; border: 1.5px solid {estilo.ACENTO}; }}"
+        )
         ed.setProperty("destino", (ruta, clave))
-        ed.setGeometry(QRect(int(r.left()), int(r.top()) - 1, int(max(r.width(), 70)), int(r.height()) + 2))
+        ed.setGeometry(QRect(int(r.left()), int(r.top()), int(max(r.width() + 6, 46)), 22))
         ed.editingFinished.connect(lambda: self._cerrar_editor(True))
         ed.cancelado.connect(lambda: self._cerrar_editor(False))
         self._editor = ed
@@ -1691,31 +2320,56 @@ class _Superficie(QWidget):
 
 
 class PaletaBloques(_Superficie):
-    """El catálogo: una ficha por cada variable (o etapa) que existe, una tras otra (pasan de línea) o en columna. Ya van elegidas: se
-    arrastran tal cual o se pulsan para insertarlas en la fórmula (`elegido`). Los operadores, temporizadores, comparaciones y constantes
-    están en la banda de categorías (`banda_bloques.py`)."""
+    """El catálogo izquierdo: filas planas limpias (.var-row) que se pulsan para insertar o se arrastran al carril."""
+    margen: int = 6
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], grupo: str = "",
                  columna: bool = False, valor: bool = False) -> None:
         super().__init__(fuente, grupo)
         self.motor.botones = False
         self.motor.fijo = True
-        self.valor = valor  # el catálogo de un valor numérico: sus variables numéricas
+        self.valor = valor
         self.clave = "vnum" if valor else "entrada"
-        self.columna = columna  # uno debajo de otro (el programador); si no, uno tras otro, pasando de línea
-        self.una_fila = False  # uno tras otro sin pasar de línea (el programador en una ventana baja: el área se desplaza a los lados)
+        self.columna = columna
+        self.una_fila = False
+        self._filtro_texto = ""
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cargar(self.clave)
+
+    def _fondo(self, p: QPainter) -> None:
+        p.fillRect(self.rect(), QColor("#ffffff"))
+
+    def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802
+        super().mouseMoveEvent(event)
+        b = self._bloque_en(event.position())
+        if b != self.motor.hover_ruta:
+            self.motor.hover_ruta = b
+            self.update()
+
+    def leaveEvent(self, event: Any) -> None:  # noqa: N802
+        super().leaveEvent(event)
+        if self.motor.hover_ruta is not None:
+            self.motor.hover_ruta = None
+            self.update()
+
+    def filtrar_texto(self, texto: str) -> None:
+        """Filtra la paleta numérica por texto (para el cuadro «Filtrar numéricas…»)."""
+        self._filtro_texto = texto.strip().casefold()
         self.cargar(self.clave)
 
     def _maqueta(self, ancho: float) -> tuple[list[tuple[_Caja, float, float]], float]:
-        x, y, lh, out = float(MARGEN), float(MARGEN), 0.0, []
+        margen = 6.0
+        x, y, lh, out = margen, margen, 0.0, []
         for i, n in enumerate(self._raices):
-            c = self.motor.caja(n, (i,), min(self.motor.natural(n, (i,)), ancho - 2 * MARGEN))
-            if x > MARGEN and (self.columna or (not self.una_fila and x + c.w > ancho - MARGEN)):
-                x, y, lh = float(MARGEN), y + lh + (2 if self.columna else GAP * 2), 0.0
+            w_caja = (ancho - 2 * margen) if self.columna else min(self.motor.natural(n, (i,)), ancho - 2 * margen)
+            c = self.motor.caja(n, (i,), w_caja)
+            if x > margen and (self.columna or (not self.una_fila and x + c.w > ancho - margen)):
+                x, y, lh = margen, y + lh + (2 if self.columna else GAP * 2), 0.0
             out.append((c, x, y))
             x += c.w + GAP * 2
             lh = max(lh, c.h)
-        return out, y + lh + MARGEN
+        return out, y + lh + margen
 
     @staticmethod
     def _orden(nombre: str) -> list[Any]:
@@ -1723,15 +2377,15 @@ class PaletaBloques(_Superficie):
         return [(0, int(x), "") if x.isdigit() else (1, 0, x.lower()) for x in re.split(r"(\d+)", nombre) if x]
 
     def cargar(self, clave: str) -> None:
-        """Pone las fichas de la clave (entradas, salidas, memorias, etapas o variables numéricas) con las variables y etapas del
-        modelo: una por cada elemento que existe (etapas por número, variables por nombre), ya elegido, que se arrastra tal cual;
-        sin elementos, una ficha vacía."""
+        """Pone las filas del catálogo (entradas, salidas, memorias, etapas o variables numéricas)."""
         self.clave = clave
         self.motor.reiniciar()
         v, etapas = self.motor.vars, list(dict.fromkeys(self.motor.etapas))
         if clave == "vnum":
             numericas = sorted((nom for nom, (_, t) in v.items() if t != "bool"), key=self._orden)
-            nodos = [nuevo("vnum", n=nom) for nom in numericas] or [nuevo("vnum", n=None)]
+            if self._filtro_texto:
+                numericas = [nom for nom in numericas if self._filtro_texto in nom.casefold()]
+            nodos = [nuevo("vnum", n=nom) for nom in numericas] or ([nuevo("vnum", n=None)] if not self._filtro_texto else [])
         elif clave in PAPEL:
             validas = sorted((nom for nom, (r, t) in v.items() if r == PAPEL[clave] and t == "bool"), key=self._orden)
             nodos = [var(nom, PAPEL[clave]) for nom in validas] or [var(None, PAPEL[clave])]
@@ -1763,12 +2417,17 @@ class AreaBloques(_Superficie):
                  valor: bool = False) -> None:
         super().__init__(fuente, grupo)
         self.valor = valor  # el área de un valor numérico: su texto se lee con las reglas de los valores
+        self.motor.valor_modo = valor
         self._raices = [None]
         self.previo: dict[str, Any] | None = None
         self._bloque_sel: tuple | None = None
-        self._hueco_sel: tuple | None = None  # el hueco vacío seleccionado (se quita con Supr)
-        self._propio = False  # se arrastra un bloque de aquí
-        self._fuera = False  # y el puntero está fuera del área: soltarlo lo quita
+        self._bloques_sel: list[tuple] = []
+        self._hueco_sel: tuple | None = None
+        self._destino_par: tuple | None = None  # grupo `( … )` enfocado donde se insertan los siguientes bloques
+        self._marca_drop: dict[str, Any] | None = None  # guía visual de inserción (antes / después / dentro)
+        self._resalte_mas: QRectF | None = None
+        self._propio = False
+        self._fuera = False
         self.arrastrando.connect(self._al_arrastrar)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.setAcceptDrops(True)
@@ -1784,17 +2443,27 @@ class AreaBloques(_Superficie):
             self.motor.resaltar_huecos = resaltar
             self.update()
 
+    def _sincronizar_motor(self) -> None:
+        self.motor.activo = self._bloque_sel
+        self.motor.seleccionados = set(self._bloques_sel) if self._bloques_sel else ({self._bloque_sel} if self._bloque_sel else set())
+        self.motor.destino_par = self._destino_par
+
     def poner_arbol(self, arbol: dict[str, Any] | None) -> None:
         self._raices = [copy.deepcopy(arbol)]
         self._bloque_sel = None
+        self._bloques_sel = []
+        self._destino_par = None
+        self._sincronizar_motor()
         self.invalidar()
 
     def texto(self) -> str:
         return arbol_a_texto(self.arbol)
 
     def _maqueta(self, ancho: float) -> tuple[list[tuple[_Caja, float, float]], float]:
+        self._sincronizar_motor()
         if self.arbol is None:
-            c = _Caja(None, (0,), min(max(HUECO_W, self.motor.m.horizontalAdvance(GUIA) + 30), ancho - 2 * MARGEN), alto_ficha())
+            w_hint = min(max(200.0, self.motor.m.horizontalAdvance(GUIA) + 32.0), max(80.0, ancho - 2 * MARGEN))
+            c = _Caja(None, (0,), w_hint, 36.0)
         else:
             c = self.motor.caja(self.arbol, (0,), ancho - 2 * MARGEN)
         return [(c, float(MARGEN), float(MARGEN))], c.h + 2 * MARGEN
@@ -1811,19 +2480,41 @@ class AreaBloques(_Superficie):
         return self.motor.fuente()
 
     # -- operaciones (lo que hacen el ratón y las pruebas)
+    def _rechazar_flanco_en_temp(self, ruta: tuple | None, nodo: dict[str, Any] | None) -> bool:
+        """IM1 (24-nov-2026): impide usar o soltar un flanco dentro de la base de un temporizador."""
+        if ruta is None or nodo is None:
+            return False
+        pos = tuple(ruta)
+        if _es_dentro_de_temp(self.arbol, pos) and _contiene_flanco(nodo):
+            self.avisa.emit(AVISO_FLANCO_TEMP)
+            return True
+        if nodo.get("k") == "temp" and nodo.get("a") is None and self.arbol is not None:
+            try:
+                destino = obtener(self.arbol, pos)
+            except KeyError:
+                destino = None
+            if _contiene_flanco(destino):
+                self.avisa.emit(AVISO_FLANCO_TEMP)
+                return True
+        return False
+
     def soltar(self, ruta: tuple | None, nodo: dict[str, Any], origen: tuple | None = None) -> bool:
-        """Suelta `nodo` en la `ruta` (hueco o bloque; sin ruta, el área vacía) y devuelve si cambió algo. Con
-        `origen`, el bloque ya estaba en el árbol y se mueve (se quita de allí). En el área vacía solo sirve si no hay
-        raíz: pasa a serlo."""
+        """Suelta `nodo` en la `ruta` (hueco o bloque; sin ruta, lo añade al final del carril o al grupo activo)."""
         if ruta is None:
-            if self.arbol is not None:
+            if self.arbol is None:
+                ruta = ()
+            elif origen is None:
+                # Arrastrar una nueva variable u operador sobre cualquier zona libre del carril lo añade directamente
+                return self.insertar(nodo)
+            else:
                 return False
-            ruta = ()
         ruta = tuple(ruta)
+        if self._rechazar_flanco_en_temp(ruta, nodo):
+            return False
         try:
             if origen is None and nodo["k"] in MODIFICADORES and nodo["a"] is None \
                     and ficha_cadena(obtener(self.arbol, ruta)) is not None:
-                nueva = alternar_modificador(self.arbol, ruta, nodo["k"])  # sobre una ficha o su hueco pendiente: se aplica a la ficha
+                nueva = alternar_modificador(self.arbol, ruta, nodo["k"])
             else:
                 nueva = mover(self.arbol, tuple(origen), ruta) if origen is not None else soltar(self.arbol, ruta, nodo)
         except KeyError:
@@ -1859,38 +2550,325 @@ class AreaBloques(_Superficie):
             return
         if (mods or siempre) and ficha is not None:
             self._bloque_sel = (0,) + tuple(externa)
+            self._bloques_sel = [self._bloque_sel]
             self.setFocus()
             self.update()
             self.seleccion_cambiada.emit()
 
-    def insertar(self, nodo: dict[str, Any]) -> bool:
-        """Pulsar un bloque del catálogo o de la banda: lo pone en el hueco o el bloque seleccionado (un bloque que envuelve envuelve al
-        elegido; uno que no, lo sustituye) y, sin elección, en el primer hueco libre (o de raíz si la fórmula está vacía). Una constante
-        sin elección es la fórmula entera (P-IMP-69). Si no hay sitio, avisa y no inserta. Devuelve si cambió algo."""
-        if nodo["k"] in MODIFICADORES and nodo["a"] is None:
-            return self.aplicar_modificador(nodo["k"])
-        ruta = self._sitio_elegido()
-        if ruta is None:
-            if nodo["k"] == "const":
-                return self.sustituir(nodo)
-            ruta = () if self.arbol is None else primer_hueco(self.arbol)
-            if ruta is None:
-                self.avisa.emit("No queda ningún hueco libre: elija un bloque de la fórmula para sustituirlo o quítelo.")
-                return False
-        if not self.soltar(ruta, nodo):
+    def _anadir_en_contenedor(self, subarbol: dict[str, Any] | None, nodo: dict[str, Any]) -> dict[str, Any]:
+        """Añade `nodo` al final de un contenedor (raíz o grupo `( … )`) conectado con `·` (AND) o `+` (aritmético)."""
+        copia = copy.deepcopy(nodo)
+        if subarbol is None:
+            return copia
+        if self.valor:
+            return nuevo("ar", op="+", a=copy.deepcopy(subarbol), b=copia)
+        ops, cons = a_lista(subarbol)
+        return de_lista(ops + [copia], cons + ["y"])
+
+    def _ruta_par_valido(self) -> tuple | None:
+        if self._destino_par is None or self.arbol is None:
+            return None
+        r = tuple(self._partir(self._destino_par)[1])
+        try:
+            n = obtener(self.arbol, r)
+        except KeyError:
+            return None
+        if n is not None and n["k"] == "par":
+            return r
+        return None
+
+    def _envolver_en_temp(self, t1: str = "5s", t2: str = "") -> bool:
+        """Envuelve el bloque o los bloques seleccionados en un temporizador `t1/…/t2`."""
+        if self.arbol is None:
             return False
-        self._elegir_ficha(ruta)
+        if len(self._bloques_sel) > 1:
+            rutas = [tuple(self._partir(s)[1]) for s in self._bloques_sel]
+            if any(_contiene_flanco(obtener(self.arbol, r)) for r in rutas):
+                self.avisa.emit(AVISO_FLANCO_TEMP)
+                return False
+            nueva_par, ruta_grupo = envolver_varios(self.arbol, rutas)
+            if nueva_par == self.arbol or ruta_grupo is None:
+                return False
+            par_nodo = obtener(nueva_par, ruta_grupo)
+            temp_nodo = nuevo("temp", t1=t1, t2=t2, a=copy.deepcopy(par_nodo["a"]))
+            nueva = con_nodo(nueva_par, ruta_grupo, temp_nodo)
+            self._fijar(0, nueva)
+            self._bloque_sel = (0,) + tuple(ruta_grupo)
+            self._bloques_sel = [self._bloque_sel]
+            self._sincronizar_motor()
+            self.invalidar()
+            self.seleccion_cambiada.emit()
+            return True
+        if self._bloque_sel is None:
+            return False
+        r = tuple(self._partir(self._bloque_sel)[1])
+        nodo = obtener(self.arbol, r)
+        if nodo is None:
+            return False
+        if _contiene_flanco(nodo):
+            self.avisa.emit(AVISO_FLANCO_TEMP)
+            return False
+        inner = copy.deepcopy(nodo["a"]) if nodo["k"] == "par" and nodo["a"] is not None else copy.deepcopy(nodo)
+        temp_nodo = nuevo("temp", t1=t1, t2=t2, a=inner)
+        nueva = con_nodo(self.arbol, r, temp_nodo)
+        self._fijar(0, nueva)
+        self._bloque_sel = (0,) + r
+        self._bloques_sel = [self._bloque_sel]
+        self._sincronizar_motor()
+        self.invalidar()
+        self.seleccion_cambiada.emit()
         return True
 
+    def _seleccion_con_flanco(self) -> bool:
+        if self.arbol is None:
+            return False
+        sels = self._bloques_sel or ([self._bloque_sel] if self._bloque_sel is not None else [])
+        return any(_contiene_flanco(obtener(self.arbol, tuple(self._partir(s)[1]))) for s in sels)
+
+    def insertar(self, nodo: dict[str, Any]) -> bool:
+        """Inserción directa en el carril (o en el grupo `( … )` activo), sin exigir huecos `?` previos.
+        Si hay un hueco `?` seleccionado explícitamente, lo rellena; si se pulsa `( … )` o `Temporizador` con bloques
+        seleccionados, los envuelve; `1`/`0` en raíz sustituye la fórmula entera (como en la maqueta)."""
+        if nodo["k"] in MODIFICADORES and nodo["a"] is None:
+            return self.aplicar_modificador(nodo["k"])
+        if nodo["k"] == "par" and nodo["a"] is None and self.hay_seleccion():
+            return self.envolver_elegido()
+        if nodo["k"] == "temp" and self.hay_seleccion() and not self.valor:
+            if self._envolver_en_temp(nodo.get("t1", "5s"), nodo.get("t2", "")):
+                return True
+            if self._seleccion_con_flanco():
+                return False
+        if self._hueco_sel is not None:
+            ruta_h = tuple(self._partir(self._hueco_sel)[1])
+            return self.soltar(ruta_h, nodo)
+        r_par = self._ruta_par_valido()
+        if r_par is not None:
+            if self._rechazar_flanco_en_temp(r_par + ("a",), nodo):
+                return False
+            par_actual = obtener(self.arbol, r_par)
+            if par_actual["a"] is not None and nodo["k"] in ("var", "etapa", "vnum", "num", "const"):
+                hueco_par = primer_hueco(par_actual["a"])
+                if hueco_par is not None:
+                    return self.soltar(r_par + ("a",) + hueco_par, nodo)
+            nuevo_dentro = self._anadir_en_contenedor(par_actual["a"], nodo)
+            nueva = con_nodo(self.arbol, r_par + ("a",), nuevo_dentro)
+            self._fijar(0, nueva)
+            self._destino_par = (0,) + r_par
+            self._sincronizar_motor()
+            self.invalidar()
+            self.seleccion_cambiada.emit()
+            return True
+        # Si hay un hueco pendiente en la fórmula (por ej. un NOT ? o `a AND ?`) y se inserta una variable/constante, rellénalo
+        if self.arbol is not None:
+            hueco = primer_hueco(self.arbol)
+            if hueco is not None and nodo["k"] in ("var", "etapa", "vnum", "num", "const"):
+                return self.soltar(hueco, nodo)
+        if not self.valor and nodo["k"] == "const":
+            # Constante 1 o 0 en la raíz: sustituye la fórmula completa (maqueta `setRootConst`)
+            self._fijar(0, copy.deepcopy(nodo))
+            self._bloque_sel = (0,)
+            self._bloques_sel = [(0,)]
+            self._sincronizar_motor()
+            self.update()
+            self.seleccion_cambiada.emit()
+            return True
+        if self.arbol is None or (not self.valor and self.arbol["k"] == "const"):
+            nueva = copy.deepcopy(nodo)
+            self._fijar(0, nueva)
+            if nodo["k"] == "par":
+                self._destino_par = (0,)
+                self._sincronizar_motor()
+                self.invalidar()
+                self.seleccion_cambiada.emit()
+            return True
+        # Inserción directa al final del carril raíz (conectada automáticamente con `·` o `+`)
+        nueva = self._anadir_en_contenedor(self.arbol, nodo)
+        self._fijar(0, nueva)
+        if nodo["k"] == "par":
+            rutas_r = _rutas_lista(nueva, ()) if not self.valor else [("b",)]
+            if rutas_r:
+                self._destino_par = (0,) + tuple(rutas_r[-1])
+                self._sincronizar_motor()
+                self.invalidar()
+                self.seleccion_cambiada.emit()
+        return True
+
+    def quitar_modificadores(self) -> bool:
+        """Botón «Normal» de la barra contextual: quita NOT, ↑ y ↓ de los bloques seleccionados."""
+        sels = list(self._bloques_sel) if self._bloques_sel else ([self._bloque_sel] if self._bloque_sel else [])
+        if not sels or self.arbol is None:
+            return False
+        nueva = self.arbol
+        nuevas_sel: list[tuple] = []
+        for sel in sels:
+            r = tuple(self._partir(sel)[1])
+            try:
+                ext, mods = cadena_modificadores(nueva, r)
+                if mods:
+                    hoja = obtener(nueva, ext + ("a",) * len(mods))
+                    nueva = con_nodo(nueva, ext, copy.deepcopy(hoja))
+                nuevas_sel.append((0,) + tuple(ext))
+            except KeyError:
+                continue
+        if nueva == self.arbol:
+            return False
+        self._fijar(0, nueva)
+        self._bloques_sel = nuevas_sel
+        self._bloque_sel = nuevas_sel[-1] if nuevas_sel else None
+        self._sincronizar_motor()
+        self.invalidar()
+        self.seleccion_cambiada.emit()
+        return True
+
+    def alternar_not_interior_temp(self) -> bool:
+        """Alterna NOT sobre la señal/fórmula interior de un temporizador seleccionado (`5s/X0` ↔ `5s/NOT X0`)."""
+        if self._bloque_sel is None or self.arbol is None:
+            return False
+        r = tuple(self._partir(self._bloque_sel)[1])
+        try:
+            ext, mods = cadena_modificadores(self.arbol, r)
+            r_temp = ext + ("a",) * len(mods)
+            nodo = obtener(self.arbol, r_temp)
+        except KeyError:
+            return False
+        if nodo is None or nodo["k"] != "temp":
+            return False
+        nueva = alternar_modificador(self.arbol, r_temp + ("a",), "no")
+        if nueva == self.arbol:
+            return False
+        sel_antes = self._bloque_sel
+        self._fijar(0, nueva)
+        self._bloque_sel = sel_antes
+        self._bloques_sel = [sel_antes]
+        self._sincronizar_motor()
+        self.invalidar()
+        self.seleccion_cambiada.emit()
+        return True
+
+    def salir_a_raiz(self) -> None:
+        """Sale del grupo `( … )` activo para volver a insertar en la raíz."""
+        if self._destino_par is not None:
+            self._destino_par = None
+            self._sincronizar_motor()
+            self.invalidar()
+            self.seleccion_cambiada.emit()
+
+    def info_seleccion(self) -> dict[str, Any]:
+        """Resumen de la selección actual para la barra contextual `.ctx-bar`."""
+        sels = list(self._bloques_sel) if self._bloques_sel else ([self._bloque_sel] if self._bloque_sel else [])
+        en_grupo = self._ruta_par_valido() is not None
+        if not sels or self.arbol is None:
+            return {"count": 0, "en_grupo": en_grupo, "es_valor": self.valor}
+        if len(sels) > 1:
+            mods_union: set[str] = set()
+            for sel in sels:
+                try:
+                    _, ms = cadena_modificadores(self.arbol, tuple(self._partir(sel)[1]))
+                    mods_union.update(ms)
+                except KeyError:
+                    pass
+            return {
+                "count": len(sels),
+                "nombre": f"{len(sels)} bloques",
+                "mods": mods_union,
+                "es_par": False,
+                "es_temp": False,
+                "es_cmp": False,
+                "temp_neg_int": False,
+                "puede_mod": not self.valor,
+                "en_grupo": en_grupo,
+                "es_valor": self.valor,
+            }
+        r = tuple(self._partir(sels[0])[1])
+        try:
+            nodo = obtener(self.arbol, r)
+            ext, mods = cadena_modificadores(self.arbol, r)
+            hoja = obtener(self.arbol, ext + ("a",) * len(mods))
+        except KeyError:
+            return {"count": 0, "en_grupo": en_grupo, "es_valor": self.valor}
+        if nodo is None:
+            return {"count": 0, "en_grupo": en_grupo, "es_valor": self.valor}
+        es_par = hoja is not None and hoja["k"] == "par"
+        es_temp = hoja is not None and hoja["k"] == "temp"
+        es_cmp = hoja is not None and hoja["k"] == "cmp"
+        temp_neg_int = bool(es_temp and hoja.get("a") is not None and "no" in Motor._cadena(hoja["a"])[0])
+        if es_par:
+            nombre = "Grupo ( … )"
+        elif es_temp:
+            nombre = "Temporizador"
+        elif es_cmp:
+            lado = hoja.get("izq") or hoja.get("n") or "?"
+            nombre = f"Comparación ({lado})"
+        elif hoja is not None and hoja["k"] == "etapa":
+            nombre = etapa_visible(hoja["n"]) if hoja.get("n") else "Etapa"
+        elif hoja is not None and hoja["k"] in ("var", "vnum"):
+            nombre = hoja.get("n") or "?"
+        elif hoja is not None and hoja["k"] in ("const", "num"):
+            nombre = str(hoja.get("v", ""))
+        else:
+            nombre = arbol_a_texto(nodo) or "Bloque"
+        return {
+            "count": 1,
+            "nombre": nombre,
+            "mods": set(mods),
+            "es_par": es_par,
+            "es_temp": es_temp,
+            "es_cmp": es_cmp,
+            "temp_neg_int": temp_neg_int,
+            "puede_mod": not self.valor and hoja is not None and hoja["k"] not in ("const",),
+            "en_grupo": en_grupo,
+            "es_valor": self.valor,
+        }
+
     def aplicar_modificador(self, clase: str) -> bool:
-        """NOT, ↑ o ↓ sobre la ficha elegida, en el orden en que se pulsan. Sin elección, un modificador con su hueco pendiente en el
-        primer hueco libre («NOT ?»), que la siguiente variable pulsada rellena."""
+        """NOT, ↑ o ↓ sobre la ficha elegida (o sobre una multiselección: NOT envuelve y niega el grupo).
+        Sin elección, deja un modificador con su hueco pendiente en el primer hueco libre («NOT ?»)."""
+        if len(self._bloques_sel) > 1:
+            rutas = [tuple(self._partir(s)[1]) for s in self._bloques_sel]
+            if clase == "no":
+                nueva_par, ruta_grupo = envolver_varios(self.arbol, rutas)
+                if nueva_par == self.arbol or ruta_grupo is None:
+                    self.avisa.emit("Para negar varios bloques a la vez, elija operandos seguidos.")
+                    return False
+                nueva = alternar_modificador(nueva_par, ruta_grupo, "no")
+                self._fijar(0, nueva)
+                self._bloque_sel = (0,) + tuple(ruta_grupo)
+                self._bloques_sel = [self._bloque_sel]
+                self._sincronizar_motor()
+                self.invalidar()
+                self.seleccion_cambiada.emit()
+                return True
+            if clase in ("sube", "baja") and any(_es_dentro_de_temp(self.arbol, r) for r in rutas):
+                self.avisa.emit(AVISO_FLANCO_TEMP)
+                return False
+            nueva = self.arbol
+            nuevas_sel: list[tuple] = []
+            for sel in self._bloques_sel:
+                r = tuple(self._destino(sel)[1:])
+                try:
+                    ext = cadena_modificadores(nueva, r)[0]
+                    nueva = alternar_modificador(nueva, r, clase)
+                    nuevas_sel.append((0,) + tuple(ext))
+                except KeyError:
+                    continue
+            if nueva == self.arbol:
+                return False
+            self._fijar(0, nueva)
+            self._bloques_sel = nuevas_sel
+            self._bloque_sel = nuevas_sel[-1] if nuevas_sel else None
+            self.setFocus()
+            self.update()
+            self.seleccion_cambiada.emit()
+            return True
         ruta = self._sitio_elegido()
         if ruta is None:
             ruta = () if self.arbol is None else primer_hueco(self.arbol)
             if ruta is None:
                 self.avisa.emit("No queda ningún hueco libre: elija una ficha para aplicarle el modificador.")
                 return False
+        if clase in ("sube", "baja") and _es_dentro_de_temp(self.arbol, ruta):
+            self.avisa.emit(AVISO_FLANCO_TEMP)
+            return False
         try:
             nueva = alternar_modificador(self.arbol, ruta, clase)
             externa = cadena_modificadores(self.arbol, ruta)[0]
@@ -1900,11 +2878,20 @@ class AreaBloques(_Superficie):
             return False
         self._fijar(0, nueva)
         self._elegir_ficha(externa, True)
+        if self._bloque_sel is None and obtener(self.arbol, externa) is not None:
+            self._bloque_sel = (0,) + tuple(externa)
+            self._bloques_sel = [self._bloque_sel]
+            self.setFocus()
+            self.update()
+            self.seleccion_cambiada.emit()
         return True
 
     def _modificador(self, ruta: tuple, clase: str) -> None:
         """Se pulsó la insignia de una ficha: un flanco pasa al otro (↑ por ↓), la negación se quita."""
         r = tuple(self._partir(ruta)[1])
+        if clase != "no" and _es_dentro_de_temp(self.arbol, r):
+            self.avisa.emit(AVISO_FLANCO_TEMP)
+            return
         if clase != "no":
             clase = "baja" if clase == "sube" else "sube"
         nueva = alternar_modificador(self.arbol, r, clase)
@@ -1929,7 +2916,7 @@ class AreaBloques(_Superficie):
         if ruta and ruta[0] == 0:
             ruta = ruta[1:]  # las rutas de la superficie llevan el índice de la raíz; las del modelo, no
         if obtener(self.arbol, ruta) is not None:
-            self._fijar(0, retirar(self.arbol, ruta))
+            self._fijar(0, _quitar_limpio(self.arbol, ruta))
 
     def anadir_hueco(self, ruta: tuple) -> bool:
         """El «+» de un «y» o un «o»: otro hueco al final. Devuelve si cambió algo."""
@@ -1966,25 +2953,91 @@ class AreaBloques(_Superficie):
     def _fijar(self, i: int, nueva: dict[str, Any] | None) -> None:
         self._hueco_sel = None
         self._bloque_sel = None
+        self._bloques_sel = []
+        self._destino_par = None
         self.previo = self._raices[i]
+        self._sincronizar_motor()
         super()._fijar(i, nueva)
         self.modificado.emit()
         self.seleccion_cambiada.emit()
 
     def envolver_elegido(self) -> bool:
-        """«Envolver ( … )»: el bloque elegido pasa a ir entre paréntesis."""
+        """«Envolver ( … )»: envuelve el bloque elegido (o varios operandos seguidos con Ctrl+clic / Shift+clic)
+        entre paréntesis; si lo elegido es ya un grupo `( … )`, le quita los paréntesis."""
+        if len(self._bloques_sel) > 1:
+            rutas = [tuple(self._partir(s)[1]) for s in self._bloques_sel]
+            nueva, ruta_grupo = envolver_varios(self.arbol, rutas)
+            if nueva == self.arbol or ruta_grupo is None:
+                self.avisa.emit("Para envolver varios bloques entre paréntesis, elija operandos seguidos.")
+                return False
+            self._fijar(0, nueva)
+            self._bloque_sel = (0,) + tuple(ruta_grupo)
+            self._bloques_sel = [self._bloque_sel]
+            self.seleccion_cambiada.emit()
+            self.update()
+            return True
+        if self._bloque_sel is not None:
+            r_sel = tuple(self._partir(self._bloque_sel)[1])
+            nodo_sel = obtener(self.arbol, r_sel)
+            if nodo_sel is not None and nodo_sel["k"] == "par":
+                return self.desenvolver_elegido(r_sel)
         ruta = self._sitio_elegido()
         if ruta is None or obtener(self.arbol, ruta) is None:
             return False
         nueva = envolver(self.arbol, ruta, "par")
         self._fijar(0, nueva)
         self._bloque_sel = (0,) + tuple(ruta)
+        self._bloques_sel = [self._bloque_sel]
+        self.seleccion_cambiada.emit()
+        self.update()
+        return True
+
+    def desenvolver_elegido(self, ruta: tuple | None = None) -> bool:
+        """Quita los paréntesis del grupo `( … )` de `ruta` (o del bloque elegido)."""
+        if ruta is None:
+            if self._bloque_sel is None:
+                return False
+            ruta = tuple(self._partir(self._bloque_sel)[1])
+        else:
+            ruta = tuple(self._partir(ruta)[1])
+        nueva = desenvolver_en(self.arbol, ruta)
+        if nueva == self.arbol:
+            return False
+        self._fijar(0, nueva)
+        if obtener(self.arbol, ruta) is not None:
+            self._bloque_sel = (0,) + tuple(ruta)
+            self._bloques_sel = [self._bloque_sel]
         self.seleccion_cambiada.emit()
         self.update()
         return True
 
     def quitar_elegido(self) -> bool:
-        """«Quitar (Supr)»: quita el bloque elegido."""
+        """«Quitar (Supr)»: quita el bloque elegido (o todos los de una selección múltiple) sin dejar huecos `?`."""
+        if len(self._bloques_sel) > 1 and self.arbol is not None:
+            copia = copy.deepcopy(self.arbol)
+            etiquetados = 0
+            for sel in self._bloques_sel:
+                r = tuple(self._partir(sel)[1])
+                try:
+                    n = obtener(copia, r)
+                    if n is not None:
+                        n["_tag_mov"] = True
+                        etiquetados += 1
+                except KeyError:
+                    continue
+            if not etiquetados:
+                return False
+            nueva = copia
+            while True:
+                r_tag = _buscar_etiqueta(nueva)
+                if r_tag is None:
+                    break
+                obtener(nueva, r_tag).pop("_tag_mov", None)
+                nueva = _quitar_limpio(nueva, r_tag)
+            if nueva == self.arbol:
+                return False
+            self._fijar(0, nueva)
+            return True
         sel = self._bloque_sel
         if sel is None:
             return False
@@ -1992,22 +3045,123 @@ class AreaBloques(_Superficie):
         return True
 
     def hay_seleccion(self) -> bool:
-        return self._bloque_sel is not None
+        return self._bloque_sel is not None or bool(self._bloques_sel)
+
+    def _conector_en(self, pos: QPointF) -> tuple[QRectF, tuple, str, int] | None:
+        self._calcular(self.width())
+        return next((c for c in self.motor.conectores if c[0].contains(pos)), None)
+
+    def alternar_conector(self, ruta: tuple, clave: str, indice: int) -> bool:
+        """Pulsa un conector `·` / `+` (o un operador aritmético +, −, ×, ÷) para alternarlo."""
+        r = tuple(self._partir(ruta)[1])
+        try:
+            if clave == "op":
+                nueva = cambiar_operador_ar(self.arbol, r, indice)
+            else:
+                nueva = cambiar_conector_lista(self.arbol, r, indice)
+        except (KeyError, IndexError):
+            return False
+        if nueva == self.arbol:
+            return False
+        self._fijar(0, nueva)
+        return True
+
+    def _actualizar_multiseleccion(self, pulsado: tuple | None, mods: Qt.KeyboardModifier) -> None:
+        if pulsado is None:
+            self._bloque_sel = None
+            self._bloques_sel = []
+            return
+        r_pulsado = tuple(self._partir(pulsado)[1])
+        base_pulsado = _raiz_yo(self.arbol, r_pulsado[:-1]) if r_pulsado else ()
+        rutas_lista = [(0,) + ro for ro in _rutas_lista(self.arbol, base_pulsado)] if r_pulsado else []
+        if self._bloques_sel:
+            actuales = list(self._bloques_sel)
+        elif self._bloque_sel is not None:
+            actuales = [self._bloque_sel]
+        else:
+            actuales = []
+        misma_lista = bool(
+            rutas_lista and pulsado in rutas_lista and actuales and all(a in rutas_lista for a in actuales)
+        )
+        if (mods & Qt.KeyboardModifier.ShiftModifier) and misma_lista and self._bloque_sel in rutas_lista:
+            i0, i1 = rutas_lista.index(self._bloque_sel), rutas_lista.index(pulsado)
+            lo, hi = min(i0, i1), max(i0, i1)
+            self._bloques_sel = rutas_lista[lo:hi + 1]
+            return
+        if (mods & Qt.KeyboardModifier.ControlModifier) and misma_lista:
+            if pulsado in actuales:
+                nuevas = [a for a in actuales if a != pulsado]
+            else:
+                nuevas = [r for r in rutas_lista if r in actuales or r == pulsado]
+            self._bloques_sel = nuevas
+            self._bloque_sel = nuevas[-1] if nuevas else None
+            return
+        self._bloque_sel = pulsado
+        self._bloques_sel = [pulsado]
+
+    def _par_ancestro(self, ruta: tuple[str, ...]) -> tuple[str, ...] | None:
+        """El grupo `( … )` más interior que contiene `ruta` (o `ruta` misma si es un `par`), o None si está en la raíz."""
+        if self.arbol is None:
+            return None
+        try:
+            nodo_p = obtener(self.arbol, ruta)
+        except KeyError:
+            return None
+        if nodo_p is not None and nodo_p["k"] == "par":
+            return ruta
+        if nodo_p is not None and nodo_p["k"] == "no" and nodo_p["a"] is not None and nodo_p["a"]["k"] == "par":
+            return ruta + ("a",)
+        for k in range(len(ruta) - 1, -1, -1):
+            pref = ruta[:k]
+            try:
+                anc = obtener(self.arbol, pref)
+            except KeyError:
+                continue
+            if anc is not None and anc["k"] == "par":
+                return pref
+        return None
 
     def mousePressEvent(self, event: Any) -> None:  # noqa: N802
         super().mousePressEvent(event)
         if event.button() != Qt.MouseButton.LeftButton:
             return
         self._hueco_sel = None
-        self._bloque_sel = self._bloque_en(event.position())
-        if self._bloque_sel is not None: self.setFocus()
-        if self._pieza_en(event.position()) is None:  # un clic en un hueco vacío lo selecciona
+        if self._conector_en(event.position()) is not None:
+            return
+        prev_dest = self._destino_par
+        pulsado = self._bloque_en(event.position())
+        self._actualizar_multiseleccion(pulsado, event.modifiers())
+        # Como en la maqueta (`targetContainerId = node.type === 'group' ? node.id : parent.id`):
+        # pulsar un `( … )` o un bloque dentro de él mantiene el foco dentro del grupo; pulsar en raíz o fondo vuelve a raíz.
+        if pulsado is None:
+            self._destino_par = None
+        else:
+            r_p = tuple(self._partir(pulsado)[1])
+            anc = self._par_ancestro(r_p)
+            self._destino_par = None if anc is None else (0,) + anc
+        if self._bloque_sel is not None:
+            self.setFocus()
+        if self._pieza_en(event.position()) is None:
             ruta = self.ruta_en(event.position())
             if ruta is not None and self.hueco_quitable(ruta):
                 self._hueco_sel = tuple(ruta)
                 self.setFocus()
-        self.update()
+        self._sincronizar_motor()
+        if self._destino_par != prev_dest:
+            self.invalidar()
+        else:
+            self.update()
         self.seleccion_cambiada.emit()
+
+    def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802
+        if self._pulsado is not None:
+            pos_ini = self._pulsado[0]
+            con = self._conector_en(event.position())
+            if con is not None and (event.position() - pos_ini).manhattanLength() < 6:
+                self._pulsado = None
+                self.alternar_conector(con[1], con[2], con[3])
+                return
+        super().mouseReleaseEvent(event)
 
     def copiar_formula(self) -> bool:
         """Copia la fórmula entera al portapapeles (el formato que lee «Pegar» y Ctrl+V, en esta y en otras ventanas)."""
@@ -2072,9 +3226,10 @@ class AreaBloques(_Superficie):
             self.quitar_hueco_en(ruta)
             self.update()
             return
-        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace) and self._bloque_sel is not None:
-            ruta, self._bloque_sel = self._bloque_sel, None
-            self.quitar(ruta); event.accept(); return
+        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace) and (self._bloque_sel is not None or self._bloques_sel):
+            self.quitar_elegido()
+            event.accept()
+            return
         super().keyPressEvent(event)
 
     def event(self, ev: Any) -> bool:
@@ -2083,23 +3238,36 @@ class AreaBloques(_Superficie):
         ):
             ev.accept()
             return True
-        if ev.type() == QEvent.Type.ShortcutOverride and (self._hueco_sel is not None or self._bloque_sel is not None) \
+        if ev.type() == QEvent.Type.ShortcutOverride and (self._hueco_sel is not None or self.hay_seleccion()) \
                 and ev.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
             ev.accept()  # Supr con un hueco seleccionado es para el hueco, no para el atajo «Borrar» de la ventana
             return True
         return super().event(ev)
 
     def contextMenuEvent(self, ev: Any) -> None:  # noqa: N802
-        ruta = self.ruta_en(QPointF(ev.pos()))
+        pos = QPointF(ev.pos())
+        ruta = self.ruta_en(pos)
         if ruta is not None and self.hueco_quitable(ruta):
             menu = QMenu(self)
             menu.addAction("Quitar hueco", lambda: self.quitar_hueco_en(ruta))
             menu.exec(ev.globalPos())
+            return
+        bloque = self._bloque_en(pos)
+        if bloque is not None:
+            r = tuple(self._partir(bloque)[1])
+            nodo = obtener(self.arbol, r)
+            if nodo is not None and nodo["k"] == "par":
+                menu = QMenu(self)
+                menu.addAction("Quitar paréntesis", lambda: self.desenvolver_elegido(r))
+                menu.exec(ev.globalPos())
 
     def soltar_en_mas(self, ruta: tuple, nodo: dict[str, Any], origen: tuple | None = None) -> bool:
         """Suelta un bloque sobre el «+» del «y» o el «o» de `ruta`: lo añade en un hueco nuevo."""
+        r_dest = tuple(self._partir(ruta)[1])
+        if self._rechazar_flanco_en_temp(r_dest, nodo):
+            return False
         try:
-            nueva = soltar_en_mas(self.arbol, tuple(self._partir(ruta)[1]), nodo,
+            nueva = soltar_en_mas(self.arbol, r_dest, nodo,
                                   None if origen is None else tuple(origen))
         except KeyError:
             return False
@@ -2131,21 +3299,121 @@ class AreaBloques(_Superficie):
         self._propio, self._fuera = en_curso, False
         self.update()
 
+    def _contenedor_de_operando(self, ruta_op: tuple[str, ...]) -> tuple[tuple[str, ...], int]:
+        """Dada la ruta de un bloque operando en el carril, devuelve `(base_contenedor, indice)` dentro de su lista plana."""
+        if self.arbol is None:
+            return (), 0
+        if not ruta_op:
+            return (), 0
+        padre = obtener(self.arbol, ruta_op[:-1])
+        if padre is not None and padre["k"] in ("y", "o"):
+            base = _raiz_yo(self.arbol, ruta_op[:-1])
+            rutas_l = _rutas_lista(self.arbol, base)
+            if ruta_op in rutas_l:
+                return base, rutas_l.index(ruta_op)
+        if padre is not None and padre["k"] == "ar":
+            # Sube hasta la raíz de la cadena aritmética del mismo contenedor (raíz o hijo de `par`)
+            base = ruta_op[:-1]
+            while base and obtener(self.arbol, base[:-1])["k"] == "ar":
+                base = base[:-1]
+            rutas_a = _rutas_ar(self.arbol, base)
+            if ruta_op in rutas_a:
+                return base, rutas_a.index(ruta_op)
+        if padre is not None and padre["k"] in ("par", "temp"):
+            return ruta_op, 0
+        return (), 0
+
+    def _calcular_destino_arrastre(
+        self, pos: QPointF, nodo: dict[str, Any], origen: tuple | None
+    ) -> dict[str, Any] | None:
+        """Calcula el destino exacto de soltar en `pos` siguiendo la maqueta (`antes`, `despues`, `dentro`, `hueco`, `final`):
+        nunca destruye un grupo `( … )` ni deja huecos `?`."""
+        self._calcular(self.width())
+        if self.arbol is None:
+            return {"tipo": "final", "base": (), "indice": 0, "rect": None}
+        # Bloques concretos bajo el puntero (excluyendo contenedores invisibles `y`/`o`/`ar`)
+        candidatos = [
+            (r.width() * r.height(), r, ruta, n)
+            for r, ruta, n in self._bloques
+            if r.contains(pos) and (n is None or n["k"] not in ("y", "o", "ar"))
+        ]
+        if not candidatos:
+            # Zona libre del carril: al final del grupo activo (si hay) o de la raíz
+            r_par = self._ruta_par_valido() if origen is None else None
+            base = (r_par + ("a",)) if r_par is not None else ()
+            sub = self.arbol if not base else obtener(self.arbol, base)
+            ops = a_lista_ar(sub)[0] if self.valor else a_lista(sub)[0]
+            return {"tipo": "final", "base": base, "indice": len(ops), "rect": None}
+        _, rect, ruta_full, target = min(candidatos, key=lambda x: x[0])
+        r = tuple(self._partir(ruta_full)[1])
+        if origen is not None and r[:len(origen)] == tuple(origen):
+            return None
+        # Hueco vacío explícito (p. ej. interior vacío de `( … )` o `NOT ?`)
+        if target is None:
+            return {"tipo": "hueco", "ruta": r, "rect": rect}
+        # Ficha pendiente con modificadores sin operando (`NOT ?`, `↑ ?`, `↓ ?`): soltar encima rellena su hueco
+        if target["k"] in MODIFICADORES and ficha_cadena(target) is not None and Motor._cadena(target)[1] is None:
+            mods_p = Motor._cadena(target)[0]
+            return {"tipo": "hueco", "ruta": r + ("a",) * len(mods_p), "rect": rect}
+        # Modificador soltado desde fuera sobre un bloque: envuelve/alterna el modificador
+        if origen is None and nodo["k"] in MODIFICADORES and nodo["a"] is None:
+            return {"tipo": "mod", "ruta": r, "rect": rect}
+        # Grupo `( … )` (o `NOT ( … )`): zona central 20 %–80 % inserta DENTRO al final; bordes insertan antes/después
+        es_par = target["k"] == "par" or (target["k"] == "no" and target.get("a") is not None and target["a"]["k"] == "par")
+        r_par = r + ("a",) if (target["k"] == "no" and es_par) else r
+        if es_par:
+            en_centro = (rect.left() + rect.width() * 0.18) <= pos.x() <= (rect.right() - rect.width() * 0.18)
+            if en_centro or target.get("a") is None:
+                base_in = r_par + ("a",)
+                sub = obtener(self.arbol, base_in)
+                ops = a_lista_ar(sub)[0] if self.valor else a_lista(sub)[0]
+                return {"tipo": "dentro", "base": base_in, "indice": len(ops), "r_par": r_par, "rect": rect}
+        # Temporizador: zona central permite insertar/encadenar dentro de la fórmula evaluada del temporizador
+        es_temp = target["k"] == "temp" or (target["k"] == "no" and target.get("a") is not None and target["a"]["k"] == "temp")
+        r_temp = r + ("a",) if (target["k"] == "no" and es_temp) else r
+        if es_temp and not self.valor:
+            en_centro = (rect.left() + rect.width() * 0.25) <= pos.x() <= (rect.right() - rect.width() * 0.25)
+            if en_centro:
+                base_in = r_temp + ("a",)
+                sub = obtener(self.arbol, base_in)
+                ops = a_lista(sub)[0]
+                return {"tipo": "dentro", "base": base_in, "indice": len(ops), "r_par": None, "rect": rect}
+        # Cualquier otro bloque (o los bordes izq/der de `( … )`): insertar ANTES o DESPUÉS en su lista
+        # Si `r` es el interior de una cadena de modificadores, subir al exterior de la ficha
+        try:
+            r_ext, _ = cadena_modificadores(self.arbol, r)
+        except KeyError:
+            r_ext = r
+        base_c, idx = self._contenedor_de_operando(r_ext)
+        despues = pos.x() >= rect.center().x()
+        return {
+            "tipo": "despues" if despues else "antes",
+            "base": base_c,
+            "indice": idx + (1 if despues else 0),
+            "rect": rect,
+        }
+
     def dragMoveEvent(self, event: Any) -> None:  # noqa: N802
         d = self._datos_mime(event.mimeData())
         if d is None:
             return
+        origen = tuple(d["origen"]) if d.get("origen") is not None and d["grupo"] == self.grupo else None
         mas = self._mas_en(event.position())
-        self._objetivo = None if mas else self.ruta_en(event.position())
         self._resalte_mas = mas[0] if mas else None
+        self._marca_drop = None if mas else self._calcular_destino_arrastre(event.position(), d["nodo"], origen)
+        self._objetivo = (
+            (0,) + tuple(self._marca_drop["ruta"])
+            if self._marca_drop is not None and self._marca_drop["tipo"] in ("hueco", "mod")
+            else None
+        )
         self.update()
-        event.setDropAction(Qt.DropAction.MoveAction if d.get("origen") is not None and d["grupo"] == self.grupo
-                            else Qt.DropAction.CopyAction)
+        event.setDropAction(Qt.DropAction.MoveAction if origen is not None else Qt.DropAction.CopyAction)
         event.accept()
 
     def dragLeaveEvent(self, event: Any) -> None:  # noqa: N802
         self._objetivo = None
         self._resalte_mas = None
+        self._marca_drop = None
         self._fuera = self._propio
         self.update()
 
@@ -2158,42 +3426,86 @@ class AreaBloques(_Superficie):
         d = self._datos_mime(event.mimeData())
         self._objetivo = None
         self._resalte_mas = None
+        self._marca_drop = None
         if d is None:
             return
         mas = self._mas_en(event.position())
-        ruta = None if mas else self.ruta_en(event.position())
         origen = tuple(d["origen"]) if d.get("origen") is not None and d["grupo"] == self.grupo else None
         _ARRASTRE["resuelto"] = True
         event.setDropAction(Qt.DropAction.MoveAction if origen is not None else Qt.DropAction.CopyAction)
         event.accept()
         if mas:  # sobre el «+»: en un hueco nuevo
             self.soltar_en_mas(mas[1], d["nodo"], origen)
+            self.update()
+            return
+        dest = self._calcular_destino_arrastre(event.position(), d["nodo"], origen)
+        if dest is None:
+            self.update()
+            return
+        tipo = dest["tipo"]
+        if tipo in ("hueco", "mod"):
+            self.soltar(dest["ruta"], d["nodo"], origen)
+        elif self._rechazar_flanco_en_temp(dest["base"], d["nodo"]):
+            self.update()
+            return
+        elif origen is not None:
+            nueva = _mover_en_posicion(self.arbol, origen, dest["base"], dest["indice"], self.valor)
+            if nueva != self.arbol:
+                self._fijar(0, nueva)
         else:
-            self.soltar(None if ruta is None else tuple(ruta[1:]), d["nodo"], origen)
+            nodo_ins = d["nodo"]
+            # Reemplazar constante raíz 1/0 sola al soltar un bloque nuevo (maqueta)
+            if not self.valor and dest["base"] == () and self.arbol is not None and self.arbol["k"] == "const":
+                self._fijar(0, copy.deepcopy(nodo_ins))
+            else:
+                nueva = _insertar_en_posicion(self.arbol, dest["base"], dest["indice"], nodo_ins, self.valor)
+                if nueva != self.arbol:
+                    self._fijar(0, nueva)
+                    if dest.get("r_par") is not None:
+                        self._destino_par = (0,) + tuple(dest["r_par"])
+                        self._sincronizar_motor()
+                        self.invalidar()
+                        self.seleccion_cambiada.emit()
         self.update()
 
     def _fondo(self, p: QPainter) -> None:
-        """Un lienzo de puntos (la rejilla de la maqueta); con un bloque en arrastre fuera de él, el borde en rojo."""
-        p.fillRect(self.rect(), QColor(estilo.SUPERFICIE))
-        p.drawTiledPixmap(QRect(1, 1, self.width() - 2, self.height() - 2), _rejilla(), QPoint(-1, -1))
-        fuera = self._propio and self._fuera
-        p.setPen(QPen(QColor(estilo.ERROR if fuera else estilo.BORDE), 2 if fuera else 1))
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), estilo.R_M, estilo.R_M)
+        """Lienzo `.block-rail` limpio de borde a borde (`#fbfdff` + puntos de 16 px, sin marco exterior)."""
+        self._sincronizar_motor()
+        p.fillRect(self.rect(), QColor("#fbfdff"))
+        p.drawTiledPixmap(self.rect(), _rejilla(), QPoint(0, 0))
+        if self._propio and self._fuera:
+            p.setPen(QPen(QColor("#c62828"), 2))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(self.rect().adjusted(1, 1, -1, -1))
 
     def _extra(self, p: QPainter) -> None:
-        if self._hueco_sel is not None or self._bloque_sel is not None:
-            seleccion = self._hueco_sel if self._hueco_sel is not None else self._bloque_sel
-            r = next((r for r, ruta, n in self._bloques if ruta == seleccion), None)
+        if self._hueco_sel is not None:
+            r = next((r for r, ruta, n in self._bloques if ruta == self._hueco_sel), None)
             if r is not None:
-                self.motor.trazo_seleccion(p, r.adjusted(-0.5, -0.5, 0.5, 0.5), 2.2)
-        if getattr(self, "_resalte_mas", None) is not None:  # el «+» donde caería lo que se arrastra
-            self.motor.trazo_seleccion(p, self._resalte_mas.adjusted(-1, -1, 1, 1), 2.6)
-        if self.arbol is None:
+                self.motor.trazo_seleccion(p, r.adjusted(-0.5, -0.5, 0.5, 0.5), 2.0)
+        if self._resalte_mas is not None:
+            self.motor.trazo_seleccion(p, self._resalte_mas.adjusted(-1, -1, 1, 1), 2.4)
+        md = self._marca_drop
+        if md is not None and md.get("rect") is not None:
+            rect: QRectF = md["rect"]
+            tipo = md["tipo"]
+            if tipo in ("antes", "despues"):
+                lx = rect.left() - 3.0 if tipo == "antes" else rect.right() + 3.0
+                p.setPen(QPen(QColor(estilo.ACENTO), 2.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+                p.drawLine(QPointF(lx, rect.top() - 2.0), QPointF(lx, rect.bottom() + 2.0))
+            elif tipo in ("dentro", "hueco", "mod"):
+                p.setPen(QPen(QColor(estilo.ACENTO), 2.0))
+                p.setBrush(QColor(11, 110, 117, 26))
+                p.drawRoundedRect(rect.adjusted(-1, -1, 1, 1), 6, 6)
+        if self.arbol is None and self._cajas:
             c, x, y = self._cajas[0]
+            r_hint = QRectF(x, y, c.w, c.h)
+            p.setPen(QPen(QColor("#b9c7d6"), 1.5, Qt.PenStyle.DashLine))
+            p.setBrush(QColor(255, 255, 255, 204))
+            p.drawRoundedRect(r_hint.adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
             p.setFont(self.motor.f)
-            p.setPen(QColor(estilo.TINTA_3))
-            p.drawText(QRectF(x, y, c.w, c.h), Qt.AlignmentFlag.AlignCenter, GUIA)
+            p.setPen(QColor("#5b6b7d"))
+            p.drawText(r_hint.adjusted(10, 0, -10, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, GUIA)
 
 
 # -- el programador: paleta y área ------------------------------------------------------------------
@@ -2286,11 +3598,13 @@ class AsaAncho(QWidget):
         self.setAccessibleName("Borde del catálogo")
 
     def paintEvent(self, event: Any) -> None:  # noqa: N802
+        if self._inicio is None and not self.underMouse():
+            return
         p = QPainter(self)
-        p.setPen(QPen(QColor(estilo.ACENTO if self._inicio is not None else estilo.BORDE_CONTROL), 1.5, Qt.PenStyle.SolidLine,
+        p.setPen(QPen(QColor(estilo.ACENTO if self._inicio is not None else "#9aa9ba"), 1.5, Qt.PenStyle.SolidLine,
                       Qt.PenCapStyle.RoundCap))
         x, h = self.width() / 2, self.height()
-        p.drawLine(QPointF(x, h / 2 - 10), QPointF(x, h / 2 + 10))
+        p.drawLine(QPointF(x, h / 2 - 12), QPointF(x, h / 2 + 12))
         p.end()
 
     def mousePressEvent(self, event: Any) -> None:  # noqa: N802
@@ -2309,19 +3623,183 @@ class AsaAncho(QWidget):
             self.soltada.emit(self.catalogo.width())
 
 
+class _ZonaPapelera(QLabel):
+    """Aviso y zona de papelera (`.trash-dropzone`): al soltar un bloque arrastrado desde el carril, lo elimina."""
+
+    def __init__(self, lienzo: AreaBloques) -> None:
+        super().__init__()
+        self.lienzo = lienzo
+        self.setWordWrap(True)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event: Any) -> None:  # noqa: N802
+        d = self.lienzo._datos_mime(event.mimeData())
+        if d is not None and d.get("origen") is not None and d.get("grupo") == self.lienzo.grupo:
+            event.setDropAction(Qt.DropAction.MoveAction)
+            event.accept()
+
+    def dropEvent(self, event: Any) -> None:  # noqa: N802
+        d = self.lienzo._datos_mime(event.mimeData())
+        if d is None or d.get("origen") is None or d.get("grupo") != self.lienzo.grupo:
+            return
+        _ARRASTRE["resuelto"] = True
+        event.setDropAction(Qt.DropAction.MoveAction)
+        event.accept()
+        origen = tuple(d["origen"])
+        if len(self.lienzo._bloques_sel) > 1 and (0,) + origen in self.lienzo._bloques_sel:
+            self.lienzo.quitar_elegido()
+        else:
+            self.lienzo.quitar(origen)
+
+
+class BarraContextual(QFrame):
+    """Barra contextual inferior del carril (`.ctx-bar`): muestra pista sin selección, o controles del bloque o selección múltiple.
+    Usa distribución con ajuste de línea (`FlowLayout`) para que ningún botón se recorte a media pantalla."""
+
+    def __init__(self, lienzo: AreaBloques) -> None:
+        super().__init__()
+        self.lienzo = lienzo
+        self.setObjectName("barraContextual")
+        self.setStyleSheet(
+            f"QFrame#barraContextual {{ background: #ffffff; border: 1px solid #8fcdd1; border-radius: 6px; }}"
+            f"QFrame#barraContextual QLabel#ctxTexto {{ color: #4a5b6e; font-size: 11.5px; background: transparent; border: 0; }}"
+            f"QFrame#barraContextual QPushButton {{ min-height: 23px; max-height: 25px; padding: 0 9px; border-radius: 4px; "
+            f"border: 1px solid #cdd6e0; background: #f6f8fb; color: #4a5b6e; font-size: 11.5px; font-weight: 600; }}"
+            f"QFrame#barraContextual QPushButton:hover:enabled {{ background: #e4ecf3; color: #16263a; }}"
+            f"QFrame#barraContextual QPushButton[activo=\"true\"] {{ background: {estilo.ACENTO}; border-color: {estilo.ACENTO_OSCURO}; color: #ffffff; }}"
+            f"QFrame#barraContextual QPushButton[activo=\"true\"]:hover {{ background: {estilo.ACENTO_OSCURO}; color: #ffffff; }}"
+            f"QFrame#barraContextual QPushButton[peligro=\"true\"]:hover:enabled {{ background: #fdecea; border-color: #e5a5a5; color: #c62828; }}"
+        )
+        raiz = QVBoxLayout(self)
+        raiz.setContentsMargins(10, 6, 10, 6)
+        raiz.setSpacing(5)
+
+        self.l_texto = QLabel()
+        self.l_texto.setObjectName("ctxTexto")
+        self.l_texto.setWordWrap(True)
+        raiz.addWidget(self.l_texto)
+
+        self._caja_btns = QWidget(self)
+        self._caja_btns.setObjectName("ctxBtns")
+        self._caja_btns.setStyleSheet("QWidget#ctxBtns { background: transparent; }")
+        self._flow = FlowLayout(self._caja_btns, sep=5)
+        raiz.addWidget(self._caja_btns)
+
+        def _btn(texto: str, tip: str, peligro: bool = False) -> QPushButton:
+            b = QPushButton(texto, self._caja_btns)
+            b.setToolTip(tip)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+            if peligro:
+                b.setProperty("peligro", True)
+            self._flow.addWidget(b)
+            return b
+
+        self.b_normal = _btn("Normal", "Quitar negación y flancos")
+        self.b_not = _btn("NOT", "Negar el bloque seleccionado (barra superior)")
+        self.b_sube = _btn("↑", "Flanco de subida")
+        self.b_baja = _btn("↓", "Flanco de bajada")
+        self.b_not_int = _btn("NOT señal", "Negar la señal o fórmula evaluada dentro del temporizador")
+        self.b_envolver = _btn("Envolver ( … )", "Envuelve o desenvuelve en paréntesis")
+        self.b_salir = _btn("Salir a raíz", "Volver a insertar fuera del paréntesis")
+        self.b_quitar = _btn("Quitar", "Quitar la selección (Supr)", peligro=True)
+
+        self.b_normal.clicked.connect(self.lienzo.quitar_modificadores)
+        self.b_not.clicked.connect(lambda: self.lienzo.aplicar_modificador("no"))
+        self.b_sube.clicked.connect(lambda: self.lienzo.aplicar_modificador("sube"))
+        self.b_baja.clicked.connect(lambda: self.lienzo.aplicar_modificador("baja"))
+        self.b_not_int.clicked.connect(self.lienzo.alternar_not_interior_temp)
+        self.b_envolver.clicked.connect(self.lienzo.envolver_elegido)
+        self.b_salir.clicked.connect(self.lienzo.salir_a_raiz)
+        self.b_quitar.clicked.connect(self.lienzo.quitar_elegido)
+        self.actualizar()
+
+    @staticmethod
+    def _marcar(b: QPushButton, activo: bool) -> None:
+        if bool(b.property("activo")) != activo:
+            b.setProperty("activo", activo)
+            b.style().unpolish(b)
+            b.style().polish(b)
+
+    def _ajustar_btns(self) -> None:
+        visibles = any(not b.isHidden() for b in (
+            self.b_normal, self.b_not, self.b_sube, self.b_baja,
+            self.b_not_int, self.b_envolver, self.b_salir, self.b_quitar,
+        ))
+        self._caja_btns.setVisible(visibles)
+        if visibles:
+            w = max(self.width() - 22, 160)
+            h = max(25, self._flow.heightForWidth(w))
+            self._caja_btns.setFixedHeight(h)
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._ajustar_btns()
+
+    def actualizar(self) -> None:
+        info = self.lienzo.info_seleccion()
+        count = info["count"]
+        en_grupo = info["en_grupo"]
+        if count == 0:
+            self.l_texto.setText(
+                "Insertando dentro de ( … ) · Pulsa variables para añadir o sal a raíz."
+                if en_grupo else
+                "Clic en un bloque para editar · Ctrl+clic varios para negar, flanco o envolver en ( … ) · Supr o arrastrar fuera para quitar."
+            )
+            for b in (self.b_normal, self.b_not, self.b_sube, self.b_baja,
+                      self.b_not_int, self.b_envolver, self.b_quitar):
+                b.hide()
+            self.b_salir.setVisible(en_grupo)
+            self._ajustar_btns()
+            return
+        mods = info["mods"]
+        puede_mod = info["puede_mod"]
+        es_par = info["es_par"]
+        es_temp = info["es_temp"]
+        if count > 1:
+            self.l_texto.setText(f"Seleccionados: {count} bloques")
+        else:
+            self.l_texto.setText(f"Seleccionado: {info['nombre']}")
+        for b in (self.b_normal, self.b_not, self.b_sube, self.b_baja):
+            b.setVisible(puede_mod)
+        if puede_mod:
+            self._marcar(self.b_normal, not mods)
+            self._marcar(self.b_not, "no" in mods)
+            self._marcar(self.b_sube, "sube" in mods)
+            self._marcar(self.b_baja, "baja" in mods)
+        self.b_not_int.setVisible(es_temp)
+        if es_temp:
+            self._marcar(self.b_not_int, bool(info.get("temp_neg_int")))
+        self.b_envolver.setText("Quitar paréntesis" if es_par else "Envolver ( … )")
+        self._marcar(self.b_envolver, count > 1)
+        self.b_envolver.show()
+        self.b_salir.setVisible(en_grupo)
+        self.b_quitar.setText(f"Quitar ({count})" if count > 1 else "Quitar")
+        self.b_quitar.show()
+        self._ajustar_btns()
+
+
+class _MarcoCarril(QWidget):
+    """Contenedor `.block-rail` con fondo de puntos `#fbfdff`, área de bloques arriba y barra contextual abajo."""
+
+    def paintEvent(self, event: Any) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor("#fbfdff"))
+        p.drawTiledPixmap(self.rect(), _rejilla(), QPoint(0, 0))
+        p.end()
+
+
 class Programador(QWidget):
-    """Programador por bloques: a la izquierda, el catálogo de variables y etapas, siempre a la vista y con un borde arrastrable; a su
-    derecha, la banda de categorías (Operadores, Temporizadores, Comparaciones, Constantes: clic o arrastre, y las herramientas Copiar
-    fórmula, Pegar y Limpiar) y, debajo, el área de trabajo con la fórmula (en línea si cabe) con el aviso. `fuente()` devuelve las
-    variables {nombre: (papel, tipo)} y las etapas (en notación X) del modelo en curso. `cambiado(texto)` se emite en cada cambio
-    hecho con bloques (no al llamar a `poner`). Con `historial`, Ctrl+Z y Ctrl+Mayús+Z deshacen y rehacen los cambios de bloques; sin
-    él, el deshacer lo pone quien lo usa (`al_deshacer`, `al_rehacer`)."""
+    """Editor de bloques de precisión 2.0.1 (`.editor-grid`):
+    - Izquierda (`208 px`, `#ffffff`, borde derecho `#cdd6e0`): buscador siempre visible + catálogo plano.
+    - Derecha: cinta fija `.op-ribbon` arriba + carril `.block-rail` con flujo directo, zona de papelera y barra contextual `.ctx-bar`."""
 
     cambiado = Signal(str)
-    franja_cambiada = Signal()  # la banda cambió de alto (al cambiar de ancho): el panel que lo contiene puede necesitar más
-    PALETA_MIN, PALETA_INICIAL, PALETA_MAX = 110, 170, 360  # el ancho del catálogo: el de apertura y los límites del borde arrastrable
-    CLAVE_ANCHO = "formulador/ancho_catalogo"  # donde se recuerda (`QSettings`), compartido por todos los programadores
-    CUERPO_MIN = 68  # alto mínimo del catálogo y el área
+    franja_cambiada = Signal()
+    PALETA_MIN, PALETA_INICIAL, PALETA_MAX = 140, 208, 340
+    CLAVE_ANCHO = "formulador/ancho_catalogo"
+    CUERPO_MIN = 220
 
     def __init__(self, fuente: Callable[[], tuple[dict[str, tuple[str, str]], list[str]]], historial: bool = False,
                  grupo: str | None = None, valor: bool = False, compacto: bool = False) -> None:
@@ -2334,109 +3812,147 @@ class Programador(QWidget):
         self.al_rehacer: Callable[[], Any] | None = None
         self._pila: list[Any] = []
         self._rehecho: list[Any] = []
-        # Arriba, la banda de categorías a todo el ancho; debajo, el catálogo a la izquierda (al menos seis fichas visibles) y, a su derecha,
-        # el área y el aviso
+        self.en_fila = False
+        self._adoptada = False
+
         raiz = QVBoxLayout(self)
         raiz.setContentsMargins(0, 0, 0, 0)
-        raiz.setSpacing(5)
-        lay = QBoxLayout(QBoxLayout.Direction.LeftToRight)  # (en ventanas bajas, el catálogo encima: `modo_fila`)
+        raiz.setSpacing(0)
+
+        lay = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         self._lay_cuerpo = lay
-        self.en_fila = False
+        raiz.addLayout(lay, 1)
+
         from .banda_bloques import BandaBloques, BotonCompacto
-        # Las herramientas (Copiar fórmula, Pegar, Limpiar) van en una fila sobre la banda, a la derecha; la ventana de Propiedades las lleva
-        # a la franja del título de su tarjeta (`adoptar_herramientas`) y esta fila se oculta
-        self._fila_herr = QWidget()
-        fh = QHBoxLayout(self._fila_herr)
-        fh.setContentsMargins(0, 0, 0, 0)
-        fh.setSpacing(6)
-        fh.addStretch(1)
-        self.herramientas = QWidget(self)
-        hl = QHBoxLayout(self.herramientas)
-        hl.setContentsMargins(0, 0, 0, 0)
-        hl.setSpacing(6)
-        self._adoptada = False
-        self.b_copiar = BotonCompacto("Copiar fórmula", self.herramientas)
-        self.b_pegar = BotonCompacto("Pegar", self.herramientas)
-        self.b_limpiar = BotonCompacto("Limpiar", self.herramientas)
-        for b, ayuda in ((self.b_copiar, "Copia la fórmula entera (Ctrl+C copia el bloque elegido)"),
-                         (self.b_pegar, "Pega la fórmula copiada, sustituyendo la actual (Ctrl+V la pega en el hueco o el bloque elegido)"),
-                         (self.b_limpiar, "Vacía la fórmula")):
-            b.setToolTip(ayuda)
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.banda = BandaBloques(fuente, self.grupo, valor)
-        # Un valor numérico solo tiene «Limpiar» (como la maqueta): lo que se arma es corto y no se copia de una ventana a otra
-        for b in ([self.b_limpiar] if valor else [self.b_copiar, self.b_pegar, self.b_limpiar]):
-            hl.addWidget(b)
-        fh.addWidget(self.herramientas)
-        self.banda.anadir_herramientas([self.b_copiar, self.b_pegar, self.b_limpiar], flujo=False)
-        if valor:
-            self.b_copiar.hide()
-            self.b_pegar.hide()
-        self.categorias = self.banda.categorias  # los rótulos de las categorías de la banda, por su clave
-        self.banda.alto_cambiado.connect(self._banda_cambiada)
-        # El catálogo: su título y, debajo, las fichas
+
+        # -- Columna izquierda: catálogo con búsqueda fija siempre visible (.catalog-pane) --
+        self._col_catalogo = QFrame()
+        self._col_catalogo.setObjectName("colCatalogo")
+        self._col_catalogo.setStyleSheet(
+            "QFrame#colCatalogo { background: #ffffff; border: 0; border-right: 1px solid #cdd6e0; }"
+            "QFrame#cajaBuscarCatalogo { background: #f8fafc; border: 0; border-bottom: 1px solid #e5ebf2; }"
+            "QFrame#cajaBuscarCatalogo QLineEdit { min-height: 24px; max-height: 26px; font-size: 12px; "
+            "padding: 2px 8px; border-radius: 4px; border: 1px solid #cdd6e0; background: #ffffff; color: #16263a; }"
+            "QFrame#cajaBuscarCatalogo QLineEdit:focus { border-color: #0b6e75; }"
+        )
+        col = QVBoxLayout(self._col_catalogo)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(0)
+
         if valor:
             self.paleta = PaletaBloques(fuente, self.grupo, columna=True, valor=True)
+            self._filtro_num = QLineEdit()
+            self._filtro_num.setPlaceholderText("Filtrar numéricas…")
+            self._filtro_num.setClearButtonEnabled(True)
+            self._filtro_num.textChanged.connect(self.paleta.filtrar_texto)
+            campo_buscar = self._filtro_num
         else:
             from .paleta_variables import PaletaVariables
             self.paleta = PaletaVariables(fuente, self.grupo, columna=True)
+            self.paleta.filtro_externo = True
+            self.paleta.filtro.setPlaceholderText("Filtrar variables…")
+            campo_buscar = self.paleta.filtro
+            self._filtro_num = None
+
+        self._caja_buscar = QFrame()
+        self._caja_buscar.setObjectName("cajaBuscarCatalogo")
+        bl = QVBoxLayout(self._caja_buscar)
+        bl.setContentsMargins(8, 7, 8, 7)
+        bl.setSpacing(0)
+        bl.addWidget(campo_buscar)
+        col.addWidget(self._caja_buscar)
+
+        self.t_catalogo = QLabel("Variables numéricas" if valor else "Variables y etapas")
+        self.t_catalogo.hide()  # reemplazado por el buscador superior siempre visible (maqueta 2.0.1)
+
         self.paleta.elegido.connect(self._elegido)
         self._sc_paleta = _desplazable(self.paleta)
-        self.t_catalogo = QLabel("Variables numéricas" if valor else "Variables y etapas")
-        self.t_catalogo.setStyleSheet(f"color: {estilo.TINTA_2}; font-weight: 600; background: transparent; padding: 0 {estilo.E1}px;")
-        self.t_catalogo.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        self._col_catalogo = QWidget()
-        col = QVBoxLayout(self._col_catalogo)
-        col.setContentsMargins(0, 0, 0, 0)
-        col.setSpacing(estilo.E1)
-        col.addWidget(self.t_catalogo)
+        self._sc_paleta.setStyleSheet("QScrollArea { background: #ffffff; border: 0; }")
         col.addWidget(self._sc_paleta, 1)
         lay.addWidget(self._col_catalogo)
+
         self.asa = AsaAncho(self._col_catalogo)
+        self.asa.setFixedWidth(4)
         self.asa.movida.connect(self.poner_ancho_catalogo)
         self.asa.soltada.connect(self._recordar_ancho)
         lay.addWidget(self.asa)
         if not valor:
             self.paleta.geometria_cambiada.connect(self._medir_paleta)
-        # El área de trabajo y, debajo, el aviso
+
+        # -- Columna derecha: cinta .op-ribbon + carril .block-rail con .ctx-bar --
         derecha = QVBoxLayout()
-        derecha.setSpacing(4)
-        raiz.addWidget(self._fila_herr)
-        raiz.addWidget(self.banda)  # la banda a todo el ancho, sobre el catálogo y el área (como la maqueta)
-        raiz.addLayout(lay, 1)
+        derecha.setContentsMargins(0, 0, 0, 0)
+        derecha.setSpacing(0)
+
+        self._fila_herr = QWidget()
+        self._fila_herr.hide()
+        self.herramientas = QWidget(self)
+        self.herramientas.hide()
+
+        self.banda = BandaBloques(fuente, self.grupo, valor)
+        self.b_copiar = BotonCompacto("Copiar", self.banda)
+        self.b_pegar = BotonCompacto("Pegar", self.banda)
+        self.b_deshacer = BotonCompacto("↶", self.banda)
+        self.b_rehacer = BotonCompacto("↷", self.banda)
+        self.b_limpiar = BotonCompacto("Limpiar", self.banda)
+        for b, ayuda in (
+            (self.b_copiar, "Copia la fórmula entera (Ctrl+C copia el bloque elegido)"),
+            (self.b_pegar, "Pega la fórmula copiada"),
+            (self.b_deshacer, "Deshacer (Ctrl+Z)"),
+            (self.b_rehacer, "Rehacer (Ctrl+Y)"),
+            (self.b_limpiar, "Vacía la fórmula"),
+        ):
+            b.setToolTip(ayuda)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.banda.anadir_herramientas([self.b_copiar, self.b_pegar, self.b_deshacer, self.b_rehacer, self.b_limpiar], flujo=True)
+        self.categorias = self.banda.categorias
+        self.banda.alto_cambiado.connect(self._banda_cambiada)
+        derecha.addWidget(self.banda)
+
+        self.marco_carril = _MarcoCarril()
+        mc = QVBoxLayout(self.marco_carril)
+        mc.setContentsMargins(0, 0, 0, 10)
+        mc.setSpacing(8)
+
         self.lienzo = AreaBloques(fuente, self.grupo, valor)
         self.lienzo.modificado.connect(self._tras_cambio)
         self.lienzo.avisa.connect(self._avisar)
         self.lienzo.arrastrando.connect(self._arrastrando)
-        derecha.addWidget(_desplazable(self.lienzo), 1)  # el área es la que crece
-        pie = QHBoxLayout()
-        self.pie = pie
-        pie.setContentsMargins(0, 0, 0, 0)
-        self.aviso = QLabel()
-        self.aviso.setWordWrap(True)
+        sc_lienzo = _desplazable(self.lienzo)
+        sc_lienzo.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: 0; }")
+        mc.addWidget(sc_lienzo, 1)
+
+        # Aviso / Zona discreta de papelera sobre la barra contextual
+        caja_pie = QWidget()
+        caja_pie.setStyleSheet("background: transparent;")
+        cpl = QVBoxLayout(caja_pie)
+        cpl.setContentsMargins(12, 0, 12, 0)
+        cpl.setSpacing(6)
+        self.aviso = _ZonaPapelera(self.lienzo)
         self._estilo_aviso(False)
         self.aviso.setVisible(False)
-        self.aviso.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)  # no impone su ancho
-        pie.addWidget(self.aviso, 1)
-        from .banda_bloques import BotonCompacto
-        self.b_envolver = BotonCompacto("Envolver ( … )", self)
-        self.b_quitar = BotonCompacto("Quitar (Supr)", self)
-        self.b_envolver.setToolTip("Envuelve el bloque elegido entre paréntesis")
-        self.b_quitar.setToolTip("Quita el bloque elegido (también Supr, o arrastrarlo fuera)")
-        self.banda.anadir_herramientas([self.b_envolver, self.b_quitar], flujo=False)  # (solo su tamaño)
-        pie.addWidget(self.b_envolver, 0, Qt.AlignmentFlag.AlignRight)
-        pie.addWidget(self.b_quitar, 0, Qt.AlignmentFlag.AlignRight)
-        derecha.addLayout(pie)
+        cpl.addWidget(self.aviso)
+
+        self.barra_ctx = BarraContextual(self.lienzo)
+        cpl.addWidget(self.barra_ctx)
+        mc.addWidget(caja_pie)
+        derecha.addWidget(self.marco_carril, 1)
+
+        # Alias para compatibilidad con código/pruebas que inspeccionan `b_envolver` y `b_quitar`
+        self.b_envolver = self.barra_ctx.b_envolver
+        self.b_quitar = self.barra_ctx.b_quitar
+        self.pie = cpl
+
         lay.addLayout(derecha, 1)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.banda.insertar.connect(self.lienzo.insertar)
         self.b_copiar.clicked.connect(self.lienzo.copiar_formula)
         self.b_pegar.clicked.connect(self.lienzo.pegar_formula)
+        self.b_deshacer.clicked.connect(self.deshacer)
+        self.b_rehacer.clicked.connect(self.rehacer)
         self.b_limpiar.clicked.connect(self.lienzo.limpiar)
-        self.b_envolver.clicked.connect(self.lienzo.envolver_elegido)
-        self.b_quitar.clicked.connect(self.lienzo.quitar_elegido)
         self.lienzo.seleccion_cambiada.connect(self._herramientas_al_dia)
         self.lienzo.modificado.connect(self._herramientas_al_dia)
         QApplication.clipboard().dataChanged.connect(self._herramientas_al_dia)
@@ -2450,26 +3966,14 @@ class Programador(QWidget):
         self._cargar_paleta("vnum" if valor else "variables")
 
     # -- herramientas y aspecto
-    def adoptar_herramientas(self, anfitrion: QLayout) -> None:
-        """Lleva las herramientas (Copiar fórmula, Pegar, Limpiar) a `anfitrion` (la franja del título de una tarjeta) y quita su fila."""
-        if not self._adoptada or self.herramientas.parentWidget() is not anfitrion.parentWidget():
-            anfitrion.addWidget(self.herramientas)
-        self._adoptada = True
-        self._fila_herr.hide()
-        self.herramientas.setVisible(self.isVisible())
-
     def showEvent(self, event: Any) -> None:  # noqa: N802
         super().showEvent(event)
-        if self._adoptada:
-            self.herramientas.show()
         self.poner_ancho_catalogo(self._ancho_recordado())
         self._cargar_paleta(self.paleta.clave)
         self._herramientas_al_dia()
 
     def hideEvent(self, event: Any) -> None:  # noqa: N802
         super().hideEvent(event)
-        if self._adoptada:
-            self.herramientas.hide()
 
     def escalar(self) -> None:
         """Cambió la escala de letra y de controles: los botones y la banda se miden otra vez."""
@@ -2480,42 +3984,44 @@ class Programador(QWidget):
         self.updateGeometry()
 
     def _herramientas_al_dia(self, *_: Any) -> None:
-        """Copiar y Limpiar valen con una fórmula; Pegar, con una fórmula copiada que sirva en esta área."""
+        """Actualiza los botones de la cinta y la barra contextual `.ctx-bar`."""
         hay = self.lienzo.arbol is not None
         self.b_copiar.setEnabled(hay)
         self.b_limpiar.setEnabled(hay)
         self.b_pegar.setEnabled(self.lienzo.puede_pegar())
-        self.b_envolver.setEnabled(self.lienzo.hay_seleccion())
-        self.b_quitar.setEnabled(self.lienzo.hay_seleccion())
+        if self.historial:
+            self.b_deshacer.setEnabled(bool(self._pila))
+            self.b_rehacer.setEnabled(bool(self._rehecho))
+        self.barra_ctx.actualizar()
 
     def _banda_cambiada(self) -> None:
         self.updateGeometry()
         self.franja_cambiada.emit()
 
     def _estilo_aviso(self, arrastre: bool) -> None:
-        """El aviso del pie: ámbar para un aviso; mientras se arrastra un bloque fuera del área, el aviso de que soltarlo lo quita."""
         if arrastre:
-            self.aviso.setStyleSheet(f"color: {estilo.ERROR}; background: {estilo.ERROR_FONDO}; border: 1px dashed {estilo.ERROR}; "
-                                     f"border-radius: {estilo.R_S}px; padding: 2px {estilo.E2}px; font-weight: 600;")
+            self.aviso.setStyleSheet(
+                f"color: #c62828; background: {estilo.ERROR_FONDO}; border: 1.5px dashed #e5a5a5; "
+                f"border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600;"
+            )
         else:
-            self.aviso.setStyleSheet("color: #B45309")
+            self.aviso.setStyleSheet("color: #b45309; font-size: 11.5px; background: transparent;")
 
     def _arrastrando(self, en_curso: bool) -> None:
-        """Mientras se arrastra un bloque del área, el pie dice que soltarlo fuera lo quita (`ERROR_FONDO`); al soltar, se retira."""
         if en_curso:
             self._estilo_aviso(True)
-            self.aviso.setText("Suelta fuera del lienzo para quitar este bloque")
+            self.aviso.setText("Suelta fuera del carril para quitar este bloque")
             self.aviso.setVisible(True)
         else:
             self._estilo_aviso(False)
             self._poner_aviso("")
 
     def hasHeightForWidth(self) -> bool:  # noqa: N802
-        return False  # (la banda ajusta su propio alto y avisa con `franja_cambiada`; el alto no depende del ancho que se le dé)
+        return False
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802
-        alto = self.banda.height() + 5 + (0 if self._adoptada else self._fila_herr.sizeHint().height() + 5) + (self.CUERPO_MIN + 4 if self.compacto else self.CUERPO_MIN)
-        return QSize((180 if self.en_fila else self._col_catalogo.width() + self.asa.width() + 180), alto)
+        alto = self.banda.height() + self.CUERPO_MIN
+        return QSize((200 if self.en_fila else self._col_catalogo.width() + self.asa.width() + 260), alto)
 
     def sizeHint(self) -> QSize:  # noqa: N802
         natural = super().sizeHint()
@@ -2560,7 +4066,6 @@ class Programador(QWidget):
         self._sc_paleta.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded if fila else Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._sc_paleta.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff if fila else Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.asa.setVisible(not fila)
-        self.t_catalogo.setVisible(not fila)
         if not fila:
             self._sc_paleta.setMinimumHeight(0)
             self._sc_paleta.setMaximumHeight(16777215)

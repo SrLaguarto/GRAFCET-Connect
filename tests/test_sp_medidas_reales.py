@@ -43,7 +43,7 @@ class MedidasRealesP(unittest.TestCase):
         medidas = []
         for octeto in ip.cajas:
             texto = octeto.fontMetrics().horizontalAdvance("888")
-            self.assertEqual(octeto.width(), texto + 10)
+            self.assertEqual(octeto.width(), octeto.fontMetrics().horizontalAdvance("888") + 10)
             self.assertEqual(octeto.alignment(), Qt.AlignmentFlag.AlignCenter)
             opcion = QStyleOptionFrame()
             octeto.initStyleOption(opcion)
@@ -51,10 +51,11 @@ class MedidasRealesP(unittest.TestCase):
             self.assertGreaterEqual(interior.width() - 4, texto)
             octeto.setText("888")
             medidas.append({"campo": "octeto", "texto": texto, "ancho": octeto.width()})
-        for nombre, spin in (("puerto", puerto), ("esclavo", unidad)):
+        for nombre, spin, cifras in (("puerto", puerto, "88888"), ("esclavo", unidad, "8888")):
             texto = spin.fontMetrics().horizontalAdvance("888")
-            self.assertGreaterEqual(spin.width(), texto + 28)
-            self.assertLessEqual(spin.width(), texto + 28 + 4)
+            esperado = spin.fontMetrics().horizontalAdvance(cifras) + 28
+            self.assertGreaterEqual(spin.width(), esperado)
+            self.assertLessEqual(spin.width(), esperado + 4)
             self.assertGreaterEqual(spin.lineEdit().width() - 4, texto)
             spin.lineEdit().setText("888")
             medidas.append({"campo": nombre, "texto": texto, "ancho": spin.width()})
@@ -127,7 +128,7 @@ class MedidasRealesP(unittest.TestCase):
                                         spin.fontMetrics().horizontalAdvance("65535"))
                 spin.setValue(502)
                 hc._bombear(2)
-                self.assertEqual(spin.width(), spin.fontMetrics().horizontalAdvance("888") + 28)
+                self.assertEqual(spin.width(), spin.fontMetrics().horizontalAdvance("88888") + 28)
         finally:
             c.cerrar()
 

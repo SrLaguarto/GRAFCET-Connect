@@ -1,7 +1,7 @@
 """Catálogo de fichas, arrastre al dibujo y desborde de Favoritos."""
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QIconEngine, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import QApplication, QMenu, QSizePolicy, QToolButton, QWidget, QWidgetAction
 
@@ -131,7 +131,7 @@ class _MotorMini(QIconEngine):
 
     def scaledPixmap(self, tamano, modo, estado, escala):
         """Qt entrega el tamaño lógico: se pinta directamente en los píxeles físicos de cada DPR."""
-        fisico = QSize(round(tamano.width() * escala), round(tamano.height() * escala))
+        fisico = QSize(int(tamano.width() * escala + 0.5), int(tamano.height() * escala + 0.5))
         imagen = QPixmap(fisico)
         imagen.setDevicePixelRatio(escala)
         imagen.fill(Qt.GlobalColor.transparent)
@@ -159,8 +159,8 @@ class BotonFavorito(QToolButton):
         self.clicked.connect(lambda: barra.paleta.ayuda.emit(Paleta.texto_ayuda(clave)))
         self.setAutoRaise(True)
         self.setStyleSheet(
-            "QToolButton { border: none; background: transparent; padding: 0; min-height: 0; }"
-            f"QToolButton:hover {{ background: {estilo.HOVER}; }}")
+            "QToolButton { border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 0; min-height: 0; }"
+            f"QToolButton:hover {{ background: {estilo.HOVER}; border-color: {estilo.BORDE}; }}")
         if menu is not None:
             self.setText(Paleta.nombre(clave))
             self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -181,6 +181,34 @@ class BotonFavorito(QToolButton):
             self.menu.hide()
         self.barra.paleta.arrastrar_elemento(self.clave, self)
         self.setDown(False)
+
+    def sizeHint(self):  # noqa: N802
+        if self.menu is None:
+            return super().sizeHint()
+        tam = self.iconSize()
+        ancho = self.fontMetrics().horizontalAdvance(self.text())
+        return QSize(8 + tam.width() + 8 + ancho + 14, max(estilo.ALTO_CONTROL, tam.height() + 8))
+
+    def paintEvent(self, evento):  # noqa: N802
+        if self.menu is None:
+            super().paintEvent(evento)
+            return
+        pintor = QPainter(self)
+        pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
+        r = QRectF(self.rect()).adjusted(1, 1, -1, -1)
+        if self.isDown() or self.underMouse():
+            pintor.setPen(QPen(QColor(estilo.BORDE), 1))
+            pintor.setBrush(QColor(estilo.HOVER))
+            pintor.drawRoundedRect(r, 4, 4)
+        tam = self.iconSize()
+        y_ico = (self.height() - tam.height()) // 2
+        self.icon().paint(pintor, QRect(8, y_ico, tam.width(), tam.height()))
+        pintor.setFont(self.font())
+        pintor.setPen(QColor(estilo.TINTA))
+        x_txt = 8 + tam.width() + 8
+        rect_txt = QRect(x_txt, 0, max(1, self.width() - x_txt - 8), self.height())
+        pintor.drawText(rect_txt, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self.text())
+        pintor.end()
 
     def mouseReleaseEvent(self, evento):
         self._pulsado = None
@@ -237,18 +265,18 @@ class BarraFavoritos(QWidget):
         self.ocultos = self.orden[cantidad:]
         for clave, boton in self.botones.items():
             boton.setVisible(clave in self._visibles)
-        alto = self.height()
+        alto = max(1, self.height() - 6)
         for i, clave in enumerate(self._visibles):
-            self.botones[clave].setGeometry(estilo.E2 + i * ancho, 0, ancho, alto)
+            self.botones[clave].setGeometry(estilo.E2 + i * ancho, 3, ancho, alto)
         self.desborde.setVisible(hay_desborde)
-        self.desborde.setGeometry(estilo.E2 + cantidad * ancho, 0, ancho, alto)
+        self.desborde.setGeometry(estilo.E2 + cantidad * ancho, 3, ancho, alto)
         self.update()
 
     def resizeEvent(self, evento):
         super().resizeEvent(evento)
-        self.lado_icono = round((self.height() + LADO_MINI) / 2)
+        self.lado_icono = max(20, min(26, round((self.height() - 6 + LADO_MINI) / 2) - 2))
         if self.window().width() <= 960:
-            self.lado_icono = 30
+            self.lado_icono = 24
         for boton in self.botones.values():
             boton.setIconSize(QSize(self.lado_icono, self.lado_icono))
         self._disponer()
@@ -256,9 +284,11 @@ class BarraFavoritos(QWidget):
 
     def paintEvent(self, evento):
         pintor = QPainter(self)
-        pintor.setPen(QPen(QColor(estilo.BORDE), 1))
-        for x in (0, self.width() - 1):
-            pintor.drawLine(x, estilo.E1, x, self.height() - estilo.E1)
+        pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
+        r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        pintor.setPen(QPen(QColor(estilo.BORDE_FUERTE), 1))
+        pintor.setBrush(QColor(estilo.SUPERFICIE))
+        pintor.drawRoundedRect(r, estilo.R_M, estilo.R_M)
         pintor.end()
 
     def foco(self):
@@ -271,6 +301,10 @@ class BarraFavoritos(QWidget):
 
     def crear_menu_desborde(self):
         menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background: #ffffff; border: 1px solid {estilo.BORDE_CONTROL}; "
+            f"border-radius: 8px; padding: 4px; }}"
+        )
         for clave in self.ocultos:
             accion = QWidgetAction(menu)
             accion.setText(Paleta.nombre(clave))

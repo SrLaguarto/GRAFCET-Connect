@@ -17,9 +17,9 @@ from typing import Any
 import re
 import unicodedata
 
-from PySide6.QtCore import QEvent, QTimer, Qt, Signal, QSize
-from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QKeySequence
-from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QComboBox, QHeaderView, QLabel, QPushButton, QGridLayout, QMenu, QSizePolicy,
+from PySide6.QtCore import QEvent, QRectF, QTimer, Qt, Signal, QSize
+from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QKeySequence, QPainter
+from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QComboBox, QFrame, QHeaderView, QLabel, QPushButton, QGridLayout, QMenu, QSizePolicy,
                                QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from shiboken6 import isValid
@@ -101,13 +101,33 @@ def nombre_tipo(t: dict[str, Any]) -> str:
     return {"decimal": f"Decimal ({t.get('scale')})", "duration": "Duración"}.get(kind, str(kind))
 
 
+_COLOR_FRANJA = {
+    "input": estilo.ACENTO,
+    "output": estilo.SIMULACION,
+    "internal": "#b45309",
+    "num": "#0369a1",
+}
+
+
 class _DelegadoCombo(QStyledItemDelegate):
     """Papel y Tipo se ven como texto; al editar la celda aparece el desplegable con las opciones. Al elegir, se aplica y
     el desplegable se cierra."""
 
+    FRANJA_ESPACIO = 11  # espacio reservado a la izquierda en la columna Nombre para la franja de papel/tipo
+
     def __init__(self, panel: "PanelVariables") -> None:
         super().__init__(panel.tabla)
         self.panel = panel
+
+    def _color_franja(self, fila: int) -> str | None:
+        if not 0 <= fila < len(self.panel._filas):
+            return None
+        f = self.panel._filas[fila]
+        if f.get("blanca"):
+            return None
+        if f.get("tipo", {}).get("kind", "bool") != "bool":
+            return _COLOR_FRANJA["num"]
+        return _COLOR_FRANJA.get(f.get("papel", "input"), estilo.ACENTO)
 
     def initStyleOption(self, option: Any, index: Any) -> None:  # noqa: N802
         """Lo que se ve en la celda: el **nombre entero**, partido por los «_» en las líneas que haga falta (`ContextoNombres.lineas`: la fila
@@ -117,16 +137,52 @@ class _DelegadoCombo(QStyledItemDelegate):
         if not option.text:
             if index.column() == 0 and 0 <= index.row() < len(self.panel._filas) and self.panel._filas[index.row()].get("blanca"):
                 option.text = MARCADOR  # (la fila en blanco del final: su texto de ayuda, en gris)
-                option.palette.setColor(option.palette.ColorRole.Text, QColor(estilo.TINTA_2))
-                option.palette.setColor(option.palette.ColorRole.HighlightedText, QColor(estilo.TINTA_2))
+                option.font.setItalic(True)
+                option.palette.setColor(option.palette.ColorRole.Text, QColor(estilo.TINTA_3))
+                option.palette.setColor(option.palette.ColorRole.HighlightedText, QColor(estilo.TINTA_3))
             return
         if index.column() == 0:
-            margen = 2 * (QApplication.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1) + 2
-            option.text = SALTO.join(self.panel.contexto.lineas(option.text, QFontMetrics(option.font), option.rect.width() - margen))
+            option.font.setWeight(QFont.Weight.DemiBold)
+            margen = 2 * (QApplication.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1) + 2 + self.FRANJA_ESPACIO
+            option.text = SALTO.join(self.panel.contexto.lineas(option.text, QFontMetrics(option.font), max(32, option.rect.width() - margen)))
             option.textElideMode = Qt.TextElideMode.ElideNone
             option.features &= ~QStyleOptionViewItem.ViewItemFeature.WrapText  # (las líneas son las de arriba)
-        elif not self.panel.completo:
-            option.text = (abreviar_papel if index.column() == 1 else abreviar_tipo)(option.text)
+        else:
+            option.palette.setColor(option.palette.ColorRole.Text, QColor(estilo.TINTA_2))
+            if not self.panel.completo:
+                option.text = (abreviar_papel if index.column() == 1 else abreviar_tipo)(option.text)
+
+    def paint(self, painter: QPainter, option: Any, index: Any) -> None:  # noqa: N802
+        if index.column() != 0:
+            super().paint(painter, option, index)
+            return
+        color = self._color_franja(index.row())
+        if not color:
+            super().paint(painter, option, index)
+            return
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        # Fondo y borde inferior de la celda completa
+        estilo_w = opt.widget.style() if opt.widget else QApplication.style()
+        opt_fondo = QStyleOptionViewItem(opt)
+        opt_fondo.text = ""
+        estilo_w.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt_fondo, painter, opt.widget)
+        # Franja vertical de 3×15 px a la izquierda
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(color))
+        y = opt.rect.top() + (opt.rect.height() - 15) / 2.0
+        painter.drawRoundedRect(QRectF(opt.rect.left() + 6, y, 3.0, 15.0), 1.5, 1.5)
+        painter.restore()
+        # Texto desplazado a la derecha de la franja
+        opt_txt = QStyleOptionViewItem(opt)
+        opt_txt.rect = opt.rect.adjusted(self.FRANJA_ESPACIO, 0, 0, 0)
+        opt_txt.backgroundBrush = QBrush()
+        opt_txt.state &= ~QStyle.StateFlag.State_Selected
+        if opt.state & QStyle.StateFlag.State_Selected:
+            opt_txt.palette.setColor(opt_txt.palette.ColorRole.Text, opt.palette.color(opt.palette.ColorRole.HighlightedText))
+        estilo_w.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt_txt, painter, opt.widget)
 
     def sizeHint(self, option: Any, index: Any) -> QSize:  # noqa: N802
         """Una línea: el alto de fila de siempre (26 px, 30 a pantalla completa); un nombre partido en varias, lo que miden sus líneas más un poco
@@ -229,6 +285,7 @@ class _Aviso(QLabel):
 
 class PanelVariables(QWidget):
     detalle = Signal(str)  # la línea de detalle de la fila actual (nombre entero, papel y tipo): la ventana la pone en su barra de estado
+    conteo = Signal(int)   # número de variables reales en el modelo (para la píldora del encabezado)
 
     def __init__(self) -> None:
         super().__init__()
@@ -247,7 +304,9 @@ class PanelVariables(QWidget):
         self.parpadeo.cambia.connect(self._pintar)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
         self.tabla = _Tabla(0, len(COLUMNAS))
+        self.tabla.setShowGrid(False)
         self.tabla.setHorizontalHeader(CabeceraCompacta(Qt.Orientation.Horizontal, self.tabla))  # (su texto, sin márgenes de más: «Nombre» entero)
         self.tabla.suprimir.connect(self.quitar_seleccion)
         self.tabla.pegar.connect(self.pegar_portapapeles)
@@ -262,7 +321,7 @@ class PanelVariables(QWidget):
         self.tabla.verticalHeader().setDefaultSectionSize(self._alto_fila())  # filas de 26 px (30 a pantalla completa): caben cinco con sus botones a 1366×768 y Propiedades abierto
         self.tabla.verticalHeader().setMinimumSectionSize(self._alto_fila())  # (un nombre partido en dos o tres líneas hace crecer su fila: `_alturas_filas`)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.tabla.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.tabla.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         cab = self.tabla.horizontalHeader()
         cab.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         cab.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # el nombre se lleva lo que sobra (`ReparteColumnas` le da, como poco, sus 96 px)
@@ -278,19 +337,25 @@ class PanelVariables(QWidget):
         self.tabla.entered.connect(lambda indice: self._detallar(indice.row()))
         self.tabla.viewport().installEventFilter(self)
         self.tabla.clicked.connect(self._clic)
-        self.tabla.setMinimumHeight(24)
+        self.tabla.setMinimumHeight(80)
         self.tabla.itemChanged.connect(self._editado)
         self.tabla.currentCellChanged.connect(lambda fila, *_: self._detallar(fila))
         self.tabla.horizontalHeader().geometriesChanged.connect(self._ajustar_tabla)
         self.ancho_nominal = 0  # el ancho útil de la tabla con el panel como se abre (lo pone la ventana con el ancho de sus paneles laterales); 0: el de ahora
         self.reparto = ReparteColumnas(self.tabla, 0, NOMBRE_MIN, self._planes, self._elegir_plan, self._ajustar_tabla,
                                        lambda: self.ancho_nominal or self.tabla.viewport().width())
-        lay.addWidget(self.tabla)
+        lay.addWidget(self.tabla, 1)
+        pie = QFrame()
+        pie.setObjectName("pieVariables")
+        pie.setStyleSheet(f"QFrame#pieVariables {{ background: {estilo.SUPERFICIE_2}; border-top: 1px solid {estilo.BORDE}; }}")
+        pl = QVBoxLayout(pie)
+        pl.setContentsMargins(8, 8, 8, 6)
+        pl.setSpacing(6)
         cont = self.cont = QWidget()
         cont.setStyleSheet(self._hoja_botones())
         fila = QGridLayout(cont)
         fila.setContentsMargins(0, 0, 0, 0)
-        fila.setSpacing(estilo.E1)
+        fila.setSpacing(6)
         fila.setColumnStretch(0, 1)
         fila.setColumnStretch(1, 1)
         self.b_nuevas: dict[str, QPushButton] = {}
@@ -301,18 +366,23 @@ class PanelVariables(QWidget):
             b.clicked.connect(lambda _=False, p=papel: self.nueva(p))
             self.b_nuevas[papel] = b
         self.b_quitar = QPushButton("Eliminar")
+        self.b_quitar.setObjectName("botonEliminarVar")
         self.b_quitar.setToolTip("Solo si no se usa en ninguna receptividad ni acción")
         self.b_quitar.clicked.connect(self.quitar)
-        for i, b in enumerate((*self.b_nuevas.values(), self.b_quitar)):  # botones de la hoja global: 36 px de alto, texto entero
+        for i, b in enumerate((*self.b_nuevas.values(), self.b_quitar)):  # botones limpios 2×2 sobre el pie
             b.setMinimumWidth(self._ancho_boton(b.text()))
             b.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
             fila.addWidget(b, i // 2, i % 2)
-        lay.addWidget(cont)
-        self.msg = _Aviso()  # sin texto no ocupa alto: así con Propiedades abierto a 1366×768 el panel no necesita barra por fuera
+        pl.addWidget(cont)
+        self.msg = _Aviso()  # sin texto no ocupa alto
         self.msg.setWordWrap(True)
         self.msg.hide()
-        lay.addWidget(self.msg)
-        lay.addStretch(1)
+        pl.addWidget(self.msg)
+        self.l_pista = QLabel("Edita nombre, papel o tipo directo en la tabla · Ctrl+V admite Excel.")
+        self.l_pista.setWordWrap(True)
+        self.l_pista.setStyleSheet(f"color: {estilo.TINTA_3}; font-size: 10.5px; background: transparent;")
+        pl.addWidget(self.l_pista)
+        lay.addWidget(pie)
 
     @staticmethod
     def _alto_fila() -> int:
@@ -320,18 +390,22 @@ class PanelVariables(QWidget):
 
     @staticmethod
     def _hoja_botones() -> str:
-        """Los botones de este panel miden `ALTO_CONTROL_COMPACTO` (26 px, 28 a pantalla completa): con Propiedades abierto, a 1366×768, el panel
-        de Variables no tiene alto para los de la hoja global y se le pondría una barra de desplazamiento por fuera."""
-        alto = estilo.ALTO_CONTROL_COMPACTO
-        return (f"QPushButton {{ min-height: {alto - 2}px; }} "
-                f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; min-height: {alto - 4}px; padding: 0 11px; }}")
+        """Botones 2×2 limpios en el pie del panel Variables (estilo v2)."""
+        alto = estilo.ALTO_CONTROL_COMPACTO + 2
+        return (f"QPushButton {{ min-height: {alto - 2}px; border-radius: 5px; border: 1px solid {estilo.BORDE_FUERTE}; "
+                f"background: {estilo.SUPERFICIE}; color: {estilo.TINTA}; font-size: 11.5px; font-weight: 600; padding: 0 8px; }} "
+                f"QPushButton:hover {{ background: {estilo.HOVER}; border-color: {estilo.ACENTO}; color: {estilo.ACENTO_OSCURO}; }} "
+                f"QPushButton#botonEliminarVar:hover {{ background: {estilo.ERROR_FONDO}; border-color: {estilo.ERROR}; color: {estilo.ERROR}; }} "
+                f"QPushButton[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; min-height: {alto - 4}px; padding: 0 7px; }}")
 
     @staticmethod
     def _hoja_tabla() -> str:
-        # (sin marco propio: los 4 px del marco transparente de la hoja global son del nombre; el anillo de foco sale con el teclado)
-        # (el editor de una celda —el nombre, la lista de papel o de tipo— no pasa del alto de su fila: lo garantiza la regla de la hoja global
-        # para los controles dentro de vistas de elementos)
-        return (f"QHeaderView::section {{ padding: 4px 4px; text-align: left; }} QTableWidget {{ font-size: {estilo.T_PEQUENA}px; border: 0; }} "
+        return (f"QHeaderView::section {{ padding: 5px 6px; text-align: left; background: {estilo.SUPERFICIE_3}; "
+                f"color: {estilo.TINTA_2}; font-size: 11px; font-weight: 600; border: 0; border-bottom: 1px solid {estilo.BORDE}; }} "
+                f"QTableWidget {{ font-size: {estilo.T_PEQUENA}px; border: 0; background: {estilo.SUPERFICIE}; "
+                f"selection-background-color: {estilo.ACENTO_SUAVE}; selection-color: {estilo.TINTA}; }} "
+                f"QTableWidget::item {{ border-bottom: 1px solid #edf2f7; padding: 2px 4px; }} "
+                f"QTableWidget::item:selected {{ background: {estilo.ACENTO_SUAVE}; color: {estilo.TINTA}; }} "
                 f"QTableWidget[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; }}")
 
     def _planes(self) -> list[dict[str, Any]]:
@@ -340,8 +414,8 @@ class PanelVariables(QWidget):
         sus 96 px, así que las palabras enteras salen donde caben (a pantalla completa, o con el panel ensanchado) y las abreviaturas donde no."""
         fm = QFontMetrics(self.fuente)
 
-        def ancho(textos: list[str], cabecera: str, forma: Any) -> int:  # (el texto más los 3 px de margen de la celda a cada lado, y 2 px de holgura)
-            return max([fm.horizontalAdvance(forma(t)) + 8 for t in textos] + [fm.horizontalAdvance(cabecera) + 8])
+        def ancho(textos: list[str], cabecera: str, forma: Any) -> int:  # (el texto más el relleno de celda de 4 px a cada lado y holgura)
+            return max([fm.horizontalAdvance(forma(t)) + 16 for t in textos] + [fm.horizontalAdvance(cabecera) + 14])
         papeles, tipos = [t for _, t in PAPELES], [t for _, t in TIPOS]
         return [{"anchos": {1: ancho(papeles, "Papel", str), 2: ancho(tipos, "Tipo", str)}, "completo": True},
                 {"anchos": {1: ancho(papeles, "Papel", abreviar_papel), 2: ancho(tipos, "Tipo", abreviar_tipo)}, "completo": False}]
@@ -431,6 +505,7 @@ class PanelVariables(QWidget):
             self.tabla.selectRow([f["id"] for f in self._filas].index(actual))
         self._ajustar_tabla()
         self._pintar()
+        self.conteo.emit(len(vs))
 
     def _detallar(self, fila: int) -> None:
         """Con una fila elegida (con el ratón o con las flechas), su nombre entero, papel y tipo: así un nombre elidido se lee sin
@@ -469,10 +544,7 @@ class PanelVariables(QWidget):
                    + sum(self.tabla.rowHeight(r) for r in range(self.tabla.rowCount()))
                    + 2 * self.tabla.frameWidth()
                    + (self.tabla.horizontalScrollBar().height() if self.tabla.horizontalScrollBar().isVisible() else 0))
-        if alto != getattr(self.tabla, "alto_filas", None):
-            self.tabla.alto_filas = alto
-            self.tabla.setFixedHeight(alto)
-            self.tabla.updateGeometry()
+        self.tabla.alto_filas = alto
 
     def texto(self, r: int, c: int) -> str:
         """Lo que se ve en la celda de la fila r: el papel o el tipo en palabras."""
@@ -508,7 +580,12 @@ class PanelVariables(QWidget):
         self._diferir(self._reconstruir)
 
     def _clic(self, index: Any) -> None:
-        if index.column() in (1, 2) or (index.column() == 0 and 0 <= index.row() < len(self._filas) and self._filas[index.row()].get("blanca")):
+        mods = QApplication.keyboardModifiers()
+        if mods & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
+            return
+        editable_blanca = (index.column() == 0 and 0 <= index.row() < len(self._filas)
+                           and self._filas[index.row()].get("blanca"))
+        if index.column() in (1, 2) or editable_blanca:
             self.tabla.editItem(self.tabla.item(index.row(), index.column()))
 
     # -- parpadeo ---------------------------------------------------------------------------------
@@ -663,10 +740,16 @@ class PanelVariables(QWidget):
             self.tabla.editItem(self.tabla.item(r, 0))
 
     def quitar(self) -> None:
-        """El botón «Quitar»: la variable de la fila actual."""
-        r = self.tabla.currentRow()
-        if 0 <= r < len(self._filas):
-            self._quitar_filas([self._filas[r]])
+        """El botón «Eliminar»: las variables seleccionadas (o la fila actual si no hay selección)."""
+        if self.e is None or not self.isEnabled():
+            return
+        sel = self.tabla.selectionModel()
+        filas = sorted({i.row() for i in sel.selectedRows()}) if sel is not None else []
+        if not filas:
+            r = self.tabla.currentRow()
+            if 0 <= r < len(self._filas):
+                filas = [r]
+        self._quitar_filas([self._filas[r] for r in filas if 0 <= r < len(self._filas)])
 
     def quitar_seleccion(self) -> None:
         """Supr: las variables de las filas seleccionadas, como si se pulsara «Quitar» en cada una (mismas comprobaciones,

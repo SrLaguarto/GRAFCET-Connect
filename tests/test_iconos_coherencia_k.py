@@ -114,7 +114,7 @@ class CoherenciaK(unittest.TestCase):
     def test_SK104_titulos_reutilizados_sin_pastilla_en_ambos_estados(self):
         dialogo = self.dialogo(self.panel())
         titulos = dialogo.findChildren(TituloGrupo)
-        self.assertEqual(len(titulos), 4)
+        self.assertEqual(len(titulos), 3)
         self.assertTrue(any(t.text().startswith("De otra escena ·") for t in titulos))
         for titulo in titulos:
             self.assertIn(" · ", titulo.text())
@@ -129,11 +129,13 @@ class CoherenciaK(unittest.TestCase):
 
     def test_SK105_motivo_visible_y_ya_traida_centrada(self):
         dialogo = self.dialogo(self.panel())
+        self.assertTrue(dialogo.b_traer.isEnabled())
+        tabla, filas = dialogo.tablas[0]
+        tabla.item(1, 2).setText("Xmotor permiso")
         self.assertTrue(dialogo.motivos.isVisible())
         self.assertIn("Xmotor permiso", dialogo.motivos.toolTip())
         self.assertIn("se confundiría", dialogo.motivos.toolTip())
         self.assertFalse(dialogo.b_traer.isEnabled())
-        tabla, filas = dialogo.tablas[0]
         self.assertEqual(tabla.item(0, 0).text(), "ya traída")
         self.assertTrue(tabla.item(0, 0).textAlignment() & Qt.AlignmentFlag.AlignHCenter)
         self.assertEqual(tabla.item(0, 0).foreground().color().name(), estilo.TINTA_2)
@@ -168,8 +170,9 @@ class CoherenciaK(unittest.TestCase):
 
     def test_SK108_cabeceras_y_leyenda_mismo_pie(self):
         panel = self.panel()
-        for cabecera in panel.cuentas.values():
-            self.assertIn("font-weight:400", cabecera.text())
+        for rol, cabecera in panel.cuentas.items():
+            self.assertIn(cabecera.text(), ("Sensores", "Actuadores"))
+            self.assertTrue(panel.badges[rol].text().isdigit())
         self.assertTrue(panel.ayuda_vacio.isVisible())
         pie = panel.ayuda_vacio.parentWidget()
         self.assertTrue(pie.isAncestorOf(panel.resumen))

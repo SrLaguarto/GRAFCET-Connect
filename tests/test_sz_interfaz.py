@@ -55,8 +55,12 @@ class InterfazZ(unittest.TestCase):
         return d
 
     def test_SZ1_aviso_corto_con_cuenta_y_signo(self):
-        """REQ-EDT-09: un único renglón explica el signo de los cuatro nombres."""
+        """REQ-EDT-09: al abrir se corrigen automáticamente; si el usuario escribe nombres con signos, un renglón lo explica."""
         d = self.dialogo()
+        self.assertTrue(d.b_traer.isEnabled())
+        tabla, _ = d.tablas[0]
+        for row, n in enumerate(NOMBRES):
+            tabla.item(row, 2).setText(n)
         self.assertIn('4 nombres', d.motivos.text())
         self.assertIn('punto', d.motivos.text())
         self.assertNotIn('\n', d.motivos.text())
@@ -88,6 +92,9 @@ class InterfazZ(unittest.TestCase):
                 centro = imagen.width() // 2
                 self.assertEqual(imagen.pixelColor(centro, 4), QColor(estilo.FONDO))
                 self.assertEqual(imagen.pixelColor(0, 0).alpha(), 0)
+                self.assertTrue(d.b_traer.isEnabled())
+                d.tablas[0][0].item(0, 2).setText(NOMBRES[0])
+                HC._bombear(2)
                 self.assertGreaterEqual(d.b_corregir.width(), d.b_corregir.sizeHint().width())
                 d.b_corregir.click()
                 self.assertTrue(d.b_traer.isEnabled())
@@ -134,7 +141,7 @@ class InterfazZ(unittest.TestCase):
         """REQ-EDT-02: corregir conserva la edición manual y resuelve duplicados."""
         d = self.dialogo()
         e = d.propuestas.edicion
-        e.nueva_variable('Pos at limit lids')
+        e.nueva_variable('Pos at limit lids', 'output')
         d.corregir_nombres()
         self.assertEqual(d.propuestas.pendientes(), 0)
         nombres = [f.nombre for f in d.propuestas.filas]
@@ -149,9 +156,11 @@ class InterfazZ(unittest.TestCase):
         self.assertEqual(filas[0].nombre, 'Otro nombre')
 
     def test_SZ3_detalle_en_ayuda_celda_naranja(self):
-        """REQ-EDT-09: el motivo y la regla completos siguen disponibles en la celda."""
+        """REQ-EDT-09: el motivo y la regla completos siguen disponibles en la celda cuando se escribe un nombre inválido."""
         d = self.dialogo()
         tabla, filas = d.tablas[0]
+        for row, n in enumerate(NOMBRES):
+            tabla.item(row, 2).setText(n)
         for row, f in enumerate(filas):
             self.assertEqual(tabla.item(row, 2).toolTip(), f.motivo)
             self.assertIn('nombre de variable', f.motivo)
@@ -160,11 +169,15 @@ class InterfazZ(unittest.TestCase):
     def test_SZ4_orden_y_categoria_inicial(self):
         """REQ-EDT-02: ambos programadores siguen el mismo orden relativo."""
         from escritorio.bloques import Programador
-        for valor, esperado in ((False, ['Operadores', 'Temp.', 'Comp.', 'Const.']),
-                                (True, ['Operadores', 'Const.'])):  # (E8: la banda; el catálogo ya no es una pestaña)
+        for valor, claves, botones in (
+            (False, ['operador', 'tiempo', 'comparacion', 'constante'], ['( … )', 'Temporizador', '= ≠ < ≥', '1', '0']),
+            (True, ['aritm', 'numero'], ['( … )', '+ Constante']),
+        ):
             p = Programador(lambda: ({}, []), valor=valor)
             self.addCleanup(p.deleteLater)
-            self.assertEqual([r.text() for r in p.categorias.values()], esperado)
+            self.assertEqual(list(p.categorias), claves)
+            self.assertEqual(p.banda.l_prefijo.text(), 'Insertar:')
+            self.assertEqual([b.text() for bs in p.banda.botones.values() for b in bs], botones)
             self.assertEqual(p.paleta.clave, "vnum" if valor else "variables")
 
     def test_SZ5_ejemplos_solo_como_archivos_sin_firma(self):
@@ -238,7 +251,6 @@ class InterfazZ(unittest.TestCase):
     def test_SZ8_categorias_en_todas_las_propiedades(self):
         """REQ-EDT-02: las ventanas reales utilizan el orden común sin perder sus controles."""
         from escritorio.bloques import Programador
-        orden = ['Operadores', 'Temp.', 'Comp.', 'Const.']
         for tipo in ('transicion', 'condicionada', 'evento', 'activacion', 'desactivacion',
                      'activacion_numerica', 'evento_numerico'):
             with self.subTest(tipo=tipo):
@@ -247,8 +259,17 @@ class InterfazZ(unittest.TestCase):
                     HC._flotante(tipo)(c)
                     self.assertTrue(c.w.flot.principal.isVisible())
                     for prog in c.w.flot.panel.findChildren(Programador):
-                        titulos = [r.text() for r in prog.categorias.values()]
-                        self.assertEqual(titulos, sorted(titulos, key=orden.index))
+                        if prog.valor:
+                            self.assertEqual(list(prog.categorias), ['aritm', 'numero'])
+                            self.assertEqual([b.text() for bs in prog.banda.botones.values() for b in bs],
+                                             ['( … )', '+ Constante'])
+                            prefijo = prog.banda.l_prefijo.text()
+                            self.assertTrue(prefijo == 'Insertar:' or prefijo.endswith(':='), prefijo)
+                        else:
+                            self.assertEqual(list(prog.categorias), ['operador', 'tiempo', 'comparacion', 'constante'])
+                            self.assertEqual([b.text() for bs in prog.banda.botones.values() for b in bs],
+                                             ['( … )', 'Temporizador', '= ≠ < ≥', '1', '0'])
+                            self.assertEqual(prog.banda.l_prefijo.text(), 'Insertar:')
                 finally:
                     c.cerrar()
 
@@ -310,7 +331,9 @@ class InterfazZ(unittest.TestCase):
                 self.assertEqual(len(externos), 1)
                 internos = [barra.widgetForAction(a) for barra in (c.w.tb_sim, c.w.tb_edit)
                             for a in barra.actions() if a.isSeparator()]
-                self.assertEqual(len(internos), 3)
+                self.assertEqual(len(internos), 2)
+                self.assertIs(c.w.diagrama.b_dependencias.parent(), c.w.tb_vista_der)
+                self.assertIs(c.w.b_errores.parent(), c.w.tb_vista_der)
                 for separador in [*internos, *externos]:
                     self.assertTrue(separador.isVisible())
                     im = separador.grab().toImage()

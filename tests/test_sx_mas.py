@@ -33,44 +33,48 @@ class PropiedadesMas(unittest.TestCase):
         return c, c.w.flot.panel, c.w.flot.principal
 
     def test_SXM1_banda_de_categorias_entera(self):
-        """REQ-EDT-02: en las tres ventanas, la banda de categorías (Operadores, Temporizadores, Comparaciones y Constantes, con sus botones y
-        las herramientas) cabe entera, también a media pantalla real: nada queda cortado y, si no caben en una fila, pasan a otra.
-        (E8: la banda sustituye a las cinco pestañas, que ya no existen; cambia el soporte de la comprobación, no lo que se exige.)"""
+        """REQ-EDT-02: en las tres ventanas, la cinta de inserción (`.op-ribbon`: «Insertar:» + botones de inserción y herramientas)
+        cabe entera, también a media pantalla real: nada queda cortado ni superpuesto."""
         for ancho, alto in ((853, 1019), (960, 1032), (1366, 768), (1920, 1080)):
             for tipo in ("transicion", "condicionada", "evento"):
                 with self.subTest(ancho=ancho, tipo=tipo):
                     c, p, v = self.contexto(tipo, ancho, alto)
                     banda = p.prog.banda
                     rotulos = list(p.prog.categorias.values())
-                    self.assertEqual([r.text() for r in rotulos], ["Operadores", "Temp.", "Comp.", "Const."])
+                    self.assertEqual(banda.l_prefijo.text(), "Insertar:")
+                    self.assertTrue(all(r is banda.l_prefijo for r in rotulos))
                     botones = [b for bs in banda.botones.values() for b in bs]
-                    for w in rotulos + botones:
+                    self.assertEqual([b.text() for b in botones], ["( … )", "Temporizador", "= ≠ < ≥", "1", "0"])
+                    for w in [banda.l_prefijo, *botones, *banda._herramientas]:
                         self.assertTrue(w.isVisible(), w.text())
                         self.assertTrue(banda.rect().contains(QRect(w.mapTo(banda, QPoint()), w.size())), w.text())
                         self.assertGreaterEqual(w.width(), w.fontMetrics().horizontalAdvance(w.text()), w.text())
-                    rects = [QRect(w.mapTo(banda, QPoint()), w.size()) for w in botones]
+                    rects = [QRect(w.mapTo(banda, QPoint()), w.size()) for w in [*botones, *banda._herramientas]]
                     for i, a in enumerate(rects):
                         for b in rects[i + 1:]:
                             self.assertFalse(a.intersects(b), "los botones no se pisan")
                     c.w._mostrar_panel("inferior", False)
 
     def test_SXM2_campos_sin_corte_y_comentario_largo(self):
-        """REQ-EDT-02: etiqueta y comentario comparten fila al pie; el comentario ocupa el ancho del pie (E8: sin casilla «Mostrar etiqueta»)."""
+        """REQ-EDT-02: etiqueta inline en cabecera y comentario a todo el ancho en la franja inferior `.comment-row`."""
         for ancho in (853, 960, 1366):
             c, p, v = self.contexto(ancho=ancho)
-            self.assertGreater(p.t_comentario.x(), p.t_etiqueta.geometry().right())
+            self.assertIs(p.t_etiqueta.parentWidget(), v.caja_etiqueta)
+            self.assertIs(p.t_comentario.parentWidget(), v.pie)
+            self.assertEqual(p.t_etiqueta.width(), 56)
             self.assertGreater(p.t_comentario.width(), p.t_etiqueta.width() * 2)
-            self.assertLessEqual(abs(p.t_comentario.geometry().right() + 1 - p.t_comentario.parentWidget().width()), 1)  # E8: al pie, a todo el ancho
+            self.assertGreater(p.t_comentario.x(), v.pie.l_comentario.geometry().right())
+            self.assertEqual(v.pie.width() - (p.t_comentario.geometry().right() + 1), 14)  # margen derecho de 14 px en `.comment-row`
             c.w._mostrar_panel("inferior", False)
 
     def test_SXM3_altura_moderada_y_aire_alrededor(self):
-        """REQ-EDT-02: el responsable sustituyó el 33 % y el doble exacto por un aumento moderado."""
-        for ancho, alto, anterior in ((1366, 768, 465), (1920, 1080, 553)):
+        """REQ-EDT-02: altura estable (`_marco_ventana() + 332`) con aire alrededor y área cómoda para bloques."""
+        for ancho, alto in ((1366, 768), (1920, 1080)):
             c, p, v = self.contexto(ancho=ancho, alto=alto)
-            self.assertGreater(v.height(), anterior)
+            self.assertEqual(v.height(), c.w.flot._marco_ventana() + 332)
+            self.assertGreater(v.height(), 465)
             self.assertLess(v.height(), c.w.flot._area().height() - 2 * estilo.E6)
-            # E8: la franja, el pie y la banda (sobre el área; el catálogo ocupa todo el alto a su lado) le quitan algo de alto a 1366×768
-            self.assertGreater(p.prog.lienzo.height(), 180 if ancho == 1366 else 330)
+            self.assertGreater(p.prog.lienzo.height(), 200)
             c.w._mostrar_panel("inferior", False)
 
     def test_SXM4_aviso_vacio_y_lupa_se_conservan(self):
@@ -84,16 +88,16 @@ class PropiedadesMas(unittest.TestCase):
         self.assertIn("#c62828", p.t_estado.styleSheet().lower())
 
     def test_SXM5_esquinas_redondas_y_fondo_opaco(self):
-        """REQ-UX-01: curvas transparentes por fuera, marco gris azulado completamente opaco."""
+        """REQ-UX-01: curvas transparentes por fuera, fondo blanco `#ffffff` completamente opaco en 2.0.1."""
         c, p, v = self.contexto()
         self.assertTrue(v.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground))
         self.assertTrue(v.windowFlags() & Qt.WindowType.NoDropShadowWindowHint)
         imagen = v.grab().toImage()
         dpr = imagen.devicePixelRatio()
-        for x, y in ((5, 5), (400, 25), (5, 100)):  # E8: (150, 100) cae ahora en la franja blanca de la vista previa; (5, 100), en el margen del cuerpo
+        for x, y in ((5, 5), (400, 25), (5, 100)):
             color = imagen.pixelColor(round(x * dpr), round(y * dpr))
             self.assertEqual(color.alpha(), 255)
-            self.assertEqual(color.name(), estilo.FONDO)
+            self.assertEqual(color.name(), estilo.SUPERFICIE)
         for x, y in ((0, 0), (imagen.width() - 1, 0),
                      (0, imagen.height() - 1), (imagen.width() - 1, imagen.height() - 1)):
             self.assertEqual(imagen.pixelColor(x, y).alpha(), 0)

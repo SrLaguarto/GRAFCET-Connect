@@ -68,14 +68,15 @@ class Memorizadas(Base):
         self.assertEqual(TITULOS_ACCION["evento"], "Acción por evento")
 
     def test_SP8C03_la_fila_variable_asigna_valor_esta_en_una_fila_y_el_elegido_va_relleno(self):
-        """REQ-EDT-02, REQ-UX-01: `Variable [▾] := [1 | 0]` en una sola fila de la tarjeta; el valor elegido, relleno del color de la acción y sin el
-        borde naranja de los avisos."""
+        """REQ-EDT-02, REQ-UX-01: en 2.0.1 la variable vive en la subcabecera y `Asignación [var] := [1 | 0]` en una fila centrada
+        en `tarjeta_asignacion`; el valor elegido va relleno con el color de acento y sin el borde naranja de los avisos."""
         c, p, v = self.contexto("activacion")
         a = p.accion
-        fila = a.fila_variable
-        for w in (a.l_variable, a.variable, a.l_fichas, a.caja_fichas):
-            self.assertIs(w.parentWidget(), fila)
-        ys = {w.geometry().center().y() for w in (a.variable, a.l_fichas, a.caja_fichas)}
+        self.assertIs(a.variable.parentWidget(), v.caja_dest)
+        self.assertTrue(v.subcabecera.isVisible() and v.caja_dest.isVisible())
+        for w in (a.l_asignacion, a.l_var_bool, a.l_fichas, a.caja_fichas):
+            self.assertIs(w.parentWidget(), a.tarjeta_asignacion)
+        ys = {w.geometry().center().y() for w in (a.l_asignacion, a.l_var_bool, a.l_fichas, a.caja_fichas)}
         self.assertLessEqual(max(ys) - min(ys), 2, "los cuatro, a la misma altura")
         self.assertEqual(a.l_fichas.text(), ":=")
         a.fichas["1"].click()
@@ -84,9 +85,39 @@ class Memorizadas(Base):
         from escritorio.acciones import ESTILO_FICHA
         self.assertNotIn(estilo.AVISO_BORDE, ESTILO_FICHA)
         centro = a.fichas["1"].mapTo(v, QPoint(6, a.fichas["1"].height() // 2))
-        self.assertEqual(self.pixel(v, centro.x(), centro.y()), estilo.SENAL_ACCION.lower())
+        self.assertEqual(self.pixel(v, centro.x(), centro.y()), estilo.ACENTO.lower())
         otro = a.fichas["0"].mapTo(v, QPoint(a.fichas["0"].width() // 2, 4))
         self.assertEqual(self.pixel(v, otro.x(), otro.y()), estilo.SUPERFICIE)
+
+    def test_SP8C03b_sin_valor_ninguna_ficha_marcada_y_al_pulsar_se_guarda_y_se_ve(self):
+        """REQ-EDT-02: con variable booleana y valor sin elegir, ni el «1» ni el «0» aparecen marcados (lo que se ve es lo que hay, y la frase
+        dice «:= ?»); al pulsar uno, se guarda y se ve en la frase y en los datos; volver a pulsarlo no lo desmarca."""
+        for tipo in ("activacion", "evento"):
+            with self.subTest(tipo=tipo):
+                c, p, v = self.contexto(tipo)
+                a = p.accion
+                a.fichas["1"].click()  # (primero un 1, para que la ficha esté marcada antes de quedarse sin valor)
+                _bombear()
+                self.assertTrue(a.fichas["1"].isChecked())
+                a._poner_valor("")
+                _bombear()
+                self.assertEqual(a.datos()["valor"], "")
+                self.assertEqual([b.isChecked() for b in a.fichas.values()], [False, False], "sin valor, ninguna ficha marcada")
+                self.assertIn(":= ?", a.frase.text())
+                a.fichas["0"].click()
+                _bombear()
+                self.assertEqual(a.datos()["valor"], "0")
+                self.assertEqual({k: b.isChecked() for k, b in a.fichas.items()}, {"1": False, "0": True})
+                self.assertIn(":= 0", a.frase.text())
+                a.fichas["0"].click()
+                _bombear()
+                self.assertEqual(a.datos()["valor"], "0")
+                self.assertTrue(a.fichas["0"].isChecked())
+                a.fichas["1"].click()
+                _bombear()
+                self.assertEqual(a.datos()["valor"], "1")
+                self.assertEqual({k: b.isChecked() for k, b in a.fichas.items()}, {"1": True, "0": False})
+                self.assertIn(":= 1", a.frase.text())
 
     def test_SP8C04_sin_variable_1_y_0_desactivados(self):
         """REQ-EDT-02, P-IMP-156: sin variable, `? :=` con 1 y 0 desactivados."""
@@ -124,29 +155,33 @@ class Conmutador(Base):
         return c, c.w.flot, c.w.flot.panel, c.w.flot.principal
 
     def test_SP8C10_un_solo_formulador_a_la_vez_y_la_ventana_no_cambia_de_tamano(self):
-        """REQ-EDT-02, P-IMP-173: Evento | Acción: una tarjeta cada vez, en la misma celda; al conmutar la ventana no cambia de tamaño."""
+        """REQ-EDT-02, P-IMP-173: Evento | Acción: conmutador único en la subcabecera; una vista cada vez y sin cambiar de tamaño."""
         c, f, p, v = self._evento()
-        self.assertTrue(v.conmutadores[v.condicion].isVisible())
+        self.assertTrue(v.conmutador.isVisible())
         self.assertTrue(v.condicion.isVisible() and not v.accion.isVisible())
         self.assertTrue(p.prog.isVisible() and not p.accion.variable.isVisible())
         tam = v.size()
-        v.conmutadores[v.condicion].botones["accion"].click()
+        v.conmutador.botones["accion"].click()
         _bombear()
         self.assertTrue(v.accion.isVisible() and not v.condicion.isVisible())
         self.assertTrue(p.accion.variable.isVisible() and not p.prog.isVisible())
         self.assertEqual(v.size(), tam)
-        self.assertEqual(v.conmutadores[v.accion].botones["formula"].text(), "Evento")
-        v.conmutadores[v.accion].botones["formula"].click()
+        self.assertEqual(v.conmutador.botones["formula"].text(), "Evento")
+        v.conmutador.botones["formula"].click()
         _bombear()
         self.assertTrue(v.condicion.isVisible())
         self.assertEqual(v.size(), tam)
 
     def test_SP8C11_la_condicionada_dice_condicion(self):
-        """REQ-EDT-02: la parte de fórmula de una condicionada se llama «Condición», la de una acción por evento, «Evento»."""
+        """REQ-EDT-02: en 2.0.1 la condicionada muestra «Condición» y «Activa variable:» en la misma pantalla sin conmutador;
+        la acción por evento muestra el conmutador «Evento | Acción»."""
         c, p, v = self.contexto("condicionada")
-        self.assertEqual(v.conmutadores[v.condicion].botones["formula"].text(), "Condición")
+        self.assertTrue(v.subcabecera.isVisible() and not v.conmutador.isVisible())
+        self.assertTrue(v.l_sub_titulo.isVisible() and v.l_sub_titulo.text() == "Condición")
+        self.assertTrue(v.caja_dest.isVisible() and v.l_dest.text() == "Activa variable:")
         c2, p2, v2 = self.contexto("evento")
-        self.assertEqual(v2.conmutadores[v2.condicion].botones["formula"].text(), "Evento")
+        self.assertTrue(v2.conmutador.isVisible())
+        self.assertEqual(v2.conmutador.botones["formula"].text(), "Evento")
 
     def test_SP8C12_clic_en_la_marca_o_en_la_caja_de_la_franja_cambia_de_parte(self):
         """REQ-EDT-02: un clic en la marca de la vista previa elige la condición o el evento; en la caja, la acción. La parte que no se edita va en gris."""
@@ -159,33 +194,32 @@ class Conmutador(Base):
         self.assertEqual(f._parte, "accion")
         self.assertTrue(v.accion.isVisible())
         colores = {es_caja: color for _, color, es_caja in lupa.senales}
-        self.assertEqual(colores[True], estilo.SENAL_ACCION)
-        self.assertEqual(colores[False], estilo.DESHABILITADO)
+        self.assertEqual(colores, {True: estilo.SENAL_ACCION})
         QTest.mouseClick(lupa, Qt.MouseButton.LeftButton, pos=t.map(marca.center()).toPoint())
         _bombear()
         self.assertEqual(f._parte, "formula")
         self.assertTrue(v.condicion.isVisible())
         colores = {es_caja: color for _, color, es_caja in lupa.senales}
-        self.assertEqual(colores[False], estilo.SENAL_CONDICION)
-        self.assertEqual(colores[True], estilo.DESHABILITADO)
+        self.assertEqual(colores, {False: estilo.SENAL_CONDICION})
 
-    def test_SP8C13_punto_de_aviso_en_la_parte_incompleta(self):
-        """REQ-EDT-02: el punto de aviso del conmutador marca la parte a la que le falta algo."""
+    def test_SP8C13_el_conmutador_no_lleva_punto_de_aviso(self):
+        """REQ-EDT-02: el conmutador Evento/Acción no pinta punto de aviso aunque falte el evento o la variable: la vista previa ya enseña «?»."""
         c, p, v = self.contexto("evento")
-        con = v.conmutadores[v.condicion]
-        self.assertFalse(con.botones["formula"].aviso)
-        self.assertFalse(con.botones["accion"].aviso)
+        con = v.conmutador
+        self.assertFalse(hasattr(con, "avisar"))
         p.accion.poner_variable("aux")
         p._desde_bloques("")
         _bombear()
-        self.assertTrue(con.botones["formula"].aviso, "sin evento, falta la parte de fórmula")
-        self.assertFalse(con.botones["accion"].aviso)
         aid = c.e.accion_activa()
         d = dict(c.e.datos_accion(aid))
         d["variable"] = ""
         c.e.cambiar_accion(aid, d)
         _bombear()
-        self.assertTrue(v.conmutadores[v.accion].botones["accion"].aviso, "sin variable, falta la acción")
+        for b in con.botones.values():
+            self.assertFalse(hasattr(b, "aviso"))
+            img = b.grab().toImage()
+            self.assertFalse(any(img.pixelColor(x, y).name() == estilo.AVISO_BORDE
+                                 for x in range(img.width()) for y in range(img.height())))
 
     def test_SP8C14_esc_e_intro_funcionan_en_las_dos_pestanas(self):
         """REQ-EDT-02: Esc cierra la ventana sin guardar y Intro la cierra guardando, tanto con la condición como con la acción a la vista."""
@@ -202,11 +236,11 @@ class Conmutador(Base):
                     self.assertFalse(f.hay_ventanas())
 
     def test_SP8C15_el_foco_pasa_a_la_parte_elegida(self):
-        """REQ-EDT-02: al conmutar, el foco pasa a la tarjeta que se enseña (el área de bloques o la variable)."""
+        """REQ-EDT-02: al conmutar, el foco pasa al panel de la parte elegida (`panel_booleano` en memorizada booleana o `prog.lienzo`)."""
         c, f, p, v = self._evento()
         f.elegir_parte("accion")
         _bombear()
-        self.assertIs(QApplication.focusWidget(), p.accion.variable)
+        self.assertIs(QApplication.focusWidget(), p.accion.panel_booleano)
         f.elegir_parte("formula")
         _bombear()
         self.assertIs(QApplication.focusWidget(), p.prog.lienzo)
@@ -226,18 +260,22 @@ class Abrir(Base):
         return aid, next(x for x in c.w.diagrama.cajas_acciones if x["id"] == aid)
 
     def test_SP8C20_doble_clic_en_la_marca_abre_la_condicion_y_en_la_caja_la_accion(self):
-        """REQ-EDT-02, REQ-UX-01: el doble clic en la marca abre Condición o Evento; en la caja, Acción."""
+        """REQ-EDT-02, REQ-UX-01: en acción por evento, doble clic en la marca abre «Evento» y en la caja abre «Acción»;
+        en acción condicionada, ambas zonas abren la pantalla unificada con condición y selector de variable."""
         HC.aplicacion()
         c = HC.Contexto(1366, 768)
         self.addCleanup(c.cerrar)
         HC._edicion(c)
-        aid, caja = self._caja(c, "condicionada")
+        sid = c.ids["etapas"][2]
+        self.assertIsNone(c.e.poner_accion(sid, {"tipo": "evento", "variable": "aux", "valor": "1", "evento": "↑marcha"}))
+        _bombear(6)
+        aid, caja = self._caja(c, "evento")
         x, y, w, h = caja["marca"]
         c.e.doble(QPointF(x + w / 2, y + h / 2))
         _bombear(10)
         f = c.w.flot
         self.assertEqual(f._parte, "formula")
-        self.assertTrue(f.principal.condicion.isVisible())
+        self.assertTrue(f.principal.condicion.isVisible() and not f.principal.accion.isVisible())
         f.cerrar()
         _bombear()
         c.e.seleccionar([])
@@ -249,6 +287,17 @@ class Abrir(Base):
         f.cerrar()
         _bombear()
         self.assertIsNone(c.e.parte_pedida)
+        # Condicionada: pantalla unificada (condición + selector de variable) tanto desde la marca como desde la caja
+        _, caja_c = self._caja(c, "condicionada")
+        for clave in ("marca", "rect"):
+            c.e.seleccionar([])
+            x, y, w, h = caja_c[clave]
+            c.e.doble(QPointF(x + w / 2, y + h / 2))
+            _bombear(10)
+            self.assertEqual(f._parte, "formula")
+            self.assertTrue(f.principal.condicion.isVisible() and f.principal.caja_dest.isVisible())
+            f.cerrar()
+            _bombear()
 
 
 class Menu(Base):
@@ -287,27 +336,34 @@ class Menu(Base):
         self.assertIsInstance(cb.view().itemDelegate(), DelegadoMenu)
         c.w.diagrama.cerrar_selector()
 
-    def test_SP8C32_filtro_con_mas_de_doce_variables(self):
-        """REQ-EDT-09: con más de 12 variables, lo que se escribe filtra la lista; con 12 o menos, no hay filtro."""
-        from escritorio.menu_variable import ComboMenu, DelegadoMenu
+    def test_SP8C32_desplegable_sin_filtro_visual(self):
+        """Decisión Ciclo 3: el desplegable de variables no activa filtro ni «Filtrar…» aunque haya más de 12 variables."""
+        from escritorio.menu_variable import ComboMenu
         HC.aplicacion()
         combo = ComboMenu()
         self.addCleanup(combo.deleteLater)
         for i in range(UMBRAL_FILTRO + 3):
             combo.addItem(f"var{i:02d}", f"var{i:02d}")
             combo.setItemData(combo.count() - 1, "output", ROL_PAPEL)
-        self.assertTrue(combo.con_filtro())
-        vista = combo.view()
-        combo.filtro_menu.poner_filtro("var1")
-        ocultas = [vista.isRowHidden(i) for i in range(combo.count())]
-        self.assertEqual(ocultas.count(False), 5)  # var10 a var14
-        combo.filtro_menu.poner_filtro("")
-        self.assertFalse(any(vista.isRowHidden(i) for i in range(combo.count())))
-        pocos = ComboMenu()
-        self.addCleanup(pocos.deleteLater)
-        for i in range(UMBRAL_FILTRO):
-            pocos.addItem(f"v{i}", f"v{i}")
-        self.assertFalse(pocos.con_filtro())
+        self.assertFalse(combo.con_filtro())
+
+    def test_SP8C33_rotulo_filtro_combomenu_no_se_muestra(self):
+        """Decisión Ciclo 3: al abrir ComboMenu con más de `UMBRAL_FILTRO` variables no aparece el rótulo «Filtrar…»."""
+        from escritorio.menu_variable import ComboMenu
+        HC.aplicacion()
+        combo = ComboMenu()
+        self.addCleanup(combo.deleteLater)
+        for i in range(UMBRAL_FILTRO + 4):
+            combo.addItem(f"var{i:02d}", f"var{i:02d}")
+            combo.setItemData(combo.count() - 1, "output", ROL_PAPEL)
+        combo.resize(220, 30)
+        combo.show()
+        _bombear()
+        combo.showPopup()
+        _bombear(4)
+        self.assertIsNone(combo.filtro_menu.etiqueta)
+        combo.hidePopup()
+        combo.hide()
 
 
 class Huecos(Base):

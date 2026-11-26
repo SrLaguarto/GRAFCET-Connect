@@ -188,39 +188,44 @@ class CampoIP(BaseQt):
 @unittest.skipUnless(QT, "PySide6 no está instalado")
 class Barras(BaseQt):
     def test_SSCR01_ventana_pequena_con_barras_a_la_vista(self):
-        """REQ-EDT-09: con la ventana pequeña los paneles laterales se desplazan en ambos sentidos y las barras se ven."""
+        """REQ-EDT-09: con la ventana pequeña Simulación y E/S se desplazan en ambos sentidos, Variables mantiene cabecera y pie fijos y desplaza su tabla, y las barras se ven."""
         w = self.w
         w.resize(640, 400)
         w.show()
         QApplication.processEvents()
-        for area in (w.scroll, w.derecho.widget(1)):
+        for area in (w.scroll, w.panel_es.scroll_cuerpo, w.variables.tabla):
             self.assertEqual(area.horizontalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAsNeeded)
             self.assertEqual(area.verticalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.assertEqual(w.panel_es.scroll_cuerpo.verticalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.assertEqual(w.panel_es.scroll_cuerpo.horizontalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.assertEqual(w.derecho.widget(1).horizontalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.assertEqual(w.derecho.widget(1).verticalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # el contenido que no cabe es alcanzable: si es más alto o ancho que la vista, la barra existe y se puede mover
-        for area in (w.scroll, w.derecho.widget(1)):
-            interior, vista = area.widget(), area.viewport()
-            if interior.minimumSizeHint().height() > vista.height():
-                self.assertGreater(area.verticalScrollBar().maximum(), 0)
-            if interior.minimumSizeHint().width() > vista.width():
-                self.assertGreater(area.horizontalScrollBar().maximum(), 0)
-        self.assertIn("width: 12px", w.styleSheet())  # barras de 12 px y asa oscura, visibles
+        interior, vista = w.scroll.widget(), w.scroll.viewport()
+        if interior.minimumSizeHint().height() > vista.height():
+            self.assertGreater(w.scroll.verticalScrollBar().maximum(), 0)
+        if interior.minimumSizeHint().width() > vista.width():
+            self.assertGreater(w.scroll.horizontalScrollBar().maximum(), 0)
+        self.assertIn("width: 10px", w.styleSheet())  # barras de 10 px y asa visible
 
 
 @unittest.skipUnless(QT, "PySide6 no está instalado")
 class Luz(BaseQt):
     def test_SLUZ01_luz_de_la_conexion_externa(self):
-        """REQ-SIM-03: la barra de simulación muestra si la conexión externa está conectada, desconectada o en error."""
+        """REQ-SIM-03: la luz de E/S externas refleja desconectada, conectada y error (texto corto + estadoLuz + tooltip completo)."""
         w = self.w
-        self.assertEqual(w.luz_es.text(), "E/S externas: desconectada")
+        self.assertEqual(w.luz_es.text(), "E/S externas")
+        self.assertEqual(w.luz_es.property("estadoLuz"), "desconectada")
+        self.assertEqual(w.luz_es.toolTip(), "E/S externas: desconectada · clic para abrir")
         w.panel_es.mostrar_estado("conectado", "Conectado")
-        self.assertEqual(w.luz_es.text(), "E/S externas: conectada")
+        self.assertEqual(w.luz_es.text(), "E/S externas")
+        self.assertEqual(w.luz_es.property("estadoLuz"), "conectada")
+        self.assertIn("E/S externas: conectada", w.luz_es.toolTip())
         w.panel_es.mostrar_estado("error", "Sin respuesta")
         self.assertEqual(w.luz_es.text(), "E/S externas: error")
+        self.assertEqual(w.luz_es.property("estadoLuz"), "error")
         self.assertIn("Sin respuesta", w.luz_es.toolTip())
         w.panel_es.mostrar_estado("desconectado", "")
-        self.assertEqual(w.luz_es.text(), "E/S externas: desconectada")
+        self.assertEqual(w.luz_es.text(), "E/S externas")
+        self.assertEqual(w.luz_es.property("estadoLuz"), "desconectada")
         w.luz_es.click()
         self.assertEqual(w.paginas_es.currentIndex(), 1)
 
@@ -635,18 +640,19 @@ class PulidoTrasLaSegundaPrueba(BaseQt):
 
     # -- 10. luz de la conexión
     def test_SPUL06_la_luz_de_la_conexion_va_al_final_de_la_fila_de_las_pestanas(self):
-        """REQ-SIM-03: «E/S externas: …» queda a la derecha del todo de la fila de GRAFCET / PLANOS / E/S externas, no junto a
-        Reiniciar; un clic abre la vista de E/S."""
+        """REQ-SIM-03: «E/S externas» va dentro del estuche segmentado junto a GRAFCET / PLANOS (a su derecha y antes del chip de modo),
+        no junto a Reiniciar; un clic abre la vista de E/S."""
         w = self.w
         w.resize(1200, 800)
         w.show()
         QApplication.processEvents()
-        self.assertIs(w.luz_es.parentWidget(), w.fila_pestanas)
-        self.assertIs(w.pestanas_vistas.parentWidget(), w.fila_pestanas)
+        self.assertIs(w.estuche_vistas.parentWidget(), w.fila_pestanas)
+        self.assertIs(w.luz_es.parentWidget(), w.estuche_vistas)
+        self.assertIs(w.pestanas_vistas.parentWidget(), w.estuche_vistas)
         fila = w.fila_pestanas.rect()
         self.assertGreater(w.luz_es.geometry().left(), w.pestanas_vistas.geometry().right())
-        self.assertGreater(w.luz_es.geometry().right(), fila.right() - 20)
-        self.assertLessEqual(w.luz_es.geometry().right(), fila.right())
+        self.assertLess(w.estado.geometry().right(), w.estuche_vistas.geometry().left())
+        self.assertLessEqual(w.estuche_vistas.geometry().right(), fila.right())
         self.assertFalse(w.tb_sim.isAncestorOf(w.luz_es))
         w.luz_es.click()
         self.assertEqual(w.paginas_es.currentIndex(), 1)

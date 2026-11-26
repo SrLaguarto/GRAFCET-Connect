@@ -85,7 +85,7 @@ class InicioInterfaz(BaseQt):
         w = self.w
         w.panel_es.directa.selector.setCurrentIndex(0)  # Autoasignación explícita de Modbus.
         e = w.edicion
-        self.assertEqual({k:v['cantidad'] for k,v in CANALES_INICIALES.items()},{'discrete':32,'coil':32,'input-register':12,'holding':12})
+        self.assertEqual({k:v['cantidad'] for k,v in CANALES_INICIALES.items()},{'discrete':16,'coil':16,'input-register':4,'holding':4})
         for nombre,papel,tipo in (('a','input',None),('b','input',None),('motor','output',None),('n','internal',None),('nivel','input',{'kind':'decimal','scale':2})):
             self.assertIsNone(e.nueva_variable(nombre,papel,tipo))
         mapa={next(v['name'] for v in e.ed.model['variables'] if v['id']==s.variable):(s.area,s.direccion) for s in w.panel_es.config.senales}
@@ -105,11 +105,11 @@ class InicioInterfaz(BaseQt):
         area=AreaBloques(lambda:({'a':('input','bool'),'b':('input','bool')},[]))
         contenedor=QWidget(w);QVBoxLayout(contenedor).addWidget(area);contenedor.resize(400,100);contenedor.show()
         area.poner_arbol(texto_a_arbol('a AND b',{'a':('input','bool'),'b':('input','bool')},[]));area._calcular(400)
-        ruta=next(ruta for rect,ruta,n in area._bloques if n and n.get('k')=='y')
+        ruta=next(ruta for rect,ruta,n in area._bloques if n and n.get('k')=='var' and n.get('n')=='a')
         rect=next(rect for rect,r,n in area._bloques if r==ruta)
-        p=QPointF(rect.left()+3,rect.center().y()).toPoint()
+        p=rect.center().toPoint()
         QTest.mouseClick(area,Qt.MouseButton.LeftButton,pos=p);QTest.keyClick(area,Qt.Key.Key_Delete)
-        self.assertIsNone(area.arbol);self.assertTrue(any(s['id']==sid for s in e.M['steps']))
+        self.assertEqual(area.texto(),'b');self.assertTrue(any(s['id']==sid for s in e.M['steps']))
         contenedor.deleteLater()
 
     def test_SIEJ07_autoasignacion_no_pisa_si_no_hay_capacidad(self):

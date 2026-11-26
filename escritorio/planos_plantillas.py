@@ -25,6 +25,7 @@ def ancho_panel(editor):
 
 def area_integrada(editor, centro, scroll):
     editor.area = QScrollArea()
+    editor.area.setObjectName("areaHojaPlanos")
     editor.area.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     editor.area.setWidgetResizable(False)
     editor.area.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -32,6 +33,7 @@ def area_integrada(editor, centro, scroll):
     centro.addWidget(editor.area, 1)
     ancho = ancho_panel(editor)
     editor.propiedades = QStackedWidget()
+    editor.propiedades.setObjectName("panelPropiedadesPlanos")
     editor.propiedades.setFixedWidth(ancho)
     scroll.setFixedWidth(ancho - 4)
     editor.propiedades.addWidget(scroll)
@@ -52,9 +54,10 @@ def fila_plantilla(editor):
     editor.b_opciones_plantilla.setText("▾")
     editor.b_opciones_plantilla.setFixedSize(estilo.ALTO_CONTROL, estilo.ALTO_CONTROL)  # (cuadrado, del alto del desplegable de al lado)
     editor.b_opciones_plantilla.setStyleSheet(  # con marco, como el desplegable: sin él parecía una flecha suelta
-        f"QToolButton {{ padding:0; border:1px solid {estilo.BORDE_CONTROL}; border-radius:{estilo.R_S}px; "
+        f"QToolButton {{ padding:0; border:1px solid {estilo.BORDE_FUERTE}; border-radius:{estilo.R_S}px; "
         f"background:{estilo.SUPERFICIE}; color:{estilo.TINTA}; }}"
-        f"QToolButton:hover {{ background:{estilo.HOVER}; }} QToolButton:pressed {{ background:{estilo.PULSADO}; }}"
+        f"QToolButton:hover {{ background:{estilo.HOVER}; border-color:{estilo.BORDE_CONTROL}; }}"
+        f"QToolButton:pressed {{ background:{estilo.PULSADO}; }}"
         f"QToolButton[tecl=\"true\"]:focus {{ border:2px dashed {estilo.FOCO}; }}"
         "QToolButton::menu-indicator { image:none; width:0; }")
     editor.b_opciones_plantilla.setToolTip("Opciones de plantilla: importar, usar la estándar, editar o quitar")

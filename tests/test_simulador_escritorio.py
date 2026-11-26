@@ -300,7 +300,7 @@ class Ventana(unittest.TestCase):
         w = self.w
         self.proyecto_de_prueba("temporizada")
         self.assertEqual((w.modo, w.a_ejecutar.isChecked(), w.rt.isActive()), ("editar", False, False), "abrir deja Pausa")
-        self.assertEqual(w.a_ejecutar.text(), "Play")
+        self.assertEqual(w.a_ejecutar.text(), "Simular")
         self.assertIsNotNone(w.edicion)
         self.assertEqual(
             (w.derecho.currentIndex(), w.inferior.currentIndex()),
@@ -311,7 +311,7 @@ class Ventana(unittest.TestCase):
         for nombre in ("a_editar", "a_simular", "a_paso", "a_completar", "tb_modo", "g_modo", "paso", "paso_evolucion"):
             self.assertFalse(hasattr(w, nombre), nombre)
         textos = {a.text().replace("&", "") for a in w.findChildren(QAction)}
-        self.assertFalse(textos & {"Editar", "Simular", "Paso", "Completar recorrido"}, textos)
+        self.assertFalse(textos & {"Editar", "Paso", "Completar recorrido"}, textos)
         atajos = {k.toString() for a in w.findChildren(QAction) for k in a.shortcuts()}
         self.assertFalse(atajos & {"Ctrl+1", "Ctrl+2", "F10", "F11"}, atajos)
         self.assertIn("F5", atajos)
@@ -329,7 +329,7 @@ class Ventana(unittest.TestCase):
         self.assertIn("τ = 3 s", w.l_reloj.text())
         # Pausa: detiene y vuelve a editar
         w.a_ejecutar.setChecked(False)
-        self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("editar", "Play", False))
+        self.assertEqual((w.modo, w.a_ejecutar.text(), w.rt.isActive()), ("editar", "Simular", False))
         self.assertEqual((w.derecho.currentIndex(), w.inferior.currentIndex()), (1, 0))
         self.assertTrue(w.favoritos.isVisibleTo(w))
         # Pausa = todo a 0 hasta un nuevo Play: sin etapas activas ni temporizadores, y las tablas no enseñan la sesión anterior
@@ -382,9 +382,9 @@ class Ventana(unittest.TestCase):
         w.cargar_ejemplo("temporizada")
         w.a_ejecutar.setChecked(True)
         self.assertTrue(w.rt.isActive())
-        w.cargar_ejemplo("macroetapa")  # desde Play
+        w.cargar_ejemplo("macroetapa")  # desde Simular
         self.assertEqual((w.a_ejecutar.isChecked(), w.a_ejecutar.text(), w.modo, w.rt.isActive()),
-                         (False, "Play", "editar", False))
+                         (False, "Simular", "editar", False))
         self.assertEqual(w.edicion.titulo, w.v.model["title"])
         with tempfile.TemporaryDirectory() as tmp:
             self.assertTrue(w.solo_lectura);self.assertFalse(w.guardar())
@@ -424,7 +424,7 @@ class Ventana(unittest.TestCase):
         w._act("avanzar", us=3_000_000)
         cuadro = w._popup_inestable
         self.assertIsNotNone(cuadro)
-        self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Play"))
+        self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Simular"))
         self.assertIn("el grafcet no alcanza una situación estable", cuadro.text())
         self.assertIn("t3", cuadro.text())
         self.assertEqual([b.text() for b in cuadro.buttons()], ["Aceptar"])
@@ -601,7 +601,7 @@ class Ventana(unittest.TestCase):
             self.assertEqual(aviso.call_count, 1)
             self.assertIn("lecturas", aviso.call_args.args[2])
             self.assertIn("dentro de la expansión", aviso.call_args.args[2])
-            self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Play"))
+            self.assertEqual((w.a_ejecutar.isChecked(), w.modo, w.a_ejecutar.text()), (False, "editar", "Simular"))
             w._opciones({})  # lecturas por defecto: se puede ejecutar
             w.a_ejecutar.setChecked(True)
             self.assertEqual((w.a_ejecutar.isChecked(), w.modo), (True, "simular"))
@@ -626,7 +626,7 @@ class Ventana(unittest.TestCase):
         self.assertEqual(w.a_ejecutar.text(), "Stop")
         self.assertFalse(w.a_ejecutar.icon().isNull(), "el símbolo se muestra ahora como icono de la barra")
         w.a_ejecutar.setChecked(False)
-        self.assertEqual(w.a_ejecutar.text(), "Play")
+        self.assertEqual(w.a_ejecutar.text(), "Simular")
         self.assertFalse(w.a_ejecutar.icon().isNull())
 
 

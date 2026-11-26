@@ -186,7 +186,7 @@ class InterfazCentro(AyudaWebBase):
         self.assertIsNotNone(dialogo.propuestas)
         self.assertFalse(dialogo.ayuda_lectura.isVisible())
         self.assertFalse(dialogo.ayuda_servidor.boton.isVisible())
-        self.assertEqual(len(dialogo.tablas), 3)
+        self.assertEqual(len(dialogo.tablas), 2)
         self.assertTrue(dialogo.b_traer.isEnabled())
 
 

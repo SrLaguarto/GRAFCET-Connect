@@ -157,6 +157,34 @@ class EnvolverDesenvolver(unittest.TestCase):
         self.assertEqual(B.envolver(a(), (), "no"), B.nuevo("no", a=a()))
         self.assertEqual(B.desenvolver(B.nuevo("par", a=None), ()), None, "un grupo vacío desaparece y deja su hueco")
 
+    def test_SP8M13_lista_plana_conectores_y_envolver_varios(self):
+        """REQ-EDT-02: `a_lista` y `de_lista` son inversas; `cambiar_conector` alterna Y/O respetando precedencia;
+        `envolver_varios` y `desenvolver_en` agrupan y desagrupan operandos contiguos."""
+        for texto in ("a AND b", "a OR b", "a AND b AND a", "a OR b OR a", "a AND b OR a", "a OR b AND a",
+                      "(a OR b) AND a", "a AND (b OR a)"):
+            with self.subTest(texto=texto):
+                n = arbol(texto)
+                self.assertEqual(B.arbol_a_texto(B.de_lista(*B.a_lista(n))), texto)
+        r = arbol("a AND b AND a")
+        r_o = B.cambiar_conector(r, (), 1)
+        self.assertEqual(B.arbol_a_texto(r_o), "a AND b OR a")
+        self.assertEqual(B.arbol_a_texto(B.cambiar_conector(r_o, (), 0)), "a AND b AND a")
+        self.assertEqual(B.arbol_a_texto(B.cambiar_conector(r_o, ("a",), 0)), "a OR b OR a")
+        self.assertEqual(B.envolver_varios(r, [("a",), ("c",)]), (r, None), "no contiguos: no envuelve ni reordena")
+        envuelto, ruta_g = B.envolver_varios(r, [("b",), ("c",)])
+        self.assertEqual(B.arbol_a_texto(envuelto), "a AND (b AND a)")
+        self.assertEqual(ruta_g, ("b",))
+        self.assertEqual(B.arbol_a_texto(B.desenvolver_en(envuelto, ("b",))), "a AND b AND a")
+        # Envolver a través de Y/O (b OR a en a AND b OR a -> a AND (b OR a)) y desagrupar de vuelta
+        env_mixto, ruta_m = B.envolver_varios(r_o, [("a", "b"), ("b",)])
+        self.assertEqual(B.arbol_a_texto(env_mixto), "a AND (b OR a)")
+        self.assertEqual(B.arbol_a_texto(B.desenvolver_en(env_mixto, ruta_m)), "a AND b OR a")
+        # Operadores aritméticos en línea (+ -> - -> * -> /)
+        ar = B.texto_a_arbol_valor("CT + 1 + 2", VARS, [])
+        ar1 = B.cambiar_operador_ar(ar, (), 1)
+        self.assertEqual(B.arbol_a_texto(ar1), "CT + 1 - 2")
+        self.assertEqual(B.arbol_a_texto(B.cambiar_operador_ar(ar1, (), 1)), "CT + 1 * 2")
+
 
 @unittest.skipUnless(QT, "requiere PySide6")
 class ContarHuecos(unittest.TestCase):

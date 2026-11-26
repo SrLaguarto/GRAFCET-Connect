@@ -5,10 +5,11 @@ from .. import estilo
 from ..laminas import VistaLamina
 from ..paneles import ContextoNombres, LINEAS_NOMBRE, partir_nombre
 from typing import Any
-from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QAbstractButton, QAbstractScrollArea, QApplication, QPushButton, QSizePolicy, QStyle,
-                               QStyleOptionButton, QStylePainter, QStyledItemDelegate, QTabBar, QToolButton, QWidget)
+from PySide6.QtWidgets import (QAbstractButton, QAbstractScrollArea, QAbstractSpinBox, QApplication, QComboBox,
+                               QLineEdit, QPlainTextEdit, QPushButton, QSizePolicy, QStyle, QStyleOptionButton,
+                               QStylePainter, QStyledItemDelegate, QTabBar, QTableWidget, QTextEdit, QToolButton, QWidget)
 
 
 def _ventana() -> type:
@@ -37,6 +38,7 @@ class _BotonEntrada(QPushButton):
         self.setMinimumHeight(estilo.ALTO_ENTRADA)
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.indicar(False)
 
     def enterEvent(self, event: Any) -> None:  # noqa: N802
         super().enterEvent(event)
@@ -102,7 +104,36 @@ class _BotonEntrada(QPushButton):
         self.initStyleOption(opcion)
         # (con el foco, la hoja de estilo pinta el anillo `[tecl="true"]:focus`: aquí no se toca el estado del foco)
         if " = " in opcion.text:
-            opcion.text = self.texto_visible()
+            lineas = self.lineas_visibles()
+            if len(lineas) == 1:
+                nombre, _, valor = self.text().rpartition(" = ")
+                icono = QIcon(opcion.icon)
+                tam_icono = QSize(opcion.iconSize)
+                opcion.text = ""
+                opcion.icon = QIcon()
+                painter.drawControl(QStyle.ControlElement.CE_PushButton, opcion)
+                contenido = self.rect().adjusted(12, 2, -12, -2)
+                izq = contenido.left()
+                if not icono.isNull():
+                    rect_ico = QRect(izq, self.height() // 2 - tam_icono.height() // 2, tam_icono.width(), tam_icono.height())
+                    icono.paint(painter, rect_ico, Qt.AlignmentFlag.AlignCenter)
+                    izq += tam_icono.width() + 6
+                cifra_txt = f"= {valor}"
+                f_cifra = estilo.fuente(estilo.T_CIFRA, mono=True)
+                f_cifra.setWeight(QFont.Weight.DemiBold)
+                ancho_cifra = QFontMetrics(f_cifra).horizontalAdvance(cifra_txt)
+                ancho_nombre = max(20, contenido.left() + contenido.width() - izq - ancho_cifra - 8)
+                r_nombre = QRectF(izq, contenido.top(), ancho_nombre, contenido.height())
+                painter.save()
+                painter.setFont(self.font())
+                painter.setPen(opcion.palette.buttonText().color())
+                nombre_elidido = painter.fontMetrics().elidedText(nombre, Qt.TextElideMode.ElideMiddle, int(r_nombre.width()))
+                painter.drawText(r_nombre, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), nombre_elidido)
+                painter.setFont(f_cifra)
+                painter.drawText(QRectF(contenido), int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter), cifra_txt)
+                painter.restore()
+                return
+            opcion.text = "\n".join(lineas)
         painter.drawControl(QStyle.ControlElement.CE_PushButton, opcion)
 
     def ancho_natural(self, texto: str | None = None) -> int:
@@ -133,7 +164,7 @@ class _BotonEntrada(QPushButton):
             p.drawRoundedRect(QRectF(5, 8, 12, 9), 1.5, 1.5)
             p.drawLine(11, 11, 11, 14)
         else:
-            p.setBrush(color if on else Qt.BrushStyle.NoBrush)
+            p.setBrush(QColor(estilo.LED_CONSOLA) if on else Qt.BrushStyle.NoBrush)
             p.drawEllipse(QPointF(11, 10), 5.5, 5.5)
         p.end()
         self.setIconSize(QSize(24, 20))
@@ -141,6 +172,77 @@ class _BotonEntrada(QPushButton):
 
     def nextCheckState(self) -> None:  # noqa: N802
         pass  # refrescar() pone el valor confirmado por la simulación
+
+
+class TablaConsola(QTableWidget):
+    """Tabla de consola de simulación: pinta cada fila como tarjeta limpia sin ocultar columnas ni datos."""
+
+    def paintEvent(self, event: Any) -> None:  # noqa: N802
+        p = QPainter(self.viewport())
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        vp_w = self.viewport().width()
+        fila_sel = self.currentRow()
+        for r in range(self.rowCount()):
+            y = self.rowViewportPosition(r)
+            h = self.rowHeight(r)
+            if y + h < 0 or y > self.viewport().height() or h <= 4:
+                continue
+            val_item = self.item(r, 2) if self.columnCount() > 2 else None
+            es_salida_activa = (
+                self.columnCount() == 4
+                and self.item(r, 1) is not None
+                and self.item(r, 1).text() == "salida continua"
+                and val_item is not None
+                and val_item.text() == "ON"
+            )
+            seleccionada = r == fila_sel and self.selectionModel() is not None and self.selectionModel().isRowSelected(r)
+            if seleccionada:
+                borde, fondo = estilo.ACENTO, estilo.ACENTO_SUAVE
+            elif es_salida_activa:
+                borde, fondo = estilo.SIMULACION_BORDE, estilo.SIMULACION_SUAVE
+            else:
+                borde, fondo = estilo.BORDE, estilo.SUPERFICIE_2
+            rect = QRectF(1.5, y + 2.5, max(4, vp_w - 3), max(4, h - 5))
+            p.setPen(QPen(QColor(borde), 1))
+            p.setBrush(QColor(fondo))
+            p.drawRoundedRect(rect, 5, 5)
+        p.end()
+        super().paintEvent(event)
+
+
+class _DelegadoValorConsola(QStyledItemDelegate):
+    """Pinta el valor «ON» de salidas continuas activas como una micro-pastilla verde discreta."""
+
+    def paint(self, painter: Any, option: Any, index: Any) -> None:
+        texto = str(index.data() or "")
+        modelo = index.model()
+        es_continua = False
+        if modelo is not None:
+            es_continua = str(modelo.index(index.row(), 1).data() or "") == "salida continua"
+        if texto == "ON" and es_continua:
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            fuente = QFont(option.font)
+            fuente.setFamily(estilo.FUENTE_MONO)
+            fuente.setBold(True)
+            px = fuente.pixelSize()
+            if px > 0:
+                fuente.setPixelSize(max(10, px - 1))
+            painter.setFont(fuente)
+            fm = QFontMetrics(fuente)
+            w = min(option.rect.width() - 4, fm.horizontalAdvance("ON") + 12)
+            h = min(option.rect.height() - 6, max(16, fm.height() + 4))
+            x = option.rect.left() + max(0, (option.rect.width() - w) // 2)
+            y = option.rect.top() + max(0, (option.rect.height() - h) // 2)
+            pill = QRectF(x, y, w, h)
+            painter.setPen(QPen(QColor(estilo.SIMULACION_BORDE), 1))
+            painter.setBrush(QColor("#dcfce7"))
+            painter.drawRoundedRect(pill, h / 2, h / 2)
+            painter.setPen(QColor(estilo.SIMULACION))
+            painter.drawText(pill, int(Qt.AlignmentFlag.AlignCenter), "ON")
+            painter.restore()
+            return
+        super().paint(painter, option, index)
 
 
 class _AjustaBanda(QObject):
@@ -232,7 +334,8 @@ class _FocoTeclado(QObject):
                         Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape))
     PUNTERO = (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick, QEvent.Type.Wheel, QEvent.Type.TouchBegin,
                QEvent.Type.TabletPress)
-    CON_ANILLO = (QAbstractButton, QTabBar, QAbstractScrollArea, VistaLamina)  # los controles cuyo anillo depende del teclado
+    CON_ANILLO = (QAbstractButton, QTabBar, QAbstractScrollArea, VistaLamina,
+                  QComboBox, QAbstractSpinBox, QLineEdit)  # los controles cuyo anillo depende del teclado
 
     def __init__(self, padre: QObject | None = None) -> None:
         super().__init__(padre)
@@ -262,8 +365,12 @@ class _FocoTeclado(QObject):
                 self.teclado = False
                 self._marcar_foco(False)
         elif tipo == QEvent.Type.KeyPress and evento.key() in self.TECLAS:
-            if not self.teclado and (evento.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab) or not evento.modifiers() & (
-                    Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.MetaModifier)):
+            en_texto = isinstance(objeto, (QLineEdit, QAbstractSpinBox, QTextEdit, QPlainTextEdit))
+            es_tab = evento.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab)
+            if (not en_texto or es_tab) and not self.teclado and (
+                    es_tab or not evento.modifiers() & (
+                        Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier
+                        | Qt.KeyboardModifier.MetaModifier)):
                 self.teclado = True
                 self._marcar_foco(True)
         elif tipo == QEvent.Type.FocusIn and isinstance(objeto, self.CON_ANILLO):

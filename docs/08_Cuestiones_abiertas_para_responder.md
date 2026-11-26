@@ -20,7 +20,7 @@ Las páginas son del PDF local («Resumen de norma UNE Grafcet.pdf»), según el
 | 1. Inicialización (U-09) | Muchos programas normales no arrancan | 1.1–1.5 |
 | 2. Lecturas y escrituras en el mismo instante (U-05) | Contadores y asignaciones encadenadas | 2.1–2.5 |
 | 3. Etapa activada y desactivada a la vez (U-04) | Acciones y temporizadores de esa etapa | 3.1–3.4 |
-| 4. Fronteras de tiempo (U-06) | Temporizadores en casos límite | 4.1–4.5 |
+| 4. Fronteras de tiempo (U-06) | Temporizadores en casos límite | 4.1–4.6 |
 | 5. Flancos durante el recorrido (U-03) | Ya es opción; falta la parte de acciones | 5.1–5.3 |
 | 6. Transiciones fuente y arranque vacío (U-07) | Modelos sin etapa inicial o con fuentes | 6.1–6.4 |
 | 7. Jerarquías: forzado, macroetapas y encapsulación (U-08, U-02) | Su ejecución | 7.1–7.7 |
@@ -256,6 +256,14 @@ Cláusula / página / ¿normativo o nota?: Respondida en el comparador (B) y rev
 - [ ] **Dejar abierta**
 
 Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 27-10-2026 en el comparador (sin cláusula citada; contraste normativo pendiente, U-01).
+
+### 4.6 · Base temporal compuesta (H-09)
+**Antes:** solo se admitía `active(etapa)` o una expresión booleana de solo entradas (`D-CAPACIDAD-NO-SOPORTADA`).
+- [X] **A.** Cualquier expresión booleana sirve de base (`5s/(X5·X4)`, `3s/(a + b)`, `2s/NOT a`, etapas, entradas, internas, salidas o mezclas), excepto si contiene un flanco (`↑a`, `↓a`), que se rechaza (`D-TIPO-EVENTO`). Se extiende P-IMP-18: solo cuenta el valor de la base al cierre del instante; los cambios transitorios dentro del mismo instante no reinician ni interrumpen la temporización.
+- [ ] **B.** Mantener solo `active(etapa)` o entradas.
+- [ ] **Dejar abierta**
+
+Cláusula / página / ¿normativo o nota?: Respondida por el responsable el 24-11-2026 (`P-IMP-176`; extiende `P-IMP-18` y cierra H-09 en el producto; contraste normativo pendiente, U-01).
 
 ---
 

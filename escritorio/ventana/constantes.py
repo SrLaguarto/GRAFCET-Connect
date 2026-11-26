@@ -10,7 +10,7 @@ TITULO = "GRAFCET Connect"
 URL_CODIGO = "https://github.com/SrLaguarto/GRAFCET-Connect"  # dónde está el código (diálogo «Acerca de»)
 URL_FALLOS = "https://github.com/SrLaguarto/GRAFCET-Connect/issues"  # dónde se comunica un fallo o una sugerencia
 ICONO_PROGRAMA = Path(__file__).resolve().parents[1] / "recursos" / "grafcet_connect.ico"
-HUECO_FRANJA = 4  # px entre la franja de modo (4 px de alto, arriba del recuadro del dibujo) y la fila de cabecera
+HUECO_FRANJA = 0  # la franja de modo va arriba de la ventana, no dentro del recuadro del dibujo
 ANCHO_DERECHO = 270  # el panel derecho desde UMBRAL_DERECHO px de ancho de ventana (P10: «Papel» y «Tipo» enteros, tablas de estado con sus cuatro columnas)
 UMBRAL_DERECHO = 1280
 ANCHO_DERECHO_BASE = 218  # las columnas de Variables mantienen su ancho mínimo
@@ -29,7 +29,7 @@ AYUDA_EDICION = {
                    "sobre ella. Para quitar un bloque, arrástrelo fuera o pulse Supr.",
 }
 NOMBRE_HERRAMIENTA = {"seleccionar": "Seleccionar"}
-AVISO = "Basado en IEC 60848"
+AVISO = "Conforme a IEC 60848"
 TEXTOS_FIRMA = {
     "sin_firma": ("Archivo sin firma",
                   "Este archivo no se guardó con esta versión de GRAFCET Connect o se modificó fuera del programa. "

@@ -150,17 +150,20 @@ class PropiedadesFlotante(unittest.TestCase):
 
     # -- SPFL07 / SPFL08
     def test_SPFL07_condicionada_dos_paneles(self):
-        """REQ-EDT-02: una acción condicionada abre paneles «Condición» y «Acción», unidos a su parte ampliada; lo
-        que se edita en cada una cambia el dibujo."""
+        """REQ-EDT-02: una acción condicionada muestra «Condición» y «Activa variable» en la misma pantalla (2.0.1),
+        unidos a su vista previa; lo que se edita en condición y variable cambia el dibujo."""
         aid, sid = self.accion("condicionada"), self.ids["etapas"][2]
         self.abrir_accion(aid, sid)
         f = self.w.flot
-        self.assertEqual([v.titulo.text() for v in self.ventanas()], ["Propiedades · Acción condicionada"])
-        # E8 (conmutador): una tarjeta cada vez, en la misma celda; empieza por la condición
-        self.assertTrue(f.principal.condicion.isVisible() and not f.principal.accion.isVisible())
+        v = f.principal
+        self.assertEqual([x.titulo.text() for x in self.ventanas()], ["Propiedades · Acción condicionada"])
+        # 2.0.1: en condicionada, condición y selector «Activa variable» conviven en la misma pantalla sin conmutador
+        self.assertTrue(v.condicion.isVisible() and not v.accion.isVisible())
+        self.assertTrue(v.subcabecera.isVisible() and not v.conmutador.isVisible())
+        self.assertEqual((v.l_sub_titulo.text(), v.l_dest.text()), ("Condición", "Activa variable:"))
         self.comprobar_colocacion(2)
-        self.assertTrue(f.panel.prog.isVisible() and not f.panel.accion.variable.isVisible())
-        self.assertIs(f.panel.pagina_bloques.parentWidget(), f.principal.condicion.cuerpo)
+        self.assertTrue(f.panel.prog.isVisible() and f.panel.accion.variable.isVisible())
+        self.assertIs(f.panel.pagina_bloques.parentWidget(), v.condicion.cuerpo)
         f.panel._desde_bloques("paro")
         self.assertEqual(self.e.datos_accion(aid)["condicion"], "paro")
         textos = [
@@ -168,11 +171,10 @@ class PropiedadesFlotante(unittest.TestCase):
             if a["id"] == aid for seg in a.get("cond") or []
         ]
         self.assertIn("paro", "".join(textos), "el dibujo muestra la condición nueva")
-        imagen_antes = f.principal.lupa.grab().toImage()
-        f.elegir_parte("accion")
+        imagen_antes = v.lupa.grab().toImage()
         f.panel.accion.poner_variable("aux")
         HC._bombear(8)
-        self.assertNotEqual(imagen_antes, f.principal.lupa.grab().toImage())
+        self.assertNotEqual(imagen_antes, v.lupa.grab().toImage())
         self.assertEqual(self.e.datos_accion(aid)["variable"], "aux")
         textos = [
             seg["t"] for s in self.e.M["steps"] for a in s.get("actions", [])
@@ -226,24 +228,33 @@ class PropiedadesFlotante(unittest.TestCase):
         self.assertEqual(self.ventanas(), [])
 
     # -- SPFL10 / SPFL11
-    def test_SPFL10_continua_no_abre_ventana(self):
-        """REQ-EDT-02: el doble clic en una acción continua solo despliega su variable sobre ella: ninguna ventana
-        flotante."""
+    def test_SPFL10_continua_abre_ventana_propiedades(self):
+        """1A (IM9): el doble clic en una acción continua abre Propiedades · Acción continua con vista previa centrada y desplegable común."""
+        from escritorio.menu_variable import ComboMenu
         aid = self.accion("continua")
         caja = self.e.accion_en_id(aid)
         x, y, w, h = caja["rect"]
         self.e.doble(QPointF(x + w / 2, y + h / 2))
         HC._bombear(10)
-        self.assertEqual(self.ventanas(), [])
-        self.assertIsNotNone(getattr(self.w.diagrama, "_selector", None), "el desplegable sobre la acción")
+        self.assertIsNone(getattr(self.w.diagrama, "_selector", None))
+        vs = self.ventanas()
+        self.assertEqual([v.titulo.text() for v in vs], ["Propiedades · Acción continua"])
+        v = vs[0]
+        self.assertTrue(v.lupa.isVisible())
+        self.assertTrue(v.subcabecera.isVisible())
+        self.assertEqual(v.l_sub_titulo.text(), "Acción continua")
+        combos = v.findChildren(ComboMenu)
+        self.assertEqual(len(combos), 1)
+        self.assertTrue(combos[0].isVisible())
 
-    def test_SPFL11_continua_seleccionada_oculta_ventana(self):
-        """REQ-EDT-02: con la ventana abierta y fijada por otro elemento, seleccionar una continua oculta la ventana."""
+    def test_SPFL11_continua_abierta_muestra_accion_continua(self):
+        """1A (IM9): abrir Propiedades sobre una acción continua muestra «Propiedades · Acción continua»."""
         self.abrir([self.ids["etapas"][0]])
         self.abrir_accion(self.accion("continua"), self.ids["etapas"][1])
         p = self.w.flot.panel
-        self.assertEqual(self.ventanas(), [])
         self.assertTrue(p.continua)
+        vs = self.ventanas()
+        self.assertEqual([v.titulo.text() for v in vs], ["Propiedades · Acción continua"])
 
 
     # -- SPFL13
@@ -272,7 +283,7 @@ class PropiedadesFlotante(unittest.TestCase):
         """REQ-EDT-02: M1, M2, C1 y C2 sin excepciones nuevas en las tres resoluciones."""
         from test_auditoria_maquetacion import REGLAS, permitida
         for ancho, alto in ((1366, 768), (2000, 1250), (960, 1032)):
-            for tipo in ("etapa", "transicion", "condicionada", "evento"):
+            for tipo in ("etapa", "transicion", "condicionada", "evento", "continua"):
                 with self.subTest(tamano=(ancho, alto), tipo=tipo):
                     c = HC.Contexto(ancho, alto)
                     try:
@@ -355,7 +366,7 @@ class PropiedadesFlotante(unittest.TestCase):
                 self.assertTrue(f.panel.accion.caja_fichas.isVisible())
 
     def test_SPFL21_formulador_mas_bajo_y_con_dibujo_alrededor(self):
-        """REQ-EDT-02: reduce la altura sin arrinconar la ventana contra los bordes de la aplicación."""
+        """REQ-EDT-02: en 2.0.1 el editor usa altura estable (`_marco_ventana() + 332`) sin arrinconar la ventana contra los bordes."""
         self.e.nueva_variable("CT", "internal", {"kind": "int"})
         sid = self.ids["etapas"][0]
         self.e.poner_accion(sid, {"tipo": "activacion", "variable": "CT", "valor": "1"})
@@ -367,7 +378,10 @@ class PropiedadesFlotante(unittest.TestCase):
                 f = self.w.flot
                 area = f._area()
                 ventana = f.principal.geometry()
-                self.assertLessEqual(ventana.height(), area.height() * .75)
+                self.assertEqual(ventana.height(), min(area.height() - 2 * estilo.E6, f._marco_ventana() + 332))
+                self.assertLessEqual(ventana.height(), area.height() - 2 * estilo.E6)
+                if alto >= 1000:
+                    self.assertLessEqual(ventana.height(), area.height() * .75)
                 self.assertGreaterEqual(ventana.left() - area.left(), 48)
                 self.assertGreaterEqual(area.right() - ventana.right(), 48)
                 self.assertEqual(f.principal.accion.scroll.horizontalScrollBar().maximum(), 0)
@@ -386,18 +400,22 @@ class PropiedadesFlotante(unittest.TestCase):
                         c.w._abrir_opciones()
                         HC._bombear(10)
                         f = c.w.flot
-                        f.elegir_parte("accion")  # (E8: una parte cada vez; el valor y la variable están en «Acción»)
+                        v = f.principal
+                        if tipo == "evento":
+                            f.elegir_parte("accion")
                         f.panel.accion.poner_variable("hh" if tipo == "evento" else "aux")
                         f.panel._desde_bloques("marcha" if tipo == "evento" else "")
                         HC._bombear(10)
-                        scroll = f.principal.accion.scroll
+                        # 2.0.1: la variable vive en la subcabecera; el editor vive en el panel activo sin scroll vertical
+                        var = f.panel.accion.variable
+                        self.assertTrue(var.isVisible())
+                        self.assertTrue(v.subcabecera.rect().contains(QRect(var.mapTo(v.subcabecera, QPoint()), var.size())))
+                        panel = v.accion if tipo == "evento" else v.condicion
+                        scroll = panel.scroll
                         self.assertEqual(scroll.verticalScrollBar().maximum(), 0)
-                        campos = [f.panel.accion.variable]
-                        if tipo == "evento":
-                            campos.append(f.panel.accion.prog)  # (el valor se arma en el formulador de la tarjeta; el cuadro de texto ya no se ve)
-                        for campo in campos:
-                            rectangulo = QRect(campo.mapTo(scroll.viewport(), QPoint()), campo.size())
-                            self.assertTrue(scroll.viewport().rect().contains(rectangulo))
+                        editor = f.panel.accion.prog if tipo == "evento" else f.panel.prog
+                        rectangulo = QRect(editor.mapTo(scroll.viewport(), QPoint()), editor.size())
+                        self.assertTrue(scroll.viewport().rect().contains(rectangulo))
                     finally:
                         c.cerrar()
 
@@ -428,68 +446,63 @@ class PropiedadesFlotante(unittest.TestCase):
         return imagen.pixelColor(x, y).name()
 
     def test_SPFL23_margenes_de_la_ventana_y_cabecera(self):
-        """REQ-EDT-02: el cuerpo empieza a E4 de los cuatro bordes de la ventana (bajo la línea de la cabecera, también);
-        la cabecera mide ALTO_CONTROL + 2·E2, con el título de sección normal, el ✕ a la derecha y una línea de 1 px
-        de color BORDE debajo."""
+        """REQ-EDT-02: en 2.0.1 el cuerpo es edge-to-edge dentro del marco de la ventana (borde + MARCO), la cabecera blanca
+        mide 40 px con título normal y ✕ a la derecha, la línea inferior mide 1 px (`#cdd6e0`) y abajo va `pie_dialogo` (44 px)."""
         for c, v in self.casos():
             lupa, columna = v.lupa.geometry(), v.columna.geometry()
-            ultimo = v.pie.geometry() if v.pie.isVisible() else columna  # E8: la vista previa arriba (o, en dos tarjetas, a un lado) y, al pie, el pie
             izq = v.cuerpo.mapTo(v, lupa.topLeft()).x()
             der = v.width() - v.cuerpo.mapTo(v, columna.topRight()).x() - 1
-            abajo = v.height() - v.cuerpo.mapTo(v, ultimo.bottomLeft()).y() - 1
             arriba = v.cuerpo.mapTo(v, lupa.topLeft()).y() - (v.linea.geometry().bottom() + 1)
-            self.assertEqual([izq, der, abajo, arriba], [estilo.E4] * 4)
-            self.assertEqual(v.cabecera.height(), estilo.ALTO_CONTROL + 2 * estilo.E2)
+            self.assertEqual(izq, der)
+            self.assertLessEqual(izq, 2, "cuerpo edge-to-edge dentro del marco")
+            self.assertEqual(arriba, 0, "la lupa nace pegada bajo la línea de la cabecera")
+            self.assertTrue(v.pie_dialogo.isVisible())
+            self.assertEqual(v.pie_dialogo.height(), 44)
+            self.assertLessEqual(v.height() - v.pie_dialogo.geometry().bottom() - 1, 2)
+            self.assertEqual(v.cabecera.height(), 40)
             self.assertEqual(v.titulo.objectName(), "tituloPanel", "título de sección normal, no reducido")
             self.assertTrue(v.linea.isVisible() and v.linea.height() == 1)
             self.assertEqual(v.linea.geometry().top(), v.cabecera.geometry().bottom() + 1)
-            self.assertLessEqual(abs(v.linea.width() - (v.width() - 2)), 1, "de lado a lado")
+            self.assertLessEqual(abs(v.linea.width() - (v.width() - 2 * izq)), 1, "de lado a lado")
             imagen = v.grab().toImage()
             y = v.linea.geometry().center().y()
-            self.assertEqual(self.color(imagen, v.width() // 2, y), estilo.BORDE)
-            centro_cab = v.cabecera.geometry().center().y()
+            self.assertEqual(self.color(imagen, v.width() // 2, y), "#cdd6e0")
+            centro_cab = v.cabecera.rect().center().y()
             self.assertLessEqual(abs(v.b_cerrar.geometry().center().y() - centro_cab), 1, "✕ centrada en vertical")
             self.assertLessEqual(abs(v.titulo.geometry().center().y() - centro_cab), 1)
             self.assertGreater(v.b_cerrar.geometry().left(), v.width() // 2, "✕ a la derecha")
-            self.assertLessEqual(v.cabecera.width() - v.b_cerrar.geometry().right() - 1, estilo.E2 + 1)
+            self.assertLessEqual(v.cabecera.width() - v.b_cerrar.geometry().right() - 1, 12)
 
     def test_SPFL24_tarjetas_iguales_con_margen_interior_y_titulo_dentro(self):
-        """REQ-EDT-02: cada panel es una tarjeta con un único fondo igual en todas, margen interior ≥ E3, el título
-        dentro arriba con E2 debajo y ningún fondo gris anidado."""
-        from PySide6.QtWidgets import QWidget
+        """REQ-EDT-02: en 2.0.1 `PanelInterior` es un contenedor plano blanco edge-to-edge (sin tarjeta gris ni fila de título interior);
+        los editores usan margen 0 y las fichas simples margen de 14 px."""
         for c, v in self.casos():
-            fondos = set()
+            es_editor = c.w.flot.panel.pagina in ("transicion", "accion")
             for t in self.tarjetas(v):
-                hijos = [h for h in t.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly) if h.isVisible()]
-                self.assertTrue(hijos)
-                for h in hijos:
-                    g = h.geometry()
-                    self.assertGreaterEqual(min(g.left(), g.top(), t.width() - g.right() - 1, t.height() - g.bottom() - 1),
-                                            estilo.E3, (t.objectName(), h.objectName() or type(h).__name__))
-                cabecera = t.conmutador if t.conmutador is not None and t.conmutador.isVisible() else t.titulo  # (el conmutador ocupa el lugar del título)
-                self.assertTrue(t.rect().contains(cabecera.geometry()), "el título va dentro de la tarjeta")
-                self.assertEqual(t.scroll.geometry().top() - t.fila_titulo.geometry().bottom() - 1, estilo.E2)
-                self.assertLess(cabecera.geometry().top(), t.height() // 3)
+                self.assertTrue(t.titulo.isHidden(), "sin fila de título interior en PanelInterior")
+                self.assertEqual(t.alto_titulo(), 0)
+                self.assertEqual(t.scroll.geometry(), t.rect(), "scroll edge-to-edge dentro de PanelInterior")
+                m = t.lay_cuerpo.contentsMargins()
+                esperado = 0 if es_editor else 14
+                self.assertEqual((m.left(), m.top(), m.right(), m.bottom()), (esperado,) * 4)
                 imagen = t.grab().toImage()
-                fondos.add(self.color(imagen, estilo.E1, t.height() // 2))
-                self.assertEqual(self.color(imagen, t.width() // 2, 0), estilo.BORDE, "borde de 1 px")
                 grises = sum(imagen.pixelColor(x, y).name() == estilo.FONDO
                              for x in range(0, imagen.width(), 2) for y in range(0, imagen.height(), 2))
-                self.assertEqual(grises, 0, "ningún fondo gris anidado dentro de la tarjeta")
-            self.assertEqual(fondos, {estilo.SUPERFICIE_2}, "el mismo fondo en todas las tarjetas")
+                self.assertEqual(grises, 0, "ningún fondo gris anidado dentro del panel")
 
     def test_SPFL25_lupa_con_marco_hueco_y_senales_de_tarjeta(self):
-        """REQ-EDT-09: la lupa conserva borde y hueco E6; las señales sustituyen a las líneas."""
+        """REQ-EDT-09: en 2.0.1 la lupa es una franja plana blanca edge-to-edge con filete inferior `#cdd6e0`, sin tarjeta redondeada
+        ni capa de líneas; las señales usan `SENAL_CONDICION` y `DESHABILITADO`."""
         for c, v in self.casos():
-            f = c.w.flot
             imagen = v.lupa.grab().toImage()
-            self.assertEqual(self.color(imagen, 0, v.lupa.height() // 2), estilo.BORDE)
+            self.assertEqual(self.color(imagen, 0, v.lupa.height() // 2), estilo.SUPERFICIE)
             self.assertEqual(self.color(imagen, estilo.E1, v.lupa.height() // 2), estilo.SUPERFICIE)
-            self.assertEqual(v.columna.geometry().top() - v.lupa.geometry().bottom() - 1, estilo.E3)  # franja: el hueco hasta la tarjeta es E3
+            self.assertEqual(self.color(imagen, v.lupa.width() // 2, v.lupa.height() - 1), "#cdd6e0")
+            siguiente = v.subcabecera if v.subcabecera.isVisible() else v.columna
+            self.assertEqual(siguiente.geometry().top(), v.lupa.geometry().bottom() + 1)
             self.assertFalse(v.findChildren(QWidget, "enlacesFlotantes"))
             if v.condicion.isVisible():
-                # (la parte que se edita, en su color; la otra, en gris)
-                self.assertEqual([color for _, color, _ in v.lupa.senales], [v.condicion.senal, estilo.DESHABILITADO])
+                self.assertEqual([color for _, color, _ in v.lupa.senales], [estilo.SENAL_CONDICION])
 
     def test_SPFL26_ningun_texto_recortado(self):
         """REQ-EDT-02: el texto de cada etiqueta y botón visible cabe en su ancho, o acaba en «…» con ayuda emergente."""
@@ -543,14 +556,15 @@ class PropiedadesFlotante(unittest.TestCase):
                 self.assertTrue(oscuros, "el trazo de unión de la primera acción se ve")
 
     def test_SPFL28_senales_de_condicion_y_accion_coinciden_con_sus_partes(self):
-        """REQ-EDT-09: cada resaltado de la lupa corresponde al rectángulo real y al color de su tarjeta."""
+        """REQ-EDT-09: cada resaltado de la lupa corresponde al rectángulo real y al color de la parte activa (sin velo gris en la inactiva)."""
         for c, v in self.casos(("evento", "condicionada")):
             caja = c.e.accion_en_id(c.w.flot.panel.ident)
-            self.assertEqual(v.lupa.senales, [(QRectF(*caja["marca"]), v.condicion.senal, False),
-                                             (QRectF(*caja["rect"]), estilo.DESHABILITADO, True)])
+            self.assertEqual(v.lupa.senales, [(QRectF(*caja["marca"]), estilo.SENAL_CONDICION, False)])
             c.w.flot.elegir_parte("accion")
-            self.assertEqual(v.lupa.senales, [(QRectF(*caja["marca"]), estilo.DESHABILITADO, False),
-                                             (QRectF(*caja["rect"]), v.accion.senal, True)])
+            if c.w.flot.panel.accion.clave_tipo == "evento":
+                self.assertEqual(v.lupa.senales, [(QRectF(*caja["rect"]), estilo.SENAL_ACCION, True)])
+            else:
+                self.assertEqual(v.lupa.senales, [(QRectF(*caja["marca"]), estilo.SENAL_CONDICION, False)])
 
     # -- encargo 18: ventana más limpia (sin fila Fórmula, aviso ni frase), más alto para los bloques, grupos plegables, lupa recortada y Esc
     def con_entradas(self, c, n=8):
@@ -610,8 +624,8 @@ class PropiedadesFlotante(unittest.TestCase):
         return next(a["id"] for a in c.e.ed.model["actions"] if c.e.datos_accion(a["id"])["tipo"] == tipo)
 
     def test_SPFL31_area_de_bloques_alta_y_sin_desplazamiento_evitable(self):
-        """REQ-EDT-02: el área de bloques de la ventana flotante ve al menos 6 fichas de variables a 1366×768 y el doble aproximadamente a
-        2000×1250 con dos paneles; la transición limita el alto. Las tarjetas no se desplazan."""
+        """REQ-EDT-02: con la altura estable de editor de 2.0.1 (`_marco_ventana() + 332`), el catálogo muestra al menos 6 fichas de
+        variables a 1366×768 y a 2000×1250 sin desplazamiento evitable en los paneles."""
         vistas = {}
         for ancho, alto in ((1366, 768), (2000, 1250)):
             for tipo in ("condicionada", "evento", "transicion"):
@@ -630,17 +644,14 @@ class PropiedadesFlotante(unittest.TestCase):
                     c.cerrar()
         for tipo in ("condicionada", "evento", "transicion"):
             self.assertGreaterEqual(vistas[(1366, tipo)], 6, vistas)
-            if tipo == "transicion":
-                self.assertLessEqual(vistas[(1366, tipo)], 10, vistas)
-                self.assertGreater(vistas[(2000, tipo)], vistas[(1366, tipo)], vistas)
-            else:
-                self.assertGreaterEqual(vistas[(2000, tipo)], int(vistas[(1366, tipo)] * 1.6), vistas)
+            self.assertGreaterEqual(vistas[(2000, tipo)], 6, vistas)
+            self.assertLessEqual(abs(vistas[(2000, tipo)] - vistas[(1366, tipo)]), 2, vistas)
 
     def test_SPFL32_sin_lineas_y_senales_solo_con_dos_paneles(self):
-        """REQ-EDT-09: no hay líneas; las dos señales solo aparecen con condición o evento."""
+        """REQ-EDT-09: no hay líneas; la señal de la parte activa solo aparece con condición o evento."""
         for c, v in self.casos(("etapa", "transicion", "activacion", "condicionada", "evento")):
             self.assertFalse(v.findChildren(QWidget, "enlacesFlotantes"))
-            self.assertEqual(len(v.lupa.senales), 2 if v.condicion.isVisible() else 0)
+            self.assertEqual(len(v.lupa.senales), 1 if v.condicion.isVisible() else 0)
 
     def mover_etapa(self, c, ident, y):
         # (V2-E6: por el editor, que crea un documento nuevo; antes se cambiaba `y` en el sitio en un documento sellado)

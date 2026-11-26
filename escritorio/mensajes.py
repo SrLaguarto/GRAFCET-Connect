@@ -183,3 +183,65 @@ def motivo_parada(codigo: str, mensaje: str, evoluciones: list[dict[str, Any]],
     detalle = causa + (f" Cambian de estado las etapas {_lista(etapas)}." if etapas else "")
     detalle += f"\nDetalle técnico: {mensaje}"
     return [(principal, detalle), (causa, detalle)]
+
+
+CORRECCION_VENCIMIENTOS = "Use tiempos distintos o evite que compitan por la misma etapa."
+PREFIJO_VENCIMIENTOS = "vencimientos simultáneos cuyo resultado depende del orden"
+
+
+def _dueno_del_temporizador(modelo: dict[str, Any], clave: str) -> tuple[str, str] | None:
+    """(«transicion» | «accion» | «limite», id) del elemento donde está el temporizador de esa clave: la clave de un retardo es el ID
+    de su expresión (con sufijo «.i» si está anidado) y la de una acción limitada, «limit:<acción>»."""
+    if clave.startswith("limit:"):
+        aid = clave[len("limit:"):]
+        return ("limite", aid) if any(a["id"] == aid for a in modelo.get("actions", [])) else None
+    eid = clave.split(".")[0]
+    for t in modelo.get("transitions", []):
+        if t.get("conditionRef") == eid:
+            return "transicion", t["id"]
+    for a in modelo.get("actions", []):
+        if eid in (a.get("conditionRef"), a.get("valueRef"), (a.get("trigger") or {}).get("expressionRef")):
+            return "accion", a["id"]
+    return None
+
+
+def _tras(modelo: dict[str, Any], nombres: dict[str, str], tid: str) -> str:
+    """«tras X1», «tras X1 y X2» o «en una transición fuente»: cómo se sitúa una transición por las etapas que tiene encima."""
+    t = next((t for t in modelo.get("transitions", []) if t["id"] == tid), {})
+    previas = [x_etapa(nombres.get(s, s)) for s in t.get("preRefs", [])]
+    if not previas:
+        return "en una transición fuente"
+    return "tras " + (previas[0] if len(previas) == 1 else ", ".join(previas[:-1]) + " y " + previas[-1])
+
+
+def vencimientos_en_palabras(d: dict[str, Any], modelo: dict[str, Any], nombres: dict[str, str]) -> tuple[str, str] | None:
+    """(mensaje, corrección) en lenguaje llano para el diagnóstico de vencimientos simultáneos cuyo resultado depende del orden
+    (`D-SEM-PENDIENTE`, «temporal.coincidencias»), con los elementos nombrados por su etiqueta. `None` si `d` no es de ese tipo
+    (así que el resto sigue su camino). El núcleo da las claves del grupo en la evidencia («claves»)."""
+    if d.get("code") != "D-SEM-PENDIENTE" or not str(d.get("message", "")).startswith(PREFIJO_VENCIMIENTOS):
+        return None
+    claves = [c.strip() for c in str((d.get("evidence") or {}).get("claves", "")).split(",") if c.strip()]
+    duenos = list(dict.fromkeys(x for x in (_dueno_del_temporizador(modelo, c) for c in claves) if x is not None))
+    final = "tienen temporizadores que vencen en el mismo instante y el resultado depende de cuál vaya primero."
+    if not duenos:
+        return "Varios temporizadores vencen en el mismo instante y el resultado depende de cuál vaya primero.", CORRECCION_VENCIMIENTOS
+    if all(tipo == "transicion" for tipo, _ in duenos):
+        etiquetas = [nombres.get(i, i) for _, i in duenos]
+        tras = [_tras(modelo, nombres, i) for _, i in duenos]
+        if len(set(tras)) == 1:
+            situadas, lugar = etiquetas, f" ({tras[0]})"
+        else:
+            situadas, lugar = [f"{e} ({t})" for e, t in zip(etiquetas, tras)], ""
+        if len(duenos) == 1:
+            return f"La transición {situadas[0]}{lugar} {final.replace('tienen', 'tiene varios', 1)}", CORRECCION_VENCIMIENTOS
+        return f"Las transiciones {_lista(situadas)}{lugar} {final}", CORRECCION_VENCIMIENTOS
+    partes = []
+    for tipo, i in duenos:
+        if tipo == "transicion":
+            partes.append(f"la transición {nombres.get(i, i)} ({_tras(modelo, nombres, i)})")
+            continue
+        a = next(a for a in modelo["actions"] if a["id"] == i)
+        accion = f"la acción de {nombres.get(a.get('targetRef'), a.get('targetRef'))} en la etapa {x_etapa(nombres.get(a['stepRef'], a['stepRef']))}"
+        partes.append(("el límite de " if tipo == "limite" else "") + accion)
+    return f"Los temporizadores de {_lista(partes)} vencen en el mismo instante y el resultado depende de cuál vaya primero.", \
+        CORRECCION_VENCIMIENTOS

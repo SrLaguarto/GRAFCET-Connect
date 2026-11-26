@@ -5,6 +5,7 @@ from typing import Any
 from PySide6.QtCore import QPointF
 from grafcet.editor import Editor
 from grafcet.view import force_situation
+from .. import orden_acciones
 from ..geometria.acciones import IMAN_ACCION
 from ..geometria.base import ajustar
 from ..diagrama import ACT_LINK, H, SX, elemento_en, posiciones
@@ -199,12 +200,15 @@ class _Forzados:
         hecho: list[str] = []
 
         def hacer() -> None:
+            orden = orden_acciones.ids_etapa(self.ed, sid) if (quitar is not None and fid is None) else None
             if quitar is not None and self._es_borrador(quitar):
                 self.ed.delete_draft_actions([quitar])
             elif quitar is not None:
                 self.ed.delete([quitar])
             if fid is None:
                 hecho.append(self.ed.add_force(sid, eleccion.get("destino"), forma, etapas))
+                if orden is not None:
+                    orden_acciones.sustituir(self.ed, sid, orden, quitar, hecho[0])
             else:
                 self.ed.set_force(fid, target_partial=eleccion.get("destino"), kind=forma, steps=etapas)
                 hecho.append(fid)

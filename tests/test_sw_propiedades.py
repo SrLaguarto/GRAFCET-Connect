@@ -52,10 +52,13 @@ class PropiedadesW(unittest.TestCase):
                     p.t_etiqueta.setFocus() if foco else p.t_etiqueta.clearFocus()
                     HC._bombear(3)
                     self.assertEqual(regla_C6(v), [])
-                    etiquetas = [x for x in p.t_etiqueta.parentWidget().findChildren(QLabel)
-                                 if x.text() in ("Etiqueta", "Comentario")]
-                    self.assertEqual(len(etiquetas), 2)  # E8: el pie rotula la etiqueta y el comentario, uno junto a su campo (ya no en una columna común)
-                    self.assertGreater(p.t_comentario.x(), p.t_etiqueta.geometry().right())
+                    # 2.0.1: «Etiqueta» vive inline en `cabecera` (`caja_etiqueta`) y «Comentario» en `pie` (`.comment-row`)
+                    et_cab = [x for x in v.caja_etiqueta.findChildren(QLabel) if x.text() == "Etiqueta"]
+                    et_pie = [x for x in v.pie.findChildren(QLabel) if x.text() == "Comentario"]
+                    self.assertEqual((len(et_cab), len(et_pie)), (1, 1))
+                    self.assertIs(p.t_etiqueta.parentWidget(), v.caja_etiqueta)
+                    self.assertIs(p.t_comentario.parentWidget(), v.pie)
+                    self.assertGreater(p.t_comentario.mapTo(v, QPoint()).y(), p.t_etiqueta.mapTo(v, QPoint()).y())
                 c.w._mostrar_panel("inferior", False)
 
     def test_SW2_clic_fuera_se_consume(self):

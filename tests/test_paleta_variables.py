@@ -35,10 +35,11 @@ class PaletaVariables(unittest.TestCase):
     def test_SPVU01_catalogo_siempre_visible_banda_y_grupos_en_orden(self):
         p = self.programador({"I10": ("input", "bool"), "I2": ("input", "bool"),
                               "M": ("internal", "bool"), "Q": ("output", "bool")}, ["X10", "X2"])
-        # (E8: sin pestañas; el catálogo está siempre a la vista y las cuatro categorías de la banda son rótulos con sus botones)
-        self.assertEqual([b.text() for b in p.categorias.values()],
-                         ["Operadores", "Temp.", "Comp.", "Const."])
-        self.assertEqual(p.t_catalogo.text(), "Variables y etapas")
+        # (2.0.1: sin pestañas; el catálogo está siempre a la vista y la cinta lleva el prefijo «Insertar:» y sus botones)
+        self.assertEqual(p.banda.l_prefijo.text(), "Insertar:")
+        self.assertEqual(list(p.categorias), ["operador", "tiempo", "comparacion", "constante"])
+        self.assertEqual([b.text() for bs in p.banda.botones.values() for b in bs],
+                         ["( … )", "Temporizador", "= ≠ < ≥", "1", "0"])
         self.assertEqual(p.paleta.clave, "variables")
         self.assertEqual([(c, t) for c, t, _, _ in p.paleta.grupos], list(GRUPOS))
         self.assertEqual([n["n"] for n in p.paleta.bloques()], ["I2", "I10", "X2", "X10", "M", "Q"])
@@ -51,23 +52,23 @@ class PaletaVariables(unittest.TestCase):
     def test_SPVU03_mensaje_completo_a_la_anchura_minima(self):
         p = self.programador()
         p.resize(400, 170)
-        p._sc_paleta.setFixedHeight(60)
+        p._sc_paleta.setFixedHeight(40)
         p.show()
         QApplication.processEvents()
         paleta = p.paleta
         aviso = paleta.mensaje
-        self.assertEqual(p._sc_paleta.width(), p.PALETA_INICIAL)  # (el catálogo mide 170 px al abrirse; el borde se arrastra)
+        self.assertEqual(p._col_catalogo.width(), p.PALETA_INICIAL)  # (el catálogo mide 208 px al abrirse; el borde se arrastra)
         self.assertEqual(aviso.text(), MENSAJE_VACIO)
         self.assertNotIn("…", aviso.text())
         self.assertTrue(aviso.wordWrap())
         self.assertEqual(aviso.alignment(), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        self.assertEqual((aviso.x(), aviso.y()), (estilo.E2, estilo.E2))
+        self.assertEqual((aviso.x(), aviso.y()), (6, 6))
         self.assertIn(estilo.TINTA_2, aviso.styleSheet())
         requerido = QFontMetrics(aviso.font()).boundingRect(
             0, 0, aviso.width(), 10000, Qt.TextFlag.TextWordWrap, MENSAJE_VACIO).height()
         self.assertGreater(requerido, QFontMetrics(aviso.font()).height())
         self.assertGreaterEqual(aviso.height(), requerido)
-        self.assertLessEqual(aviso.geometry().bottom() + estilo.E2, paleta.height())
+        self.assertLessEqual(aviso.geometry().bottom() + 6, paleta.height())
         self.assertGreater(p._sc_paleta.verticalScrollBar().maximum(), 0)
         self.assertEqual(paleta.bloques(), [])
         self.assertEqual(paleta.grupos, [])
@@ -76,11 +77,12 @@ class PaletaVariables(unittest.TestCase):
         variables = {f"I{i}": ("input", "bool") for i in range(11)}
         variables["VÁLvula"] = ("output", "bool")
         p = self.programador(variables)
-        self.assertTrue(p.paleta.filtro.isHidden())
+        self.assertTrue(p.paleta.filtro_externo)
+        self.assertFalse(p.paleta.filtro.isHidden())
         variables["memoria"] = ("internal", "bool")
         p.refrescar()
         self.assertFalse(p.paleta.filtro.isHidden())
-        self.assertEqual(p.paleta.filtro.placeholderText(), "Filtrar…")
+        self.assertEqual(p.paleta.filtro.placeholderText(), "Filtrar variables…")
         p.paleta.filtro.setText("valVULA")
         self.assertEqual([n["n"] for n in p.paleta.bloques()], ["VÁLvula"])
         self.assertEqual([t for _, t, _, _ in p.paleta.grupos], ["Salidas"])
@@ -93,7 +95,7 @@ class PaletaVariables(unittest.TestCase):
         self.assertEqual(p.paleta.filtro.text(), "")
         variables.pop("memoria")
         p.refrescar()
-        self.assertTrue(p.paleta.filtro.isHidden())
+        self.assertFalse(p.paleta.filtro.isHidden())
 
     def test_SPVU05_arrastre_preseleccionado_y_desplegables_por_papel(self):
         variables = {"I": ("input", "bool"), "M": ("internal", "bool"), "Q": ("output", "bool")}
@@ -113,8 +115,9 @@ class PaletaVariables(unittest.TestCase):
 
     def test_SPVU06_programador_numerico_no_cambia(self):
         p = self.programador({"CT": ("internal", "int")}, valor=True)
-        self.assertEqual(list(p.categorias), ["aritm", "numero"], "la banda del valor: Operadores y Constantes")
-        self.assertEqual(p.categorias["numero"].toolTip(), "Constantes")
+        self.assertEqual(list(p.categorias), ["aritm", "numero"], "la banda del valor: paréntesis y constante")
+        self.assertEqual(p.banda.l_prefijo.text(), "Insertar:")
+        self.assertEqual([b.text() for bs in p.banda.botones.values() for b in bs], ["( … )", "+ Constante"])
         self.assertEqual(p.paleta.clave, "vnum")
         self.assertIs(type(p.paleta), bloques.PaletaBloques)
         self.assertEqual([n["n"] for n in p.paleta.bloques()], ["CT"])
@@ -132,8 +135,8 @@ class PaletaVariables(unittest.TestCase):
                     self.assertGreaterEqual(x - rect.right(), estilo.E2)
                     self.assertEqual(y, rect.y())
                 else:
-                    self.assertEqual(x, estilo.E2)
-                    self.assertGreaterEqual(y - rect.bottom(), estilo.E2)
+                    self.assertEqual(x, 6)
+                    self.assertGreaterEqual(y - rect.bottom(), 2)
 
     def test_SPVU08_refresco_y_busqueda_por_nombre_visible_de_etapa(self):
         variables = {f"I{i}": ("input", "bool") for i in range(12)}
@@ -147,7 +150,9 @@ class PaletaVariables(unittest.TestCase):
         p.paleta.filtro.setText("final")
         self.assertEqual([n["n"] for n in p.paleta.bloques()], ["active(Final)"])
         p.seleccionar_elemento("otra transicion")
-        self.assertEqual([p.banda.nodo(b.clave)["k"] for b in p.banda.botones["operador"]], ["no", "sube", "baja", "par", "y", "o"])
+        self.assertEqual([p.banda.nodo(b.clave)["k"] for b in p.banda.botones["operador"]], ["par"])
+        self.assertEqual([p.banda.nodo(b.clave)["k"] for bs in p.banda.botones.values() for b in bs],
+                         ["par", "temp", "cmp", "const", "const"])
         variables.pop("I2")
         variables["Marcha"] = variables.pop("I3")
         p.refrescar()
@@ -210,9 +215,8 @@ class PaletaVariables(unittest.TestCase):
         self.assertTrue(t["entrada"].plegado and not t["etapa"].plegado)
         self.assertEqual([n["n"] for n in p.paleta.bloques()], ["X1", "M", "Q"])
         self.assertEqual(ajustes.value(CLAVE_PLEGADOS), "entrada")
-        imagen = t["entrada"].grab().toImage()  # el triángulo, con el color del papel (▸ plegado)
-        color = bloques.COLORES["entrada"].lower()
-        self.assertTrue(any(imagen.pixelColor(x, y).name() == color for x in range(0, 10) for y in range(imagen.height())))
+        imagen = t["entrada"].grab().toImage()  # el triángulo gris neutro (#8a99aa) del diseño 2.0.1 (▸ plegado)
+        self.assertTrue(any(imagen.pixelColor(x, y).name() == "#8a99aa" for x in range(0, 10) for y in range(imagen.height())))
         otra = self.programador(self.VARS, ["X1"])  # otra paleta (la barra o la flotante): lo recuerda y lo comparte
         self.assertEqual([n["n"] for n in otra.paleta.bloques()], ["X1", "M", "Q"])
         t["entrada"].click()

@@ -25,8 +25,8 @@ from typing import Any, Callable
 
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QPainter, QTextDocument
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QPushButton, QVBoxLayout, QWidget, QStyleOptionFrame, QStyle)
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
+                               QPushButton, QSizePolicy, QVBoxLayout, QWidget, QStyleOptionFrame, QStyle)
 
 from . import estilo
 from .bloques import Programador, sin_comillas
@@ -42,15 +42,15 @@ ANCHO_MAX_VARIABLE = 260
 SIN_VARIABLES = "(sin variables: créelas en la tabla de variables)"  # la lista de variables, si no hay ninguna que valga
 TIPO_CORTO = {"bool": "Bool", "int": "Ent", "decimal": "Dec", "duration": "Dur"}  # el tipo en la lista de variables de la acción
 # El «1» y el «0» del valor de una memorizada (maqueta v3): dos botones pegados; el elegido, relleno del color de la acción (sin borde de aviso)
-ESTILO_FICHA = (f"QPushButton {{ background: {estilo.SUPERFICIE}; color: {estilo.TINTA}; font-weight: 600; border: 1px solid "
-                f"{estilo.BORDE_CONTROL}; padding: 0 {estilo.E3}px; min-width: {2 * estilo.E4}px; }}"
-                f"QPushButton[lado=\"izq\"] {{ border-top-left-radius: {estilo.R_S}px; border-bottom-left-radius: {estilo.R_S}px; "
+ESTILO_FICHA = (f"QPushButton {{ background: #ffffff; color: #4a5b6e; font-size: 13px; font-weight: 700; border: 1px solid #7b8a9c; "
+                f"padding: 4px 16px; min-width: 38px; min-height: 26px; }}"
+                f"QPushButton[lado=\"izq\"] {{ border-top-left-radius: 6px; border-bottom-left-radius: 6px; "
                 f"border-top-right-radius: 0; border-bottom-right-radius: 0; }}"
-                f"QPushButton[lado=\"der\"] {{ border-top-right-radius: {estilo.R_S}px; border-bottom-right-radius: {estilo.R_S}px; "
+                f"QPushButton[lado=\"der\"] {{ border-top-right-radius: 6px; border-bottom-right-radius: 6px; "
                 f"border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 0; }}"
-                f"QPushButton:checked {{ background: {estilo.SENAL_ACCION}; color: white; border-color: {estilo.SENAL_ACCION}; }}"
-                f"QPushButton:disabled {{ background: {estilo.FONDO}; color: {estilo.DESHABILITADO}; "
-                f"border-color: {estilo.BORDE}; }}")
+                f"QPushButton:hover:!checked:enabled {{ background: #e4ecf3; color: #16263a; }}"
+                f"QPushButton:checked {{ background: {estilo.ACENTO}; color: #ffffff; border-color: {estilo.ACENTO_OSCURO}; }}"
+                f"QPushButton:disabled {{ background: #f6f8fb; color: #a0aec0; border-color: #cdd6e0; }}")
 
 
 
@@ -59,8 +59,8 @@ def opciones_variable(v: dict[str, tuple[str, str]], ofrecidas: list[str], elegi
     Salidas y luego Memorias (con su tipo) y la variable elegida aunque no valga para este tipo (se avisa). Nada elegido: «Elija…» o, si no hay
     ninguna que ofrecer, a dónde ir a crearlas."""
     out: list[tuple[str, Any, bool]] = []
-    if not elegida:
-        out.append(("Elija la variable…" if ofrecidas else SIN_VARIABLES, "", bool(ofrecidas)))
+    if not elegida and not ofrecidas:
+        out.append((SIN_VARIABLES, "", False))
     for papel, titulo in (("output", "Salidas"), ("internal", "Memorias")):
         nombres = [n for n in ofrecidas if v[n][0] == papel]
         if nombres:
@@ -216,18 +216,46 @@ class PanelAccion(QWidget):
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
         lay.addStretch(1)
-        # El valor de una memorizada: fichas 1/0 (booleana) o programador de valor (numérica)
+        # El valor de una memorizada: panel centrado estable (.stable-panel / .assign-card) para booleanas/sin variable,
+        # o editor de bloques aritmético (.editor-grid) para numéricas
         self.caja_valor = QWidget()
+        self.caja_valor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         vl = QVBoxLayout(self.caja_valor)
         vl.setContentsMargins(0, 0, 0, 0)
-        self.l_fichas = QLabel(":=")  # el «:=» de la fila; «Q :=» (la variable de la acción) queda en `l_valor`
-        self.l_fichas.setStyleSheet(f"color: {estilo.TINTA}; font-weight: 600; background: transparent")
-        self.disposicion_variable.addWidget(self.l_fichas)
+        vl.setSpacing(0)
+
+        self.panel_booleano = QFrame()
+        self.panel_booleano.setObjectName("panelAsignacionBool")
+        self.panel_booleano.setStyleSheet(
+            "QFrame#panelAsignacionBool { background: #fbfdff; border: 0; }"
+            "QFrame#tarjetaAsignacion { background: #ffffff; border: 1px solid #cdd6e0; border-radius: 8px; }"
+            "QFrame#tarjetaAsignacion[vacia=\"true\"] { border-style: dashed; border-color: #9aa9ba; }"
+            "QLabel#pildoraVarBool { background: #f6f8fb; border: 1px solid #cdd6e0; border-radius: 5px; "
+            "padding: 4px 10px; font-weight: 600; font-size: 13.5px; color: #16263a; }"
+        )
+        pbl = QVBoxLayout(self.panel_booleano)
+        pbl.setContentsMargins(24, 24, 24, 24)
+        pbl.setSpacing(12)
+        pbl.addStretch(1)
+
+        self.tarjeta_asignacion = QFrame()
+        self.tarjeta_asignacion.setObjectName("tarjetaAsignacion")
+        tal = QHBoxLayout(self.tarjeta_asignacion)
+        tal.setContentsMargins(20, 12, 20, 12)
+        tal.setSpacing(12)
+        self.l_asignacion = QLabel("Asignación")
+        self.l_asignacion.setStyleSheet("font-size: 12px; color: #5b6b7d; background: transparent;")
+        self.l_var_bool = QLabel("Elija…")
+        self.l_var_bool.setObjectName("pildoraVarBool")
+        self.l_fichas = QLabel(":=")
+        self.l_fichas.setStyleSheet(f"color: {estilo.ACENTO}; font-family: {estilo.FAMILIA_MONO}; font-size: 15px; font-weight: 700; background: transparent;")
         self.caja_fichas = QWidget()
+        self.caja_fichas.setStyleSheet("background: transparent;")
         fl = QHBoxLayout(self.caja_fichas)
         fl.setContentsMargins(0, 0, 0, 0)
         fl.setSpacing(0)
         self.grupo_fichas = QButtonGroup(self)
+        self.grupo_fichas.setExclusive(False)  # un grupo exclusivo no deja desmarcar: sin valor no debe haber ninguna ficha marcada (`_marcar_fichas`)
         self.fichas: dict[str, QPushButton] = {}
         for v, lado in (("1", "izq"), ("0", "der")):
             b = QPushButton(v)
@@ -239,32 +267,46 @@ class PanelAccion(QWidget):
             self.grupo_fichas.addButton(b)
             self.fichas[v] = b
             fl.addWidget(b)
-        self.disposicion_variable.addWidget(self.caja_fichas)
+        tal.addWidget(self.l_asignacion)
+        tal.addWidget(self.l_var_bool)
+        tal.addWidget(self.l_fichas)
+        tal.addWidget(self.caja_fichas)
+        pbl.addWidget(self.tarjeta_asignacion, 0, Qt.AlignmentFlag.AlignCenter)
+
+        self.l_nota_bool = QLabel("Seleccione arriba la variable destino y elija el valor booleano (1 o 0).")
+        self.l_nota_bool.setWordWrap(True)
+        self.l_nota_bool.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.l_nota_bool.setStyleSheet("font-size: 12px; color: #5b6b7d; background: transparent;")
+        pbl.addWidget(self.l_nota_bool)
+        pbl.addStretch(1)
+        vl.addWidget(self.panel_booleano, 1)
+
         self.disposicion_variable.addStretch(1)
+        self._variable_adoptada = False
+
         self.caja_numerica = QWidget()
         nl = QVBoxLayout(self.caja_numerica)
         nl.setContentsMargins(0, 0, 0, 0)
+        nl.setSpacing(0)
         self.prog = Programador(lambda: (self._variables(), self.e.fuente_bloques()[1] if self.e is not None else []),
                                 valor=True)
         self.prog.cambiado.connect(self._desde_bloques)
-        self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()  # Ctrl+Z deshace la operación
+        self.prog.al_deshacer = lambda: self.e is not None and self.e.deshacer()
         self.prog.al_rehacer = lambda: self.e is not None and self.e.rehacer()
         nl.addWidget(self.prog, 1)
-        # El texto del valor lo guarda este campo (oculto: el valor se ve en el formulador y en el dibujo, no en un segundo cuadro)
         self.valor = CajaFormula()
         self.valor.formato = self._formato_valor
         self.valor.textChanged.connect(self._valor_cambiado)
         self.valor.setParent(self.caja_numerica)
         self.valor.hide()
-        self.l_valor = QLabel("? :=", self.caja_numerica)  # «Q :=», sin paréntesis; «? :=» mientras no hay variable (oculta)
+        self.l_valor = QLabel("? :=", self.caja_numerica)
         self.l_valor.hide()
         vl.addWidget(self.caja_numerica, 1)
 
     def escalar(self) -> None:
-        """La caja de la variable y los botones 1 y 0 miden lo que un control de la escala activa."""
-        self.variable.setFixedHeight(estilo.ALTO_CONTROL)
+        self.variable.setFixedHeight(28)
         for b in self.fichas.values():
-            b.setFixedHeight(estilo.ALTO_CONTROL)
+            b.setFixedHeight(30)
 
     # -- rellenar ----------------------------------------------------------------------------------
     def mostrar(self, e: Any, aid: str) -> None:
@@ -334,7 +376,7 @@ class PanelAccion(QWidget):
                 c.setItemData(c.count() - 1, tipo_a_mostrar(TIPO_CORTO.get(v[dato][1]) or nombre_tipo({"kind": v[dato][1]})), ROL_TIPO)
             if not habilitado:
                 c.model().item(c.count() - 1).setEnabled(False)
-        c.setCurrentIndex(max(0, c.findData(self._elegida)))
+        c.setCurrentIndex(c.findData(self._elegida) if self._elegida else (-1 if ofrecidas else 0))
         c.blockSignals(False)
         c.ajustar_ancho()
 
@@ -348,8 +390,11 @@ class PanelAccion(QWidget):
         continua = clave in CONTINUAS
         for w in (self.l_limite, self.limite):
             w.setVisible(clave == "limitada")
+        self.fila_variable.setVisible(not self._variable_adoptada)
         self._rellenar_variables()
-        self.l_valor.setText(f"{self._elegida or '?'} :=")
+        prefijo = f"{self._elegida or '?'} :="
+        self.l_valor.setText(prefijo)
+        self.prog.banda.fijar_prefijo(prefijo)
         self.l_fichas.setVisible(not continua)
         self.caja_valor.setVisible(not continua)
         self.escalar()
@@ -357,9 +402,21 @@ class PanelAccion(QWidget):
         for boton in self.fichas.values():
             boton.setEnabled(bool(self._elegida))
             boton.setToolTip("" if self._elegida else "Elija primero la variable de la acción")
+        self.panel_booleano.setVisible(not continua and booleana)
         self.caja_fichas.setVisible(not continua and booleana)
-        self.caja_valor.setMaximumWidth(0 if booleana else 16777215)
+        self.caja_valor.setMaximumWidth(16777215)
         self.caja_numerica.setVisible(not continua and not booleana)
+        vacia = not self._elegida
+        self.l_var_bool.setText(self._elegida if self._elegida else "Elija…")
+        self.l_nota_bool.setText(
+            "Seleccione arriba una variable booleana o numérica para configurar la asignación."
+            if vacia else
+            "Elija el valor booleano (1 o 0) que tomará la variable al ejecutarse la acción."
+        )
+        if bool(self.tarjeta_asignacion.property("vacia")) != vacia:
+            self.tarjeta_asignacion.setProperty("vacia", vacia)
+            self.tarjeta_asignacion.style().unpolish(self.tarjeta_asignacion)
+            self.tarjeta_asignacion.style().polish(self.tarjeta_asignacion)
         self.prog.refrescar()
         self._previsualizar()
 
@@ -444,7 +501,14 @@ class PanelAccion(QWidget):
 
     def _poner_valor(self, texto: str) -> None:
         self.valor.setText(texto)
+        self._marcar_fichas(self.valor.text())  # (si el valor no cambió, o no se aceptó, lo marcado sigue siendo lo que hay)
         self._aplicar("valor")
+
+    def _marcar_fichas(self, texto: str) -> None:
+        """Marca la ficha que coincide con el valor y ninguna si no hay valor: lo que se ve es lo que hay."""
+        t = texto.strip()
+        for v, b in self.fichas.items():
+            b.setChecked(t == v)
 
     def _desde_bloques(self, texto: str) -> None:
         self._sync = True
@@ -454,9 +518,7 @@ class PanelAccion(QWidget):
 
     def _valor_cambiado(self, texto: str) -> None:
         """El texto del valor cambió (ficha, bloques o a mano): las fichas siguen al texto y la frase también."""
-        t = texto.strip()
-        for v, b in self.fichas.items():
-            b.setChecked(t == v)
+        self._marcar_fichas(texto)
         if not self._llenando and self._viva():
             self.frase.setText(self.frase_explicativa())
 

@@ -196,8 +196,8 @@ class _Enlaces:
         visibles = self.etiquetas_visibles()
         with ed.group("abrir rama"):
             if es_paso:
-                nuevo, _ = ed.add_transition(parcial, "", [base] if abajo else [], [] if abajo else [base], at=(x, y),
-                                             label=ed.next_label("transition"))
+                nuevo, _ = ed.add_transition(parcial, "", [base] if abajo else [], [] if abajo else [base],
+                                             at=(x, y))
                 self.etiqueta_como_las_demas(nuevo, visibles, (x, y))
             else:
                 nuevo = ed.add_step(parcial, ed.next_label("step"), at=(x, y))
@@ -232,8 +232,7 @@ class _Enlaces:
             return
         visibles = self.etiquetas_visibles()
         with self.ed.group("crear transición"):
-            tid, _ = self.ed.add_transition(self.parcial_de(ini), "", [ini], [fin], at=(tx, ty),
-                                            label=self.ed.next_label("transition"))
+            tid, _ = self.ed.add_transition(self.parcial_de(ini), "", [ini], [fin], at=(tx, ty))
             self.etiqueta_como_las_demas(tid, visibles, (tx, ty))
         self.sel = [tid]
         self.informar("Transición nueva entre las dos etapas: escriba su receptividad en las propiedades (doble clic en ella).")
@@ -250,8 +249,7 @@ class _Enlaces:
             x -= 160
         visibles = self.etiquetas_visibles()
         with self.ed.group("crear transición"):
-            tid, _ = self.ed.add_transition(self.parcial_de(origen), "", [origen], [destino], at=(x, y),
-                                            label=self.ed.next_label("transition"))
+            tid, _ = self.ed.add_transition(self.parcial_de(origen), "", [origen], [destino], at=(x, y))
             self.etiqueta_como_las_demas(tid, visibles, (x, y))
         self.sel = [tid]
         tipo = "Repetición de secuencia" if pos[destino][1] <= pos[origen][1] else "Salto de secuencia"
@@ -410,7 +408,7 @@ class _Enlaces:
         if ident in self._pasos():
             visibles = self.etiquetas_visibles()
             with ed.group("añadir debajo"):
-                tid, _ = ed.add_transition(parcial, "", [ident], at=(x, y + DY), label=ed.next_label("transition"))
+                tid, _ = ed.add_transition(parcial, "", [ident], at=(x, y + DY))
                 self.etiqueta_como_las_demas(tid, visibles, (x, y + DY))
                 nid = ed.add_step(parcial, ed.next_label("step"), at=(x, y + 2 * DY))
                 ed.connect(tid, nid)

@@ -131,19 +131,20 @@ class Alturas(BaseQt):
         finally:
             estilo.activar_escala(anterior)
         w, e, ids = self._preparar(1366, 768)
-        for a in (w.a_deshacer, w.a_dependencias):
-            self.assertLessEqual(abs(w.tb_edit.widgetForAction(a).height() - estilo.ALTO_BARRA), 2)
+        for barra, a in ((w.tb_edit, w.a_deshacer), (w.tb_vista_der, w.a_dependencias), (w.tb_vista_der, w.a_errores)):
+            self.assertLessEqual(abs(barra.widgetForAction(a).height() - estilo.ALTO_BARRA), 2)
         w.hide()
 
     def test_SALC04_variables_botones_y_celdas_miden_lo_que_su_fila(self):
-        """REQ-UX-01: los botones de Variables miden `ALTO_CONTROL_COMPACTO` y el editor de una celda no pasa del alto de su fila, a las dos pantallas."""
+        """REQ-UX-01: los botones del pie de Variables miden `ALTO_CONTROL_COMPACTO + 2` y el editor de una celda no pasa del alto de su fila, a las dos pantallas."""
         for ancho, alto in TAMANOS:
             w, e, ids = self._preparar(ancho, alto)
             w._mostrar_panel("derecho", True)
             self._bombear(6)
             v = w.variables
+            esperado_boton = estilo.ALTO_CONTROL_COMPACTO + 2
             for b in (*v.b_nuevas.values(), v.b_quitar):
-                self.assertLessEqual(abs(b.height() - estilo.ALTO_CONTROL_COMPACTO), 1, (ancho, b.text(), b.height()))
+                self.assertLessEqual(abs(b.height() - esperado_boton), 1, (ancho, b.text(), b.height()))
             v.nueva("output")
             self._bombear(4)
             editor = v.tabla.indexWidget(v.tabla.currentIndex())
@@ -214,13 +215,13 @@ class Alturas(BaseQt):
         w.hide()
 
     def test_SALC07_barra_de_edicion_orden_ayudas_y_anchura(self):
-        """REQ-EDT-01, REQ-EDT-11: Play y Reiniciar preceden a los seis botones de edición, Dependencias y Errores;
-        los seis primeros solo llevan icono y atajo en la ayuda. Cabe a 1366×768; al simular se desactivan."""
+        """REQ-EDT-01, REQ-EDT-11: Play y Reiniciar preceden a los seis botones de edición (tb_edit), con Dependencias y
+        Errores a la derecha (tb_vista_der); los seis de edición solo llevan icono y atajo en la ayuda. Cabe a 1366×768; al simular se desactivan."""
         w, e, ids = self._preparar(1366, 768)
         acciones = list(w.tb_edit.actions())
-        esperado = [w.a_deshacer, w.a_rehacer, "|", w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar,
-                    "|", w.a_dependencias, w.a_errores]
+        esperado = [w.a_deshacer, w.a_rehacer, "|", w.a_cortar, w.a_copiar, w.a_pegar, w.a_borrar]
         self.assertEqual([("|" if a.isSeparator() else a) for a in acciones], esperado)
+        self.assertEqual(list(w.tb_vista_der.actions()), [w.a_dependencias, w.a_errores])
         for a, atajo in ((w.a_deshacer, "Ctrl+Z"), (w.a_rehacer, "Ctrl+Y"), (w.a_cortar, "Ctrl+X"), (w.a_copiar, "Ctrl+C"),
                          (w.a_pegar, "Ctrl+V"), (w.a_borrar, "Supr")):
             self.assertIn(atajo, a.toolTip())
@@ -228,14 +229,17 @@ class Alturas(BaseQt):
             self.assertEqual(boton.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonIconOnly)
             self.assertFalse(a.icon().isNull(), a.text())
             self.assertTrue(boton.isVisible())
-        forma = w.tb_edit.widgetForAction(w.a_dependencias).toolButtonStyle()
+        forma = w.tb_vista_der.widgetForAction(w.a_dependencias).toolButtonStyle()
         self.assertEqual(forma, Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.assertIs(w.diagrama.b_dependencias.parent(), w.tb_edit)
-        self.assertLessEqual(w.tb_edit.geometry().right(), w.herramientas_grafcet.width())
+        self.assertIs(w.diagrama.b_dependencias.parent(), w.tb_vista_der)
+        self.assertIs(w.b_errores.parent(), w.tb_vista_der)
+        self.assertLess(w.tb_edit.geometry().right(), w.tb_vista_der.geometry().left())
+        self.assertLessEqual(w.tb_vista_der.geometry().right(), w.herramientas_grafcet.width())
         self.assertEqual(desbordes(w, 0), [])
-        for a in (x for x in acciones if not x.isSeparator()):
-            wd = w.tb_edit.widgetForAction(a)
-            self.assertTrue(w.tb_edit.rect().contains(wd.geometry()), a.text())
+        for barra in (w.tb_edit, w.tb_vista_der):
+            for a in (x for x in barra.actions() if not x.isSeparator()):
+                wd = barra.widgetForAction(a)
+                self.assertTrue(barra.rect().contains(wd.geometry()), a.text())
         # la habilitación es la de las acciones: sin selección, Copiar y Borrar desactivadas
         e.seleccionar([])
         self._bombear(3)
@@ -297,7 +301,7 @@ class Alturas(BaseQt):
         self.assertEqual((p.config.host, p.config.puerto, p.config.unidad), ("10.0.0.7", 1502, 3))
         guardada = Configuracion.cargar(Path(carpeta.name) / ARCHIVO, p.doc)
         self.assertEqual((guardada.host, guardada.puerto, guardada.unidad), ("10.0.0.7", 1502, 3), "se guarda donde ya lo hacía Configuración")
-        self.assertEqual(p.destino.text(), "(10.0.0.7:1502)\nEsclavo ID:3")
+        self.assertEqual(p.destino.text(), "(10.0.0.7:1502) · ID 3")
         # al revés: lo que se cambia en Configuración se ve en la cabecera
         p.puerto.setValue(503)
         for caja, v in zip(p.host.cajas, ("172", "16", "0", "9")):

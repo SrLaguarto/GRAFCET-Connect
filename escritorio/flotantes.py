@@ -6,9 +6,10 @@ from typing import Any
 from PySide6.QtCore import QEvent, QLineF, QObject, QPoint, QPointF, QRect, QRectF, QSignalBlocker, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QTransform
 from PySide6.QtWidgets import (
-    QApplication, QLabel, QLineEdit, QPlainTextEdit, QTextEdit,
+    QApplication, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QTextEdit,
     QBoxLayout, QFrame, QHBoxLayout, QLayout, QScrollArea, QSizePolicy, QStackedLayout, QToolButton, QVBoxLayout, QWidget,
 )
+from shiboken6 import isValid
 
 from .interaccion_propiedades import ArrastrePropiedades
 from . import estilo
@@ -20,8 +21,6 @@ from .propiedades import ANCHO_COLUMNA, PanelPropiedades
 from .elementos_lupa import ocultar_vecinos
 from .medidas_propiedades import ancho_maximo, margen_horizontal
 from .partes_propiedades import ConmutadorPartes, PiePropiedades
-from .edicion import CONTINUAS
-from grafcet.expressions import is_event_positive
 
 AMPLIACION_MAXIMA = 1.25
 FRANJA_FRACCION = 0.25  # lo más alto que es la vista previa: una cuarta parte del alto del área de trabajo (E8)
@@ -58,8 +57,9 @@ class Lupa(QWidget):
         self.senales: list[tuple[QRectF, str, bool]] = []  # (zona de la escena, color, es la caja): la parte que se edita, en su color; la otra, en gris
         self.partes: list[tuple[QRectF, str]] = []  # (zona de la escena, parte) donde un clic cambia de parte
         self.recorte: list[QRectF] = []  # rectángulos de la escena que se pintan; vacío: todo lo que cae en `origen`
-        self.margen = estilo.E2  # el aire alrededor del elemento (en columna, E3)
-        self.texto_esquina = ""  # «Etapa N» en la esquina inferior derecha de la franja: solo informa (acciones)
+        self.margen = estilo.E2
+        self.texto_esquina = ""  # «Etapa N» en la esquina inferior derecha en pastilla (.pv-badge-corner)
+        self.pista_esquina = ""  # «Clic en la bandera o en la caja para alternar» en la izquierda (.pv-hint-corner)
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -102,18 +102,17 @@ class Lupa(QWidget):
         self._modelo, self._dependencias = modelo, dependencias
 
     def paintEvent(self, evento: Any) -> None:  # noqa: N802
-        marco = QPainter(self)  # la tarjeta de la vista previa: fondo suave, borde de 1 px y radio R_M, como las de los paneles
-        marco.setRenderHint(QPainter.RenderHint.Antialiasing)
-        marco.setPen(QPen(QColor(estilo.BORDE), 1))
-        marco.setBrush(QColor(estilo.SUPERFICIE))
-        marco.drawRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5), estilo.R_M, estilo.R_M)
+        marco = QPainter(self)  # franja plana blanca `.pv-strip` con filete inferior de 1 px (sin tarjeta redondeada)
+        marco.fillRect(self.rect(), QColor("#ffffff"))
+        marco.setPen(QColor("#cdd6e0"))
+        marco.drawLine(0, self.height() - 1, self.width(), self.height() - 1)
         marco.end()
         if self.origen.isEmpty():
             self._pintar_esquina()
             return
         escena = self._escena
         minimo = Z_BAR if self.tallo_transicion is not None else float("-inf")
-        p = QPainter(self)  # antes de ocultar: si falla, no quedan vecinos ocultos (la escena incremental no los rehace)
+        p = QPainter(self)
         p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         ocultos = ocultar_vecinos(escena, self.elemento, Z_EDIT, minimo)
         try:
@@ -124,28 +123,30 @@ class Lupa(QWidget):
                 pen.setCapStyle(Qt.PenCapStyle.FlatCap)
                 p.setPen(pen)
                 p.drawLine(t.map(self.tallo_transicion))
-            if self.recorte:  # solo el elemento: nada de las cajas vecinas que caen en el encuadre
-                zona = QPainterPath()  # (la unión en un solo contorno: con rectángulos sueltos y bordes suavizados se vería una costura)
+            if self.recorte:
+                zona = QPainterPath()
                 for r in self.recorte:
                     trozo = QPainterPath()
                     trozo.addRect(t.mapRect(r))
                     zona = zona.united(trozo)
                 p.setClipPath(zona)
             escena.render(p, destino, self.origen, Qt.AspectRatioMode.IgnoreAspectRatio)
-            # El resaltado de cada parte, después del dibujo y multiplicando: el fondo blanco de la caja se tiñe (antes lo tapaba y
-            # solo asomaba un halo por fuera) y los trazos y el texto siguen negros. La marca, con un poco de holgura; la caja, justa.
             p.setClipping(False)
-            p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
-            p.setPen(Qt.PenStyle.NoPen)
             for rectangulo, color, es_caja in self.senales:
-                relleno = QColor(color)
-                relleno.setAlphaF(ALFA_RESALTADO)
-                p.setBrush(relleno)
                 zona = self.transformar().mapRect(rectangulo)
+                p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
+                relleno = QColor(color)
+                relleno.setAlphaF(0.14 if es_caja else 0.16)
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(relleno)
                 if es_caja:
                     p.drawRect(zona)
+                    p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+                    p.setBrush(Qt.BrushStyle.NoBrush)
+                    p.setPen(QPen(QColor(color), 2.0))
+                    p.drawRect(zona)
                 else:
-                    p.drawRoundedRect(zona.adjusted(-estilo.E1, -estilo.E1, estilo.E1, estilo.E1), estilo.R_M, estilo.R_M)
+                    p.drawRoundedRect(zona.adjusted(-4, -2, 4, 2), 4, 4)
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         finally:
             for item in ocultos:
@@ -154,13 +155,30 @@ class Lupa(QWidget):
         self._pintar_esquina()
 
     def _pintar_esquina(self) -> None:
-        if not self.texto_esquina:
+        if not self.texto_esquina and not self.pista_esquina:
             return
         p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-        p.setPen(QColor(estilo.TINTA_2))
-        p.drawText(self.rect().adjusted(estilo.E3, estilo.E3, -estilo.E3, -estilo.E3),
-                   Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom, self.texto_esquina)
+        p.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+        f = p.font()
+        f.setPixelSize(11)
+        if self.pista_esquina:
+            f.setWeight(f.Weight.Normal)
+            p.setFont(f)
+            p.setPen(QColor("#5b6b7d"))
+            p.drawText(self.rect().adjusted(12, 4, -12, -6),
+                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom, self.pista_esquina)
+        if self.texto_esquina:
+            f.setWeight(f.Weight.DemiBold)
+            p.setFont(f)
+            fm = p.fontMetrics()
+            tw = fm.horizontalAdvance(self.texto_esquina) + 16
+            th = fm.height() + 4
+            rb = QRectF(self.width() - 12 - tw, self.height() - 6 - th, tw, th)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor("#eef2f6"))
+            p.drawRoundedRect(rb, 4, 4)
+            p.setPen(QColor("#4a5b6e"))
+            p.drawText(rb, Qt.AlignmentFlag.AlignCenter, self.texto_esquina)
         p.end()
 
 
@@ -179,68 +197,52 @@ class TituloSenal(TituloSeccion):
 
 
 class PanelInterior(QFrame):
-    """Una tarjeta: título dentro, arriba, y contenido desplazable. El mínimo del editor nunca agranda la ventana."""
+    """Contenedor plano blanco de borde a borde para el editor de bloques o los campos de la ventana."""
 
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("tarjetaFlotante")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(estilo.E3, estilo.E3, estilo.E3, estilo.E3)  # (más el borde de 1 px de la hoja)
-        raiz.setSpacing(estilo.E2)  # T3
+        self._raiz = QVBoxLayout(self)
+        self._raiz.setContentsMargins(0, 0, 0, 0)
+        self._raiz.setSpacing(0)
         self.senal: str | None = None
-        self.conmutador: QWidget | None = None  # el conmutador de partes de una acción de dos partes (lo pone la ventana)
+        self.conmutador: QWidget | None = None
         self.titulo = TituloSenal()
         self.titulo.setObjectName("tituloPropiedades")
-        self.fila_titulo = QHBoxLayout()  # el título y, a la derecha, las herramientas del formulador (`Programador.adoptar_herramientas`)
+        self.titulo.hide()
+        self.fila_titulo = QHBoxLayout()
         self.fila_titulo.setContentsMargins(0, 0, 0, 0)
-        self.fila_titulo.setSpacing(estilo.E2)
-        self.fila_titulo.addWidget(self.titulo, 1)
-        raiz.addLayout(self.fila_titulo)
+        self.fila_titulo.setSpacing(0)
         self.scroll = QScrollArea()
         self.scroll.setObjectName("scrollTarjeta")
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setWidgetResizable(True)
         self.scroll.setMinimumSize(0, 0)
-        raiz.addWidget(self.scroll, 1)
+        self._raiz.addWidget(self.scroll, 1)
         self.cuerpo = QWidget()
         self.cuerpo.setObjectName("cuerpoTarjeta")
         self.lay_cuerpo = QVBoxLayout(self.cuerpo)
         self.lay_cuerpo.setContentsMargins(0, 0, 0, 0)
         self.lay_cuerpo.setSpacing(0)
-        self.lay_cuerpo.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
         self.scroll.setWidget(self.cuerpo)
         self.setMinimumSize(0, 0)
 
-    def indicar_parte(self, color: str | None) -> None:
-        self.senal = color
-        self.titulo.senal = color or estilo.ACENTO
-        self.titulo.update()
-        self.update()
-
-    def paintEvent(self, evento: Any) -> None:  # noqa: N802
-        super().paintEvent(evento)
-        if self.senal is not None:
-            p = QPainter(self)
-            p.fillRect(QRect(1, estilo.R_M, 3, max(0, self.height() - 2 * estilo.R_M)), QColor(self.senal))
-            p.end()
+    def poner_margen(self, px: int) -> None:
+        self.lay_cuerpo.setContentsMargins(px, px, px, px)
 
     def alto_titulo(self) -> int:
-        """Alto de la franja del título: el del título (o el del conmutador de partes, que ocupa su lugar) o el de las herramientas del
-        formulador, si las lleva."""
-        otros = [it.widget() for it in (self.fila_titulo.itemAt(i) for i in range(self.fila_titulo.count()))
-                 if it.widget() is not None and it.widget() not in (self.titulo, self.conmutador)]
-        conmutador = self.conmutador.sizeHint().height() if self.conmutador is not None and not self.conmutador.isHidden() else 0
-        return max(self.titulo.sizeHint().height(), conmutador, estilo.ALTO_BARRA_COMPACTA if otros else 0)
+        return 0
 
 
 class VentanaFlotante(QFrame):
-    """Un marco sobre el área de trabajo completa: vista previa discreta y editores amplios."""
+    """Ventana modal limpia de Propiedades (`.gc-dialog` 2.0.1):
+    barra de título blanca + lupa edge-to-edge + subcabecera opcional + cuerpo plano + comentario (transición) + pie Aceptar/Cancelar."""
 
     cerrar_pedido = Signal()
+    cancelar_pedido = Signal()
 
     def __init__(self, padre: QWidget, vista: QWidget) -> None:
-        # Popup recibe el clic exterior antes del bloqueo modal; NoMouseReplay evita que llegue al fondo.
         banderas = Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint
         super().__init__(padre, banderas)
         self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay)
@@ -250,78 +252,190 @@ class VentanaFlotante(QFrame):
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
-            f"QFrame#ventanaFlotante {{ background: {estilo.FONDO}; "
-            f"border: 1px solid {estilo.ACENTO}; border-radius: {estilo.R_M}px; }}"
-            f"QFrame#lineaCabecera {{ background: {estilo.BORDE}; border: 0; border-radius: 0; }}"
-            f"QFrame#tarjetaFlotante {{ background: {estilo.SUPERFICIE_2}; "
-            f"border: 1px solid {estilo.BORDE}; border-radius: {estilo.R_M}px; }}"
-            # dentro de una tarjeta no queda otro fondo gris: el área desplazable y los subpaneles de Propiedades son transparentes
-            f"QScrollArea#scrollTarjeta, QWidget#cuerpoTarjeta {{ background: transparent; }}"
+            f"QFrame#ventanaFlotante {{ background: #ffffff; border: 1px solid #9aa9ba; border-radius: 10px; }}"
+            f"QWidget#cabeceraFlotante {{ background: #ffffff; border: 0; border-top-left-radius: 10px; border-top-right-radius: 10px; }}"
+            f"QFrame#lineaCabecera {{ background: #cdd6e0; border: 0; }}"
+            f"QFrame#subcabeceraFlotante {{ background: #f6f8fb; border: 0; border-bottom: 1px solid #cdd6e0; }}"
+            f"QFrame#tarjetaFlotante {{ background: #ffffff; border: 0; border-radius: 0; }}"
+            f"QScrollArea#scrollTarjeta, QWidget#cuerpoTarjeta {{ background: #ffffff; border: 0; }}"
+            f"QLineEdit#etiquetaInline {{ min-height: 22px; max-height: 24px; padding: 1px 6px; "
+            f"border-radius: 4px; border: 1px solid #d8e0ea; background: #f6f8fb; color: #4a5a6d; font-weight: 600; }}"
+            f"QLineEdit#etiquetaInline[readOnly='false'] {{ border-color: #cdd6e0; background: #ffffff; "
+            f"color: #16263a; }}"
+            f"QLineEdit#etiquetaInline[readOnly='false']:focus {{ background: #ffffff; "
+            f"border-color: {estilo.ACENTO}; }}"
+            f"QToolButton#cerrarFlotante {{ border: 0; border-radius: 5px; background: transparent; color: #4a5b6e; font-size: 14px; }}"
+            f"QToolButton#cerrarFlotante:hover {{ background: #e4ecf3; color: #16263a; }}"
+            f"QFrame#pieDialogoFlotante {{ background: #f6f8fb; border: 0; border-top: 1px solid #cdd6e0; "
+            f"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }}"
+            f"QPushButton#botonCancelarFlotante {{ min-height: 26px; max-height: 28px; background: #ffffff; color: #4a5b6e; "
+            f"border: 1px solid #7b8a9c; border-radius: 5px; padding: 0 13px; font-size: 12px; font-weight: 600; }}"
+            f"QPushButton#botonCancelarFlotante:hover {{ background: #e4ecf3; color: #16263a; }}"
+            f"QPushButton#botonAceptarFlotante {{ min-height: 26px; max-height: 28px; background: {estilo.ACENTO}; color: #ffffff; "
+            f"border: 1px solid {estilo.ACENTO_OSCURO}; border-radius: 5px; padding: 0 15px; font-size: 12px; font-weight: 600; }}"
+            f"QPushButton#botonAceptarFlotante:hover {{ background: {estilo.ACENTO_OSCURO}; }}"
         )
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(0, 0, 0, 0)
+        raiz.setContentsMargins(MARCO, MARCO, MARCO, MARCO)
         raiz.setSpacing(0)
+
+        # -- 1. Barra de título blanca (`.gc-titlebar`) --
         self.cabecera = QWidget()
         self.cabecera.setObjectName("cabeceraFlotante")
+        self.cabecera.setFixedHeight(40)
         fila = QHBoxLayout(self.cabecera)
-        fila.setContentsMargins(estilo.E4 - MARCO, estilo.E2, estilo.E2, estilo.E2)
-        fila.setSpacing(estilo.E2)
+        fila.setContentsMargins(14, 0, 10, 0)
+        fila.setSpacing(8)
         self.titulo = TituloSeccion()
-        self.titulo.setObjectName("tituloPanel")  # el título de sección normal de la aplicación
-        fila.addWidget(self.titulo, 1)
+        self.titulo.setObjectName("tituloPanel")
+        fila.addWidget(self.titulo)
+
+        self.caja_etiqueta = QWidget()
+        self.caja_etiqueta.setStyleSheet("background: transparent;")
+        el = QHBoxLayout(self.caja_etiqueta)
+        el.setContentsMargins(0, 0, 0, 0)
+        el.setSpacing(7)
+        sep = QLabel("|")
+        sep.setStyleSheet("color: #cdd6e0; background: transparent;")
+        l_et = QLabel("Etiqueta")
+        l_et.setStyleSheet("color: #5b6b7d; font-size: 12px; background: transparent;")
+        el.addWidget(sep)
+        el.addWidget(l_et)
+        self._lay_etiqueta = el
+        self.caja_etiqueta.hide()
+        fila.addWidget(self.caja_etiqueta)
+
+        fila.addStretch(1)
         self.b_cerrar = QToolButton()
+        self.b_cerrar.setObjectName("cerrarFlotante")
         self.b_cerrar.setText("✕")
-        self.b_cerrar.setCursor(Qt.CursorShape.ArrowCursor)
+        self.b_cerrar.setFixedSize(26, 26)
+        self.b_cerrar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.b_cerrar.setAutoRaise(True)
-        self.b_cerrar.setToolTip("Cerrar")
+        self.b_cerrar.setToolTip("Cancelar y cerrar (Esc)")
         self.b_cerrar.setAccessibleName("Cerrar la ventana de propiedades")
-        self.b_cerrar.clicked.connect(self.cerrar_pedido)
+        self.b_cerrar.clicked.connect(self.cancelar_pedido)
         fila.addWidget(self.b_cerrar, 0, Qt.AlignmentFlag.AlignVCenter)
         raiz.addWidget(self.cabecera)
+
         self.linea = QFrame()
         self.linea.setObjectName("lineaCabecera")
         self.linea.setFixedHeight(1)
         raiz.addWidget(self.linea)
+
+        # -- 2. Cuerpo sin márgenes exteriores (lupa + subcabecera + editor + comentario) --
         self.cuerpo = QWidget()
-        fila_cuerpo = QVBoxLayout(self.cuerpo)  # la vista previa en franja arriba, la tarjeta de edición debajo y, al pie, lo que se usa poco
-        fila_cuerpo.setContentsMargins(estilo.E4 - MARCO, estilo.E4, estilo.E4 - MARCO, estilo.E4 - MARCO)
-        fila_cuerpo.setSpacing(estilo.E3)
+        self.cuerpo.setStyleSheet("background: #ffffff;")
+        fila_cuerpo = QVBoxLayout(self.cuerpo)
+        fila_cuerpo.setContentsMargins(0, 0, 0, 0)
+        fila_cuerpo.setSpacing(0)
+
         self.lupa = Lupa(vista)
         fila_cuerpo.addWidget(self.lupa)
+
+        # Subcabecera `.sub-header` (conmutador Evento|Acción o título Condición/Acción + selector variable destino)
+        self.subcabecera = QFrame()
+        self.subcabecera.setObjectName("subcabeceraFlotante")
+        self.subcabecera.setFixedHeight(42)
+        sh = QHBoxLayout(self.subcabecera)
+        sh.setContentsMargins(14, 0, 14, 0)
+        sh.setSpacing(10)
+
+        self.conmutador = ConmutadorPartes([("formula", "Evento", estilo.ACENTO), ("accion", "Acción", estilo.ACENTO)])
+        self.conmutador.hide()
+        sh.addWidget(self.conmutador)
+
+        self.l_sub_titulo = TituloSeccion("Condición", con_marcador=False)
+        self.l_sub_titulo.setStyleSheet(f"font-family: {estilo.FAMILIA_TITULO}; font-size: 14px; font-weight: 600; color: {estilo.ACENTO}; background: transparent;")
+        self.l_sub_titulo.hide()
+        sh.addWidget(self.l_sub_titulo)
+
+        sh.addStretch(1)
+
+        self.caja_dest = QWidget()
+        self.caja_dest.setStyleSheet("background: transparent;")
+        dl = QHBoxLayout(self.caja_dest)
+        dl.setContentsMargins(0, 0, 0, 0)
+        dl.setSpacing(7)
+        self.l_dest = QLabel("Variable destino:")
+        self.l_dest.setStyleSheet("color: #5b6b7d; font-size: 12px; background: transparent;")
+        dl.addWidget(self.l_dest)
+        self._lay_dest = dl
+        self.caja_dest.hide()
+        sh.addWidget(self.caja_dest)
+        self.subcabecera.hide()
+        fila_cuerpo.addWidget(self.subcabecera)
+
         self.columna = QWidget()
-        self.paneles = QStackedLayout(self.columna)  # las dos partes de una acción comparten la misma celda: una a la vez (P-IMP-173)
+        self.paneles = QStackedLayout(self.columna)
         self.paneles.setContentsMargins(0, 0, 0, 0)
         self.condicion = PanelInterior()
         self.accion = PanelInterior()
         self.paneles.addWidget(self.condicion)
         self.paneles.addWidget(self.accion)
         self.paneles.setCurrentWidget(self.accion)
-        self.conmutadores: dict[PanelInterior, ConmutadorPartes] = {}
-        for tarjeta in (self.condicion, self.accion):  # cada tarjeta lleva el suyo, en el lugar del título; los dos van a la par
-            c = ConmutadorPartes([("formula", "Condición", SENAL_CONDICION), ("accion", "Acción", SENAL_ACCION)])
-            tarjeta.conmutador = c
-            tarjeta.fila_titulo.insertWidget(0, c)
-            tarjeta.fila_titulo.insertStretch(2, 1)
-            c.hide()
-            self.conmutadores[tarjeta] = c
+        self.conmutadores: dict[PanelInterior, ConmutadorPartes] = {self.condicion: self.conmutador}
+        self.condicion.conmutador = self.conmutador
+        self.accion.conmutador = self.conmutador
         fila_cuerpo.addWidget(self.columna, 1)
+
         self.pie = PiePropiedades()
         fila_cuerpo.addWidget(self.pie)
         self.pie.hide()
         raiz.addWidget(self.cuerpo, 1)
+
+        # -- 3. Pie del diálogo (`.dialog-footer`: pista a la izquierda + Cancelar / Aceptar a la derecha) --
+        self.pie_dialogo = QFrame()
+        self.pie_dialogo.setObjectName("pieDialogoFlotante")
+        self.pie_dialogo.setFixedHeight(44)
+        pd = QHBoxLayout(self.pie_dialogo)
+        pd.setContentsMargins(14, 0, 14, 0)
+        pd.setSpacing(8)
+        self.l_pie_pista = QLabel("Intro o clic fuera confirma · Esc cancela")
+        self.l_pie_pista.setStyleSheet("color: #5b6b7d; font-size: 11px; background: transparent;")
+        pd.addWidget(self.l_pie_pista)
+        pd.addStretch(1)
+        self.b_cancelar = QPushButton("Cancelar")
+        self.b_cancelar.setObjectName("botonCancelarFlotante")
+        self.b_cancelar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.b_cancelar.setToolTip("Descartar los cambios de esta apertura y cerrar (Esc)")
+        self.b_cancelar.setAccessibleName("Cancelar y cerrar la ventana de propiedades")
+        self.b_cancelar.clicked.connect(self.cancelar_pedido)
+        pd.addWidget(self.b_cancelar)
+        self.b_aceptar = QPushButton("Aceptar")
+        self.b_aceptar.setObjectName("botonAceptarFlotante")
+        self.b_aceptar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.b_aceptar.setToolTip("Confirmar y cerrar (Intro)")
+        self.b_aceptar.setAccessibleName("Aceptar y cerrar la ventana de propiedades")
+        self.b_aceptar.clicked.connect(self.cerrar_pedido)
+        pd.addWidget(self.b_aceptar)
+        raiz.addWidget(self.pie_dialogo)
         self.hide()
+
+    def poner_etiqueta(self, campo: QLineEdit) -> None:
+        """Coloca el campo «Etiqueta» de la transición inline en la barra de título (`.lbl-inline`)."""
+        campo.setObjectName("etiquetaInline")
+        campo.setFixedWidth(56)
+        campo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lay_etiqueta.addWidget(campo)
+
+    def poner_variable_destino(self, selector: QWidget) -> None:
+        """Adopta el selector de variable de la acción dentro de la subcabecera (`.dest-picker`)."""
+        self._lay_dest.addWidget(selector)
 
     def paintEvent(self, evento: Any) -> None:  # noqa: N802
         pintor = QPainter(self)
         pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
-        pintor.setPen(QPen(QColor(estilo.ACENTO), 1))
-        pintor.setBrush(QColor(estilo.FONDO))
-        pintor.drawRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5), estilo.R_M, estilo.R_M)
+        pintor.setPen(QPen(QColor("#9aa9ba"), 1))
+        pintor.setBrush(QColor("#ffffff"))
+        pintor.drawRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5), 10, 10)
         pintor.end()
 
     def escalar(self) -> None:
-        self.cabecera.setFixedHeight(estilo.ALTO_CONTROL + 2 * estilo.E2)
-        self.b_cerrar.setFixedSize(estilo.ALTO_CONTROL, estilo.ALTO_CONTROL)
+        self.cabecera.setFixedHeight(40)
+        self.b_cancelar.setFixedHeight(28)
+        self.b_aceptar.setFixedHeight(28)
+        self.b_cerrar.setFixedSize(26, 26)
 
 
 class GestorFlotantes(QObject):
@@ -349,6 +463,15 @@ class GestorFlotantes(QObject):
         self.arrastre = None
         self._clic_fuera = False
         self._ocultando = False
+        self.w.destroyed.connect(self._desmontar)
+
+    def _desmontar(self) -> None:
+        self.principal = None
+        self._vigilar(False)
+
+    def _al_destruir_principal(self) -> None:
+        self.principal = None
+        self._vigilar(False)
 
     def _crear(self) -> None:
         if self.principal is not None:
@@ -359,12 +482,17 @@ class GestorFlotantes(QObject):
         self.w.paginas_es.currentChanged.connect(self.actualizar)
         self.panel.setObjectName("panelPropiedadesFlotante")
         self.principal = VentanaFlotante(self.superficie, self.vista)
+        self.principal.destroyed.connect(self._al_destruir_principal)
         self.arrastre = ArrastrePropiedades(self.principal, self.w)
         self.principal.accion.lay_cuerpo.addWidget(self.panel)
-        self.principal.pie.poner(self.panel.t_etiqueta, None, self.panel.t_comentario)
+        self.principal.poner_etiqueta(self.panel.t_etiqueta)
+        self.principal.pie.poner(None, None, self.panel.t_comentario)
+        self.panel.accion._variable_adoptada = True
+        self.principal.poner_variable_destino(self.panel.accion.variable)
         self.panel.show()
         self.panel.destino_bloques = self.principal.condicion.lay_cuerpo
         self.principal.cerrar_pedido.connect(self.cerrar)
+        self.principal.cancelar_pedido.connect(lambda: self._cerrar(confirmar=False))
         self.panel.prog.franja_cambiada.connect(self.colocar)
         self.panel.accion.prog.franja_cambiada.connect(self.colocar)
         self.panel.alto_cambiado.connect(self.colocar)
@@ -430,10 +558,10 @@ class GestorFlotantes(QObject):
             self.cerrar()
 
     def hay_ventanas(self) -> bool:
-        return self.principal is not None and self.principal.isVisible()
+        return self.principal is not None and isValid(self.principal) and self.principal.isVisible()
 
     def ocultar(self) -> None:
-        if self.principal is not None:
+        if self.principal is not None and isValid(self.principal):
             self._ocultando = True
             try:
                 self.principal.hide()
@@ -445,6 +573,8 @@ class GestorFlotantes(QObject):
 
     def _vigilar(self, on: bool) -> None:
         """Mientras la ventana está abierta, la aplicación nos pasa las teclas Esc (antes que a nadie): la cierran, como su ✕."""
+        if not isValid(self):
+            return
         app = QApplication.instance()
         if app is None or on == self._vigilando:
             return
@@ -465,6 +595,12 @@ class GestorFlotantes(QObject):
             if not isinstance(receptor, QWidget) or receptor.window() not in (self.w, self.principal):
                 return False
             foco = receptor  # el foco global puede seguir en el contenedor del popup que acaba de cerrarse
+        etiqueta = self.panel.t_etiqueta
+        if (foco is etiqueta or receptor is etiqueta) and not etiqueta.isReadOnly():
+            if evento.type() == QEvent.Type.ShortcutOverride:
+                evento.accept()
+                return True
+            return False
         if evento.type() == QEvent.Type.ShortcutOverride:
             evento.accept()  # (el atajo de Esc de la ventana, que deselecciona, no salta: llega la tecla)
         else:
@@ -501,7 +637,7 @@ class GestorFlotantes(QObject):
         if self._escala != (w._hoja_escala, estilo.ESCALA):
             self._escala = (w._hoja_escala, estilo.ESCALA)
             self.panel.escalar(w._hoja_escala)
-            self.principal.pie.setStyleSheet(w._hoja_escala + estilo.campos_compactos())  # (el pie no cuelga del panel: sus campos, igual de altos)
+            self.principal.pie.setStyleSheet(w._hoja_escala + estilo.campos_compactos() + self.principal.pie._hoja())  # (el pie no cuelga del panel: sus campos, igual de altos)
             self.principal.pie.escalar()
             self.principal.escalar()
         self.panel_actual()
@@ -509,79 +645,84 @@ class GestorFlotantes(QObject):
         if p.pagina == "vacio":
             self.ocultar()
             return
-        dividida = p._bloques_fuera
+        es_trans = p.pagina == "transicion"
+        es_accion = p.pagina == "accion"
+        clave_acc = p.accion.clave_tipo if es_accion else ""
+        es_evento = es_accion and clave_acc == "evento"
+        es_condicionada = es_accion and clave_acc == "condicionada"
+        es_continua = es_accion and clave_acc == "continua"
+        es_mem_simple = es_accion and clave_acc in ("activacion", "desactivacion")
         v.titulo.setText(p.titulo.text())
-        v.condicion.indicar_parte(SENAL_CONDICION if dividida else None)
-        # la tarjeta de una sola parte también lleva la barra de su parte: receptividad en el color de la condición, acción en el suyo
-        v.accion.indicar_parte(SENAL_ACCION if dividida or p.pagina == "accion" else SENAL_CONDICION if p.pagina == "transicion" else None)
-        v.accion.titulo.setText("Receptividad" if p.pagina == "transicion" else "Acción" if p.pagina in ("accion", "vacio") or dividida
-                                else p.titulo.text().removeprefix("Propiedades · "))
-        v.pie.setVisible(p.pagina == "transicion")  # etiqueta y comentario, al pie
+        v.caja_etiqueta.setVisible(es_trans)
+        v.pie.setVisible(es_trans)
+        # Margen 0 para editores de bloques / acciones de borde a borde; 14 px para formularios simples (etapa, enlace, barra…)
+        margen_cuerpo = 0 if (es_trans or es_accion) else 14
+        v.condicion.poner_margen(0)
+        v.accion.poner_margen(margen_cuerpo)
         pedida, w_e = self.w.edicion.parte_pedida, self.w.edicion
         w_e.parte_pedida = None
-        if dividida:
-            evento = p.objetivo_bloques()[2] == "evento"
-            v.condicion.titulo.setText("Evento" if evento else "Condición")
-            for c in v.conmutadores.values():
-                c.botones["formula"].setText("Evento" if evento else "Condición")
-                c.botones["formula"].setAccessibleName("Editar evento" if evento else "Editar condición")
+        if es_condicionada:
+            # Acción condicionada: Condición + «Activa variable» en la misma subcabecera (sin conmutador de pestañas)
+            self._parte = "formula"
+            v.subcabecera.show()
+            v.conmutador.hide()
+            v.l_sub_titulo.setText("Condición")
+            v.l_sub_titulo.show()
+            v.l_dest.setText("Activa variable:")
+            v.caja_dest.show()
+            p.l_bloques.hide()
+        elif es_evento:
             if pedida in ("formula", "accion"):
                 self._parte = pedida
+            v.subcabecera.show()
+            v.conmutador.botones["formula"].setText("Evento")
+            v.conmutador.botones["formula"].setAccessibleName("Editar evento")
+            v.conmutador.show()
+            v.l_sub_titulo.hide()
+            v.l_dest.setText("Variable destino:")
             p.l_bloques.hide()
-        self._mostrar_parte(dividida)
+        elif es_continua or es_mem_simple:
+            v.subcabecera.show()
+            v.conmutador.hide()
+            v.l_sub_titulo.setText("Acción continua" if es_continua else "Acción")
+            v.l_sub_titulo.show()
+            v.l_dest.setText("Variable:" if es_continua else "Variable destino:")
+            v.caja_dest.show()
+        else:
+            v.subcabecera.hide()
+        tiene_cuerpo_continua = bool(p.accion.msg.text().strip())
+        v.columna.setVisible(not es_continua or tiene_cuerpo_continua)
+        self._mostrar_parte()
         if not v.isVisible():
             self.arrastre.movida = False
             self.arrastre.inicio = None
-        from .bloques import Programador
-        for prog in (p.prog, p.accion.prog):  # las herramientas de cada formulador, en la franja del título de su tarjeta
-            tarjeta = prog.parentWidget()
-            while tarjeta is not None and not isinstance(tarjeta, PanelInterior):
-                tarjeta = tarjeta.parentWidget()
-            if tarjeta is not None:
-                prog.adoptar_herramientas(tarjeta.fila_titulo)
         v.show()
         self._vigilar(True)
         self.colocar()
-        if not self._colocar_pendiente:  # (una sola recolocación diferida aunque se refresque varias veces en la misma vuelta)
+        if not self._colocar_pendiente:
             self._colocar_pendiente = True
             QTimer.singleShot(0, self, self._colocar_diferido)
 
-    def _mostrar_parte(self, dividida: bool) -> None:
-        """Una acción de dos partes enseña una tarjeta cada vez (la parte elegida) con su conmutador en el lugar del título; con una sola parte,
-        la tarjeta de siempre. Las dos comparten la misma celda: la ventana no cambia de tamaño al conmutar (P-IMP-173)."""
-        v = self.principal
-        v.paneles.setCurrentWidget(v.condicion if dividida and self._parte == "formula" else v.accion)
-        for tarjeta, c in v.conmutadores.items():
-            c.setVisible(dividida)
-            tarjeta.titulo.setVisible(not dividida)
-            c.poner(self._parte)
-        self._avisar_partes(dividida)
-
-    def _avisar_partes(self, dividida: bool) -> None:
-        """El punto de aviso del conmutador en la parte a la que le falta algo (las mismas reglas del borrador: sin variable, sin condición o
-        evento, sin valor, o una fórmula con huecos o con errores)."""
-        v, p, e = self.principal, self.panel, self.w.edicion
-        falta = {"formula": False, "accion": False}
-        if dividida and p.objetivo_bloques() is not None:
-            _, aid, campo = p.objetivo_bloques()
-            texto = p.t_texto.text().strip()
-            from .bloques import faltan
-            falta["formula"] = (not texto or faltan(p.prog.lienzo.arbol) > 0 or e.comprobar(aid, texto) is not None
-                                or (campo == "evento" and not is_event_positive(e.significado(aid, texto))))
-            d = p.accion.datos()
-            falta["accion"] = not d["variable"] or (p.accion.clave_tipo not in CONTINUAS and not d.get("valor", "").strip())
-        for c in v.conmutadores.values():
-            for clave, f in falta.items():
-                c.avisar(clave, f)
+    def _mostrar_parte(self) -> None:
+        v, p = self.principal, self.panel
+        es_evento = p.pagina == "accion" and p.accion.clave_tipo == "evento"
+        es_condicionada = p.pagina == "accion" and p.accion.clave_tipo == "condicionada"
+        v.paneles.setCurrentWidget(v.condicion if (es_condicionada or (es_evento and self._parte == "formula")) else v.accion)
+        if es_evento:
+            v.conmutador.poner(self._parte)
+            v.caja_dest.setVisible(self._parte == "accion")
 
     def elegir_parte(self, clave: str) -> None:
         """El usuario pide otra parte (el conmutador o un clic en la marca o la caja de la vista previa): se enseña su tarjeta y el foco pasa a ella."""
+        if self.panel.pagina == "accion" and self.panel.accion.clave_tipo == "condicionada":
+            return
         if clave == self._parte or not self.abierto or not self.panel._bloques_fuera:
             return
         self._parte = clave
-        self._mostrar_parte(True)
+        self._mostrar_parte()
         p = self.panel
-        (p.prog.lienzo if clave == "formula" else p.accion.variable).setFocus(Qt.FocusReason.OtherFocusReason)
+        destino = p.prog.lienzo if clave == "formula" else (p.accion.prog.lienzo if not p.accion.caja_numerica.isHidden() else p.accion.panel_booleano)
+        destino.setFocus(Qt.FocusReason.OtherFocusReason)
         self.colocar()
 
     def _colocar_diferido(self) -> None:
@@ -632,6 +773,10 @@ class GestorFlotantes(QObject):
         return True
 
     def eventFilter(self, objeto: QObject, evento: Any) -> bool:  # noqa: N802
+        if not isValid(self.w) or (self.principal is not None and not isValid(self.principal)):
+            self.principal = None
+            self._vigilar(False)
+            return False
         tipo = evento.type()
         if objeto is self.principal and tipo == QEvent.Type.Hide and not self._ocultando:
             self.cerrar()
@@ -671,73 +816,58 @@ class GestorFlotantes(QObject):
         return [(v.accion, z["elemento"])] if z else []
 
     def _marco_ventana(self) -> int:
-        """Lo que la ventana gasta sin contar las tarjetas: cabecera, su línea, márgenes del cuerpo, borde, la vista previa en franja y, si lo
-        hay, el pie (con el comentario de una línea: si crece, el formulador cede el alto)."""
+        """Alto fijo de la ventana fuera del editor central (cabecera, lupa, subcabecera, comentario y pie)."""
         v = self.principal
-        hueco = v.cuerpo.layout().spacing()
-        pie = v.pie.alto_nominal() + hueco if v.pie.isVisibleTo(v) else 0
-        return v.cabecera.height() + 1 + 2 * estilo.E4 + 2 * MARCO + self._franja + hueco + pie
+        sub = max(v.subcabecera.height(), v.subcabecera.sizeHint().height()) if not v.subcabecera.isHidden() else 0
+        pie = v.pie.alto_nominal() if not v.pie.isHidden() else 0
+        return v.cabecera.height() + 1 + self._franja + sub + pie + v.pie_dialogo.height() + 2 * MARCO
 
     def _disposicion(self, alto_franja: int) -> None:
-        """La vista previa arriba, en franja de ancho completo, y debajo la tarjeta de edición."""
+        """La vista previa arriba, en franja de ancho completo, y debajo el editor."""
         v = self.principal
         v.lupa.margen = estilo.E2
         v.lupa.setMinimumWidth(0)
         v.lupa.setMaximumWidth(16777215)
         v.lupa.setFixedHeight(alto_franja)
 
-    def _marco_tarjeta(self) -> int:
-        """Lo que una tarjeta gasta sin contar su contenido: borde, márgenes y título con su hueco."""
-        t = self.principal.accion.alto_titulo()
-        return t + estilo.E2 + 2 * estilo.E3 + 2
-
     def _dimensionar(self, area: QRect) -> None:
         margen = margen_horizontal(area.width())
         disponible = area.adjusted(margen, estilo.E6, -margen, -estilo.E6)
-        disponible.setWidth(min(disponible.width(), ancho_maximo()))
-        necesita_formulador = (
-            self.panel.pagina == "transicion" or self.panel._bloques_fuera
-            or self.panel.accion.caja_numerica.isVisibleTo(self.panel)
-        )
-        if necesita_formulador:
-            # Con dos tarjetas se conserva el alto de apertura, también al aparecer el formulador numérico.
-            alto = disponible.height() if self.panel._bloques_fuera else self._alto_formulador(disponible)
-            self._tamano = QSize(disponible.width(), alto)
+        disponible.setWidth(min(disponible.width(), 920))
+        es_continua = self.panel.pagina == "accion" and self.panel.accion.clave_tipo == "continua"
+        es_editor = self.panel.pagina == "transicion" or (self.panel.pagina == "accion" and not es_continua)
+        if es_editor:
+            # Altura estable de 332 px para el cuerpo (.editor-grid / .stable-panel) para que nunca salte al cambiar de variable o pestaña
+            alto_objetivo = self._marco_ventana() + 332
+            self._tamano = QSize(disponible.width(), min(disponible.height(), max(alto_objetivo, 460)))
         else:
-            ancho = min(40 * estilo.E4, disponible.width())
-            campos = self.panel.izq.sizeHint().height()
-            if self.panel.der.isVisibleTo(self.panel):
-                campos += self.panel.der.sizeHint().height() + estilo.E3
-            contenido = max(self.panel.sizeHint().height(), campos)
-            alto = contenido + self._marco_ventana() + self._marco_tarjeta() + estilo.E1
+            sub_ancho = self.principal.subcabecera.sizeHint().width() + 2 * estilo.E3 if not self.principal.subcabecera.isHidden() else 0
+            ancho = min(disponible.width(), max(min(40 * estilo.E4, disponible.width()), sub_ancho))
+            tiene_cuerpo = not es_continua or bool(self.panel.accion.msg.text().strip())
+            if tiene_cuerpo:
+                campos = self.panel.izq.sizeHint().height()
+                if self.panel.der.isVisibleTo(self.panel):
+                    campos += self.panel.der.sizeHint().height() + estilo.E3
+                contenido = max(self.panel.sizeHint().height(), campos) + 28
+            else:
+                contenido = 0
+            alto = contenido + self._marco_ventana()
             self._tamano = QSize(ancho, min(alto, disponible.height()))
 
-    def _alto_formulador(self, disponible: QRect) -> int:
-        """Alto acotado para una ventana con un solo formulador."""
-        p = self.panel
-        filas = 11 if estilo.ESCALA == "grande" else 9
-        contenido = max(p.minimumSizeHint().height(), (filas + 2) * estilo.ALTO_CONTROL)
-        tope = max(1, disponible.height() - estilo.E6)
-        alto = contenido + self._marco_ventana() + self._marco_tarjeta()
-        if p.pagina == "transicion":  # (el 20 % de más es de la tarjeta del formulador, no de la vista previa ni del pie)
-            return min(tope, round((contenido + self._marco_tarjeta()) * 1.2) + self._marco_ventana())
-        return min(tope, alto, int((disponible.height() + 2 * estilo.E6) * .75))  # (el dibujo de alrededor: nunca más de tres cuartas partes del área)
-
     def _componer(self) -> None:
-        """La vista previa cede sitio al formulador; los campos se apilan solo si falta ancho."""
+        """Los editores ocupan todo el ancho sin márgenes internos; las fichas simples conservan columna."""
         v, p = self.principal, self.panel
         disponible = v.columna.width() - 4 * estilo.E2
-        vertical = p.pagina in ("transicion", "accion") or disponible < 36 * estilo.E4  # (la acción: «Variable := Valor» y, debajo, el valor)
+        vertical = p.pagina in ("transicion", "accion") or disponible < 36 * estilo.E4
         direccion = QBoxLayout.Direction.TopToBottom if vertical else QBoxLayout.Direction.LeftToRight
         p.cuerpo.layout().setDirection(direccion)
-        p.cuerpo.layout().setSpacing(estilo.E3)
+        p.cuerpo.layout().setSpacing(0 if p.pagina in ("transicion", "accion") else estilo.E3)
         p.layout().setContentsMargins(0, 0, 0, 0)
-        ancho_campos = max(ANCHO_COLUMNA, p.accion.variable.width()) if p.pagina == "accion" else ANCHO_COLUMNA
-        if p.pagina == "accion" and not p.accion.caja_fichas.isHidden():
-            ancho_campos = max(ancho_campos, p.accion.disposicion_variable.sizeHint().width())
-        p.izq.setMinimumWidth(0 if vertical else ancho_campos)
-        p.izq.setMaximumWidth(16777215 if vertical else ancho_campos)
+        p.izq.setMinimumWidth(0 if vertical else ANCHO_COLUMNA)
+        p.izq.setMaximumWidth(16777215 if vertical else ANCHO_COLUMNA)
         p.izq.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        if p.pagina == "accion" and p.accion.clave_tipo != "limitada":
+            p.izq.setVisible(p.accion.clave_tipo == "continua" and bool(p.accion.msg.text().strip()))  # la variable ya vive en la subcabecera y el valor llena todo el panel
         p.cuerpo.layout().setAlignment(p.izq, Qt.AlignmentFlag.AlignTop)
         p.cuerpo.layout().setStretch(0, 0)
         p.cuerpo.layout().setStretch(1, 1)
@@ -807,8 +937,8 @@ class GestorFlotantes(QObject):
         ]
 
     def _senales_lupa(self) -> None:
-        """Una acción de dos partes: la parte que se edita, resaltada en su color; la otra, en gris (`DESHABILITADO`). Un clic en cualquiera de las
-        dos la elige (`Lupa.mousePressEvent`)."""
+        """Resalta solo la parte activa (como la maqueta): en `formula`, tinte menta suave sobre la marca/expresión;
+        en `accion`, tinte menta suave + borde turquesa de 2 px en la caja. La parte inactiva queda limpia sin velo gris."""
         v, p = self.principal, self.panel
         v.lupa.senales, v.lupa.partes = [], []
         if p._bloques_fuera:
@@ -816,9 +946,11 @@ class GestorFlotantes(QObject):
             if caja is not None:
                 marca = QRectF(*caja["marca"]) if caja.get("marca") else None
                 if marca is not None:
-                    v.lupa.senales.append((marca, SENAL_CONDICION if self._parte == "formula" else estilo.DESHABILITADO, False))
+                    if self._parte == "formula":
+                        v.lupa.senales.append((marca, SENAL_CONDICION, False))
                     v.lupa.partes.append((marca.adjusted(-estilo.E1, -estilo.E1, estilo.E1, estilo.E1), "formula"))
-                v.lupa.senales.append((QRectF(*caja["rect"]), SENAL_ACCION if self._parte == "accion" else estilo.DESHABILITADO, True))
+                if self._parte == "accion":
+                    v.lupa.senales.append((QRectF(*caja["rect"]), SENAL_ACCION, True))
                 v.lupa.partes.append((QRectF(*caja["rect"]), "accion"))
         v.lupa.update()
 
@@ -853,6 +985,10 @@ class GestorFlotantes(QObject):
             v.lupa.tallo_transicion = self._tallo_transicion(v.lupa.origen)
             v.lupa.recorte = self._recorte(v.lupa.origen)
             v.lupa.texto_esquina = self.panel.accion.b_etapa.text() if self.panel.pagina == "accion" else ""
+            v.lupa.pista_esquina = (
+                "Clic en la bandera o en la caja para alternar"
+                if self.panel.pagina == "accion" and self.panel.accion.clave_tipo == "evento" else ""
+            )
             v.lupa.update()
             self._senales_lupa()
             v.raise_()

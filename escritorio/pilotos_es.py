@@ -7,7 +7,7 @@ from . import estilo
 
 def tamano_piloto(alto_fila=None):
     alto = alto_fila if alto_fila is not None else (20 if estilo.ESCALA == "grande" else 16)
-    lado = round(alto * 0.6) + 4
+    lado = min(15, round(alto * 0.6) + 4)
     return QSize(lado, lado)
 
 

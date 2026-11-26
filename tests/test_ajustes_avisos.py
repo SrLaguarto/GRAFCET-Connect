@@ -64,7 +64,7 @@ class AjustesYAvisos(BaseQt):
 
     def test_SAJU02_un_proyecto_nuevo_no_hereda_los_16_8_recordados_de_una_version_anterior(self):
         """REQ-SIM-03, REQ-DAT-02: las preferencias recordadas por una versión anterior (16 digitales y 8 numéricas)
-        ya no imponen sus cantidades a un proyecto sin mapa propio: abre con 32 y 12; sigue heredando el
+        ya no imponen sus cantidades a un proyecto sin mapa propio: abre con 16 y 4; sigue heredando el
         servidor."""
         from escritorio.ventana import Ventana
         ruta = Path(self.tmp.name) / "a.ini"
@@ -82,7 +82,7 @@ class AjustesYAvisos(BaseQt):
         c = p.obtener()
         self.assertEqual((c.host, c.canales), ("10.0.0.7", CANALES_INICIALES))
         areas = ("discrete", "coil", "input-register", "holding")
-        self.assertEqual([p.cantidades[a].value() for a in areas], [32, 32, 12, 12])
+        self.assertEqual([p.cantidades[a].value() for a in areas], [16, 16, 4, 4])
 
     def test_SAJU03_las_cantidades_de_un_proyecto_concreto_se_respetan_y_no_se_recuerdan_globalmente(self):
         """REQ-DAT-02, REQ-SIM-03: un proyecto con su propio mapa conserva sus cantidades; lo que se recuerda para los
@@ -112,10 +112,10 @@ class AjustesYAvisos(BaseQt):
         self.assertEqual(w.options["U-03"], SEMANTIC_OPTIONS["U-03"]["default"])
 
     def test_SAJU05_barra_de_estado_basado_en_iec_60848_y_aviso_de_ajuste_no_habitual(self):
-        """REQ-NOR-02, REQ-SEM-09: la barra de estado dice «Basado en IEC 60848» (sin «conformidad» ni
-        «provisional»); el aviso de un ajuste no habitual va en palabras normales y sin códigos."""
+        """REQ-NOR-02, REQ-SEM-09: la barra de estado dice «Conforme a IEC 60848» (sin «provisional»);
+        el aviso de un ajuste no habitual va en palabras normales y sin códigos."""
         w = self.w
-        self.assertEqual(w.l_aviso.text(), "Basado en IEC 60848")
+        self.assertEqual(w.l_aviso.text(), "Conforme a IEC 60848")
         w.cargar_ejemplo("bloqueo-u03")
         try:
             w._opciones({**w.options, "U-03": "recorrido"})
@@ -125,7 +125,7 @@ class AjustesYAvisos(BaseQt):
             w._opciones({})
         self.assertEqual(w.l_lect.text(), "")
         for texto in (w.l_aviso.text(), w.l_aviso.toolTip()):
-            self.assertNotRegex(texto.lower(), "conform|provisional")
+            self.assertNotRegex(texto.lower(), "provisional")
 
     # -- 4: avisos sin códigos ---------------------------------------------------------------------------------
     def test_SAJU06_los_avisos_no_llevan_codigos_internos_ni_rojo_agresivo(self):
@@ -180,17 +180,22 @@ class AjustesYAvisos(BaseQt):
             self.app.processEvents()
             w._mostrar_pagina("planos")
             p = w.panel_planos
-            estilo = p.b_hoja.styleSheet()
+            self.assertTrue(p.b_hoja.isHidden())
+            estilo = p.vacio.b_crear_primera.styleSheet()
             self.assertIn(p.ACENTO_HOJA, estilo)
             self.assertIn("color:white", estilo)
+            self.assertTrue(p.scroll_hojas.isAncestorOf(p.b_hoja))
             self.assertTrue(p.t_hoja.isActive(), "parpadea al entrar")
             p.parpadeos_hoja = 1
             p._paso_parpadeo_hoja()
             self.assertFalse(p.t_hoja.isActive(), "son dos o tres parpadeos, no indefinidos")
-            self.assertIn(p.ACENTO_HOJA, p.b_hoja.styleSheet())
+            self.assertIn(p.ACENTO_HOJA, p.vacio.b_crear_primera.styleSheet())
             e.ed.add_plan_page(None, ajustes_lamina({}), "Hoja 1")
             p.mostrar()
+            self.assertEqual(p.vacio.b_crear_primera.styleSheet(), "")
             self.assertEqual(p.b_hoja.styleSheet(), "")
+            self.assertTrue(p.b_hoja.isVisible())
+            self.assertEqual(p.b_hoja.text(), "+ Añadir otra hoja")
             self.assertFalse(p.t_hoja.isActive())
             w._mostrar_pagina(False)
             w._mostrar_pagina("planos")

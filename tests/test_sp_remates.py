@@ -49,10 +49,20 @@ class RematesP(unittest.TestCase):
         self.assertIsNotNone(dialogo.propuestas)
         tabla, filas = dialogo.tablas[0]
         item = tabla.item(0, 2)
+        # En 2.0.1 los nombres inválidos se corrigen automáticamente al cargar el diálogo
+        self.assertEqual(filas[0].motivo, "")
+        self.assertEqual(item.background().style(), Qt.BrushStyle.NoBrush)
+        self.assertEqual(tabla.item(1, 2).background().style(), Qt.BrushStyle.NoBrush)
+        self.assertTrue(dialogo.b_traer.isEnabled())
+        # Al editar manualmente a un nombre inválido sigue mostrando aviso naranja y bloqueando Traer
+        item.setText("Xmotor inicio")
         self.assertTrue(filas[0].motivo)
         self.assertEqual(item.background().color().name(), estilo.NOMBRE_PENDIENTE_FONDO)
         self.assertEqual(tabla.item(1, 2).background().style(), Qt.BrushStyle.NoBrush)
+        self.assertFalse(dialogo.b_traer.isEnabled())
+        # Y al corregirlo se limpia el aviso y vuelve a habilitar Traer
         item.setText("Inicio")
+        self.assertEqual(filas[0].motivo, "")
         self.assertEqual(item.background().style(), Qt.BrushStyle.NoBrush)
         self.assertTrue(dialogo.b_traer.isEnabled())
 

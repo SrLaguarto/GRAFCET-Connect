@@ -1,9 +1,9 @@
 {
- "date": "2026-11-23T14:24:09+01:00",
+ "date": "2026-11-26T04:01:09+01:00",
  "python": "3.12.10",
  "platform": "Windows-11-10.0.26200-SP0",
  "machine": "AMD64",
- "total": 1856,
+ "total": 1915,
  "failures": 0,
  "errors": 0,
  "results": [
@@ -433,7 +433,7 @@
     "REQ-NOR-02",
     "REQ-SEM-09"
    ],
-   "summary": "REQ-NOR-02, REQ-SEM-09: la barra de estado dice «Basado en IEC 60848» (sin «conformidad» ni"
+   "summary": "REQ-NOR-02, REQ-SEM-09: la barra de estado dice «Conforme a IEC 60848» (sin «provisional»);"
   },
   {
    "test": "test_ajustes_avisos.AjustesYAvisos.test_SAJU06_los_avisos_no_llevan_codigos_internos_ni_rojo_agresivo",
@@ -631,7 +631,7 @@
    "requirements": [
     "REQ-UX-01"
    ],
-   "summary": "REQ-UX-01: los botones de Variables miden `ALTO_CONTROL_COMPACTO` y el editor de una celda no pasa del alto de su fila, a las dos pantallas."
+   "summary": "REQ-UX-01: los botones del pie de Variables miden `ALTO_CONTROL_COMPACTO + 2` y el editor de una celda no pasa del alto de su fila, a las dos pantallas."
   },
   {
    "test": "test_alturas_controles.Alturas.test_SALC05_pagina_de_configuracion_y_tabla_avanzada_de_es",
@@ -660,7 +660,7 @@
     "REQ-EDT-01",
     "REQ-EDT-11"
    ],
-   "summary": "REQ-EDT-01, REQ-EDT-11: Play y Reiniciar preceden a los seis botones de edición, Dependencias y Errores;"
+   "summary": "REQ-EDT-01, REQ-EDT-11: Play y Reiniciar preceden a los seis botones de edición (tb_edit), con Dependencias y"
   },
   {
    "test": "test_alturas_controles.Alturas.test_SALC08_barra_de_edicion_cabe_en_pantalla_partida",
@@ -1670,7 +1670,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: la flotante separa las tarjetas Acción y Condición."
+   "summary": "REQ-EDT-09: la flotante muestra Condición y variable destino juntas en condicionada, y conmuta Evento | Acción en evento."
   },
   {
    "test": "test_aula_cambios.PegadoSoloSiSolapan.test_SAUC25_en_una_transicion_girada_se_pega_exacto_solo_si_los_tramos_se_solapan",
@@ -1845,7 +1845,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: con la ventana pequeña los paneles laterales se desplazan en ambos sentidos y las barras se ven."
+   "summary": "REQ-EDT-09: con la ventana pequeña Simulación y E/S se desplazan en ambos sentidos, Variables mantiene cabecera y pie fijos y desplaza su tabla, y las barras se ven."
   },
   {
    "test": "test_aula_pequena.CampoIP.test_SIP03_campo_de_cuatro_cajas",
@@ -1944,7 +1944,7 @@
    "requirements": [
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03: la barra de simulación muestra si la conexión externa está conectada, desconectada o en error."
+   "summary": "REQ-SIM-03: la luz de E/S externas refleja desconectada, conectada y error (texto corto + estadoLuz + tooltip completo)."
   },
   {
    "test": "test_aula_pequena.MenuGirar.test_SGIR01_menu_girar_transicion",
@@ -2008,7 +2008,7 @@
    "requirements": [
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03: «E/S externas: …» queda a la derecha del todo de la fila de GRAFCET / PLANOS / E/S externas, no junto a"
+   "summary": "REQ-SIM-03: «E/S externas» va dentro del estuche segmentado junto a GRAFCET / PLANOS (a su derecha y antes del chip de modo),"
   },
   {
    "test": "test_aula_pequena.TeclasDeGiro.test_SGIR02_ctrl_mayus_flechas_no_giran_en_solo_lectura_ni_al_simular",
@@ -2303,6 +2303,13 @@
    "summary": ""
   },
   {
+   "test": "test_barra_favoritos.Favoritos.test_SFAV14_sin_logo_y_menu_sin_plegar",
+   "case": "S-FAV14",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "IM4 & IM5: sin logo junto al menú, con menús visibles sin «» desde 1024 px."
+  },
+  {
    "test": "test_barra_favoritos.Favoritos.test_SFAV15_parcial_apaisado_y_g_legible",
    "case": "S-FAV15",
    "outcome": "pasa",
@@ -2355,16 +2362,16 @@
    "requirements": [
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03: Puerto y Esclavo ID (3 cifras) más estrechos en la cabecera y en Configuración."
+   "summary": "REQ-SIM-03, IM3: Puerto (5 cifras) y Esclavo ID (4 cifras visuales) estrechos en la cabecera y en Configuración."
   },
   {
-   "test": "test_barra_tabla_es.BarraYTablaES.test_SBAR04_boton_volver_de_la_cabecera_de_es_y_uniones_punteadas_de_dependencias",
+   "test": "test_barra_tabla_es.BarraYTablaES.test_SBAR04_cabecera_de_es_sin_volver_y_uniones_punteadas_de_dependencias",
    "case": "S-BAR04",
    "outcome": "pasa",
    "requirements": [
     "REQ-UX-01"
    ],
-   "summary": "REQ-UX-01: «Volver» lleva icono de flecha y texto, mide el alto de los botones de la cabecera y tiene ayuda sin atajo; el icono de"
+   "summary": "REQ-UX-01: la cabecera de E/S ya no duplica botón «Volver» (C10); el icono de dependencias recupera las dos uniones diagonales finas y punteadas entre el cuadrado y el marco (J5)."
   },
   {
    "test": "test_bloques_modificadores.ContarHuecos.test_SP8M20_faltan",
@@ -2411,6 +2418,15 @@
     "REQ-EDT-02"
    ],
    "summary": "REQ-EDT-02: desenvolver una ficha o un «y» (varios huecos) y envolver con una clase sin hueco dejan el árbol igual."
+  },
+  {
+   "test": "test_bloques_modificadores.EnvolverDesenvolver.test_SP8M13_lista_plana_conectores_y_envolver_varios",
+   "case": "S-P8M13",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: `a_lista` y `de_lista` son inversas; `cambiar_conector` alterna Y/O respetando precedencia;"
   },
   {
    "test": "test_bloques_modificadores.Modificadores.test_SP8M01_las_seis_combinaciones_sobre_una_variable",
@@ -3678,7 +3694,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: con Propiedades abierto (y plegado), el borde de las tarjetas de arriba —Elementos, el dibujo y Variables— y el de"
+   "summary": "REQ-EDT-09: los paneles planos (dibujo y Variables) no se solapan y muestran sus separadores limpios de `estilo.BORDE`"
   },
   {
    "test": "test_dibujo_vista.Dependencias.test_SEDI286_por_defecto_no_hay_trazos_de_dependencia_y_con_la_opcion_aparecen_los_de_macroetapa_y_encapsulante",
@@ -4156,7 +4172,7 @@
     "REQ-EDT-02",
     "REQ-UX-01"
    ],
-   "summary": "REQ-EDT-02, REQ-UX-01: el doble clic en la marca abre Condición o Evento; en la caja, Acción."
+   "summary": "REQ-EDT-02, REQ-UX-01: en acción por evento, doble clic en la marca abre «Evento» y en la caja abre «Acción»;"
   },
   {
    "test": "test_e8_tramo3.Conmutador.test_SP8C10_un_solo_formulador_a_la_vez_y_la_ventana_no_cambia_de_tamano",
@@ -4165,7 +4181,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02, P-IMP-173: Evento | Acción: una tarjeta cada vez, en la misma celda; al conmutar la ventana no cambia de tamaño."
+   "summary": "REQ-EDT-02, P-IMP-173: Evento | Acción: conmutador único en la subcabecera; una vista cada vez y sin cambiar de tamaño."
   },
   {
    "test": "test_e8_tramo3.Conmutador.test_SP8C11_la_condicionada_dice_condicion",
@@ -4174,7 +4190,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: la parte de fórmula de una condicionada se llama «Condición», la de una acción por evento, «Evento»."
+   "summary": "REQ-EDT-02: en 2.0.1 la condicionada muestra «Condición» y «Activa variable:» en la misma pantalla sin conmutador;"
   },
   {
    "test": "test_e8_tramo3.Conmutador.test_SP8C12_clic_en_la_marca_o_en_la_caja_de_la_franja_cambia_de_parte",
@@ -4210,7 +4226,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: al conmutar, el foco pasa a la tarjeta que se enseña (el área de bloques o la variable)."
+   "summary": "REQ-EDT-02: al conmutar, el foco pasa al panel de la parte elegida (`panel_booleano` en memorizada booleana o `prog.lienzo`)."
   },
   {
    "test": "test_e8_tramo3.Conmutador.test_SP8C16_sin_lateral",
@@ -4303,7 +4319,7 @@
     "REQ-EDT-02",
     "REQ-UX-01"
    ],
-   "summary": "REQ-EDT-02, REQ-UX-01: `Variable [▾] := [1 | 0]` en una sola fila de la tarjeta; el valor elegido, relleno del color de la acción y sin el"
+   "summary": "REQ-EDT-02, REQ-UX-01: en 2.0.1 la variable vive en la subcabecera y `Asignación [var] := [1 | 0]` en una fila centrada"
   },
   {
    "test": "test_e8_tramo3.Memorizadas.test_SP8C04_sin_variable_1_y_0_desactivados",
@@ -4342,13 +4358,18 @@
    "summary": "REQ-EDT-09: el desplegable sobre la acción continua usa la misma lista (delegado y vista) y solo ofrece booleanas."
   },
   {
-   "test": "test_e8_tramo3.Menu.test_SP8C32_filtro_con_mas_de_doce_variables",
+   "test": "test_e8_tramo3.Menu.test_SP8C32_desplegable_sin_filtro_visual",
    "case": "S-P8C32",
    "outcome": "pasa",
-   "requirements": [
-    "REQ-EDT-09"
-   ],
-   "summary": "REQ-EDT-09: con más de 12 variables, lo que se escribe filtra la lista; con 12 o menos, no hay filtro."
+   "requirements": [],
+   "summary": "Decisión Ciclo 3: el desplegable de variables no activa filtro ni «Filtrar…» aunque haya más de 12 variables."
+  },
+  {
+   "test": "test_e8_tramo3.Menu.test_SP8C33_rotulo_filtro_combomenu_no_se_muestra",
+   "case": "S-P8C33",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Decisión Ciclo 3: al abrir ComboMenu con más de `UMBRAL_FILTRO` variables no aparece el rótulo «Filtrar…»."
   },
   {
    "test": "test_editor_cadenas.AvisosConNombres.test_SEDI310_el_cuadro_de_no_compila_y_el_panel_dicen_los_nombres_aunque_los_nombres_esten_desfasados",
@@ -6324,7 +6345,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: la banda: Operadores, Temporizadores, Comparaciones y Constantes, en ese orden (el catálogo de Variables y"
+   "summary": "REQ-EDT-02: la cinta 2.0.1 conserva el orden de claves (operador, tiempo, comparacion, constante) con prefijo «Insertar:» y el"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI68_receptividad_en_el_panel_con_texto_de_solo_lectura",
@@ -6333,7 +6354,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: toda la receptividad está a la derecha del panel de opciones (texto de la fórmula, «Escrito», «Se"
+   "summary": "REQ-EDT-02: la receptividad se edita con bloques; en 2.0.1 la etiqueta va inline en la cabecera de la flotante y el comentario"
   },
   {
    "test": "test_editor_escritorio.Interfaz.test_SEDI69_lazo_de_seleccion",
@@ -7021,7 +7042,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: en una acción por evento el editor del evento es claramente mayor que el del valor."
+   "summary": "REQ-EDT-09: en una acción por evento el editor del evento ocupa todo el ancho de la ventana mientras el valor vive en su pestaña."
   },
   {
    "test": "test_elementos_otros.OtrosInterfaz.test_SOTR10_qt_y_js_dibujan_notas_y_proyecto_se_reabre",
@@ -7106,7 +7127,7 @@
    "requirements": [
     "REQ-EDT-11"
    ],
-   "summary": "REQ-EDT-11: a 1366×768 la barra de edición cabe en su fila con el botón (con su texto, o solo con icono si no hay sitio) y a 1000×600"
+   "summary": "REQ-EDT-11: a 1366×768 la barra de comandos cabe en su fila con el botón en tb_vista_der (con texto, o solo icono si no hay sitio)"
   },
   {
    "test": "test_errores_conmutador.MostrarErrores.test_SERR06_el_zoom_y_el_aviso_no_se_solapan_a_ningun_tamaño",
@@ -7847,6 +7868,55 @@
    "summary": "REQ-SIM-01: al simular, la rutina completa de las tablas, la traza hecha de cero y la parte de los registros de la navegación que solo depende del documento no se"
   },
   {
+   "test": "test_etiquetas_repetidas.EtiquetasRepetidasQt.test_SETR01_dos_transiciones_tras_x11_y_x34",
+   "case": "S-ETR01",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Dos transiciones con la misma etiqueta: «Transición t25 repetida tras X11 y tras X34.»"
+  },
+  {
+   "test": "test_etiquetas_repetidas.EtiquetasRepetidasQt.test_SETR02_tres_transiciones_coma_y_y",
+   "case": "S-ETR02",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Tres transiciones repetidas: «tras X11, tras X34 y tras X40»."
+  },
+  {
+   "test": "test_etiquetas_repetidas.EtiquetasRepetidasQt.test_SETR03_convergencia_en_y",
+   "case": "S-ETR03",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Una transición con dos etapas anteriores va como un solo elemento y fuerza la coma antes de «y tras»."
+  },
+  {
+   "test": "test_etiquetas_repetidas.EtiquetasRepetidasQt.test_SETR04_transicion_fuente",
+   "case": "S-ETR04",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Una transición sin etapas anteriores se nombra «en una transición fuente»."
+  },
+  {
+   "test": "test_etiquetas_repetidas.EtiquetasRepetidasQt.test_SETR05_editar_sin_ruido",
+   "case": "S-ETR05",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Escribir una etiqueta repetida no da mensaje de error, ni parpadeo, ni marcas con «Mostrar errores» desmarcado."
+  },
+  {
+   "test": "test_etiquetas_repetidas.EtiquetasRepetidasQt.test_SETR06_play_no_arranca_y_el_aviso_trae_el_texto_nuevo",
+   "case": "S-ETR06",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Play con etiquetas repetidas no simula y el aviso dice «Transición t25 repetida tras X11 y tras X34.»"
+  },
+  {
+   "test": "test_etiquetas_repetidas.EtiquetasRepetidasQt.test_SETR07_vaciar_la_etiqueta_quita_el_aviso",
+   "case": "S-ETR07",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Vaciar la etiqueta de una transición la devuelve a automática y el aviso desaparece."
+  },
+  {
    "test": "test_etiquetas_transiciones.Interfaz.test_SETI02_opcion_desmarcada_y_etiqueta_oculta_al_colocar",
    "case": "S-ETI02",
    "outcome": "pasa",
@@ -8214,7 +8284,7 @@
     "REQ-EDT-02",
     "REQ-EDT-07"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-07: entrada ACENTO, salida SIMULACION, etapa EDICION y memoria ORIGEN_MEMORIA, en los colores y en la barra de 4 px"
+   "summary": "REQ-EDT-02, REQ-EDT-07: entrada ACENTO, salida SIMULACION, etapa EDICION y memoria ámbar (#b45309), en los colores y en la barra"
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B04_temporizador_contenedor_y_conectores_y_o",
@@ -8223,7 +8293,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: el temporizador es un contenedor con su insignia (t/X, X/t, t1/X/t2; «sin retardo» avisa), con paréntesis solo si la"
+   "summary": "REQ-EDT-02: el temporizador lleva hueco de bloques `[t1] / [base] / [t2]` (sin desplegable enorme ni TON/TOF);"
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B05_comparacion_en_ficha_y_constantes",
@@ -8232,7 +8302,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: la comparación va entre corchetes, con sus tres piezas (variable, operador, valor); la constante es una ficha hundida."
+   "summary": "REQ-EDT-02: la comparación lleva corchetes `[var ▾ | op ▾ | Núm]` y marcador «Núm» si está vacía; la constante es una ficha hundida."
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B06_hueco_pendiente_se_pinta_y_se_rellena_al_soltar",
@@ -8251,7 +8321,7 @@
     "REQ-EDT-02",
     "REQ-UX-01"
    ],
-   "summary": "REQ-EDT-02, REQ-UX-01: cada botón de la banda, pulsado con la fórmula vacía, pone su bloque; «Y» y «O» están en Operadores."
+   "summary": "REQ-EDT-02, REQ-UX-01: cada botón de la cinta `.op-ribbon`, pulsado con la fórmula vacía, inserta su bloque."
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B11_banda_arrastre_de_cada_boton_a_un_hueco",
@@ -8279,7 +8349,7 @@
     "REQ-EDT-02",
     "REQ-UX-01"
    ],
-   "summary": "REQ-EDT-02, REQ-UX-01: el catálogo de variables y etapas no es una pestaña (está siempre a la vista, 170 px al abrirse); su borde"
+   "summary": "REQ-EDT-02, REQ-UX-01: el catálogo de variables y etapas no es una pestaña (está siempre a la vista, 208 px al abrirse); la cinta"
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B14_filtro_del_catalogo_con_mas_de_doce",
@@ -8288,7 +8358,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: el catálogo ofrece el filtro con más de doce elementos y no antes."
+   "summary": "REQ-EDT-02: en 2.0.1 el buscador del catálogo está siempre visible en la cabecera fija superior."
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B15_banda_cabe_entera_y_pasa_de_fila",
@@ -8297,7 +8367,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: todas las categorías y sus botones caben dentro de la banda, a cualquier ancho (si no caben en una fila, pasan a otra)."
+   "summary": "REQ-EDT-09: la cinta fija `.op-ribbon` aloja el prefijo, los botones de inserción y las herramientas en una fila de 26 px de alto."
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B20_copiar_pegar_y_limpiar",
@@ -8324,7 +8394,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: pulsar una ficha del catálogo la pone en el bloque o hueco elegido y, sin elección, en el primer hueco libre; sin"
+   "summary": "REQ-EDT-02: en 2.0.1 pulsar una ficha del catálogo la pone en el área vacía, rellena huecos pendientes si existen, o la añade"
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B23_modificadores_desde_la_banda_en_el_orden_en_que_se_pulsan",
@@ -8333,7 +8403,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: NOT sin selección deja «NOT ?»; la variable pulsada después la rellena; sobre una ficha elegida, NOT, ↑ y ↓ se aplican"
+   "summary": "REQ-EDT-02: `aplicar_modificador(\"no\")` sin selección deja «NOT ?»; la variable pulsada después la rellena; sobre una ficha elegida,"
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B24_constantes_1_y_0_segun_la_decision_del_responsable",
@@ -8342,7 +8412,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02, P-IMP-69: con el lienzo vacío, o sin hueco elegido, «1» y «0» son la fórmula entera; sobre un hueco elegido se combinan"
+   "summary": "REQ-EDT-02, P-IMP-69: con el lienzo vacío «1» y «0» son la fórmula entera; con huecos rellenan el hueco; sin huecos se añaden"
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B30_aviso_al_arrastrar_fuera_y_el_bloque_se_quita",
@@ -8360,7 +8430,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: el programador de un valor lleva el catálogo de variables numéricas (cápsulas con el punto de su origen) y una banda con"
+   "summary": "REQ-EDT-02: en 2.0.1 el programador de un valor lleva el catálogo plano de variables numéricas (`catalogo`), una cinta con `( … )` y"
   },
   {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B41_el_texto_guardado_no_cambia",
@@ -8372,6 +8442,15 @@
    "summary": "REQ-EDT-02: el texto que escribe el formulador es el de siempre (el arreglo es de aspecto): una fórmula con todas las clases de"
   },
   {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B42_conectores_clicables_y_multiseleccion_ctrl_clic",
+   "case": "S-P8B42",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-EDT-02"
+   ],
+   "summary": "REQ-EDT-02: clic en «· Y» o «+ O» alterna el conector; Ctrl+clic selecciona varios bloques para aplicarles"
+  },
+  {
    "test": "test_formulador_fichas.FormuladorFichas.test_SP8B50_ningun_boton_del_formulador_con_el_texto_recortado",
    "case": "S-P8B50",
    "outcome": "pasa",
@@ -8379,6 +8458,20 @@
     "REQ-EDT-09"
    ],
    "summary": "REQ-EDT-09: en la ventana de Propiedades a 1366×768 y a 1920×1080, todos los botones y rótulos del formulador (banda, herramientas"
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B51_flanco_en_temporizador_rechazado_sin_mutar",
+   "case": "S-P8B51",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "IM1 (24-nov-2026): soltar, insertar, envolver o aplicar un flanco en la base de un temporizador se rechaza con el aviso exacto."
+  },
+  {
+   "test": "test_formulador_fichas.FormuladorFichas.test_SP8B52_comparador_fijo_decimales_y_legado_solo_lectura",
+   "case": "S-P8B52",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Comparador 24-nov: entero/decimal validado con coma en pantalla, sin Fórmula izq., y complejos heredados en solo lectura."
   },
   {
    "test": "test_formulas_ida_y_vuelta.FormulasIdaYVuelta.test_SP8F01_corpus_completo",
@@ -8994,7 +9087,7 @@
    "requirements": [
     "REQ-SIM-03"
    ],
-   "summary": "REQ-SIM-03: círculo o rombo completo dentro de la pastilla, también abierta y a distintos DPR."
+   "summary": "REQ-SIM-03: círculo o rombo completo dentro de la pastilla (icono 12×12), también abierta y a distintos DPR."
   },
   {
    "test": "test_interfaz_111.Interfaz111.test_SG103_dependencias_dentro_de_caja",
@@ -9066,7 +9159,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: sin modo solapado y extensión de herramientas dentro de su barra, separada de E/S."
+   "summary": "REQ-EDT-09: sin modo solapado; el estuche (pestañas + E/S) queda separado de las herramientas y toda extensión cabe dentro de su barra."
   },
   {
    "test": "test_interfaz_111.Interfaz111.test_SG111_leyenda_recinto_y_temporizadores_actuales",
@@ -9772,13 +9865,13 @@
    "summary": "REQ-SIM-03: una respuesta antigua de reasignación no reemplaza la sesión nueva de Play."
   },
   {
-   "test": "test_marcador_seccion.MarcadorSeccion.test_SMAR01_el_cuadrado_del_titulo_de_hojas_se_ve_entero_a_dos_tamanos",
+   "test": "test_marcador_seccion.MarcadorSeccion.test_SMAR01_la_cabecera_y_lista_de_hojas_caben_a_dos_tamanos",
    "case": "S-MAR01",
    "outcome": "pasa",
    "requirements": [
     "REQ-UX-01"
    ],
-   "summary": "REQ-UX-01: el cuadrado de etapa delante de «Hojas» tiene sus cuatro lados del color del trazo (no se recorta el izquierdo) y deja el mismo margen que los paneles (cuadrado a 13 px, botón «+ Añadir hoja» a 8 px y centrado), a 1366×768 y 2000×1250."
+   "summary": "REQ-UX-01: en Planos v2 la cabecera «Hojas» y su contador quedan contenidos dentro de su columna lateral y la lista no sobresale por la derecha a 1366×768 ni a 2000×1250."
   },
   {
    "test": "test_marcador_seccion.MarcadorSeccion.test_SMAR02_un_titulo_suelto_sin_margen_tampoco_se_recorta",
@@ -9787,7 +9880,7 @@
    "requirements": [
     "REQ-UX-01"
    ],
-   "summary": "REQ-UX-01: un TituloSeccion pegado al borde de su contenedor pinta el cuadrado entero."
+   "summary": "REQ-UX-01: un TituloSeccion pegado al borde de su contenedor pinta el filete entero; con `con_marcador=False` queda limpio."
   },
   {
    "test": "test_menus_tipo.SubmenusDeTipo.test_SMTP10_accion_a_orden_de_forzado_aceptar_cancelar_y_deshacer",
@@ -10365,6 +10458,13 @@
     "REQ-SIM-03"
    ],
    "summary": "REQ-SIM-03: ajustes fuera de pantalla principal y check de conexión real."
+  },
+  {
+   "test": "test_modbus_panel.PanelTests.test_SFIO21_subtitulos_y_anchos_ip_puerto_5_cifras",
+   "case": "S-FIO21",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "IM3: las columnas conservan «Sensores»/«Actuadores» con subtítulo «Variables creadas en GRAFCET Connect», y el puerto admite 5 cifras."
   },
   {
    "test": "test_modbus_panel.PanelTests.test_SFIO22_observar_solo_entradas_desde_editor",
@@ -11584,7 +11684,7 @@
     "REQ-EDT-02",
     "REQ-UX-01"
    ],
-   "summary": "REQ-EDT-02, REQ-UX-01: tarjeta «Receptividad» con el formulador ancho; etiqueta y comentario al pie, fuera de la tarjeta."
+   "summary": "REQ-EDT-02, REQ-UX-01: en Transición, etiqueta inline en la barra de título, formulador plano a ancho completo y comentario al pie."
   },
   {
    "test": "test_partes_propiedades.Ventana.test_SP813_el_comentario_largo_no_cambia_el_tamano_de_la_ventana",
@@ -11621,7 +11721,16 @@
     "REQ-EDT-02",
     "REQ-UX-01"
    ],
-   "summary": "REQ-UX-01, REQ-EDT-02: la ventana lleva FONDO (como la lupa de siempre), la tarjeta SUPERFICIE_2 con la barra de 3 px de su parte"
+   "summary": "REQ-UX-01, REQ-EDT-02: en 2.0.1 la ventana, la cabecera, la lupa y el panel interior son blancos (`#ffffff`),"
+  },
+  {
+   "test": "test_partes_propiedades.Ventana.test_SP817_botones_aceptar_y_cancelar_en_ventana_flotante",
+   "case": "S-P817",
+   "outcome": "pasa",
+   "requirements": [
+    "REQ-UX-01"
+   ],
+   "summary": "REQ-UX-01, P-IMP-170: «Aceptar» confirma y cierra la sesión; «Cancelar» deshace los cambios y cierra."
   },
   {
    "test": "test_pilotos_zoom.PilotosZoom.test_SL101_circulo_esquinas_transparentes_y_dentro_de_fila",
@@ -12638,7 +12747,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: contenido acotado, centrado y lupa de la altura de su tarjeta."
+   "summary": "REQ-EDT-09: en 2.0.1 el editor usa altura estable (`_marco_ventana() + 332`), centrada y con lupa de ancho completo."
   },
   {
    "test": "test_propiedades_111.Propiedades111.test_SPF103_sin_variable_fichas_deshabilitadas_y_numerica_solo_con_tipo",
@@ -12684,7 +12793,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: dos resaltados suaves y franjas/títulos con la misma señal, sin capa de líneas."
+   "summary": "REQ-EDT-09: resaltado suave en la lupa solo sobre la parte activa (sin capa de líneas ni barra lateral en el panel plano 2.0.1)."
   },
   {
    "test": "test_propiedades_111.Propiedades111.test_SPF108_ayudas_sin_descripciones_de_forma_ni_propiedades",
@@ -12780,7 +12889,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: una acción condicionada abre paneles «Condición» y «Acción», unidos a su parte ampliada; lo"
+   "summary": "REQ-EDT-02: una acción condicionada muestra «Condición» y «Activa variable» en la misma pantalla (2.0.1),"
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL08_evento_dos_paneles",
@@ -12801,22 +12910,18 @@
    "summary": "REQ-EDT-02: un cambio programático de selección actualiza el estado fijado; «✕» cierra."
   },
   {
-   "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL10_continua_no_abre_ventana",
+   "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL10_continua_abre_ventana_propiedades",
    "case": "S-PFL10",
    "outcome": "pasa",
-   "requirements": [
-    "REQ-EDT-02"
-   ],
-   "summary": "REQ-EDT-02: el doble clic en una acción continua solo despliega su variable sobre ella: ninguna ventana"
+   "requirements": [],
+   "summary": "1A (IM9): el doble clic en una acción continua abre Propiedades · Acción continua con vista previa centrada y desplegable común."
   },
   {
-   "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL11_continua_seleccionada_oculta_ventana",
+   "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL11_continua_abierta_muestra_accion_continua",
    "case": "S-PFL11",
    "outcome": "pasa",
-   "requirements": [
-    "REQ-EDT-02"
-   ],
-   "summary": "REQ-EDT-02: con la ventana abierta y fijada por otro elemento, seleccionar una continua oculta la ventana."
+   "requirements": [],
+   "summary": "1A (IM9): abrir Propiedades sobre una acción continua muestra «Propiedades · Acción continua»."
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL14_ampliar_ya_no_existe",
@@ -12888,7 +12993,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: reduce la altura sin arrinconar la ventana contra los bordes de la aplicación."
+   "summary": "REQ-EDT-02: en 2.0.1 el editor usa altura estable (`_marco_ventana() + 332`) sin arrinconar la ventana contra los bordes."
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL22_panel_inferior_completo_en_acciones_sueltas",
@@ -12906,7 +13011,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: el cuerpo empieza a E4 de los cuatro bordes de la ventana (bajo la línea de la cabecera, también);"
+   "summary": "REQ-EDT-02: en 2.0.1 el cuerpo es edge-to-edge dentro del marco de la ventana (borde + MARCO), la cabecera blanca"
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL24_tarjetas_iguales_con_margen_interior_y_titulo_dentro",
@@ -12915,7 +13020,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: cada panel es una tarjeta con un único fondo igual en todas, margen interior ≥ E3, el título"
+   "summary": "REQ-EDT-02: en 2.0.1 `PanelInterior` es un contenedor plano blanco edge-to-edge (sin tarjeta gris ni fila de título interior);"
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL25_lupa_con_marco_hueco_y_senales_de_tarjeta",
@@ -12924,7 +13029,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: la lupa conserva borde y hueco E6; las señales sustituyen a las líneas."
+   "summary": "REQ-EDT-09: en 2.0.1 la lupa es una franja plana blanca edge-to-edge con filete inferior `#cdd6e0`, sin tarjeta redondeada"
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL26_ningun_texto_recortado",
@@ -12951,7 +13056,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: cada resaltado de la lupa corresponde al rectángulo real y al color de su tarjeta."
+   "summary": "REQ-EDT-09: cada resaltado de la lupa corresponde al rectángulo real y al color de la parte activa (sin velo gris en la inactiva)."
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL29_flotante_sin_formula_ni_aviso_ni_frase_y_la_barra_igual",
@@ -12978,7 +13083,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: el área de bloques de la ventana flotante ve al menos 6 fichas de variables a 1366×768 y el doble aproximadamente a"
+   "summary": "REQ-EDT-02: con la altura estable de editor de 2.0.1 (`_marco_ventana() + 332`), el catálogo muestra al menos 6 fichas de"
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL32_sin_lineas_y_senales_solo_con_dos_paneles",
@@ -12987,7 +13092,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: no hay líneas; las dos señales solo aparecen con condición o evento."
+   "summary": "REQ-EDT-09: no hay líneas; la señal de la parte activa solo aparece con condición o evento."
   },
   {
    "test": "test_propiedades_flotante.PropiedadesFlotante.test_SPFL33_lupa_de_transicion_y_etapa_sin_trozos_vecinos",
@@ -13159,6 +13264,244 @@
     "REQ-DAT-02"
    ],
    "summary": "REQ-DAT-02: la clave debe tener 32 bytes como mínimo y no aparece en la salida."
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_01_subtitulos_es_variables_creadas",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_02_terminales_hueco_cable_y_quitar_junto_al_nombre",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_03_planos_conserva_estilo_v2_tras_cambio_escala",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_04_variables_multiseleccion_y_eliminar",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_05_tooltips_claros_y_compactos",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_06_foco_sin_doble_borde_y_teclado_vs_raton",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_07_checkboxes_visibles_y_sin_border_zero",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_08_acciones_separadas_re_unen_en_grupo",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_09_indicador_c_en_modbus_y_directa",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_10_transiciones_repetidas_naranja_y_diagnostico",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_11_lienzo_vacio_sin_barras_al_arranque",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.PulidoCiclo2Qt.test_PC2_13_separar_y_reunir_grupo_mixto_forzado_accion",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.TransicionesRepetidasNucleo.test_PC2_10_nucleo_detecta_etiqueta_transicion_repetida_y_permite_editar",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo2.TransicionesRepetidasNucleo.test_PC2_12_renombrar_transicion_con_otra_sin_etiqueta",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Nucleo.test_PC3_08_colision_transicion_sin_label_no_interna_y_renombrado",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Qt.test_PC3_01_menus_variables_sin_elija_ni_filtrar",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Qt.test_PC3_02_conmutador_marca_blanca_solo_en_activo",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Qt.test_PC3_03_duracion_asume_segundos_y_aplica_al_perder_foco",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Qt.test_PC3_04_conexion_directa_sin_parpadeo_y_protege_pendiente",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Qt.test_PC3_05_planos_oculta_error_vacio_y_lo_muestra_al_fallar",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Qt.test_PC3_06_etiquetas_automaticas_transicion_y_renumerado",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Qt.test_PC3_07_campo_etiqueta_bloqueado_doble_clic_y_esc",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Qt.test_PC3_08b_forzados_sustituye_id_en_action_order",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Qt.test_PC3_09_desborde_favoritos_alineado_izquierda",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo3.Ciclo3Qt.test_PC3_10_alternar_directo_modbus_directo_repuebla_terminales",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo4.PulidoCiclo4Qt.test_PC4_01_c2_boton_simular_en_edicion_y_stop_al_simular",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo4.PulidoCiclo4Qt.test_PC4_02_c7_consola_simulacion_estilo_tarjetas_y_cuatro_columnas",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo4.PulidoCiclo4Qt.test_PC4_03_c8_c9_c9b_planos_vacio_barra_y_hojas_sin_duplicar",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo4.PulidoCiclo4Qt.test_PC4_04_c10_es_sin_boton_volver_y_retorno_por_pestana",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo4.PulidoCiclo4Qt.test_PC4_05_c13_modbus_cabecera_en_una_fila_y_texto_conectado",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo4.PulidoCiclo4Qt.test_PC4_06_c15_traer_tabla_unica_con_sentido_auto_y_grupos_plegados",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo4.PulidoCiclo4Qt.test_PC4_07_c17_config_directa_abierta_una_fila_y_cancelar_aceptar",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo4.PulidoCiclo4Qt.test_PC4_08_cositas_b1_b2_b3_y_d1_d4",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
+  },
+  {
+   "test": "test_pulido_ciclo4.PulidoCiclo4Qt.test_PC4_09_candado_preparar_carga_y_refresco_catalogo",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": ""
   },
   {
    "test": "test_pulido_es.PulidoES.test_SESP01_sin_proyecto_ni_preferencias_usa_el_del_simulador",
@@ -13474,7 +13817,7 @@
     "REQ-EDT-02",
     "REQ-EDT-07"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-07: el orden por uso es el de siempre; la banda de categorías (sin pestañas: el catálogo está siempre a la"
+   "summary": "REQ-EDT-02, REQ-EDT-07: el orden por uso es el de siempre; la cinta «Insertar:» (sin pestañas: el catálogo está siempre a la"
   },
   {
    "test": "test_remates_acciones.RematesNucleo.test_SCOR01_copiar_continua_sola_conserva_tipo",
@@ -13549,7 +13892,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: el estilo general no comprime el selector dibujado como una acción."
+   "summary": "REQ-EDT-02: el estilo general no comprime el selector de variable (28 px fijos en 2.0.1)."
   },
   {
    "test": "test_remates_acciones.RematesQt.test_SCOR08_color_flanco_en_qt",
@@ -13578,7 +13921,7 @@
     "REQ-EDT-02",
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-02, REQ-EDT-09: el desplegable «Variable» de una acción nunca es más bajo que un campo de texto del"
+   "summary": "REQ-EDT-02, REQ-EDT-09: el desplegable «Variable» de una acción conserva su altura fija (28 px en 2.0.1)"
   },
   {
    "test": "test_remates_interfaz.Remates.test_SREM02_variables_ajustan_filas_y_botones_debajo_con_limite",
@@ -13588,7 +13931,7 @@
     "REQ-EDT-07",
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-07, REQ-EDT-09: tabla sin espacio sobrante, botones debajo y desplazamiento interno con muchas filas."
+   "summary": "REQ-EDT-07, REQ-EDT-09: cabecera plana con contador, tabla edge-to-edge que se expande verticalmente, pie fijo con botones 2×2 y desplazamiento interno con muchas filas."
   },
   {
    "test": "test_remates_interfaz.Remates.test_SREM03_diagnostico_en_lienzo_selecciona_sin_tapar_zoom",
@@ -14605,6 +14948,13 @@
    "summary": ""
   },
   {
+   "test": "test_sp_interfaz.InterfazP.test_SP132_dialogo_directa_abierto_tiempos_en_fila_y_orden_cancelar_aceptar",
+   "case": "S-P132",
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Ciclo 4 (C17a/C17b/C17c): `ConfiguracionDirecta` muestra directamente «Señales que no se traen», coloca Periodo y Tiempo de espera en 1 fila horizontal y ordena Cancelar | Aceptar."
+  },
+  {
    "test": "test_sp_medidas_reales.MedidasRealesP.test_SP120_medidas_y_capturas_a_1366_y_media_pantalla",
    "case": "S-P120",
    "outcome": "pasa",
@@ -15351,7 +15701,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: en las tres ventanas, la banda de categorías (Operadores, Temporizadores, Comparaciones y Constantes, con sus botones y"
+   "summary": "REQ-EDT-02: en las tres ventanas, la cinta de inserción (`.op-ribbon`: «Insertar:» + botones de inserción y herramientas)"
   },
   {
    "test": "test_sx_mas.PropiedadesMas.test_SXM2_campos_sin_corte_y_comentario_largo",
@@ -15360,7 +15710,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: etiqueta y comentario comparten fila al pie; el comentario ocupa el ancho del pie (E8: sin casilla «Mostrar etiqueta»)."
+   "summary": "REQ-EDT-02: etiqueta inline en cabecera y comentario a todo el ancho en la franja inferior `.comment-row`."
   },
   {
    "test": "test_sx_mas.PropiedadesMas.test_SXM3_altura_moderada_y_aire_alrededor",
@@ -15369,7 +15719,7 @@
    "requirements": [
     "REQ-EDT-02"
    ],
-   "summary": "REQ-EDT-02: el responsable sustituyó el 33 % y el doble exacto por un aumento moderado."
+   "summary": "REQ-EDT-02: altura estable (`_marco_ventana() + 332`) con aire alrededor y área cómoda para bloques."
   },
   {
    "test": "test_sx_mas.PropiedadesMas.test_SXM4_aviso_vacio_y_lupa_se_conservan",
@@ -15387,7 +15737,7 @@
    "requirements": [
     "REQ-UX-01"
    ],
-   "summary": "REQ-UX-01: curvas transparentes por fuera, marco gris azulado completamente opaco."
+   "summary": "REQ-UX-01: curvas transparentes por fuera, fondo blanco `#ffffff` completamente opaco en 2.0.1."
   },
   {
    "test": "test_sx_mover_lag.IntercambioX.test_SX10_reenvio_forzado_no_reconstruye_tablas",
@@ -15502,14 +15852,14 @@
    "case": "S-Y1",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "El cambio de letra normal a grande conserva el tope confirmado de 848 px lógicos."
+   "summary": "El cambio de letra normal a grande conserva el tope de 920 px lógicos en 2.0.1 (y 848 px a media pantalla 960)."
   },
   {
    "test": "test_sy_propiedades.PropiedadesY.test_SY2_medias_pantallas_y_altos_acotados_al_area_actual",
    "case": "S-Y2",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "En media pantalla, solo las acciones de dos tarjetas usan todo el alto disponible."
+   "summary": "En media pantalla, los editores mantienen altura estable (`_marco_ventana() + 332`) acotada al área disponible."
   },
   {
    "test": "test_sy_propiedades.PropiedadesY.test_SY3_centrada_y_categorias_enteras_a_pantalla_completa",
@@ -15523,14 +15873,14 @@
    "case": "S-Y4",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "El máximo también rige para las fichas cortas sin estirarlas hasta el tope."
+   "summary": "El máximo de 920 px rige en acciones; etapas y macroetapas conservan su ancho compacto (640 px)."
   },
   {
    "test": "test_sy_propiedades.PropiedadesY.test_SY5_cursor_de_flecha_sin_perder_el_arrastre",
    "case": "S-Y5",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "La cabecera, título y cerrar heredan flecha, y el movimiento conserva el agarre."
+   "summary": "La ventana, cabecera y título heredan flecha; ✕ muestra mano apuntadora, y el movimiento conserva el agarre."
   },
   {
    "test": "test_sy_propiedades.PropiedadesY.test_SY6_lupa_identica_con_y_sin_vecinos",
@@ -15544,7 +15894,7 @@
    "case": "S-Y7",
    "outcome": "pasa",
    "requirements": [],
-   "summary": "Las alturas de una tarjeta se conservan. Dos tarjetas aprovechan el área con sus márgenes."
+   "summary": "A pantalla completa, todos los editores conservan su altura estable (`_marco_ventana() + 332`) sin estirarse al borde."
   },
   {
    "test": "test_sz_interfaz.InterfazZ.test_SZ10_traza_y_flecha_dentro_de_su_cabecera",
@@ -15627,7 +15977,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: un único renglón explica el signo de los cuatro nombres."
+   "summary": "REQ-EDT-09: al abrir se corrigen automáticamente; si el usuario escribe nombres con signos, un renglón lo explica."
   },
   {
    "test": "test_sz_interfaz.InterfazZ.test_SZ2_correccion_valida_unica_y_verde",
@@ -15645,7 +15995,7 @@
    "requirements": [
     "REQ-EDT-09"
    ],
-   "summary": "REQ-EDT-09: el motivo y la regla completos siguen disponibles en la celda."
+   "summary": "REQ-EDT-09: el motivo y la regla completos siguen disponibles en la celda cuando se escribe un nombre inválido."
   },
   {
    "test": "test_sz_interfaz.InterfazZ.test_SZ4_orden_y_categoria_inicial",
@@ -16438,6 +16788,69 @@
    "outcome": "pasa",
    "requirements": [],
    "summary": ""
+  },
+  {
+   "test": "test_temporales_compuestas.BasesTemporalesCompuestas.test_coincidencia_lote_y_vencimiento_en_base_compuesta",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Un lote en el mismo instante que vence una base compuesta activa la detección 4.1."
+  },
+  {
+   "test": "test_temporales_compuestas.BasesTemporalesCompuestas.test_declared_state_rechaza_base_compuesta_verdadera",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "declared_state sigue rechazando bases temporales ya verdaderas sin estado temporal."
+  },
+  {
+   "test": "test_temporales_compuestas.BasesTemporalesCompuestas.test_etapas_conjuncion_disyuncion_y_negacion",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "5s/(X1·X2), 3s/(a + b) y 2s/NOT a compilan y temporizan según su valor al cierre."
+  },
+  {
+   "test": "test_temporales_compuestas.BasesTemporalesCompuestas.test_flanco_solo_o_en_base_compuesta_rechazado_con_texto_exacto",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Un flanco solo o dentro de una base compuesta falla con D-TIPO-EVENTO y el aviso exacto."
+  },
+  {
+   "test": "test_temporales_compuestas.BasesTemporalesCompuestas.test_mezcla_dos_etapas_y_p_imp_18_transitorio_no_reinicia",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "P-IMP-18 extendida: salida y reentrada en el mismo instante de una base compuesta conserva la cuenta."
+  },
+  {
+   "test": "test_temporales_compuestas.BasesTemporalesCompuestas.test_mezcla_etapas_internas_y_salida_continua",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Base con etapas, entradas, internas y lectura de salida continua (8.2 C), más desconexión 0s/base/3s."
+  },
+  {
+   "test": "test_temporales_compuestas.DobleNegacionVisual.test_dibujo_js_dibuja_barras_apiladas_y_compatibilidad",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "tools/dibujo.js dibuja las 3 barras apiladas en y distintos con clases independientes."
+  },
+  {
+   "test": "test_temporales_compuestas.DobleNegacionVisual.test_qt_y_descriptores_dibujan_dos_alturas_y_colores_independientes",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "Qt (_Pintor) y Grabadora dibujan barras apiladas a alturas distintas con colores propios."
+  },
+  {
+   "test": "test_temporales_compuestas.DobleNegacionVisual.test_view_norm_genera_niveles_apilados_e_ids_distintos",
+   "case": null,
+   "outcome": "pasa",
+   "requirements": [],
+   "summary": "NOT(NOT a + NOT b) produce nivel 0 en a y b y nivel 1 sobre todo a + b."
   },
   {
    "test": "test_v2_e0.Bancos.test_genera_dos_imagenes_y_compara",

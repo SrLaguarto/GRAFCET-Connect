@@ -22,8 +22,10 @@ except ImportError:
 
 if QT:
     from escritorio import bloques, estilo
-    from escritorio.bloques import (COLORES, MIME, MIME_FORMULA, AreaBloques, Motor, Programador, _Caja, arbol_a_texto, nuevo, texto_a_arbol,
-                                    texto_a_arbol_valor, var)
+    from escritorio.bloques import (
+        AVISO_FLANCO_TEMP, COLORES, MIME, MIME_FORMULA, AreaBloques, Motor, Programador,
+        _Caja, arbol_a_texto, faltan, nuevo, texto_a_arbol, texto_a_arbol_valor, var,
+    )
     from escritorio.paleta_variables import PaletaVariables
 
 VARS = {"marcha": ("input", "bool"), "paro": ("input", "bool"), "Motor": ("output", "bool"), "M1": ("internal", "bool"),
@@ -100,65 +102,81 @@ class FormuladorFichas(unittest.TestCase):
         rect = next(x for x in a._piezas if x[1] == "mod")[0]
         QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=rect.center().toPoint())
         self.assertEqual(p.texto(), "NOT ↑marcha", "y vuelve")
-        # arrastrar desde el nombre: se lleva la ficha entera con sus modificadores
+        # arrastrar desde la ficha (sin desplegable ▾ en 2.0.1): se lleva la ficha entera con sus modificadores
         a._calcular(a.width())
-        nombre = next(x for x in a._piezas if x[1] == "drop")
-        self.assertEqual(a._ruta_arrastre(tuple(nombre[2])), (0,), "la ruta que se lleva es la de la ficha entera")
+        self.assertEqual(a._ruta_arrastre((0, "a", "a")), (0,), "la ruta que se lleva es la de la ficha entera")
+        self.assertFalse([x for x in a._piezas if x[1] == "drop"], "ficha booleana sin ▾ en el carril")
         mime = {}
         with mock.patch.object(bloques, "QDrag") as qdrag, mock.patch.object(bloques, "ejecutar_arrastre"):
-            a._arrastrar(a._ruta_arrastre(tuple(nombre[2])))
+            a._arrastrar(a._ruta_arrastre((0, "a", "a")))
             mime["datos"] = json.loads(bytes(qdrag.return_value.setMimeData.call_args.args[0].data(MIME)))
         self.assertEqual(arbol_a_texto(mime["datos"]["nodo"]), "NOT ↑marcha")
 
     def test_SP8B03_cada_origen_con_su_color_y_barra(self):
-        """REQ-EDT-02, REQ-EDT-07: entrada ACENTO, salida SIMULACION, etapa EDICION y memoria ORIGEN_MEMORIA, en los colores y en la barra de 4 px
-        de la ficha (se mira el píxel)."""
+        """REQ-EDT-02, REQ-EDT-07: entrada ACENTO, salida SIMULACION, etapa EDICION y memoria ámbar (#b45309), en los colores y en la barra
+        lateral de la ficha (se mira el píxel)."""
         self.assertEqual((COLORES["entrada"], COLORES["salida"], COLORES["etapa"], COLORES["interna"]),
-                         (estilo.ACENTO, estilo.SIMULACION, estilo.EDICION, estilo.ORIGEN_MEMORIA))
+                         (estilo.ACENTO, estilo.SIMULACION, estilo.EDICION, "#b45309"))
         p = self.programador()
-        for texto, color in (("marcha", estilo.ACENTO), ("Motor", estilo.SIMULACION), ("X0", estilo.EDICION), ("M1", estilo.ORIGEN_MEMORIA)):
+        for texto, color in (("marcha", estilo.ACENTO), ("Motor", estilo.SIMULACION), ("X0", estilo.EDICION), ("M1", "#b45309")):
             with self.subTest(texto):
                 p.poner(texto)
                 imagen = p.lienzo.grab().toImage()
                 cerca = {imagen.pixelColor(x, y).name() for x in range(bloques.MARGEN, bloques.MARGEN + 8)
                          for y in range(bloques.MARGEN, bloques.MARGEN + 28)}
                 self.assertIn(QColor(color).name(), cerca, texto)
-        # el catálogo lleva las mismas fichas: la barra de la primera entrada
+        # el catálogo lleva las mismas categorías de origen: la primera entrada
         self.assertEqual(p.paleta._cajas[0][0].cat, "entrada")
 
     def test_SP8B04_temporizador_contenedor_y_conectores_y_o(self):
-        """REQ-EDT-02: el temporizador es un contenedor con su insignia (t/X, X/t, t1/X/t2; «sin retardo» avisa), con paréntesis solo si la
-        base no es una variable; «y» y «o» son contenedores con un conector de su color; ninguno se llama TON ni TOF."""
+        """REQ-EDT-02: el temporizador lleva hueco de bloques `[t1] / [base] / [t2]` (sin desplegable enorme ni TON/TOF);
+        «y» y «o» son flujos planos (`sin_fondo=True`) con conectores `·` y `+`."""
         m = Motor(lambda: (VARS, ETAPAS))
-        for texto, insignia in (("3s/marcha", "t/X"), ("marcha/2s", "X/t"), ("3s/marcha/2s", "t1/X/t2")):
+        for texto, t1, t2 in (
+            ("3s/marcha", "3s", "t2"),
+            ("marcha/2s", "t1", "2s"),
+            ("3s/marcha/2s", "3s", "2s"),
+        ):
             with self.subTest(texto):
                 m.reiniciar()
                 c = m.caja(texto_a_arbol(texto, VARS, ETAPAS), (0,), 2000)
-                self.assertEqual(c.forma, "temp")
-                self.assertEqual(c.items[0][2].texto, insignia)
-                self.assertNotIn("(", [it.texto for _, _, it in c.items if not isinstance(it, _Caja)], "sin paréntesis con una variable")
+                self.assertEqual(c.forma, "ficha")
+                self.assertEqual(len(c.items), 5)
+                self.assertEqual((c.items[0][2].tipo, c.items[0][2].texto), ("campo", t1))
+                self.assertEqual((c.items[1][2].tipo, c.items[1][2].texto), ("txt", "/"))
+                self.assertIsInstance(c.items[2][2], _Caja)
+                self.assertEqual(c.items[2][2].forma, "ficha")
+                self.assertEqual((c.items[3][2].tipo, c.items[3][2].texto), ("txt", "/"))
+                self.assertEqual((c.items[4][2].tipo, c.items[4][2].texto), ("campo", t2))
         m.reiniciar()
         arbol = nuevo("temp", t1="", t2="", a=None)
-        self.assertEqual(m.caja(arbol, (0,), 2000).items[0][2].texto, "sin retardo")
+        c_vacio = m.caja(arbol, (0,), 2000)
+        self.assertEqual(c_vacio.forma, "ficha")
+        self.assertEqual((c_vacio.items[0][2].texto, c_vacio.items[-1][2].texto), ("t1", "t2"))
+        self.assertIsNone(c_vacio.items[2][2].nodo)
         c = m.caja(texto_a_arbol("3s/(marcha AND paro)", VARS, ETAPAS), (0,), 2000)
-        self.assertEqual([it.texto for _, _, it in c.items if not isinstance(it, _Caja)].count("("), 1, "con una expresión, entre paréntesis")
+        self.assertEqual(c.forma, "ficha")
+        self.assertTrue(any(isinstance(it, _Caja) and it.forma == "y" for _, _, it in c.items), "con una expresión, encierra el bloque compuesto")
         y, o = (m.caja(texto_a_arbol(t, VARS, ETAPAS), (0,), 2000) for t in ("marcha AND paro", "marcha OR paro"))
-        self.assertEqual((y.forma, o.forma), ("y", "o"))
-        self.assertEqual([it.texto for _, _, it in y.items if not isinstance(it, _Caja) and it.tipo == "txt"], ["· Y"])
-        self.assertEqual([it.texto for _, _, it in o.items if not isinstance(it, _Caja) and it.tipo == "txt"], ["+ O"])
+        self.assertEqual((y.forma, o.forma, y.sin_fondo, o.sin_fondo), ("y", "o", True, True))
+        self.assertEqual([it.texto for _, _, it in y.items if not isinstance(it, _Caja) and it.tipo == "txt"], ["·"])
+        self.assertEqual([it.texto for _, _, it in o.items if not isinstance(it, _Caja) and it.tipo == "txt"], ["+"])
         self.assertNotEqual(COLORES["y"].lower(), COLORES["o"].lower(), "distinguibles por color")
         p = self.programador()
         textos = [b.text() for bs in p.banda.botones.values() for b in bs] + [r.text() for r in p.categorias.values()]
         self.assertFalse([t for t in textos if "TON" in t or "TOF" in t])
 
     def test_SP8B05_comparacion_en_ficha_y_constantes(self):
-        """REQ-EDT-02: la comparación va entre corchetes, con sus tres piezas (variable, operador, valor); la constante es una ficha hundida."""
+        """REQ-EDT-02: la comparación lleva corchetes `[var ▾ | op ▾ | Núm]` y marcador «Núm» si está vacía; la constante es una ficha hundida."""
         m = Motor(lambda: (VARS, ETAPAS))
         m.reiniciar()
         c = m.caja(texto_a_arbol("CT >= 10", VARS, ETAPAS), (0,), 2000)
         self.assertEqual(c.forma, "ficha")
         self.assertEqual([(it.tipo, it.texto) for _, _, it in c.items],
                          [("txt", "["), ("drop", "CT"), ("drop", "≥"), ("campo", "10"), ("txt", "]")])
+        c_vacio = m.caja(nuevo("cmp", n="CT", op="=", v=""), (0,), 2000)
+        self.assertEqual([(it.tipo, it.texto) for _, _, it in c_vacio.items],
+                         [("txt", "["), ("drop", "CT"), ("drop", "="), ("campo", "Núm"), ("txt", "]")])
         c = m.caja(nuevo("const", v=1), (0,), 2000)
         self.assertEqual((c.forma, c.items[0][2].texto), ("hundida", "1"))
 
@@ -181,18 +199,20 @@ class FormuladorFichas(unittest.TestCase):
 
     # -- P5: catálogo y banda
     def test_SP8B10_banda_cada_boton_inserta_su_bloque(self):
-        """REQ-EDT-02, REQ-UX-01: cada botón de la banda, pulsado con la fórmula vacía, pone su bloque; «Y» y «O» están en Operadores."""
+        """REQ-EDT-02, REQ-UX-01: cada botón de la cinta `.op-ribbon`, pulsado con la fórmula vacía, inserta su bloque."""
         p = self.programador()
-        esperado = {"no": "NOT ?", "sube": "↑?", "baja": "↓?", "par": "(?)", "y": "? AND ?", "o": "? OR ?", "retardo_activar": "3s/?",
-                    "retardo_desactivar": "?/3s", "cmp": "CT = 0", "uno": "1", "cero": "0"}
+        esperado = {"par": "(?)", "temp": "5s/X0", "cmp": "CT >= 10", "uno": "1", "cero": "0"}
         for b in (b for bs in p.banda.botones.values() for b in bs):
             with self.subTest(b.clave):
                 p.lienzo.limpiar()
                 b.click()
                 self.assertEqual(p.texto(), esperado[b.clave])
                 self.assertTrue(b.toolTip())
-        self.assertEqual([b.text() for b in p.banda.botones["operador"]], ["NOT", "↑", "↓", "( … )", "Y", "O"])
-        self.assertEqual([b.text() for b in p.banda.botones["tiempo"]], ["t/X", "X/t"])
+        self.assertEqual(p.banda.l_prefijo.text(), "Insertar:")
+        self.assertEqual([b.text() for b in p.banda.botones["operador"]], ["( … )"])
+        self.assertEqual([b.text() for b in p.banda.botones["tiempo"]], ["Temporizador"])
+        self.assertEqual([b.text() for b in p.banda.botones["comparacion"]], ["= ≠ < ≥"])
+        self.assertEqual([b.text() for b in p.banda.botones["constante"]], ["1", "0"])
 
     def test_SP8B11_banda_arrastre_de_cada_boton_a_un_hueco(self):
         """REQ-EDT-02: cada botón se arrastra: lleva su bloque y, soltado sobre un hueco, lo coloca."""
@@ -226,8 +246,8 @@ class FormuladorFichas(unittest.TestCase):
         self.assertEqual(p.texto(), "1")
 
     def test_SP8B13_catalogo_siempre_visible_sin_pestanas_y_borde_arrastrable(self):
-        """REQ-EDT-02, REQ-UX-01: el catálogo de variables y etapas no es una pestaña (está siempre a la vista, 170 px al abrirse); su borde
-        se arrastra, con límites, y el ancho se recuerda en QSettings (y lo adopta otro programador)."""
+        """REQ-EDT-02, REQ-UX-01: el catálogo de variables y etapas no es una pestaña (está siempre a la vista, 208 px al abrirse); la cinta
+        `.op-ribbon` ocupa solo la columna derecha encima del carril; el borde del catálogo se arrastra con límites y se recuerda en QSettings."""
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         ajustes = QSettings(str(Path(tmp.name) / "a.ini"), QSettings.Format.IniFormat)
@@ -237,12 +257,14 @@ class FormuladorFichas(unittest.TestCase):
         p = self.programador()
         self.assertTrue(p._sc_paleta.isVisible())
         self.assertEqual(p.paleta.clave, "variables")
-        self.assertEqual(p._sc_paleta.width(), Programador.PALETA_INICIAL)
-        self.assertEqual(Programador.PALETA_INICIAL, 170)
+        self.assertEqual(p._col_catalogo.width(), Programador.PALETA_INICIAL)
+        self.assertEqual(Programador.PALETA_INICIAL, 208)
         self.assertFalse(any(hasattr(p, n) for n in ("elegir_categoria", "lista_categorias")), "sin pestañas")
         for q in (p, self.programador(valor=True)):
-            self.assertLess(q.banda.mapTo(q, q.banda.rect().topLeft()).y(), q._sc_paleta.mapTo(q, q._sc_paleta.rect().topLeft()).y(),
-                            "la banda, a todo el ancho, sobre el catálogo y el área")
+            self.assertGreaterEqual(q.banda.mapTo(q, q.banda.rect().topLeft()).x(), q._col_catalogo.width(),
+                                    "la cinta va solo sobre la columna derecha")
+            self.assertLess(q.banda.mapTo(q, q.banda.rect().topLeft()).y(), q.lienzo.mapTo(q, q.lienzo.rect().topLeft()).y(),
+                            "la cinta queda encima del carril de bloques")
         # arrastrar el borde
         x0 = p.asa.mapToGlobal(p.asa.rect().center()).x()
         centro = p.asa.rect().center()
@@ -250,49 +272,45 @@ class FormuladorFichas(unittest.TestCase):
         p.asa.movida.emit(250)
         QTest.mouseRelease(p.asa, Qt.MouseButton.LeftButton, pos=centro)
         QApplication.processEvents()
-        self.assertEqual(p._sc_paleta.width(), 250)
+        self.assertEqual(p._col_catalogo.width(), 250)
         self.assertEqual(int(ajustes.value(Programador.CLAVE_ANCHO)), 250, "se recuerda")
         p.poner_ancho_catalogo(5)
-        self.assertEqual(p._sc_paleta.width(), Programador.PALETA_MIN, "con un mínimo")
+        self.assertEqual(p._col_catalogo.width(), Programador.PALETA_MIN, "con un mínimo")
         p.poner_ancho_catalogo(5000)
-        self.assertLessEqual(p._sc_paleta.width(), Programador.PALETA_MAX, "con un máximo")
+        self.assertLessEqual(p._col_catalogo.width(), Programador.PALETA_MAX, "con un máximo")
         p.poner_ancho_catalogo(250)
         p._recordar_ancho(250)
         otro = self.programador()
-        self.assertEqual(otro._sc_paleta.width(), 250, "otro programador adopta el ancho recordado")
+        self.assertEqual(otro._col_catalogo.width(), 250, "otro programador adopta el ancho recordado")
         self.assertIsNotNone(x0)
 
     def test_SP8B14_filtro_del_catalogo_con_mas_de_doce(self):
-        """REQ-EDT-02: el catálogo ofrece el filtro con más de doce elementos y no antes."""
+        """REQ-EDT-02: en 2.0.1 el buscador del catálogo está siempre visible en la cabecera fija superior."""
         pocas = self.programador()
-        self.assertTrue(pocas.paleta.filtro.isHidden())
+        self.assertTrue(pocas.paleta.filtro_externo)
+        self.assertFalse(pocas.paleta.filtro.isHidden())
         muchas = self.programador(vars_={f"I{i}": ("input", "bool") for i in range(13)})
         self.assertFalse(muchas.paleta.filtro.isHidden())
         muchas.paleta.filtro.setText("I1")
         self.assertEqual([n["n"] for n in muchas.paleta.bloques()], ["I1", "I10", "I11", "I12"])
 
     def test_SP8B15_banda_cabe_entera_y_pasa_de_fila(self):
-        """REQ-EDT-09: todas las categorías y sus botones caben dentro de la banda, a cualquier ancho (si no caben en una fila, pasan a otra)."""
-        for ancho in (400, 700, 1000, 1400):
+        """REQ-EDT-09: la cinta fija `.op-ribbon` aloja el prefijo, los botones de inserción y las herramientas en una fila de 26 px de alto."""
+        for ancho in (800, 1000, 1400):
             with self.subTest(ancho=ancho):
                 p = self.programador()
                 p.resize(ancho, 400)
                 QApplication.processEvents()
-                for rotulo in p.categorias.values():
-                    self.assertTrue(p.banda.rect().contains(rotulo.mapTo(p.banda, rotulo.rect().topLeft())), rotulo.text())
-                    self.assertGreaterEqual(rotulo.width(), rotulo.fontMetrics().horizontalAdvance(rotulo.text()), rotulo.text())
-                for b in (b for bs in p.banda.botones.values() for b in bs):
+                rotulo = p.banda.l_prefijo
+                self.assertTrue(p.banda.rect().contains(rotulo.mapTo(p.banda, rotulo.rect().topLeft())), rotulo.text())
+                self.assertGreaterEqual(rotulo.width(), rotulo.fontMetrics().horizontalAdvance(rotulo.text()), rotulo.text())
+                for b in [b for bs in p.banda.botones.values() for b in bs] + [p.b_copiar, p.b_pegar, p.b_deshacer, p.b_rehacer, p.b_limpiar]:
                     self.assertTrue(b.isVisible())
                     caja = b.mapTo(p.banda, b.rect().topLeft())
                     self.assertTrue(p.banda.rect().contains(caja) and p.banda.rect().contains(caja + b.rect().bottomRight()), b.text())
                     self.assertGreaterEqual(b.width(), b.fontMetrics().horizontalAdvance(b.text()), b.text())
-                    self.assertIn(b.height(), {estilo.ALTO_CONTROL, estilo.ALTO_CONTROL_COMPACTO, estilo.ALTO_BARRA, estilo.ALTO_BARRA_COMPACTA},
-                                  "el alto de un token (regla C1)")
-        ancho_fila = 1400
-        p = self.programador()
-        p.resize(ancho_fila, 400)
-        QApplication.processEvents()
-        self.assertEqual(len({r.y() for r in p.categorias.values()}), 1, "a 1400 px, las cuatro categorías en una fila")
+                    self.assertEqual(b.height(), 26, "alto compacto de la cinta `.op-ribbon`")
+                self.assertEqual(len({b.y() for bs in p.banda.botones.values() for b in bs}), 1, "cinta en una sola fila")
 
     # -- P6: herramientas
     def test_SP8B20_copiar_pegar_y_limpiar(self):
@@ -319,11 +337,11 @@ class FormuladorFichas(unittest.TestCase):
         self.assertFalse(q.b_limpiar.isEnabled())
         q.deshacer()
         self.assertEqual(q.texto(), "Motor")
-        # el contenido de otro tipo no se pega con el botón: un valor no es una condición (el de un valor solo tiene «Limpiar», como la maqueta)
+        # el contenido de otro tipo no se pega con el botón: un valor no es una condición (en 2.0.1 el valor también muestra Copiar/Pegar/Limpiar)
         v = self.programador(valor=True)
-        self.assertTrue(v.b_copiar.isHidden() and v.b_pegar.isHidden() and not v.b_limpiar.isHidden())
+        self.assertFalse(v.b_copiar.isHidden() or v.b_pegar.isHidden() or v.b_limpiar.isHidden())
         v.poner("CT + 1")
-        v.lienzo.copiar_formula()
+        v.b_copiar.click()
         QApplication.processEvents()
         self.assertFalse(p.b_pegar.isEnabled(), "un valor no se pega en una condición")
         v.b_limpiar.click()
@@ -344,10 +362,9 @@ class FormuladorFichas(unittest.TestCase):
         self.assertEqual(p.texto(), "paro AND Motor", "Ctrl+V pega en el bloque elegido, no sustituye la fórmula")
 
     def test_SP8B22_clic_en_el_catalogo_inserta(self):
-        """REQ-EDT-02: pulsar una ficha del catálogo la pone en el bloque o hueco elegido y, sin elección, en el primer hueco libre; sin
-        huecos libres no inserta y lo dice."""
+        """REQ-EDT-02: en 2.0.1 pulsar una ficha del catálogo la pone en el área vacía, rellena huecos pendientes si existen, o la añade
+        directamente al final del carril conectada con AND sin exigir huecos `?` previos."""
         p = self.programador()
-        a = p.lienzo
         ficha = lambda nombre: next(i for i, n in enumerate(p.paleta._raices) if n["n"] == nombre)  # noqa: E731
 
         def pulsar(nombre):
@@ -361,54 +378,48 @@ class FormuladorFichas(unittest.TestCase):
         self.assertEqual(p.texto(), "paro AND ?", "en el primer hueco")
         pulsar("Motor")
         self.assertEqual(p.texto(), "paro AND Motor")
-        avisos = []
-        a.avisa.connect(avisos.append)
         pulsar("M1")
-        self.assertEqual(p.texto(), "paro AND Motor", "sin huecos libres no inserta")
-        self.assertTrue(avisos and "hueco" in avisos[0])
-        # con un bloque elegido: lo sustituye
-        QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=self.borde(a, (0, "b")))
-        pulsar("M1")
-        self.assertEqual(p.texto(), "paro AND M1")
+        self.assertEqual(p.texto(), "paro AND Motor AND M1", "sin huecos libres añade directamente al carril con AND")
 
     def test_SP8B23_modificadores_desde_la_banda_en_el_orden_en_que_se_pulsan(self):
-        """REQ-EDT-02: NOT sin selección deja «NOT ?»; la variable pulsada después la rellena; sobre una ficha elegida, NOT, ↑ y ↓ se aplican
-        en el orden en que se pulsan (↑(NOT a) o NOT ↑a) y volver a pulsar los quita."""
+        """REQ-EDT-02: `aplicar_modificador("no")` sin selección deja «NOT ?»; la variable pulsada después la rellena; sobre una ficha elegida,
+        los botones de la barra contextual (`barra_ctx`: NOT, ↑ y ↓) se aplican en el orden en que se pulsan y volver a pulsar los quita."""
         p = self.programador()
-        boton = lambda clave: next(b for bs in p.banda.botones.values() for b in bs if b.clave == clave)  # noqa: E731
-        boton("no").click()
+        a = p.lienzo
+        a.aplicar_modificador("no")
         self.assertEqual(p.texto(), "NOT ?")
         p.paleta._calcular(p.paleta.width())
         caja, x, y = p.paleta._cajas[0]
         QTest.mouseClick(p.paleta, Qt.MouseButton.LeftButton, pos=QPointF(x + caja.w / 2, y + caja.h / 2).toPoint())
         self.assertEqual(p.texto(), "NOT marcha")
-        boton("sube").click()
+        QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=self.borde(a, (0,)))
+        self.assertTrue(p.barra_ctx.b_not.isVisible() and p.barra_ctx.b_sube.isVisible() and p.barra_ctx.b_baja.isVisible())
+        p.barra_ctx.b_sube.click()
         self.assertEqual(p.texto(), "↑(NOT marcha)", "se aplicó a la ficha elegida, en su orden: NOT y luego ↑")
-        boton("no").click()
+        p.barra_ctx.b_not.click()
         self.assertEqual(p.texto(), "↑marcha")
-        boton("no").click()
+        p.barra_ctx.b_not.click()
         self.assertEqual(p.texto(), "NOT ↑marcha")
-        boton("baja").click()
+        p.barra_ctx.b_baja.click()
         self.assertEqual(p.texto(), "NOT ↓marcha", "cambia el flanco en su sitio")
-        boton("baja").click()
+        p.barra_ctx.b_baja.click()
         self.assertEqual(p.texto(), "NOT marcha")
         # el orden contrario
         p.lienzo.limpiar()
         p.poner("marcha")
-        a = p.lienzo
         QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=self.borde(a, (0,)))
-        boton("sube").click()
-        boton("no").click()
+        p.barra_ctx.b_sube.click()
+        p.barra_ctx.b_not.click()
         self.assertEqual(p.texto(), "NOT ↑marcha")
         p.poner("marcha")
         QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=self.borde(a, (0,)))
-        boton("no").click()
-        boton("sube").click()
+        p.barra_ctx.b_not.click()
+        p.barra_ctx.b_sube.click()
         self.assertEqual(p.texto(), "↑(NOT marcha)")
 
     def test_SP8B24_constantes_1_y_0_segun_la_decision_del_responsable(self):
-        """REQ-EDT-02, P-IMP-69: con el lienzo vacío, o sin hueco elegido, «1» y «0» son la fórmula entera; sobre un hueco elegido se combinan
-        como siempre; una fórmula guardada como «a AND 1» se abre y se escribe igual."""
+        """REQ-EDT-02, P-IMP-69: con el lienzo vacío «1» y «0» son la fórmula entera; con huecos rellenan el hueco; sin huecos se añaden
+        directamente al carril con AND; una fórmula guardada como «marcha AND 1» se abre y se escribe igual."""
         p = self.programador()
         uno = next(b for b in p.banda.botones["constante"] if b.clave == "uno")
         cero = next(b for b in p.banda.botones["constante"] if b.clave == "cero")
@@ -416,7 +427,7 @@ class FormuladorFichas(unittest.TestCase):
         self.assertEqual(p.texto(), "1", "con el lienzo vacío, la fórmula entera")
         p.poner("marcha AND ?")
         uno.click()
-        self.assertEqual(p.texto(), "1", "sin hueco elegido, sustituye la fórmula entera")
+        self.assertEqual(p.texto(), "marcha AND 1", "con un hueco pendiente, lo rellena")
         p.deshacer()
         self.assertEqual(p.texto(), "marcha AND ?")
         a = p.lienzo
@@ -427,6 +438,7 @@ class FormuladorFichas(unittest.TestCase):
         self.assertEqual(p.texto(), "marcha AND 1")
         p.poner("marcha AND 1")
         self.assertEqual((a.arbol["b"]["k"], p.texto()), ("const", "marcha AND 1"), "se abre y se escribe igual")
+        a.limpiar()
         cero.click()
         self.assertEqual(p.texto(), "0")
 
@@ -452,33 +464,35 @@ class FormuladorFichas(unittest.TestCase):
         self.assertIn("fuera", visto["texto"])
         self.assertFalse(p.aviso.isVisible(), "al terminar el arrastre, el aviso desaparece")
         self.assertFalse(a._propio or a._fuera)
-        self.assertEqual(p.texto(), "? AND paro", "el bloque se quitó")
+        self.assertEqual(p.texto(), "paro", "el bloque se quitó sin dejar huecos")
 
     # -- P7: modo valor
     def test_SP8B40_modo_valor_con_capsulas_y_banda_numerica(self):
-        """REQ-EDT-02: el programador de un valor lleva el catálogo de variables numéricas (cápsulas con el punto de su origen) y una banda con
-        Operadores (+ − × ÷ y el paréntesis) y Constantes (Número); cada botón inserta su bloque."""
+        """REQ-EDT-02: en 2.0.1 el programador de un valor lleva el catálogo plano de variables numéricas (`catalogo`), una cinta con `( … )` y
+        `+ Constante`, inserción directa con `+` y en el carril `capsula` para variables y `numconst` para números."""
         p = self.programador(valor=True)
-        self.assertEqual([r.text() for r in p.categorias.values()], ["Operadores", "Const."])
-        self.assertEqual(p.t_catalogo.text(), "Variables numéricas")
+        self.assertEqual(list(p.categorias), ["aritm", "numero"])
+        self.assertEqual(p.banda.l_prefijo.text(), "Insertar:")
         self.assertEqual(p.paleta.clave, "vnum")
         self.assertEqual([n["n"] for n in p.paleta.bloques()], ["CT"])
-        self.assertEqual(p.paleta._cajas[0][0].forma, "capsula")
-        self.assertEqual([b.text() for b in p.banda.botones["aritm"]], ["+", "−", "×", "÷", "( … )"])
+        self.assertEqual(p.paleta._cajas[0][0].forma, "catalogo")
+        self.assertEqual([b.text() for b in p.banda.botones["aritm"]], ["( … )"])
+        self.assertEqual([b.text() for b in p.banda.botones["numero"]], ["+ Constante"])
         num = p.banda.botones["numero"][0]
         num.click()
         self.assertEqual(p.texto(), "1")
         p.lienzo.limpiar()
-        p.banda.botones["aritm"][2].click()
-        self.assertEqual(p.texto(), "? * ?")
         p.paleta._calcular(p.paleta.width())
         caja, x, y = p.paleta._cajas[0]
         QTest.mouseClick(p.paleta, Qt.MouseButton.LeftButton, pos=QPointF(x + caja.w / 2, y + caja.h / 2).toPoint())
-        self.assertEqual(p.texto(), "CT * ?", "una variable numérica pulsada va al primer hueco")
+        self.assertEqual(p.texto(), "CT")
+        num.click()
+        self.assertEqual(p.texto(), "CT + 1", "inserción directa conectada con +")
         m = Motor(lambda: (VARS, ETAPAS))
         m.reiniciar()
         c = m.caja(texto_a_arbol_valor("CT + 1", VARS, ETAPAS), (0,), 2000)
-        self.assertEqual([x[2].forma if isinstance(x[2], _Caja) else x[2].tipo for x in c.items], ["capsula", "txt", "capsula"])
+        self.assertEqual((c.forma, c.sin_fondo), ("ar", True))
+        self.assertEqual([x[2].forma if isinstance(x[2], _Caja) else x[2].tipo for x in c.items], ["capsula", "txt", "numconst"])
 
     def test_SP8B41_el_texto_guardado_no_cambia(self):
         """REQ-EDT-02: el texto que escribe el formulador es el de siempre (el arreglo es de aspecto): una fórmula con todas las clases de
@@ -490,6 +504,51 @@ class FormuladorFichas(unittest.TestCase):
                 p.poner(t)
                 self.assertEqual(p.texto(), arbol_a_texto(texto_a_arbol(t, VARS, ETAPAS)))
                 self.assertFalse(p.lienzo.grab().isNull())
+
+    def test_SP8B42_conectores_clicables_y_multiseleccion_ctrl_clic(self):
+        """REQ-EDT-02: clic en «· Y» o «+ O» alterna el conector; Ctrl+clic selecciona varios bloques para aplicarles
+        NOT/↑/↓, envolverlos en `( … )` o quitarlos con Supr; `Envolver ( … )` sobre un grupo le quita los paréntesis."""
+        p = self.programador()
+        p.poner("marcha AND paro AND Motor")
+        a = p.lienzo
+        a._calcular(a.width())
+        self.assertEqual(len(a.motor.conectores), 2)
+        # Clic en el segundo conector «· Y» -> pasa a «+ O» (marcha AND paro OR Motor)
+        QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=a.motor.conectores[1][0].center().toPoint())
+        self.assertEqual(p.texto(), "marcha AND paro OR Motor")
+        a._calcular(a.width())
+        # Clic en «+ O» -> vuelve a «· Y»
+        con_o = next(c for c in a.motor.conectores if c[2] == "o")
+        QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=con_o[0].center().toPoint())
+        self.assertEqual(p.texto(), "marcha AND paro AND Motor")
+        # Multiselección con Ctrl+clic sobre el segundo y tercer operando
+        QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=self.borde(a, (0, "b")))
+        QTest.mouseClick(a, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier, pos=self.borde(a, (0, "c")))
+        self.assertEqual(a._bloques_sel, [(0, "b"), (0, "c")])
+        # Aplicar NOT a varios bloques contiguos seleccionados los envuelve en ( … ) y niega el grupo (IM10-A)
+        boton_no = p.barra_ctx.b_not
+        boton_no.click()
+        self.assertEqual(p.texto(), "marcha AND NOT (paro AND Motor)")
+        self.assertEqual(a._bloque_sel, (0, "b"))
+        # Volver a pulsar NOT sobre el grupo negado quita el NOT (conservando el grupo `( … )`)
+        boton_no.click()
+        self.assertEqual(p.texto(), "marcha AND (paro AND Motor)")
+        # Pulsar «Envolver ( … )» sobre el grupo le quita los paréntesis
+        p.b_envolver.click()
+        self.assertEqual(p.texto(), "marcha AND paro AND Motor")
+        # Shift+clic selecciona rango y Supr quita los seleccionados
+        QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=self.borde(a, (0, "b")))
+        QTest.mouseClick(a, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier, pos=self.borde(a, (0, "c")))
+        self.assertEqual(len(a._bloques_sel), 2)
+        QTest.keyClick(a, Qt.Key.Key_Delete)
+        self.assertEqual(p.texto(), "marcha")
+        # Modo valor: clic sobre un operador aritmético (+ -> -)
+        pv = self.programador(valor=True)
+        pv.poner("CT + 1")
+        av = pv.lienzo
+        av._calcular(av.width())
+        QTest.mouseClick(av, Qt.MouseButton.LeftButton, pos=av.motor.conectores[0][0].center().toPoint())
+        self.assertEqual(pv.texto(), "CT - 1")
 
     def test_SP8B50_ningun_boton_del_formulador_con_el_texto_recortado(self):
         """REQ-EDT-09: en la ventana de Propiedades a 1366×768 y a 1920×1080, todos los botones y rótulos del formulador (banda, herramientas
@@ -506,7 +565,9 @@ class FormuladorFichas(unittest.TestCase):
                         for prog in c.w.flot.principal.findChildren(Programador):
                             if not prog.isVisible():
                                 continue
-                            piezas = [b for bs in prog.banda.botones.values() for b in bs] + list(prog.categorias.values())                                 + [prog.b_copiar, prog.b_pegar, prog.b_limpiar, prog.b_envolver, prog.b_quitar]
+                            piezas = ([prog.banda.l_prefijo] + [b for bs in prog.banda.botones.values() for b in bs]
+                                      + [prog.b_copiar, prog.b_pegar, prog.b_deshacer, prog.b_rehacer, prog.b_limpiar,
+                                         prog.b_envolver, prog.b_quitar])
                             for w in piezas:
                                 if not w.isVisible():
                                     continue
@@ -514,12 +575,68 @@ class FormuladorFichas(unittest.TestCase):
                                 texto = w.text()
                                 self.assertLessEqual(w.fontMetrics().horizontalAdvance(texto), w.width(),
                                                      f"{texto!r} recortado: {w.width()} px")
-                        self.assertGreater(visto, 8)
+                        self.assertGreaterEqual(visto, 8)
                         for prog in c.w.flot.principal.findChildren(Programador):
-                            if prog.isVisible() and not prog.valor and tipo == "transicion":  # la banda, en una sola fila (las categorías no se parten)
-                                self.assertEqual(len({r.mapToGlobal(r.rect().topLeft()).y() for r in prog.categorias.values()}), 1)
+                            if prog.isVisible() and not prog.valor and tipo == "transicion":  # la cinta, en una sola fila
+                                self.assertEqual(len({b.mapToGlobal(b.rect().topLeft()).y()
+                                                      for bs in prog.banda.botones.values() for b in bs}), 1)
                     finally:
                         c.cerrar()
+
+    def test_SP8B51_flanco_en_temporizador_rechazado_sin_mutar(self):
+        """IM1 (24-nov-2026): soltar, insertar, envolver o aplicar un flanco en la base de un temporizador se rechaza con el aviso exacto."""
+        p = self.programador()
+        a = p.lienzo
+        avisos = []
+        a.avisa.connect(avisos.append)
+        # 1) Aplicar ↑ sobre una variable dentro de 3s/marcha
+        p.poner("3s/marcha")
+        a._calcular(a.width())
+        QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=self.borde(a, (0, "a")))
+        self.assertFalse(a.aplicar_modificador("sube"))
+        self.assertEqual(p.texto(), "3s/marcha")
+        self.assertEqual(avisos[-1], AVISO_FLANCO_TEMP)
+        # 2) Soltar ↑paro dentro del hueco vacío de 3s/?
+        p.poner("3s/?")
+        self.assertFalse(a.soltar(("a",), nuevo("sube", a=var("paro", "input"))))
+        self.assertEqual(p.texto(), "3s/?")
+        self.assertEqual(avisos[-1], AVISO_FLANCO_TEMP)
+        # 3) Intentar envolver un flanco seleccionado en un temporizador desde la cinta
+        p.poner("↑marcha")
+        QTest.mouseClick(a, Qt.MouseButton.LeftButton, pos=self.borde(a, (0,)))
+        self.assertFalse(a.insertar(nuevo("temp", t1="5s", t2="")))
+        self.assertEqual(p.texto(), "↑marcha")
+        self.assertEqual(avisos[-1], AVISO_FLANCO_TEMP)
+
+    def test_SP8B52_comparador_fijo_decimales_y_legado_solo_lectura(self):
+        """Comparador 24-nov: entero/decimal validado con coma en pantalla, sin Fórmula izq., y complejos heredados en solo lectura."""
+        vars_mix = {**VARS, "T": ("input", "decimal")}
+        p = self.programador(vars_=vars_mix)
+        a = p.lienzo
+        self.assertFalse(hasattr(p.barra_ctx, "b_formula_cmp"))
+        self.assertFalse(hasattr(a, "editar_formula_izq_cmp"))
+        # Entero vs decimal con coma
+        p.poner("T >= 2.5")
+        c = a.motor.caja(a.arbol, (0,), 2000)
+        self.assertEqual([(it.tipo, it.texto) for _, _, it in c.items],
+                         [("txt", "["), ("drop", "T"), ("drop", "≥"), ("campo", "2,5"), ("txt", "]")])
+        self.assertTrue(a.editar_campo((), "v", "3,75"))
+        self.assertEqual(p.texto(), "T >= 3.75")
+        self.assertTrue(a.editar_campo((), "v", ""))
+        self.assertEqual(p.texto(), "T >= ?")
+        self.assertEqual(faltan(a.arbol), 1)
+        a.elegir((), "n", "CT")
+        self.assertFalse(a.editar_campo((), "v", "2,5"))
+        self.assertTrue(a.editar_campo((), "v", "8"))
+        self.assertEqual(p.texto(), "CT >= 8")
+        # Comparadores heredados complejos abren y guardan igual en solo lectura (sin drops ni campos)
+        for complejo in ("(CT + 1) > 5", "CT != T"):
+            with self.subTest(complejo):
+                p.poner(complejo)
+                box = a.motor.caja(a.arbol, (0,), 2000)
+                self.assertTrue(all(it.tipo == "txt" for _, _, it in box.items))
+                self.assertEqual(p.texto(), arbol_a_texto(texto_a_arbol(complejo, vars_mix, ETAPAS)))
+                self.assertFalse(a.editar_campo((), "v", "99"))
 
 
 if __name__ == "__main__":

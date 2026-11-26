@@ -4,8 +4,23 @@ from __future__ import annotations
 import re
 import unicodedata
 import uuid
+from typing import Any
 
 ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+INTERNAL_ID_RE = re.compile(r"[a-z]-[0-9a-f]{32}")
+
+
+def transition_effective_label(t: dict[str, Any]) -> str:
+    """Etiqueta efectiva de una transición (manual si tiene; si no, su ID salvo ID interno UUID)."""
+    lbl = t.get("label")
+    if isinstance(lbl, str) and lbl:
+        return lbl
+    tid = t.get("id")
+    if isinstance(tid, str) and tid and not INTERNAL_ID_RE.fullmatch(tid):
+        return tid
+    return ""
+
+
 MAX_LABEL = 256
 MAX_FILENAME_BYTES = 255  # límite habitual por componente (NTFS, ext4, APFS); hallazgo H-12
 

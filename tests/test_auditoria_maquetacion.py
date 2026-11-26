@@ -33,10 +33,21 @@ EXCEPCIONES: list[tuple[str, str, str]] = [
     ("C1", "QPushButton#[Renombrar", "los botones de la ficha de jerarquía son más bajos (20 px) a propósito: varias filas en una columna estrecha sin que crezca el panel (comentario de `FichaJerarquia`)"),
     ("C1", "QPushButton#[1]", "las fichas «1» y «0» del valor de una acción memorizada (`ESTILO_FICHA`) son más bajas o más altas que el token a propósito: son el valor que se elige (pantalla «flot_accion_evento»)"),
     ("C1", "QPushButton#[0]", "ídem: la ficha «0» del valor de una acción memorizada"),
+    ("C1", "BotonBloque#", "los botones de inserción de la cinta de bloques (`bandaBloques`) tienen altura compacta fija de 26 px en el diseño 2.0.1"),
+    ("C1", "BotonCompacto#", "los botones compactos de `bandaBloques` y `barraContextual` tienen altura fija de 24–26 px en el diseño 2.0.1"),
+    ("C1", "QPushButton#[+ Entrada]", "los botones 2×2 del pie de Variables (`pieVariables`) usan altura fija de diseño 2.0.1 (32/34 px)"),
+    ("C1", "QPushButton#[+ Salida]", "ídem: botón «+ Salida» del pie de Variables (`pieVariables`) en 2.0.1"),
+    ("C1", "QPushButton#[+ Memoria]", "ídem: botón «+ Memoria» del pie de Variables (`pieVariables`) en 2.0.1"),
+    ("C1", "QPushButton#botonEliminarVar", "ídem: botón «Eliminar» del pie de Variables (`pieVariables`) en 2.0.1"),
+    ("C1", "QPushButton#botonAceptarFlotante", "los botones del pie de `VentanaFlotante` (`pieDialogoFlotante`) usan altura fija de diseño 2.0.1 (28–30 px)"),
+    ("C1", "QPushButton#botonCancelarFlotante", "ídem: botón «Cancelar» de `pieDialogoFlotante` en 2.0.1"),
+    ("C1", "_ComboVariable#selectorVariableAccion", "el selector de variable adoptado en `subcabeceraFlotante` tiene altura fija de 28 px en 2.0.1"),
+    ("C1", "#etiquetaInline", "el campo inline «Etiqueta» de la barra de título de Transición tiene altura compacta fija de 28 px en 2.0.1"),
     ("M4", "«Entradas»", "las cajas de la columna de simulación (Entradas, Salidas y variables) llevan sus tablas de borde a borde: a 218 px de panel no caben las cuatro columnas con 16 px más de margen (SRED13); la guía M4 no las lista"),
     ("M4", "«Salidas y variables»", "ídem: la tabla de estado va de borde a borde del panel de simulación (SRED13)"),
     ("M4", "«Traza»", "ídem: la lista de la traza va de borde a borde"),
     ("M3", "BandaModo", "la franja de color del modo cubre el borde superior de la tarjeta del dibujo a propósito (decisión de diseño: recorta con las esquinas redondeadas, `_AjustaBanda`)"),
+    ("M3", "QWidget#panelVariables", "en 2.0.1 `panelVariables` es edge-to-edge sin borde exterior (`cabeceraPanel` en 0,0 y contenido a ancho completo)"),
     ("TB1", "tabla columna 0", "la columna «Nombre» de Variables es la que se queda el sobrante de la tabla (columna declarada, como la última)"),
 ]
 
@@ -242,6 +253,8 @@ def regla_C1(raiz):
             continue
         if isinstance(w.parentWidget(), (QAbstractSpinBox, QComboBox)) or w.objectName().startswith("qt_"):
             continue
+        if isinstance(w, QLineEdit) and w.parentWidget() is not None and w.parentWidget().objectName() == "cajaBuscarCatalogo" and 26 <= w.height() <= 32:
+            continue  # el filtro del catálogo de bloques (2.0.1) mantiene altura fija compacta de 30 px en ambas escalas
         if not any(abs(w.height() - a) <= 1 for a in _alturas_token()):
             out.append(f"{_desc(w)} mide {w.height()} (tokens {sorted(_alturas_token())})")
     return out
@@ -413,8 +426,8 @@ def regla_B1(raiz):
         acciones = tb.actions()
         seps = [i for i, a in enumerate(acciones) if a.isSeparator()]
         externos = [w for w in tb.parentWidget().findChildren(SeparadorBarra) if w.isVisible()]
-        if len(seps) != 2 or len(externos) != 1:
-            out.append(f"barraEdicion: {len(seps)} separadores internos y {len(externos)} externos (se esperan 2 y 1)")
+        if len(seps) != 1 or len(externos) != 1:
+            out.append(f"barraEdicion: {len(seps)} separadores internos y {len(externos)} externos (se esperan 1 y 1)")
         for a, b in zip(acciones, acciones[1:]):
             if a.isSeparator() and b.isSeparator():
                 out.append("barraEdicion: dos separadores seguidos")

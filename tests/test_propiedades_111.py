@@ -59,22 +59,19 @@ class Propiedades111(unittest.TestCase):
         self.assertIsNone(QApplication.activeModalWidget())
 
     def test_SPF102_transicion_alto_limitado_y_lupa_igual(self):
-        """REQ-EDT-09: contenido acotado, centrado y lupa de la altura de su tarjeta."""
+        """REQ-EDT-09: en 2.0.1 el editor usa altura estable (`_marco_ventana() + 332`), centrada y con lupa de ancho completo."""
         alturas = []
         for ancho, alto in ((1366, 768), (2000, 1250)):
             c, p, v = self.contexto("transicion", ancho, alto)
             f = c.w.flot
-            filas = 11 if estilo.ESCALA == "grande" else 9
-            necesario = max(p.minimumSizeHint().height(), (filas + 2) * estilo.ALTO_CONTROL)
-            tope = round((necesario + f._marco_tarjeta()) * 1.2) + f._marco_ventana()  # (E8: el 20 % es de la tarjeta; la franja y el pie suman aparte)
-            self.assertLessEqual(v.height(), tope)
+            self.assertEqual(v.height(), f._marco_ventana() + 332)
             self.assertLess(v.height(), f._area().height() - 2 * estilo.E6)
             self.assertLessEqual(v.lupa.height(), max(estilo.ALTO_CONTROL + 2 * estilo.E3, round(f._area().height() * .25)))  # E8: franja, no columna
             self.assertGreaterEqual(v.lupa.width(), v.accion.width())
             centro = v.lupa.transformar().map(v.lupa.origen.center())
             self.assertLessEqual(abs(centro.y() - v.lupa.height() / 2), 1)
             alturas.append(v.height())
-        self.assertGreater(alturas[1], alturas[0])
+        self.assertEqual(alturas[1], alturas[0], "altura estable entre resoluciones en 2.0.1")
 
     def test_SPF103_sin_variable_fichas_deshabilitadas_y_numerica_solo_con_tipo(self):
         """REQ-EDT-02: sin variable, 1/0 inertes; numérica solo después de elegirla, abajo y flotante."""
@@ -188,20 +185,21 @@ class Propiedades111(unittest.TestCase):
         self.assertEqual([otro.e.nombres[i] for i in (datos.entry, datos.exit)], ["EntradaAntigua", "SalidaAntigua"])
 
     def test_SPF107_senales_sin_lineas_y_colores_compartidos(self):
-        """REQ-EDT-09: dos resaltados suaves y franjas/títulos con la misma señal, sin capa de líneas."""
+        """REQ-EDT-09: resaltado suave en la lupa solo sobre la parte activa (sin capa de líneas ni barra lateral en el panel plano 2.0.1)."""
         for tipo in ("condicionada", "evento"):
             c, p, v = self.contexto(tipo)
             self.assertFalse(v.findChildren(QWidget, "enlacesFlotantes"))
-            self.assertEqual([color for _, color, _ in v.lupa.senales], [SENAL_CONDICION, estilo.DESHABILITADO])  # (E8: la parte que se edita, en su color; la otra, en gris)
+            self.assertEqual([color for _, color, _ in v.lupa.senales], [SENAL_CONDICION])
             self.assertGreaterEqual(ALFA_RESALTADO, .15)
             self.assertLessEqual(ALFA_RESALTADO, .20)
-            for parte, tarjeta, color in (("formula", v.condicion, SENAL_CONDICION), ("accion", v.accion, SENAL_ACCION)):
-                c.w.flot.elegir_parte(parte)  # (E8: una tarjeta cada vez)
+            self.assertTrue(v.condicion.isVisible() and v.condicion.titulo.isHidden())
+            if tipo == "condicionada":
+                self.assertTrue(v.caja_dest.isVisible() and not v.conmutador.isVisible())
+            else:
+                c.w.flot.elegir_parte("accion")
                 HC._bombear(4)
-                self.assertTrue(tarjeta.isVisible())
-                self.assertEqual(tarjeta.titulo.senal, color)
-                imagen = tarjeta.grab().toImage()
-                self.assertEqual(imagen.pixelColor(2, tarjeta.height() // 2).name(), color)
+                self.assertTrue(v.accion.isVisible() and v.accion.titulo.isHidden())
+                self.assertEqual([color for _, color, _ in v.lupa.senales], [SENAL_ACCION])
 
     def test_SPF108_ayudas_sin_descripciones_de_forma_ni_propiedades(self):
         """REQ-EDT-02: instrucciones directas, sin alternativas ni descripciones visuales redundantes."""

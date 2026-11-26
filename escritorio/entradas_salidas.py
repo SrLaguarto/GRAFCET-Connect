@@ -9,7 +9,7 @@ from dataclasses import replace
 import json
 import copy
 from PySide6.QtCore import Signal, Qt, QMimeData, QObject, QSize, QRect, QEvent, QRegularExpression, QTimer
-from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPixmap, QRegularExpressionValidator
+from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPen, QPixmap, QRegularExpressionValidator
 from fractions import Fraction
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QStackedWidget, QFrame, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy,
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QStackedWidget
                                QStyledItemDelegate, QScrollBar)
 
 from . import estilo
+from .estilo_config_es import crear_tarjeta, hoja_dialogo_es
 from .campos_medidos import LineaMedida, SpinMedido
 from .pilotos_es import pintar_piloto, tamano_piloto
 from .paneles import ContextoNombres, EtiquetaGrupos, TituloSeccion
@@ -43,56 +44,84 @@ COLOR_TIPO = {"bool": estilo.TIPO_BOOL, "decimal": estilo.TIPO_DECIMAL, "int": e
 COLOR_CUALQUIERA = estilo.TIPO_CUALQUIERA
 LEYENDA = (("Bool", "bool"), ("Decimal", "decimal"), ("Entera", "int"), ("Cualquiera", None))
 NIVEL_TENUE, NIVEL_ASIGNADO, NIVEL_ACTIVO = .28, .62, 1.0
-ALTO_FILA = 16  # (a la escala normal; a pantalla completa la vista sube de tamaño: `PanelES.alto_fila`, ver `PanelES.escalar`)
-ALTO_VARIABLE = ALTO_FILA
+ALTO_FILA = 24  # (a la escala normal; a pantalla completa la vista sube de tamaño: `PanelES.alto_fila`, ver `PanelES.escalar`)
+ALTO_VARIABLE = 30
 ANCHO_INTERIOR = 200  # la mitad del marco que cae dentro de él: indicador, nombre del canal y, en los registros, su valor
 ROL_COLOR, ROL_ASIGNADA, ROL_ACTIVO = (Qt.ItemDataRole.UserRole + n for n in (1, 2, 3))
 def estilo_panel(escala: str = "normal") -> str:
-    """La hoja de la vista de E/S con la letra de la escala `escala` (`estilo.ESCALAS`): las filas y los nombres de canal suben de 12 a 14 px
-    a pantalla completa, como el resto de la interfaz."""
+    """La hoja de la vista de E/S 2.0.1 (Vista 3 de la maqueta) con la letra de la escala `escala` (`estilo.ESCALAS`)."""
     e = estilo.ESCALAS[escala]
     return f"""
-    QWidget#conexionES {{ background:{estilo.FONDO}; }}
+    QWidget#conexionES {{ background:#edf2f7; }}
     QWidget#conexionES, QWidget#conexionES QLabel, QWidget#conexionES QListWidget {{ font-size:{e["T_ES"]}px; }}
-    QWidget#tarjetaES {{ background:white; border:1px solid {estilo.BORDE}; border-radius:{estilo.R_M}px; }}
+    QWidget#tarjetaES {{ background:#ffffff; border:1px solid #cdd6e0; border-radius:8px; }}
     QWidget#tarjetaES QLabel {{ border:0; }}
-    QWidget#conexionES QLabel#canalES {{ color:{estilo.TINTA_2}; }}
-    QWidget#conexionES QLabel#asignacionES {{ color:{estilo.TINTA}; }}
+    QFrame#cabeceraTarjetaES {{ background:#f7f9fc; border:0; border-bottom:1px solid #e2e8f0;
+        border-top-left-radius:7px; border-top-right-radius:7px; }}
+    QLabel#badgeTarjetaES {{ background:#e4ecf3; color:#16263a; border-radius:9px; padding:1px 7px;
+        font-size:11px; font-weight:700; font-family:{estilo.FAMILIA_MONO}; }}
+    QWidget#conexionES QLabel#canalES {{ color:#4a5b6e; font-weight:600; }}
+    QWidget#conexionES QLabel#asignacionES {{ color:#16263a; font-weight:600; }}
     QWidget#conexionES QLabel#asignacionES[aviso="true"] {{ color:{estilo.AVISO}; }}
-    QWidget#conexionES QLabel#valorES {{ color:{estilo.TINTA_2}; font-size:{e["T_ES"]}px; font-family:{estilo.FAMILIA_MONO}; }}
+    QWidget#conexionES QLabel#valorES {{ color:#4a5b6e; font-size:{e["T_ES"]}px; font-family:{estilo.FAMILIA_MONO}; font-weight:600; }}
     QWidget#conexionES QLabel#tituloPLC {{ color:{estilo.ACENTO}; font-family:{estilo.FAMILIA_TITULO}; font-size:{e["T_SECCION"]}px; font-weight:600; padding:6px; }}
-    QFrame#cabeceraES {{ background:{estilo.SUPERFICIE}; border:0; border-bottom:1px solid {estilo.BORDE}; }}
-    QFrame#cabeceraES[estadoVisual="conectado"] {{ background:{estilo.SIMULACION_SUAVE}; border-bottom:2px solid {estilo.SIMULACION}; }}
+    QFrame#cabeceraES {{ background:#f7f9fc; border:0; border-bottom:1px solid #cdd6e0; }}
+    QFrame#cabeceraES[estadoVisual="conectado"] {{ background:#e4f7ea; border-bottom:2px solid {estilo.SIMULACION}; }}
     QFrame#cabeceraES QWidget {{ background:transparent; }}
-    QFrame#cabeceraES QPushButton {{ background:{estilo.SUPERFICIE}; color:{estilo.TINTA}; border:1px solid {estilo.BORDE_CONTROL}; padding:0 14px;
-        border-radius:{estilo.R_S}px; min-height:{e["ALTO_CONTROL_COMPACTO"] - 2}px; font-size:{e["T_BASE"]}px; }}
-    QFrame#cabeceraES QPushButton:hover {{ background:{estilo.HOVER}; border-color:{estilo.TINTA_2}; }}
-    QFrame#cabeceraES QPushButton:pressed {{ background:{estilo.PULSADO}; }}
-    QFrame#cabeceraES QPushButton[tecl="true"]:focus {{ border:2px dashed {estilo.FOCO}; padding:0 13px; min-height:{e["ALTO_CONTROL_COMPACTO"] - 4}px; }}
-    QFrame#cabeceraES QPushButton:disabled {{ color:{estilo.DESHABILITADO}; background:{estilo.SUPERFICIE_2}; border-color:{estilo.BORDE}; }}
-    QFrame#cabeceraES QPushButton[primario="true"] {{ background:{estilo.ACENTO}; color:white; border-color:{estilo.ACENTO_OSCURO}; font-weight:600; }}
+    QFrame#cabeceraES QFrame#sepCabeceraES {{ background:#cdd6e0; border:0; }}
+    QFrame#cabeceraES QComboBox {{ background:#ffffff; color:#16263a; border:1px solid #b8c6d6; border-radius:5px;
+        padding:0 8px; font-size:{e["T_ES"]}px; font-weight:600; }}
+    QFrame#cabeceraES QComboBox:hover {{ border-color:{estilo.ACENTO}; }}
+    QFrame#cabeceraES QPushButton {{ background:#ffffff; color:#16263a; border:1px solid #b8c6d6; padding:0 12px;
+        border-radius:5px; min-height:{e["ALTO_CONTROL_COMPACTO"] - 2}px; font-size:{e["T_ES"]}px; font-weight:600; }}
+    QFrame#cabeceraES QPushButton:hover {{ background:#e4ecf3; border-color:#7b8a9c; }}
+    QFrame#cabeceraES QPushButton:pressed {{ background:#d3dfea; }}
+    QFrame#cabeceraES QPushButton[tecl="true"]:focus {{ border:2px dashed {estilo.FOCO}; padding:0 11px; min-height:{e["ALTO_CONTROL_COMPACTO"] - 4}px; }}
+    QFrame#cabeceraES QPushButton:disabled {{ color:{estilo.DESHABILITADO}; background:#f1f5f9; border-color:#d4dde8; }}
+    QFrame#cabeceraES QPushButton[primario="true"] {{ background:{estilo.ACENTO}; color:#ffffff; border-color:{estilo.ACENTO_OSCURO}; font-weight:600; }}
     QFrame#cabeceraES QPushButton[primario="true"]:hover {{ background:{estilo.ACENTO_HOVER}; }}
     QFrame#cabeceraES QPushButton[primario="true"][tecl="true"]:focus {{ border:2px dashed white; }}
-    QWidget#conexionES QLabel#tituloES {{ color:{estilo.TINTA}; font-size:{e["T_TITULO"]}px; font-weight:700; padding-left:4px; }}
+    QWidget#conexionES QLabel#tituloES {{ color:#16263a; font-family:{estilo.FAMILIA_TITULO}; font-size:14px; font-weight:700; padding-left:2px; }}
     QWidget#conexionES QLineEdit[invalido="true"] {{ border:1px solid {estilo.ERROR}; }}
-    QWidget#conexionES QLineEdit[invalido="true"]:focus {{ border:2px dashed {estilo.ERROR}; }}
-    QWidget#cuerpoES, QFrame#pieES {{ background:transparent; }}
-    QWidget#cuerpoES QLabel, QFrame#pieES QLabel {{ color:{estilo.TINTA_2}; background:transparent; }}
-    QWidget#conexionES QLabel#seccionES {{ color:{estilo.ACENTO}; font-family:{estilo.FAMILIA_TITULO}; font-size:{e["T_SECCION"]}px; font-weight:600; padding:6px; }}  /* como los títulos de sección del resto: tipo de título, acento, sin mayúsculas */
-    QWidget#conexionES QLabel#ayudaES, QWidget#conexionES QLabel#resumenES {{ color:{estilo.TINTA_2}; }}
-    QFrame#moduloPLC {{ background:transparent; border:1px solid {estilo.BORDE_CONTROL}; }}
+    QWidget#conexionES QLineEdit[invalido="true"]:focus {{ border:2px solid {estilo.ERROR}; }}
+    QWidget#conexionES QLineEdit[invalido="true"][tecl="true"]:focus {{ border:2px dashed {estilo.ERROR}; }}
+    QWidget#cuerpoES {{ background:transparent; }}
+    QFrame#pieES {{ background:#ffffff; border:0; border-top:1px solid #cdd6e0; }}
+    QWidget#cuerpoES QLabel, QFrame#pieES QLabel {{ color:#4a5b6e; background:transparent; }}
+    QWidget#tarjetaES QLabel#badgeTarjetaES {{ background:#e4ecf3; color:#16263a; border-radius:9px; padding:1px 7px;
+        font-size:11px; font-weight:700; font-family:{estilo.FAMILIA_MONO}; }}
+    QWidget#conexionES QLabel#seccionES {{ font-family:{estilo.FAMILIA_TITULO}; font-size:13px; font-weight:700; padding:0; }}
+    QWidget#conexionES QLabel#seccionES[rol="input"] {{ color:{estilo.ACENTO_OSCURO}; }}
+    QWidget#conexionES QLabel#seccionES[rol="output"] {{ color:{estilo.SIMULACION}; }}
+    QWidget#conexionES QLabel#subtituloTarjetaES {{ color:#5b6b7d; font-size:10.5px; font-weight:500; background:transparent; }}
+    QWidget#conexionES QLabel#ayudaES {{ color:#5b6b7d; font-size:11.5px; }}
+    QWidget#conexionES QLabel#resumenES {{ color:#16263a; font-family:{estilo.FAMILIA_MONO}; font-weight:700; }}
+    QFrame#moduloPLC {{ background:transparent; border:1.5px solid #7b8a9c; border-radius:8px; }}
+    QStackedWidget#cabeceraPLC {{ background:#f1f5f9; border:0; border-bottom:1px solid #cdd6e0;
+        border-top-left-radius:7px; border-top-right-radius:7px; }}
+    QStackedWidget#cabeceraPLC QWidget {{ background:transparent; }}
+    QStackedWidget#cabeceraPLC QLineEdit, QStackedWidget#cabeceraPLC QSpinBox {{
+        background:#ffffff; border:1px solid #b8c6d6; border-radius:4px; color:#16263a; font-family:{estilo.FAMILIA_MONO}; }}
+    QStackedWidget#cabeceraPLC QPushButton {{
+        background:#ffffff; color:#16263a; border:1px solid #b8c6d6; border-radius:5px; padding:0 10px; font-weight:600; }}
+    QStackedWidget#cabeceraPLC QPushButton:hover {{ background:#e4ecf3; border-color:{estilo.ACENTO}; }}
+    QWidget#subhdrPLC {{ background:#ffffff; border:0; border-bottom:1px solid #e6edf5; }}
+    QLabel#subcolPLC {{ color:#5b6b7d; font-size:10px; font-weight:700; padding:4px 10px; background:transparent; }}
+    QLabel#subcolPLCDiv {{ color:#5b6b7d; font-size:10px; font-weight:700; padding:4px 10px; background:transparent;
+        border-right:1px solid #e6edf5; }}
     QListWidget#listaES {{ background:transparent; border:0; outline:0; }}
     QListWidget#listaES[tecl="true"]:focus {{ border:2px dashed {estilo.FOCO}; }}
-    QScrollArea#scrollES {{ background:white; border:1px solid {estilo.BORDE}; border-radius:{estilo.R_M}px; }}
-    QScrollArea#scrollES > QWidget > QWidget {{ background:white; }}
+    QScrollArea#scrollES {{ background:#f7f9fc; border:1px solid #cdd6e0; border-radius:8px; }}
+    QScrollArea#scrollES > QWidget > QWidget {{ background:#f7f9fc; }}
+    QWidget#lienzoES {{ background:transparent; }}
     QScrollArea#scrollCuerpoES, QScrollArea#scrollCuerpoES > QWidget > QWidget#cuerpoES {{ background:transparent; }}
-    QWidget#conexionES QScrollBar:vertical {{ background:{estilo.BORDE}; width:{estilo.ANCHO_BARRA}px; margin:0; border-radius:{estilo.ANCHO_BARRA // 2}px; }}
-    QWidget#conexionES QScrollBar::handle:vertical {{ background:{estilo.BORDE_CONTROL}; border-radius:{estilo.ANCHO_BARRA // 2 - 1}px; margin:1px; min-height:36px; }}
-    QWidget#conexionES QScrollBar:horizontal {{ background:{estilo.BORDE}; height:{estilo.ANCHO_BARRA}px; margin:0; border-radius:{estilo.ANCHO_BARRA // 2}px; }}
-    QWidget#conexionES QScrollBar::handle:horizontal {{ background:{estilo.BORDE_CONTROL}; border-radius:{estilo.ANCHO_BARRA // 2 - 1}px; margin:1px; min-width:36px; }}
+    QWidget#conexionES QScrollBar:vertical {{ background:transparent; width:{estilo.ANCHO_BARRA}px; margin:0; border-radius:{estilo.ANCHO_BARRA // 2}px; }}
+    QWidget#conexionES QScrollBar::handle:vertical {{ background:{estilo.BORDE_FUERTE}; border-radius:{estilo.ANCHO_BARRA // 2 - 1}px; margin:1px; min-height:36px; }}
+    QWidget#conexionES QScrollBar:horizontal {{ background:transparent; height:{estilo.ANCHO_BARRA}px; margin:0; border-radius:{estilo.ANCHO_BARRA // 2}px; }}
+    QWidget#conexionES QScrollBar::handle:horizontal {{ background:{estilo.BORDE_FUERTE}; border-radius:{estilo.ANCHO_BARRA // 2 - 1}px; margin:1px; min-width:36px; }}
     QWidget#conexionES QScrollBar::add-line, QWidget#conexionES QScrollBar::sub-line {{ height:0; width:0; }}
     QWidget#conexionES QScrollBar::add-page, QWidget#conexionES QScrollBar::sub-page {{ background:transparent; }}
-    QPushButton#quitarES {{ background:transparent; color:{estilo.TINTA_2}; border:0; padding:0; font-size:14px; min-height:0; }}
+    QPushButton#quitarES {{ background:transparent; color:#5b6b7d; border:0; padding:0; font-size:14px; font-weight:700; min-height:0; }}
     QPushButton#quitarES:hover {{ color:{estilo.ERROR}; }}
     QPushButton#quitarES[tecl="true"]:focus {{ border:1px dashed {estilo.FOCO}; padding:0; }}
     QPushButton#quitarES:disabled {{ color:{estilo.DESHABILITADO}; background:transparent; }}
@@ -189,6 +218,13 @@ class EtiquetaElidida(QLabel):
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.contexto = None  # los nombres de su lista: el recorte no confunde dos (`ContextoNombres`); sin él, se corta por el final
 
+    def sizeHint(self):  # noqa: N802
+        fm = QFontMetrics(self.font())
+        return QSize(fm.horizontalAdvance(self.text()) + 2, super().sizeHint().height())
+
+    def minimumSizeHint(self):  # noqa: N802
+        return QSize(0, super().minimumSizeHint().height())
+
     def texto_visible(self):
         fm = QFontMetrics(self.font())
         if self.contexto is None:
@@ -202,24 +238,51 @@ class EtiquetaElidida(QLabel):
         p.drawText(self.rect(), int(self.alignment()), self.texto_visible())
 
 
-def _pintar_variable(p, rect, texto, color, activa, derecha, resaltado=False, letra=None, contexto=None):
-    fuente = QFont(p.font()); fuente.setPixelSize(letra or ESCALAS_ES["normal"]); p.setFont(fuente)
+def _pintar_variable(p, rect, texto, color, activa, derecha, resaltado=False, letra=None, contexto=None,
+                     elegida=False, asignada=False):
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    fuente = QFont(p.font())
+    fuente.setPixelSize(letra or ESCALAS_ES["normal"])
+    fuente.setWeight(QFont.Weight.DemiBold)
+    p.setFont(fuente)
     fm = QFontMetrics(fuente)
-    if resaltado:
-        p.fillRect(rect, QColor(estilo.RESALTADO))
+    card = rect.adjusted(2, 2, -2, -2)
+    borde = QColor(estilo.ACENTO if (elegida or resaltado) else "#cdd6e0")
+    fondo = QColor(estilo.ACENTO_SUAVE if elegida else estilo.RESALTADO if resaltado else "#ffffff")
+    p.setPen(borde)
+    p.setBrush(fondo)
+    p.drawRoundedRect(card, 5, 5)
+    # Punto de color del tipo a la izquierda (.es-var-chip)
+    dot_col = QColor(color or COLOR_CUALQUIERA)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(dot_col)
+    cy = card.center().y()
+    p.drawEllipse(card.left() + 7, cy - 3, 7, 7)
     p.setPen(QColor(estilo.TINTA))
-    tr = rect.adjusted(6, 0, -6, 0)
+    tr = card.adjusted(20, 0, -26 if asignada else -7, 0)
     # un nombre largo conserva lo que lo distingue de los demás de su lista (sensor_…_10_avance frente a sensor_…_20_avance)
-    visible = contexto.elidir(texto, fm, tr.width()) if contexto is not None else fm.elidedText(texto, Qt.TextElideMode.ElideMiddle, tr.width())
+    visible = (contexto.elidir(texto, fm, tr.width())
+               if contexto is not None else fm.elidedText(texto, Qt.TextElideMode.ElideMiddle, tr.width()))
     p.drawText(tr, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, visible)
+    if asignada:
+        br = QRect(card.right() - 21, cy - 8, 16, 16)
+        p.setPen(QPen(QColor(estilo.SIMULACION_BORDE), 1))
+        p.setBrush(QColor(estilo.SIMULACION_SUAVE))
+        p.drawRoundedRect(br, 4, 4)
+        fc = QFont(fuente)
+        fc.setPixelSize(max(10, (letra or ESCALAS_ES["normal"]) - 2))
+        fc.setWeight(QFont.Weight.Bold)
+        p.setFont(fc)
+        p.setPen(QColor(estilo.SIMULACION))
+        p.drawText(br, Qt.AlignmentFlag.AlignCenter, "C")
 
 
 ESCALAS_ES = {"normal": estilo.ESCALAS["normal"]["T_ES"], "grande": estilo.ESCALAS["grande"]["T_ES"]}  # letra de las filas, por escala
 
 
 def figura_variable(texto, color, derecha, activa=False, letra=None, alto=None):
-    fuente = QFont(estilo.FUENTE); fuente.setPixelSize(letra or ESCALAS_ES["normal"])
-    pm = QPixmap(QFontMetrics(fuente).horizontalAdvance(texto) + 18, alto or ALTO_VARIABLE)
+    fuente = QFont(estilo.FUENTE); fuente.setPixelSize(letra or ESCALAS_ES["normal"]); fuente.setWeight(QFont.Weight.DemiBold)
+    pm = QPixmap(QFontMetrics(fuente).horizontalAdvance(texto) + 34, alto or ALTO_VARIABLE)
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm); p.setFont(fuente)
     _pintar_variable(p, pm.rect(), texto, color, activa, derecha, False, letra); p.end()
@@ -227,7 +290,7 @@ def figura_variable(texto, color, derecha, activa=False, letra=None, alto=None):
 
 
 class DelegadoVariable(QStyledItemDelegate):
-    """Nombre alineado a la izquierda; la fila completa sirve para seleccionar y arrastrar."""
+    """Chip limpio `.es-var-chip` alineado a la izquierda; la fila completa sirve para seleccionar y arrastrar."""
     def __init__(self, padre, barra_a_la_derecha):
         super().__init__(padre)
         self.derecha = barra_a_la_derecha
@@ -238,10 +301,13 @@ class DelegadoVariable(QStyledItemDelegate):
     def paint(self, p, opcion, indice):
         p.save()
         lista = self.parent()
-        _pintar_variable(p, opcion.rect.adjusted(4,1,-4,-1), indice.data() or "", indice.data(ROL_COLOR),
+        elegida = bool(opcion.state & QStyle.StateFlag.State_Selected)
+        hover = bool(opcion.state & QStyle.StateFlag.State_MouseOver)
+        _pintar_variable(p, opcion.rect.adjusted(4, 0, -4, 0), indice.data() or "", indice.data(ROL_COLOR),
                          indice.data(ROL_ACTIVO), self.derecha,
-                         bool(opcion.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver)),
-                         getattr(lista, "letra", None), getattr(lista, "contexto", None))
+                         hover,
+                         getattr(lista, "letra", None), getattr(lista, "contexto", None),
+                         elegida=elegida, asignada=bool(indice.data(ROL_ASIGNADA)))
         p.restore()
 
     def texto_visible(self, indice, ancho):
@@ -249,7 +315,9 @@ class DelegadoVariable(QStyledItemDelegate):
         lista = self.parent()
         fuente = QFont(estilo.FUENTE)
         fuente.setPixelSize(getattr(lista, "letra", None) or ESCALAS_ES["normal"])
-        return lista.contexto.elidir(indice.data() or "", QFontMetrics(fuente), ancho - 8 - 12)
+        fuente.setWeight(QFont.Weight.DemiBold)
+        recorte = 19 if bool(indice.data(ROL_ASIGNADA)) else 0
+        return lista.contexto.elidir(indice.data() or "", QFontMetrics(fuente), max(0, ancho - 8 - 31 - recorte))
 
 
 class ListaVariables(QListWidget):
@@ -330,6 +398,7 @@ class TerminalES(QFrame):
         self.aviso = aviso
         self._inicio_arrastre = None
         self._resaltado = False
+        self._en_arrastre = False
         self._elegido = getattr(panel, "_eleccion", None) == ("canal", area, direccion)  # el canal elegido con un clic (a la espera de la variable)
         self.setAcceptDrops(not panel.bloqueado)
         self.setObjectName("senalPLC")
@@ -379,36 +448,50 @@ class TerminalES(QFrame):
             w.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.b_quitar = None
         if variable:
-            self.b_quitar = QPushButton("×")
-            self.b_quitar.setObjectName("quitarES")
-            self.b_quitar.setFixedSize(18, alto - 2)
-            self.b_quitar.setToolTip("Desconecta para desasignar" if panel.bloqueado else "Desasignar esta señal")
-            self.b_quitar.setEnabled(not panel.bloqueado)
-            self.b_quitar.clicked.connect(lambda: panel.quitar(variable["id"]))
-            self.b_quitar.hide()  # solo al pasar el ratón por la fila
+            self._asegurar_boton_quitar()
+        self.nombre.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
         l = QHBoxLayout(self)
         self._diseno = l
         l.setContentsMargins(0, 0, 0, 0)
         l.setSpacing(0)
         if entrada:
+            l.addStretch(1)
             if self.b_quitar:
                 l.addWidget(self.b_quitar)
             if self.marca:  # por el lado exterior: el nombre sigue pegado al marco del PLC
                 l.addWidget(self.marca)
-            l.addWidget(self.nombre, 1)
+            l.addWidget(self.nombre)
             l.addWidget(self.barrita_nombre)
-            l.addSpacing(8)
+            l.addSpacing(14)
             l.addWidget(interior)
         else:
             l.addWidget(interior)
-            l.addSpacing(8)
+            l.addSpacing(14)
             l.addWidget(self.barrita_nombre)
-            l.addWidget(self.nombre, 1)
+            l.addWidget(self.nombre)
             if self.marca:
                 l.addWidget(self.marca)
             if self.b_quitar:
                 l.addWidget(self.b_quitar)
+            l.addStretch(1)
         self.setToolTip(f"{AREAS[area]} · dirección {direccion}\nArrastra una variable, o haz clic en ella y en este canal. Botón derecho para quitar o configurar.")
+
+    def _pulsar_quitar(self):
+        if self.variable is not None:
+            self.panel.quitar(self.variable["id"])
+
+    def _asegurar_boton_quitar(self):
+        if self.b_quitar is None:
+            self.b_quitar = QPushButton("×")
+            self.b_quitar.setObjectName("quitarES")
+            self.b_quitar.setFixedSize(18, getattr(self.panel, "alto_fila", ALTO_FILA) - 2)
+            self.b_quitar.clicked.connect(self._pulsar_quitar)
+            self.b_quitar.hide()  # solo al pasar el ratón por la fila
+            if hasattr(self, "_diseno"):
+                idx = 1 if self.area in ("discrete", "input-register") else self._diseno.count() - 1
+                self._diseno.insertWidget(idx, self.b_quitar)
+        self.b_quitar.setToolTip("Desconecta para desasignar" if self.panel.bloqueado else "Desasignar esta señal")
+        self.b_quitar.setEnabled(not self.panel.bloqueado)
 
     def _ayuda_nombre(self, aviso=""):
         """Ayuda de la etiqueta del nombre: el nombre entero (la etiqueta lo recorta) y, si lo hay, el aviso."""
@@ -463,12 +546,30 @@ class TerminalES(QFrame):
 
     def paintEvent(self, evento):
         super().paintEvent(evento)
+        p = QPainter(self)
+        ri = self.interior.geometry()
+        entrada = self.area in ("discrete", "input-register")
+        # Fondo blanco limpio del interior del PLC (sin tintar durante un arrastre: solo se resalta el lateral exterior)
+        hover_int = self.underMouse() and not self._en_arrastre and not self._resaltado
+        p.fillRect(ri, QColor(estilo.ACENTO_SUAVE if hover_int else "#ffffff"))
+        if entrada:
+            p.setPen(QColor("#e6edf5"))
+            p.drawLine(ri.right(), ri.top(), ri.right(), ri.bottom())
+        # Cable fino (.plc-wire) conectando el nombre exterior con el borne del PLC cuando hay variable asignada
+        if self.variable is not None:
+            col_wire = QColor(color_tipo(self.variable))
+            col_wire.setAlpha(180)
+            cy = self.height() // 2
+            if entrada:
+                p.fillRect(ri.left() - 10, cy - 1, 10, 2, col_wire)
+            else:
+                p.fillRect(ri.right() + 1, cy - 1, 10, 2, col_wire)
         if self._resaltado or self._elegido:
-            p = QPainter(self)
             p.fillRect(self.zona_asignacion(), QColor(estilo.ASIGNACION))
             if self._elegido:
                 p.setPen(QColor(estilo.ACENTO))
                 p.drawRect(self.zona_asignacion().adjusted(0, 0, -1, -1))
+        p.end()
 
     def detalle(self):
         """Lo que cuenta la línea de detalle de la ventana al pasar por la fila: el nombre entero, el canal y el tipo."""
@@ -526,6 +627,7 @@ class TerminalES(QFrame):
 
     def dragEnterEvent(self, evento):
         if self._variable_evento(evento):
+            self._en_arrastre = True
             self._resaltar(self.zona_asignacion().contains(evento.position().toPoint()))
             evento.acceptProposedAction()  # permite continuar hacia el lateral sin salir de la fila
 
@@ -538,10 +640,12 @@ class TerminalES(QFrame):
             evento.ignore()
 
     def dragLeaveEvent(self, evento):
+        self._en_arrastre = False
         self._resaltar(False)
         evento.accept()
 
     def dropEvent(self, evento):
+        self._en_arrastre = False
         self._resaltar(False)
         vid = self._variable_evento(evento)
         if vid and self.zona_asignacion().contains(evento.position().toPoint()) and self.panel.asignar(vid, self.area, self.direccion):
@@ -580,13 +684,14 @@ class LienzoPLC(QWidget):
         # La cabecera del marco: con la conexión parada, los controles de la IP, el puerto y el esclavo (`edicion_destino`, los mismos widgets que
         # Configuración); con ella activa o sin proyecto, el texto de solo lectura (`destino`). Las dos páginas miden lo mismo: el marco no cambia.
         self.cabecera_marco = QStackedWidget()
+        self.cabecera_marco.setObjectName("cabeceraPLC")
         self.destino = QLabel()
         self.destino.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cabecera_marco.addWidget(self.destino)
         self.edicion_destino = QWidget()
-        ed = QVBoxLayout(self.edicion_destino)
-        ed.setContentsMargins(0, 0, 0, 0)
-        ed.setSpacing(4)
+        fila = QHBoxLayout(self.edicion_destino)
+        fila.setContentsMargins(6, 5, 6, 5)
+        fila.setSpacing(4)
         self.ip = CampoIPv4(relleno=False)
         self.ip.setAccessibleName("IP del servidor")
         self.puerto = _SpinConfiguracion()
@@ -597,19 +702,31 @@ class LienzoPLC(QWidget):
         self.unidad.setRange(0, 255)
         self.unidad.setAccessibleName("Esclavo ID")
         self.unidad.setToolTip("El ID de unidad configurado en el servidor Modbus; normalmente 1.")
-        self.puerto.fijar_digitos(3)
-        self.unidad.fijar_digitos(3)
-        for elementos in ((QLabel("IP"), self.ip, QLabel(":"), self.puerto), (QLabel("Esclavo ID"), self.unidad)):
-            fila = QHBoxLayout()
-            fila.setContentsMargins(0, 0, 0, 0)
-            fila.setSpacing(6)
-            fila.addStretch(1)
-            for e in elementos:
-                fila.addWidget(e)
-            fila.addStretch(1)
-            ed.addLayout(fila)
+        self.puerto.fijar_digitos(5)
+        self.unidad.fijar_digitos(4)
+        et_id = QLabel("ID")
+        et_id.setToolTip("Esclavo ID configurado en el servidor Modbus")
+        fila.addStretch(1)
+        for elemento in (QLabel("IP"), self.ip, QLabel(":"), self.puerto, QLabel("·"), et_id, self.unidad):
+            fila.addWidget(elemento)
+        fila.addStretch(1)
         self.cabecera_marco.addWidget(self.edicion_destino)
         self.fijar_alto_cabecera(estilo.ALTO_CONTROL)
+        # Subcabecera blanca ENTRADAS | SALIDAS (`.plc-subhdr`)
+        self.subhdr = QWidget()
+        self.subhdr.setObjectName("subhdrPLC")
+        shl = QHBoxLayout(self.subhdr)
+        shl.setContentsMargins(0, 0, 0, 0)
+        shl.setSpacing(0)
+        lbl_in = QLabel("ENTRADAS")
+        lbl_in.setObjectName("subcolPLCDiv")
+        lbl_in.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        lbl_out = QLabel("SALIDAS")
+        lbl_out.setObjectName("subcolPLC")
+        lbl_out.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        shl.addWidget(lbl_in, 1)
+        shl.addWidget(lbl_out, 1)
+        self.subhdr.setFixedWidth(2 * self.ancho_interior)
         self.izq, self.der = QWidget(), QWidget()
         self.fila_izq, self.fila_der = QVBoxLayout(self.izq), QVBoxLayout(self.der)
         for f in (self.fila_izq, self.fila_der):
@@ -622,8 +739,9 @@ class LienzoPLC(QWidget):
         self.ayuda.setContentsMargins(0, 0, 0, 0)
         self.ayuda.setMinimumHeight(20)
         rejilla.addWidget(self.cabecera_marco, 1, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
-        rejilla.addWidget(self.izq, 2, 0, Qt.AlignmentFlag.AlignTop)
-        rejilla.addWidget(self.der, 2, 1, Qt.AlignmentFlag.AlignTop)
+        rejilla.addWidget(self.subhdr, 2, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
+        rejilla.addWidget(self.izq, 3, 0, Qt.AlignmentFlag.AlignTop)
+        rejilla.addWidget(self.der, 3, 1, Qt.AlignmentFlag.AlignTop)
         self.ayuda.hide()  # las instrucciones siguen en los tooltips de los canales
         rejilla.setColumnStretch(0, 1)
         rejilla.setColumnStretch(1, 1)
@@ -634,14 +752,20 @@ class LienzoPLC(QWidget):
         self.setMinimumWidth(2 * self.ancho_interior + 120)
 
     def fijar_alto_cabecera(self, alto_control):
-        """La cabecera del marco mide dos filas de controles de `alto_control` px (con o sin controles: el marco no se mueve al conectar)."""
-        self._alto_cabecera = max(36, 2 * alto_control + 6)
+        """La cabecera del marco mide una fila de controles de `alto_control` px (con o sin controles: el marco no se mueve al conectar)."""
+        for w in (*self.ip.cajas, self.puerto, self.unidad, self.edicion_destino):
+            w.ensurePolished()
+        if self.edicion_destino.layout() is not None:
+            self.edicion_destino.layout().activate()
+        self._alto_cabecera = max(38, self.edicion_destino.sizeHint().height(), alto_control + 12)
         self.cabecera_marco.setFixedSize(2 * self.ancho_interior, self._alto_cabecera)
+        if hasattr(self, "subhdr"):
+            self.subhdr.setFixedWidth(2 * self.ancho_interior)
 
     def fijar_interior(self, ancho, alto_control=None):
         """El ancho de la mitad del marco que cae dentro de él (más ancho con la letra grande)."""
         self.ancho_interior = ancho
-        self.fijar_alto_cabecera(alto_control if alto_control is not None else (self._alto_cabecera - 6) // 2)
+        self.fijar_alto_cabecera(alto_control if alto_control is not None else self._alto_cabecera - 12)
         self.setMinimumWidth(2 * ancho + 120)
         self._colocar_marco()
 
@@ -652,10 +776,11 @@ class LienzoPLC(QWidget):
         return resultado
 
     def _colocar_marco(self):
-        g, d, c = self.izq.geometry(), self.der.geometry(), self.cabecera_marco.geometry()  # (la cabecera del marco, no el texto de dentro: su geometría es la de su página)
+        g, d, c = self.izq.geometry(), self.der.geometry(), self.cabecera_marco.geometry()
+        s = self.subhdr.geometry()
         x0, x1 = g.right() + 1 - self.ancho_interior, d.left() + self.ancho_interior
-        y1 = max(g.bottom() if self.fila_izq.count() else 0, d.bottom() if self.fila_der.count() else 0, c.bottom()) + 5
-        self.marco.setGeometry(x0, c.top() - 4, x1 - x0, y1 - c.top() + 4)  # (4 px de aire entre el borde y la cabecera)
+        y1 = max(g.bottom() if self.fila_izq.count() else 0, d.bottom() if self.fila_der.count() else 0, s.bottom(), c.bottom()) + 6
+        self.marco.setGeometry(x0, c.top(), x1 - x0, y1 - c.top())
         self.marco.raise_()
 
 
@@ -713,6 +838,7 @@ class _CasillaCentrada(QWidget):
     def __init__(self):
         super().__init__()
         self.casilla = QCheckBox()
+        self.casilla.setStyleSheet("QCheckBox { spacing: 0px; background: transparent; }")
         self.casilla.toggled.connect(self.toggled)
         caja = QHBoxLayout(self)
         caja.setContentsMargins(0, 0, 0, 0)
@@ -741,6 +867,7 @@ class _Octeto(LineaMedida):
         self.setMaxLength(15)  # lo que cabe al pegar una IP entera; al teclear nunca pasa de 3
         self.setValidator(QRegularExpressionValidator(QRegularExpression(r"[0-9.]*"), self))
         self.setStyleSheet("QLineEdit { padding: 0 2px; } QLineEdit:focus { padding: 0 1px; }")
+        self.medicion.medir()
         self.textEdited.connect(self._editado)
 
     def _editado(self, texto):
@@ -800,7 +927,7 @@ class CampoIPv4(QWidget):
         super().__init__(parent)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(3)
+        lay.setSpacing(2 if not relleno else 4)
         self.cajas = []
         for i in range(4):
             if i:
@@ -863,6 +990,13 @@ class CampoIPv4(QWidget):
 
 
 class DialogoConfiguracion(QDialog):
+    def showEvent(self, evento):  # noqa: N802
+        """Al abrirse, la anchura fija y la posición (centrado, borde superior quieto) las pone el panel."""
+        panel = self.parent()
+        if not evento.spontaneous() and hasattr(panel, "_colocar_dialogo"):
+            panel._colocar_dialogo()
+        super().showEvent(evento)
+
     def closeEvent(self, evento):
         panel = self.parent()
         if panel.bloqueado or panel.doc is None or panel._aplicar():
@@ -894,16 +1028,18 @@ class PanelES(QWidget):
         fuente.setPixelSize(self.letra)
         self.setFont(fuente)
         self.setStyleSheet(hoja_ventana + estilo_panel(escala))
+        self.dialogo_config.setFont(fuente)
+        self.dialogo_config.setStyleSheet((hoja_ventana or estilo.hoja_global()) + hoja_dialogo_es())
         from .campos_medidos import notificar_fuentes
         notificar_fuentes()
-        self.fila_alta.setFixedHeight(e["ALTO_CONTROL_COMPACTO"] + 8)
-        self.b_volver.setFixedHeight(e["ALTO_CONTROL_COMPACTO"])
+        self.fila_alta.setFixedHeight(e["ALTO_CONTROL_COMPACTO"] + 10)
         for piloto in self.ayuda_vacio.parentWidget().findChildren(IndicadorES):
             piloto.setFixedSize(tamano_piloto(self.alto_fila))
         self._filas_tabla(escala)
         self.lienzo.fijar_interior(self.ancho_interior, e["ALTO_CONTROL"])
+        alto_var = ALTO_VARIABLE + (2 if escala == "grande" else 0)
         for lista in (self.lista_entradas, self.lista_salidas):
-            lista.letra, lista.alto = self.letra, self.alto_fila
+            lista.letra, lista.alto = self.letra, alto_var
         self.contexto_izq.fijar(()); self.contexto_der.fijar(())  # (se rehacen con las filas)
         if self.doc is not None:
             self._dibujar()
@@ -951,25 +1087,29 @@ class PanelES(QWidget):
         banda = self.cabecera = QFrame()
         banda.setProperty("estadoVisual", "neutro")
         banda.setObjectName("cabeceraES")
+        banda.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         cabeza = QVBoxLayout(banda)
         cabeza.setContentsMargins(0, 0, 0, 0)
         cabeza.setSpacing(0)
         fila_alta = QWidget()
         self.fila_alta = fila_alta
-        fila_alta.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 8)  # los botones de la cabecera miden `ALTO_CONTROL_COMPACTO` (hoja `estilo_panel`)
+        fila_alta.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO + 10)  # barra de comandos limpia (`.cmd-bar`)
         cabecera = QHBoxLayout(fila_alta)
-        cabecera.setContentsMargins(estilo.E2, 0, estilo.E2, 0)
-        cabecera.setSpacing(estilo.E2)
-        self.b_volver = QPushButton("Volver")  # de la familia de los botones de la barra: icono de flecha del mismo trazo y borde como «Reiniciar» (hoja de `cabeceraES`)
-        self.b_volver.setIcon(estilo.icono("volver", estilo.TINTA, tam=20))
-        self.b_volver.setIconSize(QSize(20, 20))
-        self.b_volver.setFixedHeight(estilo.ALTO_CONTROL_COMPACTO)
-        self.b_volver.setToolTip("Volver al dibujo GRAFCET")
-        self.b_volver.clicked.connect(self.volver)
-        cabecera.addWidget(self.b_volver)
+        cabecera.setContentsMargins(estilo.E3, 0, estilo.E3, 0)
+        cabecera.setSpacing(8)
         titulo = QLabel("Asignación de E/S")
         titulo.setObjectName("tituloES")
+        self.titulo_es = titulo
         cabecera.addWidget(titulo)
+        sep_cab = QFrame()
+        sep_cab.setObjectName("sepCabeceraES")
+        sep_cab.setFixedSize(1, 18)
+        self.sep_cab = sep_cab
+        cabecera.addWidget(sep_cab)
+        self._slot_selector = QHBoxLayout()
+        self._slot_selector.setContentsMargins(0, 0, 0, 0)
+        self._slot_selector.setSpacing(0)
+        cabecera.addLayout(self._slot_selector)
         cabecera.addStretch()
         fila_estado = QWidget()
         fe = QHBoxLayout(fila_estado)
@@ -1016,6 +1156,8 @@ class PanelES(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.lienzo)
         self.cuentas = {}
+        self.subtitulos = {}
+        self.badges = {}
         self.lista_entradas, self.lista_salidas = ListaVariables("entrada"), ListaVariables("salida")
         columnas = []
         for rol, lista in (("input", self.lista_entradas), ("output", self.lista_salidas)):
@@ -1025,14 +1167,37 @@ class PanelES(QWidget):
             cl = QVBoxLayout(columna)
             cl.setContentsMargins(0, 0, 0, 0)
             cl.setSpacing(0)
-            etiqueta = TituloSeccion("Sensores" if rol == "input" else "Actuadores")
-            etiqueta.setContentsMargins(6, 0, 0, 0)  # (el cuadrado, a 6 px del borde y a 7 px del texto, como en los demás títulos: con `x_marcador` se movía solo el cuadrado y quedaba pegado)
+            cab_t = QFrame()
+            cab_t.setObjectName("cabeceraTarjetaES")
+            cab_t.setMinimumHeight(46)
+            ctv = QVBoxLayout(cab_t)
+            ctv.setContentsMargins(10, 6, 10, 6)
+            ctv.setSpacing(1)
+            ctl = QHBoxLayout()
+            ctl.setContentsMargins(0, 0, 0, 0)
+            ctl.setSpacing(6)
+            etiqueta = QLabel("Sensores" if rol == "input" else "Actuadores")
             etiqueta.setObjectName("seccionES")
-            etiqueta.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)  # (con el centrado vertical, el cuadrado queda a la altura del texto)
+            etiqueta.setProperty("rol", rol)
+            etiqueta.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             etiqueta.setTextFormat(Qt.TextFormat.RichText)
-            cl.addWidget(etiqueta)
+            badge = QLabel("0")
+            badge.setObjectName("badgeTarjetaES")
+            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ctl.addWidget(etiqueta)
+            ctl.addStretch(1)
+            ctl.addWidget(badge)
+            subtitulo = QLabel("Variables creadas en GRAFCET Connect")
+            subtitulo.setObjectName("subtituloTarjetaES")
+            subtitulo.setWordWrap(True)
+            ctv.addLayout(ctl)
+            ctv.addWidget(subtitulo)
+            cl.addWidget(cab_t)
+            lista.setViewportMargins(0, 4, 0, 4)
             cl.addWidget(lista, 1)
             self.cuentas[rol] = etiqueta
+            self.subtitulos[rol] = subtitulo
+            self.badges[rol] = badge
             columnas.append(columna)
         self._partes = (columnas[0], scroll, columnas[1])
         for lista in (self.lista_entradas, self.lista_salidas):  # el nombre entero de la variable, al pasar el ratón, en la barra de estado
@@ -1055,11 +1220,11 @@ class PanelES(QWidget):
         self.scroll_cuerpo.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.scroll_cuerpo.setWidget(cuerpo)
         raiz.addWidget(self.scroll_cuerpo, 1)
-        # Pie: leyenda de los colores de tipo y resumen de lo asignado
+        # Pie: leyenda de los colores de tipo y resumen de lo asignado (`.es-footer`)
         pie = QFrame()
         pie.setObjectName("pieES")
         pl = QHBoxLayout(pie)
-        pl.setContentsMargins(12, 0, 12, 2)
+        pl.setContentsMargins(12, 6, 12, 6)
         pl.setSpacing(6)
         for texto, tipo in LEYENDA:
             cuadro = IndicadorES()
@@ -1081,22 +1246,20 @@ class PanelES(QWidget):
         raiz.addWidget(pie)
         self.dialogo_config = DialogoConfiguracion(self)
         self.dialogo_config.setWindowTitle("Configuración Modbus TCP")
-        self.dialogo_config.resize(640, 380)
-        self.dialogo_config.setStyleSheet(f"""
-            QDialog {{ background:{estilo.FONDO}; color:{estilo.TINTA}; }}
-            QLabel, QCheckBox {{ color:{estilo.TINTA}; }}
-            QTableWidget {{ background:{estilo.SUPERFICIE}; color:{estilo.TINTA}; gridline-color:{estilo.BORDE}; }}
-            QHeaderView::section {{ background:{estilo.SUPERFICIE_2}; color:{estilo.TINTA_2}; padding:6px; border:0; font-weight:600; }}
-        """)
+        self.dialogo_config.setMinimumWidth(520)
+        self.dialogo_config.setSizeGripEnabled(False)
+        self.dialogo_config.setStyleSheet(estilo.hoja_global() + hoja_dialogo_es())
         ajustes = QVBoxLayout(self.dialogo_config)
+        ajustes.setContentsMargins(16, 14, 16, 14)
+        ajustes.setSpacing(10)
         self.config_widget = QWidget()
         configuracion = QVBoxLayout(self.config_widget)
+        configuracion.setContentsMargins(0, 0, 0, 0)
+        configuracion.setSpacing(10)
+        tarjeta_conn, lay_conn = crear_tarjeta("Conexión Modbus", self.config_widget)
         endpoint = QFormLayout()
         endpoint.setVerticalSpacing(8)
         endpoint.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint)
-        servidor = QLabel("Conexión Modbus")
-        servidor.setStyleSheet(f"font-size:{estilo.T_TITULO}px; font-weight:600; color:{estilo.ACENTO}; padding:8px 0")
-        configuracion.addWidget(servidor)
         self.host = CampoIPv4()
         self.puerto = _SpinConfiguracion()
         self.puerto.setRange(1, 65535)
@@ -1108,16 +1271,18 @@ class PanelES(QWidget):
         self.timeout = _SpinConfiguracion()
         self.timeout.setRange(10, 10000)
         self.timeout.setSuffix(" ms")
-        self.puerto.fijar_digitos(3)
-        self.unidad.fijar_digitos(3)
+        self.puerto.fijar_digitos(5)
+        self.unidad.fijar_digitos(4)
         self.host.setToolTip("Copia la dirección del software que actúa como servidor Modbus. Debe coincidir con el servidor activo.")
         self.unidad.setToolTip("El ID de unidad configurado en el servidor Modbus; normalmente 1.")
         for texto, widget in (("IP (Host)", self.host), ("Puerto", self.puerto), ("Esclavo ID", self.unidad)):
             endpoint.addRow(texto, widget)
-        configuracion.addLayout(endpoint)
-        titulo_canales = QLabel("Canales del servidor")
-        titulo_canales.setStyleSheet(f"font-size:{estilo.T_SECCION}px; font-weight:600; color:{estilo.ACENTO}; padding-top:10px")
-        configuracion.addWidget(titulo_canales)
+        lay_conn.addLayout(endpoint)
+        fila_tarjetas = QHBoxLayout()  # con la anchura fija del diálogo, las dos tarjetas van lado a lado: sin huecos en blanco
+        fila_tarjetas.setSpacing(10)
+        fila_tarjetas.addWidget(tarjeta_conn, 2, Qt.AlignmentFlag.AlignTop)
+        configuracion.addLayout(fila_tarjetas)
+        tarjeta_canales, lay_canales = crear_tarjeta("Canales del servidor", self.config_widget)
         rejilla_canales = QGridLayout()
         rejilla_canales.setColumnStretch(3, 1)
         rejilla_canales.addWidget(QLabel("Offset (desde)"), 0, 1)
@@ -1137,26 +1302,28 @@ class PanelES(QWidget):
             rejilla_canales.addWidget(QLabel(texto), fila, 0)
             rejilla_canales.addWidget(offset, fila, 1, Qt.AlignmentFlag.AlignLeft)
             rejilla_canales.addWidget(cantidad, fila, 2, Qt.AlignmentFlag.AlignLeft)
-        configuracion.addLayout(rejilla_canales)
-        self.b_restaurar_canales = QPushButton("Restablecer canales: 32 digitales y 12 numéricos")
+        lay_canales.addLayout(rejilla_canales)
+        self.b_restaurar_canales = QPushButton("Restablecer canales: 16 digitales y 4 numéricos")
         self.b_restaurar_canales.clicked.connect(self.restablecer_canales)
         rejilla_canales.addWidget(self.b_restaurar_canales, 5, 0, 1, 3, Qt.AlignmentFlag.AlignRight)
         self.ayuda_canales = QLabel("Copia el desplazamiento y la cantidad del software del servidor. Estos ajustes no modifican el servidor.")
+        self.ayuda_canales.setObjectName("ayudaTarjetaConfigES")
         self.ayuda_canales.setWordWrap(True)
-        self.ayuda_canales.setStyleSheet(f"color:{estilo.TINTA_2}; font-size:12px")
-        configuracion.addWidget(self.ayuda_canales)
+        lay_canales.addWidget(self.ayuda_canales)
+        fila_tarjetas.addWidget(tarjeta_canales, 3, Qt.AlignmentFlag.AlignTop)
         self.b_avanzado = QPushButton("Asignaciones y ajustes avanzados  ›")
-        self.b_avanzado.setStyleSheet(f"text-align:left; background:transparent; color:{estilo.TINTA_2}; border:1px solid transparent")  # (el borde transparente deja el alto de control)
+        self.b_avanzado.setObjectName("botonAvanzadoES")
         self.b_avanzado.clicked.connect(self._alternar_avanzado)
-        configuracion.addSpacing(12)  # (el hueco sobre el botón, fuera de él: su alto es el del control)
         configuracion.addWidget(self.b_avanzado)
         self.avanzado = QWidget()
         avanzado = QVBoxLayout(self.avanzado)
-        avanzado.setContentsMargins(0, 10, 0, 0)
+        avanzado.setContentsMargins(0, 0, 0, 0)
+        avanzado.setSpacing(0)
+        tarjeta_avz, lay_avz = crear_tarjeta("Ajustes avanzados y tabla de asignaciones", self.avanzado)
         tiempos = QFormLayout()
         tiempos.addRow("Periodo", self.periodo)
         tiempos.addRow("Tiempo de espera", self.timeout)
-        avanzado.addLayout(tiempos)
+        lay_avz.addLayout(tiempos)
         self.tabla = QTableWidget(0, 8)
         from .campos_medidos import ColumnaNumerica
         self.columna_direccion = ColumnaNumerica(self.tabla, 5)
@@ -1166,23 +1333,32 @@ class PanelES(QWidget):
         self.tabla.horizontalHeader().setStretchLastSection(True)
         self.tabla.setMinimumHeight(150)
         self._filas_tabla()
-        avanzado.addWidget(self.tabla)
+        lay_avz.addWidget(self.tabla)
+        avanzado.addWidget(tarjeta_avz)
         configuracion.addWidget(self.avanzado)
         self.avanzado.hide()
-        ajustes.addWidget(self.config_widget)
+        self.zona_config = QScrollArea()  # si no cabe en alto, se desplaza por dentro
+        self.zona_config.setObjectName("zonaConfigES")
+        self.zona_config.setWidgetResizable(True)
+        self.zona_config.setFrameShape(QFrame.Shape.NoFrame)
+        self.zona_config.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.zona_config.setStyleSheet("QScrollArea#zonaConfigES, QScrollArea#zonaConfigES > QWidget > QWidget { background:transparent; }")
+        self.zona_config.setWidget(self.config_widget)
+        ajustes.addWidget(self.zona_config, 1)
         self.b_conectar = QPushButton("Conectar")
         self.b_conectar.clicked.connect(self.conectar)
         self.b_conectar.setProperty("primario", True)  # el botón principal de la cabecera
         self.b_desconectar = QPushButton("Desconectar / editar")
         self.b_desconectar.clicked.connect(self.desconectar)
         self.b_desconectar.setEnabled(False)
-        for b in (self.b_conectar, self.b_desconectar, self.b_configuracion):
+        for b in (self.b_configuracion, self.b_conectar, self.b_desconectar):
             cabecera.addWidget(b)
         self.b_desconectar.hide()
         self.error_config = QLabel()
         self.error_config.setWordWrap(True)
         self.error_config.setStyleSheet(f"color:{estilo.ERROR}")
         ajustes.addWidget(self.error_config)
+        self.error_config.hide()
         self.host.editingFinished.connect(self._config_editada)
         for widget in (self.puerto, self.unidad, self.periodo, self.timeout):
             widget.valueChanged.connect(self._config_editada)
@@ -1194,6 +1370,9 @@ class PanelES(QWidget):
         self._cargando = False
         from .conexion_directa import PanelDirecto
         self.directa = PanelDirecto(self)
+
+    def minimumSizeHint(self):  # noqa: N802
+        return QSize(480, 320)
 
     def eventFilter(self, objeto, evento):  # noqa: N802
         if evento.type() == QEvent.Type.Leave and objeto in (self.lista_entradas.viewport(), self.lista_salidas.viewport()):
@@ -1335,8 +1514,16 @@ class PanelES(QWidget):
         base = estilo.ESCALAS[self.escala]["ANCHO_INTERIOR_ES"]
         return base if ancho >= 1200 else min(base, necesario)
 
+    def _ajustar_cabecera(self, ancho: int) -> None:
+        """A media pantalla oculta el título redundante para que el selector de modo no choque con Configuración."""
+        muy_estrecho = ancho < estilo.UMBRAL_MUY_ESTRECHO
+        self.titulo_es.setVisible(not muy_estrecho)
+        self.sep_cab.setVisible(not muy_estrecho)
+        self.fila_alta.layout().setSpacing(6 if muy_estrecho else 8)
+
     def resizeEvent(self, evento):  # noqa: N802
         super().resizeEvent(evento)
+        self._ajustar_cabecera(self.width())
         estrecho = self.width() < self.UMBRAL_ESTRECHO
         self._disponer(estrecho)
         self._repartir_zona()
@@ -1460,14 +1647,57 @@ class PanelES(QWidget):
         mostrar = self.avanzado.isHidden()
         self.avanzado.setVisible(mostrar)
         self.b_avanzado.setText("Asignaciones y ajustes avanzados  ⌄" if mostrar else "Asignaciones y ajustes avanzados  ›")
-        self.dialogo_config.resize(1050 if mostrar else 640, 680 if mostrar else 380)
+        estilo.poner(self.b_avanzado, abierto=mostrar)
         if mostrar:
             self._anchos_controles()
-            # TB3: la tabla cabe sin barra horizontal si la ventana tiene sitio (a menos ancho, se desplaza y no se corta ninguna columna)
-            pide = sum(self.tabla.columnWidth(c) for c in range(self.tabla.columnCount()) if not self.tabla.isColumnHidden(c)) + self.tabla.verticalHeader().width() + 2 * self.tabla.frameWidth()
-            hueco = self.dialogo_config.width() - self.tabla.viewport().width() - 2 * self.tabla.frameWidth() if self.tabla.viewport().width() else 80
-            libre = max(1050, self.window().width() - 40)
-            self.dialogo_config.resize(min(libre, max(1050, pide + max(hueco, 60))), 680)
+        self._ajustar_alto_dialogo()
+
+    def _ancho_dialogo(self) -> int:
+        """La anchura única del diálogo de Configuración: la que pide la tabla de asignaciones desplegada, sin pasar de lo que da la pantalla."""
+        self._anchos_controles()
+        tabla = self.tabla
+        pide = sum(tabla.columnWidth(c) for c in range(tabla.columnCount()) if not tabla.isColumnHidden(c)) + tabla.verticalHeader().width() + 2 * tabla.frameWidth()
+        margenes = self.dialogo_config.layout().contentsMargins()
+        # márgenes del diálogo, de la tarjeta avanzada (14 + 14 + 2 de borde) y la barra de desplazamiento vertical
+        extra = margenes.left() + margenes.right() + 30 + self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
+        d = self.dialogo_config
+        marco = d.frameGeometry().width() - d.width() if d.isVisible() else 0
+        libre = self._pantalla_libre().width() - marco
+        return min(libre, max(1050, pide + extra))
+
+    def _pantalla_libre(self):
+        pantalla = self.dialogo_config.screen() or self.screen()
+        return pantalla.availableGeometry()
+
+    def _ajustar_alto_dialogo(self):
+        """Solo cambia el alto (hacia abajo: el borde superior no se mueve); si no cabe, la zona de Configuración se desplaza por dentro."""
+        d = self.dialogo_config
+        self.config_widget.layout().activate()
+        d.layout().activate()
+        lay = d.layout()
+        m = lay.contentsMargins()
+        pide = self.config_widget.sizeHint().height() + m.top() + m.bottom()
+        if not self.error_config.isHidden():
+            pide += self.error_config.sizeHint().height() + lay.spacing()
+        pide += 2 * self.zona_config.frameWidth()
+        libre = self._pantalla_libre()
+        marco = d.frameGeometry().height() - d.height() if d.isVisible() else 0
+        tope = libre.bottom() + 1 - (d.y() if d.isVisible() else libre.top()) - marco
+        d.resize(d.width(), max(200, min(pide, tope)))
+
+    def _colocar_dialogo(self):
+        """Al abrir: anchura fija, centrado en la ventana y con el borde superior en un sitio que no cambia al plegar o desplegar."""
+        d = self.dialogo_config
+        ancho = self._ancho_dialogo()
+        d.setFixedWidth(ancho)
+        libre = self._pantalla_libre()
+        ventana = self.window().frameGeometry() if self.window().isVisible() else libre
+        total = ancho + (d.frameGeometry().width() - d.width() if d.isVisible() else 0)  # (con el marco de la ventana)
+        x = ventana.center().x() - total // 2
+        x = max(libre.left(), min(x, libre.right() + 1 - total))
+        y = max(libre.top(), min(ventana.top() + 48, libre.bottom() - 300))
+        d.move(x, y)
+        self._ajustar_alto_dialogo()
 
     def mostrar_tiempos(self, medidas, ultima_parada=None):
         """Cadencia observada y duración del intercambio, sin confundirlas con la parada física. Se guarda en `tiempos`
@@ -1772,8 +2002,13 @@ class PanelES(QWidget):
         except ValueError as exc:
             self.mostrar_estado("error", f"Mapa inválido: {exc}")
             self.error_config.setText(f"Mapa inválido: {exc}")
+            self.error_config.show()
+            self._ajustar_alto_dialogo()
             return False
-        self.error_config.clear()
+        if not self.error_config.isHidden():
+            self.error_config.clear()
+            self.error_config.hide()
+            self._ajustar_alto_dialogo()
         self.config = c
         self.escalas_base.update({f"{s.area}:{s.direccion}": s.escala for s in c.senales})
         self.aviso = ""  # el usuario ya ha actuado sobre el mapa
@@ -1791,7 +2026,7 @@ class PanelES(QWidget):
         self.terminales.clear()
         self.indicadores_listas.clear()
         c = self.config
-        self.destino.setText(f"({c.host}:{c.puerto})\nEsclavo ID:{c.unidad}")
+        self.destino.setText(f"({c.host}:{c.puerto}) · ID {c.unidad}")
         self.ayuda_vacio.show()
         for fila in (self.fila_entradas, self.fila_salidas):
             while fila.count():
@@ -1806,15 +2041,18 @@ class PanelES(QWidget):
         self.lista_salidas.clear()
         asignadas = {s.variable: f"{ETIQUETA_CANAL[s.area]} {s.direccion}" for s in c.senales}
         for rol, titulo in (("input", "Sensores"), ("output", "Actuadores")):
-            self.cuentas[rol].setText(f"{titulo} <span style='color:{estilo.TINTA_2}; font-size:{self.letra}px; font-weight:400'>{sum(v['role'] == rol for v in self.variables)}</span>")
+            cuenta = sum(v["role"] == rol for v in self.variables)
+            self.cuentas[rol].setText(titulo)
+            self.badges[rol].setText(str(cuenta))
         # los nombres de cada lista y de cada lado del PLC: el recorte de un nombre largo conserva lo que lo distingue de los demás
         self.lista_entradas.contexto.fijar([v["name"] for v in self.variables if v["role"] == "input"])
         self.lista_salidas.contexto.fijar([v["name"] for v in self.variables if v["role"] == "output"])
         self.contexto_izq.fijar([variables[s.variable]["name"] for s in c.senales if s.variable in variables and s.area in ("discrete", "input-register")])
         self.contexto_der.fijar([variables[s.variable]["name"] for s in c.senales if s.variable in variables and s.area in ("coil", "holding")])
+        alto_var = ALTO_VARIABLE + (2 if self.escala == "grande" else 0)
         for v in self.variables:
             item = QListWidgetItem(v["name"])
-            item.setSizeHint(QSize(0, self.alto_fila))
+            item.setSizeHint(QSize(0, alto_var))
             item.setData(Qt.ItemDataRole.UserRole, v["id"])
             item.setData(ROL_COLOR, color_tipo(v))
             item.setData(ROL_ASIGNADA, v["id"] in asignadas)

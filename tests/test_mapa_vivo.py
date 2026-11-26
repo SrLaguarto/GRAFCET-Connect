@@ -111,14 +111,16 @@ class InterfazMapaVivo(BaseQt):
             self.assertFalse(any(s.variable==a for s in p.config.senales))
 
     def test_SMAP03_cantidades_cero_y_restablecer_sin_pisar_asignaciones(self):
-        """REQ-SIM-03: cero canales es válido; restablecer propone 32/12 y conserva direcciones ocupadas."""
+        """REQ-SIM-03: cero canales es válido; restablecer propone 16/4 y conserva direcciones ocupadas."""
         p=self.w.panel_es
-        self.assertEqual([x['cantidad'] for x in CANALES_INICIALES.values()],[32,32,12,12])
+        self.assertEqual([x['cantidad'] for x in CANALES_INICIALES.values()],[16,16,4,4])
         for c in p.cantidades.values():c.setValue(0)
         self.assertTrue(all(x['cantidad']==0 for x in p.obtener().canales.values()))
         self.assertFalse(p.terminales)
         p.restablecer_canales()
         self.assertEqual(p.obtener().canales,CANALES_INICIALES)
+        self.assertEqual(p.b_restaurar_canales.text(),'Restablecer canales: 16 digitales y 4 numéricos')
+        self.assertEqual([(x['offset'],x['cantidad']) for x in p.obtener().canales.values()],[(0,16),(0,16),(0,4),(0,4)])
 
     def test_SMAP04_ayuda_siempre_en_pie_y_nunca_ventana(self):
         """REQ-EDT-09, REQ-ROB-01: quitar asignaciones y cambiar de vista no crea una ventana de ayuda."""

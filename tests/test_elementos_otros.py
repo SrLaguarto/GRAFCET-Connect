@@ -149,11 +149,15 @@ class OtrosInterfaz(BaseQt):
         self.assertIn('Tipo de etapa',textos)
 
     def test_SOTR09_accion_por_evento_reserva_mas_espacio_al_evento(self):
-        """REQ-EDT-09: en una acción por evento el editor del evento es claramente mayor que el del valor."""
+        """REQ-EDT-09: en una acción por evento el editor del evento ocupa todo el ancho de la ventana mientras el valor vive en su pestaña."""
         w,e=self.preparar();w._abrir_opciones();n=e.ed.add_draft_action((200,140),{'tipo':'evento'});e.sel=[n];e.cambia();QApplication.processEvents()
-        p=w.props;self.assertTrue(p.pagina_bloques.isVisible())  # E8: una parte cada vez; la ventana abre por el evento
+        p=w.props;v=w.flot.principal
+        self.assertTrue(p.pagina_bloques.isVisible())  # 2.0.1: una parte cada vez; abre en «Evento» a todo el ancho
         self.assertFalse(p.accion.caja_valor.isVisible())
-        self.assertGreater(p.pagina_bloques.width(),2*p.accion.caja_valor.width())
+        self.assertGreaterEqual(p.pagina_bloques.width(),v.width()-8)
+        w.flot.elegir_parte('accion');QApplication.processEvents()
+        self.assertTrue(p.accion.caja_valor.isVisible())
+        self.assertFalse(p.pagina_bloques.isVisible())
 
     def test_SOTR10_qt_y_js_dibujan_notas_y_proyecto_se_reabre(self):
         """REQ-DAT-02, REQ-EDT-09: texto e imagen se conservan al guardar y ambos renderizadores usan la misma geometría y estilo."""

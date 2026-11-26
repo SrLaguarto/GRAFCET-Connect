@@ -81,7 +81,7 @@ class PanelPlegadoNoSeAbre(BaseQt):
         w._abrir_opciones()
         QApplication.processEvents()
         e.anadir_accion(etapas["2"]);QApplication.processEvents()
-        self.assertFalse(w.flot.hay_ventanas(), "la acción continua usa el selector del dibujo")
+        self.assertTrue(w.flot.hay_ventanas(), "con el panel abierto, añadir continua lo mantiene abierto (decisión 1A)")
 
     def test_SAUC04_con_el_panel_abierto_la_seleccion_lo_actualiza(self):
         """REQ-EDT-09: con el panel abierto, seleccionar cambia su página como siempre."""
@@ -767,7 +767,7 @@ class PanelesMasCompactos(BaseQt):
 
 
     def test_SAUC20_las_tarjetas_distinguen_accion_y_condicion(self):
-        """REQ-EDT-09: la flotante separa las tarjetas Acción y Condición."""
+        """REQ-EDT-09: la flotante muestra Condición y variable destino juntas en condicionada, y conmuta Evento | Acción en evento."""
         w, e, y = self.preparar()
         sid = next(s["id"] for s in e.M["steps"] if s["label"] == "1")
         e.pedir_accion = lambda *args: None
@@ -776,11 +776,27 @@ class PanelesMasCompactos(BaseQt):
         w._abrir_opciones()
         QApplication.processEvents()
         v = w.flot.principal
-        self.assertEqual(v.accion.titulo.text(), "Acción")
-        self.assertEqual(v.condicion.titulo.text(), "Condición")
+        self.assertTrue(v.subcabecera.isVisible())
+        self.assertEqual(v.l_sub_titulo.text(), "Condición")
+        self.assertTrue(v.l_sub_titulo.isVisible())
+        self.assertEqual(v.l_dest.text(), "Activa variable:")
+        self.assertTrue(v.caja_dest.isVisible())
+        self.assertFalse(v.conmutador.isVisible(), "en condicionada la variable destino va en la subcabecera sin conmutador")
         self.assertTrue(v.condicion.isVisible())
-        self.assertFalse(v.accion.isVisible(), "E8: una tarjeta cada vez (conmutador Condición | Acción), en la misma celda")
-        self.assertTrue(v.conmutadores[v.condicion].isVisible())
+        self.assertFalse(v.accion.isVisible())
+        # En acción por evento sí se distinguen Evento y Acción con el conmutador de partes
+        e.tipo_accion(did, "evento")
+        QApplication.processEvents()
+        self.assertTrue(v.conmutador.isVisible())
+        self.assertEqual(v.conmutador.botones["formula"].text(), "Evento")
+        self.assertEqual(v.conmutador.botones["accion"].text(), "Acción")
+        self.assertTrue(v.condicion.isVisible())
+        self.assertFalse(v.accion.isVisible())
+        w.flot.elegir_parte("accion")
+        QApplication.processEvents()
+        self.assertTrue(v.accion.isVisible())
+        self.assertFalse(v.condicion.isVisible())
+        self.assertTrue(v.caja_dest.isVisible())
 
 
 @unittest.skipUnless(QT, "requiere PySide6")
@@ -912,7 +928,7 @@ class EntradaAES(BaseQt):
         tabs = w.pestanas_vistas
         self.assertFalse(tabs.isTabVisible(2))
         self.assertTrue(tabs.isTabVisible(0) and tabs.isTabVisible(1))
-        self.assertEqual(w.luz_es.toolTip().splitlines()[-1], "Abrir E/S externas")
+        self.assertEqual(w.luz_es.toolTip().splitlines()[-1], "E/S externas: desconectada · clic para abrir")
         self.assertEqual(w.luz_es.cursor().shape(), Qt.CursorShape.PointingHandCursor)
         self.assertFalse(w.luz_es.property("abierta"))
         QTest.mouseClick(w.luz_es, Qt.MouseButton.LeftButton);QApplication.processEvents()
@@ -925,5 +941,7 @@ class EntradaAES(BaseQt):
         QTest.mouseClick(tabs, Qt.MouseButton.LeftButton, pos=tabs.tabRect(0).center());QApplication.processEvents()
         self.assertEqual(w.paginas_es.currentIndex(), 0)
         self.assertFalse(w.luz_es.property("abierta"))
-        w.luz_es.click();w.panel_es.b_volver.click()
+        w.luz_es.click();QApplication.processEvents()
+        self.assertEqual((w.paginas_es.currentIndex(), w.luz_es.property("abierta")), (1, True))
+        QTest.mouseClick(tabs, Qt.MouseButton.LeftButton, pos=tabs.tabRect(0).center());QApplication.processEvents()
         self.assertEqual((w.paginas_es.currentIndex(), w.luz_es.property("abierta")), (0, False))

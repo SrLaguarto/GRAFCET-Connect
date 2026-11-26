@@ -406,8 +406,14 @@ class DialogoLaminas(QDialog):
         self.documento=None;self.indice=0
         self.plantilla=copy.deepcopy(self.ajustes['plantilla']);self.offset=list(self.ajustes['offset_mm']);self.aviso_biblioteca='';self.editor_textos=None;self.editando_plantilla=False
         if self.plantilla is None:self.cargar_tecnica(self.ajustes['formato'],self.ajustes['orientacion'],self.ajustes['margen_mm'])
-        raiz=QVBoxLayout(self);barra=QMenuBar(self);raiz.setMenuBar(barra)
-        if integrado:barra.hide();self.setSizeGripEnabled(False)
+        raiz = QVBoxLayout(self)
+        barra = QMenuBar(self)
+        raiz.setMenuBar(barra)
+        if integrado:
+            raiz.setContentsMargins(0, 0, 0, 0)
+            raiz.setSpacing(estilo.E1)
+            barra.hide()
+            self.setSizeGripEnabled(False)
         menu = barra.addMenu('Plano')
         self.menu_plantilla = menu
         self.a_importar = menu.addAction('Importar plantilla…', self.importar_plantilla)
@@ -416,11 +422,29 @@ class DialogoLaminas(QDialog):
         self.a_quitar_plantilla=menu.addAction('Quitar plantilla',self.quitar_plantilla)
         menu.addAction('Guardar plantilla en biblioteca…',self.guardar_en_biblioteca)
         menu.addAction('Restaurar plantilla predeterminada…',self.restaurar_predeterminada)
-        centro=QHBoxLayout();raiz.addLayout(centro,1)
-        scroll=QScrollArea();scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus);scroll.setWidgetResizable(True);scroll.setFixedWidth(286 if integrado else 300);panel=QWidget();form=QFormLayout(panel);self.form_hoja=form;scroll.setWidget(panel)
+        centro = QHBoxLayout()
         if integrado:
-            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows);scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        else:centro.addWidget(scroll)
+            centro.setContentsMargins(0, 0, 0, 0)
+            centro.setSpacing(estilo.E2)
+        raiz.addLayout(centro, 1)
+        scroll = QScrollArea()
+        scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        scroll.setWidgetResizable(True)
+        scroll.setFixedWidth(286 if integrado else 300)
+        panel = QWidget()
+        form = QFormLayout(panel)
+        self.form_hoja = form
+        scroll.setWidget(panel)
+        if integrado:
+            scroll.setObjectName("scrollPropiedadesPlanos")
+            panel.setObjectName("panelHojaPlanos")
+            panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            form.setContentsMargins(12, 12, 12, 12)
+            form.setVerticalSpacing(estilo.E2)
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        else:
+            centro.addWidget(scroll)
         from .planos_plantillas import ComboPlantillas
         self.predeterminadas=ComboPlantillas();self.predeterminadas.addItem('Elegir plantilla…',None)
         self.predeterminadas.addItem('A4 vertical — predeterminada',('A4','vertical'));self.predeterminadas.addItem('A3 horizontal',('A3','horizontal'));self.predeterminadas.addItem('A3 vertical',('A3','vertical'))
@@ -433,7 +457,9 @@ class DialogoLaminas(QDialog):
         except OSError:pass
         if integrado:
             from .planos_plantillas import fila_plantilla
-            form.addRow(QLabel("Plantilla"))
+            cabecera_plantilla = QLabel("Plantilla")
+            cabecera_plantilla.setObjectName("seccionPropiedadesPlanos")
+            form.addRow(cabecera_plantilla)
             form.addRow(fila_plantilla(self))
         else:
             form.addRow("Biblioteca de plantillas", self.predeterminadas)
@@ -475,7 +501,7 @@ class DialogoLaminas(QDialog):
         for w in (self.b_exportar,self.b_imprimir,cerrar):nav.addWidget(w)
         if integrado:
             for w in (self.b_exportar,self.b_imprimir,self.b_centrar,cerrar,self.guardar_ajustes):w.hide()
-        self.error=QLabel();self.error.setWordWrap(True);raiz.addWidget(self.error)
+        self.error=QLabel();self.error.setWordWrap(True);self.error.hide();raiz.addWidget(self.error)
         self.anterior.clicked.connect(lambda:self.ir(self.indice-1));self.siguiente.clicked.connect(lambda:self.ir(self.indice+1))
         self.b_exportar.clicked.connect(self.exportar);self.b_imprimir.clicked.connect(self.imprimir);cerrar.clicked.connect(self.close)
         self.guardar_ajustes.clicked.connect(lambda:self.aplicar(True))
@@ -544,10 +570,10 @@ class DialogoLaminas(QDialog):
         try:
             clase = DocumentoHoja if '_graficos' in self.modelo else DocumentoLaminas
             self.documento = clase(self.modelo, self.estado, self.valores(), self.dependencias)
-            self.error.setText(self.aviso_biblioteca)
+            self._fijar_error(self.aviso_biblioteca)
         except (ValueError, OverflowError) as exc:
             self.documento = None
-            self.error.setText(str(exc))
+            self._fijar_error(str(exc))
         self.b_exportar.setEnabled(self.documento is not None)
         self.b_imprimir.setEnabled(self.documento is not None)
         if self.editor_textos and self.documento:
@@ -558,6 +584,10 @@ class DialogoLaminas(QDialog):
         if self.integrado and self.selector_plantillas.cambio and self.editor_textos is not None:
             self.preparar_textos()
         self.modificado.emit()
+
+    def _fijar_error(self, texto: str = '') -> None:
+        self.error.setText(texto)
+        self.error.setVisible(bool(texto))
 
     def ir(self,indice):
         d=self.documento;self.indice=max(0,min(indice,d.total-1)) if d else 0
@@ -587,7 +617,9 @@ class DialogoLaminas(QDialog):
         try:
             if svg:d.exportar_svg(ruta)
             else:d.exportar_pdf(ruta)
-            self.aplicar();self.error.setText(f'Exportadas {d.total} hojas en {ruta.parent}'+(' (un SVG por hoja)' if svg and d.total>1 else ''))
+            self.aplicar()
+            extra = ' (un SVG por hoja)' if svg and d.total > 1 else ''
+            self._fijar_error(f'Exportadas {d.total} hojas en {ruta.parent}{extra}')
         except (OSError,ValueError,RuntimeError) as exc:QMessageBox.warning(self,'Exportar plano',str(exc))
 
     def imprimir(self):
@@ -676,7 +708,10 @@ class DialogoLaminas(QDialog):
             if self.editor_textos.actual or self.editando_plantilla else self.propiedades.widget(0))
 
     def anadir_texto(self):
-        self.vista.nuevo_texto=True;self.vista.setCursor(Qt.CursorShape.CrossCursor);self.error.setText('Pulsa en la hoja para colocar el texto.');self.vista.setFocus()
+        self.vista.nuevo_texto = True
+        self.vista.setCursor(Qt.CursorShape.CrossCursor)
+        self._fijar_error('Pulsa en la hoja para colocar el texto.')
+        self.vista.setFocus()
 
     def editar_plantilla(self):
         if self.integrado:

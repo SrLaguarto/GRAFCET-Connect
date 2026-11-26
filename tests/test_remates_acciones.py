@@ -128,21 +128,21 @@ class RematesQt(BaseQt):
         e.deshacer();self.assertEqual(len(e.ed.model['steps']),1)
 
     def test_SCOR07_selector_no_se_comprime_por_el_estilo(self):
-        """REQ-EDT-02: el estilo general no comprime el selector dibujado como una acción."""
+        """REQ-EDT-02: el estilo general no comprime el selector de variable (28 px fijos en 2.0.1)."""
         w,e,s=self.preparar();d=e.anadir_accion(s);w.editar_accion(s,d);QApplication.processEvents()
-        self.assertEqual(w.props.accion.variable.height(),estilo.ALTO_CONTROL)  # (E8: el desplegable deja de ser caja de acción; altura de un control)
+        self.assertEqual(w.props.accion.variable.height(),28)  # 2.0.1: selector de subcabecera de 28 px fijos
         self.assertGreaterEqual(w._minimo_panel('inferior'),w.props.layout().totalHeightForWidth(w.props.width()))
 
     def test_SCOR11_selector_de_variable_no_se_aplasta_tras_parpadear_ni_con_el_panel_alto_o_bajo(self):
-        """REQ-EDT-02, REQ-EDT-09: el desplegable «Variable» de una acción nunca es más bajo que un campo de texto del
-        panel, con el panel a su altura mínima o más alto y tras el parpadeo (que antes le quitaba su hoja de estilo)."""
+        """REQ-EDT-02, REQ-EDT-09: el desplegable «Variable» de una acción conserva su altura fija (28 px en 2.0.1)
+        con el panel a su altura mínima o más alto y tras el parpadeo (que antes le quitaba su hoja de estilo)."""
         w,e,s=self.preparar();e.nueva_variable('Abrir','output',{'kind':'int'})
         self.assertIsNone(e.poner_accion(s,{'tipo':'activacion','variable':'Abrir','valor':'5'}))
         w.editar_accion(s,e.acciones(s)[0]['id']);QApplication.processEvents()
         acc=w.props.accion;total=sum(w.vsplit.sizes())
         def comprobar(contexto):
             QApplication.processEvents()
-            self.assertEqual(acc.variable.height(),estilo.ALTO_CONTROL,contexto)  # (E8: altura de un control; el cuadro del valor ya no se ve)
+            self.assertEqual(acc.variable.height(),28,contexto)  # 2.0.1: altura fija de 28 px en `PanelAccion.escalar`
         for alto in (w._minimo_panel('inferior'),w._minimo_panel('inferior')+200):
             w.vsplit.setSizes([total-alto,alto]);comprobar(f'alto {alto}')
             acc.parpadeo.iniciar({'variable'});comprobar(f'parpadeando con alto {alto}')

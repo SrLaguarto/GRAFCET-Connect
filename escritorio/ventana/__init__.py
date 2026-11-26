@@ -25,7 +25,7 @@ from PySide6.QtGui import (QDesktopServices, QCursor, QAction, QActionGroup, QCo
                            QPainterPath, QPen, QPixmap, QFont, QFontMetrics)
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
                                QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
-                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QRadioButton,
+                               QListWidget, QListWidgetItem, QMainWindow, QMenuBar, QMessageBox, QPushButton, QRadioButton,
                                QScrollArea, QSplitter, QStackedWidget, QTabBar, QTableWidget, QTableWidgetItem,
                                QToolBar, QToolButton, QVBoxLayout, QWidget, QStyle, QMenu, QTextEdit, QPlainTextEdit, QAbstractSpinBox,
                                QSizePolicy, QStylePainter, QStyleOptionButton, QAbstractButton, QAbstractScrollArea, QStyledItemDelegate)
@@ -83,11 +83,17 @@ from .vista import VistaVentana
 class Ventana(Menus, Archivos, Simulacion, ConexionES, Modos, VistaVentana, ArchivosProyecto, QMainWindow):
     """La ventana principal: la fachada. Crea y conecta los controles y el estado compartido, y hereda las piezas (`archivos`, `simulacion`, `es`, `modos`, `vista`, `menus`), que son clases sin estado propio."""
 
+    def menuBar(self) -> QMenuBar:  # noqa: N802
+        return self._menu_bar
+
     def __init__(self, ajustes: QSettings | None = None, obtener=None) -> None:
         instalar_idioma()
         instalar_ayudas()
         estilo_botones.instalar()  # (iconos y textos de los botones de herramientas, centrados; una sola vez)
         super().__init__()
+        self._menu_bar = QMenuBar(self)
+        self._menu_bar.setNativeMenuBar(False)
+        self._menu_bar.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self.setWindowTitle(TITULO)
         self.resize(1360, 860)
         # Preferencias de la interfaz (paneles plegados) en un .ini del usuario, sin tocar el registro
@@ -181,17 +187,41 @@ class Ventana(Menus, Archivos, Simulacion, ConexionES, Modos, VistaVentana, Arch
         self.panel_planos=PaginaPlanos(self)
         self.paginas_es.addWidget(self.panel_planos)  # PLANOS se pinta su propia tarjeta (`PaginaPlanos.paintEvent`)
         contenedor=QWidget();disposicion=QVBoxLayout(contenedor);disposicion.setContentsMargins(0,0,0,0);disposicion.setSpacing(0)
-        self.pestanas_vistas=QTabBar();self.pestanas_vistas.setExpanding(False);self.pestanas_vistas.setDrawBase(True)
+        # Línea superior de acento de estado (3 px: petróleo en edición, verde en simulación)
+        self.banda_modo = BandaModo(contenedor)
+        self.banda_modo.setObjectName("bandaModo")
+        self.banda_modo.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.banda_modo.setFixedHeight(3)
+        self.banda_modo.setProperty("modo", "editar")
+        self.banda_modo.setAccessibleName("Modo")
+        disposicion.addWidget(self.banda_modo)
+        self.pestanas_vistas=QTabBar();self.pestanas_vistas.setExpanding(False);self.pestanas_vistas.setDrawBase(False)
         for texto in ('GRAFCET','PLANOS','E/S externas'):self.pestanas_vistas.addTab(texto)
         self.pestanas_vistas.setTabVisible(2,False)  # a E/S se entra por la luz de conexión (`luz_es`); el índice 2 solo marca la página
         self.pestanas_vistas.setObjectName("pestanasVistas")  # su aspecto lo da la hoja global (estilo.py)
         self.pestanas_vistas.setUsesScrollButtons(False)  # son dos pestañas: nunca flechas de desplazamiento
         self.pestanas_vistas.setAccessibleName("Vista: GRAFCET, PLANOS")
-        # La fila de arriba: las pestañas a la izquierda y, a la derecha del todo, la luz de la conexión externa (`luz_es`)
+        # Cabecera unificada (`top-header`): [menús] | [■ EDICIÓN] | [GRAFCET | PLANOS | ● E/S externas]
         self.fila_pestanas=QWidget();self.fila_pestanas.setObjectName('filaPestanas');self.fila_pestanas.setAttribute(Qt.WidgetAttribute.WA_StyledBackground,True)
-        self.fila_pestanas.setMinimumWidth(1)  # su contenido (con textos) no fija el mínimo de la ventana: «Reiniciar» y la luz pasan a icono y texto corto al estrecharse
-        fila_p=QHBoxLayout(self.fila_pestanas);fila_p.setContentsMargins(estilo.E2,0,estilo.E2,0);fila_p.setSpacing(0)
-        fila_p.addWidget(self.pestanas_vistas);fila_p.addStretch(1)
+        self.fila_pestanas.setMinimumWidth(1)
+        self.fila_pestanas.setFixedHeight(44)
+        fila_p=QHBoxLayout(self.fila_pestanas);fila_p.setContentsMargins(10,4,10,4);fila_p.setSpacing(estilo.E2)
+        self.menu_cluster = QWidget(self.fila_pestanas)
+        self.menu_cluster.setObjectName("menuCluster")
+        ml = QHBoxLayout(self.menu_cluster)
+        ml.setContentsMargins(0, 0, 0, 0)
+        ml.setSpacing(4)
+        self._menu_bar.setParent(self.menu_cluster)
+        ml.addWidget(self._menu_bar, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.estuche_vistas = QFrame(self.fila_pestanas)
+        self.estuche_vistas.setObjectName("estucheVistas")
+        el = QHBoxLayout(self.estuche_vistas)
+        el.setContentsMargins(3, 2, 3, 2)
+        el.setSpacing(2)
+        el.addWidget(self.pestanas_vistas)
+        fila_p.addWidget(self.menu_cluster)
+        fila_p.addWidget(self.estuche_vistas)
+        fila_p.addStretch(1)
         disposicion.addWidget(self.fila_pestanas)
         self.aviso_traer=QWidget();self.aviso_traer.setObjectName('avisoSeleccionPlanos')
         self._estilo_aviso_traer()

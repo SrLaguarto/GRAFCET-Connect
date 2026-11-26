@@ -10,36 +10,40 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGroupBox, QHead
 from . import estilo
 
 
-LADO_MARCADOR = 9  # el cuadrado de etapa que abre cada título de sección
+ANCHO_MARCADOR = 3  # filete vertical petróleo que abre los títulos de sección (2A)
+ALTO_MARCADOR = 14
 
 
 def pintar_marcador(p: QPainter, x: float, centro_y: float, color: str = estilo.ACENTO) -> None:
-    """El cuadrado de la etapa vacía, del trazo de los iconos (1,75 px): el marcador de sección de todas las vistas."""
+    """Filete vertical redondeado de 3×14 px: el marcador discreto de cabeceras y títulos principales."""
     p.save()
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setPen(QPen(QColor(color), 1.75, Qt.PenStyle.SolidLine, Qt.PenCapStyle.SquareCap, Qt.PenJoinStyle.MiterJoin))
-    p.setBrush(Qt.BrushStyle.NoBrush)
-    p.drawRect(QRectF(x + .9, centro_y - LADO_MARCADOR / 2 + .9, LADO_MARCADOR - 1.8, LADO_MARCADOR - 1.8))  # (QRectF: con números sueltos Qt trunca a enteros y se recorta el borde izquierdo)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(color))
+    p.drawRoundedRect(QRectF(x, centro_y - ALTO_MARCADOR / 2, ANCHO_MARCADOR, ALTO_MARCADOR), 1.5, 1.5)
     p.restore()
 
 
 class TituloSeccion(QLabel):
-    """El título de una sección (Elementos, Propiedades…) con el cuadrado de etapa delante: la misma marca en todas las vistas."""
+    """El título de una sección (Elementos, Propiedades…) con el filete vertical delante cuando `con_marcador` está activo."""
 
-    def __init__(self, texto: str = "", x_marcador: int = 0) -> None:
+    def __init__(self, texto: str = "", x_marcador: int = 0, con_marcador: bool = True) -> None:
         super().__init__(texto)
-        self.x_marcador = x_marcador  # dónde empieza el cuadrado, además del margen izquierdo del título
-        self.setIndent(LADO_MARCADOR + 7)
+        self.x_marcador = x_marcador  # dónde empieza el filete, además del margen izquierdo del título
+        self.con_marcador = con_marcador
+        self.setIndent(ANCHO_MARCADOR + 8 if con_marcador else 0)
 
     def paintEvent(self, evento) -> None:  # noqa: N802
         super().paintEvent(evento)
+        if not self.con_marcador:
+            return
         p = QPainter(self)
         pintar_marcador(p, self.contentsMargins().left() + self.x_marcador, self.height() / 2)
         p.end()
 
 
 class CajaSeccion(QGroupBox):
-    """Un `QGroupBox` cuyo título lleva delante el cuadrado de etapa (el hueco lo deja la hoja global: `[seccion="true"]::title`)."""
+    """Un `QGroupBox` de subsección con tipografía limpia sin marcador decorativo."""
 
     def __init__(self, titulo: str = "") -> None:
         super().__init__(titulo)
@@ -47,31 +51,14 @@ class CajaSeccion(QGroupBox):
 
     def paintEvent(self, evento) -> None:  # noqa: N802
         super().paintEvent(evento)
-        opcion = QStyleOptionGroupBox()
-        self.initStyleOption(opcion)
-        r = self.style().subControlRect(QStyle.ComplexControl.CC_GroupBox, opcion, QStyle.SubControl.SC_GroupBoxLabel, self)
-        p = QPainter(self)
-        pintar_marcador(p, r.left() - 16, r.center().y())  # (el rectángulo del título es el del texto: el hueco de 22 px queda a su izquierda)
-        p.end()
 
 
 class BandaModo(QWidget):
-    """La franja de color de lo alto de la tarjeta del dibujo (tinta al editar, verde al simular). Se lee como un **enlace** de la
-    notación y no como una regla: un solo trazo, **una** barra de transición cerca del origen y, al final, la punta de la flecha de
-    evolución. La ventana la sitúa dentro de las esquinas redondeadas de la tarjeta (`_AjustaBanda`): su remate no sobresale."""
-
-    PUNTA = 12  # lo que mide la punta de la flecha de evolución, al final del enlace
+    """Línea superior de estado de la ventana (petróleo al editar, verde al simular)."""
 
     def paintEvent(self, evento) -> None:  # noqa: N802
         p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h = self.width(), self.height()
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(estilo.SIMULACION if self.property("modo") == "simular" else estilo.EDICION))
-        punta = min(self.PUNTA, max(0, w // 2))
-        p.drawPolygon([QPointF(0, 0), QPointF(w - punta, 0), QPointF(w, h / 2), QPointF(w - punta, h), QPointF(0, h)])  # el enlace, que acaba en flecha
-        p.setBrush(QColor(estilo.SUPERFICIE))
-        p.drawRect(QRectF(34, 0, 3, h))  # la barra de la transición: un hueco que corta el enlace
+        p.fillRect(self.rect(), QColor(estilo.SIMULACION if self.property("modo") == "simular" else estilo.ACENTO))
         p.end()
 
 class EtiquetaElidida(QLabel):
@@ -235,16 +222,16 @@ class CabeceraCompacta(QHeaderView):
         if not rect.isValid():
             return
         p.save()
-        p.fillRect(rect, QColor(estilo.SUPERFICIE_2))
+        p.fillRect(rect, QColor(estilo.SUPERFICIE_3))
         p.setPen(QColor(estilo.BORDE))
         p.drawLine(rect.bottomLeft(), rect.bottomRight())
         p.setPen(QColor(estilo.TINTA_2))
         fuente = QFont(self.font())
-        fuente.setPixelSize(estilo.T_PEQUENA)  # la letra de las celdas de estas tablas
-        fuente.setBold(False)
+        fuente.setPixelSize(max(11, estilo.T_PEQUENA - 1))
+        fuente.setWeight(QFont.Weight.DemiBold)
         p.setFont(fuente)
         texto = str(self.model().headerData(indice, self.orientation(), Qt.ItemDataRole.DisplayRole) or "")
-        r = rect.adjusted(4, 0, -2, -1)
+        r = rect.adjusted(4, 0, -1, -1)
         while p.fontMetrics().horizontalAdvance(texto) > r.width() and texto in self.abreviaturas:  # (la forma corta, y la más corta aún)
             texto = self.abreviaturas[texto]
         p.drawText(r, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),

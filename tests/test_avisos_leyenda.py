@@ -147,5 +147,28 @@ class Interfaz(BaseQt):
         self.assertNotAlmostEqual(d.escala(), antes[0], places=3, msg="«Centrar todo» sigue encajando")
 
 
+    def test_SAVI20_la_ventana_cuenta_los_vencimientos_simultaneos_con_etiquetas(self):
+        """REQ-TMP-02, REQ-UX-01: el diagnóstico de vencimientos simultáneos llega a la pantalla nombrando las transiciones y sin proponer
+        Ajustes de simulación."""
+        from types import SimpleNamespace
+        from grafcet.builder import M
+        from grafcet.view import display_names
+        w, e = self.vacio()
+        m = M().step("E0", True).step("E1").step("E2")
+        m.trans("t1", ["E0"], ["E1"], "delay(2 s, active(E0), 0 s)").trans("t2", ["E0"], ["E2"], "delay(2 s, active(E0), 0 s)")
+        w.v = SimpleNamespace(doc=m.doc, names=display_names(m.doc))
+        crudo = {"code": "D-SEM-PENDIENTE", "correction": "Cerrar la cuestión indicada",
+                 "message": "vencimientos simultáneos cuyo resultado depende del orden (e2, e1 frente a e1, e2; grupo e1, e2) [temporal.coincidencias]",
+                 "evidence": {"capacidad": "temporal.coincidencias", "claves": "e1, e2"}}
+        d = w._diag_llano(crudo)
+        self.assertTrue(d["message"].startswith("Las transiciones t1 y t2 (tras X0)"), d["message"])
+        self.assertNotIn("Ajustes de simulación", d["message"] + d["correction"])
+        self.assertEqual(d["correction"], "Use tiempos distintos o evite que compitan por la misma etapa.")
+        motivos = motivo_parada(d["code"], d["message"], [], w.v.names)
+        self.assertIn("t1 y t2", motivos[0][0])
+        w.v = None
+        self.assertIs(w._diag_llano(crudo), crudo)
+
+
 if __name__ == "__main__":
     unittest.main()

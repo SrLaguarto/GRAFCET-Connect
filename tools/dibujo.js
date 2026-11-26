@@ -22,6 +22,7 @@ const ACT_COL = 12;   // separación mínima entre cajas de una columna (crece l
 const ACT_CANAL = 7;  // de la derivación a la segunda columna de una matriz, por debajo de su fila
 const MARK = 7;       // marcas internas de la encapsulante y divisiones de la macroetapa
 const GROSOR_NEGADO = 1.25;  // grosor de la barra de una variable negada (el sobrerrayado del texto no se puede engrosar)
+const PASO_NEGADO = 2.5;     // separación vertical entre barras de negaciones apiladas
 const TMR_EXTRA = 12;     // lo que sube por encima de la condición o el evento de una acción con temporizador
 const MARGEN_MARCO_X = 26;  // lo que se separa el marco de un parcial de todo lo que dibuja de él, a izquierda y derecha...
 const MARGEN_MARCO_Y = 22;  // ... y por arriba y por abajo (el mismo de siempre alrededor de sus etapas)
@@ -72,6 +73,21 @@ function segText(parent, x, y, segs, cls, anchor="start", truth={}) {
     if (s.s) { sp.setAttribute("baseline-shift", "sub"); sp.setAttribute("font-size", "75%"); }
   });
   const ts = [...t.children], yb = y - ascenso(parseFloat(getComputedStyle(t).fontSize));
+  if ((segs || []).some(s => Array.isArray(s.neg) && s.neg.length)) {
+    const porId = new Map();
+    ts.forEach((span, idx) => {
+      (segs[idx].neg || []).forEach(g => {
+        if (!porId.has(g.id)) porId.set(g.id, {i: idx, j: idx, n: g.n, eval: g.eval});
+        else porId.get(g.id).j = idx;
+      });
+    });
+    const barras = [...porId.values()].sort((a, b) => a.n - b.n || a.i - b.i);
+    barras.forEach(g => {
+      const verde = (g.eval || []).some(k => truth[k] === true), yNeg = yb - g.n * PASO_NEGADO;
+      el("line", {x1:extremo(ts[g.i], false), x2:extremo(ts[g.j], true), y1:yNeg, y2:yNeg, class:verde ? "neg verdadero" : "neg"}, parent);
+    });
+    return t;
+  }
   for (let i = 0; i < ts.length; i++) {
     if (!segs[i].o) continue;
     let j = i;
@@ -115,8 +131,10 @@ function timerText(parent, tx, segs, y, ref, S) {
     const sitios = (segs || []).map((s, i) => s.t === t.token ? i : -1).filter(i => i >= 0);
     const i = sitios[t.nth || 0];
     const caja = i === undefined ? tx.getBBox() : tx.children[i].getBBox();
-    const negado = i === undefined ? (segs || []).some(s => s.o) : !!segs[i].o;
-    const base = y - ascenso(size) - (negado ? 3 : 1), off = !!t.off;
+    const tramo = i === undefined ? (segs || []) : [segs[i]];
+    const niveles = tramo.reduce((m, s) => Math.max(m, Array.isArray(s.neg) && s.neg.length ? s.neg.length : (s.o ? 1 : 0)), 0);
+    const extraNeg = niveles ? (3 + (niveles - 1) * PASO_NEGADO) : 1;
+    const base = y - ascenso(size) - extraNeg, off = !!t.off;
     const x = caja.x + (off ? caja.width : 0);
     const grupo = el("g", {class: `timer-state ${t.estado === "contando" ? "run" : "done"}`}, parent);
     const texto = txt(grupo, x, base - 1, t.shown, {"text-anchor": off ? "end" : "start", class: "timer"});

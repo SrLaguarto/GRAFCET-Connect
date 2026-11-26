@@ -28,19 +28,25 @@ class Remates(BaseQt):
 
 
     def test_SREM02_variables_ajustan_filas_y_botones_debajo_con_limite(self):
-        """REQ-EDT-07, REQ-EDT-09: tabla sin espacio sobrante, botones debajo y desplazamiento interno con muchas filas."""
+        """REQ-EDT-07, REQ-EDT-09: cabecera plana con contador, tabla edge-to-edge que se expande verticalmente, pie fijo con botones 2×2 y desplazamiento interno con muchas filas."""
         w,e=self.editor();p=w.variables
+        pie=p.findChild(QObject,"pieVariables")
+        self.assertIsNotNone(pie)
         for i in range(2):e.ed.add_variable("p"+str(i),"input",{"kind":"bool"})
         e.cambia();QTest.qWait(20)
+        self.assertEqual(w.l_cont_vars.text(),"2")
         natural=p.tabla.horizontalHeader().height()+sum(p.tabla.rowHeight(i) for i in range(2))+2*p.tabla.frameWidth()
-        self.assertEqual(p.tabla.height(),natural)
+        self.assertGreaterEqual(p.tabla.height(),natural)
+        self.assertLessEqual(pie.y()-p.tabla.geometry().bottom(),2)
         botones=list(p.b_nuevas.values())+[p.b_quitar]
-        self.assertLessEqual(botones[0].parentWidget().y()-p.tabla.geometry().bottom(),10)
         for b in botones:self.assertGreaterEqual(b.width(),b.fontMetrics().horizontalAdvance(b.text())+16)
+        alto_dos=p.tabla.height()
         for i in range(45):e.ed.add_variable("q"+str(i),"input",{"kind":"bool"})
         e.cambia();QTest.qWait(20)
-        self.assertLessEqual(p.tabla.height(),320);self.assertGreater(p.tabla.verticalScrollBar().maximum(),0)
-        self.assertLessEqual(botones[0].parentWidget().y()-p.tabla.geometry().bottom(),10)
+        self.assertEqual(w.l_cont_vars.text(),"47")
+        self.assertEqual(p.tabla.height(),alto_dos)
+        self.assertGreater(p.tabla.verticalScrollBar().maximum(),0)
+        self.assertLessEqual(pie.y()-p.tabla.geometry().bottom(),2)
 
     def test_SREM03_diagnostico_en_lienzo_selecciona_sin_tapar_zoom(self):
         """REQ-EDT-09: sin errores no hay indicador; el error con nombre se pulsa sobre el dibujo y conserva selección y parpadeo."""

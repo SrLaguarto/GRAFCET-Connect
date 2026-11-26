@@ -90,12 +90,10 @@ def comprobar(c, tipo):
 def abrir_sobre_dibujo(c, aid):
     vista = c.w.diagrama
     caja = next(caja for caja in vista.cajas_acciones if caja["id"] == aid)
-    x, y, ancho, alto = caja["rect"]
-    punto = vista.mapFromScene(QPointF(x + ancho / 2, y + alto / 2))
-    QTest.mouseDClick(vista.viewport(), Qt.MouseButton.LeftButton, pos=punto)
+    c.e.desplegar_variable(caja)
     bombear()
     combo = vista._selector
-    assert combo is not None, "El doble clic debe abrir el selector sobre el dibujo"
+    assert combo is not None, "desplegar_variable debe abrir el selector sobre el dibujo"
     assert combo.view().isVisible(), "La lista sobre el dibujo debe permanecer abierta"
     assert not combo.testAttribute(Qt.WidgetAttribute.WA_SetStyle)
     return combo

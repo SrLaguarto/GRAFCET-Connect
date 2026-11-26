@@ -8,9 +8,10 @@ from .geometria.acciones import CLAVE, acciones_etapa as acciones_etapa, ordenar
 
 def ids_etapa(editor: Any, sid: str) -> list[str]:
     etapa = next(s for s in editor.model["steps"] if s["id"] == sid)
-    pendientes = [b for b in editor.draft_actions() if b.get("etapa") == sid and b["tipo"] != "forzado"]
+    fuerzas = [{"id": f["id"]} for f in editor.model["forces"] if f["sourceStepRef"] == sid]
+    pendientes = [b for b in editor.draft_actions() if b.get("etapa") == sid]
     pendientes.sort(key=lambda b: b.get("orden", 10 ** 6))
-    elementos = [{"id": i} for i in etapa["actionRefs"]] + pendientes
+    elementos = [{"id": i} for i in etapa["actionRefs"]] + fuerzas + pendientes
     ordenes = editor.presentation.get(CLAVE, {})
     orden = ordenes.get(sid, []) if isinstance(ordenes, dict) else []
     return [a["id"] for a in ordenar(elementos, orden if isinstance(orden, list) else [])]

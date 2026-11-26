@@ -43,27 +43,24 @@ class PropiedadesY(unittest.TestCase):
         return c, c.w.flot.panel, c.w.flot.principal
 
     def test_SY1_ancho_maximo_igual_al_de_media_pantalla(self):
-        """El cambio de letra normal a grande conserva el tope confirmado de 848 px lógicos."""
+        """El cambio de letra normal a grande conserva el tope de 920 px lógicos en 2.0.1 (y 848 px a media pantalla 960)."""
         for tipo in ("transicion", "condicionada", "evento", "activacion_numerica"):
-            referencia = None
-            for ancho, alto in ((960, 1032), (1920, 1080), (2560, 1440)):
+            for ancho, alto, esperado in ((960, 1032, 848), (1920, 1080, 920), (2560, 1440, 920)):
                 with self.subTest(tipo=tipo, ancho=ancho):
                     c, p, v = self.contexto(tipo, ancho, alto)
-                    referencia = v.width() if referencia is None else referencia
-                    self.assertLessEqual(abs(v.width() - referencia), 2)
-                    self.assertEqual(v.width(), 848)
+                    self.assertEqual(v.width(), esperado)
                     self.doCleanups()
 
     def test_SY2_medias_pantallas_y_altos_acotados_al_area_actual(self):
-        """En media pantalla, solo las acciones de dos tarjetas usan todo el alto disponible."""
+        """En media pantalla, los editores mantienen altura estable (`_marco_ventana() + 332`) acotada al área disponible."""
         for ancho, alto, esperado in ((683, 768, 587), (960, 1032, 848)):
             for tipo in ("transicion", "condicionada", "evento", "activacion_numerica"):
                 with self.subTest(tipo=tipo, ancho=ancho):
                     c, p, v = self.contexto(tipo, ancho, alto)
                     disponible = c.w.paginas_es.height() - 2 * estilo.E6
-                    alto_por_tipo = {(683, 768): {"transicion": 577, "activacion_numerica": 486},
-                                     (960, 1032): {"transicion": 688, "activacion_numerica": 601}}[(ancho, alto)]  # E8: con franja y pie (E3 de aire bajo el filete) y las herramientas del formulador en la franja del título (28 px en vez de 20)
-                    self.assertEqual((v.width(), v.height()), (esperado, alto_por_tipo.get(tipo, disponible)))
+                    alto_esperado = min(disponible, max(c.w.flot._marco_ventana() + 332, 460))
+                    self.assertEqual((v.width(), v.height()), (esperado, alto_esperado))
+                    self.assertLessEqual(v.height(), disponible)
                     self.doCleanups()
 
     def test_SY3_centrada_y_categorias_enteras_a_pantalla_completa(self):
@@ -83,18 +80,22 @@ class PropiedadesY(unittest.TestCase):
                     self.doCleanups()
 
     def test_SY4_etapas_y_macroetapas_conservan_su_ancho_menor(self):
-        """El máximo también rige para las fichas cortas sin estirarlas hasta el tope."""
+        """El máximo de 920 px rige en acciones; etapas y macroetapas conservan su ancho compacto (640 px)."""
         for tipo in ("etapa", "inicial", "macroetapa", "activacion", "desactivacion"):
             c, p, v = self.contexto(tipo, 1920, 1080)
-            self.assertLessEqual(v.width(), 848)
+            if tipo in ("etapa", "inicial", "macroetapa"):
+                self.assertLessEqual(v.width(), 40 * estilo.E4)
+            else:
+                self.assertEqual(v.width(), 920)
             self.assertTrue(v.isVisible())
             self.doCleanups()
 
     def test_SY5_cursor_de_flecha_sin_perder_el_arrastre(self):
-        """La cabecera, título y cerrar heredan flecha, y el movimiento conserva el agarre."""
+        """La ventana, cabecera y título heredan flecha; ✕ muestra mano apuntadora, y el movimiento conserva el agarre."""
         c, p, v = self.contexto()
-        for widget in (v, v.cabecera, v.titulo, v.b_cerrar):
+        for widget in (v, v.cabecera, v.titulo):
             self.assertEqual(widget.cursor().shape(), Qt.CursorShape.ArrowCursor)
+        self.assertEqual(v.b_cerrar.cursor().shape(), Qt.CursorShape.PointingHandCursor)
         antes = v.pos()
         inicio = QPoint(90, v.cabecera.height() // 2)
         QTest.mousePress(v.cabecera, Qt.MouseButton.LeftButton, pos=inicio)
@@ -127,13 +128,15 @@ class PropiedadesY(unittest.TestCase):
                 self.doCleanups()
 
     def test_SY7_altos_a_pantalla_completa_se_ajustan_al_area_actual(self):
-        """Las alturas de una tarjeta se conservan. Dos tarjetas aprovechan el área con sus márgenes."""
-        fijos = {"transicion": 800, "activacion_numerica": 693}  # E8: con la vista previa en franja y el pie (E3 de aire bajo el filete)
+        """A pantalla completa, todos los editores conservan su altura estable (`_marco_ventana() + 332`) sin estirarse al borde."""
+        fijos = {"transicion": 533, "activacion_numerica": 577, "condicionada": 581}
         for ancho, alto in ((1920, 1080), (2560, 1440)):
-            for tipo in (*fijos, "condicionada"):
+            for tipo in fijos:
                 c, p, v = self.contexto(tipo, ancho, alto)
                 disponible = c.w.paginas_es.height() - 2 * estilo.E6
-                self.assertEqual(v.height(), fijos.get(tipo, disponible), (ancho, tipo))
+                self.assertEqual(v.height(), c.w.flot._marco_ventana() + 332, (ancho, tipo))
+                self.assertEqual(v.height(), fijos[tipo], (ancho, tipo))
+                self.assertLess(v.height(), disponible, (ancho, tipo))
                 self.doCleanups()
 
 

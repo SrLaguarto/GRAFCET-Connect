@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QRectF, QRect, Qt
-from PySide6.QtGui import QPainter
+from PySide6.QtCore import QPointF, QRect, QRectF, Qt
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QProxyStyle, QStyle, QStyleOptionMenuItem, QToolButton
 
 from . import estilo
@@ -38,7 +38,10 @@ class EstiloBotones(QProxyStyle):
         return super().pixelMetric(metrica, opcion, widget)
 
     def drawPrimitive(self, elemento: Any, opcion: Any, pintor: Any, widget: Any = None) -> None:  # noqa: N802
-        """Una opción excluyente de un menú (grupo de acciones exclusivo) se marca con un punto de radio, no con la marca de verificación."""
+        """Casillas de verificación limpias sin depender del estilo nativo bajo hojas Qt, y radio en menús excluyentes."""
+        if elemento == QStyle.PrimitiveElement.PE_IndicatorCheckBox:
+            self._pintar_casilla(opcion, pintor)
+            return
         if (elemento == QStyle.PrimitiveElement.PE_IndicatorMenuCheckMark and isinstance(opcion, QStyleOptionMenuItem)
                 and opcion.checkType == QStyleOptionMenuItem.CheckType.Exclusive):
             pintor.save()
@@ -50,6 +53,41 @@ class EstiloBotones(QProxyStyle):
             pintor.restore()
             return
         super().drawPrimitive(elemento, opcion, pintor, widget)
+
+    @staticmethod
+    def _pintar_casilla(opcion: Any, pintor: Any) -> None:
+        r = QRectF(opcion.rect).adjusted(1.0, 1.0, -1.0, -1.0)
+        habilitada = bool(opcion.state & QStyle.StateFlag.State_Enabled)
+        marcada = bool(opcion.state & QStyle.StateFlag.State_On)
+        parcial = bool(opcion.state & QStyle.StateFlag.State_NoChange)
+        hover = bool(opcion.state & QStyle.StateFlag.State_MouseOver)
+        pintor.save()
+        pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if marcada or parcial:
+            fondo = estilo.ACENTO if habilitada else estilo.DESHABILITADO
+            borde = estilo.ACENTO_OSCURO if habilitada else estilo.DESHABILITADO
+            pintor.setPen(QPen(QColor(borde), 1.2))
+            pintor.setBrush(QColor(fondo))
+            pintor.drawRoundedRect(r, 3.0, 3.0)
+            pintor.setPen(QPen(QColor("white"), 1.8, Qt.PenStyle.SolidLine,
+                               Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            if marcada:
+                pintor.drawPolyline([
+                    QPointF(r.left() + r.width() * 0.22, r.top() + r.height() * 0.52),
+                    QPointF(r.left() + r.width() * 0.42, r.top() + r.height() * 0.72),
+                    QPointF(r.left() + r.width() * 0.78, r.top() + r.height() * 0.28),
+                ])
+            else:
+                cy = r.center().y()
+                pintor.drawLine(QPointF(r.left() + r.width() * 0.24, cy),
+                                QPointF(r.right() - r.width() * 0.24, cy))
+        else:
+            fondo = estilo.SUPERFICIE if habilitada else estilo.SUPERFICIE_2
+            borde = estilo.ACENTO if (habilitada and hover) else estilo.BORDE_CONTROL if habilitada else estilo.BORDE
+            pintor.setPen(QPen(QColor(borde), 1.4))
+            pintor.setBrush(QColor(fondo))
+            pintor.drawRoundedRect(r, 3.0, 3.0)
+        pintor.restore()
 
     def drawItemPixmap(self, pintor: Any, rect: QRect, alineacion: int, pixmap: Any) -> None:  # noqa: N802
         boton = _boton_con_icono_y_texto(pintor)
@@ -103,6 +141,7 @@ class EstiloBotones(QProxyStyle):
 def instalar(app: QApplication | None = None) -> None:
     """Pone el estilo sobre el de la aplicación, una sola vez."""
     app = app or QApplication.instance()
-    if app is None or isinstance(app.style(), EstiloBotones):
+    if app is None or isinstance(app.style(), EstiloBotones) or app.property("_estilo_botones_instalado"):
         return
+    app.setProperty("_estilo_botones_instalado", True)
     app.setStyle(EstiloBotones(app.style().name()))

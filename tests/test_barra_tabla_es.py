@@ -48,6 +48,8 @@ class BarraYTablaES(BaseQt):
         p.cargar(M().var("a").var("b").var("q", "output").step("0", True).doc)
         p.resize(1200, 700)
         p.show()
+        from PySide6.QtCore import QRect
+        p._pantalla_libre = lambda: QRect(0, 0, 2000, 1100)  # (la pantalla de pruebas mide 800 px: se emula la de 2000)
         p.abrir_configuracion()
         p._alternar_avanzado()
         p.dialogo_config.resize(1050, 700)
@@ -75,15 +77,16 @@ class BarraYTablaES(BaseQt):
         self.assertGreater(t.columnWidth(7), 60, "Escala se ve")
 
     def test_SBAR03_puerto_y_esclavo_estrechos_y_el_marco_no_cambia_de_ancho(self):
-        """REQ-SIM-03: Puerto y Esclavo ID (3 cifras) más estrechos en la cabecera y en Configuración.
+        """REQ-SIM-03, IM3: Puerto (5 cifras) y Esclavo ID (4 cifras visuales) estrechos en la cabecera y en Configuración.
         El marco mide lo mismo con
         la cabecera de edición o con la de solo lectura."""
         p = self.panel()
         for puerto, unidad in ((p.puerto, p.unidad), (p.lienzo.puerto, p.lienzo.unidad)):
             self.assertLessEqual(puerto.width(), 90)
             self.assertLessEqual(unidad.width(), 70)
-            self.assertEqual(unidad.width(), puerto.width())
-            self.assertEqual(puerto.width(), puerto.fontMetrics().horizontalAdvance("888") + 28)
+            self.assertGreater(puerto.width(), unidad.width())
+            self.assertEqual(puerto.width(), puerto.fontMetrics().horizontalAdvance("88888") + 28)
+            self.assertEqual(unidad.width(), unidad.fontMetrics().horizontalAdvance("8888") + 28)
         c = p.lienzo.cabecera_marco
         medidas = []
         for pagina in (p.lienzo.edicion_destino, p.lienzo.destino):
@@ -92,16 +95,13 @@ class BarraYTablaES(BaseQt):
             medidas.append((c.width(), c.height(), p.lienzo.marco.width()))
         self.assertEqual(medidas[0], medidas[1])
 
-    def test_SBAR04_boton_volver_de_la_cabecera_de_es_y_uniones_punteadas_de_dependencias(self):
-        """REQ-UX-01: «Volver» lleva icono de flecha y texto, mide el alto de los botones de la cabecera y tiene ayuda sin atajo; el icono de
-        dependencias recupera las dos uniones diagonales finas y punteadas entre el cuadrado y el marco (J5)."""
+    def test_SBAR04_cabecera_de_es_sin_volver_y_uniones_punteadas_de_dependencias(self):
+        """REQ-UX-01: la cabecera de E/S ya no duplica botón «Volver» (C10); el icono de dependencias recupera las dos uniones diagonales finas y punteadas entre el cuadrado y el marco (J5)."""
         from PySide6.QtCore import QSize
         from escritorio import estilo
         p = self.panel()
-        b = p.b_volver
-        self.assertEqual((b.text(), b.toolTip()), ("Volver", "Volver al dibujo GRAFCET"))
-        self.assertFalse(b.icon().isNull())
-        self.assertEqual(b.height(), p.b_configuracion.height())
+        self.assertFalse(hasattr(p, "b_volver"))
+        self.assertEqual(p.titulo_es.text(), "Asignación de E/S")
         img = estilo.icono("dependencias").pixmap(QSize(48, 48)).toImage()
         # J5 recupera dos diagonales; el centro del icono queda vacío.
         for signo in (-1, 1):

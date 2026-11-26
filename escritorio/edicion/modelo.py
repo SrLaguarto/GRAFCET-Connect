@@ -266,7 +266,7 @@ class _Modelo:
         receptividad se escribe después, en el panel de propiedades o con doble clic."""
         visibles = self.etiquetas_visibles()
         with self.ed.group("crear transición"):
-            tid, _ = self.ed.add_transition(self.parcial_en(p), "", at=self._modelo(p), label=self.ed.next_label("transition"))
+            tid, _ = self.ed.add_transition(self.parcial_en(p), "", at=self._modelo(p))
             self.etiqueta_como_las_demas(tid, visibles, self._modelo(p))
         self.sel = [tid]
         self.cambia()
@@ -316,6 +316,10 @@ class _Modelo:
         (más no cabe en su cuadro); lo ya guardado con más se abre y se dibuja como siempre."""
         if len(nuevo) > MAX_ETIQUETA_ETAPA and any(s["id"] == ident for s in self.ed.model["steps"]):
             return f"El nombre de una etapa admite {MAX_ETIQUETA_ETAPA} caracteres como máximo; más no cabe en su cuadro."
+        if not nuevo and any(t["id"] == ident for t in self.ed.model["transitions"]):
+            self.ed.clear_transition_label(ident)
+            self.cambia()
+            return None
         try:
             self.ed.rename(ident, nuevo, repetida=True)  # un número repetido se admite como borrador (P-IMP-118)
         except DiagnosticError as exc:

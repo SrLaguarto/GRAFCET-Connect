@@ -16,17 +16,21 @@ from PySide6.QtWidgets import (QAbstractButton, QApplication, QDialog, QFrame, Q
                                QListWidget, QScrollArea, QSizePolicy, QTableWidget, QVBoxLayout, QWidget)
 from .constantes import (ALTO_TRAZA, ANCHO_DERECHO, ANCHO_DERECHO_BASE, ARRIBA_CAJA, ARRIBA_VARIABLES, AVISO, ESPERA_ARRANQUE,
                          ESPERA_ESCALA, HUECO_FRANJA, NOMBRE_MIN_TABLA, UMBRAL_DERECHO)
-from .widgets import _AjustaBanda, _AjustaCabecera, _BotonEntrada, _DelegadoAbreviado, _SalidaRaton, _VigilaAlto
+from .widgets import _AjustaBanda, _AjustaCabecera, _BotonEntrada, _DelegadoAbreviado, _DelegadoValorConsola, _SalidaRaton, _VigilaAlto
 
 
 class VistaVentana:
     """Vista: la construcción de la interfaz, los paneles plegables, los divisores, la escala, la pantalla completa y la cabecera. Sin estado propio: usa los atributos de `Ventana` (la fachada) y llama a los demás métodos a través de `self`."""
 
-    def _caja(self, titulo: str) -> tuple[QGroupBox, QVBoxLayout]:
-        box = CajaSeccion(titulo)
+    def _caja(self, titulo: str) -> tuple[QWidget, QVBoxLayout]:
+        box = QWidget()
+        box.setObjectName("seccionConsola")
         lay = QVBoxLayout(box)
-        lay.setContentsMargins(0, ARRIBA_CAJA, 0, estilo.E1)  # T3: E2 entre el título y lo primero; las tablas de la simulación van de borde a borde (a 218 px no caben sus cuatro columnas con más margen: SRED13)
+        lay.setContentsMargins(0, 0, 0, estilo.E1)
         lay.setSpacing(estilo.E1)
+        etiq = QLabel(titulo.upper())
+        etiq.setObjectName("tituloConsola")
+        lay.addWidget(etiq)
         self.lado.addWidget(box)
         self._cajas_lado = getattr(self, "_cajas_lado", []) + [box]
         return box, lay
@@ -35,17 +39,9 @@ class VistaVentana:
         izq = QWidget()
         izq.setObjectName("panelDibujo")
         il = QVBoxLayout(izq)
-        il.setContentsMargins(estilo.E2, estilo.E1 + HUECO_FRANJA, estilo.E2, estilo.E2)  # (un hueco bajo la franja de modo: el zoom y el chip no la tocan)
-        il.setSpacing(2)
-        self._margenes_dibujo = (estilo.E2, estilo.E1 + HUECO_FRANJA, estilo.E2, estilo.E2)
-        # Franja de color de lo alto de la tarjeta del dibujo: azul tinta al editar, verde al simular (no ocupa sitio)
-        self.banda_modo = BandaModo(izq)
-        self.banda_modo.setObjectName("bandaModo")
-        self.banda_modo.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.banda_modo.setFixedHeight(4)
-        self.banda_modo.setProperty("modo", "editar")
-        self.banda_modo.setAccessibleName("Modo")
-        izq.installEventFilter(_AjustaBanda(izq, self.banda_modo))
+        il.setContentsMargins(10, 8, 10, 4)
+        il.setSpacing(4)
+        self._margenes_dibujo = (10, 8, 10, 4)
         izq.installEventFilter(_AjustaCabecera(izq, self))
         cab = QHBoxLayout()
         cab.setSpacing(estilo.E2)
@@ -88,6 +84,7 @@ class VistaVentana:
         self._leyenda: QDialog | None = None
 
         der = QWidget()
+        der.setObjectName("consolaSimulacion")
         self.lado = QVBoxLayout(der)
         self.lado.setContentsMargins(estilo.E1, estilo.E1, estilo.E1, estilo.E1)
         self.lado.setSpacing(estilo.E1)
@@ -99,8 +96,11 @@ class VistaVentana:
         self.lado.addWidget(self.diag)
 
         _, lay = self._caja("Entradas")
-        self.l_ayuda_entradas = EtiquetaGrupos("Clic: pulsar · Ctrl+clic: enclavar · Clic derecho: tipo")  # (se parte entre acciones, nunca por dentro de una; en el panel táctil del portátil, el toque con dos dedos es el clic derecho)
-        self.l_ayuda_entradas.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px; font-weight: 400")
+        self.l_ayuda_entradas = EtiquetaGrupos("Clic: pulsar · Ctrl: enclavar · Der.: tipo")
+        self.l_ayuda_entradas.setToolTip("Clic: pulsar · Ctrl+clic: enclavar · Clic derecho: cambiar tipo")
+        self.l_ayuda_entradas.setStyleSheet(
+            f"color: {estilo.TINTA_3}; font-size: {max(11, estilo.T_PEQUENA - 1)}px; font-weight: 400"
+        )
         lay.addWidget(self.l_ayuda_entradas)
         # Las entradas se desplazan por dentro de su caja, con un alto máximo (`_alto_entradas`) que deja ver al menos cuatro filas de
         # «Salidas y variables»: con muchas entradas, las salidas no quedan fuera de la vista
@@ -136,6 +136,7 @@ class VistaVentana:
         self.t_vars.horizontalHeader().abreviaturas = {"Contribuyen": "Contrib.", "Contrib.": "Contr."}
         self._del_vars = (DelegadoNombres(self.t_vars, (0,)), DelegadoNombres(self.t_vars, (3,), lineas=2))  # nombres partidos sin que dos se lean igual
         self.t_vars.setItemDelegateForColumn(0, self._del_vars[0])
+        self.t_vars.setItemDelegateForColumn(2, _DelegadoValorConsola(self.t_vars))
         self.t_vars.setItemDelegateForColumn(3, self._del_vars[1])
         lay.addWidget(self.t_vars)
         self.t_vars.currentCellChanged.connect(self._detalle_del_foco)
@@ -166,11 +167,12 @@ class VistaVentana:
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # con la ventana pequeña, también se desplaza a los lados
         self._vigila_alto = _VigilaAlto(self.scroll.viewport(), self._alto_entradas)  # (el alto máximo de las entradas sigue al del panel)
         self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        # Página de edición: la herramienta, la selección y los diagnósticos (REQ-EDT-09)
+        # Página de edición: cabecera fija .panel-hd + tabla edge-to-edge + pie fijo (estilo v2)
         pag = QWidget()
         pag.setObjectName("panelVariables")
         pl = QVBoxLayout(pag)
-        pl.setContentsMargins(estilo.E2, estilo.E2, estilo.E2, estilo.E2)  # el panel es estrecho: poco marco, para que quepa la tabla de variables
+        pl.setContentsMargins(0, 0, 0, 0)
+        pl.setSpacing(0)
         self.l_herr = QLabel()
         self.l_herr.setWordWrap(True)
         self.l_herr.setTextFormat(Qt.TextFormat.RichText)
@@ -180,40 +182,59 @@ class VistaVentana:
         self.l_sel.setWordWrap(True)
         pl.addWidget(self.l_sel)
         self.l_sel.hide()  # la selección se identifica en el encabezado de Propiedades
+        cab_vars = QFrame()
+        cab_vars.setObjectName("cabeceraPanel")
+        cab_vars.setFixedHeight(36)
+        cvl = QHBoxLayout(cab_vars)
+        cvl.setContentsMargins(10, 0, 38, 0)  # reserva a la derecha para el botón de plegar (32 px)
+        cvl.setSpacing(6)
+        l_tit_vars = QLabel("Variables")
+        l_tit_vars.setObjectName("tituloPanel")
+        self.l_cont_vars = QLabel("0")
+        self.l_cont_vars.setObjectName("badgePanel")
+        cvl.addWidget(l_tit_vars)
+        cvl.addWidget(self.l_cont_vars)
+        cvl.addStretch(1)
+        pl.addWidget(cab_vars)
         self.variables = PanelVariables()
         self.variables.detalle.connect(self._detallar)
-        caja_vars = CajaSeccion("Variables")
-        caja_vars.setObjectName("grupoVariables")
-        cv = QVBoxLayout(caja_vars)
-        cv.setContentsMargins(estilo.E2, ARRIBA_VARIABLES, estilo.E2, estilo.E1)  # M4 y T3
-        cv.addWidget(self.variables)
+        self.variables.conteo.connect(lambda n: self.l_cont_vars.setText(str(n)))
         self.l_resumen = QLabel()  # resumen accesible para la validación, sin bloque lateral
         self.l_resumen.hide()
         self.lista_diag = self.diagrama.lista_diagnosticos
         self.lista_diag.itemClicked.connect(self._ir_a_diagnostico)
-        pl.addWidget(caja_vars)
-        pl.addStretch(1)
+        pl.addWidget(self.variables, 1)
         self.derecho = PilaActual()
         # F4: el botón de plegar (32 px) va en una fila de título propia sobre las tablas: al desplazar el panel ya no tapa la primera entrada
         pagina_sim = QWidget()
+        pagina_sim.setObjectName("panelVariables")
         psl = QVBoxLayout(pagina_sim)
         psl.setContentsMargins(0, 0, 0, 0)
         psl.setSpacing(0)
-        self.titulo_sim = TituloSeccion("Simulación")
+        cab_sim = QFrame()
+        cab_sim.setObjectName("cabeceraPanel")
+        cab_sim.setFixedHeight(36)
+        csl = QHBoxLayout(cab_sim)
+        csl.setContentsMargins(10, 0, 38, 0)
+        csl.setSpacing(6)
+        self.titulo_sim = QLabel("Consola de simulación")
         self.titulo_sim.setObjectName("tituloPanel")
-        self.titulo_sim.setContentsMargins(estilo.E2, 0, 40, 0)  # (a la derecha, el sitio del botón de plegar)
-        self.titulo_sim.setFixedHeight(36)
-        psl.addWidget(self.titulo_sim)
+        self.l_cont_sim = QLabel("0")
+        self.l_cont_sim.setObjectName("badgePanel")
+        csl.addWidget(self.titulo_sim)
+        csl.addWidget(self.l_cont_sim)
+        csl.addStretch(1)
+        psl.addWidget(cab_sim)
         psl.addWidget(self.scroll, 1)
         self.derecho.addWidget(pagina_sim)
-        pag_scroll = QScrollArea()  # si no cabe, se desplaza en alto y en ancho
+        pag_scroll = QScrollArea()  # mantiene compatibilidad con referencias internas; la tabla hace su propio scroll
         pag_scroll.setWidgetResizable(True)
         pag_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        pag_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        pag_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        pag_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        pag_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         pag_scroll.setWidget(pag)
         self.derecho.addWidget(pag_scroll)
-        self._pag_scroll, self._caja_vars = pag_scroll, caja_vars
+        self._pag_scroll, self._caja_vars = pag_scroll, pag
         self._vigila_pagina = _VigilaAlto(pag_scroll.viewport(), self._alto_tabla_variables)
         self.derecho.setMinimumWidth(300)
         self.paleta = Paleta(self.diagrama.escala, self)
@@ -237,7 +258,7 @@ class VistaVentana:
         self.split.configurar(1, "derecho", 1, self._plegables["derecho"])
         self.split.setStretchFactor(0, 1)
         self.split.setStretchFactor(1, 0)
-        self.split.setHandleWidth(8)
+        self.split.setHandleWidth(5)
         self._derecho_a_mano = False  # el usuario movió el divisor: su ancho no se vuelve a tocar al cambiar de tamaño la ventana
         self.split.splitterMoved.connect(lambda *_: setattr(self, "_derecho_a_mano", True))
         self.split.setSizes([880, 460])
@@ -250,8 +271,8 @@ class VistaVentana:
             divisor.abrir.connect(self._abrir_desde_tiron)
         self.vsplit.setCollapsible(0, False)
         self.vsplit.setCollapsible(1, False)  # el panel inferior se pliega con su flecha, no arrastrando: nunca por debajo de lo que pide
-        self.vsplit.setHandleWidth(8)
-        self.split.setContentsMargins(estilo.E2, 0, estilo.E2, 0)  # los paneles de arriba, alineados con la barra de herramientas (el inferior va de borde a borde)
+        self.vsplit.setHandleWidth(4)
+        self.split.setContentsMargins(0, 0, 0, 0)
         self.vsplit.setStretchFactor(0, 1)  # al agrandar la ventana crece el dibujo; el panel inferior conserva su altura
         self.vsplit.setStretchFactor(1, 0)
         self.vsplit.setSizes([520, ALTO_TRAZA])
@@ -266,22 +287,36 @@ class VistaVentana:
         self.l_reloj.setMinimumWidth(0)
         self.l_reloj.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)  # mide lo que su texto: nunca pierde caracteres
         self._ancho_reloj = 0  # lo más ancho que ha llegado a ser el texto del reloj (el reloj solo crece, para que la barra no baile)
-        sb.addWidget(self.l_aviso)
+        # Lo fijo de la izquierda (conformidad, detalle y firma) va en UNA zona: `QStatusBar` esconde sus widgets al enseñar un mensaje
+        # temporal, pero otros textos (la firma, el detalle) se mostraban a su aire por encima del mensaje. Con una sola zona, al haber
+        # mensaje se esconde entera y lo que se muestre dentro de ella no se ve hasta que el mensaje se va.
+        self.zona_estado = QWidget()
+        self.zona_estado.setObjectName("zonaEstado")
+        zona = QHBoxLayout(self.zona_estado)
+        zona.setContentsMargins(0, 0, 0, 0)
+        zona.setSpacing(6)
+        zona.addWidget(self.l_aviso)
         # La línea de detalle: el nombre entero (y papel, tipo, valor…) de la entrada, la variable o la fila que tiene el foco o está
         # elegida; los nombres largos se elidén por el medio en las listas y aquí se leen enteros, sin pasar el ratón por encima.
         self.l_detalle = EtiquetaElidida(ancho_maximo=10 ** 6, modo=Qt.TextElideMode.ElideMiddle)
         self.l_detalle.setStyleSheet(f"color: {estilo.TINTA}; font-weight: 600")
         self.l_detalle.setAccessibleName("Detalle")
         self.l_detalle.hide()
-        sb.addWidget(self.l_detalle, 1)
+        zona.addWidget(self.l_detalle, 1)
         self.l_firma = QLabel()  # «Archivo sin firma»: discreto y permanente mientras el archivo abierto no tenga firma válida
         self.l_firma.setStyleSheet(f"color: {estilo.TINTA_2}")
         self.l_firma.hide()
-        sb.addWidget(self.l_firma)
+        zona.addWidget(self.l_firma)
+        sb.addWidget(self.zona_estado, 1)
         # el mensaje temporal sustituye al texto fijo mientras dura (si no, se dibujan uno encima del otro)
-        sb.messageChanged.connect(lambda texto: self.l_aviso.setVisible(not texto))
+        sb.messageChanged.connect(self._mensaje_de_estado)
         sb.addPermanentWidget(self.l_lect)
         sb.addPermanentWidget(self.l_reloj)
+
+    def _mensaje_de_estado(self, texto: str) -> None:
+        """Con un mensaje temporal en la barra de estado, el texto fijo de la izquierda cede su sitio; sin él, vuelve."""
+        self.l_aviso.setVisible(not texto)
+        self.zona_estado.setVisible(not texto)
 
     def _paneles(self) -> None:
         """Recupera la visibilidad de Variables y Traza y conecta sus tiradores."""
@@ -390,7 +425,9 @@ class VistaVentana:
         """Lo que la ventana escribe a mano con las letras y los alto de control de la escala de ahora (títulos, ayudas, reloj,
         tablas, entradas…): se genera en la construcción y otra vez al cruzar el umbral de pantalla completa."""
         self.ayuda.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px")
-        self.l_ayuda_entradas.setStyleSheet(f"color: {estilo.TINTA_2}; font-size: {estilo.T_PEQUENA}px; font-weight: 400")
+        self.l_ayuda_entradas.setStyleSheet(
+            f"color: {estilo.TINTA_3}; font-size: {max(11, estilo.T_PEQUENA - 1)}px; font-weight: 400"
+        )
         self._estilo_ayuda()
         self.navegacion.escalar()
         self.l_reloj.setStyleSheet(f"font-weight: 600; color: {estilo.TINTA}; font-family: {estilo.FAMILIA_MONO}; font-size: {estilo.T_CIFRA}px")
@@ -398,13 +435,10 @@ class VistaVentana:
         for b in self.botones.values():
             if isinstance(b, _BotonEntrada):
                 b.ajustar_alto()  # (el alto de una línea de la escala de ahora, o el de sus líneas si el nombre va partido)
-        hoja = (f"QTableWidget {{ font-size: {estilo.T_PEQUENA}px; border: 0; }} "
-                f"QTableWidget[tecl=\"true\"]:focus {{ border: 2px dashed {estilo.FOCO}; }} "
-                f"QHeaderView::section {{ font-size: {estilo.T_PEQUENA}px; font-weight: 400; padding: 4px 0; }} "
-                f"QTableWidget::item {{ padding: 0; }}")
+        hoja = self._hoja_consola()
         for t in (self.t_vars, self.t_temp):
             t.setStyleSheet(hoja)
-            t.verticalHeader().setDefaultSectionSize(estilo.ALTO_FILA)
+            t.verticalHeader().setDefaultSectionSize(estilo.ALTO_FILA + 2)
             t.verticalHeader().setMinimumSectionSize(estilo.ALTO_FILA_COMPACTA)
         for reparto in self._reparto:  # (con la letra de ahora, las columnas se miden otra vez)
             reparto.aplicar()
@@ -463,7 +497,6 @@ class VistaVentana:
             self._poner_reloj(self.l_reloj.text())
         self.diagrama.escalar()
         self.variables.escalar()
-        self.panel_planos.escalar()
         self.diagrama.parentWidget().layout().invalidate()
         self._estilo_aviso_traer()
         if self.modo == "simular" and self.v is not None:
@@ -505,7 +538,7 @@ class VistaVentana:
         """PLANOS lleva la hoja de la escala de ahora; se hace al mostrarla (cruzar el umbral no repasa una página que no se ve)."""
         if self._planos_pendiente:
             self._planos_pendiente = False
-            self.panel_planos.setStyleSheet(self._hoja_escala)
+            self.panel_planos.escalar(self._hoja_escala)
 
     def _zoom_diferido(self) -> None:
         if not self._zoom_pendiente:
@@ -594,9 +627,10 @@ class VistaVentana:
         clave = (con_texto, estilo.ESCALA)
         if clave not in cache:
             self._textos_en_barras(con_texto)
-            self.tb_edit.layout().invalidate()
-            self.tb_edit.layout().activate()
-            cache[clave] = self.tb_edit.sizeHint().width()
+            for barra in (self.tb_edit, self.tb_vista_der):
+                barra.layout().invalidate()
+                barra.layout().activate()
+            cache[clave] = self.tb_edit.sizeHint().width() + self.tb_vista_der.sizeHint().width() + 16
         return cache[clave]
 
     def _repartir_textos_barra(self) -> None:
@@ -611,15 +645,16 @@ class VistaVentana:
         self._texto_en_barra = con
         self._textos_en_barras(con)
         if antes is not None and antes != con:
-            self.tb_edit.layout().invalidate()
-            self.tb_edit.updateGeometry()
+            for barra in (self.tb_edit, self.tb_vista_der):
+                barra.layout().invalidate()
+                barra.updateGeometry()
 
     def _textos_en_barras(self, con_texto: bool) -> None:
         """Dependencias y Errores llevan texto cuando cabe; en pantalla partida, solo icono y ayuda.
         Los restantes botones de edición son siempre de solo icono."""
         forma = Qt.ToolButtonStyle.ToolButtonTextBesideIcon if con_texto else Qt.ToolButtonStyle.ToolButtonIconOnly
         for a in (self.a_dependencias, self.a_errores):
-            w = self.tb_edit.widgetForAction(a)
+            w = self.tb_vista_der.widgetForAction(a)
             if w is not None:
                 w.setToolButtonStyle(forma)
         self.diagrama.b_dependencias.setToolButtonStyle(forma)

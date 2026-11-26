@@ -46,6 +46,7 @@ def corregir_nombres(propuestas):
     ocupados = {label_key(v["name"]) for v in propuestas.edicion.ed.model["variables"]}
     ocupados.update(label_key(f.nombre) for f in propuestas.filas if f not in pendientes)
     for fila in pendientes:
+        anterior = fila.nombre
         base = " ".join(re.sub(r"[^\w +\-]", " ", fila.nombre).split())
         base = base.lstrip("+-")[:MAX_LABEL].strip() or "Variable"
         if propuestas.edicion.motivo_nombre(base):
@@ -60,6 +61,6 @@ def corregir_nombres(propuestas):
             nombre = base[:MAX_LABEL - len(sufijo)].rstrip() + sufijo
             numero += 1
         fila.nombre = nombre
-        fila.cambiado = True
+        fila.cambiado = fila.cambiado or (nombre != anterior)
         ocupados.add(label_key(nombre))
     propuestas.validar()
